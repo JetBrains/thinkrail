@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
 	GitFileChange,
 	TodoArtifact,
@@ -28,6 +29,7 @@ import {
 	readReviewMeta,
 	readReviewRecords,
 	removeSessionReviews,
+	restoreReviewRecord,
 	setAutoCycles,
 	setReviewerSession,
 	type TodoReviewRecord,
@@ -175,15 +177,17 @@ export function addTodo(params: {
 	sessionId: string;
 	title: string;
 	note?: string;
-}): TodoItem {
-	const title = params.title?.trim();
-	if (!title) throw new Error("A TODO title is required.");
-	const input: { title: string; note?: string; origin: "user" } = {
-		title,
-		origin: "user",
-	};
-	if (params.note !== undefined) input.note = params.note;
-	return storeFor(params.workspaceId, params.sessionId).add(input);
+}): Promise<TodoItem> {
+	return enqueueTodoMutation(params.workspaceId, () => {
+		const title = params.title?.trim();
+		if (!title) throw new Error("A TODO title is required.");
+		const input: { title: string; note?: string; origin: "user" } = {
+			title,
+			origin: "user",
+		};
+		if (params.note !== undefined) input.note = params.note;
+		return storeFor(params.workspaceId, params.sessionId).add(input);
+	});
 }
 
 export function updateTodo(params: {
@@ -193,26 +197,31 @@ export function updateTodo(params: {
 	status?: TodoStatus;
 	title?: string;
 	note?: string;
-}): TodoItem {
-	const patch: { status?: TodoStatus; title?: string; note?: string } = {};
-	if (params.status !== undefined) patch.status = params.status;
-	if (params.title !== undefined) patch.title = params.title;
-	if (params.note !== undefined) patch.note = params.note;
-	const result = storeFor(params.workspaceId, params.sessionId).update(params.id, patch);
-	if (!result) throw new Error(`No TODO with id "${params.id}".`);
-	return result.todo;
+}): Promise<TodoItem> {
+	return enqueueTodoMutation(params.workspaceId, () => {
+		const patch: { status?: TodoStatus; title?: string; note?: string } = {};
+		if (params.status !== undefined) patch.status = params.status;
+		if (params.title !== undefined) patch.title = params.title;
+		if (params.note !== undefined) patch.note = params.note;
+		const result = storeFor(params.workspaceId, params.sessionId).update(params.id, patch);
+		if (!result) throw new Error(`No TODO with id "${params.id}".`);
+		return result.todo;
+	});
 }
 
-export function removeTodo(params: {
-	workspaceId: string;
-	sessionId: string;
-	id: string;
-}): Promise<{
+export function removeTodo(
+	params: {
+		workspaceId: string;
+		sessionId: string;
+		id: string;
+	},
+	isUnderActiveReview: () => boolean = () => false,
+): Promise<{
 	ok: true;
 }> {
 	return enqueueTodoMutation(params.workspaceId, () => {
 		const root = getWorkspace(params.workspaceId).worktreePath;
-		if (readReviewMeta(root, params.sessionId).pending[params.id]) {
+		if (readReviewMeta(root, params.sessionId).pending[params.id] || isUnderActiveReview()) {
 			throw new Error(
 				`TODO "${params.id}" is currently under review — cancel or wait for the review to finish before removing it.`,
 			);
@@ -402,27 +411,35 @@ export function requestTodoFix(params: {
 	sessionId: string;
 	id: string;
 	feedback: string;
-}): { pkg: string; previous: TodoReviewRecord | undefined } {
+}): {
+	pkg: string;
+	previous: TodoReviewRecord | undefined;
+	requested: TodoReviewRecord;
+} {
 	const feedback = params.feedback.trim();
 	if (!feedback) throw new Error("Fix feedback must not be empty.");
 	const { root, item } = reviewableItem(params);
-	const previous = putReviewRecord(root, params.sessionId, params.id, {
+	const requested: TodoReviewRecord = {
 		state: "changes_requested",
 		reviewedShas: commitShas(item),
 		feedback,
 		at: new Date().toISOString(),
-	});
-	return { pkg: renderFixPackage(item, feedback), previous };
+		requestId: randomUUID(),
+	};
+	const previous = putReviewRecord(root, params.sessionId, params.id, requested);
+	return { pkg: renderFixPackage(item, feedback), previous, requested };
 }
 
 export function rollbackTodoFix(
 	params: { workspaceId: string; sessionId: string; id: string },
 	previous: TodoReviewRecord | undefined,
-): void {
-	dropReviewRecord(
+	requested: TodoReviewRecord,
+): boolean {
+	return restoreReviewRecord(
 		getWorkspace(params.workspaceId).worktreePath,
 		params.sessionId,
 		params.id,
+		requested,
 		previous,
 	);
 }

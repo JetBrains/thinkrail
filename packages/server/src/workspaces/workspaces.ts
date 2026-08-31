@@ -192,19 +192,21 @@ function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: st
 }
 
 async function diffStats(ws: Workspace): Promise<DiffStats | undefined> {
-	const result = await gitAsync(
-		ws.worktreePath,
-		changedFileArgs(await resolveDiffRange(ws), "--shortstat"),
-	);
-	if (!result.ok) {
+	try {
+		const result = await gitAsync(
+			ws.worktreePath,
+			changedFileArgs(await resolveDiffRange(ws), "--shortstat"),
+		);
+		if (!result.ok) throw new Error(result.err);
+		if (!result.out) return { added: 0, removed: 0 };
+		return {
+			added: Number(/(\d+) insertion/.exec(result.out)?.[1] ?? 0),
+			removed: Number(/(\d+) deletion/.exec(result.out)?.[1] ?? 0),
+		};
+	} catch {
 		log.warn(`git diff --shortstat failed for workspace ${ws.id}`);
 		return undefined;
 	}
-	if (!result.out) return { added: 0, removed: 0 };
-	return {
-		added: Number(/(\d+) insertion/.exec(result.out)?.[1] ?? 0),
-		removed: Number(/(\d+) deletion/.exec(result.out)?.[1] ?? 0),
-	};
 }
 
 export async function createWorkspace(

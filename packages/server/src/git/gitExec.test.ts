@@ -63,6 +63,7 @@ posix("the user's core.sshCommand runs unmodified — we add no options of our o
 	const result = await gitAsync(repo, ["fetch", "origin"], { network: true });
 
 	expect(result.ok).toBe(false);
+	expect(result.failure).toBeUndefined();
 	expect(result.err).toContain("example.invalid git-upload-pack");
 	expect(result.err).not.toContain("BatchMode");
 });
@@ -92,6 +93,7 @@ posix("gitAsync ends a stalled fetch at the timeout and names the likely cause",
 
 	expect(existsSync(reached)).toBe(true);
 	expect(result.ok).toBe(false);
+	expect(result.failure).toBe("timeout");
 	expect(result.err).toContain("timed out after");
 	expect(result.err).toContain("the remote never answered");
 	expect(result.err).not.toMatch(/git (is )?waiting for SSH/);
@@ -133,6 +135,18 @@ posix("an oversized stderr is truncated before it can reach a client", async () 
 	expect(result.err.length).toBeLessThanOrEqual(2_000);
 	expect(result.err).toContain("… (truncated) …");
 	expect(result.err).toContain("Could not read from remote repository");
+});
+
+test("gitAsync distinguishes a launch failure from git's own nonzero exit", async () => {
+	const path = process.env.PATH;
+	process.env.PATH = join(repo, "missing-bin");
+	const result = await gitAsync(repo, ["status"]);
+	if (path === undefined) delete process.env.PATH;
+	else process.env.PATH = path;
+
+	expect(result.ok).toBe(false);
+	expect(result.failure).toBe("launch");
+	expect(result.err).not.toBe("");
 });
 
 test("git reports git's own stderr, trimmed", () => {

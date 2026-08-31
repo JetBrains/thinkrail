@@ -162,9 +162,11 @@ import { provisionInitialTerminal } from "./initialTerminal";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
 import { withReviewLock } from "./reviewLock";
 import {
+	claimItemFix,
 	isItemUnderActiveReview,
 	itemFixFindings,
 	markClientStale,
+	releaseItemFix,
 	startReviewAllFlow,
 	startTodoReviewFlow,
 } from "./todoReview";
@@ -217,11 +219,12 @@ function fireTodoFixPrompt(
 	p: { workspaceId: string; sessionId: string; id: string },
 	pkg: string,
 	previous: TodoReviewRecord | undefined,
+	requested: TodoReviewRecord,
 	findingIds: string[] = [],
 ): void {
 	void ackSend(followUpSession(p.sessionId, pkg))
 		.then(undefined, (err) => {
-			rollbackTodoFix(p, previous);
+			rollbackTodoFix(p, previous, requested);
 			if (findingIds.length > 0) rollbackSend(p.workspaceId, findingIds, p.sessionId);
 			notifyExtUi(
 				p.sessionId,
@@ -231,7 +234,8 @@ function fireTodoFixPrompt(
 		})
 		.catch((err) => {
 			console.warn(`todo fix rollback failed: ${err instanceof Error ? err.message : err}`);
-		});
+		})
+		.finally(() => releaseItemFix(p.sessionId, p.id));
 }
 
 async function sendToFileChat(
@@ -401,13 +405,7 @@ const handlers: Record<string, Handler> = {
 		),
 	"todo.remove": (params) => {
 		const p = params as { workspaceId: string; sessionId: string; id: string };
-		// See host/SPEC.md (todo.remove) — this covers the tail removeTodo's own pending check can't.
-		if (isItemUnderActiveReview(p.sessionId, p.id)) {
-			throw new Error(
-				`TODO "${p.id}" is currently under review — cancel or wait for the review to finish before removing it.`,
-			);
-		}
-		return removeTodo(p);
+		return removeTodo(p, () => isItemUnderActiveReview(p.sessionId, p.id));
 	},
 	"todo.review": (params) =>
 		approveTodoReview(params as { workspaceId: string; sessionId: string; id: string }),
@@ -417,24 +415,47 @@ const handlers: Record<string, Handler> = {
 		startReviewAllFlow(params as { workspaceId: string; sessionId: string }),
 	"todo.requestFix": async (params) => {
 		const p = params as { workspaceId: string; sessionId: string; id: string; feedback: string };
-		const ws = getWorkspace(p.workspaceId);
-		const { pkg, previous } = requestTodoFix(p);
-		if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath))) {
-			rollbackTodoFix(p, previous);
-			throw new Error("This plan's chat is no longer on disk — can't send the fix request.");
+		if (!claimItemFix(p.sessionId, p.id))
+			throw new Error(`A fix request is already active for ${p.id}.`);
+		try {
+			const ws = getWorkspace(p.workspaceId);
+			if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath))) {
+				throw new Error("This plan's chat is no longer on disk — can't send the fix request.");
+			}
+			const prepared = await withReviewLock(p.workspaceId, async () => {
+				const request = requestTodoFix(p);
+				try {
+					const findings = await itemFixFindings(p);
+					if (findings.length === 0)
+						return { ...request, fixText: request.pkg, findingIds: [] as string[] };
+					const fixText = `${request.pkg}\n\n${await buildSendPackage(p.workspaceId, findings)}`;
+					const findingIds = findings.map((c) => c.id);
+					await markCommentsSent(p.workspaceId, findingIds, p.sessionId);
+					return { ...request, fixText, findingIds };
+				} catch (error) {
+					rollbackTodoFix(p, request.previous, request.requested);
+					throw error;
+				}
+			});
+			try {
+				fireTodoFixPrompt(
+					p,
+					prepared.fixText,
+					prepared.previous,
+					prepared.requested,
+					prepared.findingIds,
+				);
+			} catch (error) {
+				if (prepared.findingIds.length > 0)
+					rollbackSend(p.workspaceId, prepared.findingIds, p.sessionId);
+				rollbackTodoFix(p, prepared.previous, prepared.requested);
+				throw error;
+			}
+			return { ok: true } as const;
+		} catch (error) {
+			releaseItemFix(p.sessionId, p.id);
+			throw error;
 		}
-		const { fixText, findingIds } = await withReviewLock(p.workspaceId, async () => {
-			const findings = await itemFixFindings(p);
-			if (findings.length === 0) return { fixText: pkg, findingIds: [] as string[] };
-			const ids = findings.map((c) => c.id);
-			await markCommentsSent(p.workspaceId, ids, p.sessionId);
-			return {
-				fixText: `${pkg}\n\n${await buildSendPackage(p.workspaceId, findings)}`,
-				findingIds: ids,
-			};
-		});
-		fireTodoFixPrompt(p, fixText, previous, findingIds);
-		return { ok: true } as const;
 	},
 	"git.status": (params) => {
 		const p = params as { workspaceId: string; scope?: GitDiffScope };

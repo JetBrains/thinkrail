@@ -1,6 +1,6 @@
 import type { GitDiffScope, Workspace } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { git, gitAsync } from "./gitExec";
+import { type GitResult, git, gitAsync } from "./gitExec";
 
 export function diffBaseRef(ws: Pick<Workspace, "baseBranch" | "diffBase">): string {
 	return ws.diffBase ?? ws.baseBranch;
@@ -15,6 +15,11 @@ export interface DiffRange {
 }
 
 const OID = /^[0-9a-f]{4,64}$/;
+
+function throwExecutionFailure(result: GitResult): void {
+	if (result.failure)
+		throw new Error(`Could not resolve the diff range: ${result.err || "git failed"}`);
+}
 
 export function resolveCommitOid(worktreePath: string, ref: string): string | null {
 	const out = git(worktreePath, [
@@ -48,6 +53,7 @@ export async function resolveDiffRange(
 			"--quiet",
 			`${scope.baseRef}^{commit}`,
 		]);
+		throwExecutionFailure(resolved);
 		if (!resolved.ok || !resolved.out)
 			throw new CodedError("UNKNOWN_COMMIT", `Unknown commit: ${scope.baseRef}`);
 		return {
@@ -66,6 +72,7 @@ export async function resolveDiffRange(
 			"--quiet",
 			`${scope.sha}^{commit}`,
 		]);
+		throwExecutionFailure(resolved);
 		if (!resolved.ok || !resolved.out)
 			throw new CodedError("UNKNOWN_COMMIT", `Unknown commit: ${scope.sha}`);
 		const sha = resolved.out;
@@ -75,6 +82,7 @@ export async function resolveDiffRange(
 			"--quiet",
 			`${sha}^^{commit}`,
 		]);
+		throwExecutionFailure(parent);
 		if (!parent.ok || !parent.out) {
 			return {
 				listPrefix: ["show", "--format="],
@@ -99,6 +107,7 @@ export async function resolveDiffRange(
 		base,
 		"HEAD",
 	]);
+	throwExecutionFailure(mergeBase);
 	const forkPoint = mergeBase.ok && mergeBase.out ? mergeBase.out : base;
 	return {
 		listPrefix: ["diff"],
@@ -112,6 +121,14 @@ export async function resolveDiffRange(
 export function changedFileArgs(
 	range: DiffRange,
 	mode: "--name-status" | "--numstat" | "--shortstat",
+	nul = false,
 ): string[] {
-	return [...range.listPrefix, mode, "--end-of-options", ...range.listRevs, "--"];
+	return [
+		...range.listPrefix,
+		mode,
+		...(nul ? ["-z"] : []),
+		"--end-of-options",
+		...range.listRevs,
+		"--",
+	];
 }

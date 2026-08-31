@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Workspace } from "@thinkrail/contracts";
 import {
 	completeInitialTerminalReservation,
 	createWorkspace,
@@ -790,6 +791,24 @@ test("ensuring the Default emits created once; listing never writes into the pro
 	ensureWorkspaceScratchDir(def);
 	expect(readFileSync(join(repo, ".thinkrail", "context", ".gitignore"), "utf8")).toBe("*\n");
 	expect(gitOut(repo, "status", "--porcelain")).not.toContain(".thinkrail");
+});
+
+test("a diff-range execution failure omits only that workspace's badge", async () => {
+	const workspace = {
+		id: "bad-range",
+		projectId: "p1",
+		name: "bad range",
+		branch: "main",
+		baseBranch: "main",
+		diffBase: "bad\u0000ref",
+		worktreePath: repo,
+		createdAt: 1,
+	} as Workspace;
+	writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify([workspace]));
+
+	const row = (await listWorkspaces("p1")).find((candidate) => candidate.id === workspace.id);
+	expect(row?.id).toBe(workspace.id);
+	expect(row && "diffStats" in row).toBe(false);
 });
 
 test("includeDiffStats: false keeps membership/order/Default ensure while skipping the diff-stat fan-out", async () => {

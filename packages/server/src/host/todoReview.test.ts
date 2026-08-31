@@ -42,6 +42,7 @@ import {
 	todoReviewAutoCycles,
 } from "../todos";
 import {
+	claimItemFix,
 	handleReviewerSettled,
 	installTodoReviewSeams,
 	isItemUnderActiveReview,
@@ -49,6 +50,7 @@ import {
 	itemOpenFindings,
 	maybeResumeReflection,
 	reconcilePendingReviewsOnBoot,
+	releaseItemFix,
 	startReviewAllFlow,
 	startTodoReviewFlow,
 } from "./todoReview";
@@ -152,6 +154,17 @@ function anchorAt(path: string): ReviewAnchor {
 	};
 }
 
+test("the per-item fix latch rejects overlap and participates in the removal guard", () => {
+	expect(claimItemFix(SESSION, "t1")).toBe(true);
+	try {
+		expect(claimItemFix(SESSION, "t1")).toBe(false);
+		expect(isItemUnderActiveReview(SESSION, "t1")).toBe(true);
+	} finally {
+		releaseItemFix(SESSION, "t1");
+	}
+	expect(isItemUnderActiveReview(SESSION, "t1")).toBe(false);
+});
+
 test("itemFixFindings keeps only this item's open unstale agent findings", async () => {
 	const todo = new TodoStore(worktree, SESSION).add({
 		title: "t",
@@ -189,6 +202,44 @@ test("itemFixFindings keeps only this item's open unstale agent findings", async
 		(c) => c.id,
 	);
 	expect(ids).toEqual([kept.id]);
+});
+
+test("a concurrent reviewer finding lands before an approval checks for open findings", async () => {
+	installTodoReviewSeams();
+	fauxReviewer.setResponses([fauxAssistantMessage("Looks fine, no findings.")]);
+	updateConfig({ reviewModel: toWireModel(fauxReviewer.getModel()), reviewEffort: "medium" });
+	const todo = new TodoStore(worktree, SESSION).add({
+		title: "t",
+		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],
+	});
+	const { reviewerSessionId } = await startTodoReviewFlow({
+		workspaceId: WS,
+		sessionId: SESSION,
+		id: todo.id,
+	});
+	const finding = createAddReviewCommentTool().execute(
+		"tc-concurrent-finding",
+		{ path: "a.ts", startLine: 1, body: "concurrent finding" } as never,
+		undefined,
+		undefined,
+		reviewerCtx(reviewerSessionId),
+	);
+	const verdict = createReviewVerdictTool().execute(
+		"tc-concurrent-verdict",
+		{ todoId: todo.id, verdict: "approve" } as never,
+		undefined,
+		undefined,
+		reviewerCtx(reviewerSessionId),
+	);
+
+	expect((await Promise.allSettled([finding, verdict])).map((result) => result.status)).toEqual([
+		"fulfilled",
+		"rejected",
+	]);
+	expect(await itemOpenFindings({ workspaceId: WS, sessionId: SESSION, id: todo.id })).toHaveLength(
+		1,
+	);
+	handleReviewerSettled(reviewerSessionId, { type: "agent_settled", terminal: null });
 });
 
 test("review_verdict rejects approve while this item still has an open finding from the same review", async () => {
@@ -571,6 +622,8 @@ test("when reflection refutes every candidate, no empty fix request is sent — 
 		reviewerCtx(reviewerSessionId),
 	);
 	expect(todoReviewAutoCycles(ref)).toBe(1);
+	handleReviewerSettled(reviewerSessionId, { type: "agent_settled", terminal: null });
+	expect(isItemUnderActiveReview(SESSION, todo.id)).toBe(true);
 
 	// fireReflection fires the transient reflector session detached, registering it in `pendingFix`
 	// right after creation but before this test can observe it — retry the actual reflect_finding
@@ -607,6 +660,10 @@ test("when reflection refutes every candidate, no empty fix request is sent — 
 		await new Promise((resolve) => setTimeout(resolve, 20));
 	}
 	maybeResumeReflection(reflectorSessionId);
+	while (todoReviewAutoCycles(ref) !== 2) {
+		if (Date.now() > deadline) throw new Error("reflected fix did not settle");
+		await new Promise((resolve) => setTimeout(resolve, 20));
+	}
 
 	// Never sent (nothing survived reflection) — still a draft, badged, for the human to see.
 	const after = (await getReviewSnapshot(WS)).comments.find((c) => c.id === finding.id);
@@ -615,8 +672,8 @@ test("when reflection refutes every candidate, no empty fix request is sent — 
 	// ever land a fresh artifact delta for this item (the worker was never asked to change anything),
 	// so maybeAutoReReview's trigger would otherwise never fire again — see host/SPEC.md.
 	expect(todoReviewAutoCycles(ref)).toBe(2);
+	expect(isItemUnderActiveReview(SESSION, todo.id)).toBe(false);
 
-	handleReviewerSettled(reviewerSessionId, { type: "agent_settled", terminal: null });
 	handleReviewerSettled(reflectorSessionId, { type: "agent_settled", terminal: null });
 });
 

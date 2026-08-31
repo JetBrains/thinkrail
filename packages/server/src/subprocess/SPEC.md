@@ -16,9 +16,11 @@ never what a particular child's output means.
 
 ## Boundary
 
-- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env? })` → `{ ok, out, err, timedOut, waitedMs }`: spawn
-  detached, capture both streams, complete on the child's **exit**, and on expiry kill the whole process
-  group. A failed launch is a result (`ok: false`, the launch error as `err`), never a throw.
+- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env? })` →
+  `{ ok, out, err, timedOut, launchFailed, waitedMs }`: spawn detached, capture both streams, complete on
+  the child's **exit**, and on expiry kill the whole process group. A failed launch is a result
+  (`ok: false`, `launchFailed: true`, the launch error as `err`), never a throw; callers can distinguish
+  infrastructure failure from a child that ran and exited nonzero.
 - **Public surface:** `runBounded`, `BoundedRun`, `BoundedRunOptions`.
 - **Allowed deps:** Bun/Node process APIs. Nothing else — it knows no feature, no wire type, no
   persistence.

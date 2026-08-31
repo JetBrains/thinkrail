@@ -8,6 +8,7 @@ import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 import { STORE_DIR, storeRel, TodoStore } from "pi-todos/core";
 import { saveWorkspaces } from "../persistence";
 import {
+	enqueueTodoMutation,
 	maybeAttachChangeArtifacts,
 	reconcileChangeArtifacts,
 	unattributedChanges,
@@ -28,6 +29,79 @@ test("pi-todos STORE_DIR mirrors the shared WORKSPACE_TODOS_DIR", async () => {
 	expect(STORE_DIR).toBe(WORKSPACE_TODOS_DIR);
 });
 
+test("the first queued mutation starts synchronously and reserves against re-entry", async () => {
+	const gate = deferred<void>();
+	const order: string[] = [];
+	let second!: Promise<void>;
+	const first = enqueueTodoMutation("queue-sync", () => {
+		order.push("first");
+		second = enqueueTodoMutation("queue-sync", () => {
+			order.push("second");
+		});
+		return gate.promise;
+	});
+
+	expect(order).toEqual(["first"]);
+	gate.resolve(undefined);
+	await Promise.all([first, second]);
+	expect(order).toEqual(["first", "second"]);
+});
+
+test("a newly active window is captured before a held queue or an earlier done item can yield", async () => {
+	const dataDir = mkdtempSync(join(tmpdir(), "todos-capture-data-"));
+	const worktree = mkdtempSync(join(tmpdir(), "todos-capture-wt-"));
+	const prevDataDir = process.env.THINKRAIL_DATA_DIR;
+	process.env.THINKRAIL_DATA_DIR = dataDir;
+	try {
+		execFileSync("git", ["init", "-b", "main"], { cwd: worktree, stdio: "ignore" });
+		execFileSync(
+			"git",
+			["-c", "user.email=t@t", "-c", "user.name=t", "commit", "--allow-empty", "-m", "init"],
+			{ cwd: worktree, stdio: "ignore" },
+		);
+		saveWorkspaces([
+			{
+				id: "ws-capture",
+				projectId: "p1",
+				name: "capture",
+				branch: "main",
+				baseBranch: "main",
+				worktreePath: worktree,
+				createdAt: 0,
+			} as Workspace,
+		]);
+		const store = new TodoStore(worktree, SESSION);
+		const done = store.add({ title: "earlier done" });
+		store.update(done.id, { status: "done" });
+		const active = store.add({ title: "active" });
+		store.update(active.id, { status: "in_progress" });
+		writeFileSync(join(worktree, "before.ts"), "before\n");
+
+		const gate = deferred<void>();
+		const blocker = enqueueTodoMutation("ws-capture", () => gate.promise);
+		const reconcile = maybeAttachChangeArtifacts("ws-capture", SESSION);
+		expect(readBaselines(worktree, SESSION)[active.id]?.paths).toEqual(["before.ts"]);
+		writeFileSync(join(worktree, "after.ts"), "after\n");
+
+		gate.resolve(undefined);
+		await Promise.all([blocker, reconcile]);
+		expect(readBaselines(worktree, SESSION)[active.id]?.paths).toEqual(["before.ts"]);
+	} finally {
+		if (prevDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+		else process.env.THINKRAIL_DATA_DIR = prevDataDir;
+		rmSync(dataDir, { recursive: true, force: true });
+		rmSync(worktree, { recursive: true, force: true });
+	}
+});
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((done) => {
+		resolve = done;
+	});
+	return { promise, resolve };
+}
+
 function tempStore(): { store: TodoStore; root: string } {
 	const root = mkdtempSync(join(tmpdir(), "server-todos-"));
 	return { store: new TodoStore(root, SESSION), root };
@@ -44,6 +118,96 @@ test("done attaches the delta of changes since the in_progress baseline", async 
 		store.update(todo.id, { status: "done" });
 		await reconcileChangeArtifacts(store, root, SESSION, async () => ["a.ts", "b.ts"]);
 		expect(store.get(todo.id)?.artifacts).toEqual([{ kind: "change", path: "b.ts" }]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("an in-progress reconcile aborts when the item finishes during its git read", async () => {
+	const { store, root } = tempStore();
+	try {
+		const todo = store.add({ title: "step" });
+		store.update(todo.id, { status: "in_progress" });
+		const changed = deferred<string[]>();
+		const stale = reconcileChangeArtifacts(store, root, SESSION, () => changed.promise);
+		store.update(todo.id, { status: "done" });
+		changed.resolve(["work.ts"]);
+		await stale;
+
+		expect(readBaselines(root, SESSION)[todo.id]).toBeUndefined();
+		expect(store.get(todo.id)?.artifacts).toBeUndefined();
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["work.ts"]);
+		expect(store.get(todo.id)?.artifacts).toEqual([{ kind: "change", path: "work.ts" }]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("a done reconcile cannot commit an item reopened during its git read", async () => {
+	const { store, root } = tempStore();
+	try {
+		const todo = store.add({ title: "step" });
+		store.update(todo.id, { status: "in_progress" });
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
+		store.update(todo.id, { status: "done" });
+		const changed = deferred<string[]>();
+		let committed = false;
+		const stale = reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			() => changed.promise,
+			() => {
+				committed = true;
+				return { sha: "must-not-commit" };
+			},
+		);
+		store.update(todo.id, { status: "in_progress" });
+		changed.resolve(["work.ts"]);
+		await stale;
+
+		expect(committed).toBe(false);
+		expect(store.get(todo.id)?.status).toBe("in_progress");
+		expect(store.get(todo.id)?.artifacts).toBeUndefined();
+		expect(readBaselines(root, SESSION)[todo.id]).toBeDefined();
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("later plan drift cannot retain an earlier completed item's baseline", async () => {
+	const { store, root } = tempStore();
+	try {
+		const first = store.add({ title: "first" });
+		const second = store.add({ title: "second" });
+		store.update(first.id, { status: "done" });
+		store.update(second.id, { status: "done" });
+		writeBaselines(root, SESSION, {
+			[first.id]: { paths: [], head: null },
+			[second.id]: { paths: [], head: null },
+		});
+		const firstRead = deferred<string[]>();
+		const secondRead = deferred<string[]>();
+		let reads = 0;
+		const stale = reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			() => (++reads === 1 ? firstRead.promise : secondRead.promise),
+			() => ({ sha: "committed-first" }),
+		);
+		firstRead.resolve(["first.ts"]);
+		while (reads < 2) await Promise.resolve();
+		store.update(second.id, { status: "in_progress" });
+		secondRead.resolve(["second.ts"]);
+		await stale;
+
+		const baselines = readBaselines(root, SESSION);
+		expect(baselines[first.id]).toBeUndefined();
+		expect(baselines[second.id]).toBeDefined();
+		expect(store.get(first.id)?.artifacts).toEqual([
+			{ kind: "commit", sha: "committed-first", label: "first" },
+		]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -504,6 +668,7 @@ test("a UI removal landing during an in-flight reconcile leaves no orphan window
 		store.update(todo.id, { status: "in_progress" });
 
 		const reconcile = maybeAttachChangeArtifacts("ws-todo-race", SESSION);
+		expect(readBaselines(worktree, SESSION)[todo.id]?.paths).toEqual(["dirty.ts"]);
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		const removal = removeTodo({ workspaceId: "ws-todo-race", sessionId: SESSION, id: todo.id });
 		await Promise.all([reconcile, removal]);

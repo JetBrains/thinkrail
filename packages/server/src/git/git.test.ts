@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
@@ -10,9 +10,9 @@ import {
 	gitDiffFile,
 	gitHeadSha,
 	gitStatus,
+	gitUncommittedPaths,
 	listBranches,
 	listCommits,
-	numstatPath,
 	prefetchBranch,
 	tryCurrentBranch,
 } from "./git";
@@ -21,6 +21,7 @@ import { isSafeRef } from "./refs";
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+const savedPath = process.env.PATH;
 
 function git(cwd: string, ...args: string[]): void {
 	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
@@ -48,7 +49,29 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+	if (savedPath === undefined) delete process.env.PATH;
+	else process.env.PATH = savedPath;
 });
+
+function installGitWrapper(subcommand: string, runBeforeFailure = false): void {
+	const executable = Bun.which("git");
+	if (!executable) throw new Error("git not found");
+	const bin = join(dataDir, "bin");
+	mkdirSync(bin);
+	const failure = runBeforeFailure
+		? `${JSON.stringify(executable)} "$@" || exit $?\necho "forced ${subcommand} failure" >&2\nexit 70`
+		: `echo "forced ${subcommand} failure" >&2\nexit 70`;
+	writeFileSync(
+		join(bin, "git"),
+		`#!/bin/sh\ncase " $* " in *" ${subcommand} "*) ${failure};; esac\nexec ${JSON.stringify(executable)} "$@"\n`,
+	);
+	chmodSync(join(bin, "git"), 0o755);
+	process.env.PATH = bin;
+}
+
+function failGitSubcommand(subcommand: string): void {
+	installGitWrapper(subcommand);
+}
 
 function seedWorkspace(extra: Partial<Workspace> = {}): void {
 	writeFileSync(
@@ -98,6 +121,34 @@ test("gitDiffFile: untracked → empty original; deleted → empty modified", as
 	expect(deleted.modified).toBe("");
 });
 
+test("git paths preserve legal leading and trailing filename whitespace", async () => {
+	seedWorkspace();
+	writeFileSync(join(repo, " tracked "), "before\n");
+	git(repo, "add", " tracked ");
+	git(repo, "commit", "-m", "spaced path");
+	writeFileSync(join(repo, " tracked "), "after\n");
+	writeFileSync(join(repo, " untracked "), "new\n");
+
+	expect(gitUncommittedPaths("w1")).toEqual([" tracked ", " untracked "]);
+	const changes = (await gitStatus("w1", { kind: "uncommitted" })).changes;
+	expect(changes.map((row) => row.path)).toEqual([" tracked ", " untracked "]);
+	expect(changes.find((row) => row.path === " tracked ")).toMatchObject({ added: 1, removed: 1 });
+});
+
+test("git numstat preserves tabs and newlines in a literal path", async () => {
+	seedWorkspace();
+	const path = "line\n\tname";
+	writeFileSync(join(repo, path), "before\n");
+	git(repo, "add", path);
+	git(repo, "commit", "-m", "unusual path");
+	writeFileSync(join(repo, path), "before\nafter\n");
+
+	expect(gitUncommittedPaths("w1")).toEqual([path]);
+	expect((await gitStatus("w1", { kind: "uncommitted" })).changes).toEqual([
+		{ path, status: "modified", added: 1, removed: 0 },
+	]);
+});
+
 test("gitStatus attaches per-file +/- counts, incl. untracked line counts", async () => {
 	seedWorkspace();
 	writeFileSync(join(repo, "README.md"), "# repo\nline two\nline three\n");
@@ -122,12 +173,6 @@ test("gitStatus omits counts for untracked binary or oversized files (matches tr
 	expect(bin?.added).toBeUndefined();
 	expect(changes.find((c) => c.path === "big.txt")?.added).toBeUndefined();
 	expect(changes.find((c) => c.path === "small.txt")).toMatchObject({ added: 2 });
-});
-
-test("numstatPath resolves rename/copy forms to the destination path", async () => {
-	expect(numstatPath("src/a.ts")).toBe("src/a.ts");
-	expect(numstatPath("old.ts => new.ts")).toBe("new.ts");
-	expect(numstatPath("src/{a => b}/x.ts")).toBe("src/b/x.ts");
 });
 
 test("gitDiffFile refuses a path escaping the worktree", async () => {
@@ -171,6 +216,12 @@ test("listBranches throws on an unknown project", async () => {
 	await expect(listBranches("nope")).rejects.toThrow(/Unknown project/);
 });
 
+test("listBranches never returns a partial catalog when either ref read fails", async () => {
+	failGitSubcommand("for-each-ref");
+
+	await expect(listBranches("p1")).rejects.toThrow(/Could not list local branches/);
+});
+
 test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown project", async () => {
 	const remoteRepo = join(dataDir, "remote.git");
 	git(repo, "init", "--bare", remoteRepo);
@@ -209,6 +260,13 @@ test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown p
 	git(clone, "push", "origin", "main");
 	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true, moved: true });
 	git(repo, "update-ref", "-d", "refs/heads/origin/main");
+
+	writeFileSync(join(clone, "remote-only-3.txt"), "even more\n");
+	git(clone, "add", "-A");
+	git(clone, "commit", "-m", "remote-only-3");
+	git(clone, "push", "origin", "main");
+	installGitWrapper("fetch", true);
+	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: false, moved: true });
 
 	expect(await prefetchBranch("p1", "main")).toEqual({ ok: false, moved: false });
 	expect(await prefetchBranch("nope", "origin/main")).toEqual({ ok: false, moved: false });
@@ -443,6 +501,13 @@ test("gitStatus/listCommits measure against the re-pointed diffBase, not the cre
 	]);
 });
 
+test("listCommits keeps semantic empty-range fallback but propagates execution failure", async () => {
+	seedWorkspace({ diffBase: "missing-base" });
+	expect(await listCommits("w1")).toEqual({ commits: [] });
+	process.env.PATH = join(dataDir, "missing-bin");
+	await expect(listCommits("w1")).rejects.toThrow(/Could not list commits/);
+});
+
 test("listCommits: a subject carrying the field separator can't shift author or timestamp", async () => {
 	git(repo, "switch", "-c", "feature");
 	writeFileSync(join(repo, "spoof.txt"), "spoof\n");
@@ -553,6 +618,33 @@ test("a failed diff throws — a broken read is never reported as a clean worktr
 	seedWorkspace({ diffBase: "no-such-branch" });
 	writeFileSync(join(repo, "dirty.txt"), "dirty\n");
 	await expect(gitStatus("w1")).rejects.toThrow(/Could not read the changed files/);
+});
+
+test("a failed untracked-file read is never reported as a clean worktree", async () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "untracked.txt"), "work\n");
+	failGitSubcommand("ls-files");
+
+	await expect(gitStatus("w1")).rejects.toThrow(/forced ls-files failure/);
+});
+
+test("a failed blob read is never reported as an empty side", async () => {
+	git(repo, "switch", "-c", "feature");
+	writeFileSync(join(repo, "README.md"), "changed\n");
+	seedWorkspace({ branch: "feature" });
+	failGitSubcommand("show");
+
+	await expect(gitDiffFile("w1", "README.md")).rejects.toThrow(/forced show failure/);
+});
+
+test("scope resolution never turns a git launch failure into a semantic outcome", async () => {
+	const workspace = { baseBranch: "main", worktreePath: repo };
+	process.env.PATH = join(dataDir, "missing-bin");
+
+	await expect(resolveDiffRange(workspace, { kind: "commit", sha: "abcd" })).rejects.toThrow(
+		/Could not resolve the diff range/,
+	);
+	await expect(resolveDiffRange(workspace)).rejects.toThrow(/Could not resolve the diff range/);
 });
 
 function stagedPaths(): string[] {
@@ -692,6 +784,13 @@ test("gitCommitPaths refuses to commit over a conflicted index (unmerged entries
 	const head = gitHeadSha("w1");
 	expect(gitCommitPaths("w1", "todo: mid-merge", ["impl.ts"])).toBeNull();
 	expect(gitHeadSha("w1")).toBe(head ?? "");
+});
+
+test("countUnpushedCommits distinguishes an absent remote ref from a failed count", async () => {
+	git(repo, "update-ref", "refs/remotes/origin/main", "HEAD");
+	failGitSubcommand("rev-list");
+
+	await expect(countUnpushedCommits(repo, "main")).rejects.toThrow(/forced rev-list failure/);
 });
 
 test("countUnpushedCommits counts what origin/<branch> lacks; null without the remote ref", async () => {

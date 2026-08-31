@@ -12,7 +12,7 @@ import type {
 import { logger } from "../log";
 import { loadProjects, loadWorkspaces } from "../persistence";
 import { changedFileArgs, type DiffRange, diffBaseRef, resolveDiffRange } from "./diffScope";
-import { git, gitAsync } from "./gitExec";
+import { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";
 import { isSafeRef, remoteTrackingRef } from "./refs";
 
 const log = logger("git");
@@ -80,6 +80,10 @@ export async function listBranches(projectId: string): Promise<BranchList> {
 		gitAsync(repo, ["for-each-ref", "--format=%(refname:short)", "refs/heads"]),
 		gitAsync(repo, ["for-each-ref", "--format=%(refname:short)\t%(symref)", "refs/remotes/origin"]),
 	]);
+	if (!localRefs.ok)
+		throw new Error(`Could not list local branches: ${localRefs.err || "git failed"}`);
+	if (!remoteRefs.ok)
+		throw new Error(`Could not list remote branches: ${remoteRefs.err || "git failed"}`);
 	const local = lines(localRefs.out);
 	const remote = lines(remoteRefs.out)
 		.map((line) => line.split("\t"))
@@ -135,10 +139,9 @@ export async function prefetchBranch(
 		["fetch", "origin", "--", ref.slice("origin/".length)],
 		{ network: true },
 	);
-	if (!result.ok) return { ok: false, moved: false };
 	const after = remoteRefOid(project.path, ref);
 	const moved = after !== null && after !== before;
-	return { ok: true, moved };
+	return { ok: result.ok, moved };
 }
 
 function mapStatus(code: string): GitFileStatus {
@@ -148,29 +151,30 @@ function mapStatus(code: string): GitFileStatus {
 	return "modified";
 }
 
-export function numstatPath(raw: string): string {
-	if (!raw.includes("=>")) return raw;
-	const brace = raw.match(/^(.*)\{.* => (.*)\}(.*)$/);
-	if (brace) return `${brace[1]}${brace[2]}${brace[3]}`.replace(/\/\//g, "/");
-	const arrow = raw.match(/ => (.*)$/);
-	return arrow ? (arrow[1] ?? raw) : raw;
-}
-
 async function numstat(
 	worktreePath: string,
 	range: DiffRange,
 ): Promise<Map<string, { added: number; removed: number }>> {
 	const counts = new Map<string, { added: number; removed: number }>();
-	const out = await gitAsync(worktreePath, changedFileArgs(range, "--numstat"));
+	const out = await gitAsync(worktreePath, changedFileArgs(range, "--numstat", true), {
+		raw: true,
+	});
 	if (!out.ok) throw diffFailure(out.err);
-	if (!out.out) return counts;
-	for (const line of out.out.split("\n")) {
-		const parts = line.split("\t");
-		if (parts.length < 3) continue;
-		const added = Number(parts[0]);
-		const removed = Number(parts[1]);
-		if (!Number.isFinite(added) || !Number.isFinite(removed)) continue;
-		counts.set(numstatPath(parts.slice(2).join("\t")), { added, removed });
+	const fields = nulFields(out.out);
+	for (let index = 0; index < fields.length; ) {
+		const header = fields[index++] ?? "";
+		const firstTab = header.indexOf("\t");
+		const secondTab = firstTab < 0 ? -1 : header.indexOf("\t", firstTab + 1);
+		if (firstTab < 0 || secondTab < 0) continue;
+		const added = Number(header.slice(0, firstTab));
+		const removed = Number(header.slice(firstTab + 1, secondTab));
+		let path = header.slice(secondTab + 1);
+		if (!path) {
+			index++;
+			path = fields[index++] ?? "";
+		}
+		if (!path || !Number.isFinite(added) || !Number.isFinite(removed)) continue;
+		counts.set(path, { added, removed });
 	}
 	return counts;
 }
@@ -199,40 +203,67 @@ function diffFailure(stderr: string): Error {
 	return new Error(`Could not read the changed files: ${stderr || "git failed"}`);
 }
 
+function nulFields(output: string): string[] {
+	const fields = output.split("\0");
+	if (fields.at(-1) === "") fields.pop();
+	return fields;
+}
+
+function parseNameStatus(output: string): Array<{ code: string; path: string }> {
+	const fields = nulFields(output);
+	const parsed: Array<{ code: string; path: string }> = [];
+	for (let index = 0; index < fields.length; ) {
+		const code = fields[index++] ?? "";
+		let path = fields[index++] ?? "";
+		if (code.startsWith("R") || code.startsWith("C")) path = fields[index++] ?? "";
+		if (path) parsed.push({ code, path });
+	}
+	return parsed;
+}
+
+export function gitUncommittedPaths(workspaceId: string): string[] {
+	const cwd = workspace(workspaceId).worktreePath;
+	const tracked = git(
+		cwd,
+		["diff", "--name-only", "-z", "--no-ext-diff", "--end-of-options", "HEAD", "--"],
+		{ raw: true },
+	);
+	if (!tracked.ok) throw diffFailure(tracked.err);
+	const untracked = git(cwd, ["ls-files", "-z", "--others", "--exclude-standard"], {
+		raw: true,
+	});
+	if (!untracked.ok) throw diffFailure(untracked.err);
+	return [...new Set([...nulFields(tracked.out), ...nulFields(untracked.out)])].sort();
+}
+
 export async function gitStatus(workspaceId: string, scope?: GitDiffScope): Promise<GitStatus> {
 	const ws = workspace(workspaceId);
 	const range = await resolveDiffRange(ws, scope);
 	const changes: GitFileChange[] = [];
 	const [counts, tracked] = await Promise.all([
 		numstat(ws.worktreePath, range),
-		gitAsync(ws.worktreePath, changedFileArgs(range, "--name-status")),
+		gitAsync(ws.worktreePath, changedFileArgs(range, "--name-status", true), { raw: true }),
 	]);
 	if (!tracked.ok) throw diffFailure(tracked.err);
-	if (tracked.out) {
-		for (const line of tracked.out.split("\n")) {
-			const parts = line.split("\t");
-			const code = parts[0] ?? "";
-			const path = parts.length > 2 ? parts[parts.length - 1] : parts[1];
-			if (path) changes.push({ path, status: mapStatus(code), ...counts.get(path) });
-		}
+	for (const { code, path } of parseNameStatus(tracked.out)) {
+		changes.push({ path, status: mapStatus(code), ...counts.get(path) });
 	}
 
 	if (range.untracked) {
-		const untracked = await gitAsync(ws.worktreePath, [
-			"ls-files",
-			"--others",
-			"--exclude-standard",
-		]);
-		if (untracked.ok && untracked.out) {
-			for (const path of untracked.out.split("\n")) {
-				if (!path) continue;
-				const added = untrackedAdded(ws.worktreePath, path);
-				changes.push({
-					path,
-					status: "untracked",
-					...(added !== undefined && { added, removed: 0 }),
-				});
-			}
+		const untracked = await gitAsync(
+			ws.worktreePath,
+			["ls-files", "-z", "--others", "--exclude-standard"],
+			{ raw: true },
+		);
+		if (!untracked.ok) throw diffFailure(untracked.err);
+		for (const path of nulFields(untracked.out)) {
+			if (!path) continue;
+			const added = untrackedAdded(ws.worktreePath, path);
+			changes.push({
+				path,
+				status: "untracked",
+				...(added !== undefined && { added, removed: 0 }),
+			});
 		}
 	}
 
@@ -246,19 +277,25 @@ export function readBlobAt(worktreePath: string, ref: string, path: string): str
 	return blobFrom(git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true }));
 }
 
+function blobIsMissing(stderr: string): boolean {
+	return /does not exist in|exists on disk, but not in/.test(stderr);
+}
+
 function blobFrom(shown: { ok: boolean; out: string; err: string }): string | null {
 	if (shown.ok) return shown.out;
-	if (!/does not exist in|exists on disk, but not in/.test(shown.err)) {
-		log.warn("git blob read failed");
-	}
+	if (!blobIsMissing(shown.err)) log.warn("git blob read failed");
 	return null;
 }
 
 async function showBlob(worktreePath: string, ref: string, path: string): Promise<string> {
 	const shown = await gitAsync(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], {
 		raw: true,
+		env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
 	});
-	return blobFrom(shown) ?? "";
+	if (shown.ok) return shown.out;
+	if (shown.failure) throw new Error(`Could not read the file diff: ${shown.err || "git failed"}`);
+	if (blobIsMissing(shown.err)) return "";
+	throw new Error(`Could not read the file diff: ${shown.err || "git failed"}`);
 }
 
 export async function gitDiffFile(
@@ -318,6 +355,7 @@ export async function listCommits(workspaceId: string): Promise<{ commits: GitCo
 		`${diffBaseRef(ws)}..HEAD`,
 		"--",
 	]);
+	if (log.failure) throw new Error(`Could not list commits: ${log.err || "git failed"}`);
 	if (!log.ok || !log.out) return { commits: [] };
 	const commits: GitCommit[] = [];
 	for (const line of log.out.split("\n")) {
@@ -347,7 +385,12 @@ export async function countUnpushedCommits(
 		`origin/${branch}..HEAD`,
 		"--",
 	]);
-	if (!counted.ok) return null;
+	if (counted.failure)
+		throw new Error(`Could not count unpushed commits: ${counted.err || "git failed"}`);
+	if (!counted.ok) {
+		if (remoteRefOid(worktreePath, `origin/${branch}`) === null) return null;
+		throw new Error(`Could not count unpushed commits: ${counted.err || "git failed"}`);
+	}
 	const count = Number(counted.out);
 	return Number.isSafeInteger(count) && count >= 0 ? count : null;
 }

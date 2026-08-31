@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TodoStore } from "pi-todos/core";
 import { gitCommitPaths } from "../git";
-import { reconcileChangeArtifacts } from "./artifacts";
+import { enqueueTodoMutation, reconcileChangeArtifacts } from "./artifacts";
 import {
 	clearAllPendingReviews,
 	dropReviewRecord,
@@ -200,7 +200,7 @@ test("requestTodoFix records changes_requested + feedback and renders the contex
 	const { id, sha } = committedItem(store, "Implement FloodWait handling", "flood.ts");
 	store.update(id, { summary: "Added throttling and fallback for failed batch sends." });
 
-	const { pkg, previous } = requestTodoFix({
+	const { pkg, previous, requested } = requestTodoFix({
 		workspaceId: "w1",
 		sessionId: SESSION,
 		id,
@@ -220,9 +220,26 @@ test("requestTodoFix records changes_requested + feedback and renders the contex
 	expect(review?.feedback).toBe("Don't retry RetryAfter here. Propagate it.");
 
 	// A pre-turn send rejection rolls the record back to what it replaced (here: none).
-	rollbackTodoFix({ workspaceId: "w1", sessionId: SESSION, id }, previous);
+	rollbackTodoFix({ workspaceId: "w1", sessionId: SESSION, id }, previous, requested);
 	const after = await listTodos({ workspaceId: "w1", sessionId: SESSION });
 	expect(after.todos.find((t) => t.id === id)?.review?.state).toBe("unreviewed");
+});
+
+test("a failed fix request cannot roll back a newer review decision", () => {
+	const store = new TodoStore(repo, SESSION);
+	const { id } = committedItem(store, "step", "impl.ts");
+	const { previous, requested } = requestTodoFix({
+		workspaceId: "w1",
+		sessionId: SESSION,
+		id,
+		feedback: "change it",
+	});
+	approveTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
+
+	expect(rollbackTodoFix({ workspaceId: "w1", sessionId: SESSION, id }, previous, requested)).toBe(
+		false,
+	);
+	expect(readReviewRecords(repo, SESSION)[id]?.state).toBe("reviewed");
 });
 
 test("review ops reject diff-less or unknown items; empty feedback is refused", () => {
@@ -284,6 +301,24 @@ test("todo.remove rejects while the item is pending an agent review, leaving it 
 	await expect(removeTodo({ workspaceId: "w1", sessionId: SESSION, id })).rejects.toThrow(
 		/currently under review/,
 	);
+	expect(store.get(id)).toBeDefined();
+});
+
+test("todo.remove rechecks the host's active-review guard after waiting in the mutation queue", async () => {
+	const store = new TodoStore(repo, SESSION);
+	const { id } = committedItem(store, "step", "impl.ts");
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const blocker = enqueueTodoMutation("w1", () => gate);
+	let active = false;
+	const removal = removeTodo({ workspaceId: "w1", sessionId: SESSION, id }, () => active);
+	active = true;
+	release();
+	await blocker;
+
+	await expect(removal).rejects.toThrow(/currently under review/);
 	expect(store.get(id)).toBeDefined();
 });
 

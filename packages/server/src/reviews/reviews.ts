@@ -210,6 +210,15 @@ function openSnapshot(workspaceId: string): ReviewSnapshot | null {
 	return existing?.review.status === "open" ? existing : null;
 }
 
+async function mutateSnapshot<T>(
+	workspaceId: string,
+	mutate: (snapshot: ReviewSnapshot) => T,
+): Promise<T> {
+	const existing = openSnapshot(workspaceId);
+	if (existing) return mutate(existing);
+	return mutate(await ensureSnapshot(workspaceId));
+}
+
 function reanchorSnapshot(workspaceId: string, snapshot: ReviewSnapshot): boolean {
 	const ws = getWorkspace(workspaceId);
 	let changed = false;
@@ -280,57 +289,60 @@ export async function addComment(input: AddCommentInput): Promise<ReviewComment>
 	if (input.kind === "review" && input.anchor)
 		throw new Error("A review-level comment carries no anchor.");
 	let anchor = input.anchor;
-	if (anchor) {
+	if (anchor?.side === "base") {
 		const ws = getWorkspace(input.workspaceId);
-		if (anchor.side === "base") {
-			const originalRef = (await resolveDiffRange(ws, input.scope)).originalRef;
-			if (!originalRef)
-				throw new Error("This diff has no base side to comment on (nothing precedes the change).");
-			const baseRef = resolveCommitOid(ws.worktreePath, originalRef);
-			if (!baseRef)
-				throw new Error(`Can't pin the base side of this diff: ${originalRef} names no commit.`);
-			const content = readBlobAt(ws.worktreePath, baseRef, anchor.path);
-			if (content === null)
-				throw new Error(`The base (${baseRef}) has no ${anchor.path} to comment on.`);
-			anchor = captureAnchor(
-				{ ...anchor, baseRef, ...(input.scope ? { scope: input.scope } : {}) },
-				content,
-			);
-		} else {
-			const content = readWorktreeFile(ws.worktreePath, anchor.path);
-			if (content !== null) anchor = captureAnchor(anchor, content);
-		}
+		const originalRef = (await resolveDiffRange(ws, input.scope)).originalRef;
+		if (!originalRef)
+			throw new Error("This diff has no base side to comment on (nothing precedes the change).");
+		const baseRef = resolveCommitOid(ws.worktreePath, originalRef);
+		if (!baseRef)
+			throw new Error(`Can't pin the base side of this diff: ${originalRef} names no commit.`);
+		const content = readBlobAt(ws.worktreePath, baseRef, anchor.path);
+		if (content === null)
+			throw new Error(`The base (${baseRef}) has no ${anchor.path} to comment on.`);
+		anchor = captureAnchor(
+			{ ...anchor, baseRef, ...(input.scope ? { scope: input.scope } : {}) },
+			content,
+		);
 	}
-	const snapshot = await ensureSnapshot(input.workspaceId);
-	const comment: ReviewComment = {
-		id: `rc_${randomUUID().slice(0, 8)}`,
-		reviewId: snapshot.review.id,
-		kind: input.kind,
-		anchor,
-		body,
-		status: "draft",
-		anchorState: "anchored",
-		...(input.author === "agent" ? { author: "agent" as const } : {}),
-		...(input.origin ? { origin: input.origin } : {}),
-		createdAt: Date.now(),
-	};
-	snapshot.comments.push(comment);
-	const key = reviewSessionKey(comment);
-	if (snapshot.review.doneFiles?.includes(key))
-		snapshot.review.doneFiles = snapshot.review.doneFiles.filter((p) => p !== key);
-	persistAndPublish(input.workspaceId, snapshot);
-	return comment;
+	return mutateSnapshot(input.workspaceId, (snapshot) => {
+		let captured = anchor;
+		if (captured?.side === "worktree") {
+			const ws = getWorkspace(input.workspaceId);
+			const content = readWorktreeFile(ws.worktreePath, captured.path);
+			if (content !== null) captured = captureAnchor(captured, content);
+		}
+		const comment: ReviewComment = {
+			id: `rc_${randomUUID().slice(0, 8)}`,
+			reviewId: snapshot.review.id,
+			kind: input.kind,
+			anchor: captured,
+			body,
+			status: "draft",
+			anchorState: "anchored",
+			...(input.author === "agent" ? { author: "agent" as const } : {}),
+			...(input.origin ? { origin: input.origin } : {}),
+			createdAt: Date.now(),
+		};
+		snapshot.comments.push(comment);
+		const key = reviewSessionKey(comment);
+		if (snapshot.review.doneFiles?.includes(key))
+			snapshot.review.doneFiles = snapshot.review.doneFiles.filter((p) => p !== key);
+		persistAndPublish(input.workspaceId, snapshot);
+		return comment;
+	});
 }
 
 export async function markFileDone(workspaceId: string, path: string): Promise<void> {
-	const snapshot = await ensureSnapshot(workspaceId);
-	const unresolved = snapshot.comments.some(
-		(c) => reviewSessionKey(c) === path && (c.status === "draft" || c.status === "sent"),
-	);
-	if (unresolved) throw new Error("The file still has unresolved comments.");
-	const done = snapshot.review.doneFiles ?? [];
-	if (!done.includes(path)) snapshot.review.doneFiles = [...done, path];
-	persistAndPublish(workspaceId, snapshot);
+	return mutateSnapshot(workspaceId, (snapshot) => {
+		const unresolved = snapshot.comments.some(
+			(c) => reviewSessionKey(c) === path && (c.status === "draft" || c.status === "sent"),
+		);
+		if (unresolved) throw new Error("The file still has unresolved comments.");
+		const done = snapshot.review.doneFiles ?? [];
+		if (!done.includes(path)) snapshot.review.doneFiles = [...done, path];
+		persistAndPublish(workspaceId, snapshot);
+	});
 }
 
 function mustFind(snapshot: ReviewSnapshot, id: string): ReviewComment {
@@ -345,26 +357,29 @@ export async function updateComment(input: {
 	body?: string;
 	status?: ReviewCommentStatus;
 }): Promise<ReviewComment> {
-	const snapshot = await ensureSnapshot(input.workspaceId);
-	const comment = mustFind(snapshot, input.id);
-	if (input.body !== undefined) {
-		if (comment.status !== "draft") throw new Error("Only a draft comment's text can be edited.");
-		if (!input.body.trim()) throw new Error("A comment body is required.");
-		comment.body = input.body.trim();
-	}
-	if (input.status !== undefined && input.status !== comment.status) {
-		if (input.status !== "resolved" && input.status !== "dismissed")
-			throw new Error(`A comment can only be resolved or dismissed — not set to ${input.status}.`);
-		if (comment.status !== "draft" && comment.status !== "sent")
-			throw new Error(`A ${comment.status} comment is final — add a new comment instead.`);
-		comment.status = input.status;
-		if (input.status === "resolved") {
-			comment.resolvedBy = "user";
-			comment.resolvedAt = Date.now();
+	return mutateSnapshot(input.workspaceId, (snapshot) => {
+		const comment = mustFind(snapshot, input.id);
+		if (input.body !== undefined) {
+			if (comment.status !== "draft") throw new Error("Only a draft comment's text can be edited.");
+			if (!input.body.trim()) throw new Error("A comment body is required.");
+			comment.body = input.body.trim();
 		}
-	}
-	persistAndPublish(input.workspaceId, snapshot);
-	return comment;
+		if (input.status !== undefined && input.status !== comment.status) {
+			if (input.status !== "resolved" && input.status !== "dismissed")
+				throw new Error(
+					`A comment can only be resolved or dismissed — not set to ${input.status}.`,
+				);
+			if (comment.status !== "draft" && comment.status !== "sent")
+				throw new Error(`A ${comment.status} comment is final — add a new comment instead.`);
+			comment.status = input.status;
+			if (input.status === "resolved") {
+				comment.resolvedBy = "user";
+				comment.resolvedAt = Date.now();
+			}
+		}
+		persistAndPublish(input.workspaceId, snapshot);
+		return comment;
+	});
 }
 
 export async function setReflection(
@@ -372,23 +387,26 @@ export async function setReflection(
 	commentId: string,
 	reflection: NonNullable<ReviewComment["reflection"]>,
 ): Promise<ReviewComment> {
-	const snapshot = await ensureSnapshot(workspaceId);
-	const comment = mustFind(snapshot, commentId);
-	comment.reflection = reflection;
-	persistAndPublish(workspaceId, snapshot);
-	return comment;
+	return mutateSnapshot(workspaceId, (snapshot) => {
+		const comment = mustFind(snapshot, commentId);
+		comment.reflection = reflection;
+		persistAndPublish(workspaceId, snapshot);
+		return comment;
+	});
 }
 
 export async function deleteComment(workspaceId: string, id: string): Promise<void> {
-	const snapshot = await ensureSnapshot(workspaceId);
-	const comment = mustFind(snapshot, id);
-	if (comment.status !== "draft")
-		throw new Error("Only a draft can be deleted — a sent comment is a record.");
-	snapshot.comments = snapshot.comments.filter((c) => c.id !== id);
-	persistAndPublish(workspaceId, snapshot);
+	return mutateSnapshot(workspaceId, (snapshot) => {
+		const comment = mustFind(snapshot, id);
+		if (comment.status !== "draft")
+			throw new Error("Only a draft can be deleted — a sent comment is a record.");
+		snapshot.comments = snapshot.comments.filter((c) => c.id !== id);
+		persistAndPublish(workspaceId, snapshot);
+	});
 }
 
 export async function clearReview(workspaceId: string): Promise<ReviewSnapshot> {
+	await ensureSnapshot(workspaceId);
 	const fresh = await freshSnapshot(workspaceId);
 	const existing = load(workspaceId);
 	if (existing) archiveRecords(workspaceId, existing);
@@ -439,19 +457,22 @@ export async function markCommentsSent(
 	commentIds: string[],
 	sessionId: string,
 ): Promise<void> {
-	const snapshot = await ensureSnapshot(workspaceId);
-	const ids = new Set(commentIds);
-	for (const comment of snapshot.comments) {
-		if (!ids.has(comment.id)) continue;
-		comment.status = "sent";
-		comment.sentAt = Date.now();
-		comment.sessionId = sessionId;
-		snapshot.review.fileSessions = {
-			...snapshot.review.fileSessions,
-			[reviewSessionKey(comment)]: sessionId,
-		};
-	}
-	persistAndPublish(workspaceId, snapshot);
+	return mutateSnapshot(workspaceId, (snapshot) => {
+		const comments = commentIds.map((id) => mustFind(snapshot, id));
+		for (const comment of comments) {
+			if (comment.status !== "draft") throw new Error(`Comment ${comment.id} is not a draft.`);
+		}
+		for (const comment of comments) {
+			comment.status = "sent";
+			comment.sentAt = Date.now();
+			comment.sessionId = sessionId;
+			snapshot.review.fileSessions = {
+				...snapshot.review.fileSessions,
+				[reviewSessionKey(comment)]: sessionId,
+			};
+		}
+		persistAndPublish(workspaceId, snapshot);
+	});
 }
 
 export function rollbackSend(workspaceId: string, commentIds: string[], sessionId: string): void {

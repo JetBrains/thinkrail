@@ -12,7 +12,12 @@ const LOCAL_NO_ANSWER = "git did not exit";
 const NETWORK_NO_ANSWER =
 	"the remote never answered; if it uses SSH, a key that is not loaded is the usual cause (`ssh-add`)";
 
-type GitResult = { ok: boolean; out: string; err: string };
+export type GitResult = {
+	ok: boolean;
+	out: string;
+	err: string;
+	failure?: "timeout" | "launch";
+};
 
 export function nonInteractiveGitEnv(): Record<string, string | undefined> {
 	return { ...process.env, GIT_TERMINAL_PROMPT: "0" };
@@ -57,11 +62,17 @@ export async function gitAsync(
 	if (run.timedOut) {
 		const captured = boundedStderr(run.err);
 		const noAnswer = opts.network ? NETWORK_NO_ANSWER : LOCAL_NO_ANSWER;
-		return { ok: false, out: "", err: `${STALLED(run.waitedMs)} — ${captured || noAnswer}` };
+		return {
+			ok: false,
+			out: "",
+			err: `${STALLED(run.waitedMs)} — ${captured || noAnswer}`,
+			failure: "timeout",
+		};
 	}
 	return {
 		ok: run.ok,
 		out: opts.raw ? run.out : run.out.trim(),
 		err: boundedStderr(run.err),
+		...(run.launchFailed && { failure: "launch" as const }),
 	};
 }

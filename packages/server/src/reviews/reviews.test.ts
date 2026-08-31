@@ -183,6 +183,16 @@ test("a workspace removed while creation awaits git gets no resurrected review f
 	).toBeUndefined();
 });
 
+test("Clear serializes with a first lazy review read", async () => {
+	const clearing = clearReview(WS_ID);
+	const reading = getReviewSnapshot(WS_ID);
+	const [cleared] = await Promise.all([clearing, reading]);
+
+	expect((await getReviewSnapshot(WS_ID)).review.id).toBe(cleared.review.id);
+	expect(pushes).toHaveLength(1);
+	expect(pushes[0]?.review.id).toBe(cleared.review.id);
+});
+
 test("review creation retries when the diff target changes during base resolution", async () => {
 	gitIn(worktree, ["switch", "-c", "feature"]);
 	writeFileSync(join(worktree, "feature.ts"), "feature\n");
@@ -272,6 +282,17 @@ test("the implicit batch sweeps agent drafts too — findings ride the user's se
 	expect((await sendableComments(WS_ID)).map((c) => c.id)).toEqual([mine.id, theirs.id]);
 });
 
+test("mark sent rejects lifecycle drift without partially updating the surviving draft", async () => {
+	const comment = await addInline("draft");
+
+	await expect(markCommentsSent(WS_ID, [comment.id, "rc_missing"], "sess-file")).rejects.toThrow(
+		/Unknown review comment/,
+	);
+	expect((await getReviewSnapshot(WS_ID)).comments.find((c) => c.id === comment.id)?.status).toBe(
+		"draft",
+	);
+});
+
 test("rollbackSend undoes an optimistic markSent (pre-turn rejection) → drafts again, chat unpinned", async () => {
 	const c1 = await addInline("one");
 	const c2 = await addInline("two");
@@ -354,6 +375,20 @@ test("agent resolve is bound to the chat the comment was actually sent to — no
 	expect(resolveCommentFromAgent("sess1", comment.id).status).toBe("resolved");
 });
 
+test("an open-snapshot mutation cannot overwrite an agent resolution across its async return", async () => {
+	const sent = await addInline("sent first");
+	await markCommentsSent(WS_ID, [sent.id], "sess1");
+
+	const adding = addInline("added concurrently");
+	resolveCommentFromAgent("sess1", sent.id, "fixed concurrently");
+	await adding;
+
+	expect((await getReviewSnapshot(WS_ID)).comments.find((c) => c.id === sent.id)).toMatchObject({
+		status: "resolved",
+		resolveNote: "fixed concurrently",
+	});
+});
+
 test("a draft finding is unresolvable through resolve_comment even when self-authored by the agent — the reviewer must not clear its own unsent finding", async () => {
 	const finding = await addComment({
 		workspaceId: WS_ID,
@@ -369,6 +404,14 @@ test("a draft finding is unresolvable through resolve_comment even when self-aut
 	expect(() => resolveCommentFromAgent("reviewer-sess", finding.id)).toThrow("not sent");
 	const scratch = await addInline("human scratch");
 	expect(() => resolveCommentFromAgent("any-sess", scratch.id)).toThrow("not sent");
+});
+
+test("the first worktree comment captures its anchor after lazy snapshot creation", async () => {
+	const adding = addInline("late anchor");
+	writeFileSync(join(worktree, "a.ts"), "const a = 1;\nconst b = 22;\nconst c = 3;\n");
+	const comment = await adding;
+	const quote = comment.anchor?.selectors.find((selector) => selector.kind === "textQuote");
+	expect(quote).toMatchObject({ exact: "const b = 22;" });
 });
 
 test("clear keeps an agent resolution that lands while the fresh base resolves", async () => {
