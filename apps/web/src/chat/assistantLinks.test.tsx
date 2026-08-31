@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AssistantMarkdown, assistantFileTarget } from "./assistantLinks";
+import { AssistantMarkdown, assistantFileTarget, assistantUrlTransform } from "./assistantLinks";
 
 describe("assistantFileTarget", () => {
 	test("accepts normalized relative paths and absolute paths inside the workspace", () => {
@@ -12,6 +12,7 @@ describe("assistantFileTarget", () => {
 			"reports/manual report.md",
 		);
 		expect(assistantFileTarget("/repo/docs/report.md?raw=1", "/repo")).toBe("docs/report.md");
+		expect(assistantFileTarget("C:/repo/docs/report.md", "C:/repo")).toBe("docs/report.md");
 	});
 
 	test("rejects external, fragment, outside-workspace, and context-free targets", () => {
@@ -29,6 +30,20 @@ describe("assistantFileTarget", () => {
 		}
 		expect(assistantFileTarget("README.md", undefined)).toBeNull();
 	});
+});
+
+test("assistant URL transforms preserve only anchor-shaped Windows paths", () => {
+	const anchor = { tagName: "a" };
+	expect(assistantUrlTransform("C:/repo/report.md", "href", anchor)).toBe("C:/repo/report.md");
+	expect(assistantUrlTransform("C:%5Crepo%5Creport.md", "href", anchor)).toBe(
+		"C:%5Crepo%5Creport.md",
+	);
+	expect(assistantUrlTransform("C:/repo/image.png", "src", { tagName: "img" })).toBe("");
+	expect(assistantUrlTransform("C:/repo/style.css", "href", { tagName: "link" })).toBe("");
+	expect(assistantUrlTransform("javascript:alert(1)", "href", anchor)).toBe("");
+	expect(assistantUrlTransform("https://example.com/report", "href", anchor)).toBe(
+		"https://example.com/report",
+	);
 });
 
 test("assistant Markdown distinguishes workspace files from ordinary anchors", () => {
@@ -50,4 +65,26 @@ test("assistant Markdown distinguishes workspace files from ordinary anchors", (
 	expect(html.match(/target="_blank"/g)).toHaveLength(2);
 	expect(html).toContain('href="https://example.com/report"');
 	expect(html).toContain('href="../report.md"');
+});
+
+test("assistant Markdown opens contained Windows paths without exposing unsafe URLs", () => {
+	const html = renderToStaticMarkup(
+		<AssistantMarkdown
+			text={[
+				"[inside](C:/repo/docs/report.md)",
+				"[inside backslash](C:\\repo\\docs\\backslash.md)",
+				"[outside](D:/other/report.md)",
+				"[unsafe](javascript:alert(1))",
+			].join("\n\n")}
+			workspaceRoot="C:/repo"
+			onOpenFile={() => {}}
+		/>,
+	);
+
+	expect(html).toContain('data-path="docs/report.md"');
+	expect(html).toContain('data-path="docs/backslash.md"');
+	expect(html).not.toContain('href="C:/repo/docs/report.md"');
+	expect(html).not.toContain('href="C:%5Crepo%5Cdocs%5Cbackslash.md"');
+	expect(html).not.toContain('href="D:/other/report.md"');
+	expect(html).not.toContain('href="javascript:alert(1)"');
 });

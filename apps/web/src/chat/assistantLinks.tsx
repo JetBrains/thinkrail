@@ -1,7 +1,22 @@
 import { type ReactNode, useMemo } from "react";
-import type { Components } from "react-markdown";
+import { type Components, defaultUrlTransform } from "react-markdown";
+import { isWindowsAbsolutePath, workspaceFileTarget } from "./fileTargets";
 import { Markdown } from "./Markdown";
-import { toolFileTarget } from "./tools/ToolFileLink";
+
+export function assistantUrlTransform(
+	value: string,
+	property: string,
+	node: { tagName: string },
+): string {
+	if (property === "href" && node.tagName === "a") {
+		try {
+			if (isWindowsAbsolutePath(decodeURIComponent(value))) return value;
+		} catch {
+			return defaultUrlTransform(value);
+		}
+	}
+	return defaultUrlTransform(value);
+}
 
 export function assistantFileTarget(
 	href: string | undefined,
@@ -14,7 +29,7 @@ export function assistantFileTarget(
 	const encodedPath = candidate.split(/[?#]/, 1)[0];
 	if (!encodedPath) return null;
 	try {
-		return toolFileTarget(decodeURIComponent(encodedPath), workspaceRoot);
+		return workspaceFileTarget(decodeURIComponent(encodedPath), workspaceRoot);
 	} catch {
 		return null;
 	}
@@ -33,8 +48,9 @@ function AssistantLink({
 }) {
 	const target = assistantFileTarget(href, workspaceRoot);
 	if (!target || !onOpenFile) {
+		const safeHref = href === undefined ? undefined : defaultUrlTransform(href);
 		return (
-			<a href={href} target="_blank" rel="noopener noreferrer">
+			<a href={safeHref} target="_blank" rel="noopener noreferrer">
 				{children}
 			</a>
 		);
@@ -71,5 +87,5 @@ export function AssistantMarkdown({
 		}),
 		[workspaceRoot, onOpenFile],
 	);
-	return <Markdown text={text} components={components} />;
+	return <Markdown text={text} urlTransform={assistantUrlTransform} components={components} />;
 }

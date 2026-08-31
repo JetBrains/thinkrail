@@ -84,8 +84,11 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   workspace-file callback; absolute paths are accepted only when they normalize inside the active worktree,
   while URL schemes, protocol-relative URLs, fragments, and unsafe/outside paths retain ordinary safe
   new-tab anchor behavior. Percent-encoded file paths are decoded once before validation, so encoded
-  separators and traversal cannot bypass containment. The generic `Markdown` primitive remains props-driven
-  and receives this behavior as an `a` component override only at the assistant-turn integration edge;
+  separators and traversal cannot bypass containment. A narrow assistant-only URL transform preserves
+  recognized Windows drive-letter anchor paths, including Markdown's percent-encoded backslash form, until
+  validation; every other value delegates to react-markdown's default sanitizer, and a rejected Windows path
+  is re-sanitized before fallback anchor rendering. The generic `Markdown` primitive remains props-driven and
+  receives this behavior only as an `a` component override at the assistant-turn integration edge;
   accepted workspace targets render as button controls without a raw browser `href`, so alternate native
   anchor activation cannot escape into the SPA fallback. That override keeps a stable component identity
   while its workspace inputs are unchanged: workbench focus can rerender a chat row between pointer-down and
@@ -889,14 +892,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 ## Boundary
 
-- **Public surface:** the registry API (`toolRegistry`), the props-driven slash-completion primitive, and
-  the renderers (incl. the presentational `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
+- **Public surface:** the registry API (`toolRegistry`), the shared workspace-file target canonicalizer
+  (`fileTargets`), the props-driven slash-completion primitive, and the renderers (incl. the presentational
+  `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses the compact bubble skin (`tr-prose-chat`),
   `panels/MarkdownPreview` the document skin (`tr-prose-doc`). A skin names exactly one generated
   `tr-prose-*` system and then carries only spacing/measure/chrome — no size, weight, leading or
   tracking (see `styles/TYPOGRAPHY.md`); a caller may
-  also **extend** the render with extra `remarkPlugins` + `components`, e.g. the file view's GitHub
-  alert callouts), the view types
+  also **extend** the render with an optional `urlTransform`, extra `remarkPlugins`, and `components`, e.g.
+  the file view's GitHub alert callouts), the view types
   (`types.ts`,
   incl. `ToolResultState` + `ExtUiDialogRequest`), and `ChatView` (lazy-mounted by the shell workbench
   resource renderer;
