@@ -414,6 +414,23 @@ describe("reading-band reader intent", () => {
 		});
 	});
 
+	it("cancels controller movement for a local reveal without changing follow state", () => {
+		const following = createHarness();
+		following.setGeometry({ edgeBottom: 500 });
+		following.controller.contentChanged();
+		expect(following.controller.getSnapshot().moving).toBe(true);
+
+		following.controller.cancelMovement();
+		expect(following.pendingFrames()).toBe(0);
+		expect(following.cancelledFrames()).toBe(1);
+		expect(following.controller.getSnapshot()).toMatchObject({ following: true, moving: false });
+
+		const detached = createHarness();
+		detached.controller.readerLeft();
+		detached.controller.cancelMovement();
+		expect(detached.controller.getSnapshot().following).toBe(false);
+	});
+
 	it("does not re-arm from geometry alone, but manual return and the button do", () => {
 		const harness = createHarness();
 		harness.controller.readerLeft();

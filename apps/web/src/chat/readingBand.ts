@@ -48,6 +48,7 @@ export interface ReadingBandController {
 	userTurnArrived: (index: number, source: "immediate" | "queued") => void;
 	latestRowArrived: (index: number) => void;
 	contentChanged: () => void;
+	cancelMovement: () => void;
 	readerLeft: () => void;
 	readerReachedEdge: () => void;
 	returnToEdge: () => void;
@@ -280,6 +281,10 @@ export function createReadingBandController(
 			if (bounds) moveTo(latestScrollTop(bounds), false, false);
 		},
 		contentChanged,
+		cancelMovement: () => {
+			cancelMotion();
+			cancelAnchor();
+		},
 		readerLeft: () => {
 			cancelMotion();
 			cancelAnchor();

@@ -389,10 +389,13 @@ export function AskUserQuestionCard({
 		if (previousTab.current === tab) return;
 		previousTab.current = tab;
 		const frame = requestAnimationFrame(() => {
-			if (cardRef.current) focusCurrentQuestionPage(cardRef.current);
+			const card = cardRef.current;
+			if (!card) return;
+			actions?.revealChatElement(card, "start");
+			focusCurrentQuestionPage(card);
 		});
 		return () => cancelAnimationFrame(frame);
-	}, [tab]);
+	}, [actions, tab]);
 
 	useEffect(() => {
 		if (!awaiting || streaming || questions.length === 0 || submitted) return;
@@ -419,7 +422,7 @@ export function AskUserQuestionCard({
 			setAnnounced(true);
 			const card = cardRef.current;
 			if (!card) return;
-			card.scrollIntoView({ block: "nearest" });
+			actions?.revealChatElement(card, "nearest");
 			settleFocus();
 		});
 		return () => {
@@ -427,7 +430,7 @@ export function AskUserQuestionCard({
 			window.removeEventListener("pointerdown", yieldToUser, { capture: true });
 			window.removeEventListener("keydown", yieldToUser, { capture: true });
 		};
-	}, [awaiting, focusScope, questions.length, streaming, submitted, toolCallId]);
+	}, [actions, awaiting, focusScope, questions.length, streaming, submitted, toolCallId]);
 
 	const stateFor = (qi: number): QState => states[qi] ?? emptyQState();
 	const patch = (qi: number, next: Partial<QState>) =>

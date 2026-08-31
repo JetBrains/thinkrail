@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import "./tools/register";
 import {
 	estimateChatRowHeight,
 	estimateChatRowHeights,
@@ -18,6 +19,19 @@ function userRow(id: string, content: string): ChatRow {
 		kind: "user",
 		id,
 		message: { role: "user", content, timestamp: 0 },
+	};
+}
+
+function toolRow(toolName: string, args: Record<string, unknown>): ChatRow {
+	return {
+		kind: "tool",
+		id: `${toolName}-1`,
+		toolCallId: `${toolName}-1`,
+		toolName,
+		args,
+		tool: { status: "done", raw: null },
+		dead: false,
+		streaming: false,
 	};
 }
 
@@ -88,5 +102,35 @@ describe("chat row height estimates", () => {
 		)[0];
 
 		expect(grown).toBeGreaterThan(initial ?? 0);
+	});
+
+	test("models collapsed reports and expanded visualization payloads", () => {
+		const report: ChatRow = {
+			kind: "subagentCompletion",
+			id: "subagent-1",
+			text: Array.from({ length: 100 }, () => paragraph).join("\n\n"),
+			details: {
+				childSessionId: "child-1",
+				task: "Inspect the fixture",
+				status: "completed",
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					cost: 0,
+					turns: 1,
+					contextTokens: 0,
+				},
+				durationMs: 1,
+			},
+		};
+		const visualization = toolRow("visualize", {
+			type: "comparison",
+			options: [{ name: "Detailed", description: paragraph.repeat(100) }],
+		});
+
+		expect(estimateChatRowHeight(report)).toBeLessThan(100);
+		expect(estimateChatRowHeight(visualization)).toBeGreaterThan(3_000);
 	});
 });
