@@ -54,7 +54,8 @@ Tiny UI helpers shared across components.
   semantic resource key, so delimiters and stable noncanonical placement ids cannot split or alias identities.
 - **Public surface (barrel):** `cn`, `isMarkdownPath`, `stripFrontmatter`, `cssColorToHex`,
   `normalizePath`, `isAbsolutePath`, `projectRelativePath` (canonical worktree-relative POSIX identity;
-  collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection),
+  collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
+  drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
   `shallowEqualArrays`, `userText`, `parseSkillInvocation`, `matchesSkillInvocationCommand`,
   `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `copyText`, `randomId`,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,

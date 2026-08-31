@@ -121,6 +121,10 @@ test("projectRelativePath yields the worktree-relative tab identity from every r
 	expect(projectRelativePath("src/./nested/../foo.ts", root)).toBe("src/foo.ts");
 	expect(projectRelativePath("../outside.ts", root)).toBe("../outside.ts");
 	expect(projectRelativePath("C:\\wt\\ws\\src\\..\\foo.ts", "C:\\wt\\ws")).toBe("foo.ts");
+	expect(projectRelativePath("c:/WT/ws/Src/Foo.ts", "C:/wt/WS")).toBe("Src/Foo.ts");
+	expect(projectRelativePath("C:/Repository/foo.ts", "c:/repo")).toBe("C:/Repository/foo.ts");
+	expect(projectRelativePath("D:/Repo/foo.ts", "c:/repo")).toBe("D:/Repo/foo.ts");
+	expect(projectRelativePath("/WT/ws/src/foo.ts", root)).toBe("/WT/ws/src/foo.ts");
 	expect(projectRelativePath("/src/foo.ts", "/")).toBe("src/foo.ts");
 	expect(projectRelativePath("C:/src/foo.ts", "C:/")).toBe("src/foo.ts");
 	expect(projectRelativePath("/elsewhere/foo.ts", root)).toBe("/elsewhere/foo.ts");

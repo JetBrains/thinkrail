@@ -12,7 +12,7 @@ describe("assistantFileTarget", () => {
 			"reports/manual report.md",
 		);
 		expect(assistantFileTarget("/repo/docs/report.md?raw=1", "/repo")).toBe("docs/report.md");
-		expect(assistantFileTarget("C:/repo/docs/report.md", "C:/repo")).toBe("docs/report.md");
+		expect(assistantFileTarget("c:/repo/docs/Report.md", "C:/Repo")).toBe("docs/Report.md");
 	});
 
 	test("rejects external, fragment, outside-workspace, and context-free targets", () => {
@@ -71,20 +71,21 @@ test("assistant Markdown opens contained Windows paths without exposing unsafe U
 	const html = renderToStaticMarkup(
 		<AssistantMarkdown
 			text={[
-				"[inside](C:/repo/docs/report.md)",
-				"[inside backslash](C:\\repo\\docs\\backslash.md)",
+				"[inside](c:/repo/docs/Report.md)",
+				"[inside backslash](c:\\REPO\\docs\\backslash.md)",
 				"[outside](D:/other/report.md)",
 				"[unsafe](javascript:alert(1))",
 			].join("\n\n")}
-			workspaceRoot="C:/repo"
+			workspaceRoot="C:/Repo"
 			onOpenFile={() => {}}
 		/>,
 	);
 
-	expect(html).toContain('data-path="docs/report.md"');
+	expect(html.match(/data-testid="chat-file-link"/g)).toHaveLength(2);
+	expect(html).toContain('data-path="docs/Report.md"');
 	expect(html).toContain('data-path="docs/backslash.md"');
-	expect(html).not.toContain('href="C:/repo/docs/report.md"');
-	expect(html).not.toContain('href="C:%5Crepo%5Cdocs%5Cbackslash.md"');
+	expect(html).not.toContain('href="c:/repo/docs/Report.md"');
+	expect(html).not.toContain('href="c:%5CREPO%5Cdocs%5Cbackslash.md"');
 	expect(html).not.toContain('href="D:/other/report.md"');
 	expect(html).not.toContain('href="javascript:alert(1)"');
 });

@@ -86,7 +86,8 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   new-tab anchor behavior. Percent-encoded file paths are decoded once before validation, so encoded
   separators and traversal cannot bypass containment. A narrow assistant-only URL transform preserves
   recognized Windows drive-letter anchor paths, including Markdown's percent-encoded backslash form, until
-  validation; every other value delegates to react-markdown's default sanitizer, and a rejected Windows path
+  validation; drive-rooted containment compares case-insensitively while preserving the linked path's casing.
+  Every other value delegates to react-markdown's default sanitizer, and a rejected Windows path
   is re-sanitized before fallback anchor rendering. The generic `Markdown` primitive remains props-driven and
   receives this behavior only as an `a` component override at the assistant-turn integration edge;
   accepted workspace targets render as button controls without a raw browser `href`, so alternate native
