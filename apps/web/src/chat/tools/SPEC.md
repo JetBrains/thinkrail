@@ -68,7 +68,11 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     focus** at all: on a phone there is no keyboard flow to hand off to, and focusing a row (the Other input
     especially) raises the soft keyboard over someone who was reading — the reveal + scroll-into-view *are*
     the attention treatment there. A **page change** follows a tap, so it may focus — except into a text
-    field on a coarse pointer (`shouldFocusPageTarget`), which would raise that same keyboard. The empty
+    field on a coarse pointer (`shouldFocusPageTarget`), which would raise that same keyboard. Each page
+    change first asks the parent chat scroll owner to align the new page's start with the transcript viewport,
+    then applies that focus rule with browser auto-scroll suppressed. The card stays in ordinary transcript
+    flow — no nested vertical scroller — so long pages use the same chat scrollbar to reach later answers and
+    Next/Submit. Reveal still occurs when coarse-pointer focus is withheld and never re-arms follow mode. The empty
     composer left focused after Send is safe to hand off. The retry window that out-waits a closing focus
     scope **yields to the user**: the first real `pointerdown`/`keydown` after the reveal ends the claim, so
     a later retry can never pull focus back out from under a click the user made while it was still trying.
