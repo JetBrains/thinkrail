@@ -902,12 +902,13 @@ function ViewportCoach({
 	);
 }
 
-type Gap = "md" | "xxl" | "xxxl";
+type Gap = "lg" | "xxl" | "xxxl" | "xxxxl";
 
 const GAP_CLASS: Record<Gap, string> = {
-	md: "mt-md",
+	lg: "mt-lg",
 	xxl: "mt-xxl",
 	xxxl: "mt-xxxl",
+	xxxxl: "mt-xxxxl",
 };
 
 type OnboardingSection = {
@@ -942,7 +943,14 @@ function OnboardingScreen({
 }: {
 	testId: string;
 	sections: OnboardingSection[];
-	cta: { label: string; testId: string; onClick: () => void };
+	cta: {
+		label: string;
+		testId: string;
+		onClick: () => void;
+		gapBefore: Gap;
+		disabled?: boolean;
+		leading?: ReactNode;
+	};
 }) {
 	const steps = sections.length + 1;
 	const phase = useSequentialReveal(steps);
@@ -968,49 +976,50 @@ function OnboardingScreen({
 						</div>
 					);
 				})}
-				<div className={cn("mt-xxxl", revealClass(ctaRevealed))}>
-					<Button
-						data-testid={cta.testId}
-						data-revealed={ctaRevealed ? "true" : "false"}
-						onClick={cta.onClick}
-					>
-						{cta.label}
-					</Button>
+				<div className={cn(GAP_CLASS[cta.gapBefore], revealClass(ctaRevealed))}>
+					<div className="flex flex-wrap items-center justify-center gap-sm">
+						{cta.leading}
+						<Button
+							data-testid={cta.testId}
+							data-revealed={ctaRevealed ? "true" : "false"}
+							disabled={cta.disabled}
+							onClick={cta.onClick}
+						>
+							{cta.label}
+						</Button>
+					</div>
 				</div>
 			</div>
 		</div>
 	);
 }
 
-function GitReadinessRow() {
-	const [ready, setReady] = useState(false);
-	useEffect(() => {
-		const timer = setTimeout(() => setReady(true), 3500);
-		return () => clearTimeout(timer);
-	}, []);
+function GitStatus({ ready }: { ready: boolean }) {
 	return (
 		<div
 			data-testid="onboarding-git"
-			className="inline-flex items-center gap-sm rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-md py-sm"
+			data-ready={ready ? "true" : "false"}
+			className="inline-flex h-8 items-center gap-sm rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-md tr-text-ui"
 		>
-			<GitBranch className="size-4 shrink-0 text-text-muted" />
-			<span className="tr-text-ui text-text-default">Git</span>
+			<span className="text-text-default">Git:</span>
 			{ready ? (
-				<span className="inline-flex items-center gap-xs tr-text-metadata text-feedback-success">
+				<span className="inline-flex items-center gap-xs text-feedback-success">
 					<Check className="size-3.5" />
-					Git is ready
+					is Ready
 				</span>
 			) : (
-				<span className="inline-flex items-center gap-xs text-text-muted tr-text-metadata">
-					<Loader2 className="size-3.5 motion-safe:animate-spin" />
-					Checking Git…
-				</span>
+				<Loader2 className="size-3.5 shrink-0 text-text-muted motion-safe:animate-spin" />
 			)}
 		</div>
 	);
 }
 
 function IntroScreen({ onStart }: { onStart: () => void }) {
+	const [gitReady, setGitReady] = useState(false);
+	useEffect(() => {
+		const timer = setTimeout(() => setGitReady(true), 3500);
+		return () => clearTimeout(timer);
+	}, []);
 	const sections: OnboardingSection[] = [
 		{
 			key: "title",
@@ -1020,26 +1029,19 @@ function IntroScreen({ onStart }: { onStart: () => void }) {
 			key: "lede",
 			gapBefore: "xxl",
 			render: () => (
-				<p className="max-w-[560px] tr-heading-md text-text-default">
+				<p className="max-w-[400px] tr-heading-md text-text-default">
 					{PRODUCT_NAME} is a worktree IDE built for working with AI agents in parallel.
 				</p>
 			),
 		},
 		{
-			key: "before",
+			key: "git-copy",
 			gapBefore: "xxxl",
-			render: () => <p className="tr-heading-sm text-text-default">Before we start</p>,
-		},
-		{
-			key: "git",
-			gapBefore: "xxl",
 			render: () => (
-				<div className="flex flex-col items-center gap-md">
-					<p className="max-w-[520px] tr-text-ui text-text-muted">
-						{PRODUCT_NAME} works with Git projects. Let's make sure your computer is ready.
-					</p>
-					<GitReadinessRow />
-				</div>
+				<p className="tr-text-ui text-text-muted">
+					<span className="block">{PRODUCT_NAME} works with Git projects</span>
+					<span className="block">Let's make sure your computer is ready.</span>
+				</p>
 			),
 		},
 	];
@@ -1047,7 +1049,14 @@ function IntroScreen({ onStart }: { onStart: () => void }) {
 		<OnboardingScreen
 			testId="onboarding-intro"
 			sections={sections}
-			cta={{ label: "Start demo project", testId: "onboarding-start", onClick: onStart }}
+			cta={{
+				label: "Start demo project",
+				testId: "onboarding-start",
+				onClick: onStart,
+				gapBefore: "lg",
+				disabled: !gitReady,
+				leading: <GitStatus ready={gitReady} />,
+			}}
 		/>
 	);
 }
@@ -1076,6 +1085,7 @@ function FinalScreen({ onFinish }: { onFinish: () => void }) {
 				label: "Start working on your own project",
 				testId: "onboarding-finish",
 				onClick: onFinish,
+				gapBefore: "xxxxl",
 			}}
 		/>
 	);

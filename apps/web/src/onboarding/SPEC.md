@@ -33,24 +33,32 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
   genuinely narrow — the future mobile single-view), same sequential fade/translate reveal
   (`useSequentialReveal`, `motion-reduce:transition-none`; each section + the CTA carry
   `data-revealed`), and a **single primary `Button` CTA** revealed last as the only action in the content
-  area. Vertical rhythm is layout-owned via per-section `gapBefore` mapped to the spacing scale — the
-  requested 32px / 64px use the `xxl` / `xxxl` scale steps (`mt-xxl` / `mt-xxxl`) — named outside
-  Tailwind's `--container-*` t-shirt scale on purpose: `2xl`/`3xl` there would make Tailwind v4 emit a
+  area. The **CTA area is one horizontal action row** (`flex flex-wrap`) so a screen may seat a
+  **leading control** left of the CTA (the intro's Git status) at the same `h-8` height; it wraps/stacks
+  on genuinely narrow viewports. Vertical rhythm is layout-owned via per-section `gapBefore` (and a
+  per-CTA `gapBefore`) mapped to the spacing scale — 16/32/48/64px use `lg`/`xxl`/`xxxl`/`xxxxl`
+  (`mt-lg`/`mt-xxl`/`mt-xxxl`/`mt-xxxxl`). The large steps are named **outside** Tailwind's
+  `--container-*` t-shirt scale on purpose: `2xl`/`3xl` there would make Tailwind v4 emit a
   spacing-derived `max-w-3xl` that silently shadows the container one `ChatView` relies on
   (`mx-auto max-w-3xl`), collapsing the chat column. Typography is mapped to
-  existing semantic roles only (`tr-brand-hero` hero, `tr-heading-md` subtitle, `tr-heading-sm` section
-  heading, `tr-text-ui`/`tr-text-metadata` support) — no component-specific type — and colour uses the
-  existing Primary/text/container/border semantics only (no card, no success-green surface).
+  existing semantic roles only (`tr-brand-hero` hero, `tr-heading-md` subtitle,
+  `tr-text-ui`/`tr-text-metadata` support) — no component-specific type — and colour uses the
+  existing Primary/text/container/border/disabled semantics only (no card, no success-green surface).
 - **Intro** (`onboarding-intro`, first): reveals in sequence — "Welcome to ThinkRail" (`tr-brand-hero`),
-  32px, the product subtitle (`tr-heading-md`), 64px, a **"Before we start"** heading (`tr-heading-sm`),
-  32px, the Git prerequisite explanation (`tr-text-ui`) with **one compact, fully mocked Git row**
-  (`onboarding-git`) that animates `Checking Git…` (spinner) → `Git is ready` (the semantic **success**
-  role + check) — no clicks, always ends ready, no terminal/install/Git-config detail; it reveals the Git
-  prerequisite before a real project could error. The intro **does not auto-advance**: it stays visible
-  indefinitely until the user clicks the **"Start demo project"** CTA (`onboarding-start`), which enters
-  the first interactive action. **Nothing here detects/invokes Git** or touches any real state; it is not
-  a numbered onboarding step, and no coach mark shows during the intro. (The missing-Git install flow is
-  deliberately out of scope — a future state once Git is bundled vs. externally installed is decided.)
+  32px, the product subtitle (`tr-heading-md`, `max-w-[400px]`), 48px, a two-line Git prerequisite
+  copy (`tr-text-ui`, each sentence its own `block` so the second never wraps up onto the first, yet each
+  still wraps within a narrow viewport), 16px, then the **action row**: a **single Git status control**
+  (`onboarding-git`) beside the **"Start demo project"** CTA (`onboarding-start`). There is no
+  "Before we start" heading. The Git status is one control whose content evolves — `Git:` + the existing
+  `Loader2` spinner while checking → `Git: is Ready` (`Check` + the semantic **success** role) when
+  ready (`data-ready`); it is a fully mocked status (a `setTimeout`, no clicks, always ends ready, no
+  terminal/install detail) that reveals the Git prerequisite before a real project could error. The CTA
+  is **disabled** (existing disabled control semantics) until the mocked readiness confirms, then
+  enables. The intro **does not auto-advance**: it stays visible indefinitely until the user clicks the
+  enabled CTA, which enters the first interactive action. **Nothing here detects/invokes Git** or touches
+  any real state; it is not a numbered onboarding step, and no coach mark shows during the intro. (The
+  missing-Git install flow is deliberately out of scope — a future state once Git is bundled vs.
+  externally installed is decided.)
 - **Close demo** (`onboarding-close`, a quiet `Button variant="ghost"` in the card's top-right) is present
   throughout — intro included — and is the only explicit pre-completion exit. It only clears the mocked
   experience (`closeDemo`); it touches no real state. Coach marks themselves stay non-dismissible.

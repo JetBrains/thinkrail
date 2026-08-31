@@ -13,15 +13,19 @@ test("the mocked demo runs intro → parallel-agents payoff, never touching real
 	await page.getByTestId("onboarding-launch").click();
 	await expect(page.getByTestId("onboarding-sim")).toBeVisible();
 	await expect(page.getByTestId("onboarding-intro")).toContainText("Welcome to ThinkRail");
-	await expect(page.getByTestId("onboarding-git")).toContainText("Git is ready");
+	await expect(page.getByTestId("onboarding-intro")).toContainText(
+		"ThinkRail works with Git projects",
+	);
 	await expect(page.getByTestId("onboarding-progress")).toBeAttached();
 
 	const coach = page.getByTestId("onboarding-coach");
+	const start = page.getByTestId("onboarding-start");
 
-	await expect(page.getByTestId("onboarding-start")).toHaveAttribute("data-revealed", "true");
+	await expect(start).toBeDisabled();
+	await expect(page.getByTestId("onboarding-git")).toContainText("is Ready");
+	await expect(start).toBeEnabled();
 	await expect(coach).toHaveCount(0);
-
-	await page.getByTestId("onboarding-start").click();
+	await start.click();
 
 	await expect(coach).toContainText("Open a project");
 	await page.getByTestId("sim-open-project").click();
@@ -63,20 +67,31 @@ test("the mocked demo runs intro → parallel-agents payoff, never touching real
 	await expect(page.getByTestId("project-item")).toHaveCount(0);
 });
 
-test("the intro reveals sequentially and only the CTA starts the demo", async ({ page }) => {
+test("the intro reveals sequentially, gates the CTA on Git readiness, and needs an explicit click", async ({
+	page,
+}) => {
 	await openAppFresh(page);
 	await page.getByTestId("onboarding-launch").click();
 
 	const intro = page.getByTestId("onboarding-intro");
 	await expect(intro).toBeVisible();
-	await expect(intro).toContainText("Before we start");
+	await expect(intro).not.toContainText("Before we start");
+	await expect(intro).toContainText("ThinkRail works with Git projects");
+	await expect(intro).toContainText("Let's make sure your computer is ready.");
 
 	const start = page.getByTestId("onboarding-start");
 	await expect(start).toHaveAttribute("data-revealed", "false");
 	await expect(start).toHaveAttribute("data-revealed", "true");
 
+	const git = page.getByTestId("onboarding-git");
+	await expect(git).toHaveAttribute("data-ready", "false");
+	await expect(start).toBeDisabled();
+	await expect(git).toHaveAttribute("data-ready", "true");
+	await expect(git).toContainText("is Ready");
+	await expect(start).toBeEnabled();
+
 	await expect(page.getByTestId("onboarding-coach")).toHaveCount(0);
-	await page.getByTestId("onboarding-start").click();
+	await start.click();
 	await expect(intro).toHaveCount(0);
 	await expect(page.getByTestId("onboarding-coach")).toContainText("Open a project");
 });
@@ -86,7 +101,6 @@ test("the final screen shares the intro layout and reveals sequentially", async 
 	await page.getByTestId("onboarding-launch").click();
 	await page.getByTestId("onboarding-start").click();
 
-	// Drive to the final screen.
 	await page.getByTestId("sim-open-project").click();
 	await page.getByTestId("sim-folder").click();
 	await page.getByTestId("sim-add-workspace").click();
