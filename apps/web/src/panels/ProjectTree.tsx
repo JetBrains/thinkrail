@@ -7,6 +7,7 @@ import {
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
 	RiMore2Line as MoreVertical,
+	RiPencilLine as Pencil,
 	RiAddLine as Plus,
 	RiFolderFill,
 	RiFolderLine,
@@ -49,6 +50,7 @@ import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
 
 const PREWARM_WORKSPACE_LIMIT = 8;
@@ -502,6 +504,7 @@ function WorkspaceRow({
 }) {
 	const isDefault = isDefaultWorkspace(workspace);
 	const isExternal = isExternalWorkspace(workspace);
+	const canRename = !isDefault && !isExternal;
 	const Icon = isActive
 		? isDefault
 			? RiHome2Fill
@@ -520,6 +523,7 @@ function WorkspaceRow({
 		setMenuOpen(true);
 	};
 	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [renameOpen, setRenameOpen] = useState(false);
 	return (
 		<li>
 			<fieldset
@@ -585,6 +589,19 @@ function WorkspaceRow({
 								</DropdownMenuSubContent>
 							</DropdownMenuSub>
 						)}
+						{canRename ? (
+							<DropdownMenuItem
+								data-testid="workspace-rename"
+								onSelect={(event) => {
+									event.preventDefault();
+									setMenuOpen(false);
+									requestAnimationFrame(() => setRenameOpen(true));
+								}}
+							>
+								<Pencil />
+								Rename workspace
+							</DropdownMenuItem>
+						) : null}
 						<DropdownMenuItem data-testid="workspace-copy-path" onSelect={onCopyPath}>
 							<Copy />
 							Copy path
@@ -612,6 +629,9 @@ function WorkspaceRow({
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</fieldset>
+			{canRename && renameOpen ? (
+				<RenameWorkspaceDialog open workspace={workspace} onOpenChange={setRenameOpen} />
+			) : null}
 			{!isDefault && (
 				<ConfirmDialog
 					open={confirmOpen}

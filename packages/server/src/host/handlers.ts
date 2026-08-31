@@ -151,6 +151,7 @@ import {
 	listWorkspaces,
 	openExistingWorktree,
 	reclaimWorktree,
+	renameWorkspace,
 	setWorkspaceDiffBase,
 	setWorkspaceSkillOverride,
 	workspaceDiffStats,
@@ -312,6 +313,10 @@ const handlers: Record<string, Handler> = {
 	"workspace.openExisting": (params) => {
 		const p = params as { projectId: string; path: string };
 		return provisionInitialTerminal(openExistingWorktree(p.projectId, p.path));
+	},
+	"workspace.rename": (params) => {
+		const p = params as { id: string; name: string };
+		return renameWorkspace(p.id, p.name);
 	},
 	"workspace.list": async (params) => {
 		const p = params as { projectId: string; includeDiffStats?: boolean };
