@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ThinkingGroup } from "./ActivityGroup";
+import { NarrationGroup, ThinkingGroup } from "./ActivityGroup";
 
 const tool = (id: string, toolName: string) => ({
 	kind: "tool" as const,
@@ -130,6 +130,26 @@ describe("ThinkingGroup", () => {
 
 		expect(markup).not.toContain("Not actually strong");
 		expect(markup).not.toContain("This is ordinary reasoning.");
+	});
+
+	test("NarrationGroup shows the narration text as an always-visible section header over its steps", () => {
+		const markup = renderToStaticMarkup(
+			<NarrationGroup
+				parentId="activity:a1"
+				narration={{
+					kind: "narration",
+					id: "a2:text:0",
+					text: "Now the CSS token system and structure.",
+					steps: [tool("c1", "read"), tool("c2", "grep")],
+				}}
+			/>,
+		);
+		expect(markup).toContain('data-testid="narration-group"');
+		expect(markup).toContain('data-activity-node-kind="narration"');
+		expect(markup).toContain('data-activity-parent-id="activity:a1"');
+		expect(markup).toContain('data-testid="narration-group-headline"');
+		expect(markup).toContain("Now the CSS token system and structure.");
+		expect(markup).toContain("2 steps · read, grep");
 	});
 
 	test("rejects triple-emphasis runs instead of exposing leftover Markdown", () => {

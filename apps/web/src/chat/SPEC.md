@@ -26,7 +26,45 @@ The transcript is pi-canonical turns (`ChatTurn` in `types.ts`: user/assistant a
 record pi leaves where it replaced earlier messages), but the list renders **derived rows, not raw turns** — folding
 spans assistant-message boundaries (pi emits one assistant message per tool round), so a per-turn item
 model can't group. The pure **`deriveRows(turns, toolResults, isStreaming, isSpec?)`** (`rows.ts`) walks
-blocks in order into rows; `ChatTurnView` dispatches on row kind:
+blocks in order into rows; `ChatTurnView` dispatches on row kind.
+
+**Turn hierarchy — three regions per round.** A *settled* agent round reads as exactly *opening prose →
+one compact activity block → final prose*, not a flat chronological transcript. `deriveRows` accumulates
+each round's assistant blocks into a **segment** as one ordered `events` list (`step` = thinking / routine
+tool; `prose` = a text block) so a narration fragment keeps its position relative to the steps that
+followed it, then emits region rows in a fixed non-reflowing order:
+
+1. **opening** prose (`markdown` `role: "opening"`) — the round's intent: the first prose block plus any
+   *contiguous continuation* prose (no step between them, normalized into the opening).
+2. ONE coalesced `activity` block holding *all* routine work of the segment. **Intermediate narration
+   lives here, not as region-3 prose:** each mid-round prose fragment becomes a `NarrationStep` section
+   whose `steps` are the thinking/tools that followed it (a leading run of steps before the first
+   narration stays top-level; inside every section routine tools still `nestRoutineRun`-fold under their
+   thinking). Chronology and grouping are preserved — narration is a contextual label over its own
+   execution, never all-narration-collected-at-the-top. Collapsed, the whole block reduces to the
+   `summarizeSteps` count ("N steps", counting thinking + tools only — narration labels are not steps).
+3. **final** prose (`markdown` `role: "final"`) — the terminal message's prose, the settled user-facing
+   result, visually prominent below Activity.
+
+A `primary` tool (interactive/result-bearing — see the `tool` bullet) is *not* mechanics: it flushes the
+current segment, renders as its own prominent row in place, and a fresh segment begins after it — so most
+rounds are exactly one segment (one clean three-region layout), and interactive cards/diagrams are never
+buried in the fold.
+
+**Streaming vs settled.** The boundary is the pi event model's own, not a timing/string heuristic: a
+round is `user` → next `user` (or end); a message's `stopReason` distinguishes a continuing round
+(`toolUse`) from a terminal one (`stop`/`length`/`error`/`aborted`); a prose block is `terminal` when its
+message is settled and non-`toolUse`. Only the **trailing live segment of a streaming transcript** uses a
+different projection — the **response model**: opening + a steps-only Activity block + region-3 prose
+(`role: "response"`), so the answer being streamed is never buried inside Activity. Every already-past
+segment, and the whole transcript once it settles, uses the **narration model** above; that re-derivation
+is the running → settled *normalization* the design calls for. Because both projections are pure and
+boundary-derived, a hydrated transcript reconstructs the identical settled grouping as the live stream
+once settled (`hydrate.ts` builds the same turns; `deriveRows` does the rest). The opening anchor is
+`safeOpening` (first prose not preceded by activity, OR preceded but in an already-completed `toolUse`
+message — `confirmedContinuing`, so its region can't change at settlement); the parallel work pi exposes
+is only block/message order (batched tool calls are an ordered list in one message), which is preserved
+as-is — no stricter linear chronology is invented. Row list:
 
 - `user` / `system` / `retry` — 1:1 renderers. A user message that is Pi's canonical expanded skill block (`<skill name="…" location="…">`) renders
   as one **collapsed skill-invocation card** rather than exposing the full `SKILL.md`: the skill name is
@@ -79,7 +117,12 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   summarized disappear immediately rather than only after reload. Its `summary` opens on click
   (`data-testid="chat-compaction"`). Hydration/reopen starts directly from that same durable form. Both forms
   share the **"Context compacted"** title; only facts unavailable after reload disappear.
-- `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + shiki). A fenced
+- `markdown` — a non-empty assistant text block carrying a `role` (`opening` | `final`, plus `response`
+  only in the streaming response model; surfaced as `data-prose-role` on the `data-role="assistant"`
+  element, the region hook for tests). Intermediate narration is NOT a `markdown` row in a settled round —
+  it renders inside Activity as a `narration` node. All roles use the same assistant body typography
+  (`tr-text-reading text-text-default`) and semantic tokens — the hierarchy is region *order*, not
+  per-role font/colour. Rendered via react-markdown + remark-gfm + shiki. A fenced
   ```mermaid block renders as a themed diagram via `tools/visualize`'s `MermaidView` (fullscreen
   pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
   preview); until mounted it renders as highlighted source, so static contexts (`RenderedDiff`'s
@@ -95,8 +138,15 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   needs no host fetch and works for paths outside the workspace. Previewable blocks require non-empty data
   and one of `contracts`' shared raster media types (PNG/JPEG/GIF/WebP); malformed shapes and unsupported
   media types are ignored, while canonical content arrays are never serialized into base64 JSON.
-- `activity` — one contiguous run of routine work stays one **collapsed outer disclosure** whose header
-  summarizes every atomic step (thinking blocks + routine tool calls). Expanding it preserves tools before
+- `activity` — the round segment's execution (thinking, routine tool calls, and — settled — intermediate
+  **narration** sections) as one **collapsed outer disclosure** whose header summarizes every atomic step.
+  It is coalesced across assistant-message boundaries and across intervening narration, so a segment has
+  at most one activity block regardless of how prose and tools interleave. Its `steps` are
+  `ActivityNode[]` = `NarrationStep | ThinkingStep | RoutineToolStep`: a `NarrationStep` (`NarrationGroup`,
+  a disclosure whose always-visible header is the model's narration text over its nested
+  thinking/tools — `data-testid="narration-group"`, breadcrumb kind `narration`) groups the steps that
+  followed that fragment. Only a `primary` tool or a non-assistant turn (a new round, compaction, retry,
+  error) breaks it. Expanding it preserves tools before
   the first thought as direct rows, then renders each non-empty thinking block as a nested disclosure. When
   that block's first non-empty line is a complete standalone Markdown strong span (`**…**` or `__…__`),
   its folded header surfaces the model-authored inner text in place of the redundant visible `Thinking`
@@ -108,8 +158,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   tool call stays under that thought until the next thinking block or activity boundary. Those thinking
   groups are siblings **inside** the outer run, even across assistant-message
   boundaries; the hierarchy is presentational, never invented pi entry parentage. A single atomic step
-  still renders directly. Non-empty text, primary tools, and non-assistant turns break the outer run. Only
-  its trailing instance carries the live ticker. Errored routine tools get **no special treatment**
+  still renders directly. Only
+  its trailing instance carries the live ticker (live while the segment's most recent block was activity,
+  not while the agent is streaming response prose below it). Errored routine tools get **no special treatment**
   (deliberate — agents often recover; `ErrorTurn` and primary error-auto-expand are the safety nets).
 - `subagentCompletion` — a `subagent-completion` custom message: a detached (background) subagent run's
   terminal report, injected into the parent by `pi-subagents` when the run finishes. Rendered as a compact

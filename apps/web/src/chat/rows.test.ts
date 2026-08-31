@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AssistantMessage } from "@thinkrail/contracts";
+import { summarizeSteps } from "./ActivityGroup";
 import { type ChatRow, deriveRows, projectRows, turnDivider } from "./rows";
 import { registerToolRenderer } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
@@ -133,26 +134,113 @@ describe("deriveRows grouping", () => {
 		]);
 	});
 
-	test("non-empty text splits the run; empty/whitespace text and empty thinking do not", () => {
+	test("intermediate narration becomes a section inside the one activity block; empty text/thinking dropped", () => {
 		const turns = [
 			user("u1"),
-			assistant("a1", [
-				tc("t1"),
-				text("  "),
-				think(""),
-				tc("t2"),
-				text("interim narration"),
-				tc("t3"),
-			]),
+			assistant(
+				"a1",
+				[
+					text("I'll start."),
+					tc("t1"),
+					text("  "),
+					think(""),
+					tc("t2"),
+					text("interim narration"),
+					tc("t3"),
+				],
+				{ stopReason: "toolUse" },
+			),
+			assistant("a2", [text("final answer")]),
 			done("s1"),
 		];
 		const rows = deriveRows(turns, {}, false);
-		expect(kinds(rows)).toEqual(["user", "activity", "markdown", "activity", "system", "divider"]);
-		const first = rows[1];
-		const second = rows[3];
-		if (first?.kind !== "activity" || second?.kind !== "activity") throw new Error("bad rows");
-		expect(first.steps.map((s) => s.id)).toEqual(["t1", "t2"]);
-		expect(second.steps.map((s) => s.id)).toEqual(["t3"]);
+		expect(kinds(rows)).toEqual(["user", "markdown", "activity", "markdown", "system", "divider"]);
+		expect(rows[1]).toMatchObject({ role: "opening", text: "I'll start." });
+		const activity = rows[2];
+		if (activity?.kind !== "activity") throw new Error("expected one coalesced activity block");
+		expect(activity.steps.map((s) => s.kind)).toEqual(["tool", "tool", "narration"]);
+		const narration = activity.steps[2];
+		if (narration?.kind !== "narration") throw new Error("expected a narration section");
+		expect(narration.text).toBe("interim narration");
+		expect(narration.steps.map((s) => s.id)).toEqual(["t3"]);
+		expect(rows[3]).toMatchObject({ role: "final", text: "final answer" });
+	});
+
+	test("three regions: opening prose, one activity block, then final prose (reference rhythm)", () => {
+		const turns = [
+			user("u1"),
+			assistant("a1", [text("I'll inspect and fix."), tc("t1", "read")], { stopReason: "toolUse" }),
+			assistant("a2", [tc("t2", "edit"), text("Fixed. Verification: ok.")]),
+			done("s1"),
+		];
+		const rows = deriveRows(turns, {}, false);
+		expect(kinds(rows)).toEqual(["user", "markdown", "activity", "markdown", "system", "divider"]);
+		expect(rows[1]).toMatchObject({ text: "I'll inspect and fix.", role: "opening" });
+		const activity = rows[2];
+		if (activity?.kind !== "activity") throw new Error("expected activity row");
+		expect(activity.steps.map((s) => s.id)).toEqual(["t1", "t2"]);
+		expect(rows[3]).toMatchObject({ text: "Fixed. Verification: ok.", role: "final" });
+	});
+
+	test("a completed tool-use message's prose is the opening even when thinking preceded it", () => {
+		const turns = [
+			user("u1"),
+			assistant("a1", [think("plan"), text("I'll do X."), tc("t1", "read")], {
+				stopReason: "toolUse",
+			}),
+			assistant("a2", [text("Done.")]),
+			done("s1"),
+		];
+		const rows = deriveRows(turns, {}, false);
+		expect(kinds(rows)).toEqual(["user", "markdown", "activity", "markdown", "system", "divider"]);
+		expect(rows[1]).toMatchObject({ text: "I'll do X.", role: "opening" });
+		expect(rows[3]).toMatchObject({ text: "Done.", role: "final" });
+	});
+
+	test("a single prose block after activity is the final answer (region 3), not an opening", () => {
+		const turns = [
+			user("u1"),
+			assistant("a1", [think("hmm"), tc("t1"), text("The answer.")]),
+			done("s1"),
+		];
+		const rows = deriveRows(turns, {}, false);
+		expect(kinds(rows)).toEqual(["user", "activity", "markdown", "system", "divider"]);
+		expect(rows[2]).toMatchObject({ text: "The answer.", role: "final" });
+	});
+
+	test("a plain Q&A round with no activity is one prominent final message", () => {
+		const rows = deriveRows(
+			[user("u1"), assistant("a1", [text("Hi there.")]), done("s1")],
+			{},
+			false,
+		);
+		expect(kinds(rows)).toEqual(["user", "markdown", "system", "divider"]);
+		expect(rows[1]).toMatchObject({ text: "Hi there.", role: "final" });
+	});
+
+	test("a primary tool starts a fresh three-region segment after it", () => {
+		const turns = [
+			user("u1"),
+			assistant("a1", [text("Let me ask."), tc("t1"), tc("q1", "bare-tool")], {
+				stopReason: "toolUse",
+			}),
+			assistant("a2", [tc("t2"), text("All set.")]),
+			done("s1"),
+		];
+		const rows = deriveRows(turns, {}, false);
+		expect(kinds(rows)).toEqual([
+			"user",
+			"markdown",
+			"activity",
+			"tool",
+			"activity",
+			"markdown",
+			"system",
+			"divider",
+		]);
+		expect(rows[1]).toMatchObject({ text: "Let me ask.", role: "opening" });
+		expect(rows[3]?.kind === "tool" && rows[3].toolCallId).toBe("q1");
+		expect(rows[5]).toMatchObject({ text: "All set.", role: "final" });
 	});
 
 	test("a primary tool escapes the fold as its own row and breaks the run (bare implies primary)", () => {
@@ -266,6 +354,128 @@ describe("deriveRows grouping", () => {
 		expect(s1?.kind === "tool" && s1.tool?.status).toBe("done");
 		expect(s2?.kind === "tool" && s2.tool?.status).toBe("error");
 		expect(s3?.kind === "tool" && s3.tool).toBeUndefined();
+	});
+});
+
+describe("deriveRows narration-in-activity (settled)", () => {
+	test("several narration groups each own the steps that followed them, in chronological order", () => {
+		const turns = [
+			user("u1"),
+			assistant("a1", [text("Opening."), think("plan"), tc("t1")], { stopReason: "toolUse" }),
+			assistant("a2", [text("Now HTML."), tc("h1"), tc("h2")], { stopReason: "toolUse" }),
+			assistant("a3", [text("Now CSS."), tc("c1")], { stopReason: "toolUse" }),
+			assistant("a4", [text("Here's the audit.")]),
+			done("s1"),
+		];
+		const rows = deriveRows(turns, {}, false);
+		expect(kinds(rows)).toEqual(["user", "markdown", "activity", "markdown", "system", "divider"]);
+		expect(rows[1]).toMatchObject({ role: "opening", text: "Opening." });
+		expect(rows[3]).toMatchObject({ role: "final", text: "Here's the audit." });
+		const activity = rows[2];
+		if (activity?.kind !== "activity") throw new Error("expected activity");
+		expect(activity.steps.map((s) => s.kind)).toEqual(["thinking", "narration", "narration"]);
+		const think1 = activity.steps[0];
+		const html = activity.steps[1];
+		const css = activity.steps[2];
+		if (think1?.kind !== "thinking") throw new Error("expected leading thinking");
+		expect(think1.tools.map((t) => t.id)).toEqual(["t1"]);
+		if (html?.kind !== "narration" || css?.kind !== "narration") throw new Error("bad narration");
+		expect(html.text).toBe("Now HTML.");
+		expect(html.steps.map((s) => s.id)).toEqual(["h1", "h2"]);
+		expect(css.text).toBe("Now CSS.");
+		expect(css.steps.map((s) => s.id)).toEqual(["c1"]);
+	});
+
+	test("a narration section nests routine tools under a thinking block that followed it", () => {
+		const turns = [
+			user("u1"),
+			assistant("a1", [text("Opening."), tc("t0")], { stopReason: "toolUse" }),
+			assistant("a2", [text("Now the tokens."), think("inspect"), tc("t1"), tc("t2")], {
+				stopReason: "toolUse",
+			}),
+			assistant("a3", [text("Result.")]),
+			done("s1"),
+		];
+		const rows = deriveRows(turns, {}, false);
+		const activity = rows[2];
+		if (activity?.kind !== "activity") throw new Error("expected activity");
+		expect(activity.steps.map((s) => s.kind)).toEqual(["tool", "narration"]);
+		const narration = activity.steps[1];
+		if (narration?.kind !== "narration") throw new Error("expected narration");
+		const nestedThinking = narration.steps[0];
+		if (nestedThinking?.kind !== "thinking") throw new Error("expected nested thinking");
+		expect(nestedThinking.tools.map((t) => t.id)).toEqual(["t1", "t2"]);
+	});
+
+	test("a long run collapses to one activity block; the summary counts steps, not narration labels", () => {
+		const tools = Array.from({ length: 12 }, (_, i) => tc(`x${i}`, "read"));
+		const turns = [
+			user("u1"),
+			assistant("a1", [text("Opening."), ...tools.slice(0, 6)], { stopReason: "toolUse" }),
+			assistant("a2", [text("Halfway note."), ...tools.slice(6)], { stopReason: "toolUse" }),
+			assistant("a3", [text("Final.")]),
+			done("s1"),
+		];
+		const rows = deriveRows(turns, {}, false);
+		expect(rows.filter((r) => r.kind === "activity")).toHaveLength(1);
+		const activity = rows.find((r) => r.kind === "activity");
+		if (activity?.kind !== "activity") throw new Error("expected one activity block");
+		expect(summarizeSteps(activity.steps)).toBe("12 steps · read ×12");
+	});
+
+	test("streaming keeps narration as response prose; settling normalizes it into activity", () => {
+		const streaming = [
+			user("u1"),
+			assistant("a1", [text("Opening."), tc("t1"), text("Now HTML."), tc("h1")], {
+				stopReason: "toolUse",
+				streaming: true,
+			}),
+		];
+		const live = deriveRows(streaming, {}, true);
+		expect(kinds(live)).toEqual(["user", "markdown", "activity", "markdown"]);
+		expect(live[1]).toMatchObject({ role: "opening", text: "Opening." });
+		expect(live[3]).toMatchObject({ role: "response", text: "Now HTML." });
+		const liveActivity = live[2];
+		if (liveActivity?.kind !== "activity") throw new Error("expected activity");
+		expect(liveActivity.steps.every((s) => s.kind !== "narration")).toBe(true);
+
+		const settled = [
+			user("u1"),
+			assistant("a1", [text("Opening."), tc("t1"), text("Now HTML."), tc("h1")], {
+				stopReason: "toolUse",
+			}),
+			assistant("a2", [text("Final.")]),
+			done("s1"),
+		];
+		const rows = deriveRows(settled, {}, false);
+		expect(kinds(rows)).toEqual(["user", "markdown", "activity", "markdown", "system", "divider"]);
+		expect(rows[3]).toMatchObject({ role: "final", text: "Final." });
+		const settledActivity = rows[2];
+		if (settledActivity?.kind !== "activity") throw new Error("expected activity");
+		const narration = settledActivity.steps.find((s) => s.kind === "narration");
+		if (narration?.kind !== "narration") throw new Error("narration should move into activity");
+		expect(narration.text).toBe("Now HTML.");
+		expect(narration.steps.map((s) => s.id)).toEqual(["h1"]);
+	});
+
+	test("contiguous continuation prose (no step between) normalizes into the opening", () => {
+		const turns = [
+			user("u1"),
+			assistant("a1", [text("I'll audit the page."), text("Let me gather source."), tc("t1")], {
+				stopReason: "toolUse",
+			}),
+			assistant("a2", [text("Done.")]),
+			done("s1"),
+		];
+		const rows = deriveRows(turns, {}, false);
+		const openings = rows.filter((r) => r.kind === "markdown" && r.role === "opening");
+		expect(openings.map((r) => (r.kind === "markdown" ? r.text : ""))).toEqual([
+			"I'll audit the page.",
+			"Let me gather source.",
+		]);
+		const activity = rows.find((r) => r.kind === "activity");
+		if (activity?.kind !== "activity") throw new Error("expected activity");
+		expect(activity.steps.every((s) => s.kind !== "narration")).toBe(true);
 	});
 });
 

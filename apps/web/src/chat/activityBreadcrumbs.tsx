@@ -1,12 +1,13 @@
 import {
 	RiBrainLine as Brain,
+	RiChatQuoteLine as ChatQuote,
 	RiArrowRightSLine as ChevronRight,
 	RiStackLine as Layers,
 	RiToolsLine as Tools,
 } from "@remixicon/react";
 import { useCallback, useEffect, useState } from "react";
 
-export type ActivityBreadcrumbKind = "activity" | "thinking" | "tool";
+export type ActivityBreadcrumbKind = "activity" | "thinking" | "tool" | "narration";
 
 export interface ActivityBreadcrumbDescriptor {
 	id: string;
@@ -81,7 +82,14 @@ export function compressBreadcrumbPath(
 }
 
 function SegmentIcon({ kind }: { kind: ActivityBreadcrumbKind }) {
-	const Icon = kind === "activity" ? Layers : kind === "thinking" ? Brain : Tools;
+	const Icon =
+		kind === "activity"
+			? Layers
+			: kind === "thinking"
+				? Brain
+				: kind === "narration"
+					? ChatQuote
+					: Tools;
 	return <Icon aria-hidden className="size-12 shrink-0 text-primary" />;
 }
 

@@ -1,5 +1,6 @@
 import {
 	RiBrainLine as Brain,
+	RiChatQuoteLine as ChatQuote,
 	RiCheckLine as Check,
 	RiArrowRightSLine as ChevronRight,
 	RiStackLine as Layers,
@@ -9,7 +10,13 @@ import {
 import { cn } from "@/lib";
 import type { ActivityBreadcrumbKind } from "./activityBreadcrumbs";
 import { useFold } from "./foldState";
-import type { ActivityStep, RoutineToolStep, ThinkingStep } from "./rows";
+import type {
+	ActivityNode,
+	ActivityStep,
+	NarrationStep,
+	RoutineToolStep,
+	ThinkingStep,
+} from "./rows";
 import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolSummary, type ToolRenderProps } from "./toolRegistry";
 import type { ToolStatus } from "./types";
@@ -22,14 +29,14 @@ export function ActivityGroup({
 	onOpenFile,
 }: {
 	id: string;
-	steps: ActivityStep[];
+	steps: ActivityNode[];
 	live: boolean;
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const flatSteps = flattenActivitySteps(steps);
-	const single = flatSteps.length === 1 ? steps[0] : undefined;
-	if (single)
+	const single = flatSteps.length === 1 && steps.length === 1 ? steps[0] : undefined;
+	if (single && single.kind !== "narration")
 		return single.kind === "thinking" ? (
 			<ThinkingGroup
 				id={single.id}
@@ -59,7 +66,15 @@ export function ActivityGroup({
 			summary={summary}
 		>
 			{steps.map((step) =>
-				step.kind === "thinking" ? (
+				step.kind === "narration" ? (
+					<NarrationGroup
+						key={step.id}
+						parentId={id}
+						narration={step}
+						workspaceRoot={workspaceRoot}
+						onOpenFile={onOpenFile}
+					/>
+				) : step.kind === "thinking" ? (
 					<ThinkingGroup
 						key={step.id}
 						id={step.id}
@@ -141,6 +156,59 @@ export function ThinkingGroup({
 	);
 }
 
+export function NarrationGroup({
+	parentId,
+	narration,
+	workspaceRoot,
+	onOpenFile,
+}: {
+	parentId: string;
+	narration: NarrationStep;
+	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
+}) {
+	const summary = narration.steps.length > 0 ? summarizeSteps(narration.steps) : "note";
+	return (
+		<GroupDisclosure
+			id={narration.id}
+			parentId={parentId}
+			kind="narration"
+			testId="narration-group"
+			live={false}
+			stepCount={narration.steps.length}
+			icon={<ChatQuote className="size-12 shrink-0" />}
+			headline={narration.text}
+			headlineAlways
+			breadcrumbLabel={narration.text}
+			breadcrumbMeta={summary}
+			summary={summary}
+		>
+			{narration.steps.map((step) =>
+				step.kind === "thinking" ? (
+					<ThinkingGroup
+						key={step.id}
+						id={step.id}
+						parentId={narration.id}
+						thought={step}
+						tools={step.tools}
+						live={false}
+						workspaceRoot={workspaceRoot}
+						onOpenFile={onOpenFile}
+					/>
+				) : (
+					<RoutineToolRow
+						key={step.id}
+						step={step}
+						parentId={narration.id}
+						workspaceRoot={workspaceRoot}
+						onOpenFile={onOpenFile}
+					/>
+				),
+			)}
+		</GroupDisclosure>
+	);
+}
+
 function GroupDisclosure({
 	id,
 	parentId,
@@ -151,6 +219,7 @@ function GroupDisclosure({
 	icon,
 	label,
 	headline,
+	headlineAlways,
 	breadcrumbLabel,
 	breadcrumbMeta,
 	summary,
@@ -159,18 +228,20 @@ function GroupDisclosure({
 	id: string;
 	parentId?: string;
 	kind: ActivityBreadcrumbKind;
-	testId: "activity-group" | "thinking-group";
+	testId: "activity-group" | "thinking-group" | "narration-group";
 	live: boolean;
 	stepCount: number;
 	icon: React.ReactNode;
 	label?: string;
 	headline?: string | undefined;
+	headlineAlways?: boolean;
 	breadcrumbLabel: string;
 	breadcrumbMeta: string;
 	summary: string;
 	children: React.ReactNode;
 }) {
 	const [expanded, toggle] = useFold(id);
+	const showHeadline = (headlineAlways || !expanded) && !!headline;
 	return (
 		<div
 			data-testid={testId}
@@ -201,11 +272,11 @@ function GroupDisclosure({
 					icon
 				)}
 				{label ? (
-					<span className={cn("shrink-0 text-text-default", !expanded && headline && "sr-only")}>
+					<span className={cn("shrink-0 text-text-default", showHeadline && "sr-only")}>
 						{label}
 					</span>
 				) : null}
-				{!expanded && headline ? (
+				{showHeadline ? (
 					<span
 						data-testid={`${testId}-headline`}
 						className="min-w-0 flex-1 truncate text-text-default"
@@ -249,11 +320,17 @@ function splitSummary(summary: string): { label: string; meta: string } {
 		: { label: summary.slice(0, separator), meta: summary.slice(separator + 3) };
 }
 
-function flattenActivitySteps(steps: ActivityStep[]): ActivityStep[] {
-	return steps.flatMap((step) => (step.kind === "thinking" ? [step, ...step.tools] : [step]));
+function flattenActivitySteps(steps: ActivityNode[]): ActivityStep[] {
+	return steps.flatMap((step) =>
+		step.kind === "narration"
+			? flattenActivitySteps(step.steps)
+			: step.kind === "thinking"
+				? [step, ...step.tools]
+				: [step],
+	);
 }
 
-export function summarizeSteps(steps: ActivityStep[]): string {
+export function summarizeSteps(steps: ActivityNode[]): string {
 	const flatSteps = flattenActivitySteps(steps);
 	const counts = new Map<string, number>();
 	for (const step of flatSteps) {
@@ -268,7 +345,7 @@ export function summarizeSteps(steps: ActivityStep[]): string {
 	return `${count} · ${shown}${more > 0 ? `, +${more} more` : ""}`;
 }
 
-function liveActivityTicker(steps: ActivityStep[], workspaceRoot: string | undefined): string {
+function liveActivityTicker(steps: ActivityNode[], workspaceRoot: string | undefined): string {
 	const flatSteps = flattenActivitySteps(steps);
 	const current = flatSteps[flatSteps.length - 1];
 	if (!current) return "Working…";

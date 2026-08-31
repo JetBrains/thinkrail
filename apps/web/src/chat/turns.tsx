@@ -89,6 +89,7 @@ export function ChatTurnView({
 				<div
 					data-testid="chat-message"
 					data-role="assistant"
+					data-prose-role={row.role}
 					className="tr-text-reading text-text-default"
 				>
 					<Markdown text={row.text} />

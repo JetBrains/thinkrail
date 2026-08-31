@@ -25,6 +25,17 @@ export interface ThinkingStep {
 
 export type ActivityStep = RoutineToolStep | ThinkingStep;
 
+export interface NarrationStep {
+	kind: "narration";
+	id: string;
+	text: string;
+	steps: ActivityStep[];
+}
+
+export type ActivityNode = NarrationStep | ThinkingStep | RoutineToolStep;
+
+export type ProseRole = "opening" | "response" | "final";
+
 export type ChatRow =
 	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
 	| { kind: "system"; id: string; text: string }
@@ -38,13 +49,13 @@ export type ChatRow =
 			maxAttempts: number;
 			delayMs: number;
 	  }
-	| { kind: "markdown"; id: string; text: string }
+	| { kind: "markdown"; id: string; text: string; role: ProseRole }
 	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
 			kind: "activity";
 			id: string;
-			steps: ActivityStep[];
+			steps: ActivityNode[];
 			live: boolean;
 	  }
 	| { kind: "divider"; id: string; data: TurnDividerData };
@@ -74,6 +85,23 @@ export function projectRows(rows: ChatRow[], messageOrder: ChatMessageOrder): Ch
 	return projected;
 }
 
+interface ProseEntry {
+	id: string;
+	text: string;
+	safeOpening: boolean;
+	afterStep: boolean;
+	terminal: boolean;
+}
+
+type SegEvent = { kind: "step"; step: ActivityStep } | { kind: "prose"; entry: ProseEntry };
+
+interface Segment {
+	events: SegEvent[];
+	sawActivity: boolean;
+	endedOnActivity: boolean;
+	stepSincePrevProse: boolean;
+}
+
 function nestRoutineRun(steps: ActivityStep[]): ActivityStep[] {
 	const nested: ActivityStep[] = [];
 	let currentThinking: ThinkingStep | undefined;
@@ -90,6 +118,33 @@ function nestRoutineRun(steps: ActivityStep[]): ActivityStep[] {
 	return nested;
 }
 
+function buildActivityTree(events: SegEvent[]): ActivityNode[] {
+	const top: ActivityNode[] = [];
+	let sectionSteps: ActivityStep[] = [];
+	let narration: NarrationStep | undefined;
+	const commit = () => {
+		const nested = nestRoutineRun(sectionSteps);
+		if (narration) narration.steps = nested;
+		else top.push(...nested);
+		sectionSteps = [];
+	};
+	for (const event of events) {
+		if (event.kind === "prose") {
+			commit();
+			narration = { kind: "narration", id: event.entry.id, text: event.entry.text, steps: [] };
+			top.push(narration);
+		} else {
+			sectionSteps.push(event.step);
+		}
+	}
+	commit();
+	return top;
+}
+
+function emptySegment(): Segment {
+	return { events: [], sawActivity: false, endedOnActivity: false, stepSincePrevProse: false };
+}
+
 export function deriveRows(
 	turns: ChatTurn[],
 	toolResults: Record<string, ToolResultState>,
@@ -97,37 +152,122 @@ export function deriveRows(
 	isSpec?: (path: string) => boolean,
 ): ChatRow[] {
 	const rows: ChatRow[] = [];
-	let run: ActivityStep[] = [];
+	let seg = emptySegment();
 
-	const flushRun = (live = false) => {
-		const first = run[0];
-		if (!first) return;
-		rows.push({ kind: "activity", id: `activity:${first.id}`, steps: nestRoutineRun(run), live });
-		run = [];
+	const pushProse = (entry: ProseEntry, role: ProseRole) => {
+		rows.push({ kind: "markdown", id: entry.id, text: entry.text, role });
+	};
+
+	const pushActivity = (events: SegEvent[], live: boolean) => {
+		const firstStep = events.find((event) => event.kind === "step");
+		if (firstStep?.kind !== "step") return false;
+		rows.push({
+			kind: "activity",
+			id: `activity:${firstStep.step.id}`,
+			steps: buildActivityTree(events),
+			live,
+		});
+		return true;
+	};
+
+	const flushSegment = (opts: { live: boolean; settled: boolean; roundEnd: boolean }) => {
+		const { events } = seg;
+		if (events.length === 0) {
+			seg = emptySegment();
+			return;
+		}
+		const prose = events.flatMap((event) => (event.kind === "prose" ? [event.entry] : []));
+		const anyStep = events.some((event) => event.kind === "step");
+		const first = prose[0];
+		const hasFollowing = anyStep || prose.length > 1;
+
+		if (!opts.settled) {
+			const opening = first?.safeOpening && hasFollowing ? first : undefined;
+			if (opening) pushProse(opening, "opening");
+			pushActivity(
+				events.filter((event) => event.kind === "step"),
+				opts.live,
+			);
+			const response = opening ? prose.slice(1) : prose;
+			response.forEach((entry, idx) => {
+				pushProse(entry, opts.roundEnd && idx === response.length - 1 ? "final" : "response");
+			});
+			seg = emptySegment();
+			return;
+		}
+
+		const openingIds = new Set<string>();
+		if (first?.safeOpening && hasFollowing && !first.terminal) {
+			openingIds.add(first.id);
+			for (let k = 1; k < prose.length; k++) {
+				const entry = prose[k];
+				const prev = prose[k - 1];
+				if (entry && prev && !entry.afterStep && !entry.terminal && openingIds.has(prev.id))
+					openingIds.add(entry.id);
+				else break;
+			}
+		}
+		const finalIds = new Set(
+			prose.filter((entry) => entry.terminal && !openingIds.has(entry.id)).map((entry) => entry.id),
+		);
+		const activityEvents = events.filter(
+			(event) =>
+				event.kind === "step" || (!openingIds.has(event.entry.id) && !finalIds.has(event.entry.id)),
+		);
+
+		for (const event of events)
+			if (event.kind === "prose" && openingIds.has(event.entry.id))
+				pushProse(event.entry, "opening");
+		if (!pushActivity(activityEvents, opts.live))
+			for (const event of activityEvents)
+				if (event.kind === "prose") pushProse(event.entry, "response");
+		for (const event of events)
+			if (event.kind === "prose" && finalIds.has(event.entry.id)) pushProse(event.entry, "final");
+		seg = emptySegment();
 	};
 
 	for (let i = 0; i < turns.length; i++) {
 		const turn = turns[i];
 		if (!turn) continue;
+		const endsRound =
+			turn.kind !== "user" &&
+			(turns[i + 1]?.kind === "user" || (i === turns.length - 1 && !isStreaming));
 		if (turn.kind === "assistant") {
 			const { message } = turn;
 			const dead = message.stopReason === "aborted" || message.stopReason === "error";
+			const confirmedContinuing = !turn.streaming && message.stopReason === "toolUse";
 			for (let b = 0; b < message.content.length; b++) {
 				const block = message.content[b];
 				if (!block) continue;
 				if (block.type === "thinking") {
 					if (block.thinking.trim().length === 0) continue;
-					run.push({
-						kind: "thinking",
-						id: `${turn.id}:thinking:${b}`,
-						text: block.thinking,
-						streaming: turn.streaming,
-						tools: [],
+					seg.events.push({
+						kind: "step",
+						step: {
+							kind: "thinking",
+							id: `${turn.id}:thinking:${b}`,
+							text: block.thinking,
+							streaming: turn.streaming,
+							tools: [],
+						},
 					});
+					seg.sawActivity = true;
+					seg.endedOnActivity = true;
+					seg.stepSincePrevProse = true;
 				} else if (block.type === "text") {
 					if (block.text.trim().length === 0) continue;
-					flushRun();
-					rows.push({ kind: "markdown", id: `${turn.id}:text:${b}`, text: block.text });
+					seg.events.push({
+						kind: "prose",
+						entry: {
+							id: `${turn.id}:text:${b}`,
+							text: block.text,
+							safeOpening: !seg.sawActivity || confirmedContinuing,
+							afterStep: seg.stepSincePrevProse,
+							terminal: !turn.streaming && message.stopReason !== "toolUse",
+						},
+					});
+					seg.endedOnActivity = false;
+					seg.stepSincePrevProse = false;
 				} else if (block.type === "toolCall") {
 					const data: ToolCallData = {
 						toolCallId: block.id,
@@ -138,15 +278,23 @@ export function deriveRows(
 						streaming: turn.streaming,
 					};
 					if (resolveProminence(block.name).prominence === "primary") {
-						flushRun();
+						flushSegment({ live: false, settled: true, roundEnd: false });
 						rows.push({ kind: "tool", id: block.id, ...data });
 					} else {
-						run.push({ kind: "tool", id: block.id, ...data });
+						seg.events.push({ kind: "step", step: { kind: "tool", id: block.id, ...data } });
+						seg.sawActivity = true;
+						seg.endedOnActivity = true;
+						seg.stepSincePrevProse = true;
 					}
 				}
 			}
+			if (endsRound) {
+				flushSegment({ live: false, settled: true, roundEnd: true });
+				const data = turnDivider(turns, i, isSpec);
+				if (data) rows.push({ kind: "divider", id: `${turn.id}:divider`, data });
+			}
 		} else {
-			flushRun();
+			flushSegment({ live: false, settled: true, roundEnd: endsRound });
 			switch (turn.kind) {
 				case "user":
 					rows.push({
@@ -189,17 +337,17 @@ export function deriveRows(
 					});
 					break;
 			}
-		}
-		const roundEnded =
-			turn.kind !== "user" &&
-			(turns[i + 1]?.kind === "user" || (i === turns.length - 1 && !isStreaming));
-		if (roundEnded) {
-			flushRun();
-			const data = turnDivider(turns, i, isSpec);
-			if (data) rows.push({ kind: "divider", id: `${turn.id}:divider`, data });
+			if (endsRound) {
+				const data = turnDivider(turns, i, isSpec);
+				if (data) rows.push({ kind: "divider", id: `${turn.id}:divider`, data });
+			}
 		}
 	}
-	flushRun(isStreaming);
+	flushSegment({
+		live: isStreaming && seg.endedOnActivity,
+		settled: !isStreaming,
+		roundEnd: !isStreaming,
+	});
 	return rows;
 }
 
