@@ -116,6 +116,48 @@ test("only the round's final agent answer carries a copy action, not intermediat
 	await expect(final.getByTestId("chat-copy")).toHaveCount(1);
 });
 
+test("the copy action sits 2px below the content, consistent for agent and user messages", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "copy spacing chat",
+		messages: [
+			{ role: "user", text: "Summarize the transport module.", timestamp: BASE_TS },
+			{
+				role: "assistant",
+				text: "Reworked reconnect and made ordering deterministic.",
+				timestamp: BASE_TS + 1_000,
+			},
+		],
+	});
+
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
+	await enterDefaultWorkspace(page);
+	await openChatFromHistory(page, "copy spacing chat");
+
+	const userMessage = page.locator('[data-testid="chat-message"][data-role="user"]');
+	const assistantMessage = page.locator('[data-testid="chat-message"][data-role="assistant"]');
+	await expect(assistantMessage).toBeVisible();
+
+	// The shared copy-action gap is exactly 2px on both roles (single source of truth in MessageWithCopy).
+	const gapOf = (loc: import("@playwright/test").Locator) =>
+		loc.evaluate((el) => getComputedStyle(el).rowGap);
+	await expect.poll(() => gapOf(userMessage)).toBe("2px");
+	await expect.poll(() => gapOf(assistantMessage)).toBe("2px");
+
+	// The agent answer ends flush: its last markdown block carries no trailing bottom margin, so the copy
+	// action is not pushed farther away than on a user bubble.
+	const lastBlockMb = await assistantMessage
+		.locator("[data-testid='chat-copy']")
+		.evaluate((copy) => {
+			const content = copy.previousElementSibling;
+			const block = content?.firstElementChild?.lastElementChild;
+			return block ? getComputedStyle(block).marginBottom : null;
+		});
+	expect(lastBlockMb).toBe("0px");
+});
+
 test("copy actions copy the full source of both user and agent messages", async ({ page }) => {
 	await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
 	await openFixtureProject(page);

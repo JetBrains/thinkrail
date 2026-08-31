@@ -105,7 +105,10 @@ export function ChatTurnView({
 			// narration the agent emits between tool steps.
 			return isFinalAnswer ? (
 				<MessageWithCopy messageRole="assistant" side="left" getText={() => row.text}>
-					<div className="w-full min-w-0 tr-text-reading text-text-default">
+					{/* Zero the trailing block margin of the answer's LAST child only, so the message ends flush
+					    against the copy-action gap (its own owning layout) — inter-block + leading spacing keep
+					    the shared prose margins. */}
+					<div className="w-full min-w-0 tr-text-reading text-text-default [&>div>*:last-child]:mb-0">
 						<Markdown text={row.text} />
 					</div>
 				</MessageWithCopy>
@@ -223,7 +226,7 @@ function MessageWithCopy({
 		<div
 			data-testid="chat-message"
 			data-role={messageRole}
-			className={cn("group flex flex-col gap-4", side === "right" ? "items-end" : "items-start")}
+			className={cn("group flex flex-col gap-2", side === "right" ? "items-end" : "items-start")}
 		>
 			{children}
 			<CopyButton getText={getText} />

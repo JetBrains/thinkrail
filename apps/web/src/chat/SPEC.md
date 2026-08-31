@@ -120,7 +120,11 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   Both go through **one shared layout**, `MessageWithCopy` (in `turns.tsx`): a `flex-col` that places the
   action **below** the message content, aligned to the message's own side — bottom-**left** under an
   assistant row, bottom-**right** under a user bubble — never an overlay on the text, so long/multiline
-  messages can't collide with it. The user bubble stays content-only (the action moved out of it).
+  messages can't collide with it. The `flex-col` gap is the **single source** of the message→copy spacing
+  (2px), so the action sits the same distance from an agent answer as from a user bubble; the agent
+  answer's content wrapper zeroes only its **last** markdown block's trailing margin
+  (`[&>div>*:last-child]:mb-0`) so the prose's 8px bottom margin doesn't add to that gap (inter-block and
+  leading prose margins are untouched). The user bubble stays content-only (the action moved out of it).
   `MessageWithCopy` also carries the `data-testid="chat-message"`/`data-role` hooks the jump/flash + tests
   rely on. `CopyButton` is a self-contained presentational primitive (`navigator.clipboard.writeText` + a local ~1.2s
   `Copy`→`Check` icon flip); it does **not** reach the store toast the way `panels/PlanPane` does,
