@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { removeTree } from "@thinkrail/shared/removeTree";
 
 export const PORT_BLOCK_BASE = 25000;
 export const PORT_BLOCK_STRIDE = 10;
@@ -28,7 +29,7 @@ type PortBlockOwnerInput = string | PortBlockOwner;
 const STALE_LOCK_MS = 10_000;
 
 function removeLockTree(path: string): void {
-	rmSync(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 10 });
+	removeTree(path, { delayMs: 10 });
 }
 
 function slotBase(slot: number): number {

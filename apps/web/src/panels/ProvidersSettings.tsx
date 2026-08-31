@@ -121,7 +121,6 @@ export function ProvidersSettings() {
 					size="sm"
 					data-testid="providers-refresh"
 					aria-label="Refresh provider status"
-					title="Refresh"
 					disabled={refreshing}
 					onClick={() => void load()}
 				>

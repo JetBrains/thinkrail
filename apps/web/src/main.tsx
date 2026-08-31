@@ -1,7 +1,9 @@
 import "./index.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { initChatMessageOrderPersistence } from "./chat/messageOrder";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { TooltipProvider } from "./components/ui/tooltip";
 import { initNavigation } from "./navigation";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
 import { Shell } from "./shell/Shell";
@@ -11,6 +13,7 @@ import { initTransport } from "./transport";
 initializeBundledThemes();
 applyTheme(readThemeHint());
 initTransport();
+initChatMessageOrderPersistence();
 initProjectExpansionPersistence();
 initNavigation();
 
@@ -19,7 +22,9 @@ if (root) {
 	createRoot(root).render(
 		<StrictMode>
 			<ErrorBoundary label="app">
-				<Shell />
+				<TooltipProvider delayDuration={250} skipDelayDuration={400}>
+					<Shell />
+				</TooltipProvider>
 			</ErrorBoundary>
 		</StrictMode>,
 	);

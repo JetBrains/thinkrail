@@ -196,6 +196,9 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   ([web/SPEC.md](web/SPEC.md)). Routine.
 - **The five `todo_*` tools** deliberately keep routine fallback receipts: their connected product surface
   is the chat plan, not a second renderer system in this module.
+- **`subagent/`** — delegation renderers for `pi-subagents`: `AgentCard` (the `Agent` tool — **primary**;
+  also registered for `get_subagent_result`, routine), the `SubagentCompletionCard` turn card, and the
+  pure `runDetails` readers/formatters; own child spec ([subagent/SPEC.md](subagent/SPEC.md)).
 - **Shared pieces** — `CodeBlock` (shiki), `Collapsible` ("Show all N lines" fold for long output),
   `ToolFileLink` + exact-reference linked text, pure `toolHelpers` (arg readers, `resultText`,
   `languageFromPath`) + `lib`'s `projectRelativePath`. `resultText` delegates canonical result parsing to

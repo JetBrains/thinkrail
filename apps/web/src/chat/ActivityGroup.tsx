@@ -117,6 +117,7 @@ export function ThinkingGroup({
 			stepCount={tools.length}
 			icon={<Brain className="size-12 shrink-0" />}
 			label="Thinking"
+			headline={extractThinkingHeading(thought.text)}
 			breadcrumbLabel="Thinking"
 			breadcrumbMeta={summary}
 			summary={summary}
@@ -149,6 +150,7 @@ function GroupDisclosure({
 	stepCount,
 	icon,
 	label,
+	headline,
 	breadcrumbLabel,
 	breadcrumbMeta,
 	summary,
@@ -162,6 +164,7 @@ function GroupDisclosure({
 	stepCount: number;
 	icon: React.ReactNode;
 	label?: string;
+	headline?: string | undefined;
 	breadcrumbLabel: string;
 	breadcrumbMeta: string;
 	summary: string;
@@ -197,7 +200,20 @@ function GroupDisclosure({
 				) : (
 					icon
 				)}
-				{label ? <span className="shrink-0 text-text-default">{label}</span> : null}
+				{label ? (
+					<span className={cn("shrink-0 text-text-default", !expanded && headline && "sr-only")}>
+						{label}
+					</span>
+				) : null}
+				{!expanded && headline ? (
+					<span
+						data-testid={`${testId}-headline`}
+						className="min-w-0 flex-1 truncate text-text-default"
+						title={headline}
+					>
+						{headline}
+					</span>
+				) : null}
 				<span className="min-w-0 truncate" title={summary}>
 					{summary}
 				</span>
@@ -205,6 +221,25 @@ function GroupDisclosure({
 			{expanded ? <div className="flex flex-col gap-px pl-12">{children}</div> : null}
 		</div>
 	);
+}
+
+function extractThinkingHeading(text: string): string | undefined {
+	const firstLine = text
+		.split(/\r?\n/)
+		.find((line) => line.trim().length > 0)
+		?.trim();
+	if (!firstLine) return undefined;
+	for (const delimiter of ["**", "__"]) {
+		if (!firstLine.startsWith(delimiter) || !firstLine.endsWith(delimiter)) continue;
+		const marker = delimiter[0];
+		if (firstLine[delimiter.length] === marker || firstLine.at(-delimiter.length - 1) === marker)
+			return undefined;
+		const heading = firstLine.slice(delimiter.length, -delimiter.length);
+		return heading && heading === heading.trim() && !heading.includes(delimiter)
+			? heading
+			: undefined;
+	}
+	return undefined;
 }
 
 function splitSummary(summary: string): { label: string; meta: string } {

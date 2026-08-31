@@ -16,6 +16,7 @@ import {
 } from "@remixicon/react";
 import type { TodoGroupItem, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
 import { useState } from "react";
+import { IconTooltip } from "../components/ui/tooltip";
 import { cn } from "../lib";
 import { PlanStatusIcon, SectionLabel } from "./planKit";
 import {
@@ -119,16 +120,17 @@ export function TodoAddRow({
 				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
 			{onOpenPlan ? (
-				<button
-					type="button"
-					data-testid="todo-open-plan"
-					onClick={onOpenPlan}
-					aria-label="Open the plan page"
-					title="Open the plan as a page — review each step's changes"
-					className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
-				>
-					<FileText className="size-14" />
-				</button>
+				<IconTooltip label="Open the plan as a page — review each step's changes">
+					<button
+						type="button"
+						data-testid="todo-open-plan"
+						onClick={onOpenPlan}
+						aria-label="Open the plan page"
+						className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
+					>
+						<FileText className="size-14" />
+					</button>
+				</IconTooltip>
 			) : null}
 		</div>
 	);
@@ -412,16 +414,19 @@ function TodoRow({
 					<UserRound className="size-14" />
 				</span>
 			) : null}
-			<button
-				type="button"
-				onClick={onRemove}
-				disabled={reviewing}
-				aria-label="Remove"
-				title={reviewing ? "Reviewing… — wait for the review to finish before removing" : "Remove"}
-				className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+			<IconTooltip
+				label={reviewing ? "Reviewing… — wait for the review to finish before removing" : "Remove"}
 			>
-				<Trash2 className="size-14" />
-			</button>
+				<button
+					type="button"
+					onClick={onRemove}
+					disabled={reviewing}
+					aria-label="Remove"
+					className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+				>
+					<Trash2 className="size-14" />
+				</button>
+			</IconTooltip>
 		</li>
 	);
 }

@@ -23,6 +23,7 @@ import {
 	RiLayoutLeftLine as PanelLeftOpen,
 	RiLayoutRightLine as PanelRightOpen,
 	RiLayout2Line as PanelsTopLeft,
+	RiAddLine as Plus,
 	RiBookOpenFill,
 	RiBookOpenLine,
 	RiChat2Fill,
@@ -37,23 +38,10 @@ import {
 	RiGitPullRequestFill,
 	RiLayout2Fill,
 	RiTerminalBoxFill,
+	RiSearchLine as Search,
 	RiTerminalBoxLine as SquareTerminal,
 	RiCloseLine as X,
 } from "@remixicon/react";
-import type {
-	LayoutAuxiliaryRegion,
-	LayoutBottomAlignment,
-	LayoutBottomGroup,
-	LayoutCenterGroup,
-	LayoutCenterNode,
-	LayoutCenterSplit,
-	LayoutCenterTab,
-	LayoutSideGroup,
-	LayoutSideTab,
-	LayoutTab,
-	LayoutToolId,
-	WorkspaceLayoutDocument,
-} from "@thinkrail/contracts";
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CustomIcon } from "../../components/CustomIcon";
 import {
@@ -86,6 +74,7 @@ import {
 	ResizablePanel,
 	ResizablePanelGroup,
 } from "../../components/ui/resizable";
+import { IconTooltip } from "../../components/ui/tooltip";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
 	type LayoutAttention,
@@ -113,7 +102,6 @@ import {
 	isLayoutUnavailable,
 	keepPreview,
 	LAYOUT_LIMITS,
-	LAYOUT_TOOLS,
 	type LayoutGroupLocation,
 	type LayoutMutationResult,
 	type LayoutOperationResult,
@@ -121,6 +109,7 @@ import {
 	layoutTabName,
 	moveTabToGroup,
 	reconcileAttention,
+	removeLayoutGroup,
 	resizeAuxiliaryGroups,
 	resizeBottomRegion,
 	resizeCenterSplit,
@@ -135,7 +124,23 @@ import {
 	showSide,
 	splitCenterGroup,
 	toolTab,
+	unplacedTools,
+	unplacedToolsForSide,
 } from "./model";
+import type {
+	LayoutAuxiliaryRegion,
+	LayoutBottomAlignment,
+	LayoutBottomGroup,
+	LayoutCenterGroup,
+	LayoutCenterNode,
+	LayoutCenterSplit,
+	LayoutCenterTab,
+	LayoutSideGroup,
+	LayoutSideTab,
+	LayoutTab,
+	LayoutToolId,
+	WorkspaceLayoutDocument,
+} from "./types";
 
 export interface LayoutTabFocusRequest {
 	key: string;
@@ -153,13 +158,14 @@ export interface WorkbenchProps {
 	attention: LayoutAttention;
 	maxSideGroups: number;
 	maxBottomGroups: number;
-	remoteEpoch: number;
+	projectionEpoch: number;
 	focusRequest?: LayoutTabFocusRequest;
 	renderTabBody: (tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>) => ReactNode;
 	renderTabAdornment: (tab: LayoutTab) => ReactNode;
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
 	renderEmptyCenter: (groupId: string) => ReactNode;
 	renderCenterActions: (groupId: string) => ReactNode;
+	renderSideMenuActions: (side: LayoutSide, groupId: string) => ReactNode;
 	onCommit: (document: WorkspaceLayoutDocument) => void;
 	onAttentionChange: (attention: LayoutAttention) => void;
 	onUserNavigation: () => void;
@@ -170,7 +176,7 @@ export interface WorkbenchProps {
 	) => void;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (groupId: string, area: "center" | LayoutAuxiliaryRegion) => void;
-	onRemoteGestureCanceled?: () => void;
+	onGestureCanceled?: () => void;
 }
 
 type DropTarget =
@@ -196,7 +202,7 @@ function isResizeArrowKey(key: string): boolean {
 
 function useCommittedSizes(
 	current: readonly number[],
-	remoteEpoch: number,
+	projectionEpoch: number,
 	commit: (sizes: number[]) => void,
 	onCanceled?: () => void,
 ): {
@@ -208,12 +214,12 @@ function useCommittedSizes(
 	const dragging = useRef(false);
 	const keyboard = useRef(false);
 	const pending = useRef<number[] | null>(null);
-	const startEpoch = useRef(remoteEpoch);
-	const observedEpoch = useRef(remoteEpoch);
-	const epoch = useRef(remoteEpoch);
+	const startEpoch = useRef(projectionEpoch);
+	const observedEpoch = useRef(projectionEpoch);
+	const epoch = useRef(projectionEpoch);
 	const currentRef = useRef(current);
 	const commitRef = useRef(commit);
-	epoch.current = remoteEpoch;
+	epoch.current = projectionEpoch;
 	currentRef.current = current;
 	commitRef.current = commit;
 
@@ -230,13 +236,13 @@ function useCommittedSizes(
 	}, [onCanceled]);
 
 	useEffect(() => {
-		if (observedEpoch.current === remoteEpoch) return;
+		if (observedEpoch.current === projectionEpoch) return;
 		if (dragging.current || keyboard.current) {
 			cancelStaleGesture();
 			return;
 		}
-		observedEpoch.current = remoteEpoch;
-	}, [cancelStaleGesture, remoteEpoch]);
+		observedEpoch.current = projectionEpoch;
+	}, [cancelStaleGesture, projectionEpoch]);
 
 	const flush = useCallback(() => {
 		const sizes = pending.current;
@@ -579,6 +585,7 @@ function TabStrip({
 	const tabRefs = useRef(new Map<string, HTMLButtonElement>());
 	const overflowFocusTarget = useRef<string | null>(null);
 	const [overflowOpen, setOverflowOpen] = useState(false);
+	const overflowing = scrollOverflow.before || scrollOverflow.after;
 	const selectTab = (tabId: string, keep?: boolean) => {
 		selectionEpoch.current += 1;
 		onSelect(tabId, keep);
@@ -604,6 +611,10 @@ function TabStrip({
 		if (selectedId)
 			tabRefs.current.get(selectedId)?.scrollIntoView({ block: "nearest", inline: "nearest" });
 	}, [selectedId]);
+
+	useEffect(() => {
+		if (!overflowing) setOverflowOpen(false);
+	}, [overflowing]);
 
 	const selectAt = (index: number) => {
 		const tab = tabs[index];
@@ -731,47 +742,51 @@ function TabStrip({
 				) : null}
 			</div>
 			{trailing}
-			<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
-				<PopoverTrigger
-					aria-label="Search open tabs"
-					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-				>
-					<MoreHorizontal className="size-14" />
-				</PopoverTrigger>
-				<PopoverContent
-					align="end"
-					className="w-288 p-0"
-					onCloseAutoFocus={(event) => {
-						const targetId = overflowFocusTarget.current;
-						if (!targetId) return;
-						overflowFocusTarget.current = null;
-						event.preventDefault();
-						tabRefs.current.get(targetId)?.focus();
-					}}
-				>
-					<Command>
-						<CommandInput placeholder="Find an open tab…" />
-						<CommandList>
-							<CommandEmpty>No matching tabs.</CommandEmpty>
-							{tabs.map((tab) => (
-								<CommandItem
-									key={tab.id}
-									value={tab.id}
-									keywords={tabSearchKeywords(tab)}
-									onSelect={() => {
-										overflowFocusTarget.current = tab.id;
-										selectTab(tab.id);
-										setOverflowOpen(false);
-									}}
-								>
-									{tabIcon(tab)}
-									<span className="truncate">{layoutTabName(tab)}</span>
-								</CommandItem>
-							))}
-						</CommandList>
-					</Command>
-				</PopoverContent>
-			</Popover>
+			{overflowing ? (
+				<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
+					<IconTooltip label="Search open tabs" wrapTrigger>
+						<PopoverTrigger
+							aria-label="Search open tabs"
+							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						>
+							<Search className="size-14" />
+						</PopoverTrigger>
+					</IconTooltip>
+					<PopoverContent
+						align="end"
+						className="w-288 p-0"
+						onCloseAutoFocus={(event) => {
+							const targetId = overflowFocusTarget.current;
+							if (!targetId) return;
+							overflowFocusTarget.current = null;
+							event.preventDefault();
+							tabRefs.current.get(targetId)?.focus();
+						}}
+					>
+						<Command>
+							<CommandInput placeholder="Find an open tab…" />
+							<CommandList>
+								<CommandEmpty>No matching tabs.</CommandEmpty>
+								{tabs.map((tab) => (
+									<CommandItem
+										key={tab.id}
+										value={tab.id}
+										keywords={tabSearchKeywords(tab)}
+										onSelect={() => {
+											overflowFocusTarget.current = tab.id;
+											selectTab(tab.id);
+											setOverflowOpen(false);
+										}}
+									>
+										{tabIcon(tab)}
+										<span className="truncate">{layoutTabName(tab)}</span>
+									</CommandItem>
+								))}
+							</CommandList>
+						</Command>
+					</PopoverContent>
+				</Popover>
+			) : null}
 		</div>
 	);
 }
@@ -876,7 +891,7 @@ function WorkbenchTab({
 		disabled: !acceptsAfter,
 	});
 	const groups = collectAllGroups(document);
-	const missingTools = LAYOUT_TOOLS.filter((tool) => !findPlacedResource(document, toolTab(tool)));
+	const missingTools = unplacedTools(document);
 	const splitReason = (direction: CenterSplitDirection): string | null => {
 		if (location.area !== "center") return "Only center tabs can split the center.";
 		if (tab.kind === "tool") return "Tools stay in a side region.";
@@ -904,6 +919,7 @@ function WorkbenchTab({
 		: -1;
 	const currentAuxiliaryLimit = currentAuxiliary === "bottom" ? maxBottomGroups : maxSideGroups;
 	const name = layoutTabName(tab);
+	const groupRemoval = removeLayoutGroup(document, location);
 
 	const move = (target: LayoutGroupLocation, targetIndex?: number) => {
 		const result = moveTabToGroup(document, tab, target, targetIndex);
@@ -1139,12 +1155,12 @@ function WorkbenchTab({
 						})}
 					</>
 				) : null}
-				{missingTools.length > 0 ? (
+				{location.area !== "center" && missingTools.length > 0 ? (
 					<>
 						<ContextMenuSeparator />
 						{missingTools.map((tool) => (
 							<ContextMenuItem key={tool} onSelect={() => onRevealTool(tool)}>
-								Restore {toolTab(tool).name}
+								Show {toolTab(tool).name}
 							</ContextMenuItem>
 						))}
 					</>
@@ -1155,6 +1171,17 @@ function WorkbenchTab({
 						{location.area === "bottom" ? "Hide bottom panel" : `Hide ${location.area} side`}
 					</ContextMenuItem>
 				) : null}
+				<ContextMenuItem
+					disabled={isLayoutUnavailable(groupRemoval)}
+					title={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : undefined}
+					onSelect={() => {
+						if (!isLayoutUnavailable(groupRemoval)) onApply(groupRemoval);
+					}}
+				>
+					{isLayoutUnavailable(groupRemoval)
+						? `Remove group — ${groupRemoval.reason}`
+						: "Remove group"}
+				</ContextMenuItem>
 				<ContextMenuItem
 					onSelect={onClose}
 					className="text-feedback-error focus:text-feedback-error"
@@ -1187,9 +1214,10 @@ interface SharedGroupProps {
 	renderTabBody: WorkbenchProps["renderTabBody"];
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	renderToolBody: WorkbenchProps["renderToolBody"];
+	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
 	onAttentionChange: WorkbenchProps["onAttentionChange"];
 	onUserNavigation: WorkbenchProps["onUserNavigation"];
-	onRemoteGestureCanceled: (() => void) | undefined;
+	onGestureCanceled: (() => void) | undefined;
 	onApply: (result: LayoutMutationResult) => void;
 	onClose: (tab: LayoutTab) => void;
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
@@ -1218,6 +1246,7 @@ function CenterGroupView({
 	};
 	const selectedId = readLayoutSelection(shared.attention, group.id);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
+	const groupRemoval = removeLayoutGroup(shared.document, location);
 	const applySelect = (tabId: string, keep?: boolean) => {
 		shared.onUserNavigation();
 		const document = shared.document;
@@ -1267,16 +1296,35 @@ function CenterGroupView({
 				trailing={
 					<>
 						{renderCenterActions(group.id)}
-						<button
-							type="button"
-							data-testid="new-chat"
-							aria-label="New chat"
-							title="New chat"
-							onClick={() => onNewChat(group.id)}
-							className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-						>
-							<MessageSquarePlus className="size-14" />
-						</button>
+						{group.tabs.length === 0 ? (
+							<IconTooltip
+								label={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : "Remove group"}
+							>
+								<button
+									type="button"
+									data-testid="remove-layout-group"
+									aria-label="Remove group"
+									disabled={isLayoutUnavailable(groupRemoval)}
+									onClick={() => {
+										if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
+									}}
+									className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+								>
+									<X className="size-14" />
+								</button>
+							</IconTooltip>
+						) : null}
+						<IconTooltip label="New chat">
+							<button
+								type="button"
+								data-testid="new-chat"
+								aria-label="New chat"
+								onClick={() => onNewChat(group.id)}
+								className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								<MessageSquarePlus className="size-14" />
+							</button>
+						</IconTooltip>
 					</>
 				}
 			/>
@@ -1337,14 +1385,20 @@ function CenterGroupView({
 
 type CenterNodeProps = SharedGroupProps & {
 	node: LayoutCenterNode;
-	remoteEpoch: number;
+	projectionEpoch: number;
 	onCommit: WorkbenchProps["onCommit"];
 	onNewChat: WorkbenchProps["onNewChat"];
 	renderEmptyCenter: WorkbenchProps["renderEmptyCenter"];
 	renderCenterActions: WorkbenchProps["renderCenterActions"];
 };
 
-function CenterNodeView({ node, remoteEpoch, onCommit, onNewChat, ...shared }: CenterNodeProps) {
+function CenterNodeView({
+	node,
+	projectionEpoch,
+	onCommit,
+	onNewChat,
+	...shared
+}: CenterNodeProps) {
 	return node.kind === "group" ? (
 		<CenterGroupView
 			key={tupleKey("center-node", node.id)}
@@ -1356,7 +1410,7 @@ function CenterNodeView({ node, remoteEpoch, onCommit, onNewChat, ...shared }: C
 		<CenterSplitView
 			key={tupleKey("center-node", node.id)}
 			node={node}
-			remoteEpoch={remoteEpoch}
+			projectionEpoch={projectionEpoch}
 			onCommit={onCommit}
 			onNewChat={onNewChat}
 			{...shared}
@@ -1366,7 +1420,7 @@ function CenterNodeView({ node, remoteEpoch, onCommit, onNewChat, ...shared }: C
 
 function CenterSplitView({
 	node,
-	remoteEpoch,
+	projectionEpoch,
 	onCommit,
 	onNewChat,
 	...shared
@@ -1375,12 +1429,12 @@ function CenterSplitView({
 	const weights = node.weights.map((weight) => weight * 100);
 	const resize = useCommittedSizes(
 		weights,
-		remoteEpoch,
+		projectionEpoch,
 		(sizes) => {
 			const next = resizeCenterSplit(shared.document, node.id, [sizes[0] ?? 50, sizes[1] ?? 50]);
 			if (next !== shared.document) onCommit(next);
 		},
-		shared.onRemoteGestureCanceled,
+		shared.onGestureCanceled,
 	);
 	const dimension = node.direction === "horizontal" ? size.width : size.height;
 	const minimumPixels =
@@ -1389,7 +1443,7 @@ function CenterSplitView({
 	return (
 		<div ref={size.ref} className="h-full min-h-0 min-w-0 overflow-hidden">
 			<ResizablePanelGroup
-				key={tupleKey("center-split", node.id, String(remoteEpoch))}
+				key={tupleKey("center-split", node.id, String(projectionEpoch))}
 				direction={node.direction}
 				onLayout={resize.onLayout}
 				className="min-h-0 min-w-0"
@@ -1402,7 +1456,7 @@ function CenterSplitView({
 				>
 					<CenterNodeView
 						node={node.children[0]}
-						remoteEpoch={remoteEpoch}
+						projectionEpoch={projectionEpoch}
 						onCommit={onCommit}
 						onNewChat={onNewChat}
 						{...shared}
@@ -1424,7 +1478,7 @@ function CenterSplitView({
 				>
 					<CenterNodeView
 						node={node.children[1]}
-						remoteEpoch={remoteEpoch}
+						projectionEpoch={projectionEpoch}
 						onCommit={onCommit}
 						onNewChat={onNewChat}
 						{...shared}
@@ -1439,6 +1493,7 @@ function SideGroupView({
 	side,
 	group,
 	groupIndex,
+	foldable,
 	renderToolBody,
 	onFold,
 	...shared
@@ -1446,10 +1501,12 @@ function SideGroupView({
 	side: LayoutSide;
 	group: LayoutSideGroup;
 	groupIndex: number;
+	foldable: boolean;
 	renderToolBody: WorkbenchProps["renderToolBody"];
 	onFold: () => void;
 }) {
 	const location: LayoutGroupLocation = { area: side, groupId: group.id };
+	const groupRemoval = removeLayoutGroup(shared.document, location);
 	const selectedId = readLayoutSelection(shared.attention, group.id);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
 	const draggedSideTab =
@@ -1531,27 +1588,58 @@ function SideGroupView({
 						onRevealTool={shared.onRevealTool}
 						canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 						renderTabAdornment={shared.renderTabAdornment}
+						trailing={
+							<SideGroupMenu
+								document={shared.document}
+								side={side}
+								groupId={group.id}
+								renderSideMenuActions={shared.renderSideMenuActions}
+								onRevealTool={shared.onRevealTool}
+							/>
+						}
 					/>
 				</div>
-				<button
-					type="button"
-					data-testid="side-group-fold"
-					aria-label={group.folded ? "Expand group" : "Fold group"}
-					aria-expanded={!group.folded}
-					onClick={onFold}
-					onKeyDown={(event) => {
-						if (event.key !== "Enter" && event.key !== " ") return;
-						event.preventDefault();
-						onFold();
-					}}
-					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-				>
-					{group.folded ? (
-						<RiExpandVerticalLine className="size-16" />
-					) : (
-						<RiCollapseVerticalLine className="size-16" />
-					)}
-				</button>
+				{foldable ? (
+					<IconTooltip label={group.folded ? "Expand group" : "Fold group"}>
+						<button
+							type="button"
+							data-testid="side-group-fold"
+							aria-label={group.folded ? "Expand group" : "Fold group"}
+							aria-expanded={!group.folded}
+							onClick={onFold}
+							onKeyDown={(event) => {
+								if (event.key !== "Enter" && event.key !== " ") return;
+								event.preventDefault();
+								onFold();
+							}}
+							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						>
+							{group.folded ? (
+								<RiExpandVerticalLine className="size-16" />
+							) : (
+								<RiCollapseVerticalLine className="size-16" />
+							)}
+						</button>
+					</IconTooltip>
+				) : null}
+				{group.tabs.length === 0 ? (
+					<IconTooltip
+						label={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : "Remove group"}
+					>
+						<button
+							type="button"
+							data-testid="remove-layout-group"
+							aria-label="Remove group"
+							disabled={isLayoutUnavailable(groupRemoval)}
+							onClick={() => {
+								if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
+							}}
+							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+						>
+							<X className="size-14" />
+						</button>
+					</IconTooltip>
+				) : null}
 			</div>
 			<div
 				id={groupPanelId(location)}
@@ -1568,6 +1656,10 @@ function SideGroupView({
 								? shared.renderTabBody(selected)
 								: null}
 					</Fragment>
+				) : !group.folded ? (
+					<div className="flex h-full items-center justify-center tr-text-metadata text-text-muted">
+						Empty group
+					</div>
 				) : null}
 				{group.folded ? null : creationTargets}
 			</div>
@@ -1576,17 +1668,61 @@ function SideGroupView({
 	);
 }
 
+function SideGroupMenu({
+	document,
+	side,
+	groupId,
+	renderSideMenuActions,
+	onRevealTool,
+}: {
+	document: WorkspaceLayoutDocument;
+	side: LayoutSide;
+	groupId: string;
+	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
+	onRevealTool: (tool: LayoutToolId) => void;
+}) {
+	const missing = unplacedToolsForSide(document, side);
+	const actions = renderSideMenuActions(side, groupId);
+	if (missing.length === 0 && !actions) return null;
+	return (
+		<DropdownMenu>
+			<IconTooltip label="Add to this group" wrapTrigger>
+				<DropdownMenuTrigger
+					data-testid="side-group-menu"
+					aria-label="Add to this group"
+					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				>
+					<Plus className="size-16" />
+				</DropdownMenuTrigger>
+			</IconTooltip>
+			<DropdownMenuContent align="end">
+				{actions}
+				{actions && missing.length > 0 ? <DropdownMenuSeparator /> : null}
+				{missing.map((tool) => (
+					<DropdownMenuItem
+						key={tool}
+						data-testid={`show-tool-${tool}`}
+						onSelect={() => onRevealTool(tool)}
+					>
+						Show {toolTab(tool).name}
+					</DropdownMenuItem>
+				))}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
 function SideStack({
 	side,
 	region,
-	remoteEpoch,
+	projectionEpoch,
 	renderToolBody,
 	onCommit,
 	...shared
 }: SharedGroupProps & {
 	side: LayoutSide;
 	region: WorkspaceLayoutDocument[LayoutSide];
-	remoteEpoch: number;
+	projectionEpoch: number;
 	renderToolBody: WorkbenchProps["renderToolBody"];
 	onCommit: WorkbenchProps["onCommit"];
 }) {
@@ -1595,12 +1731,12 @@ function SideStack({
 	const current = region.groups.map((group) => (group.weight / total) * 100);
 	const resize = useCommittedSizes(
 		current,
-		remoteEpoch,
+		projectionEpoch,
 		(sizes) => {
 			const next = resizeSideGroups(shared.document, side, sizes);
 			if (next !== shared.document) onCommit(next);
 		},
-		shared.onRemoteGestureCanceled,
+		shared.onGestureCanceled,
 	);
 	const foldedCount = region.groups.filter((group) => group.folded).length;
 	const expandedCount = region.groups.length - foldedCount;
@@ -1629,7 +1765,7 @@ function SideStack({
 				key={tupleKey(
 					"side-stack",
 					side,
-					String(remoteEpoch),
+					String(projectionEpoch),
 					...region.groups.flatMap((group) => [group.id, String(group.folded)]),
 				)}
 				direction="vertical"
@@ -1656,6 +1792,7 @@ function SideStack({
 								side={side}
 								group={group}
 								groupIndex={index}
+								foldable={region.groups.length > 1 || group.folded}
 								renderToolBody={renderToolBody}
 								onFold={() => {
 									const result = setSideGroupFolded(shared.document, side, group.id, !group.folded);
@@ -1798,6 +1935,7 @@ function BottomGroupView({
 	onAlignmentChange: (alignment: LayoutBottomAlignment) => void;
 }) {
 	const location: LayoutGroupLocation = { area: "bottom", groupId: group.id };
+	const groupRemoval = removeLayoutGroup(shared.document, location);
 	const selectedId = readLayoutSelection(shared.attention, group.id);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
 	const selectedName = selected ? layoutTabName(selected) : undefined;
@@ -1858,6 +1996,24 @@ function BottomGroupView({
 						}
 					/>
 				</div>
+				{group.tabs.length === 0 ? (
+					<IconTooltip
+						label={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : "Remove group"}
+					>
+						<button
+							type="button"
+							data-testid="remove-layout-group"
+							aria-label="Remove group"
+							disabled={isLayoutUnavailable(groupRemoval)}
+							onClick={() => {
+								if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
+							}}
+							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+						>
+							<X className="size-14" />
+						</button>
+					</IconTooltip>
+				) : null}
 				<button
 					type="button"
 					data-testid="bottom-group-fold"
@@ -1969,12 +2125,12 @@ function BottomFoldedGroup({
 }
 
 function BottomStack({
-	remoteEpoch,
+	projectionEpoch,
 	onCommit,
 	onNewTerminal,
 	...shared
 }: SharedGroupProps & {
-	remoteEpoch: number;
+	projectionEpoch: number;
 	onCommit: WorkbenchProps["onCommit"];
 	onNewTerminal: WorkbenchProps["onNewTerminal"];
 }) {
@@ -1990,12 +2146,12 @@ function BottomStack({
 	const current = region.groups.map((group) => (group.weight / total) * 100);
 	const resize = useCommittedSizes(
 		current,
-		remoteEpoch,
+		projectionEpoch,
 		(sizes) => {
 			const next = resizeAuxiliaryGroups(shared.document, "bottom", sizes);
 			if (next !== shared.document) onCommit(next);
 		},
-		shared.onRemoteGestureCanceled,
+		shared.onGestureCanceled,
 	);
 	const foldedCount = region.groups.filter((group) => group.folded).length;
 	const expandedCount = region.groups.length - foldedCount;
@@ -2024,7 +2180,7 @@ function BottomStack({
 			<ResizablePanelGroup
 				key={tupleKey(
 					"bottom-stack",
-					String(remoteEpoch),
+					String(projectionEpoch),
 					...region.groups.flatMap((group) => [group.id, String(group.folded)]),
 				)}
 				direction="horizontal"
@@ -2229,20 +2385,24 @@ function HiddenSideRail({
 			data-drop-active={drop.isOver || undefined}
 			className="flex w-28 shrink-0 flex-col items-center border-border-default bg-container-sidebar-bg py-4 first:border-r last:border-l data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
 		>
-			<button
-				type="button"
-				aria-label={`Show ${side} side`}
-				title={showEnabled ? `Show ${side} side` : `No ${side} groups to show`}
-				disabled={!showEnabled}
-				onClick={onShow}
-				className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text disabled:hover:bg-transparent"
+			<IconTooltip
+				label={showEnabled ? `Show ${side} side` : `No ${side} groups to show`}
+				wrapTrigger
 			>
-				{side === "left" ? (
-					<PanelLeftOpen className="size-14" />
-				) : (
-					<PanelRightOpen className="size-14" />
-				)}
-			</button>
+				<button
+					type="button"
+					aria-label={`Show ${side} side`}
+					disabled={!showEnabled}
+					onClick={onShow}
+					className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:pointer-events-none disabled:text-control-disabled-text"
+				>
+					{side === "left" ? (
+						<PanelLeftOpen className="size-14" />
+					) : (
+						<PanelRightOpen className="size-14" />
+					)}
+				</button>
+			</IconTooltip>
 		</div>
 	);
 }
@@ -2252,13 +2412,14 @@ export function Workbench({
 	attention,
 	maxSideGroups,
 	maxBottomGroups,
-	remoteEpoch,
+	projectionEpoch,
 	focusRequest,
 	renderTabBody,
 	renderTabAdornment,
 	renderToolBody,
 	renderEmptyCenter,
 	renderCenterActions,
+	renderSideMenuActions,
 	onCommit,
 	onAttentionChange,
 	onUserNavigation,
@@ -2266,14 +2427,14 @@ export function Workbench({
 	onRequestClose,
 	onNewChat,
 	onNewTerminal,
-	onRemoteGestureCanceled,
+	onGestureCanceled,
 }: WorkbenchProps) {
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 	const [draggingTab, setDraggingTab] = useState<LayoutTab | null>(null);
 	const tabSelectionEpoch = useRef(0);
-	const selectionRemoteEpoch = useRef(remoteEpoch);
-	if (selectionRemoteEpoch.current !== remoteEpoch) {
-		selectionRemoteEpoch.current = remoteEpoch;
+	const selectionProjectionEpoch = useRef(projectionEpoch);
+	if (selectionProjectionEpoch.current !== projectionEpoch) {
+		selectionProjectionEpoch.current = projectionEpoch;
 		tabSelectionEpoch.current += 1;
 	}
 	const { ref: workbenchRef, width: workbenchWidth, height: workbenchHeight } = useElementSize();
@@ -2286,7 +2447,7 @@ export function Workbench({
 	documentRef.current = document;
 	attentionRef.current = attention;
 	const [localFocusRequest, setLocalFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
-	const dragStartEpoch = useRef(remoteEpoch);
+	const dragStartEpoch = useRef(projectionEpoch);
 	const canceled = useRef(false);
 
 	useEffect(() => {
@@ -2302,11 +2463,11 @@ export function Workbench({
 	}, [localFocusRequest]);
 
 	useEffect(() => {
-		if (!draggingTab || dragStartEpoch.current === remoteEpoch) return;
+		if (!draggingTab || dragStartEpoch.current === projectionEpoch) return;
 		canceled.current = true;
 		setDraggingTab(null);
-		onRemoteGestureCanceled?.();
-	}, [draggingTab, onRemoteGestureCanceled, remoteEpoch]);
+		onGestureCanceled?.();
+	}, [draggingTab, onGestureCanceled, projectionEpoch]);
 
 	const updateAttentionForResult = useCallback(
 		(result: LayoutMutationResult) => {
@@ -2474,14 +2635,14 @@ export function Workbench({
 		const data = event.active.data.current as DragData | undefined;
 		if (!data?.tab) return;
 		tabSelectionEpoch.current += 1;
-		dragStartEpoch.current = remoteEpoch;
+		dragStartEpoch.current = projectionEpoch;
 		canceled.current = false;
 		setDraggingTab(data.tab);
 	};
 	const handleDragEnd = (event: DragEndEvent) => {
 		const tab = draggingTab;
 		setDraggingTab(null);
-		if (!tab || canceled.current || dragStartEpoch.current !== remoteEpoch) return;
+		if (!tab || canceled.current || dragStartEpoch.current !== projectionEpoch) return;
 		const target = event.over?.data.current?.target as DropTarget | undefined;
 		if (!target) return;
 		let result: LayoutOperationResult;
@@ -2566,7 +2727,7 @@ export function Workbench({
 		"outer-workbench",
 		String(leftOwnsBottomCorner),
 		String(rightOwnsBottomCorner),
-		String(remoteEpoch),
+		String(projectionEpoch),
 	);
 	const [alignedProjection, setAlignedProjection] = useState({
 		topology: outerTopology,
@@ -2602,7 +2763,7 @@ export function Workbench({
 	}, [outerCurrent]);
 	const outerResize = useCommittedSizes(
 		outerCurrent,
-		remoteEpoch,
+		projectionEpoch,
 		(sizes) => {
 			const side = activeSideResize.current;
 			if (side === "left" && leftOwnsBottomCorner) {
@@ -2612,7 +2773,7 @@ export function Workbench({
 				commitSideSizes([["right", sizes.at(-1) ?? globalRightCurrent]]);
 			}
 		},
-		onRemoteGestureCanceled,
+		onGestureCanceled,
 	);
 	const projectOuterLayout = useCallback(
 		(sizes: number[]) => {
@@ -2656,7 +2817,7 @@ export function Workbench({
 	}, [alignedRowCurrent]);
 	const alignedRowResize = useCommittedSizes(
 		alignedRowCurrent,
-		remoteEpoch,
+		projectionEpoch,
 		(sizes) => {
 			const side = activeSideResize.current;
 			if (side === "left" && leftInAlignedRow) {
@@ -2666,7 +2827,7 @@ export function Workbench({
 				commitSideSizes([["right", ((sizes.at(-1) ?? 0) * projectedAlignedWidth) / 100]]);
 			}
 		},
-		onRemoteGestureCanceled,
+		onGestureCanceled,
 	);
 	const outerLeftResize = bindSideResize("left", outerResize, activeSideResize);
 	const outerRightResize = bindSideResize("right", outerResize, activeSideResize);
@@ -2687,7 +2848,7 @@ export function Workbench({
 	}, [bottomCurrent]);
 	const bottomResize = useCommittedSizes(
 		bottomCurrent,
-		remoteEpoch,
+		projectionEpoch,
 		(sizes) => {
 			const bottomSize = sizes[1] ?? bottomCurrent[1] ?? 30;
 			if (bottomSize <= Number.EPSILON) {
@@ -2697,7 +2858,7 @@ export function Workbench({
 			const next = resizeBottomRegion(document, bottomSize / 100);
 			if (next !== document) onCommit(next);
 		},
-		onRemoteGestureCanceled,
+		onGestureCanceled,
 	);
 	const bottomMinimumPercent = Math.min(
 		LAYOUT_LIMITS.maxBottomHeight * 100,
@@ -2809,9 +2970,10 @@ export function Workbench({
 		renderTabBody,
 		renderTabAdornment,
 		renderToolBody,
+		renderSideMenuActions,
 		onAttentionChange,
 		onUserNavigation,
-		onRemoteGestureCanceled,
+		onGestureCanceled,
 		onApply: apply,
 		onClose: close,
 		onFocusAdjacentGroup: focusAdjacentGroup,
@@ -2830,7 +2992,7 @@ export function Workbench({
 		<SideStack
 			side={side}
 			region={document[side]}
-			remoteEpoch={remoteEpoch}
+			projectionEpoch={projectionEpoch}
 			onCommit={onCommit}
 			{...shared}
 		/>
@@ -2839,7 +3001,7 @@ export function Workbench({
 		<main data-testid="center-tabs" className="h-full min-h-0 min-w-0">
 			<CenterNodeView
 				node={document.center}
-				remoteEpoch={remoteEpoch}
+				projectionEpoch={projectionEpoch}
 				onCommit={onCommit}
 				onNewChat={onNewChat}
 				renderEmptyCenter={renderEmptyCenter}
@@ -2855,7 +3017,7 @@ export function Workbench({
 				"aligned-workbench-row",
 				String(leftInAlignedRow),
 				String(rightInAlignedRow),
-				String(remoteEpoch),
+				String(projectionEpoch),
 			)}
 			direction="horizontal"
 			onLayout={alignedRowResize.onLayout}
@@ -2916,7 +3078,7 @@ export function Workbench({
 	const alignedColumn = bottomVisible ? (
 		<ResizablePanelGroup
 			ref={bottomGroupRef}
-			key={tupleKey("workbench-bottom", String(remoteEpoch))}
+			key={tupleKey("workbench-bottom", String(projectionEpoch))}
 			direction="vertical"
 			onLayout={bottomResize.onLayout}
 			className="min-h-0 min-w-0 flex-1"
@@ -2942,7 +3104,7 @@ export function Workbench({
 			>
 				<BottomAlignedRow document={document}>
 					<BottomStack
-						remoteEpoch={remoteEpoch}
+						projectionEpoch={projectionEpoch}
 						onCommit={onCommit}
 						onNewTerminal={onNewTerminal}
 						{...shared}

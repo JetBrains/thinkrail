@@ -21,8 +21,9 @@ with, never by assembling the prompt ourselves.
 
 ## V1 — Worktree IDE + cheap wins
 
-A ThinkRail, git-worktree IDE, driven by a CLI you run that opens a browser UI.
-The shell is built first, `pi` connected last:
+A ThinkRail git-worktree IDE shipped through two additive local launchers: a native Electrobun desktop
+app and the retained CLI that opens the browser UI. Both embed the same host and serve the same client;
+the shell is built first, `pi` connected last:
 
 - **Projects → workspaces**: open a git repo as a project; a workspace is a `git worktree` (own branch +
   cwd) under `~/.thinkrail/worktrees` — plus one built-in, non-removable **Default workspace** per
@@ -32,9 +33,10 @@ The shell is built first, `pi` connected last:
 - **Desktop workbench**: a recursively splittable center for files, diffs, registered documents, chats, and terminals,
   bounded to four visible groups; Projects / Specs / Files / Changes / Review and terminals may occupy
   movable auxiliary groups—vertical stacks at left/right and a horizontally grouped, alignable bottom panel.
-  New workspaces place one terminal in that bottom panel by default. Each workspace's structural layout is
-  host-persisted and shared across clients, while active selection/focus remains local so clients do not steal
-  one another's attention.
+  New workspaces place one terminal in that bottom panel by default. Each frontend window owns one locally
+  persisted, resource-free frame—topology, tool placement, visibility, and geometry—reused across all of its
+  opened workspaces. Open resources, previews, selection, and focus remain local per workspace and window;
+  current layout never synchronizes through the host. Only custom layout presets are shared across clients.
 - A workspace-local **Review** surface for the current worktree: GitHub-style anchored file/diff drafts
   are collected without starting the agent, then sent as structured context into per-file `pi` chats;
   sent records persist and the agent can resolve them. This is local review, not PR-provider integration.

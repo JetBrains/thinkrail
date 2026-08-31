@@ -6,7 +6,9 @@ import {
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
 import { useEffect, useRef } from "react";
+import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
+import { IconTooltip } from "../components/ui/tooltip";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
@@ -23,6 +25,7 @@ import type { ConnectionStatus } from "../transport";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
 import { LayoutSettings } from "./LayoutSettings";
+import { useLocalLayoutState } from "./layoutState";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
@@ -40,6 +43,7 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 };
 
 export function Shell() {
+	useLocalLayoutState();
 	const status = useAppStore((s) => s.status);
 	const StatusDot = status === "connected" ? RiCircleFill : Circle;
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
@@ -154,16 +158,17 @@ export function Shell() {
 							{STATUS_LABEL[status]}
 						</span>
 					</span>
-					<button
-						type="button"
-						data-testid="open-settings"
-						aria-label="Settings"
-						title="Settings"
-						onClick={() => useAppStore.getState().openSettings()}
-						className="flex size-28 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-					>
-						<Settings className="size-16" />
-					</button>
+					<IconTooltip label="Settings">
+						<button
+							type="button"
+							data-testid="open-settings"
+							aria-label="Settings"
+							onClick={() => useAppStore.getState().openSettings()}
+							className="flex size-28 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+						>
+							<Settings className="size-16" />
+						</button>
+					</IconTooltip>
 				</div>
 				<SettingsDialog layoutSettings={<LayoutSettings />} />
 			</header>
@@ -208,9 +213,11 @@ export function Shell() {
 								tabIndex={-1}
 								aria-hidden={welcomeProjects.collapsed || undefined}
 								inert={welcomeProjects.collapsed ? true : undefined}
-								className="h-full overflow-auto bg-container-sidebar-bg p-12 outline-none"
+								className="h-full bg-container-sidebar-bg outline-none"
 							>
-								<ProjectTree />
+								<QuietScrollArea className="h-full" viewportClassName="p-12">
+									<ProjectTree />
+								</QuietScrollArea>
 							</aside>
 						</ResizablePanel>
 						<ResizableHandle

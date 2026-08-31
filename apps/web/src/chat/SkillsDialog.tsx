@@ -7,6 +7,7 @@ import type { Project, SkillCatalogEntry, SkillDecision, Workspace } from "@thin
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport, reloadSessionResourcesWithSkillBaseline } from "@/transport";
@@ -211,21 +212,25 @@ export function SkillsDialog({
 				<div className="flex items-center justify-between gap-8 pr-[2rem]">
 					<DialogTitle className="tr-text-ui text-text-default">Skills</DialogTitle>
 					{workspace ? (
-						<Button
-							size="sm"
-							variant="outline"
-							data-testid="skills-reload"
-							disabled={busy || workspace.streaming}
-							title={
+						<IconTooltip
+							label={
 								workspace.streaming
 									? "Available once the current turn finishes"
 									: "Apply to this chat"
 							}
-							onClick={() => void reload()}
+							wrapTrigger
 						>
-							<RefreshCw className="size-14" />
-							Reload
-						</Button>
+							<Button
+								size="sm"
+								variant="outline"
+								data-testid="skills-reload"
+								disabled={busy || workspace.streaming}
+								onClick={() => void reload()}
+							>
+								<RefreshCw className="size-14" />
+								Reload
+							</Button>
+						</IconTooltip>
 					) : null}
 				</div>
 

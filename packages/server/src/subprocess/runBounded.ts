@@ -78,6 +78,7 @@ export async function runBounded(argv: string[], opts: BoundedRunOptions): Promi
 			stdout: "pipe",
 			stderr: "pipe",
 			detached: true,
+			windowsHide: process.platform === "win32",
 		});
 	} catch (cause) {
 		const err = cause instanceof Error ? cause.message : String(cause);

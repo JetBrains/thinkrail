@@ -17,8 +17,27 @@ spec-graph viewer, and multiple concurrent `pi` chat sessions — all scoped to 
 
 ## Install
 
-ThinkRail ships as a single self-contained executable per platform. The installer downloads the right
-build from the GitHub releases, verifies its SHA-256 checksum, and puts `thinkrail` on your PATH.
+ThinkRail ships in two additive forms: an unsigned native desktop installer and the self-contained
+`thinkrail` CLI, which opens the same app in your browser. Both embed the same in-process agent host and
+are published with `SHA256SUMS` on the [releases page](https://github.com/JetBrains/thinkrail/releases).
+
+### Desktop
+
+Download the matching `thinkrail-desktop-*` asset: a DMG for macOS Apple Silicon, a setup ZIP for Windows
+x64, or a setup tarball for Linux x64/ARM64. These initial desktop builds are unsigned, so the operating
+system may ask you to confirm the first launch.
+
+Linux desktop builds require Ubuntu 24.04 or another glibc 2.38+ distribution with GTK 3, WebKitGTK 4.1,
+Ayatana AppIndicator 3, and librsvg 2. On Ubuntu 24.04:
+
+```bash
+sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
+```
+
+### CLI / browser
+
+The CLI installer downloads the right binary, verifies its SHA-256 checksum, and puts `thinkrail` on
+your PATH.
 
 **macOS / Linux** (also Windows under Git Bash):
 
@@ -56,9 +75,8 @@ questions). `thinkrail --help` lists the flags; `thinkrail --version` prints the
 **Prebuilt platforms:** macOS (Apple Silicon), Linux arm64 + x64, Windows x64 (`.exe`). Intel macOS isn't
 prebuilt — use Apple Silicon or build from source.
 
-> Prefer a manual install? Download a binary + `SHA256SUMS` from the
-> [releases page](https://github.com/JetBrains/thinkrail/releases), verify the checksum, `chmod +x`, and
-> move it onto your PATH.
+> Prefer a manual CLI install? Download a binary + `SHA256SUMS` from the releases page, verify the
+> checksum, `chmod +x`, and move it onto your PATH.
 
 **Runtime prerequisites:** `git` on PATH, and an authenticated `pi` provider (the agent runs against your
 real provider credentials). App state lives under `~/.thinkrail`.
@@ -82,20 +100,22 @@ bun run dev
 
 `bun run dev` boots the host and the web client together. Press `Ctrl+C` to stop.
 
-To run the V1 CLI entrypoint (boots the host in-process and opens the browser):
+To run the V1 launchers:
 
 ```bash
-bun run --filter @thinkrail/cli dev
-# or build the standalone binary:
-bun run build:binary
+bun run --filter @thinkrail/cli dev  # browser launcher
+bun run build:binary                 # standalone CLI artifact
+bun run desktop:dev                  # package and open the Electrobun app
+bun run desktop:build                # package without opening it
 ```
 
 On-disk app state (projects, workspaces, worktrees) lives under `~/.thinkrail`.
 
 ## Architecture (three rings)
 
-- **Engine host** — `packages/server` (+ `packages/shared`), launched by `apps/cli`. `createServer()` is
-  a `Bun.serve` HTTP+WS host with an `AgentSessionManager` (one in-process `pi` `AgentSession` per tab).
+- **Engine host** — `packages/server` (+ `packages/shared`), launched by `apps/cli` or
+  `apps/desktop`. `createServer()` is a `Bun.serve` HTTP+WS host with an `AgentSessionManager` (one
+  in-process `pi` `AgentSession` per tab).
 - **The wire** — `packages/contracts`: the typed, versioned protocol (types-only).
 - **UI client** — `apps/web`: mobile-first React 19 + Zustand + Tailwind v4, ships independently and
   dials a host over the wire.
@@ -112,7 +132,7 @@ the canonical product and design specs.
 apps/
   cli/        V1 entrypoint: boot host + open browser
   web/        mobile-first UI client
-  desktop/    Electrobun launcher — deferred
+  desktop/    Electrobun local-host launcher + native packaging
   website/    public landing + blog + vibecoding site (Cloudflare Pages)
 packages/
   server/     createServer(): Bun.serve + AgentSessionManager
@@ -141,6 +161,8 @@ bun run e2e -- e2e/changes.spec.ts                  # focused iteration
 bun run e2e -- --last-failed                        # repair loop
 bun run e2e:serial                                  # one-host debugging fallback
 bun run e2e -- --shards=12                          # explicit 1–16 override
+bun run e2e:binary                                  # packaged CLI host (build first)
+bun run e2e:desktop                                 # packaged desktop host (build first)
 bun run e2e:full                                    # everything; needs pi auth
 bun run e2e:agent                                   # only @agent; remains serial
 ```
@@ -167,8 +189,8 @@ muted, so test traffic can't be mistaken for a person.
 **The only stable identifier** is a random per-install id (a `uuid4`) minted on your machine and
 stored in `~/.thinkrail/installation.json`; it never leaves the host except as the anonymous
 `distinct_id` on events. Events additionally carry only low-cardinality, non-personal metadata: app
-version, release channel (`stable`/`nightly`/`dev`), how the code was built (`binary` for a compiled
-executable, `source` for a repo checkout), OS (`macos`/`linux`/`windows`), architecture
+version, release channel (`stable`/`nightly`/`dev`), how the code was built (`desktop`, `binary` for a
+compiled CLI, or `source` for a repo checkout), OS (`macos`/`linux`/`windows`), architecture
 (`x64`/`arm64`), and — on chat/login events — the model/provider name **only if it is a pi built-in**
 (anything user-configured is reported as `custom`). Message activity is counted as a bare send event
 carrying only *how* it was sent (`prompt`/`steer`/`follow_up`) — never the message itself. Events are sent **personless** (no person

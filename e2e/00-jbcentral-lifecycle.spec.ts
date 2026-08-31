@@ -68,7 +68,7 @@ test("Central is installed but signed out: the card offers Sign in, never Connec
 	page,
 }) => {
 	await openAppFresh(page);
-	writeFileSync(E2E_CENTRAL_STATE, "needs-login");
+	writeFileSync(E2E_CENTRAL_STATE, "needs-login slow-status");
 	const card = await openProviders(page);
 	await waitForCentralState(page, "supported");
 	await reprobeCentralStatus(page);

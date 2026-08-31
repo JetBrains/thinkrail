@@ -2,6 +2,8 @@ import type {
 	AppConfig,
 	AppConfigUpdate,
 	BranchList,
+	DelegationRunDetails,
+	DelegationRunStatus,
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
@@ -15,8 +17,6 @@ import type {
 	JbcentralActionResult,
 	JbcentralConnectResult,
 	JbcentralLoginResult,
-	LayoutReplaceParams,
-	LayoutReplaceResult,
 	LoginReply,
 	OpenBranchReview,
 	OpenPrResult,
@@ -37,8 +37,8 @@ import type {
 	TodoPlan,
 	TodoStatus,
 	Workspace,
-	WorkspaceLayoutSnapshot,
 } from "./domain";
+import { isDelegationRunDetails } from "./domain";
 import type {
 	AskUserAnswersDetails,
 	AskUserQuestionResult,
@@ -74,6 +74,8 @@ export interface TerminalDetachedPush {
 	tabKey: string;
 }
 
+export const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
+
 export interface TerminalTabInfo {
 	tabKey: string;
 	title: string;
@@ -84,7 +86,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 52;
+export const PROTOCOL_VERSION = 54;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
@@ -101,6 +103,8 @@ export interface WorkspaceRemoved {
 	projectId: string;
 	id: string;
 }
+
+export type SessionCreatedPayload = SessionSummary;
 
 export interface SessionDeletedPayload {
 	workspaceId: string;
@@ -181,6 +185,7 @@ export const WS_METHODS = {
 	sessionAnswerQuestion: "session.answerQuestion",
 	sessionList: "session.list",
 	sessionGetMessages: "session.getMessages",
+	subagentGetTranscript: "subagent.getTranscript",
 	modelList: "model.list",
 	modelRefresh: "model.refresh",
 	modelDefault: "model.default",
@@ -195,8 +200,6 @@ export const WS_METHODS = {
 	providerJbcentralStartProxy: "provider.jbcentralStartProxy",
 	providerJbcentralLogin: "provider.jbcentralLogin",
 	providerJbcentralUpdate: "provider.jbcentralUpdate",
-	layoutGet: "layout.get",
-	layoutReplace: "layout.replace",
 	settingsUpdate: "settings.update",
 	historySearch: "history.search",
 	reviewGet: "review.get",
@@ -218,6 +221,7 @@ export const WS_CHANNELS = {
 	projectUpdated: "project.updated",
 	piEvent: "pi.event",
 	piExtensionUi: "pi.extensionUi",
+	sessionCreated: "session.created",
 	sessionDeleted: "session.deleted",
 	providerLogin: "provider.login",
 	providerChanged: "provider.changed",
@@ -230,7 +234,6 @@ export const WS_CHANNELS = {
 	workspaceRemoved: "workspace.removed",
 	workspaceFsChanged: "workspace.fsChanged",
 	settingsChanged: "settings.changed",
-	layoutChanged: "layout.changed",
 	reviewChanged: "review.changed",
 } as const;
 
@@ -255,6 +258,30 @@ export function isAskUserAnswersMessage(message: unknown): message is AskUserAns
 		Array.isArray(details.result.answers) &&
 		typeof details.result.cancelled === "boolean"
 	);
+}
+
+export const SUBAGENT_COMPLETION_CUSTOM_TYPE = "subagent-completion";
+
+export interface SubagentCompletionMessage extends WireCustomMessage<DelegationRunDetails> {
+	customType: typeof SUBAGENT_COMPLETION_CUSTOM_TYPE;
+	details: DelegationRunDetails;
+}
+
+export function isSubagentCompletionMessage(
+	message: unknown,
+): message is SubagentCompletionMessage {
+	if (!message || typeof message !== "object") return false;
+	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
+	if (m.role !== "custom" || m.customType !== SUBAGENT_COMPLETION_CUSTOM_TYPE) return false;
+	return isDelegationRunDetails(m.details);
+}
+
+export function customMessageText(content: WireCustomMessage["content"]): string {
+	if (typeof content === "string") return content;
+	return content
+		.filter((c): c is Extract<typeof c, { type: "text" }> => c.type === "text")
+		.map((c) => c.text)
+		.join("");
 }
 
 export interface Ack {
@@ -453,6 +480,10 @@ export interface WsMethodMap {
 		params: { sessionId: string; workspaceId: string };
 		result: { summary: SessionSummary; messages: TranscriptMessage[] };
 	};
+	"subagent.getTranscript": {
+		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
+		result: { messages: TranscriptMessage[]; status?: DelegationRunStatus };
+	};
 	"model.list": { params: Record<string, never>; result: WireModel[] };
 	"model.clampThinking": {
 		params: { provider: string; id: string; level: ThinkingLevel };
@@ -476,11 +507,6 @@ export interface WsMethodMap {
 	"provider.jbcentralStartProxy": { params: Record<string, never>; result: JbcentralActionResult };
 	"provider.jbcentralLogin": { params: Record<string, never>; result: JbcentralLoginResult };
 	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
-	"layout.get": {
-		params: { workspaceId: string };
-		result: WorkspaceLayoutSnapshot | null;
-	};
-	"layout.replace": { params: LayoutReplaceParams; result: LayoutReplaceResult };
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"history.search": {
 		params: { query: string; scope: HistoryScope; limit?: number };
@@ -568,7 +594,7 @@ export interface WsResume {
 
 export type WsClientMessage = WsRequest | WsAck | WsResume;
 
-export type WsErrorCode = "UNKNOWN_COMMIT" | "PUSH_AUTH_FAILED";
+export type WsErrorCode = "UNKNOWN_COMMIT" | "PUSH_AUTH_FAILED" | "SUBAGENT_TRANSCRIPT_NOT_FOUND";
 
 export interface WsResponse {
 	id: string;

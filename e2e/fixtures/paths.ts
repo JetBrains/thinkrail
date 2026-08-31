@@ -73,9 +73,19 @@ export const E2E_CENTRAL_ARTIFACT = join(
 	"jetbrains-central.ts",
 );
 
+export const E2E_CENTRAL_ARTIFACT_SEED = join(E2E_DATA_DIR, "real-central-extension.seed.ts");
+
 export const E2E_FIXTURE_REPO = join(E2E_DATA_DIR, "sample-project");
 
 export const E2E_BINARY_CACHE = join(tmpdir(), `thinkrail-e2e-binary-cache-${E2E_STATE_KEY}`);
+
+export const E2E_DESKTOP_CACHE = join(tmpdir(), `thinkrail-e2e-desktop-cache-${E2E_STATE_KEY}`);
+
+export const E2E_DESKTOP_READY_FILE = join(E2E_DATA_DIR, "desktop.ready.json");
+
+export const E2E_DESKTOP_CONTROL_FILE = join(E2E_DATA_DIR, "desktop.control");
+
+export const E2E_DESKTOP_USER_DATA = join(E2E_DATA_DIR, "desktop-user-data");
 
 export const E2E_PICK_DIR_POINTER = join(E2E_DATA_DIR, "pick-dir");
 

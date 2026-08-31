@@ -1,10 +1,10 @@
-import type { LayoutCenterTab } from "@thinkrail/contracts";
 import { useEffect, useRef } from "react";
 import {
 	selectAttentionCenterResourceCacheKey,
 	selectAttentionCenterTab,
 	useAppStore,
 } from "../../store";
+import type { LayoutCenterTab } from "../layout";
 
 function syncLegacySelectedResource(
 	workspaceId: string,

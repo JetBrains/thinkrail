@@ -4,16 +4,17 @@ import {
 	type ExtUiRequest,
 	type PiEvent,
 	type Project,
+	type SessionEventPayload,
 	type SessionSummary,
 	type SpecGraphNode,
 	type WireModel,
 	type Workspace,
 	type WorkspaceFsChangedPayload,
-	type WorkspaceLayoutDocument,
 	type WorkspaceSkillChange,
 } from "@thinkrail/contracts";
-import type { ChatTurn } from "../chat/types";
+import type { ChatTurn, FailureRecovery } from "../chat/types";
 import { userText } from "../lib";
+import type { WorkspaceLayoutDocument } from "../shell/layout";
 import {
 	captureCenterNavigation,
 	chatTabId,
@@ -114,11 +115,12 @@ beforeEach(() => {
 		routeChatTargetGeneration: 0,
 		sessions: {},
 		extUiOrphans: [],
-		layoutSnapshotsByWorkspace: {},
+		workbenchFrame: null,
+		workspaceViewsByWorkspace: {},
+		layoutStateReady: false,
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
-		layoutPendingByWorkspace: {},
-		layoutRemoteEpochByWorkspace: {},
+		layoutProjectionEpochByWorkspace: {},
 		layoutIntents: [],
 		tabsByWorkspace: {},
 		terminalsByWorkspace: {},
@@ -142,6 +144,7 @@ beforeEach(() => {
 		activeLogin: null,
 		settingsOpen: false,
 		settingsSection: "providers",
+		chatMessageOrder: "oldest-first",
 		toasts: [],
 	});
 });
@@ -150,6 +153,11 @@ function rt(sessionId: string): SessionRuntime {
 	const runtime = useAppStore.getState().sessions[sessionId];
 	if (!runtime) throw new Error(`no runtime for ${sessionId}`);
 	return runtime;
+}
+
+function failureRecovery(sessionId: string): FailureRecovery | undefined {
+	const error = rt(sessionId).turns.find((turn) => turn.kind === "error");
+	return error?.kind === "error" ? error.recovery : undefined;
 }
 
 test("each connected status advances the reconnect generation atomically", () => {
@@ -197,6 +205,35 @@ test("pi events route to the right session runtime; chats stay independent", () 
 	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
 	expect(rt("b").isStreaming).toBe(true);
 	expect(rt("b").turns).toHaveLength(0);
+});
+
+test("an ordered Pi-event batch commits once while preserving every session revision", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "b", null, "high");
+	const partial = { content: [{ type: "text", text: "partial" }] };
+	const payloads: SessionEventPayload[] = [
+		{ sessionId: "a", event: agentStart },
+		{ sessionId: "a", event: toolStart("t1") },
+		{ sessionId: "b", event: agentStart },
+		{ sessionId: "a", event: toolUpdate("t1", partial) },
+		{ sessionId: "a", event: agentEnd },
+		{ sessionId: "missing", event: agentStart },
+	];
+	let commits = 0;
+	const unsubscribe = useAppStore.subscribe(() => {
+		commits += 1;
+	});
+
+	store.handlePiEvents(payloads);
+	unsubscribe();
+
+	expect(commits).toBe(1);
+	expect(rt("a").eventRevision).toBe(4);
+	expect(rt("a").isStreaming).toBe(true);
+	expect(rt("a").toolResults.t1).toEqual({ status: "running", raw: partial });
+	expect(rt("b").eventRevision).toBe(1);
+	expect(rt("b").isStreaming).toBe(true);
 });
 
 test("a host-fired USER message folds into the transcript; the composer's optimistic twin doesn't duplicate", () => {
@@ -413,6 +450,63 @@ test("an ask-user-answers custom message_end indexes into askAnswers (never the 
 	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
 });
 
+test("a subagent-completion custom message_end appends a subagentCompletion turn", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	const details = {
+		childSessionId: "child-1",
+		roleName: "scout",
+		task: "map the repo",
+		status: "completed",
+		usage: {
+			input: 10,
+			output: 5,
+			cacheRead: 0,
+			cacheWrite: 0,
+			cost: 0.01,
+			turns: 3,
+			contextTokens: 15,
+		},
+		durationMs: 4200,
+	};
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "subagent-completion",
+				content: 'Subagent "scout" (child-1) completed:\n\nthe report',
+				display: true,
+				details,
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	const turn = rt("a").turns.at(-1);
+	expect(turn?.kind).toBe("subagentCompletion");
+	expect(turn?.kind === "subagentCompletion" && turn.details.childSessionId).toBe("child-1");
+	expect(turn?.kind === "subagentCompletion" && turn.text).toContain("the report");
+
+	const before = rt("a");
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "subagent-completion",
+				content: "x",
+				display: true,
+				details: { nope: true },
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	const ignored = rt("a");
+	expect(ignored.turns).toBe(before.turns);
+	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
+});
+
 test("the tool lifecycle folds into toolResults (the status + raw the renderers read)", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
@@ -587,6 +681,7 @@ test("a turn that ends in a provider error surfaces the error (not a false ✓ D
 	expect(after.isStreaming).toBe(false);
 	const err = after.turns.find((t) => t.kind === "error");
 	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
+	expect(failureRecovery("a")).toBe("try-again");
 	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(false);
 });
 
@@ -601,8 +696,43 @@ test("a terminal length stop is a visible failure, never a false ✓ Done", () =
 	const after = rt("a");
 	const error = after.turns.find((turn) => turn.kind === "error");
 	expect(error?.kind === "error" && error.text.toLowerCase()).toContain("truncated");
+	expect(failureRecovery("a")).toBe("try-again");
 	expect(after.turns.some((turn) => turn.kind === "system" && turn.text === "✓ Done")).toBe(false);
 	expect(after.isStreaming).toBe(false);
+});
+
+test("a local follow-on consumes only its session's failure recovery", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "b", null, "medium");
+	for (const sessionId of ["a", "b"]) {
+		store.handlePiEvent(
+			agentSettled({ stopReason: "error", errorMessage: "fetch failed" }),
+			sessionId,
+		);
+	}
+
+	store.appendUserMessage("a", "Try again.");
+
+	expect(failureRecovery("a")).toBeUndefined();
+	expect(failureRecovery("b")).toBe("try-again");
+});
+
+test("another client's agent start consumes only its session's failure recovery", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "b", null, "medium");
+	for (const sessionId of ["a", "b"]) {
+		store.handlePiEvent(
+			agentSettled({ stopReason: "error", errorMessage: "fetch failed" }),
+			sessionId,
+		);
+	}
+
+	store.handlePiEvent(agentStart, "b");
+
+	expect(failureRecovery("a")).toBe("try-again");
+	expect(failureRecovery("b")).toBeUndefined();
 });
 
 test("a successful overflow compaction removes the superseded assistant attempt", () => {
@@ -817,6 +947,7 @@ test("appendErrorTurn surfaces a failed send (a rejected prompt) as a visible er
 
 	const err = rt("a").turns.find((t) => t.kind === "error");
 	expect(err?.kind === "error" && err.text).toContain("No API key");
+	expect(failureRecovery("a")).toBeUndefined();
 	expect(rt("a").isStreaming).toBe(false);
 });
 
@@ -1552,6 +1683,17 @@ test("noteClosedChats surfaces disk-only sessions in history, skipping live/open
 	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Old chat", closedAt: 200 }]);
 	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
 	expect(history).toHaveLength(2);
+	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Renamed chat", closedAt: 400 }]);
+	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
+	expect(history.find((chat) => chat.sessionId === "disk1")).toEqual({
+		sessionId: "disk1",
+		title: "Renamed chat",
+		closedAt: 200,
+	});
+
+	store.openChatSession("ws1", "disk1", null, "medium");
+	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
+	expect(history.map((chat) => chat.sessionId)).toEqual(["disk2"]);
 });
 
 test("opening a chat never steals another resource's canonical cache id", () => {
@@ -2230,16 +2372,6 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	expect(s.historyOpenRequest).toBeNull();
 	expect(s.reviewFocusRequest).toBeNull();
 
-	const lateDocument: WorkspaceLayoutDocument = {
-		version: 2,
-		center: { kind: "group", id: "center", tabs: [] },
-		left: { visible: false, width: 0.2, groups: [] },
-		right: { visible: false, width: 0.2, groups: [] },
-		bottom: emptyBottomRegion(),
-		toolRestoreTargets: {},
-	};
-	s.installLayoutSnapshot({ workspaceId: "w1", revision: 1, document: lateDocument });
-	s.beginLayoutCommit("w1", lateDocument, "late-write");
 	s.setLayoutAttention("w1", {
 		selectedByGroup: {},
 		lastFocusedCenterGroupId: "center",
@@ -2790,6 +2922,13 @@ test("applyConfig projects the composer growth limit", () => {
 		composerGrowthLimit: "roomy",
 	});
 	expect(useAppStore.getState()).toHaveProperty("composerGrowthLimit", "roomy");
+});
+
+test("chat message order is browser-local and cannot be overwritten by host config", () => {
+	useAppStore.getState().setChatMessageOrder("newest-first");
+	const legacyConfig = { ...DEFAULT_CONFIG, chatMessageOrder: "oldest-first" };
+	useAppStore.getState().applyConfig(legacyConfig);
+	expect(useAppStore.getState().chatMessageOrder).toBe("newest-first");
 });
 
 test("diff tabs: openTab dedupes by id + activates; view + contents update in place", () => {

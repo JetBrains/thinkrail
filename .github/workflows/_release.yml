@@ -1,6 +1,6 @@
 name: Release
 
-# Reusable: build every platform binary, (optionally) sign, checksum, and publish a GitHub release.
+# Reusable: build every native CLI and desktop artifact, optionally sign, checksum, and publish one release.
 # Called by nightly.yml (channel=nightly) and stable.yml (channel=stable).
 
 on:

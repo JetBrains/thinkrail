@@ -101,6 +101,33 @@ describe("WsTransport channel replay", () => {
 	});
 });
 
+describe("WsTransport dispatch barriers", () => {
+	test("runs the barrier before channel subscribers and response settlement", async () => {
+		const order: string[] = [];
+		const transport = new WsTransport(
+			{ url: "ws://localhost:24242/ws" },
+			{ beforeDispatch: () => order.push("barrier") },
+		);
+		transport.subscribe(WS_CHANNELS.projectUpdated, () => order.push("push"));
+		transport.connect();
+		const socket = TestWebSocket.instances[0];
+		socket?.open();
+
+		socket?.message(JSON.stringify({ channel: WS_CHANNELS.projectUpdated, data: {} }));
+		expect(order).toEqual(["barrier", "push"]);
+
+		order.length = 0;
+		const result = transport.request("project.list", {}).then((value) => {
+			order.push("response");
+			return value;
+		});
+		const id = requestsIn(socket?.sent ?? [])[0]?.id;
+		socket?.message(JSON.stringify({ id, ok: true, result: [] }));
+		expect(await result).toEqual([]);
+		expect(order).toEqual(["barrier", "response"]);
+	});
+});
+
 describe("WsTransport reconnect delivery", () => {
 	test("replays an unresolved frame under the same id and resolves from the replacement socket", async () => {
 		const statuses: string[] = [];

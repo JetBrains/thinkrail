@@ -1,7 +1,12 @@
 import { appendFileSync, realpathSync, utimesSync } from "node:fs";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import {
+	defaultWorkspaceRow,
+	enterDefaultWorkspace,
+	openChatFromHistory,
+	openFixtureProject,
+} from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -182,6 +187,7 @@ test("structured tool paths reuse the preview tab while rich tool results stay i
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
+	await openChatFromHistory(page, "tool file links");
 
 	const localRead = await toolStep(page, "read");
 	await localRead.getByTestId("tool-file-link").click();

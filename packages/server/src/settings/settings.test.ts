@@ -2,11 +2,37 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_CONFIG } from "@thinkrail/contracts";
+import {
+	type AppConfig,
+	type AppConfigUpdate,
+	DEFAULT_CONFIG,
+	type LayoutPreset,
+} from "@thinkrail/contracts";
+import { validateCustomLayoutPresets } from "./layoutPresets";
 import { getConfig, resetConfigCache, setSettingsPublisher, updateConfig } from "./settings";
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+
+function preset(id = "custom"): LayoutPreset {
+	return {
+		id,
+		name: id,
+		center: { kind: "group", id: `${id}-center` },
+		left: {
+			visible: true,
+			width: 0.2,
+			groups: [{ id: `${id}-left`, weight: 1, folded: false, tools: [] }],
+		},
+		right: { visible: false, width: 0.2, groups: [] },
+		bottom: {
+			visible: true,
+			height: 0.3,
+			alignment: "center",
+			groups: [{ id: `${id}-bottom`, weight: 1, folded: false, tools: [] }],
+		},
+	};
+}
 
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-settings-test-"));
@@ -74,6 +100,25 @@ test("loadConfig replaces an invalid composer growth preset with the default", (
 	expect(getConfig()).toHaveProperty("composerGrowthLimit", "half-chat");
 });
 
+test("retired chat message order is stripped from disk and stale updates", () => {
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ ...DEFAULT_CONFIG, chatMessageOrder: "newest-first" }),
+	);
+	resetConfigCache();
+	expect(getConfig()).not.toHaveProperty("chatMessageOrder");
+
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const staleUpdate = { chatMessageOrder: "newest-first" } as AppConfigUpdate;
+	const next = updateConfig(staleUpdate);
+	expect(next).not.toHaveProperty("chatMessageOrder");
+	expect(published).toHaveLength(1);
+	expect(published[0]).not.toHaveProperty("chatMessageOrder");
+	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+	expect(onDisk).not.toHaveProperty("chatMessageOrder");
+});
+
 test("reviewAutoFix defaults on; an old config without it loads the default; toggling off round-trips", () => {
 	expect(DEFAULT_CONFIG.reviewAutoFix).toBe(true);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
@@ -118,16 +163,16 @@ test("a null reviewModel/reviewEffort clears the override back to unset, and it 
 	expect(getConfig().reviewEffort).toBeUndefined();
 });
 
-test("loadConfig normalizes nested layout fields independently", () => {
+test("loadConfig ignores the old layout settings object", () => {
 	writeFileSync(
 		join(dataDir, "config.json"),
 		JSON.stringify({
 			theme: "acme.persisted",
 			layout: {
 				defaultPresetId: "review",
-				customPresets: "corrupt",
-				maxSideGroups: 0,
-				maxBottomGroups: 33,
+				customPresets: [preset()],
+				maxSideGroups: 12,
+				maxBottomGroups: 9,
 			},
 		}),
 	);
@@ -135,11 +180,52 @@ test("loadConfig normalizes nested layout fields independently", () => {
 	expect(getConfig()).toEqual({
 		...DEFAULT_CONFIG,
 		theme: "acme.persisted",
+	});
+});
+
+test("updateConfig ignores the old layout settings object from an untrusted client", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const update = {
+		theme: "acme.updated",
 		layout: {
 			defaultPresetId: "review",
-			customPresets: [],
-			maxSideGroups: DEFAULT_CONFIG.layout.maxSideGroups,
-			maxBottomGroups: DEFAULT_CONFIG.layout.maxBottomGroups,
+			customPresets: [preset()],
+			maxSideGroups: 12,
+			maxBottomGroups: 9,
 		},
-	});
+	};
+
+	const next = updateConfig(update);
+	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+
+	expect(next.theme).toBe("acme.updated");
+	expect("layout" in next).toBe(false);
+	expect(published).toEqual([next]);
+	expect(onDisk).not.toHaveProperty("layout");
+});
+
+test("custom preset updates validate the complete catalog and permit empty structural slots", () => {
+	expect(updateConfig({ customLayoutPresets: [preset()] }).customLayoutPresets).toEqual([preset()]);
+	expect(() =>
+		updateConfig({
+			customLayoutPresets: [{ ...preset(), right: { visible: true, width: 0.2, groups: [] } }],
+		}),
+	).toThrow("cannot be visible while empty");
+	expect(() => validateCustomLayoutPresets([preset("same"), preset("same")])).toThrow(
+		"ids must be unique",
+	);
+});
+
+test("stored custom presets keep only complete current-schema entries", () => {
+	const { bottom: _bottom, ...bottomless } = preset("bottomless");
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({
+			...DEFAULT_CONFIG,
+			customLayoutPresets: [preset("valid"), bottomless, { id: "broken" }],
+		}),
+	);
+	resetConfigCache();
+	expect(getConfig().customLayoutPresets).toEqual([preset("valid")]);
 });

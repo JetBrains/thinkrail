@@ -240,7 +240,7 @@ test("disconnect removes Central from new chats while an existing live chat keep
 		'[data-testid="editor-tab"][data-kind="chat"][data-active="true"]',
 	);
 	await activeChat.getByTestId("editor-tab-close").click();
-	await page.getByTestId("chat-history").click();
+	await page.getByTestId("chat-history").first().click();
 	await page.getByTestId("closed-chat-row").first().getByTestId("closed-chat-delete").click();
 	await expect(page.getByTestId("chat-history")).toHaveCount(0);
 });

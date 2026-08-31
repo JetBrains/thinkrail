@@ -412,7 +412,7 @@ test("the awaiting card survives closing and reopening the chat", { tag: "@agent
 	await chatTabs.first().getByTestId("editor-tab-close").click();
 	await expect(chatTabs).toHaveCount(0);
 
-	await page.getByTestId("chat-history").click();
+	await page.getByTestId("chat-history").first().click();
 	await page.getByTestId("closed-chat-item").first().click();
 	await expect(chatTabs).toHaveCount(1);
 	const card = activeCard(page);

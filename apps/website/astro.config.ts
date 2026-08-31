@@ -7,6 +7,8 @@ import { youTubeEmbeds } from "./src/youTubeEmbeds";
 
 export default defineConfig({
 	site: "https://thinkrail.ai",
+	// HTML whitespace rules; the 'jsx' default drops newline spacing around inline tags
+	compressHTML: true,
 	integrations: [react(), sitemap()],
 	vite: {
 		plugins: [tailwindcss()],

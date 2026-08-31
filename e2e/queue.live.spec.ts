@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import { E2eWire } from "./fixtures/wire";
 
 const COUNT_PROMPT =
 	"Count from 1 to 60, one number per line. No other text, no tools, just the numbers.";
@@ -9,9 +10,12 @@ test("queueing: pending strip + canonical order; per-row edit/remove; interrupt 
 }, async ({ page }) => {
 	test.setTimeout(300_000);
 	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
+	const workspace = await createWorkspaceViaDialog(page);
 	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await expect(chatTab).toHaveCount(1);
+	const sessionId = await chatTab.getAttribute("data-session-id");
+	if (!sessionId) throw new Error("Queue test chat is missing its session id");
 
 	const input = page.getByTestId("chat-input");
 	const users = page.locator('[data-testid="chat-message"][data-role="user"]');
@@ -36,15 +40,17 @@ test("queueing: pending strip + canonical order; per-row edit/remove; interrupt 
 
 	await expect(assistants.last()).toContainText("QUEUEDOK", { timeout: 120_000 });
 	await expect(strip).toBeHidden();
-	await expect(users).toHaveCount(2);
+	await expect(users.last()).toContainText("QUEUEDOK");
 	await expect(assistants.first()).toContainText("60");
 
-	const roles = await page
-		.locator('[data-testid="chat-message"]')
-		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-role")));
-	const conversational = roles.filter((role) => role === "user" || role === "assistant");
-	const firstAssistant = conversational.indexOf("assistant");
-	const queuedUser = conversational.indexOf("user", 1);
+	const wire = await E2eWire.connect();
+	const transcript = await wire
+		.request("session.getMessages", { sessionId, workspaceId: workspace.id })
+		.finally(() => wire.close());
+	const firstAssistant = transcript.messages.findIndex((message) => message.role === "assistant");
+	const queuedUser = transcript.messages.findIndex(
+		(message) => message.role === "user" && JSON.stringify(message.content).includes("QUEUEDOK"),
+	);
 	expect(firstAssistant).toBeGreaterThan(0);
 	expect(queuedUser).toBeGreaterThan(firstAssistant);
 
@@ -52,7 +58,6 @@ test("queueing: pending strip + canonical order; per-row edit/remove; interrupt 
 		"Count from 1 to 200, one number per line. No other text, no tools, just the numbers.",
 	);
 	await input.press("Enter");
-	await expect(users).toHaveCount(3, { timeout: 60_000 });
 	await expect(input).toHaveAttribute("placeholder", /Enter steers at the next step/, {
 		timeout: 60_000,
 	});
@@ -76,7 +81,7 @@ test("queueing: pending strip + canonical order; per-row edit/remove; interrupt 
 
 	await input.fill("Now reply with exactly the single word: INTERRUPTOK");
 	await input.press("ControlOrMeta+Shift+Enter");
-	await expect(users).toHaveCount(4, { timeout: 60_000 });
+	await expect(users.last()).toContainText("INTERRUPTOK", { timeout: 60_000 });
 	await expect(assistants.last()).toContainText("INTERRUPTOK", { timeout: 120_000 });
 	await expect(page.getByTestId("chat-abort")).toBeHidden({ timeout: 60_000 });
 });

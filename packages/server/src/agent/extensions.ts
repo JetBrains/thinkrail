@@ -14,6 +14,7 @@ import {
 	type Skill,
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
+import specGraphExtension from "pi-spec-graph";
 import { askUserQuestionExtension } from "./askUserQuestion";
 import { oversizedImageGuard } from "./imageGuard";
 import { reviewToolExtension } from "./reviewTool";
@@ -31,6 +32,7 @@ export interface BundledExtensions {
 	factories: BundledExtensionFactory[];
 	skillsDir: string;
 	trashHelpers: BundledTrashHelpers;
+	webAccessFactory: BundledExtensionFactory;
 }
 
 let bundled: BundledExtensions | undefined;
@@ -166,17 +168,34 @@ export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
 	}));
 }
 
+let devWebAccessFactory: BundledExtensionFactory | undefined;
+function webAccessFactory(): BundledExtensionFactory {
+	if (bundled) return bundled.webAccessFactory;
+	if (!devWebAccessFactory) {
+		const require = createRequire(import.meta.url);
+		const loaded: { default: BundledExtensionFactory } = require("pi-web-access/index.ts");
+		devWebAccessFactory = loaded.default;
+	}
+	return devWebAccessFactory;
+}
+
+export function childExtensionFactories(): ExtensionFactory[] {
+	return [headlessSearchPolicy, webAccessFactory(), specGraphExtension];
+}
+
 export async function buildResourceLoader(
 	cwd: string,
 	settingsManager: SettingsManager,
 	getAdmission: () => SkillAdmissionContext,
 	excludedExtensionPaths: readonly string[] = [],
+	extraFactories: ExtensionFactory[] = [],
 ): Promise<ResourceLoader> {
 	const sharedFactories = [
 		headlessSearchPolicy,
 		askUserQuestionExtension,
 		reviewToolExtension,
 		oversizedImageGuard,
+		...extraFactories,
 	];
 	const skillInputs = resolveSkillInputs(cwd, getAdmission);
 	const agentDir = getAgentDir();

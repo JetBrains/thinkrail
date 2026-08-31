@@ -50,9 +50,15 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   end event clears only its own), and `RetryIndicator` labels them apart ("Retrying" vs "Retrying
   summarization"). **`ErrorTurn`** is a persistent tinted failure notice
   (provider/model error, an unrecovered `length` truncation, or a rejected send) — **never folded**, so
-  a failed turn can't look like nothing happened. Live settlement and transcript hydration share the
-  same assistant-failure classifier, so reload cannot turn the latest unresolved failure into success;
-  recovered historical `length` attempts followed by later work are not re-labeled as current failures.
+  a failed turn can't look like nothing happened. Only the current settlement-derived failure carries the
+  web-local `try-again` recovery action; its **Try again** button sends one visible ordinary `Try again.` user
+  message through `ChatView`'s existing immediate-send path. Rejected sends, extension notifications, and
+  generic app errors stay non-actionable because the missing prompt or repair may not be in Pi's context.
+  The optimistic user append consumes the action immediately, and any later `agent_start` consumes it for
+  other-client/custom-message starts, so a historical error never regains the affordance. Live settlement
+  and transcript hydration share the same assistant-failure classifier and action derivation, so reload
+  cannot turn the latest unresolved failure into success or lose its recovery; recovered historical
+  `length` attempts followed by later work are not re-labeled as current failures.
 - `compaction` — a 1:1, fold-breaking row with two sources that converge. Live `compaction_start` /
   `compaction_end` events produce `CompactionNotice` (see the store SPEC): running "Compacting context…"
   (spinner), done **"Context compacted"** (+ "— resuming…" while pi's overflow retry continues the run, +
@@ -91,13 +97,25 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   media types are ignored, while canonical content arrays are never serialized into base64 JSON.
 - `activity` — one contiguous run of routine work stays one **collapsed outer disclosure** whose header
   summarizes every atomic step (thinking blocks + routine tool calls). Expanding it preserves tools before
-  the first thought as direct rows, then renders each non-empty thinking block as a nested disclosure that
-  contains its exact text and every following routine tool call until the next thinking block or activity
-  boundary. Those thinking groups are siblings **inside** the outer run, even across assistant-message
+  the first thought as direct rows, then renders each non-empty thinking block as a nested disclosure. When
+  that block's first non-empty line is a complete standalone Markdown strong span (`**…**` or `__…__`),
+  its folded header surfaces the model-authored inner text in place of the redundant visible `Thinking`
+  label, using the row's ordinary inherited weight while retaining its default text colour, before the
+  trailing tool/character metadata; the teaser truncates before that metadata and
+  disappears when expanded, where the disclosure retains the generic label and contains the exact text.
+  Blocks without that convention keep the generic label while folded. Semantic breadcrumb and assistive
+  labels remain `Thinking` in every state. Every following routine
+  tool call stays under that thought until the next thinking block or activity boundary. Those thinking
+  groups are siblings **inside** the outer run, even across assistant-message
   boundaries; the hierarchy is presentational, never invented pi entry parentage. A single atomic step
   still renders directly. Non-empty text, primary tools, and non-assistant turns break the outer run. Only
   its trailing instance carries the live ticker. Errored routine tools get **no special treatment**
   (deliberate — agents often recover; `ErrorTurn` and primary error-auto-expand are the safety nets).
+- `subagentCompletion` — a `subagent-completion` custom message: a detached (background) subagent run's
+  terminal report, injected into the parent by `pi-subagents` when the run finishes. Rendered as a compact
+  self-framed card (`tools/subagent/SubagentCompletionCard`) — **the** terminal signal for a background
+  run, whose `Agent` tool card froze at its ack (why + card anatomy:
+  [tools/subagent/SPEC.md](tools/subagent/SPEC.md)). Never folded into activity groups.
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
   round ends: elapsed time, tool-call count, and the round's written files as **two chips split by owning
   tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on exactly
@@ -132,6 +150,20 @@ the `AskUserQuestionCard` pattern, see tools/SPEC.md; deliberately
 never evicted — growth is bounded by manual toggles). A manual toggle always wins — over auto-expand
 defaults *and* over a virtualization remount.
 
+**Message-order projection.** `deriveRows` remains canonical and chronological. The pure
+`projectRows(rows, chatMessageOrder)` partitions that sequence at user rows (a pre-user notice span is its
+own group); oldest-first returns the input unchanged, while newest-first reverses the group order **and**
+every group's top-level rows: `1,2,3 | 4,5,6 → 6,5,4 | 3,2,1`. Stable row ids survive verbatim, so folds,
+flashes, tool state, and history anchors do not fork. The projection never reaches inside one row: Markdown
+paragraphs/code, a tool card body, review-package comments, and an Activity row's own disclosure hierarchy
+retain their semantic order. Virtuoso and DOM traversal consume the projected rows; Pi turns, persistence,
+stream status, and every non-presentation derivation remain chronological. `messageOrder.ts` owns the
+closed preference and its oldest-first default, then hydrates the store before React mounts. Browser clients
+read/write a host-qualified localStorage key and synchronize that key across same-origin tabs; a native shell
+may inject the same narrow string-storage adapter under its stable backend-profile/window identity so a
+dynamic loopback port cannot erase the preference on restart. It never enters `AppConfig`, so choosing
+newest-first cannot change another browser, device, host, or native window.
+
 **Sticky activity breadcrumb.** While the transcript's top visible content remains inside expanded
 Activity → Thinking → tool disclosures whose original headers have scrolled above the viewport, one
 opaque compact row overlays the scroller with that active root-to-leaf path. Segments join only after
@@ -140,7 +172,7 @@ leaf tool. A segment label scrolls and focuses its original header just below th
 changing fold state; its separate chevron writes through the existing fold-state source. The trail is
 always one line: metadata truncates before names, then a narrow pane preserves the outermost and active
 segments while compressing middle ancestry to `…`. It never reflows transcript content, creates parallel
-navigation/fold state, or disturbs Virtuoso's initial-bottom, follow-output, and jump-to-message behavior.
+navigation/fold state, or disturbs Virtuoso's mode-aware latest-edge, reading-band, and jump-to-message behavior.
 The root-to-leaf labels and chevrons are distinct keyboard targets in a labelled navigation region; visual
 entry/exit obeys reduced motion.
 
@@ -180,12 +212,30 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   prose. A standalone renderer has no callback and therefore stays inert. The callback's preview-slot
   semantics belong to [[submodule-web-panels]].
 - **`ChatActions`** — a React context (provided by `ChatView`, `null` standalone): how a renderer talks
-  **back** to the agent without importing store/transport. Today: `answerQuestion(toolCallId, result)` —
+  **back** to the agent — or asks the integration layer to open something — without importing
+  store/transport. Today: `answerQuestion(toolCallId, result)` —
   it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX —
   plus `focusComposer()`, for a renderer that resolves *itself*: it unmounts the control the user was
   standing on, and focus would otherwise fall to `<body>` and swallow every following keystroke (the same
   stranding the history overlay's dismiss refocus avoids). Only the card's own reply path calls it, and
-  only while the card still holds focus.
+  only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
+  cards' transcript link (no provider → the cards hide the action).
+- **Subagent transcript view** (`SubagentTranscriptDialog.tsx` — an integration file, like
+  `SkillsDialog`): a **read-only overlay** over the chat rendering a hidden child's transcript with the
+  same primitives (`messagesToRuntime` → `deriveRows` → `ChatTurnView`), fetched via
+  `subagent.getTranscript` keyed `(workspaceId, parentSessionId = this chat, childSessionId)`. Opened
+  through `ChatActions.openSubagentTranscript`; rendered under a `null` `ChatActions` provider so
+  nothing inside can talk back (and a nested transcript link cannot exist). Liveness comes from the
+  **host** with each response: `subagent.getTranscript` carries the run's current registry `status`
+  (absent once the host no longer knows the run — restart, dispose). The open dialog keeps exactly one
+  read in flight, scheduling the next ~2.5s poll only after a response while status is queued/running —
+  never from this chat's own runtime, whose frozen background ack can't tell a live run from one lost to
+  a restart. A terminal/absent status or the wire's permanent `SUBAGENT_TRANSCRIPT_NOT_FOUND` stops;
+  plain transport failures retry while the dialog stays open with a capped backoff. Poll snapshots
+  hydrate with child-scoped ids derived from each persisted message's role/timestamp/index, so an
+  append-only refresh preserves row identity and manual folds instead of remounting the transcript.
+  Works during the run, after completion, and after a host restart (transcripts persist on disk; only
+  the in-memory registry is lost — and its absence is precisely what stops the polling).
 - **`askState`** — the questionnaire lifecycle seam: the pure `deriveAskStates(turns, askAnswers)` +
   `AskStatesContext`/`useAskState` (provided by `ChatView`, `null` standalone). The ask tool is **ack +
   terminate** (its tool result is just an ack; the reply arrives later as an `ask-user-answers` message),
@@ -199,10 +249,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   intended read (you returned to the chat that needs you), not just a side effect. It carries no store or
   transport state.
 - **Hydration** (`hydrate.ts`) — the pure
-  `messagesToRuntime(TranscriptMessage[], lastSettlement?)` converter (read-side counterpart of the event
-  reducer): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a `HydratedRuntime`) from a
-  persisted transcript so a reconnecting/second client renders identically to the live path (same `raw`
-  result shape). When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the
+  `messagesToRuntime(TranscriptMessage[], lastSettlement?, { idScope? })` converter (read-side counterpart
+  of the event reducer): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a
+  `HydratedRuntime`) from a persisted transcript so a reconnecting/second client renders identically to
+  the live path (same `raw` result shape). One-shot consumers keep freshly minted ids; a repeated-snapshot
+  consumer supplies its session scope to derive stable role/timestamp/index ids for persisted turns. When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the
   final conversational assistant can synthesize an error/length turn. Compacted historical length attempts
   followed by later messages remain history, not a stale current warning. One retry-presentation rule on
   both paths: pi persists a superseded auto-retry attempt ("keep in session for history") that the live
@@ -213,12 +264,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   settlement-derived error turn. It also
   returns `turnIdByMessageIndex` (message-position → minted turn id) — the jump anchor map a
   history-search "jump to message" deep link (`chatLocationRequest`, see `store/SPEC.md`) resolves
-  against; entries are `null` for a `toolResult`/`custom` message (never its own turn) and for a
+  against; entries are `null` for a `toolResult` or non-turn `custom` message (a `subagent-completion`
+  message maps to its own completion turn's id; text-less, it is still never an anchor match) and for a
   `compactionSummary` (its own turn, but never a search hit — the host's index consumes the same slot, so
   the two stay aligned), and a message that
   ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error turn's.
-  `custom` messages never become turns: known ones (`ask-user-answers`) index into `askAnswers`; unknown
-  customTypes are ignored. No store/transport/shiki.
+  `custom` messages: `ask-user-answers` indexes into `askAnswers` (never a turn — the questionnaire card
+  is its rendering); `subagent-completion` **becomes its own `subagentCompletion` turn** (the completion
+  card is transcript-positioned, so it maps its message index too); unknown customTypes are ignored. No
+  store/transport/shiki.
 - **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
   a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
   the workbench shell integration's open/reopen/hydrate half) — `ChatView` is the sole consumer. Once
@@ -228,33 +282,52 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   one), falling back to scanning `turns` for the newest whose own text contains `anchorText`'s prefix — the
   same fallback also covers a hydrated map entry whose turn no longer contains the anchor (e.g. the
   transcript changed underneath it). The resolved turn maps to a row via the pure **`rowIndexForTurn(rows,
-  turnId)`** (`rows.ts`) — a turn's own row for `user`/`system`/`error`/`retry`, or its first `:text:` row
-  for `assistant` (whose turns dissolve into `markdown`/`tool`/`activity` rows, never a row of their own)
+  turnId)`** (`rows.ts`), called with the projected rows — a turn's own row for
+  `user`/`system`/`error`/`retry`, or its first `:text:` row for `assistant` (whose turns dissolve
+  into `markdown`/`tool`/`activity` rows, never a row of their own)
   — then `virtuosoRef.scrollToIndex({ align: "center" })` plus a transient `flashRowId` (rendered as
   `data-flash` + a `bg-primary-subtle` transition on the row wrapper, cleared after 1600ms) draw the
   eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") clears that
   exact still-current request; an older effect may not clear a newer jump. `ChatView` is its only terminal
   consumer, so an unresolved current request must never linger.
-- **Open at the latest message** — a settled chat `Virtuoso` mounts with `initialTopMostItemIndex = {
-  index: last row, align: "end" }`, so every freshly shown transcript (new tab, reopen from history,
-  auto-open, reload) starts at the bottom instead of mid-scroll; jump-to-message (above) runs post-mount
-  and overrides with its centered `scrollToIndex`. E2e: `auto-open-chats.spec.ts` asserts a long seeded
-  transcript's last message is in view without scrolling.
-- **Streaming reading band** — `useChatScroll` owns one imperative, cancellable follow controller for
-  every kind of live row growth; renderers never scroll themselves. An immediate local send arms follow,
-  aligns its user row at 10% of transcript height clamped to 48–80px, and gives the response a one-way
-  60%-viewport runway. A transient list header makes that inset possible even for the first row; the tail
-  spacer starts as the 60% budget plus a 42% reading-band floor, shrinks one-for-one with response growth,
-  never re-inflates except to recalibrate after a viewport resize, and survives settlement in place. The
-  active edge grows without movement until it crosses 82% of the viewport, then
-  one 220ms ease-out advances it to 58% (immediate under reduced motion); a large layout change is still
-  one move and moves never overlap. A queued continuation anchors only if follow stayed armed after it was
-  queued. Upward wheel/touch/scrollbar intent, keyboard transcript navigation, selection, interactive
-  focus, and message/history jumps cancel follow even within the bottom threshold. A deliberate manual
-  return, **Follow response**, or a new immediate send re-arms it; geometry changes alone do not. Settlement
-  neither catches up nor collapses remaining runway. An active-stream remount reconstructs band geometry
-  without animating; a settled remount has no runway and keeps the latest-message rule above. The detached
-  control reads **Follow response** during streaming and **Latest** after settlement.
+- **Open at the latest message** — `ChatMessageOrder` chooses the mounted edge: oldest-first starts at
+  `{ index: last row, align: "end" }`; newest-first starts at `{ index: 0, align: "start" }`. Thus every
+  freshly shown transcript (new tab, history reopen, local-placement restore, reload) shows the latest work
+  without an intermediate wrong-edge paint. Switching the preference remounts the projection and lands at
+  its new latest edge; preserving a pixel position across total reversal has no stable meaning.
+  Jump-to-message runs post-mount and overrides either rule with its centered `scrollToIndex`.
+  `chat-history.spec.ts` pins the default latest edge; `chat-order.spec.ts` pins both projections.
+- **One direction-aware streaming controller** — `useChatScroll` remains the sole imperative,
+  cancellable owner for every kind of live row growth; renderers and the message-order projection never
+  scroll themselves. Both orders share explicit immediate-turn arming, queued-continuation currency,
+  reader-intent cancellation, one non-overlapping 220ms ease-out, reduced-motion immediacy, active-stream
+  reconstruction, and **Follow response** / **Latest** detached labels. Immediate turns derive their anchor
+  inset from the scroller even when the stream marker is virtualized, then initialize runway geometry once
+  that marker mounts. The latest edge is bottom for oldest-first and top for newest-first; wheel,
+  touch/scrollbar, and keyboard directions invert with it. Touch return intent survives pointer release or
+  cancellation through the momentum tail and re-arms only if that explicit motion reaches the latest edge.
+  Selection, interactive focus, and message/history jumps cancel either mode; navigation keys bubbling from
+  an interactive descendant never undo that cancellation. Geometry alone never re-arms a detached reader.
+- **Oldest-first reading band** — the established behavior remains intact. An immediate local send aligns
+  its user row at 10% of transcript height clamped to 48–80px and gives the response a one-way 60%-viewport
+  runway. A transient list header makes that inset possible even for the first row; the tail spacer starts
+  as the 60% budget plus a 42% reading-band floor, shrinks one-for-one with response growth, never
+  re-inflates except to recalibrate after a viewport resize, and survives settlement in place. The active
+  edge grows without movement until it crosses 82% of the viewport, then one 220ms ease-out advances it to
+  58% (immediate under reduced motion); a large layout change is still one move and moves never overlap.
+  Settlement neither catches up nor collapses remaining runway.
+- **Newest-first reading band** — the newest stream surface begins after the same 48–80px top inset; its
+  live phase indicator leads the newest projected row. While follow is armed, appended content inside that
+  row uses the same sparse 82%→58% advance; a newly inserted top row returns to the latest band in one
+  controller-owned move. Runway consumption is measured separately at the stable trailing edge of the
+  latest request/answer group, excluding the changing header, so newly prepended assistant rows consume
+  their cumulative height instead of comparing unrelated first-row markers. `firstItemIndex` assigns
+  stable logical indices across projected prefix insertion and removal. The header's measured height delta
+  is applied directly to `scrollTop` only while detached; together those mechanisms preserve a detached
+  reader's visible historical anchor and pixel offset without invoking follow. Scrolling downward into
+  older groups detaches immediately, and no insertion moves that reader; upward return to the top or the
+  floating **↑ Follow response** / **↑ Latest** action re-arms. The synthetic tail space stays after the
+  oldest group, never between reversed request/answer rows, so it cannot split the selected group semantics.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
@@ -446,7 +519,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   filters; see `packages/server/src/history/SPEC.md`): a user-role hit is always a textual duplicate of
   its own `PromptHit` entry, so the location it used to add moved onto the prompt row instead. Every
   prompt row now renders a go-to-chat icon (`data-testid="history-jump"`, `aria-label="Go to chat"`,
-  `title="⇧⏎ go to chat"`, next to the existing save-as-template icon) **when jumpable** —
+  an `IconTooltip` reading "⇧⏎ go to chat", next to the existing save-as-template icon) **when jumpable** —
   `workspaceId` present and `messageIndex != null` (absent for an unmapped-cwd hit, or a host that
   doesn't populate the prompt's anchor fields). Clicking it, or **`Shift+Enter`** while a prompt row
   is the keyboard selection, routes through the exact same `onOpenMessage` path a message hit's
@@ -777,9 +850,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
   the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
   is no right-panel Todo tab — the plan lives in the conversation; the plan *page* is a center tab, a
-  document-scale view of the same plan, not a panel. Shared layout persists that page as a registered
-  `todo-plan` document reference (resolver kind + session identity, never plan content), so another client
-  can hydrate the same live page from the host-owned TODO plan. (An earlier design compiled the plan to a
+  document-scale view of the same plan, not a panel. Frontend-local workspace view state persists that page
+  as a registered `todo-plan` reference (resolver kind + session identity, never plan content); another
+  client may explicitly reopen the same live page from the host-owned TODO plan without inheriting placement. (An earlier design compiled the plan to a
   static markdown `doc` tab with a custom `thinkrail-diff:` link scheme — replaced: a snapshot lies the
   moment the agent flips a status, and markdown can't carry the Changes-panel affordances; the page is live
   and markdown is demoted to its export.)
@@ -825,9 +898,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
-  is `ChatView.tsx` plus the hooks and dialogs it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
+  is `ChatView.tsx`, `messageOrder.ts` (the client-local persistence adapter), plus the hooks and dialogs
+  it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
   `useModelCatalog.ts`, **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical
-  transcript reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`. `useModelCatalog` is the shared
+  transcript reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`,
+  `SubagentTranscriptDialog.tsx`. `useModelCatalog` is the shared
   models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
   drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
   nothing about the list this one inherited) and reads `model.list` only when the shared list is **empty** —
@@ -853,7 +928,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **`useTranscriptSync.ts`** (the guarded authoritative read that converges an existing runtime), and
   **`TemplateEditorDialog.tsx`** (the shared template save form), the other integration points. A
   **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
-  never swallowed; *streaming* faults arrive as pi events instead.
+  never swallowed and never given the settlement-only Try again affordance; *streaming* faults arrive as pi
+  events instead.
 
 ## Streaming model
 
@@ -866,7 +942,8 @@ it can still precede auto-compaction/retry); `agent_settled` alone closes the au
 session loader, and appends one success/error marker. A successful overflow `compaction_end` with
 `willRetry: true` removes the superseded errored/truncated attempt, matching Pi's rebuilt context. Tool results are
 indexed by `toolCallId` in `toolResults`; `ask-user-answers` custom messages index into `askAnswers`
-(never the turn list — the questionnaire card is their rendering). The view re-derives rows each render
+(never the turn list — the questionnaire card is their rendering); `subagent-completion` custom messages
+append a `subagentCompletion` turn (the shared contracts guard narrows both, on the live and read paths). The view re-derives rows each render
 (`deriveRows` is pure; `ChatView` memoizes) — stable row/step ids keep fold state across snapshots.
 
 **One live indicator, always.** pi splits a run into several assistant messages, so the reducer sweeps

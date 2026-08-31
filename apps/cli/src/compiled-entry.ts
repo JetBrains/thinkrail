@@ -6,6 +6,7 @@ import { parseSubcommand } from "./args";
 import {
 	bundledExtensionFactories,
 	bundledSkillsVersion,
+	bundledWebAccessFactory,
 	embeddedSkillFiles,
 } from "./bundled-extensions.generated";
 import { stagingRoot } from "./paths";
@@ -44,6 +45,7 @@ if (parseSubcommand(Bun.argv.slice(2)) === undefined) {
 		factories: bundledExtensionFactories,
 		skillsDir,
 		trashHelpers: { macos: macosTrash, windows: windowsTrash },
+		webAccessFactory: bundledWebAccessFactory,
 	});
 }
 const { launch } = await import("./bootstrap");
