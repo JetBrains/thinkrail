@@ -57,9 +57,9 @@ test("Settings → Providers lists in-app auth options", async ({ page }) => {
 	await expect(page.getByTestId("providers-error")).toHaveCount(0);
 });
 
-test("a real provider's API key round-trips through the login dialog (add in Settings, sign out)", async ({
-	page,
-}) => {
+test("a real provider's API key round-trips through the login dialog (add in Settings, sign out)", {
+	tag: "@dev-seam",
+}, async ({ page }) => {
 	await openAppFresh(page);
 	await page.getByTestId("open-settings").click();
 	await expect(page.getByTestId("settings-providers")).toBeVisible();
@@ -98,9 +98,9 @@ test("a real provider's API key round-trips through the login dialog (add in Set
 	await expect(configuredRow).toHaveCount(0);
 });
 
-test("clicking Sign in (Settings) opens the in-app login dialog, and Cancel dismisses it", async ({
-	page,
-}) => {
+test("clicking Sign in (Settings) opens the in-app login dialog, and Cancel dismisses it", {
+	tag: "@dev-seam",
+}, async ({ page }) => {
 	await openAppFresh(page);
 	await page.getByTestId("open-settings").click();
 	await expect(page.getByTestId("settings-providers")).toBeVisible();
