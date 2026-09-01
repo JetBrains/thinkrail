@@ -118,15 +118,17 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   precedes the next user turn (`finalAnswerRowIds`, passed down as `isFinalAnswer`); a non-final markdown
   row renders plain, without the action.
   Both go through **one shared layout**, `MessageWithCopy` (in `turns.tsx`): a `relative` wrapper that
-  overlays the action on the message's own **bottom-right corner** (`absolute right-4 bottom-4` on the
+  overlays the action on the message's own **bottom-right corner** (`absolute right-4 bottom-0` on the
   `CopyButton`) — for both roles alike, agent and user — rather than a row below the content. The user
   bubble stays content-only: the button is positioned against the outer wrapper, not injected into the
   bubble markup, and lands on the bubble's own corner because the bubble is the wrapper's only (and so
   bottom-most, right-aligned) child. Both message content wrappers (the user bubble, the final-answer
-  markdown wrapper) carry `pb-32` — clearance for the button's 24px hit target plus its inset — so the
-  overlay's hit area is reserved padding, never the text's own last line, no matter how close that line
-  runs to the right edge. `MessageWithCopy` also carries the `data-testid="chat-message"`/`data-role`
-  hooks the jump/flash + tests rely on. `CopyButton` is a self-contained presentational primitive
+  markdown wrapper) carry `pb-24` — exactly the button's own `size-24` hit target, flush against the
+  wrapper's bottom edge (`bottom-0`, no extra inset, so the reserved band and the button's footprint
+  match exactly) — so the overlay's hit area is reserved padding, never the text's own last line, no
+  matter how close that line runs to the right edge. `MessageWithCopy` also carries the
+  `data-testid="chat-message"`/`data-role` hooks the jump/flash + tests rely on. `CopyButton` is a
+  self-contained presentational primitive
   (`navigator.clipboard.writeText` + a local ~1.2s `Copy`→`Check` icon flip); it does **not** reach the
   store toast the way `panels/PlanPane` does, keeping the message renderers props-driven.
   Skill-invocation and review-package cards keep their own disclosure UI and carry no copy affordance.

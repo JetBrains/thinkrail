@@ -101,7 +101,7 @@ export function ChatTurnView({
 		case "markdown":
 			return isFinalAnswer ? (
 				<MessageWithCopy messageRole="assistant" side="left" getText={() => row.text}>
-					<div className="w-full min-w-0 pb-32 tr-text-reading text-text-default">
+					<div className="w-full min-w-0 pb-24 tr-text-reading text-text-default">
 						<Markdown text={row.text} />
 					</div>
 				</MessageWithCopy>
@@ -214,7 +214,7 @@ function MessageWithCopy({
 			className={cn("group relative flex flex-col", side === "right" ? "items-end" : "items-start")}
 		>
 			{children}
-			<CopyButton getText={getText} className="absolute right-4 bottom-4 z-10" />
+			<CopyButton getText={getText} className="absolute right-4 bottom-0 z-10" />
 		</div>
 	);
 }
@@ -299,7 +299,7 @@ function PlainUserTurn({
 	return (
 		<MessageWithCopy messageRole="user" side="right" getText={() => text}>
 			<div className="flex w-fit max-w-[85%] flex-col items-end">
-				<div className={cn(USER_BUBBLE_BASE, "pb-32")}>
+				<div className={cn(USER_BUBBLE_BASE, "pb-24")}>
 					{attachments.length > 0 ? (
 						<div className="flex flex-wrap gap-4 pb-4" data-testid="chat-message-images">
 							{attachments.map(({ key, label, img }) => (
