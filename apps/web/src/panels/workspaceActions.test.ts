@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { WORKSPACE_RENAME_PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
-import { canRenameWorkspace } from "./workspaceActions";
+import { canRenameWorkspace, workspaceRenameValue } from "./workspaceActions";
 
 const managed: Workspace = {
 	id: "w1",
@@ -19,4 +19,10 @@ test("manual rename requires its introducing host protocol and a ThinkRail-manag
 	expect(canRenameWorkspace(55, { ...managed, kind: "default" })).toBe(false);
 	expect(canRenameWorkspace(55, { ...managed, kind: "external" })).toBe(false);
 	expect(canRenameWorkspace(null, managed)).toBe(false);
+});
+
+test("inline rename submits only a changed nonblank label", () => {
+	expect(workspaceRenameValue("Current", "   ")).toBeNull();
+	expect(workspaceRenameValue("Current", " Current ")).toBeNull();
+	expect(workspaceRenameValue("Current", " Next name ")).toBe("Next name");
 });

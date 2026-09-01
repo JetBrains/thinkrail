@@ -51,7 +51,7 @@ test("Copy path copies the worktree's absolute path to the clipboard", async ({
 	expect(copied).toContain("/worktrees/sample-project/");
 });
 
-test("a managed workspace can be renamed with its branch while its worktree path stays put", async ({
+test("a managed workspace can rename its display label inline without changing Git", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -61,34 +61,43 @@ test("a managed workspace can be renamed with its branch while its worktree path
 
 	await openWorkspaceMenu(row);
 	await page.getByTestId("workspace-rename").click();
-	const dialog = page.getByTestId("rename-workspace-dialog");
-	const input = page.getByTestId("rename-workspace-input");
-	const submit = page.getByTestId("rename-workspace-submit");
-	await expect(dialog).toBeVisible();
-	await expect(dialog).toContainText("Git branch");
-	await expect(dialog).toContainText("folder stays in place");
+	let input = row.getByRole("textbox", { name: "Workspace name" });
 	await expect(input).toHaveValue(created.name);
 	await expect(input).toBeFocused();
-
+	expect(
+		await input.evaluate(
+			(element: HTMLInputElement) =>
+				element.selectionStart === 0 && element.selectionEnd === element.value.length,
+		),
+	).toBe(true);
 	await input.fill("   ");
-	await expect(submit).toBeDisabled();
-	await input.fill("Manual Workspace Name");
-	await submit.click();
+	await page.getByTestId("project-name").first().click();
+	await expect(row.getByTestId("workspace-name")).toHaveText(created.name);
 
-	await expect(dialog).toHaveCount(0);
+	await openWorkspaceMenu(row);
+	await page.getByTestId("workspace-rename").click();
+	input = row.getByRole("textbox", { name: "Workspace name" });
+	await input.fill("Cancelled Rename");
+	await input.press("Escape");
+	await expect(row.getByTestId("workspace-name")).toHaveText(created.name);
+
+	await openWorkspaceMenu(row);
+	await page.getByTestId("workspace-rename").click();
+	input = row.getByRole("textbox", { name: "Workspace name" });
+	await input.fill("Manual Workspace Name");
+	await page.getByTestId("project-name").first().click();
+
 	await expect(row.getByTestId("workspace-name")).toHaveText("Manual Workspace Name");
-	await expect(row.getByTestId("workspace-branch")).toHaveText("manual-workspace-name");
+	await expect(row.getByTestId("workspace-branch")).toHaveText(created.branch);
 	expect(
 		execFileSync("git", ["-C", created.worktreePath, "symbolic-ref", "--short", "HEAD"], {
 			encoding: "utf8",
 		}).trim(),
-	).toBe("manual-workspace-name");
+	).toBe(created.branch);
 	expect(existsSync(created.worktreePath)).toBe(true);
 });
 
-test("an open rename dialog survives reconnect and waits for the current welcome", async ({
-	page,
-}) => {
+test("an open inline rename survives reconnect", async ({ page }) => {
 	let firstSocket: WebSocketRoute | undefined;
 	let socketsOpened = 0;
 	let releaseReconnect: () => void = () => {};
@@ -103,31 +112,28 @@ test("an open rename dialog survives reconnect and waits for the current welcome
 	});
 
 	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
+	const created = await createWorkspaceViaDialog(page);
 	await settleAfterCreate(page);
 	const row = worktreeRows(page).first();
 	await openWorkspaceMenu(row);
 	await page.getByTestId("workspace-rename").click();
-	const dialog = page.getByTestId("rename-workspace-dialog");
-	const submit = page.getByTestId("rename-workspace-submit");
-	await expect(dialog).toBeVisible();
+	const input = row.getByRole("textbox", { name: "Workspace name" });
+	await expect(input).toBeVisible();
 
 	await firstSocket?.close();
 	await expect(page.getByTestId("connection-status")).not.toHaveAttribute(
 		"data-status",
 		"connected",
 	);
-	await expect(dialog).toBeVisible();
-	await expect(submit).toBeDisabled();
+	await expect(input).toBeVisible();
 
 	releaseReconnect();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect.poll(() => socketsOpened).toBeGreaterThan(1);
-	await expect(dialog).toBeVisible();
-	await expect(submit).toBeEnabled();
-	await page.getByTestId("rename-workspace-input").fill("Rename After Reconnect");
-	await submit.click();
+	await input.fill("Rename After Reconnect");
+	await input.press("Enter");
 	await expect(row.getByTestId("workspace-name")).toHaveText("Rename After Reconnect");
+	await expect(row.getByTestId("workspace-branch")).toHaveText(created.branch);
 });
 
 test("the Default workspace's kebab menu offers only non-mutating actions", async ({ page }) => {

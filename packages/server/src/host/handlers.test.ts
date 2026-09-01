@@ -57,7 +57,7 @@ test("request diagnostics expose only registered method names", async () => {
 	await expect(handleRequest("toString", undefined, CTX)).rejects.toThrow("Unknown method");
 });
 
-test("workspace.rename runs the locked branch rename transaction and preserves the worktree path", async () => {
+test("workspace.rename locks the display name without changing Git or the worktree path", async () => {
 	const created = (await handleRequest("workspace.create", { projectId: "p1" }, CTX)) as Workspace;
 
 	const renamed = (await handleRequest(
@@ -69,13 +69,11 @@ test("workspace.rename runs the locked branch rename transaction and preserves t
 	expect(renamed).toMatchObject({
 		id: created.id,
 		name: "Manual Workspace Name",
-		branch: "manual-workspace-name",
+		branch: created.branch,
 		renamed: true,
 		worktreePath: created.worktreePath,
 	});
-	expect(gitText(created.worktreePath, "symbolic-ref", "--short", "HEAD")).toBe(
-		"manual-workspace-name",
-	);
+	expect(gitText(created.worktreePath, "symbolic-ref", "--short", "HEAD")).toBe(created.branch);
 	const listed = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
 	expect(listed.find((workspace) => workspace.id === created.id)).toMatchObject(renamed);
 });

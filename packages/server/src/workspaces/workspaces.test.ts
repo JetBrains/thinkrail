@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
-	chmodSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
@@ -393,85 +392,30 @@ test("renameWorkspace moves the branch in place: record + git follow, the worktr
 	expect((await worktrees())[0]?.branch).toBe("add-login-flow");
 });
 
-test("renameWorkspace rejects an out-of-band branch switch without changing its record", async () => {
+test("renameWorkspace with renameBranch:false changes only the display name", async () => {
 	const ws = await createWorkspace("p1");
-	git(ws.worktreePath, "switch", "-c", "manual-switch");
+	git(repo, "branch", "release");
+	setWorkspaceDiffBase(ws.id, "release");
+	git(repo, "update-ref", `refs/remotes/origin/${ws.branch}`, "HEAD");
 
-	expect(() => renameWorkspace(ws.id, "renamed anyway")).toThrow(
-		'Workspace branch changed outside ThinkRail; switch back to "workspace-1" before renaming',
-	);
-	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe("manual-switch");
-	expect(gitOut(repo, "branch", "--list", "workspace-1")).toBe("workspace-1");
-	expect((await worktrees())[0]).toMatchObject({ name: ws.name, branch: ws.branch });
-});
+	const renamed = renameWorkspace(ws.id, "Published Workspace", {
+		lock: true,
+		renameBranch: false,
+	});
 
-test("renameWorkspace detects a pushed branch through worktree-local upstream config", async () => {
-	const remote = join(dataDir, "remote.git");
-	git(dataDir, "init", "--bare", remote);
-	git(repo, "remote", "add", "origin", remote);
-	git(repo, "config", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main");
-	git(repo, "config", "extensions.worktreeConfig", "true");
-	const ws = await createWorkspace("p1");
-	git(ws.worktreePath, "push", "--set-upstream", "origin", ws.branch);
-	git(repo, "config", "--unset-all", `branch.${ws.branch}.remote`);
-	git(repo, "config", "--unset-all", `branch.${ws.branch}.merge`);
-	git(ws.worktreePath, "config", "--worktree", `branch.${ws.branch}.remote`, "origin");
-	git(
-		ws.worktreePath,
-		"config",
-		"--worktree",
-		`branch.${ws.branch}.merge`,
-		`refs/heads/${ws.branch}`,
-	);
-	expect(gitOut(repo, "show-ref", "--verify", "--quiet", `refs/remotes/origin/${ws.branch}`)).toBe(
-		"",
-	);
-	expect(gitOut(repo, "config", "--get", `branch.${ws.branch}.remote`)).toBe("");
-	expect(gitOut(ws.worktreePath, "config", "--get", `branch.${ws.branch}.remote`)).toBe("origin");
-
-	expect(() => renameWorkspace(ws.id, "published rename")).toThrow(
-		'Published workspace branch "workspace-1" cannot be renamed',
-	);
+	expect(renamed).toMatchObject({
+		name: "Published Workspace",
+		branch: ws.branch,
+		worktreePath: ws.worktreePath,
+		baseBranch: ws.baseBranch,
+		diffBase: "release",
+		renamed: true,
+	});
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
-	expect((await worktrees())[0]).toMatchObject({ name: ws.name, branch: ws.branch });
-});
-
-test("renameWorkspace rolls its ref back when the checkout switches during mutation", async () => {
-	const ws = await createWorkspace("p1");
-	const realGit = Bun.which("git");
-	if (!realGit) throw new Error("git not found");
-	const shimDir = join(dataDir, "git-shim");
-	mkdirSync(shimDir);
-	const shim = join(shimDir, "git");
-	writeFileSync(
-		shim,
-		`#!/bin/sh
-if [ "$3" = "branch" ] && [ "$4" = "-m" ] && [ "$5" = "${ws.branch}" ]; then
-  "$REAL_GIT" -C "$RACE_WORKTREE" switch -c race-switch >/dev/null 2>&1
-fi
-exec "$REAL_GIT" "$@"
-`,
+	expect(gitOut(repo, "rev-parse", `refs/heads/${ws.branch}`)).toBe(
+		gitOut(ws.worktreePath, "rev-parse", "HEAD"),
 	);
-	chmodSync(shim, 0o755);
-	const previousPath = process.env.PATH;
-	process.env.PATH = `${shimDir}:${previousPath ?? ""}`;
-	process.env.REAL_GIT = realGit;
-	process.env.RACE_WORKTREE = ws.worktreePath;
-	try {
-		expect(() => renameWorkspace(ws.id, "raced rename")).toThrow(
-			'Workspace branch changed outside ThinkRail; switch back to "workspace-1" before renaming',
-		);
-	} finally {
-		if (previousPath === undefined) delete process.env.PATH;
-		else process.env.PATH = previousPath;
-		delete process.env.REAL_GIT;
-		delete process.env.RACE_WORKTREE;
-	}
-
-	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe("race-switch");
-	expect(gitOut(repo, "branch", "--list", ws.branch)).toBe(ws.branch);
-	expect(gitOut(repo, "branch", "--list", "raced-rename")).toBe("");
-	expect((await worktrees())[0]).toMatchObject({ name: ws.name, branch: ws.branch });
+	expect((await worktrees())[0]).toMatchObject(renamed);
 });
 
 test("renameWorkspace with lock:false renames name + branch but leaves renamed unset (provisional)", async () => {

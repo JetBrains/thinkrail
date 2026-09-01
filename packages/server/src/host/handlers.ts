@@ -316,7 +316,7 @@ const handlers: Record<string, Handler> = {
 	},
 	"workspace.rename": (params) => {
 		const p = params as { id: string; name: string };
-		return renameWorkspace(p.id, p.name);
+		return renameWorkspace(p.id, p.name, { lock: true, renameBranch: false });
 	},
 	"workspace.list": async (params) => {
 		const p = params as { projectId: string; includeDiffStats?: boolean };

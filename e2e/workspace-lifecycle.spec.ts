@@ -35,7 +35,7 @@ test("workspace rename rehydrates in a second tab that missed the live snapshot"
 	context,
 }) => {
 	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
+	const created = await createWorkspaceViaDialog(page);
 	const sourceRow = worktreeRows(page).first();
 
 	let firstPeerSocket: WebSocketRoute | undefined;
@@ -65,8 +65,9 @@ test("workspace rename rehydrates in a second tab that missed the live snapshot"
 
 	await openWorkspaceMenu(sourceRow);
 	await page.getByTestId("workspace-rename").click();
-	await page.getByTestId("rename-workspace-input").fill("Shared Rename");
-	await page.getByTestId("rename-workspace-submit").click();
+	const input = sourceRow.getByRole("textbox", { name: "Workspace name" });
+	await input.fill("Shared Rename");
+	await input.press("Enter");
 	await expect(sourceRow.getByTestId("workspace-name")).toHaveText("Shared Rename");
 	await expect(peerRow.getByTestId("workspace-name")).not.toHaveText("Shared Rename");
 
@@ -76,7 +77,7 @@ test("workspace rename rehydrates in a second tab that missed the live snapshot"
 
 	for (const row of [sourceRow, peerRow]) {
 		await expect(row.getByTestId("workspace-name")).toHaveText("Shared Rename");
-		await expect(row.getByTestId("workspace-branch")).toHaveText("shared-rename");
+		await expect(row.getByTestId("workspace-branch")).toHaveText(created.branch);
 	}
 });
 

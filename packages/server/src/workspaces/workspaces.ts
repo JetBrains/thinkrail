@@ -64,26 +64,6 @@ function branchExists(repoPath: string, branch: string): boolean {
 	return git(repoPath, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).ok;
 }
 
-function hasKnownRemoteBranch(repoPath: string, branch: string): boolean {
-	const remote = git(repoPath, ["config", "--get", `branch.${branch}.remote`]);
-	const merge = git(repoPath, ["config", "--get", `branch.${branch}.merge`]);
-	if (remote.ok || merge.ok) return true;
-	const refs = git(repoPath, ["for-each-ref", "--format=%(refname)", "refs/remotes"]);
-	if (!refs.ok) throw new Error(`Could not inspect remote branches: ${refs.err}`);
-	const remotes = git(repoPath, ["remote"]);
-	if (!remotes.ok) throw new Error(`Could not inspect configured remotes: ${remotes.err}`);
-	const knownRefs = new Set(refs.out.split("\n"));
-	return remotes.out
-		.split("\n")
-		.some((remoteName) => knownRefs.has(`refs/remotes/${remoteName}/${branch}`));
-}
-
-function branchChangedError(branch: string): Error {
-	return new Error(
-		`Workspace branch changed outside ThinkRail; switch back to "${branch}" before renaming`,
-	);
-}
-
 function nameTaken(project: Project, candidate: string): boolean {
 	return (
 		branchExists(project.path, candidate) ||
@@ -393,9 +373,10 @@ export function refreshUserOwnedWorkspace(workspaceId: string): void {
 export function renameWorkspace(
 	id: string,
 	requestedName: string,
-	opts: { lock?: boolean } = {},
+	opts: { lock?: boolean; renameBranch?: boolean } = {},
 ): Workspace {
 	const lock = opts.lock ?? true;
+	const renameBranch = opts.renameBranch ?? true;
 	const ws = loadWorkspaces().find((w) => w.id === id);
 	if (!ws) throw new Error(`Unknown workspace: ${id}`);
 	const project = getProjects().find((p) => p.id === ws.projectId);
@@ -404,26 +385,13 @@ export function renameWorkspace(
 	if (ws.kind === "default") throw new Error("The Default workspace cannot be renamed");
 	if (ws.kind === "external")
 		throw new Error("An existing worktree cannot be renamed by ThinkRail");
-	if (tryCurrentBranch(ws.worktreePath) !== ws.branch) throw branchChangedError(ws.branch);
 	const displayName = toDisplayName(requestedName);
 	if (!displayName) throw new Error(`Invalid workspace name: ${requestedName}`);
-	const wanted = toBranch(displayName);
+	const wanted = renameBranch ? toBranch(displayName) : ws.branch;
 	const branch = wanted === ws.branch ? ws.branch : uniqueBranch(project, wanted);
 	if (branch !== ws.branch) {
-		if (hasKnownRemoteBranch(ws.worktreePath, ws.branch)) {
-			throw new Error(`Published workspace branch "${ws.branch}" cannot be renamed`);
-		}
 		const moved = git(project.path, ["branch", "-m", ws.branch, branch]);
 		if (!moved.ok) throw new Error(`git branch -m failed: ${moved.err}`);
-		if (tryCurrentBranch(ws.worktreePath) !== branch) {
-			const rolledBack = git(project.path, ["branch", "-m", branch, ws.branch]);
-			if (!rolledBack.ok) {
-				throw new Error(
-					`Workspace branch changed during rename; rollback failed: ${rolledBack.err}`,
-				);
-			}
-			throw branchChangedError(ws.branch);
-		}
 	}
 
 	const all = loadWorkspaces();

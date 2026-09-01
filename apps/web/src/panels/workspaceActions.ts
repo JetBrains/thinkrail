@@ -8,3 +8,8 @@ export function canRenameWorkspace(protocolVersion: number | null, workspace: Wo
 		workspace.kind !== "external"
 	);
 }
+
+export function workspaceRenameValue(currentName: string, input: string): string | null {
+	const name = input.trim();
+	return name && name !== currentName ? name : null;
+}
