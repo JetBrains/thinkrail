@@ -5,9 +5,30 @@ import { openFileInTab } from "./openTabs";
 
 export type HrefKind = "empty" | "anchor" | "external" | "relative";
 
+function sanitizeUrl(url: string | undefined): string | undefined {
+	if (!url) return undefined;
+	const lower = url.toLowerCase().trim();
+	if (
+		lower.startsWith("javascript:") ||
+		lower.startsWith("data:") ||
+		lower.startsWith("vbscript:")
+	) {
+		return "about:blank";
+	}
+	return url;
+}
+
 export function classifyHref(href: string | undefined): HrefKind {
 	if (!href) return "empty";
 	if (href.startsWith("#")) return "anchor";
+	const lower = href.toLowerCase().trim();
+	if (
+		lower.startsWith("javascript:") ||
+		lower.startsWith("data:") ||
+		lower.startsWith("vbscript:")
+	) {
+		return "empty";
+	}
 	if (href.startsWith("//") || /^[a-z][a-z0-9+.-]*:/i.test(href)) return "external";
 	return "relative";
 }
@@ -109,7 +130,7 @@ export function documentComponents(ctx: { workspaceId: string; path: string }): 
 			);
 		}
 		return (
-			<a href={href} target="_blank" rel="noopener noreferrer">
+			<a href={sanitizeUrl(href)} target="_blank" rel="noopener noreferrer">
 				{children}
 			</a>
 		);

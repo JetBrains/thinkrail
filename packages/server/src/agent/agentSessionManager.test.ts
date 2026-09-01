@@ -42,6 +42,7 @@ import {
 	setSessionDeletedPublisher,
 	setSessionManagerFactory,
 	setSessionPublisher,
+	setSkillAdmissionResolver,
 	steerSession,
 	toWireModel,
 } from "./agentSessionManager";
@@ -103,6 +104,14 @@ let priorOffline: string | undefined;
 let runtime: ModelRuntime;
 
 beforeAll(async () => {
+	setSkillAdmissionResolver(() => ({
+		trusted: true,
+		acknowledged: [],
+		disabled: [],
+		disabledGroups: [],
+		overrides: {},
+	}));
+
 	priorAgentDir = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = tmpCwd("trpi-agentdir-");
 

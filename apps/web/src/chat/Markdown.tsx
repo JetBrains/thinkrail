@@ -43,9 +43,22 @@ function Table({ children }: { children?: ReactNode }) {
 	);
 }
 
+function sanitizeUrl(url: string | undefined): string | undefined {
+	if (!url) return undefined;
+	const lower = url.toLowerCase().trim();
+	if (
+		lower.startsWith("javascript:") ||
+		lower.startsWith("data:") ||
+		lower.startsWith("vbscript:")
+	) {
+		return "about:blank";
+	}
+	return url;
+}
+
 function Anchor({ href, children }: { href?: string | undefined; children?: ReactNode }) {
 	return (
-		<a href={href} target="_blank" rel="noopener noreferrer">
+		<a href={sanitizeUrl(href)} target="_blank" rel="noopener noreferrer">
 			{children}
 		</a>
 	);
