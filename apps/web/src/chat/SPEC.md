@@ -49,7 +49,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   toggle **inside the card** (within its padding, directly below the message body, so line-clamp truncates
   only the body's own element — never the control) once the agent has started responding to it: `UserTurn`
   folds on `useFold(`${id}:user-collapse`,
-  agentResponded)`, so the fallback is *expanded* until the agent responds and *collapsed* after — with
+  !agentResponded)`, so the fallback is *expanded* until the agent responds and *collapsed* after — with
   the shared cache's "a manual toggle always wins over a fallback flip" giving exactly the required
   behavior (shown expanded right after send; auto-collapses the instant the agent produces anything;
   a manual `Show more` then survives continued streaming). `agentResponded` is derived in `ChatView`
@@ -128,10 +128,14 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   match exactly) — so the overlay's hit area is reserved padding, never the text's own last line, no
   matter how close that line runs to the right edge. `MessageWithCopy` also carries the
   `data-testid="chat-message"`/`data-role` hooks the jump/flash + tests rely on. `CopyButton` is a
-  self-contained presentational primitive
-  (`navigator.clipboard.writeText` + a local ~1.2s `Copy`→`Check` icon flip); it does **not** reach the
-  store toast the way `panels/PlanPane` does, keeping the message renderers props-driven.
+  self-contained presentational primitive that copies through the shared `copyText()` (`@/lib`) — the
+  one clipboard-write path with its degradation baked in — flipping to a local ~1.2s `Copy`→`Check` icon
+  only when it reports success; it does **not** reach the store toast the way `panels/PlanPane` does,
+  keeping the message renderers props-driven.
   Skill-invocation and review-package cards keep their own disclosure UI and carry no copy affordance.
+  The transcript's Virtuoso list carries a 1600px `increaseViewportBy` on both edges so a short transcript
+  stays fully mounted even opened scrolled to the bottom — every row's hover-revealed copy action needs to
+  be in the DOM, not virtualized away, for it to be reachable at all.
 - `tool` — a **primary** tool call: the collapsible `ToolCard` frame (collapsed unless registered
   `defaultExpanded`; errors auto-expand; a manual toggle wins), or a `"bare"` renderer that owns its
   frame. A `"bare"` call on a dead message (`stopReason` aborted/error — pi never executes those calls)
