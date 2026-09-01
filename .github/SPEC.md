@@ -148,9 +148,9 @@ in place.
 ## Get right
 
 - **Native build == correct runtime.** Do not collapse the matrix to cross-compilation without another
-  way to execute each target's PTY, trash helper, Electrobun wrapper/system renderer, ownership lease, and
-  normal quit path. Linux release additionally requires clean Ubuntu 24.04 x64/ARM64 smoke with glibc
-  2.38 and the declared GTK/WebKitGTK/AppIndicator/RSVG packages; Windows ownership must execute natively.
+  way to execute each target's PTY, trash helper, Electrobun wrapper/system renderer, and normal quit path.
+  Linux release additionally requires clean Ubuntu 24.04 x64/ARM64 smoke with glibc 2.38 and the declared
+  GTK/WebKitGTK/AppIndicator/RSVG packages.
 - **`server.welcome` stays additive.** `appVersion` is optional; adding wire fields that clients can
   ignore doesn't bump `PROTOCOL_VERSION`. A field clients must understand does.
 - **Windows has no real SIGTERM** — `smoke:binary` relaxes its clean-exit assertion there (Bun
