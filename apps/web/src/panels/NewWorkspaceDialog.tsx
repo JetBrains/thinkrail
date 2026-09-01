@@ -433,6 +433,7 @@ export function NewWorkspaceDialog({
 						rows={6}
 						className="min-h-[160px]"
 						onKeyDown={(e) => {
+							if (e.nativeEvent.isComposing) return;
 							if (slashCompletion.handleKeyDown(e)) return;
 							if (e.key === "Enter" && !e.shiftKey) {
 								e.preventDefault();

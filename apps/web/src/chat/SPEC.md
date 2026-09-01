@@ -454,6 +454,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   awaits `session.abort` (the ack means idle) then performs an ordinary idle send — the partial reply
   stays in the transcript marked aborted, and messages still queued keep their lanes (they deliver in
   the run the interrupt starts). Rejection restores the draft like other streaming sends.
+- **IME composition safety (`isComposing`)** (`Composer`) — all keyboard shortcut handlers in `Composer`
+  (send, steer, follow-up, interrupt, slot stepping, mention selection, slash command picking, and prompt
+  history recall) guard against active IME composition (`e.nativeEvent.isComposing`). Keydown events occurring
+  while `isComposing` is true return immediately, ensuring that Korean/CJK character composition commits
+  cleanly without premature submissions, duplicate/leftover character insertion, or unintentional menu
+  activations.
 - **History overlay: zoomed preview pane + scope picker** (`HistoryOverlay.tsx`) — `Tab` grows the
   compact single-column overlay into a **two-pane** `zoomed` layout: the existing Prompts/Messages
   sections list stays on the left (~55% width, `data-testid="history-results"` — keyboard nav,

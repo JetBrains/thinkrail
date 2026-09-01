@@ -82,7 +82,8 @@ for (const path of [join(root, "package.json"), ...manifestPaths()]) {
 	}
 }
 
-const lock = Bun.JSONC.parse(readFileSync(join(root, "bun.lock"), "utf8")) as BunLock;
+const lockModule = await import(join(root, "bun.lock"));
+const lock = (lockModule.default ?? lockModule) as BunLock;
 for (const name of ["react", "react-dom"]) {
 	const prefix = `${name}@`;
 	const versions = new Set<string>();

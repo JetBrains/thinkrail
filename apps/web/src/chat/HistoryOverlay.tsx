@@ -393,6 +393,7 @@ export function HistoryOverlay({
 	if (!open) return null;
 
 	const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+		if (e.nativeEvent.isComposing) return;
 		if ((e.metaKey || e.ctrlKey) && e.code === "KeyS") {
 			e.preventDefault();
 			const item = resolveHistorySelection(stage, result, selected);

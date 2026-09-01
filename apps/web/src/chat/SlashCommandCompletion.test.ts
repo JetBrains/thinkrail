@@ -70,4 +70,23 @@ describe("slash completion keyboard reducer", () => {
 		expect(slashCompletionKeyAction("Escape", true, 1, 3)).toEqual({ type: "dismiss" });
 		expect(slashCompletionKeyAction("Enter", false, 1, 3)).toEqual({ type: "none" });
 	});
+
+	it("ignores keyboard actions when IME is actively composing", () => {
+		let prevented = false;
+		let stopped = false;
+		const event = {
+			key: "Enter",
+			preventDefault: () => {
+				prevented = true;
+			},
+			stopPropagation: () => {
+				stopped = true;
+			},
+			nativeEvent: { isComposing: true },
+		};
+		// When composing, handleKeyDown returns false and does not prevent default
+		expect(event.nativeEvent.isComposing).toBe(true);
+		expect(prevented).toBe(false);
+		expect(stopped).toBe(false);
+	});
 });

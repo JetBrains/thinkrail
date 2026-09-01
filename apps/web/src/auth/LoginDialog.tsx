@@ -164,6 +164,7 @@ export function LoginDialog({
 										type={state.input.secret ? "password" : "text"}
 										placeholder={state.input.placeholder ?? ""}
 										onKeyDown={(e) => {
+											if (e.nativeEvent.isComposing) return;
 											if (e.key === "Enter") {
 												e.preventDefault();
 												submitPrompt();
