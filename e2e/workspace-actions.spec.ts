@@ -126,12 +126,14 @@ test("an open inline rename survives reconnect", async ({ page }) => {
 		"connected",
 	);
 	await expect(input).toBeVisible();
+	await input.fill("Rename After Reconnect");
+	await input.press("Enter");
+	await expect(input).toBeVisible();
+	await expect(input).toHaveValue("Rename After Reconnect");
 
 	releaseReconnect();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect.poll(() => socketsOpened).toBeGreaterThan(1);
-	await input.fill("Rename After Reconnect");
-	await input.press("Enter");
 	await expect(row.getByTestId("workspace-name")).toHaveText("Rename After Reconnect");
 	await expect(row.getByTestId("workspace-branch")).toHaveText(created.branch);
 });

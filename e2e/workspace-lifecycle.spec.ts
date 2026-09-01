@@ -30,7 +30,7 @@ test("workspace removal propagates — no zombie row in a second tab", async ({ 
 	await expect(page2.getByTestId("toast").filter({ hasText: created.name })).toBeVisible();
 });
 
-test("workspace rename rehydrates in a second tab that missed the live snapshot", async ({
+test("workspace rename propagates live and rehydrates a tab that missed a later snapshot", async ({
 	page,
 	context,
 }) => {
@@ -56,6 +56,22 @@ test("workspace rename rehydrates in a second tab that missed the live snapshot"
 	await revealFirstProjectWorkspaces(page2);
 	const peerRow = worktreeRows(page2).first();
 	await expect(peerRow).toBeVisible();
+	await openWorkspaceMenu(peerRow);
+	await page2.getByTestId("workspace-rename").click();
+	const peerInput = peerRow.getByRole("textbox", { name: "Workspace name" });
+	await expect(peerInput).toHaveValue(created.name);
+
+	await openWorkspaceMenu(sourceRow);
+	await page.getByTestId("workspace-rename").click();
+	let input = sourceRow.getByRole("textbox", { name: "Workspace name" });
+	await input.fill("Shared Rename");
+	await input.press("Enter");
+	await expect(sourceRow.getByTestId("workspace-name")).toHaveText("Shared Rename");
+	await expect(peerInput).toHaveValue(created.name);
+	await peerInput.press("Enter");
+	for (const row of [sourceRow, peerRow]) {
+		await expect(row.getByTestId("workspace-name")).toHaveText("Shared Rename");
+	}
 
 	await firstPeerSocket?.close();
 	await expect(page2.getByTestId("connection-status")).not.toHaveAttribute(
@@ -65,18 +81,18 @@ test("workspace rename rehydrates in a second tab that missed the live snapshot"
 
 	await openWorkspaceMenu(sourceRow);
 	await page.getByTestId("workspace-rename").click();
-	const input = sourceRow.getByRole("textbox", { name: "Workspace name" });
-	await input.fill("Shared Rename");
+	input = sourceRow.getByRole("textbox", { name: "Workspace name" });
+	await input.fill("Offline Rename");
 	await input.press("Enter");
-	await expect(sourceRow.getByTestId("workspace-name")).toHaveText("Shared Rename");
-	await expect(peerRow.getByTestId("workspace-name")).not.toHaveText("Shared Rename");
+	await expect(sourceRow.getByTestId("workspace-name")).toHaveText("Offline Rename");
+	await expect(peerRow.getByTestId("workspace-name")).toHaveText("Shared Rename");
 
 	releasePeerReconnect();
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect.poll(() => peerSocketsOpened).toBeGreaterThan(1);
 
 	for (const row of [sourceRow, peerRow]) {
-		await expect(row.getByTestId("workspace-name")).toHaveText("Shared Rename");
+		await expect(row.getByTestId("workspace-name")).toHaveText("Offline Rename");
 		await expect(row.getByTestId("workspace-branch")).toHaveText(created.branch);
 	}
 });

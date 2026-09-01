@@ -543,6 +543,8 @@ function WorkspaceRow({
 	};
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const nameRef = useRef<HTMLInputElement>(null);
+	const editStartNameRef = useRef(workspace.name);
+	const pendingNameRef = useRef<string | null>(null);
 	const cancelNextBlurRef = useRef(false);
 	const enterRenameRef = useRef(false);
 	const [editing, setEditing] = useState(false);
@@ -556,15 +558,33 @@ function WorkspaceRow({
 		return () => cancelAnimationFrame(frame);
 	}, [editing]);
 
+	useEffect(() => {
+		const name = pendingNameRef.current;
+		if (!editing || !canRename || !name) return;
+		pendingNameRef.current = null;
+		setEditing(false);
+		onRename(name);
+	}, [canRename, editing, onRename]);
+
 	const commitRename = () => {
 		if (cancelNextBlurRef.current) {
 			cancelNextBlurRef.current = false;
+			pendingNameRef.current = null;
 			setEditing(false);
 			return;
 		}
-		const name = workspaceRenameValue(workspace.name, nameRef.current?.value ?? "");
+		const name = workspaceRenameValue(editStartNameRef.current, nameRef.current?.value ?? "");
+		if (!name) {
+			pendingNameRef.current = null;
+			setEditing(false);
+			return;
+		}
+		if (!canRename) {
+			pendingNameRef.current = name;
+			return;
+		}
 		setEditing(false);
-		if (name) onRename(name);
+		onRename(name);
 	};
 
 	const onNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -680,6 +700,8 @@ function WorkspaceRow({
 							<DropdownMenuItem
 								data-testid="workspace-rename"
 								onSelect={() => {
+									editStartNameRef.current = workspace.name;
+									pendingNameRef.current = null;
 									cancelNextBlurRef.current = false;
 									enterRenameRef.current = true;
 									setEditing(true);

@@ -62,8 +62,11 @@ treatment.
   one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`.
   Rename replaces the row's name span in place with a chrome-less single-line input carrying the same
   typography, colour, and geometry; it is prefilled, focused, and selected. Enter or blur commits, Escape
-  cancels, and blank or unchanged text exits without a request. A commit leaves optimistic domain state out
-  of the client: the row returns to the prior host-owned label until every surface adopts the full-snapshot
+  cancels, and blank or text unchanged from the edit-start label exits without a request, so an incoming
+  peer snapshot cannot be reverted by closing an untouched editor. A changed commit made while the current
+  socket's capability is unknown stays pending and dispatches only after a v55-or-newer welcome restores
+  `canRename`; an older host never receives the method. A commit leaves optimistic domain state out of the
+  client: the row returns to the prior host-owned label until every surface adopts the full-snapshot
   `workspace.updated` push; rejection keeps that snapshot and raises an error toast. The Git branch and
   worktree folder never change. Remove is styled destructive
   and opens a centered `ConfirmDialog`; confirming fires `workspace.remove` and lets every client react to the
@@ -77,7 +80,7 @@ treatment.
   (`kind === "default"` — the project folder itself) renders **pinned first** (the server pins it in
   `workspace.list`; `addWorkspace` appends created worktree rows after it), with a **`House` icon** in
   place of the `GitBranch` glyph and **no Rename or Remove item** (non-renamable/non-removable — the server
-  enforces both; the menu simply omits them) — it still gets "Open in" / Copy path / Reveal, same as any
+  enforces both; the menu simply omits them) — it still gets "Open in" / Copy path / Reveal like every
   worktree. Its branch line
   shows the folder's real current branch. When the **selected project's** authoritative workspace list lands,
   `ProjectTree` fire-and-forgets transport's `prewarmWorkspaceSkillLoad` for at most the first eight rows:

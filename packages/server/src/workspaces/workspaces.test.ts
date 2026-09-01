@@ -394,9 +394,12 @@ test("renameWorkspace moves the branch in place: record + git follow, the worktr
 
 test("renameWorkspace with renameBranch:false changes only the display name", async () => {
 	const ws = await createWorkspace("p1");
+	const sibling = await createWorkspace("p1", undefined, ws.branch);
 	git(repo, "branch", "release");
 	setWorkspaceDiffBase(ws.id, "release");
 	git(repo, "update-ref", `refs/remotes/origin/${ws.branch}`, "HEAD");
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
 
 	const renamed = renameWorkspace(ws.id, "Published Workspace", {
 		lock: true,
@@ -415,7 +418,10 @@ test("renameWorkspace with renameBranch:false changes only the display name", as
 	expect(gitOut(repo, "rev-parse", `refs/heads/${ws.branch}`)).toBe(
 		gitOut(ws.worktreePath, "rev-parse", "HEAD"),
 	);
-	expect((await worktrees())[0]).toMatchObject(renamed);
+	expect(events).toEqual([{ kind: "updated", workspace: renamed }]);
+	const listed = await worktrees();
+	expect(listed.find((workspace) => workspace.id === ws.id)).toMatchObject(renamed);
+	expect(listed.find((workspace) => workspace.id === sibling.id)?.baseBranch).toBe(ws.branch);
 });
 
 test("renameWorkspace with lock:false renames name + branch but leaves renamed unset (provisional)", async () => {
