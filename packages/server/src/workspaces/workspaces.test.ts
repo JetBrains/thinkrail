@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Workspace } from "@thinkrail/contracts";
 import {
 	completeInitialTerminalReservation,
 	createWorkspace,
@@ -43,8 +44,8 @@ function git(cwd: string, ...args: string[]): void {
 	if (!result.success) throw new Error(`git ${args.join(" ")} failed`);
 }
 
-function worktrees(projectId = "p1") {
-	return listWorkspaces(projectId).filter((w) => w.kind !== "default");
+async function worktrees(projectId = "p1") {
+	return (await listWorkspaces(projectId)).filter((w) => w.kind !== "default");
 }
 
 beforeEach(() => {
@@ -101,9 +102,9 @@ test("the retired eligibility marker never gains initial-terminal provisioning o
 	expect(listWorkspaceRecords("p1").find((candidate) => candidate.id === ws.id)).not.toHaveProperty(
 		"initialTerminalPending",
 	);
-	expect(listWorkspaces("p1").find((candidate) => candidate.id === ws.id)).not.toHaveProperty(
-		"initialTerminalPending",
-	);
+	expect(
+		(await listWorkspaces("p1")).find((candidate) => candidate.id === ws.id),
+	).not.toHaveProperty("initialTerminalPending");
 });
 
 test("completing initial-terminal reservation clears the durable marker exactly once", async () => {
@@ -164,7 +165,7 @@ test("createWorkspace fails with git's own words when the base fetch fails", asy
 	await expect(create).rejects.toThrow(/Could not fetch origin\/main/);
 	await expect(create).rejects.toThrow(/does not appear to be a git repository/);
 	expect(existsSync(join(dataDir, "worktrees", "repo"))).toBe(false);
-	expect(worktrees()).toHaveLength(0);
+	expect(await worktrees()).toHaveLength(0);
 });
 
 test("createWorkspace names the refspec when a fetch succeeds without landing the ref", async () => {
@@ -183,7 +184,7 @@ test("createWorkspace names the refspec when a fetch succeeds without landing th
 
 	expect(message).toContain("check remote.origin.fetch");
 	expect(message).not.toContain("FETCH_HEAD");
-	expect(worktrees()).toHaveLength(0);
+	expect(await worktrees()).toHaveLength(0);
 });
 
 test("createWorkspace leaves the new branch with no upstream", async () => {
@@ -219,7 +220,7 @@ test("listExistingWorktrees shows unattached branch and detached checkouts only"
 	expect(candidates.some((candidate) => candidate.path === managed.worktreePath)).toBe(false);
 });
 
-test("openExistingWorktree adopts idempotently and removal never reclaims the checkout", () => {
+test("openExistingWorktree adopts idempotently and removal never reclaims the checkout", async () => {
 	const external = join(dataDir, "existing auth checkout");
 	git(repo, "worktree", "add", external, "-b", "feature/auth", "main");
 	writeFileSync(join(external, "staged.txt"), "keep staged\n");
@@ -269,7 +270,7 @@ test("openExistingWorktree adopts idempotently and removal never reclaims the ch
 	expect(gitOut(repo, "show-ref", "--verify", "refs/heads/feature/auth")).not.toBe("");
 });
 
-test("openExistingWorktree rejects detached and unrelated paths", () => {
+test("openExistingWorktree rejects detached and unrelated paths", async () => {
 	const detached = join(dataDir, "detached checkout");
 	git(repo, "worktree", "add", "--detach", detached, "main");
 	expect(() => openExistingWorktree("p1", detached)).toThrow(
@@ -283,7 +284,7 @@ test("openExistingWorktree rejects detached and unrelated paths", () => {
 	);
 });
 
-test("existing worktrees represented by another project are rejected before its Default exists", () => {
+test("existing worktrees represented by another project are rejected before its Default exists", async () => {
 	const external = join(dataDir, "existing auth checkout");
 	git(repo, "worktree", "add", external, "-b", "feature/auth", "main");
 	writeFileSync(
@@ -300,11 +301,11 @@ test("existing worktrees represented by another project are rejected before its 
 	);
 });
 
-test("external workspace branch metadata converges on refresh and list", () => {
+test("external workspace branch metadata converges on refresh and list", async () => {
 	const external = join(dataDir, "existing auth checkout");
 	git(repo, "worktree", "add", external, "-b", "feature/auth", "main");
 	const workspace = openExistingWorktree("p1", external);
-	listWorkspaces("p1");
+	await listWorkspaces("p1");
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((event) => events.push(event));
 
@@ -319,7 +320,7 @@ test("external workspace branch metadata converges on refresh and list", () => {
 
 	events.length = 0;
 	git(external, "switch", "-c", "feature/list-refresh");
-	const listed = listWorkspaces("p1").find((candidate) => candidate.id === workspace.id);
+	const listed = (await listWorkspaces("p1")).find((candidate) => candidate.id === workspace.id);
 	expect(listed?.branch).toBe("feature/list-refresh");
 	expect(listed?.name).toBe("existing auth checkout");
 	expect(listed?.baseBranch).toBe("main");
@@ -387,8 +388,8 @@ test("renameWorkspace moves the branch in place: record + git follow, the worktr
 	expect(gitOut(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads")).not.toContain(
 		"workspace-1",
 	);
-	expect(worktrees()[0]?.name).toBe("add login flow");
-	expect(worktrees()[0]?.branch).toBe("add-login-flow");
+	expect((await worktrees())[0]?.name).toBe("add login flow");
+	expect((await worktrees())[0]?.branch).toBe("add-login-flow");
 });
 
 test("renameWorkspace with lock:false renames name + branch but leaves renamed unset (provisional)", async () => {
@@ -399,7 +400,7 @@ test("renameWorkspace with lock:false renames name + branch but leaves renamed u
 	expect(renamed.branch).toBe("add-login-flow");
 	expect(renamed.renamed).toBeUndefined();
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe("add-login-flow");
-	expect(worktrees()[0]?.renamed).toBeUndefined();
+	expect((await worktrees())[0]?.renamed).toBeUndefined();
 
 	const locked = renameWorkspace(ws.id, "final name");
 	expect(locked.name).toBe("final name");
@@ -421,7 +422,7 @@ test("renameWorkspace re-points siblings basing their diff on the old branch", a
 	expect(dependent.baseBranch).toBe(first.branch);
 
 	renameWorkspace(first.id, "core work");
-	const after = listWorkspaces("p1");
+	const after = await listWorkspaces("p1");
 	expect(after.find((w) => w.id === dependent.id)?.baseBranch).toBe("core-work");
 	expect(after.find((w) => w.id === first.id)?.branch).toBe("core-work");
 });
@@ -442,6 +443,23 @@ test("setWorkspaceDiffBase re-points the diff target, leaving creation provenanc
 	expect(setWorkspaceDiffBase(ws.id, ws.baseBranch).diffBase).toBeUndefined();
 	expect(() => setWorkspaceDiffBase(ws.id, "   ")).toThrow(/must be a ref/);
 	expect(() => setWorkspaceDiffBase("nope", "release")).toThrow("Unknown workspace: nope");
+});
+
+test("a diff base re-pointed while badges resolve drops the badge, never pairing it with stale totals", async () => {
+	const ws = await createWorkspace("p1", "Iso");
+	writeFileSync(join(ws.worktreePath, "work.txt"), "one\ntwo\n");
+	git(ws.worktreePath, "add", "-A");
+	git(ws.worktreePath, "commit", "-m", "branch work");
+	expect((await listWorkspaces("p1")).find((w) => w.id === ws.id)?.diffStats).toEqual({
+		added: 2,
+		removed: 0,
+	});
+
+	const listing = listWorkspaces("p1");
+	setWorkspaceDiffBase(ws.id, gitOut(ws.worktreePath, "rev-parse", "HEAD"));
+	const listed = (await listing).find((w) => w.id === ws.id);
+	expect(listed?.diffBase).toBeDefined();
+	expect(listed?.diffStats).toBeUndefined();
 });
 
 test("renameWorkspace re-points a sibling whose diff TARGET was the renamed branch", async () => {
@@ -501,7 +519,7 @@ test("createWorkspace rejects a closed project — a stale or rogue client can't
 	await expect(createWorkspace("p1")).rejects.toThrow(/Unknown project/);
 });
 
-test("renameWorkspace throws on an unknown workspace", () => {
+test("renameWorkspace throws on an unknown workspace", async () => {
 	expect(() => renameWorkspace("nope", "anything")).toThrow("Unknown workspace: nope");
 });
 
@@ -528,11 +546,11 @@ test("creating after a rename skips the freed name whose worktree dir is still o
 
 test("forgetWorkspace drops the record + returns it, but leaves the worktree for a separate reclaim", async () => {
 	const ws = await createWorkspace("p1");
-	expect(worktrees()).toHaveLength(1);
+	expect(await worktrees()).toHaveLength(1);
 
 	const forgotten = forgetWorkspace(ws.id);
 	expect(forgotten?.id).toBe(ws.id);
-	expect(worktrees()).toHaveLength(0);
+	expect(await worktrees()).toHaveLength(0);
 	const before = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
 	expect(new TextDecoder().decode(before.stdout)).toContain(ws.worktreePath);
 
@@ -565,24 +583,24 @@ test("a null publisher makes lifecycle emits silent no-ops", async () => {
 	setWorkspacePublisher(null);
 	const ws = await createWorkspace("p1");
 	expect(() => removeWorkspace(ws.id)).not.toThrow();
-	expect(worktrees()).toHaveLength(0);
+	expect(await worktrees()).toHaveLength(0);
 });
 
 test("removeWorkspace cleans up even when the worktree dir is already gone", async () => {
 	const ws = await createWorkspace("p1");
-	expect(worktrees()).toHaveLength(1);
+	expect(await worktrees()).toHaveLength(1);
 
 	rmSync(ws.worktreePath, { recursive: true, force: true });
 
 	expect(() => removeWorkspace(ws.id)).not.toThrow();
-	expect(worktrees()).toHaveLength(0);
+	expect(await worktrees()).toHaveLength(0);
 
 	const list = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
 	expect(new TextDecoder().decode(list.stdout)).not.toContain(ws.worktreePath);
 });
 
 test("listWorkspaces ensures exactly one Default workspace, pinned first, with folder-truth fields", async () => {
-	const first = listWorkspaces("p1");
+	const first = await listWorkspaces("p1");
 	const def = first[0];
 	expect(def?.kind).toBe("default");
 	expect(def?.name).toBe("Default");
@@ -592,12 +610,12 @@ test("listWorkspaces ensures exactly one Default workspace, pinned first, with f
 	expect(def?.renamed).toBe(true);
 	expect(def?.initialTerminalPending).toBe(true);
 
-	const again = listWorkspaces("p1");
+	const again = await listWorkspaces("p1");
 	expect(again.filter((w) => w.kind === "default")).toHaveLength(1);
 	expect(again[0]?.id).toBe(def?.id);
 
 	await createWorkspace("p1");
-	const rows = listWorkspaces("p1");
+	const rows = await listWorkspaces("p1");
 	expect(rows[0]?.kind).toBe("default");
 	expect(rows).toHaveLength(2);
 });
@@ -609,12 +627,12 @@ test("the Default workspace's branch and base refresh from the folder on each li
 	git(repo, "push", "origin", "main");
 	git(repo, "fetch", "origin");
 
-	expect(listWorkspaces("p1")[0]?.baseBranch).toBe("origin/main");
+	expect((await listWorkspaces("p1"))[0]?.baseBranch).toBe("origin/main");
 
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((e) => events.push(e));
 	git(repo, "switch", "-c", "feature/x");
-	const def = listWorkspaces("p1")[0];
+	const def = (await listWorkspaces("p1"))[0];
 	expect(def?.branch).toBe("feature/x");
 	expect(def?.baseBranch).toBe("origin/main");
 	expect(events).toHaveLength(1);
@@ -623,24 +641,24 @@ test("the Default workspace's branch and base refresh from the folder on each li
 		workspace: { branch: "feature/x", kind: "default" },
 	});
 
-	listWorkspaces("p1");
+	await listWorkspaces("p1");
 	expect(events).toHaveLength(1);
 
 	writeFileSync(join(repo, "new.txt"), "one\ntwo\n");
 	git(repo, "add", "-A");
 	git(repo, "commit", "-m", "feature work");
-	expect(listWorkspaces("p1")[0]?.diffStats?.added).toBe(2);
+	expect((await listWorkspaces("p1"))[0]?.diffStats?.added).toBe(2);
 
 	git(repo, "switch", "main");
 	writeFileSync(join(repo, "upstream.txt"), "a\nb\nc\n");
 	git(repo, "add", "-A");
 	git(repo, "commit", "-m", "upstream work");
 	git(repo, "switch", "feature/x");
-	expect(listWorkspaces("p1")[0]?.diffStats).toEqual({ added: 2, removed: 0 });
+	expect((await listWorkspaces("p1"))[0]?.diffStats).toEqual({ added: 2, removed: 0 });
 });
 
 test("refreshUserOwnedWorkspace re-syncs and publishes Default drift off the list path", async () => {
-	listWorkspaces("p1");
+	await listWorkspaces("p1");
 	const def = listWorkspaceRecords("p1").find((w) => w.kind === "default");
 	if (!def) throw new Error("expected the ensured Default workspace");
 	const worktree = await createWorkspace("p1", "Iso");
@@ -663,8 +681,8 @@ test("refreshUserOwnedWorkspace re-syncs and publishes Default drift off the lis
 	expect(events).toHaveLength(1);
 });
 
-test("the Default workspace is non-removable and non-renamable — loud server-side guards", () => {
-	const def = listWorkspaces("p1")[0];
+test("the Default workspace is non-removable and non-renamable — loud server-side guards", async () => {
+	const def = (await listWorkspaces("p1"))[0];
 	if (!def) throw new Error("expected the ensured Default workspace");
 
 	expect(() => forgetWorkspace(def.id)).toThrow("The Default workspace cannot be removed");
@@ -674,11 +692,11 @@ test("the Default workspace is non-removable and non-renamable — loud server-s
 	);
 	reclaimWorktree(def);
 	expect(existsSync(join(repo, "README.md"))).toBe(true);
-	expect(listWorkspaces("p1")[0]?.id).toBe(def.id);
+	expect((await listWorkspaces("p1"))[0]?.id).toBe(def.id);
 });
 
-test("duplicate Default records (out-of-band corruption) collapse to the oldest", () => {
-	const def = listWorkspaces("p1")[0];
+test("duplicate Default records (out-of-band corruption) collapse to the oldest", async () => {
+	const def = (await listWorkspaces("p1"))[0];
 	if (!def) throw new Error("expected the ensured Default workspace");
 
 	const raw = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8"));
@@ -687,7 +705,7 @@ test("duplicate Default records (out-of-band corruption) collapse to the oldest"
 
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((e) => events.push(e));
-	const rows = listWorkspaces("p1");
+	const rows = await listWorkspaces("p1");
 	expect(rows.filter((w) => w.kind === "default")).toHaveLength(1);
 	expect(rows[0]?.id).toBe(def.id);
 	expect(events).toEqual([{ kind: "removed", projectId: "p1", id: "dupe" }]);
@@ -702,12 +720,12 @@ test("a concurrent list's Default-ensure survives createWorkspace's awaited fall
 	git(repo, "update-ref", "-d", "refs/remotes/origin/feature-x");
 
 	const pending = createWorkspace("p1", undefined, "origin/feature-x");
-	const def = listWorkspaces("p1")[0];
+	const def = (await listWorkspaces("p1"))[0];
 	expect(def?.kind).toBe("default");
 
 	const ws = await pending;
 	expect(ws.baseBranch).toBe("origin/feature-x");
-	const rows = listWorkspaces("p1");
+	const rows = await listWorkspaces("p1");
 	expect(rows.filter((w) => w.kind === "default")).toHaveLength(1);
 	expect(rows[0]?.id).toBe(def?.id);
 	expect(rows).toHaveLength(2);
@@ -720,8 +738,8 @@ test("ensureWorkspaceScratchDir refuses a missing workspace root instead of resu
 	expect(existsSync(ws.worktreePath)).toBe(false);
 });
 
-test("ensureWorkspaceScratchDir never follows symlinks — the checkout controls these paths", () => {
-	const def = listWorkspaces("p1")[0];
+test("ensureWorkspaceScratchDir never follows symlinks — the checkout controls these paths", async () => {
+	const def = (await listWorkspaces("p1"))[0];
 	if (!def) throw new Error("expected the ensured Default workspace");
 	const outside = join(dataDir, "outside");
 	mkdirSync(outside);
@@ -738,15 +756,15 @@ test("ensureWorkspaceScratchDir never follows symlinks — the checkout controls
 	expect(existsSync(planted)).toBe(false);
 });
 
-test("reclaimWorktree refuses a record pointing at the project folder even without the kind flag", () => {
-	const def = listWorkspaces("p1")[0];
+test("reclaimWorktree refuses a record pointing at the project folder even without the kind flag", async () => {
+	const def = (await listWorkspaces("p1"))[0];
 	if (!def) throw new Error("expected the ensured Default workspace");
 	const { kind: _dropped, ...corrupt } = def;
 	reclaimWorktree(corrupt);
 	expect(existsSync(join(repo, "README.md"))).toBe(true);
 });
 
-test("an unborn repo's Default never persists the literal HEAD as its base", () => {
+test("an unborn repo's Default never persists the literal HEAD as its base", async () => {
 	const bare = join(dataDir, "unborn");
 	mkdirSync(bare);
 	git(bare, "init", "-b", "main");
@@ -754,25 +772,43 @@ test("an unborn repo's Default never persists the literal HEAD as its base", () 
 	projects.push({ id: "p2", name: "unborn", path: bare, slug: "unborn", lastOpened: 1 });
 	writeFileSync(join(dataDir, "projects.json"), JSON.stringify(projects));
 
-	const def = listWorkspaces("p2")[0];
+	const def = (await listWorkspaces("p2"))[0];
 	expect(def?.branch).toBe("main");
 	expect(def?.baseBranch).toBe("main");
 });
 
-test("ensuring the Default emits created once; listing never writes into the project folder", () => {
+test("ensuring the Default emits created once; listing never writes into the project folder", async () => {
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((e) => events.push(e));
 
-	listWorkspaces("p1");
-	listWorkspaces("p1");
+	await listWorkspaces("p1");
+	await listWorkspaces("p1");
 	expect(events.map((e) => e.kind)).toEqual(["created"]);
 
 	expect(existsSync(join(repo, ".thinkrail"))).toBe(false);
-	const def = listWorkspaces("p1")[0];
+	const def = (await listWorkspaces("p1"))[0];
 	if (!def) throw new Error("expected the ensured Default workspace");
 	ensureWorkspaceScratchDir(def);
 	expect(readFileSync(join(repo, ".thinkrail", "context", ".gitignore"), "utf8")).toBe("*\n");
 	expect(gitOut(repo, "status", "--porcelain")).not.toContain(".thinkrail");
+});
+
+test("a diff-range execution failure omits only that workspace's badge", async () => {
+	const workspace = {
+		id: "bad-range",
+		projectId: "p1",
+		name: "bad range",
+		branch: "main",
+		baseBranch: "main",
+		diffBase: "bad\u0000ref",
+		worktreePath: repo,
+		createdAt: 1,
+	} as Workspace;
+	writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify([workspace]));
+
+	const row = (await listWorkspaces("p1")).find((candidate) => candidate.id === workspace.id);
+	expect(row?.id).toBe(workspace.id);
+	expect(row && "diffStats" in row).toBe(false);
 });
 
 test("includeDiffStats: false keeps membership/order/Default ensure while skipping the diff-stat fan-out", async () => {
@@ -784,12 +820,15 @@ test("includeDiffStats: false keeps membership/order/Default ensure while skippi
 	git(ws.worktreePath, "add", "-A");
 	git(ws.worktreePath, "commit", "-m", "branch work");
 
-	const light = listWorkspaces("p1", { includeDiffStats: false });
+	const light = await listWorkspaces("p1", { includeDiffStats: false });
 	expect(light.map((w) => w.kind ?? "worktree")).toEqual(["default", "worktree"]);
 	expect(events.map((e) => e.kind)).toContain("created");
 	expect(light.every((w) => w.diffStats === undefined)).toBe(true);
 
-	for (const full of [listWorkspaces("p1"), listWorkspaces("p1", { includeDiffStats: true })]) {
+	for (const full of await Promise.all([
+		listWorkspaces("p1"),
+		listWorkspaces("p1", { includeDiffStats: true }),
+	])) {
 		expect(full.map((w) => w.id)).toEqual(light.map((w) => w.id));
 		expect(full.find((w) => w.id === ws.id)?.diffStats).toEqual({ added: 2, removed: 0 });
 	}

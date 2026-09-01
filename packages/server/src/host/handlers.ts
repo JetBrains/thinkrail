@@ -136,6 +136,7 @@ import {
 	removeTodo,
 	requestTodoFix,
 	rollbackTodoFix,
+	settleChangeArtifacts,
 	type TodoReviewRecord,
 	updateTodo,
 } from "../todos";
@@ -161,9 +162,11 @@ import { provisionInitialTerminal } from "./initialTerminal";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
 import { withReviewLock } from "./reviewLock";
 import {
+	claimItemFix,
 	isItemUnderActiveReview,
 	itemFixFindings,
 	markClientStale,
+	releaseItemFix,
 	startReviewAllFlow,
 	startTodoReviewFlow,
 } from "./todoReview";
@@ -179,6 +182,7 @@ type Handler = (params: unknown, ctx: RequestContext) => unknown | Promise<unkno
 async function archiveTeardown(ws: Workspace): Promise<void> {
 	try {
 		await removeWorkspaceSessions(ws.id, ws.worktreePath);
+		await settleChangeArtifacts(ws.id);
 		reclaimWorktree(ws);
 	} catch {
 		log.warn(`workspace archive teardown failed for ${ws.id}`);
@@ -215,11 +219,12 @@ function fireTodoFixPrompt(
 	p: { workspaceId: string; sessionId: string; id: string },
 	pkg: string,
 	previous: TodoReviewRecord | undefined,
+	requested: TodoReviewRecord,
 	findingIds: string[] = [],
 ): void {
 	void ackSend(followUpSession(p.sessionId, pkg))
 		.then(undefined, (err) => {
-			rollbackTodoFix(p, previous);
+			rollbackTodoFix(p, previous, requested);
 			if (findingIds.length > 0) rollbackSend(p.workspaceId, findingIds, p.sessionId);
 			notifyExtUi(
 				p.sessionId,
@@ -229,7 +234,8 @@ function fireTodoFixPrompt(
 		})
 		.catch((err) => {
 			console.warn(`todo fix rollback failed: ${err instanceof Error ? err.message : err}`);
-		});
+		})
+		.finally(() => releaseItemFix(p.sessionId, p.id));
 }
 
 async function sendToFileChat(
@@ -238,13 +244,13 @@ async function sendToFileChat(
 	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: string },
 ): Promise<ReviewSendResult> {
 	const ids = comments.map((c) => c.id);
-	const pkg = buildSendPackage(workspaceId, comments);
+	const pkg = await buildSendPackage(workspaceId, comments);
 	const ws = getWorkspace(workspaceId);
 	const first = comments[0];
 	const path = first ? reviewSessionKey(first) : REVIEW_LEVEL_KEY;
-	const existing = opts.sessionId ?? fileReviewSession(workspaceId, path);
+	const existing = opts.sessionId ?? (await fileReviewSession(workspaceId, path));
 	if (existing && (await ensureSessionAttached(existing, workspaceId, ws.worktreePath))) {
-		markCommentsSent(workspaceId, ids, existing);
+		await markCommentsSent(workspaceId, ids, existing);
 		fireReviewPrompt(workspaceId, ids, existing, pkg, followUpSession);
 		return {
 			sessionId: existing,
@@ -271,7 +277,7 @@ async function sendToFileChat(
 			params: bucketProviderModel(created.model.provider, created.model.id),
 		});
 	}
-	markCommentsSent(workspaceId, ids, created.sessionId);
+	await markCommentsSent(workspaceId, ids, created.sessionId);
 	fireReviewPrompt(workspaceId, ids, created.sessionId, pkg);
 	return { ...created, reused: false };
 }
@@ -307,11 +313,11 @@ const handlers: Record<string, Handler> = {
 		const p = params as { projectId: string; path: string };
 		return provisionInitialTerminal(openExistingWorktree(p.projectId, p.path));
 	},
-	"workspace.list": (params) => {
+	"workspace.list": async (params) => {
 		const p = params as { projectId: string; includeDiffStats?: boolean };
-		return listWorkspaces(p.projectId, { includeDiffStats: p.includeDiffStats ?? true }).map(
-			(workspace) => ({ ...workspace, ...provisionInitialTerminal(workspace) }),
-		);
+		return (
+			await listWorkspaces(p.projectId, { includeDiffStats: p.includeDiffStats ?? true })
+		).map((workspace) => ({ ...workspace, ...provisionInitialTerminal(workspace) }));
 	},
 	"workspace.openReview": async (params) => {
 		const ws = getWorkspace((params as { workspaceId: string }).workspaceId);
@@ -399,13 +405,7 @@ const handlers: Record<string, Handler> = {
 		),
 	"todo.remove": (params) => {
 		const p = params as { workspaceId: string; sessionId: string; id: string };
-		// See host/SPEC.md (todo.remove) — this covers the tail removeTodo's own pending check can't.
-		if (isItemUnderActiveReview(p.sessionId, p.id)) {
-			throw new Error(
-				`TODO "${p.id}" is currently under review — cancel or wait for the review to finish before removing it.`,
-			);
-		}
-		return removeTodo(p);
+		return removeTodo(p, () => isItemUnderActiveReview(p.sessionId, p.id));
 	},
 	"todo.review": (params) =>
 		approveTodoReview(params as { workspaceId: string; sessionId: string; id: string }),
@@ -415,21 +415,47 @@ const handlers: Record<string, Handler> = {
 		startReviewAllFlow(params as { workspaceId: string; sessionId: string }),
 	"todo.requestFix": async (params) => {
 		const p = params as { workspaceId: string; sessionId: string; id: string; feedback: string };
-		const ws = getWorkspace(p.workspaceId);
-		const { pkg, previous } = requestTodoFix(p);
-		if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath))) {
-			rollbackTodoFix(p, previous);
-			throw new Error("This plan's chat is no longer on disk — can't send the fix request.");
+		if (!claimItemFix(p.sessionId, p.id))
+			throw new Error(`A fix request is already active for ${p.id}.`);
+		try {
+			const ws = getWorkspace(p.workspaceId);
+			if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath))) {
+				throw new Error("This plan's chat is no longer on disk — can't send the fix request.");
+			}
+			const prepared = await withReviewLock(p.workspaceId, async () => {
+				const request = requestTodoFix(p);
+				try {
+					const findings = await itemFixFindings(p);
+					if (findings.length === 0)
+						return { ...request, fixText: request.pkg, findingIds: [] as string[] };
+					const fixText = `${request.pkg}\n\n${await buildSendPackage(p.workspaceId, findings)}`;
+					const findingIds = findings.map((c) => c.id);
+					await markCommentsSent(p.workspaceId, findingIds, p.sessionId);
+					return { ...request, fixText, findingIds };
+				} catch (error) {
+					rollbackTodoFix(p, request.previous, request.requested);
+					throw error;
+				}
+			});
+			try {
+				fireTodoFixPrompt(
+					p,
+					prepared.fixText,
+					prepared.previous,
+					prepared.requested,
+					prepared.findingIds,
+				);
+			} catch (error) {
+				if (prepared.findingIds.length > 0)
+					rollbackSend(p.workspaceId, prepared.findingIds, p.sessionId);
+				rollbackTodoFix(p, prepared.previous, prepared.requested);
+				throw error;
+			}
+			return { ok: true } as const;
+		} catch (error) {
+			releaseItemFix(p.sessionId, p.id);
+			throw error;
 		}
-		const { fixText, findingIds } = await withReviewLock(p.workspaceId, async () => {
-			const findings = itemFixFindings(p);
-			if (findings.length === 0) return { fixText: pkg, findingIds: [] as string[] };
-			const ids = findings.map((c) => c.id);
-			markCommentsSent(p.workspaceId, ids, p.sessionId);
-			return { fixText: `${pkg}\n\n${buildSendPackage(p.workspaceId, findings)}`, findingIds: ids };
-		});
-		fireTodoFixPrompt(p, fixText, previous, findingIds);
-		return { ok: true } as const;
 	},
 	"git.status": (params) => {
 		const p = params as { workspaceId: string; scope?: GitDiffScope };
@@ -610,7 +636,7 @@ const handlers: Record<string, Handler> = {
 	"session.delete": async (params) => {
 		const p = params as { workspaceId: string; sessionId: string };
 		await deleteSession(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
-		removeSessionTodoWindows(p);
+		await removeSessionTodoWindows(p);
 		return { ok: true } as const;
 	},
 	"session.setModel": async (params) => {
@@ -719,10 +745,11 @@ const handlers: Record<string, Handler> = {
 			limit: clampLimit(p.limit),
 		});
 	},
-	"review.get": (params) => {
+
+	"review.get": async (params) => {
 		const p = params as { workspaceId: string };
 		ensureWatch(p.workspaceId);
-		return markClientStale(getReviewSnapshot(p.workspaceId), p.workspaceId);
+		return markClientStale(await getReviewSnapshot(p.workspaceId), p.workspaceId);
 	},
 	"review.commentAdd": (params) => {
 		const p = params as {
@@ -746,21 +773,21 @@ const handlers: Record<string, Handler> = {
 	"review.commentDelete": (params) => {
 		const p = params as { workspaceId: string; id: string };
 		return withReviewLock(p.workspaceId, async () => {
-			deleteComment(p.workspaceId, p.id);
+			await deleteComment(p.workspaceId, p.id);
 			return { ok: true } as const;
 		});
 	},
 	"review.fileDone": (params) => {
 		const p = params as { workspaceId: string; path: string };
 		return withReviewLock(p.workspaceId, async () => {
-			markFileDone(p.workspaceId, p.path);
+			await markFileDone(p.workspaceId, p.path);
 			return { ok: true } as const;
 		});
 	},
 	"review.close": (params) => {
 		const p = params as { workspaceId: string };
 		return withReviewLock(p.workspaceId, async () => {
-			clearReview(p.workspaceId);
+			await clearReview(p.workspaceId);
 			return { ok: true } as const;
 		});
 	},
@@ -772,8 +799,8 @@ const handlers: Record<string, Handler> = {
 			thinkingLevel?: ThinkingLevel;
 			sessionId?: string;
 		};
-		return withReviewLock(p.workspaceId, () =>
-			sendToFileChat(p.workspaceId, sendableComments(p.workspaceId, [p.id]), p),
+		return withReviewLock(p.workspaceId, async () =>
+			sendToFileChat(p.workspaceId, await sendableComments(p.workspaceId, [p.id]), p),
 		);
 	},
 	"review.sendBatch": (params) => {
@@ -785,7 +812,7 @@ const handlers: Record<string, Handler> = {
 			sessionId?: string;
 		};
 		return withReviewLock(p.workspaceId, async () => {
-			const comments = sendableComments(p.workspaceId, p.commentIds);
+			const comments = await sendableComments(p.workspaceId, p.commentIds);
 			const groups = new Map<string, typeof comments>();
 			for (const comment of comments) {
 				const key = reviewSessionKey(comment);

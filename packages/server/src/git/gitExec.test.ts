@@ -60,9 +60,10 @@ test("nonInteractiveGitEnv layers over process.env and leaves the user's ssh cli
 posix("the user's core.sshCommand runs unmodified — we add no options of our own", async () => {
 	sshRemoteVia('echo "ARGV: $*" >&2\nexit 42');
 
-	const result = await gitAsync(repo, ["fetch", "origin"]);
+	const result = await gitAsync(repo, ["fetch", "origin"], { network: true });
 
 	expect(result.ok).toBe(false);
+	expect(result.failure).toBeUndefined();
 	expect(result.err).toContain("example.invalid git-upload-pack");
 	expect(result.err).not.toContain("BatchMode");
 });
@@ -70,7 +71,10 @@ posix("the user's core.sshCommand runs unmodified — we add no options of our o
 posix("a grandchild outliving git does not turn a finished fetch into a timeout", async () => {
 	sshRemoteVia("sleep 5 </dev/null >/dev/null &\nexit 0");
 
-	const result = await gitAsync(repo, ["fetch", "origin"], { timeoutMs: 5_000 });
+	const result = await gitAsync(repo, ["fetch", "origin"], {
+		network: true,
+		timeoutMs: 5_000,
+	});
 
 	expect(result.ok).toBe(false);
 	expect(result.err).toContain("Could not read from remote repository");
@@ -81,21 +85,40 @@ posix("gitAsync ends a stalled fetch at the timeout and names the likely cause",
 	const reached = sshRemoteVia("sleep 30");
 
 	const started = Date.now();
-	const result = await gitAsync(repo, ["fetch", "origin"], { timeoutMs: 500 });
+	const result = await gitAsync(repo, ["fetch", "origin"], {
+		network: true,
+		timeoutMs: 500,
+	});
 	const elapsed = Date.now() - started;
 
 	expect(existsSync(reached)).toBe(true);
 	expect(result.ok).toBe(false);
+	expect(result.failure).toBe("timeout");
 	expect(result.err).toContain("timed out after");
 	expect(result.err).toContain("the remote never answered");
 	expect(result.err).not.toMatch(/git (is )?waiting for SSH/);
 	expect(elapsed).toBeLessThan(5_000);
 });
 
+posix("a stalled local read reports only that git did not exit", async () => {
+	const result = await gitAsync(repo, ["-c", "alias.wait=!sleep 30", "wait"], {
+		timeoutMs: 500,
+	});
+
+	expect(result.ok).toBe(false);
+	expect(result.err).toContain("timed out after");
+	expect(result.err).toContain("git did not exit");
+	expect(result.err).not.toContain("remote");
+	expect(result.err).not.toContain("ssh-add");
+});
+
 posix("a stalled fetch keeps what git actually wrote before the kill", async () => {
 	sshRemoteVia('echo "REMOTE-SAID-THIS" >&2\nsleep 30');
 
-	const result = await gitAsync(repo, ["fetch", "origin"], { timeoutMs: 500 });
+	const result = await gitAsync(repo, ["fetch", "origin"], {
+		network: true,
+		timeoutMs: 500,
+	});
 
 	expect(result.ok).toBe(false);
 	expect(result.err).toContain("timed out after");
@@ -106,12 +129,24 @@ posix("a stalled fetch keeps what git actually wrote before the kill", async () 
 posix("an oversized stderr is truncated before it can reach a client", async () => {
 	sshRemoteVia("head -c 40000 /dev/zero | tr '\\0' 'x' >&2\nexit 1");
 
-	const result = await gitAsync(repo, ["fetch", "origin"]);
+	const result = await gitAsync(repo, ["fetch", "origin"], { network: true });
 
 	expect(result.ok).toBe(false);
 	expect(result.err.length).toBeLessThanOrEqual(2_000);
 	expect(result.err).toContain("… (truncated) …");
 	expect(result.err).toContain("Could not read from remote repository");
+});
+
+test("gitAsync distinguishes a launch failure from git's own nonzero exit", async () => {
+	const path = process.env.PATH;
+	process.env.PATH = join(repo, "missing-bin");
+	const result = await gitAsync(repo, ["status"]);
+	if (path === undefined) delete process.env.PATH;
+	else process.env.PATH = path;
+
+	expect(result.ok).toBe(false);
+	expect(result.failure).toBe("launch");
+	expect(result.err).not.toBe("");
 });
 
 test("git reports git's own stderr, trimmed", () => {

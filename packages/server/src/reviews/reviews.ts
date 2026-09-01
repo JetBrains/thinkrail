@@ -21,7 +21,7 @@ import type {
 import { diffBaseRef, readBlobAt, resolveCommitOid, resolveDiffRange } from "../git";
 import { logger } from "../log";
 import { dataDir } from "../persistence";
-import { getWorkspace } from "../workspaces";
+import { getWorkspace, workspaceDiffKey } from "../workspaces";
 import { buildTextQuote, hashContent, lineRangeOf, reanchor, textQuoteOf } from "./anchoring";
 import { renderPackage } from "./packageRender";
 
@@ -153,20 +153,25 @@ function readWorktreeFile(worktreePath: string, path: string): string | null {
 	}
 }
 
-function freshSnapshot(workspaceId: string): ReviewSnapshot {
-	const ws = getWorkspace(workspaceId);
-	const ref = resolveDiffRange(ws).originalRef ?? diffBaseRef(ws);
-	const base = resolveCommitOid(ws.worktreePath, ref);
-	return {
-		review: {
-			id: `rev_${randomUUID().slice(0, 8)}`,
-			workspaceId,
-			status: "open",
-			baseSha: base ?? ref,
-			createdAt: Date.now(),
-		},
-		comments: [],
-	};
+async function freshSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
+	for (;;) {
+		const ws = getWorkspace(workspaceId);
+		const diffKey = workspaceDiffKey(ws);
+		const ref = (await resolveDiffRange(ws)).originalRef ?? diffBaseRef(ws);
+		const current = getWorkspace(workspaceId);
+		if (workspaceDiffKey(current) !== diffKey) continue;
+		const base = resolveCommitOid(current.worktreePath, ref);
+		return {
+			review: {
+				id: `rev_${randomUUID().slice(0, 8)}`,
+				workspaceId,
+				status: "open",
+				baseSha: base ?? ref,
+				createdAt: Date.now(),
+			},
+			comments: [],
+		};
+	}
 }
 
 function archiveRecords(workspaceId: string, snapshot: ReviewSnapshot): void {
@@ -181,13 +186,37 @@ function archiveRecords(workspaceId: string, snapshot: ReviewSnapshot): void {
 	if (archived.comments.length > 0) saveArchive(workspaceId, archived);
 }
 
-function ensureSnapshot(workspaceId: string): ReviewSnapshot {
+const ensuring = new Map<string, Promise<ReviewSnapshot>>();
+
+function ensureSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
+	const pending = ensuring.get(workspaceId);
+	if (pending) return pending;
 	const existing = load(workspaceId);
-	if (existing?.review.status === "open") return existing;
-	const snapshot = freshSnapshot(workspaceId);
-	if (existing) archiveRecords(workspaceId, existing);
-	save(workspaceId, snapshot);
-	return snapshot;
+	if (existing?.review.status === "open") return Promise.resolve(existing);
+	const flight = (async () => {
+		const snapshot = await freshSnapshot(workspaceId);
+		if (existing) archiveRecords(workspaceId, existing);
+		save(workspaceId, snapshot);
+		return snapshot;
+	})().finally(() => {
+		if (ensuring.get(workspaceId) === flight) ensuring.delete(workspaceId);
+	});
+	ensuring.set(workspaceId, flight);
+	return flight;
+}
+
+function openSnapshot(workspaceId: string): ReviewSnapshot | null {
+	const existing = load(workspaceId);
+	return existing?.review.status === "open" ? existing : null;
+}
+
+async function mutateSnapshot<T>(
+	workspaceId: string,
+	mutate: (snapshot: ReviewSnapshot) => T,
+): Promise<T> {
+	const existing = openSnapshot(workspaceId);
+	if (existing) return mutate(existing);
+	return mutate(await ensureSnapshot(workspaceId));
 }
 
 function reanchorSnapshot(workspaceId: string, snapshot: ReviewSnapshot): boolean {
@@ -207,16 +236,17 @@ function reanchorSnapshot(workspaceId: string, snapshot: ReviewSnapshot): boolea
 	return changed;
 }
 
-export function getReviewSnapshot(workspaceId: string): ReviewSnapshot {
-	const snapshot = ensureSnapshot(workspaceId);
+export async function getReviewSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
+	const snapshot = openSnapshot(workspaceId);
+	if (!snapshot) return ensureSnapshot(workspaceId);
 	if (reanchorSnapshot(workspaceId, snapshot)) persistAndPublish(workspaceId, snapshot);
 	return snapshot;
 }
 
 export function reanchorWorkspace(workspaceId: string): void {
 	try {
-		const snapshot = load(workspaceId);
-		if (snapshot?.review.status !== "open" || snapshot.comments.length === 0) return;
+		const snapshot = openSnapshot(workspaceId);
+		if (!snapshot || snapshot.comments.length === 0) return;
 		if (reanchorSnapshot(workspaceId, snapshot)) persistAndPublish(workspaceId, snapshot);
 	} catch {}
 }
@@ -251,65 +281,68 @@ function captureAnchor(anchor: ReviewAnchor, content: string): ReviewAnchor {
 	return { ...anchor, contentHash: hashContent(content), selectors };
 }
 
-export function addComment(input: AddCommentInput): ReviewComment {
+export async function addComment(input: AddCommentInput): Promise<ReviewComment> {
 	const body = input.body.trim();
 	if (!body) throw new Error("A comment body is required.");
 	if (input.kind !== "review" && !input.anchor?.path)
 		throw new Error(`A ${input.kind} comment requires an anchor path.`);
 	if (input.kind === "review" && input.anchor)
 		throw new Error("A review-level comment carries no anchor.");
-	const snapshot = ensureSnapshot(input.workspaceId);
 	let anchor = input.anchor;
-	if (anchor) {
+	if (anchor?.side === "base") {
 		const ws = getWorkspace(input.workspaceId);
-		if (anchor.side === "base") {
-			const originalRef = resolveDiffRange(ws, input.scope).originalRef;
-			if (!originalRef)
-				throw new Error("This diff has no base side to comment on (nothing precedes the change).");
-			const baseRef = resolveCommitOid(ws.worktreePath, originalRef);
-			if (!baseRef)
-				throw new Error(`Can't pin the base side of this diff: ${originalRef} names no commit.`);
-			const content = readBlobAt(ws.worktreePath, baseRef, anchor.path);
-			if (content === null)
-				throw new Error(`The base (${baseRef}) has no ${anchor.path} to comment on.`);
-			anchor = captureAnchor(
-				{ ...anchor, baseRef, ...(input.scope ? { scope: input.scope } : {}) },
-				content,
-			);
-		} else {
-			const content = readWorktreeFile(ws.worktreePath, anchor.path);
-			if (content !== null) anchor = captureAnchor(anchor, content);
-		}
+		const originalRef = (await resolveDiffRange(ws, input.scope)).originalRef;
+		if (!originalRef)
+			throw new Error("This diff has no base side to comment on (nothing precedes the change).");
+		const baseRef = resolveCommitOid(ws.worktreePath, originalRef);
+		if (!baseRef)
+			throw new Error(`Can't pin the base side of this diff: ${originalRef} names no commit.`);
+		const content = readBlobAt(ws.worktreePath, baseRef, anchor.path);
+		if (content === null)
+			throw new Error(`The base (${baseRef}) has no ${anchor.path} to comment on.`);
+		anchor = captureAnchor(
+			{ ...anchor, baseRef, ...(input.scope ? { scope: input.scope } : {}) },
+			content,
+		);
 	}
-	const comment: ReviewComment = {
-		id: `rc_${randomUUID().slice(0, 8)}`,
-		reviewId: snapshot.review.id,
-		kind: input.kind,
-		anchor,
-		body,
-		status: "draft",
-		anchorState: "anchored",
-		...(input.author === "agent" ? { author: "agent" as const } : {}),
-		...(input.origin ? { origin: input.origin } : {}),
-		createdAt: Date.now(),
-	};
-	snapshot.comments.push(comment);
-	const key = reviewSessionKey(comment);
-	if (snapshot.review.doneFiles?.includes(key))
-		snapshot.review.doneFiles = snapshot.review.doneFiles.filter((p) => p !== key);
-	persistAndPublish(input.workspaceId, snapshot);
-	return comment;
+	return mutateSnapshot(input.workspaceId, (snapshot) => {
+		let captured = anchor;
+		if (captured?.side === "worktree") {
+			const ws = getWorkspace(input.workspaceId);
+			const content = readWorktreeFile(ws.worktreePath, captured.path);
+			if (content !== null) captured = captureAnchor(captured, content);
+		}
+		const comment: ReviewComment = {
+			id: `rc_${randomUUID().slice(0, 8)}`,
+			reviewId: snapshot.review.id,
+			kind: input.kind,
+			anchor: captured,
+			body,
+			status: "draft",
+			anchorState: "anchored",
+			...(input.author === "agent" ? { author: "agent" as const } : {}),
+			...(input.origin ? { origin: input.origin } : {}),
+			createdAt: Date.now(),
+		};
+		snapshot.comments.push(comment);
+		const key = reviewSessionKey(comment);
+		if (snapshot.review.doneFiles?.includes(key))
+			snapshot.review.doneFiles = snapshot.review.doneFiles.filter((p) => p !== key);
+		persistAndPublish(input.workspaceId, snapshot);
+		return comment;
+	});
 }
 
-export function markFileDone(workspaceId: string, path: string): void {
-	const snapshot = ensureSnapshot(workspaceId);
-	const unresolved = snapshot.comments.some(
-		(c) => reviewSessionKey(c) === path && (c.status === "draft" || c.status === "sent"),
-	);
-	if (unresolved) throw new Error("The file still has unresolved comments.");
-	const done = snapshot.review.doneFiles ?? [];
-	if (!done.includes(path)) snapshot.review.doneFiles = [...done, path];
-	persistAndPublish(workspaceId, snapshot);
+export async function markFileDone(workspaceId: string, path: string): Promise<void> {
+	return mutateSnapshot(workspaceId, (snapshot) => {
+		const unresolved = snapshot.comments.some(
+			(c) => reviewSessionKey(c) === path && (c.status === "draft" || c.status === "sent"),
+		);
+		if (unresolved) throw new Error("The file still has unresolved comments.");
+		const done = snapshot.review.doneFiles ?? [];
+		if (!done.includes(path)) snapshot.review.doneFiles = [...done, path];
+		persistAndPublish(workspaceId, snapshot);
+	});
 }
 
 function mustFind(snapshot: ReviewSnapshot, id: string): ReviewComment {
@@ -318,65 +351,74 @@ function mustFind(snapshot: ReviewSnapshot, id: string): ReviewComment {
 	return comment;
 }
 
-export function updateComment(input: {
+export async function updateComment(input: {
 	workspaceId: string;
 	id: string;
 	body?: string;
 	status?: ReviewCommentStatus;
-}): ReviewComment {
-	const snapshot = ensureSnapshot(input.workspaceId);
-	const comment = mustFind(snapshot, input.id);
-	if (input.body !== undefined) {
-		if (comment.status !== "draft") throw new Error("Only a draft comment's text can be edited.");
-		if (!input.body.trim()) throw new Error("A comment body is required.");
-		comment.body = input.body.trim();
-	}
-	if (input.status !== undefined && input.status !== comment.status) {
-		if (input.status !== "resolved" && input.status !== "dismissed")
-			throw new Error(`A comment can only be resolved or dismissed — not set to ${input.status}.`);
-		if (comment.status !== "draft" && comment.status !== "sent")
-			throw new Error(`A ${comment.status} comment is final — add a new comment instead.`);
-		comment.status = input.status;
-		if (input.status === "resolved") {
-			comment.resolvedBy = "user";
-			comment.resolvedAt = Date.now();
+}): Promise<ReviewComment> {
+	return mutateSnapshot(input.workspaceId, (snapshot) => {
+		const comment = mustFind(snapshot, input.id);
+		if (input.body !== undefined) {
+			if (comment.status !== "draft") throw new Error("Only a draft comment's text can be edited.");
+			if (!input.body.trim()) throw new Error("A comment body is required.");
+			comment.body = input.body.trim();
 		}
-	}
-	persistAndPublish(input.workspaceId, snapshot);
-	return comment;
+		if (input.status !== undefined && input.status !== comment.status) {
+			if (input.status !== "resolved" && input.status !== "dismissed")
+				throw new Error(
+					`A comment can only be resolved or dismissed — not set to ${input.status}.`,
+				);
+			if (comment.status !== "draft" && comment.status !== "sent")
+				throw new Error(`A ${comment.status} comment is final — add a new comment instead.`);
+			comment.status = input.status;
+			if (input.status === "resolved") {
+				comment.resolvedBy = "user";
+				comment.resolvedAt = Date.now();
+			}
+		}
+		persistAndPublish(input.workspaceId, snapshot);
+		return comment;
+	});
 }
 
-export function setReflection(
+export async function setReflection(
 	workspaceId: string,
 	commentId: string,
 	reflection: NonNullable<ReviewComment["reflection"]>,
-): ReviewComment {
-	const snapshot = ensureSnapshot(workspaceId);
-	const comment = mustFind(snapshot, commentId);
-	comment.reflection = reflection;
-	persistAndPublish(workspaceId, snapshot);
-	return comment;
+): Promise<ReviewComment> {
+	return mutateSnapshot(workspaceId, (snapshot) => {
+		const comment = mustFind(snapshot, commentId);
+		comment.reflection = reflection;
+		persistAndPublish(workspaceId, snapshot);
+		return comment;
+	});
 }
 
-export function deleteComment(workspaceId: string, id: string): void {
-	const snapshot = ensureSnapshot(workspaceId);
-	const comment = mustFind(snapshot, id);
-	if (comment.status !== "draft")
-		throw new Error("Only a draft can be deleted — a sent comment is a record.");
-	snapshot.comments = snapshot.comments.filter((c) => c.id !== id);
-	persistAndPublish(workspaceId, snapshot);
+export async function deleteComment(workspaceId: string, id: string): Promise<void> {
+	return mutateSnapshot(workspaceId, (snapshot) => {
+		const comment = mustFind(snapshot, id);
+		if (comment.status !== "draft")
+			throw new Error("Only a draft can be deleted — a sent comment is a record.");
+		snapshot.comments = snapshot.comments.filter((c) => c.id !== id);
+		persistAndPublish(workspaceId, snapshot);
+	});
 }
 
-export function clearReview(workspaceId: string): ReviewSnapshot {
+export async function clearReview(workspaceId: string): Promise<ReviewSnapshot> {
+	await ensureSnapshot(workspaceId);
+	const fresh = await freshSnapshot(workspaceId);
 	const existing = load(workspaceId);
-	const fresh = freshSnapshot(workspaceId);
 	if (existing) archiveRecords(workspaceId, existing);
 	persistAndPublish(workspaceId, fresh);
 	return fresh;
 }
 
-export function sendableComments(workspaceId: string, commentIds?: string[]): ReviewComment[] {
-	const snapshot = getReviewSnapshot(workspaceId);
+export async function sendableComments(
+	workspaceId: string,
+	commentIds?: string[],
+): Promise<ReviewComment[]> {
+	const snapshot = await getReviewSnapshot(workspaceId);
 	const drafts = snapshot.comments.filter((c) => c.status === "draft");
 	if (!commentIds) {
 		if (drafts.length === 0) throw new Error("No draft comments to send.");
@@ -389,9 +431,12 @@ export function sendableComments(workspaceId: string, commentIds?: string[]): Re
 	});
 }
 
-export function buildSendPackage(workspaceId: string, comments: ReviewComment[]): string {
+export async function buildSendPackage(
+	workspaceId: string,
+	comments: ReviewComment[],
+): Promise<string> {
 	const ws = getWorkspace(workspaceId);
-	const snapshot = ensureSnapshot(workspaceId);
+	const snapshot = await ensureSnapshot(workspaceId);
 	return renderPackage({
 		review: snapshot.review,
 		branch: ws.branch,
@@ -407,24 +452,27 @@ export function reviewSessionKey(comment: Pick<ReviewComment, "anchor">): string
 	return comment.anchor?.path ?? REVIEW_LEVEL_KEY;
 }
 
-export function markCommentsSent(
+export async function markCommentsSent(
 	workspaceId: string,
 	commentIds: string[],
 	sessionId: string,
-): void {
-	const snapshot = ensureSnapshot(workspaceId);
-	const ids = new Set(commentIds);
-	for (const comment of snapshot.comments) {
-		if (!ids.has(comment.id)) continue;
-		comment.status = "sent";
-		comment.sentAt = Date.now();
-		comment.sessionId = sessionId;
-		snapshot.review.fileSessions = {
-			...snapshot.review.fileSessions,
-			[reviewSessionKey(comment)]: sessionId,
-		};
-	}
-	persistAndPublish(workspaceId, snapshot);
+): Promise<void> {
+	return mutateSnapshot(workspaceId, (snapshot) => {
+		const comments = commentIds.map((id) => mustFind(snapshot, id));
+		for (const comment of comments) {
+			if (comment.status !== "draft") throw new Error(`Comment ${comment.id} is not a draft.`);
+		}
+		for (const comment of comments) {
+			comment.status = "sent";
+			comment.sentAt = Date.now();
+			comment.sessionId = sessionId;
+			snapshot.review.fileSessions = {
+				...snapshot.review.fileSessions,
+				[reviewSessionKey(comment)]: sessionId,
+			};
+		}
+		persistAndPublish(workspaceId, snapshot);
+	});
 }
 
 export function rollbackSend(workspaceId: string, commentIds: string[], sessionId: string): void {
@@ -451,8 +499,11 @@ export function rollbackSend(workspaceId: string, commentIds: string[], sessionI
 	persistAndPublish(workspaceId, snapshot);
 }
 
-export function fileReviewSession(workspaceId: string, key: string): string | undefined {
-	return ensureSnapshot(workspaceId).review.fileSessions?.[key];
+export async function fileReviewSession(
+	workspaceId: string,
+	key: string,
+): Promise<string | undefined> {
+	return (await ensureSnapshot(workspaceId)).review.fileSessions?.[key];
 }
 
 function applyAgentResolution(

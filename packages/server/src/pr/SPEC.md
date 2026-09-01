@@ -37,11 +37,13 @@ the live `git symbolic-ref`), and an external (adopted) workspace can equally si
 this guard, Open PR would `git push origin <default-branch>` straight to the shared branch on an
 unprotected remote, publishing the commits before any PR could offer its review boundary. The client
 disables the Open PR affordances (header button, draft-PR menu item, the "ready to ship" banner) the
-same way for the same reason. **Before any of that, `refreshUserOwnedWorkspace(workspaceId)` resolves
-the LIVE branch for Default/external workspaces** (`workspaces`' same sync used by the fs-watcher tee)
-and persists it — a no-op for created workspaces, whose branch only ThinkRail ever moves. Without this,
-a branch switched in a terminal moments before pressing Open PR would push/open/compare against the
-STALE persisted branch until the async watcher next catches up: `ws` is read fresh right after, so the
+same way for the same reason. **`refreshUserOwnedWorkspace(workspaceId)` resolves the LIVE branch for
+Default/external workspaces** (`workspaces`' same sync used by the fs-watcher tee) and persists it — a
+no-op for created workspaces, whose branch only ThinkRail ever moves. Open PR validates once before its
+async dirty-file read (preserving the safe base-branch fast failure), then refreshes, reloads, and
+revalidates immediately after that await. Without both, a branch switched in a terminal while the Git
+read is in flight or moments before pressing Open PR would push/open/compare against the STALE persisted
+branch until the async watcher next catches up: the branch-sensitive `ws` is fresh, so the
 base guard, the push, the `gh` lookup/create, and the compare URL all derive from the one refreshed
 value. Then:
 1. No `origin` remote → throws (the client toasts it). Push failure → throws with git's stderr;

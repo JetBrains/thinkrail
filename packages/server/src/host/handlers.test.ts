@@ -79,7 +79,7 @@ test("todo.requestFix on a chat that isn't on disk rolls the record back and nev
 		title: "t",
 		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],
 	});
-	const finding = addComment({
+	const finding = await addComment({
 		workspaceId: workspace.id,
 		kind: "inline",
 		author: "agent",
@@ -102,7 +102,7 @@ test("todo.requestFix on a chat that isn't on disk rolls the record back and nev
 	).rejects.toThrow("no longer on disk");
 
 	expect(todoReviewRecord({ workspaceId: workspace.id, sessionId, id: todo.id })).toBeUndefined();
-	const after = getReviewSnapshot(workspace.id).comments.find((c) => c.id === finding.id);
+	const after = (await getReviewSnapshot(workspace.id)).comments.find((c) => c.id === finding.id);
 	expect(after?.status).toBe("draft");
 	expect(after?.sessionId).toBeUndefined();
 });

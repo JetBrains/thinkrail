@@ -10,6 +10,7 @@ export interface TodoReviewRecord {
 	feedback?: string;
 	at: string;
 	reviewedBy?: "agent";
+	requestId?: string;
 }
 
 export interface TodoReviewMeta {
@@ -43,6 +44,7 @@ function isRecord(raw: unknown): raw is TodoReviewRecord {
 		o.reviewedShas.every((s) => typeof s === "string") &&
 		(o.feedback === undefined || typeof o.feedback === "string") &&
 		(o.reviewedBy === undefined || o.reviewedBy === "agent") &&
+		(o.requestId === undefined || typeof o.requestId === "string") &&
 		typeof o.at === "string"
 	);
 }
@@ -177,6 +179,21 @@ export function putReviewRecord(
 	file.items[id] = record;
 	writeFile(root, sessionId, file);
 	return previous;
+}
+
+export function restoreReviewRecord(
+	root: string,
+	sessionId: string,
+	id: string,
+	expected: TodoReviewRecord,
+	previous: TodoReviewRecord | undefined,
+): boolean {
+	const file = readFile(root, sessionId);
+	if (file.items[id]?.requestId !== expected.requestId) return false;
+	if (previous) file.items[id] = previous;
+	else delete file.items[id];
+	writeFile(root, sessionId, file);
+	return true;
 }
 
 export function dropReviewRecord(
