@@ -35,11 +35,14 @@ function signal() {
 	return { received, send };
 }
 
-async function holdNextPickerReply(page: Page) {
+async function holdNextPickerReply(page: Page, pickerPath: string) {
 	const held = signal();
 	const release = signal();
 	const acknowledged = signal();
+	const barrier = signal();
 	let pickerRequestId: string | null = null;
+	let barrierArmed = false;
+	let staleOpenSent = false;
 	await page.routeWebSocket(/\/ws(?:\?|$)/, (browserSocket) => {
 		const serverSocket = browserSocket.connectToServer();
 		browserSocket.onMessage((message) => {
@@ -53,6 +56,14 @@ async function holdNextPickerReply(page: Page) {
 				frame.ack.includes(pickerRequestId)
 			) {
 				acknowledged.send();
+			}
+			if (barrierArmed) {
+				const params =
+					frame?.params !== null && typeof frame?.params === "object"
+						? (frame.params as Record<string, unknown>)
+						: null;
+				if (frame?.method === "project.open" && params?.path === pickerPath) staleOpenSent = true;
+				if (frame?.method === "provider.status") barrier.send();
 			}
 			serverSocket.send(message);
 		});
@@ -70,6 +81,11 @@ async function holdNextPickerReply(page: Page) {
 		held: held.received,
 		release: release.send,
 		acknowledged: acknowledged.received,
+		armBarrier: () => {
+			barrierArmed = true;
+		},
+		barrier: barrier.received,
+		staleOpenWasSent: () => staleOpenSent,
 	};
 }
 
@@ -154,7 +170,7 @@ test("picker failure falls back to host-path entry on every host platform", asyn
 });
 
 test("manual path from the rail supersedes a picker started from Welcome", async ({ page }) => {
-	const pickerReply = await holdNextPickerReply(page);
+	const pickerReply = await holdNextPickerReply(page, E2E_FIXTURE_REPO);
 	await openAppFresh(page);
 	const manualRepo = seedSecondRepo();
 	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
@@ -172,8 +188,10 @@ test("manual path from the rail supersedes a picker started from Welcome", async
 
 	pickerReply.release();
 	await pickerReply.acknowledged;
+	pickerReply.armBarrier();
 	await page.getByTestId("open-settings").click();
-	await expect(page.getByTestId("providers-refresh")).toBeEnabled();
+	await pickerReply.barrier;
+	expect(pickerReply.staleOpenWasSent()).toBe(false);
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
 	await expect(page.getByTestId("welcome-title")).toHaveText("second-project");
