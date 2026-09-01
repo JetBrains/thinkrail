@@ -102,7 +102,11 @@ export function ChatTurnView({
 			return isFinalAnswer ? (
 				<MessageWithCopy messageRole="assistant" side="left" getText={() => row.text}>
 					<div className="w-full min-w-0 pb-24 tr-text-reading text-text-default">
-						<Markdown text={row.text} />
+						<AssistantMarkdown
+							text={row.text}
+							workspaceRoot={workspaceRoot}
+							onOpenFile={onOpenFile}
+						/>
 					</div>
 				</MessageWithCopy>
 			) : (
