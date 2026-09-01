@@ -192,7 +192,7 @@ test("assistant Markdown opens safe relative files without navigating the browse
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
-	await openChatFromHistory(page, "assistant file links");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const message = page.locator('[data-testid="chat-message"][data-role="assistant"]').last();
 	const local = message.getByRole("button", { name: "Open README" });
