@@ -1,0 +1,131 @@
+import { expect, test, type WebSocketRoute } from "@playwright/test";
+import { WS_CHANNELS } from "@thinkrail/contracts";
+
+const BOOKING_URL = "https://calendar.app.google/5suMJdDEBFvYJ4zN9";
+
+type ClientRequest = {
+	id?: string;
+	method?: string;
+	params?: { action?: string };
+};
+
+function sendInvitation(socket: WebSocketRoute | undefined): void {
+	if (!socket) throw new Error("expected the app WebSocket");
+	socket.send(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} }));
+}
+
+test("feedback settings and the addressed interview prompt preserve the approved lifecycle", async ({
+	context,
+	page,
+}) => {
+	let browserSocket: WebSocketRoute | undefined;
+	let rejectNextResponse = false;
+	const actions: string[] = [];
+
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		browserSocket = socket;
+		const server = socket.connectToServer();
+		socket.onMessage((message) => {
+			const raw = typeof message === "string" ? message : message.toString();
+			let request: ClientRequest;
+			try {
+				request = JSON.parse(raw) as ClientRequest;
+			} catch {
+				server.send(message);
+				return;
+			}
+			if (request.method === "feedback.respond" && request.id) {
+				actions.push(request.params?.action ?? "");
+				if (rejectNextResponse) {
+					rejectNextResponse = false;
+					socket.send(
+						JSON.stringify({ id: request.id, ok: false, error: "feedback response failed" }),
+					);
+					return;
+				}
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => socket.send(message));
+	});
+	await context.route("https://calendar.app.google/**", (route) => route.abort());
+
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-feedback").click();
+	const settings = page.getByTestId("settings-feedback");
+	await expect(settings).toContainText(
+		"Share your experience using ThinkRail and help shape what we build next.",
+	);
+	const settingsLink = settings.getByTestId("feedback-schedule-interview");
+	await expect(settingsLink).toHaveAttribute("href", BOOKING_URL);
+	await expect(settingsLink).toHaveAttribute("target", "_blank");
+	await expect(settingsLink).toHaveAttribute("rel", "noopener noreferrer");
+	const settingsPopupPromise = page.waitForEvent("popup");
+	await settingsLink.click();
+	const settingsPopup = await settingsPopupPromise;
+	await settingsPopup.close();
+	await expect.poll(() => actions).toEqual([]);
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+
+	sendInvitation(browserSocket);
+	const dialog = page.getByTestId("interview-prompt-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog).toContainText("Help shape ThinkRail");
+	await expect(dialog).toContainText(
+		"We’d love to hear about your experience using ThinkRail. Schedule a user interview to tell us what’s working and what could be better.",
+	);
+	await expect(dialog.getByTestId("interview-postpone")).toBeFocused();
+
+	rejectNextResponse = true;
+	await dialog.getByTestId("interview-postpone").click();
+	await expect(dialog).toBeVisible();
+	await expect(
+		page
+			.locator('[data-testid="toast"][data-variant="error"]')
+			.filter({ hasText: "feedback response failed" }),
+	).toBeVisible();
+	await dialog.getByTestId("interview-postpone").click();
+	await expect(dialog).toBeHidden();
+	await expect.poll(() => actions).toEqual(["postpone", "postpone"]);
+
+	sendInvitation(browserSocket);
+	await expect(dialog).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+	await expect.poll(() => actions.at(-1)).toBe("postpone");
+
+	sendInvitation(browserSocket);
+	await expect(dialog).toBeVisible();
+	await dialog.getByRole("button", { name: "Close" }).click();
+	await expect(dialog).toBeHidden();
+	await expect.poll(() => actions.at(-1)).toBe("postpone");
+
+	sendInvitation(browserSocket);
+	await expect(dialog).toBeVisible();
+	await page.getByTestId("dialog-overlay").click({ position: { x: 4, y: 4 } });
+	await expect(dialog).toBeHidden();
+	await expect.poll(() => actions.at(-1)).toBe("postpone");
+
+	sendInvitation(browserSocket);
+	await expect(dialog).toBeVisible();
+	await dialog.getByTestId("interview-never").click();
+	await expect(dialog).toBeHidden();
+	await expect.poll(() => actions.at(-1)).toBe("never");
+
+	sendInvitation(browserSocket);
+	await expect(dialog).toBeVisible();
+	const bookingLink = dialog.getByTestId("interview-book");
+	await expect(bookingLink).toHaveAttribute("href", BOOKING_URL);
+	await expect(bookingLink).toHaveAttribute("target", "_blank");
+	await expect(bookingLink).toHaveAttribute("rel", "noopener noreferrer");
+	const bookingPopupPromise = page.waitForEvent("popup");
+	await bookingLink.click();
+	const bookingPopup = await bookingPopupPromise;
+	await bookingPopup.close();
+	await expect(dialog).toBeHidden();
+	await expect.poll(() => actions.at(-1)).toBe("book");
+});
