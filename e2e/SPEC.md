@@ -168,8 +168,12 @@ transform cache is lane-local because Playwright's shared cache assumes a single
 lets a cold shard consume another shard's partially written transform. The lane's fake executable directory
 lives under `.bun/bin`: this intentionally marks the injected, hermetic host `PATH` as complete to
 `resolveShellEnv()`, preventing login-shell repair from replacing the Central/editor stubs with
-developer-machine executables. Port allocation remains stable and collision-safe across worktrees: the
-registry claim distinguishes
+developer-machine executables. Folder selection comes from one picker control file across the source,
+binary, and desktop hosts: plain content returns a path and an `error:<message>` directive forces a
+platform-independent failure. The source host also receives empty `DISPLAY` and `WAYLAND_DISPLAY`, so a
+broken control cannot reach a developer's Linux display; native Linux preflight stays unit-covered. Port
+allocation remains stable and collision-safe across
+worktrees: the registry claim distinguishes
 a lane's logical key while checking staleness against the real worktree path. Legacy plain-path claims are
 still valid.
 

@@ -117,11 +117,20 @@ treatment.
   Home while every client receives `project.updated`; on failure `project.inspect` → either offers to
   bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
-  non-git folder is never a silent no-op — and neither is a host that couldn't *show* a folder dialog (that
-  throws; the notice carries the reason, and the request runs on a raised `timeoutMs` since the picker waits
-  on a human). Both are modals on `components/ui/dialog` (the init offer has no
-  on-screen anchor, unlike the Remove popover); `NoticeDialog` is a single-button info modal for failures
-  with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. **Selecting a
+  non-git folder is never a silent no-op. The native picker remains the local fast path and keeps its raised
+  timeout because it waits on a human; if the host cannot present it, the rejection instead opens an
+  **Open project from host path** dialog carrying the reason and an autofocused path field. The dialog says
+  the path belongs to the computer running ThinkRail, accepts a host-absolute path or `~` / `~/…`, and
+  submits through this same open/inspect/init flow. **Enter host path…** is also always present beside Open
+  project in `AddProjectMenu`: a remote client cannot tell whether a successful native picker opened on an
+  unseen host display, so recovery cannot be failure-only. Every open gesture starts one client-wide
+  last-intent generation shared by both mounted `useOpenProject` instances. The flow rechecks that generation
+  after each picker, open, inspect, init, and adoption await, so a manual path or recent selection from either
+  surface supersedes any older flow before it can select a project or raise a stale dialog.
+  These are modals on `components/ui/dialog` (the init offer has no on-screen anchor, unlike the Remove
+  popover); `NoticeDialog` remains the single-button
+  surface for failures with no recovery inside that notice. The hook returns a `dialogs` node each consumer
+  renders. **Selecting a
   project** (clicking its row — the chevron expands/collapses separately) **deselects any active
   workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture. Both
   select-project gestures — the rail row click and adopting a just-opened project (`ProjectTree` *and*
@@ -203,9 +212,9 @@ project folder"; **project + no specs** → a spec-first **"Set up project"** (p
 + "Work in project folder". **"Open project" appears only in the no-projects state** — where it's the
 only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
-**`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Open GitHub (soon)
-/ Recents). Recents is the store's `recentProjects`: one last-opened path list containing open + closed
-records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
+**`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Enter host
+path… / Open GitHub (soon) / Recents). Recents is the store's `recentProjects`: one last-opened path list
+containing open + closed records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
 closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
 trigger. **"Work in project folder"**
 (`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: the

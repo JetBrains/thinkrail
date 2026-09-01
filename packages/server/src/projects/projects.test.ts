@@ -131,6 +131,36 @@ test("inspectProjectPath: a git repo (and any subdirectory) is `repo`", () => {
 	expect(inspectProjectPath(sub)).toEqual({ kind: "repo" });
 });
 
+test("host-home paths resolve consistently across inspect, open, and init", () => {
+	const home = join(dataDir, "host-home");
+	const repo = join(home, "repo");
+	const plain = join(home, "plain");
+	makeRepo(repo);
+	mkdirSync(plain);
+	const savedHome = process.env.HOME;
+	const savedUserProfile = process.env.USERPROFILE;
+	process.env.HOME = home;
+	process.env.USERPROFILE = home;
+	try {
+		expect(inspectProjectPath("~")).toEqual({ kind: "initable" });
+		expect(inspectProjectPath("~/repo")).toEqual({ kind: "repo" });
+		expect(openProject("~/repo").path).toBe(realpathSync(repo));
+		expect(inspectProjectPath("~/plain")).toEqual({ kind: "initable" });
+		expect(initProject("~/plain").path).toBe(realpathSync(plain));
+	} finally {
+		if (savedHome === undefined) delete process.env.HOME;
+		else process.env.HOME = savedHome;
+		if (savedUserProfile === undefined) delete process.env.USERPROFILE;
+		else process.env.USERPROFILE = savedUserProfile;
+	}
+});
+
+test("relative project paths are rejected instead of using the host process cwd", () => {
+	for (const operation of [openProject, inspectProjectPath, initProject]) {
+		expect(() => operation("relative/project")).toThrow("must be absolute or start with ~/");
+	}
+});
+
 test("initProject: initialises a plain folder, commits its contents, and opens it", () => {
 	const dir = join(dataDir, "plain");
 	mkdirSync(dir);

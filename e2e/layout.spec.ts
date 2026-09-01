@@ -349,17 +349,17 @@ test("one local frame survives workspace switches while resource tabs stay works
 	await dragHandle(page, handle, handleBox.x - 70, handleBox.y + handleBox.height / 2);
 	const resized = await width(page.getByTestId("right-stack"));
 	await pressPlatformShortcut(page, "Shift+j");
-	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 
 	await createWorkspaceViaDialog(page);
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toHaveCount(0);
-	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	await expect.poll(() => width(page.getByTestId("right-stack"))).toBeCloseTo(resized, 0);
 
 	await defaultWorkspaceRow(page).getByRole("button").first().click();
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toHaveCount(1);
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
-	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 });
 
 test("a duplicated tab remints copied surface storage and preserves both layouts on reload", async ({
@@ -1183,4 +1183,89 @@ test("another window cannot cancel or adopt an active side resize", async ({ pag
 	await expect.poll(() => width(page.getByTestId("right-stack"))).not.toBeCloseTo(before, 0);
 	await expect(page2.getByTestId("right-layout-rail")).toBeVisible();
 	await page2.close();
+});
+
+test("a tab drag reveals every valid destination subtly, then emphasizes the one under the pointer", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, ["README.md", "notes.txt"]);
+
+	const centerStrip = page.getByTestId("center-tab-strip");
+	const rightStrip = page.getByTestId("right-tab-strip");
+	const dragged = page.getByTestId("editor-tab").filter({ hasText: "README.md" });
+	const box = await dragged.boundingBox();
+	if (!box) throw new Error("drag tab has no box");
+
+	await expect(centerStrip).not.toHaveAttribute("data-drop-hint", "true");
+	await expect(page.locator('[data-drop-label="Split right"]')).toHaveCount(0);
+
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box.x + box.width / 2 + 12, box.y + box.height / 2 + 8, { steps: 4 });
+	const pane = await page.getByTestId("editor-pane").first().boundingBox();
+	if (!pane) throw new Error("editor pane has no box");
+	await page.mouse.move(pane.x + pane.width / 2, pane.y + pane.height / 2, { steps: 6 });
+
+	await expect(centerStrip).toHaveAttribute("data-drop-hint", "true");
+	await expect(centerStrip).not.toHaveAttribute("data-drop-active", "true");
+	await expect(rightStrip).not.toHaveAttribute("data-drop-hint", "true");
+	const splitTarget = page.locator('[data-drop-label="Split right"]');
+	await expect(splitTarget).toBeVisible();
+	await expect(splitTarget).toHaveAttribute("data-drop-hint", "true");
+	await expect(page.getByTestId("bottom-drop-zone")).toHaveCount(0);
+
+	const targetBox = await splitTarget.boundingBox();
+	if (!targetBox) throw new Error("split target has no box");
+	await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, {
+		steps: 8,
+	});
+	await expect(splitTarget).toHaveAttribute("data-drop-active", "true");
+	await expect(splitTarget).not.toHaveAttribute("data-drop-hint", "true");
+	await expect(centerStrip).toHaveAttribute("data-drop-hint", "true");
+
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
+	await expect(centerStrip).not.toHaveAttribute("data-drop-hint", "true");
+	await expect(page.locator('[data-drop-label="Split right"]')).toHaveCount(0);
+});
+
+test("the hidden bottom drop zone wins overlapping terminal targets and reveals its frame group", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	await page.getByTestId("terminal-tab").click({ button: "right" });
+	await page.getByRole("menuitem", { name: /Move to center group/ }).click();
+	await waitForLayoutSettled(page);
+	const terminal = page.getByTestId("center-group").getByTestId("terminal-tab");
+	await expect(terminal).toBeVisible();
+
+	await pressPlatformShortcut(page, "Shift+j");
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
+	const box = await terminal.boundingBox();
+	if (!box) throw new Error("terminal tab has no box");
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box.x + box.width / 2 + 12, box.y + box.height / 2 + 8, { steps: 4 });
+
+	const dropZone = page.getByTestId("bottom-drop-zone");
+	await expect(dropZone).toBeVisible();
+	await expect(dropZone).toHaveAttribute("data-drop-hint", "true");
+	await expect(async () => {
+		const zoneBox = await dropZone.boundingBox();
+		if (!zoneBox) throw new Error("bottom drop zone has no box");
+		expect(Math.round(zoneBox.height)).toBe(24);
+	}).toPass();
+
+	const zoneBox = await dropZone.boundingBox();
+	if (!zoneBox) throw new Error("bottom drop zone has no box");
+	await page.mouse.move(zoneBox.x + zoneBox.width / 2, zoneBox.y + zoneBox.height / 2, {
+		steps: 8,
+	});
+	await expect(dropZone).toHaveAttribute("data-drop-active", "true");
+	await page.mouse.up();
+	await waitForLayoutSettled(page);
+	await expect(page.getByTestId("bottom-panel")).toBeVisible();
+	await expect(page.getByTestId("bottom-group").getByTestId("terminal-tab")).toHaveCount(1);
+	await expect(page.getByTestId("center-group").getByTestId("terminal-tab")).toHaveCount(0);
 });

@@ -158,7 +158,7 @@ export function ProjectTree() {
 		if (willExpand) void loadWorkspaces(projectId);
 	};
 
-	const { openProject, pickAndOpen, dialogs } = useOpenProject((project) =>
+	const { openProject, pickAndOpen, enterHostPath, dialogs } = useOpenProject((project) =>
 		selectProject(project.id),
 	);
 
@@ -238,6 +238,7 @@ export function ProjectTree() {
 				<AddProjectMenu
 					recentProjects={recentProjects}
 					onOpen={() => void pickAndOpen()}
+					onEnterHostPath={enterHostPath}
 					onOpenRecent={(p) => void openProject(p)}
 				>
 					<Button

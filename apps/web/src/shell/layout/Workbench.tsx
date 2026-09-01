@@ -1,4 +1,5 @@
 import {
+	type CollisionDetection,
 	DndContext,
 	type DragEndEvent,
 	DragOverlay,
@@ -19,7 +20,6 @@ import {
 	RiListCheck3 as ListTodo,
 	RiChatNewLine as MessageSquarePlus,
 	RiMoreLine as MoreHorizontal,
-	RiLayoutBottomLine as PanelBottomOpen,
 	RiLayoutLeftLine as PanelLeftOpen,
 	RiLayoutRightLine as PanelRightOpen,
 	RiLayout2Line as PanelsTopLeft,
@@ -120,7 +120,6 @@ import {
 	setAuxiliaryGroupFolded,
 	setBottomAlignment,
 	setSideGroupFolded,
-	showBottom,
 	showSide,
 	splitCenterGroup,
 	toolTab,
@@ -188,6 +187,18 @@ type DropTarget =
 interface DragData {
 	tab: LayoutTab;
 }
+
+const HIDDEN_BOTTOM_DROP_ID = "dnd-hidden-bottom-edge";
+
+const workbenchCollisionDetection: CollisionDetection = (args) => {
+	const collisions = pointerWithin(args);
+	const bottomCollision = collisions.find((collision) => collision.id === HIDDEN_BOTTOM_DROP_ID);
+	if (!bottomCollision) return collisions;
+	return [
+		bottomCollision,
+		...collisions.filter((collision) => collision.id !== HIDDEN_BOTTOM_DROP_ID),
+	];
+};
 
 function sameSizes(first: readonly number[], second: readonly number[], tolerance = 0.15): boolean {
 	return (
@@ -529,9 +540,46 @@ function DropZone({
 			ref={setNodeRef}
 			aria-hidden="true"
 			data-drop-active={isOver || undefined}
+			data-drop-hint={!isOver || undefined}
 			data-drop-label={label}
-			className={`pointer-events-auto z-20 rounded-[var(--radius-sm)] border border-transparent transition-colors data-[drop-active]:border-primary data-[drop-active]:bg-primary-subtle ${className}`}
+			className={`pointer-events-auto z-20 rounded-[var(--radius-sm)] border border-transparent transition-colors data-[drop-hint]:border-primary-soft data-[drop-hint]:bg-primary-subtle data-[drop-active]:border-primary data-[drop-active]:bg-primary-soft ${className}`}
 		/>
+	);
+}
+
+function CenterSplitTarget({
+	groupId,
+	direction,
+	label,
+	edgeClassName,
+	halfClassName,
+}: {
+	groupId: string;
+	direction: CenterSplitDirection;
+	label: string;
+	edgeClassName: string;
+	halfClassName: string;
+}) {
+	const { setNodeRef, isOver } = useDroppable({
+		id: tupleKey("dnd-split", groupId, direction),
+		data: { target: { kind: "split", groupId, direction } satisfies DropTarget },
+	});
+	return (
+		<>
+			<div
+				aria-hidden="true"
+				data-drop-active={isOver || undefined}
+				className={`pointer-events-none absolute z-10 rounded-[var(--radius-sm)] border-2 border-transparent transition-colors data-[drop-active]:border-primary data-[drop-active]:bg-primary-soft ${halfClassName}`}
+			/>
+			<div
+				ref={setNodeRef}
+				aria-hidden="true"
+				data-drop-label={label}
+				data-drop-active={isOver || undefined}
+				data-drop-hint={!isOver || undefined}
+				className={`pointer-events-auto absolute z-20 rounded-[var(--radius-sm)] border border-transparent transition-colors data-[drop-hint]:border-primary-soft data-[drop-hint]:bg-primary-subtle ${edgeClassName}`}
+			/>
+		</>
 	);
 }
 
@@ -638,7 +686,8 @@ function TabStrip({
 			data-area={location.area}
 			data-group-id={location.groupId}
 			data-drop-active={groupDrop.isOver || undefined}
-			className="relative flex h-panel-header-row shrink-0 items-stretch border-border-default border-b bg-container-workspace-bg data-[drop-active]:bg-primary-subtle"
+			data-drop-hint={(acceptsAppend && !groupDrop.isOver) || undefined}
+			className="relative flex h-panel-header-row shrink-0 items-stretch border-border-default border-b bg-container-workspace-bg data-[drop-hint]:ring-1 data-[drop-hint]:ring-inset data-[drop-hint]:ring-primary-soft data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
 		>
 			<div className="relative min-w-0 flex-1 overflow-hidden">
 				<div
@@ -1347,33 +1396,37 @@ function CenterGroupView({
 				<div className="pointer-events-none absolute inset-0 z-30">
 					{splitGeometry.horizontal ? (
 						<>
-							<DropZone
-								id={tupleKey("dnd-split", group.id, "left")}
-								target={{ kind: "split", groupId: group.id, direction: "left" }}
+							<CenterSplitTarget
+								groupId={group.id}
+								direction="left"
 								label="Split left"
-								className="absolute inset-y-1/4 left-4 w-1/5"
+								edgeClassName="inset-y-1/4 left-4 w-1/5"
+								halfClassName="inset-y-0 left-0 w-1/2"
 							/>
-							<DropZone
-								id={tupleKey("dnd-split", group.id, "right")}
-								target={{ kind: "split", groupId: group.id, direction: "right" }}
+							<CenterSplitTarget
+								groupId={group.id}
+								direction="right"
 								label="Split right"
-								className="absolute inset-y-1/4 right-4 w-1/5"
+								edgeClassName="inset-y-1/4 right-4 w-1/5"
+								halfClassName="inset-y-0 right-0 w-1/2"
 							/>
 						</>
 					) : null}
 					{splitGeometry.vertical ? (
 						<>
-							<DropZone
-								id={tupleKey("dnd-split", group.id, "up")}
-								target={{ kind: "split", groupId: group.id, direction: "up" }}
+							<CenterSplitTarget
+								groupId={group.id}
+								direction="up"
 								label="Split up"
-								className="absolute inset-x-1/4 top-32 h-1/5"
+								edgeClassName="inset-x-1/4 top-32 h-1/5"
+								halfClassName="inset-x-0 top-0 h-1/2"
 							/>
-							<DropZone
-								id={tupleKey("dnd-split", group.id, "down")}
-								target={{ kind: "split", groupId: group.id, direction: "down" }}
+							<CenterSplitTarget
+								groupId={group.id}
+								direction="down"
 								label="Split down"
-								className="absolute inset-x-1/4 bottom-4 h-1/5"
+								edgeClassName="inset-x-1/4 bottom-4 h-1/5"
+								halfClassName="inset-x-0 bottom-0 h-1/2"
 							/>
 						</>
 					) : null}
@@ -2078,10 +2131,11 @@ function BottomFoldedGroup({
 	const location: LayoutGroupLocation = { area: "bottom", groupId: group.id };
 	const restoreId = groupDomId(location);
 	const panelId = groupPanelId(location);
+	const dropEnabled = !!shared.draggingTab && canPlaceLayoutTab(shared.draggingTab, "bottom");
 	const drop = useDroppable({
 		id: tupleKey("dnd-bottom-folded", group.id),
 		data: { target: { kind: "group", location } satisfies DropTarget },
-		disabled: !shared.draggingTab || !canPlaceLayoutTab(shared.draggingTab, "bottom"),
+		disabled: !dropEnabled,
 	});
 	return (
 		<section
@@ -2090,10 +2144,11 @@ function BottomFoldedGroup({
 			data-group-id={group.id}
 			data-folded="true"
 			data-drop-active={drop.isOver || undefined}
+			data-drop-hint={(dropEnabled && !drop.isOver) || undefined}
 			aria-label={
 				selectedName ? `Folded bottom group: ${selectedName}` : "Folded empty bottom group"
 			}
-			className="relative flex h-full items-stretch overflow-hidden border-border-default border-r bg-container-sidebar-bg data-[drop-active]:bg-primary-subtle"
+			className="relative flex h-full items-stretch overflow-hidden border-border-default border-r bg-container-sidebar-bg data-[drop-hint]:bg-primary-subtle data-[drop-active]:bg-primary-soft"
 		>
 			<div className="flex min-h-0 w-full flex-col">
 				{showAlignmentMenu ? (
@@ -2277,19 +2332,15 @@ function BottomAlignedRow({
 	);
 }
 
-function HiddenBottomRail({
-	onShow,
-	dropEnabled,
+function BottomDropZone({
 	targetGroupId,
 	targetIndex,
 }: {
-	onShow: () => void;
-	dropEnabled: boolean;
 	targetGroupId: string | undefined;
 	targetIndex: number;
 }) {
 	const drop = useDroppable({
-		id: "dnd-hidden-bottom-edge",
+		id: HIDDEN_BOTTOM_DROP_ID,
 		data: {
 			target: targetGroupId
 				? ({
@@ -2298,26 +2349,19 @@ function HiddenBottomRail({
 					} satisfies DropTarget)
 				: ({ kind: "auxiliary-edge", region: "bottom", index: targetIndex } satisfies DropTarget),
 		},
-		disabled: !dropEnabled,
 	});
 	return (
 		<div
 			ref={drop.setNodeRef}
-			data-testid="bottom-layout-rail"
-			data-drop-label={dropEnabled ? "Create group in hidden bottom region" : undefined}
+			data-testid="bottom-drop-zone"
+			aria-hidden="true"
+			data-drop-label={
+				targetGroupId ? "Reveal hidden bottom group" : "Create group in hidden bottom region"
+			}
 			data-drop-active={drop.isOver || undefined}
-			className="flex h-28 shrink-0 items-center justify-center border-border-default border-t bg-container-sidebar-bg data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
-		>
-			<button
-				type="button"
-				aria-label="Show bottom panel"
-				title="Show bottom panel (Mod+Shift+J)"
-				onClick={onShow}
-				className="flex h-24 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-metadata text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-			>
-				<PanelBottomOpen className="size-16" /> Bottom
-			</button>
-		</div>
+			data-drop-hint={!drop.isOver || undefined}
+			className="pointer-events-auto absolute inset-x-0 bottom-0 z-20 h-24 border-primary transition-colors data-[drop-hint]:border-t data-[drop-hint]:bg-primary-subtle data-[drop-active]:border-t-2 data-[drop-active]:bg-primary-soft"
+		/>
 	);
 }
 
@@ -2383,7 +2427,8 @@ function HiddenSideRail({
 			data-testid={`${side}-layout-rail`}
 			data-drop-label={dropEnabled ? `Create ${side} group in hidden side` : undefined}
 			data-drop-active={drop.isOver || undefined}
-			className="flex w-28 shrink-0 flex-col items-center border-border-default bg-container-sidebar-bg py-4 first:border-r last:border-l data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
+			data-drop-hint={(dropEnabled && !drop.isOver) || undefined}
+			className="flex w-28 shrink-0 flex-col items-center border-border-default bg-container-sidebar-bg py-4 first:border-r last:border-l data-[drop-hint]:bg-primary-subtle data-[drop-hint]:ring-1 data-[drop-hint]:ring-inset data-[drop-hint]:ring-primary-soft data-[drop-active]:bg-primary-soft data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
 		>
 			<IconTooltip
 				label={showEnabled ? `Show ${side} side` : `No ${side} groups to show`}
@@ -2944,15 +2989,6 @@ export function Workbench({
 			),
 		[apply, document],
 	);
-	const showBottomRegion = useCallback(() => {
-		const shown = showBottom(document, maxSideGroups, maxBottomGroups, attentionRef.current);
-		if (isLayoutUnavailable(shown)) return;
-		apply(shown);
-		if (shown.document.bottom.groups.every((group) => group.tabs.length === 0)) {
-			const groupId = shown.focusGroupId ?? shown.document.bottom.groups[0]?.id;
-			if (groupId) onNewTerminal(groupId, "bottom");
-		}
-	}, [apply, document, maxBottomGroups, maxSideGroups, onNewTerminal]);
 	const revealMissingTool = useCallback(
 		(tool: LayoutToolId) => {
 			const result = revealTool(document, tool, maxSideGroups, maxBottomGroups);
@@ -3113,29 +3149,23 @@ export function Workbench({
 			</ResizablePanel>
 		</ResizablePanelGroup>
 	) : (
-		<div className="flex h-full min-h-0 min-w-0 flex-col">
+		<div className="relative flex h-full min-h-0 min-w-0 flex-col">
 			<div className="min-h-0 min-w-0 flex-1">{alignedTopRow}</div>
-			<div className="h-28 shrink-0">
-				<BottomAlignedRow document={document}>
-					<HiddenBottomRail
-						onShow={showBottomRegion}
-						dropEnabled={
-							!!draggingTab &&
-							canPlaceLayoutTab(draggingTab, "bottom") &&
-							(hiddenBottomTargetGroupId !== undefined ||
-								canCreateAuxiliaryGroup(
-									document,
-									"bottom",
-									draggingTab,
-									maxBottomGroups,
-									document.bottom.groups.length,
-								))
-						}
-						targetGroupId={hiddenBottomTargetGroupId}
-						targetIndex={document.bottom.groups.length}
-					/>
-				</BottomAlignedRow>
-			</div>
+			{draggingTab &&
+			canPlaceLayoutTab(draggingTab, "bottom") &&
+			(hiddenBottomTargetGroupId !== undefined ||
+				canCreateAuxiliaryGroup(
+					document,
+					"bottom",
+					draggingTab,
+					maxBottomGroups,
+					document.bottom.groups.length,
+				)) ? (
+				<BottomDropZone
+					targetGroupId={hiddenBottomTargetGroupId}
+					targetIndex={document.bottom.groups.length}
+				/>
+			) : null}
 		</div>
 	);
 	const workbenchColumns = (
@@ -3202,7 +3232,7 @@ export function Workbench({
 	return (
 		<DndContext
 			sensors={sensors}
-			collisionDetection={pointerWithin}
+			collisionDetection={workbenchCollisionDetection}
 			measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
 			onDragStart={handleDragStart}
 			onDragCancel={() => setDraggingTab(null)}

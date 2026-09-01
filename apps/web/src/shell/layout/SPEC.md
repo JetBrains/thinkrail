@@ -50,14 +50,19 @@ Frame groups may remain empty in any workspace. Closing a final resource therefo
 - **Left/right:** ordered vertical frame stacks. Dragging an outer separator through its minimum hides that side, retains the last expanded width, and exposes its full-height restore rail. Broad upper/lower targets create groups before/after each row, including folded or currently empty rows. Expanded bodies have a 120 px normal minimum; folded groups occupy 27 px and retain normalized expanded weights. An empty frame group remains available across workspaces until explicit removal and renders a named
   Add/Reveal surface rather than disappearing; a region with groups may stay hidden.
 - **Bottom:** ordered left-to-right frame groups resize on vertical separators. A group may fold to a 27 px
-  vertical rail; the region hides to a 27 px-high horizontal restore rail over its selected span. Height starts
-  at 30%, has a 120 px body minimum, and caps at 70%. Alignment is center, center+left, center+right, or full
-  workbench. A side excluded from that span owns its lower corner and continues to the workbench bottom; an
-  included side ends above it. Hidden restore geometry follows the same ownership. Alignment follows actual
-  browser-local side projection during resize and narrow compression while persisted workbench-wide frame
-  ratios remain the target and are converted through nested panel groups. A separator gesture commits only
-  the ratio of the side that owns it; compression of an untouched neighbor remains runtime-local. Hidden
-  sides contribute no phantom width. Empty bottom slots render terminal creation/reveal affordances.
+  vertical rail. When the region is hidden or the frame has no bottom groups, the workbench renders no bottom
+  chrome and reserves no bottom height; there is no persistent restore rail. While a bottom-eligible tab is
+  dragged and the bottom is not rendered, a 24 px-high horizontal Primary drop zone appears over the span
+  selected by bottom alignment; dropping there reveals the region. With no drag active, `Mod+Shift+J` remains
+  the direct chrome-free restore path. Height starts at 30%, has a 120 px body minimum, and caps at 70%.
+  Alignment is center, center+left, center+right, or full workbench. A side excluded from that span owns its
+  lower corner and continues to the workbench bottom; an included side ends above it; the drag-time drop zone
+  follows the same ownership. Alignment follows actual browser-local side projection during resize and narrow
+  compression while persisted workbench-wide frame ratios remain the target and are converted through nested
+  panel groups. A separator gesture commits only the ratio of the side that owns it; compression of an
+  untouched neighbor remains runtime-local. Hidden sides contribute no phantom width. A visible empty bottom
+  frame slot remains available across workspaces until explicit removal and renders terminal creation/reveal
+  affordances.
 - **Limits:** left/right share a local setting defaulting to six groups per side; bottom has an independent local setting defaulting to three. Both accept 1–32, with closed hard safety bounds enforced even for untrusted local state or shared presets. Existing overages survive; creation is unavailable until below the configured limit, while reorder/join/reducing moves remain legal. Stable-id uniqueness, one canonical resource placement per workspace view, normalized geometry, and the final-center-leaf invariant are enforced by every mutation.
 - **Small viewports:** restoring onto less space may compress below operation minimums locally. Content scrolls/clips; bottom alignment projects from actual compressed side spans, while frame topology, alignment choice, and ratios are never rewritten merely because this viewport is narrow.
 
@@ -67,7 +72,27 @@ Async completion reroutes from a removed group to current last focus and advance
 
 ## Arrangement and accessibility
 
-A tab drag paints exactly one result: strip insertion, whole-group join, legal center half-split, side upper/lower boundary, or bottom left/right boundary. Expanded strips remain join/reorder targets while bodies create adjacent groups; folded rails divide their compact axis between the same two targets. Hidden restore rails are broad legal creation targets within local limits. Illegal domains, limits, exact-position no-ops, and minimum violations paint no target and commit nothing. Escape, pointer cancellation, outside drop, or a superseding local frame/view transition restores the source. Drag moves one workspace resource or one frame-owned tool; it never copies or crosses workspaces.
+A tab drag paints exactly one result: strip insertion, whole-group join, legal center half-split, side
+upper/lower boundary, or bottom left/right boundary. Expanded strips remain join/reorder targets while bodies
+create adjacent groups; folded rails divide their compact axis between the same two targets. The user never
+has to acquire a thin outer edge. Hidden left/right restore rails are broad legal creation targets within local
+limits. When bottom is not rendered, its drag-time zone reuses the active workspace's last-focused surviving
+bottom frame group, falls back to the trailing group, or creates one at the trailing boundary only when no
+group exists and the local bottom limit permits; either drop reveals the region. Illegal domains, limits,
+exact-position no-ops, and minimum violations paint no target and commit nothing. Escape, pointer
+cancellation, outside drop, or a superseding local frame/view transition restores the source. A drag moves one
+workspace resource or one frame-owned tool; it never copies or crosses workspaces.
+
+Drop-target styling has no resting treatment. As soon as a movable tab is picked up, every currently valid
+destination shows a subtle Primary hint, and the destination under the pointer strengthens. Both states derive
+from the existing drag state and each site's already-computed validity—there is no second drag-state
+machine—and use only semantic Primary roles, never `feedback-*`: `drop-hint` is a subtle Primary outline or
+translucent surface and `drop-active` is stronger. Tab-header targets outline the whole group header;
+individual before/after insertion markers remain the precise hover cue. Center-split targets show compact
+directional edge hints at drag start and fill the true resulting half on hover. The bottom drag-time zone is
+24 px high and takes collision priority within that band over overlapping lower-body targets. Active emphasis
+clears on pointer leave; all hints clear on drop or cancel; decorative layers never alter hit-testing or the
+committed result.
 
 Creating or deleting a group is visibly a frame command and therefore affects every workspace in this window. Moving a resource among existing groups affects only its workspace view. Moving a singleton tool changes frame placement globally within this window. Uncommitted drag/resize drafts stay runtime-local and commit once on drop/pointer-up; no host revision can cancel them. A local projection epoch invalidates drafts or delayed preview-settle timers only when another local transition replaces their base.
 
