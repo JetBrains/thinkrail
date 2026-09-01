@@ -1,9 +1,9 @@
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { Workspace } from "@thinkrail/contracts";
 import { createWorkspaceViaDialog, openWorkspaceChat } from "./fixtures/app";
+import { gitText } from "./fixtures/git";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 function persistedWorkspaces(): Workspace[] {
@@ -58,16 +58,15 @@ test("turn start names the workspace instantly, then the settled turn refines it
 	await expect(name).toHaveText(displayName, { timeout: 20_000 });
 	await expect(branchLine).toHaveText(branch, { timeout: 20_000 });
 
-	const branches = execFileSync(
-		"git",
-		["-C", E2E_FIXTURE_REPO, "for-each-ref", "--format=%(refname:short)", "refs/heads"],
-		{ encoding: "utf8" },
+	const branches = gitText(
+		E2E_FIXTURE_REPO,
+		"for-each-ref",
+		"--format=%(refname:short)",
+		"refs/heads",
 	);
 	expect(branches.split("\n")).not.toContain(initialName);
 	expect(branches.split("\n")).toContain(branch);
-	const worktrees = execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "list"], {
-		encoding: "utf8",
-	});
+	const worktrees = gitText(E2E_FIXTURE_REPO, "worktree", "list");
 	expect(worktrees).toContain(before.worktreePath);
 
 	const second = await createWorkspaceViaDialog(page);

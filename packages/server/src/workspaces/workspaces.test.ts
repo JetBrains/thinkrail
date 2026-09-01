@@ -209,7 +209,7 @@ test("listExistingWorktrees shows unattached branch and detached checkouts only"
 	git(repo, "worktree", "add", "--detach", detached, "main");
 	const managed = await createWorkspace("p1");
 
-	const candidates = listExistingWorktrees("p1");
+	const candidates = await listExistingWorktrees("p1");
 	expect(candidates).toContainEqual({
 		path: external,
 		branch: "feature/auth",
@@ -242,7 +242,7 @@ test("openExistingWorktree adopts idempotently and removal never reclaims the ch
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((event) => events.push(event));
 
-	const workspace = openExistingWorktree("p1", external);
+	const workspace = await openExistingWorktree("p1", external);
 	expect(workspace).toMatchObject({
 		projectId: "p1",
 		kind: "external",
@@ -254,10 +254,10 @@ test("openExistingWorktree adopts idempotently and removal never reclaims the ch
 		initialTerminalPending: true,
 	});
 	expect(events).toEqual([{ kind: "created", workspace }]);
-	expect(listExistingWorktrees("p1")).toHaveLength(0);
+	expect(await listExistingWorktrees("p1")).toHaveLength(0);
 	expectCheckoutUnchanged();
 
-	expect(openExistingWorktree("p1", external).id).toBe(workspace.id);
+	expect((await openExistingWorktree("p1", external)).id).toBe(workspace.id);
 	expect(events).toHaveLength(1);
 	expect(() => renameWorkspace(workspace.id, "hands off")).toThrow(
 		"An existing worktree cannot be renamed by ThinkRail",
@@ -273,13 +273,13 @@ test("openExistingWorktree adopts idempotently and removal never reclaims the ch
 test("openExistingWorktree rejects detached and unrelated paths", async () => {
 	const detached = join(dataDir, "detached checkout");
 	git(repo, "worktree", "add", "--detach", detached, "main");
-	expect(() => openExistingWorktree("p1", detached)).toThrow(
+	await expect(openExistingWorktree("p1", detached)).rejects.toThrow(
 		"Detached HEAD worktrees cannot be opened; create a branch first",
 	);
 
 	const unrelated = join(dataDir, "unrelated");
 	mkdirSync(unrelated);
-	expect(() => openExistingWorktree("p1", unrelated)).toThrow(
+	await expect(openExistingWorktree("p1", unrelated)).rejects.toThrow(
 		"The selected path is not a registered worktree of this project",
 	);
 });
@@ -295,8 +295,10 @@ test("existing worktrees represented by another project are rejected before its 
 		]),
 	);
 	expect(listWorkspaceRecords("p2")).toHaveLength(0);
-	expect(listExistingWorktrees("p1").some((candidate) => candidate.path === external)).toBe(false);
-	expect(() => openExistingWorktree("p1", external)).toThrow(
+	expect((await listExistingWorktrees("p1")).some((candidate) => candidate.path === external)).toBe(
+		false,
+	);
+	await expect(openExistingWorktree("p1", external)).rejects.toThrow(
 		"This worktree is already open under another ThinkRail project",
 	);
 });
@@ -304,7 +306,7 @@ test("existing worktrees represented by another project are rejected before its 
 test("external workspace branch metadata converges on refresh and list", async () => {
 	const external = join(dataDir, "existing auth checkout");
 	git(repo, "worktree", "add", external, "-b", "feature/auth", "main");
-	const workspace = openExistingWorktree("p1", external);
+	const workspace = await openExistingWorktree("p1", external);
 	await listWorkspaces("p1");
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((event) => events.push(event));

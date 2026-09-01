@@ -54,7 +54,7 @@ value. Then:
    the client answers with setup guidance rather than a raw-stderr toast.
 2. Always pushes `--set-upstream origin <branch>` first — the branch is workspace-owned, so a plain
    push is correct; re-invocations push follow-up commits to the SAME branch (never a second PR).
-   The push runs with a **non-interactive env** (`nonInteractiveGitEnv`): `GIT_TERMINAL_PROMPT=0`;
+   The push runs with a **non-interactive env** (`pushGitEnv`): `GIT_TERMINAL_PROMPT=0`;
    **`LC_MESSAGES=C` with `LC_ALL` demoted to `LC_CTYPE`** (dropped, its value preserved as
    `LC_CTYPE` when none was set) so git's stderr stays English for the PUSH_AUTH_FAILED patterns on
    any host locale — while hooks and helpers spawned by the push keep their character encoding

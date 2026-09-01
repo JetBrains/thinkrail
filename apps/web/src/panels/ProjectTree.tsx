@@ -6,6 +6,7 @@ import {
 	RiFolderOpenLine as FolderOpen,
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
+	RiLoader4Line as Loader2,
 	RiMore2Line as MoreVertical,
 	RiAddLine as Plus,
 	RiFolderFill,
@@ -37,6 +38,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { copyText } from "@/lib";
+import { LoadingRegion } from "../components/Skeleton";
 import {
 	isDefaultWorkspace,
 	isExternalWorkspace,
@@ -58,6 +60,7 @@ export function ProjectTree() {
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 	const workspaces = useAppStore((s) => s.workspaces);
+	const worktreeCreations = useAppStore((s) => s.worktreeCreationsByProject);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 
 	const [editors, setEditors] = useState<EditorInfo[]>([]);
@@ -253,8 +256,11 @@ export function ProjectTree() {
 								onRegisterNameButton={(element) => registerProjectNameButton(project.id, element)}
 								onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
 							/>
+							{isExpanded && list === undefined && (
+								<LoadingRegion rows={2} className="py-4 pr-8 pl-16" />
+							)}
 							{isExpanded && list !== undefined && (
-								<ul className="mt-4 flex flex-col gap-4">
+								<ul className="mt-4 flex flex-col gap-4 motion-safe:animate-reveal">
 									{list.map((ws) => (
 										<WorkspaceRow
 											key={ws.id}
@@ -269,6 +275,15 @@ export function ProjectTree() {
 										/>
 									))}
 								</ul>
+							)}
+							{isExpanded && (worktreeCreations[project.id] ?? 0) > 0 && (
+								<div
+									data-testid="worktree-creating-row"
+									className="flex items-center gap-8 py-4 pr-8 pl-16 tr-text-ui text-text-muted"
+								>
+									<Loader2 className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />
+									Creating worktree…
+								</div>
 							)}
 						</li>
 					);
