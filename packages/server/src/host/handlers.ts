@@ -5,6 +5,7 @@ import type {
 	GitDiffScope,
 	HistoryScope,
 	ImageContent,
+	InterviewResponse,
 	LoginReply,
 	QueueLane,
 	ReviewAnchor,
@@ -69,6 +70,7 @@ import {
 import { findOpenBranchReview } from "../branch-review";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
+import { recordAcceptedMessage, respondToInterview } from "../feedback";
 import { readDir, readFile } from "../fs";
 import {
 	countUnpushedCommits,
@@ -190,9 +192,10 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 	}
 }
 
-function trackSend(mode: SendMode, text: string): void {
+function recordAcceptedSend(mode: SendMode, text: string, clientKey: string): void {
 	if (isControlMessage(text)) return;
 	track({ name: "message_sent", params: { mode } });
+	recordAcceptedMessage(clientKey);
 }
 
 function fireReviewPrompt(
@@ -598,22 +601,22 @@ const handlers: Record<string, Handler> = {
 		}
 		return created;
 	},
-	"session.prompt": async (params) => {
+	"session.prompt": async (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
 		await ackSend(promptSession(p.sessionId, p.text, p.images));
-		trackSend("prompt", p.text);
+		recordAcceptedSend("prompt", p.text, ctx.clientKey);
 		return { ok: true } as const;
 	},
-	"session.steer": async (params) => {
+	"session.steer": async (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
 		await ackSend(steerSession(p.sessionId, p.text, p.images));
-		trackSend("steer", p.text);
+		recordAcceptedSend("steer", p.text, ctx.clientKey);
 		return { ok: true } as const;
 	},
-	"session.followUp": async (params) => {
+	"session.followUp": async (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
 		await ackSend(followUpSession(p.sessionId, p.text, p.images));
-		trackSend("follow_up", p.text);
+		recordAcceptedSend("follow_up", p.text, ctx.clientKey);
 		return { ok: true } as const;
 	},
 	"session.clearQueue": (params) => {
@@ -737,6 +740,10 @@ const handlers: Record<string, Handler> = {
 	"settings.update": (params) => {
 		const config = (params as { config: AppConfigUpdate }).config;
 		return updateConfig(config);
+	},
+	"feedback.respond": (params) => {
+		respondToInterview((params as { action: InterviewResponse }).action);
+		return { ok: true } as const;
 	},
 	"history.search": (params) => {
 		const p = params as { query: string; scope: HistoryScope; limit?: number };

@@ -37,6 +37,7 @@ import {
 	setLoginPublisher,
 	stopJbcentralRuntime,
 } from "../auth";
+import { releaseInterview, setFeedbackPublisher } from "../feedback";
 import { resolveWorktreeFile } from "../fs";
 import { logger } from "../log";
 import { loadWorkspaces } from "../persistence";
@@ -139,7 +140,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			setTimeout(() => {
 				reapTimers.delete(clientKey);
 				if (sockets.has(clientKey)) return;
-				if (!requestReplays.clearClient(clientKey)) armClientReap(clientKey);
+				if (!requestReplays.clearClient(clientKey)) {
+					armClientReap(clientKey);
+					return;
+				}
+				releaseInterview(clientKey);
 			}, CLIENT_REPLAY_RETENTION_MS),
 		);
 	};
@@ -286,8 +291,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				resumeClientTerminals(ws.data.clientKey);
 			},
 			close(ws) {
-				if (stopping) return;
 				const { clientKey } = ws.data;
+				if (stopping) return;
 				if (sockets.get(clientKey) === ws) {
 					sockets.delete(clientKey);
 					terminalBackpressured.delete(clientKey);
@@ -310,6 +315,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			terminalBackpressured.add(clientKey);
 			ws.close();
 			return "unavailable";
+		}
+	});
+
+	setFeedbackPublisher((clientKey) => {
+		const ws = sockets.get(clientKey);
+		if (!ws) return false;
+		try {
+			return ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} })) !== 0;
+		} catch {
+			ws.close();
+			return false;
 		}
 	});
 
@@ -488,6 +504,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		requestReplays.clear();
 		persistTerminalSessions();
 		closeAllTerminals();
+		setFeedbackPublisher(null);
 		setSettingsPublisher(null);
 		setJbcentralAppliedPublisher(() => {});
 		setJbcentralChangedPublisher(() => {});

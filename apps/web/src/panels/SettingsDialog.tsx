@@ -1,4 +1,5 @@
 import {
+	RiFeedbackLine as Feedback,
 	RiGitBranchLine as GitBranch,
 	RiKeyLine as KeyRound,
 	RiLayoutTop2Line as LayoutPanelTop,
@@ -17,6 +18,7 @@ import { cn } from "@/lib";
 import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
+import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
@@ -34,6 +36,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
+	{ id: SettingsSection.Feedback, label: "Feedback", icon: Feedback },
 ];
 const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: SlidersHorizontal }];
 
@@ -113,6 +116,8 @@ export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }
 							<ReviewSettings />
 						) : section === SettingsSection.Privacy ? (
 							<PrivacySettings />
+						) : section === SettingsSection.Feedback ? (
+							<FeedbackSettings />
 						) : (
 							<AppearanceSettings />
 						)}

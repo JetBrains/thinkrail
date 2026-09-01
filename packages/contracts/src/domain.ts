@@ -466,6 +466,8 @@ export type AppConfigUpdate = Partial<Omit<AppConfig, "reviewModel" | "reviewEff
 	reviewEffort?: ThinkingLevel | null;
 };
 
+export type InterviewResponse = "book" | "postpone" | "never";
+
 export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;
 
 export const DEFAULT_CONFIG: AppConfig = {

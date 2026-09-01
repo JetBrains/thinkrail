@@ -99,6 +99,18 @@ describe("WsTransport channel replay", () => {
 		transport.subscribe(WS_CHANNELS.providerChanged, (payload) => received.push(payload));
 		expect(received).toEqual([]);
 	});
+
+	test("does not replay an addressed interview invitation to a late subscriber", () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const socket = TestWebSocket.instances[0];
+		socket?.open();
+		socket?.message(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} }));
+
+		const received: unknown[] = [];
+		transport.subscribe(WS_CHANNELS.feedbackInterview, (payload) => received.push(payload));
+		expect(received).toEqual([]);
+	});
 });
 
 describe("WsTransport dispatch barriers", () => {

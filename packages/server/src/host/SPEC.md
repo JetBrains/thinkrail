@@ -393,7 +393,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - **Interview invitation delivery:** the three user-send handlers share one post-`ackSend` path that
   filters control traffic once, tracks anonymous `message_sent`, and records the local feedback count. The
   feedback module's injected publisher maps an eligible claim to addressed `feedback.interview` delivery
-  for that request's opaque client key; delivery failure and socket close release the claim. Popup
+  for that request's opaque client key; delivery failure or final client reap after the reconnect grace
+  releases the claim, while a transient reconnect retains it. Popup
   `feedback.respond` actions are ordinary replay-safe requests and never alter the Settings link.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer` (including
   idempotent `shutdown()`), `bootHost`, `BootHostOptions`, and `BootedHost`.

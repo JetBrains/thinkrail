@@ -144,6 +144,7 @@ beforeEach(() => {
 		activeLogin: null,
 		settingsOpen: false,
 		settingsSection: "providers",
+		interviewPromptOpen: false,
 		chatMessageOrder: "oldest-first",
 		toasts: [],
 	});
@@ -2837,6 +2838,23 @@ test("openSettings deep-links to a section (default providers); closeSettings hi
 	s.closeSettings();
 	expect(useAppStore.getState().settingsOpen).toBe(false);
 	expect(useAppStore.getState().settingsSection).toBe("providers");
+});
+
+test("the interview prompt show action is idempotent and hide clears it", () => {
+	let updates = 0;
+	const unsubscribe = useAppStore.subscribe(() => {
+		updates += 1;
+	});
+
+	useAppStore.getState().showInterviewPrompt();
+	useAppStore.getState().showInterviewPrompt();
+	expect(useAppStore.getState().interviewPromptOpen).toBe(true);
+	expect(updates).toBe(1);
+
+	useAppStore.getState().hideInterviewPrompt();
+	expect(useAppStore.getState().interviewPromptOpen).toBe(false);
+	expect(updates).toBe(2);
+	unsubscribe();
 });
 
 test("an error frame is terminal: sets status/error and clears the live input + progress", () => {

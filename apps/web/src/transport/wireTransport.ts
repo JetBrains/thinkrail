@@ -114,6 +114,10 @@ export function initTransport(): WsTransport {
 			.catch(() => {});
 	});
 
+	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {
+		useAppStore.getState().showInterviewPrompt();
+	});
+
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
 		useAppStore.getState().addWorkspace(data as Workspace);
 	});

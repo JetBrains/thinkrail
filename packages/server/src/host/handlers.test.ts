@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace, WorkspaceWatchReadyResult } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
+import { recordAcceptedMessage, resetFeedbackForTests, setFeedbackPublisher } from "../feedback";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { todoReviewRecord } from "../todos";
 import { stopAllWatches } from "../watch";
@@ -29,6 +30,7 @@ function gitText(cwd: string, ...args: string[]): string {
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-handlers-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
+	resetFeedbackForTests();
 	repo = join(dataDir, "repo");
 	mkdirSync(repo);
 	git(repo, "init", "-b", "main");
@@ -45,6 +47,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	stopAllWatches();
+	resetFeedbackForTests();
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -55,6 +58,26 @@ test("request diagnostics expose only registered method names", async () => {
 	expect(requestMethodDiagnostic("secret prompt value")).toBe("unknown method");
 	expect(requestMethodDiagnostic("toString")).toBe("unknown method");
 	await expect(handleRequest("toString", undefined, CTX)).rejects.toThrow("Unknown method");
+});
+
+test("feedback.respond persists a popup action through the handler", async () => {
+	setFeedbackPublisher(() => true);
+	for (let count = 0; count < 10; count += 1) recordAcceptedMessage(CTX.clientKey);
+
+	expect(await handleRequest("feedback.respond", { action: "postpone" }, CTX)).toEqual({
+		ok: true,
+	});
+	expect(JSON.parse(readFileSync(join(dataDir, "feedback.json"), "utf8"))).toEqual({
+		acceptedMessages: 10,
+		nextInvitationAt: 20,
+		dismissed: false,
+	});
+});
+
+test("feedback.respond rejects an action outside the wire union", async () => {
+	await expect(handleRequest("feedback.respond", { action: "later" }, CTX)).rejects.toThrow(
+		"Invalid interview response",
+	);
 });
 
 test("workspace.rename locks the display name without changing Git or the worktree path", async () => {

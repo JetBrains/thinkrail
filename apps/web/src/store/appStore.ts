@@ -258,6 +258,7 @@ export const SettingsSection = {
 	Templates: "templates",
 	Review: "review",
 	Privacy: "privacy",
+	Feedback: "feedback",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
@@ -758,6 +759,7 @@ interface AppState {
 	activeLogin: LoginState | null;
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
+	interviewPromptOpen: boolean;
 	theme: ThemeId;
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
@@ -937,6 +939,8 @@ interface AppState {
 	openSettings: (section?: SettingsSection) => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
+	showInterviewPrompt: () => void;
+	hideInterviewPrompt: () => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
@@ -1557,6 +1561,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	activeLogin: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
+	interviewPromptOpen: false,
 	theme: DEFAULT_CONFIG.theme,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
@@ -2896,6 +2901,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
+	showInterviewPrompt: () =>
+		set((state) => (state.interviewPromptOpen ? state : { interviewPromptOpen: true })),
+	hideInterviewPrompt: () => set({ interviewPromptOpen: false }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
 	applyConfig: (config) => set(configPatch(config)),
 	requestToolView: (workspaceId, tool) =>

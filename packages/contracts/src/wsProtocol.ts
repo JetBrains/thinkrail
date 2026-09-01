@@ -14,6 +14,7 @@ import type {
 	GitStatus,
 	HistoryScope,
 	HistorySearchResult,
+	InterviewResponse,
 	JbcentralActionResult,
 	JbcentralConnectResult,
 	JbcentralLoginResult,
@@ -86,7 +87,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 55;
+export const PROTOCOL_VERSION = 56;
 export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
@@ -203,6 +204,7 @@ export const WS_METHODS = {
 	providerJbcentralLogin: "provider.jbcentralLogin",
 	providerJbcentralUpdate: "provider.jbcentralUpdate",
 	settingsUpdate: "settings.update",
+	feedbackRespond: "feedback.respond",
 	historySearch: "history.search",
 	reviewGet: "review.get",
 	reviewCommentAdd: "review.commentAdd",
@@ -236,6 +238,7 @@ export const WS_CHANNELS = {
 	workspaceRemoved: "workspace.removed",
 	workspaceFsChanged: "workspace.fsChanged",
 	settingsChanged: "settings.changed",
+	feedbackInterview: "feedback.interview",
 	reviewChanged: "review.changed",
 } as const;
 
@@ -511,6 +514,7 @@ export interface WsMethodMap {
 	"provider.jbcentralLogin": { params: Record<string, never>; result: JbcentralLoginResult };
 	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
+	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
 	"history.search": {
 		params: { query: string; scope: HistoryScope; limit?: number };
 		result: HistorySearchResult;
