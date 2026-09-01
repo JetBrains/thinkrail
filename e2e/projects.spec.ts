@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
@@ -10,6 +9,7 @@ import {
 	stagePlainFolder,
 	worktreeRows,
 } from "./fixtures/app";
+import { git } from "./fixtures/git";
 import {
 	E2E_DATA_DIR,
 	E2E_FIXTURE_REPO,
@@ -28,12 +28,12 @@ function seedSecondRepo(): string {
 	const repo = join(E2E_DATA_DIR, "second-project");
 	rmSync(repo, { recursive: true, force: true });
 	mkdirSync(repo, { recursive: true });
-	execFileSync("git", ["-C", repo, "init", "-b", "main"]);
-	execFileSync("git", ["-C", repo, "config", "user.email", "e2e@thinkrail.test"]);
-	execFileSync("git", ["-C", repo, "config", "user.name", "ThinkRail E2E"]);
+	git(repo, "init", "-b", "main");
+	git(repo, "config", "user.email", "e2e@thinkrail.test");
+	git(repo, "config", "user.name", "ThinkRail E2E");
 	writeFileSync(join(repo, "README.md"), "# second project\n");
-	execFileSync("git", ["-C", repo, "add", "-A"]);
-	execFileSync("git", ["-C", repo, "commit", "-m", "seed"]);
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "seed");
 	writeFileSync(E2E_PICK_DIR_POINTER, repo);
 	return repo;
 }

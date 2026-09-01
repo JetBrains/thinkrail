@@ -1,8 +1,8 @@
-import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { commitFile } from "./fixtures/git";
 
 // The agent-reviewer's reflection pass, end to end (@agent, real provider): Start review on a step whose
 // committed change carries a blatant problem (a hallucinated import + inverted logic under a "tests pass"
@@ -11,19 +11,6 @@ import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 // that reflection RAN (a comment carries a `reflection` verdict) — never a specific kept/refuted outcome,
 // which a live model decides. Inherently slower + less deterministic than the no-agent badge test in
 // review.spec.ts; on-demand only (real tokens), never a commit/CI gate.
-
-function commitFile(worktree: string, path: string, content: string, subject: string): string {
-	writeFileSync(join(worktree, path), content);
-	const git = (...args: string[]) =>
-		execFileSync(
-			"git",
-			["-C", worktree, "-c", "user.email=e2e@thinkrail.test", "-c", "user.name=e2e", ...args],
-			{ encoding: "utf8" },
-		);
-	git("add", "--", path);
-	git("commit", "--no-verify", "-m", subject);
-	return git("rev-parse", "HEAD").trim();
-}
 
 /** Poll review.get over a throwaway socket until at least one comment carries a reflection verdict. */
 async function reflectionLanded(page: Page): Promise<boolean> {

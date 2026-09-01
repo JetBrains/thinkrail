@@ -1,11 +1,11 @@
-import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { gitQuiet } from "./git";
 import { E2E_FIXTURE_REPO } from "./paths";
 
 export function fixtureRepoHealthy(): boolean {
 	try {
-		execFileSync("git", ["-C", E2E_FIXTURE_REPO, "rev-parse", "--git-dir"], { stdio: "ignore" });
+		gitQuiet(E2E_FIXTURE_REPO, "rev-parse", "--git-dir");
 		return true;
 	} catch {
 		return false;
@@ -14,8 +14,7 @@ export function fixtureRepoHealthy(): boolean {
 
 export function seedFixtureRepo(): void {
 	mkdirSync(E2E_FIXTURE_REPO, { recursive: true });
-	const git = (...args: string[]) =>
-		execFileSync("git", ["-C", E2E_FIXTURE_REPO, ...args], { stdio: "ignore" });
+	const git = (...args: string[]) => gitQuiet(E2E_FIXTURE_REPO, ...args);
 	git("init", "-b", "main");
 	git("config", "user.email", "e2e@thinkrail.test");
 	git("config", "user.name", "ThinkRail E2E");
