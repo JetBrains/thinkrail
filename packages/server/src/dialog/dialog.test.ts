@@ -151,6 +151,28 @@ test("THINKRAIL_PICK_DIR overrides the native picker", async () => {
 	}
 });
 
+test("a picker override file can force a deterministic failure before native selection", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "trpi-pick-"));
+	const pointer = join(dir, "pick-dir");
+	writeFileSync(pointer, "error:Deterministic picker failure");
+	let spawned = false;
+	try {
+		await expect(
+			selectDirectory({
+				platform: "win32",
+				env: { THINKRAIL_PICK_DIR: pointer },
+				runPicker: async () => {
+					spawned = true;
+					return { stdout: "", stderr: "", code: 0 };
+				},
+			}),
+		).rejects.toThrow("Deterministic picker failure");
+		expect(spawned).toBe(false);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
 test("THINKRAIL_PICK_DIR reads its value from a file when it names one (live per call)", async () => {
 	const dir = mkdtempSync(join(tmpdir(), "trpi-pick-"));
 	const pointer = join(dir, "pick-dir");

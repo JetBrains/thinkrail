@@ -17,6 +17,62 @@ import {
 	E2E_PLAIN_DIR,
 } from "./fixtures/paths";
 
+function parseWsFrame(message: unknown): Record<string, unknown> | null {
+	if (typeof message !== "string") return null;
+	try {
+		const frame: unknown = JSON.parse(message);
+		return frame !== null && typeof frame === "object" ? (frame as Record<string, unknown>) : null;
+	} catch {
+		return null;
+	}
+}
+
+function signal() {
+	let send = () => {};
+	const received = new Promise<void>((resolve) => {
+		send = resolve;
+	});
+	return { received, send };
+}
+
+async function holdNextPickerReply(page: Page) {
+	const held = signal();
+	const release = signal();
+	const acknowledged = signal();
+	let pickerRequestId: string | null = null;
+	await page.routeWebSocket(/\/ws(?:\?|$)/, (browserSocket) => {
+		const serverSocket = browserSocket.connectToServer();
+		browserSocket.onMessage((message) => {
+			const frame = parseWsFrame(message);
+			if (frame?.method === "dialog.selectDirectory" && typeof frame.id === "string") {
+				pickerRequestId = frame.id;
+			}
+			if (
+				pickerRequestId !== null &&
+				Array.isArray(frame?.ack) &&
+				frame.ack.includes(pickerRequestId)
+			) {
+				acknowledged.send();
+			}
+			serverSocket.send(message);
+		});
+		serverSocket.onMessage((message) => {
+			const frame = parseWsFrame(message);
+			if (pickerRequestId !== null && frame?.id === pickerRequestId) {
+				held.send();
+				void release.received.then(() => browserSocket.send(message));
+				return;
+			}
+			browserSocket.send(message);
+		});
+	});
+	return {
+		held: held.received,
+		release: release.send,
+		acknowledged: acknowledged.received,
+	};
+}
+
 async function openProjectActions(page: Page, row: Locator): Promise<Locator> {
 	await row.click({ button: "right" });
 	const menu = page.getByTestId("project-actions");
@@ -72,8 +128,9 @@ test("opens a project from an explicit host path", async ({ page }) => {
 	).toBeVisible();
 });
 
-test("headless picker failure falls back to host-path entry", async ({ page }) => {
-	writeFileSync(E2E_PICK_DIR_POINTER, "");
+test("picker failure falls back to host-path entry on every host platform", async ({ page }) => {
+	const failure = "Deterministic picker failure from the e2e host";
+	writeFileSync(E2E_PICK_DIR_POINTER, `error:${failure}`);
 	try {
 		await page.goto("/");
 		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -83,9 +140,7 @@ test("headless picker failure falls back to host-path entry", async ({ page }) =
 
 		const dialog = page.getByTestId("open-project-path-dialog");
 		await expect(dialog).toBeVisible();
-		await expect(dialog.getByTestId("open-project-picker-error")).toContainText(
-			"No graphical session",
-		);
+		await expect(dialog.getByTestId("open-project-picker-error")).toContainText(failure);
 		await dialog.getByTestId("open-project-path-input").fill(E2E_FIXTURE_REPO);
 		await dialog.getByTestId("open-project-path-submit").click();
 
@@ -96,6 +151,35 @@ test("headless picker failure falls back to host-path entry", async ({ page }) =
 	} finally {
 		writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 	}
+});
+
+test("manual path from the rail supersedes a picker started from Welcome", async ({ page }) => {
+	const pickerReply = await holdNextPickerReply(page);
+	await openAppFresh(page);
+	const manualRepo = seedSecondRepo();
+	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
+
+	await page.getByTestId("welcome-cta").click();
+	await page.getByTestId("menu-open-project").click();
+	await pickerReply.held;
+
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-enter-host-path").click();
+	const pathDialog = page.getByTestId("open-project-path-dialog");
+	await pathDialog.getByTestId("open-project-path-input").fill(manualRepo);
+	await pathDialog.getByTestId("open-project-path-submit").click();
+	await expect(page.getByTestId("welcome-title")).toHaveText("second-project");
+
+	pickerReply.release();
+	await pickerReply.acknowledged;
+	await page.getByTestId("open-settings").click();
+	await expect(page.getByTestId("providers-refresh")).toBeEnabled();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+	await expect(page.getByTestId("welcome-title")).toHaveText("second-project");
+	await expect(
+		page.getByTestId("project-item").filter({ hasText: basename(E2E_FIXTURE_REPO) }),
+	).toHaveCount(0);
 });
 
 test("opening a non-git folder offers to initialise a repo, then opens it end-to-end", async ({

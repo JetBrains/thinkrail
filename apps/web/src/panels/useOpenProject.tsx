@@ -1,12 +1,14 @@
 import type { Project } from "@thinkrail/contracts";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { createLatestOperation } from "./latestOperation";
 import { NoticeDialog } from "./NoticeDialog";
 import { OpenProjectPathDialog } from "./OpenProjectPathDialog";
 
 const PICK_TIMEOUT_MS = 30 * 60_000;
+const projectOpenIntents = createLatestOperation();
 
 export function useOpenProject(onOpened: (project: Project) => void | Promise<void>): {
 	openProject: (rawPath: string) => Promise<void>;
@@ -17,23 +19,28 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 	const [initTarget, setInitTarget] = useState<string | null>(null);
 	const [openError, setOpenError] = useState<string | null>(null);
 	const [pathEntry, setPathEntry] = useState<{ reason: string | null } | null>(null);
-	const pickerGeneration = useRef(0);
 
-	const adopt = async (project: Project) => {
+	const adopt = async (project: Project, isCurrent: () => boolean) => {
+		if (!isCurrent()) return;
 		useAppStore.getState().applyProjectUpdated(project);
+		if (!isCurrent()) return;
 		await onOpened(project);
 	};
 
-	const openProject = async (rawPath: string) => {
-		pickerGeneration.current += 1;
+	const openProjectForIntent = async (rawPath: string, isCurrent: () => boolean) => {
 		const trimmed = rawPath.trim();
-		if (!trimmed) return;
+		if (!trimmed || !isCurrent()) return;
 		try {
-			await adopt(await getTransport().request("project.open", { path: trimmed }));
+			const project = await getTransport().request("project.open", { path: trimmed });
+			if (!isCurrent()) return;
+			await adopt(project, isCurrent);
+			if (!isCurrent()) return;
 		} catch (err) {
+			if (!isCurrent()) return;
 			const status = await getTransport()
 				.request("project.inspect", { path: trimmed })
 				.catch(() => null);
+			if (!isCurrent()) return;
 			if (status?.kind === "initable") setInitTarget(trimmed);
 			else if (status?.kind === "missing")
 				setOpenError(`This folder no longer exists:\n${trimmed}`);
@@ -42,22 +49,29 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 		}
 	};
 
+	const openProject = (rawPath: string) =>
+		openProjectForIntent(rawPath, projectOpenIntents.begin());
+
 	const initProject = async (path: string) => {
+		const isCurrent = projectOpenIntents.begin();
 		try {
-			await adopt(await getTransport().request("project.init", { path }));
+			const project = await getTransport().request("project.init", { path });
+			if (!isCurrent()) return;
+			await adopt(project, isCurrent);
+			if (!isCurrent()) return;
 		} catch (err) {
+			if (!isCurrent()) return;
 			setOpenError(errorText(err, `Couldn't initialise a git repository in ${path}.`));
 		}
 	};
 
 	const enterHostPath = () => {
-		pickerGeneration.current += 1;
+		projectOpenIntents.begin();
 		setPathEntry({ reason: null });
 	};
 
 	const pickAndOpen = async () => {
-		const generation = pickerGeneration.current + 1;
-		pickerGeneration.current = generation;
+		const isCurrent = projectOpenIntents.begin();
 		let path: string | null;
 		try {
 			({ path } = await getTransport().request(
@@ -66,12 +80,12 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 				{ timeoutMs: PICK_TIMEOUT_MS },
 			));
 		} catch (err) {
-			if (pickerGeneration.current !== generation) return;
+			if (!isCurrent()) return;
 			setPathEntry({ reason: errorText(err, "Couldn't open the folder picker on the host.") });
 			return;
 		}
-		if (pickerGeneration.current !== generation) return;
-		if (path) await openProject(path);
+		if (!isCurrent()) return;
+		if (path) await openProjectForIntent(path, isCurrent);
 	};
 
 	const dialogs = (

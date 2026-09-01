@@ -112,8 +112,10 @@ treatment.
   the path belongs to the computer running ThinkRail, accepts a host-absolute path or `~` / `~/…`, and
   submits through this same open/inspect/init flow. **Enter host path…** is also always present beside Open
   project in `AddProjectMenu`: a remote client cannot tell whether a successful native picker opened on an
-  unseen host display, so recovery cannot be failure-only. Entering the manual path flow supersedes the
-  hook's current picker generation, so a hidden picker reply that arrives later cannot open another project.
+  unseen host display, so recovery cannot be failure-only. Every open gesture starts one client-wide
+  last-intent generation shared by both mounted `useOpenProject` instances. The flow rechecks that generation
+  after each picker, open, inspect, init, and adoption await, so a manual path or recent selection from either
+  surface supersedes any older flow before it can select a project or raise a stale dialog.
   These are modals on `components/ui/dialog` (the init offer has no on-screen anchor, unlike the Remove
   popover); `NoticeDialog` remains the single-button
   surface for failures with no recovery inside that notice. The hook returns a `dialogs` node each consumer

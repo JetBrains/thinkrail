@@ -20,6 +20,9 @@ interface SelectDirectoryOptions {
 	runPicker?: PickerRunner;
 }
 
+type PickerOverride = { kind: "path"; path: string } | { kind: "error"; message: string };
+
+const PICKER_ERROR_DIRECTIVE = "error:";
 const toPath = (stdout: string): string | null => stdout.trim().replace(/[/\\]+$/, "") || null;
 
 const appleScriptCancellation = ({ stderr }: PickerExecution): boolean => stderr.includes("(-128)");
@@ -91,13 +94,24 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
 	}
 }
 
-function resolveOverride(env: NodeJS.ProcessEnv): string | null {
+function pickerOverrideFromFile(value: string): PickerOverride | null {
+	const content = readFileSync(value, "utf8").trim();
+	if (!content) return null;
+	if (!content.startsWith(PICKER_ERROR_DIRECTIVE)) return { kind: "path", path: content };
+	const message = content.slice(PICKER_ERROR_DIRECTIVE.length).trim();
+	return {
+		kind: "error",
+		message: message || "The picker failure directive requires a message.",
+	};
+}
+
+function resolveOverride(env: NodeJS.ProcessEnv): PickerOverride | null {
 	const value = env.THINKRAIL_PICK_DIR;
 	if (!value) return null;
 	try {
-		if (statSync(value).isFile()) return readFileSync(value, "utf8").trim() || null;
+		if (statSync(value).isFile()) return pickerOverrideFromFile(value);
 	} catch {}
-	return value;
+	return { kind: "path", path: value };
 }
 
 export function pickerFailure(stderr: string, code: number): string {
@@ -127,7 +141,8 @@ export async function selectDirectory({
 	runPicker = defaultRunPicker,
 }: SelectDirectoryOptions = {}): Promise<{ path: string | null }> {
 	const override = resolveOverride(env);
-	if (override) return { path: override };
+	if (override?.kind === "error") throw new Error(override.message);
+	if (override?.kind === "path") return { path: override.path };
 	if (platform === "linux" && !env.DISPLAY && !env.WAYLAND_DISPLAY) {
 		throw new Error("No graphical session is available for the folder picker on this Linux host.");
 	}
