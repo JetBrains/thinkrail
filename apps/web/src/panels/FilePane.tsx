@@ -1,5 +1,6 @@
 import { lazy, Suspense, useMemo } from "react";
 import { isMarkdownPath } from "@/lib/utils";
+import { LoadingRegion } from "../components/Skeleton";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
@@ -12,9 +13,7 @@ import { useFileReview } from "./useReviewCommenting";
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 
-const loading = (
-	<div className="flex h-full items-center justify-center text-text-muted">Loading…</div>
-);
+const loading = <LoadingRegion rows={12} className="h-full p-12" />;
 
 export function FilePane({ tab }: { tab: FileTab }) {
 	const setFileTabView = useAppStore((s) => s.setFileTabView);
@@ -83,12 +82,14 @@ export function FilePane({ tab }: { tab: FileTab }) {
 			<div className="min-h-0 flex-1">
 				{view === "rendered" ? (
 					<Suspense fallback={loading}>
-						<MarkdownPreview
-							content={tab.content}
-							workspaceId={tab.workspaceId}
-							path={tab.path}
-							review={review}
-						/>
+						<div className="h-full motion-safe:animate-reveal">
+							<MarkdownPreview
+								content={tab.content}
+								workspaceId={tab.workspaceId}
+								path={tab.path}
+								review={review}
+							/>
+						</div>
 					</Suspense>
 				) : (
 					editor

@@ -724,6 +724,8 @@ interface AppState {
 	previewTabByWorkspace: Record<string, string>;
 	navTickByWorkspace: Record<string, number>;
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	chatStartsByWorkspace: Record<string, number>;
+	worktreeCreationsByProject: Record<string, number>;
 	deletedSessionsByWorkspace: Record<string, Record<string, true>>;
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
@@ -860,6 +862,10 @@ interface AppState {
 	consumeTerminalInitialCommand: (workspaceId: string, tabKey: string) => void;
 	closeTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
 	setActiveTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
+	beginChatStart: (workspaceId: string) => void;
+	endChatStart: (workspaceId: string) => void;
+	beginWorktreeCreation: (projectId: string) => void;
+	endWorktreeCreation: (projectId: string) => void;
 	openChatSession: (
 		workspaceId: string,
 		sessionId: string,
@@ -1524,6 +1530,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	previewTabByWorkspace: {},
 	navTickByWorkspace: {},
 	closedChatsByWorkspace: {},
+	chatStartsByWorkspace: {},
+	worktreeCreationsByProject: {},
 	deletedSessionsByWorkspace: Object.create(null) as Record<string, Record<string, true>>,
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
@@ -2148,6 +2156,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				previewTabByWorkspace: omitKey(s.previewTabByWorkspace, workspaceId),
 				navTickByWorkspace: omitKey(s.navTickByWorkspace, workspaceId),
 				closedChatsByWorkspace: omitKey(s.closedChatsByWorkspace, workspaceId),
+				chatStartsByWorkspace: omitKey(s.chatStartsByWorkspace, workspaceId),
 				terminalsByWorkspace: omitKey(s.terminalsByWorkspace, workspaceId),
 				activeTerminalByWorkspace: omitKey(s.activeTerminalByWorkspace, workspaceId),
 				sessions,
@@ -2320,6 +2329,40 @@ export const useAppStore = create<AppState>((set, get) => ({
 						activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
 					},
 		),
+	beginWorktreeCreation: (projectId) =>
+		set((s) => ({
+			worktreeCreationsByProject: {
+				...s.worktreeCreationsByProject,
+				[projectId]: (s.worktreeCreationsByProject[projectId] ?? 0) + 1,
+			},
+		})),
+	endWorktreeCreation: (projectId) =>
+		set((s) => {
+			const remaining = (s.worktreeCreationsByProject[projectId] ?? 0) - 1;
+			return {
+				worktreeCreationsByProject:
+					remaining > 0
+						? { ...s.worktreeCreationsByProject, [projectId]: remaining }
+						: omitKey(s.worktreeCreationsByProject, projectId),
+			};
+		}),
+	beginChatStart: (workspaceId) =>
+		set((s) => ({
+			chatStartsByWorkspace: {
+				...s.chatStartsByWorkspace,
+				[workspaceId]: (s.chatStartsByWorkspace[workspaceId] ?? 0) + 1,
+			},
+		})),
+	endChatStart: (workspaceId) =>
+		set((s) => {
+			const remaining = (s.chatStartsByWorkspace[workspaceId] ?? 0) - 1;
+			return {
+				chatStartsByWorkspace:
+					remaining > 0
+						? { ...s.chatStartsByWorkspace, [workspaceId]: remaining }
+						: omitKey(s.chatStartsByWorkspace, workspaceId),
+			};
+		}),
 	openChatSession: (workspaceId, sessionId, model, thinkingLevel, syncedTick, options = {}) => {
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId] || isSessionDeleted(s, workspaceId, sessionId)) {

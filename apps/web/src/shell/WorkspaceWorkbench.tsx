@@ -1,11 +1,13 @@
 import {
 	RiGitBranchLine as GitBranch,
+	RiLoader4Line as Loader2,
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
+import { LoadingRegion } from "../components/Skeleton";
 import { DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { IconTooltip } from "../components/ui/tooltip";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
@@ -69,11 +71,11 @@ const NO_EDITOR_TABS: EditorTab[] = [];
 
 function MissingResource({ label }: { label: string }) {
 	return (
-		<div className="flex h-full items-center justify-center px-16 text-center tr-text-ui text-text-muted">
-			Restoring {label}…
-		</div>
+		<LoadingRegion rows={12} label={`Restoring ${label}`} className="h-full overflow-hidden p-16" />
 	);
 }
+
+const CHAT_RETRY_DELAY_MS = 4000;
 
 function ChatResourceBody({
 	workspaceId,
@@ -85,6 +87,13 @@ function ChatResourceBody({
 	onOpenFile: (path: string) => void;
 }) {
 	const available = useAppStore((state) => state.sessions[tab.sessionId] !== undefined);
+	const [stalled, setStalled] = useState(false);
+	useEffect(() => {
+		if (available) return;
+		setStalled(false);
+		const timer = setTimeout(() => setStalled(true), CHAT_RETRY_DELAY_MS);
+		return () => clearTimeout(timer);
+	}, [available, tab.sessionId]);
 	if (available) {
 		return (
 			<ErrorBoundary label="chat" resetKeys={[workspaceId, tab.id]}>
@@ -94,35 +103,37 @@ function ChatResourceBody({
 			</ErrorBoundary>
 		);
 	}
+	const retry = () => {
+		void hydrateChatResource(workspaceId, tab.sessionId)
+			.then((installed) => {
+				if (installed) return;
+				const { state, current } = currentChatDestination(workspaceId, tab, undefined);
+				if (
+					current &&
+					!state.removedWorkspaceIds[workspaceId] &&
+					!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
+				) {
+					toast.error("The chat could not be restored.", "Couldn't restore the chat");
+				}
+			})
+			.catch((error) => {
+				const { state, current } = currentChatDestination(workspaceId, tab, undefined);
+				if (
+					current &&
+					!state.removedWorkspaceIds[workspaceId] &&
+					!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
+				) {
+					toast.error(errorText(error), "Couldn't restore the chat");
+				}
+			});
+	};
+	if (!stalled) return <MissingResource label="chat" />;
 	return (
 		<div className="flex h-full flex-col items-center justify-center gap-8 text-text-muted">
-			<MissingResource label="chat" />
+			<span className="tr-text-ui">The chat is taking longer than usual to restore.</span>
 			<button
 				type="button"
-				onClick={() => {
-					void hydrateChatResource(workspaceId, tab.sessionId)
-						.then((installed) => {
-							if (installed) return;
-							const { state, current } = currentChatDestination(workspaceId, tab, undefined);
-							if (
-								current &&
-								!state.removedWorkspaceIds[workspaceId] &&
-								!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
-							) {
-								toast.error("The chat could not be restored.", "Couldn't restore the chat");
-							}
-						})
-						.catch((error) => {
-							const { state, current } = currentChatDestination(workspaceId, tab, undefined);
-							if (
-								current &&
-								!state.removedWorkspaceIds[workspaceId] &&
-								!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
-							) {
-								toast.error(errorText(error), "Couldn't restore the chat");
-							}
-						});
-				}}
+				onClick={retry}
 				className="rounded-[var(--radius-sm)] border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
 			>
 				Retry
@@ -199,6 +210,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
+	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
 	const terminalClose = useTerminalClose();
 	const specs = useWorkspaceSpecs(workspaceId);
@@ -516,6 +528,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			if (!currentAttention) return;
 			changeAttention({ ...currentAttention, lastFocusedCenterGroupId: groupId });
 			const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, groupId);
+			useAppStore.getState().beginChatStart(workspaceId);
 			void createSessionWithSkillBaseline({ workspaceId })
 				.then(({ result: { sessionId, model, thinkingLevel }, syncedTick }) => {
 					const store = useAppStore.getState();
@@ -536,7 +549,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					) {
 						toast.error("The agent session could not be created.", "Couldn't start the chat");
 					}
-				});
+				})
+				.finally(() => useAppStore.getState().endChatStart(workspaceId));
 		},
 		[changeAttention, workspaceId],
 	);
@@ -627,10 +641,21 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						<button
 							type="button"
 							data-testid="start-chat"
+							data-starting={chatStarting || undefined}
+							disabled={chatStarting}
 							onClick={() => startChat(groupId)}
-							className="mt-4 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
+							className="mt-4 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-text-muted disabled:hover:bg-container-elevated-bg"
 						>
-							<MessageSquarePlus className="size-14" /> New chat
+							{chatStarting ? (
+								<>
+									<Loader2 className="size-14 animate-spin motion-reduce:animate-none" /> Starting
+									chat…
+								</>
+							) : (
+								<>
+									<MessageSquarePlus className="size-14" /> New chat
+								</>
+							)}
 						</button>
 					</div>
 				)}

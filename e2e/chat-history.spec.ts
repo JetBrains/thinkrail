@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { TodoStore } from "pi-todos/core";
 import {
 	defaultWorkspaceRow,
@@ -19,11 +19,6 @@ function setMtime(path: string, ms: number): void {
 	utimesSync(path, new Date(ms), new Date(ms));
 }
 
-async function reopenChat(page: Page, name: string): Promise<void> {
-	await page.getByTestId("chat-history").first().click();
-	await page.getByTestId("closed-chat-item").filter({ hasText: name }).click();
-}
-
 function seedOpenTodo(sessionId: string, title: string): void {
 	const contextDir = join(repoCwd(), ".thinkrail", "context");
 	mkdirSync(contextDir, { recursive: true });
@@ -35,7 +30,7 @@ test.afterEach(() => {
 	rmSync(join(E2E_FIXTURE_REPO, ".thinkrail"), { recursive: true, force: true });
 });
 
-test("disk chats stay in local history until explicitly reopened, including unfinished work", async ({
+test("a disk chat with unfinished work auto-opens; a finished one stays in local history", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -68,12 +63,13 @@ test("disk chats stay in local history until explicitly reopened, including unfi
 	await enterDefaultWorkspace(page);
 
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
-	await expect(chatTabs).toHaveCount(0);
-	await page.getByTestId("chat-history").first().click();
-	await expect(page.getByTestId("closed-chat-item")).toHaveCount(2);
-	await page.getByTestId("closed-chat-item").filter({ hasText: "the migration chat" }).click();
 	await expect(chatTabs).toHaveCount(1);
 	await expect(page.getByText("stopped before the final verification pass")).toBeVisible();
+	await page.getByTestId("chat-history").first().click();
+	await expect(page.getByTestId("closed-chat-item")).toHaveCount(1);
+	await expect(
+		page.getByTestId("closed-chat-item").filter({ hasText: "release notes chat" }),
+	).toBeVisible();
 });
 
 test("a closed chat can be moved to trash from history", async ({ page }) => {
@@ -96,7 +92,6 @@ test("a closed chat can be moved to trash from history", async ({ page }) => {
 	setMtime(kept.path, BASE_TS + 50_000);
 
 	await enterDefaultWorkspace(page);
-	await reopenChat(page, "keep this chat");
 	await expect(page.getByText("keep this transcript")).toBeVisible();
 	await page.getByTestId("chat-history").first().click();
 	const row = page.getByTestId("closed-chat-row").filter({ hasText: "trash this chat" });
@@ -130,7 +125,6 @@ test("trashing a chat converges to a second client", async ({ page, context }) =
 	setMtime(doomed.path, BASE_TS);
 
 	await enterDefaultWorkspace(page);
-	await reopenChat(page, "shared doomed chat");
 	await expect(page.getByText("shared doomed transcript")).toBeVisible();
 
 	const page2 = await context.newPage();
@@ -138,7 +132,6 @@ test("trashing a chat converges to a second client", async ({ page, context }) =
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(page2);
 	await defaultWorkspaceRow(page2).click();
-	await reopenChat(page2, "shared doomed chat");
 	await expect(page2.getByText("shared doomed transcript")).toBeVisible();
 
 	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
@@ -166,7 +159,6 @@ test("a client that misses chat deletion while offline reconciles it after recon
 	setMtime(doomed.path, BASE_TS);
 
 	await enterDefaultWorkspace(page);
-	await reopenChat(page, "offline doomed chat");
 	await expect(page.getByText("offline doomed transcript")).toBeVisible();
 
 	const context2 = await browser.newContext();
@@ -188,7 +180,6 @@ test("a client that misses chat deletion while offline reconciles it after recon
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(page2);
 	await defaultWorkspaceRow(page2).click();
-	await reopenChat(page2, "offline doomed chat");
 	await expect(page2.getByText("offline doomed transcript")).toBeVisible();
 
 	await context2.setOffline(true);
@@ -218,7 +209,7 @@ test("a client that misses chat deletion while offline reconciles it after recon
 	await context2.close();
 });
 
-test("with no TODOs, every disk chat remains in history until explicit reopen", async ({
+test("with no TODOs, the single newest disk chat opens as a fallback; older ones stay in history", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -237,9 +228,11 @@ test("with no TODOs, every disk chat remains in history until explicit reopen", 
 	await enterDefaultWorkspace(page);
 
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
-	await expect(chatTabs).toHaveCount(0);
-	await page.getByTestId("chat-history").first().click();
-	await expect(page.getByTestId("closed-chat-item")).toHaveCount(2);
-	await page.getByTestId("closed-chat-item").filter({ hasText: "newest fallback chat" }).click();
+	await expect(chatTabs).toHaveCount(1);
 	await expect(page.getByText("the newest fallback chat")).toBeVisible();
+	await page.getByTestId("chat-history").first().click();
+	await expect(page.getByTestId("closed-chat-item")).toHaveCount(1);
+	await expect(
+		page.getByTestId("closed-chat-item").filter({ hasText: "older fallback chat" }),
+	).toBeVisible();
 });

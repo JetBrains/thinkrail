@@ -6,6 +6,7 @@ import {
 import { lazy, Suspense, useState } from "react";
 import { IconTooltip } from "@/components/ui/tooltip";
 import { copyText, isMarkdownPath } from "@/lib/utils";
+import { LoadingRegion } from "../components/Skeleton";
 import type { DiffTab } from "../store";
 import { selectDiffTabTargetRef, useAppStore } from "../store";
 import { getTransport } from "../transport";
@@ -18,9 +19,7 @@ import { useFileReview } from "./useReviewCommenting";
 const MonacoDiff = lazy(() => import("./MonacoDiff"));
 const RenderedDiff = lazy(() => import("./RenderedDiff"));
 
-const loading = (
-	<div className="flex h-full items-center justify-center text-text-muted">Loading…</div>
-);
+const loading = <LoadingRegion rows={12} className="h-full p-12" />;
 
 export function DiffPane({ tab }: { tab: DiffTab }) {
 	const setDiffTabView = useAppStore((s) => s.setDiffTabView);
@@ -149,7 +148,9 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 			<div className="min-h-0 flex-1">
 				<Suspense fallback={loading}>
 					{rendered ? (
-						<RenderedDiff tab={tab} />
+						<div className="h-full motion-safe:animate-reveal">
+							<RenderedDiff tab={tab} />
+						</div>
 					) : (
 						<MonacoDiff
 							path={tab.path}

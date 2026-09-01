@@ -43,6 +43,7 @@ export async function openChatInTab(
 		store.reopenChat(workspaceId, sessionId, options);
 		return;
 	}
+	store.beginChatStart(workspaceId);
 	try {
 		const {
 			result: { summary, messages },
@@ -92,5 +93,7 @@ export async function openChatInTab(
 		) {
 			toast.error(errorText(err), "Couldn't open the chat");
 		}
+	} finally {
+		useAppStore.getState().endChatStart(workspaceId);
 	}
 }
