@@ -101,7 +101,7 @@ export function ChatTurnView({
 		case "markdown":
 			return isFinalAnswer ? (
 				<MessageWithCopy messageRole="assistant" side="left" getText={() => row.text}>
-					<div className="w-full min-w-0 tr-text-reading text-text-default">
+					<div className="w-full min-w-0 pb-32 tr-text-reading text-text-default">
 						<Markdown text={row.text} />
 					</div>
 				</MessageWithCopy>
@@ -299,7 +299,7 @@ function PlainUserTurn({
 	return (
 		<MessageWithCopy messageRole="user" side="right" getText={() => text}>
 			<div className="flex w-fit max-w-[85%] flex-col items-end">
-				<div className={USER_BUBBLE_BASE}>
+				<div className={cn(USER_BUBBLE_BASE, "pb-32")}>
 					{attachments.length > 0 ? (
 						<div className="flex flex-wrap gap-4 pb-4" data-testid="chat-message-images">
 							{attachments.map(({ key, label, img }) => (

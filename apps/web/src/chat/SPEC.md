@@ -122,10 +122,13 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   `CopyButton`) — for both roles alike, agent and user — rather than a row below the content. The user
   bubble stays content-only: the button is positioned against the outer wrapper, not injected into the
   bubble markup, and lands on the bubble's own corner because the bubble is the wrapper's only (and so
-  bottom-most, right-aligned) child. `MessageWithCopy` also carries the `data-testid="chat-message"`/
-  `data-role` hooks the jump/flash + tests rely on. `CopyButton` is a self-contained presentational
-  primitive (`navigator.clipboard.writeText` + a local ~1.2s `Copy`→`Check` icon flip); it does **not**
-  reach the store toast the way `panels/PlanPane` does, keeping the message renderers props-driven.
+  bottom-most, right-aligned) child. Both message content wrappers (the user bubble, the final-answer
+  markdown wrapper) carry `pb-32` — clearance for the button's 24px hit target plus its inset — so the
+  overlay's hit area is reserved padding, never the text's own last line, no matter how close that line
+  runs to the right edge. `MessageWithCopy` also carries the `data-testid="chat-message"`/`data-role`
+  hooks the jump/flash + tests rely on. `CopyButton` is a self-contained presentational primitive
+  (`navigator.clipboard.writeText` + a local ~1.2s `Copy`→`Check` icon flip); it does **not** reach the
+  store toast the way `panels/PlanPane` does, keeping the message renderers props-driven.
   Skill-invocation and review-package cards keep their own disclosure UI and carry no copy affordance.
 - `tool` — a **primary** tool call: the collapsible `ToolCard` frame (collapsed unless registered
   `defaultExpanded`; errors auto-expand; a manual toggle wins), or a `"bare"` renderer that owns its
