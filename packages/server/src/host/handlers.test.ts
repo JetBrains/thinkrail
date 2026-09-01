@@ -20,6 +20,12 @@ function git(cwd: string, ...args: string[]): void {
 	if (!result.success) throw new Error(`git ${args.join(" ")} failed`);
 }
 
+function gitText(cwd: string, ...args: string[]): string {
+	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "pipe" });
+	if (!result.success) throw new Error(`git ${args.join(" ")} failed`);
+	return new TextDecoder().decode(result.stdout).trim();
+}
+
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-handlers-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
@@ -49,6 +55,27 @@ test("request diagnostics expose only registered method names", async () => {
 	expect(requestMethodDiagnostic("secret prompt value")).toBe("unknown method");
 	expect(requestMethodDiagnostic("toString")).toBe("unknown method");
 	await expect(handleRequest("toString", undefined, CTX)).rejects.toThrow("Unknown method");
+});
+
+test("workspace.rename locks the display name without changing Git or the worktree path", async () => {
+	const created = (await handleRequest("workspace.create", { projectId: "p1" }, CTX)) as Workspace;
+
+	const renamed = (await handleRequest(
+		"workspace.rename",
+		{ id: created.id, name: "Manual Workspace Name" },
+		CTX,
+	)) as Workspace;
+
+	expect(renamed).toMatchObject({
+		id: created.id,
+		name: "Manual Workspace Name",
+		branch: created.branch,
+		renamed: true,
+		worktreePath: created.worktreePath,
+	});
+	expect(gitText(created.worktreePath, "symbolic-ref", "--short", "HEAD")).toBe(created.branch);
+	const listed = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	expect(listed.find((workspace) => workspace.id === created.id)).toMatchObject(renamed);
 });
 
 test("workspace.watchReady waits for startup once, then reports an already-ready watcher", async () => {
@@ -107,7 +134,7 @@ test("todo.requestFix on a chat that isn't on disk rolls the record back and nev
 	expect(after?.sessionId).toBeUndefined();
 });
 
-test("workspace.remove rejects the Default at the handler level, before any teardown side-effect", async () => {
+test("workspace mutation handlers reject the Default before any side effect", async () => {
 	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
 	const def = rows[0];
 	if (def?.kind !== "default")
@@ -116,6 +143,9 @@ test("workspace.remove rejects the Default at the handler level, before any tear
 	await expect(handleRequest("workspace.remove", { id: def.id }, CTX)).rejects.toThrow(
 		"The Default workspace cannot be removed",
 	);
+	await expect(
+		handleRequest("workspace.rename", { id: def.id, name: "Not Default" }, CTX),
+	).rejects.toThrow("The Default workspace cannot be renamed");
 
 	const after = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
 	expect(after.filter((w) => w.kind === "default")).toHaveLength(1);

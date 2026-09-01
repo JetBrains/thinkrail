@@ -186,6 +186,9 @@ Windows lane into the real profile (see `module-shared`).
 
 - **Owns:** browser scenarios and fixtures under `e2e/`, their Playwright configuration/runner entrypoints,
   isolation and port-allocation rules, report orchestration, and the public `e2e*` package commands.
+  `e2e/fixtures/git.ts` is the one place specs shell out to `git` (`git`, `gitQuiet`, `gitText`, `gitAs`,
+  `commitFile`); `gitAs`/`commitFile` pin a throwaway e2e identity so a seeded commit's authorship never
+  depends on the developer machine's real git config.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
   exports, CLI binary, packaged desktop adapter, shared retrying teardown helper, git, Chromium, and
   Playwright.

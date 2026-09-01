@@ -43,6 +43,7 @@ import {
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
+import { LoadingRegion } from "../components/Skeleton";
 import { IconTooltip } from "../components/ui/tooltip";
 import {
 	selectAgentReviewCommentCount,
@@ -531,11 +532,14 @@ export default function PlanPane({
 	const reviewComments = useAppStore((s) => s.reviewsByWorkspace[workspaceId]?.comments);
 
 	if (plan.data === null) {
-		return (
-			<div className="flex h-full items-center justify-center text-text-subtle tr-text-ui">
-				{plan.failed ? "Couldn't load the plan." : "Loading…"}
-			</div>
-		);
+		if (plan.failed) {
+			return (
+				<div className="flex h-full items-center justify-center text-text-subtle tr-text-ui">
+					Couldn't load the plan.
+				</div>
+			);
+		}
+		return <LoadingRegion rows={8} className="h-full p-12" />;
 	}
 	const data = plan.data;
 	const { done, total } = planSummary(data);
@@ -744,7 +748,10 @@ export default function PlanPane({
 	const exportMarkdown = () => planToMarkdown(data, title);
 
 	return (
-		<div data-testid="plan-pane" className="h-full overflow-auto bg-container-content-bg">
+		<div
+			data-testid="plan-pane"
+			className="h-full overflow-auto bg-container-content-bg motion-safe:animate-reveal"
+		>
 			<PrComposeDialog
 				state={prCompose}
 				updating={Boolean(openReview)}

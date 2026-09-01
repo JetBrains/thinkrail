@@ -42,11 +42,10 @@ and its actual port forms the window origin. The packaged `web/dist`, `/ws`, `/f
 therefore remain same-origin and the web client has no desktop branch. A dynamic loopback port is never
 persisted.
 
-Exactly one host may own a canonical ThinkRail data directory. Desktop and CLI both acquire the shared
-kernel-held loopback ownership lease before mutable host initialization. A matching owner fingerprint is
-refused with an actionable already-running result; a different owner advances through deterministic
-candidates; an occupied candidate that does not answer the bounded versioned handshake fails closed. The
-lease is released by graceful shutdown or automatically by process death, with no stale filesystem lock.
+Desktop, CLI, and source hosts do not exclude one another by data directory. Every launcher binds an
+independent serving port and initializes its own in-process services. If multiple hosts use the same mutable
+state, their persistence and event streams are not coordinated and concurrent changes may overwrite one
+another.
 
 ## Startup and packaged runtime
 
@@ -62,8 +61,7 @@ lease is released by graceful shutdown or automatically by process death, with n
    and macOS/Windows trash helpers. The generator's key map must satisfy every key of the server-owned
    `BundledExtensions` contract, so adding a required launcher field fails desktop typecheck instead of
    producing a packaged-only `undefined`. It then calls `bootHost()` on loopback port `0` with the staged web
-   directory, baked version, and `desktop` analytics provenance. `bootHost()` acquires ownership before its
-   mutable initialization.
+   directory, baked version, and `desktop` analytics provenance.
 4. Restore the valid route fragment and bounded client-preference map for
    `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
@@ -116,9 +114,9 @@ injects the literal URL as code on Linux.
 ## Lifecycle
 
 Every quit path calls the shared idempotent asynchronous server shutdown once. It settles/aborts active
-agent work within its bound, drains analytics, disposes server resources and PTYs, closes sockets, and
-then releases ownership. Electrobun's synchronous `before-quit` callback cancels quit while that promise is
-pending and retries `Utils.quit()` under a completion guard. Abrupt death relies only on kernel cleanup.
+agent work within its bound, drains analytics, disposes server resources and PTYs, and closes sockets.
+Electrobun's synchronous `before-quit` callback cancels quit while that promise is pending and retries
+`Utils.quit()` under a completion guard. Abrupt death relies only on operating-system process cleanup.
 
 ## Build and release
 

@@ -3021,7 +3021,7 @@ export function Workbench({
 			)}
 			direction="horizontal"
 			onLayout={alignedRowResize.onLayout}
-			className="h-full min-h-0 min-w-0"
+			className="h-full min-h-0 min-w-0 motion-safe:animate-fade-in"
 		>
 			{leftInAlignedRow ? (
 				<>
@@ -3144,7 +3144,7 @@ export function Workbench({
 			key={outerTopology}
 			direction="horizontal"
 			onLayout={projectOuterLayout}
-			className="h-full min-h-0 min-w-0 flex-1"
+			className="h-full min-h-0 min-w-0 flex-1 motion-safe:animate-fade-in"
 		>
 			{leftOwnsBottomCorner ? (
 				<>

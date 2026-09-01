@@ -327,7 +327,11 @@ of the host.
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /
-  **`workspace.openReview`** (the active branch's optional `OpenBranchReview` metadata) /
+  **`workspace.rename`** (`{ id, name }` → the locked updated `Workspace`; managed worktrees only;
+  changes the display name while preserving the Git branch + cwd, and broadcasts the ordinary full-snapshot
+  `workspace.updated`; `WORKSPACE_RENAME_PROTOCOL_VERSION` pins its v55 introduction so a newer client with
+  this action omits it against an older host) / **`workspace.openReview`** (the active
+  branch's optional `OpenBranchReview` metadata) /
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
   cross-agent skill aliases) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from

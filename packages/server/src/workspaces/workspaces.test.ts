@@ -209,7 +209,7 @@ test("listExistingWorktrees shows unattached branch and detached checkouts only"
 	git(repo, "worktree", "add", "--detach", detached, "main");
 	const managed = await createWorkspace("p1");
 
-	const candidates = listExistingWorktrees("p1");
+	const candidates = await listExistingWorktrees("p1");
 	expect(candidates).toContainEqual({
 		path: external,
 		branch: "feature/auth",
@@ -242,7 +242,7 @@ test("openExistingWorktree adopts idempotently and removal never reclaims the ch
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((event) => events.push(event));
 
-	const workspace = openExistingWorktree("p1", external);
+	const workspace = await openExistingWorktree("p1", external);
 	expect(workspace).toMatchObject({
 		projectId: "p1",
 		kind: "external",
@@ -254,10 +254,10 @@ test("openExistingWorktree adopts idempotently and removal never reclaims the ch
 		initialTerminalPending: true,
 	});
 	expect(events).toEqual([{ kind: "created", workspace }]);
-	expect(listExistingWorktrees("p1")).toHaveLength(0);
+	expect(await listExistingWorktrees("p1")).toHaveLength(0);
 	expectCheckoutUnchanged();
 
-	expect(openExistingWorktree("p1", external).id).toBe(workspace.id);
+	expect((await openExistingWorktree("p1", external)).id).toBe(workspace.id);
 	expect(events).toHaveLength(1);
 	expect(() => renameWorkspace(workspace.id, "hands off")).toThrow(
 		"An existing worktree cannot be renamed by ThinkRail",
@@ -273,13 +273,13 @@ test("openExistingWorktree adopts idempotently and removal never reclaims the ch
 test("openExistingWorktree rejects detached and unrelated paths", async () => {
 	const detached = join(dataDir, "detached checkout");
 	git(repo, "worktree", "add", "--detach", detached, "main");
-	expect(() => openExistingWorktree("p1", detached)).toThrow(
+	await expect(openExistingWorktree("p1", detached)).rejects.toThrow(
 		"Detached HEAD worktrees cannot be opened; create a branch first",
 	);
 
 	const unrelated = join(dataDir, "unrelated");
 	mkdirSync(unrelated);
-	expect(() => openExistingWorktree("p1", unrelated)).toThrow(
+	await expect(openExistingWorktree("p1", unrelated)).rejects.toThrow(
 		"The selected path is not a registered worktree of this project",
 	);
 });
@@ -295,8 +295,10 @@ test("existing worktrees represented by another project are rejected before its 
 		]),
 	);
 	expect(listWorkspaceRecords("p2")).toHaveLength(0);
-	expect(listExistingWorktrees("p1").some((candidate) => candidate.path === external)).toBe(false);
-	expect(() => openExistingWorktree("p1", external)).toThrow(
+	expect((await listExistingWorktrees("p1")).some((candidate) => candidate.path === external)).toBe(
+		false,
+	);
+	await expect(openExistingWorktree("p1", external)).rejects.toThrow(
 		"This worktree is already open under another ThinkRail project",
 	);
 });
@@ -304,7 +306,7 @@ test("existing worktrees represented by another project are rejected before its 
 test("external workspace branch metadata converges on refresh and list", async () => {
 	const external = join(dataDir, "existing auth checkout");
 	git(repo, "worktree", "add", external, "-b", "feature/auth", "main");
-	const workspace = openExistingWorktree("p1", external);
+	const workspace = await openExistingWorktree("p1", external);
 	await listWorkspaces("p1");
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((event) => events.push(event));
@@ -390,6 +392,38 @@ test("renameWorkspace moves the branch in place: record + git follow, the worktr
 	);
 	expect((await worktrees())[0]?.name).toBe("add login flow");
 	expect((await worktrees())[0]?.branch).toBe("add-login-flow");
+});
+
+test("renameWorkspace with renameBranch:false changes only the display name", async () => {
+	const ws = await createWorkspace("p1");
+	const sibling = await createWorkspace("p1", undefined, ws.branch);
+	git(repo, "branch", "release");
+	setWorkspaceDiffBase(ws.id, "release");
+	git(repo, "update-ref", `refs/remotes/origin/${ws.branch}`, "HEAD");
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+
+	const renamed = renameWorkspace(ws.id, "Published Workspace", {
+		lock: true,
+		renameBranch: false,
+	});
+
+	expect(renamed).toMatchObject({
+		name: "Published Workspace",
+		branch: ws.branch,
+		worktreePath: ws.worktreePath,
+		baseBranch: ws.baseBranch,
+		diffBase: "release",
+		renamed: true,
+	});
+	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
+	expect(gitOut(repo, "rev-parse", `refs/heads/${ws.branch}`)).toBe(
+		gitOut(ws.worktreePath, "rev-parse", "HEAD"),
+	);
+	expect(events).toEqual([{ kind: "updated", workspace: renamed }]);
+	const listed = await worktrees();
+	expect(listed.find((workspace) => workspace.id === ws.id)).toMatchObject(renamed);
+	expect(listed.find((workspace) => workspace.id === sibling.id)?.baseBranch).toBe(ws.branch);
 });
 
 test("renameWorkspace with lock:false renames name + branch but leaves renamed unset (provisional)", async () => {

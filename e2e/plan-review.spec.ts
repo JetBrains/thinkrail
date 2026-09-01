@@ -1,8 +1,8 @@
-import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { commitFile } from "./fixtures/git";
 
 // The TODO → review workflow's user-visible half, no agent: a seeded plan whose done steps carry
 // completion summaries + real commit artifacts (the host's change-set shape) renders on the plan page
@@ -13,20 +13,6 @@ import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 // mode" page (task-plan-review-kebab): findings live in the right-panel Review tab, header actions are
 // a kebab menu. Actually settling a review (the reviewer chat, verdicts, ask-to-fix's fix cycle,
 // Review All's queue) is @agent territory; the seeded JSON here is exactly the shape those leave behind.
-
-/** One real commit in the worktree (the shape artifacts.ts leaves), returning its sha. */
-function commitFile(worktree: string, path: string, content: string, subject: string): string {
-	writeFileSync(join(worktree, path), content);
-	const git = (...args: string[]) =>
-		execFileSync(
-			"git",
-			["-C", worktree, "-c", "user.email=e2e@thinkrail.test", "-c", "user.name=e2e", ...args],
-			{ encoding: "utf8" },
-		);
-	git("add", "--", path);
-	git("commit", "--no-verify", "-m", subject);
-	return git("rev-parse", "HEAD").trim();
-}
 
 test("reviewable steps show the reviewed counter, Start review, and the settled Verified state", async ({
 	page,
