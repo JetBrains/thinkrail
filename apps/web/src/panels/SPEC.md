@@ -54,18 +54,18 @@ treatment.
   anywhere on the row opens that exact menu at the kebab without selecting/activating the workspace, while
   the kebab remains the touch and keyboard-focus path. Its actions are a `DropdownMenuSub` **"Open in"**
   (rendered only when at least one editor was detected), **Copy path**, and **Reveal in file manager**. A
-  ThinkRail-managed worktree additionally gets **Rename workspace** when the connected host's protocol is
-  at least `WORKSPACE_RENAME_PROTOCOL_VERSION`, plus **Remove workspace**; an external row gets only
-  **Remove from ThinkRail**, whose confirm promises the checkout and its branch stay untouched.
+  ThinkRail-managed worktree additionally gets **Rename** when the connected host's protocol is at least
+  `WORKSPACE_RENAME_PROTOCOL_VERSION`, plus **Remove workspace**; an external row gets only **Remove from
+  ThinkRail**, whose confirm promises the checkout and its branch stay untouched.
   The Default gets neither mutation. "Open in" comes from the host-wide `editor.list`; GUI entries call
   `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through `addTerminal`'s
   one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`.
-  Rename opens a focused dialog prefilled with the display name and states that the managed branch changes
-  while the worktree folder stays put. Blank names cannot submit; a request in flight holds the dialog open.
-  An opened dialog also remains mounted across a disconnect so its request state is not lost, while submission
-  stays disabled until the current socket's welcome confirms support again. Rejection renders inline, while
-  success closes it and every surface adopts only the host's full-snapshot
-  `workspace.updated` push. The client never predicts the collision-safe branch. Remove is styled destructive
+  Rename replaces the row's name span in place with a chrome-less single-line input carrying the same
+  typography, colour, and geometry; it is prefilled, focused, and selected. Enter or blur commits, Escape
+  cancels, and blank or unchanged text exits without a request. A commit leaves optimistic domain state out
+  of the client: the row returns to the prior host-owned label until every surface adopts the full-snapshot
+  `workspace.updated` push; rejection keeps that snapshot and raises an error toast. The Git branch and
+  worktree folder never change. Remove is styled destructive
   and opens a centered `ConfirmDialog`; confirming fires `workspace.remove` and lets every client react to the
   host's `workspace.removed` push via the store's `applyWorkspaceRemoved`; a rejected request (no event will
   come) surfaces an error toast, leaving the row in place. Each **workspace row** is **two-line**: the display

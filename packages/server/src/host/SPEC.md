@@ -116,9 +116,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   SIGINT/SIGTERM handlers await that same shutdown before process exit. Settling aborts streaming sessions
   and waits bounded so pi persists their "Operation aborted" tool results and transcripts land paired; an
   immediate exit would strand mid-tool transcripts on restart repair); `handlers.ts` (the WS method→handler
-  registry, including `workspace.rename` as the direct manual door into `renameWorkspace`'s default locked
-  transaction — the workspaces module persists and publishes it, so the handler never emits or patches a
-  client separately — and the **Skills-manager set**: `skill.list` / `skills.state` / `project.skills` build
+  registry, including `workspace.rename` as the direct manual door into
+  `renameWorkspace(id, name, { lock: true, renameBranch: false })` — the workspaces module changes only the
+  display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
+  separately — and the **Skills-manager set**: `skill.list` / `skills.state` / `project.skills` build
   the admission context from `projects` (+ the
   workspace's `skillOverrides` when workspace-scoped) and pass it into agent's `listSkillCommands`/
   `listSkillCatalog`; `session.list` decorates agent's `listSessions` summaries with
