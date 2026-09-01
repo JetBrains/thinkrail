@@ -441,8 +441,8 @@ a project picker, the prompt hero, and the reused
   built to grow. `ProvidersSettings`/`AppearanceSettings`/`ChatSettings`/`TemplatesSettings`/
   `PrivacySettings`/`ReviewSettings`/`FeedbackSettings` and the app-wide **`InterviewPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The prompt renders the approved copy and fixed
-  Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. The booking click
-  opens Calendar immediately and records `book`; close, Escape, and backdrop record `postpone`; permanent
+  Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
+  middle-button booking activation open Calendar immediately and record `book`; close, Escape, and backdrop record `postpone`; permanent
   dismissal records `never`. The controlled dialog closes only after the host acks, and reports a rejected
   action without discarding the still-open choice. `SettingsDialog` receives the Layout section from the
   shell composition root so no panel reaches sideways into shell, and the `LoginDialog` stays presentational

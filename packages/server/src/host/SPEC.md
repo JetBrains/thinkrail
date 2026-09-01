@@ -393,12 +393,14 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - **Interview invitation delivery:** the three user-send handlers share one post-`ackSend` path that
   filters control traffic once, tracks anonymous `message_sent`, and records the local feedback count. The
   feedback module's injected publisher maps an eligible claim to addressed `feedback.interview` delivery
-  for that request's opaque client key; delivery failure or final client reap after the reconnect grace
-  releases the claim, while a transient reconnect retains it. Popup
-  `feedback.respond` actions are ordinary replay-safe requests and never alter the Settings link.
+  for that request's opaque client key only when its socket-advertised protocol version supports the channel;
+  delivery failure or final client reap after the reconnect grace releases the claim, while a transient
+  reconnect retains and re-delivers it after `server.welcome`. A host restart has no claim to re-deliver, and
+  the welcome clears the frontend's stale popup projection. Popup `feedback.respond` actions are ordinary
+  replay-safe requests and never alter the Settings link.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer` (including
   idempotent `shutdown()`), `bootHost`, `BootHostOptions`, and `BootedHost`.
-- **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
+- **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
   `boot.ts`); `persistence` (`dataDir` — where `crashLog.ts` writes); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile` for the `/files` route); Bun/Node.
 - **Forbidden:** being imported by any feature module; importing `web`/`cli`/`desktop`.

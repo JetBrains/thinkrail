@@ -19,6 +19,7 @@ test("feedback settings and the addressed interview prompt preserve the approved
 	page,
 }) => {
 	let browserSocket: WebSocketRoute | undefined;
+	let welcomeFrame: string | undefined;
 	let rejectNextResponse = false;
 	const actions: string[] = [];
 
@@ -46,7 +47,14 @@ test("feedback settings and the addressed interview prompt preserve the approved
 			}
 			server.send(message);
 		});
-		server.onMessage((message) => socket.send(message));
+		server.onMessage((message) => {
+			const raw = typeof message === "string" ? message : message.toString();
+			try {
+				const frame = JSON.parse(raw) as { channel?: string };
+				if (frame.channel === WS_CHANNELS.serverWelcome) welcomeFrame = raw;
+			} catch {}
+			socket.send(message);
+		});
 	});
 	await context.route("https://calendar.app.google/**", (route) => route.abort());
 
@@ -118,10 +126,22 @@ test("feedback settings and the addressed interview prompt preserve the approved
 
 	sendInvitation(browserSocket);
 	await expect(dialog).toBeVisible();
+	if (!welcomeFrame) throw new Error("expected the host welcome frame");
+	browserSocket?.send(welcomeFrame);
+	await expect(dialog).toBeHidden();
+
+	sendInvitation(browserSocket);
+	await expect(dialog).toBeVisible();
 	const bookingLink = dialog.getByTestId("interview-book");
 	await expect(bookingLink).toHaveAttribute("href", BOOKING_URL);
 	await expect(bookingLink).toHaveAttribute("target", "_blank");
 	await expect(bookingLink).toHaveAttribute("rel", "noopener noreferrer");
+	await bookingLink.dispatchEvent("auxclick", { button: 1 });
+	await expect(dialog).toBeHidden();
+	await expect.poll(() => actions.at(-1)).toBe("book");
+
+	sendInvitation(browserSocket);
+	await expect(dialog).toBeVisible();
 	const bookingPopupPromise = page.waitForEvent("popup");
 	await bookingLink.click();
 	const bookingPopup = await bookingPopupPromise;

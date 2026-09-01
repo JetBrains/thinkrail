@@ -59,6 +59,7 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome = data as Partial<ServerWelcome>;
 		if (typeof welcome.protocolVersion !== "number" || !Array.isArray(welcome.projects)) return;
+		useAppStore.getState().hideInterviewPrompt();
 		useAppStore
 			.getState()
 			.installWelcomeSnapshot(

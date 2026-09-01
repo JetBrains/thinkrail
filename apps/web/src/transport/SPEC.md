@@ -17,11 +17,12 @@ batches high-frequency Pi events without allowing later wire messages to overtak
 
 - **Owns:** `transport.ts` (`WsTransport`: id-correlated `request` — replies time out after 60s unless the
   caller raises `timeoutMs`, which a request the host answers *only once a human has* must do (an open
-  folder dialog: a fired timeout also drops the reply that follows it) —, the **`?client=` page identity** it
-  appends to the socket URL (minted lazily and *not* via the secure-context-only `crypto.randomUUID`, so a
-  plain-http remote origin still boots; it spans reconnects but not reloads, correlating replayed requests and
-  terminal stream routing while host-owned PTY tabs/shells survive and a reloaded page takes them over by
-  durable `tabKey`), **reconnect-safe unresolved requests** — a
+  folder dialog: a fired timeout also drops the reply that follows it) —, the **`?client=` page identity** and
+  **`?protocol=` current wire version** it appends to the socket URL (the identity is minted lazily and *not*
+  via the secure-context-only `crypto.randomUUID`, so a plain-http remote origin still boots; it spans
+  reconnects but not reloads, correlating replayed requests and terminal stream routing while host-owned PTY
+  tabs/shells survive and a reloaded page takes them over by durable `tabKey`; the version lets a newer host
+  avoid claiming an addressed feature for an independently shipped older client that cannot render it), **reconnect-safe unresolved requests** — a
   frame that was in flight when its socket died returns to the queue and is replayed under the same request id,
   while the host deduplicates `(clientKey, requestId)`, so an accepted mutation cannot become a false failure or
   execute twice —, the two frames that are this side's half of that bargain — **`{ ack: [id] }` receipts**
@@ -63,7 +64,9 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `noteProviderChanged()` plus a `model.list` re-read installed through the store's monotonic provider-version
   guard (the model-catalog hook uses the same guarded write for every list/refresh, so an older reply cannot
   restore a removed generation's models; provider settings observes the same version and re-reads
-  `provider.status`), `feedback.interview` via the idempotent `showInterviewPrompt()`,
+  `provider.status`), each valid `server.welcome` first clearing any popup projection left by a host restart,
+  then `feedback.interview` via the idempotent `showInterviewPrompt()` (a surviving host claim re-delivers the
+  addressed event immediately after welcome),
   `workspace.fsChanged` via `noteFsChanged(payload)`, and **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
   welcome config lands in the atomic install above. Before `WsTransport` dispatches any response or non-Pi
   push, `wireTransport` flushes queued Pi events synchronously; connection-status transitions do the same.

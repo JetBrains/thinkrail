@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	recordAcceptedMessage,
+	redeliverInterview,
 	releaseInterview,
 	resetFeedbackForTests,
 	respondToInterview,
@@ -171,6 +172,52 @@ test("count persistence failure preserves an existing claim and cannot reject a 
 	process.env.THINKRAIL_DATA_DIR = directory;
 	recordAcceptedMessage("client-b");
 	expect(delivered).toEqual(["client-a"]);
+	expect(stored().acceptedMessages).toBe(12);
+});
+
+test("a failed threshold write is retained and offered after persistence recovers", () => {
+	const delivered: string[] = [];
+	setFeedbackPublisher((clientKey) => {
+		delivered.push(clientKey);
+		return true;
+	});
+	for (let count = 0; count < 9; count += 1) recordAcceptedMessage("client-a");
+
+	const blockedDataDir = join(directory, "not-a-directory");
+	writeFileSync(blockedDataDir, "blocked");
+	process.env.THINKRAIL_DATA_DIR = blockedDataDir;
+	recordAcceptedMessage("client-a");
+	expect(delivered).toEqual([]);
+
+	process.env.THINKRAIL_DATA_DIR = directory;
+	recordAcceptedMessage("client-b");
+	expect(delivered).toEqual(["client-b"]);
+	expect(stored().acceptedMessages).toBe(11);
+});
+
+test("reconnect redelivers only to the claimed client and releases a failed redelivery", () => {
+	const attempts: string[] = [];
+	setFeedbackPublisher((clientKey) => {
+		attempts.push(clientKey);
+		return true;
+	});
+	for (let count = 0; count < 10; count += 1) recordAcceptedMessage("client-a");
+
+	redeliverInterview("client-b");
+	redeliverInterview("client-a");
+	expect(attempts).toEqual(["client-a", "client-a"]);
+
+	setFeedbackPublisher((clientKey) => {
+		attempts.push(clientKey);
+		return false;
+	});
+	redeliverInterview("client-a");
+	setFeedbackPublisher((clientKey) => {
+		attempts.push(clientKey);
+		return true;
+	});
+	recordAcceptedMessage("client-b");
+	expect(attempts).toEqual(["client-a", "client-a", "client-a", "client-b"]);
 });
 
 test("invalid responses do not mutate state or release the claim", () => {

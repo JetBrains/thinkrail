@@ -57,9 +57,13 @@ function loadState(): FeedbackState {
 	return cachedState;
 }
 
-function saveState(next: FeedbackState): void {
+function writeState(next: FeedbackState): void {
 	mkdirSync(dataDir(), { recursive: true });
 	writeFileSync(join(dataDir(), "feedback.json"), `${JSON.stringify(next, null, "\t")}\n`);
+}
+
+function saveState(next: FeedbackState): void {
+	writeState(next);
 	cachedState = next;
 }
 
@@ -79,19 +83,28 @@ export function recordAcceptedMessage(clientKey: string): void {
 		...current,
 		acceptedMessages: addWithinSafeRange(current.acceptedMessages, 1),
 	};
+	cachedState = next;
 	try {
-		saveState(next);
+		writeState(next);
 	} catch {
 		return;
 	}
 	if (next.acceptedMessages < next.nextInvitationAt || claimedClient !== null) return;
 
 	claimedClient = clientKey;
+	deliverInterview(clientKey);
+}
+
+function deliverInterview(clientKey: string): void {
 	try {
 		if (publishInterview?.(clientKey) !== true) claimedClient = null;
 	} catch {
 		claimedClient = null;
 	}
+}
+
+export function redeliverInterview(clientKey: string): void {
+	if (claimedClient === clientKey) deliverInterview(clientKey);
 }
 
 export function respondToInterview(action: InterviewResponse): void {

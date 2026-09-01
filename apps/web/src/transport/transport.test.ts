@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { WsTransport } from "./transport";
 
 class TestWebSocket {
@@ -68,6 +68,15 @@ beforeEach(() => {
 
 afterEach(() => {
 	globalThis.WebSocket = originalWebSocket;
+});
+
+test("advertises the client protocol version in the WebSocket handshake", () => {
+	const transport = new WsTransport({ url: "ws://localhost:24242/ws?existing=value" });
+	transport.connect();
+	const socketUrl = new URL(TestWebSocket.instances[0]?.url ?? "");
+	expect(socketUrl.searchParams.get("existing")).toBe("value");
+	expect(socketUrl.searchParams.get("protocol")).toBe(String(PROTOCOL_VERSION));
+	expect(socketUrl.searchParams.get("client")).toStartWith("client-");
 });
 
 describe("WsTransport channel replay", () => {

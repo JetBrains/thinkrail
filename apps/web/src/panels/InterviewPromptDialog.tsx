@@ -1,6 +1,6 @@
 import { RiExternalLinkLine as ExternalLink } from "@remixicon/react";
 import type { InterviewResponse } from "@thinkrail/contracts";
-import { useRef, useState } from "react";
+import { type MouseEvent, useRef, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
 	Dialog,
@@ -33,6 +33,15 @@ export function InterviewPromptDialog() {
 				pendingRef.current = false;
 				setPendingAction(null);
 			});
+	};
+
+	const book = (event: MouseEvent<HTMLAnchorElement>): void => {
+		if (event.type === "auxclick" && event.button !== 1) return;
+		if (pendingRef.current) {
+			event.preventDefault();
+			return;
+		}
+		respond("book");
 	};
 
 	return (
@@ -85,13 +94,8 @@ export function InterviewPromptDialog() {
 								buttonVariants(),
 								pendingAction !== null && "pointer-events-none opacity-50",
 							)}
-							onClick={(event) => {
-								if (pendingRef.current) {
-									event.preventDefault();
-									return;
-								}
-								respond("book");
-							}}
+							onClick={book}
+							onAuxClick={book}
 						>
 							<ExternalLink className="size-14" />
 							Schedule an interview
