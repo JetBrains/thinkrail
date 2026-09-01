@@ -32,6 +32,10 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 
 ## Decisions
 
+- **Shell selection is terminal-local.** An explicit `SHELL` always wins. Without one, Windows uses
+  `ComSpec`/`COMSPEC` and finally `cmd.exe`; other platforms retain `/bin/bash`. The host does not invent a
+  global `SHELL` on Windows: it is a Unix login-shell convention, and mutating it would affect the in-process
+  agent and every unrelated child process merely to configure this module's PTY executable.
 - **macOS PTYs start the user's shell in login mode (`-l`)** to match Terminal.app and the platform's
   terminal convention; other platforms keep a plain interactive shell. The PTY itself supplies
   interactivity, so no explicit `-i` is needed.
@@ -129,6 +133,7 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them).
 - `outputBatcher.test.ts` — batching, backpressure, truncation, `reset`.
 - `shellBusy.test.ts` — child detection, including that an unanswerable platform reports *not* busy.
+- `shellArgs.test.ts` — shell executable precedence across Unix and Windows plus platform-specific arguments.
 - `terminalManager.test.ts` — transactional durable reservation without spawn, catalog bounds, attach
   idempotency (incl. concurrent), takeover, displaced-client rejection, tab-list broadcast, close/busy,
   revive. Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as
