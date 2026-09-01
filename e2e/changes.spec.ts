@@ -1,8 +1,8 @@
-import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import { gitQuiet } from "./fixtures/git";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { largeRepetitiveMarkdownEdited } from "./fixtures/repo";
 
@@ -173,10 +173,6 @@ test("Changes has a List|Tree toggle; Tree groups files into folders with +/- co
 	await expect(page.getByTestId("changes-toggle-tree")).toHaveAttribute("data-active", "true");
 });
 
-function gitIn(cwd: string, ...args: string[]): void {
-	execFileSync("git", ["-C", cwd, ...args], { stdio: "ignore" });
-}
-
 function worktreeDir(): string {
 	return join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 }
@@ -184,8 +180,8 @@ function worktreeDir(): string {
 function seedCommitAndDirtyEdit(): string {
 	const worktree = worktreeDir();
 	writeFileSync(join(worktree, "committed.txt"), "committed by e2e\n");
-	gitIn(worktree, "add", "committed.txt");
-	gitIn(
+	gitQuiet(worktree, "add", "committed.txt");
+	gitQuiet(
 		worktree,
 		"-c",
 		"user.email=e2e@thinkrail.test",
@@ -260,8 +256,8 @@ test("Uncommitted scope converges when HEAD moves out-of-band (a commit in a ter
 
 	await new Promise((r) => setTimeout(r, 1500));
 
-	gitIn(worktree, "add", "-A");
-	gitIn(
+	gitQuiet(worktree, "add", "-A");
+	gitQuiet(
 		worktree,
 		"-c",
 		"user.email=e2e@thinkrail.test",
@@ -307,10 +303,10 @@ test("A target that advanced past the fork point adds no phantom changes (merge-
 	seedCommitAndDirtyEdit();
 
 	const upstreamWt = join(E2E_DATA_DIR, "worktrees", "e2e-upstream");
-	gitIn(E2E_FIXTURE_REPO, "worktree", "add", upstreamWt, "-b", "future-main", "main");
+	gitQuiet(E2E_FIXTURE_REPO, "worktree", "add", upstreamWt, "-b", "future-main", "main");
 	writeFileSync(join(upstreamWt, "upstream.txt"), "landed on the base after the fork\n");
-	gitIn(upstreamWt, "add", "upstream.txt");
-	gitIn(
+	gitQuiet(upstreamWt, "add", "upstream.txt");
+	gitQuiet(
 		upstreamWt,
 		"-c",
 		"user.email=e2e@thinkrail.test",
@@ -385,8 +381,8 @@ test("The diff viewer collapses unchanged context and has a per-tab hide-whitesp
 	const worktree = worktreeDir();
 	const lines = Array.from({ length: 120 }, (_, i) => `export const v${i} = ${i};`);
 	writeFileSync(join(worktree, "long.ts"), `${lines.join("\n")}\n`);
-	gitIn(worktree, "add", "long.ts");
-	gitIn(
+	gitQuiet(worktree, "add", "long.ts");
+	gitQuiet(
 		worktree,
 		"-c",
 		"user.email=e2e@thinkrail.test",
@@ -571,8 +567,8 @@ test("Re-pointing the target branch re-reads an open branch-scope diff tab — a
 	await createWorkspaceViaDialog(page);
 	const worktree = seedCommitAndDirtyEdit();
 	writeFileSync(join(worktree, "committed.txt"), "revised by the workspace\n");
-	gitIn(worktree, "add", "committed.txt");
-	gitIn(
+	gitQuiet(worktree, "add", "committed.txt");
+	gitQuiet(
 		worktree,
 		"-c",
 		"user.email=e2e@thinkrail.test",
@@ -582,7 +578,7 @@ test("Re-pointing the target branch re-reads an open branch-scope diff tab — a
 		"-m",
 		"e2e revise commit",
 	);
-	gitIn(worktree, "branch", "e2e-target", "HEAD~1");
+	gitQuiet(worktree, "branch", "e2e-target", "HEAD~1");
 
 	await page.getByTestId("tab-changes").click();
 	const committedRow = page.getByTestId("change-item").filter({ hasText: "committed.txt" });
@@ -618,9 +614,9 @@ test("A commit scope whose commit is rewritten away falls back to All changes wi
 	await page.getByTestId("changes-scope-commit").filter({ hasText: "e2e scope commit" }).click();
 	await expect(page.getByTestId("changes-scope-label")).toHaveText(/^[0-9a-f]{7,}$/);
 
-	gitIn(worktree, "reset", "--hard", "HEAD~1");
-	gitIn(worktree, "reflog", "expire", "--expire=now", "--all");
-	gitIn(worktree, "gc", "--prune=now");
+	gitQuiet(worktree, "reset", "--hard", "HEAD~1");
+	gitQuiet(worktree, "reflog", "expire", "--expire=now", "--all");
+	gitQuiet(worktree, "gc", "--prune=now");
 	writeFileSync(join(worktree, "nudge.txt"), "nudge the watcher\n");
 
 	await expect(page.getByTestId("changes-scope-label")).toHaveText("All changes", {
@@ -638,13 +634,13 @@ test("A failed read says so — it never renders as an empty (clean) change set"
 	await createWorkspaceViaDialog(page);
 	const worktree = worktreeDir();
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited by e2e\n");
-	gitIn(worktree, "branch", "doomed");
+	gitQuiet(worktree, "branch", "doomed");
 
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("changes-target-picker").click();
 	await page.locator('[data-testid="branch-option"][data-branch="doomed"]').click();
 	await expect(page.getByTestId("change-item").filter({ hasText: "README.md" })).toHaveCount(1);
-	gitIn(worktree, "branch", "-D", "doomed");
+	gitQuiet(worktree, "branch", "-D", "doomed");
 
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();

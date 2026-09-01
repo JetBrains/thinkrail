@@ -8,9 +8,9 @@ import {
 	ghPrFlow,
 	githubSlug,
 	isPushAuthFailure,
-	nonInteractiveGitEnv,
 	openPr,
 	type PrCommandRunner,
+	pushGitEnv,
 } from "./pr";
 import { renderPrBody } from "./prBody";
 
@@ -94,27 +94,25 @@ describe("isPushAuthFailure", () => {
 	});
 });
 
-describe("nonInteractiveGitEnv", () => {
+describe("pushGitEnv", () => {
 	test("forces prompt-free git, English git messages without touching hook encoding, batch-mode ssh", () => {
-		const env = nonInteractiveGitEnv({ PATH: "/bin", LC_ALL: "ru_RU.UTF-8" }, false);
+		const env = pushGitEnv({ PATH: "/bin", LC_ALL: "ru_RU.UTF-8" }, false);
 		expect(env.GIT_TERMINAL_PROMPT).toBe("0");
 		expect(env.LC_MESSAGES).toBe("C");
 		expect("LC_ALL" in env).toBe(false);
 		expect(env.LC_CTYPE).toBe("ru_RU.UTF-8");
-		expect(nonInteractiveGitEnv({ LC_ALL: "C", LC_CTYPE: "en_US.UTF-8" }, false).LC_CTYPE).toBe(
+		expect(pushGitEnv({ LC_ALL: "C", LC_CTYPE: "en_US.UTF-8" }, false).LC_CTYPE).toBe(
 			"en_US.UTF-8",
 		);
 		expect(env.GIT_SSH_COMMAND).toBe("ssh -oBatchMode=yes");
 	});
 
 	test("never overrides the user's own ssh command — env vars or core.sshCommand config", () => {
-		expect(nonInteractiveGitEnv({ GIT_SSH_COMMAND: "ssh -i /key" }, false).GIT_SSH_COMMAND).toBe(
+		expect(pushGitEnv({ GIT_SSH_COMMAND: "ssh -i /key" }, false).GIT_SSH_COMMAND).toBe(
 			"ssh -i /key",
 		);
-		expect(
-			nonInteractiveGitEnv({ GIT_SSH: "/usr/bin/myssh" }, false).GIT_SSH_COMMAND,
-		).toBeUndefined();
-		expect(nonInteractiveGitEnv({}, true).GIT_SSH_COMMAND).toBeUndefined();
+		expect(pushGitEnv({ GIT_SSH: "/usr/bin/myssh" }, false).GIT_SSH_COMMAND).toBeUndefined();
+		expect(pushGitEnv({}, true).GIT_SSH_COMMAND).toBeUndefined();
 	});
 });
 

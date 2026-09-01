@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -9,6 +8,7 @@ import {
 	openWorkspaceMenu,
 	worktreeRows,
 } from "./fixtures/app";
+import { git, gitText } from "./fixtures/git";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PICK_DIR_POINTER } from "./fixtures/paths";
 
 test("opens and safely forgets an existing user-owned worktree", async ({ page }) => {
@@ -17,27 +17,16 @@ test("opens and safely forgets an existing user-owned worktree", async ({ page }
 	const detached = join(E2E_DATA_DIR, "detached-worktree-fixture");
 	rmSync(external, { recursive: true, force: true });
 	rmSync(detached, { recursive: true, force: true });
-	execFileSync("git", [
-		"-C",
-		E2E_FIXTURE_REPO,
-		"worktree",
-		"add",
-		external,
-		"-b",
-		"feature/existing",
-		"main",
-	]);
-	execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "add", "--detach", detached, "main"]);
+	git(E2E_FIXTURE_REPO, "worktree", "add", external, "-b", "feature/existing", "main");
+	git(E2E_FIXTURE_REPO, "worktree", "add", "--detach", detached, "main");
 	writeFileSync(join(external, "staged.txt"), "preserve this staged addition\n");
-	execFileSync("git", ["-C", external, "add", "staged.txt"]);
+	git(external, "add", "staged.txt");
 	writeFileSync(
 		join(external, "README.md"),
 		`${readFileSync(join(external, "README.md"), "utf8")}preserve this unstaged edit\n`,
 	);
 	writeFileSync(join(external, "uncommitted.txt"), "preserve this untracked file\n");
 
-	const gitText = (cwd: string, ...args: string[]) =>
-		execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" });
 	const before = {
 		status: gitText(external, "status", "--porcelain=v1", "-z"),
 		branch: gitText(external, "symbolic-ref", "--short", "HEAD"),
@@ -120,15 +109,15 @@ test("opens and safely forgets an existing user-owned worktree", async ({ page }
 	} finally {
 		for (const path of [external, detached]) {
 			try {
-				execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "remove", "--force", path]);
+				git(E2E_FIXTURE_REPO, "worktree", "remove", "--force", path);
 			} catch {
 				rmSync(path, { recursive: true, force: true });
 			}
 		}
 		try {
-			execFileSync("git", ["-C", E2E_FIXTURE_REPO, "branch", "-D", "feature/existing"]);
+			git(E2E_FIXTURE_REPO, "branch", "-D", "feature/existing");
 		} catch {}
-		execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "prune"]);
+		git(E2E_FIXTURE_REPO, "worktree", "prune");
 	}
 });
 
@@ -136,16 +125,7 @@ test("an attached worktree cannot also be opened as a project", async ({ page })
 	await openFixtureProject(page);
 	const external = join(E2E_DATA_DIR, "claimed-worktree-fixture");
 	rmSync(external, { recursive: true, force: true });
-	execFileSync("git", [
-		"-C",
-		E2E_FIXTURE_REPO,
-		"worktree",
-		"add",
-		external,
-		"-b",
-		"feature/claimed",
-		"main",
-	]);
+	git(E2E_FIXTURE_REPO, "worktree", "add", external, "-b", "feature/claimed", "main");
 
 	try {
 		const projectRow = page.getByTestId("project-item").filter({ hasText: "sample-project" });
@@ -172,14 +152,14 @@ test("an attached worktree cannot also be opened as a project", async ({ page })
 	} finally {
 		writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 		try {
-			execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "remove", "--force", external]);
+			git(E2E_FIXTURE_REPO, "worktree", "remove", "--force", external);
 		} catch {
 			rmSync(external, { recursive: true, force: true });
 		}
 		try {
-			execFileSync("git", ["-C", E2E_FIXTURE_REPO, "branch", "-D", "feature/claimed"]);
+			git(E2E_FIXTURE_REPO, "branch", "-D", "feature/claimed");
 		} catch {}
-		execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "prune"]);
+		git(E2E_FIXTURE_REPO, "worktree", "prune");
 	}
 });
 
@@ -191,9 +171,7 @@ test("creates, removes, and re-creates worktree workspaces (no branch collision)
 
 	await createWorkspaceViaDialog(page);
 	await expect(items).toHaveCount(1);
-	const worktrees = execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "list"], {
-		encoding: "utf8",
-	});
+	const worktrees = gitText(E2E_FIXTURE_REPO, "worktree", "list");
 	expect(worktrees.trim().split("\n").length).toBeGreaterThanOrEqual(2);
 	expect(worktrees).toContain("/worktrees/sample-project/");
 
@@ -206,12 +184,7 @@ test("creates, removes, and re-creates worktree workspaces (no branch collision)
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect(page.getByTestId("center-tabs")).toHaveCount(0);
 	await expect
-		.poll(
-			() =>
-				execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "list"], { encoding: "utf8" })
-					.trim()
-					.split("\n").length,
-		)
+		.poll(() => gitText(E2E_FIXTURE_REPO, "worktree", "list").trim().split("\n").length)
 		.toBe(1);
 
 	await createWorkspaceViaDialog(page);

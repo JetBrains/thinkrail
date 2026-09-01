@@ -17,7 +17,7 @@ workflows and composite actions.
 
 ## CI vs release
 
-- **CI** (`ci.yml`, on PRs to `main`): dependency/module-boundary checks, lint+typecheck (incl.
+- **CI** (`ci.yml`, on PRs to `main` and merge-queue check requests): dependency/module-boundary checks, lint+typecheck (incl.
   `check:seams` — the pi binary-seam canary, see `scripts/check-binary-seams.ts`), unit tests, no-agent e2e,
   and a **host-target** binary
   build+smoke+**e2e-vs-binary** (`bun run e2e:binary`: the same no-agent suite against the compiled

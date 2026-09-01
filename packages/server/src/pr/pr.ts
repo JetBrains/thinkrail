@@ -50,7 +50,7 @@ export function isPushAuthFailure(stderr: string): boolean {
 	return PUSH_AUTH_PATTERNS.some((p) => p.test(stderr));
 }
 
-export function nonInteractiveGitEnv(
+export function pushGitEnv(
 	base: Record<string, string | undefined>,
 	hasSshCommandConfig: boolean,
 ): Record<string, string | undefined> {
@@ -212,7 +212,7 @@ export async function openPr(
 	if (!origin.ok) throw new Error("This workspace's repository has no 'origin' remote to push to.");
 	const hasSshCommandConfig = git(cwd, ["config", "core.sshCommand"]).ok;
 	const pushed = await gitAsync(cwd, ["push", "--set-upstream", "origin", ws.branch], {
-		env: nonInteractiveGitEnv(process.env, hasSshCommandConfig),
+		env: pushGitEnv(process.env, hasSshCommandConfig),
 		network: true,
 	});
 	if (!pushed.ok) {

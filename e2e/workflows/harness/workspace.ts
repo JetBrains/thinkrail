@@ -1,6 +1,6 @@
-import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { gitQuiet } from "../../fixtures/git";
 import { E2E_DATA_DIR } from "../../fixtures/paths";
 
 export type WorkspaceKind = "empty" | "code-only" | "specced";
@@ -11,14 +11,13 @@ let counter = 0;
 export function seedWorkspace(seed: WorkspaceSeed): string {
 	const cwd = join(E2E_DATA_DIR, `workflow-ws-${process.pid}-${++counter}`);
 	mkdirSync(cwd, { recursive: true });
-	const git = (...args: string[]) => execFileSync("git", ["-C", cwd, ...args], { stdio: "ignore" });
-	git("init", "-b", "main");
-	git("config", "user.email", "workflow-tests@thinkrail.test");
-	git("config", "user.name", "ThinkRail Workflow Tests");
+	gitQuiet(cwd, "init", "-b", "main");
+	gitQuiet(cwd, "config", "user.email", "workflow-tests@thinkrail.test");
+	gitQuiet(cwd, "config", "user.name", "ThinkRail Workflow Tests");
 	if (typeof seed === "function") seed(cwd);
 	else seedKind(cwd, seed);
-	git("add", "-A");
-	git("commit", "-m", "seed", "--allow-empty");
+	gitQuiet(cwd, "add", "-A");
+	gitQuiet(cwd, "commit", "-m", "seed", "--allow-empty");
 	return cwd;
 }
 
