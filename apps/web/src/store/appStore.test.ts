@@ -160,15 +160,30 @@ function failureRecovery(sessionId: string): FailureRecovery | undefined {
 	return error?.kind === "error" ? error.recovery : undefined;
 }
 
-test("each connected status advances the reconnect generation atomically", () => {
+test("connection transitions advance reconnect generations and invalidate old protocol capabilities", () => {
 	const store = useAppStore.getState();
 	store.setStatus("connected");
-	expect(useAppStore.getState()).toMatchObject({ status: "connected", connectionGeneration: 1 });
+	store.installWelcomeSnapshot(55, [], []);
+	expect(useAppStore.getState()).toMatchObject({
+		status: "connected",
+		connectionGeneration: 1,
+		protocolVersion: 55,
+	});
 	store.setStatus("disconnected");
-	expect(useAppStore.getState()).toMatchObject({ status: "disconnected", connectionGeneration: 1 });
+	expect(useAppStore.getState()).toMatchObject({
+		status: "disconnected",
+		connectionGeneration: 1,
+		protocolVersion: null,
+	});
 	store.setStatus("connecting");
 	store.setStatus("connected");
-	expect(useAppStore.getState()).toMatchObject({ status: "connected", connectionGeneration: 2 });
+	expect(useAppStore.getState()).toMatchObject({
+		status: "connected",
+		connectionGeneration: 2,
+		protocolVersion: null,
+	});
+	store.installWelcomeSnapshot(54, [], []);
+	expect(useAppStore.getState().protocolVersion).toBe(54);
 });
 
 test("selectLastOpenChatSession: active chat tab first, then the most recent chat tab, else null", () => {

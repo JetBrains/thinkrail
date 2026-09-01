@@ -47,7 +47,11 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   folds every connection transition through
   `setStatus`, whose connected generation gives active-workspace hydration a distinct trigger on every
   reconnect; the complete welcome (protocol + open/recent project views + optional config) via the atomic
-  `installWelcomeSnapshot`, whose separate `welcomeGeneration` is the cold-navigation readiness edge;
+  `installWelcomeSnapshot`, whose separate `welcomeGeneration` is the cold-navigation readiness edge; after
+  every welcome it re-reads each project whose workspace list this surface already holds with
+  `includeDiffStats: false`, generation-fencing the result and folding only already-known rows through
+  `updateWorkspace`, so a pushed full workspace snapshot missed while disconnected (including a rename)
+  cannot stay stale without misrepresenting this metadata repair as membership reconciliation;
   project snapshots via `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
   `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,
   `workspace.created` via `addWorkspace(workspace)`, `workspace.updated` via `updateWorkspace(workspace)`,

@@ -379,9 +379,10 @@ export function refreshUserOwnedWorkspace(workspaceId: string): void {
 export function renameWorkspace(
 	id: string,
 	requestedName: string,
-	opts: { lock?: boolean } = {},
+	opts: { lock?: boolean; renameBranch?: boolean } = {},
 ): Workspace {
 	const lock = opts.lock ?? true;
+	const renameBranch = opts.renameBranch ?? true;
 	const ws = loadWorkspaces().find((w) => w.id === id);
 	if (!ws) throw new Error(`Unknown workspace: ${id}`);
 	const project = getProjects().find((p) => p.id === ws.projectId);
@@ -392,9 +393,10 @@ export function renameWorkspace(
 		throw new Error("An existing worktree cannot be renamed by ThinkRail");
 	const displayName = toDisplayName(requestedName);
 	if (!displayName) throw new Error(`Invalid workspace name: ${requestedName}`);
-	const wanted = toBranch(displayName);
+	const wanted = renameBranch ? toBranch(displayName) : ws.branch;
 	const branch = wanted === ws.branch ? ws.branch : uniqueBranch(project, wanted);
-	if (branch !== ws.branch) {
+	const branchChanged = branch !== ws.branch;
+	if (branchChanged) {
 		const moved = git(project.path, ["branch", "-m", ws.branch, branch]);
 		if (!moved.ok) throw new Error(`git branch -m failed: ${moved.err}`);
 	}
@@ -403,15 +405,17 @@ export function renameWorkspace(
 	const target = all.find((w) => w.id === id);
 	if (!target) throw new Error(`Unknown workspace: ${id}`);
 	const repointed: Workspace[] = [];
-	for (const w of all) {
-		if (w.projectId !== target.projectId || w.id === target.id) continue;
-		const changed = w.baseBranch === ws.branch || w.diffBase === ws.branch;
-		if (w.baseBranch === ws.branch) w.baseBranch = branch;
-		if (w.diffBase === ws.branch) w.diffBase = branch;
-		if (changed) repointed.push(w);
+	if (branchChanged) {
+		for (const w of all) {
+			if (w.projectId !== target.projectId || w.id === target.id) continue;
+			const changed = w.baseBranch === ws.branch || w.diffBase === ws.branch;
+			if (w.baseBranch === ws.branch) w.baseBranch = branch;
+			if (w.diffBase === ws.branch) w.diffBase = branch;
+			if (changed) repointed.push(w);
+		}
+		if (target.baseBranch === ws.branch) target.baseBranch = branch;
+		if (target.diffBase === ws.branch) target.diffBase = branch;
 	}
-	if (target.baseBranch === ws.branch) target.baseBranch = branch;
-	if (target.diffBase === ws.branch) target.diffBase = branch;
 	target.name = displayName;
 	target.branch = branch;
 	if (lock) target.renamed = true;

@@ -53,16 +53,25 @@ treatment.
   workspace row's hover-revealed **kebab menu** (`MoreVertical`, controlled `DropdownMenu`) — right-clicking
   anywhere on the row opens that exact menu at the kebab without selecting/activating the workspace, while
   the kebab remains the touch and keyboard-focus path. Its actions are a `DropdownMenuSub` **"Open in"**
-  (rendered only when at least one editor was detected), **Copy path**, **Reveal in file manager**, and
-  (worktrees only) **Remove workspace** — worded **Remove from ThinkRail** on an external row, whose
-  confirm promises the checkout and its branch stay untouched. "Open in" comes from the
-  host-wide `editor.list`;
-  GUI entries call `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through
-  `addTerminal`'s one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`.
-  Remove is styled destructive and opens a centered `ConfirmDialog`; confirming fires
-  `workspace.remove` and lets every client react to the host's `workspace.removed` push via the store's
-  `applyWorkspaceRemoved`; a rejected request (no event will come) surfaces an error toast, leaving the row
-  in place. Each **workspace row** is **two-line**: the display
+  (rendered only when at least one editor was detected), **Copy path**, and **Reveal in file manager**. A
+  ThinkRail-managed worktree additionally gets **Rename** when the connected host's protocol is at least
+  `WORKSPACE_RENAME_PROTOCOL_VERSION`, plus **Remove workspace**; an external row gets only **Remove from
+  ThinkRail**, whose confirm promises the checkout and its branch stay untouched.
+  The Default gets neither mutation. "Open in" comes from the host-wide `editor.list`; GUI entries call
+  `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through `addTerminal`'s
+  one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`.
+  Rename replaces the row's name span in place with a chrome-less single-line input carrying the same
+  typography, colour, and geometry; it is prefilled, focused, and selected. Enter or blur commits, Escape
+  cancels, and blank or text unchanged from the edit-start label exits without a request, so an incoming
+  peer snapshot cannot be reverted by closing an untouched editor. A changed commit made while the current
+  socket's capability is unknown stays pending and dispatches only after a v55-or-newer welcome restores
+  `canRename`; an older host never receives the method. A commit leaves optimistic domain state out of the
+  client: the row returns to the prior host-owned label until every surface adopts the full-snapshot
+  `workspace.updated` push; rejection keeps that snapshot and raises an error toast. The Git branch and
+  worktree folder never change. Remove is styled destructive
+  and opens a centered `ConfirmDialog`; confirming fires `workspace.remove` and lets every client react to the
+  host's `workspace.removed` push via the store's `applyWorkspaceRemoved`; a rejected request (no event will
+  come) surfaces an error toast, leaving the row in place. Each **workspace row** is **two-line**: the display
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
   name is decoupled from the git branch (see [[submodule-server-workspaces]]). Workspace rows deliberately
@@ -70,8 +79,9 @@ treatment.
   the dedicated Changes views. The **Default workspace**
   (`kind === "default"` — the project folder itself) renders **pinned first** (the server pins it in
   `workspace.list`; `addWorkspace` appends created worktree rows after it), with a **`House` icon** in
-  place of the `GitBranch` glyph and **no Remove item** (non-removable — the server enforces it; the menu
-  simply omits it) — it still gets "Open in" / Copy path / Reveal, same as any worktree. Its branch line
+  place of the `GitBranch` glyph and **no Rename or Remove item** (non-renamable/non-removable — the server
+  enforces both; the menu simply omits them) — it still gets "Open in" / Copy path / Reveal like every
+  worktree. Its branch line
   shows the folder's real current branch. When the **selected project's** authoritative workspace list lands,
   `ProjectTree` fire-and-forgets transport's `prewarmWorkspaceSkillLoad` for at most the first eight rows:
   the common visible set begins the conservative watcher-readiness window before a workspace click. The
@@ -86,7 +96,8 @@ treatment.
   hydrated at boot from `main.tsx`, best-effort writes, untrusted reads), a page reload — the rail
   looks the same after reloading. Rows whose persisted expansion outlives this client's fetched lists
   (a fresh reload) fetch their missing `workspace.list` lazily; an already-fetched list is refreshed on
-  an explicit expand gesture, never refetched in a loop. The active workspace must
+  an explicit expand gesture and by transport after a new welcome/reconnect generation, never refetched in
+  a loop. The active workspace must
   also stay visible: when `ProjectTree` mounts with an active workspace, or the active workspace's derived
   owning project changes or first becomes resolvable, it expands that parent project — this reveal applies
   *on top of* the persisted baseline (a persisted collapse never hides the active workspace). A manual collapse

@@ -1570,6 +1570,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setStatus: (status) =>
 		set((state) => ({
 			status,
+			protocolVersion: null,
 			connectionGeneration:
 				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
 		})),

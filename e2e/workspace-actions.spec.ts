@@ -1,5 +1,6 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
-import { expect, test } from "@playwright/test";
+import { expect, test, type WebSocketRoute } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
@@ -50,14 +51,100 @@ test("Copy path copies the worktree's absolute path to the clipboard", async ({
 	expect(copied).toContain("/worktrees/sample-project/");
 });
 
-test("the Default workspace's kebab menu offers Open in / Copy path but no Remove", async ({
+test("a managed workspace can rename its display label inline without changing Git", async ({
 	page,
 }) => {
+	await openFixtureProject(page);
+	const created = await createWorkspaceViaDialog(page);
+	await settleAfterCreate(page);
+	const row = worktreeRows(page).first();
+
+	await openWorkspaceMenu(row);
+	await page.getByTestId("workspace-rename").click();
+	let input = row.getByRole("textbox", { name: "Workspace name" });
+	await expect(input).toHaveValue(created.name);
+	await expect(input).toBeFocused();
+	expect(
+		await input.evaluate(
+			(element: HTMLInputElement) =>
+				element.selectionStart === 0 && element.selectionEnd === element.value.length,
+		),
+	).toBe(true);
+	await input.fill("   ");
+	await page.getByTestId("project-name").first().click();
+	await expect(row.getByTestId("workspace-name")).toHaveText(created.name);
+
+	await openWorkspaceMenu(row);
+	await page.getByTestId("workspace-rename").click();
+	input = row.getByRole("textbox", { name: "Workspace name" });
+	await input.fill("Cancelled Rename");
+	await input.press("Escape");
+	await expect(row.getByTestId("workspace-name")).toHaveText(created.name);
+
+	await openWorkspaceMenu(row);
+	await page.getByTestId("workspace-rename").click();
+	input = row.getByRole("textbox", { name: "Workspace name" });
+	await input.fill("Manual Workspace Name");
+	await page.getByTestId("project-name").first().click();
+
+	await expect(row.getByTestId("workspace-name")).toHaveText("Manual Workspace Name");
+	await expect(row.getByTestId("workspace-branch")).toHaveText(created.branch);
+	expect(
+		execFileSync("git", ["-C", created.worktreePath, "symbolic-ref", "--short", "HEAD"], {
+			encoding: "utf8",
+		}).trim(),
+	).toBe(created.branch);
+	expect(existsSync(created.worktreePath)).toBe(true);
+});
+
+test("an open inline rename survives reconnect", async ({ page }) => {
+	let firstSocket: WebSocketRoute | undefined;
+	let socketsOpened = 0;
+	let releaseReconnect: () => void = () => {};
+	const reconnectAllowed = new Promise<void>((resolve) => {
+		releaseReconnect = resolve;
+	});
+	await page.routeWebSocket(/\/ws(\?|$)/, async (socket) => {
+		socketsOpened += 1;
+		if (socketsOpened > 1) await reconnectAllowed;
+		firstSocket ??= socket;
+		socket.connectToServer();
+	});
+
+	await openFixtureProject(page);
+	const created = await createWorkspaceViaDialog(page);
+	await settleAfterCreate(page);
+	const row = worktreeRows(page).first();
+	await openWorkspaceMenu(row);
+	await page.getByTestId("workspace-rename").click();
+	const input = row.getByRole("textbox", { name: "Workspace name" });
+	await expect(input).toBeVisible();
+
+	await firstSocket?.close();
+	await expect(page.getByTestId("connection-status")).not.toHaveAttribute(
+		"data-status",
+		"connected",
+	);
+	await expect(input).toBeVisible();
+	await input.fill("Rename After Reconnect");
+	await input.press("Enter");
+	await expect(input).toBeVisible();
+	await expect(input).toHaveValue("Rename After Reconnect");
+
+	releaseReconnect();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect.poll(() => socketsOpened).toBeGreaterThan(1);
+	await expect(row.getByTestId("workspace-name")).toHaveText("Rename After Reconnect");
+	await expect(row.getByTestId("workspace-branch")).toHaveText(created.branch);
+});
+
+test("the Default workspace's kebab menu offers only non-mutating actions", async ({ page }) => {
 	await openFixtureProject(page);
 	const row = page.locator('[data-testid="workspace-item"][data-kind="default"]');
 	await openWorkspaceMenu(row);
 	await expect(page.getByTestId("workspace-open-in")).toBeVisible();
 	await expect(page.getByTestId("workspace-copy-path")).toBeVisible();
+	await expect(page.getByTestId("workspace-rename")).toHaveCount(0);
 	await expect(page.getByTestId("workspace-remove")).toHaveCount(0);
 });
 
@@ -84,6 +171,7 @@ test("right-click opens the workspace's kebab menu without activating it", async
 	expect(Math.abs(actionsBox.x + actionsBox.width - (kebabBox.x + kebabBox.width))).toBeLessThan(8);
 	expect(Math.abs(actionsBox.y - (kebabBox.y + kebabBox.height))).toBeLessThan(12);
 	await expect(page.getByTestId("workspace-copy-path")).toBeVisible();
+	await expect(page.getByTestId("workspace-rename")).toHaveCount(0);
 	await expect(page.getByTestId("workspace-remove")).toHaveCount(0);
 	await expect(activeRow).toHaveAttribute("data-active", "true");
 	await expect(defaultRow).toHaveAttribute("data-active", "false");

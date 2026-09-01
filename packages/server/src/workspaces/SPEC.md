@@ -77,23 +77,20 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   where `name === branch`; **re-reads the registry after the awaited fallback fetch** before appending —
   the pre-await snapshot is stale by then, and saving it would clobber a concurrent list's Default-ensure
   (same discipline as `renameWorkspace`'s re-load after its git subprocess)),
-  `renameWorkspace` (**sync**; sets the **display `name`** (sanitized, casing preserved) and derives the
-  **git branch** from it via `toBranch`, uniqued against refs + worktree dirs, `git branch -m` from the
-  project repo — the branch ref moves and the worktree's HEAD follows, but the **worktree dir never moves**
-  (pi keys sessions by exact cwd; terminals/tabs are cwd'd there — the stale dir name is the accepted cost);
-  **`name` and `branch` deliberately differ** (e.g. `Fix Auth Redirect` / `fix-auth-redirect`) — the name
-  is display-only, never a path/id; only the branch is uniqued (display names may repeat, the branch
-  shown beneath the name in the nav disambiguates — see [[submodule-web-panels]]); **re-points sibling
-  records whose `baseBranch` **or `diffBase`** was the old branch** in the same save so their provenance stays
-  truthful and their diffs don't silently empty, and **emits `updated` for every record it changed** (the
-  target plus those siblings) — the server would be right either way, but an unbroadcast sibling leaves its
-  clients labelling `vs <old branch>` and keying reads on it until the next `workspace.list`;
-  **re-loads the records after the git subprocess** — a record that vanished meanwhile (archived / e2e
-  reset) aborts the save instead of resurrecting it; throws on unknown id or git failure — callers decide,
-  the auto-rename hook treats it as best-effort. `opts.lock` (default `true`) sets `renamed: true`,
-  marking the name deliberate so the auto-namer never touches it again — what a user rename and the
-  agentic auto-rename want; the host's **provisional naive rename** passes `lock: false` to rename name +
-  branch while leaving `renamed` unset, so the settled-turn agentic pass still refines it),
+  `renameWorkspace` (**sync**; sets the sanitized, casing-preserved display `name`; `opts.lock` defaults
+  `true` and sets `renamed: true`, marking the choice deliberate so auto-naming never touches it again.
+  **`opts.renameBranch` defaults `true`** for the existing provisional + agentic auto-rename callers: the
+  branch is derived via `toBranch`, uniqued against refs + worktree dirs, and moved with `git branch -m` while
+  the **worktree dir never moves** (pi keys sessions and terminals/tabs by that exact cwd). The branch-moving
+  path re-points sibling records whose `baseBranch` or `diffBase` named the old branch, re-loads the registry
+  after the Git subprocess so a concurrent removal is not resurrected, saves once, and emits `updated` for
+  every changed record. The host's provisional naive pass combines `lock: false` with this default so the
+  settled-turn agentic pass can still refine it. The manual wire method instead passes
+  **`{ lock: true, renameBranch: false }`**: it changes only the display label, keeps `branch`, `worktreePath`,
+  `baseBranch`, and `diffBase` untouched, performs no Git mutation, and emits one full-snapshot `updated`.
+  **`name` and `branch` deliberately differ** after such a rename — the name is display-only and may repeat;
+  the branch shown beneath it disambiguates (see [[submodule-web-panels]]). Unknown/default/external ids and
+  invalid names still throw; callers decide presentation),
   `listWorkspaces(projectId, { includeDiffStats? })` (**async**; complete authoritative membership/order
   after Default ensure + user-owned folder-truth reconciliation — that sync prologue's load→mutate→save
   completes before the first await; the diff-stat badges then resolve **in parallel through `gitAsync`**,

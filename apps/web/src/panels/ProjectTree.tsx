@@ -8,6 +8,7 @@ import {
 	RiHome2Line as House,
 	RiLoader4Line as Loader2,
 	RiMore2Line as MoreVertical,
+	RiPencilLine as Pencil,
 	RiAddLine as Plus,
 	RiFolderFill,
 	RiFolderLine,
@@ -18,7 +19,14 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
-import { type MouseEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+	type KeyboardEvent,
+	type MouseEvent,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { Button } from "@/components/ui/button";
 import {
 	ContextMenu,
@@ -52,6 +60,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
+import { canRenameWorkspace, workspaceRenameValue } from "./workspaceActions";
 
 const PREWARM_WORKSPACE_LIMIT = 8;
 
@@ -62,6 +71,7 @@ export function ProjectTree() {
 	const workspaces = useAppStore((s) => s.workspaces);
 	const worktreeCreations = useAppStore((s) => s.worktreeCreationsByProject);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
 
 	const [editors, setEditors] = useState<EditorInfo[]>([]);
 	useEffect(() => {
@@ -192,6 +202,12 @@ export function ProjectTree() {
 			.catch((err) => toast.error(errorText(err, "Failed to reveal workspace")));
 	};
 
+	const renameWorkspace = (workspace: Workspace, name: string) => {
+		void getTransport()
+			.request("workspace.rename", { id: workspace.id, name })
+			.catch((err) => toast.error(errorText(err, "Failed to rename workspace")));
+	};
+
 	const closeProject = (project: Project) => {
 		pendingCloseFocusProjectIdRef.current = project.id;
 		void getTransport()
@@ -266,11 +282,13 @@ export function ProjectTree() {
 											key={ws.id}
 											workspace={ws}
 											isActive={activeWorkspaceId === ws.id}
+											canRename={canRenameWorkspace(protocolVersion, ws)}
 											editors={editors}
 											onSelect={() => selectWorkspace(ws)}
 											onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
 											onCopyPath={() => void copyText(ws.worktreePath)}
 											onReveal={() => revealWorkspace(ws)}
+											onRename={(name) => renameWorkspace(ws, name)}
 											onRemove={() => removeWorkspace(ws.id)}
 										/>
 									))}
@@ -499,20 +517,24 @@ function ProjectRow({
 function WorkspaceRow({
 	workspace,
 	isActive,
+	canRename,
 	editors,
 	onSelect,
 	onOpenIn,
 	onCopyPath,
 	onReveal,
+	onRename,
 	onRemove,
 }: {
 	workspace: Workspace;
 	isActive: boolean;
+	canRename: boolean;
 	editors: EditorInfo[];
 	onSelect: () => void;
 	onOpenIn: (editor: EditorInfo) => void;
 	onCopyPath: () => void;
 	onReveal: () => void;
+	onRename: (name: string) => void;
 	onRemove: () => void;
 }) {
 	const isDefault = isDefaultWorkspace(workspace);
@@ -535,6 +557,79 @@ function WorkspaceRow({
 		setMenuOpen(true);
 	};
 	const [confirmOpen, setConfirmOpen] = useState(false);
+	const nameRef = useRef<HTMLInputElement>(null);
+	const editStartNameRef = useRef(workspace.name);
+	const pendingNameRef = useRef<string | null>(null);
+	const cancelNextBlurRef = useRef(false);
+	const enterRenameRef = useRef(false);
+	const [editing, setEditing] = useState(false);
+
+	useEffect(() => {
+		if (!editing) return;
+		const frame = requestAnimationFrame(() => {
+			nameRef.current?.focus();
+			nameRef.current?.select();
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [editing]);
+
+	useEffect(() => {
+		const name = pendingNameRef.current;
+		if (!editing || !canRename || !name) return;
+		pendingNameRef.current = null;
+		setEditing(false);
+		onRename(name);
+	}, [canRename, editing, onRename]);
+
+	const commitRename = () => {
+		if (cancelNextBlurRef.current) {
+			cancelNextBlurRef.current = false;
+			pendingNameRef.current = null;
+			setEditing(false);
+			return;
+		}
+		const name = workspaceRenameValue(editStartNameRef.current, nameRef.current?.value ?? "");
+		if (!name) {
+			pendingNameRef.current = null;
+			setEditing(false);
+			return;
+		}
+		if (!canRename) {
+			pendingNameRef.current = name;
+			return;
+		}
+		setEditing(false);
+		onRename(name);
+	};
+
+	const onNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+		if (event.key === "Enter") {
+			event.preventDefault();
+			nameRef.current?.blur();
+			return;
+		}
+		if (event.key === "Escape") {
+			event.preventDefault();
+			cancelNextBlurRef.current = true;
+			nameRef.current?.blur();
+		}
+	};
+
+	const identityClass = `flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`;
+	const identityIcon = (
+		<Icon
+			className={`${isTwoLine ? "mt-2 " : ""}size-14 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}
+		/>
+	);
+	const branchLabel = isTwoLine ? (
+		<span
+			data-testid="workspace-branch"
+			className="truncate text-text-subtle tr-text-metadata leading-tight"
+		>
+			{workspace.branch}
+		</span>
+	) : null;
+
 	return (
 		<li>
 			<fieldset
@@ -547,31 +642,39 @@ function WorkspaceRow({
 					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 				}`}
 			>
-				<button
-					type="button"
-					onClick={onSelect}
-					className={`flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`}
-				>
-					<Icon
-						className={`${isTwoLine ? "mt-2 " : ""}size-14 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}
-					/>
-					<span className="flex min-w-0 flex-1 flex-col">
-						<span
-							data-testid="workspace-name"
-							className={`truncate tr-text-ui leading-tight ${isActive ? "text-primary" : "text-text-muted"}`}
-						>
-							{workspace.name}
+				{editing ? (
+					<div className={identityClass}>
+						{identityIcon}
+						<span className="flex min-w-0 flex-1 flex-col">
+							<input
+								ref={nameRef}
+								data-testid="workspace-name"
+								data-editing
+								type="text"
+								spellCheck={false}
+								aria-label="Workspace name"
+								defaultValue={workspace.name}
+								onKeyDown={onNameKeyDown}
+								onBlur={commitRename}
+								className={`w-full min-w-0 truncate border-0 bg-transparent p-0 tr-text-ui leading-tight outline-none ${isActive ? "text-primary" : "text-text-muted"}`}
+							/>
+							{branchLabel}
 						</span>
-						{isTwoLine && (
+					</div>
+				) : (
+					<button type="button" onClick={onSelect} className={identityClass}>
+						{identityIcon}
+						<span className="flex min-w-0 flex-1 flex-col">
 							<span
-								data-testid="workspace-branch"
-								className="truncate text-text-subtle tr-text-metadata leading-tight"
+								data-testid="workspace-name"
+								className={`truncate tr-text-ui leading-tight ${isActive ? "text-primary" : "text-text-muted"}`}
 							>
-								{workspace.branch}
+								{workspace.name}
 							</span>
-						)}
-					</span>
-				</button>
+							{branchLabel}
+						</span>
+					</button>
+				)}
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="workspace-menu"
@@ -580,7 +683,15 @@ function WorkspaceRow({
 					>
 						<MoreVertical className="size-14" />
 					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end" data-testid="workspace-actions">
+					<DropdownMenuContent
+						align="end"
+						data-testid="workspace-actions"
+						onCloseAutoFocus={(event) => {
+							if (!enterRenameRef.current) return;
+							enterRenameRef.current = false;
+							event.preventDefault();
+						}}
+					>
 						{editors.length > 0 && (
 							<DropdownMenuSub>
 								<DropdownMenuSubTrigger data-testid="workspace-open-in">
@@ -600,6 +711,21 @@ function WorkspaceRow({
 								</DropdownMenuSubContent>
 							</DropdownMenuSub>
 						)}
+						{canRename ? (
+							<DropdownMenuItem
+								data-testid="workspace-rename"
+								onSelect={() => {
+									editStartNameRef.current = workspace.name;
+									pendingNameRef.current = null;
+									cancelNextBlurRef.current = false;
+									enterRenameRef.current = true;
+									setEditing(true);
+								}}
+							>
+								<Pencil />
+								Rename
+							</DropdownMenuItem>
+						) : null}
 						<DropdownMenuItem data-testid="workspace-copy-path" onSelect={onCopyPath}>
 							<Copy />
 							Copy path

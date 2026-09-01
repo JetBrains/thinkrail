@@ -91,6 +91,7 @@ test("opens and safely forgets an existing user-owned worktree", async ({ page }
 		expectCheckoutUnchanged();
 
 		await openWorkspaceMenu(row);
+		await expect(page.getByTestId("workspace-rename")).toHaveCount(0);
 		await expect(page.getByTestId("workspace-remove")).toHaveText("Remove from ThinkRail");
 		await page.getByTestId("workspace-remove").click();
 		const confirm = page.getByRole("alertdialog", {
