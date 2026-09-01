@@ -119,15 +119,15 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   `markdown`/`tool`/`activity` row precedes the next user turn (`finalAnswerRowIds`, supplied by every
   transcript integration as `isFinalAnswer`); a non-final markdown row renders plain, without the action.
   Both go through **one shared layout**, `MessageWithCopy` (in `turns.tsx`): a `relative` wrapper that
-  overlays the action on the message's own **bottom-right corner** (`absolute right-4 bottom-0` on the
-  `CopyButton`) — for both roles alike, agent and user — rather than a row below the content. The user
-  bubble stays content-only: the button is positioned against the outer wrapper, not injected into the
-  bubble markup, and lands on the bubble's own corner because the bubble is the wrapper's only (and so
-  bottom-most, right-aligned) child. Both message content wrappers (the user bubble, the final-answer
-  markdown wrapper) carry `pb-24` — exactly the button's own `size-24` hit target, flush against the
-  wrapper's bottom edge (`bottom-0`, no extra inset, so the reserved band and the button's footprint
-  match exactly) — so the overlay's hit area is reserved padding, never the text's own last line, no
-  matter how close that line runs to the right edge. `MessageWithCopy` also carries the
+  overlays the action **inside the role's bottom corner on the same line as content** — bottom-left for
+  an assistant answer (`left-0 bottom-0`), bottom-right for a user bubble (`right-0 bottom-8`, aligned
+  within the bubble's existing vertical padding) — never in a row below it. The user bubble stays
+  content-only: the button is positioned against the outer wrapper, not injected into the bubble markup.
+  The message content reserves one horizontal `size-24` band on the action's side (`pl-24` for the final
+  assistant Markdown wrapper, `pr-24` for the user bubble) instead of a vertical band, so text and the
+  large-message toggle cannot sit beneath the hit target. The assistant wrapper removes only its final
+  Markdown block's trailing margin to align the action with the actual final line; inter-block and leading
+  margins stay unchanged. `MessageWithCopy` also carries the
   `data-testid="chat-message"`/`data-role` hooks the jump/flash + tests rely on. `CopyButton` is a
   self-contained presentational primitive that copies through the shared `copyText()` (`@/lib`) — the
   one clipboard-write path with its degradation baked in — flipping to a local ~1.2s `Copy`→`Check` icon
