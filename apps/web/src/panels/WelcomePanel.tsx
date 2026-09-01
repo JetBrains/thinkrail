@@ -57,7 +57,7 @@ export function WelcomePanel() {
 		};
 	}, [project?.id]);
 
-	const { openProject, pickAndOpen, dialogs } = useOpenProject((opened) =>
+	const { openProject, pickAndOpen, enterHostPath, dialogs } = useOpenProject((opened) =>
 		useAppStore.getState().selectProject(opened.id, { reveal: true }),
 	);
 
@@ -86,6 +86,7 @@ export function WelcomePanel() {
 		<AddProjectMenu
 			recentProjects={recentProjects}
 			onOpen={() => void pickAndOpen()}
+			onEnterHostPath={enterHostPath}
 			onOpenRecent={(path) => void openProject(path)}
 			align="start"
 		>

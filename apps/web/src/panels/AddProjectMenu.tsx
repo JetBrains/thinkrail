@@ -1,4 +1,8 @@
-import { RiFolderLine as Folder, RiGlobalLine as Globe } from "@remixicon/react";
+import {
+	RiEditLine as Edit,
+	RiFolderLine as Folder,
+	RiGlobalLine as Globe,
+} from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
 import type { ReactNode } from "react";
 import {
@@ -14,12 +18,14 @@ import {
 export function AddProjectMenu({
 	recentProjects,
 	onOpen,
+	onEnterHostPath,
 	onOpenRecent,
 	align = "end",
 	children,
 }: {
 	recentProjects: Project[];
 	onOpen: () => void;
+	onEnterHostPath: () => void;
 	onOpenRecent: (path: string) => void;
 	align?: "start" | "center" | "end";
 	children: ReactNode;
@@ -31,6 +37,10 @@ export function AddProjectMenu({
 				<DropdownMenuItem data-testid="menu-open-project" onSelect={() => onOpen()}>
 					<Folder />
 					<span>Open project</span>
+				</DropdownMenuItem>
+				<DropdownMenuItem data-testid="menu-enter-host-path" onSelect={() => onEnterHostPath()}>
+					<Edit />
+					<span>Enter host path…</span>
 				</DropdownMenuItem>
 				<DropdownMenuItem disabled>
 					<Globe />

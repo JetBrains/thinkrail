@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useAppStore } from "../store";
+import { createLatestOperation, type LatestOperation } from "./latestOperation";
 
 export function useLiveTabContent<T>(
 	tab: { workspaceId: string; path: string; loadedTick?: number },
@@ -60,14 +61,5 @@ export function useLiveTabContent<T>(
 	}, [reloadKey, tab.loadedTick, sequencer]);
 }
 
-export type ReadSequencer = { begin: () => () => boolean };
-
-export function createReadSequencer(): ReadSequencer {
-	let latest = 0;
-	return {
-		begin: () => {
-			const seq = ++latest;
-			return () => seq === latest;
-		},
-	};
-}
+export type ReadSequencer = LatestOperation;
+export const createReadSequencer = createLatestOperation;

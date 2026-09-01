@@ -94,9 +94,13 @@ export function normalizePath(path: string): string {
 	return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
 }
 
+function hasWindowsDriveRoot(path: string): boolean {
+	return /^[A-Za-z]:\//.test(normalizePath(path));
+}
+
 export function isAbsolutePath(path: string): boolean {
 	const normalized = normalizePath(path);
-	return normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized);
+	return normalized.startsWith("/") || hasWindowsDriveRoot(normalized);
 }
 
 export function shallowEqualArrays(
@@ -142,8 +146,14 @@ export function projectRelativePath(path: string, workspaceRoot?: string | undef
 	if (!canonical || !isAbsolutePath(canonical)) return canonical;
 
 	const root = workspaceRoot ? trimTrailingSlashes(canonicalPosixPath(workspaceRoot)) : "";
-	const rootPrefix = root.endsWith("/") ? root : `${root}/`;
-	if (root && (canonical === root || canonical.startsWith(rootPrefix))) {
+	const ignoreCase = hasWindowsDriveRoot(canonical) && hasWindowsDriveRoot(root);
+	const comparableCanonical = ignoreCase ? canonical.toLowerCase() : canonical;
+	const comparableRoot = ignoreCase ? root.toLowerCase() : root;
+	const rootPrefix = comparableRoot.endsWith("/") ? comparableRoot : `${comparableRoot}/`;
+	if (
+		comparableRoot &&
+		(comparableCanonical === comparableRoot || comparableCanonical.startsWith(rootPrefix))
+	) {
 		return canonical.slice(root.length).replace(/^\/+/, "") || fileName(canonical);
 	}
 

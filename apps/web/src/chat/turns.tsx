@@ -22,6 +22,7 @@ import {
 	userText,
 } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
+import { AssistantMarkdown } from "./assistantLinks";
 import { FileChip } from "./FileChip";
 import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
@@ -91,7 +92,11 @@ export function ChatTurnView({
 					data-role="assistant"
 					className="tr-text-reading text-text-default"
 				>
-					<Markdown text={row.text} />
+					<AssistantMarkdown
+						text={row.text}
+						workspaceRoot={workspaceRoot}
+						onOpenFile={onOpenFile}
+					/>
 				</div>
 			);
 		case "subagentCompletion":

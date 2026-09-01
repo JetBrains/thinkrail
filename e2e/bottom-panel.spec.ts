@@ -90,6 +90,19 @@ function bottomGroups(page: Page): Locator {
 	return page.getByTestId("bottom-group");
 }
 
+async function startTabDrag(page: Page, tab: Locator): Promise<void> {
+	const box = await tab.boundingBox();
+	if (!box) throw new Error("drag tab has no bounding box");
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box.x + box.width / 2 + 12, box.y + box.height / 2 + 8, { steps: 4 });
+}
+
+async function cancelTabDrag(page: Page): Promise<void> {
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
+}
+
 async function setBottomAlignment(page: Page, name: string): Promise<void> {
 	await page.getByRole("button", { name: "Bottom panel alignment" }).click();
 	await page.getByRole("menuitemradio", { name, exact: true }).click();
@@ -269,13 +282,13 @@ test("a hidden local frame keeps the host terminal reserved without attaching un
 	await focusPreset.getByRole("button", { name: "Apply now…" }).click();
 	await page.getByTestId("layout-apply-confirm").click();
 	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
-	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 
 	const workspace = await createWorkspaceWithoutOpening(page);
 	await pressPlatformShortcut(page, "b");
 	const workspaceRow = page.getByTestId("workspace-item").filter({ hasText: workspace.name });
 	await workspaceRow.getByRole("button").first().click();
-	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
 	const catalog = await requestOverWire<{ tabs: Array<{ tabKey: string }> }>(
 		page,
@@ -293,10 +306,12 @@ test("a hidden local frame keeps the host terminal reserved without attaching un
 	await expect(peer.getByTestId("terminal-tab")).toHaveCount(1);
 	await waitTerminalReady(peer);
 
-	await page.reload();
-	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await reloadDefaultWorkbench(page);
+	await waitForLayoutSettled(page);
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
-	await page.getByRole("button", { name: "Show bottom panel" }).click();
+	await pressPlatformShortcut(page, "Shift+j");
+	await waitTerminalReady(page);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await peer.close();
 });
@@ -342,11 +357,11 @@ test("Mod+Shift+J works from xterm, preserves its PTY through hide and reload, a
 
 	await visibleTerminal(page).locator(".xterm-helper-textarea").focus();
 	await pressPlatformShortcut(page, "Shift+j");
-	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
 
 	await reloadDefaultWorkbench(page);
-	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	await pressPlatformShortcut(page, "Shift+j");
 	await waitTerminalReady(page);
 	await expect(visibleTerminalScreen(page)).toContainText(marker);
@@ -357,7 +372,7 @@ test("Mod+Shift+J works from xterm, preserves its PTY through hide and reload, a
 	await expect(page.getByTestId("bottom-panel")).toBeVisible();
 	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
 	await pressPlatformShortcut(page, "Shift+j");
-	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 });
 
 test("bottom height, all alignments, and keyboard resizing persist across reload", async ({
@@ -429,7 +444,10 @@ test("bottom height, all alignments, and keyboard resizing persist across reload
 		.toBeGreaterThan(keyboardBefore);
 
 	await pressPlatformShortcut(page, "Shift+j");
-	await expectHorizontalSpan(page.getByTestId("bottom-layout-rail"), left, center);
+	await startTabDrag(page, page.getByTestId("tab-files"));
+	await expect(page.getByTestId("bottom-drop-zone")).toBeVisible();
+	await expectHorizontalSpan(page.getByTestId("bottom-drop-zone"), left, center);
+	await cancelTabDrag(page);
 	await pressPlatformShortcut(page, "Shift+j");
 	await expectHorizontalSpan(page.getByTestId("bottom-panel"), left, center);
 });
@@ -558,7 +576,8 @@ test("closing a final bottom resource retains its frame groups until explicit re
 	await bottomGroups(page).first().getByTestId("remove-layout-group").click();
 	await expect(bottomGroups(page)).toHaveCount(1);
 	await bottomGroups(page).first().getByTestId("remove-layout-group").click();
-	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
+	await expect(page.getByTestId("bottom-drop-zone")).toHaveCount(0);
 	await expect(page.getByTestId("center-group").first()).toBeFocused();
 });
 
@@ -717,7 +736,7 @@ test("bottom visibility and alignment stay local to each window and survive its 
 	await setBottomAlignment(page, "Full width");
 	await expect(peer.getByTestId("bottom-aligned-row")).toHaveAttribute("data-alignment", "center");
 	await pressPlatformShortcut(page, "Shift+j");
-	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	await expect(peer.getByTestId("bottom-panel")).toBeVisible();
 
 	await setBottomAlignment(peer, "Below center and left");
@@ -726,7 +745,7 @@ test("bottom visibility and alignment stay local to each window and survive its 
 		"data-alignment",
 		"center-left",
 	);
-	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	await peer.close();
 });
 

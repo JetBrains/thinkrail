@@ -170,6 +170,52 @@ async function returnToChat(page: Page): Promise<void> {
 	await expect(page.getByTestId("chat-view")).toBeVisible();
 }
 
+test("assistant Markdown opens safe relative files without navigating the browser", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	seedWorkspaceSession(repoCwd(), {
+		name: "assistant file links",
+		messages: [
+			{ role: "user", text: "show the evidence", timestamp: BASE_TS },
+			{
+				role: "assistant",
+				text: [
+					"[Open README](README.md)",
+					"[Open docs](https://example.com/docs)",
+					"[Outside workspace](../outside.md)",
+				].join("\n\n"),
+				timestamp: BASE_TS + 1_000,
+			},
+		],
+	});
+
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
+	await enterDefaultWorkspace(page);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+
+	const message = page.locator('[data-testid="chat-message"][data-role="assistant"]').last();
+	const local = message.getByRole("button", { name: "Open README" });
+	await expect(local).toHaveAttribute("data-testid", "chat-file-link");
+	await expect(local).toHaveAttribute("data-path", "README.md");
+	await expect(local).not.toHaveAttribute("href", "README.md");
+	await expect(local).not.toHaveAttribute("target", "_blank");
+	await expect(message.getByRole("link", { name: "Open docs" })).toHaveAttribute(
+		"target",
+		"_blank",
+	);
+	await expect(message.getByRole("link", { name: "Outside workspace" })).toHaveAttribute(
+		"target",
+		"_blank",
+	);
+
+	await local.click();
+	const fileTab = page.locator('[data-testid="editor-tab"][data-kind="file"]');
+	await expect(fileTab).toHaveCount(1);
+	await expect(fileTab).toContainText("README.md");
+	await expect(fileTab).toHaveAttribute("data-preview", "true");
+});
+
 test("structured tool paths reuse the preview tab while rich tool results stay intentional", async ({
 	page,
 }) => {

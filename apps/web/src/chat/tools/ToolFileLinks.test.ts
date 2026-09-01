@@ -4,7 +4,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ToolRenderProps } from "../toolRegistry";
 import { EditCard } from "./EditCard";
 import { ReadCard } from "./ReadCard";
-import { toolFileTarget } from "./ToolFileLink";
 import { WriteCard } from "./WriteCard";
 
 const result = { content: [{ type: "text", text: "ok" }] };
@@ -36,21 +35,6 @@ function markup(
 }
 
 describe("structured tool file links", () => {
-	it("canonicalizes only paths contained by the active worktree", () => {
-		for (const [path, root, expected] of [
-			["module-a/../README.md", "/repo", "README.md"],
-			["/repo/module-a/SPEC.md", "/repo", "module-a/SPEC.md"],
-			["C:\\repo\\module-a\\SPEC.md", "C:\\repo", "module-a/SPEC.md"],
-			["/repo-other/SPEC.md", "/repo", null],
-			["../outside.md", "/repo", null],
-			["https://example.com/a.md", "/repo", null],
-			["file:///repo/a.md", "/repo", null],
-			["", "/repo", null],
-		] as const) {
-			expect(toolFileTarget(path, root)).toBe(expected);
-		}
-	});
-
 	it("opens relative and in-worktree absolute read paths under one canonical relative label", () => {
 		const relative = markup(ReadCard, "read", "module-a/../README.md");
 		const absolute = markup(ReadCard, "read", "/repo/module-a/SPEC.md");
