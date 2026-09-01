@@ -95,8 +95,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   feature modules never track), and
   `stop()` → immediate agent-session cleanup, then `persistTerminalSessions()` **before**
   `closeAllTerminals()`, then watcher/socket disposal; `shutdown()` memoizes one asynchronous graceful
-  path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` first, then `stop()` and
-  ownership-lease close). The bounded settle includes hidden delegation children even when their parent is
+  path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` first, then `stop()`). The
+  bounded settle includes hidden delegation children even when their parent is
   idle, plus child cascades already started by a concurrent removal, so graceful quit does not let a
   background child lose its terminal abort/tool result; `crashLog.ts` (`installCrashLog` — the `uncaughtException`/`unhandledRejection` report
   appended to `<dataDir>/logs/crash.log` and echoed to stderr, then `exit(1)`: in-process pi means such a
@@ -104,15 +104,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   Never a recovery, and never installed under `NODE_ENV=test` — a unit-test process reports its own
   faults. It renders the throw via the `log` module's `describeError`, so crash reports and log lines
   agree, but keeps its own sync append — the death path must not depend on the logger's state);
-  `ownership.ts` (canonicalize the data directory, hash its fingerprint into a dedicated deterministic
-  loopback candidate range, hold an exclusive `node:net` listener, and answer a bounded versioned
-  fingerprint handshake; same-owner candidates refuse, different owners advance, and an occupied
-  unresponsive candidate fails closed); `boot.ts` (`bootHost` → acquire ownership before any mutable host
-  initialization, await `initLogging` — debug level when the launcher passed `verbose` — then install the
-  crash report, resolve the login-shell PATH, pre-warm the same
-  Central watcher/runtime initialization before choosing the serving port, await `createServer` (which
-  idempotently enforces runtime bootstrap for low-level embedders), attach the lease to
-  `RunningServer.shutdown()`, and write the `listening on` info line (see `submodule-server-log`). Its
+  `boot.ts` (`bootHost` → await `initLogging` — debug level when the launcher passed `verbose` — then
+  install the crash report, resolve the login-shell PATH, pre-warm the same Central watcher/runtime
+  initialization before choosing the serving port, await `createServer` (which idempotently enforces
+  runtime bootstrap for low-level embedders), and write the `listening on` info line (see
+  `submodule-server-log`). Its
   SIGINT/SIGTERM handlers await that same shutdown before process exit. Settling aborts streaming sessions
   and waits bounded so pi persists their "Operation aborted" tool results and transcripts land paired; an
   immediate exit would strand mid-tool transcripts on restart repair); `handlers.ts` (the WS method→handler
@@ -395,8 +391,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   low-latency event, not a durable queue: a reconnecting client's active-workspace `session.list` is the
   authoritative read-side repair for an event missed while its socket was down.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer` (including
-  idempotent `shutdown()`), `bootHost`, `BootHostOptions`, `BootedHost`, and the closed ownership-failure
-  type a launcher maps to its own presentation.
+  idempotent `shutdown()`), `bootHost`, `BootHostOptions`, and `BootedHost`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
   `boot.ts`); `persistence` (`dataDir` — where `crashLog.ts` writes); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile` for the `/files` route); Bun/Node.
@@ -419,11 +414,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `ws.send` to the single *attached* client (see [[submodule-server-terminal]]). Adding a terminal-style
   addressed channel means wiring a publisher, not a subscription.
 - The host is the single place features are wired together — features never reach back into it.
-- Ownership identity is the canonical data directory, not process name or app kind: CLI and desktop must
-  exclude one another for the same state. No timeout authorizes a second writer. Graceful close and process
-  death release the kernel listener; there is no stale artifact or force-unlock path.
+- Separate host processes do not coordinate mutable state or events. They may use the same data directory,
+  but each owns independent in-memory sessions, terminals, watchers, and connected clients; persistence
+  conflicts are accepted rather than serialized by the host.
 - `shutdown()` is safe under concurrent signal/native-quit calls: callers receive one promise, lifecycle
-  work runs once, and resource disposal/ownership release remain ordered after session settling.
+  work runs once, and resource disposal remains ordered after session settling.
 - **A send (prompt/steer/followUp/answerQuestion) is acked when ACCEPTED, not when the turn ends**
   (`ackSend`): pi's send methods resolve only at turn end, and a turn can outlive the client's request
   timeout (long tool rounds and multi-minute reasoning turns are routine) — awaiting completion would

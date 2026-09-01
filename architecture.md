@@ -202,7 +202,9 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     origin. Native resources that require paths stay unpacked. The shell sets the staged `bun-pty` library
     before server import and loads PI from a separately bundled `.ts` runtime so external TypeScript
     extensions receive PI's bundled virtual modules rather than nonexistent built-Node aliases. The CLI
-    and desktop acquire the same canonical-data-directory ownership lease and share graceful shutdown.
+    and desktop share host boot and graceful shutdown, but launchers enforce no process-wide single-instance
+    or canonical-data-directory ownership policy. Each host binds its own loopback port; when multiple hosts
+    point at the same mutable data directory, cross-process consistency is intentionally not guaranteed.
     Desktop artifacts are additive and unsigned initially; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
     the supported Linux floor. Detail: [[module-desktop]].
 
