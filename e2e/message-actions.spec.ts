@@ -116,7 +116,7 @@ test("only the round's final agent answer carries a copy action, not intermediat
 	await expect(final.getByTestId("chat-copy")).toHaveCount(1);
 });
 
-test("the copy action sits 2px below the content, consistent for agent and user messages", async ({
+test("the copy action overlays the bottom-right corner of the message, for both agent and user", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -140,22 +140,17 @@ test("the copy action sits 2px below the content, consistent for agent and user 
 	const assistantMessage = page.locator('[data-testid="chat-message"][data-role="assistant"]');
 	await expect(assistantMessage).toBeVisible();
 
-	// The shared copy-action gap is exactly 2px on both roles (single source of truth in MessageWithCopy).
-	const gapOf = (loc: import("@playwright/test").Locator) =>
-		loc.evaluate((el) => getComputedStyle(el).rowGap);
-	await expect.poll(() => gapOf(userMessage)).toBe("2px");
-	await expect.poll(() => gapOf(assistantMessage)).toBe("2px");
-
-	// The agent answer ends flush: its last markdown block carries no trailing bottom margin, so the copy
-	// action is not pushed farther away than on a user bubble.
-	const lastBlockMb = await assistantMessage
-		.locator("[data-testid='chat-copy']")
-		.evaluate((copy) => {
-			const content = copy.previousElementSibling;
-			const block = content?.firstElementChild?.lastElementChild;
-			return block ? getComputedStyle(block).marginBottom : null;
-		});
-	expect(lastBlockMb).toBe("0px");
+	// The copy action is an overlay pinned to its message's own bottom-right corner — for both roles —
+	// not a row below the content, so its edges track the message's own bounding box.
+	for (const message of [userMessage, assistantMessage]) {
+		const [messageBox, copyBox] = await Promise.all([
+			message.boundingBox(),
+			message.getByTestId("chat-copy").boundingBox(),
+		]);
+		if (!messageBox || !copyBox) throw new Error("expected both bounding boxes to be visible");
+		expect(messageBox.x + messageBox.width - (copyBox.x + copyBox.width)).toBeLessThan(8);
+		expect(messageBox.y + messageBox.height - (copyBox.y + copyBox.height)).toBeLessThan(8);
+	}
 });
 
 test("copy actions copy the full source of both user and agent messages", async ({ page }) => {

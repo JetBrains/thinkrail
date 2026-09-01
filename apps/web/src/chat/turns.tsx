@@ -105,10 +105,7 @@ export function ChatTurnView({
 			// narration the agent emits between tool steps.
 			return isFinalAnswer ? (
 				<MessageWithCopy messageRole="assistant" side="left" getText={() => row.text}>
-					{/* Zero the trailing block margin of the answer's LAST child only, so the message ends flush
-					    against the copy-action gap (its own owning layout) — inter-block + leading spacing keep
-					    the shared prose margins. */}
-					<div className="w-full min-w-0 tr-text-reading text-text-default [&>div>*:last-child]:mb-0">
+					<div className="w-full min-w-0 tr-text-reading text-text-default">
 						<Markdown text={row.text} />
 					</div>
 				</MessageWithCopy>
@@ -205,9 +202,9 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 }
 /**
  * Shared message + Copy layout, so both message types position the action the same way instead of each
- * carrying its own hack. The Copy sits **below** the message content (never an overlay on the text),
- * aligned to the message's own side: agent = bottom-**left** under the message, user = bottom-**right**
- * under the bubble. Hover-reveal (the button's own styling) keeps it visually secondary. The
+ * carrying its own hack. The Copy overlays the message's own **bottom-right corner** — for both agent and
+ * user messages alike — absolutely positioned against this `relative` wrapper rather than sitting in a row
+ * below the content. Hover-reveal (the button's own styling) keeps it visually secondary. The
  * `data-testid`/`data-role` hooks stay on this outer element, where the transcript's jump/flash and tests
  * expect them.
  */
@@ -226,10 +223,10 @@ function MessageWithCopy({
 		<div
 			data-testid="chat-message"
 			data-role={messageRole}
-			className={cn("group flex flex-col gap-2", side === "right" ? "items-end" : "items-start")}
+			className={cn("group relative flex flex-col", side === "right" ? "items-end" : "items-start")}
 		>
 			{children}
-			<CopyButton getText={getText} />
+			<CopyButton getText={getText} className="absolute right-4 bottom-4 z-10" />
 		</div>
 	);
 }
@@ -306,8 +303,8 @@ function UserTurn({
 }
 
 /**
- * A plain user message bubble (its Copy action lives in the enclosing {@link MessageWithCopy}, below the
- * bubble on the right) — and, only above {@link LARGE_USER_MESSAGE} chars, auto-collapse. The fold's fallback is
+ * A plain user message bubble (its Copy action lives in the enclosing {@link MessageWithCopy}, overlaid on
+ * the bubble's bottom-right corner) — and, only above {@link LARGE_USER_MESSAGE} chars, auto-collapse. The fold's fallback is
  * `agentResponded` (expanded until the agent starts responding, collapsed after), so the shared cache's
  * "a manual toggle always wins over a fallback flip" gives the required behavior for free: shown
  * expanded right after send, auto-collapsed the instant the agent produces anything, and a manual
@@ -329,8 +326,8 @@ function PlainUserTurn({
 	const collapsed = large && !expanded;
 	return (
 		<MessageWithCopy messageRole="user" side="right" getText={() => text}>
-			{/* w-fit so the bubble still hugs its content (up to 85%). Copy lives OUTSIDE this bubble column
-			    (in MessageWithCopy's gutter); the bubble holds message content only. */}
+			{/* w-fit so the bubble still hugs its content (up to 85%) and is the wrapper's only, right-aligned
+			    child — so the overlaid Copy button's corner coincides with the bubble's own corner. */}
 			<div className="flex w-fit max-w-[85%] flex-col items-end">
 				<div className={USER_BUBBLE_BASE}>
 					{attachments.length > 0 ? (
