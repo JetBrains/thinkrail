@@ -1,11 +1,6 @@
 import { realpathSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import {
-	defaultWorkspaceRow,
-	enterDefaultWorkspace,
-	openChatFromHistory,
-	openFixtureProject,
-} from "./fixtures/app";
+import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -32,7 +27,7 @@ test("a large user message with an agent reply collapses, and Show more re-expan
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
-	await openChatFromHistory(page, "large message chat");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const body = page.getByTestId("user-message-body");
 	const toggle = page.getByTestId("user-message-toggle");
@@ -58,7 +53,7 @@ test("a large user message with no agent reply stays expanded", async ({ page })
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
-	await openChatFromHistory(page, "unanswered large message chat");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const body = page.getByTestId("user-message-body");
 	await expect(body).toBeVisible();
@@ -78,7 +73,7 @@ test("a short user message has no collapse controls", async ({ page }) => {
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
-	await openChatFromHistory(page, "short message chat");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const body = page.getByTestId("user-message-body");
 	await expect(body).toBeVisible();
@@ -105,7 +100,7 @@ test("only the round's final agent answer carries a copy action, not intermediat
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
-	await openChatFromHistory(page, "intermediate vs final chat");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const assistantMessages = page.locator('[data-testid="chat-message"][data-role="assistant"]');
 	await expect(assistantMessages).toHaveCount(2);
@@ -134,7 +129,7 @@ test("the copy action overlays the bottom-right corner of the message, for both 
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
-	await openChatFromHistory(page, "copy spacing chat");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const userMessage = page.locator('[data-testid="chat-message"][data-role="user"]');
 	const assistantMessage = page.locator('[data-testid="chat-message"][data-role="assistant"]');
@@ -170,7 +165,7 @@ test("copy actions copy the full source of both user and agent messages", async 
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
-	await openChatFromHistory(page, "copy chat");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	// User copy — full source, not the collapsed preview.
 	const userMessage = page.locator('[data-testid="chat-message"][data-role="user"]');
