@@ -38,6 +38,7 @@ import {
 } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
+import { deriveMessageActions } from "./messageActions";
 import type { ChatMessageOrder } from "./messageOrder";
 import {
 	compactSubmissionError,
@@ -247,43 +248,10 @@ export default function ChatView({
 	}
 	const firstItemIndex = virtualRows.firstItemIndex;
 
-	const userResponded = useMemo(() => {
-		const map = new Map<string, boolean>();
-		let sawQualifying = false;
-		let sawUserAfter = false;
-		for (let i = chronologicalRows.length - 1; i >= 0; i--) {
-			const kind = chronologicalRows[i]?.kind;
-			if (kind === "user") {
-				map.set(chronologicalRows[i]?.id ?? "", sawQualifying || (!sawUserAfter && isStreaming));
-				sawUserAfter = true;
-			} else if (
-				kind === "markdown" ||
-				kind === "tool" ||
-				kind === "activity" ||
-				kind === "divider"
-			) {
-				sawQualifying = true;
-			}
-		}
-		return map;
-	}, [chronologicalRows, isStreaming]);
-
-	const finalAnswerRowIds = useMemo(() => {
-		const ids = new Set<string>();
-		let dirtySinceUser = false;
-		for (let i = chronologicalRows.length - 1; i >= 0; i--) {
-			const kind = chronologicalRows[i]?.kind;
-			if (kind === "user") {
-				dirtySinceUser = false;
-			} else if (kind === "markdown") {
-				if (!dirtySinceUser) ids.add(chronologicalRows[i]?.id ?? "");
-				dirtySinceUser = true;
-			} else if (kind === "tool" || kind === "activity") {
-				dirtySinceUser = true;
-			}
-		}
-		return ids;
-	}, [chronologicalRows]);
+	const messageActions = useMemo(
+		() => deriveMessageActions(chronologicalRows, isStreaming),
+		[chronologicalRows, isStreaming],
+	);
 
 	const currentStreamStatus = useMemo<StreamStatus | null>(() => {
 		const last = turns[turns.length - 1];
@@ -835,10 +803,8 @@ export default function ChatView({
 										row={row}
 										workspaceRoot={workspaceRoot}
 										onOpenFile={onOpenFile}
-										agentResponded={row.kind === "user" ? userResponded.get(row.id) : undefined}
-										isFinalAnswer={
-											row.kind === "markdown" ? finalAnswerRowIds.has(row.id) : undefined
-										}
+										agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
+										isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
 										onOpenSpec={onOpenSpec}
 										onOpenChange={onOpenChange}
 										onReveal={onReveal}

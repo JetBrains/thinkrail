@@ -52,10 +52,11 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   !agentResponded)`, so the fallback is *expanded* until the agent responds and *collapsed* after — with
   the shared cache's "a manual toggle always wins over a fallback flip" giving exactly the required
   behavior (shown expanded right after send; auto-collapses the instant the agent produces anything;
-  a manual `Show more` then survives continued streaming). `agentResponded` is derived in `ChatView`
-  (a later `markdown`/`tool`/`activity`/`divider` row exists after this user row, **or** it is the
-  trailing user row while `isStreaming`) — client view state only, no wire. Below 500 chars the bubble
-  is unchanged. The retry countdown carries a `source` (`turn` =
+  a manual `Show more` then survives continued streaming). The shared `deriveMessageActions` classifier
+  derives `agentResponded` from chronological rows (a later `markdown`/`tool`/`activity`/`divider` row
+  exists after this user row, **or** it is the trailing user row while `isStreaming`) and every transcript
+  integration supplies that state to the renderer. It remains client view state only, with no wire impact.
+  Below 500 chars the bubble is unchanged. The retry countdown carries a `source` (`turn` =
   pi `auto_retry_*`; `summarization` = compaction/branch-summary `summarization_retry_*`, pi ≥0.81.1) —
   the flows can overlap mid-run, each keeps exactly one indicator (re-scheduling replaces, each source's
   end event clears only its own), and `RetryIndicator` labels them apart ("Retrying" vs "Retrying
@@ -114,9 +115,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   `data-testid="chat-copy"`) that copies the full message **source** — `userText(message.content)` for a
   user bubble, the markdown `text` for an assistant row — never the collapsed preview or any UI chrome.
   Only the **final** `markdown` row of a round is copyable, not the intermediate narration the agent emits
-  between tool steps: `ChatView` marks a markdown row final when no later `markdown`/`tool`/`activity` row
-  precedes the next user turn (`finalAnswerRowIds`, passed down as `isFinalAnswer`); a non-final markdown
-  row renders plain, without the action.
+  between tool steps: `deriveMessageActions` marks a markdown row final when no later
+  `markdown`/`tool`/`activity` row precedes the next user turn (`finalAnswerRowIds`, supplied by every
+  transcript integration as `isFinalAnswer`); a non-final markdown row renders plain, without the action.
   Both go through **one shared layout**, `MessageWithCopy` (in `turns.tsx`): a `relative` wrapper that
   overlays the action on the message's own **bottom-right corner** (`absolute right-4 bottom-0` on the
   `CopyButton`) — for both roles alike, agent and user — rather than a row below the content. The user

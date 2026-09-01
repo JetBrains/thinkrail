@@ -51,8 +51,8 @@ export function ChatTurnView({
 	row: ChatRow;
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
-	agentResponded?: boolean | undefined;
-	isFinalAnswer?: boolean | undefined;
+	agentResponded: boolean;
+	isFinalAnswer: boolean;
 	onOpenSpec?: ((path: string) => void) | undefined;
 	onOpenChange?: ((path: string) => void) | undefined;
 	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
@@ -65,7 +65,7 @@ export function ChatTurnView({
 					id={row.id}
 					message={row.message}
 					attachmentNames={row.attachmentNames}
-					agentResponded={agentResponded ?? false}
+					agentResponded={agentResponded}
 				/>
 			);
 		case "system":
