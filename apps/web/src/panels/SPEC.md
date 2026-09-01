@@ -423,7 +423,11 @@ a project picker, the prompt hero, and the reused
   ever seeds global files. No server change. **`PrivacySettings`** is the **anonymous-usage-analytics
   toggle** — a switch over `store.analyticsEnabled`, fired via `settings.update { analyticsEnabled }`
   with the same converge-on-broadcast pattern as the theme, plus the what-is/isn't-collected copy; only
-  the boolean ever crosses the wire, see `submodule-server-analytics`. **`ReviewSettings`** is the
+  the boolean ever crosses the wire, see `submodule-server-analytics`. **`FeedbackSettings`** is the final
+  live section after Privacy: approved interview copy plus a real external anchor to the fixed Google
+  Calendar booking page, opened in a new tab with `noopener noreferrer`. This proactive Settings link is
+  always available and deliberately does not call `feedback.respond` or alter automatic-popup state.
+  **`ReviewSettings`** is the
   **plan-review policy** section: the reviewer **model + effort** (`ModelSelector`/`ThinkingSelector` over
   `useModelCatalog`, written as `settings.update { reviewModel | reviewEffort }`; unset ⇒ default). The
   selector carries an **explicit default-model row** (`model-option-default`, labelled with the host's
@@ -435,10 +439,14 @@ a project picker, the prompt hero, and the reused
   `settings.update { reviewAutoFix }`) — off means a `request_changes` verdict records findings and waits
   (the host gates its auto-fix cycle on it, see `submodule-server-todos`). A single dimmed "General" nav item ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`AppearanceSettings`/`ChatSettings`/`TemplatesSettings`/
-  `PrivacySettings`/`ReviewSettings` are the panels-owned **integration pieces** (store + transport);
-  `SettingsDialog` receives the Layout section
-  from the shell composition root so no panel reaches sideways into shell, and the `LoginDialog` stays
-  presentational (`auth` module).
+  `PrivacySettings`/`ReviewSettings`/`FeedbackSettings` and the app-wide **`InterviewPromptDialog`** are the
+  panels-owned **integration pieces** (store + transport). The prompt renders the approved copy and fixed
+  Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. The booking click
+  opens Calendar immediately and records `book`; close, Escape, and backdrop record `postpone`; permanent
+  dismissal records `never`. The controlled dialog closes only after the host acks, and reports a rejected
+  action without discarding the still-open choice. `SettingsDialog` receives the Layout section from the
+  shell composition root so no panel reaches sideways into shell, and the `LoginDialog` stays presentational
+  (`auth` module).
 
   Panels compose their own sub-panels
   (e.g. side tools → `FileTree`/`ChangesPanel`, workbench resource renderers → `FilePane`→`MonacoEditor`) — an internal hierarchy.
