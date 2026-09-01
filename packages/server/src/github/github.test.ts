@@ -7,9 +7,9 @@ afterEach(() => {
 	else process.env.THINKRAIL_GH_OFFLINE = saved;
 });
 
-test("THINKRAIL_GH_OFFLINE forces a disconnected status without shelling out", () => {
+test("THINKRAIL_GH_OFFLINE forces a disconnected status without shelling out", async () => {
 	process.env.THINKRAIL_GH_OFFLINE = "1";
-	expect(githubAuthStatus()).toEqual({ connected: false });
+	expect(await githubAuthStatus()).toEqual({ connected: false });
 });
 
 test("ghSetupProblemFrom names the missing piece: no binary, then a failed auth probe, then nothing", () => {
