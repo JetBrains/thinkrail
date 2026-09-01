@@ -6,6 +6,7 @@ import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
 	openFixtureProject,
+	openPersistedChat,
 	revealFirstProjectWorkspaces,
 } from "./fixtures/app";
 import {
@@ -113,6 +114,7 @@ test("coarse wheel input crosses realistic virtual geometry before a giant histo
 	});
 
 	await enterDefaultWorkspace(page);
+	await openPersistedChat(page, "giant hydrated history");
 
 	const chatScroll = page.getByTestId("chat-scroll");
 	const latestRow = page

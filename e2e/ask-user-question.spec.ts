@@ -6,7 +6,12 @@ import type {
 	AskUserQuestionArgs,
 	AskUserQuestionOption,
 } from "@thinkrail/contracts";
-import { enterDefaultWorkspace, hideAuxiliaryWorkbench, openFixtureProject } from "./fixtures/app";
+import {
+	enterDefaultWorkspace,
+	hideAuxiliaryWorkbench,
+	openFixtureProject,
+	openPersistedChat,
+} from "./fixtures/app";
 import {
 	moveMouseToChatViewport,
 	nestedVerticalScrollSurfaces,
@@ -130,6 +135,7 @@ test("a persisted tall questionnaire reveals page changes and a restored page wi
 		await selectOldestFirst(page);
 		await enterDefaultWorkspace(page);
 		await hideAuxiliaryWorkbench(page);
+		await openPersistedChat(page, "tall persisted questionnaire");
 
 		const chatScroll = page.getByTestId("chat-scroll");
 		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
@@ -221,6 +227,7 @@ test("a coarse pointer reveals a returning page's text target without focusing i
 	try {
 		await enterDefaultWorkspace(page);
 		await hideAuxiliaryWorkbench(page);
+		await openPersistedChat(page, "touch questionnaire");
 
 		const chatScroll = page.getByTestId("chat-scroll");
 		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
