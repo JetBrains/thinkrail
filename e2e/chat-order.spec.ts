@@ -1,6 +1,6 @@
 import { realpathSync, rmSync, utimesSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openChatFromHistory, openFixtureProject } from "./fixtures/app";
+import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -34,7 +34,7 @@ test("the browser-local message-order preference reverses rows without changing 
 	try {
 		await selectMessageOrder(page, "oldest-first");
 		await enterDefaultWorkspace(page);
-		await openChatFromHistory(page, "message order chat");
+		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 		const messages = page.getByTestId("chat-message");
 		await expect(messages).toHaveText([
@@ -108,7 +108,7 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 	try {
 		await selectMessageOrder(page, "newest-first");
 		await enterDefaultWorkspace(page);
-		await openChatFromHistory(page, "long newest-first chat");
+		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 		const chatScroll = page.getByTestId("chat-scroll");
 		await expect(
 			page.getByText("answer 30: the deliberately verbose fixture has been inspected"),

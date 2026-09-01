@@ -1,6 +1,7 @@
 import MonacoReact, { type BeforeMount, type OnMount } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { useCallback, useEffect, useRef } from "react";
+import { LoadingRegion } from "../components/Skeleton";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
 	defineThinkrailTheme,
@@ -95,11 +96,7 @@ export default function MonacoEditor({
 			theme={EDITOR_THEME}
 			beforeMount={beforeMount}
 			onMount={onMount}
-			loading={
-				<div className="flex h-full items-center justify-center text-text-muted">
-					Loading editor…
-				</div>
-			}
+			loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
 			options={sharedEditorOptions()}
 		/>
 	);

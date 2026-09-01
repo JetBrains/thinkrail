@@ -41,8 +41,7 @@ workspace use `text-text-default`, while branch/trailing metadata use `text-text
 responsive degradation. A selected project without an active workspace shows Project Home. No selected
 project leaves the logo alone.
 
-With an active workspace, `Shell` mounts the workbench projection of the window's singular frame and that workspace's local view. Switching workspace changes resource contents and attention but never frame topology, Projects/Specs/Files/Changes/Review placement, side/bottom geometry, folds, visibility, or alignment. Shell-owned wrappers around Projects, Files, and Specs use `components/QuietScrollArea`, as does the Project Home navigator; Changes/Review and xterm own their internal quiet-scroll surfaces in `panels`. These primitives never receive or infer placement. Without an active workspace, Shell mounts Welcome beside the projects navigator using separate local geometry. Toasts mount once above both branches.
-
+With an active workspace, `Shell` mounts the workbench projection of the window's singular frame and that workspace's local view. Switching workspace changes resource contents and attention but never frame topology, Projects/Specs/Files/Changes/Review placement, side/bottom geometry, folds, visibility, or alignment. Shell-owned wrappers around Projects, Files, and Specs use `components/QuietScrollArea`, as does the Project Home navigator; Changes/Review and xterm own their internal quiet-scroll surfaces in `panels`. These primitives never receive or infer placement. `react-resizable-panels` cannot reconcile a panel-count change in place, so switching to a workspace whose default preset has a different shape (e.g. Balanced ↔ Focus) forces the aligned-row and outer `ResizablePanelGroup`s to remount; they carry `motion-safe:animate-fade-in` (an opacity-only twin of `animate-reveal` — no `transform`, since these subtrees can contain ChatView's `position: sticky` breadcrumbs) so the shape change reads as a soft cross-fade rather than a jump. Without an active workspace, Shell mounts Welcome beside the projects navigator using separate local geometry. Toasts mount once above both branches.
 Shell is the sole theme side-effect owner: store receives the host-selected opaque theme through transport; shell applies it atomically through `themes` and writes the local first-paint hint. No other component mutates `[data-theme]`.
 
 ## Workbench behavior
@@ -63,11 +62,31 @@ Default-terminal creation no longer depends on a host layout revision. The works
 
 Built-in presets remain web-owned. The Layout section presents built-ins plus the host-synchronized custom preset catalog, while default preset selection and independent side/bottom limits are local to this frontend surface. The selected default is the explicit Reset frame target; it is not reapplied on workspace switches because every workspace shares the current frame. Capture/rename/delete changes only the shared custom definition. Apply or Reset replaces this window's frame and reflows all retained workspace views, preserving resource identities, then persists locally; another frontend is unaffected.
 
+## Long-operation feedback
+
+Starting an agent session is seconds-long (watcher readiness + `session.create`), so it is never silent:
+every chat-start path — the empty-center New-chat button, `NewWorkspaceDialog`'s create-and-kick-off flow,
+and reopening a closed chat (`openChatInTab`) — brackets its request with the store's per-workspace
+chat-start counter (`beginChatStart`/`endChatStart`, a counter because starts can overlap); worktree
+creation does the same per-project (`beginWorktreeCreation`/`endWorktreeCreation`), which `ProjectTree`
+renders as a pending row under the project — the list stays put and the new worktree lands where the
+row was. Consumers show it as an inline pending state where the result will appear: the empty-center button flips to a disabled
+spinner ("Starting chat…", also the double-click guard), and the chat-history trigger spins while a
+reopened chat hydrates. Workspace removal drops the counter with the rest of the per-workspace state.
+
 ## Error resilience
 
 Every independently mounted workbench resource body—including documents, terminals, and singleton tools—has its own keyed region boundary, so one bad lazy panel cannot blank workbench chrome, sibling groups, or shell. Switching workspace or resource resets stuck region errors. Failed dynamic chunks offer a page reload rather than retrying the same stale module. `main.tsx` retains the last-resort boundary around `Shell`.
 
 Invalid local layout state falls back to the Balanced safe frame without contaminating domain state. A local persistence failure leaves the live frame usable and reports one actionable error. A custom-preset settings failure leaves both the instantiated current frame and catalog unchanged.
+
+A chat tab whose session isn't in the local runtime cache yet renders the same content skeleton as every
+other restoring resource — never a manual "Retry" affordance up front, because `chatReconciliation`'s
+placement/catalog convergence already auto-hydrates it in the overwhelming majority of cases within a
+second or two, and a retry button shown immediately reads as "this failed" for what is normal loading.
+`ChatResourceBody` only swaps the skeleton for an explicit retry message once hydration has stayed
+stalled past a short grace window (`CHAT_RETRY_DELAY_MS`), so the retry affordance surfaces solely for the
+genuinely-stuck case it exists for.
 
 ## Global chords
 

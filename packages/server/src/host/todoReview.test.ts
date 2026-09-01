@@ -665,6 +665,12 @@ test("when reflection refutes every candidate, no empty fix request is sent — 
 		await new Promise((resolve) => setTimeout(resolve, 20));
 	}
 
+	const settleDeadline = Date.now() + 5000;
+	while (todoReviewAutoCycles(ref) !== 2) {
+		if (Date.now() > settleDeadline) throw new Error("sendReflectedFix never settled");
+		await new Promise((resolve) => setTimeout(resolve, 10));
+	}
+
 	// Never sent (nothing survived reflection) — still a draft, badged, for the human to see.
 	const after = (await getReviewSnapshot(WS)).comments.find((c) => c.id === finding.id);
 	expect(after?.status).toBe("draft");

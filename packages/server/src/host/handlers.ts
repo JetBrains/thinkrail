@@ -310,9 +310,9 @@ const handlers: Record<string, Handler> = {
 	},
 	"workspace.listExisting": (params) =>
 		listExistingWorktrees((params as { projectId: string }).projectId),
-	"workspace.openExisting": (params) => {
+	"workspace.openExisting": async (params) => {
 		const p = params as { projectId: string; path: string };
-		return provisionInitialTerminal(openExistingWorktree(p.projectId, p.path));
+		return provisionInitialTerminal(await openExistingWorktree(p.projectId, p.path));
 	},
 	"workspace.rename": (params) => {
 		const p = params as { id: string; name: string };

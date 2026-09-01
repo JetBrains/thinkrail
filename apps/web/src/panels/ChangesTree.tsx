@@ -16,7 +16,7 @@ export function ChangesTree({
 	isActive: (path: string) => boolean;
 }) {
 	return (
-		<ul className="flex flex-col">
+		<ul className="flex flex-col motion-safe:animate-reveal">
 			{buildChangesTree(changes).map((node) => (
 				<ChangeNodeRow key={node.path} node={node} onOpen={onOpen} isActive={isActive} />
 			))}

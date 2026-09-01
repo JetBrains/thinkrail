@@ -23,9 +23,12 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
 
 ## Boundary
 
-- **Owns:** `listExistingWorktrees(projectId)` (parse `git worktree list --porcelain -z`; drop the project
-  folder, prunable registrations, and every path already represented in ThinkRail; branch-backed rows are
-  `available`, detached-HEAD ones `detached`), `openExistingWorktree(projectId, path)` (revalidate against
+- **Owns:** `listExistingWorktrees(projectId)` (**async** — parses `git worktree list --porcelain -z` read
+  through `gitAsync`, the same request-path-read rule `git/SPEC.md` states for `gitStatus`/`listCommits`:
+  this is the Existing-Worktree dialog's populate call, so a slow/large registry must not freeze the host's
+  event loop; drop the project folder, prunable registrations, and every path already represented in
+  ThinkRail; branch-backed rows are `available`, detached-HEAD ones `detached`), `openExistingWorktree(projectId, path)`
+  (**async** for the same worktree-list read; revalidate against
   the Git registry at the mutation door, comparing canonicalized paths; same-project retries are
   idempotent, cross-project cwd reuse is rejected; persist + emit `created` with `kind: "external"`, a
   directory-basename display name, `renamed: true`, and the repo default as its initial review target —

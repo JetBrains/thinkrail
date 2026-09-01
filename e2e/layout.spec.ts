@@ -1075,13 +1075,6 @@ test("frontend windows keep chat and file placement independent", async ({ page,
 	await expect(peer.getByTestId("terminal-tab")).toHaveCount(2);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	const peerChat = peer.locator('[data-testid="editor-tab"][data-kind="chat"]');
-	await expect(peerChat).toHaveCount(0);
-	await expect(chat).toHaveCount(1);
-
-	const peerHistory = peer.getByTestId("chat-history").first();
-	await expect(peerHistory).toBeVisible();
-	await peerHistory.press("Enter");
-	await peer.getByTestId("closed-chat-item").click();
 	await expect(peerChat).toHaveCount(1);
 	await expect(chat).toHaveCount(1);
 	await peerChat.hover();
@@ -1089,8 +1082,10 @@ test("frontend windows keep chat and file placement independent", async ({ page,
 	await expect(peerChat).toHaveCount(0);
 	await expect(chat).toHaveCount(1);
 
+	const peerHistory = peer.getByTestId("chat-history").first();
 	await page.getByTestId("new-chat").first().click();
 	await expect(chat).toHaveCount(2);
+	await expect(peerHistory).toBeVisible();
 	await peerHistory.press("Enter");
 	await expect(peer.getByTestId("closed-chat-item")).toHaveCount(2);
 	await peer.keyboard.press("Escape");

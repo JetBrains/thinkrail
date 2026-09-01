@@ -1,7 +1,7 @@
 import { realpathSync } from "node:fs";
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { enterDefaultWorkspace, openChatFromHistory, openFixtureProject } from "./fixtures/app";
+import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -56,7 +56,7 @@ test("a final agent failure offers Try again as an ordinary visible prompt", asy
 	});
 
 	await enterDefaultWorkspace(page);
-	await openChatFromHistory(page, "network failure chat");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const failure = page
 		.locator('[data-testid="chat-message"][data-role="error"]')

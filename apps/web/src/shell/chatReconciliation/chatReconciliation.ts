@@ -3,6 +3,7 @@ import { messagesToRuntime } from "../../chat/hydrate";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
 import {
 	type CenterNavigationStamp,
+	captureCenterNavigation,
 	chatTabId,
 	type EditorTab,
 	isConnectedGeneration,
@@ -27,6 +28,20 @@ import {
 import { commitWorkspaceLayout } from "../layoutState";
 
 const sessionHydration = new Map<string, Promise<boolean>>();
+const AUTO_OPEN_CHAT_LIMIT = 4;
+
+let autoOpenAttemptGeneration = 0;
+const autoOpenAttemptedWorkspaceIds = new Set<string>();
+
+function claimAutoOpenAttempt(workspaceId: string, connectionGeneration: number): boolean {
+	if (connectionGeneration !== autoOpenAttemptGeneration) {
+		autoOpenAttemptGeneration = connectionGeneration;
+		autoOpenAttemptedWorkspaceIds.clear();
+	}
+	if (autoOpenAttemptedWorkspaceIds.has(workspaceId)) return false;
+	autoOpenAttemptedWorkspaceIds.add(workspaceId);
+	return true;
+}
 
 export function hydrateChatResource(workspaceId: string, sessionId: string): Promise<boolean> {
 	const state = useAppStore.getState();
@@ -307,14 +322,100 @@ export function useWorkspaceChatCatalogReconciliation(
 						}
 					}
 				}
-				const history = [...summaries]
-					.sort((a, b) => b.updatedAt - a.updatedAt)
-					.filter(
-						(summary) =>
-							summary.sessionId !== handledRouteSessionId &&
-							!placed.has(summary.sessionId) &&
-							!useAppStore.getState().sessions[summary.sessionId],
-					);
+				const autoOpenAlreadyAttempted = !claimAutoOpenAttempt(workspaceId, connectionGeneration);
+				const toOpen: typeof summaries = [];
+				const toHistory: typeof summaries = [];
+				for (const summary of [...summaries].sort((a, b) => b.updatedAt - a.updatedAt)) {
+					if (summary.sessionId === handledRouteSessionId || placed.has(summary.sessionId))
+						continue;
+					if (
+						handledRouteSessionId === null &&
+						!autoOpenAlreadyAttempted &&
+						(summary.live || (summary.openTodos ?? 0) > 0) &&
+						toOpen.length < AUTO_OPEN_CHAT_LIMIT
+					) {
+						toOpen.push(summary);
+					} else {
+						toHistory.push(summary);
+					}
+				}
+				if (
+					handledRouteSessionId === null &&
+					!autoOpenAlreadyAttempted &&
+					placed.size === 0 &&
+					toOpen.length === 0
+				) {
+					const fallback = toHistory.shift();
+					if (fallback) toOpen.push(fallback);
+				}
+				const navigation =
+					toOpen.length > 0 ? captureCenterNavigation(useAppStore.getState(), workspaceId) : null;
+				const loads = toOpen.map((summary) => ({
+					summary,
+					result: useAppStore.getState().sessions[summary.sessionId]
+						? ("cached" as const)
+						: fetchMessages(summary.sessionId),
+				}));
+				let openedCount = 0;
+				const failedToOpen: typeof summaries = [];
+				for (const load of loads) {
+					if (!live()) continue;
+					let cache: Extract<EditorTab, { kind: "chat" }> | undefined;
+					if (load.result === "cached") {
+						const state = useAppStore.getState();
+						if (!state.sessions[load.summary.sessionId]) continue;
+						cache = state.tabsByWorkspace[workspaceId]?.find(
+							(tab): tab is Extract<EditorTab, { kind: "chat" }> =>
+								tab.kind === "chat" && tab.sessionId === load.summary.sessionId,
+						) ?? {
+							kind: "chat",
+							id: chatTabId(workspaceId, load.summary.sessionId),
+							workspaceId,
+							name:
+								state.closedChatsByWorkspace[workspaceId]?.find(
+									(chat) => chat.sessionId === load.summary.sessionId,
+								)?.title ?? load.summary.title,
+							sessionId: load.summary.sessionId,
+						};
+					} else {
+						const loaded = await load.result;
+						if (!live()) continue;
+						if (!loaded) {
+							failedToOpen.push(load.summary);
+							continue;
+						}
+						const { summary, messages } = loaded.result;
+						useAppStore
+							.getState()
+							.hydrateSession(
+								summary,
+								messagesToRuntime(messages, summary.lastSettlement),
+								false,
+								summary.live ? undefined : loaded.syncedTick,
+								{ activate: false },
+							);
+						const state = useAppStore.getState();
+						cache = state.tabsByWorkspace[workspaceId]?.find(
+							(tab): tab is Extract<EditorTab, { kind: "chat" }> =>
+								tab.kind === "chat" && tab.sessionId === summary.sessionId,
+						);
+						if (!state.sessions[summary.sessionId] || !cache) continue;
+					}
+					const state = useAppStore.getState();
+					const activate = handledRouteSessionId === null && openedCount === 0;
+					openedCount += 1;
+					const routed = layoutOpenOptionsForNavigation(state, workspaceId, navigation);
+					state.enqueueLayoutIntent({
+						kind: "open",
+						workspaceId,
+						tab: cache,
+						intent: "keep",
+						...routed,
+						activate: activate && routed.activate !== false,
+						countNavigation: false,
+					});
+				}
+				const history = [...toHistory, ...failedToOpen];
 				if (!live() || history.length === 0) return;
 				useAppStore.getState().noteClosedChats(
 					workspaceId,

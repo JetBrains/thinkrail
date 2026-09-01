@@ -96,8 +96,8 @@ interface GitWorktreeEntry {
 	prunable: boolean;
 }
 
-function gitWorktreeEntries(repoPath: string): GitWorktreeEntry[] {
-	const listed = git(repoPath, ["worktree", "list", "--porcelain", "-z"], { raw: true });
+async function gitWorktreeEntries(repoPath: string): Promise<GitWorktreeEntry[]> {
+	const listed = await gitAsync(repoPath, ["worktree", "list", "--porcelain", "-z"], { raw: true });
 	if (!listed.ok) throw new Error(`git worktree list failed: ${listed.err}`);
 	const entries: GitWorktreeEntry[] = [];
 	for (const record of listed.out.split("\0\0")) {
@@ -116,9 +116,11 @@ function gitWorktreeEntries(repoPath: string): GitWorktreeEntry[] {
 	return entries;
 }
 
-export function listExistingWorktrees(projectId: string): ExistingWorktreeCandidate[] {
+export async function listExistingWorktrees(
+	projectId: string,
+): Promise<ExistingWorktreeCandidate[]> {
 	const project = openProjectById(projectId);
-	const entries = gitWorktreeEntries(project.path);
+	const entries = await gitWorktreeEntries(project.path);
 	const projectPath = canonicalPath(project.path);
 	const representedPaths = new Set([
 		...loadProjects().map((knownProject) => canonicalPath(knownProject.path)),
@@ -133,14 +135,18 @@ export function listExistingWorktrees(projectId: string): ExistingWorktreeCandid
 	});
 }
 
-export function openExistingWorktree(projectId: string, requestedPath: string): Workspace {
+export async function openExistingWorktree(
+	projectId: string,
+	requestedPath: string,
+): Promise<Workspace> {
 	const project = openProjectById(projectId);
 	if (!requestedPath) throw new Error("An existing worktree path is required");
 	const wantedPath = canonicalPath(requestedPath);
 	const projectPath = canonicalPath(project.path);
 	if (wantedPath === projectPath) return ensureDefaultWorkspace(project);
 
-	const entry = gitWorktreeEntries(project.path).find(
+	const entries = await gitWorktreeEntries(project.path);
+	const entry = entries.find(
 		(candidate) => !candidate.prunable && canonicalPath(candidate.path) === wantedPath,
 	);
 	if (!entry) throw new Error("The selected path is not a registered worktree of this project");
