@@ -327,9 +327,9 @@ function PlainUserTurn({
 							className="mt-4 flex items-center gap-4 tr-text-metadata text-text-subtle hover:text-text-default"
 						>
 							{expanded ? (
-								<ChevronUp className="size-12 shrink-0" />
+								<ChevronUp className="size-16 shrink-0" />
 							) : (
-								<ChevronDown className="size-12 shrink-0" />
+								<ChevronDown className="size-16 shrink-0" />
 							)}
 							{expanded ? "Show less" : "Show more"}
 						</button>

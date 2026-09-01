@@ -824,8 +824,6 @@ export default function ChatView({
 							totalListHeightChanged={handleContentHeight}
 							atBottomThreshold={50}
 							atTopThreshold={50}
-							// Keep a generous off-screen render buffer so a short transcript stays fully mounted
-							// even when opened scrolled to the bottom (rows now carry a per-message copy action).
 							increaseViewportBy={{ top: 1600, bottom: 1600 }}
 							computeItemKey={(_, row) => row.id}
 							itemContent={(index, row) => (
