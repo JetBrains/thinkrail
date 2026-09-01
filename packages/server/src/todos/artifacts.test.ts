@@ -352,16 +352,45 @@ test("done commits the window: one commit artifact (the sha), and only the item'
 			root,
 			SESSION,
 			async () => ["src/foo.ts"],
-			({ paths, title, todoId }) => {
+			({ paths, subject }) => {
 				seen.push(paths);
-				expect(title).toBe("step");
-				expect(todoId).toBe(todo.id);
+				expect(subject).toBe("step");
 				return { sha: "abc1234def" };
 			},
 		);
 		expect(seen).toEqual([["src/foo.ts"]]);
 		expect(store.get(todo.id)?.artifacts).toEqual([
 			{ kind: "commit", sha: "abc1234def", label: "step" },
+		]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("the agent's commitSubject is the commit subject verbatim; the title stays the artifact label", async () => {
+	const { store, root } = tempStore();
+	try {
+		const todo = store.add({ title: "Newest-first chat order" });
+		store.update(todo.id, { status: "in_progress" });
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
+		store.update(todo.id, {
+			status: "done",
+			commitSubject: "feat(web): add newest-first chat order",
+		});
+		const subjects: string[] = [];
+		await reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			async () => ["src/foo.ts"],
+			({ subject }) => {
+				subjects.push(subject);
+				return { sha: "sha-subject" };
+			},
+		);
+		expect(subjects).toEqual(["feat(web): add newest-first chat order"]);
+		expect(store.get(todo.id)?.artifacts).toEqual([
+			{ kind: "commit", sha: "sha-subject", label: "Newest-first chat order" },
 		]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });

@@ -33,6 +33,12 @@ const parameters = Type.Object({
 				'Verification line, set together with status=done: the EXACT check you ran and its result ("bun test src/todos — 34 pass", "typecheck green") — or "not verified" when you ran nothing. Never claim a check you did not run. Empty string clears it.',
 		}),
 	),
+	commitSubject: Type.Optional(
+		Type.String({
+			description:
+				"Commit subject for this step's code changes, set together with status=done when the step changed code — the host commits the step's delta under it verbatim. One line, imperative, describing the CHANGE (not the plan step), and written in THIS repository's existing commit style: read `git log --oneline -20` and match what you see (a Conventional-Commits repo gets `type(scope): subject`, a prose-subject repo gets prose). It lands on the user's branch and must be pushable as-is: no todo/plan markers, no ids, no tool attribution. Empty string clears it; omitted, the host falls back to the step title.",
+		}),
+	),
 });
 
 function nextOpenStep(plan: TodoPlan, id: string): Todo | undefined {
@@ -63,6 +69,7 @@ export function registerTodoUpdate(pi: ExtensionAPI): void {
 			if (params.note !== undefined) patch.note = params.note;
 			if (params.summary !== undefined) patch.summary = params.summary;
 			if (params.verification !== undefined) patch.verification = params.verification;
+			if (params.commitSubject !== undefined) patch.commitSubject = params.commitSubject;
 			const store = storeFor(ctx);
 			const result = store.update(params.id, patch);
 			if (!result) return errorResult(`No TODO with id "${params.id}".`);

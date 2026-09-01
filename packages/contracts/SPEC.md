@@ -227,7 +227,11 @@ of the host.
   (same one-home rationale), never stored; absent = the sha no longer resolves, degrade silently.
   `TodoItem.summary` / `TodoPlan.summary` are the agent's completion notes (per step / whole plan, as
   stored) and `TodoItem.verification` the separate self-reported check line (exact command + result, or
-  "not verified" — clients render it as a badge labeled as the agent's own claim, never a host gate); **`TodoItem.review?: TodoReviewInfo`** (+ the **`TodoReviewState`** union) is the host-derived
+  "not verified" — clients render it as a badge labeled as the agent's own claim, never a host gate).
+  `TodoItem.commitSubject` is the third stored done-time field: the git subject the host commits the
+  item's delta under (the `title` is the plan step for the panel, this is the line that lands in the
+  repository's history — see [[submodule-server-todos]]). It is on the wire because the DTO mirrors the
+  stored item, not because any client renders it today; **`TodoItem.review?: TodoReviewInfo`** (+ the **`TodoReviewState`** union) is the host-derived
   review decoration, present only on reviewable items (those with a host change set): `state`
   (`unreviewed`/`reviewed`/`changes_requested` — `unreviewed` = no stored record), `revision` (commit
   count — 1 TODO = N commits), `unreviewedShas` (commits since the user's watermark — the "changed since

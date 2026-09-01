@@ -80,6 +80,13 @@ reviewer, not for yourself.
    check pass by weakening it — if you changed, skipped, or deleted a test as part of the step, the
    summary must say so explicitly: a reviewer who finds it themselves stops trusting every other
    summary.
+- **A step that changed code also gets a `commitSubject`.** The host commits that step's delta on the
+   user's branch and uses this line as the commit subject verbatim, so write it as a **commit message,
+   not a plan step**: one imperative line about the *change*, and in **this repository's existing
+   style** — run `git log --oneline -20` and match what you see (Conventional Commits ⇒
+   `type(scope): subject`; a prose-subject repo ⇒ prose). It must be pushable as-is: no `todo:`
+   prefix, no item ids, no tool attribution. Omit it and the host falls back to the step title, which
+   reads as a plan step in `git log` — so don't rely on that.
 - **Disclose scope drift.** Anything you touched beyond the step's own ask — an adjacent refactor, a
    drive-by rename, a new dependency — goes in the summary ("also touched X because Y"). The
    signature failure of agent changes is solving the asked problem *plus* neighbors; undisclosed
@@ -93,9 +100,11 @@ reviewer, not for yourself.
    deferred — an omission here reads as "nothing left", so say it if something is.
 - **Fix requests re-open the SAME item.** When the user asks for a fix on a reviewed step (you'll
    receive the original step, its summary, its change set, and their feedback), flip **that exact item**
-   (by id) back to `in_progress`, make the fix, and mark it `done` with a **fresh summary** describing
-   the fix — the fix, not the original work (the user re-reviews only the new delta). Never open a new
-   item for a fix — the revision must attach to the step it revises.
+   (by id) back to `in_progress`, make the fix, and mark it `done` with a **fresh summary** and a
+   **fresh `commitSubject`** describing the fix — the fix, not the original work (the user re-reviews
+   only the new delta, and the revision lands as its own commit). Re-opening clears the previous
+   values, so supply both again. Never open a new item for a fix — the revision must attach to the step
+   it revises.
 
 ## Invariants
 

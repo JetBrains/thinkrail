@@ -49,7 +49,7 @@ export function groupStatus(group: TodoGroup): TodoGroupStatus {
 	return "pending";
 }
 
-const CURRENT_VERSION = 5 as const;
+const CURRENT_VERSION = 6 as const;
 
 const STATUS_SET: ReadonlySet<string> = new Set(TODO_STATUSES);
 const ORIGIN_SET: ReadonlySet<string> = new Set(TODO_ORIGINS);
@@ -115,6 +115,8 @@ function sanitize(raw: unknown): Todo | null {
 	if (typeof o.summary === "string" && o.summary) todo.summary = decodeIfAgent(o.summary, origin);
 	if (typeof o.verification === "string" && o.verification)
 		todo.verification = decodeIfAgent(o.verification, origin);
+	if (typeof o.commitSubject === "string" && o.commitSubject)
+		todo.commitSubject = decodeIfAgent(o.commitSubject, origin);
 	const artifacts = sanitizeArtifacts(o.artifacts, origin);
 	if (artifacts) todo.artifacts = artifacts;
 	return todo;
@@ -279,6 +281,7 @@ export class TodoStore {
 			if (wasDone && patch.status !== "done") {
 				delete todo.summary;
 				delete todo.verification;
+				delete todo.commitSubject;
 				delete plan.summary;
 			}
 		}
@@ -293,6 +296,10 @@ export class TodoStore {
 		if (patch.verification !== undefined) {
 			if (patch.verification) todo.verification = decodeIfAgent(patch.verification, todo.origin);
 			else delete todo.verification;
+		}
+		if (patch.commitSubject !== undefined) {
+			if (patch.commitSubject) todo.commitSubject = decodeIfAgent(patch.commitSubject, todo.origin);
+			else delete todo.commitSubject;
 		}
 		if (patch.artifacts !== undefined) {
 			const clean = sanitizeArtifacts(patch.artifacts, todo.origin);

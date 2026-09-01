@@ -57,7 +57,7 @@ afterEach(() => {
 test("listTodos decorates a commit artifact with the commit's derived files; a dead sha ships none", async () => {
 	const store = new TodoStore(repo, SESSION);
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
-	const committed = gitCommitPaths("w1", "todo: step", ["impl.ts"]);
+	const committed = gitCommitPaths("w1", "feat: step", ["impl.ts"]);
 	if (!committed) throw new Error("commit failed");
 	const good = store.add({
 		title: "committed step",

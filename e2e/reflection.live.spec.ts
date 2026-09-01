@@ -64,14 +64,14 @@ test("Start review → reviewer requests changes → an independent reflector ju
 		workspace.worktreePath,
 		"sum.ts",
 		'import { helper } from "./does-not-exist";\n\nexport const sum = (a: number, b: number): number => helper(a) - b;\n',
-		"todo: add sum helper",
+		"feat(math): add a sum helper",
 	);
 	const todosDir = join(workspace.worktreePath, ".thinkrail", "context", "todos");
 	mkdirSync(todosDir, { recursive: true });
 	writeFileSync(
 		join(todosDir, `${sessionId}.json`),
 		JSON.stringify({
-			version: 5,
+			version: 6,
 			todos: [
 				{
 					id: "t_sum",

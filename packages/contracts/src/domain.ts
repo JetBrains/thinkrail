@@ -139,6 +139,7 @@ export interface TodoItem {
 	note?: string;
 	summary?: string;
 	verification?: string;
+	commitSubject?: string;
 	artifacts?: TodoArtifact[];
 	/**
 	 * The item's review decoration — **host-derived on `todo.list`, present only on reviewable items**

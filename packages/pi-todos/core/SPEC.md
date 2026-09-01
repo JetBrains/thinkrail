@@ -24,9 +24,9 @@ stores them; it does not resolve paths, compute diffs, or touch git. `file`/`spe
 agent (a `spec` naturally from `spec_create`'s `{path,id}`); `change` **and** `commit` are attached by the
 host when an item reaches `done` — the host commits the item's work and records just the sha, or falls
 back to a `change` path-list when it couldn't commit (see `server/src/todos` — the store stays git-free). `sanitize` drops an entry lacking its key (a `commit` with
-no `sha`, any other kind with no `path`). The on-disk `version` is `5` (`3` added `artifacts`, `4` added
-the `commit` kind, `5` added the `summary` fields); an older file reads cleanly and is upgraded on the
-next write.
+no `sha`, any other kind with no `path`). The on-disk `version` is `6` (`3` added `artifacts`, `4` added
+the `commit` kind, `5` added the `summary` fields, `6` added `commitSubject`); an older file reads cleanly
+and is upgraded on the next write.
 
 **Summaries (the review trail).** An item may carry `summary` — the agent's completion note (what/why,
 the decisions the diff can't show) — and **`verification`**, a separate field for the exact check run +
@@ -36,7 +36,18 @@ plan-level `summary` (`TodoFile.summary`, written by `TodoStore.setSummary`) —
 the agent writes when the whole plan completes. Both are stored verbatim across later edits, with one
 invalidation rule: `update` clears an item's `summary`/`verification`, and drops the plan-level `summary`
 with it, the moment that item's `status` leaves `done` — unless the same patch also supplies fresh values
-for them, which win. A UI reader can gate display on "everything done", but a non-UI consumer (a generated
+for them, which win.
+
+**`commitSubject` (the git-facing title).** A third done-time field, same family and the same
+invalidation rule: the subject line the host uses verbatim when it commits the item's delta (see
+[[submodule-server-todos]]). It exists because `title` and a commit subject are **different texts for
+different readers** — `title` is a plan step in the user's status panel ("Newest-first chat order"),
+while the subject lands in the repository's permanent history next to human commits and must match that
+history's own convention ("feat(web): add newest-first chat order"). Deriving one from the other is not
+possible (the change's type/scope is knowable only from the change), so the agent authors both and the
+store just carries them. The model stays git-free: it never validates the style, never reads `git log` —
+the tool description and the todos skill carry the "match this repo's history" instruction, and the host
+falls back to `title` when the field is absent. A UI reader can gate display on "everything done", but a non-UI consumer (a generated
 PR body, a work report) has no such gate, so a reopened item's stale completion story must not survive on
 disk, not merely be hidden. `replaceAll` deliberately does **not** carry the plan summary over — a
 fresh plan is new work. Review *state* is never stored here: it is user-owned and lives in a host sidecar

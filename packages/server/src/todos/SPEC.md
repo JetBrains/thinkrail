@@ -5,7 +5,7 @@ status: active
 title: todos — a chat's per-session TODO plan (read/write)
 parent: module-server
 depends-on: [module-contracts, submodule-server-git]
-references: [module-pi-todos, submodule-web-chat]
+references: [module-pi-todos, submodule-server-pr, submodule-web-chat]
 tags: [v2, todos]
 ---
 
@@ -71,13 +71,25 @@ and `session.delete` removes the chat's whole sidecar (`removeSessionTodoWindows
 as a permanently open foreign window and force every sibling chat into the fallback forever. On `done`:
 
 - **Commit the item's delta.** `git.gitCommitPaths` commits **exactly the delta paths** — the item's own
-  work, never "everything currently dirty" — `--no-verify` (the bookkeeping commit must not run/fail the
-  user's hooks; author/committer stay the user's own config — it's their branch) with a `todo: <title>`
-  subject + a `ThinkRail-Todo: <sessionId>/<todoId>` trailer (recoverable/squashable by tooling). It
+  work, never "everything currently dirty" — `--no-verify` (the commit must not run/fail the
+  user's hooks; author/committer stay the user's own config — it's their branch). It
   preserves the user's index across any failure (see [[submodule-server-git]]). The item gets **one
   `commit` artifact** (the sha, `label` = the item title) and **nothing else**: the commit is
   self-sufficient — its file list is *derived*, never denormalized into the JSON (see the `listTodos`
   decoration below).
+- **The message is a single subject line the user can push unedited.** These commits land on the user's
+  own branch, in the same history as their hand-written ones, and the branch ships straight to a PR
+  ([[submodule-server-pr]] pushes it) — so anything the user would have to reword before pushing is a
+  defect. The subject is the item's agent-authored **`commitSubject`** (see [[module-pi-todos]]: written
+  at `done` in the *host repository's* commit style, which the agent reads off `git log`), falling back
+  to the item `title` when absent. Nothing else: **no `todo:` prefix and no body/trailer.** An earlier
+  version wrote `todo: <title>` plus a `ThinkRail-Todo: <sessionId>/<todoId>` trailer; both are gone.
+  The prefix + a plan-step title read as a foreign artifact in a Conventional-Commits history (this
+  repo's own `todo: Get design sign-off, promote decisions into apps/website/SPEC.md` is the
+  specimen), and the trailer was **write-only** — item↔commit attribution is the `commit` artifact's
+  `sha`, nothing ever parsed the trailer back, so it bought only a leaked internal session UUID in
+  public history. The `CommitWindow` seam is correspondingly `{ subject, paths }`: choosing the
+  subject is the reconcile's job, and the git leaf only commits.
 - **Commit gate (safety on the user's branch).** A commit may only contain work the item can be *proven*
   to own, so all four must hold — else **no commit**, and the live-diff `change` path-list artifacts stand
   in (branch scope; `change` survives **only** as this fallback):

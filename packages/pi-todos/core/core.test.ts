@@ -498,13 +498,13 @@ test("a version-3 file (pre-commit-kind) reads cleanly and upgrades to the curre
 		);
 		expect(store(root).get("t_old")?.artifacts).toEqual([{ kind: "change", path: "a.ts" }]);
 		store(root).add({ title: "new" }); // any write upgrades the file version
-		expect(JSON.parse(readFileSync(file, "utf8")).version).toBe(5);
+		expect(JSON.parse(readFileSync(file, "utf8")).version).toBe(6);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
 
-test("item summary: set with done, cleared by empty string, sanitized on read", () => {
+test("item summary/verification/commitSubject: set with done, cleared by empty string, sanitized on read", () => {
 	const root = tempRoot();
 	try {
 		const todo = store(root).add({ title: "Implement FloodWait handling" });
@@ -512,20 +512,25 @@ test("item summary: set with done, cleared by empty string, sanitized on read", 
 			status: "done",
 			summary: "Added throttling and fallback for failed batch sends.",
 			verification: "bun test src/todos — 34 pass",
+			commitSubject: "fix(sender): back off and retry on FloodWait",
 		});
 		expect(store(root).get(todo.id)?.summary).toBe(
 			"Added throttling and fallback for failed batch sends.",
 		);
 		expect(store(root).get(todo.id)?.verification).toBe("bun test src/todos — 34 pass");
-		store(root).update(todo.id, { summary: "", verification: "" });
+		expect(store(root).get(todo.id)?.commitSubject).toBe(
+			"fix(sender): back off and retry on FloodWait",
+		);
+		store(root).update(todo.id, { summary: "", verification: "", commitSubject: "" });
 		expect(store(root).get(todo.id)?.summary).toBeUndefined();
 		expect(store(root).get(todo.id)?.verification).toBeUndefined();
+		expect(store(root).get(todo.id)?.commitSubject).toBeUndefined();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
 
-test("reopening a done item clears its stale completion summary/verification and the plan summary", () => {
+test("reopening a done item clears its stale completion fields and the plan summary", () => {
 	const root = tempRoot();
 	try {
 		const s = store(root);
@@ -534,6 +539,7 @@ test("reopening a done item clears its stale completion summary/verification and
 			status: "done",
 			summary: "Added throttling and fallback for failed batch sends.",
 			verification: "bun test src/todos — 34 pass",
+			commitSubject: "fix(sender): back off and retry on FloodWait",
 		});
 		s.setSummary("All tasks landed; e2e suite green.");
 
@@ -541,15 +547,18 @@ test("reopening a done item clears its stale completion summary/verification and
 
 		expect(s.get(todo.id)?.summary).toBeUndefined();
 		expect(s.get(todo.id)?.verification).toBeUndefined();
+		expect(s.get(todo.id)?.commitSubject).toBeUndefined();
 		expect(s.read().summary).toBeUndefined();
 
 		s.update(todo.id, {
 			status: "done",
 			summary: "Retried with the corrected backoff window.",
 			verification: "bun test src/todos — 35 pass",
+			commitSubject: "fix(sender): widen the FloodWait backoff window",
 		});
 		expect(s.get(todo.id)?.summary).toBe("Retried with the corrected backoff window.");
 		expect(s.get(todo.id)?.verification).toBe("bun test src/todos — 35 pass");
+		expect(s.get(todo.id)?.commitSubject).toBe("fix(sender): widen the FloodWait backoff window");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

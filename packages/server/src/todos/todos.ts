@@ -466,7 +466,7 @@ export function renderFixPackage(item: StoredItem, feedback: string): string {
 		feedback,
 		'"""',
 		"",
-		`Address the feedback on THIS step: flip ${item.id} back to in_progress (todo_update), make the fix, then mark it done with a fresh summary describing the fix. Do not create a new item for it.`,
+		`Address the feedback on THIS step: flip ${item.id} back to in_progress (todo_update), make the fix, then mark it done with a fresh summary AND a fresh commitSubject describing the fix (the revision is its own commit). Do not create a new item for it.`,
 	];
 	return lines.join("\n");
 }
