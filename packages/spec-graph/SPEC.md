@@ -46,8 +46,8 @@ own boundary and leaves.
 ## Derived read index
 
 The filesystem is the source of truth; the model the tools read is **derived, in-memory, read-only, and
-revalidated on demand**. Each read re-globs the spec set in a name-sorted walk (ignoring
-`node_modules`/`.git`/`dist`/`build`) and revalidates every file by `(mtimeMs, size)`: unchanged files
+revalidated on demand**. Each read re-runs the **glob** — a name-sorted traversal that ignores
+`node_modules`/`.git`/`dist`/`build` — and revalidates every file by `(mtimeMs, size)`: unchanged files
 reuse their cached parse, changed/new files are re-parsed, vanished files are evicted, and the derived
 graph is rebuilt only when the spec set actually changed. So specs added, deleted, or edited from any
 source — including pi's normal `write`/`edit` — are always current, while redundant re-parse/rebuild is

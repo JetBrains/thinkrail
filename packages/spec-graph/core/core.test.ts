@@ -1,5 +1,14 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -27,6 +36,59 @@ import {
 	updateFrontmatterText,
 	validateGraph,
 } from "./index.ts";
+import {
+	compareWalkEntries,
+	resolvePathSegment,
+	type SegmentResolution,
+	toWalkEntry,
+} from "./store.ts";
+
+function probeFilesystem(): {
+	foldsCase: boolean;
+	foldsUnicode: boolean;
+	deniesListing: boolean;
+} {
+	const probe = mkdtempSync(join(tmpdir(), "spec-probe-"));
+	try {
+		for (const name of ["CaseProbe", "caf\u00e9", "cafe\u0301"]) {
+			mkdirSync(join(probe, name), { recursive: true });
+		}
+		const foldsCase = existsSync(join(probe, "caseprobe"));
+		const foldsUnicode = readdirSync(probe).length < 3;
+		return {
+			foldsCase,
+			foldsUnicode,
+			deniesListing: withUnlistableDirectory(probe, refusesListing),
+		};
+	} finally {
+		rmSync(probe, { recursive: true, force: true });
+	}
+}
+
+function withUnlistableDirectory<T>(parent: string, fn: (dir: string) => T): T {
+	const dir = join(parent, "unlistable");
+	mkdirSync(dir, { recursive: true });
+	chmodSync(dir, 0o311);
+	try {
+		return fn(dir);
+	} finally {
+		chmodSync(dir, 0o755);
+	}
+}
+
+function refusesListing(dir: string): boolean {
+	try {
+		readdirSync(dir);
+		return false;
+	} catch {
+		return true;
+	}
+}
+
+const { foldsCase, foldsUnicode, deniesListing } = probeFilesystem();
+const caseFolding = test.skipIf(!foldsCase);
+const spellingPreserving = test.skipIf(foldsUnicode);
+const listingDenied = test.skipIf(!deniesListing);
 
 test("the finite-vocabulary tuples carry exactly their members", () => {
 	expect([...IDENTITY_FIELDS]).toEqual(["id", "type"]);
@@ -499,17 +561,20 @@ function withProject(fn: (root: string, outer: string) => void): void {
 	});
 }
 
-const ok = (r: ReturnType<typeof resolveSpecPath>): string => {
+const ok = (r: ReturnType<typeof resolveSpecPath>, root: string): string => {
 	if ("error" in r) throw new Error(`expected a resolved path, got: ${r.error}`);
+	expect(r.abs).toBe(join(root, ...r.rel.split("/")));
 	return r.rel;
 };
 
 test("resolveSpecPath returns the canonical relative path the index would report", () => {
 	withProject((root) => {
-		expect(ok(resolveSpecPath(root, "SPEC.md"))).toBe("SPEC.md");
-		expect(ok(resolveSpecPath(root, "packages/core/SPEC.md"))).toBe("packages/core/SPEC.md");
-		expect(ok(resolveSpecPath(root, "./packages/core/SPEC.md"))).toBe("packages/core/SPEC.md");
-		expect(ok(resolveSpecPath(root, "pkg/./sub/../SPEC.md"))).toBe("pkg/SPEC.md");
+		expect(ok(resolveSpecPath(root, "SPEC.md"), root)).toBe("SPEC.md");
+		expect(ok(resolveSpecPath(root, "packages/core/SPEC.md"), root)).toBe("packages/core/SPEC.md");
+		expect(ok(resolveSpecPath(root, "./packages/core/SPEC.md"), root)).toBe(
+			"packages/core/SPEC.md",
+		);
+		expect(ok(resolveSpecPath(root, "pkg/./sub/../SPEC.md"), root)).toBe("pkg/SPEC.md");
 		expect(SPEC_FILE_EXTENSION).toBe(".md");
 	});
 });
@@ -544,7 +609,7 @@ test("resolveSpecPath rejects a symlinked directory even when it points back ins
 		expect(resolveSpecPath(root, "gone/evil.md")).toHaveProperty("error");
 		expect(resolveSpecPath(root, "docs/ghost.md")).toHaveProperty("error");
 		expect(resolveSpecPath(root, "alias/SPEC.md")).toHaveProperty("error");
-		expect(ok(resolveSpecPath(root, "real/SPEC.md"))).toBe("real/SPEC.md");
+		expect(ok(resolveSpecPath(root, "real/SPEC.md"), root)).toBe("real/SPEC.md");
 	});
 });
 
@@ -559,11 +624,72 @@ test("resolveSpecPath rejects a symlink at the leaf, dangling or not", () => {
 	});
 });
 
+const resolvedName = (r: SegmentResolution): string => {
+	if ("error" in r) throw new Error(`expected a resolved segment, got: ${r.error}`);
+	return r.name;
+};
+
+test("resolvePathSegment canonicalizes to the on-disk spelling and never guesses", () => {
+	expect(resolvedName(resolvePathSegment(["docs", "pkg"], "docs", true))).toBe("docs");
+	expect(resolvedName(resolvePathSegment(["Docs", "pkg"], "docs", true))).toBe("Docs");
+	expect(resolvedName(resolvePathSegment(["caf\u00e9"], "cafe\u0301", true))).toBe("caf\u00e9");
+	expect(resolvedName(resolvePathSegment(["docs"], "Docs", false))).toBe("Docs");
+	expect(resolvedName(resolvePathSegment(["docs"], "SPEC.md", false))).toBe("SPEC.md");
+
+	expect(resolvePathSegment(["Docs", "docs"], "DOCS", true)).toHaveProperty("error");
+	expect(resolvePathSegment(["pkg"], "docs", true)).toHaveProperty("error");
+});
+
+test("resolvePathSegment refuses an ignored directory in any spelling, existing or not", () => {
+	expect(resolvePathSegment(["node_modules"], "node_modules", true)).toHaveProperty("error");
+	expect(resolvePathSegment(["node_modules"], "NODE_MODULES", true)).toHaveProperty("error");
+	for (const spelling of [
+		"node_modules",
+		"NODE_MODULES",
+		"Node_Modules",
+		"DIST",
+		"BUILD",
+		".GIT",
+	]) {
+		expect(resolvePathSegment([], spelling, false)).toHaveProperty("error");
+	}
+});
+
+caseFolding("resolveSpecPath resolves a case alias to the spelling the index will walk", () => {
+	withProject((root) => {
+		mkdirSync(join(root, "node_modules"), { recursive: true });
+		mkdirSync(join(root, "docs"), { recursive: true });
+
+		expect(resolveSpecPath(root, "NODE_MODULES/SPEC.md")).toHaveProperty("error");
+		expect(ok(resolveSpecPath(root, "Docs/SPEC.md"), root)).toBe("docs/SPEC.md");
+		expect(ok(resolveSpecPath(root, "Docs/Nested/SPEC.md"), root)).toBe("docs/Nested/SPEC.md");
+
+		writeFileSync(
+			join(root, "docs", "SPEC.MD"),
+			"---\nid: shouty\ntype: module-design\ntitle: S\n---\n",
+		);
+		expect(resolveSpecPath(root, "docs/spec.md")).toHaveProperty("error");
+	});
+});
+
 test("resolveSpecPath fails closed when the root does not exist", () => {
 	expect(resolveSpecPath(join(tmpdir(), "spec-index-definitely-absent"), "SPEC.md")).toHaveProperty(
 		"error",
 	);
 });
+
+listingDenied(
+	"resolveSpecPath fails closed when a parent directory exists but cannot be listed",
+	() => {
+		withProject((root) => {
+			withUnlistableDirectory(root, () => {
+				expect(resolveSpecPath(root, "unlistable/SPEC.md")).toHaveProperty("error");
+				expect(resolveSpecPath(root, "unlistable/nested/SPEC.md")).toHaveProperty("error");
+			});
+			expect(ok(resolveSpecPath(root, "unlistable/SPEC.md"), root)).toBe("unlistable/SPEC.md");
+		});
+	},
+);
 
 test("SpecIndex walks in a stable order, so a duplicate id resolves the same everywhere", () => {
 	withIndexRoot((root) => {
@@ -583,3 +709,73 @@ test("SpecIndex walks in a stable order, so a duplicate id resolves the same eve
 		]);
 	});
 });
+
+test("SpecIndex walks a directory in its place among its sibling files, not before or after them", () => {
+	withIndexRoot((root) => {
+		const spec = "---\nid: dup\ntype: module-design\ntitle: Dup\n---\n";
+		mkdirSync(join(root, "b-dir"), { recursive: true });
+		writeFileSync(join(root, "a.md"), spec);
+		writeFileSync(join(root, "b-dir", "SPEC.md"), spec);
+		writeFileSync(join(root, "c.md"), spec);
+
+		const graph = new SpecIndex(root).graph();
+		expect(graph.duplicateIds.get("dup")).toEqual(["a.md", "b-dir/SPEC.md", "c.md"]);
+		expect(graph.nodes.get("dup")?.path).toBe("a.md");
+	});
+});
+
+test("the glob keeps the byte-exact ignored rule the resolver deliberately over-refuses", () => {
+	withIndexRoot((root) => {
+		mkdirSync(join(root, "NODE_MODULES"), { recursive: true });
+		writeFileSync(
+			join(root, "NODE_MODULES", "SPEC.md"),
+			"---\nid: shouted\ntype: module-design\ntitle: S\n---\n",
+		);
+
+		expect(resolveSpecPath(root, "NODE_MODULES/SPEC.md")).toHaveProperty("error");
+		expect(new SpecIndex(root).graph().nodes.has("shouted")).toBe(true);
+	});
+});
+
+const walkOrder = (names: readonly string[]): string[] =>
+	names
+		.map((name) => toWalkEntry(name, false))
+		.sort(compareWalkEntries)
+		.map((entry) => entry.name);
+
+test("the walk order compares NFC-normalized names, not raw code units", () => {
+	expect(walkOrder(["A\u0308pfel", "Banana"])).toEqual(["Banana", "A\u0308pfel"]);
+	expect(walkOrder(["Banana", "A\u0308pfel"])).toEqual(["Banana", "A\u0308pfel"]);
+	expect(walkOrder(["\u00c4pfel", "Banana"])).toEqual(["Banana", "\u00c4pfel"]);
+});
+
+test("the walk order is total, so canonically equivalent names sort the same either way round", () => {
+	const names = ["caf\u00e9", "cafe\u0301", "zebra", "\u00c4pfel", "A\u0308pfel", "apple"];
+	expect(walkOrder(names)).toEqual(walkOrder([...names].reverse()));
+	expect(walkOrder(["zebra", "caf\u00e9", "apple", "cafe\u0301"])).toEqual([
+		"apple",
+		"cafe\u0301",
+		"caf\u00e9",
+		"zebra",
+	]);
+});
+
+spellingPreserving(
+	"SpecIndex resolves a duplicate id the same way for canonically equivalent directory names",
+	() => {
+		withIndexRoot((root) => {
+			const spellings = ["caf\u00e9", "cafe\u0301"];
+			for (const name of spellings) {
+				mkdirSync(join(root, name), { recursive: true });
+				writeFileSync(
+					join(root, name, "SPEC.md"),
+					"---\nid: dup\ntype: module-design\ntitle: Dup\n---\n",
+				);
+			}
+			const expected = ["cafe\u0301/SPEC.md", "caf\u00e9/SPEC.md"];
+			const graph = new SpecIndex(root).graph();
+			expect(graph.duplicateIds.get("dup")).toEqual(expected);
+			expect(graph.nodes.get("dup")?.path).toBe(expected[0]);
+		});
+	},
+);

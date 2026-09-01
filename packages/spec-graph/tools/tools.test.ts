@@ -25,6 +25,18 @@ import {
 } from "../core/index.ts";
 import { registerSpecTools } from "./index.ts";
 
+function foldsCase(): boolean {
+	const probe = mkdtempSync(join(tmpdir(), "spec-probe-"));
+	try {
+		mkdirSync(join(probe, "CaseProbe"), { recursive: true });
+		return existsSync(join(probe, "caseprobe"));
+	} finally {
+		rmSync(probe, { recursive: true, force: true });
+	}
+}
+
+const caseFolding = test.skipIf(!foldsCase());
+
 const tools = new Map<string, ToolDefinition>();
 registerSpecTools({
 	registerTool(tool: ToolDefinition) {
@@ -217,6 +229,23 @@ test("spec_create refuses a path the index could never see, and writes nothing",
 		expect(existsSync(join(root, "notes/spec.txt"))).toBe(false);
 	});
 });
+
+caseFolding(
+	"spec_create refuses a case alias of an ignored directory, and writes nothing",
+	async () => {
+		await withRoot(async (root) => {
+			mkdirSync(join(root, "node_modules"), { recursive: true });
+
+			const res = await run(
+				"spec_create",
+				{ path: "NODE_MODULES/SPEC.md", id: "aliased", type: "module-design", title: "A" },
+				root,
+			);
+			expect(isError(res)).toBe(true);
+			expect(existsSync(join(root, "node_modules", "SPEC.md"))).toBe(false);
+		});
+	},
+);
 
 test("spec_create writes nothing through a symlink, dangling leaf included", async () => {
 	await withRoot(async (outer) => {
