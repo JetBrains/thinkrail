@@ -247,48 +247,43 @@ export default function ChatView({
 	}
 	const firstItemIndex = virtualRows.firstItemIndex;
 
-	// Per user row: has the agent started responding to it? Drives the large-user-message auto-collapse
-	// (client view state only — no wire). "Responded" = a later assistant-derived row exists after it,
-	// or it is the trailing user row while the session is still streaming (covers the pre-content gap).
 	const userResponded = useMemo(() => {
 		const map = new Map<string, boolean>();
-		for (let i = 0; i < rows.length; i++) {
-			if (rows[i]?.kind !== "user") continue;
-			let responded = false;
-			let hasUserAfter = false;
-			for (let j = i + 1; j < rows.length; j++) {
-				const k = rows[j]?.kind;
-				if (k === "markdown" || k === "tool" || k === "activity" || k === "divider")
-					responded = true;
-				if (k === "user") hasUserAfter = true;
+		let sawQualifying = false;
+		let sawUserAfter = false;
+		for (let i = chronologicalRows.length - 1; i >= 0; i--) {
+			const kind = chronologicalRows[i]?.kind;
+			if (kind === "user") {
+				map.set(chronologicalRows[i]?.id ?? "", sawQualifying || (!sawUserAfter && isStreaming));
+				sawUserAfter = true;
+			} else if (
+				kind === "markdown" ||
+				kind === "tool" ||
+				kind === "activity" ||
+				kind === "divider"
+			) {
+				sawQualifying = true;
 			}
-			if (!responded && !hasUserAfter && isStreaming) responded = true;
-			map.set(rows[i]?.id ?? "", responded);
 		}
 		return map;
-	}, [rows, isStreaming]);
+	}, [chronologicalRows, isStreaming]);
 
-	// The concluding answer of each round — the only `markdown` row that carries the Copy action, so it
-	// rides the work summary rather than the intermediate narration the agent emits between tool steps. A
-	// markdown row is "final" when no further assistant-content row (`markdown`/`tool`/`activity`) follows
-	// it before the next user turn (a `divider`/`system`/`retry` in between doesn't disqualify it).
 	const finalAnswerRowIds = useMemo(() => {
 		const ids = new Set<string>();
-		for (let i = 0; i < rows.length; i++) {
-			if (rows[i]?.kind !== "markdown") continue;
-			let isFinal = true;
-			for (let j = i + 1; j < rows.length; j++) {
-				const k = rows[j]?.kind;
-				if (k === "user") break;
-				if (k === "markdown" || k === "tool" || k === "activity") {
-					isFinal = false;
-					break;
-				}
+		let dirtySinceUser = false;
+		for (let i = chronologicalRows.length - 1; i >= 0; i--) {
+			const kind = chronologicalRows[i]?.kind;
+			if (kind === "user") {
+				dirtySinceUser = false;
+			} else if (kind === "markdown") {
+				if (!dirtySinceUser) ids.add(chronologicalRows[i]?.id ?? "");
+				dirtySinceUser = true;
+			} else if (kind === "tool" || kind === "activity") {
+				dirtySinceUser = true;
 			}
-			if (isFinal) ids.add(rows[i]?.id ?? "");
 		}
 		return ids;
-	}, [rows]);
+	}, [chronologicalRows]);
 
 	const currentStreamStatus = useMemo<StreamStatus | null>(() => {
 		const last = turns[turns.length - 1];
