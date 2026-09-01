@@ -51,9 +51,7 @@ export function ChatTurnView({
 	row: ChatRow;
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
-	/** For a `user` row: has the agent started responding to it yet (drives large-message auto-collapse). */
 	agentResponded?: boolean | undefined;
-	/** For a `markdown` row: is it the round's concluding answer (only that one carries the Copy action). */
 	isFinalAnswer?: boolean | undefined;
 	onOpenSpec?: ((path: string) => void) | undefined;
 	onOpenChange?: ((path: string) => void) | undefined;
@@ -101,8 +99,6 @@ export function ChatTurnView({
 				/>
 			);
 		case "markdown":
-			// Copy rides only the round's concluding answer (the work summary) — not the intermediate
-			// narration the agent emits between tool steps.
 			return isFinalAnswer ? (
 				<MessageWithCopy messageRole="assistant" side="left" getText={() => row.text}>
 					<div className="w-full min-w-0 tr-text-reading text-text-default">
@@ -200,14 +196,6 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 		</>
 	);
 }
-/**
- * Shared message + Copy layout, so both message types position the action the same way instead of each
- * carrying its own hack. The Copy overlays the message's own **bottom-right corner** — for both agent and
- * user messages alike — absolutely positioned against this `relative` wrapper rather than sitting in a row
- * below the content. Hover-reveal (the button's own styling) keeps it visually secondary. The
- * `data-testid`/`data-role` hooks stay on this outer element, where the transcript's jump/flash and tests
- * expect them.
- */
 function MessageWithCopy({
 	messageRole,
 	side,
@@ -231,13 +219,6 @@ function MessageWithCopy({
 	);
 }
 
-/** The user bubble. Pi's canonical expanded skill block renders as a compact, collapsed invocation with
- * any user-supplied request kept visible beneath it. A review send's context package renders as a compact
- * card — the "Sent N review comments on <file>" line with the COMMENT rows right under it (a send is one
- * message per file, so a file level would always hold exactly one entry — the summary already names the
- * file); each comment unfolds to its full text + the quoted fragment — instead of the structured XML the
- * agent needs. Everything is parsed from the message itself (the transcript IS the history), so any old
- * chat unfolds the same way; the folds survive virtualization via the shared cache. */
 const LARGE_USER_MESSAGE = 500;
 
 function UserTurn({
@@ -249,7 +230,6 @@ function UserTurn({
 	id: string;
 	message: UserMessage;
 	attachmentNames?: string[] | undefined;
-	/** Once the agent has started responding, a large (>500-char) plain message auto-collapses. */
 	agentResponded: boolean;
 }) {
 	const text = userText(message.content);
@@ -302,14 +282,6 @@ function UserTurn({
 	);
 }
 
-/**
- * A plain user message bubble (its Copy action lives in the enclosing {@link MessageWithCopy}, overlaid on
- * the bubble's bottom-right corner) — and, only above {@link LARGE_USER_MESSAGE} chars, auto-collapse. The fold's fallback is
- * `agentResponded` (expanded until the agent starts responding, collapsed after), so the shared cache's
- * "a manual toggle always wins over a fallback flip" gives the required behavior for free: shown
- * expanded right after send, auto-collapsed the instant the agent produces anything, and a manual
- * `Show more` then survives continued streaming. Copy always yields the full text, never the preview.
- */
 function PlainUserTurn({
 	id,
 	text,
@@ -326,8 +298,6 @@ function PlainUserTurn({
 	const collapsed = large && !expanded;
 	return (
 		<MessageWithCopy messageRole="user" side="right" getText={() => text}>
-			{/* w-fit so the bubble still hugs its content (up to 85%) and is the wrapper's only, right-aligned
-			    child — so the overlaid Copy button's corner coincides with the bubble's own corner. */}
 			<div className="flex w-fit max-w-[85%] flex-col items-end">
 				<div className={USER_BUBBLE_BASE}>
 					{attachments.length > 0 ? (
@@ -337,8 +307,6 @@ function PlainUserTurn({
 							))}
 						</div>
 					) : null}
-					{/* The Show more/less control lives INSIDE the card, within its padding, below the text — so
-					    line-clamp truncates only the message body (its own element), never the control. */}
 					<div
 						data-testid="user-message-body"
 						data-collapsed={collapsed || undefined}

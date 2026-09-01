@@ -6,7 +6,6 @@ import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const BASE_TS = 1_700_910_000_000;
 
-// A plain user message comfortably over the 500-char collapse threshold.
 const LARGE_TEXT = `Please refactor the transport layer. ${"Investigate the reconnect path and reducer ordering carefully. ".repeat(
 	12,
 )}`;
@@ -16,7 +15,7 @@ test("a large user message with an agent reply collapses, and Show more re-expan
 	page,
 }) => {
 	expect(LARGE_TEXT.length).toBeGreaterThan(500);
-	await openFixtureProject(page); // resets state — seed after
+	await openFixtureProject(page);
 	seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name: "large message chat",
 		messages: [
@@ -31,7 +30,6 @@ test("a large user message with an agent reply collapses, and Show more re-expan
 
 	const body = page.getByTestId("user-message-body");
 	const toggle = page.getByTestId("user-message-toggle");
-	// Agent has replied, so the large message is collapsed by default.
 	await expect(body).toHaveAttribute("data-collapsed", "true");
 	await expect(toggle).toHaveText("Show more");
 
@@ -106,7 +104,6 @@ test("only the round's final agent answer carries a copy action, not intermediat
 	await expect(assistantMessages).toHaveCount(2);
 	const intermediate = assistantMessages.filter({ hasText: "let me inspect" });
 	const final = assistantMessages.filter({ hasText: "Done — I refactored" });
-	// The intermediate narration has no copy affordance at all; only the concluding answer does.
 	await expect(intermediate.getByTestId("chat-copy")).toHaveCount(0);
 	await expect(final.getByTestId("chat-copy")).toHaveCount(1);
 });
@@ -135,8 +132,6 @@ test("the copy action overlays the bottom-right corner of the message, for both 
 	const assistantMessage = page.locator('[data-testid="chat-message"][data-role="assistant"]');
 	await expect(assistantMessage).toBeVisible();
 
-	// The copy action is an overlay pinned to its message's own bottom-right corner — for both roles —
-	// not a row below the content, so its edges track the message's own bounding box.
 	for (const message of [userMessage, assistantMessage]) {
 		const [messageBox, copyBox] = await Promise.all([
 			message.boundingBox(),
@@ -167,7 +162,6 @@ test("copy actions copy the full source of both user and agent messages", async 
 	await enterDefaultWorkspace(page);
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
-	// User copy — full source, not the collapsed preview.
 	const userMessage = page.locator('[data-testid="chat-message"][data-role="user"]');
 	await userMessage.hover();
 	await userMessage.getByTestId("chat-copy").click();
@@ -175,7 +169,6 @@ test("copy actions copy the full source of both user and agent messages", async 
 		expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(LARGE_TEXT);
 	}).toPass();
 
-	// Agent copy — the markdown source.
 	const assistantMessage = page.locator('[data-testid="chat-message"][data-role="assistant"]');
 	await assistantMessage.hover();
 	await assistantMessage.getByTestId("chat-copy").click();

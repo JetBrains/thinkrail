@@ -2,13 +2,6 @@ import { RiCheckLine as Check, RiFileCopyLine as Copy } from "@remixicon/react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib";
 
-/**
- * A hover-revealed copy affordance for a chat message. Self-contained and presentational (no
- * store/transport): it writes `getText()` to the clipboard and flips its icon to a check for ~1.2s as
- * confirmation, rather than reaching the store toast `panels/PlanPane` uses — that keeps the message
- * renderers props-driven and reusable. `getText` is a thunk so the caller supplies the full message
- * source (never a collapsed preview) at click time.
- */
 export function CopyButton({
 	getText,
 	label = "Copy message",
