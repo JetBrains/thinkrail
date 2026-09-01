@@ -315,9 +315,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   Selection, interactive focus, and message/history jumps cancel either mode; navigation keys bubbling from
   an interactive descendant never undo that cancellation. Geometry alone never re-arms a detached reader.
   Renderers needing attention expose an element through `ChatActions`; `useChatScroll` alone reveals it in
-  the transcript with a clamped direct scroll write. That local reveal never changes follow state, while the
-  **Latest** action always writes the physical latest edge even when no stream marker is mounted, and
-  keeps that edge pinned for a bounded settling window while newly mounted rows replace estimates.
+  the transcript with a clamped direct scroll write. `nearest` reveal follows size-aware browser semantics for
+  targets taller than the viewport rather than hiding their useful leading edge. That local reveal never changes
+  follow state, while the **Latest** action always writes the physical latest edge even when no stream marker is
+  mounted, and keeps that edge pinned for its bounded settling window while newly mounted or delayed rows replace
+  estimates. A streaming-settled transition does not end that manual-return window; reader intent still does.
 - **Oldest-first reading band** — the established behavior remains intact. An immediate local send aligns
   its user row at 10% of transcript height clamped to 48–80px and gives the response a one-way 60%-viewport
   runway. A transient list header makes that inset possible even for the first row; the tail spacer starts

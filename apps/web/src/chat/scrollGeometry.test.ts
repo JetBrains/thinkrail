@@ -29,6 +29,11 @@ describe("revealScrollTop", () => {
 		expect(reveal(180, 900, "start")).toBe(480);
 	});
 
+	test("uses the useful edge when an oversized target is outside the viewport", () => {
+		expect(reveal(550, 1_000, "nearest")).toBe(850);
+		expect(reveal(-50, 400, "nearest")).toBe(300);
+	});
+
 	test("does not move nearest reveal when an oversized target spans the viewport", () => {
 		expect(reveal(50, 650, "nearest")).toBe(400);
 		expect(reveal(50, 650, "start")).toBe(350);

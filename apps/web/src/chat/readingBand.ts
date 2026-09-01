@@ -6,7 +6,6 @@ const EDGE_TRIGGER_RATIO = 0.82;
 const EDGE_SETTLE_RATIO = 0.58;
 const TAIL_RUNWAY_RATIO = 1 - EDGE_SETTLE_RATIO;
 const ADVANCE_DURATION_MS = 220;
-const EDGE_PIN_STABLE_FRAMES = 3;
 const EDGE_PIN_MAX_FRAMES = 30;
 const GEOMETRY_EPSILON = 0.5;
 
@@ -212,24 +211,13 @@ export function createReadingBandController(
 	const pinLatestEdge = () => {
 		cancelEdgePin();
 		let remainingFrames = EDGE_PIN_MAX_FRAMES;
-		let stableFrames = 0;
-		let previousTarget: number | null = null;
 		const pin = () => {
 			edgePinFrame = null;
 			const bounds = environment.readScrollBounds();
 			if (!bounds) return;
-			const target = latestScrollTop(bounds);
-			environment.writeScrollTop(target);
-			const measuredBounds = environment.readScrollBounds() ?? bounds;
-			const measuredTarget = latestScrollTop(measuredBounds);
-			const stable =
-				previousTarget !== null &&
-				Math.abs(measuredTarget - previousTarget) <= GEOMETRY_EPSILON &&
-				Math.abs(measuredBounds.scrollTop - measuredTarget) <= GEOMETRY_EPSILON;
-			stableFrames = stable ? stableFrames + 1 : 0;
-			previousTarget = measuredTarget;
+			environment.writeScrollTop(latestScrollTop(bounds));
 			remainingFrames -= 1;
-			if (stableFrames >= EDGE_PIN_STABLE_FRAMES || remainingFrames <= 0) return;
+			if (remainingFrames <= 0) return;
 			edgePinFrame = environment.requestFrame(pin);
 		};
 		pin();
@@ -337,7 +325,6 @@ export function createReadingBandController(
 			pinLatestEdge();
 		},
 		setStreaming: (nextStreaming) => {
-			cancelEdgePin();
 			if (!nextStreaming) cancelMotion();
 			publish({
 				streaming: nextStreaming,

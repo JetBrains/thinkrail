@@ -5,7 +5,6 @@ import { TodoStore } from "pi-todos/core";
 import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
-	openChatFromHistory,
 	openFixtureProject,
 	revealFirstProjectWorkspaces,
 } from "./fixtures/app";
@@ -114,7 +113,6 @@ test("coarse wheel input crosses realistic virtual geometry before a giant histo
 	});
 
 	await enterDefaultWorkspace(page);
-	await openChatFromHistory(page, "giant hydrated history");
 
 	const chatScroll = page.getByTestId("chat-scroll");
 	const latestRow = page

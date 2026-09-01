@@ -325,6 +325,10 @@ function focusQuestionAttention(card: HTMLElement): void {
 	else focusCurrentQuestionPage(card);
 }
 
+function currentQuestionPageStart(card: HTMLElement): HTMLElement {
+	return card.querySelector<HTMLElement>('[data-ask-page-start="true"]') ?? card;
+}
+
 interface CachedCardState {
 	states: Record<number, QState>;
 	tab: number;
@@ -391,7 +395,7 @@ export function AskUserQuestionCard({
 		const frame = requestAnimationFrame(() => {
 			const card = cardRef.current;
 			if (!card) return;
-			actions?.revealChatElement(card, "start");
+			actions?.revealChatElement(currentQuestionPageStart(card), "start");
 			focusCurrentQuestionPage(card);
 		});
 		return () => cancelAnimationFrame(frame);
@@ -407,28 +411,30 @@ export function AskUserQuestionCard({
 		};
 		window.addEventListener("pointerdown", yieldToUser, { capture: true, once: true });
 		window.addEventListener("keydown", yieldToUser, { capture: true, once: true });
-		const settleFocus = () => {
+		window.addEventListener("wheel", yieldToUser, { capture: true, once: true, passive: true });
+		const settleAttention = () => {
 			const card = cardRef.current;
 			if (!card || userTookOver) return;
-			const kind = focusTargetKind(document.activeElement, card);
-			if (!shouldClaimQuestionFocus(kind, hasCoarsePointer())) return;
-			focusQuestionAttention(card);
-			if (card.contains(document.activeElement)) return;
+			actions?.revealChatElement(currentQuestionPageStart(card), "start");
+			if (!card.contains(document.activeElement)) {
+				const kind = focusTargetKind(document.activeElement, card);
+				if (shouldClaimQuestionFocus(kind, hasCoarsePointer())) focusQuestionAttention(card);
+			}
 			attempts += 1;
-			if (attempts < ATTENTION_SETTLE_FRAMES) frame = requestAnimationFrame(settleFocus);
+			if (attempts < ATTENTION_SETTLE_FRAMES) {
+				frame = requestAnimationFrame(settleAttention);
+			}
 		};
 		frame = requestAnimationFrame(() => {
 			if (!claimQuestionAttention(focusScope, toolCallId)) return;
 			setAnnounced(true);
-			const card = cardRef.current;
-			if (!card) return;
-			actions?.revealChatElement(card, "nearest");
-			settleFocus();
+			settleAttention();
 		});
 		return () => {
 			if (frame != null) cancelAnimationFrame(frame);
 			window.removeEventListener("pointerdown", yieldToUser, { capture: true });
 			window.removeEventListener("keydown", yieldToUser, { capture: true });
+			window.removeEventListener("wheel", yieldToUser, { capture: true });
 		};
 	}, [actions, awaiting, focusScope, questions.length, streaming, submitted, toolCallId]);
 
@@ -581,12 +587,7 @@ export function AskUserQuestionCard({
 					className="flex flex-col gap-12 p-12"
 				>
 					{onReview ? (
-						<ReviewView
-							questions={questions}
-							answers={answers}
-							submitEnabled={canSubmit}
-							onJump={setTab}
-						/>
+						<ReviewView questions={questions} answers={answers} onJump={setTab} />
 					) : (
 						<QuestionBody
 							question={q}
@@ -658,7 +659,6 @@ export function AskUserQuestionCard({
 								<button
 									type="button"
 									data-testid="ask-submit"
-									data-ask-page-focus={onReview && canSubmit ? "true" : undefined}
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
 									className="shrink-0 whitespace-nowrap rounded-[var(--radius-sm)] bg-control-primary-bg px-12 py-8 tr-text-action text-control-primary-text outline-none hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
@@ -808,7 +808,7 @@ function ModeHint({
 				className="flex items-center gap-4 text-text-muted tr-text-metadata"
 			>
 				<ListChecks className="size-14 shrink-0" />
-				Review · ←→ questions · Enter submit · Shift+Esc skip · Tab actions
+				Review · ←→ questions · Tab actions · Shift+Esc skip
 			</span>
 		);
 	}
@@ -922,7 +922,11 @@ function QuestionBody({
 		<div className="flex flex-col gap-12">
 			<div className="flex items-start gap-8">
 				<MessageCircleQuestion className="mt-2 size-16 shrink-0 text-text-muted" />
-				<p data-testid="ask-question-text" className="tr-title-dialog text-text-default">
+				<p
+					data-testid="ask-question-text"
+					data-ask-page-start="true"
+					className="tr-title-dialog text-text-default"
+				>
 					{question.question}
 				</p>
 			</div>
@@ -1246,12 +1250,10 @@ function Indicator({
 function ReviewView({
 	questions,
 	answers,
-	submitEnabled,
 	onJump,
 }: {
 	questions: AskUserQuestionItem[];
 	answers: AskUserQuestionAnswer[];
-	submitEnabled: boolean;
 	onJump: (index: number) => void;
 }) {
 	const byIndex = new Map(answers.map((a) => [a.questionIndex, a]));
@@ -1260,7 +1262,13 @@ function ReviewView({
 		<div className="flex flex-col gap-8">
 			<div className="flex items-start gap-8">
 				<MessageCircleQuestion className="mt-2 size-16 shrink-0 text-text-muted" />
-				<p data-testid="ask-review-title" className="tr-title-dialog text-text-default">
+				<p
+					tabIndex={-1}
+					data-testid="ask-review-title"
+					data-ask-page-start="true"
+					data-ask-page-focus="true"
+					className="rounded-[var(--radius-sm)] tr-title-dialog text-text-default outline-none focus-visible:ring-2 focus-visible:ring-primary"
+				>
 					Review your answers
 				</p>
 			</div>
@@ -1276,7 +1284,6 @@ function ReviewView({
 				<button
 					type="button"
 					data-testid="ask-unanswered"
-					data-ask-page-focus={submitEnabled ? undefined : "true"}
 					onClick={() => onJump(unanswered[0]?.i ?? 0)}
 					className="self-start rounded-[var(--radius-sm)] text-feedback-warning tr-text-metadata outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary"
 				>

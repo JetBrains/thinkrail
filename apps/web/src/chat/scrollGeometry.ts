@@ -20,10 +20,16 @@ export function revealScrollTop(geometry: RevealScrollGeometry, block: RevealBlo
 
 	if (block === "start") {
 		destination += targetTop - viewportTop;
-	} else if (targetTop < viewportTop && targetBottom < viewportBottom) {
-		destination += targetTop - viewportTop;
-	} else if (targetBottom > viewportBottom && targetTop > viewportTop) {
-		destination += targetBottom - viewportBottom;
+	} else {
+		const viewportHeight = viewportBottom - viewportTop;
+		const targetHeight = targetBottom - targetTop;
+		if (targetTop < viewportTop && targetBottom < viewportBottom) {
+			destination +=
+				targetHeight > viewportHeight ? targetBottom - viewportBottom : targetTop - viewportTop;
+		} else if (targetBottom > viewportBottom && targetTop > viewportTop) {
+			destination +=
+				targetHeight > viewportHeight ? targetTop - viewportTop : targetBottom - viewportBottom;
+		}
 	}
 
 	return clampScrollTop(destination, maxScrollTop);

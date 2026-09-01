@@ -6,12 +6,7 @@ import type {
 	AskUserQuestionArgs,
 	AskUserQuestionOption,
 } from "@thinkrail/contracts";
-import {
-	enterDefaultWorkspace,
-	hideAuxiliaryWorkbench,
-	openChatFromHistory,
-	openFixtureProject,
-} from "./fixtures/app";
+import { enterDefaultWorkspace, hideAuxiliaryWorkbench, openFixtureProject } from "./fixtures/app";
 import {
 	moveMouseToChatViewport,
 	nestedVerticalScrollSurfaces,
@@ -123,7 +118,7 @@ async function wheelUntilChatElementIntersects(
 	await expect.poll(async () => (await readChatViewportIntersection(target)).intersects).toBe(true);
 }
 
-test("a persisted tall questionnaire reveals the next page in the transcript without nested scrolling", async ({
+test("a persisted tall questionnaire reveals page changes and a restored page without hidden review focus", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1280, height: 720 });
@@ -135,7 +130,6 @@ test("a persisted tall questionnaire reveals the next page in the transcript wit
 		await selectOldestFirst(page);
 		await enterDefaultWorkspace(page);
 		await hideAuxiliaryWorkbench(page);
-		await openChatFromHistory(page, "tall persisted questionnaire");
 
 		const chatScroll = page.getByTestId("chat-scroll");
 		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
@@ -163,7 +157,50 @@ test("a persisted tall questionnaire reveals the next page in the transcript wit
 				firstOption: (await readChatViewportIntersection(secondFirstOption)).intersects,
 			}))
 			.toEqual({ heading: true, firstOption: true });
-		expect(await nestedVerticalScrollSurfaces(card)).toEqual([]);
+
+		const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+		await chatTabs.first().getByTestId("editor-tab-close").click();
+		await expect(chatTabs).toHaveCount(0);
+		await page.getByTestId("chat-history").first().click();
+		await page
+			.getByTestId("closed-chat-item")
+			.filter({ hasText: "tall persisted questionnaire" })
+			.click();
+		await expect(chatTabs).toHaveCount(1);
+
+		const reopenedCard = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
+		const reopenedHeading = reopenedCard.getByTestId("ask-question-text");
+		const reopenedFirstOption = reopenedCard.getByTestId("ask-option").first();
+		await expect(reopenedHeading).toHaveText("Which second-page rollout should we use?");
+		await expect(reopenedFirstOption).toBeFocused();
+		await expect
+			.poll(async () => ({
+				heading: (await readChatViewportIntersection(reopenedHeading)).intersects,
+				firstOption: (await readChatViewportIntersection(reopenedFirstOption)).intersects,
+			}))
+			.toEqual({ heading: true, firstOption: true });
+
+		await reopenedFirstOption.click();
+		await page.setViewportSize({ width: 1280, height: 480 });
+		const reviewNext = reopenedCard.getByTestId("ask-continue");
+		await wheelUntilChatElementIntersects(page, chatScroll, reviewNext);
+		await reviewNext.click();
+
+		const reviewTitle = reopenedCard.getByTestId("ask-review-title");
+		const submit = reopenedCard.getByTestId("ask-submit");
+		await expect(reviewTitle).toBeFocused();
+		await expect
+			.poll(async () => (await readChatViewportIntersection(reviewTitle)).intersects)
+			.toBe(true);
+		await expect(submit).toBeEnabled();
+		await expect
+			.poll(async () => (await readChatViewportIntersection(submit)).intersects)
+			.toBe(false);
+		await page.keyboard.press("Enter");
+		await expect(reopenedCard).toHaveAttribute("data-tone", "active");
+		await expect(reopenedCard.getByTestId("ask-sent")).toHaveCount(0);
+
+		expect(await nestedVerticalScrollSurfaces(reopenedCard)).toEqual([]);
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
 	} finally {
 		rmSync(session.path, { force: true });
@@ -184,7 +221,6 @@ test("a coarse pointer reveals a returning page's text target without focusing i
 	try {
 		await enterDefaultWorkspace(page);
 		await hideAuxiliaryWorkbench(page);
-		await openChatFromHistory(page, "touch questionnaire");
 
 		const chatScroll = page.getByTestId("chat-scroll");
 		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
