@@ -150,6 +150,24 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		async fetch(req, srv) {
 			const url = new URL(req.url);
 			if (url.pathname === "/ws") {
+				const origin = req.headers.get("origin");
+				if (origin && origin !== "null") {
+					try {
+						const originUrl = new URL(origin);
+						const hostname = originUrl.hostname;
+						const originPort = originUrl.port || (originUrl.protocol === "https:" ? "443" : "80");
+						const serverPort = String(srv.port);
+						const isLocal =
+							hostname === "localhost" || hostname === "127.0.0.1" || hostname === host;
+						const isCorrectPort = originPort === serverPort;
+						if (!isLocal || !isCorrectPort) {
+							log.warn(`Rejected WebSocket connection from unauthorized origin: ${origin}`);
+							return new Response("Unauthorized origin", { status: 403 });
+						}
+					} catch {
+						return new Response("Invalid origin header", { status: 400 });
+					}
+				}
 				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
 				return srv.upgrade(req, { data: { clientKey } })
 					? undefined

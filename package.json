@@ -30,7 +30,9 @@
 	},
 	"overrides": {
 		"react": "catalog:",
-		"react-dom": "catalog:"
+		"react-dom": "catalog:",
+		"brace-expansion": "5.0.9",
+		"protobufjs": "7.6.5"
 	},
 	"type": "module",
 	"scripts": {

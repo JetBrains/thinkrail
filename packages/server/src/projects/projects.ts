@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { rmSync, statSync } from "node:fs";
+import { existsSync, rmSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
 import { canonicalPath, git } from "../git";
@@ -179,6 +179,8 @@ export function initProject(path: string): Project {
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
 	if (status.kind === "repo") return openProject(path);
 
+	const gitPath = join(path, ".git");
+	const existedBefore = existsSync(gitPath);
 	const init = git(path, ["init", "-b", "main"]);
 	if (!init.ok) throw new Error(`git init failed: ${path}`);
 	try {
@@ -192,7 +194,9 @@ export function initProject(path: string): Project {
 		const commit = git(path, [...identity, "commit", "--allow-empty", "-m", "Initial commit"]);
 		if (!commit.ok) throw new Error(`git commit failed: ${path}`);
 	} catch (err) {
-		rmSync(join(path, ".git"), { recursive: true, force: true });
+		if (!existedBefore) {
+			rmSync(gitPath, { recursive: true, force: true });
+		}
 		throw err;
 	}
 

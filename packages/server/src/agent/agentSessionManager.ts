@@ -165,8 +165,8 @@ export async function reloadSessionResources(sessionId: string): Promise<void> {
 	await session.reload();
 }
 
-export function buildSessionSettings(cwd: string): SettingsManager {
-	const settings = SettingsManager.create(cwd, undefined, { projectTrusted: true });
+export function buildSessionSettings(cwd: string, projectTrusted = true): SettingsManager {
+	const settings = SettingsManager.create(cwd, undefined, { projectTrusted });
 	settings.applyOverrides({ images: { autoResize: false } });
 	return settings;
 }
@@ -318,7 +318,8 @@ async function registerSession(
 
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
 	const generation = await getPiRuntimeGeneration();
-	const settingsManager = buildSessionSettings(input.cwd);
+	const isTrusted = skillAdmissionResolver(input.workspaceId).trusted;
+	const settingsManager = buildSessionSettings(input.cwd, isTrusted);
 	let model: Model<string> | undefined;
 	if (input.model) {
 		try {
@@ -530,7 +531,8 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 	if (!info) throw new Error(`Unknown session: ${sessionId}`);
 	if (sessions.has(sessionId)) return;
 	const generation = await getPiRuntimeGeneration();
-	const settingsManager = buildSessionSettings(cwd);
+	const isTrusted = skillAdmissionResolver(workspaceId).trusted;
+	const settingsManager = buildSessionSettings(cwd, isTrusted);
 	const sessionManager = SessionManager.open(info.path);
 	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
 	let exactModel: Model<string> | undefined;

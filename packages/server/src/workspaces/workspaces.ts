@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type {
 	DiffStats,
 	ExistingWorktreeCandidate,
@@ -509,8 +509,28 @@ export function reclaimWorktree(ws: Workspace): void {
 	if (ws.kind === "default" || ws.kind === "external") return;
 	const project = loadProjects().find((p) => p.id === ws.projectId);
 	if (!project) return;
-	if (resolve(ws.worktreePath) === resolve(project.path)) return;
-	const removed = git(project.path, ["worktree", "remove", "--force", ws.worktreePath]);
+
+	const slug = project.slug;
+	const expectedSubdir = canonicalPath(resolve(dataDir(), "worktrees", slug));
+	const canonicalTarget = canonicalPath(resolve(ws.worktreePath));
+	const rel = relative(expectedSubdir, canonicalTarget);
+	if (rel.startsWith("..") || isAbsolute(rel) || rel === "") {
+		log.warn(`Refusing to remove worktree path outside expected subdirectory: ${ws.worktreePath}`);
+		return;
+	}
+
+	const status = git(ws.worktreePath, ["status", "--porcelain"]);
+	const isDirty = status.ok && status.out.trim().length > 0;
+
+	if (isDirty) {
+		log.warn(
+			`Workspace ${ws.name} has uncommitted/untracked changes. Refusing to delete worktree to prevent data loss.`,
+		);
+		git(project.path, ["worktree", "remove", ws.worktreePath]);
+		return;
+	}
+
+	const removed = git(project.path, ["worktree", "remove", ws.worktreePath]);
 	if (!removed.ok) {
 		rmSync(ws.worktreePath, { recursive: true, force: true });
 		git(project.path, ["worktree", "prune"]);
