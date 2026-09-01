@@ -277,8 +277,7 @@ export function NewWorkspaceDialog({
 		try {
 			const { result: session, syncedTick } = await createSessionWithSkillBaseline({
 				workspaceId: workspace.id,
-				...(model ? { model } : {}),
-				thinkingLevel,
+				...(model ? { model, thinkingLevel } : {}),
 			});
 			store.openChatSession(
 				workspace.id,
@@ -477,6 +476,7 @@ export function NewWorkspaceDialog({
 							refreshing={modelsRefreshing}
 							onRefresh={onRefreshModels}
 							container={dialogEl}
+							placeholder="Default model"
 							onSelect={(m) => {
 								setModel(m);
 							}}

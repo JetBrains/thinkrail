@@ -356,15 +356,53 @@ test("model.clampThinking refuses a model ref the host can't resolve", async () 
 	);
 });
 
-test("model.default clamps the saved thinking level onto the resolved model's support set", async () => {
+test("model.default clamps the saved thinking level onto the pinned model's support set", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const settingsPath = join(agentDir, "settings.json");
+	writeFileSync(
+		settingsPath,
+		`${JSON.stringify({
+			defaultProvider: "fauxa",
+			defaultModel: "fauxa",
+			defaultThinkingLevel: "high",
+		})}\n`,
+	);
+	try {
+		const d = await getDefaultModel();
+		expect(d.model?.id).toBe("fauxa");
+		expect(d.model?.thinkingLevels).toEqual(["off"]);
+		expect(d.thinkingLevel).toBe("off");
+	} finally {
+		rmSync(settingsPath, { force: true });
+	}
+});
+
+test("model.default names NO model when nothing is pinned — pi's resolver is the only one", async () => {
 	const agentDir = process.env.PI_CODING_AGENT_DIR;
 	if (!agentDir) throw new Error("agent dir not isolated");
 	const settingsPath = join(agentDir, "settings.json");
 	writeFileSync(settingsPath, `${JSON.stringify({ defaultThinkingLevel: "high" })}\n`);
 	try {
+		expect((await listAvailableModels()).length).toBeGreaterThan(0);
 		const d = await getDefaultModel();
-		expect(d.model?.thinkingLevels).toEqual(["off"]);
-		expect(d.thinkingLevel).toBe("off");
+		expect(d.model).toBeNull();
+		expect(d.thinkingLevel).toBe("high");
+	} finally {
+		rmSync(settingsPath, { force: true });
+	}
+});
+
+test("model.default names NO model when the pinned one is unavailable", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const settingsPath = join(agentDir, "settings.json");
+	writeFileSync(
+		settingsPath,
+		`${JSON.stringify({ defaultProvider: "fauxa", defaultModel: "gone" })}\n`,
+	);
+	try {
+		expect((await getDefaultModel()).model).toBeNull();
 	} finally {
 		rmSync(settingsPath, { force: true });
 	}

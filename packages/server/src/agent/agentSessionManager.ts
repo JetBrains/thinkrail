@@ -904,7 +904,7 @@ export async function getDefaultModel(): Promise<DefaultModelResult> {
 		provider && modelId
 			? available.find((model) => model.provider === provider && model.id === modelId)
 			: undefined;
-	const resolved = (pinned ?? available[0] ?? null) as Model<string> | null;
+	const resolved = (pinned ?? null) as Model<string> | null;
 	const saved = settings.getDefaultThinkingLevel() ?? "medium";
 	const thinkingLevel = resolved ? clampThinkingLevel(resolved, saved) : saved;
 	return { model: resolved ? toWireModel(resolved) : null, thinkingLevel };

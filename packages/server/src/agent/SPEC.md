@@ -141,9 +141,18 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     entry) / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
     `listAvailableModels` / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host owns it so the pre-session picker, `getDefaultModel`, and a live
-    session all adjust effort identically) / `getDefaultModel` (the model + thinking a fresh session resolves to — settings
-    default if available, else first available — so the New-Workspace dialog shows the exact pre-session
-    model). **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
+    session all adjust effort identically) / `getDefaultModel` (the **pinned** default only — pi's settings
+    `defaultProvider`/`defaultModel` when that model is available, else `model: null` — plus the effort that
+    pairs with it). **The host never guesses a pre-session model:** pi's own resolver (settings pin →
+    provider default → first available) runs inside `createAgentSession`, so a caller without a pinned
+    default omits `model` and lets pi choose, and every creation path agrees by construction. The earlier
+    `pinned ?? available[0]` was a *second* resolver: with nothing pinned it answered `available[0]` while a
+    fresh session got pi's provider default, so the New-Workspace dialog pre-pinned a model no other path
+    would have picked — landing on `anthropic/claude-fable-5`, whose `compat.allowedFallbackModels` makes pi
+    send a `fallbacks` field, a 400 on an Anthropic proxy without the server-side-fallback beta, while a new
+    chat in the same worktree worked. Pi publishes no pre-session resolver (`findInitialModel` and
+    `defaultModelPerProvider` are not re-exported from the package root and its `exports` map blocks the deep
+    import), and copying its provider-default table here would recompute what `pi` owns. **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
     `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl`, `headers`, extension/provider
     routing data, and any other field are excluded by
     default — and the inbound side re-resolves the ref by `{provider,id}` via `resolveWireModel` against
