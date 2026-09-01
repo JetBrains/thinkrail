@@ -1,8 +1,8 @@
-import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { openAppFresh, openFixtureProject, worktreeRows } from "./fixtures/app";
+import { git } from "./fixtures/git";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PICK_DIR_POINTER } from "./fixtures/paths";
 
 test("the dialog lists local branches (no stray origin) and creates a worktree", async ({
@@ -177,7 +177,6 @@ test("Enter in the prompt creates; Shift+Enter inserts a newline", async ({ page
 test("a base whose fetch fails reports git's error, not a request timeout", async ({ page }) => {
 	const remote = join(E2E_DATA_DIR, "dangling-head-remote.git");
 	const repo = join(E2E_DATA_DIR, "dangling-head-fixture");
-	const git = (cwd: string, ...args: string[]) => execFileSync("git", ["-C", cwd, ...args]);
 	for (const path of [remote, repo]) rmSync(path, { recursive: true, force: true });
 	mkdirSync(remote, { recursive: true });
 	git(remote, "init", "--bare", "-b", "main");

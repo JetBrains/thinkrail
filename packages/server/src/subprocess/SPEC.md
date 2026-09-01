@@ -26,7 +26,7 @@ never what a particular child's output means.
   persistence.
 - **Forbidden:** message wording, retry, truncation, or any policy about a specific program. `git`'s
   stalled/stderr text and `branch-review`'s degrade-to-`null` are the callers' business.
-- **Known non-consumers.** Three callers spawn something that can outlast a human's patience and still do
+- **Known non-consumers.** Two callers spawn something that can outlast a human's patience and still do
   it themselves, each deliberately and each a standing debt rather than a settled design:
   - `@thinkrail/shared/jbcentral` — already deadline-first, and a different contract (bounded-byte reads, a
     closed outcome vocabulary, an injectable `run` seam, Central's confidentiality rules). Folding it in
@@ -34,9 +34,11 @@ never what a particular child's output means.
   - `dialog`'s `selectDirectory` (`dialog.ts`) — still the EOF-gated shape this module replaces, around
     `zenity`/`kdialog`/`osascript`, whose forked helpers inherit stdio. Unmigrated because a picker's real
     budget is a human at a dialog: it needs a cancellation seam, which `runBounded` does not offer.
-  - `github`'s `githubAuthStatus` (`github.ts`) — a `spawnSync` HTTPS call on the single event loop, so it
-    also caps this module's guarantee: while it blocks, no `runBounded` deadline can fire. Migrating it
-    means making the call async first, which changes its handler on the wire side.
+
+  `github`'s `githubAuthStatus` (`github.ts`) used to be a third — a `spawnSync` HTTPS call on the single
+  event loop — until it moved onto `runBounded`, which is also why `ghSetupProblem` no longer hand-rolls its
+  own TERM+KILL escalation: both `gh auth status` probes now share this module's timeout mechanics instead
+  of duplicating them.
 
   The census above is about *unbounded waits*, not about every spawn in the repo — the rest are already
   bounded or cannot wait on anything: `git`'s sync `git()` and `shared/shellEnv` pass their own

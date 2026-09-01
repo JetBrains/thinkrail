@@ -105,6 +105,7 @@ the host from env via `bootHost` for dev/e2e.
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
 - `projects` → `git` (shared runner), `persistence`
 - `git` → `subprocess` (every child that talks to a network or another CLI)
+- `github` → `subprocess` (both `gh auth status` probes run under the same bounded runner as `git`/`branch-review`)
 - `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
 - `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
   cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,
@@ -123,7 +124,7 @@ the host from env via `bootHost` for dev/e2e.
 - `agent` → `log`, `persistence` (`dataDir` — the static state-root resolver; the delegation store lives at
   `<dataDir>/delegation`, bound in the agent's delegation embedding) — otherwise the pi runtime alone; auth
   passes desired opaque Central paths through its public generation seam
-- `persistence`, `dialog`, `github`, `history`, `templates`, `subprocess` → (leaves)
+- `persistence`, `dialog`, `history`, `templates`, `subprocess` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
 `agent`'s WS surface (`session.*` + `pi.event` forwarding) attaches to `host`. Features that push on their

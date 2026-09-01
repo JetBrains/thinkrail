@@ -1,4 +1,4 @@
-import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import {
 	chmodSync,
 	copyFileSync,
@@ -25,6 +25,7 @@ import {
 	waitForCentralTarget,
 } from "./fixtures/centralAgent";
 import { hermeticE2ePath, resolveBunExecutable } from "./fixtures/executables";
+import { gitQuiet } from "./fixtures/git";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
@@ -59,14 +60,12 @@ function seedState(): void {
 	rmSync(HOST_LOG, { force: true });
 	mkdirSync(REPO, { recursive: true });
 	mkdirSync(HOME_DIR, { recursive: true });
-	const git = (...args: string[]) =>
-		execFileSync("git", ["-C", REPO, ...args], { stdio: "ignore" });
-	git("init", "-b", "main");
-	git("config", "user.email", "e2e@thinkrail.test");
-	git("config", "user.name", "ThinkRail E2E");
+	gitQuiet(REPO, "init", "-b", "main");
+	gitQuiet(REPO, "config", "user.email", "e2e@thinkrail.test");
+	gitQuiet(REPO, "config", "user.name", "ThinkRail E2E");
 	writeFileSync(join(REPO, "README.md"), "# restart fixture\n");
-	git("add", "-A");
-	git("commit", "-m", "init");
+	gitQuiet(REPO, "add", "-A");
+	gitQuiet(REPO, "commit", "-m", "init");
 
 	mkdirSync(AGENT_DIR, { recursive: true });
 	const settingsSource = join(E2E_PI_AGENT_DIR, "settings.json");

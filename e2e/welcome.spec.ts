@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -9,6 +8,7 @@ import {
 	stagePlainFolder,
 	worktreeRows,
 } from "./fixtures/app";
+import { git } from "./fixtures/git";
 import { E2E_FIXTURE_REPO, E2E_PLAIN_DIR } from "./fixtures/paths";
 
 const FIXTURE_SPECS = ["SPEC.md", join("module-a", "SPEC.md")];
@@ -197,7 +197,7 @@ test("a project without specs suggests setting it up", async ({ page }) => {
 		).toHaveAttribute("data-active", "true");
 		await expect(worktreeRows(page)).toHaveCount(0);
 	} finally {
-		execFileSync("git", ["-C", E2E_FIXTURE_REPO, "checkout", "--", ...FIXTURE_SPECS]);
+		git(E2E_FIXTURE_REPO, "checkout", "--", ...FIXTURE_SPECS);
 	}
 });
 
