@@ -1,5 +1,6 @@
 import { existsSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { fromMarkdown } from "mdast-util-from-markdown";
 import { FIELDS, list, parseFile, SpecIndex } from "pi-spec-graph/core";
 import ts from "typescript";
 
@@ -18,28 +19,27 @@ export interface SurfaceBlock {
 	heading: boolean;
 }
 
+interface MarkdownNode {
+	type: string;
+	children?: readonly MarkdownNode[];
+	position?: { start: { line: number }; end: { line: number } };
+}
+
 function visibleMarkdown(text: string): string {
-	let fence: { marker: string; length: number } | null = null;
+	const hiddenLines = new Set<number>();
+	const visit = (node: MarkdownNode): void => {
+		if ((node.type === "code" || node.type === "html") && node.position !== undefined) {
+			for (let line = node.position.start.line; line <= node.position.end.line; line++) {
+				hiddenLines.add(line);
+			}
+			return;
+		}
+		for (const child of node.children ?? []) visit(child);
+	};
+	visit(fromMarkdown(text) as MarkdownNode);
 	return text
 		.split("\n")
-		.map((line) => {
-			const opening = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
-			if (fence !== null) {
-				if (
-					opening !== undefined &&
-					opening[0] === fence.marker &&
-					opening.length >= fence.length
-				) {
-					fence = null;
-				}
-				return "";
-			}
-			if (opening !== undefined) {
-				fence = { marker: opening[0] ?? "", length: opening.length };
-				return "";
-			}
-			return /^(?: {4}|\t)/.test(line) ? "" : line;
-		})
+		.map((line, index) => (hiddenLines.has(index + 1) ? "" : line))
 		.join("\n");
 }
 
@@ -152,6 +152,8 @@ interface SurfaceCandidate {
 interface CompilerConfiguration {
 	key: string;
 	options: ts.CompilerOptions;
+	rootNames: string[];
+	projectReferences?: readonly ts.ProjectReference[];
 	error?: string;
 }
 
@@ -201,11 +203,11 @@ function compilerConfiguration(barrel: string, root: string): CompilerConfigurat
 		found === undefined ||
 		(resolve(found) !== resolve(root) && !resolve(found).startsWith(rootPrefix))
 	) {
-		return { key: "<default>", options: fallback };
+		return { key: "<default>", options: fallback, rootNames: [] };
 	}
 	const loaded = ts.readConfigFile(found, ts.sys.readFile);
 	if (loaded.error !== undefined) {
-		return { key: found, options: fallback, error: diagnosticText(loaded.error) };
+		return { key: found, options: fallback, rootNames: [], error: diagnosticText(loaded.error) };
 	}
 	const parsed = ts.parseJsonConfigFileContent(
 		loaded.config,
@@ -223,42 +225,224 @@ function compilerConfiguration(barrel: string, root: string): CompilerConfigurat
 	return {
 		key: found,
 		options: parsed.options,
+		rootNames: parsed.fileNames,
+		...(parsed.projectReferences !== undefined
+			? { projectReferences: parsed.projectReferences }
+			: {}),
 		...(errors.length > 0 ? { error: errors.map(diagnosticText).join("; ") } : {}),
 	};
 }
 
-function sourceFileFor(symbol: ts.Symbol): ts.SourceFile | undefined {
-	return symbol.declarations?.find(ts.isSourceFile);
+type ExportContainer = ts.SourceFile | ts.ModuleBlock;
+
+function moduleContainers(symbol: ts.Symbol): ExportContainer[] {
+	const containers: ExportContainer[] = [];
+	for (const declaration of symbol.declarations ?? []) {
+		if (ts.isSourceFile(declaration)) {
+			containers.push(declaration);
+			continue;
+		}
+		if (!ts.isModuleDeclaration(declaration)) continue;
+		let body = declaration.body;
+		while (body !== undefined && ts.isModuleDeclaration(body)) body = body.body;
+		if (body !== undefined && ts.isModuleBlock(body)) containers.push(body);
+	}
+	return containers;
 }
 
-function unresolvedReexports(
+function bindingNames(name: ts.BindingName, names: Set<string>): void {
+	if (ts.isIdentifier(name)) {
+		names.add(name.text);
+		return;
+	}
+	for (const element of name.elements) {
+		if (!ts.isOmittedExpression(element)) bindingNames(element.name, names);
+	}
+}
+
+function hasExportModifier(statement: ts.Statement): boolean {
+	return (
+		ts.canHaveModifiers(statement) &&
+		(ts.getModifiers(statement) ?? []).some(
+			(modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+		)
+	);
+}
+
+function explicitExportNames(statements: readonly ts.Statement[]): Set<string> {
+	const names = new Set<string>();
+	for (const statement of statements) {
+		if (ts.isExportAssignment(statement)) {
+			names.add(statement.isExportEquals ? "export=" : "default");
+			continue;
+		}
+		if (ts.isExportDeclaration(statement)) {
+			const clause = statement.exportClause;
+			if (clause !== undefined) {
+				if (ts.isNamespaceExport(clause)) names.add(clause.name.text);
+				else for (const element of clause.elements) names.add(element.name.text);
+			}
+			continue;
+		}
+		if (!hasExportModifier(statement)) continue;
+		const modifiers = ts.canHaveModifiers(statement) ? (ts.getModifiers(statement) ?? []) : [];
+		if (modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)) {
+			names.add("default");
+			continue;
+		}
+		if (ts.isVariableStatement(statement)) {
+			for (const declaration of statement.declarationList.declarations) {
+				bindingNames(declaration.name, names);
+			}
+			continue;
+		}
+		if (ts.isImportEqualsDeclaration(statement)) {
+			names.add(statement.name.text);
+			continue;
+		}
+		if (
+			ts.isFunctionDeclaration(statement) ||
+			ts.isClassDeclaration(statement) ||
+			ts.isEnumDeclaration(statement) ||
+			ts.isModuleDeclaration(statement) ||
+			ts.isTypeAliasDeclaration(statement) ||
+			ts.isInterfaceDeclaration(statement)
+		) {
+			if (statement.name !== undefined) names.add(statement.name.text);
+		}
+	}
+	return names;
+}
+
+function resolvedAlias(symbol: ts.Symbol, checker: ts.TypeChecker): ts.Symbol {
+	return symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+}
+
+function exportDeclarations(source: ts.SourceFile): ts.ExportDeclaration[] {
+	const declarations: ts.ExportDeclaration[] = [];
+	const visit = (node: ts.Node): void => {
+		if (ts.isExportDeclaration(node)) declarations.push(node);
+		ts.forEachChild(node, visit);
+	};
+	visit(source);
+	return declarations;
+}
+
+function exportGraphIssues(
 	root: string,
-	sourceFile: ts.SourceFile,
+	moduleSymbol: ts.Symbol,
 	checker: ts.TypeChecker,
+	program: ts.Program,
 ): string[] {
-	const unresolved: string[] = [];
-	const seen = new Set<string>();
-	const visit = (source: ts.SourceFile): void => {
-		if (seen.has(source.fileName)) return;
-		seen.add(source.fileName);
-		for (const statement of source.statements) {
-			if (!ts.isExportDeclaration(statement) || statement.moduleSpecifier === undefined) continue;
+	const issues = new Set<string>();
+	const seenSymbols = new Set<ts.Symbol>();
+	const seenSources = new Map<string, ts.SourceFile>();
+	const rootPrefix = `${resolve(root)}${sep}`;
+	const isLocal = (source: ts.SourceFile): boolean => {
+		const path = resolve(source.fileName);
+		return path.startsWith(rootPrefix) && !path.includes(`${sep}node_modules${sep}`);
+	};
+	const visit = (symbol: ts.Symbol): void => {
+		if (seenSymbols.has(symbol)) return;
+		seenSymbols.add(symbol);
+		const containers = moduleContainers(symbol).filter((container) =>
+			isLocal(container.getSourceFile()),
+		);
+		const statements = containers.flatMap((container) => [...container.statements]);
+		if (statements.length === 0) return;
+		for (const container of containers) {
+			const source = container.getSourceFile();
+			seenSources.set(source.fileName, source);
+		}
+		const firstSource = containers[0]?.getSourceFile();
+		const modulePath =
+			firstSource === undefined ? "unknown" : relativeTo(root, firstSource.fileName);
+		for (const exported of checker.getExportsOfModule(symbol)) {
+			if (!(exported.flags & ts.SymbolFlags.Alias)) continue;
+			const target = resolvedAlias(exported, checker);
+			if (target.name === "unknown" && target.declarations === undefined) {
+				issues.add(`invalid exported alias in ${modulePath}: ${exported.getName()}`);
+			}
+		}
+		const explicit = explicitExportNames(statements);
+		const direct = explicitExportNames(
+			statements.filter((statement) => !ts.isExportDeclaration(statement)),
+		);
+		const explicitClauses = new Set<string>();
+		const starred = new Map<string, ts.Symbol>();
+		for (const statement of statements) {
+			if (!ts.isExportDeclaration(statement)) continue;
+			const source = statement.getSourceFile();
+			const sourcePath = relativeTo(root, source.fileName);
+			if (statement.exportClause !== undefined && ts.isNamedExports(statement.exportClause)) {
+				for (const element of statement.exportClause.elements) {
+					const name = element.name.text;
+					if (direct.has(name) || explicitClauses.has(name)) {
+						issues.add(`duplicate explicit export in ${sourcePath}: ${name}`);
+					} else {
+						explicitClauses.add(name);
+					}
+					const target = checker.getExportSpecifierLocalTargetSymbol(element);
+					const resolved = target === undefined ? undefined : resolvedAlias(target, checker);
+					if (
+						resolved === undefined ||
+						(resolved.name === "unknown" && resolved.declarations === undefined)
+					) {
+						issues.add(`invalid export specifier in ${sourcePath}: ${element.getText(source)}`);
+					}
+				}
+			} else if (statement.exportClause !== undefined) {
+				const name = statement.exportClause.name.text;
+				if (direct.has(name) || explicitClauses.has(name)) {
+					issues.add(`duplicate explicit export in ${sourcePath}: ${name}`);
+				} else {
+					explicitClauses.add(name);
+				}
+			}
+			if (statement.moduleSpecifier === undefined) continue;
 			const specifier = ts.isStringLiteralLike(statement.moduleSpecifier)
 				? statement.moduleSpecifier.text
 				: statement.moduleSpecifier.getText(source);
 			const target = checker.getSymbolAtLocation(statement.moduleSpecifier);
 			if (target === undefined) {
-				unresolved.push(`${relativeTo(root, source.fileName)} → ${specifier}`);
+				issues.add(`re-export could not be resolved (${sourcePath} → ${specifier})`);
 				continue;
 			}
 			if (statement.exportClause === undefined) {
-				const targetSource = sourceFileFor(target);
-				if (targetSource !== undefined) visit(targetSource);
+				for (const exported of checker.getExportsOfModule(target)) {
+					const name = exported.getName();
+					if (name === "default" || explicit.has(name)) continue;
+					const resolved = resolvedAlias(exported, checker);
+					const prior = starred.get(name);
+					if (prior !== undefined && prior !== resolved) {
+						issues.add(`ambiguous star export in ${modulePath}: ${name}`);
+					} else {
+						starred.set(name, resolved);
+					}
+				}
 			}
+			visit(target);
 		}
 	};
-	visit(sourceFile);
-	return unresolved.sort();
+	visit(moduleSymbol);
+	for (const source of seenSources.values()) {
+		const declarations = exportDeclarations(source);
+		for (const diagnostic of program.getSemanticDiagnostics(source)) {
+			if (diagnostic.start === undefined || diagnostic.code === 2307) continue;
+			const declaration = declarations.find(
+				(candidate) =>
+					diagnostic.start !== undefined &&
+					diagnostic.start >= candidate.getStart(source) &&
+					diagnostic.start < candidate.end,
+			);
+			if (declaration !== undefined) {
+				issues.add(
+					`invalid re-export in ${relativeTo(root, source.fileName)} (TS${diagnostic.code}: ${diagnosticText(diagnostic)})`,
+				);
+			}
+		}
+	}
+	return [...issues].sort();
 }
 
 function checkCompilerGroup(
@@ -276,8 +460,13 @@ function checkCompilerGroup(
 		return;
 	}
 	const program = ts.createProgram({
-		rootNames: candidates.map((candidate) => candidate.barrel),
+		rootNames: [
+			...new Set([...configuration.rootNames, ...candidates.map((candidate) => candidate.barrel)]),
+		],
 		options: configuration.options,
+		...(configuration.projectReferences !== undefined
+			? { projectReferences: configuration.projectReferences }
+			: {}),
 	});
 	const checker = program.getTypeChecker();
 	for (const candidate of candidates) {
@@ -291,10 +480,10 @@ function checkCompilerGroup(
 			report.violations.push(`${candidate.specPath}: barrel is not a TypeScript module`);
 			continue;
 		}
-		const unresolved = unresolvedReexports(root, sourceFile, checker);
-		if (unresolved.length > 0) {
-			for (const edge of unresolved) {
-				report.violations.push(`${candidate.specPath}: re-export could not be resolved (${edge})`);
+		const exportIssues = exportGraphIssues(root, moduleSymbol, checker, program);
+		if (exportIssues.length > 0) {
+			for (const issue of exportIssues) {
+				report.violations.push(`${candidate.specPath}: ${issue}`);
 			}
 			continue;
 		}
