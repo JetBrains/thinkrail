@@ -1,6 +1,5 @@
 export {
 	ensureWatch,
-	isIgnoredPath,
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
 	setWatchPublisher,

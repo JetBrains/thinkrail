@@ -49,7 +49,7 @@
 		"smoke:desktop:installer": "bun apps/desktop/installerSmoke.ts",
 		"smoke:subagents": "bun scripts/smoke-pure-pi-subagents.ts",
 		"typecheck": "turbo run typecheck",
-		"test": "turbo run test && bun test ./scripts/",
+		"test": "bun test ./scripts/ && turbo run test",
 		"lint": "biome check .",
 		"format": "biome check --write .",
 		"prepare": "husky",

@@ -148,7 +148,7 @@ Fast gates (also the husky pre-commit hook):
 ```bash
 bun run lint        # biome
 bun run typecheck   # tsc across all packages
-bun run test        # unit tests (bun test, per package)
+bun run test        # unit tests (root tooling + each package)
 ```
 
 End-to-end tests drive the real web UI against isolated hosts. The no-agent gate builds once and
