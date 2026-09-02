@@ -96,8 +96,8 @@ interface GitWorktreeEntry {
 	prunable: boolean;
 }
 
-function gitWorktreeEntries(repoPath: string): GitWorktreeEntry[] {
-	const listed = git(repoPath, ["worktree", "list", "--porcelain", "-z"], { raw: true });
+async function gitWorktreeEntries(repoPath: string): Promise<GitWorktreeEntry[]> {
+	const listed = await gitAsync(repoPath, ["worktree", "list", "--porcelain", "-z"], { raw: true });
 	if (!listed.ok) throw new Error(`git worktree list failed: ${listed.err}`);
 	const entries: GitWorktreeEntry[] = [];
 	for (const record of listed.out.split("\0\0")) {
@@ -116,9 +116,11 @@ function gitWorktreeEntries(repoPath: string): GitWorktreeEntry[] {
 	return entries;
 }
 
-export function listExistingWorktrees(projectId: string): ExistingWorktreeCandidate[] {
+export async function listExistingWorktrees(
+	projectId: string,
+): Promise<ExistingWorktreeCandidate[]> {
 	const project = openProjectById(projectId);
-	const entries = gitWorktreeEntries(project.path);
+	const entries = await gitWorktreeEntries(project.path);
 	const projectPath = canonicalPath(project.path);
 	const representedPaths = new Set([
 		...loadProjects().map((knownProject) => canonicalPath(knownProject.path)),
@@ -133,14 +135,18 @@ export function listExistingWorktrees(projectId: string): ExistingWorktreeCandid
 	});
 }
 
-export function openExistingWorktree(projectId: string, requestedPath: string): Workspace {
+export async function openExistingWorktree(
+	projectId: string,
+	requestedPath: string,
+): Promise<Workspace> {
 	const project = openProjectById(projectId);
 	if (!requestedPath) throw new Error("An existing worktree path is required");
 	const wantedPath = canonicalPath(requestedPath);
 	const projectPath = canonicalPath(project.path);
 	if (wantedPath === projectPath) return ensureDefaultWorkspace(project);
 
-	const entry = gitWorktreeEntries(project.path).find(
+	const entries = await gitWorktreeEntries(project.path);
+	const entry = entries.find(
 		(candidate) => !candidate.prunable && canonicalPath(candidate.path) === wantedPath,
 	);
 	if (!entry) throw new Error("The selected path is not a registered worktree of this project");
@@ -191,17 +197,22 @@ function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: st
 	return true;
 }
 
-function diffStats(ws: Workspace): DiffStats | undefined {
-	const result = git(ws.worktreePath, changedFileArgs(resolveDiffRange(ws), "--shortstat"));
-	if (!result.ok) {
+async function diffStats(ws: Workspace): Promise<DiffStats | undefined> {
+	try {
+		const result = await gitAsync(
+			ws.worktreePath,
+			changedFileArgs(await resolveDiffRange(ws), "--shortstat"),
+		);
+		if (!result.ok) throw new Error(result.err);
+		if (!result.out) return { added: 0, removed: 0 };
+		return {
+			added: Number(/(\d+) insertion/.exec(result.out)?.[1] ?? 0),
+			removed: Number(/(\d+) deletion/.exec(result.out)?.[1] ?? 0),
+		};
+	} catch {
 		log.warn(`git diff --shortstat failed for workspace ${ws.id}`);
 		return undefined;
 	}
-	if (!result.out) return { added: 0, removed: 0 };
-	return {
-		added: Number(/(\d+) insertion/.exec(result.out)?.[1] ?? 0),
-		removed: Number(/(\d+) deletion/.exec(result.out)?.[1] ?? 0),
-	};
 }
 
 export async function createWorkspace(
@@ -228,12 +239,11 @@ export async function createWorkspace(
 	const remoteBase = remoteTrackingRef(baseBranch);
 	const baseMissing = () => remoteRefOid(project.path, baseBranch) === null;
 	if (remoteBase && baseMissing()) {
-		const fetched = await gitAsync(project.path, [
-			"fetch",
-			"origin",
-			"--",
-			baseBranch.slice("origin/".length),
-		]);
+		const fetched = await gitAsync(
+			project.path,
+			["fetch", "origin", "--", baseBranch.slice("origin/".length)],
+			{ network: true },
+		);
 		if (baseMissing())
 			throw new Error(
 				fetched.ok
@@ -369,9 +379,10 @@ export function refreshUserOwnedWorkspace(workspaceId: string): void {
 export function renameWorkspace(
 	id: string,
 	requestedName: string,
-	opts: { lock?: boolean } = {},
+	opts: { lock?: boolean; renameBranch?: boolean } = {},
 ): Workspace {
 	const lock = opts.lock ?? true;
+	const renameBranch = opts.renameBranch ?? true;
 	const ws = loadWorkspaces().find((w) => w.id === id);
 	if (!ws) throw new Error(`Unknown workspace: ${id}`);
 	const project = getProjects().find((p) => p.id === ws.projectId);
@@ -382,9 +393,10 @@ export function renameWorkspace(
 		throw new Error("An existing worktree cannot be renamed by ThinkRail");
 	const displayName = toDisplayName(requestedName);
 	if (!displayName) throw new Error(`Invalid workspace name: ${requestedName}`);
-	const wanted = toBranch(displayName);
+	const wanted = renameBranch ? toBranch(displayName) : ws.branch;
 	const branch = wanted === ws.branch ? ws.branch : uniqueBranch(project, wanted);
-	if (branch !== ws.branch) {
+	const branchChanged = branch !== ws.branch;
+	if (branchChanged) {
 		const moved = git(project.path, ["branch", "-m", ws.branch, branch]);
 		if (!moved.ok) throw new Error(`git branch -m failed: ${moved.err}`);
 	}
@@ -393,15 +405,17 @@ export function renameWorkspace(
 	const target = all.find((w) => w.id === id);
 	if (!target) throw new Error(`Unknown workspace: ${id}`);
 	const repointed: Workspace[] = [];
-	for (const w of all) {
-		if (w.projectId !== target.projectId || w.id === target.id) continue;
-		const changed = w.baseBranch === ws.branch || w.diffBase === ws.branch;
-		if (w.baseBranch === ws.branch) w.baseBranch = branch;
-		if (w.diffBase === ws.branch) w.diffBase = branch;
-		if (changed) repointed.push(w);
+	if (branchChanged) {
+		for (const w of all) {
+			if (w.projectId !== target.projectId || w.id === target.id) continue;
+			const changed = w.baseBranch === ws.branch || w.diffBase === ws.branch;
+			if (w.baseBranch === ws.branch) w.baseBranch = branch;
+			if (w.diffBase === ws.branch) w.diffBase = branch;
+			if (changed) repointed.push(w);
+		}
+		if (target.baseBranch === ws.branch) target.baseBranch = branch;
+		if (target.diffBase === ws.branch) target.diffBase = branch;
 	}
-	if (target.baseBranch === ws.branch) target.baseBranch = branch;
-	if (target.diffBase === ws.branch) target.diffBase = branch;
 	target.name = displayName;
 	target.branch = branch;
 	if (lock) target.renamed = true;
@@ -443,10 +457,10 @@ export function setWorkspaceDiffBase(id: string, ref: string | null): Workspace 
 	return ws;
 }
 
-export function listWorkspaces(
+export async function listWorkspaces(
 	projectId: string,
 	opts: { includeDiffStats?: boolean } = {},
-): Workspace[] {
+): Promise<Workspace[]> {
 	const project = getProjects().find((p) => p.id === projectId);
 	if (project) ensureDefaultWorkspace(project);
 	for (const workspace of loadWorkspaces()) {
@@ -454,13 +468,27 @@ export function listWorkspaces(
 			refreshUserOwnedWorkspace(workspace.id);
 		}
 	}
-	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
-	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
+	const rows = projectRows(projectId);
 	if (opts.includeDiffStats === false) return rows;
-	return rows.map((w) => {
-		const stats = diffStats(w);
+	const statsByKey = new Map(
+		await Promise.all(rows.map(async (w) => [workspaceDiffKey(w), await diffStats(w)] as const)),
+	);
+	return projectRows(projectId).map((w) => {
+		const stats = statsByKey.get(workspaceDiffKey(w));
 		return stats ? { ...w, diffStats: stats } : w;
 	});
+}
+
+function projectRows(projectId: string): Workspace[] {
+	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
+	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
+	return rows;
+}
+
+export function workspaceDiffKey(
+	ws: Pick<Workspace, "id" | "worktreePath" | "baseBranch" | "diffBase">,
+): string {
+	return `${ws.id}\u0000${ws.worktreePath}\u0000${ws.baseBranch}\u0000${ws.diffBase ?? ""}`;
 }
 
 export function listWorkspaceRecords(projectId: string): Workspace[] {
@@ -494,9 +522,9 @@ export function removeWorkspace(id: string): void {
 	if (ws) reclaimWorktree(ws);
 }
 
-export function workspaceDiffStats(id: string): DiffStats {
+export async function workspaceDiffStats(id: string): Promise<DiffStats> {
 	const ws = getWorkspace(id);
-	const stats = diffStats(ws);
+	const stats = await diffStats(ws);
 	if (!stats) throw new Error(`Could not read the diff stats of ${ws.name}`);
 	return stats;
 }

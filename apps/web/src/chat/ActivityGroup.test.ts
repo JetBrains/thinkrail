@@ -55,7 +55,9 @@ describe("activity disclosure summaries", () => {
 			live: false,
 		};
 
-		const markup = renderToStaticMarkup(ChatTurnView({ row }));
+		const markup = renderToStaticMarkup(
+			ChatTurnView({ row, agentResponded: false, isFinalAnswer: false }),
+		);
 
 		expect(markup).toContain('data-testid="activity-group"');
 		expect(markup).toContain('data-activity-node-id="activity:a"');
@@ -65,7 +67,13 @@ describe("activity disclosure summaries", () => {
 		expect(markup).not.toContain(">Activity<");
 		expect(markup).not.toContain("inspect first");
 
-		const liveMarkup = renderToStaticMarkup(ChatTurnView({ row: { ...row, live: true } }));
+		const liveMarkup = renderToStaticMarkup(
+			ChatTurnView({
+				row: { ...row, live: true },
+				agentResponded: false,
+				isFinalAnswer: false,
+			}),
+		);
 		expect(liveMarkup).toContain('data-activity-node-label="4 steps"');
 	});
 });

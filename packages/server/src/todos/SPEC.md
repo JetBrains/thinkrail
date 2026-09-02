@@ -37,10 +37,27 @@ V1 (the chat-plan UX this feeds: [[submodule-web-chat]]'s "Chat TODO plan").
 `host/server.ts` tees `isTodoToolEnd` off the session event stream and fires
 `maybeAttachChangeArtifacts(workspaceId, sessionId)` off the publish path (`void` — it runs git writes).
 Reconciles are **serialized per workspace** (a promise chain) so two quick `todo_*` ends can't race the
-index mid-commit; the whole path is best-effort and never throws into the event stream.
+index mid-commit. Every `maybeAttachChangeArtifacts` call first inspects the fresh plan and synchronously
+captures any newly `in_progress` window **before enqueueing**; that stays true when an older reconcile
+already occupies the queue or a done item precedes the active one. The queued pass never opens a missing
+window in production — missing means capture failed, so later completion degrades to the no-baseline
+path-list fallback rather than excluding work from a late baseline. The
+whole path is best-effort and never throws into the event stream. The same chain serializes **every host
+plan/sidecar writer** — the UI's `todo.add` / `todo.update` / `todo.remove` and `session.delete`'s window
+removal enqueue behind any in-flight reconcile (`enqueueTodoMutation`) — because a reconcile reads plan +
+baselines, awaits git, and ends with a whole-map baseline write: an unqueued removal landing inside that
+window would be resurrected by the stale write, exactly the permanent-orphan case below. Agent-side
+`todo_*` plan writes can't be queued (they happen inside pi), so a reconcile fingerprints both the plan
+and persisted baseline sidecar it read and re-checks the authoritative fingerprint before each
+corresponding write. Drift aborts that stale pass before it can open a too-late baseline, commit a
+reopened item, erase an externally captured/shared window, or overwrite newer artifacts; the
+agent tool's already-enqueued follow-up reconcile operates on the new plan. Each successfully reconciled
+item checkpoints its baseline add/drop before the loop can await Git for the next item, so later drift
+cannot roll back an earlier item's completed window.
 
 On `in_progress` it **opens the item's work window**: a baseline of the worktree's **uncommitted**
-changed-path set + the current `HEAD` sha, **persisted** in a host-owned sidecar next to the todos JSON
+changed-path set + the current `HEAD` sha, captured through the git module's deliberately synchronous
+`gitUncommittedPaths` leaf before the tool-end publisher returns, then **persisted** in a host-owned sidecar next to the todos JSON
 (`.thinkrail/context/todos/<sessionId>.baselines.json`, read-modify-write like the store) — so a host
 restart mid-item changes nothing; `head` is recorded for future window-commit attribution, unused today.
 A window opening while **another chat** already has one records `shared: true` and marks that other
@@ -156,7 +173,9 @@ completion note, agent-authored via `todo_plan_summary`; item `summary` rides th
   composed in `host`** (this module never imports `agent`): `followUpSession` into the item's **own chat**
   (per-session plan/windows force it), fired detached with the review-send pattern — a pre-turn rejection
   calls **`rollbackTodoFix`** (restores the record the request replaced) and surfaces in the chat, so an
-  undelivered fix request never strands as `changes_requested`.
+  undelivered fix request never strands as `changes_requested`. Manual requests carry an opaque
+  `requestId`; compensation restores the previous record only while that exact request is still current,
+  so a delayed send failure cannot erase a newer verdict or retry.
 
 **The agent reviewer ([[submodule-server-reviews]] is the findings' home).** `todo.startReview` puts a
 reviewable item in front of the plan's **dedicated reviewer chat** — one per worker session, pinned as
@@ -207,7 +226,9 @@ it resolves immediately when nothing is in flight, and never rejects.
   0),
   `addTodo(...) → TodoItem` (validates a non-empty title; tags `origin: "user"`),
   `updateTodo(...) → TodoItem` (throws on unknown id → a `{ ok:false }` WS response),
-  `removeTodo(...) → { ok:true }` (idempotent; **throws while the item is `pending` an agent review** —
+  `removeTodo(...) → Promise<{ ok:true }>` (idempotent; enqueued on the per-workspace reconcile chain —
+  see the sidecar-writer serialization above — as is `removeSessionTodoWindows`;
+  **throws while the item is `pending` an agent review** —
   a removal mid-review would strand `host`'s in-flight registration (`currentReview`, the per-plan
   latch — both memory-only, cleared only by the reviewer session's settle) and let a stray
   `add_review_comment` file a finding against an id that no longer exists; the client disables Remove

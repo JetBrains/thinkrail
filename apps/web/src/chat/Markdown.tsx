@@ -14,12 +14,14 @@ export function Markdown({
 	className = CHAT_PROSE,
 	remarkPlugins,
 	rehypePlugins,
+	urlTransform,
 	components,
 }: {
 	text: string;
 	className?: string;
 	remarkPlugins?: ComponentProps<typeof ReactMarkdown>["remarkPlugins"];
 	rehypePlugins?: ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
+	urlTransform?: ComponentProps<typeof ReactMarkdown>["urlTransform"];
 	components?: ComponentProps<typeof ReactMarkdown>["components"];
 }) {
 	return (
@@ -27,6 +29,7 @@ export function Markdown({
 			<ReactMarkdown
 				remarkPlugins={remarkPlugins ? [remarkGfm, ...remarkPlugins] : [remarkGfm]}
 				rehypePlugins={rehypePlugins}
+				urlTransform={urlTransform}
 				components={{ code: CodeBlock, a: Anchor, table: Table, ...components }}
 			>
 				{text}

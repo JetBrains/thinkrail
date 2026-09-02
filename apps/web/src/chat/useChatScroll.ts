@@ -23,6 +23,7 @@ import {
 	type ReadingBandScrollBounds,
 	type ReadingBandSnapshot,
 } from "./readingBand";
+import { type RevealBlock, revealScrollTop } from "./scrollGeometry";
 
 interface ScrollContainerProps {
 	onFocusCapture: FocusEventHandler;
@@ -54,6 +55,7 @@ export interface ChatScroll {
 	scrollToLatest: () => void;
 	armImmediateTurn: () => void;
 	releaseFollow: () => void;
+	revealElement: (target: HTMLElement, block?: RevealBlock) => void;
 	runwayActive: boolean;
 	followState: "following" | "detached";
 	containerProps: ScrollContainerProps;
@@ -409,6 +411,28 @@ export function useChatScroll(
 		controller.armImmediateTurn();
 	}, [clearReturnIntent, controller]);
 
+	const revealElement = useCallback(
+		(target: HTMLElement, block: RevealBlock = "nearest") => {
+			const scroller = scrollerRef.current;
+			if (!scroller?.contains(target)) return;
+			clearReturnIntent();
+			controller.cancelMovement();
+			const viewportRect = scroller.getBoundingClientRect();
+			const targetRect = target.getBoundingClientRect();
+			scroller.scrollTop = revealScrollTop(
+				{
+					...scrollBounds(scroller),
+					viewportTop: viewportRect.top,
+					viewportBottom: viewportRect.bottom,
+					targetTop: targetRect.top,
+					targetBottom: targetRect.bottom,
+				},
+				block,
+			);
+		},
+		[clearReturnIntent, controller],
+	);
+
 	const releaseFollow = readerLeft;
 	const scrollToLatest = useCallback(() => {
 		clearReturnIntent();
@@ -583,6 +607,7 @@ export function useChatScroll(
 		scrollToLatest,
 		armImmediateTurn,
 		releaseFollow,
+		revealElement,
 		runwayActive: snapshot.runway,
 		followState: snapshot.following ? "following" : "detached",
 		containerProps: {

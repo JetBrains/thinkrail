@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Workspace } from "@thinkrail/contracts";
+import { type Workspace, WS_CHANNELS } from "@thinkrail/contracts";
 import { saveTerminalSessions, saveWorkspaces } from "../persistence";
 import {
 	attachTerminal,
@@ -19,11 +19,100 @@ import {
 	writeTerminal,
 } from "./terminalManager";
 
+interface PublishedFrame {
+	clientKey: string;
+	channel: string;
+	data: unknown;
+}
+
 const WS = "ws-1";
+const TERMINAL_CONDITION_TIMEOUT_MS = 15_000;
+const TERMINAL_TEST_TIMEOUT_MS = TERMINAL_CONDITION_TIMEOUT_MS * 3 + 5_000;
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
-let pushed: { clientKey: string; channel: string; data: unknown }[] = [];
+let pushed: PublishedFrame[] = [];
+const terminalFrameSignals = new Set<() => void>();
+
+function isPushForTerminal(data: unknown, id: string): data is { id: string } {
+	return (
+		typeof data === "object" &&
+		data !== null &&
+		"id" in data &&
+		typeof data.id === "string" &&
+		data.id === id
+	);
+}
+
+function terminalOutput(id: string): string {
+	return pushed.reduce((output, frame) => {
+		if (
+			frame.channel !== WS_CHANNELS.terminalData ||
+			!isPushForTerminal(frame.data, id) ||
+			!("data" in frame.data) ||
+			typeof frame.data.data !== "string"
+		) {
+			return output;
+		}
+		return output + frame.data.data;
+	}, "");
+}
+
+function waitForTerminalCondition(
+	id: string,
+	description: string,
+	ready: () => boolean,
+): Promise<void> {
+	if (ready()) return Promise.resolve();
+	return new Promise((resolve, reject) => {
+		const signal = () => {
+			if (!ready()) return;
+			clearTimeout(timeout);
+			terminalFrameSignals.delete(signal);
+			resolve();
+		};
+		const timeout = setTimeout(() => {
+			terminalFrameSignals.delete(signal);
+			reject(
+				new Error(
+					`Timed out after ${TERMINAL_CONDITION_TIMEOUT_MS}ms waiting for ${description} for terminal ${id}`,
+				),
+			);
+		}, TERMINAL_CONDITION_TIMEOUT_MS);
+		terminalFrameSignals.add(signal);
+		signal();
+	});
+}
+
+function waitForTerminalOutput(id: string, marker?: string): Promise<void> {
+	const description = marker === undefined ? "initial output" : `output containing ${marker}`;
+	return waitForTerminalCondition(id, description, () => {
+		const output = terminalOutput(id);
+		return marker === undefined ? output.length > 0 : output.includes(marker);
+	});
+}
+
+function waitForTerminalExit(id: string): Promise<void> {
+	return waitForTerminalCondition(id, "exit", () =>
+		pushed.some(
+			(frame) => frame.channel === WS_CHANNELS.terminalExit && isPushForTerminal(frame.data, id),
+		),
+	);
+}
+
+async function exitTerminalWithMarker(
+	id: string,
+	markerSuffix: string,
+	clientKey: string,
+): Promise<string> {
+	await waitForTerminalOutput(id);
+	const marker = `TR_${markerSuffix}`;
+	writeTerminal(id, `printf 'TR_%s\\n' '${markerSuffix}'\r`, clientKey);
+	await waitForTerminalOutput(id, marker);
+	writeTerminal(id, "exit\r", clientKey);
+	await waitForTerminalExit(id);
+	return marker;
+}
 
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-terminal-test-"));
@@ -32,8 +121,10 @@ beforeEach(() => {
 	mkdirSync(worktreePath);
 	saveWorkspaces([{ id: WS, worktreePath } as Workspace]);
 	pushed = [];
+	terminalFrameSignals.clear();
 	setTerminalPublisher((clientKey, channel, data) => {
 		pushed.push({ clientKey, channel, data });
+		for (const signal of terminalFrameSignals) signal();
 		return "delivered";
 	});
 });
@@ -215,36 +306,44 @@ test("a shell with something running refuses to close until forced", async () =>
 	expect(listTerminals(WS)).toHaveLength(0);
 });
 
-test("a host restart gives the tabs back with fresh shells showing the old output", async () => {
-	const first = attachTerminal(WS, "tab-a", "client-1", { title: "Kept" });
-	await Bun.sleep(500);
-	persistTerminalSessions();
-	resetTerminalState();
+test(
+	"a host restart gives the tabs back with fresh shells showing the old output",
+	async () => {
+		const first = attachTerminal(WS, "tab-a", "client-1", { title: "Kept" });
+		await waitForTerminalOutput(first.id);
+		persistTerminalSessions();
+		resetTerminalState();
 
-	expect(listTerminals(WS)).toHaveLength(0);
-	reviveTerminalSessions();
-	expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Kept" }]);
+		expect(listTerminals(WS)).toHaveLength(0);
+		reviveTerminalSessions();
+		expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Kept" }]);
 
-	const revived = attachTerminal(WS, "tab-a", "client-1");
-	expect(revived.created).toBe(true);
-	expect(revived.id).not.toBe(first.id);
-	expect(revived.replay ?? "").not.toBe("");
-});
+		const revived = attachTerminal(WS, "tab-a", "client-1");
+		expect(revived.created).toBe(true);
+		expect(revived.id).not.toBe(first.id);
+		expect(revived.replay ?? "").not.toBe("");
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
 
-test("a revived recording is served once, not to every later attach", async () => {
-	attachTerminal(WS, "tab-a", "client-1");
-	await Bun.sleep(500);
-	persistTerminalSessions();
-	resetTerminalState();
-	reviveTerminalSessions();
+test(
+	"a revived recording is served once, not to every later attach",
+	async () => {
+		const first = attachTerminal(WS, "tab-a", "client-1");
+		await waitForTerminalOutput(first.id);
+		persistTerminalSessions();
+		resetTerminalState();
+		reviveTerminalSessions();
 
-	const revived = attachTerminal(WS, "tab-a", "client-1");
-	closeTerminalTab(WS, "tab-a", true);
-	const fresh = attachTerminal(WS, "tab-a", "client-1");
+		const revived = attachTerminal(WS, "tab-a", "client-1");
+		closeTerminalTab(WS, "tab-a", true);
+		const fresh = attachTerminal(WS, "tab-a", "client-1");
 
-	expect(revived.replay ?? "").not.toBe("");
-	expect(fresh.replay ?? "").toBe("");
-});
+		expect(revived.replay ?? "").not.toBe("");
+		expect(fresh.replay ?? "").toBe("");
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
 
 test("persisting writes nothing for a workspace whose tabs were all closed", () => {
 	attachTerminal(WS, "tab-a", "client-1");
@@ -318,34 +417,34 @@ test("the attached client is not told it is displaced", async () => {
 	expect(pushed.filter((frame) => frame.channel === "terminal.detached")).toHaveLength(0);
 });
 
-test("a tab keeps its last screen when its shell exits on its own", async () => {
-	const first = attachTerminal(WS, "tab-a", "client-1");
-	await Bun.sleep(400);
-	writeTerminal(first.id, "echo TR_BEFORE_CRASH\r", "client-1");
-	await Bun.sleep(600);
-	writeTerminal(first.id, "exit\r", "client-1");
-	await Bun.sleep(800);
+test(
+	"a tab keeps its last screen when its shell exits on its own",
+	async () => {
+		const first = attachTerminal(WS, "tab-a", "client-1");
+		const marker = await exitTerminalWithMarker(first.id, "BEFORE_CRASH", "client-1");
 
-	expect(listTerminals(WS)).toHaveLength(1);
-	const next = attachTerminal(WS, "tab-a", "client-1");
-	expect(next.created).toBe(true);
-	expect(next.replay ?? "").toContain("TR_BEFORE_CRASH");
-});
+		expect(listTerminals(WS)).toHaveLength(1);
+		const next = attachTerminal(WS, "tab-a", "client-1");
+		expect(next.created).toBe(true);
+		expect(next.replay ?? "").toContain(marker);
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
 
-test("a dead tab's last screen survives a host restart", async () => {
-	const first = attachTerminal(WS, "tab-a", "client-1");
-	await Bun.sleep(400);
-	writeTerminal(first.id, "echo TR_LAST_WORDS\r", "client-1");
-	await Bun.sleep(600);
-	writeTerminal(first.id, "exit\r", "client-1");
-	await Bun.sleep(800);
+test(
+	"a dead tab's last screen survives a host restart",
+	async () => {
+		const first = attachTerminal(WS, "tab-a", "client-1");
+		const marker = await exitTerminalWithMarker(first.id, "LAST_WORDS", "client-1");
 
-	persistTerminalSessions();
-	resetTerminalState();
-	reviveTerminalSessions();
+		persistTerminalSessions();
+		resetTerminalState();
+		reviveTerminalSessions();
 
-	expect(attachTerminal(WS, "tab-a", "client-1").replay ?? "").toContain("TR_LAST_WORDS");
-});
+		expect(attachTerminal(WS, "tab-a", "client-1").replay ?? "").toContain(marker);
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
 
 describe("membership survives an ungraceful exit", () => {
 	test("a tab closed before a crash does not come back", () => {

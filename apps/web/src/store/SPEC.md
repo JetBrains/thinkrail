@@ -19,7 +19,9 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
 - **Owns:** `appStore.ts` — connection/projects/workspaces state + setters. Connection state has two
   monotonic edges with different meanings: `setStatus("connected")` advances **`connectionGeneration`**
   for reconnect hydration, while **`welcomeGeneration`** advances only when one complete
-  `server.welcome` snapshot lands. **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
+  `server.welcome` snapshot lands. Every connection-status transition clears `protocolVersion`, so UI
+  capabilities remain unavailable between sockets and until the current socket's welcome is installed.
+  **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
   config?)`** installs protocol + both sorted project views + optional config + navigation repair and then
   advances that readiness edge in one Zustand write; route validation never observes a protocol-only or
   project-only intermediate state. `installProjectSnapshot` remains the project-only primitive for focused

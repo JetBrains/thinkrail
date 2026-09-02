@@ -1,6 +1,6 @@
 import type { GitDiffScope, Workspace } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { git } from "./gitExec";
+import { type GitResult, git, gitAsync } from "./gitExec";
 
 export function diffBaseRef(ws: Pick<Workspace, "baseBranch" | "diffBase">): string {
 	return ws.diffBase ?? ws.baseBranch;
@@ -16,6 +16,11 @@ export interface DiffRange {
 
 const OID = /^[0-9a-f]{4,64}$/;
 
+function throwExecutionFailure(result: GitResult): void {
+	if (result.failure)
+		throw new Error(`Could not resolve the diff range: ${result.err || "git failed"}`);
+}
+
 export function resolveCommitOid(worktreePath: string, ref: string): string | null {
 	const out = git(worktreePath, [
 		"rev-parse",
@@ -27,10 +32,10 @@ export function resolveCommitOid(worktreePath: string, ref: string): string | nu
 	return out.ok && out.out ? out.out : null;
 }
 
-export function resolveDiffRange(
+export async function resolveDiffRange(
 	ws: Pick<Workspace, "baseBranch" | "diffBase" | "worktreePath">,
 	scope: GitDiffScope = { kind: "branch" },
-): DiffRange {
+): Promise<DiffRange> {
 	if (scope.kind === "uncommitted") {
 		return {
 			listPrefix: ["diff"],
@@ -42,12 +47,13 @@ export function resolveDiffRange(
 	}
 	if (scope.kind === "pinned") {
 		if (!OID.test(scope.baseRef)) throw new Error(`Not a commit id: ${scope.baseRef}`);
-		const resolved = git(ws.worktreePath, [
+		const resolved = await gitAsync(ws.worktreePath, [
 			"rev-parse",
 			"--verify",
 			"--quiet",
 			`${scope.baseRef}^{commit}`,
 		]);
+		throwExecutionFailure(resolved);
 		if (!resolved.ok || !resolved.out)
 			throw new CodedError("UNKNOWN_COMMIT", `Unknown commit: ${scope.baseRef}`);
 		return {
@@ -60,16 +66,23 @@ export function resolveDiffRange(
 	}
 	if (scope.kind === "commit") {
 		if (!OID.test(scope.sha)) throw new Error(`Not a commit id: ${scope.sha}`);
-		const resolved = git(ws.worktreePath, [
+		const resolved = await gitAsync(ws.worktreePath, [
 			"rev-parse",
 			"--verify",
 			"--quiet",
 			`${scope.sha}^{commit}`,
 		]);
+		throwExecutionFailure(resolved);
 		if (!resolved.ok || !resolved.out)
 			throw new CodedError("UNKNOWN_COMMIT", `Unknown commit: ${scope.sha}`);
 		const sha = resolved.out;
-		const parent = git(ws.worktreePath, ["rev-parse", "--verify", "--quiet", `${sha}^^{commit}`]);
+		const parent = await gitAsync(ws.worktreePath, [
+			"rev-parse",
+			"--verify",
+			"--quiet",
+			`${sha}^^{commit}`,
+		]);
+		throwExecutionFailure(parent);
 		if (!parent.ok || !parent.out) {
 			return {
 				listPrefix: ["show", "--format="],
@@ -88,7 +101,13 @@ export function resolveDiffRange(
 		};
 	}
 	const base = diffBaseRef(ws);
-	const mergeBase = git(ws.worktreePath, ["merge-base", "--end-of-options", base, "HEAD"]);
+	const mergeBase = await gitAsync(ws.worktreePath, [
+		"merge-base",
+		"--end-of-options",
+		base,
+		"HEAD",
+	]);
+	throwExecutionFailure(mergeBase);
 	const forkPoint = mergeBase.ok && mergeBase.out ? mergeBase.out : base;
 	return {
 		listPrefix: ["diff"],
@@ -102,6 +121,14 @@ export function resolveDiffRange(
 export function changedFileArgs(
 	range: DiffRange,
 	mode: "--name-status" | "--numstat" | "--shortstat",
+	nul = false,
 ): string[] {
-	return [...range.listPrefix, mode, "--end-of-options", ...range.listRevs, "--"];
+	return [
+		...range.listPrefix,
+		mode,
+		...(nul ? ["-z"] : []),
+		"--end-of-options",
+		...range.listRevs,
+		"--",
+	];
 }

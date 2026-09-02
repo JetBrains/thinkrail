@@ -95,8 +95,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   feature modules never track), and
   `stop()` → immediate agent-session cleanup, then `persistTerminalSessions()` **before**
   `closeAllTerminals()`, then watcher/socket disposal; `shutdown()` memoizes one asynchronous graceful
-  path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` first, then `stop()` and
-  ownership-lease close). The bounded settle includes hidden delegation children even when their parent is
+  path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` first, then `stop()`). The
+  bounded settle includes hidden delegation children even when their parent is
   idle, plus child cascades already started by a concurrent removal, so graceful quit does not let a
   background child lose its terminal abort/tool result; `crashLog.ts` (`installCrashLog` — the `uncaughtException`/`unhandledRejection` report
   appended to `<dataDir>/logs/crash.log` and echoed to stderr, then `exit(1)`: in-process pi means such a
@@ -104,19 +104,19 @@ channel fan-out, and the process-boot wrapper both launchers share.
   Never a recovery, and never installed under `NODE_ENV=test` — a unit-test process reports its own
   faults. It renders the throw via the `log` module's `describeError`, so crash reports and log lines
   agree, but keeps its own sync append — the death path must not depend on the logger's state);
-  `ownership.ts` (canonicalize the data directory, hash its fingerprint into a dedicated deterministic
-  loopback candidate range, hold an exclusive `node:net` listener, and answer a bounded versioned
-  fingerprint handshake; same-owner candidates refuse, different owners advance, and an occupied
-  unresponsive candidate fails closed); `boot.ts` (`bootHost` → acquire ownership before any mutable host
-  initialization, await `initLogging` — debug level when the launcher passed `verbose` — then install the
-  crash report, resolve the login-shell PATH, pre-warm the same
-  Central watcher/runtime initialization before choosing the serving port, await `createServer` (which
-  idempotently enforces runtime bootstrap for low-level embedders), attach the lease to
-  `RunningServer.shutdown()`, and write the `listening on` info line (see `submodule-server-log`). Its
+  `boot.ts` (`bootHost` → await `initLogging` — debug level when the launcher passed `verbose` — then
+  install the crash report, resolve the login-shell PATH, pre-warm the same Central watcher/runtime
+  initialization before choosing the serving port, await `createServer` (which idempotently enforces
+  runtime bootstrap for low-level embedders), and write the `listening on` info line (see
+  `submodule-server-log`). Its
   SIGINT/SIGTERM handlers await that same shutdown before process exit. Settling aborts streaming sessions
   and waits bounded so pi persists their "Operation aborted" tool results and transcripts land paired; an
-  immediate exit would strand mid-tool transcripts on restart repair); `handlers.ts` (the WS method→handler registry, including the **Skills-manager set**:
-  `skill.list` / `skills.state` / `project.skills` build the admission context from `projects` (+ the
+  immediate exit would strand mid-tool transcripts on restart repair); `handlers.ts` (the WS method→handler
+  registry, including `workspace.rename` as the direct manual door into
+  `renameWorkspace(id, name, { lock: true, renameBranch: false })` — the workspaces module changes only the
+  display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
+  separately — and the **Skills-manager set**: `skill.list` / `skills.state` / `project.skills` build
+  the admission context from `projects` (+ the
   workspace's `skillOverrides` when workspace-scoped) and pass it into agent's `listSkillCommands`/
   `listSkillCatalog`; `session.list` decorates agent's `listSessions` summaries with
   `openTodos: countOpenTodos(…)` per session (a host-only composition of `agent` + `todos` — `agent`
@@ -129,15 +129,25 @@ channel fan-out, and the process-boot wrapper both launchers share.
   does (`itemFixFindings` — this item's unstale agent-authored drafts by `origin`, `markCommentsSent` +
   `buildSendPackage` under `withReviewLock`): with auto-fix off, the verdict path sends nothing, so
   without this the worker never sees the reviewer's findings and they strand as drafts under a later
-  approve. The same pre-turn rejection also `rollbackSend`s them back to draft;
+  approve. Package rendering happens before those findings are marked sent; every preparation failure
+  identity-checks and rolls back exactly the `changes_requested` record this request wrote, plus any
+  marks, so it neither strands a failed request nor overwrites a newer decision. The same identity-safe
+  compensation runs on detached pre-turn rejection;
   **`todo.remove`** layers a host-side guard in front of `todos`' own, together covering the item's
   full in-flight lifetime — neither alone does: `removeTodo`'s durable `pending` mark covers
   `startTodoReview` (synchronous, before `currentReview` registers post-session-creation) through
   `review_verdict`, which clears it MID-turn; `isItemUnderActiveReview(sessionId, id)` reads
   `currentReview` (set once the reviewer session exists, live until `handleReviewerSettled`) and covers
   the tail `pending` misses — the reviewer's tool seams stay usable after the verdict, until the turn
-  actually settles. `handlers.ts`'s `todo.remove` checks `isItemUnderActiveReview` before ever calling
-  `removeTodo`, whose own `pending` check remains the front-edge guard. A `session.dispose` on a still-
+  actually settles. The host injects that in-memory guard into `removeTodo`, and the queued removal
+  evaluates it together with the durable guard immediately before deleting; checking before enqueue
+  would leave a wait-behind-reconcile window in which a review could start and reach a verdict. An
+  manual or automatic fix claims one in-memory per-item latch before its first await and remains part of
+  that guard through reflection/package preparation and fix-send acceptance/failure; overlapping manual
+  sends are rejected, and removing the item cannot send a captured fix package for a TODO that no longer
+  exists. The automatic verdict reads candidates before persisting `changes_requested` or clearing its
+  pending mark, so a failed async review read remains cleanup-visible and cannot wedge Review All. A
+  `session.dispose` on a still-
   streaming reviewer chat aborts it first (mirroring `deleteSession`/`removeWorkspaceSessions`) so the
   resulting settle event still reaches `handleReviewerSettled` before the session unsubscribes — without
   that, a closed tab would leak its `currentReview` entry for the process's life, wedging `todo.remove`
@@ -316,7 +326,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
     on-disk transcripts for the cwd) → `reclaimWorktree` (`git worktree remove`; a hard no-op for an
     external one). So the user never waits
     for the git subprocess + session abort. **Ordering holds:** terminals (sync) and sessions (bg, before
-    the reclaim) are down before the dir is deleted, since they hold it as cwd. Best-effort by contract —
+    the reclaim) are down before the dir is deleted, since they hold it as cwd, and the workspace's
+    todo-mutation queue is settled (`settleChangeArtifacts`) between the two — an in-flight reconcile's
+    plan/baseline writes land before the reclaim that sweeps them, never after it into a resurrected dir. Best-effort by contract —
     a failed background teardown is warn-logged, never thrown into the void (nothing awaits it), like
     the auto-rename tee. **Archive keeps the branch but not the chat:** the git branch stays (code is
     recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
@@ -330,13 +342,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   the agent can never `resolve_comment`. One queue per workspace, so a mutation issued mid-send simply
   happens after it.
   The package prompt is fired **detached** after the mark, so the lock only ever holds session
-  creation, and a failed operation releases it rather than poisoning the queue. Deliberately unlocked:
-  `review.get` (its load → re-anchor → persist is one synchronous pass, and hydration must not queue
-  behind a send) — plus the two mutations that don't
-  arrive over the wire, `reviews.resolveCommentFromAgent` (the agent-tool seam) and `reanchorWorkspace`
-  (the fs-watch tee): both are fully synchronous and re-read the snapshot from disk before writing, and
-  neither removes a comment nor closes the review, so landing in a send's gap can't invalidate the
-  package's ids.
+  creation, and a failed operation releases it rather than poisoning the queue. The reviewer/reflection
+  agent-tool seams (`add_review_comment`, `review_verdict`, `reflect_finding`) join the same lock: their
+  now-async review reads must not approve over, or save over, a concurrent finding. The reflected-fix
+  read→mark→render pass also stays under it, so Clear cannot replace the candidate IDs between those
+  stages. Deliberately unlocked: `review.get` (its load → re-anchor → persist is one synchronous pass,
+  and hydration must not queue behind a send) — plus the two mutations that remain fully synchronous,
+  `reviews.resolveCommentFromAgent` (the worker tool seam) and `reanchorWorkspace` (the fs-watch tee):
+  both re-read the snapshot from disk before writing, and neither removes a comment nor closes the
+  review, so landing in a send's gap can't invalidate the package's ids.
 - **A review send lands in the conversation already on screen, else the key's chat.** Both send
   handlers route through `sendToFileChat`: comments are grouped by `reviews.reviewSessionKey` (the
   anchor's path, or the review-level bucket for anchorless remarks — pinned like a file so a second
@@ -377,8 +391,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   low-latency event, not a durable queue: a reconnecting client's active-workspace `session.list` is the
   authoritative read-side repair for an event missed while its socket was down.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer` (including
-  idempotent `shutdown()`), `bootHost`, `BootHostOptions`, `BootedHost`, and the closed ownership-failure
-  type a launcher maps to its own presentation.
+  idempotent `shutdown()`), `bootHost`, `BootHostOptions`, and `BootedHost`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
   `boot.ts`); `persistence` (`dataDir` — where `crashLog.ts` writes); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile` for the `/files` route); Bun/Node.
@@ -401,11 +414,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `ws.send` to the single *attached* client (see [[submodule-server-terminal]]). Adding a terminal-style
   addressed channel means wiring a publisher, not a subscription.
 - The host is the single place features are wired together — features never reach back into it.
-- Ownership identity is the canonical data directory, not process name or app kind: CLI and desktop must
-  exclude one another for the same state. No timeout authorizes a second writer. Graceful close and process
-  death release the kernel listener; there is no stale artifact or force-unlock path.
+- Separate host processes do not coordinate mutable state or events. They may use the same data directory,
+  but each owns independent in-memory sessions, terminals, watchers, and connected clients; persistence
+  conflicts are accepted rather than serialized by the host.
 - `shutdown()` is safe under concurrent signal/native-quit calls: callers receive one promise, lifecycle
-  work runs once, and resource disposal/ownership release remain ordered after session settling.
+  work runs once, and resource disposal remains ordered after session settling.
 - **A send (prompt/steer/followUp/answerQuestion) is acked when ACCEPTED, not when the turn ends**
   (`ackSend`): pi's send methods resolve only at turn end, and a turn can outlive the client's request
   timeout (long tool rounds and multi-minute reasoning turns are routine) — awaiting completion would

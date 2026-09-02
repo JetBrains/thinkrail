@@ -6,6 +6,7 @@ import {
 } from "@remixicon/react";
 import type { GitCommit, GitDiffScope } from "@thinkrail/contracts";
 import { useRef, useState } from "react";
+import { LoadingRegion } from "@/components/Skeleton";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -96,7 +97,7 @@ export function ChangesScopeMenu({
 				<DropdownMenuSeparator />
 				<DropdownMenuLabel>Commits</DropdownMenuLabel>
 				{commits === null ? (
-					<DropdownMenuItem disabled>Loading commits…</DropdownMenuItem>
+					<LoadingRegion rows={3} label="Loading commits" className="px-8 py-4" />
 				) : commits.length === 0 ? (
 					<DropdownMenuItem disabled>No commits on this branch</DropdownMenuItem>
 				) : (

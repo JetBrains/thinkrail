@@ -23,9 +23,12 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
 
 ## Boundary
 
-- **Owns:** `listExistingWorktrees(projectId)` (parse `git worktree list --porcelain -z`; drop the project
-  folder, prunable registrations, and every path already represented in ThinkRail; branch-backed rows are
-  `available`, detached-HEAD ones `detached`), `openExistingWorktree(projectId, path)` (revalidate against
+- **Owns:** `listExistingWorktrees(projectId)` (**async** — parses `git worktree list --porcelain -z` read
+  through `gitAsync`, the same request-path-read rule `git/SPEC.md` states for `gitStatus`/`listCommits`:
+  this is the Existing-Worktree dialog's populate call, so a slow/large registry must not freeze the host's
+  event loop; drop the project folder, prunable registrations, and every path already represented in
+  ThinkRail; branch-backed rows are `available`, detached-HEAD ones `detached`), `openExistingWorktree(projectId, path)`
+  (**async** for the same worktree-list read; revalidate against
   the Git registry at the mutation door, comparing canonicalized paths; same-project retries are
   idempotent, cross-project cwd reuse is rejected; persist + emit `created` with `kind: "external"`, a
   directory-basename display name, `renamed: true`, and the repo default as its initial review target —
@@ -74,27 +77,35 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   where `name === branch`; **re-reads the registry after the awaited fallback fetch** before appending —
   the pre-await snapshot is stale by then, and saving it would clobber a concurrent list's Default-ensure
   (same discipline as `renameWorkspace`'s re-load after its git subprocess)),
-  `renameWorkspace` (**sync**; sets the **display `name`** (sanitized, casing preserved) and derives the
-  **git branch** from it via `toBranch`, uniqued against refs + worktree dirs, `git branch -m` from the
-  project repo — the branch ref moves and the worktree's HEAD follows, but the **worktree dir never moves**
-  (pi keys sessions by exact cwd; terminals/tabs are cwd'd there — the stale dir name is the accepted cost);
-  **`name` and `branch` deliberately differ** (e.g. `Fix Auth Redirect` / `fix-auth-redirect`) — the name
-  is display-only, never a path/id; only the branch is uniqued (display names may repeat, the branch
-  shown beneath the name in the nav disambiguates — see [[submodule-web-panels]]); **re-points sibling
-  records whose `baseBranch` **or `diffBase`** was the old branch** in the same save so their provenance stays
-  truthful and their diffs don't silently empty, and **emits `updated` for every record it changed** (the
-  target plus those siblings) — the server would be right either way, but an unbroadcast sibling leaves its
-  clients labelling `vs <old branch>` and keying reads on it until the next `workspace.list`;
-  **re-loads the records after the git subprocess** — a record that vanished meanwhile (archived / e2e
-  reset) aborts the save instead of resurrecting it; throws on unknown id or git failure — callers decide,
-  the auto-rename hook treats it as best-effort. `opts.lock` (default `true`) sets `renamed: true`,
-  marking the name deliberate so the auto-namer never touches it again — what a user rename and the
-  agentic auto-rename want; the host's **provisional naive rename** passes `lock: false` to rename name +
-  branch while leaving `renamed` unset, so the settled-turn agentic pass still refines it),
-  `listWorkspaces(projectId, { includeDiffStats? })` (complete authoritative membership/order after Default
-  ensure + user-owned folder-truth reconciliation; diff stats default **on** for compatibility, while
-  `includeDiffStats: false` skips the per-workspace `git diff --shortstat` fan-out for cold navigation —
-  automatic reload on a shared host must not synchronously diff every worktree), `listWorkspaceRecords`
+  `renameWorkspace` (**sync**; sets the sanitized, casing-preserved display `name`; `opts.lock` defaults
+  `true` and sets `renamed: true`, marking the choice deliberate so auto-naming never touches it again.
+  **`opts.renameBranch` defaults `true`** for the existing provisional + agentic auto-rename callers: the
+  branch is derived via `toBranch`, uniqued against refs + worktree dirs, and moved with `git branch -m` while
+  the **worktree dir never moves** (pi keys sessions and terminals/tabs by that exact cwd). The branch-moving
+  path re-points sibling records whose `baseBranch` or `diffBase` named the old branch, re-loads the registry
+  after the Git subprocess so a concurrent removal is not resurrected, saves once, and emits `updated` for
+  every changed record. The host's provisional naive pass combines `lock: false` with this default so the
+  settled-turn agentic pass can still refine it. The manual wire method instead passes
+  **`{ lock: true, renameBranch: false }`**: it changes only the display label, keeps `branch`, `worktreePath`,
+  `baseBranch`, and `diffBase` untouched, performs no Git mutation, and emits one full-snapshot `updated`.
+  **`name` and `branch` deliberately differ** after such a rename — the name is display-only and may repeat;
+  the branch shown beneath it disambiguates (see [[submodule-web-panels]]). Unknown/default/external ids and
+  invalid names still throw; callers decide presentation),
+  `listWorkspaces(projectId, { includeDiffStats? })` (**async**; complete authoritative membership/order
+  after Default ensure + user-owned folder-truth reconciliation — that sync prologue's load→mutate→save
+  completes before the first await; the diff-stat badges then resolve **in parallel through `gitAsync`**,
+  off the event loop, and **membership is re-read after the awaits** (the same stale-snapshot discipline
+  as the writers): a workspace created while the badges resolved must appear in this response, because its
+  `created` push may reach a client before this reply seeds that client's list, where a push into an
+  unlisted project is deliberately not folded — a mid-flight row ships without stats until the next list.
+  Cached stats attach to a fresh row **only when its diff-defining fields (`worktreePath`, `baseBranch`,
+  `diffBase`) still match the snapshot they were computed from** — a `setDiffBase` landing while the
+  badges resolved drops that row's badge the same way, never pairing the new ref with the old ref's
+  totals. `workspaceDiffKey` is this identity's single public definition, shared with `reviews` so a
+  review created across the same race retries against the new target instead of pinning the old one.
+  Diff stats default **on** for compatibility, while `includeDiffStats: false` skips the per-workspace
+  fan-out for cold navigation — an automatic reload on a shared host must not diff every worktree),
+  `listWorkspaceRecords`
   (raw registry records without Default ensure, folder-truth reconciliation, or per-workspace git diffStats —
   for internal read-only paths like history scope mapping that must not block on git spawns),
   `workspaceDiffStats`, **`setWorkspaceDiffBase(id, ref | null)`** — re-point the ref this workspace's diff is
@@ -191,7 +202,7 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
 - **Public surface (barrel):** `createWorkspace`, `listExistingWorktrees`, `openExistingWorktree`,
   `listWorkspaces`, `listWorkspaceRecords`, `forgetWorkspace`, `reclaimWorktree`, `removeWorkspace`,
-  `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
+  `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;

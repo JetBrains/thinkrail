@@ -1,5 +1,6 @@
 import {
 	RiHistoryLine as History,
+	RiLoader4Line as Loader2,
 	RiArrowGoBackLine as RotateCcw,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
@@ -25,6 +26,7 @@ export function WorkspaceChatHistory({
 	targetGroupId: string;
 }) {
 	const closed = useAppStore((state) => state.closedChatsByWorkspace[workspaceId] ?? EMPTY_CHATS);
+	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
 	if (closed.length === 0) return null;
 	return (
 		<DropdownMenu>
@@ -34,7 +36,11 @@ export function WorkspaceChatHistory({
 					aria-label="Reopen a closed chat"
 					className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 				>
-					<History className="size-14" />
+					{chatStarting ? (
+						<Loader2 className="size-14 animate-spin motion-reduce:animate-none" />
+					) : (
+						<History className="size-14" />
+					)}
 				</DropdownMenuTrigger>
 			</IconTooltip>
 			<DropdownMenuContent align="end" className="min-w-[16rem]">

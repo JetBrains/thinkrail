@@ -1,19 +1,15 @@
 import type { GhSetupProblem, GithubAuthStatus } from "@thinkrail/contracts";
+import { runBounded } from "../subprocess";
 
-export function githubAuthStatus(): GithubAuthStatus {
+const GH_PROBE_TIMEOUT_MS = 8_000;
+
+export async function githubAuthStatus(): Promise<GithubAuthStatus> {
 	if (process.env.THINKRAIL_GH_OFFLINE === "1") return { connected: false };
 
-	let result: { success: boolean; stdout: Uint8Array; stderr: Uint8Array };
-	try {
-		result = Bun.spawnSync(["gh", "auth", "status"], { stdout: "pipe", stderr: "pipe" });
-	} catch {
-		return { connected: false };
-	}
-	if (!result.success) return { connected: false };
+	const result = await runBounded(["gh", "auth", "status"], { timeoutMs: GH_PROBE_TIMEOUT_MS });
+	if (!result.ok) return { connected: false };
 
-	return parseGhAuthStatus(
-		`${new TextDecoder().decode(result.stdout)}\n${new TextDecoder().decode(result.stderr)}`,
-	);
+	return parseGhAuthStatus(`${result.out}\n${result.err}`);
 }
 
 export function parseGhAuthStatus(text: string): GithubAuthStatus {
@@ -31,7 +27,7 @@ export function parseGhAuthStatus(text: string): GithubAuthStatus {
 	return status;
 }
 
-export function githubRefresh(): GithubAuthStatus {
+export function githubRefresh(): Promise<GithubAuthStatus> {
 	return githubAuthStatus();
 }
 
@@ -40,29 +36,12 @@ export function ghSetupProblemFrom(ghPath: string | null, authOk: boolean): GhSe
 	return authOk ? null : "unauthenticated";
 }
 
-const GH_PROBE_TIMEOUT_MS = 8_000;
-
 export async function ghSetupProblem(): Promise<GhSetupProblem | null> {
 	if (process.env.THINKRAIL_GH_OFFLINE === "1") return null;
 	const ghPath = Bun.which("gh");
 	if (ghPath === null) return "missing";
-	try {
-		const proc = Bun.spawn(["gh", "auth", "status"], { stdout: "ignore", stderr: "ignore" });
-		let timedOut = false;
-		const term = setTimeout(() => {
-			timedOut = true;
-			proc.kill();
-		}, GH_PROBE_TIMEOUT_MS);
-		const kill = setTimeout(() => proc.kill(9), GH_PROBE_TIMEOUT_MS + 2_000);
-		try {
-			const exitCode = await proc.exited;
-			if (timedOut) return null;
-			return ghSetupProblemFrom(ghPath, exitCode === 0);
-		} finally {
-			clearTimeout(term);
-			clearTimeout(kill);
-		}
-	} catch {
-		return "missing";
-	}
+	const result = await runBounded(["gh", "auth", "status"], { timeoutMs: GH_PROBE_TIMEOUT_MS });
+	if (result.timedOut) return null;
+	if (result.launchFailed) return "missing";
+	return ghSetupProblemFrom(ghPath, result.ok);
 }

@@ -86,7 +86,8 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 54;
+export const PROTOCOL_VERSION = 55;
+export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
@@ -125,6 +126,7 @@ export const WS_METHODS = {
 	projectSetGroupEnabled: "project.setGroupEnabled",
 	projectSkills: "project.skills",
 	workspaceCreate: "workspace.create",
+	workspaceRename: "workspace.rename",
 	workspaceListExisting: "workspace.listExisting",
 	workspaceOpenExisting: "workspace.openExisting",
 	workspaceList: "workspace.list",
@@ -322,6 +324,7 @@ export interface WsMethodMap {
 		params: { projectId: string; name?: string; baseRef?: string };
 		result: Workspace;
 	};
+	"workspace.rename": { params: { id: string; name: string }; result: Workspace };
 	"workspace.listExisting": {
 		params: { projectId: string };
 		result: ExistingWorktreeCandidate[];

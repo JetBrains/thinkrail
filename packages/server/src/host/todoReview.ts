@@ -46,6 +46,7 @@ import {
 	reviewerWorkerFor,
 	setReviewerSessionWorkspaceMapping,
 } from "./reviewerSessionMonitor";
+import { withReviewLock } from "./reviewLock";
 import {
 	advanceReviewQueue,
 	claimReviewQueue,
@@ -64,9 +65,24 @@ interface ItemRef {
 }
 
 const currentReview = new Map<string, { todoId: string; reviewedSha: string; sessionId: string }>();
+const activeFixItems = new Set<string>();
+const activeFixKey = (sessionId: string, todoId: string): string =>
+	[sessionId, todoId].join("\u0000");
+
+export function claimItemFix(sessionId: string, todoId: string): boolean {
+	const key = activeFixKey(sessionId, todoId);
+	if (activeFixItems.has(key)) return false;
+	activeFixItems.add(key);
+	return true;
+}
+
+export function releaseItemFix(sessionId: string, todoId: string): void {
+	activeFixItems.delete(activeFixKey(sessionId, todoId));
+}
 
 /** See host/SPEC.md (todo.remove) — covers the tail past `review_verdict` that the durable `pending` mark can't. */
 export function isItemUnderActiveReview(sessionId: string, id: string): boolean {
+	if (activeFixItems.has(activeFixKey(sessionId, id))) return true;
 	for (const entry of currentReview.values()) {
 		if (entry.sessionId === sessionId && entry.todoId === id) return true;
 	}
@@ -173,8 +189,8 @@ export function markClientStale<T extends ReviewSnapshot>(snapshot: T, workspace
 	};
 }
 
-function itemFindings(p: ItemRef): ReviewComment[] {
-	return getReviewSnapshot(p.workspaceId).comments.filter(
+async function itemFindings(p: ItemRef): Promise<ReviewComment[]> {
+	return (await getReviewSnapshot(p.workspaceId)).comments.filter(
 		(c) =>
 			c.author === "agent" &&
 			c.origin?.todoId === p.id &&
@@ -183,12 +199,12 @@ function itemFindings(p: ItemRef): ReviewComment[] {
 	);
 }
 
-export function itemFixFindings(p: ItemRef): ReviewComment[] {
-	return itemFindings(p).filter((c) => c.status === "draft");
+export async function itemFixFindings(p: ItemRef): Promise<ReviewComment[]> {
+	return (await itemFindings(p)).filter((c) => c.status === "draft");
 }
 
-export function itemOpenFindings(p: ItemRef): ReviewComment[] {
-	return itemFindings(p).filter(
+export async function itemOpenFindings(p: ItemRef): Promise<ReviewComment[]> {
+	return (await itemFindings(p)).filter(
 		(c) => (c.status === "draft" || c.status === "sent") && c.reflection?.verdict !== "refuted",
 	);
 }
@@ -312,116 +328,142 @@ export function handleReviewerSettled(sessionId: string, event: PiEvent): void {
 export function installTodoReviewSeams(): void {
 	setAddReviewCommentHandler((reviewerSessionId, params: AddReviewCommentParams) => {
 		const { workspaceId } = reviewerContext(reviewerSessionId);
-		const problem = anchorProblem(workspaceId, params.path, params.startLine);
-		if (problem) throw new Error(problem);
-		const endLine = params.endLine ?? params.startLine;
-		const origin = currentReview.get(reviewerSessionId);
-		if (!origin)
-			throw new Error(
-				"add_review_comment: no review is in flight for this session — the reviewer chat has already settled.",
-			);
-		const comment = addComment({
-			workspaceId,
-			kind: "inline",
-			author: "agent",
-			body: params.body,
-			origin,
-			anchor: {
-				path: params.path,
-				side: "worktree",
-				contentHash: "",
-				selectors: [{ kind: "lineRange", startLine: params.startLine, endLine }],
-			},
+		return withReviewLock(workspaceId, async () => {
+			const problem = anchorProblem(workspaceId, params.path, params.startLine);
+			if (problem) throw new Error(problem);
+			const endLine = params.endLine ?? params.startLine;
+			const origin = currentReview.get(reviewerSessionId);
+			if (!origin)
+				throw new Error(
+					"add_review_comment: no review is in flight for this session — the reviewer chat has already settled.",
+				);
+			const comment = await addComment({
+				workspaceId,
+				kind: "inline",
+				author: "agent",
+				body: params.body,
+				origin,
+				anchor: {
+					path: params.path,
+					side: "worktree",
+					contentHash: "",
+					selectors: [{ kind: "lineRange", startLine: params.startLine, endLine }],
+				},
+			});
+			return { commentId: comment.id };
 		});
-		return { commentId: comment.id };
 	});
 
 	setReviewVerdictHandler((reviewerSessionId, params: ReviewVerdictParams) => {
 		const ctx = reviewerContext(reviewerSessionId);
-		const current = currentReview.get(reviewerSessionId);
-		if (!current || current.todoId !== params.todoId) {
-			throw new Error(
-				current
-					? `review_verdict: this session is reviewing ${current.todoId} — a verdict for ${params.todoId} would land on the wrong item.`
-					: "review_verdict: no review is in flight for this session.",
-			);
-		}
-		const ref: ItemRef = {
-			workspaceId: ctx.workspaceId,
-			sessionId: current.sessionId,
-			id: current.todoId,
-		};
-		const settleQueue = () => onReviewVerdict(ctx.workspaceId, current.sessionId, current.todoId);
-		if (params.verdict === "approve") {
-			const open = itemOpenFindings(ref);
-			if (open.length > 0) {
+		return withReviewLock(ctx.workspaceId, async () => {
+			const current = currentReview.get(reviewerSessionId);
+			if (!current || current.todoId !== params.todoId) {
 				throw new Error(
-					`review_verdict: ${params.todoId} still has ${open.length} open finding(s) on it ` +
-						`(ids: ${open.map((c) => c.id).join(", ")}) — the worker resolves each one after ` +
-						`addressing it, or you can call review_verdict with verdict: "request_changes" instead.`,
+					current
+						? `review_verdict: this session is reviewing ${current.todoId} — a verdict for ${params.todoId} would land on the wrong item.`
+						: "review_verdict: no review is in flight for this session.",
 				);
 			}
-			approveTodoReview(ref, "agent");
-			settleQueue();
-			return { summary: `Verdict recorded: ${params.todoId} approved — the item is now reviewed.` };
-		}
-		const autoFix = getConfig().reviewAutoFix !== false;
-		const spent = todoReviewAutoCycles(ref) ?? 0;
-		if (spent >= 1 || !autoFix) {
-			recordAgentChangesRequested({
-				...ref,
-				...(params.note ? { note: params.note } : {}),
-				autoCycles: 2,
-			});
-			settleQueue();
-			return {
-				summary: autoFix
-					? `Verdict recorded: changes requested on ${params.todoId}. The automated fix cycle is spent — the user decides next.`
-					: `Verdict recorded: changes requested on ${params.todoId}. Auto-fix is off — the findings await the user.`,
+			const ref: ItemRef = {
+				workspaceId: ctx.workspaceId,
+				sessionId: current.sessionId,
+				id: current.todoId,
 			};
-		}
-		const { item } = recordAgentChangesRequested({
-			...ref,
-			...(params.note ? { note: params.note } : {}),
-			autoCycles: 1,
+			const settleQueue = () => onReviewVerdict(ctx.workspaceId, current.sessionId, current.todoId);
+			if (params.verdict === "approve") {
+				const open = await itemOpenFindings(ref);
+				if (open.length > 0) {
+					throw new Error(
+						`review_verdict: ${params.todoId} still has ${open.length} open finding(s) on it ` +
+							`(ids: ${open.map((c) => c.id).join(", ")}) — the worker resolves each one after ` +
+							`addressing it, or you can call review_verdict with verdict: "request_changes" instead.`,
+					);
+				}
+				approveTodoReview(ref, "agent");
+				settleQueue();
+				return {
+					summary: `Verdict recorded: ${params.todoId} approved — the item is now reviewed.`,
+				};
+			}
+			const autoFix = getConfig().reviewAutoFix !== false;
+			const spent = todoReviewAutoCycles(ref) ?? 0;
+			if (spent >= 1 || !autoFix) {
+				recordAgentChangesRequested({
+					...ref,
+					...(params.note ? { note: params.note } : {}),
+					autoCycles: 2,
+				});
+				settleQueue();
+				return {
+					summary: autoFix
+						? `Verdict recorded: changes requested on ${params.todoId}. The automated fix cycle is spent — the user decides next.`
+						: `Verdict recorded: changes requested on ${params.todoId}. Auto-fix is off — the findings await the user.`,
+				};
+			}
+			const note = params.note ?? DEFAULT_FIX_NOTE;
+			if (!claimItemFix(current.sessionId, current.todoId))
+				throw new Error(`A fix request is already active for ${current.todoId}.`);
+			let candidates: ReviewComment[];
+			try {
+				candidates = await itemFixFindings(ref);
+			} catch (error) {
+				releaseItemFix(current.sessionId, current.todoId);
+				throw error;
+			}
+			let item: Todo;
+			try {
+				({ item } = recordAgentChangesRequested({
+					...ref,
+					...(params.note ? { note: params.note } : {}),
+					autoCycles: 1,
+				}));
+			} catch (error) {
+				releaseItemFix(current.sessionId, current.todoId);
+				throw error;
+			}
+			const pending: PendingFix = {
+				workspaceId: ctx.workspaceId,
+				workerSessionId: ctx.sessionId,
+				reviewerSessionId,
+				item,
+				note,
+				candidateIds: candidates.map((c) => c.id),
+			};
+			settleQueue();
+			if (candidates.length === 0) {
+				void sendReflectedFix(pending);
+				return {
+					summary: `Verdict recorded: changes requested on ${params.todoId} — no findings to send (auto cycle 1 of 1).`,
+				};
+			}
+			fireReflection(pending, candidates);
+			return {
+				summary: `Verdict recorded: changes requested on ${params.todoId} — reflecting ${candidates.length} finding(s) before the fix request (auto cycle 1 of 1).`,
+			};
 		});
-		const note = params.note ?? DEFAULT_FIX_NOTE;
-		const candidates = itemFixFindings(ref);
-		const pending: PendingFix = {
-			workspaceId: ctx.workspaceId,
-			workerSessionId: ctx.sessionId,
-			reviewerSessionId,
-			item,
-			note,
-			candidateIds: candidates.map((c) => c.id),
-		};
-		settleQueue();
-		if (candidates.length === 0) {
-			sendReflectedFix(pending);
-			return {
-				summary: `Verdict recorded: changes requested on ${params.todoId} — no findings to send (auto cycle 1 of 1).`,
-			};
-		}
-		fireReflection(pending, candidates);
-		return {
-			summary: `Verdict recorded: changes requested on ${params.todoId} — reflecting ${candidates.length} finding(s) before the fix request (auto cycle 1 of 1).`,
-		};
 	});
 
 	setReflectFindingHandler((reflectorSessionId, params: ReflectFindingParams) => {
 		const pending = pendingFix.get(reflectorSessionId);
 		if (!pending)
 			throw new Error("reflect_finding is only for the reflector session of an active fix cycle.");
-		if (!pending.candidateIds.includes(params.commentId))
-			throw new Error(
-				`reflect_finding: ${params.commentId} is not one of this reflection's candidate findings.`,
-			);
-		const comment = setReflection(pending.workspaceId, params.commentId, {
-			verdict: params.verdict,
-			confidence: params.confidence,
-			reason: params.reason,
+		return withReviewLock(pending.workspaceId, async () => {
+			if (pendingFix.get(reflectorSessionId) !== pending)
+				throw new Error(
+					"reflect_finding is only for the reflector session of an active fix cycle.",
+				);
+			if (!pending.candidateIds.includes(params.commentId))
+				throw new Error(
+					`reflect_finding: ${params.commentId} is not one of this reflection's candidate findings.`,
+				);
+			const comment = await setReflection(pending.workspaceId, params.commentId, {
+				verdict: params.verdict,
+				confidence: params.confidence,
+				reason: params.reason,
+			});
+			return { body: comment.body };
 		});
-		return { body: comment.body };
 	});
 }
 
@@ -445,14 +487,25 @@ function renderReflectionPackage(item: Todo, candidates: ReviewComment[]): strin
 	].join("\n");
 }
 
-function sendReflectedFix(pending: PendingFix): void {
+async function sendReflectedFix(pending: PendingFix): Promise<void> {
 	try {
-		const ids = new Set(pending.candidateIds);
-		const surviving = getReviewSnapshot(pending.workspaceId).comments.filter(
-			(c) => ids.has(c.id) && c.status === "draft" && c.reflection?.verdict !== "refuted",
-		);
-		if (pending.candidateIds.length > 0 && surviving.length === 0) {
-			// see host/SPEC.md "Reflection layer" — zero survivors of a non-empty candidate set
+		const prepared = await withReviewLock(pending.workspaceId, async () => {
+			const ids = new Set(pending.candidateIds);
+			const surviving = (await getReviewSnapshot(pending.workspaceId)).comments.filter(
+				(c) => ids.has(c.id) && c.status === "draft" && c.reflection?.verdict !== "refuted",
+			);
+			if (pending.candidateIds.length > 0 && surviving.length === 0) return null;
+			const survivingIds = surviving.map((c) => c.id);
+			const reviewPackage =
+				survivingIds.length > 0 ? await buildSendPackage(pending.workspaceId, surviving) : null;
+			if (survivingIds.length > 0)
+				await markCommentsSent(pending.workspaceId, survivingIds, pending.workerSessionId);
+			const fixText = reviewPackage
+				? `${renderFixPackage(pending.item, pending.note)}\n\n${reviewPackage}`
+				: renderFixPackage(pending.item, pending.note);
+			return { survivingIds, fixText };
+		});
+		if (!prepared) {
 			recordAgentChangesRequested({
 				workspaceId: pending.workspaceId,
 				sessionId: pending.workerSessionId,
@@ -465,19 +518,13 @@ function sendReflectedFix(pending: PendingFix): void {
 				"Every finding was refuted on reflection — no fix was sent. They stay in Review for you to judge.",
 				"info",
 			);
+			releaseItemFix(pending.workerSessionId, pending.item.id);
 			return;
 		}
-		const survivingIds = surviving.map((c) => c.id);
-		if (survivingIds.length > 0)
-			markCommentsSent(pending.workspaceId, survivingIds, pending.workerSessionId);
-		const fixText =
-			survivingIds.length > 0
-				? `${renderFixPackage(pending.item, pending.note)}\n\n${buildSendPackage(pending.workspaceId, surviving)}`
-				: renderFixPackage(pending.item, pending.note);
-		void ackSend(followUpSession(pending.workerSessionId, fixText))
+		void ackSend(followUpSession(pending.workerSessionId, prepared.fixText))
 			.then(undefined, (err) => {
-				if (survivingIds.length > 0)
-					rollbackSend(pending.workspaceId, survivingIds, pending.workerSessionId);
+				if (prepared.survivingIds.length > 0)
+					rollbackSend(pending.workspaceId, prepared.survivingIds, pending.workerSessionId);
 				notifyExtUi(
 					pending.reviewerSessionId,
 					`Fix send failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -486,8 +533,10 @@ function sendReflectedFix(pending: PendingFix): void {
 			})
 			.catch((err) => {
 				console.warn(`reflected fix rollback failed: ${err instanceof Error ? err.message : err}`);
-			});
+			})
+			.finally(() => releaseItemFix(pending.workerSessionId, pending.item.id));
 	} catch (err) {
+		releaseItemFix(pending.workerSessionId, pending.item.id);
 		console.warn(`reflected fix send skipped: ${err instanceof Error ? err.message : err}`);
 	}
 }
@@ -507,7 +556,7 @@ function fireReflection(pending: PendingFix, candidates: ReviewComment[]): void 
 			);
 		} catch (err) {
 			pendingFix.delete(reflector.sessionId);
-			sendReflectedFix(pending);
+			void sendReflectedFix(pending);
 			notifyExtUi(
 				pending.reviewerSessionId,
 				`Reflection couldn't start (${err instanceof Error ? err.message : String(err)}) — the fix was sent unreflected.`,
@@ -521,7 +570,7 @@ export function maybeResumeReflection(settledSessionId: string): void {
 	const pending = pendingFix.get(settledSessionId);
 	if (!pending) return;
 	pendingFix.delete(settledSessionId);
-	sendReflectedFix(pending);
+	void sendReflectedFix(pending);
 }
 
 export async function maybeAutoReReview(workspaceId: string, sessionId: string): Promise<void> {

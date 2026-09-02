@@ -22,7 +22,7 @@ import {
 } from "./outputBatcher";
 import { createOutputRecorder, type OutputRecorder } from "./outputRecorder";
 import { nudgePtyRedraw, type PtyGrid, resizePtyIfChanged } from "./ptyGrid";
-import { terminalShellArgs } from "./shellArgs";
+import { terminalShell, terminalShellArgs } from "./shellArgs";
 import { hasChildProcesses } from "./shellBusy";
 
 type PushToClient = (clientKey: string, channel: string, data: unknown) => TerminalDeliveryResult;
@@ -148,7 +148,7 @@ function spawnForTab(
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
 
-	const shell = process.env.SHELL ?? "/bin/bash";
+	const shell = terminalShell(process.platform, process.env);
 	const grid = {
 		cols: size.cols ?? DEFAULT_PTY_SIZE.cols,
 		rows: size.rows ?? DEFAULT_PTY_SIZE.rows,

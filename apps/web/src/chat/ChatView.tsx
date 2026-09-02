@@ -38,6 +38,7 @@ import {
 } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
+import { deriveMessageActions } from "./messageActions";
 import type { ChatMessageOrder } from "./messageOrder";
 import {
 	compactSubmissionError,
@@ -46,6 +47,7 @@ import {
 } from "./nativeCommands";
 import { planGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
+import { estimateChatRowHeights, type RowHeightEstimateCache } from "./rowHeightEstimates";
 import { type ChatRow, deriveRows, projectRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
@@ -65,6 +67,9 @@ import { useTranscriptSync } from "./useTranscriptSync";
 import { advanceVirtualRows, initialVirtualRows } from "./virtualRows";
 
 const TRY_AGAIN_PROMPT = "Try again.";
+const CHAT_VIEWPORT_INCREASE = 800;
+const CHAT_MIN_OVERSCAN_ITEMS = 2;
+const CHAT_LATEST_EDGE_MARGIN = 8;
 
 function turnAnchorText(turn: ChatTurn): string {
 	if (turn.kind === "user") {
@@ -231,6 +236,18 @@ export default function ChatView({
 		() => projectRows(chronologicalRows, chatMessageOrder),
 		[chronologicalRows, chatMessageOrder],
 	);
+	const rowHeightEstimateCacheRef = useRef<{
+		messageOrder: ChatMessageOrder;
+		cache: RowHeightEstimateCache;
+	}>({ messageOrder: chatMessageOrder, cache: new Map() });
+	if (rowHeightEstimateCacheRef.current.messageOrder !== chatMessageOrder) {
+		rowHeightEstimateCacheRef.current = { messageOrder: chatMessageOrder, cache: new Map() };
+	}
+	const rowHeightEstimateCache = rowHeightEstimateCacheRef.current.cache;
+	const rowHeightEstimates = useMemo(
+		() => estimateChatRowHeights(rows, rowHeightEstimateCache),
+		[rows, rowHeightEstimateCache],
+	);
 	const visibleAnchorRowId = useRef<string | null>(null);
 	const [storedVirtualRows, setStoredVirtualRows] = useState(() =>
 		initialVirtualRows(rows, chatMessageOrder),
@@ -246,6 +263,11 @@ export default function ChatView({
 		setStoredVirtualRows(virtualRows);
 	}
 	const firstItemIndex = virtualRows.firstItemIndex;
+
+	const messageActions = useMemo(
+		() => deriveMessageActions(chronologicalRows, isStreaming),
+		[chronologicalRows, isStreaming],
+	);
 
 	const currentStreamStatus = useMemo<StreamStatus | null>(() => {
 		const last = turns[turns.length - 1];
@@ -302,6 +324,7 @@ export default function ChatView({
 		scrollToLatest,
 		armImmediateTurn,
 		releaseFollow,
+		revealElement,
 		runwayActive,
 		followState,
 		containerProps,
@@ -700,8 +723,9 @@ export default function ChatView({
 					.then(() => undefined),
 			focusComposer: () => composerRef.current?.refocus(),
 			openSubagentTranscript: setTranscriptChildId,
+			revealChatElement: revealElement,
 		}),
-		[sessionId],
+		[revealElement, sessionId],
 	);
 
 	const onExtUiReply = (value: string | boolean | null) => {
@@ -766,7 +790,10 @@ export default function ChatView({
 							key={chatMessageOrder}
 							ref={virtuosoRef}
 							data={rows}
+							heightEstimates={rowHeightEstimates}
 							firstItemIndex={firstItemIndex}
+							increaseViewportBy={CHAT_VIEWPORT_INCREASE}
+							minOverscanItemCount={CHAT_MIN_OVERSCAN_ITEMS}
 							scrollerRef={handleScrollerRef}
 							context={listContext}
 							components={CHAT_LIST_COMPONENTS}
@@ -774,7 +801,11 @@ export default function ChatView({
 							initialTopMostItemIndex={
 								chatMessageOrder === "newest-first"
 									? { index: 0, align: "start" }
-									: { index: Math.max(rows.length - 1, 0), align: "end" }
+									: {
+											index: Math.max(rows.length - 1, 0),
+											align: "end",
+											offset: CHAT_LATEST_EDGE_MARGIN,
+										}
 							}
 							followOutput={followOutput}
 							atBottomStateChange={handleAtBottom}
@@ -796,6 +827,8 @@ export default function ChatView({
 										row={row}
 										workspaceRoot={workspaceRoot}
 										onOpenFile={onOpenFile}
+										agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
+										isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
 										onOpenSpec={onOpenSpec}
 										onOpenChange={onOpenChange}
 										onReveal={onReveal}

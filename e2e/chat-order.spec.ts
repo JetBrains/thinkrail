@@ -1,6 +1,7 @@
 import { realpathSync, rmSync, utimesSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openChatFromHistory, openFixtureProject } from "./fixtures/app";
+import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import { readChatScrollGeometry, readChatViewportIntersection } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -34,7 +35,7 @@ test("the browser-local message-order preference reverses rows without changing 
 	try {
 		await selectMessageOrder(page, "oldest-first");
 		await enterDefaultWorkspace(page);
-		await openChatFromHistory(page, "message order chat");
+		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 		const messages = page.getByTestId("chat-message");
 		await expect(messages).toHaveText([
@@ -108,11 +109,12 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 	try {
 		await selectMessageOrder(page, "newest-first");
 		await enterDefaultWorkspace(page);
-		await openChatFromHistory(page, "long newest-first chat");
+		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 		const chatScroll = page.getByTestId("chat-scroll");
-		await expect(
-			page.getByText("answer 30: the deliberately verbose fixture has been inspected"),
-		).toBeInViewport();
+		const latestAnswer = page.getByText(
+			"answer 30: the deliberately verbose fixture has been inspected",
+		);
+		await expect(latestAnswer).toBeInViewport();
 
 		const scrollPoint = await chatScroll.evaluate((root) => {
 			const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
@@ -157,6 +159,17 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 		await latest.click();
 		await expect(latest).toHaveCount(0);
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+		await expect(latestAnswer).toBeAttached();
+		await expect
+			.poll(async () => {
+				const geometry = await readChatScrollGeometry(chatScroll);
+				const latestIntersection = await readChatViewportIntersection(latestAnswer);
+				return {
+					atPhysicalLatestEdge: geometry.distanceFromStart <= geometry.clientHeight * 0.02,
+					latestRowIntersectsViewport: latestIntersection.intersects,
+				};
+			})
+			.toEqual({ atPhysicalLatestEdge: true, latestRowIntersectsViewport: true });
 
 		await page.mouse.wheel(0, 10_000);
 		await expect(latest).toBeVisible();
@@ -185,6 +198,47 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 		});
 		await expect(latest).toHaveCount(0);
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("in newest-first order, auto-collapse and the final-answer copy action still track chronological order", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const largeText = `Please refactor the transport layer. ${"Investigate the reconnect path and reducer ordering carefully. ".repeat(12)}`;
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "newest-first round chat",
+		messages: [
+			{ role: "user", text: largeText, timestamp: BASE_TS },
+			{ role: "assistant", text: "First, let me inspect the files.", timestamp: BASE_TS + 1_000 },
+			{
+				role: "assistant",
+				text: "Done — I refactored the module and updated its tests.",
+				timestamp: BASE_TS + 2_000,
+			},
+			{ role: "user", text: "any follow-up needed?", timestamp: BASE_TS + 3_000 },
+			{ role: "assistant", text: "All set.", timestamp: BASE_TS + 4_000 },
+		],
+	});
+	utimesSync(session.path, new Date(BASE_TS + 10_000), new Date(BASE_TS + 10_000));
+
+	try {
+		await selectMessageOrder(page, "newest-first");
+		await enterDefaultWorkspace(page);
+		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+
+		const largeBody = page
+			.getByTestId("user-message-body")
+			.filter({ hasText: "Please refactor the transport layer" });
+		await expect(largeBody).toHaveAttribute("data-collapsed", "true");
+
+		const assistantMessages = page.locator('[data-testid="chat-message"][data-role="assistant"]');
+		const intermediate = assistantMessages.filter({ hasText: "let me inspect" });
+		const final = assistantMessages.filter({ hasText: "Done — I refactored" });
+		await expect(intermediate.getByTestId("chat-copy")).toHaveCount(0);
+		await expect(final.getByTestId("chat-copy")).toHaveCount(1);
 	} finally {
 		rmSync(session.path, { force: true });
 	}

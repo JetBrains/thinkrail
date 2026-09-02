@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +7,7 @@ import {
 	enterDefaultWorkspace,
 	openFixtureProject,
 } from "./fixtures/app";
+import { gitAs } from "./fixtures/git";
 
 // The plan page's finish line, no agent and no GitHub: Open PR in the header opens the compose
 // dialog (pr.preview prefills title + body) and submitting runs the deterministic host-side
@@ -18,14 +18,6 @@ import {
 // success), and pressing again re-pushes new commits to the SAME branch (the anti-Codex
 // invariant). gh never runs here (non-GitHub remote + the THINKRAIL_GH_OFFLINE seam); the
 // created/updated/compare arms are pinned by unit tests (packages/server/src/pr/pr.test.ts).
-
-function gitIn(cwd: string, ...args: string[]): string {
-	return execFileSync(
-		"git",
-		["-C", cwd, "-c", "user.email=e2e@thinkrail.test", "-c", "user.name=e2e", ...args],
-		{ encoding: "utf8" },
-	).trim();
-}
 
 test("Open PR: no origin errors, with origin pushes, re-press follows the same branch", async ({
 	page,
@@ -53,31 +45,31 @@ test("Open PR: no origin errors, with origin pushes, re-press follows the same b
 	await expect(compose).not.toBeVisible();
 
 	const bare = mkdtempSync(join(tmpdir(), "thinkrail-pr-origin-"));
-	gitIn(bare, "init", "--bare");
-	gitIn(workspace.worktreePath, "remote", "add", "origin", bare);
+	gitAs(bare, "init", "--bare");
+	gitAs(workspace.worktreePath, "remote", "add", "origin", bare);
 	writeFileSync(join(workspace.worktreePath, "flood.ts"), "export const wait = 1;\n");
-	gitIn(workspace.worktreePath, "add", "--", "flood.ts");
-	gitIn(workspace.worktreePath, "commit", "--no-verify", "-m", "todo: implement FloodWait");
-	const firstSha = gitIn(workspace.worktreePath, "rev-parse", "HEAD");
-	const branch = gitIn(workspace.worktreePath, "rev-parse", "--abbrev-ref", "HEAD");
+	gitAs(workspace.worktreePath, "add", "--", "flood.ts");
+	gitAs(workspace.worktreePath, "commit", "--no-verify", "-m", "todo: implement FloodWait");
+	const firstSha = gitAs(workspace.worktreePath, "rev-parse", "HEAD");
+	const branch = gitAs(workspace.worktreePath, "rev-parse", "--abbrev-ref", "HEAD");
 
 	await openPr.click();
 	await expect(compose).toBeVisible();
 	await submit.click();
 	await expect(page.getByText("Branch pushed").first()).toBeVisible();
 	await expect(compose).not.toBeVisible();
-	expect(gitIn(bare, "rev-parse", `refs/heads/${branch}`)).toBe(firstSha);
+	expect(gitAs(bare, "rev-parse", `refs/heads/${branch}`)).toBe(firstSha);
 
 	writeFileSync(join(workspace.worktreePath, "flood.ts"), "export const wait = 2;\n");
-	gitIn(workspace.worktreePath, "add", "--", "flood.ts");
-	gitIn(workspace.worktreePath, "commit", "--no-verify", "-m", "todo: tune FloodWait");
-	const secondSha = gitIn(workspace.worktreePath, "rev-parse", "HEAD");
+	gitAs(workspace.worktreePath, "add", "--", "flood.ts");
+	gitAs(workspace.worktreePath, "commit", "--no-verify", "-m", "todo: tune FloodWait");
+	const secondSha = gitAs(workspace.worktreePath, "rev-parse", "HEAD");
 
 	await openPr.click();
 	await expect(compose).toBeVisible();
 	await submit.click();
 	await expect
-		.poll(() => gitIn(bare, "rev-parse", `refs/heads/${branch}`), { timeout: 10_000 })
+		.poll(() => gitAs(bare, "rev-parse", `refs/heads/${branch}`), { timeout: 10_000 })
 		.toBe(secondSha);
 });
 

@@ -1,6 +1,7 @@
 import type { GitStatus } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
+import { LoadingRegion } from "../components/Skeleton";
 import {
 	type CenterNavigationStamp,
 	isCenterNavigationCurrent,
@@ -176,7 +177,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 						</button>
 					</div>
 				) : status === null ? (
-					<p className="px-8 py-4 tr-text-metadata text-text-muted">Loading…</p>
+					<LoadingRegion rows={5} className="px-8 py-4" />
 				) : status.changes.length === 0 ? (
 					<p data-testid="changes-empty" className="px-8 py-4 tr-text-metadata text-text-muted">
 						No changes in this scope.
@@ -184,7 +185,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				) : changesView === "tree" ? (
 					<ChangesTree changes={status.changes} onOpen={openDiff} isActive={isActive} />
 				) : (
-					<ul>
+					<ul className="motion-safe:animate-reveal">
 						{status.changes.map((change) => {
 							const { dir, base } = splitPath(change.path);
 							return (

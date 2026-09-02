@@ -18,7 +18,27 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
 
 ## Model (mirrors the wire DTOs in `contracts`)
 
-- **One open `Review` per workspace** (auto-created lazily on the first read/comment). Wire
+- **One open `Review` per workspace** (auto-created lazily on the first read/comment). Lazy creation
+  awaits git (the pinned base resolves through the async scope resolver), so it is **single-flighted per
+  workspace**: the unlocked `review.get` read and a locked mutation racing through that window would
+  otherwise each save a distinct fresh review, the last silently replacing the other's (possibly
+  already-mutated) snapshot. Clear joins that creation flight before resolving its replacement, so a
+  first `review.get` can never save an unannounced snapshot over the one Clear published.
+  `freshSnapshot` re-reads the workspace **after** its git await: removal throws before anything
+  persists, while a changed diff identity (`worktreePath`, `baseBranch`, `diffBase`) retries base
+  resolution rather than pinning the new review to the old target. Creation is the **only** await a
+  snapshot pass may span: every load→mutate→persist over the open snapshot runs synchronously. Mutation
+  helpers use an already-open snapshot immediately and await only when they must join lazy creation; they
+  never wrap a loaded snapshot in `Promise.resolve` and yield with stale state. The unlocked read's
+  re-anchor pass (`getReviewSnapshot`) follows the same rule. `addComment` resolves its immutable base-side
+  ref *before* taking the snapshot, but captures a mutable worktree anchor only inside the final
+  synchronous mutate/persist pass; `clearReview` resolves the fresh base
+  *before* loading the active snapshot it archives — because the review lock covers only mutations, and
+  a pass holding a snapshot across an await would save over whatever a concurrent writer (a locked
+  mutation, `rollbackSend`, an agent resolve) persisted in the gap, silently deleting it. The one loss
+  that discipline still allows is a locked mutation (whose snapshot predates its awaits) overwriting a
+  re-anchor persist — benign: anchor state is derived from worktree content and recomputed on the next
+  read. Wire
   **`review.close` is the Clear operation**: under the host's workspace review lock, `clearReview`
   first persists the current review's non-draft records as a closed snapshot under
   `reviews/archive/<workspaceId>/<reviewId>.json`, then replaces the active snapshot with a fresh open
@@ -101,16 +121,18 @@ own tools; **each side reads its own content** — the worktree for worktree anc
 the conversation already on the user's screen — else the chat already pinned for that KEY, **re-attached
 from disk when it isn't live**, since review state and pi transcripts both survive a host restart; a
 batch spanning several keys sends each group separately and answers with all of them, so none is left
-running unseen; whatever received the package becomes the key's pin) → `markSent` → prompt. The whole sequence is **serialized per
-workspace together with every review mutation** (`host`'s `withReviewLock`): the draft/session check
+running unseen; whatever received the package becomes the key's pin) → `markSent` → prompt. `markSent`
+requires every requested id to still name a draft in the active snapshot — it never silently marks a
+partial set after lifecycle drift. The whole sequence is **serialized per workspace together with every
+review mutation** (`host`'s `withReviewLock`): the draft/session check
 happens *before* the awaited session creation, so in that gap two concurrent sends would both see
 "drafts, no session" and fork the review — and a concurrent `review.close` Clear would invalidate the
 package already built, leaving the agent with comment ids no open review contains.
 **The prompt is fired DETACHED** (`fireReviewPrompt`): the handler returns the
 moment the session exists so the client opens the chat immediately — awaiting the ack meant sitting
-out pi's 10s acceptance window on every send. Because `markSent` runs synchronously (before the turn is
-known-accepted — it must, so the key's pin exists inside the lock and a concurrent send can't fork the
-chat), a pre-turn rejection (bad model, missing/expired key) both surfaces INSIDE the just-opened chat
+out pi's 10s acceptance window on every send. Because `markSent` is awaited inside the lock, before the
+turn is known-accepted — it must be, so the key's pin exists inside the lock and a concurrent send can't
+fork the chat — a pre-turn rejection (bad model, missing/expired key) both surfaces INSIDE the just-opened chat
 as an extension-UI notice AND **rolls the comments back to `draft`** (`rollbackSend`, keyed off
 `ackSend`'s accept-vs-reject window): a review the agent never received stays retryable instead of
 stranding as `sent` with its send/edit/delete actions gone, and a chat spun up solely for that failed

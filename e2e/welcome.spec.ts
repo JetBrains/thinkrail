@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -9,6 +8,7 @@ import {
 	stagePlainFolder,
 	worktreeRows,
 } from "./fixtures/app";
+import { git } from "./fixtures/git";
 import { E2E_FIXTURE_REPO, E2E_PLAIN_DIR } from "./fixtures/paths";
 
 const FIXTURE_SPECS = ["SPEC.md", join("module-a", "SPEC.md")];
@@ -57,9 +57,9 @@ test("Settings → Providers lists in-app auth options", async ({ page }) => {
 	await expect(page.getByTestId("providers-error")).toHaveCount(0);
 });
 
-test("a real provider's API key round-trips through the login dialog (add in Settings, sign out)", async ({
-	page,
-}) => {
+test("a real provider's API key round-trips through the login dialog (add in Settings, sign out)", {
+	tag: "@dev-seam",
+}, async ({ page }) => {
 	await openAppFresh(page);
 	await page.getByTestId("open-settings").click();
 	await expect(page.getByTestId("settings-providers")).toBeVisible();
@@ -98,9 +98,9 @@ test("a real provider's API key round-trips through the login dialog (add in Set
 	await expect(configuredRow).toHaveCount(0);
 });
 
-test("clicking Sign in (Settings) opens the in-app login dialog, and Cancel dismisses it", async ({
-	page,
-}) => {
+test("clicking Sign in (Settings) opens the in-app login dialog, and Cancel dismisses it", {
+	tag: "@dev-seam",
+}, async ({ page }) => {
 	await openAppFresh(page);
 	await page.getByTestId("open-settings").click();
 	await expect(page.getByTestId("settings-providers")).toBeVisible();
@@ -197,7 +197,7 @@ test("a project without specs suggests setting it up", async ({ page }) => {
 		).toHaveAttribute("data-active", "true");
 		await expect(worktreeRows(page)).toHaveCount(0);
 	} finally {
-		execFileSync("git", ["-C", E2E_FIXTURE_REPO, "checkout", "--", ...FIXTURE_SPECS]);
+		git(E2E_FIXTURE_REPO, "checkout", "--", ...FIXTURE_SPECS);
 	}
 });
 

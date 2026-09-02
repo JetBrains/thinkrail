@@ -57,7 +57,7 @@ export function WelcomePanel() {
 		};
 	}, [project?.id]);
 
-	const { openProject, pickAndOpen, dialogs } = useOpenProject((opened) =>
+	const { openProject, pickAndOpen, enterHostPath, dialogs } = useOpenProject((opened) =>
 		useAppStore.getState().selectProject(opened.id, { reveal: true }),
 	);
 
@@ -78,6 +78,7 @@ export function WelcomePanel() {
 			title="Work in project folder"
 			subtitle="Chats, changes, and terminals run directly in your project folder — no isolation."
 			onClick={() => void enterDefaultWorkspace(projectId)}
+			className="motion-safe:animate-reveal"
 		/>
 	);
 
@@ -85,6 +86,7 @@ export function WelcomePanel() {
 		<AddProjectMenu
 			recentProjects={recentProjects}
 			onOpen={() => void pickAndOpen()}
+			onEnterHostPath={enterHostPath}
 			onOpenRecent={(path) => void openProject(path)}
 			align="start"
 		>
@@ -116,7 +118,12 @@ export function WelcomePanel() {
 			<div className="mt-24 flex flex-wrap justify-center gap-12">
 				{noProjects ? (
 					openProjectCard()
-				) : hasSpecs === null ? null : hasSpecs ? (
+				) : hasSpecs === null ? (
+					<>
+						<CardSkeleton />
+						<CardSkeleton />
+					</>
+				) : hasSpecs ? (
 					<>
 						<Card
 							cta
@@ -125,6 +132,7 @@ export function WelcomePanel() {
 							title="Start building"
 							subtitle="Cut an isolated worktree + branch, then pair with the agent to build it."
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
+							className="motion-safe:animate-reveal"
 						/>
 						{projectFolderCard(project.id)}
 					</>
@@ -144,12 +152,14 @@ export function WelcomePanel() {
 									note: SETUP_NOTE,
 								})
 							}
+							className="motion-safe:animate-reveal"
 						/>
 						<Card
 							icon={Rocket}
 							title="Start building"
 							subtitle="Cut an isolated worktree + branch and pair with the agent."
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
+							className="motion-safe:animate-reveal"
 						/>
 						{projectFolderCard(project.id)}
 					</>
@@ -169,6 +179,23 @@ export function WelcomePanel() {
 				/>
 			) : null}
 			{dialogs}
+		</div>
+	);
+}
+
+function CardSkeleton() {
+	return (
+		<div
+			role="status"
+			aria-label="Loading"
+			aria-busy="true"
+			className="flex h-[150px] w-[220px] flex-col items-start justify-between rounded-[var(--radius-sm)] border border-border-default bg-container-workspace-bg p-16"
+		>
+			<span className="size-24 shrink-0 animate-pulse rounded-full bg-control-bg-hovered" />
+			<span className="flex w-full flex-col gap-8">
+				<span className="h-3 w-3/4 animate-pulse rounded-[var(--radius-sm)] bg-control-bg-hovered" />
+				<span className="h-3 w-full animate-pulse rounded-[var(--radius-sm)] bg-control-bg-hovered" />
+			</span>
 		</div>
 	);
 }
