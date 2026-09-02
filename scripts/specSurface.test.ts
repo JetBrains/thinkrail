@@ -152,6 +152,22 @@ test("readSurfaceBlock keeps an indented sub-bullet inside the block", () => {
 	expect(declaredNames(block)).toEqual(["alpha", "beta"]);
 });
 
+test("blank-separated paragraphs remain inside a public-surface list item", () => {
+	const declaration =
+		"- **Public surface:** `kept`,\n\n  `promised`.\n- **Allowed deps:** `outside`.\n";
+	const block = surfaceOf(declaration);
+	expect(isBareNameList(block)).toBe(true);
+	expect(declaredNames(block)).toEqual(["kept", "promised"]);
+	expect(block.text).not.toContain("Allowed deps");
+
+	const root = fixture();
+	write(root, "module/SPEC.md", spec("blank-continuation", declaration.trimEnd()));
+	write(root, "module/index.ts", "export const kept = 1;\n");
+	const result = run(root);
+	expect(result.code).toBe(1);
+	expect(result.stderr).toContain("barrel no longer exports: promised");
+});
+
 test("diffSurface reports both directions", () => {
 	expect(diffSurface(["a", "b"], ["b", "c"])).toEqual({
 		promised: ["a"],
@@ -246,6 +262,68 @@ test("direct and transitive unresolved re-exports fail", () => {
 	expect(result.code).toBe(1);
 	expect(result.stderr).toContain("direct/index.ts → ./missing");
 	expect(result.stderr).toContain("transitive/middle.ts → ./missing");
+});
+
+test("dependency and out-of-root declaration re-exports are validated", () => {
+	const dependencyRoot = fixture();
+	write(
+		dependencyRoot,
+		"package/tsconfig.json",
+		JSON.stringify({
+			compilerOptions: { module: "ESNext", moduleResolution: "Bundler", skipLibCheck: true },
+			files: ["src/index.ts"],
+		}),
+	);
+	write(
+		dependencyRoot,
+		"package/SPEC.md",
+		spec("dependency-declarations", "- **Public surface:** `ok`."),
+	);
+	write(dependencyRoot, "package/src/index.ts", 'export * from "dep";\n');
+	write(
+		dependencyRoot,
+		"package/node_modules/dep/package.json",
+		JSON.stringify({ name: "dep", types: "index.d.ts" }),
+	);
+	write(
+		dependencyRoot,
+		"package/node_modules/dep/index.d.ts",
+		'export const ok: number;\nexport * from "./missing";\n',
+	);
+	const dependencyResult = run(dependencyRoot);
+	expect(dependencyResult.code).toBe(1);
+	expect(dependencyResult.stderr).toContain("package/node_modules/dep/index.d.ts → ./missing");
+
+	const outsideRoot = fixture();
+	const outsideDeclarations = fixture();
+	write(
+		outsideRoot,
+		"package/tsconfig.json",
+		JSON.stringify({
+			compilerOptions: {
+				baseUrl: ".",
+				module: "ESNext",
+				moduleResolution: "Bundler",
+				paths: { outside: [join(outsideDeclarations, "index.d.ts")] },
+				skipLibCheck: true,
+			},
+			files: ["src/index.ts"],
+		}),
+	);
+	write(
+		outsideRoot,
+		"package/SPEC.md",
+		spec("outside-declarations", "- **Public surface:** `ok`."),
+	);
+	write(outsideRoot, "package/src/index.ts", 'export * from "outside";\n');
+	write(
+		outsideDeclarations,
+		"index.d.ts",
+		'export const ok: number;\nexport * from "./missing";\n',
+	);
+	const outsideResult = run(outsideRoot);
+	expect(outsideResult.code).toBe(1);
+	expect(outsideResult.stderr).toContain("index.d.ts → ./missing");
 });
 
 test("ambient-module re-export graphs are validated", () => {
@@ -368,6 +446,33 @@ test("direct CommonJS export assignments normalize to one default surface", () =
 	expect(mismatch.code).toBe(1);
 	expect(mismatch.stderr).toContain("barrel no longer exports: prototype");
 	expect(mismatch.stderr).toContain("surface does not list: default");
+});
+
+test("module-valued exported aliases join transitive validation", () => {
+	const root = fixture();
+	write(
+		root,
+		"tsconfig.json",
+		JSON.stringify({
+			compilerOptions: { module: "CommonJS", moduleResolution: "Node10", skipLibCheck: true },
+			files: ["globals.d.ts", "namespace/index.ts", "equals/index.ts"],
+		}),
+	);
+	write(
+		root,
+		"globals.d.ts",
+		'declare module "middle" { export const ok: number; export * from "missing-package"; }\n',
+	);
+	write(root, "namespace/SPEC.md", spec("namespace-alias", "- **Public surface:** `api`."));
+	write(root, "namespace/index.ts", 'import * as api from "middle";\nexport { api };\n');
+	write(root, "equals/SPEC.md", spec("import-equals-alias", "- **Public surface:** `api`."));
+	write(root, "equals/index.ts", 'export import api = require("middle");\n');
+
+	const result = run(root);
+	expect(result.code).toBe(1);
+	expect(result.stderr).toContain("namespace/SPEC.md");
+	expect(result.stderr).toContain("equals/SPEC.md");
+	expect(result.stderr).toContain("globals.d.ts → missing-package");
 });
 
 test("invalid named and ambiguous star re-exports fail", () => {

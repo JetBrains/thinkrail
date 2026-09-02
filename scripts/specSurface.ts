@@ -25,7 +25,13 @@ interface MarkdownNode {
 	position?: { start: { line: number }; end: { line: number } };
 }
 
-function visibleMarkdown(text: string): string {
+interface MarkdownView {
+	lines: string[];
+	tree: MarkdownNode;
+}
+
+function markdownView(text: string): MarkdownView {
+	const tree = fromMarkdown(text) as MarkdownNode;
 	const hiddenLines = new Set<number>();
 	const visit = (node: MarkdownNode): void => {
 		if ((node.type === "code" || node.type === "html") && node.position !== undefined) {
@@ -36,11 +42,23 @@ function visibleMarkdown(text: string): string {
 		}
 		for (const child of node.children ?? []) visit(child);
 	};
-	visit(fromMarkdown(text) as MarkdownNode);
-	return text
-		.split("\n")
-		.map((line, index) => (hiddenLines.has(index + 1) ? "" : line))
-		.join("\n");
+	visit(tree);
+	return {
+		lines: text.split("\n").map((line, index) => (hiddenLines.has(index + 1) ? "" : line)),
+		tree,
+	};
+}
+
+function enclosingNode(tree: MarkdownNode, type: string, line: number): MarkdownNode | null {
+	let found: MarkdownNode | null = null;
+	const visit = (node: MarkdownNode): void => {
+		const position = node.position;
+		if (position === undefined || line < position.start.line || line > position.end.line) return;
+		if (node.type === type) found = node;
+		for (const child of node.children ?? []) visit(child);
+	};
+	visit(tree);
+	return found;
 }
 
 function declaredByLabel(line: string): boolean {
@@ -56,27 +74,32 @@ function declaredInProse(line: string): boolean {
 }
 
 export function readSurfaceBlock(specText: string): SurfaceBlock | null {
-	const lines = visibleMarkdown(specText).split("\n");
-	const labelled = lines.findIndex(declaredByLabel);
-	const start = labelled === -1 ? lines.findIndex(declaredInProse) : labelled;
-	const first = lines[start];
+	const view = markdownView(specText);
+	const labelled = view.lines.findIndex(declaredByLabel);
+	const start = labelled === -1 ? view.lines.findIndex(declaredInProse) : labelled;
+	const first = view.lines[start];
 	if (start === -1 || first === undefined) return null;
 	const heading = HEADING.test(first);
+	if (heading) {
+		const nextHeading = view.lines.findIndex((line, index) => index > start && HEADING.test(line));
+		const end = nextHeading === -1 ? view.lines.length : nextHeading;
+		return { text: view.lines.slice(start, end).join("\n"), heading: true };
+	}
+	const type = BULLET_LABEL.test(first) ? "listItem" : "paragraph";
+	const container = enclosingNode(view.tree, type, start + 1);
+	if (container?.position !== undefined) {
+		return {
+			text: view.lines.slice(start, container.position.end.line).join("\n"),
+			heading: false,
+		};
+	}
 	const collected = [first];
-	let blanks = 0;
-	for (let index = start + 1; index < lines.length; index++) {
-		const line = lines[index] ?? "";
-		if (HEADING.test(line)) break;
-		if (!heading && TOP_LEVEL_BULLET.test(line)) break;
-		if (line.trim() === "") {
-			blanks++;
-			if (!heading || blanks >= 2) break;
-			continue;
-		}
-		blanks = 0;
+	for (let index = start + 1; index < view.lines.length; index++) {
+		const line = view.lines[index] ?? "";
+		if (HEADING.test(line) || TOP_LEVEL_BULLET.test(line) || line.trim() === "") break;
 		collected.push(line);
 	}
-	return { text: collected.join("\n"), heading };
+	return { text: collected.join("\n"), heading: false };
 }
 
 function body(block: SurfaceBlock): string {
@@ -358,21 +381,19 @@ function exportGraphIssues(
 	const seenSymbols = new Set<ts.Symbol>();
 	const seenSources = new Map<string, ts.SourceFile>();
 	const rootPrefix = `${resolve(root)}${sep}`;
-	const isLocal = (source: ts.SourceFile): boolean => {
+	const shouldCheckDiagnostics = (source: ts.SourceFile): boolean => {
 		const path = resolve(source.fileName);
 		return path.startsWith(rootPrefix) && !path.includes(`${sep}node_modules${sep}`);
 	};
 	const visit = (symbol: ts.Symbol): void => {
 		if (seenSymbols.has(symbol)) return;
 		seenSymbols.add(symbol);
-		const containers = moduleContainers(symbol).filter((container) =>
-			isLocal(container.getSourceFile()),
-		);
+		const containers = moduleContainers(symbol);
 		const statements = containers.flatMap((container) => [...container.statements]);
 		if (statements.length === 0) return;
 		for (const container of containers) {
 			const source = container.getSourceFile();
-			seenSources.set(source.fileName, source);
+			if (shouldCheckDiagnostics(source)) seenSources.set(source.fileName, source);
 		}
 		const firstSource = containers[0]?.getSourceFile();
 		const modulePath =
@@ -382,6 +403,8 @@ function exportGraphIssues(
 			const target = resolvedAlias(exported, checker);
 			if (target.name === "unknown" && target.declarations === undefined) {
 				issues.add(`invalid exported alias in ${modulePath}: ${exported.getName()}`);
+			} else {
+				visit(target);
 			}
 		}
 		const explicit = explicitExportNames(statements);
