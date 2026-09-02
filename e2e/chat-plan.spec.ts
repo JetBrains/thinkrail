@@ -46,6 +46,7 @@ test("the plan opens as the session's Work view (markdown is its export)", async
 	).toBeVisible();
 
 	await popover.getByTestId("todo-open-plan").click();
+	await expect(page.locator('[data-testid="editor-tab"]')).toHaveCount(1);
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="plan"]')).toHaveCount(0);
 	await expect(page.getByTestId("session-view-work")).toHaveAttribute("data-active", "true");
 	const pane = page.getByTestId("plan-pane");

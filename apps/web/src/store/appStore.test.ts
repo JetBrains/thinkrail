@@ -1403,16 +1403,9 @@ test("authoritative session reconciliation never impersonates user navigation", 
 	expect(state.navTickByWorkspace.ws1 ?? 0).toBe(before);
 });
 
-test("session deletion drops queued chat and live-plan opens before pruning placement", () => {
+test("session deletion drops queued chat opens before pruning placement", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "queued", null, "medium");
-	store.openDoc({
-		kind: "plan",
-		id: "queued-plan",
-		workspaceId: "ws1",
-		name: "Queued plan",
-		sessionId: "queued",
-	});
 	store.deleteChat("ws1", "queued", false);
 	const afterDeletion = useAppStore.getState();
 	const intents = afterDeletion.layoutIntents;
@@ -1420,9 +1413,7 @@ test("session deletion drops queued chat and live-plan opens before pruning plac
 	expect(
 		intents.some(
 			(intent) =>
-				intent.kind === "open" &&
-				(intent.tab.kind === "chat" || intent.tab.kind === "plan") &&
-				intent.tab.sessionId === "queued",
+				intent.kind === "open" && intent.tab.kind === "chat" && intent.tab.sessionId === "queued",
 		),
 	).toBe(false);
 	expect(intents.at(-1)).toMatchObject({
@@ -1448,15 +1439,6 @@ test("a deletion that beats session.create prevents its late response from resto
 		"keep",
 		false,
 	);
-	store.openDoc({
-		kind: "doc",
-		id: "late-todo",
-		workspaceId: "ws1",
-		name: "Late TODO",
-		content: "# Late",
-		docPath: "TODO.md",
-		sourceId: "late",
-	});
 	store.requestChatLocation({
 		workspaceId: "ws1",
 		projectId: "p1",
@@ -3288,21 +3270,12 @@ test("the slot is per workspace — clearWorkspaceTabs releases only its own", (
 	expect(s.previewTabByWorkspace.ws2).toBe("ws2:b.ts");
 });
 
-test("chat, document, and plan tabs never enter the preview slot", () => {
+test("chat tabs never enter the preview slot", () => {
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
 	const store = useAppStore.getState();
 	store.openTab(fileTab("ws1", "a.ts"), "preview");
 
 	store.openChatSession("ws1", "s1", null, "medium");
-	store.openDoc({
-		kind: "doc",
-		id: "ws1:plan",
-		workspaceId: "ws1",
-		name: "Plan",
-		content: "# plan",
-		docPath: "plan.md",
-		sourceId: "s1",
-	});
 	store.openTab(
 		{
 			kind: "chat",
@@ -3313,17 +3286,10 @@ test("chat, document, and plan tabs never enter the preview slot", () => {
 		},
 		"preview",
 	);
-	store.openDoc({
-		kind: "plan",
-		id: "ws1:live-plan",
-		workspaceId: "ws1",
-		name: "Live plan",
-		sessionId: "s3",
-	});
 
 	const s = useAppStore.getState();
 	expect(s.previewTabByWorkspace.ws1).toBe("ws1:a.ts");
-	expect(s.tabsByWorkspace.ws1).toHaveLength(5);
+	expect(s.tabsByWorkspace.ws1).toHaveLength(3);
 	expect(s.layoutIntents.at(-1)).toMatchObject({ kind: "open", intent: "keep" });
 });
 
@@ -3359,17 +3325,6 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 	expect(tick()).toBe(beforeOpen);
 
 	bumps("setActiveTab", () => s().setActiveTab("ws1:a.ts"));
-	bumps("openDoc", () =>
-		s().openDoc({
-			kind: "doc",
-			id: "ws1:plan",
-			workspaceId: "ws1",
-			name: "Plan",
-			content: "# p",
-			docPath: "plan.md",
-			sourceId: "s1",
-		}),
-	);
 	bumps("openChatSession", () => s().openChatSession("ws1", "sess", null, "medium"));
 	bumps("closeChatToHistory", () => s().closeChatToHistory("sess"));
 	bumps("reopenChat", () => s().reopenChat("ws1", "sess"));

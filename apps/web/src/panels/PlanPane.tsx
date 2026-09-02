@@ -503,11 +503,9 @@ function downloadMarkdown(markdown: string, title: string): void {
 export default function PlanPane({
 	workspaceId,
 	sessionId,
-	sessionView = false,
 }: {
 	workspaceId: string;
 	sessionId: string;
-	sessionView?: boolean;
 }) {
 	const plan = useChatTodos(workspaceId, sessionId);
 	const title = useAppStore((s) => selectChatTitle(s, workspaceId, sessionId));
@@ -534,7 +532,7 @@ export default function PlanPane({
 	const agentComments = useAppStore((s) => selectAgentReviewCommentCount(s, workspaceId));
 	const reviewComments = useAppStore((s) => s.reviewsByWorkspace[workspaceId]?.comments);
 
-	const switcherBar = sessionView ? (
+	const switcherBar = (
 		<div className="flex h-panel-header-row shrink-0 items-center gap-12 border-border-muted border-b bg-container-workspace-bg px-12">
 			<ViewSwitcher
 				view="work"
@@ -542,7 +540,7 @@ export default function PlanPane({
 				onSelect={(view) => useAppStore.getState().setSessionView(sessionId, view)}
 			/>
 		</div>
-	) : null;
+	);
 	if (plan.data === null) {
 		return (
 			<div className="flex h-full flex-col">

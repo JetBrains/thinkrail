@@ -430,16 +430,13 @@ a project picker, the prompt hero, and the reused
   changes, and terminals run directly in your project folder.” An **external workspace** reads
   **“Existing worktree”** with `on <branch>` for the same reason — ThinkRail did not cut it, so there is no
   `from <base>` to claim. It is neither one-time nor dismissible, so it also helps
-  after the last tab closes without introducing onboarding state. The workbench resource renderer handles
-  registered **`plan`** tabs (`PlanTab`) via the lazy **`PlanPane`** — the chat plan's **live review-map
-  page**. Frontend-local placement stores only the `todo-plan` resolver kind + session identity, never inline
-  plan content; another client can explicitly reopen the same host-owned page without inheriting placement.
-Plan tabs are now legacy-only (nothing creates one since the Chat→Work switcher — see `store/SPEC.md`);
-`PlanPane`'s primary mount is as the chat tab's **Work view**: with the `sessionView` prop the shell passes,
-it renders a panel-header-row bar carrying `chat/ViewSwitcher` (view `work`) above the page, so the user
-switches back to Chat in place — same session, same tab, no second lifecycle. Availability for the Work
-segment re-derives from its own live plan (`chat/planView.workAvailable`); the active segment never
-disables, so an emptied plan cannot strand the user in Work. It renders the session's TODO plan document-scale
+  after the last tab closes without introducing onboarding state. The lazy **`PlanPane`** — the chat plan's
+  **live review-map page** — is the chat tab's **Work view**, its ONLY mount (the separate plan center-tab
+  representation was removed — see `store/SPEC.md`): the shell swaps it in for `ChatView` on the SAME
+  session tab, and it renders a panel-header-row bar carrying `chat/ViewSwitcher` (view `work`) above the
+  page, so the user switches back to Chat in place — same session, same tab, no second lifecycle.
+  Availability for the Work segment re-derives from its own live plan (`chat/planView.workAvailable`); the
+  active segment never disables, so an emptied plan cannot strand the user in Work. It renders the session's TODO plan document-scale
   (groups as sections, items with status glyphs) with a **scan-first item anatomy**: the item TITLE is
   the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,
   subtle/muted) — so titles never blend into prose. A **done item collapses to a compact two-line
@@ -1089,7 +1086,7 @@ own section. The kebab menu (`plan-menu`, a
   preview identity per frame group; its label is italic and carries `data-preview="true"`. Single-clicking a file/spec/change row or
   following a rendered-document/chat artifact link opens into the browser's last-focused destination group
   as preview. Double-click keeps; clicking an already active preview keeps as the touch path. An explicit
-  Settings/open-as-file action starts kept. Chat and registered plan/document tabs never enter preview.
+  Settings/open-as-file action starts kept. Chat tabs never enter preview.
   The strip and
   context/command surfaces also expose a keyboard-operable Keep Preview command.
 

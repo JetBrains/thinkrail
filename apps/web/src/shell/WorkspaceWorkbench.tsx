@@ -92,7 +92,7 @@ function ChatResourceBody({
 			<ErrorBoundary label="chat" resetKeys={[workspaceId, tab.id, view]}>
 				<Suspense fallback={<MissingResource label="chat" />}>
 					{view === "work" ? (
-						<PlanPane workspaceId={workspaceId} sessionId={tab.sessionId} sessionView />
+						<PlanPane workspaceId={workspaceId} sessionId={tab.sessionId} />
 					) : (
 						<ChatView sessionId={tab.sessionId} workspaceId={workspaceId} onOpenFile={onOpenFile} />
 					)}
@@ -406,16 +406,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			if (tab.kind === "chat") {
 				return <ChatResourceBody workspaceId={workspaceId} tab={tab} onOpenFile={openToolFile} />;
 			}
-			if (tab.kind === "document") {
-				if (deletedSessions?.[tab.sourceId]) return <MissingResource label="plan" />;
-				return (
-					<ErrorBoundary label="plan" resetKeys={[workspaceId, tab.id]}>
-						<Suspense fallback={<MissingResource label="plan" />}>
-							<PlanPane workspaceId={workspaceId} sessionId={tab.sourceId} />
-						</Suspense>
-					</ErrorBoundary>
-				);
-			}
 			if (tab.kind === "terminal") {
 				const terminal = terminalByKey.get(tab.tabKey);
 				const location = document ? findTabLocation(document, tab.id) : null;
@@ -706,7 +696,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							prepared.onAccepted(current);
 							if (tab.kind === "chat") {
 								state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
-							} else if (tab.kind === "file" || tab.kind === "diff" || tab.kind === "document") {
+							} else if (tab.kind === "file" || tab.kind === "diff") {
 								for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
 									const resource = toLayoutTab(cache);
 									if (resource && layoutResourceIdentity(resource) === closedIdentity) {

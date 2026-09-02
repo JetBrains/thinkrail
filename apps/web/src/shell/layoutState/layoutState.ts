@@ -297,6 +297,37 @@ function isResourceFreeFrame(value: unknown): value is WorkbenchFrame {
 	});
 }
 
+function dropLegacyPlanDocumentTabs(value: unknown): unknown {
+	if (!isRecord(value) || !isRecord(value.groups)) return value;
+	const groups: Record<string, unknown> = {};
+	for (const [groupId, group] of Object.entries(value.groups)) {
+		if (!isRecord(group) || !Array.isArray(group.tabs)) {
+			groups[groupId] = group;
+			continue;
+		}
+		const legacy = (tab: unknown): tab is Record<string, unknown> =>
+			isRecord(tab) && tab.kind === "document";
+		if (!group.tabs.some(legacy)) {
+			groups[groupId] = group;
+			continue;
+		}
+		const dropped = new Set(
+			group.tabs.flatMap((tab) => (legacy(tab) && typeof tab.id === "string" ? [tab.id] : [])),
+		);
+		const next: Record<string, unknown> = { ...group, tabs: group.tabs.filter((t) => !legacy(t)) };
+		if (typeof next.previewTabId === "string" && dropped.has(next.previewTabId)) {
+			delete next.previewTabId;
+		}
+		if (isRecord(next.beforeToolByTabId)) {
+			next.beforeToolByTabId = Object.fromEntries(
+				Object.entries(next.beforeToolByTabId).filter(([id]) => !dropped.has(id)),
+			);
+		}
+		groups[groupId] = next;
+	}
+	return { ...value, groups };
+}
+
 function isWorkspaceView(value: unknown): value is WorkspaceViewState {
 	if (!isRecord(value) || !hasOnlyKeys(value, ["groups"]) || !isRecord(value.groups)) {
 		return false;
@@ -336,13 +367,6 @@ function isWorkspaceView(value: unknown): value is WorkspaceViewState {
 			case "chat":
 				return (
 					hasOnlyKeys(tab, ["kind", "id", "name", "sessionId"]) && typeof tab.sessionId === "string"
-				);
-			case "document":
-				return (
-					hasOnlyKeys(tab, ["kind", "id", "name", "documentKind", "sourceId", "docPath"]) &&
-					tab.documentKind === "todo-plan" &&
-					typeof tab.sourceId === "string" &&
-					typeof tab.docPath === "string"
 				);
 			case "terminal":
 				return hasOnlyKeys(tab, ["kind", "id", "name", "tabKey"]) && typeof tab.tabKey === "string";
@@ -434,7 +458,8 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 		const viewsByWorkspace: Record<string, WorkspaceViewState> = {};
 		const documentsByWorkspace: Record<string, WorkspaceLayoutDocument> = {};
 		const attentionByWorkspace: Record<string, LayoutAttention> = {};
-		for (const [workspaceId, view] of Object.entries(parsed.viewsByWorkspace)) {
+		for (const [workspaceId, rawView] of Object.entries(parsed.viewsByWorkspace)) {
+			const view = dropLegacyPlanDocumentTabs(rawView);
 			if (!isWorkspaceView(view) || Object.keys(view.groups).some((id) => !validGroupIds.has(id))) {
 				return undefined;
 			}

@@ -638,18 +638,10 @@ describe("workspace layout model", () => {
 		expect(fromUntrustedPlainObjects.navigationClockByGroup.constructor).toBe(0);
 	});
 
-	test("session pruning removes both chat and registered TODO references without touching neighbors", () => {
+	test("session pruning removes the session's chat placement without touching neighbors", () => {
 		const document = baseDocument([
 			file("one"),
 			{ kind: "chat", id: "chat", name: "Chat", sessionId: "session" },
-			{
-				kind: "document",
-				id: "todo",
-				name: "TODO",
-				documentKind: "todo-plan",
-				sourceId: "session",
-				docPath: "TODO.md",
-			},
 		]);
 		const pruned = removeSessionLayoutTabs(document, "session");
 		expect(collectCenterGroups(pruned.center).flatMap((group) => group.tabs)).toEqual([

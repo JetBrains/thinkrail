@@ -185,6 +185,49 @@ describe("frontend-local layout state", () => {
 		expect(restored.left.width).toBe(0.31);
 	});
 
+	test("a persisted legacy plan-document tab is dropped on load without discarding the layout", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const document = structuredClone(await ensureWorkspaceLayoutState("workspace"));
+		if (document.center.kind !== "group") throw new Error("missing center group");
+		document.center.tabs = [
+			{ kind: "chat", id: "chat-1", name: "Chat", sessionId: "session-1" },
+			{ kind: "file", id: "one.ts", name: "one.ts", path: "one.ts" },
+		];
+		await commitWorkspaceLayout("workspace", document);
+
+		const key = localLayoutStorageKey(endpoint, "surface-a");
+		const stored = JSON.parse(local.getItem(key) ?? "");
+		const centerGroupId = document.center.id;
+		const group = stored.viewsByWorkspace.workspace.groups[centerGroupId];
+		group.tabs.push({
+			kind: "document",
+			id: "legacy-plan",
+			name: "Plan · Chat",
+			documentKind: "todo-plan",
+			sourceId: "session-1",
+			docPath: "TODO.md",
+		});
+		group.previewTabId = "legacy-plan";
+		local.setItem(key, JSON.stringify(stored));
+
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+
+		const restored = await ensureWorkspaceLayoutState("workspace");
+		expect(collectAllGroups(restored).flatMap((group) => group.tabs.map((tab) => tab.id))).toEqual(
+			expect.arrayContaining(["chat-1", "one.ts"]),
+		);
+		expect(
+			collectAllGroups(restored)
+				.flatMap((group) => group.tabs)
+				.some((tab) => tab.id === "legacy-plan"),
+		).toBe(false);
+	});
+
 	test("a stale region callback rebases its change without reverting a newer frame region", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();

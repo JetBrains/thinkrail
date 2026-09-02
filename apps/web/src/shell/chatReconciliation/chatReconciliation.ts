@@ -129,12 +129,7 @@ export function useDeletedChatPlacementReconciliation(workspaceId: string): void
 				collectAllGroups(document)
 					.flatMap((group) => group.tabs)
 					.flatMap((tab) => {
-						const sessionId =
-							tab.kind === "chat"
-								? tab.sessionId
-								: tab.kind === "document" && tab.documentKind === "todo-plan"
-									? tab.sourceId
-									: null;
+						const sessionId = tab.kind === "chat" ? tab.sessionId : null;
 						return sessionId && Object.hasOwn(deletedSessions, sessionId) ? [sessionId] : [];
 					}),
 			),
@@ -195,13 +190,7 @@ export function useWorkspaceChatCatalogReconciliation(
 		const baselinePlacedSessionIds = baselineDocument
 			? collectAllGroups(baselineDocument)
 					.flatMap((group) => group.tabs)
-					.flatMap((tab) =>
-						tab.kind === "chat"
-							? [tab.sessionId]
-							: tab.kind === "document" && tab.documentKind === "todo-plan"
-								? [tab.sourceId]
-								: [],
-					)
+					.flatMap((tab) => (tab.kind === "chat" ? [tab.sessionId] : []))
 			: [];
 		const baselineSessionIds = [
 			...new Set([

@@ -46,6 +46,7 @@ test("Work stays disabled until the plan has content, never auto-switches, and t
 	await expect(page.getByTestId("session-view-work")).toHaveAttribute("data-active", "true");
 	await expect(pane.getByTestId("plan-item").filter({ hasText: "Ship the feature" })).toBeVisible();
 
+	await expect(page.locator('[data-testid="editor-tab"]')).toHaveCount(1);
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="plan"]')).toHaveCount(0);
 

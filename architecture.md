@@ -116,7 +116,7 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    crosses the wire. Each browser tab or native window owns exactly one resource-free `WorkbenchFrame` for
    center and left/right/bottom topology, singleton-tool placement, visibility, folds, normalized geometry,
    bottom alignment, and restore targets. It separately owns one `WorkspaceViewState` per workspace for open
-   file/diff/chat/document/terminal placements, tab order, and previews, plus a per-workspace `LayoutAttention`
+   file/diff/chat/terminal placements, tab order, and previews, plus a per-workspace `LayoutAttention`
    overlay keyed into that frame. The mounted workbench is a projection of those local values, not another
    authority.
 

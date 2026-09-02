@@ -23,7 +23,6 @@ type LayoutResourceIdentityInput =
 				| { kind: "pinned"; baseRef: string };
 	  }
 	| { kind: "chat"; sessionId: string }
-	| { kind: "document"; documentKind: string; sourceId: string }
 	| { kind: "terminal"; tabKey: string }
 	| { kind: "tool"; tool: string };
 
@@ -42,8 +41,6 @@ export function layoutResourceIdentity<T extends LayoutResourceIdentityInput>(ta
 		}
 		case "chat":
 			return tupleKey("layout-resource", "chat", tab.sessionId);
-		case "document":
-			return tupleKey("layout-resource", "document", tab.documentKind, tab.sourceId);
 		case "terminal":
 			return tupleKey("layout-resource", "terminal", tab.tabKey);
 		case "tool":

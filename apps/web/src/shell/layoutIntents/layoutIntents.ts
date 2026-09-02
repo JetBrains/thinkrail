@@ -148,26 +148,6 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 				name: tab.name,
 				sessionId: tab.sessionId,
 			};
-		case "doc": {
-			if (!tab.sourceId) return null;
-			return {
-				kind: "document",
-				id: tab.id,
-				name: tab.name,
-				documentKind: "todo-plan",
-				sourceId: tab.sourceId,
-				docPath: tab.docPath,
-			};
-		}
-		case "plan":
-			return {
-				kind: "document",
-				id: tab.id,
-				name: tab.name,
-				documentKind: "todo-plan",
-				sourceId: tab.sessionId,
-				docPath: "TODO.md",
-			};
 	}
 }
 

@@ -120,12 +120,12 @@ export function TodoAddRow({
 				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
 			{onOpenPlan ? (
-				<IconTooltip label="Open the plan as a page — review each step's changes">
+				<IconTooltip label="Open this chat's Work view — review each step's changes">
 					<button
 						type="button"
 						data-testid="todo-open-plan"
 						onClick={onOpenPlan}
-						aria-label="Open the plan page"
+						aria-label="Open the Work view"
 						className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
 					>
 						<FileText className="size-14" />

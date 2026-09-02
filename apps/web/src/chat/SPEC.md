@@ -845,7 +845,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `commit.files`); the **path-list fallback** deep-links a single path's live diff directly (pinning the
   scope back to `branch` first, so it can't inherit a commit scope a previous click left behind) or
   expands an inline path list. A commit artifact whose sha no longer resolves ships **no `files`** → no
-  chip, never a broken diff tab (the degrade contract). Plus the add-row + an **"Open the plan page"**
+  chip, never a broken diff tab (the degrade contract). Plus the add-row + an **"Open the Work view"**
   button (`todo-open-plan`) — `useChatTodos.openPlan` switches the session to its **Work view**
   (`setSessionView(sessionId, "work")`): the same chat tab's body swaps to `panels/PlanPane` at the
   shell (see `shell/SPEC.md`), never a second tab, session, or lifecycle. This button is the explicit
@@ -867,13 +867,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   scheme would be dead; interactive navigation is the plan page's job), and `ChatPlan` (`ChatPlanStripContent` +
   `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
   the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
-  is no right-panel Todo tab — the plan lives in the conversation; the plan *page* is a center tab, a
-  document-scale view of the same plan, not a panel. Frontend-local workspace view state persists that page
-  as a registered `todo-plan` reference (resolver kind + session identity, never plan content); another
-  client may explicitly reopen the same live page from the host-owned TODO plan without inheriting placement. (An earlier design compiled the plan to a
-  static markdown `doc` tab with a custom `thinkrail-diff:` link scheme — replaced: a snapshot lies the
-  moment the agent flips a status, and markdown can't carry the Changes-panel affordances; the page is live
-  and markdown is demoted to its export.)
+  is no right-panel Todo tab — the plan lives in the conversation; the plan *page* is the session tab's
+  **Work view**, a document-scale view of the same plan — never its own center tab or panel, and never
+  persisted in local layout state. (Two earlier designs were replaced: a static markdown `doc` tab — a
+  snapshot lies the moment the agent flips a status — and then a live `plan` center tab, which broke the
+  "Chat and Work are two presentations of ONE session surface" model and duplicated navigation.)
   **The glance state** keeps the plan honest as the user's status window: `planGlance(isStreaming,
   askStates)` — derived from session state in `ChatView`, **never stored**, so the agent can't make it
   lie — renders the `in_progress` step as working (dot), **waiting for your answer**

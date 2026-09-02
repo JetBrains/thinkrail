@@ -25,15 +25,6 @@ export interface LayoutChatTab {
 	sessionId: string;
 }
 
-export interface LayoutDocumentTab {
-	kind: "document";
-	id: string;
-	name: string;
-	documentKind: "todo-plan";
-	sourceId: string;
-	docPath: string;
-}
-
 export interface LayoutTerminalTab {
 	kind: "terminal";
 	id: string;
@@ -48,12 +39,7 @@ export interface LayoutToolTab {
 	tool: LayoutToolId;
 }
 
-export type LayoutCenterTab =
-	| LayoutFileTab
-	| LayoutDiffTab
-	| LayoutChatTab
-	| LayoutDocumentTab
-	| LayoutTerminalTab;
+export type LayoutCenterTab = LayoutFileTab | LayoutDiffTab | LayoutChatTab | LayoutTerminalTab;
 export type LayoutAuxiliaryTab = LayoutToolTab | LayoutTerminalTab;
 export type LayoutSideTab = LayoutAuxiliaryTab;
 export type LayoutTab = LayoutCenterTab | LayoutAuxiliaryTab;

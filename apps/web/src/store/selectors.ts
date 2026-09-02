@@ -158,8 +158,6 @@ export function selectAttentionCenterResourceCacheKey(
 			case "diff":
 			case "chat":
 				return tab.kind === selected.kind && layoutResourceIdentity(tab) === identity;
-			case "doc":
-				return selected.kind === "document" && tab.sourceId === selected.sourceId;
 		}
 		return false;
 	});
@@ -274,11 +272,7 @@ export function selectWorkspaceSessionIds(
 ): string[] {
 	const sessionIds = new Set(
 		(state.tabsByWorkspace[workspaceId] ?? []).flatMap((tab) =>
-			tab.kind === "chat" || tab.kind === "plan"
-				? [tab.sessionId]
-				: tab.kind === "doc"
-					? [tab.sourceId]
-					: [],
+			tab.kind === "chat" ? [tab.sessionId] : [],
 		),
 	);
 	for (const chat of state.closedChatsByWorkspace[workspaceId] ?? []) {
@@ -292,9 +286,6 @@ export function selectWorkspaceSessionIds(
 		}
 		for (const tab of node.tabs) {
 			if (tab.kind === "chat") sessionIds.add(tab.sessionId);
-			if (tab.kind === "document" && tab.documentKind === "todo-plan") {
-				sessionIds.add(tab.sourceId);
-			}
 		}
 	};
 	const document = state.layoutDocumentsByWorkspace?.[workspaceId];

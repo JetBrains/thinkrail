@@ -619,8 +619,7 @@ export function moveTabToGroup(
 		groupIndex < 0 ||
 		movingTab.kind === "file" ||
 		movingTab.kind === "diff" ||
-		movingTab.kind === "chat" ||
-		movingTab.kind === "document"
+		movingTab.kind === "chat"
 	) {
 		return { reason: "The destination group no longer exists." };
 	}
@@ -1127,11 +1126,7 @@ export function removeSessionLayoutTabs(
 ): WorkspaceLayoutDocument {
 	const ids = collectAllGroups(document)
 		.flatMap((group) => group.tabs)
-		.filter(
-			(tab) =>
-				(tab.kind === "chat" && tab.sessionId === sessionId) ||
-				(tab.kind === "document" && tab.documentKind === "todo-plan" && tab.sourceId === sessionId),
-		)
+		.filter((tab) => tab.kind === "chat" && tab.sessionId === sessionId)
 		.map((tab) => tab.id);
 	return ids.reduce(removeTabEverywhere, document);
 }

@@ -168,57 +168,6 @@ test("layout placement lookup traverses recursive center and every auxiliary reg
 	expect(selectAttentionCenterResourceCacheKey(state, "ws")).toBe("legacy-file-placement");
 });
 
-test("registered documents participate in legacy selection readiness", () => {
-	const layout: WorkspaceLayoutDocument = {
-		version: 2,
-		center: {
-			kind: "group",
-			id: "center",
-			tabs: [
-				{
-					kind: "document",
-					id: "shared-todo",
-					name: "TODO",
-					documentKind: "todo-plan",
-					sourceId: "session",
-					docPath: "TODO.md",
-				},
-			],
-		},
-		left: { visible: false, width: 0.2, groups: [] },
-		right: { visible: false, width: 0.2, groups: [] },
-		bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
-		toolRestoreTargets: {},
-	};
-	const state = {
-		layoutDocumentsByWorkspace: { ws: layout },
-		layoutAttentionByWorkspace: {
-			ws: {
-				selectedByGroup: { center: "shared-todo" },
-				lastFocusedCenterGroupId: "center",
-				lastFocusedSideGroupId: {},
-				navigationClockByGroup: { center: 0 },
-			},
-		},
-		tabsByWorkspace: {
-			ws: [
-				{
-					kind: "doc" as const,
-					id: "local-todo",
-					workspaceId: "ws",
-					name: "TODO",
-					content: "",
-					docPath: "TODO.md",
-					sourceId: "session",
-				},
-			],
-		},
-		terminalsByWorkspace: {},
-	};
-	expect(selectAttentionCenterResourceReady(state, "ws")).toBe(true);
-	expect(selectAttentionCenterResourceCacheKey(state, "ws")).toBe("local-todo");
-});
-
 test("active workspace selectors resolve the workspace and its owning project", () => {
 	const state = { activeWorkspaceId: "w2", workspaces };
 

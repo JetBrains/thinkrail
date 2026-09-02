@@ -92,15 +92,6 @@ export interface ChatTab {
 	name: string;
 	sessionId: string;
 }
-export interface DocTab {
-	kind: "doc";
-	id: string;
-	workspaceId: string;
-	name: string;
-	content: string;
-	docPath: string;
-	sourceId: string;
-}
 export type DiffTabView = "split" | "inline";
 export interface DiffTab {
 	kind: "diff";
@@ -117,37 +108,19 @@ export interface DiffTab {
 	ignoreWhitespace?: boolean;
 	loadedTick?: number;
 }
-export interface PlanTab {
-	kind: "plan";
-	id: string;
-	workspaceId: string;
-	name: string;
-	sessionId: string;
-}
-export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | PlanTab;
+export type EditorTab = FileTab | ChatTab | DiffTab;
 
 export function chatTabId(workspaceId: string, sessionId: string): string {
 	return tupleKey("chat", workspaceId, sessionId);
 }
 
-function editorResourceIdentity(tab: EditorTab): string {
-	if (tab.kind === "doc") {
-		return tupleKey("layout-resource", "document", "todo-plan", tab.sourceId);
-	}
-	if (tab.kind === "plan") {
-		return tupleKey("layout-resource", "document", "todo-plan", tab.sessionId);
-	}
-	return layoutResourceIdentity(tab);
-}
-
 function editorSessionId(tab: EditorTab): string | null {
-	if (tab.kind === "chat" || tab.kind === "plan") return tab.sessionId;
-	return tab.kind === "doc" ? tab.sourceId : null;
+	return tab.kind === "chat" ? tab.sessionId : null;
 }
 
 function availableEditorTabId(tabs: readonly EditorTab[], tab: EditorTab): string {
-	const identity = editorResourceIdentity(tab);
-	const existing = tabs.find((candidate) => editorResourceIdentity(candidate) === identity);
+	const identity = layoutResourceIdentity(tab);
+	const existing = tabs.find((candidate) => layoutResourceIdentity(candidate) === identity);
 	if (existing) return existing.id;
 	if (!tabs.some((candidate) => candidate.id === tab.id)) return tab.id;
 	let fallback = randomId("editor-cache");
@@ -816,7 +789,6 @@ interface AppState {
 		syncLayout?: boolean,
 		options?: LayoutOpenOptions,
 	) => void;
-	openDoc: (tab: DocTab | PlanTab) => void;
 	closeTab: (
 		id: string,
 		syncLayout?: boolean,
@@ -1951,41 +1923,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 						: claimPreview && preview
 							? omitKey(s.previewTabByWorkspace, wsId)
 							: s.previewTabByWorkspace,
-			};
-		}),
-	openDoc: (tab) =>
-		set((s) => {
-			const sessionId = editorSessionId(tab);
-			if (
-				s.removedWorkspaceIds[tab.workspaceId] ||
-				(sessionId !== null && isSessionDeleted(s, tab.workspaceId, sessionId))
-			) {
-				return {};
-			}
-			const tabs = s.tabsByWorkspace[tab.workspaceId] ?? [];
-			const existing = tabs.find(
-				(candidate) => editorResourceIdentity(candidate) === editorResourceIdentity(tab),
-			);
-			const id = availableEditorTabId(tabs, tab);
-			const resolvedTab = id === tab.id ? tab : { ...tab, id };
-			const navigation = advanceCenterNavigation(s, tab.workspaceId);
-			return {
-				...navigation.patch,
-				layoutIntents: appendLayoutIntent(s.layoutIntents, {
-					kind: "open",
-					workspaceId: tab.workspaceId,
-					tab: resolvedTab,
-					intent: "keep",
-					...(navigation.stamp ? { targetGroupId: navigation.stamp.groupId } : {}),
-					navigation: navigation.stamp,
-				}),
-				tabsByWorkspace: {
-					...s.tabsByWorkspace,
-					[tab.workspaceId]: existing
-						? tabs.map((candidate) => (candidate === existing ? resolvedTab : candidate))
-						: [...tabs, resolvedTab],
-				},
-				activeTabByWorkspace: { ...s.activeTabByWorkspace, [tab.workspaceId]: resolvedTab.id },
 			};
 		}),
 	closeTab: (id, syncLayout = true, countNavigation = true, workspaceId) =>

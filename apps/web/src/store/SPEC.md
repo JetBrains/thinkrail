@@ -104,11 +104,10 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   cannot recreate it.
 
   **Browser-local resource render state** is keyed by workspace + canonical resource id, never embedded in
-  the frame. Loaded file/diff content and ticks, editor modes, live chat runtimes, and resolved document
-  markdown remain caches over their domain sources. Placement ids are stable within a workspace view; an id
-  already owned by another semantic cache gets a collision-safe cache id. A virtual document is legal only
-  when its local resource reference names a registered resolver plus durable source identity; `todo-plan`
-  resolves by session to the live `PlanPane`. Arbitrary inline markdown cannot enter persisted layout state.
+  the frame. Loaded file/diff content and ticks, editor modes, and live chat runtimes remain caches over
+  their domain sources. Placement ids are stable within a workspace view; an id
+  already owned by another semantic cache gets a collision-safe cache id. Arbitrary inline markdown
+  cannot enter persisted layout state.
   An empty pre-hydration cache is never absence: a domain read must be authoritative for the current connection
   generation before reconciliation may prune a local reference.
 
@@ -203,10 +202,10 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   summary—so a chat that survived a host restart or was created in another frontend is reopenable without
   gaining local placement. **`deleteChat(workspaceId, sessionId)`** is the idempotent
   fold for both a confirmed local `session.delete` and the `session.deleted` broadcast: it atomically drops
-  every tab the chat owns — its transcript, live plan page, and any dependent legacy document cache — plus
+  every tab the chat owns plus
   its history row/runtime + skill baseline, records a page-lifetime tombstone, removes queued opens for the
-  chat or its dependent documents, and queues a resource-removal intent. The shell layout integration
-  removes every matching chat placement and session-backed plan reference through its pure mutation path,
+  chat, and queues a resource-removal intent. The shell layout integration
+  removes every matching chat placement through its pure mutation path,
   then reconciles local attention in the same transition. Until then the tombstone renders no body, so a
   stale local reference cannot recreate or hydrate the session. **`noteClosedChats`** and
   **`hydrateSession`** reject tombstoned session ids, so
@@ -408,13 +407,11 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   with the workspace in `applyWorkspaceRemoved`. `setWorkspaceSpecs` **keeps the previous array identity when
   the re-read found no change** — most fs ticks touch no spec, and a fresh identity would invalidate
   `ChatView`'s matcher memo and re-derive every open chat's whole transcript about once a second.
-  **`openDoc(tab)`** caches and places either a resolved **`DocTab`** or a **`PlanTab`** (`kind: "plan"`,
-  id `${workspaceId}:plan:${sessionId}` — one page per chat, re-open focuses). Local placement persistence
-  keeps only resolver kind + durable session identity, never cached content. `PlanPane` reads the host-owned
-  plan live, so the page has no snapshot to go stale. Since the Chat→Work switcher, **no code path
-  produces a plan tab anymore** — `useChatTodos.openPlan` sets the session view instead — but the
-  `PlanTab` plumbing stays so a previously persisted placement still resolves (a named survivor of the
-  Chat→Work switcher change, candidate for a follow-up removal). **`sessionViewBySession`** is the
+  **The plan center-tab model is gone** (`openDoc`, `DocTab`, `PlanTab`, and the layout `document`/
+  `todo-plan` tab kind were removed with the Chat→Work single-surface completion): the plan renders only
+  as the chat tab's Work view, and `layoutState` DROPS a previously persisted legacy plan-document tab on
+  load (plus its preview/before-tool references) instead of invalidating the whole snapshot — an invalid
+  view would discard every local layout. **`sessionViewBySession`** is the
   Chat/Work per-session view mode: client/frontend view state (in-memory — a reload defaults every session
   back to Chat), written by **`setSessionView(sessionId, view)`** (storing only `"work"` entries; `"chat"`
   deletes, and clearing an absent key is identity-preserving) and read through **`selectSessionView`**
@@ -466,7 +463,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   by placement-only minting) still selects semantically. That selection deliberately does not focus the tab,
   because the mounted history query owns focus. The shell updates the group's local attention so the target
   body mounts and consumes the request without publishing a structural snapshot. The `EditorTab` (`FileTab`
-  | `ChatTab` | `DocTab` | `DiffTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
+  | `ChatTab` | `DiffTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
   (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.
