@@ -38,7 +38,7 @@ Run the fast gates before opening a PR (they also run as the husky pre-commit ho
 ```bash
 bun run lint        # biome
 bun run typecheck   # tsc across all packages
-bun run test        # unit tests (bun test, per package)
+bun run test        # unit tests (root tooling + each package)
 ```
 
 Every change that touches the app is verified by the end-to-end suite against the

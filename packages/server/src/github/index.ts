@@ -1,1 +1,1 @@
-export * from "./github";
+export { ghSetupProblem, githubAuthStatus, githubRefresh } from "./github";
