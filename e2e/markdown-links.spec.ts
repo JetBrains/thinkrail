@@ -1,6 +1,29 @@
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
+test("a parent-relative file link cannot escape into browser navigation", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+
+	await page.getByTestId("file-node").filter({ hasText: "styles" }).click();
+	await page.getByTestId("file-node").filter({ hasText: "COLOR.md" }).dblclick();
+	const preview = page.getByTestId("markdown-preview");
+	await expect(preview).toBeVisible();
+
+	const link = preview.getByTestId("markdown-file-link");
+	await expect(link).toHaveAttribute("data-path", "themes/SPEC.md");
+	await expect(link).not.toHaveAttribute("href", /.+/);
+	const urlBefore = page.url();
+	const pagesBefore = page.context().pages().length;
+
+	await link.click();
+
+	await expect(preview.getByRole("heading", { name: "Theme spec target" })).toBeVisible();
+	expect(page.url()).toBe(urlBefore);
+	expect(page.context().pages()).toHaveLength(pagesBefore);
+});
+
 test("relative links, images, and heading anchors work in the rendered markdown view", async ({
 	page,
 }) => {

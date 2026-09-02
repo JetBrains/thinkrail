@@ -1184,7 +1184,9 @@ own section. The kebab menu (`plan-menu`, a
 - **Rendered markdown navigates.** In the preview, links + images resolve against the file's own path
   (via `markdownLinks`, passed as the `a`/`img` renderers): a **relative link** opens the target file in
   the **preview** tab through the shared **`openFileInTab`** (the same flow `FileTree` uses) — following a
-  link is browsing, so the slot is reused rather than promoting the source doc the way VS Code does; the
+  link is browsing, so the slot is reused rather than promoting the source doc the way VS Code does; an
+  accepted file target is a button styled as document-link text, never an anchor with a raw relative
+  `href`, because that URL is not a ThinkRail route and native navigation would escape to the Main page; the
   slot is the slot, whatever the open came from — an **in-doc `#` link**
   scrolls the preview (headings carry slug ids from the in-repo `remarkHeadingIds` transform), an
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route

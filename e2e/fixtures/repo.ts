@@ -79,6 +79,16 @@ export function seedFixtureRepo(): void {
 			"",
 		].join("\n"),
 	);
+	mkdirSync(join(E2E_FIXTURE_REPO, "styles"), { recursive: true });
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "styles", "COLOR.md"),
+		"# Colour system\n\nSee [`themes/SPEC.md`](../themes/SPEC.md).\n",
+	);
+	mkdirSync(join(E2E_FIXTURE_REPO, "themes"), { recursive: true });
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "themes", "SPEC.md"),
+		"# Theme spec target\n\nReached through a parent-relative Markdown link.\n",
+	);
 	writeFileSync(
 		join(E2E_FIXTURE_REPO, "logo.png"),
 		Buffer.from(
