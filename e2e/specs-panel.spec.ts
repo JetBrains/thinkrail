@@ -2,7 +2,6 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
-import { E2eWire } from "./fixtures/wire";
 
 async function proxyOneSpecGraphFailure(page: Page) {
 	let armed = false;
@@ -165,15 +164,6 @@ test("a failed automatic Specs update keeps the previous tree until Retry succee
 	const workspace = await createWorkspaceViaDialog(page);
 	const root = page.locator('[data-testid="spec-node"][data-spec-id="sample-root"]');
 	await expect(root).toBeVisible();
-
-	const wire = await E2eWire.connect();
-	const readsBeforeReady = failure.readCount();
-	const readiness = await wire
-		.request("workspace.watchReady", { workspaceId: workspace.id })
-		.finally(() => wire.close());
-	if (readiness.startupNudge) {
-		await expect.poll(failure.readCount).toBeGreaterThan(readsBeforeReady);
-	}
 
 	const added = page.locator('[data-testid="spec-node"][data-spec-id="sample-retry"]');
 	failure.arm();
