@@ -5,7 +5,7 @@ status: active
 title: host — the browser↔host wire
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1, host]
+tags: [v1, host, public-surface-checked]
 ---
 
 ## Responsibility
@@ -398,8 +398,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   reconnect retains and re-delivers it after `server.welcome`. A host restart has no claim to re-deliver, and
   the welcome clears the frontend's stale popup projection. Popup `feedback.respond` actions are ordinary
   replay-safe requests and never alter the Settings link.
-- **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer` (including
-  idempotent `shutdown()`), `bootHost`, `BootHostOptions`, and `BootedHost`.
+- **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
+  `BootHostOptions`, `BootedHost`, `BuildKind`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
   `boot.ts`); `persistence` (`dataDir` — where `crashLog.ts` writes); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile` for the `/files` route); Bun/Node.

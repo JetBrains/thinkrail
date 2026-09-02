@@ -5,7 +5,7 @@ status: active
 title: subprocess — bounded child processes
 parent: module-server
 depends-on: []
-tags: [v1, host]
+tags: [v1, host, public-surface-checked]
 ---
 
 ## Responsibility

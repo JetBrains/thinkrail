@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: CI & release pipeline
 parent: architecture
-depends-on: [module-cli, module-desktop, module-shared]
+depends-on: [module-cli, module-desktop, module-shared, module-repo-scripts]
 ---
 
 ## Responsibility
@@ -19,8 +19,8 @@ workflows and composite actions.
 
 - **CI** (`ci.yml`, on PRs to `main` and merge-queue check requests): dependency/module-boundary checks,
   lint+typecheck (incl. `check:seams` — the pi binary-seam canary, see `scripts/check-binary-seams.ts` —
-  and `check:spec-surface`, which holds a module's declared public surface to its barrel, see
-  `scripts/check-spec-surface.ts`), unit tests, no-agent e2e, and a **host-target** binary
+  and `check:spec-surface`, which holds explicitly enrolled exact public surfaces to their TypeScript-resolved barrels, see
+  `module-repo-scripts`), unit tests, no-agent e2e, and a **host-target** binary
   build+smoke+**e2e-vs-binary** (`bun run e2e:binary`: the same no-agent suite against the compiled
   artifact, minus the `@dev-seam` fake-login specs), a **windows-latest binary build+smoke**
   (`binary-windows`), plus a host-target Electrobun package, native-window smoke, shared artifact probes,

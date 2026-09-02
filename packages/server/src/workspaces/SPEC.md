@@ -5,7 +5,7 @@ status: active
 title: workspaces — git worktrees
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1]
+tags: [v1, public-surface-checked]
 ---
 
 ## Responsibility

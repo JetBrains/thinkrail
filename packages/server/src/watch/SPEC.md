@@ -5,7 +5,7 @@ status: active
 title: watch — worktree change notifier
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1, live-refresh]
+tags: [v1, live-refresh, public-surface-checked]
 ---
 
 ## Responsibility
@@ -95,6 +95,6 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   panels fall back to read-on-demand until a later read re-creates it. No idle-stop in V1 (bounded by
   workspaces actually visited plus the capped prewarm tier).
 - **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
-  `setRepoMetaPublisher`, `setSkillPathClassifier`, `isIgnoredPath`.
+  `setRepoMetaPublisher`, `setSkillPathClassifier`.
 - **Allowed deps:** `persistence` (workspace lookup), `log`; `contracts` (payload type); Bun/Node.
 - **Forbidden:** `host`; sibling features; any pi package.

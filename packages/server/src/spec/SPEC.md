@@ -6,7 +6,7 @@ title: spec — worktree spec-graph reads
 parent: module-server
 depends-on: [module-contracts]
 references: [module-spec-graph]
-tags: [v1, spec-viewer]
+tags: [v1, spec-viewer, public-surface-checked]
 ---
 
 ## Responsibility
