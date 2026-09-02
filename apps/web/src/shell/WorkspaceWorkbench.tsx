@@ -1,6 +1,9 @@
 import {
 	RiGitBranchLine as GitBranch,
 	RiChatNewLine as MessageSquarePlus,
+	RiChat2Fill,
+	RiChat2Line,
+	RiListCheck3,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
@@ -51,6 +54,7 @@ import {
 	findPlacedResource,
 	findTabLocation,
 	type LayoutCenterTab,
+	type LayoutChatTab,
 	type LayoutTab,
 	type LayoutTabFocusRequest,
 	type LayoutToolId,
@@ -76,6 +80,49 @@ function MissingResource({ label }: { label: string }) {
 	);
 }
 
+function ChatTabLabel({ tab, tabActive }: { tab: LayoutChatTab; tabActive: boolean }) {
+	const view = useAppStore((state) => selectSessionView(state, tab.sessionId));
+	return (
+		<span
+			data-testid="session-view-chat"
+			data-active={view === "chat"}
+			className={`flex min-w-0 items-center gap-4 ${view === "chat" ? "" : "text-text-muted"}`}
+		>
+			{tabActive && view === "chat" ? (
+				<RiChat2Fill className="size-14 shrink-0" />
+			) : (
+				<RiChat2Line className="size-14 shrink-0" />
+			)}
+			<span className="truncate">{tab.name}</span>
+		</span>
+	);
+}
+
+function WorkTabButton({ tab, select }: { tab: LayoutChatTab; select: () => void }) {
+	const view = useAppStore((state) => selectSessionView(state, tab.sessionId));
+	return (
+		<button
+			type="button"
+			tabIndex={-1}
+			data-testid="session-view-work"
+			data-active={view === "work"}
+			aria-label="Show this session's work"
+			onClick={() => {
+				select();
+				useAppStore.getState().setSessionView(tab.sessionId, "work");
+			}}
+			className={`flex shrink-0 items-center gap-4 border-border-muted border-l px-6 ${
+				view === "work"
+					? "text-text-default"
+					: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+			}`}
+		>
+			<RiListCheck3 className="size-14 shrink-0" />
+			Work
+		</button>
+	);
+}
+
 function ChatResourceBody({
 	workspaceId,
 	tab,
@@ -94,7 +141,7 @@ function ChatResourceBody({
 			<ErrorBoundary label="chat" resetKeys={[workspaceId, tab.id, view]}>
 				<Suspense fallback={<MissingResource label="chat" />}>
 					{view === "work" ? (
-						<PlanPane workspaceId={workspaceId} sessionId={tab.sessionId} headerSlot={headerSlot} />
+						<PlanPane workspaceId={workspaceId} sessionId={tab.sessionId} />
 					) : (
 						<ChatView
 							sessionId={tab.sessionId}
@@ -572,6 +619,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				projectionEpoch={projectionEpoch}
 				{...(focusRequest ? { focusRequest } : {})}
 				renderTabBody={renderTabBody}
+				renderChatTabLabel={(tab, active) => <ChatTabLabel tab={tab} tabActive={active} />}
+				renderChatTabActions={(tab, select) => <WorkTabButton tab={tab} select={select} />}
+				onChatTabPrimaryClick={(tab) =>
+					useAppStore.getState().setSessionView(tab.sessionId, "chat")
+				}
 				renderTabAdornment={(tab) => {
 					if (tab.kind === "tool" && tab.tool === "review" && reviewDraftCount > 0) {
 						return (

@@ -134,6 +134,7 @@ import type {
 	LayoutCenterNode,
 	LayoutCenterSplit,
 	LayoutCenterTab,
+	LayoutChatTab,
 	LayoutSideGroup,
 	LayoutSideTab,
 	LayoutTab,
@@ -164,6 +165,9 @@ export interface WorkbenchProps {
 		headerSlot?: HTMLElement | null,
 	) => ReactNode;
 	renderTabAdornment: (tab: LayoutTab) => ReactNode;
+	renderChatTabLabel?: (tab: LayoutChatTab, active: boolean) => ReactNode;
+	renderChatTabActions?: (tab: LayoutChatTab, select: () => void) => ReactNode;
+	onChatTabPrimaryClick?: (tab: LayoutChatTab) => void;
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
 	renderEmptyCenter: (groupId: string) => ReactNode;
 	renderCenterActions: (groupId: string) => ReactNode;
@@ -552,6 +556,9 @@ interface TabStripProps {
 	onRevealTool: (tool: LayoutToolId) => void;
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderChatTabLabel?: WorkbenchProps["renderChatTabLabel"];
+	renderChatTabActions?: WorkbenchProps["renderChatTabActions"];
+	onChatTabPrimaryClick?: WorkbenchProps["onChatTabPrimaryClick"];
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
 	trailing?: ReactNode;
 	contentSlotRef?: (element: HTMLElement | null) => void;
@@ -576,6 +583,9 @@ function TabStrip({
 	onRevealTool,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	renderChatTabLabel,
+	renderChatTabActions,
+	onChatTabPrimaryClick,
 	splitGeometry,
 	trailing,
 	contentSlotRef,
@@ -676,6 +686,9 @@ function TabStrip({
 							onRevealTool={onRevealTool}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
+							renderChatTabLabel={renderChatTabLabel}
+							renderChatTabActions={renderChatTabActions}
+							onChatTabPrimaryClick={onChatTabPrimaryClick}
 							draggingTab={draggingTab}
 							panelId={panelId}
 							{...(splitGeometry ? { splitGeometry } : {})}
@@ -818,6 +831,9 @@ interface WorkbenchTabProps {
 	onRevealTool: (tool: LayoutToolId) => void;
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderChatTabLabel?: WorkbenchProps["renderChatTabLabel"];
+	renderChatTabActions?: WorkbenchProps["renderChatTabActions"];
+	onChatTabPrimaryClick?: WorkbenchProps["onChatTabPrimaryClick"];
 	draggingTab: LayoutTab | null;
 	panelId: string;
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
@@ -844,6 +860,9 @@ function WorkbenchTab({
 	onRevealTool,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	renderChatTabLabel,
+	renderChatTabActions,
+	onChatTabPrimaryClick,
 	draggingTab,
 	panelId,
 	splitGeometry,
@@ -986,15 +1005,27 @@ function WorkbenchTab({
 						tabIndex={active ? 0 : -1}
 						{...drag.listeners}
 						title={preview ? "Preview — double-click to keep" : name}
-						onClick={selectFromClick}
+						onClick={() => {
+							if (tab.kind === "chat") onChatTabPrimaryClick?.(tab);
+							selectFromClick();
+						}}
 						onDoubleClick={selectFromDoubleClick}
 						onKeyDown={onKeyDown}
 						className={`flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${tab.kind === "tool" ? "pr-8" : ""}`}
 					>
-						{tabIcon(tab, active)}
-						<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
+						{tab.kind === "chat" && renderChatTabLabel ? (
+							renderChatTabLabel(tab, active)
+						) : (
+							<>
+								{tabIcon(tab, active)}
+								<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
+							</>
+						)}
 						{renderTabAdornment(tab)}
 					</button>
+					{tab.kind === "chat" && renderChatTabActions
+						? renderChatTabActions(tab, () => onSelect(tab.id))
+						: null}
 					{tab.kind !== "tool" ? (
 						<button
 							type="button"
@@ -1220,6 +1251,9 @@ interface SharedGroupProps {
 	draggingTab: LayoutTab | null;
 	renderTabBody: WorkbenchProps["renderTabBody"];
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderChatTabLabel?: WorkbenchProps["renderChatTabLabel"];
+	renderChatTabActions?: WorkbenchProps["renderChatTabActions"];
+	onChatTabPrimaryClick?: WorkbenchProps["onChatTabPrimaryClick"];
 	renderToolBody: WorkbenchProps["renderToolBody"];
 	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
 	onAttentionChange: WorkbenchProps["onAttentionChange"];
@@ -1301,6 +1335,9 @@ function CenterGroupView({
 				onRevealTool={shared.onRevealTool}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
+				renderChatTabLabel={shared.renderChatTabLabel}
+				renderChatTabActions={shared.renderChatTabActions}
+				onChatTabPrimaryClick={shared.onChatTabPrimaryClick}
 				contentSlotRef={setHeaderSlot}
 				trailing={
 					<>
@@ -2425,6 +2462,9 @@ export function Workbench({
 	focusRequest,
 	renderTabBody,
 	renderTabAdornment,
+	renderChatTabLabel,
+	renderChatTabActions,
+	onChatTabPrimaryClick,
 	renderToolBody,
 	renderEmptyCenter,
 	renderCenterActions,
@@ -2978,6 +3018,9 @@ export function Workbench({
 		draggingTab,
 		renderTabBody,
 		renderTabAdornment,
+		renderChatTabLabel,
+		renderChatTabActions,
+		onChatTabPrimaryClick,
 		renderToolBody,
 		renderSideMenuActions,
 		onAttentionChange,
