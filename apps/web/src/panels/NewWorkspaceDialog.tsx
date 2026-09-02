@@ -3,6 +3,7 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
+	RiLoader4Line as Loader2,
 	type RemixiconComponentType as LucideIcon,
 	RiSparkling2Line as Sparkles,
 	RiAlertLine as TriangleAlert,
@@ -249,6 +250,7 @@ export function NewWorkspaceDialog({
 			}
 			workspace = def;
 		} else {
+			useAppStore.getState().beginWorktreeCreation(selectedProjectId);
 			try {
 				workspace = await getTransport().request("workspace.create", {
 					projectId: selectedProjectId,
@@ -258,6 +260,8 @@ export function NewWorkspaceDialog({
 				toast.error(errorText(err), "Couldn't create workspace");
 				setCreating(false);
 				return;
+			} finally {
+				useAppStore.getState().endWorktreeCreation(selectedProjectId);
 			}
 		}
 
@@ -269,6 +273,7 @@ export function NewWorkspaceDialog({
 		onOpenChange(false);
 
 		const text = prompt.trim();
+		store.beginChatStart(workspace.id);
 		try {
 			const { result: session, syncedTick } = await createSessionWithSkillBaseline({
 				workspaceId: workspace.id,
@@ -289,6 +294,8 @@ export function NewWorkspaceDialog({
 				.catch((err) => store.appendErrorTurn(session.sessionId, errorText(err)));
 		} catch (err) {
 			toast.error(errorText(err), "Couldn't start the chat");
+		} finally {
+			useAppStore.getState().endChatStart(workspace.id);
 		}
 	};
 
@@ -488,10 +495,19 @@ export function NewWorkspaceDialog({
 						onClick={() => void create()}
 						className="flex h-32 shrink-0 items-center gap-8 rounded-[var(--radius-sm)] bg-control-primary-bg px-12 tr-text-action text-control-primary-text outline-none transition-colors hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 					>
-						{isolated ? "Create" : "Start"}
-						<span className="inline-flex h-16 min-w-16 items-center justify-center rounded-[var(--radius-sm)] bg-on-primary-soft px-4 tr-code-text">
-							↵
-						</span>
+						{creating ? (
+							<>
+								<Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
+								{isolated ? "Creating…" : "Starting…"}
+							</>
+						) : (
+							<>
+								{isolated ? "Create" : "Start"}
+								<span className="inline-flex h-16 min-w-16 items-center justify-center rounded-[var(--radius-sm)] bg-on-primary-soft px-4 tr-code-text">
+									↵
+								</span>
+							</>
+						)}
 					</button>
 				</div>
 				<SkillsDialog

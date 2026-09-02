@@ -1,17 +1,5 @@
 import { cn, isAbsolutePath, projectRelativePath } from "@/lib";
-
-const URI_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
-
-export function toolFileTarget(path: string, workspaceRoot?: string | undefined): string | null {
-	const candidate = path.trim();
-	if (!candidate) return null;
-	if (!isAbsolutePath(candidate) && URI_SCHEME.test(candidate)) return null;
-	const relative = projectRelativePath(candidate, workspaceRoot);
-	if (!relative || isAbsolutePath(relative) || relative === ".." || relative.startsWith("../")) {
-		return null;
-	}
-	return relative;
-}
+import { hasUriScheme, workspaceFileTarget } from "../fileTargets";
 
 export function ToolFileLink({
 	path,
@@ -31,10 +19,10 @@ export function ToolFileLink({
 	const candidate = path.trim();
 	const displayPath =
 		label ??
-		(candidate && !isAbsolutePath(candidate) && URI_SCHEME.test(candidate)
+		(candidate && !isAbsolutePath(candidate) && hasUriScheme(candidate)
 			? candidate
 			: projectRelativePath(candidate, workspaceRoot));
-	const target = disabled ? null : toolFileTarget(candidate, workspaceRoot);
+	const target = disabled ? null : workspaceFileTarget(candidate, workspaceRoot);
 	if (!target || !onOpenFile) {
 		return (
 			<span

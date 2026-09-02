@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { PlanStatusIcon, SectionLabel } from "../chat/planKit";
 import { sessionGlance } from "../chat/planView";
 import { glanceIcon } from "../chat/TodoList";
+import { LoadingRegion } from "../components/Skeleton";
 import { selectDiffScope, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmPopover } from "./ConfirmPopover";
@@ -86,7 +87,9 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			</p>
 		);
 	}
-	if (!snapshot) return <p className="px-8 py-4 tr-text-metadata text-text-subtle">Loading…</p>;
+	if (!snapshot) {
+		return <LoadingRegion rows={5} className="px-8 py-4" />;
+	}
 
 	const files = fileSummaries(snapshot.comments, snapshot.review.doneFiles);
 	const finishFile = async (path: string | null) => {
@@ -155,7 +158,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 							: "No review comments yet. Select lines in a file or diff and click the comment icon."}
 					</p>
 				) : (
-					<ul>
+					<ul className="motion-safe:animate-reveal">
 						{files.map((file) => {
 							const isOpen = expanded.has(file.path);
 							const finishable = file.total === 0 && file.resolved > 0;

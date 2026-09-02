@@ -168,8 +168,12 @@ transform cache is lane-local because Playwright's shared cache assumes a single
 lets a cold shard consume another shard's partially written transform. The lane's fake executable directory
 lives under `.bun/bin`: this intentionally marks the injected, hermetic host `PATH` as complete to
 `resolveShellEnv()`, preventing login-shell repair from replacing the Central/editor stubs with
-developer-machine executables. Port allocation remains stable and collision-safe across worktrees: the
-registry claim distinguishes
+developer-machine executables. Folder selection comes from one picker control file across the source,
+binary, and desktop hosts: plain content returns a path and an `error:<message>` directive forces a
+platform-independent failure. The source host also receives empty `DISPLAY` and `WAYLAND_DISPLAY`, so a
+broken control cannot reach a developer's Linux display; native Linux preflight stays unit-covered. Port
+allocation remains stable and collision-safe across
+worktrees: the registry claim distinguishes
 a lane's logical key while checking staleness against the real worktree path. Legacy plain-path claims are
 still valid.
 
@@ -186,6 +190,9 @@ Windows lane into the real profile (see `module-shared`).
 
 - **Owns:** browser scenarios and fixtures under `e2e/`, their Playwright configuration/runner entrypoints,
   isolation and port-allocation rules, report orchestration, and the public `e2e*` package commands.
+  `e2e/fixtures/git.ts` is the one place specs shell out to `git` (`git`, `gitQuiet`, `gitText`, `gitAs`,
+  `commitFile`); `gitAs`/`commitFile` pin a throwaway e2e identity so a seeded commit's authorship never
+  depends on the developer machine's real git config.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
   exports, CLI binary, packaged desktop adapter, shared retrying teardown helper, git, Chromium, and
   Playwright.
@@ -203,8 +210,12 @@ terminal-state contract. Scenarios whose subject is a client-side send transform
 outgoing `session.prompt` frame rather than treating a
 mounted optimistic transcript row as delivery evidence: a fast provider rejection can add a taller error,
 scroll to the latest row, and legitimately virtualize the preceding user row. Chat-order coverage seeds
-multi-round transcripts and asserts both latest edges, host-qualified browser-local persistence, and
-cross-browser isolation without involving a provider; desktop package tests separately pin the stable
+multi-round transcripts and asserts both latest edges, their physical **Latest** destinations, host-qualified
+browser-local persistence, and cross-browser isolation without involving a provider. Hydrated-history
+coverage seeds one canonical giant Markdown block and drives real coarse wheel input so initial virtual
+geometry cannot clamp before the row mounts. Questionnaire paging uses a canonical persisted tool-call/ack
+fixture to pin tall-page reveal, fresh-chat restored-page reveal, visible review focus, and coarse-pointer
+focus without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
 `@agent` because only Pi's real row growth exercises that lifecycle. Before handoff, every app-affecting
 change runs the complete `bun run e2e` no-agent gate. Artifact-only regressions remain covered by

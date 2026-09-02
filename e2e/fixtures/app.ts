@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
@@ -11,6 +10,7 @@ import {
 	removeCentralModeLocalSeeds,
 	writeE2eAgentSettings,
 } from "./centralAgent";
+import { git, gitQuiet, gitText } from "./git";
 import {
 	E2E_CENTRAL_ARTIFACT,
 	E2E_CENTRAL_LOG,
@@ -65,20 +65,19 @@ function resetState(): void {
 	if (!fixtureRepoHealthy()) seedFixtureRepo();
 
 	try {
-		const head = execFileSync("git", ["-C", E2E_FIXTURE_REPO, "symbolic-ref", "--short", "HEAD"], {
-			encoding: "utf8",
-		}).trim();
+		const head = gitText(E2E_FIXTURE_REPO, "symbolic-ref", "--short", "HEAD").trim();
 		if (head !== "main") {
-			execFileSync("git", ["-C", E2E_FIXTURE_REPO, "checkout", "-f", "main"], { stdio: "ignore" });
+			gitQuiet(E2E_FIXTURE_REPO, "checkout", "-f", "main");
 		}
 	} catch {}
 
-	execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "prune"]);
+	git(E2E_FIXTURE_REPO, "worktree", "prune");
 	for (let sweep = 0; sweep < 2; sweep += 1) {
-		const branches = execFileSync(
-			"git",
-			["-C", E2E_FIXTURE_REPO, "for-each-ref", "--format=%(refname:short)", "refs/heads"],
-			{ encoding: "utf8" },
+		const branches = gitText(
+			E2E_FIXTURE_REPO,
+			"for-each-ref",
+			"--format=%(refname:short)",
+			"refs/heads",
 		)
 			.split("\n")
 			.map((b) => b.trim())
@@ -86,7 +85,7 @@ function resetState(): void {
 		if (branches.length === 0) break;
 		for (const branch of branches) {
 			try {
-				execFileSync("git", ["-C", E2E_FIXTURE_REPO, "branch", "-D", branch], { stdio: "ignore" });
+				gitQuiet(E2E_FIXTURE_REPO, "branch", "-D", branch);
 			} catch {}
 		}
 	}
@@ -149,9 +148,38 @@ export async function enterDefaultWorkspace(page: Page): Promise<void> {
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
-export async function openChatFromHistory(page: Page, title: string): Promise<void> {
-	await page.getByTestId("chat-history").first().click();
-	await page.getByTestId("closed-chat-item").filter({ hasText: title }).click();
+export async function openPersistedChat(page: Page, title: string): Promise<void> {
+	const chatTab = page
+		.locator('[data-testid="editor-tab"][data-kind="chat"]')
+		.filter({ hasText: title });
+	const historyButton = page.getByTestId("chat-history").first();
+	const historyItem = page.getByTestId("closed-chat-item").filter({ hasText: title });
+	const clickUnlessOpened = async (target: Locator) => {
+		try {
+			await target.click({ timeout: 5_000 });
+		} catch (error) {
+			if (!(await chatTab.isVisible())) throw error;
+		}
+	};
+
+	await expect
+		.poll(async () => (await chatTab.isVisible()) || (await historyButton.isVisible()), {
+			timeout: 30_000,
+		})
+		.toBe(true);
+	if (await chatTab.isVisible()) return;
+
+	await clickUnlessOpened(historyButton);
+	if (await chatTab.isVisible()) return;
+	await expect
+		.poll(async () => (await chatTab.isVisible()) || (await historyItem.isVisible()), {
+			timeout: 30_000,
+		})
+		.toBe(true);
+	if (await chatTab.isVisible()) return;
+
+	await clickUnlessOpened(historyItem);
+	await expect(chatTab).toBeVisible({ timeout: 30_000 });
 }
 
 export async function revealFirstProjectWorkspaces(page: Page): Promise<void> {

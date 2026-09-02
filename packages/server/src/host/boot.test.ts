@@ -7,7 +7,7 @@ import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { isPortFree } from "@thinkrail/shared/freePort";
 import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
 import { resetJbcentralStateForTests } from "../auth";
-import { type BootedHost, bootHost, HostAlreadyRunningError } from "./boot";
+import { type BootedHost, bootHost } from "./boot";
 
 process.setMaxListeners(50);
 
@@ -112,14 +112,19 @@ test("stop() releases the port", async () => {
 	expect(await isPortFree(b.port)).toBe(true);
 });
 
-test("boot refuses a second host for the same data directory", async () => {
-	await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
-	await expect(
-		bootHost({ port: grabFreePort(), host: "localhost", portMode: "exact" }),
-	).rejects.toBeInstanceOf(HostAlreadyRunningError);
+test("boot permits two hosts for the same data directory", async () => {
+	const first = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	const second = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+
+	expect(second.port).not.toBe(first.port);
+	const responses = await Promise.all([
+		fetch(`http://localhost:${first.port}/health`),
+		fetch(`http://localhost:${second.port}/health`),
+	]);
+	expect(await Promise.all(responses.map((response) => response.text()))).toEqual(["ok", "ok"]);
 });
 
-test("shutdown is idempotent and releases ownership", async () => {
+test("shutdown is idempotent and releases the port", async () => {
 	const options = { port: grabFreePort(), host: "localhost", portMode: "exact" as const };
 	const first = await boot(options);
 	await Promise.all([first.server.shutdown(), first.server.shutdown()]);

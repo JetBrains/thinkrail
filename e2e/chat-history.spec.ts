@@ -1,13 +1,19 @@
 import { existsSync, mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { TodoStore } from "pi-todos/core";
 import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
 	openFixtureProject,
+	openPersistedChat,
 	revealFirstProjectWorkspaces,
 } from "./fixtures/app";
+import {
+	moveMouseToChatViewport,
+	readChatScrollGeometry,
+	readChatViewportIntersection,
+} from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -17,11 +23,6 @@ const repoCwd = () => realpathSync(E2E_FIXTURE_REPO);
 
 function setMtime(path: string, ms: number): void {
 	utimesSync(path, new Date(ms), new Date(ms));
-}
-
-async function reopenChat(page: Page, name: string): Promise<void> {
-	await page.getByTestId("chat-history").first().click();
-	await page.getByTestId("closed-chat-item").filter({ hasText: name }).click();
 }
 
 function seedOpenTodo(sessionId: string, title: string): void {
@@ -35,7 +36,7 @@ test.afterEach(() => {
 	rmSync(join(E2E_FIXTURE_REPO, ".thinkrail"), { recursive: true, force: true });
 });
 
-test("disk chats stay in local history until explicitly reopened, including unfinished work", async ({
+test("a disk chat with unfinished work auto-opens; a finished one stays in local history", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -68,12 +69,127 @@ test("disk chats stay in local history until explicitly reopened, including unfi
 	await enterDefaultWorkspace(page);
 
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
-	await expect(chatTabs).toHaveCount(0);
-	await page.getByTestId("chat-history").first().click();
-	await expect(page.getByTestId("closed-chat-item")).toHaveCount(2);
-	await page.getByTestId("closed-chat-item").filter({ hasText: "the migration chat" }).click();
 	await expect(chatTabs).toHaveCount(1);
 	await expect(page.getByText("stopped before the final verification pass")).toBeVisible();
+	await page.getByTestId("chat-history").first().click();
+	await expect(page.getByTestId("closed-chat-item")).toHaveCount(1);
+	await expect(
+		page.getByTestId("closed-chat-item").filter({ hasText: "release notes chat" }),
+	).toBeVisible();
+});
+
+test("coarse wheel input crosses realistic virtual geometry before a giant history row mounts", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1280, height: 760 });
+	await openFixtureProject(page);
+
+	const longBlockMarker = "canonical giant history block";
+	const longBlock = [
+		longBlockMarker,
+		...Array.from(
+			{ length: 100 },
+			(_, index) =>
+				`Paragraph ${index + 1} records enough deterministic transcript detail to wrap across the chat column while preserving this assistant response as one canonical Markdown row.`,
+		),
+	].join("\n\n");
+	seedWorkspaceSession(repoCwd(), {
+		name: "giant hydrated history",
+		messages: [
+			{ role: "user", text: "Write the complete migration record.", timestamp: BASE_TS },
+			{ role: "assistant", text: longBlock, timestamp: BASE_TS + 1_000 },
+			...Array.from({ length: 14 }, (_, index) => [
+				{
+					role: "user" as const,
+					text: `short follow-up ${index + 1}`,
+					timestamp: BASE_TS + 2_000 + index * 2_000,
+				},
+				{
+					role: "assistant" as const,
+					text: `short answer ${index + 1}`,
+					timestamp: BASE_TS + 3_000 + index * 2_000,
+				},
+			]).flat(),
+		],
+	});
+
+	await enterDefaultWorkspace(page);
+	await openPersistedChat(page, "giant hydrated history");
+
+	const chatScroll = page.getByTestId("chat-scroll");
+	const latestRow = page
+		.locator('[data-testid="chat-message"][data-role="assistant"]')
+		.filter({ hasText: "short answer 14" });
+	await expect(latestRow).toBeVisible();
+	await expect
+		.poll(async () => (await readChatViewportIntersection(latestRow)).intersects)
+		.toBe(true);
+	await expect(page.getByText(longBlockMarker, { exact: true })).toHaveCount(0);
+
+	const coarseDelta = 1_000;
+	const substantialTravelFloor = coarseDelta * 1.5;
+	await expect
+		.poll(async () => {
+			const geometry = await readChatScrollGeometry(chatScroll);
+			return geometry.distanceFromEnd <= geometry.clientHeight * 0.02;
+		})
+		.toBe(true);
+	const initial = await readChatScrollGeometry(chatScroll);
+	expect(initial.maxScrollTop).toBeGreaterThan(coarseDelta * 2 + initial.clientHeight);
+
+	await moveMouseToChatViewport(page, chatScroll);
+	await page.mouse.wheel(0, -coarseDelta);
+	await page.mouse.wheel(0, -coarseDelta);
+
+	await expect
+		.poll(async () => {
+			const geometry = await readChatScrollGeometry(chatScroll);
+			return {
+				substantialTravel: geometry.distanceFromEnd > substantialTravelFloor,
+				clearOfHistoryStart: geometry.distanceFromStart > geometry.clientHeight,
+			};
+		})
+		.toEqual({ substantialTravel: true, clearOfHistoryStart: true });
+	const after = await readChatScrollGeometry(chatScroll);
+	await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+	const latest = page.getByTestId("scroll-to-bottom");
+	await expect(latest).toBeVisible();
+	await expect(latest).toContainText("Latest");
+
+	expect(after.distanceFromEnd).toBeGreaterThan(substantialTravelFloor);
+	expect(after.distanceFromStart).toBeGreaterThan(after.clientHeight);
+
+	await latest.click();
+	await expect(latest).toHaveCount(0);
+	await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+	await expect
+		.poll(async () => {
+			const geometry = await readChatScrollGeometry(chatScroll);
+			return {
+				atPhysicalLatestEdge: geometry.distanceFromEnd <= geometry.clientHeight * 0.02,
+				latestRowIntersectsViewport: (await readChatViewportIntersection(latestRow)).intersects,
+			};
+		})
+		.toEqual({ atPhysicalLatestEdge: true, latestRowIntersectsViewport: true });
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(latestRow).toBeVisible();
+	await expect(page.getByText(longBlockMarker, { exact: true })).toHaveCount(0);
+	await expect
+		.poll(async () => (await readChatScrollGeometry(chatScroll)).distanceFromEnd)
+		.toBeLessThanOrEqual(16);
+	await moveMouseToChatViewport(page, chatScroll);
+	for (let delta = 0; delta < 20; delta += 1) {
+		await page.mouse.wheel(0, -100);
+		await page.evaluate(() => new Promise(requestAnimationFrame));
+	}
+	const granular = await readChatScrollGeometry(chatScroll);
+
+	expect(granular.distanceFromEnd).toBeGreaterThan(substantialTravelFloor);
+	expect(Math.abs(granular.distanceFromEnd - after.distanceFromEnd)).toBeLessThanOrEqual(
+		granular.clientHeight,
+	);
 });
 
 test("a closed chat can be moved to trash from history", async ({ page }) => {
@@ -96,7 +212,6 @@ test("a closed chat can be moved to trash from history", async ({ page }) => {
 	setMtime(kept.path, BASE_TS + 50_000);
 
 	await enterDefaultWorkspace(page);
-	await reopenChat(page, "keep this chat");
 	await expect(page.getByText("keep this transcript")).toBeVisible();
 	await page.getByTestId("chat-history").first().click();
 	const row = page.getByTestId("closed-chat-row").filter({ hasText: "trash this chat" });
@@ -130,7 +245,6 @@ test("trashing a chat converges to a second client", async ({ page, context }) =
 	setMtime(doomed.path, BASE_TS);
 
 	await enterDefaultWorkspace(page);
-	await reopenChat(page, "shared doomed chat");
 	await expect(page.getByText("shared doomed transcript")).toBeVisible();
 
 	const page2 = await context.newPage();
@@ -138,7 +252,6 @@ test("trashing a chat converges to a second client", async ({ page, context }) =
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(page2);
 	await defaultWorkspaceRow(page2).click();
-	await reopenChat(page2, "shared doomed chat");
 	await expect(page2.getByText("shared doomed transcript")).toBeVisible();
 
 	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
@@ -166,7 +279,6 @@ test("a client that misses chat deletion while offline reconciles it after recon
 	setMtime(doomed.path, BASE_TS);
 
 	await enterDefaultWorkspace(page);
-	await reopenChat(page, "offline doomed chat");
 	await expect(page.getByText("offline doomed transcript")).toBeVisible();
 
 	const context2 = await browser.newContext();
@@ -188,7 +300,6 @@ test("a client that misses chat deletion while offline reconciles it after recon
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(page2);
 	await defaultWorkspaceRow(page2).click();
-	await reopenChat(page2, "offline doomed chat");
 	await expect(page2.getByText("offline doomed transcript")).toBeVisible();
 
 	await context2.setOffline(true);
@@ -218,7 +329,7 @@ test("a client that misses chat deletion while offline reconciles it after recon
 	await context2.close();
 });
 
-test("with no TODOs, every disk chat remains in history until explicit reopen", async ({
+test("with no TODOs, the single newest disk chat opens as a fallback; older ones stay in history", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -237,9 +348,11 @@ test("with no TODOs, every disk chat remains in history until explicit reopen", 
 	await enterDefaultWorkspace(page);
 
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
-	await expect(chatTabs).toHaveCount(0);
-	await page.getByTestId("chat-history").first().click();
-	await expect(page.getByTestId("closed-chat-item")).toHaveCount(2);
-	await page.getByTestId("closed-chat-item").filter({ hasText: "newest fallback chat" }).click();
+	await expect(chatTabs).toHaveCount(1);
 	await expect(page.getByText("the newest fallback chat")).toBeVisible();
+	await page.getByTestId("chat-history").first().click();
+	await expect(page.getByTestId("closed-chat-item")).toHaveCount(1);
+	await expect(
+		page.getByTestId("closed-chat-item").filter({ hasText: "older fallback chat" }),
+	).toBeVisible();
 });

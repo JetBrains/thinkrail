@@ -1,6 +1,7 @@
 import { realpathSync, rmSync, utimesSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openChatFromHistory, openFixtureProject } from "./fixtures/app";
+import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import { readChatScrollGeometry, readChatViewportIntersection } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -34,7 +35,7 @@ test("the browser-local message-order preference reverses rows without changing 
 	try {
 		await selectMessageOrder(page, "oldest-first");
 		await enterDefaultWorkspace(page);
-		await openChatFromHistory(page, "message order chat");
+		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 		const messages = page.getByTestId("chat-message");
 		await expect(messages).toHaveText([
@@ -108,11 +109,12 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 	try {
 		await selectMessageOrder(page, "newest-first");
 		await enterDefaultWorkspace(page);
-		await openChatFromHistory(page, "long newest-first chat");
+		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 		const chatScroll = page.getByTestId("chat-scroll");
-		await expect(
-			page.getByText("answer 30: the deliberately verbose fixture has been inspected"),
-		).toBeInViewport();
+		const latestAnswer = page.getByText(
+			"answer 30: the deliberately verbose fixture has been inspected",
+		);
+		await expect(latestAnswer).toBeInViewport();
 
 		const scrollPoint = await chatScroll.evaluate((root) => {
 			const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
@@ -157,6 +159,17 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 		await latest.click();
 		await expect(latest).toHaveCount(0);
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+		await expect(latestAnswer).toBeAttached();
+		await expect
+			.poll(async () => {
+				const geometry = await readChatScrollGeometry(chatScroll);
+				const latestIntersection = await readChatViewportIntersection(latestAnswer);
+				return {
+					atPhysicalLatestEdge: geometry.distanceFromStart <= geometry.clientHeight * 0.02,
+					latestRowIntersectsViewport: latestIntersection.intersects,
+				};
+			})
+			.toEqual({ atPhysicalLatestEdge: true, latestRowIntersectsViewport: true });
 
 		await page.mouse.wheel(0, 10_000);
 		await expect(latest).toBeVisible();

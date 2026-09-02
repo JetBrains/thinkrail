@@ -13,11 +13,28 @@ import type {
 	WorkspaceRemoved,
 } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
-import { useAppStore } from "../store";
+import { isConnectedGeneration, useAppStore } from "../store";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
+
+function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
+	const snapshot = useAppStore.getState();
+	const openProjectIds = new Set(snapshot.projects.map((project) => project.id));
+	for (const projectId of Object.keys(snapshot.workspaces)) {
+		if (!openProjectIds.has(projectId)) continue;
+		void getTransport()
+			.request("workspace.list", { projectId, includeDiffStats: false })
+			.then((workspaces) => {
+				const current = useAppStore.getState();
+				if (!isConnectedGeneration(current, connectionGeneration)) return;
+				if (!current.projects.some((project) => project.id === projectId)) return;
+				for (const workspace of workspaces) current.updateWorkspace(workspace);
+			})
+			.catch(() => {});
+	}
+}
 
 export function initTransport(): WsTransport {
 	if (transport) return transport;
@@ -55,6 +72,7 @@ export function initTransport(): WsTransport {
 					? welcome.hostPlatform
 					: undefined,
 			);
+		refreshLoadedWorkspaceLists(useAppStore.getState().connectionGeneration);
 	});
 
 	transport.subscribe(WS_CHANNELS.projectUpdated, (data) => {

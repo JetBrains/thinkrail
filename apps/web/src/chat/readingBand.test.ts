@@ -414,6 +414,23 @@ describe("reading-band reader intent", () => {
 		});
 	});
 
+	it("cancels controller movement for a local reveal without changing follow state", () => {
+		const following = createHarness();
+		following.setGeometry({ edgeBottom: 500 });
+		following.controller.contentChanged();
+		expect(following.controller.getSnapshot().moving).toBe(true);
+
+		following.controller.cancelMovement();
+		expect(following.pendingFrames()).toBe(0);
+		expect(following.cancelledFrames()).toBe(1);
+		expect(following.controller.getSnapshot()).toMatchObject({ following: true, moving: false });
+
+		const detached = createHarness();
+		detached.controller.readerLeft();
+		detached.controller.cancelMovement();
+		expect(detached.controller.getSnapshot().following).toBe(false);
+	});
+
 	it("does not re-arm from geometry alone, but manual return and the button do", () => {
 		const harness = createHarness();
 		harness.controller.readerLeft();
@@ -437,6 +454,29 @@ describe("reading-band reader intent", () => {
 		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
 		harness.controller.returnToEdge();
 		expect(harness.writes).toEqual([0]);
+	});
+
+	it("keeps a manual return pinned through delayed measurement and stream settlement", () => {
+		const harness = createHarness();
+		harness.controller.readerLeft();
+		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+		harness.controller.returnToEdge();
+		expect(harness.writes).toEqual([900]);
+		expect(harness.pendingFrames()).toBe(1);
+
+		for (let frame = 0; frame < 10; frame += 1) harness.advance(16);
+		expect(harness.pendingFrames()).toBe(1);
+		harness.controller.setStreaming(false);
+		expect(harness.pendingFrames()).toBe(1);
+
+		harness.setGeometry({ maxScrollTop: 1_400 });
+		harness.controller.contentChanged();
+		harness.advance(16);
+		expect(harness.writes.at(-1)).toBe(1_400);
+
+		for (let frame = 0; frame < 19; frame += 1) harness.advance(16);
+		expect(harness.pendingFrames()).toBe(0);
+		expect(harness.controller.getSnapshot()).toMatchObject({ following: true, moving: false });
 	});
 
 	it("returns and reconstructs at the physical top when newest-first makes top the latest edge", () => {

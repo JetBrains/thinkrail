@@ -96,8 +96,8 @@ interface GitWorktreeEntry {
 	prunable: boolean;
 }
 
-function gitWorktreeEntries(repoPath: string): GitWorktreeEntry[] {
-	const listed = git(repoPath, ["worktree", "list", "--porcelain", "-z"], { raw: true });
+async function gitWorktreeEntries(repoPath: string): Promise<GitWorktreeEntry[]> {
+	const listed = await gitAsync(repoPath, ["worktree", "list", "--porcelain", "-z"], { raw: true });
 	if (!listed.ok) throw new Error(`git worktree list failed: ${listed.err}`);
 	const entries: GitWorktreeEntry[] = [];
 	for (const record of listed.out.split("\0\0")) {
@@ -116,9 +116,11 @@ function gitWorktreeEntries(repoPath: string): GitWorktreeEntry[] {
 	return entries;
 }
 
-export function listExistingWorktrees(projectId: string): ExistingWorktreeCandidate[] {
+export async function listExistingWorktrees(
+	projectId: string,
+): Promise<ExistingWorktreeCandidate[]> {
 	const project = openProjectById(projectId);
-	const entries = gitWorktreeEntries(project.path);
+	const entries = await gitWorktreeEntries(project.path);
 	const projectPath = canonicalPath(project.path);
 	const representedPaths = new Set([
 		...loadProjects().map((knownProject) => canonicalPath(knownProject.path)),
@@ -133,14 +135,18 @@ export function listExistingWorktrees(projectId: string): ExistingWorktreeCandid
 	});
 }
 
-export function openExistingWorktree(projectId: string, requestedPath: string): Workspace {
+export async function openExistingWorktree(
+	projectId: string,
+	requestedPath: string,
+): Promise<Workspace> {
 	const project = openProjectById(projectId);
 	if (!requestedPath) throw new Error("An existing worktree path is required");
 	const wantedPath = canonicalPath(requestedPath);
 	const projectPath = canonicalPath(project.path);
 	if (wantedPath === projectPath) return ensureDefaultWorkspace(project);
 
-	const entry = gitWorktreeEntries(project.path).find(
+	const entries = await gitWorktreeEntries(project.path);
+	const entry = entries.find(
 		(candidate) => !candidate.prunable && canonicalPath(candidate.path) === wantedPath,
 	);
 	if (!entry) throw new Error("The selected path is not a registered worktree of this project");
@@ -373,9 +379,10 @@ export function refreshUserOwnedWorkspace(workspaceId: string): void {
 export function renameWorkspace(
 	id: string,
 	requestedName: string,
-	opts: { lock?: boolean } = {},
+	opts: { lock?: boolean; renameBranch?: boolean } = {},
 ): Workspace {
 	const lock = opts.lock ?? true;
+	const renameBranch = opts.renameBranch ?? true;
 	const ws = loadWorkspaces().find((w) => w.id === id);
 	if (!ws) throw new Error(`Unknown workspace: ${id}`);
 	const project = getProjects().find((p) => p.id === ws.projectId);
@@ -386,9 +393,10 @@ export function renameWorkspace(
 		throw new Error("An existing worktree cannot be renamed by ThinkRail");
 	const displayName = toDisplayName(requestedName);
 	if (!displayName) throw new Error(`Invalid workspace name: ${requestedName}`);
-	const wanted = toBranch(displayName);
+	const wanted = renameBranch ? toBranch(displayName) : ws.branch;
 	const branch = wanted === ws.branch ? ws.branch : uniqueBranch(project, wanted);
-	if (branch !== ws.branch) {
+	const branchChanged = branch !== ws.branch;
+	if (branchChanged) {
 		const moved = git(project.path, ["branch", "-m", ws.branch, branch]);
 		if (!moved.ok) throw new Error(`git branch -m failed: ${moved.err}`);
 	}
@@ -397,15 +405,17 @@ export function renameWorkspace(
 	const target = all.find((w) => w.id === id);
 	if (!target) throw new Error(`Unknown workspace: ${id}`);
 	const repointed: Workspace[] = [];
-	for (const w of all) {
-		if (w.projectId !== target.projectId || w.id === target.id) continue;
-		const changed = w.baseBranch === ws.branch || w.diffBase === ws.branch;
-		if (w.baseBranch === ws.branch) w.baseBranch = branch;
-		if (w.diffBase === ws.branch) w.diffBase = branch;
-		if (changed) repointed.push(w);
+	if (branchChanged) {
+		for (const w of all) {
+			if (w.projectId !== target.projectId || w.id === target.id) continue;
+			const changed = w.baseBranch === ws.branch || w.diffBase === ws.branch;
+			if (w.baseBranch === ws.branch) w.baseBranch = branch;
+			if (w.diffBase === ws.branch) w.diffBase = branch;
+			if (changed) repointed.push(w);
+		}
+		if (target.baseBranch === ws.branch) target.baseBranch = branch;
+		if (target.diffBase === ws.branch) target.diffBase = branch;
 	}
-	if (target.baseBranch === ws.branch) target.baseBranch = branch;
-	if (target.diffBase === ws.branch) target.diffBase = branch;
 	target.name = displayName;
 	target.branch = branch;
 	if (lock) target.renamed = true;

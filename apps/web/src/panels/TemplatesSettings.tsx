@@ -9,6 +9,7 @@ import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
 import { TemplateEditorDialog } from "@/chat/TemplateEditorDialog";
 import { assembleTemplate } from "@/chat/templateText";
+import { SkeletonRows } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import { PopoverTrigger } from "@/components/ui/popover";
 import { IconTooltip } from "@/components/ui/tooltip";
@@ -181,7 +182,7 @@ export function TemplatesSettings() {
 			</div>
 
 			{loading ? (
-				<p className="text-text-muted tr-text-ui">Loading templates…</p>
+				<SkeletonRows rows={3} />
 			) : failed ? (
 				<p data-testid="templates-error" className="text-text-muted tr-text-ui">
 					Couldn't read templates from the host — reopen Settings to retry.

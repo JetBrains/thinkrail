@@ -12,24 +12,23 @@ tags: [v1, host]
 
 The retained browser launcher and standalone rollback artifact: the `thinkrail` bin. It boots the engine
 host in-process and opens the browser UI at its URL. It is a thin sibling of `apps/desktop`; all engine
-logic and host ownership live in `packages/server`.
+and process-boot logic lives in `packages/server`.
 
 ## Flow
 
 1. Parse argv + env into options (`src/args.ts`, a pure function); `--help` prints usage and exits.
 2. Resolve the static dir (`THINKRAIL_STATIC_DIR`, else the built web app shipped beside the bin) and
    warn if it is missing.
-3. Await `bootHost({ portMode: "free", … })`. The shared boot path installs crash logging, acquires the
-   canonical-data-directory ownership lease before mutable initialization, repairs the login-shell
-   environment, initializes the current PI runtime/Central watcher, resolves a free serving port at or
-   above the requested one, and embeds the host in this Bun process. A desktop or second CLI already
-   owning the same state is an actionable refusal, never a scan to another writer.
+3. Await `bootHost({ portMode: "free", … })`. The shared boot path installs crash logging, repairs the
+   login-shell environment, initializes the current PI runtime/Central watcher, resolves a free serving
+   port at or above the requested one, and embeds the host in this Bun process. Another CLI or desktop
+   host using the same data directory does not block startup; each process serves its own endpoint.
 4. On interactive stdout render the shared recursive ThinkRail startup mark with honest `host ready`
    status + the resolved endpoint, retain the parse-stable `thinkrail → <url>` line, and open the browser
    there (cross-platform: `open` / `start` / `xdg-open`, best-effort), unless `--no-open`. Exit-only
    commands and redirected output omit the mark.
 5. SIGINT / SIGTERM await the shared idempotent `server.shutdown()` before exit; they do not duplicate
-   agent/analytics/resource/ownership teardown.
+   agent, analytics, or resource teardown.
 
 ## Interface
 
