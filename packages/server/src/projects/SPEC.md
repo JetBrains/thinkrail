@@ -5,7 +5,7 @@ status: active
 title: projects — git repos as projects
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1]
+tags: [v1, public-surface-checked]
 ---
 
 ## Responsibility
@@ -44,10 +44,14 @@ bootstrap it into one so it can be opened.
   The commit supplies a **fallback `user.name`/`user.email` only for a field git has none configured for**,
   so a real global identity is never overridden. ("Does the project have specs?" is **not** computed here
   — `host` answers the lazy `project.hasSpecs` query via `spec.projectHasSpecs`, keeping this module free
-  of any spec dependency.)
+  of any spec dependency.) Project records also own the persisted project-level skill-admission state:
+  trust is granted explicitly and revocably; the grant snapshots the currently discovered project aliases
+  as acknowledged so later arrivals remain pending; and disabled skill/group sets form the project baseline
+  beneath any workspace override. The host composes discovery with these mutation operations; this module
+  stores no skill catalog and imports no agent code.
 - **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`, `closeProject`,
-  `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `isProjectTrusted`,
-  `setProjectTrust`, `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`.
+  `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `setProjectTrust`,
+  `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the
   environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`); Node/Bun.
 - **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the

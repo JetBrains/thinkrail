@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: editors — host editor/IDE integration
 parent: module-server
-tags: [v1]
+tags: [v1, public-surface-checked]
 ---
 
 ## Responsibility
@@ -43,7 +43,7 @@ worktree in the host's file manager — the workspace row's "Open in" menu.
   uses, so its darwin/win32/linux branches are each asserted directly rather than only on whichever OS
   runs the test.
 - **Public surface (barrel):** `listAvailableEditors`, `openEditor`, `revealInFileManager`, `WhichFn`,
-  `SpawnFn`, `defaultWhich`, `defaultSpawn`.
+  `SpawnFn`.
 - **Allowed deps:** Bun (`Bun.which`, `Bun.spawn`), `process.env`/`process.platform`, `contracts` (the
   `EditorInfo` wire type).
 - **Forbidden:** `host`; sibling features (`workspaces` resolves `worktreePath` before calling in — this

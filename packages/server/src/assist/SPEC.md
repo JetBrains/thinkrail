@@ -5,7 +5,7 @@ status: active
 title: assist — ad-hoc one-shot tasks
 parent: module-server
 depends-on: [module-contracts, submodule-server-agent]
-tags: [v1, pi, oneshot]
+tags: [v1, pi, oneshot, public-surface-checked]
 ---
 
 ## Responsibility

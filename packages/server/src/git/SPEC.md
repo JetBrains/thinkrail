@@ -5,7 +5,7 @@ status: active
 title: git — runner + worktree status/diff
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1]
+tags: [v1, public-surface-checked]
 ---
 
 ## Responsibility
@@ -195,7 +195,8 @@ ref off the workspace-create critical path.
   **writes** the user's branch; the caller serializes it per workspace.
   **`gitHeadSha(workspaceId)`** → `string | null` — `rev-parse HEAD` (`null` on an unborn HEAD), recorded
   into the todos baseline sidecar at `in_progress`.
-- **Public surface (barrel):** `git`, `gitAsync`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`, `gitDiffFile`,
+- **Public surface (barrel):** `git`, `gitAsync`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
+  `gitUncommittedPaths`, `gitDiffFile`,
   `readBlobAt`,
   `gitCommitPaths`, `gitHeadSha`, `listCommits`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,

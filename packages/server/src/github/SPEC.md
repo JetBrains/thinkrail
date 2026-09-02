@@ -5,7 +5,7 @@ status: active
 title: github — local gh auth status
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1]
+tags: [v1, public-surface-checked]
 ---
 
 ## Responsibility
@@ -29,8 +29,7 @@ Read-only local GitHub CLI (`gh`) auth status for the New-Workspace dialog's "Co
   `{ connected: false }` (a transient network stall is not "signed out" — the silent compare fallback,
   never the sign-in dialog). `pr` consumes `ghSetupProblem` (after a failed gh flow only) so the client can
   show setup guidance instead of silently degrading to the compare page.
-- **Public surface (barrel):** `githubAuthStatus`, `githubRefresh`, `ghSetupProblem`, `ghSetupProblemFrom`,
-  `parseGhAuthStatus`.
+- **Public surface (barrel):** `githubAuthStatus`, `githubRefresh`, `ghSetupProblem`.
 - **Allowed deps:** `contracts` (`GithubAuthStatus`); `subprocess` (`runBounded`, the bounded child both
   probes spawn under); Bun (`which`). No `git`/`projects` reach — it's a pure `gh` probe.
 - **Forbidden:** `host`; sibling features; being bundled into the browser (`gh` is shelled, never bundled).
