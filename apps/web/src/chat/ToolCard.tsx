@@ -81,7 +81,9 @@ export function ToolCard({
 				/>
 			</button>
 			{expanded ? (
-				<div className={cn("px-8 pb-4", isError && "text-feedback-error")}>
+				<div
+					className={cn("border-border-muted border-t px-8 py-4", isError && "text-feedback-error")}
+				>
 					<ToolRendererBody {...renderProps} imageLabel={summary} />
 				</div>
 			) : null}

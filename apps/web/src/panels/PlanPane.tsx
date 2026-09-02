@@ -269,6 +269,7 @@ interface StepDrag {
 	draggable: boolean;
 	handlers: React.HTMLAttributes<HTMLLIElement>;
 	insertion: "top" | "bottom" | null;
+	connector: boolean;
 }
 
 function StepList({
@@ -348,7 +349,14 @@ function StepList({
 						: {}),
 				};
 				return (
-					<Fragment key={item.id}>{renderItem(item, { draggable, handlers, insertion })}</Fragment>
+					<Fragment key={item.id}>
+						{renderItem(item, {
+							draggable,
+							handlers,
+							insertion,
+							connector: index < ordered.length - 1,
+						})}
+					</Fragment>
 				);
 			})}
 		</ul>
@@ -467,25 +475,9 @@ function ItemBlock({
 							changesRequested={changesRequested}
 						/>
 					</span>
-					{collapsible ? (
-						<button
-							type="button"
-							data-testid="plan-item-toggle"
-							aria-expanded={expanded}
-							onClick={() => setExpanded((v) => !v)}
-							title={expanded ? "Hide this step's details" : "Show this step's details"}
-							className="flex min-w-0 flex-1 items-center gap-4 rounded-[var(--radius-sm)] text-left"
-						>
-							<ChevronRight className="size-14 shrink-0 text-text-muted transition-transform group-data-[expanded=true]:rotate-90" />
-							<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
-								{item.title}
-							</span>
-						</button>
-					) : (
-						<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
-							{item.title}
-						</span>
-					)}
+					<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
+						{item.title}
+					</span>
 					{reviewing ? (
 						<button
 							type="button"
@@ -626,6 +618,20 @@ function ItemBlock({
 							</PopoverContent>
 						</Popover>
 					</div>
+					{collapsible ? (
+						<button
+							type="button"
+							data-testid="plan-item-toggle"
+							aria-expanded={expanded}
+							onClick={() => setExpanded((v) => !v)}
+							title={expanded ? "Hide this step's details" : "Show this step's details"}
+							className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+						>
+							<ChevronRight
+								className={`size-14 transition-transform ${expanded ? "rotate-90" : ""}`}
+							/>
+						</button>
+					) : null}
 				</div>
 				{collapsible && (item.verification || set) ? (
 					<span className="flex items-center gap-8 py-2 tr-text-metadata text-text-subtle group-data-[expanded=true]:hidden">
@@ -645,9 +651,7 @@ function ItemBlock({
 					</span>
 				) : null}
 				{hasDetails ? (
-					<div
-						className={`mt-2 ml-8 flex-col gap-2 border-border-default border-l pl-12 ${detailsClass}`}
-					>
+					<div className={`mt-4 flex-col gap-4 border-border-muted border-t pt-4 ${detailsClass}`}>
 						{feedback ? (
 							<div
 								data-testid="plan-item-review-feedback"
@@ -708,6 +712,13 @@ function ItemBlock({
 				<div
 					data-testid="step-insertion-line"
 					className="pointer-events-none absolute inset-x-0 bottom-[-3px] h-2 rounded-full bg-primary"
+				/>
+			) : null}
+			{drag.connector ? (
+				<div
+					data-testid="step-connector"
+					aria-hidden="true"
+					className="pointer-events-none absolute bottom-[-4px] left-[15px] h-4 w-px bg-border-muted"
 				/>
 			) : null}
 		</li>
@@ -1270,7 +1281,7 @@ export default function PlanPane({
 					</div>
 				) : unsettledReviewables.length > 0 ? (
 					<div data-testid="plan-next-action" data-kind="review" className={NEXT_ACTION_CLASS}>
-						<RiSearchEyeLine className="size-16 shrink-0 text-primary" />
+						<CircleAlert className="size-16 shrink-0 text-text-muted" />
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{unsettledReviewables.length === 1
 								? "1 step awaits"
@@ -1349,11 +1360,6 @@ export default function PlanPane({
 						))}
 						{loose.length > 0 ? (
 							<section className="mb-16" data-testid="plan-loose">
-								{groups.length > 0 ? (
-									<h2 className="mb-4 border-border-default border-b pb-4 tr-title-compact text-text-default">
-										Other
-									</h2>
-								) : null}
 								<StepList
 									items={loose}
 									renderItem={(item, drag) => (

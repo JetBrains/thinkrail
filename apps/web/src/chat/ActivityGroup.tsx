@@ -192,9 +192,6 @@ function GroupDisclosure({
 				onClick={toggle}
 				className="flex w-full cursor-pointer select-none items-center gap-4 rounded-[var(--radius-sm)] px-4 py-4 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
-				<ChevronRight
-					className={`size-16 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
-				/>
 				{live ? (
 					<Loader2 className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
 				) : (
@@ -214,11 +211,18 @@ function GroupDisclosure({
 						{headline}
 					</span>
 				) : null}
-				<span className="min-w-0 truncate" title={summary}>
+				<span className="min-w-0 flex-1 truncate" title={summary}>
 					{summary}
 				</span>
+				<ChevronRight
+					className={`size-16 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+				/>
 			</button>
-			{expanded ? <div className="flex flex-col gap-px pl-12">{children}</div> : null}
+			{expanded ? (
+				<div className="mt-2 flex flex-col gap-px border-border-muted border-t pt-2 pl-12">
+					{children}
+				</div>
+			) : null}
 		</div>
 	);
 }
