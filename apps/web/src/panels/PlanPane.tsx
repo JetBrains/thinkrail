@@ -10,20 +10,29 @@ import {
 	RiGitBranchLine as GitBranch,
 	RiGitCommitLine as GitCommitHorizontal,
 	RiGitPullRequestLine as GitPullRequestArrow,
-	RiListCheck3 as ListChecks,
 	RiLoader4Line as Loader2,
 	RiChat1Line as MessageSquare,
 	RiMore2Line as MoreVertical,
+	RiCheckboxBlankCircleLine,
+	RiCheckboxCircleLine,
+	RiCloseCircleLine,
+	RiDeleteBin7Line,
+	RiDraggable,
+	RiLoader4Line,
+	RiPauseLine,
+	RiPlayLine,
+	RiSearchEyeLine,
+	RiStopLine,
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { VerificationBadge, VerificationGlyph } from "../chat/planKit";
 import { planToMarkdown } from "../chat/planMarkdown";
 import {
@@ -42,7 +51,6 @@ import {
 	reviewSettled,
 	workAvailable,
 } from "../chat/planView";
-import { StatusIcon } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
 import { IconTooltip } from "../components/ui/tooltip";
 import {
@@ -52,6 +60,7 @@ import {
 	useAppStore,
 } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
+import { ConfirmPopover } from "./ConfirmPopover";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
 import { openDiffInTab } from "./openTabs";
@@ -150,7 +159,7 @@ function ChangeSetBlock({
 const NEXT_ACTION_CLASS =
 	"mb-16 flex items-center gap-8 rounded-[var(--radius-md)] bg-container-elevated-bg px-12 py-8";
 const NEXT_ACTION_BUTTON_CLASS =
-	"shrink-0 rounded-[var(--radius-sm)] bg-primary px-8 py-4 tr-text-ui text-text-on-primary hover:opacity-90 disabled:opacity-50";
+	"flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] bg-primary px-8 py-4 tr-text-ui text-text-on-primary hover:opacity-90 disabled:opacity-50";
 
 type StageState = "done" | "active" | "pending";
 
@@ -220,6 +229,132 @@ function RevisionsBlock({
 	);
 }
 
+interface StepProto {
+	paused: boolean;
+	stopped: boolean;
+	comments: string[];
+}
+
+const EMPTY_STEP_PROTO: StepProto = { paused: false, stopped: false, comments: [] };
+
+const STEP_ACTION_CLASS =
+	"flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
+
+function StepStatusIcon({
+	status,
+	paused,
+	stopped,
+	changesRequested,
+}: {
+	status: TodoItem["status"];
+	paused: boolean;
+	stopped: boolean;
+	changesRequested: boolean;
+}) {
+	if (stopped) return <RiCloseCircleLine className="size-14 shrink-0 text-feedback-error" />;
+	if (changesRequested)
+		return <RiCloseCircleLine className="size-14 shrink-0 text-feedback-warning" />;
+	if (status === "in_progress")
+		return (
+			<RiLoader4Line
+				className={`size-14 shrink-0 text-text-muted ${paused ? "" : "animate-spin"}`}
+			/>
+		);
+	if (status === "done")
+		return <RiCheckboxCircleLine className="size-14 shrink-0 text-feedback-success" />;
+	return <RiCheckboxBlankCircleLine className="size-14 shrink-0 text-text-muted" />;
+}
+
+interface StepDrag {
+	draggable: boolean;
+	handlers: React.HTMLAttributes<HTMLLIElement>;
+	insertion: "top" | "bottom" | null;
+}
+
+function StepList({
+	items,
+	renderItem,
+}: {
+	items: TodoItem[];
+	renderItem: (item: TodoItem, drag: StepDrag) => ReactNode;
+}) {
+	const [localOrder, setLocalOrder] = useState<string[] | null>(null);
+	const ordered = useMemo(() => {
+		if (!localOrder) return items;
+		const byId = new Map(items.map((t) => [t.id, t] as const));
+		const sorted = localOrder.flatMap((id) => {
+			const t = byId.get(id);
+			if (!t) return [];
+			byId.delete(id);
+			return [t];
+		});
+		return [...sorted, ...byId.values()];
+	}, [items, localOrder]);
+	const [drag, setDrag] = useState<{ id: string; slot: number } | null>(null);
+	const minSlot = useMemo(() => {
+		let lastLocked = -1;
+		ordered.forEach((t, i) => {
+			if (t.status !== "pending") lastLocked = i;
+		});
+		return lastLocked + 1;
+	}, [ordered]);
+	const finishDrop = () => {
+		if (!drag) return;
+		const ids = ordered.map((t) => t.id);
+		const from = ids.indexOf(drag.id);
+		if (from >= 0) {
+			let to = Math.max(drag.slot, minSlot);
+			ids.splice(from, 1);
+			if (to > from) to -= 1;
+			ids.splice(to, 0, drag.id);
+			setLocalOrder(ids);
+		}
+		setDrag(null);
+	};
+	return (
+		<ul className="flex flex-col gap-4">
+			{ordered.map((item, index) => {
+				const draggable = item.status === "pending";
+				const insertion: StepDrag["insertion"] =
+					drag !== null && drag.id !== item.id && drag.slot >= minSlot
+						? drag.slot === index
+							? "top"
+							: index === ordered.length - 1 && drag.slot === ordered.length
+								? "bottom"
+								: null
+						: null;
+				const handlers: React.HTMLAttributes<HTMLLIElement> = {
+					onDragOver: (event) => {
+						if (!drag) return;
+						event.preventDefault();
+						const rect = event.currentTarget.getBoundingClientRect();
+						const half = event.clientY < rect.top + rect.height / 2;
+						const slot = Math.max(half ? index : index + 1, minSlot);
+						if (drag.slot !== slot) setDrag({ ...drag, slot });
+					},
+					onDrop: (event) => {
+						event.preventDefault();
+						finishDrop();
+					},
+					...(draggable
+						? {
+								onDragStart: (event: React.DragEvent<HTMLLIElement>) => {
+									event.dataTransfer.effectAllowed = "move";
+									event.dataTransfer.setData("text/plain", item.id);
+									setDrag({ id: item.id, slot: index });
+								},
+								onDragEnd: () => setDrag(null),
+							}
+						: {}),
+				};
+				return (
+					<Fragment key={item.id}>{renderItem(item, { draggable, handlers, insertion })}</Fragment>
+				);
+			})}
+		</ul>
+	);
+}
+
 function ItemBlock({
 	item,
 	workspaceId,
@@ -231,6 +366,10 @@ function ItemBlock({
 	reviewerSessionId,
 	startDisabled,
 	focusRequest,
+	proto,
+	onProtoChange,
+	onDelete,
+	drag,
 }: {
 	item: TodoItem;
 	workspaceId: string;
@@ -242,6 +381,10 @@ function ItemBlock({
 	reviewerSessionId?: string | undefined;
 	startDisabled: boolean;
 	focusRequest: { id: string; tick: number } | null;
+	proto: StepProto;
+	onProtoChange: (patch: Partial<StepProto>) => void;
+	onDelete: () => void;
+	drag: StepDrag;
 }) {
 	const reviewed = reviewSettled(item);
 	const reviewing = item.review?.reviewing === true;
@@ -253,10 +396,18 @@ function ItemBlock({
 	const fileCount = counts?.count ?? 0;
 	const feedback = changesRequested ? item.review?.feedback : undefined;
 	const hasDetails = Boolean(
-		item.note || item.summary || item.verification || feedback || set !== null,
+		item.note ||
+			item.summary ||
+			item.verification ||
+			feedback ||
+			set !== null ||
+			proto.comments.length > 0,
 	);
 	const collapsible = item.status === "done" && hasDetails;
 	const [expanded, setExpanded] = useState(false);
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [commentOpen, setCommentOpen] = useState(false);
+	const [commentDraft, setCommentDraft] = useState("");
 	const consumedFocusTick = useRef(0);
 	useEffect(() => {
 		if (!focusRequest || focusRequest.id !== item.id || !collapsible) return;
@@ -265,6 +416,16 @@ function ItemBlock({
 		setExpanded(true);
 	}, [focusRequest, item.id, collapsible]);
 	const detailsClass = collapsible ? "hidden group-data-[expanded=true]:flex" : "flex";
+	const showReviewButton = needsReview && !reviewing && !changesRequested;
+	const queued = item.status === "pending" && !proto.stopped;
+	const running = item.status === "in_progress" && !proto.stopped;
+	const saveComment = () => {
+		const text = commentDraft.trim();
+		if (!text) return;
+		onProtoChange({ comments: [...proto.comments, text] });
+		setCommentDraft("");
+		setCommentOpen(false);
+	};
 	return (
 		<li
 			id={`plan-item-${item.id}`}
@@ -274,137 +435,280 @@ function ItemBlock({
 			data-reviewing={reviewing}
 			data-changes-requested={changesRequested}
 			data-expanded={collapsible ? expanded : undefined}
-			className="group py-2"
+			data-dragging={drag.draggable || undefined}
+			draggable={drag.draggable}
+			{...drag.handlers}
+			className="group relative flex items-start gap-8"
 		>
-			<div className="flex items-start gap-8 rounded-[var(--radius-sm)] transition-colors group-hover:bg-control-bg-hovered">
-				<span
-					className="flex min-h-8 shrink-0 items-center"
-					title={
-						reviewing
-							? "Reviewing — the reviewer agent is reading this step"
-							: changesRequested
-								? "Changes requested"
-								: reviewed
-									? "Verified"
-									: undefined
-					}
-				>
-					<StatusIcon
-						status={item.status}
-						glance="working"
-						reviewed={reviewed}
-						reviewing={reviewing}
-						changesRequested={changesRequested}
-					/>
-				</span>
-				<div className="flex min-w-0 flex-1 flex-col gap-2">
-					<div className="flex min-h-8 items-center gap-8">
-						{collapsible ? (
-							<button
-								type="button"
-								data-testid="plan-item-toggle"
-								aria-expanded={expanded}
-								onClick={() => setExpanded((v) => !v)}
-								title={expanded ? "Hide this step's details" : "Show this step's details"}
-								className="flex min-w-0 flex-1 items-center gap-8 rounded-[var(--radius-sm)] px-4 py-2 text-left"
-							>
-								<ChevronRight className="size-14 shrink-0 text-text-muted transition-transform group-data-[expanded=true]:rotate-90" />
-								<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
-									{item.title}
-								</span>
-							</button>
-						) : (
-							<span className="flex min-w-0 flex-1 items-center gap-8 px-4">
-								<span className="size-14 shrink-0" />
-								<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
-									{item.title}
-								</span>
-							</span>
-						)}
-						{reviewing ? (
-							<button
-								type="button"
-								data-testid="plan-item-reviewing"
-								title="Open the reviewer's chat to watch the process"
-								onClick={() =>
-									reviewerSessionId && void openChatInTab(workspaceId, reviewerSessionId)
-								}
-								className="min-h-8 shrink-0 tr-text-metadata text-primary underline-offset-2 hover:underline"
-							>
-								Reviewing…
-							</button>
-						) : changesRequested ? (
-							<button
-								type="button"
-								data-testid="plan-item-changes-requested"
-								title="The review demanded changes — open the Review tab for the findings"
-								onClick={onOpenReview}
-								className="flex min-h-8 shrink-0 items-center gap-2 tr-text-metadata text-feedback-warning underline-offset-2 hover:underline"
-							>
-								<CircleAlert className="size-14" />
-								Changes requested
-								{findings > 0 ? ` · ${findings}` : ""}
-							</button>
-						) : needsReview ? (
-							<button
-								type="button"
-								data-testid="plan-start-review"
-								disabled={startDisabled}
-								title={
-									startDisabled
-										? "Another step is being reviewed — one review at a time"
-										: undefined
-								}
-								onClick={() => onStartReview(item.id)}
-								className="flex h-24 shrink-0 items-center rounded-[var(--radius-sm)] bg-control-primary-bg px-8 text-control-primary-text tr-text-action opacity-100 transition hover:bg-control-primary-bg-hovered focus-visible:opacity-100 disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
-							>
-								Start review
-							</button>
-						) : null}
-					</div>
-					{collapsible && (item.verification || set) ? (
-						<span className="flex items-center gap-8 px-4 tr-text-metadata text-text-subtle group-data-[expanded=true]:hidden">
-							<span className="size-14 shrink-0" />
-							{item.verification ? <VerificationGlyph verification={item.verification} /> : null}
-							{set ? (
-								<span>
-									{fileCount} {fileCount === 1 ? "file" : "files"}
-								</span>
-							) : null}
-							{set?.kind === "commit" && counts ? (
-								<span className="flex items-center gap-8 max-sm:hidden">
-									<span className="tr-code-text">{set.sha.slice(0, 7)}</span>
-									<DiffStatBadge added={counts.added} removed={counts.removed} />
-								</span>
-							) : null}
-						</span>
-					) : null}
-				</div>
-			</div>
-			{hasDetails ? (
+			{drag.insertion === "top" ? (
 				<div
-					className={`mt-2 ml-8 flex-col gap-2 border-border-default border-l pl-12 ${detailsClass}`}
-				>
-					{feedback ? (
-						<div
-							data-testid="plan-item-review-feedback"
-							className="tr-text-metadata text-feedback-warning"
+					data-testid="step-insertion-line"
+					className="pointer-events-none absolute inset-x-0 top-[-3px] h-2 rounded-full bg-primary"
+				/>
+			) : null}
+			<div className="min-w-0 flex-1 rounded-[var(--radius-md)] bg-container-elevated-bg px-8 py-4">
+				<div className="flex min-h-24 items-center gap-8">
+					<span
+						className="flex shrink-0 items-center"
+						title={
+							proto.stopped
+								? "Stopped"
+								: proto.paused && running
+									? "Paused"
+									: changesRequested
+										? "Changes requested"
+										: undefined
+						}
+					>
+						<StepStatusIcon
+							status={item.status}
+							paused={proto.paused}
+							stopped={proto.stopped}
+							changesRequested={changesRequested}
+						/>
+					</span>
+					{collapsible ? (
+						<button
+							type="button"
+							data-testid="plan-item-toggle"
+							aria-expanded={expanded}
+							onClick={() => setExpanded((v) => !v)}
+							title={expanded ? "Hide this step's details" : "Show this step's details"}
+							className="flex min-w-0 flex-1 items-center gap-4 rounded-[var(--radius-sm)] text-left"
 						>
-							{feedback}
-						</div>
+							<ChevronRight className="size-14 shrink-0 text-text-muted transition-transform group-data-[expanded=true]:rotate-90" />
+							<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
+								{item.title}
+							</span>
+						</button>
+					) : (
+						<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
+							{item.title}
+						</span>
+					)}
+					{reviewing ? (
+						<button
+							type="button"
+							data-testid="plan-item-reviewing"
+							title="Open the reviewer's chat to watch the process"
+							onClick={() =>
+								reviewerSessionId && void openChatInTab(workspaceId, reviewerSessionId)
+							}
+							className="shrink-0 tr-text-metadata text-primary underline-offset-2 hover:underline"
+						>
+							Reviewing…
+						</button>
+					) : changesRequested ? (
+						<button
+							type="button"
+							data-testid="plan-item-changes-requested"
+							title="The review demanded changes — open the Review tab for the findings"
+							onClick={onOpenReview}
+							className="flex shrink-0 items-center gap-2 tr-text-metadata text-feedback-warning underline-offset-2 hover:underline"
+						>
+							Changes requested
+							{findings > 0 ? ` · ${findings}` : ""}
+						</button>
 					) : null}
-					{item.note ? <div className="tr-text-metadata text-text-subtle">{item.note}</div> : null}
-					{item.status === "done" && item.summary ? (
-						<div data-testid="plan-item-summary" className="tr-text-metadata text-text-muted">
-							{item.summary}
-						</div>
-					) : null}
-					{item.status === "done" && item.verification ? (
-						<VerificationBadge verification={item.verification} />
-					) : null}
-					<ChangeSetBlock item={item} workspaceId={workspaceId} onOpenCommit={onOpenCommit} />
-					<RevisionsBlock item={item} onOpenCommit={onOpenCommit} />
+					<div className="flex shrink-0 items-center gap-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+						{queued ? (
+							<>
+								<IconTooltip label="Drag to reorder the queue">
+									<button
+										type="button"
+										data-testid="step-drag-handle"
+										aria-label="Drag to reorder the queue"
+										className={`${STEP_ACTION_CLASS} cursor-grab`}
+									>
+										<RiDraggable className="size-14" />
+									</button>
+								</IconTooltip>
+								<ConfirmPopover
+									open={confirmOpen}
+									onOpenChange={setConfirmOpen}
+									title={`Remove "${item.title}"?`}
+									description="The queued step is removed from this session's plan."
+									confirmLabel="Remove"
+									destructive
+									confirmTestId="step-confirm-delete"
+									onConfirm={() => {
+										setConfirmOpen(false);
+										onDelete();
+									}}
+									align="end"
+								>
+									<IconTooltip label="Remove this queued step" wrapTrigger>
+										<PopoverTrigger asChild>
+											<button
+												type="button"
+												data-testid="step-delete"
+												aria-label="Remove this queued step"
+												className={STEP_ACTION_CLASS}
+											>
+												<RiDeleteBin7Line className="size-14" />
+											</button>
+										</PopoverTrigger>
+									</IconTooltip>
+								</ConfirmPopover>
+							</>
+						) : null}
+						{running && !proto.paused ? (
+							<IconTooltip label="Pause this step">
+								<button
+									type="button"
+									data-testid="step-pause"
+									aria-label="Pause this step"
+									onClick={() => onProtoChange({ paused: true })}
+									className={STEP_ACTION_CLASS}
+								>
+									<RiPauseLine className="size-14" />
+								</button>
+							</IconTooltip>
+						) : null}
+						{running && proto.paused ? (
+							<IconTooltip label="Resume this step">
+								<button
+									type="button"
+									data-testid="step-resume"
+									aria-label="Resume this step"
+									onClick={() => onProtoChange({ paused: false })}
+									className={STEP_ACTION_CLASS}
+								>
+									<RiPlayLine className="size-14" />
+								</button>
+							</IconTooltip>
+						) : null}
+						{running ? (
+							<IconTooltip label="Stop this step">
+								<button
+									type="button"
+									data-testid="step-stop"
+									aria-label="Stop this step"
+									onClick={() => onProtoChange({ stopped: true, paused: false })}
+									className={STEP_ACTION_CLASS}
+								>
+									<RiStopLine className="size-14" />
+								</button>
+							</IconTooltip>
+						) : null}
+						<Popover open={commentOpen} onOpenChange={setCommentOpen}>
+							<IconTooltip label="Add a note to this step" wrapTrigger>
+								<PopoverTrigger asChild>
+									<button
+										type="button"
+										data-testid="step-comment-toggle"
+										aria-label="Add a note to this step"
+										className={STEP_ACTION_CLASS}
+									>
+										<MessageSquare className="size-14" />
+									</button>
+								</PopoverTrigger>
+							</IconTooltip>
+							<PopoverContent
+								side="bottom"
+								align="end"
+								data-testid="step-comment-popover"
+								className="flex w-288 flex-col gap-8 p-12"
+							>
+								<span className="tr-title-compact text-text-default">Note for this step</span>
+								<input
+									value={commentDraft}
+									onChange={(event) => setCommentDraft(event.target.value)}
+									onKeyDown={(event) => {
+										if (event.key === "Enter") saveComment();
+									}}
+									placeholder="Add a note…"
+									className="w-full rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active"
+								/>
+								<span className="tr-text-metadata text-text-subtle">
+									Session-local prototype — notes aren't persisted yet.
+								</span>
+							</PopoverContent>
+						</Popover>
+					</div>
 				</div>
+				{collapsible && (item.verification || set) ? (
+					<span className="flex items-center gap-8 py-2 tr-text-metadata text-text-subtle group-data-[expanded=true]:hidden">
+						<span className="size-14 shrink-0" />
+						{item.verification ? <VerificationGlyph verification={item.verification} /> : null}
+						{set ? (
+							<span>
+								{fileCount} {fileCount === 1 ? "file" : "files"}
+							</span>
+						) : null}
+						{set?.kind === "commit" && counts ? (
+							<span className="flex items-center gap-8 max-sm:hidden">
+								<span className="tr-code-text">{set.sha.slice(0, 7)}</span>
+								<DiffStatBadge added={counts.added} removed={counts.removed} />
+							</span>
+						) : null}
+					</span>
+				) : null}
+				{hasDetails ? (
+					<div
+						className={`mt-2 ml-8 flex-col gap-2 border-border-default border-l pl-12 ${detailsClass}`}
+					>
+						{feedback ? (
+							<div
+								data-testid="plan-item-review-feedback"
+								className="tr-text-metadata text-feedback-warning"
+							>
+								{feedback}
+							</div>
+						) : null}
+						{item.note ? (
+							<div className="tr-text-metadata text-text-subtle">{item.note}</div>
+						) : null}
+						{item.status === "done" && item.summary ? (
+							<div data-testid="plan-item-summary" className="tr-text-metadata text-text-muted">
+								{item.summary}
+							</div>
+						) : null}
+						{item.status === "done" && item.verification ? (
+							<VerificationBadge verification={item.verification} />
+						) : null}
+						<ChangeSetBlock item={item} workspaceId={workspaceId} onOpenCommit={onOpenCommit} />
+						<RevisionsBlock item={item} onOpenCommit={onOpenCommit} />
+						{proto.comments.map((comment, index) => (
+							<div
+								key={`${index}:${comment}`}
+								data-testid="step-comment"
+								className="flex items-start gap-4 tr-text-metadata text-text-muted"
+							>
+								<MessageSquare className="mt-2 size-12 shrink-0" />
+								<span className="min-w-0 flex-1">{comment}</span>
+							</div>
+						))}
+					</div>
+				) : null}
+			</div>
+			<span className="flex w-24 shrink-0 justify-end">
+				{showReviewButton ? (
+					<IconTooltip
+						label={
+							startDisabled
+								? "Another step is being reviewed — one review at a time"
+								: "Review this step's work"
+						}
+					>
+						<button
+							type="button"
+							data-testid="plan-start-review"
+							aria-label="Review this step's work"
+							disabled={startDisabled}
+							onClick={() => onStartReview(item.id)}
+							className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text transition hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+						>
+							<RiSearchEyeLine className="size-14" />
+						</button>
+					</IconTooltip>
+				) : null}
+			</span>
+			{drag.insertion === "bottom" ? (
+				<div
+					data-testid="step-insertion-line"
+					className="pointer-events-none absolute inset-x-0 bottom-[-3px] h-2 rounded-full bg-primary"
+				/>
 			) : null}
 		</li>
 	);
@@ -447,6 +751,9 @@ function GroupSection({
 	reviewerSessionId,
 	startDisabled,
 	focusRequest,
+	protoFor,
+	patchProto,
+	onDelete,
 }: {
 	group: TodoGroupItem;
 	workspaceId: string;
@@ -458,6 +765,9 @@ function GroupSection({
 	reviewerSessionId?: string | undefined;
 	startDisabled: boolean;
 	focusRequest: { id: string; tick: number } | null;
+	protoFor: (id: string) => StepProto;
+	patchProto: (id: string, patch: Partial<StepProto>) => void;
+	onDelete: (id: string) => void;
 }) {
 	const { done, total } = groupProgress(group);
 	return (
@@ -468,10 +778,10 @@ function GroupSection({
 					{done}/{total}
 				</span>
 			</h2>
-			<ul className="flex flex-col">
-				{group.todos.map((item) => (
+			<StepList
+				items={group.todos}
+				renderItem={(item, drag) => (
 					<ItemBlock
-						key={item.id}
 						item={item}
 						workspaceId={workspaceId}
 						sessionId={sessionId}
@@ -482,9 +792,13 @@ function GroupSection({
 						reviewerSessionId={reviewerSessionId}
 						startDisabled={startDisabled}
 						focusRequest={focusRequest}
+						proto={protoFor(item.id)}
+						onProtoChange={(patch) => patchProto(item.id, patch)}
+						onDelete={() => onDelete(item.id)}
+						drag={drag}
 					/>
-				))}
-			</ul>
+				)}
+			/>
 		</section>
 	);
 }
@@ -528,6 +842,10 @@ export default function PlanPane({
 		titleEdited: boolean;
 	} | null>(null);
 	const [focusRequest, setFocusRequest] = useState<{ id: string; tick: number } | null>(null);
+	const [stepProto, setStepProto] = useState<Record<string, StepProto>>({});
+	const protoFor = (id: string): StepProto => stepProto[id] ?? EMPTY_STEP_PROTO;
+	const patchProto = (id: string, patch: Partial<StepProto>) =>
+		setStepProto((prev) => ({ ...prev, [id]: { ...(prev[id] ?? EMPTY_STEP_PROTO), ...patch } }));
 	const agentComments = useAppStore((s) => selectAgentReviewCommentCount(s, workspaceId));
 	const reviewComments = useAppStore((s) => s.reviewsByWorkspace[workspaceId]?.comments);
 
@@ -931,20 +1249,6 @@ export default function PlanPane({
 									Open draft PR
 								</DropdownMenuItem>
 							) : null}
-							{reviewables.length > 0 ? (
-								<>
-									<DropdownMenuSeparator />
-									<DropdownMenuItem
-										data-testid="plan-review-all"
-										disabled={unsettledReviewables.length === 0 || reviewingAny}
-										onSelect={() => void reviewAll()}
-									>
-										<ListChecks />
-										Review All
-										{unsettledReviewables.length > 0 ? ` (${unsettledReviewables.length})` : ""}
-									</DropdownMenuItem>
-								</>
-							) : null}
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</header>
@@ -966,7 +1270,7 @@ export default function PlanPane({
 					</div>
 				) : unsettledReviewables.length > 0 ? (
 					<div data-testid="plan-next-action" data-kind="review" className={NEXT_ACTION_CLASS}>
-						<ListChecks className="size-16 shrink-0 text-primary" />
+						<RiSearchEyeLine className="size-16 shrink-0 text-primary" />
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{unsettledReviewables.length === 1
 								? "1 step awaits"
@@ -980,6 +1284,7 @@ export default function PlanPane({
 							onClick={() => void reviewAll()}
 							className={NEXT_ACTION_BUTTON_CLASS}
 						>
+							<RiSearchEyeLine className="size-14 shrink-0" />
 							Review All
 						</button>
 					</div>
@@ -1037,6 +1342,9 @@ export default function PlanPane({
 								reviewerSessionId={data.reviewerSessionId}
 								startDisabled={reviewingAny}
 								focusRequest={focusRequest}
+								protoFor={protoFor}
+								patchProto={patchProto}
+								onDelete={(id) => void plan.remove(id)}
 							/>
 						))}
 						{loose.length > 0 ? (
@@ -1046,10 +1354,10 @@ export default function PlanPane({
 										Other
 									</h2>
 								) : null}
-								<ul className="flex flex-col">
-									{loose.map((item) => (
+								<StepList
+									items={loose}
+									renderItem={(item, drag) => (
 										<ItemBlock
-											key={item.id}
 											item={item}
 											workspaceId={workspaceId}
 											sessionId={sessionId}
@@ -1060,9 +1368,13 @@ export default function PlanPane({
 											reviewerSessionId={data.reviewerSessionId}
 											startDisabled={reviewingAny}
 											focusRequest={focusRequest}
+											proto={protoFor(item.id)}
+											onProtoChange={(patch) => patchProto(item.id, patch)}
+											onDelete={() => void plan.remove(item.id)}
+											drag={drag}
 										/>
-									))}
-								</ul>
+									)}
+								/>
 							</section>
 						) : null}
 					</>
