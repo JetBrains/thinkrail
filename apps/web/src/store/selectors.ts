@@ -23,6 +23,7 @@ import type {
 	EditorTab,
 	RouteChatTarget,
 	SessionRuntime,
+	SessionViewMode,
 	TerminalTab,
 } from "./appStore";
 
@@ -349,6 +350,13 @@ export function selectChatTitle(
 	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
 	const chatTab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
 	return (chatTab?.name ?? "Chat").trim() || "Chat";
+}
+
+export function selectSessionView(
+	state: { sessionViewBySession: Record<string, "work"> },
+	sessionId: string,
+): SessionViewMode {
+	return state.sessionViewBySession[sessionId] ?? "chat";
 }
 
 export function selectCompactionTurnIds(

@@ -278,6 +278,8 @@ export interface TerminalTab {
 	reservationPending?: true;
 }
 
+export type SessionViewMode = "chat" | "work";
+
 export interface ClosedChat {
 	sessionId: string;
 	title: string;
@@ -761,6 +763,7 @@ interface AppState {
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
 	chatMessageOrder: ChatMessageOrder;
+	sessionViewBySession: Record<string, "work">;
 	reviewModel: WireModel | undefined;
 	reviewEffort: ThinkingLevel | undefined;
 	reviewAutoFix: boolean;
@@ -932,6 +935,7 @@ interface AppState {
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
+	setSessionView: (sessionId: string, view: SessionViewMode) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
 	requestChangesView: (workspaceId: string, path: string) => void;
@@ -1554,6 +1558,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	chatMessageOrder: "oldest-first",
+	sessionViewBySession: {},
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	reviewModel: DEFAULT_CONFIG.reviewModel,
 	reviewEffort: DEFAULT_CONFIG.reviewEffort,
@@ -2853,6 +2858,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
+	setSessionView: (sessionId, view) =>
+		set((s) => {
+			if (view === "work")
+				return {
+					sessionViewBySession: { ...s.sessionViewBySession, [sessionId]: "work" as const },
+				};
+			if (!s.sessionViewBySession[sessionId]) return {};
+			const { [sessionId]: _dropped, ...sessionViewBySession } = s.sessionViewBySession;
+			return { sessionViewBySession };
+		}),
 	applyConfig: (config) => set(configPatch(config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>

@@ -84,6 +84,10 @@ export function flatItems(plan: TodoPlan): TodoItem[] {
 	return [...plan.groups.flatMap((g) => g.todos), ...plan.todos];
 }
 
+export function workAvailable(plan: TodoPlan | null): boolean {
+	return plan !== null && (plan.groups.length > 0 || plan.todos.length > 0);
+}
+
 export function planSummary(plan: TodoPlan): {
 	done: number;
 	total: number;

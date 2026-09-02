@@ -433,7 +433,13 @@ a project picker, the prompt hero, and the reused
   after the last tab closes without introducing onboarding state. The workbench resource renderer handles
   registered **`plan`** tabs (`PlanTab`) via the lazy **`PlanPane`** — the chat plan's **live review-map
   page**. Frontend-local placement stores only the `todo-plan` resolver kind + session identity, never inline
-  plan content; another client can explicitly reopen the same host-owned page without inheriting placement. It renders the session's TODO plan document-scale
+  plan content; another client can explicitly reopen the same host-owned page without inheriting placement.
+Plan tabs are now legacy-only (nothing creates one since the Chat→Work switcher — see `store/SPEC.md`);
+`PlanPane`'s primary mount is as the chat tab's **Work view**: with the `sessionView` prop the shell passes,
+it renders a panel-header-row bar carrying `chat/ViewSwitcher` (view `work`) above the page, so the user
+switches back to Chat in place — same session, same tab, no second lifecycle. Availability for the Work
+segment re-derives from its own live plan (`chat/planView.workAvailable`); the active segment never
+disables, so an emptied plan cannot strand the user in Work. It renders the session's TODO plan document-scale
   (groups as sections, items with status glyphs) with a **scan-first item anatomy**: the item TITLE is
   the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,
   subtle/muted) — so titles never blend into prose. A **done item collapses to a compact two-line

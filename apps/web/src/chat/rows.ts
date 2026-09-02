@@ -47,7 +47,8 @@ export type ChatRow =
 			steps: ActivityStep[];
 			live: boolean;
 	  }
-	| { kind: "divider"; id: string; data: TurnDividerData };
+	| { kind: "divider"; id: string; data: TurnDividerData }
+	| { kind: "workStarted"; id: string };
 
 export function projectRows(rows: ChatRow[], messageOrder: ChatMessageOrder): ChatRow[] {
 	if (messageOrder === "oldest-first" || rows.length < 2) return rows;
@@ -98,6 +99,7 @@ export function deriveRows(
 ): ChatRow[] {
 	const rows: ChatRow[] = [];
 	let run: ActivityStep[] = [];
+	let workStarted = false;
 
 	const flushRun = (live = false) => {
 		const first = run[0];
@@ -142,6 +144,11 @@ export function deriveRows(
 						rows.push({ kind: "tool", id: block.id, ...data });
 					} else {
 						run.push({ kind: "tool", id: block.id, ...data });
+					}
+					if (!workStarted && PLAN_CREATING_TOOLS.has(block.name)) {
+						workStarted = true;
+						flushRun();
+						rows.push({ kind: "workStarted", id: `${block.id}:work-started` });
 					}
 				}
 			}
@@ -209,6 +216,8 @@ export interface TurnDividerData {
 	specs: string[];
 	changedFiles: string[];
 }
+
+const PLAN_CREATING_TOOLS = new Set(["todo_write", "todo_add"]);
 
 const SPEC_WRITER_TOOL = "spec_create";
 

@@ -2,7 +2,7 @@ import type { PiEvent, SessionEventPayload, TodoPlan } from "@thinkrail/contract
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
-import { isConnectedGeneration, selectChatTitle, useAppStore } from "../store";
+import { isConnectedGeneration, useAppStore } from "../store";
 import { errorText, getSessionMessagesWithSkillBaseline, getTransport } from "../transport";
 import { messagesToRuntime } from "./hydrate";
 import { sessionGlance, shouldNudgeOnAdd } from "./planView";
@@ -171,15 +171,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	};
 
 	const openPlan = () => {
-		const state = useAppStore.getState();
-		const title = selectChatTitle(state, workspaceId, sessionId);
-		state.openDoc({
-			kind: "plan",
-			id: `${workspaceId}:plan:${sessionId}`,
-			workspaceId,
-			name: `Plan · ${title}`,
-			sessionId,
-		});
+		useAppStore.getState().setSessionView(sessionId, "work");
 	};
 
 	const openChanges = (target: { sha: string } | { path: string }) => {

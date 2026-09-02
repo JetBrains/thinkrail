@@ -411,7 +411,15 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   **`openDoc(tab)`** caches and places either a resolved **`DocTab`** or a **`PlanTab`** (`kind: "plan"`,
   id `${workspaceId}:plan:${sessionId}` — one page per chat, re-open focuses). Local placement persistence
   keeps only resolver kind + durable session identity, never cached content. `PlanPane` reads the host-owned
-  plan live, so the page has no snapshot to go stale. **`DiffTab`** is a read-only Monaco diff of one
+  plan live, so the page has no snapshot to go stale. Since the Chat→Work switcher, **no code path
+  produces a plan tab anymore** — `useChatTodos.openPlan` sets the session view instead — but the
+  `PlanTab` plumbing stays so a previously persisted placement still resolves (a named survivor of the
+  Chat→Work switcher change, candidate for a follow-up removal). **`sessionViewBySession`** is the
+  Chat/Work per-session view mode: client/frontend view state (in-memory — a reload defaults every session
+  back to Chat), written by **`setSessionView(sessionId, view)`** (storing only `"work"` entries; `"chat"`
+  deletes, and clearing an absent key is identity-preserving) and read through **`selectSessionView`**
+  (absent → `"chat"`). Work *availability* is NOT stored here — it derives from the host-owned plan
+  (`chat/planView.workAvailable`), so the store never carries a second execution truth. **`DiffTab`** is a read-only Monaco diff of one
 changed file over **one diff scope** (id `${workspaceId}:diff:${scopeKey}:${path}` — one tab per *(file,
 scope)*: **the scope is part of a tab's identity**, because a tab's content must never change meaning
 because the Changes tool's scope flipped underneath it; the tab carries its own `scope`, which is also what

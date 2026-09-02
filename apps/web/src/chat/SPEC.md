@@ -138,6 +138,13 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   store's arrangement-agnostic tool-reveal intent) without surfacing any path, which is what makes the pair
   read as switching between Specs and Changes; closing is “never mind” and leaves the tool where the user
   last sent it.
+- `workStarted` — the conversation→work transition marker: the FIRST assistant `todo_write`/`todo_add`
+  toolCall (the plan-creating moment, persisted in the transcript so hydration re-derives it identically)
+  flushes the run and anchors ONE `Work started · View work →` row (`work-started`/`view-work`) right
+  after that activity — one per transcript, never one per todo event. It is a compact navigation row,
+  not an assistant message: `ChatView` supplies `onViewWork` only while `planView.workAvailable` holds,
+  so the link never leads to an empty Work view and ordinary conversational tool use never shows it;
+  without the callback the row renders nothing (history preview included).
 
 Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
 block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives
@@ -395,7 +402,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `h-panel-header-row` (`--panel-header-row-height`, currently 32px), the shared structural geometry with
   workbench Group Headers and the Changes toolbar, not a value pinned here; it never scrolls,
   and constrained widths clip/truncate TODO + status/usage text while preserving the trailing Skills
-  action. Its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
+  action. Its `left` slot carries the session **`ViewSwitcher`** then the plan strip; its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
   `NewWorkspaceDialog` so the two triggers cannot drift), `ExtUiDialog`, and **`SkillsDialog`** (the **Skills manager**: a catalog
   grouped by source with **sticky section headers** — the first-party **ThinkRail** and **Pi** groups lead
@@ -839,9 +846,20 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   scope back to `branch` first, so it can't inherit a commit scope a previous click left behind) or
   expands an inline path list. A commit artifact whose sha no longer resolves ships **no `files`** → no
   chip, never a broken diff tab (the degrade contract). Plus the add-row + an **"Open the plan page"**
-  button (`todo-open-plan`) — `useChatTodos.openPlan` opens (or focuses) the chat's **live plan page**,
-  a center `plan` tab rendered by `panels/PlanPane` (see `panels/SPEC.md`); its heading resolves the
-  chat's name through the store's `selectChatTitle` (one home, shared with the pane). **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
+  button (`todo-open-plan`) — `useChatTodos.openPlan` switches the session to its **Work view**
+  (`setSessionView(sessionId, "work")`): the same chat tab's body swaps to `panels/PlanPane` at the
+  shell (see `shell/SPEC.md`), never a second tab, session, or lifecycle. This button is the explicit
+  escape hatch and stays live even on an empty plan (the PR funnel works from an empty Work view). The
+  *progressive* path is **`ViewSwitcher`** (`ViewSwitcher.tsx`, presentational `Chat | Work` segments,
+  `session-view-chat`/`session-view-work`, mounted in `ChatHeader`'s left slot): Chat selected by
+  default, Work visible but **disabled** (native `disabled` + semantic `control-disabled` tokens) until
+  **`planView.workAvailable(plan)`** — the host-persisted `todo.list` plan has any group or item. That
+  is the one availability signal: ordinary conversation never populates the plan (only
+  `todo_write`/`todo_add`/user adds do), and it re-derives identically after reload — no client-only
+  execution truth. Enabling never auto-switches; selection is client view state
+  (`store.sessionViewBySession`, per-session — concurrent sessions stay isolated — and in-memory, so a
+  reload defaults back to Chat). `PlanPane` mounts the same switcher (view `work`) in its session-view
+  bar, so exactly one switcher is mounted either way. **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
   "work in order" discipline is unaffected), `planMarkdown` (a pure `plan →
   markdown` compiler, `## <group> — n/m` sections — the plan page's **export** (copy / save-as-.md),
   never an interactive surface: a done item's change set renders as its short sha + `N files · +A −R`

@@ -18,6 +18,7 @@ import {
 	shouldNudgeOnAdd,
 	stripStatus,
 	verificationStatus,
+	workAvailable,
 } from "./planView";
 import type { ChatTurn } from "./types";
 
@@ -279,6 +280,13 @@ test("planCompletionSummary shows only while every item is done", () => {
 	expect(planCompletionSummary({ ...done, todos: [item("a", "done"), item("b")] })).toBeUndefined();
 	expect(planCompletionSummary({ todos: [], groups: [], summary: "x" })).toBeUndefined();
 	expect(planCompletionSummary({ todos: [item("a", "done")], groups: [] })).toBeUndefined();
+});
+
+test("workAvailable: false until the plan has any group or item, same answer on every re-derivation", () => {
+	expect(workAvailable(null)).toBe(false);
+	expect(workAvailable({ todos: [], groups: [] })).toBe(false);
+	expect(workAvailable({ todos: [item("a")], groups: [] })).toBe(true);
+	expect(workAvailable({ todos: [], groups: [group("g", [item("a")])] })).toBe(true);
 });
 
 test("verificationStatus: an honest 'not verified' reads unverified; a named check reads claimed", () => {

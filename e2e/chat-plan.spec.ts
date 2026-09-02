@@ -30,7 +30,7 @@ test("the chat plan opens as a popup from the header strip and takes a user item
 	await expect(toggle).toContainText("0/1");
 });
 
-test("the plan opens as a live plan page tab (markdown is its export)", async ({
+test("the plan opens as the session's Work view (markdown is its export)", async ({
 	page,
 	context,
 }) => {
@@ -46,7 +46,8 @@ test("the plan opens as a live plan page tab (markdown is its export)", async ({
 	).toBeVisible();
 
 	await popover.getByTestId("todo-open-plan").click();
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="plan"]')).toContainText("Plan");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="plan"]')).toHaveCount(0);
+	await expect(page.getByTestId("session-view-work")).toHaveAttribute("data-active", "true");
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 	await expect(pane.getByRole("heading", { level: 1 })).toContainText("Plan");
@@ -55,12 +56,13 @@ test("the plan opens as a live plan page tab (markdown is its export)", async ({
 	).toBeVisible();
 	await expect(pane.getByTestId("plan-progress")).toContainText("0/1");
 
-	await page.locator('[data-testid="editor-tab"][data-kind="chat"]').click();
+	await page.getByTestId("session-view-chat").click();
 	await page.getByTestId("chat-plan-toggle").click();
 	await popover.getByTestId("todo-add-input").fill("Second thought");
 	await popover.getByTestId("todo-add-input").press("Enter");
 	await expect(popover.getByTestId("todo-row").filter({ hasText: "Second thought" })).toBeVisible();
-	await page.locator('[data-testid="editor-tab"][data-kind="plan"]').click();
+	await page.keyboard.press("Escape");
+	await page.getByTestId("session-view-work").click();
 	await expect(pane.getByTestId("plan-item").filter({ hasText: "Second thought" })).toBeVisible();
 	await expect(pane.getByTestId("plan-progress")).toContainText("0/2");
 

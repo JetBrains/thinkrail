@@ -3,6 +3,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { StopReason } from "@thinkrail/contracts";
 
+type FixtureToolCall = { id: string; name: string; arguments?: Record<string, unknown> };
+
 type FixtureMessage =
 	| { role: "user"; text: string; timestamp: number }
 	| {
@@ -11,7 +13,9 @@ type FixtureMessage =
 			timestamp: number;
 			stopReason?: StopReason;
 			errorMessage?: string;
-	  };
+			toolCalls?: FixtureToolCall[];
+	  }
+	| { role: "toolResult"; toolCallId: string; text: string; timestamp: number };
 
 export function writeFixtureSession(
 	dir: string,
@@ -53,7 +57,20 @@ export function writeFixtureSession(
 
 	opts.messages.forEach((m, i) => {
 		const id = entryId(`m${i}`);
-		const content = m.role === "assistant" ? [{ type: "text", text: m.text }] : m.text;
+		const content =
+			m.role === "assistant"
+				? [
+						{ type: "text", text: m.text },
+						...(m.toolCalls ?? []).map((call) => ({
+							type: "toolCall",
+							id: call.id,
+							name: call.name,
+							arguments: call.arguments ?? {},
+						})),
+					]
+				: m.role === "toolResult"
+					? [{ type: "text", text: m.text }]
+					: m.text;
 		lines.push(
 			JSON.stringify({
 				type: "message",
@@ -64,6 +81,7 @@ export function writeFixtureSession(
 					role: m.role,
 					content,
 					timestamp: m.timestamp,
+					...(m.role === "toolResult" ? { toolCallId: m.toolCallId, isError: false } : {}),
 					...(m.role === "assistant" && m.stopReason ? { stopReason: m.stopReason } : {}),
 					...(m.role === "assistant" && m.errorMessage !== undefined
 						? { errorMessage: m.errorMessage }

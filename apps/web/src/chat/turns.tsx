@@ -1,4 +1,5 @@
 import {
+	RiArrowRightLine as ArrowRight,
 	RiBookOpenLine as BookOpen,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
@@ -42,6 +43,7 @@ export function ChatTurnView({
 	onOpenChange,
 	onReveal,
 	onTryAgain,
+	onViewWork,
 }: {
 	row: ChatRow;
 	workspaceRoot?: string | undefined;
@@ -50,6 +52,7 @@ export function ChatTurnView({
 	onOpenChange?: ((path: string) => void) | undefined;
 	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
 	onTryAgain?: (() => void) | undefined;
+	onViewWork?: (() => void) | undefined;
 }) {
 	switch (row.kind) {
 		case "user":
@@ -119,9 +122,32 @@ export function ChatTurnView({
 					onReveal={onReveal ?? (() => {})}
 				/>
 			);
+		case "workStarted":
+			return onViewWork ? <WorkStartedRow onViewWork={onViewWork} /> : null;
 		default:
 			return null;
 	}
+}
+
+function WorkStartedRow({ onViewWork }: { onViewWork: () => void }) {
+	return (
+		<div
+			data-testid="work-started"
+			className="flex items-center gap-4 text-text-muted tr-text-metadata"
+		>
+			<span>Work started</span>
+			<span aria-hidden="true">·</span>
+			<button
+				type="button"
+				data-testid="view-work"
+				onClick={onViewWork}
+				className="flex items-center gap-2 rounded-[var(--radius-sm)] px-4 text-primary underline-offset-2 hover:underline"
+			>
+				View work
+				<ArrowRight className="size-12 shrink-0" />
+			</button>
+		</div>
+	);
 }
 
 function userAttachments(content: UserMessage["content"], names?: string[]) {

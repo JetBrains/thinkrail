@@ -14,6 +14,7 @@ import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
 import {
 	EMPTY_RUNTIME,
+	type SessionViewMode,
 	SettingsSection,
 	selectCatalogModel,
 	selectCompactionTurnIds,
@@ -44,7 +45,7 @@ import {
 	mergeNativeChatCommands,
 	parseNativeChatCommand,
 } from "./nativeCommands";
-import { planGlance } from "./planView";
+import { planGlance, workAvailable } from "./planView";
 import { QueueStrip } from "./QueueStrip";
 import { type ChatRow, deriveRows, projectRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
@@ -62,6 +63,7 @@ import { useChatScroll } from "./useChatScroll";
 import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
 import { useTranscriptSync } from "./useTranscriptSync";
+import { ViewSwitcher } from "./ViewSwitcher";
 import { advanceVirtualRows, initialVirtualRows } from "./virtualRows";
 
 const TRY_AGAIN_PROMPT = "Try again.";
@@ -263,6 +265,11 @@ export default function ChatView({
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
 	const plan = useChatTodos(workspaceId, sessionId);
+	const workEnabled = workAvailable(plan.data);
+	const onSelectView = useCallback(
+		(view: SessionViewMode) => useAppStore.getState().setSessionView(sessionId, view),
+		[sessionId],
+	);
 	const [planOpen, setPlanOpen] = useState(false);
 	const [slashActive, setSlashActive] = useState(false);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
@@ -730,22 +737,29 @@ export default function ChatView({
 									stats={stats}
 									statusEntries={Object.entries(extUiStatus)}
 									left={
-										plan.data ? (
-											<PopoverTrigger asChild>
-												<button
-													type="button"
-													data-testid="chat-plan-toggle"
-													data-open={planOpen}
-													className="flex min-w-0 max-w-full items-center gap-4 overflow-clip whitespace-nowrap text-text-muted tr-text-metadata hover:text-text-default"
-												>
-													<ChatPlanStripContent
-														plan={plan}
-														open={planOpen}
-														glance={planGlanceState}
-													/>
-												</button>
-											</PopoverTrigger>
-										) : null
+										<>
+											<ViewSwitcher
+												view="chat"
+												workAvailable={workEnabled}
+												onSelect={onSelectView}
+											/>
+											{plan.data ? (
+												<PopoverTrigger asChild>
+													<button
+														type="button"
+														data-testid="chat-plan-toggle"
+														data-open={planOpen}
+														className="flex min-w-0 max-w-full items-center gap-4 overflow-clip whitespace-nowrap text-text-muted tr-text-metadata hover:text-text-default"
+													>
+														<ChatPlanStripContent
+															plan={plan}
+															open={planOpen}
+															glance={planGlanceState}
+														/>
+													</button>
+												</PopoverTrigger>
+											) : null}
+										</>
 									}
 									skillsStale={skillsStale}
 									{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
@@ -800,6 +814,7 @@ export default function ChatView({
 										onOpenChange={onOpenChange}
 										onReveal={onReveal}
 										onTryAgain={() => performSend(TRY_AGAIN_PROMPT, [], "send")}
+										onViewWork={workEnabled ? () => onSelectView("work") : undefined}
 									/>
 									{chatMessageOrder === "newest-first" &&
 									runwayActive &&

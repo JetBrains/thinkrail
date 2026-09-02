@@ -269,6 +269,46 @@ describe("deriveRows grouping", () => {
 	});
 });
 
+describe("deriveRows work-started marker", () => {
+	test("the first plan-creating tool call anchors exactly one workStarted row", () => {
+		const rows = deriveRows(
+			[user("u1"), assistant("a1", [think("planning"), tc("t1", "todo_write"), tc("t2", "bash")])],
+			{},
+			false,
+		);
+		const markers = rows.filter((r) => r.kind === "workStarted");
+		expect(markers).toHaveLength(1);
+		const markerIndex = rows.findIndex((r) => r.kind === "workStarted");
+		const activityIndex = rows.findIndex((r) => r.kind === "activity");
+		expect(markerIndex).toBe(activityIndex + 1);
+	});
+
+	test("ordinary conversation tool use derives no workStarted row", () => {
+		const rows = deriveRows(
+			[user("u1"), assistant("a1", [think("looking"), tc("t1", "read"), text("answer")])],
+			{},
+			false,
+		);
+		expect(rows.filter((r) => r.kind === "workStarted")).toHaveLength(0);
+	});
+
+	test("repeated todo tool calls across turns never duplicate the marker (hydration-stable)", () => {
+		const turns = [
+			user("u1"),
+			assistant("a1", [tc("t1", "todo_write")]),
+			user("u2"),
+			assistant("a2", [tc("t2", "todo_add"), tc("t3", "todo_update")]),
+		];
+		const first = deriveRows(turns, {}, false);
+		expect(first.filter((r) => r.kind === "workStarted")).toHaveLength(1);
+		const again = deriveRows(turns, {}, false);
+		expect(again.filter((r) => r.kind === "workStarted").map((r) => r.id)).toEqual(
+			first.filter((r) => r.kind === "workStarted").map((r) => r.id),
+		);
+		expect(first.find((r) => r.kind === "workStarted")?.id).toBe("t1:work-started");
+	});
+});
+
 describe("deriveRows compaction notices", () => {
 	test("a compaction turn maps 1:1 to its own row and breaks the activity run (never folded)", () => {
 		const turns: ChatTurn[] = [

@@ -31,6 +31,7 @@ import {
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectLastOpenChatSession,
+	selectSessionView,
 	selectSkillsStale,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
@@ -130,6 +131,7 @@ beforeEach(() => {
 		navTickByWorkspace: {},
 		closedChatsByWorkspace: {},
 		deletedSessionsByWorkspace: {},
+		sessionViewBySession: {},
 		fsChangesByWorkspace: {},
 		skillChangeTickByWorkspace: {},
 		skillsSyncedTickBySession: {},
@@ -3709,4 +3711,22 @@ test("authority can be given up without replacing the list (a consumer activatin
 	s().dropModelsFreshness();
 	expect(s().modelsFresh).toBe(false);
 	expect(s().models).toBe(refreshed);
+});
+
+test("session view is client view state: Chat by default, per-session isolated, and clearable", () => {
+	const store = useAppStore.getState();
+	expect(selectSessionView(useAppStore.getState(), "s1")).toBe("chat");
+
+	store.setSessionView("s1", "work");
+	expect(selectSessionView(useAppStore.getState(), "s1")).toBe("work");
+	expect(selectSessionView(useAppStore.getState(), "s2")).toBe("chat");
+
+	store.setSessionView("s2", "work");
+	store.setSessionView("s1", "chat");
+	expect(selectSessionView(useAppStore.getState(), "s1")).toBe("chat");
+	expect(selectSessionView(useAppStore.getState(), "s2")).toBe("work");
+
+	const before = useAppStore.getState().sessionViewBySession;
+	store.setSessionView("s1", "chat");
+	expect(useAppStore.getState().sessionViewBySession).toBe(before);
 });

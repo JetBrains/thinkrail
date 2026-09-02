@@ -31,6 +31,7 @@ import {
 	selectContextProject,
 	selectDiffTabTargetRef,
 	selectReviewDraftCount,
+	selectSessionView,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	selectWorkspaceTick,
@@ -85,11 +86,16 @@ function ChatResourceBody({
 	onOpenFile: (path: string) => void;
 }) {
 	const available = useAppStore((state) => state.sessions[tab.sessionId] !== undefined);
+	const view = useAppStore((state) => selectSessionView(state, tab.sessionId));
 	if (available) {
 		return (
-			<ErrorBoundary label="chat" resetKeys={[workspaceId, tab.id]}>
+			<ErrorBoundary label="chat" resetKeys={[workspaceId, tab.id, view]}>
 				<Suspense fallback={<MissingResource label="chat" />}>
-					<ChatView sessionId={tab.sessionId} workspaceId={workspaceId} onOpenFile={onOpenFile} />
+					{view === "work" ? (
+						<PlanPane workspaceId={workspaceId} sessionId={tab.sessionId} sessionView />
+					) : (
+						<ChatView sessionId={tab.sessionId} workspaceId={workspaceId} onOpenFile={onOpenFile} />
+					)}
 				</Suspense>
 			</ErrorBoundary>
 		);

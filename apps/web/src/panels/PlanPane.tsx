@@ -40,9 +40,11 @@ import {
 	reviewableItems,
 	reviewChangesRequested,
 	reviewSettled,
+	workAvailable,
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
+import { ViewSwitcher } from "../chat/ViewSwitcher";
 import { IconTooltip } from "../components/ui/tooltip";
 import {
 	selectAgentReviewCommentCount,
@@ -501,9 +503,11 @@ function downloadMarkdown(markdown: string, title: string): void {
 export default function PlanPane({
 	workspaceId,
 	sessionId,
+	sessionView = false,
 }: {
 	workspaceId: string;
 	sessionId: string;
+	sessionView?: boolean;
 }) {
 	const plan = useChatTodos(workspaceId, sessionId);
 	const title = useAppStore((s) => selectChatTitle(s, workspaceId, sessionId));
@@ -530,10 +534,22 @@ export default function PlanPane({
 	const agentComments = useAppStore((s) => selectAgentReviewCommentCount(s, workspaceId));
 	const reviewComments = useAppStore((s) => s.reviewsByWorkspace[workspaceId]?.comments);
 
+	const switcherBar = sessionView ? (
+		<div className="flex h-panel-header-row shrink-0 items-center gap-12 border-border-muted border-b bg-container-workspace-bg px-12">
+			<ViewSwitcher
+				view="work"
+				workAvailable={workAvailable(plan.data)}
+				onSelect={(view) => useAppStore.getState().setSessionView(sessionId, view)}
+			/>
+		</div>
+	) : null;
 	if (plan.data === null) {
 		return (
-			<div className="flex h-full items-center justify-center text-text-subtle tr-text-ui">
-				{plan.failed ? "Couldn't load the plan." : "Loading…"}
+			<div className="flex h-full flex-col">
+				{switcherBar}
+				<div className="flex flex-1 items-center justify-center text-text-subtle tr-text-ui">
+					{plan.failed ? "Couldn't load the plan." : "Loading…"}
+				</div>
 			</div>
 		);
 	}
@@ -744,339 +760,342 @@ export default function PlanPane({
 	const exportMarkdown = () => planToMarkdown(data, title);
 
 	return (
-		<div data-testid="plan-pane" className="h-full overflow-auto bg-container-content-bg">
-			<PrComposeDialog
-				state={prCompose}
-				updating={Boolean(openReview)}
-				busy={prBusy}
-				onClose={() => {
-					setPrCompose(null);
-					lastPrSubmit.current = null;
-				}}
-				onSubmit={(prTitle, prBody, titleEdited) => {
-					if (prCompose) void submitPr(prCompose.draft, prTitle, prBody, titleEdited);
-				}}
-			/>
-			<PrSetupDialog
-				state={prSetup}
-				platform={hostPlatform}
-				onClose={() => setPrSetup(null)}
-				onRetry={retryPrSetup}
-				onRun={runPrSetupCommand}
-				onCompareOpen={() => {
-					setPrSetup(null);
-					lastPrSubmit.current = null;
-				}}
-			/>
-			<div className="mx-auto max-w-[52rem] px-16 py-16">
-				<header className="mb-16 flex items-center gap-12">
-					<div className="min-w-0 flex-1">
-						<h1 className="truncate tr-title-section text-text-default">Plan · {title}</h1>
-						<div
-							data-testid="plan-progress"
-							className="flex flex-wrap items-center gap-4 tr-text-metadata text-text-subtle"
-						>
-							<StageGlyph state={stages.build} />
-							<span>
-								{done}/{total} done
-							</span>
-							{reviewables.length > 0 ? (
-								<>
-									<ChevronRight className="size-12 shrink-0 text-text-muted" />
-									<span data-testid="plan-review-progress" className="flex items-center gap-4">
-										<StageGlyph state={stages.review} />
-										{reviewedCount}/{reviewables.length} reviewed
-									</span>
-								</>
-							) : null}
-							<ChevronRight className="size-12 shrink-0 text-text-muted" />
-							<span
-								data-testid="plan-pr-stage"
-								data-state={stages.pr}
-								className="flex items-center gap-4"
-							>
-								<StageGlyph state={stages.pr} />
-								{openReview ? openReviewLabel(openReview) : "PR"}
-							</span>
-						</div>
-						{workspace ? (
+		<div className="flex h-full flex-col">
+			{switcherBar}
+			<div data-testid="plan-pane" className="min-h-0 flex-1 overflow-auto bg-container-content-bg">
+				<PrComposeDialog
+					state={prCompose}
+					updating={Boolean(openReview)}
+					busy={prBusy}
+					onClose={() => {
+						setPrCompose(null);
+						lastPrSubmit.current = null;
+					}}
+					onSubmit={(prTitle, prBody, titleEdited) => {
+						if (prCompose) void submitPr(prCompose.draft, prTitle, prBody, titleEdited);
+					}}
+				/>
+				<PrSetupDialog
+					state={prSetup}
+					platform={hostPlatform}
+					onClose={() => setPrSetup(null)}
+					onRetry={retryPrSetup}
+					onRun={runPrSetupCommand}
+					onCompareOpen={() => {
+						setPrSetup(null);
+						lastPrSubmit.current = null;
+					}}
+				/>
+				<div className="mx-auto max-w-[52rem] px-16 py-16">
+					<header className="mb-16 flex items-center gap-12">
+						<div className="min-w-0 flex-1">
+							<h1 className="truncate tr-title-section text-text-default">Plan · {title}</h1>
 							<div
-								data-testid="plan-context"
-								className="mt-2 flex flex-wrap items-center gap-8 tr-text-metadata text-text-subtle"
+								data-testid="plan-progress"
+								className="flex flex-wrap items-center gap-4 tr-text-metadata text-text-subtle"
 							>
-								<span className="flex min-w-0 items-center gap-4">
-									<GitBranch className="size-12 shrink-0" />
-									<span className="truncate">
-										{workspace.branch} ← {workspace.baseBranch}
-									</span>
+								<StageGlyph state={stages.build} />
+								<span>
+									{done}/{total} done
 								</span>
-								{commitCount > 0 ? (
-									<span className="shrink-0">
-										{commitCount} {commitCount === 1 ? "commit" : "commits"}
-									</span>
+								{reviewables.length > 0 ? (
+									<>
+										<ChevronRight className="size-12 shrink-0 text-text-muted" />
+										<span data-testid="plan-review-progress" className="flex items-center gap-4">
+											<StageGlyph state={stages.review} />
+											{reviewedCount}/{reviewables.length} reviewed
+										</span>
+									</>
 								) : null}
-								{workspace.diffStats ? (
-									<DiffStatBadge
-										added={workspace.diffStats.added}
-										removed={workspace.diffStats.removed}
-									/>
-								) : null}
-							</div>
-						) : null}
-					</div>
-					{agentComments > 0 ? (
-						<button
-							type="button"
-							data-testid="plan-review-comments"
-							onClick={onOpenReview}
-							title="Open the Review tab — the reviewer's findings"
-							className="flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-						>
-							<MessageSquare className="size-14" />
-							{agentComments} {agentComments === 1 ? "comment" : "comments"}
-						</button>
-					) : null}
-					{openReview ? (
-						openReviewUrl ? (
-							<a
-								data-testid="plan-pr-chip"
-								href={openReviewUrl}
-								target="_blank"
-								rel="noopener noreferrer"
-								className="shrink-0 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-							>
-								{openReviewLabel(openReview)}
-							</a>
-						) : (
-							<span
-								data-testid="plan-pr-chip"
-								className="shrink-0 px-8 py-4 tr-text-ui text-text-muted"
-							>
-								{openReviewLabel(openReview)}
-							</span>
-						)
-					) : null}
-					<button
-						type="button"
-						data-testid="plan-open-pr"
-						disabled={prBusy || sameBranch}
-						onClick={() => void openPrFlow(false)}
-						title={
-							sameBranch
-								? "This workspace's branch is its base branch — there's nothing to open a PR against."
-								: openReview
-									? "Push new commits to the open PR and refresh its description from the plan"
-									: "Push the branch and open a PR whose description comes from this plan"
-						}
-						className={`flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui disabled:opacity-50 ${
-							(planReady && !openReview) || unpushed > 0
-								? "bg-primary text-text-on-primary hover:opacity-90"
-								: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-						}`}
-					>
-						{prBusy ? (
-							<Loader2 className="size-14 animate-spin" />
-						) : (
-							<GitPullRequestArrow className="size-14" />
-						)}
-						{prBusy && prCompose
-							? "Pushing…"
-							: openReview
-								? unpushed > 0
-									? `Push updates (${unpushed})`
-									: "Push updates"
-								: "Open PR"}
-					</button>
-					<DropdownMenu>
-						<DropdownMenuTrigger
-							data-testid="plan-menu"
-							aria-label="Plan actions"
-							className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-hovered"
-						>
-							<MoreVertical className="size-16" />
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end" data-testid="plan-menu-content">
-							<DropdownMenuItem data-testid="plan-copy-markdown" onSelect={() => copyMarkdown()}>
-								<Copy />
-								Copy
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								data-testid="plan-save-markdown"
-								onSelect={() => downloadMarkdown(exportMarkdown(), title)}
-							>
-								<Download />
-								Save .md
-							</DropdownMenuItem>
-							{!openReview ? (
-								<DropdownMenuItem
-									data-testid="plan-open-draft-pr"
-									disabled={prBusy || sameBranch}
-									onSelect={() => void openPrFlow(true)}
+								<ChevronRight className="size-12 shrink-0 text-text-muted" />
+								<span
+									data-testid="plan-pr-stage"
+									data-state={stages.pr}
+									className="flex items-center gap-4"
 								>
-									<GitPullRequestArrow />
-									Open draft PR
-								</DropdownMenuItem>
-							) : null}
-							{reviewables.length > 0 ? (
-								<>
-									<DropdownMenuSeparator />
-									<DropdownMenuItem
-										data-testid="plan-review-all"
-										disabled={unsettledReviewables.length === 0 || reviewingAny}
-										onSelect={() => void reviewAll()}
-									>
-										<ListChecks />
-										Review All
-										{unsettledReviewables.length > 0 ? ` (${unsettledReviewables.length})` : ""}
-									</DropdownMenuItem>
-								</>
-							) : null}
-						</DropdownMenuContent>
-					</DropdownMenu>
-				</header>
-				{flagged.length > 0 ? (
-					<div data-testid="plan-next-action" data-kind="fix" className={NEXT_ACTION_CLASS}>
-						<CircleAlert className="size-16 shrink-0 text-feedback-warning" />
-						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
-							{flagged.length === 1 ? "1 step needs" : `${flagged.length} steps need`} fixes — the
-							review requested changes.
-						</span>
-						<button
-							type="button"
-							data-testid="plan-next-action-go"
-							onClick={() => flagged[0] && jumpToItem(flagged[0].id)}
-							className={NEXT_ACTION_BUTTON_CLASS}
-						>
-							Show step
-						</button>
-					</div>
-				) : unsettledReviewables.length > 0 ? (
-					<div data-testid="plan-next-action" data-kind="review" className={NEXT_ACTION_CLASS}>
-						<ListChecks className="size-16 shrink-0 text-primary" />
-						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
-							{unsettledReviewables.length === 1
-								? "1 step awaits"
-								: `${unsettledReviewables.length} steps await`}{" "}
-							review — run the agent reviewer.
-						</span>
-						<button
-							type="button"
-							data-testid="plan-next-action-go"
-							disabled={reviewingAny}
-							onClick={() => void reviewAll()}
-							className={NEXT_ACTION_BUTTON_CLASS}
-						>
-							Review All
-						</button>
-					</div>
-				) : openReview && unpushed > 0 ? (
-					<div data-testid="plan-next-action" data-kind="push" className={NEXT_ACTION_CLASS}>
-						<GitPullRequestArrow className="size-16 shrink-0 text-primary" />
-						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
-							{unpushed === 1 ? "1 new commit isn't" : `${unpushed} new commits aren't`} in{" "}
-							{openReviewLabel(openReview)} yet.
-						</span>
-						<button
-							type="button"
-							data-testid="plan-next-action-go"
-							disabled={prBusy}
-							onClick={() => void openPrFlow(false)}
-							className={NEXT_ACTION_BUTTON_CLASS}
-						>
-							Push updates
-						</button>
-					</div>
-				) : planReady && !openReview && !sameBranch ? (
-					<div data-testid="plan-next-action" data-kind="ship" className={NEXT_ACTION_CLASS}>
-						<GitPullRequestArrow className="size-16 shrink-0 text-feedback-success" />
-						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
-							All steps are done and reviewed — ready to ship.
-						</span>
-						<button
-							type="button"
-							data-testid="plan-next-action-go"
-							disabled={prBusy}
-							onClick={() => void openPrFlow(false)}
-							className={NEXT_ACTION_BUTTON_CLASS}
-						>
-							Open PR
-						</button>
-					</div>
-				) : null}
-				{overallSummary ? <OverallSummary text={overallSummary} /> : null}
-				{empty ? (
-					<p className="text-text-subtle tr-text-ui">
-						No items yet — the agent adds its plan here.
-					</p>
-				) : (
-					<>
-						{groups.map((group) => (
-							<GroupSection
-								key={group.id}
-								group={group}
-								workspaceId={workspaceId}
-								sessionId={sessionId}
-								onOpenCommit={onOpenCommit}
-								onStartReview={startReview}
-								onOpenReview={onOpenReview}
-								reviewComments={reviewComments}
-								reviewerSessionId={data.reviewerSessionId}
-								startDisabled={reviewingAny}
-								focusRequest={focusRequest}
-							/>
-						))}
-						{loose.length > 0 ? (
-							<section className="mb-16" data-testid="plan-loose">
-								{groups.length > 0 ? (
-									<h2 className="mb-4 border-border-default border-b pb-4 tr-title-compact text-text-default">
-										Other
-									</h2>
-								) : null}
-								<ul className="flex flex-col">
-									{loose.map((item) => (
-										<ItemBlock
-											key={item.id}
-											item={item}
-											workspaceId={workspaceId}
-											sessionId={sessionId}
-											onOpenCommit={onOpenCommit}
-											onStartReview={startReview}
-											onOpenReview={onOpenReview}
-											reviewComments={reviewComments}
-											reviewerSessionId={data.reviewerSessionId}
-											startDisabled={reviewingAny}
-											focusRequest={focusRequest}
+									<StageGlyph state={stages.pr} />
+									{openReview ? openReviewLabel(openReview) : "PR"}
+								</span>
+							</div>
+							{workspace ? (
+								<div
+									data-testid="plan-context"
+									className="mt-2 flex flex-wrap items-center gap-8 tr-text-metadata text-text-subtle"
+								>
+									<span className="flex min-w-0 items-center gap-4">
+										<GitBranch className="size-12 shrink-0" />
+										<span className="truncate">
+											{workspace.branch} ← {workspace.baseBranch}
+										</span>
+									</span>
+									{commitCount > 0 ? (
+										<span className="shrink-0">
+											{commitCount} {commitCount === 1 ? "commit" : "commits"}
+										</span>
+									) : null}
+									{workspace.diffStats ? (
+										<DiffStatBadge
+											added={workspace.diffStats.added}
+											removed={workspace.diffStats.removed}
 										/>
-									))}
-								</ul>
-							</section>
+									) : null}
+								</div>
+							) : null}
+						</div>
+						{agentComments > 0 ? (
+							<button
+								type="button"
+								data-testid="plan-review-comments"
+								onClick={onOpenReview}
+								title="Open the Review tab — the reviewer's findings"
+								className="flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								<MessageSquare className="size-14" />
+								{agentComments} {agentComments === 1 ? "comment" : "comments"}
+							</button>
 						) : null}
-					</>
-				)}
-				{data.unattributed && data.unattributed.length > 0 ? (
-					<section className="mb-16" data-testid="plan-unattributed">
-						<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
-							<span className="min-w-0 flex-1 truncate">Outside the plan</span>
-							<span className="shrink-0 tr-text-eyebrow text-text-subtle">
-								{data.unattributed.length} {data.unattributed.length === 1 ? "file" : "files"}
+						{openReview ? (
+							openReviewUrl ? (
+								<a
+									data-testid="plan-pr-chip"
+									href={openReviewUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="shrink-0 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+								>
+									{openReviewLabel(openReview)}
+								</a>
+							) : (
+								<span
+									data-testid="plan-pr-chip"
+									className="shrink-0 px-8 py-4 tr-text-ui text-text-muted"
+								>
+									{openReviewLabel(openReview)}
+								</span>
+							)
+						) : null}
+						<button
+							type="button"
+							data-testid="plan-open-pr"
+							disabled={prBusy || sameBranch}
+							onClick={() => void openPrFlow(false)}
+							title={
+								sameBranch
+									? "This workspace's branch is its base branch — there's nothing to open a PR against."
+									: openReview
+										? "Push new commits to the open PR and refresh its description from the plan"
+										: "Push the branch and open a PR whose description comes from this plan"
+							}
+							className={`flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui disabled:opacity-50 ${
+								(planReady && !openReview) || unpushed > 0
+									? "bg-primary text-text-on-primary hover:opacity-90"
+									: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							}`}
+						>
+							{prBusy ? (
+								<Loader2 className="size-14 animate-spin" />
+							) : (
+								<GitPullRequestArrow className="size-14" />
+							)}
+							{prBusy && prCompose
+								? "Pushing…"
+								: openReview
+									? unpushed > 0
+										? `Push updates (${unpushed})`
+										: "Push updates"
+									: "Open PR"}
+						</button>
+						<DropdownMenu>
+							<DropdownMenuTrigger
+								data-testid="plan-menu"
+								aria-label="Plan actions"
+								className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-hovered"
+							>
+								<MoreVertical className="size-16" />
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end" data-testid="plan-menu-content">
+								<DropdownMenuItem data-testid="plan-copy-markdown" onSelect={() => copyMarkdown()}>
+									<Copy />
+									Copy
+								</DropdownMenuItem>
+								<DropdownMenuItem
+									data-testid="plan-save-markdown"
+									onSelect={() => downloadMarkdown(exportMarkdown(), title)}
+								>
+									<Download />
+									Save .md
+								</DropdownMenuItem>
+								{!openReview ? (
+									<DropdownMenuItem
+										data-testid="plan-open-draft-pr"
+										disabled={prBusy || sameBranch}
+										onSelect={() => void openPrFlow(true)}
+									>
+										<GitPullRequestArrow />
+										Open draft PR
+									</DropdownMenuItem>
+								) : null}
+								{reviewables.length > 0 ? (
+									<>
+										<DropdownMenuSeparator />
+										<DropdownMenuItem
+											data-testid="plan-review-all"
+											disabled={unsettledReviewables.length === 0 || reviewingAny}
+											onSelect={() => void reviewAll()}
+										>
+											<ListChecks />
+											Review All
+											{unsettledReviewables.length > 0 ? ` (${unsettledReviewables.length})` : ""}
+										</DropdownMenuItem>
+									</>
+								) : null}
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</header>
+					{flagged.length > 0 ? (
+						<div data-testid="plan-next-action" data-kind="fix" className={NEXT_ACTION_CLASS}>
+							<CircleAlert className="size-16 shrink-0 text-feedback-warning" />
+							<span className="min-w-0 flex-1 tr-text-ui text-text-default">
+								{flagged.length === 1 ? "1 step needs" : `${flagged.length} steps need`} fixes — the
+								review requested changes.
 							</span>
-						</h2>
-						<p className="mb-4 px-4 tr-text-metadata text-text-subtle">
-							Uncommitted changes no step claims — review them too.
+							<button
+								type="button"
+								data-testid="plan-next-action-go"
+								onClick={() => flagged[0] && jumpToItem(flagged[0].id)}
+								className={NEXT_ACTION_BUTTON_CLASS}
+							>
+								Show step
+							</button>
+						</div>
+					) : unsettledReviewables.length > 0 ? (
+						<div data-testid="plan-next-action" data-kind="review" className={NEXT_ACTION_CLASS}>
+							<ListChecks className="size-16 shrink-0 text-primary" />
+							<span className="min-w-0 flex-1 tr-text-ui text-text-default">
+								{unsettledReviewables.length === 1
+									? "1 step awaits"
+									: `${unsettledReviewables.length} steps await`}{" "}
+								review — run the agent reviewer.
+							</span>
+							<button
+								type="button"
+								data-testid="plan-next-action-go"
+								disabled={reviewingAny}
+								onClick={() => void reviewAll()}
+								className={NEXT_ACTION_BUTTON_CLASS}
+							>
+								Review All
+							</button>
+						</div>
+					) : openReview && unpushed > 0 ? (
+						<div data-testid="plan-next-action" data-kind="push" className={NEXT_ACTION_CLASS}>
+							<GitPullRequestArrow className="size-16 shrink-0 text-primary" />
+							<span className="min-w-0 flex-1 tr-text-ui text-text-default">
+								{unpushed === 1 ? "1 new commit isn't" : `${unpushed} new commits aren't`} in{" "}
+								{openReviewLabel(openReview)} yet.
+							</span>
+							<button
+								type="button"
+								data-testid="plan-next-action-go"
+								disabled={prBusy}
+								onClick={() => void openPrFlow(false)}
+								className={NEXT_ACTION_BUTTON_CLASS}
+							>
+								Push updates
+							</button>
+						</div>
+					) : planReady && !openReview && !sameBranch ? (
+						<div data-testid="plan-next-action" data-kind="ship" className={NEXT_ACTION_CLASS}>
+							<GitPullRequestArrow className="size-16 shrink-0 text-feedback-success" />
+							<span className="min-w-0 flex-1 tr-text-ui text-text-default">
+								All steps are done and reviewed — ready to ship.
+							</span>
+							<button
+								type="button"
+								data-testid="plan-next-action-go"
+								disabled={prBusy}
+								onClick={() => void openPrFlow(false)}
+								className={NEXT_ACTION_BUTTON_CLASS}
+							>
+								Open PR
+							</button>
+						</div>
+					) : null}
+					{overallSummary ? <OverallSummary text={overallSummary} /> : null}
+					{empty ? (
+						<p className="text-text-subtle tr-text-ui">
+							No items yet — the agent adds its plan here.
 						</p>
-						<ul className="flex flex-col">
-							{data.unattributed.map((file) => (
-								<FileRow
-									key={file.path}
-									file={file}
-									onOpen={() =>
-										void openDiffInTab(workspaceId, { kind: "uncommitted" }, file.path, "preview")
-									}
+					) : (
+						<>
+							{groups.map((group) => (
+								<GroupSection
+									key={group.id}
+									group={group}
+									workspaceId={workspaceId}
+									sessionId={sessionId}
+									onOpenCommit={onOpenCommit}
+									onStartReview={startReview}
+									onOpenReview={onOpenReview}
+									reviewComments={reviewComments}
+									reviewerSessionId={data.reviewerSessionId}
+									startDisabled={reviewingAny}
+									focusRequest={focusRequest}
 								/>
 							))}
-						</ul>
-					</section>
-				) : null}
+							{loose.length > 0 ? (
+								<section className="mb-16" data-testid="plan-loose">
+									{groups.length > 0 ? (
+										<h2 className="mb-4 border-border-default border-b pb-4 tr-title-compact text-text-default">
+											Other
+										</h2>
+									) : null}
+									<ul className="flex flex-col">
+										{loose.map((item) => (
+											<ItemBlock
+												key={item.id}
+												item={item}
+												workspaceId={workspaceId}
+												sessionId={sessionId}
+												onOpenCommit={onOpenCommit}
+												onStartReview={startReview}
+												onOpenReview={onOpenReview}
+												reviewComments={reviewComments}
+												reviewerSessionId={data.reviewerSessionId}
+												startDisabled={reviewingAny}
+												focusRequest={focusRequest}
+											/>
+										))}
+									</ul>
+								</section>
+							) : null}
+						</>
+					)}
+					{data.unattributed && data.unattributed.length > 0 ? (
+						<section className="mb-16" data-testid="plan-unattributed">
+							<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
+								<span className="min-w-0 flex-1 truncate">Outside the plan</span>
+								<span className="shrink-0 tr-text-eyebrow text-text-subtle">
+									{data.unattributed.length} {data.unattributed.length === 1 ? "file" : "files"}
+								</span>
+							</h2>
+							<p className="mb-4 px-4 tr-text-metadata text-text-subtle">
+								Uncommitted changes no step claims — review them too.
+							</p>
+							<ul className="flex flex-col">
+								{data.unattributed.map((file) => (
+									<FileRow
+										key={file.path}
+										file={file}
+										onOpen={() =>
+											void openDiffInTab(workspaceId, { kind: "uncommitted" }, file.path, "preview")
+										}
+									/>
+								))}
+							</ul>
+						</section>
+					) : null}
+				</div>
 			</div>
 		</div>
 	);
