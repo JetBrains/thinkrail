@@ -3,6 +3,11 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, waitForAgentSettled } from "./fixtures/app";
 
+const SETUP_SKILL = "setting-up-a-project";
+const USER_REQUEST =
+	"This is an existing codebase with no specs. Derive everything from the files and draft the specs now — do not ask me any questions.";
+const SETUP_PROMPT = `/skill:${SETUP_SKILL} ${USER_REQUEST}`;
+
 function hasGoalSpec(dir: string): boolean {
 	for (const entry of readdirSync(dir, { withFileTypes: true })) {
 		if (entry.name === ".git" || entry.name === "node_modules") continue;
@@ -58,18 +63,14 @@ test("`/skill:setting-up-a-project` routes an existing codebase to import and dr
 	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(1);
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
-	await page
-		.getByTestId("chat-input")
-		.fill(
-			"/skill:setting-up-a-project This is an existing codebase with no specs. Derive everything from the files and draft the specs now — do not ask me any questions.",
-		);
+	await page.getByTestId("chat-input").fill(SETUP_PROMPT);
 	await page.getByTestId("chat-send").click();
 
-	await expect(
-		page
-			.locator('[data-testid="chat-message"][data-role="user"]')
-			.filter({ hasText: "/skill:setting-up-a-project" }),
-	).toHaveCount(1);
+	const skillCard = page.getByTestId("skill-invocation-card");
+	await expect(skillCard).toHaveCount(1);
+	await expect(skillCard).toBeVisible();
+	await expect(page.getByTestId("skill-invocation-name")).toHaveText(SETUP_SKILL);
+	await expect(page.getByTestId("skill-user-request")).toHaveText(USER_REQUEST);
 
 	await waitForAgentSettled(page, 320_000);
 
