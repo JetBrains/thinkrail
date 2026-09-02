@@ -1,11 +1,17 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { runSpecSurfaceCheck } from "./check-spec-surface";
 import {
 	declaredNames,
 	diffSurface,
 	isBareNameList,
-	parseExports,
+	PUBLIC_SURFACE_TAG,
 	readSurfaceBlock,
 } from "./specSurface";
+
+const roots: string[] = [];
 
 const BARE = `## Boundary
 
@@ -34,6 +40,47 @@ const MENTION_ONLY = `- **Owns:** booting the host and opening the browser.
   bundle.
 `;
 
+afterEach(() => {
+	for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+function fixture(): string {
+	const root = mkdtempSync(join(tmpdir(), "thinkrail-spec-surface-"));
+	roots.push(root);
+	return root;
+}
+
+function write(root: string, path: string, content: string): void {
+	const target = join(root, path);
+	mkdirSync(join(target, ".."), { recursive: true });
+	writeFileSync(target, content);
+}
+
+function spec(id: string, surface: string, tags = `[${PUBLIC_SURFACE_TAG}]`): string {
+	return `---
+id: ${id}
+type: module-design
+title: ${id}
+tags: ${tags}
+---
+
+## Boundary
+
+${surface}
+`;
+}
+
+function run(root: string, listSkipped = false) {
+	const stdout: string[] = [];
+	const stderr: string[] = [];
+	const code = runSpecSurfaceCheck(root, {
+		listSkipped,
+		stdout: (line) => stdout.push(line),
+		stderr: (line) => stderr.push(line),
+	});
+	return { code, stdout: stdout.join("\n"), stderr: stderr.join("\n") };
+}
+
 function surfaceOf(text: string) {
 	const block = readSurfaceBlock(text);
 	if (block === null) throw new Error("expected a public surface block");
@@ -56,70 +103,41 @@ test("readSurfaceBlock accepts every label form the specs write a surface as", (
 	expect(declared).toEqual(LABEL_FORMS);
 });
 
-test("a bullet that only mentions the public surface in its body declares nothing", () => {
+test("surface-like text in prose, frontmatter, and code blocks is ignored", () => {
+	const text = `---
+title: Public surface example
+---
+
+The module reaches a public surface.
+
+\`\`\`md
+- **Public surface:** \`wrong\`.
+\`\`\`
+
+    - **Public surface:** \`alsoWrong\`.
+
+- **Public surface:** \`right\`.
+`;
+	expect(declaredNames(surfaceOf(text))).toEqual(["right"]);
 	expect(readSurfaceBlock(MENTION_ONLY)).toBeNull();
 });
 
-test("isBareNameList accepts a list of names and rejects prose", () => {
+test("isBareNameList accepts names and rejects prose, signatures, and empty surfaces", () => {
 	expect(isBareNameList(surfaceOf(BARE))).toBe(true);
 	expect(isBareNameList(surfaceOf(PROSE))).toBe(false);
-});
-
-test("isBareNameList rejects a surface that names nothing", () => {
+	expect(
+		isBareNameList(
+			surfaceOf("- **Public surface (barrel):** `listTodos({workspaceId}) → TodoPlan`.\n"),
+		),
+	).toBe(false);
 	expect(isBareNameList(surfaceOf("- **Public surface (barrel):** none yet.\n"))).toBe(false);
 });
 
-test("declaredNames drops the type keyword and anything that is not an identifier", () => {
+test("declaredNames accepts type labels and ignores the bullet label", () => {
 	const block = surfaceOf(
-		"- **Public surface (barrel):** `openEditor`, `type WhichFn`, `pi-spec-graph/core`.\n",
+		"- **Public surface (barrel `index.ts`):** `openEditor`, `type WhichFn`, `pi-spec-graph/core`.\n",
 	);
-	expect(declaredNames(block)).toEqual(["openEditor", "WhichFn"]);
-});
-
-test("parseExports reads named, aliased, type-only and declared exports", () => {
-	const parsed = parseExports(`
-export { alpha, type Beta, gamma as delta } from "./one";
-export type { Epsilon } from "./two";
-export function zeta() {}
-export const eta = 1;
-export default eta;
-`);
-	expect(parsed.names.sort()).toEqual(["Beta", "Epsilon", "alpha", "delta", "eta", "zeta"]);
-	expect(parsed.starTargets).toEqual([]);
-});
-
-test("parseExports reports star targets and names a star namespace", () => {
-	const parsed = parseExports(`export * from "./watch";\nexport * as theta from "./iota";\n`);
-	expect(parsed.starTargets).toEqual(["./watch"]);
-	expect(parsed.names).toEqual(["theta"]);
-});
-
-test("diffSurface reports both directions", () => {
-	expect(diffSurface(["a", "b"], ["b", "c"])).toEqual({ promised: ["a"], undeclared: ["c"] });
-});
-
-test("parseExports ignores exports inside comments and string literals", () => {
-	const parsed = parseExports(`
-// export { ghost } from "./nowhere";
-/* export const phantom = 1; */
-const sample = 'export { alsoGhost } from "./nowhere";';
-export const real = sample;
-`);
-	expect(parsed.names).toEqual(["real"]);
-	expect(parsed.starTargets).toEqual([]);
-});
-
-test("parseExports treats a type-only star as a star target", () => {
-	expect(parseExports(`export type * from "./types";\n`).starTargets).toEqual(["./types"]);
-});
-
-test("parseExports names a const enum rather than its keyword", () => {
-	expect(parseExports("export const enum Mode { A }\n").names).toEqual(["Mode"]);
-});
-
-test("declaredNames ignores an identifier inside the bullet's own label", () => {
-	const block = surfaceOf("- **Public surface (barrel `index.ts`):** `openEditor`.\n");
-	expect(declaredNames(block)).toEqual(["openEditor"]);
+	expect(declaredNames(block)).toEqual(["WhichFn", "openEditor"]);
 });
 
 test("readSurfaceBlock keeps an indented sub-bullet inside the block", () => {
@@ -127,28 +145,167 @@ test("readSurfaceBlock keeps an indented sub-bullet inside the block", () => {
 		"- **Public surface (barrel):** `alpha`,\n  - `beta`\n- **Allowed deps:** `gamma`.\n",
 	);
 	expect(isBareNameList(block)).toBe(true);
-	expect(declaredNames(block).sort()).toEqual(["alpha", "beta"]);
+	expect(declaredNames(block)).toEqual(["alpha", "beta"]);
 });
 
-test("a prose mention never shadows the bullet that declares the surface", () => {
-	const block = surfaceOf(
-		"Siblings reach it only through its public surface.\n\n- **Public surface (barrel):** `alpha`.\n",
+test("diffSurface reports both directions", () => {
+	expect(diffSurface(["a", "b"], ["b", "c"])).toEqual({
+		promised: ["a"],
+		undeclared: ["c"],
+	});
+});
+
+test("a tagged exact surface uses TypeScript's effective export names", () => {
+	const root = fixture();
+	write(
+		root,
+		"module/SPEC.md",
+		spec(
+			"module-effective",
+			"- **Public surface (barrel):** `default`, `NamedDefault`, `OnlyType`, `renamed`, `tools`, `typeOnlyValue`.",
+		),
 	);
-	expect(declaredNames(block)).toEqual(["alpha"]);
-});
-
-test("parseExports keeps an exported default declaration out of the surface", () => {
-	expect(parseExports("export default function hidden() {}\n").names).toEqual([]);
-});
-
-test("isBareNameList rejects a surface written in signature style", () => {
-	const block = surfaceOf(
-		"- **Public surface (barrel):** `listTodos({workspaceId}) → TodoPlan`.\n",
+	write(
+		root,
+		"module/index.ts",
+		`export type * from "./types";
+export { value as renamed } from "./values";
+export * as tools from "./values";
+export { default as NamedDefault } from "./defaults";
+export default function rootDefault() {}
+`,
 	);
-	expect(isBareNameList(block)).toBe(false);
+	write(
+		root,
+		"module/types.ts",
+		"export interface OnlyType { value: string }\nexport const typeOnlyValue = 1;\nexport default class HiddenDefault {}\n",
+	);
+	write(root, "module/values.ts", "export const value = 1;\n");
+	write(root, "module/defaults.ts", "export default function targetDefault() {}\n");
+
+	const result = run(root);
+	expect(result.code).toBe(0);
+	expect(result.stdout).toContain("1 enrolled, 1 compared");
+	expect(result.stderr).toBe("");
 });
 
-test("a prose line only declares the surface when it opens with the phrase", () => {
-	expect(readSurfaceBlock("The CI job runs the declared public surface check.\n")).toBeNull();
-	expect(declaredNames(surfaceOf("Public surface: the `alpha` export.\n"))).toEqual(["alpha"]);
+test("transitive star exports follow cycles without duplicating names", () => {
+	const root = fixture();
+	write(
+		root,
+		"module/SPEC.md",
+		spec("module-cycle", "- **Public surface (barrel):** `alpha`, `Beta`."),
+	);
+	write(root, "module/index.ts", 'export * from "./a";\n');
+	write(root, "module/a.ts", 'export * from "./b";\nexport const alpha = 1;\n');
+	write(root, "module/b.ts", 'export * from "./a";\nexport interface Beta {}\n');
+
+	expect(run(root)).toMatchObject({ code: 0, stderr: "" });
+});
+
+test("tagged structural failures cannot silently become skips", () => {
+	const root = fixture();
+	write(root, "missing/SPEC.md", spec("missing", "- **Owns:** nothing."));
+	write(root, "missing/index.ts", "export const value = 1;\n");
+	write(root, "prose/SPEC.md", spec("prose", PROSE.trim()));
+	write(root, "prose/index.ts", "export const initTransport = 1;\n");
+	write(root, "barrelless/SPEC.md", spec("barrelless", "- **Public surface:** `value`."));
+
+	const result = run(root);
+	expect(result.code).toBe(1);
+	expect(result.stderr).toContain("tagged public-surface-checked but declares no public surface");
+	expect(result.stderr).toContain("public surface is not a bare identifier list");
+	expect(result.stderr).toContain("has no TypeScript barrel");
+	expect(result.stdout).not.toContain("missing/SPEC.md");
+});
+
+test("surface differences report promises and undeclared exports", () => {
+	const root = fixture();
+	write(root, "module/SPEC.md", spec("module-diff", "- **Public surface:** `actual`, `promised`."));
+	write(root, "module/index.ts", "export const actual = 1;\nexport const undeclared = 2;\n");
+
+	const result = run(root);
+	expect(result.code).toBe(1);
+	expect(result.stderr).toContain("barrel no longer exports: promised");
+	expect(result.stderr).toContain("surface does not list: undeclared");
+});
+
+test("direct and transitive unresolved re-exports fail", () => {
+	const root = fixture();
+	write(root, "direct/SPEC.md", spec("direct", "- **Public surface:** `value`."));
+	write(root, "direct/index.ts", 'export { value } from "./missing";\n');
+	write(root, "transitive/SPEC.md", spec("transitive", "- **Public surface:** `value`."));
+	write(root, "transitive/index.ts", 'export * from "./middle";\n');
+	write(root, "transitive/middle.ts", 'export * from "./missing";\n');
+
+	const result = run(root);
+	expect(result.code).toBe(1);
+	expect(result.stderr).toContain("direct/index.ts → ./missing");
+	expect(result.stderr).toContain("transitive/middle.ts → ./missing");
+});
+
+test("untagged specs remain successful skips and list only when requested", () => {
+	const root = fixture();
+	write(
+		root,
+		"module/SPEC.md",
+		spec("module-unenrolled", "- **Public surface:** `promised`.", "[tooling]"),
+	);
+	write(root, "module/index.ts", 'export * from "./missing";\n');
+
+	const quiet = run(root);
+	expect(quiet.code).toBe(0);
+	expect(quiet.stdout).not.toContain("module/SPEC.md");
+	expect(quiet.stderr).toBe("");
+
+	const listed = run(root, true);
+	expect(listed.code).toBe(0);
+	expect(listed.stdout).toContain("module/SPEC.md: not enrolled");
+});
+
+test("canonical scalar-tag specs at nonstandard Markdown paths can use src barrels", () => {
+	const root = fixture();
+	write(
+		root,
+		"package/MODULE.md",
+		spec("module-nonstandard", "- **Public surface:** `value`.", PUBLIC_SURFACE_TAG),
+	);
+	write(root, "package/src/index.ts", "export const value = 1;\n");
+	write(
+		root,
+		"invalid/SPEC.md",
+		`---
+title: invalid
+tags: [${PUBLIC_SURFACE_TAG}]
+---
+
+- **Public surface:** \`ghost\`.
+`,
+	);
+
+	const result = run(root, true);
+	expect(result.code).toBe(0);
+	expect(result.stdout).toContain("1 enrolled, 1 compared");
+	expect(result.stdout).not.toContain("invalid/SPEC.md");
+});
+
+test("nearest tsconfig options participate in module resolution", () => {
+	const root = fixture();
+	write(
+		root,
+		"package/tsconfig.json",
+		JSON.stringify({
+			compilerOptions: {
+				baseUrl: ".",
+				module: "ESNext",
+				moduleResolution: "Bundler",
+				paths: { "#types": ["src/types.ts"] },
+			},
+		}),
+	);
+	write(root, "package/SPEC.md", spec("module-paths", "- **Public surface:** `Resolved`."));
+	write(root, "package/src/index.ts", 'export type { Resolved } from "#types";\n');
+	write(root, "package/src/types.ts", "export interface Resolved {}\n");
+
+	expect(run(root)).toMatchObject({ code: 0, stderr: "" });
 });
