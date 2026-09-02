@@ -424,9 +424,13 @@ a project picker, the prompt hero, and the reused
   toggle** — a switch over `store.analyticsEnabled`, fired via `settings.update { analyticsEnabled }`
   with the same converge-on-broadcast pattern as the theme, plus the what-is/isn't-collected copy; only
   the boolean ever crosses the wire, see `submodule-server-analytics`. **`FeedbackSettings`** is the final
-  live section after Privacy: approved interview copy plus a real external anchor to the fixed Google
-  Calendar booking page, opened in a new tab with `noopener noreferrer`. This proactive Settings link is
-  always available and deliberately does not call `feedback.respond` or alter automatic-popup state.
+  live section after Privacy: the same interview copy as the automatic prompt, stating that joining a user
+  interview to discuss the participant's ThinkRail experience earns 100 bonus credits in Central
+  (JetBrains AI), plus a real external anchor to the fixed Google Calendar booking page, opened in a new
+  tab with `noopener noreferrer`. ThinkRail communicates the incentive only; attendance verification,
+  eligibility, and credit fulfillment stay outside the app. This proactive Settings link is always
+  available and deliberately does not call `feedback.respond`, alter automatic-popup state, or claim that
+  booking alone earns credits.
   **`ReviewSettings`** is the
   **plan-review policy** section: the reviewer **model + effort** (`ModelSelector`/`ThinkingSelector` over
   `useModelCatalog`, written as `settings.update { reviewModel | reviewEffort }`; unset ⇒ default). The
@@ -440,8 +444,8 @@ a project picker, the prompt hero, and the reused
   (the host gates its auto-fix cycle on it, see `submodule-server-todos`). A single dimmed "General" nav item ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`AppearanceSettings`/`ChatSettings`/`TemplatesSettings`/
   `PrivacySettings`/`ReviewSettings`/`FeedbackSettings` and the app-wide **`InterviewPromptDialog`** are the
-  panels-owned **integration pieces** (store + transport). The prompt renders the approved copy and fixed
-  Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
+  panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and
+  fixed Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
   middle-button booking activation open Calendar immediately and record `book`; close, Escape, and backdrop record `postpone`; permanent
   dismissal records `never`. The controlled dialog closes only after the host acks, and reports a rejected
   action without discarding the still-open choice. `SettingsDialog` receives the Layout section from the

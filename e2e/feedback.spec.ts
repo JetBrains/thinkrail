@@ -2,6 +2,8 @@ import { expect, test, type WebSocketRoute } from "@playwright/test";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 
 const BOOKING_URL = "https://calendar.app.google/5suMJdDEBFvYJ4zN9";
+const INVITATION_COPY =
+	"Join us for a user interview, tell us about your experience with ThinkRail, and receive 100 bonus credits in Central (JetBrains AI).";
 
 type ClientRequest = {
 	id?: string;
@@ -64,9 +66,7 @@ test("feedback settings and the addressed interview prompt preserve the approved
 	await page.getByTestId("open-settings").click();
 	await page.getByTestId("settings-nav-feedback").click();
 	const settings = page.getByTestId("settings-feedback");
-	await expect(settings).toContainText(
-		"Share your experience using ThinkRail and help shape what we build next.",
-	);
+	await expect(settings).toContainText(INVITATION_COPY);
 	const settingsLink = settings.getByTestId("feedback-schedule-interview");
 	await expect(settingsLink).toHaveAttribute("href", BOOKING_URL);
 	await expect(settingsLink).toHaveAttribute("target", "_blank");
@@ -92,9 +92,7 @@ test("feedback settings and the addressed interview prompt preserve the approved
 	const dialog = page.getByTestId("interview-prompt-dialog");
 	await expect(dialog).toBeVisible();
 	await expect(dialog).toContainText("Help shape ThinkRail");
-	await expect(dialog).toContainText(
-		"We’d love to hear about your experience using ThinkRail. Schedule a user interview to tell us what’s working and what could be better.",
-	);
+	await expect(dialog).toContainText(INVITATION_COPY);
 	await expect(dialog.getByTestId("interview-postpone")).toBeFocused();
 
 	rejectNextResponse = true;

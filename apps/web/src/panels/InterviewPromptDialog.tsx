@@ -13,7 +13,7 @@ import {
 import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
-import { INTERVIEW_BOOKING_URL } from "./interview";
+import { INTERVIEW_BOOKING_URL, INTERVIEW_INVITATION_COPY } from "./interview";
 
 export function InterviewPromptDialog() {
 	const open = useAppStore((state) => state.interviewPromptOpen);
@@ -60,10 +60,7 @@ export function InterviewPromptDialog() {
 			>
 				<DialogHeader>
 					<DialogTitle>Help shape ThinkRail</DialogTitle>
-					<DialogDescription>
-						We’d love to hear about your experience using ThinkRail. Schedule a user interview to
-						tell us what’s working and what could be better.
-					</DialogDescription>
+					<DialogDescription>{INTERVIEW_INVITATION_COPY}</DialogDescription>
 				</DialogHeader>
 				<DialogFooter className="flex-col gap-8 sm:flex-row sm:justify-between">
 					<Button
