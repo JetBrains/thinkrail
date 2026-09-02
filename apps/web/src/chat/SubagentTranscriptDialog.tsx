@@ -5,6 +5,7 @@ import { errorText, getTransport, wsErrorCode } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { ChatActionsContext } from "./ChatActions";
 import { messagesToRuntime } from "./hydrate";
+import { deriveMessageActions } from "./messageActions";
 import { deriveRows } from "./rows";
 import { startSubagentTranscriptPolling } from "./subagentTranscriptPolling";
 import { ChatTurnView } from "./turns";
@@ -67,6 +68,7 @@ export function SubagentTranscriptDialog({
 		() => (runtime ? deriveRows(runtime.turns, runtime.toolResults, live) : []),
 		[runtime, live],
 	);
+	const messageActions = useMemo(() => deriveMessageActions(rows, live), [rows, live]);
 	const askContext = useMemo(
 		() => ({
 			states: runtime ? deriveAskStates(runtime.turns, runtime.askAnswers) : {},
@@ -107,7 +109,11 @@ export function SubagentTranscriptDialog({
 							) : (
 								rows.map((row) => (
 									<div key={row.id}>
-										<ChatTurnView row={row} />
+										<ChatTurnView
+											row={row}
+											agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
+											isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
+										/>
 									</div>
 								))
 							)}

@@ -202,3 +202,44 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 		rmSync(session.path, { force: true });
 	}
 });
+
+test("in newest-first order, auto-collapse and the final-answer copy action still track chronological order", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const largeText = `Please refactor the transport layer. ${"Investigate the reconnect path and reducer ordering carefully. ".repeat(12)}`;
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "newest-first round chat",
+		messages: [
+			{ role: "user", text: largeText, timestamp: BASE_TS },
+			{ role: "assistant", text: "First, let me inspect the files.", timestamp: BASE_TS + 1_000 },
+			{
+				role: "assistant",
+				text: "Done — I refactored the module and updated its tests.",
+				timestamp: BASE_TS + 2_000,
+			},
+			{ role: "user", text: "any follow-up needed?", timestamp: BASE_TS + 3_000 },
+			{ role: "assistant", text: "All set.", timestamp: BASE_TS + 4_000 },
+		],
+	});
+	utimesSync(session.path, new Date(BASE_TS + 10_000), new Date(BASE_TS + 10_000));
+
+	try {
+		await selectMessageOrder(page, "newest-first");
+		await enterDefaultWorkspace(page);
+		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+
+		const largeBody = page
+			.getByTestId("user-message-body")
+			.filter({ hasText: "Please refactor the transport layer" });
+		await expect(largeBody).toHaveAttribute("data-collapsed", "true");
+
+		const assistantMessages = page.locator('[data-testid="chat-message"][data-role="assistant"]');
+		const intermediate = assistantMessages.filter({ hasText: "let me inspect" });
+		const final = assistantMessages.filter({ hasText: "Done — I refactored" });
+		await expect(intermediate.getByTestId("chat-copy")).toHaveCount(0);
+		await expect(final.getByTestId("chat-copy")).toHaveCount(1);
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});

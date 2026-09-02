@@ -38,6 +38,7 @@ import {
 } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
+import { deriveMessageActions } from "./messageActions";
 import type { ChatMessageOrder } from "./messageOrder";
 import {
 	compactSubmissionError,
@@ -262,6 +263,11 @@ export default function ChatView({
 		setStoredVirtualRows(virtualRows);
 	}
 	const firstItemIndex = virtualRows.firstItemIndex;
+
+	const messageActions = useMemo(
+		() => deriveMessageActions(chronologicalRows, isStreaming),
+		[chronologicalRows, isStreaming],
+	);
 
 	const currentStreamStatus = useMemo<StreamStatus | null>(() => {
 		const last = turns[turns.length - 1];
@@ -821,6 +827,8 @@ export default function ChatView({
 										row={row}
 										workspaceRoot={workspaceRoot}
 										onOpenFile={onOpenFile}
+										agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
+										isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
 										onOpenSpec={onOpenSpec}
 										onOpenChange={onOpenChange}
 										onReveal={onReveal}

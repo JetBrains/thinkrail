@@ -44,7 +44,19 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   the quoted `<fragment>` verbatim (monospace, height-capped). Everything is parsed from the MESSAGE
   itself — never the review snapshot, which the next review replaces — so any transcript answers
   "what was sent" forever, on any client; the comment-row folds ride the shared fold cache (keyed
-  `rowId:<content-key>`), surviving virtualization. The retry countdown carries a `source` (`turn` =
+  `rowId:<content-key>`), surviving virtualization. A **plain** user bubble (not a skill/review card)
+  whose text exceeds **500 characters** collapses to a `line-clamp` preview + a `Show more`/`Show less`
+  toggle **inside the card** (within its padding, directly below the message body, so line-clamp truncates
+  only the body's own element — never the control) once the agent has started responding to it: `UserTurn`
+  folds on `useFold(`${id}:user-collapse`,
+  !agentResponded)`, so the fallback is *expanded* until the agent responds and *collapsed* after — with
+  the shared cache's "a manual toggle always wins over a fallback flip" giving exactly the required
+  behavior (shown expanded right after send; auto-collapses the instant the agent produces anything;
+  a manual `Show more` then survives continued streaming). The shared `deriveMessageActions` classifier
+  derives `agentResponded` from chronological rows (a later `markdown`/`tool`/`activity`/`divider` row
+  exists after this user row, **or** it is the trailing user row while `isStreaming`) and every transcript
+  integration supplies that state to the renderer. It remains client view state only, with no wire impact.
+  Below 500 chars the bubble is unchanged. The retry countdown carries a `source` (`turn` =
   pi `auto_retry_*`; `summarization` = compaction/branch-summary `summarization_retry_*`, pi ≥0.81.1) —
   the flows can overlap mid-run, each keeps exactly one indicator (re-scheduling replaces, each source's
   end event clears only its own), and `RetryIndicator` labels them apart ("Retrying" vs "Retrying
@@ -98,6 +110,31 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
   preview); until mounted it renders as highlighted source, so static contexts (`RenderedDiff`'s
   `renderToStaticMarkup`) degrade to code exactly like shiki blocks do.
+- **Message copy** — plain user bubbles and the **round's concluding assistant answer** carry a
+  hover-revealed (`group`/`opacity-0 group-hover:opacity-100`) **`CopyButton`** (`chat/CopyButton.tsx`,
+  `data-testid="chat-copy"`) that copies the full message **source** — `userText(message.content)` for a
+  user bubble, the markdown `text` for an assistant row — never the collapsed preview or any UI chrome.
+  Only the **final** `markdown` row of a round is copyable, not the intermediate narration the agent emits
+  between tool steps: `deriveMessageActions` marks a markdown row final when no later
+  `markdown`/`tool`/`activity` row precedes the next user turn (`finalAnswerRowIds`, supplied by every
+  transcript integration as `isFinalAnswer`); a non-final markdown row renders plain, without the action.
+  Both go through **one shared layout**, `MessageWithCopy` (in `turns.tsx`): a `relative` wrapper that
+  overlays the action **inside the role's bottom corner on the same line as content** — bottom-left for
+  an assistant answer (`left-0 bottom-0`), bottom-right for a user bubble (`right-0 bottom-8`, aligned
+  within the bubble's existing vertical padding) — never in a row below it. The user bubble stays
+  content-only: the button is positioned against the outer wrapper, not injected into the bubble markup.
+  The message content reserves one horizontal `size-24` band on the action's side (`pl-24` for the final
+  assistant Markdown wrapper, `pr-24` for the user bubble) instead of a vertical band, so text and the
+  large-message toggle cannot sit beneath the hit target. Final-answer list markers stay inside their
+  content box rather than painting back into the assistant's action band. The assistant wrapper removes
+  only its final Markdown block's trailing margin to align the action with the actual final line;
+  inter-block and leading margins stay unchanged. `MessageWithCopy` also carries the
+  `data-testid="chat-message"`/`data-role` hooks the jump/flash + tests rely on. `CopyButton` is a
+  self-contained presentational primitive that copies through the shared `copyText()` (`@/lib`) — the
+  one clipboard-write path with its degradation baked in — flipping to a local ~1.2s `Copy`→`Check` icon
+  only when it reports success; it does **not** reach the store toast the way `panels/PlanPane` does,
+  keeping the message renderers props-driven.
+  Skill-invocation and review-package cards keep their own disclosure UI and carry no copy affordance.
 - `tool` — a **primary** tool call: the collapsible `ToolCard` frame (collapsed unless registered
   `defaultExpanded`; errors auto-expand; a manual toggle wins), or a `"bare"` renderer that owns its
   frame. A `"bare"` call on a dead message (`stopReason` aborted/error — pi never executes those calls)
