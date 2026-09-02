@@ -43,6 +43,10 @@ export function flatItems(plan: TodoPlan): Todo[] {
 	return [...plan.groups.flatMap((g) => g.todos), ...plan.todos];
 }
 
+export function isQueuedUserTodo(todo: Todo): boolean {
+	return todo.origin === "user" && todo.status === "pending";
+}
+
 export function groupStatus(group: TodoGroup): TodoGroupStatus {
 	if (group.todos.length > 0 && group.todos.every((t) => t.status === "done")) return "done";
 	if (group.todos.some((t) => t.status === "in_progress")) return "active";
@@ -302,6 +306,30 @@ export class TodoStore {
 		todo.updatedAt = nowIso();
 		this.write(plan);
 		return { todo, paused };
+	}
+
+	reorderQueue(ids: string[]): TodoPlan {
+		const plan = this.read();
+		const eligible = plan.todos.filter(isQueuedUserTodo);
+		const eligibleById = new Map(eligible.map((t) => [t.id, t] as const));
+		if (ids.length !== eligible.length || new Set(ids).size !== ids.length) {
+			throw new Error(
+				"Reorder must name every un-started user-added task exactly once — started, completed, and agent-planned steps cannot be reordered.",
+			);
+		}
+		const reordered: Todo[] = [];
+		for (const id of ids) {
+			const todo = eligibleById.get(id);
+			if (!todo) {
+				throw new Error(
+					`TODO "${id}" is not an un-started user-added task — only the untouched queue can be reordered.`,
+				);
+			}
+			reordered.push(todo);
+		}
+		plan.todos = [...plan.todos.filter((t) => !isQueuedUserTodo(t)), ...reordered];
+		this.write(plan);
+		return plan;
 	}
 
 	remove(id: string): boolean {

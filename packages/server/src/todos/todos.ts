@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
 	GitFileChange,
 	TodoArtifact,
+	TodoChangedPayload,
 	TodoItem,
 	TodoPlan,
 	TodoReviewInfo,
@@ -37,6 +38,18 @@ import {
 
 function storeFor(workspaceId: string, sessionId: string): TodoStore {
 	return new TodoStore(getWorkspace(workspaceId).worktreePath, sessionId);
+}
+
+type TodoPublisher = (payload: TodoChangedPayload) => void;
+
+let todoPublisher: TodoPublisher | null = null;
+
+export function setTodoPublisher(fn: TodoPublisher): void {
+	todoPublisher = fn;
+}
+
+function publishTodoChanged(workspaceId: string, sessionId: string): void {
+	todoPublisher?.({ workspaceId, sessionId });
 }
 
 const commitFilesCache = new Map<string, GitFileChange[]>();
@@ -186,7 +199,21 @@ export function addTodo(params: {
 			origin: "user",
 		};
 		if (params.note !== undefined) input.note = params.note;
-		return storeFor(params.workspaceId, params.sessionId).add(input);
+		const todo = storeFor(params.workspaceId, params.sessionId).add(input);
+		publishTodoChanged(params.workspaceId, params.sessionId);
+		return todo;
+	});
+}
+
+export function reorderTodos(params: {
+	workspaceId: string;
+	sessionId: string;
+	ids: string[];
+}): Promise<{ ok: true }> {
+	return enqueueTodoMutation(params.workspaceId, () => {
+		storeFor(params.workspaceId, params.sessionId).reorderQueue(params.ids);
+		publishTodoChanged(params.workspaceId, params.sessionId);
+		return { ok: true } as const;
 	});
 }
 
@@ -205,6 +232,7 @@ export function updateTodo(params: {
 		if (params.note !== undefined) patch.note = params.note;
 		const result = storeFor(params.workspaceId, params.sessionId).update(params.id, patch);
 		if (!result) throw new Error(`No TODO with id "${params.id}".`);
+		publishTodoChanged(params.workspaceId, params.sessionId);
 		return result.todo;
 	});
 }
@@ -230,6 +258,7 @@ export function removeTodo(
 		dropItemBaseline(root, params.sessionId, params.id);
 		dropReviewRecord(root, params.sessionId, params.id);
 		clearAutoCycles(root, params.sessionId, params.id);
+		publishTodoChanged(params.workspaceId, params.sessionId);
 		return { ok: true } as const;
 	});
 }

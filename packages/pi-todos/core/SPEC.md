@@ -60,9 +60,16 @@ surgical mid-plan insert (`after` wins over `group`; an unknown id throws).
 
 The `index.ts` barrel:
 - `TodoStore` (constructed per `(root, sessionId)`, incl. `setSummary` — the plan-level completion
-  summary), `STORE_DIR` / `storeRel`, and the `countItems(plan)`
+  summary — and `reorderQueue(ids)`: permutes exactly the loose `isQueuedUserTodo` set — every
+  un-started user-added task named once, anything else throws — and normalizes the result to
+  `[non-eligible loose in current order, …eligible in requested order]`, keeping the user queue
+  contiguous at the tail and deterministic across re-reads), `STORE_DIR` / `storeRel`, and the
+  `countItems(plan)`
   + `flatItems(plan)` (every item in display order: groups first, the user's loose lane last — the one
-  flatten reused by reads/updates/rendering) + `groupStatus(group)` helpers.
+  flatten reused by reads/updates/rendering) + `groupStatus(group)` + `isQueuedUserTodo(todo)`
+  (`origin === "user" && status === "pending"` — the home of the "untouched user queue" eligibility
+  rule; the host's reorder validation uses it directly, and the web UI mirrors the predicate over the
+  wire DTO, the same never-imported mirroring the TODO DTOs already use) helpers.
 - The model types: `Todo`, `TodoGroup`, `TodoPlan`, `TodoFile`, `TodoInput`, `TodoPatch`,
   `TodoUpdateResult`, `WriteItem`, `WritePlan`, `TodoArtifact`, and the `TodoStatus` / `TodoOrigin` /
   `TodoGroupStatus` / `TodoArtifactKind` aliases.

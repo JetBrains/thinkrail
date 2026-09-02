@@ -22,15 +22,32 @@ second copy of it.
 
 Unlike the agent's own tools (which own status), the host's write surface is the **user's** edit lever:
 `todo.add` tags new items `origin: "user"` so the agent's `todo_write` re-plans never drop them, and
-`todo.remove` deletes by id. `todo.update` exists on the wire (accepts status/title/note) but no current
+`todo.remove` deletes by id (guarded only by the under-review latch — the popover is the user's
+plan-curation surface and may remove any item; the Work card merely scopes its own delete affordance to
+queued user tasks). `todo.update` exists on the wire (accepts status/title/note) but no current
 UI path calls it — status stays agent-owned (see [[module-pi-todos]]). `updateTodo` unwraps the store's
 `TodoUpdateResult` (`{ todo, paused }` — `paused` = items auto-demoted to keep one `in_progress`); the
 wire response stays a bare `TodoItem` — the UI re-reads the whole plan on change, so demotions arrive
 with the next `todo.list`.
 
-This module does **not** push: a user edit isn't broadcast to other clients. The acting client updates
-optimistically; a second viewer reconciles on the next `pi.event`-driven refetch. Fine for single-owner
-V1 (the chat-plan UX this feeds: [[submodule-web-chat]]'s "Chat TODO plan").
+**`todo.reorder` — the user's queue lever.** The Work view's "untouched queue" is a DERIVED domain
+notion, not new state: a loose todo with `origin: "user"` + `status: "pending"`
+(`isQueuedUserTodo`, owned by `pi-todos/core` like every plan-semantics rule). `reorderTodos`
+delegates to the store's `reorderQueue(ids)`: the request must name EXACTLY the current eligible set
+(every un-started user task once — started, completed, grouped, and agent-planned steps are rejected
+SERVER-side, frontend drag limits are UX only), and the result is normalized to
+`[non-eligible loose in current order] + [eligible in requested order]`, so the queue stays contiguous
+at the plan's tail and hydration re-reads the same order deterministically. Because the agent's
+`todo_list`/`formatPlan` discipline works the plan in order, the persisted order IS the execution
+queue — no second engine. When the agent starts a task (`todo_update` → `in_progress`) it leaves the
+eligible set with no extra state and can never re-enter reordering.
+
+**Host mutations broadcast.** `addTodo`/`updateTodo`/`removeTodo`/`reorderTodos` publish
+**`todo.changed`** `{workspaceId, sessionId}` through the `setTodoPublisher` seam (the
+`setReviewPublisher` pattern) — a refetch SIGNAL, never a payload of truth: every client re-reads
+`todo.list`, so a second viewer converges without witnessing the mutation live (hydrate-then-stream
+holds). Agent-side writes still reach clients via the existing `tool_execution_end` refetch; only
+host-side writes needed the new channel.
 
 **Change artifacts (`artifacts.ts`) — a commit-based review map.** Status stays agent-owned, but the host
 *observes* the transitions to attach an item's code changes, so the plan becomes a durable review map.

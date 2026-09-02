@@ -297,8 +297,10 @@ of the host.
   `false` returns the same authoritative membership/order without the synchronous per-workspace diff-stat
   fan-out used nowhere by navigation restoration / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
-  **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
-  item `origin:"user"`), plus the review ops **`review`** (approve: record `reviewed` + the sha
+  **`reorder`**/**`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
+  item `origin:"user"`; `reorder` permutes exactly the un-started user-added loose queue — `ids` must
+  name that whole set, validated host-side — and returns an Ack, with the new order arriving via re-read;
+  host todo mutations broadcast **`todo.changed`** `{workspaceId, sessionId}` as a refetch signal), plus the review ops **`review`** (approve: record `reviewed` + the sha
   watermark), **`requestFix`** (record `changes_requested` + feedback, then the host fires the fix
   package into the item's own chat — detached, rolled back on a pre-turn rejection) and
   **`startReview`** (the AGENT review: the plan's pinned reviewer chat gets the item's package; findings

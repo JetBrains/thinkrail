@@ -86,7 +86,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 54;
+export const PROTOCOL_VERSION = 55;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
@@ -107,6 +107,11 @@ export interface WorkspaceRemoved {
 export type SessionCreatedPayload = SessionSummary;
 
 export interface SessionDeletedPayload {
+	workspaceId: string;
+	sessionId: string;
+}
+
+export interface TodoChangedPayload {
 	workspaceId: string;
 	sessionId: string;
 }
@@ -149,6 +154,7 @@ export const WS_METHODS = {
 	todoList: "todo.list",
 	todoAdd: "todo.add",
 	todoUpdate: "todo.update",
+	todoReorder: "todo.reorder",
 	todoRemove: "todo.remove",
 	todoReview: "todo.review",
 	todoRequestFix: "todo.requestFix",
@@ -235,6 +241,7 @@ export const WS_CHANNELS = {
 	workspaceFsChanged: "workspace.fsChanged",
 	settingsChanged: "settings.changed",
 	reviewChanged: "review.changed",
+	todoChanged: "todo.changed",
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
@@ -392,6 +399,10 @@ export interface WsMethodMap {
 			note?: string;
 		};
 		result: TodoItem;
+	};
+	"todo.reorder": {
+		params: { workspaceId: string; sessionId: string; ids: string[] };
+		result: Ack;
 	};
 	"todo.remove": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
 	"todo.review": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };

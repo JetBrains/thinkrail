@@ -57,7 +57,7 @@ import {
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
 } from "../terminal";
-import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
+import { isTodoToolEnd, maybeAttachChangeArtifacts, setTodoPublisher } from "../todos";
 import {
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
@@ -191,6 +191,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
+				ws.subscribe(WS_CHANNELS.todoChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -379,6 +380,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				channel: WS_CHANNELS.reviewChanged,
 				data: markClientStale(payload, payload.workspaceId),
 			}),
+		);
+	});
+	setTodoPublisher((payload) => {
+		server.publish(
+			WS_CHANNELS.todoChanged,
+			JSON.stringify({ channel: WS_CHANNELS.todoChanged, data: payload }),
 		);
 	});
 	setReviewCommentHandler((sessionId, commentId, note) => ({

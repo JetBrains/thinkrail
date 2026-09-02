@@ -134,6 +134,7 @@ import {
 	listTodos,
 	removeSessionTodoWindows,
 	removeTodo,
+	reorderTodos,
 	requestTodoFix,
 	rollbackTodoFix,
 	settleChangeArtifacts,
@@ -403,6 +404,8 @@ const handlers: Record<string, Handler> = {
 				note?: string;
 			},
 		),
+	"todo.reorder": (params) =>
+		reorderTodos(params as { workspaceId: string; sessionId: string; ids: string[] }),
 	"todo.remove": (params) => {
 		const p = params as { workspaceId: string; sessionId: string; id: string };
 		return removeTodo(p, () => isItemUnderActiveReview(p.sessionId, p.id));

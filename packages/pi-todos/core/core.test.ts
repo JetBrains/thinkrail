@@ -590,3 +590,45 @@ test("plan summary: setSummary round-trips, empty clears, survives item edits, d
 		rmSync(root, { recursive: true, force: true });
 	}
 });
+
+test("reorderQueue permutes exactly the un-started user-added loose tasks and normalizes them to the tail", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		s.add({ title: "agent step", origin: "agent" });
+		const a = s.add({ title: "user A", origin: "user" });
+		const b = s.add({ title: "user B", origin: "user" });
+		const c = s.add({ title: "user C", origin: "user" });
+		const next = s.reorderQueue([c.id, a.id, b.id]);
+		expect(next.todos.map((t) => t.title)).toEqual(["agent step", "user C", "user A", "user B"]);
+		// deterministic after a re-read (hydration)
+		expect(
+			store(root)
+				.read()
+				.todos.map((t) => t.title),
+		).toEqual(["agent step", "user C", "user A", "user B"]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("reorderQueue rejects partial sets, foreign ids, and started/completed/agent items", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const agent = s.add({ title: "agent step", origin: "agent" });
+		const a = s.add({ title: "user A", origin: "user" });
+		const b = s.add({ title: "user B", origin: "user" });
+		expect(() => s.reorderQueue([a.id])).toThrow(/exactly once/);
+		expect(() => s.reorderQueue([a.id, a.id])).toThrow(/exactly once/);
+		expect(() => s.reorderQueue([a.id, agent.id])).toThrow(/untouched queue/);
+		expect(() => s.reorderQueue([a.id, b.id, "t_missing"])).toThrow(/exactly once/);
+		s.update(a.id, { status: "in_progress" });
+		// a started user task leaves the reorderable set
+		expect(() => s.reorderQueue([b.id, a.id])).toThrow();
+		const after = s.reorderQueue([b.id]);
+		expect(after.todos.map((t) => t.title)).toEqual(["agent step", "user A", "user B"]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});

@@ -1,4 +1,12 @@
-export { countItems, flatItems, groupStatus, STORE_DIR, storeRel, TodoStore } from "./store.ts";
+export {
+	countItems,
+	flatItems,
+	groupStatus,
+	isQueuedUserTodo,
+	STORE_DIR,
+	storeRel,
+	TodoStore,
+} from "./store.ts";
 export {
 	TODO_ARTIFACT_KINDS,
 	TODO_GROUP_STATUSES,
