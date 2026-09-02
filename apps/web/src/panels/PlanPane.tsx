@@ -1,5 +1,4 @@
 import {
-	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 	RiCircleLine as Circle,
 	RiErrorWarningLine as CircleAlert,
@@ -40,6 +39,7 @@ import {
 	changeSetStat,
 	flatItems,
 	groupProgress,
+	type ItemChangeSet,
 	itemChangeSet,
 	itemOpenFindings,
 	itemRevisions,
@@ -69,90 +69,28 @@ import { PrSetupDialog, type PrSetupState } from "./PrSetupDialog";
 import { FileRow } from "./planFileRow";
 import { openReviewLabel, useOpenBranchReview } from "./useOpenBranchReview";
 
-function ChangeSetBlock({
-	item,
-	workspaceId,
-	onOpenCommit,
-}: {
-	item: TodoItem;
-	workspaceId: string;
-	onOpenCommit: (sha: string) => void;
-}) {
-	const [expanded, setExpanded] = useState(false);
-	const set = itemChangeSet(item);
-	if (!set) return null;
-	const Chevron = expanded ? ChevronDown : ChevronRight;
-	const { count, added, removed } = changeSetCounts(set);
+function ChangeSetFiles({ set, workspaceId }: { set: ItemChangeSet; workspaceId: string }) {
+	const files =
+		set.kind === "paths"
+			? set.paths.map((path) => ({ path, status: "modified" as const }))
+			: set.files;
 	return (
-		<div
-			className="mt-4"
-			data-testid="plan-change-set"
-			data-kind={set.kind}
-			data-expanded={expanded}
-		>
-			<div className="flex items-center gap-8 px-4">
-				<IconTooltip label={expanded ? "Hide changed files" : "Show changed files"}>
-					<button
-						type="button"
-						data-testid="plan-change-set-toggle"
-						aria-expanded={expanded}
-						onClick={() => setExpanded((v) => !v)}
-						className="flex min-h-32 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 text-left hover:bg-control-bg-hovered"
-					>
-						<Chevron className="size-16 shrink-0 text-text-muted" />
-						<span className="shrink-0 tr-text-metadata text-text-subtle">
-							{count} {count === 1 ? "file" : "files"}
-						</span>
-					</button>
-				</IconTooltip>
-				{set.kind === "commit" ? (
-					<>
-						<IconTooltip label="Open this step's commit in the Changes panel">
-							<button
-								type="button"
-								data-testid="plan-commit-chip"
-								onClick={() => onOpenCommit(set.sha)}
-								className="flex min-h-32 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
-							>
-								<GitCommitHorizontal className="size-14" />
-								{set.sha.slice(0, 7)}
-							</button>
-						</IconTooltip>
-						<DiffStatBadge added={added} removed={removed} />
-					</>
-				) : null}
-			</div>
-			{expanded ? (
-				set.kind === "paths" ? (
-					<ul className="flex flex-col">
-						{set.paths.map((path) => (
-							<FileRow
-								key={path}
-								file={{ path, status: "modified" }}
-								onOpen={() => void openDiffInTab(workspaceId, { kind: "branch" }, path, "preview")}
-							/>
-						))}
-					</ul>
-				) : (
-					<ul className="flex flex-col">
-						{set.files.map((file) => (
-							<FileRow
-								key={file.path}
-								file={file}
-								onOpen={() =>
-									void openDiffInTab(
-										workspaceId,
-										{ kind: "commit", sha: set.sha },
-										file.path,
-										"preview",
-									)
-								}
-							/>
-						))}
-					</ul>
-				)
-			) : null}
-		</div>
+		<ul className="flex flex-col" data-testid="plan-change-set" data-kind={set.kind}>
+			{files.map((file) => (
+				<FileRow
+					key={file.path}
+					file={file}
+					onOpen={() =>
+						void openDiffInTab(
+							workspaceId,
+							set.kind === "commit" ? { kind: "commit", sha: set.sha } : { kind: "branch" },
+							file.path,
+							"preview",
+						)
+					}
+				/>
+			))}
+		</ul>
 	);
 }
 
@@ -633,8 +571,11 @@ function ItemBlock({
 						</button>
 					) : null}
 				</div>
-				{collapsible && (item.verification || set) ? (
-					<span className="flex items-center gap-8 py-2 tr-text-metadata text-text-subtle group-data-[expanded=true]:hidden">
+				{set || item.verification ? (
+					<div
+						data-testid="plan-item-meta"
+						className="flex items-center gap-8 py-2 tr-text-metadata text-text-subtle"
+					>
 						<span className="size-14 shrink-0" />
 						{item.verification ? <VerificationGlyph verification={item.verification} /> : null}
 						{set ? (
@@ -642,13 +583,22 @@ function ItemBlock({
 								{fileCount} {fileCount === 1 ? "file" : "files"}
 							</span>
 						) : null}
-						{set?.kind === "commit" && counts ? (
-							<span className="flex items-center gap-8 max-sm:hidden">
-								<span className="tr-code-text">{set.sha.slice(0, 7)}</span>
-								<DiffStatBadge added={counts.added} removed={counts.removed} />
-							</span>
+						{set?.kind === "commit" ? (
+							<button
+								type="button"
+								data-testid="plan-commit-chip"
+								title="Open this step's commit in the Changes panel"
+								onClick={() => onOpenCommit(set.sha)}
+								className="flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								<GitCommitHorizontal className="size-14" />
+								{set.sha.slice(0, 7)}
+							</button>
 						) : null}
-					</span>
+						{set?.kind === "commit" && counts ? (
+							<DiffStatBadge added={counts.added} removed={counts.removed} />
+						) : null}
+					</div>
 				) : null}
 				{hasDetails ? (
 					<div className={`mt-4 flex-col gap-4 border-border-muted border-t pt-4 ${detailsClass}`}>
@@ -671,7 +621,7 @@ function ItemBlock({
 						{item.status === "done" && item.verification ? (
 							<VerificationBadge verification={item.verification} />
 						) : null}
-						<ChangeSetBlock item={item} workspaceId={workspaceId} onOpenCommit={onOpenCommit} />
+						{set ? <ChangeSetFiles set={set} workspaceId={workspaceId} /> : null}
 						<RevisionsBlock item={item} onOpenCommit={onOpenCommit} />
 						{proto.comments.map((comment, index) => (
 							<div
@@ -718,7 +668,7 @@ function ItemBlock({
 				<div
 					data-testid="step-connector"
 					aria-hidden="true"
-					className="pointer-events-none absolute bottom-[-4px] left-[15px] h-4 w-px bg-border-muted"
+					className="pointer-events-none absolute bottom-[-4px] left-[14px] h-4 w-2 bg-border-muted"
 				/>
 			) : null}
 		</li>
