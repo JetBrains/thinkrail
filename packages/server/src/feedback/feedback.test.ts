@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -57,6 +57,17 @@ test("missing and malformed state use the complete defaults", () => {
 		recordAcceptedMessage("client-a");
 		expect(stored()).toEqual({ acceptedMessages: 1, nextInvitationAt: 10, dismissed: false });
 	}
+});
+
+test("a failed atomic replacement preserves durable state and cleans its temporary path", () => {
+	respondToInterview("never");
+	const durable = stored();
+	const temporary = join(directory, `feedback.json.${process.pid}.tmp`);
+	mkdirSync(temporary);
+
+	expect(() => respondToInterview("postpone")).toThrow();
+	expect(stored()).toEqual(durable);
+	expect(existsSync(temporary)).toBe(false);
 });
 
 test("accepted messages persist synchronously and one client holds the eligible claim", () => {

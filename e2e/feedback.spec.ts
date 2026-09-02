@@ -71,6 +71,15 @@ test("feedback settings and the addressed interview prompt preserve the approved
 	await expect(settingsLink).toHaveAttribute("href", BOOKING_URL);
 	await expect(settingsLink).toHaveAttribute("target", "_blank");
 	await expect(settingsLink).toHaveAttribute("rel", "noopener noreferrer");
+	const primaryTextColor = await page.evaluate(() => {
+		const probe = document.createElement("span");
+		probe.className = "text-control-primary-text";
+		document.body.append(probe);
+		const color = getComputedStyle(probe).color;
+		probe.remove();
+		return color;
+	});
+	await expect(settingsLink).toHaveCSS("color", primaryTextColor);
 	const settingsPopupPromise = page.waitForEvent("popup");
 	await settingsLink.click();
 	const settingsPopup = await settingsPopupPromise;
@@ -136,6 +145,7 @@ test("feedback settings and the addressed interview prompt preserve the approved
 	await expect(bookingLink).toHaveAttribute("href", BOOKING_URL);
 	await expect(bookingLink).toHaveAttribute("target", "_blank");
 	await expect(bookingLink).toHaveAttribute("rel", "noopener noreferrer");
+	await expect(bookingLink).toHaveCSS("color", primaryTextColor);
 	await bookingLink.dispatchEvent("auxclick", { button: 1 });
 	await expect(dialog).toBeHidden();
 	await expect.poll(() => actions.at(-1)).toBe("book");

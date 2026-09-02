@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { InterviewResponse } from "@thinkrail/contracts";
 import { dataDir } from "../persistence";
@@ -58,8 +58,19 @@ function loadState(): FeedbackState {
 }
 
 function writeState(next: FeedbackState): void {
-	mkdirSync(dataDir(), { recursive: true });
-	writeFileSync(join(dataDir(), "feedback.json"), `${JSON.stringify(next, null, "\t")}\n`);
+	const directory = dataDir();
+	const file = join(directory, "feedback.json");
+	const temporary = `${file}.${process.pid}.tmp`;
+	mkdirSync(directory, { recursive: true });
+	try {
+		writeFileSync(temporary, `${JSON.stringify(next, null, "\t")}\n`, "utf8");
+		renameSync(temporary, file);
+	} catch (error) {
+		try {
+			rmSync(temporary, { force: true, recursive: true });
+		} catch {}
+		throw error;
+	}
 }
 
 function saveState(next: FeedbackState): void {
