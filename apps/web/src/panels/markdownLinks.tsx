@@ -12,15 +12,24 @@ export function classifyHref(href: string | undefined): HrefKind {
 	return "relative";
 }
 
-export function resolveRelativePath(fromFile: string, href: string): string {
-	const dir = fromFile.includes("/") ? fromFile.slice(0, fromFile.lastIndexOf("/")) : "";
-	const segs = href.startsWith("/") || dir === "" ? [] : dir.split("/");
-	for (const seg of href.split("/")) {
-		if (seg === "" || seg === ".") continue;
-		if (seg === "..") segs.pop();
-		else segs.push(seg);
+export function resolveRelativePath(fromFile: string, href: string): string | null {
+	let decoded: string;
+	try {
+		decoded = decodeURIComponent(href);
+	} catch {
+		return null;
 	}
-	return segs.join("/");
+	if (!decoded) return null;
+	const dir = fromFile.includes("/") ? fromFile.slice(0, fromFile.lastIndexOf("/")) : "";
+	const segs = decoded.startsWith("/") || dir === "" ? [] : dir.split("/");
+	for (const seg of decoded.split("/")) {
+		if (seg === "" || seg === ".") continue;
+		if (seg === "..") {
+			if (segs.length === 0) return null;
+			segs.pop();
+		} else segs.push(seg);
+	}
+	return segs.join("/") || null;
 }
 
 export function slugify(text: string): string {
@@ -31,9 +40,9 @@ export function slugify(text: string): string {
 		.replace(/\s+/g, "-");
 }
 
-function splitHash(href: string): { path: string; hash: string } {
-	const i = href.indexOf("#");
-	return i < 0 ? { path: href, hash: "" } : { path: href.slice(0, i), hash: href.slice(i + 1) };
+function relativePathname(href: string): string {
+	const i = href.search(/[?#]/);
+	return i < 0 ? href : href.slice(0, i);
 }
 
 function encodePath(path: string): string {
@@ -95,12 +104,12 @@ export function documentComponents(ctx: { workspaceId: string; path: string }): 
 			);
 		}
 		if (kind === "relative" && href) {
-			const target = resolveRelativePath(ctx.path, splitHash(href).path);
+			const target = resolveRelativePath(ctx.path, relativePathname(href));
 			return (
 				<button
 					type="button"
 					data-testid="markdown-file-link"
-					data-path={target}
+					data-path={target ?? undefined}
 					disabled={!target}
 					onClick={() => {
 						if (target) void openFileInTab(ctx.workspaceId, target, "preview");
@@ -119,12 +128,13 @@ export function documentComponents(ctx: { workspaceId: string; path: string }): 
 	}
 
 	function DocumentImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
-		const resolved =
-			classifyHref(src) === "relative" && src
-				? `${getTransport().httpBase()}/files/${encodeURIComponent(ctx.workspaceId)}/${encodePath(
-						resolveRelativePath(ctx.path, src),
-					)}`
-				: src;
+		const isRelative = classifyHref(src) === "relative" && src !== undefined;
+		const target = isRelative ? resolveRelativePath(ctx.path, relativePathname(src)) : null;
+		const resolved = isRelative
+			? target
+				? `${getTransport().httpBase()}/files/${encodeURIComponent(ctx.workspaceId)}/${encodePath(target)}`
+				: undefined
+			: src;
 		return <img src={resolved} alt={alt ?? ""} title={title} />;
 	}
 

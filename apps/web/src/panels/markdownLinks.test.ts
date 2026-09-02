@@ -26,6 +26,13 @@ test("resolveRelativePath resolves against the source file's directory (posix)",
 	expect(resolveRelativePath("README.md", "architecture.md")).toBe("architecture.md");
 	expect(resolveRelativePath("docs/guide.md", "./img/logo.png")).toBe("docs/img/logo.png");
 	expect(resolveRelativePath("a/b/c.md", "/root.md")).toBe("root.md");
+	expect(resolveRelativePath("docs/guide.md", "../themes/My%20Theme.md")).toBe(
+		"themes/My Theme.md",
+	);
+	expect(resolveRelativePath("docs/guide.md", "../themes/%E2%9C%93.md")).toBe("themes/✓.md");
+	expect(resolveRelativePath("docs/guide.md", "../../README.md")).toBeNull();
+	expect(resolveRelativePath("docs/guide.md", "%2e%2e/%2e%2e/README.md")).toBeNull();
+	expect(resolveRelativePath("docs/guide.md", "%E0%A4%A.md")).toBeNull();
 });
 
 test("relative document targets have no browser-navigable href", () => {

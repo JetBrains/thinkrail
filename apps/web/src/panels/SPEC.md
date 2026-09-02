@@ -1186,8 +1186,10 @@ own section. The kebab menu (`plan-menu`, a
   the **preview** tab through the shared **`openFileInTab`** (the same flow `FileTree` uses) — following a
   link is browsing, so the slot is reused rather than promoting the source doc the way VS Code does; an
   accepted file target is a button styled as document-link text, never an anchor with a raw relative
-  `href`, because that URL is not a ThinkRail route and native navigation would escape to the Main page; the
-  slot is the slot, whatever the open came from — an **in-doc `#` link**
+  `href`, because that URL is not a ThinkRail route and native navigation would escape to the Main page;
+  URL pathnames are decoded once before resolution, while malformed encoding and traversal above the
+  worktree root produce an inert control instead of opening the wrong file; the slot is the slot, whatever
+  the open came from — an **in-doc `#` link**
   scrolls the preview (headings carry slug ids from the in-repo `remarkHeadingIds` transform), an
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
