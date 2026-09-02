@@ -16,7 +16,7 @@ import {
 } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
 import { LoadingRegion } from "../components/Skeleton";
-import { IconTooltip } from "../components/ui/tooltip";
+import { Button } from "../components/ui/button";
 import { cn } from "../lib";
 import { selectActiveEditorTab, useAppStore } from "../store";
 import { openFileInTab } from "./openTabs";
@@ -31,11 +31,11 @@ import {
 export function SpecsPanel({
 	workspaceId,
 	failed = false,
-	onRefresh,
+	onRetry,
 }: {
 	workspaceId: string;
 	failed?: boolean;
-	onRefresh?: () => void;
+	onRetry: () => void;
 }) {
 	const nodes = useAppStore((s) => s.specsByWorkspace[workspaceId]) ?? null;
 	const activeTab = useAppStore((state) => selectActiveEditorTab(state, workspaceId));
@@ -51,12 +51,10 @@ export function SpecsPanel({
 	const roots = useMemo(() => (nodes ? buildSpecTree(nodes) : null), [nodes]);
 
 	const content =
-		failed && !nodes ? (
-			<p data-testid="specs-error" className="px-4 py-4 tr-text-metadata text-text-muted">
-				Couldn't load specs — Refresh to retry.
-			</p>
-		) : nodes === null || roots === null ? (
-			<LoadingRegion rows={6} className="px-4 py-4" />
+		nodes === null || roots === null ? (
+			failed ? null : (
+				<LoadingRegion rows={6} className="px-4 py-4" />
+			)
 		) : nodes.length === 0 ? (
 			<p className="px-4 py-4 tr-text-metadata text-text-muted">No specs</p>
 		) : (
@@ -74,19 +72,25 @@ export function SpecsPanel({
 		);
 	return (
 		<div className="flex min-h-0 flex-col">
-			{onRefresh ? (
-				<div className="flex h-panel-header-row shrink-0 items-center justify-end border-border-muted border-b px-12">
-					<IconTooltip label="Refresh specs">
-						<button
-							type="button"
-							data-testid="specs-refresh"
-							aria-label="Refresh specs"
-							onClick={onRefresh}
-							className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-						>
-							<RefreshCw className="size-14" />
-						</button>
-					</IconTooltip>
+			{failed ? (
+				<div
+					role="alert"
+					data-testid="specs-error"
+					className="flex items-center gap-8 rounded-[var(--radius-sm)] bg-feedback-error-subtle px-8 py-4 tr-text-metadata text-feedback-error"
+				>
+					<span className="min-w-0 flex-1">
+						{nodes === null ? "Couldn't load specs." : "Couldn't update specs."}
+					</span>
+					<Button
+						variant="ghost"
+						size="sm"
+						data-testid="specs-retry"
+						onClick={onRetry}
+						className="text-feedback-error hover:text-feedback-error"
+					>
+						<RefreshCw className="size-14" />
+						Retry
+					</Button>
 				</div>
 			) : null}
 			{content}

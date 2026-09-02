@@ -337,7 +337,7 @@ joins that last group. This is startup behavior, not a fixed hierarchy.
 | Canonical name | `data-testid` | Implementation / responsibility |
 |---|---|---|
 | Projects | `tab-projects`, body `left-nav` | `panels/ProjectTree.tsx`; projects and workspaces |
-| Specs | `tab-specs` | `panels/SpecsPanel.tsx`; read-only spec graph, with `specs-refresh` |
+| Specs | `tab-specs` | `panels/SpecsPanel.tsx`; automatically refreshed read-only spec graph, with error-only `specs-retry` |
 | Files | `tab-files` | `panels/FileTree.tsx`; worktree file tree |
 | Changes | `tab-changes` | `panels/ChangesPanel.tsx`; scoped git changes and diff opens |
 | Review | `tab-review` | `panels/ReviewPanel.tsx`; review accordion and send actions |

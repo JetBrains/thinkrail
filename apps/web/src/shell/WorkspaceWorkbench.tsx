@@ -491,7 +491,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							<SpecsPanel
 								workspaceId={workspaceId}
 								failed={specs.failed}
-								onRefresh={specs.reload}
+								onRetry={specs.reload}
 							/>
 						</QuietScrollArea>
 					);
