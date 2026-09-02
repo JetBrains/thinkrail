@@ -110,13 +110,16 @@ reviewer, not for yourself.
 
 - **Done stays.** Completing a step = `todo_update` → `done`. **Never delete a done item** — it's the
   user's history. `todo_remove` is only for when the user explicitly asks to drop something.
-- **Edit surgically.** After the first plan, use `todo_update` / `todo_add` (they touch one item).
-  **Never `todo_write` to tweak** an existing list — it replaces everything; `todo_write` is only for
-  laying out a fresh plan.
+- **Edit surgically.** After the first plan, prefer `todo_update` / `todo_add` (they touch one item) for
+  a single change — cheaper than restating the whole plan. `todo_write` **reconciles** (it's not a
+  destructive replace): it matches your written steps to the existing ones by group + step title and
+  keeps their status/summary/id, so a re-plan is safe and lossless — reach for it when you're genuinely
+  restructuring, not to nudge one item. Status advances only via `todo_update`; a `status` you put in
+  `todo_write` on a step that already exists is ignored.
 - **Respect the user's edits.** The list is shared; treat their additions as new requests and their
   removals as cancellations. Loose items are theirs — do them, but don't rewrite or drop them when you
-  re-plan. (`todo_write` preserves user items and done items for you, but don't lean on that — reach
-  for `todo_add`/`todo_update` to edit, and keep `todo_write` for a genuinely fresh plan.)
+  re-plan. (`todo_write` never touches user items and keeps done items; but keep your steps' titles
+  stable across a re-plan — a reworded title reads as a new step, so the old one's progress won't carry.)
 
 ## Tools
 
@@ -125,7 +128,7 @@ reviewer, not for yourself.
 - `todo_update` — progress one step (`in_progress` on start, `done` when finished — with a `summary`
   when the step changed code; done stays).
 - `todo_remove` — delete one item (only when the user asks).
-- `todo_write` — lay out a fresh plan (groups only — one per task; replaces your open items; use once,
-  at the start).
+- `todo_write` — lay out or reconcile the plan (groups only — one per task; matches steps by title and
+  keeps their progress; prefer `todo_add`/`todo_update` for a single change).
 - `todo_plan_summary` — after the last item is done: a short overall summary of what the plan
   accomplished.

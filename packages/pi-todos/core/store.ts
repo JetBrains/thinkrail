@@ -16,6 +16,7 @@ import {
 	type TodoPlan,
 	type TodoStatus,
 	type TodoUpdateResult,
+	type WriteItem,
 	type WritePlan,
 } from "./types.ts";
 
@@ -333,11 +334,24 @@ export class TodoStore {
 				w.verification,
 			),
 		);
-		const freshGroups: TodoGroup[] = (plan.groups ?? []).map((g) => ({
-			id: freshId("g"),
-			title: decodeEscapes(g.title),
-			todos: g.todos.map((w) =>
-				makeTodo(
+		const current = this.read();
+		const existingByKey = new Map<string, Todo[]>();
+		for (const g of current.groups) {
+			for (const t of g.todos) {
+				if (t.origin !== "agent") continue;
+				const key = `${g.title}\u0000${t.title}`;
+				const bucket = existingByKey.get(key);
+				if (bucket) bucket.push(t);
+				else existingByKey.set(key, [t]);
+			}
+		}
+		const consumed = new Set<string>();
+		const reconcile = (groupTitle: string, w: WriteItem): Todo => {
+			const hit = existingByKey
+				.get(`${groupTitle}\u0000${decodeEscapes(w.title)}`)
+				?.find((t) => !consumed.has(t.id));
+			if (!hit) {
+				return makeTodo(
 					w.title,
 					w.status ?? "pending",
 					"agent",
@@ -345,25 +359,43 @@ export class TodoStore {
 					w.artifacts,
 					w.summary,
 					w.verification,
-				),
-			),
-		}));
-		const current = this.read();
+				);
+			}
+			consumed.add(hit.id);
+			const merged: Todo = { ...hit };
+			if (w.note !== undefined) {
+				const note = decodeEscapes(w.note);
+				if (note) merged.note = note;
+				else delete merged.note;
+				merged.updatedAt = nowIso();
+			}
+			return merged;
+		};
+		const freshGroups: TodoGroup[] = (plan.groups ?? []).map((g) => {
+			const title = decodeEscapes(g.title);
+			return { id: freshId("g"), title, todos: g.todos.map((w) => reconcile(title, w)) };
+		});
 		const keptLoose = current.todos.filter((t) => t.origin === "user" || t.status === "done");
 		const resultLoose = [...freshLoose, ...keptLoose];
+		const carriedGroups: TodoGroup[] = [];
 		for (const old of current.groups) {
+			const carriedDone: Todo[] = [];
 			for (const t of old.todos) {
+				if (consumed.has(t.id)) continue;
 				if (t.origin === "user") {
 					resultLoose.push(t);
 				} else if (t.status === "done") {
 					const match = freshGroups.find((g) => g.title === old.title);
 					if (match) match.todos.push(t);
-					else resultLoose.push(t);
+					else carriedDone.push(t);
 				}
+			}
+			if (carriedDone.length > 0) {
+				carriedGroups.push({ id: freshId("g"), title: old.title, todos: carriedDone });
 			}
 		}
 
-		const next: TodoPlan = { todos: resultLoose, groups: freshGroups };
+		const next: TodoPlan = { todos: resultLoose, groups: [...freshGroups, ...carriedGroups] };
 		this.keepOneInProgress(next);
 		this.write(next);
 		return next;

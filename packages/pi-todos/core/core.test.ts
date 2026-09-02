@@ -142,7 +142,7 @@ test("add places an item into a named group (created if new) or loose", () => {
 	}
 });
 
-test("done items in a group rejoin it across a re-plan; a dropped group's done items fall to loose", () => {
+test("across a re-plan done items rejoin a matching group and a dropped group's done items stay grouped, never loose", () => {
 	const root = tempRoot();
 	try {
 		const s = store(root);
@@ -154,8 +154,92 @@ test("done items in a group rejoin it across a re-plan; a dropped group's done i
 		const plan = s.replaceAll({ groups: [{ title: "Import", todos: [{ title: "next step" }] }] });
 		const importGroup = plan.groups.find((g) => g.title === "Import");
 		expect(importGroup?.todos.map((t) => t.title)).toContain("kept done");
-		expect(plan.groups.find((g) => g.title === "Gone")).toBeUndefined();
-		expect(plan.todos.map((t) => t.title)).toContain("orphan done");
+		const goneGroup = plan.groups.find((g) => g.title === "Gone");
+		expect(goneGroup?.todos.map((t) => t.title)).toEqual(["orphan done"]);
+		expect(plan.groups.map((g) => g.title)).toEqual(["Import", "Gone"]);
+		expect(plan.todos.map((t) => t.title)).not.toContain("orphan done");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("re-plan keeps the loose lane user-only: agent items never leak into it", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const userLoose = s.add({ title: "user request", origin: "user" });
+		const agentDone = s.add({ title: "agent done", group: "Gone" });
+		s.update(agentDone.id, { status: "done" });
+
+		const plan = s.replaceAll({ groups: [{ title: "Fresh", todos: [{ title: "step" }] }] });
+		expect(plan.todos.map((t) => t.id)).toEqual([userLoose.id]);
+		expect(plan.todos.every((t) => t.origin === "user")).toBe(true);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("reconcile: re-listing a step keeps its id, in_progress status and summary (no reset, no dup)", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const a = s.add({ title: "step a", group: "Task" });
+		s.add({ title: "step b", group: "Task" });
+		s.update(a.id, { status: "in_progress", summary: "halfway" });
+
+		const plan = s.replaceAll({
+			groups: [
+				{
+					title: "Task",
+					todos: [{ title: "step a", status: "done" }, { title: "step b" }, { title: "step c" }],
+				},
+			],
+		});
+		const task = plan.groups.find((g) => g.title === "Task");
+		const reA = task?.todos.find((t) => t.title === "step a");
+		expect(reA?.id).toBe(a.id);
+		expect(reA?.status).toBe("in_progress");
+		expect(reA?.summary).toBe("halfway");
+		expect(task?.todos.filter((t) => t.title === "step a")).toHaveLength(1);
+		expect(task?.todos.map((t) => t.title)).toEqual(["step a", "step b", "step c"]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("reconcile: an agent-open step omitted from the re-plan is dropped; a done one is preserved", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		s.add({ title: "open step", group: "Task" });
+		const done = s.add({ title: "done step", group: "Task" });
+		s.update(done.id, { status: "done" });
+
+		const plan = s.replaceAll({ groups: [{ title: "Task", todos: [{ title: "new step" }] }] });
+		const task = plan.groups.find((g) => g.title === "Task");
+		expect(task?.todos.map((t) => t.title)).toContain("new step");
+		expect(task?.todos.map((t) => t.title)).toContain("done step");
+		expect(task?.todos.map((t) => t.title)).not.toContain("open step");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("reconcile: duplicate step titles in a group are matched positionally", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const first = s.add({ title: "dup", group: "Task" });
+		const second = s.add({ title: "dup", group: "Task" });
+		s.update(first.id, { status: "in_progress" });
+		s.update(second.id, { status: "done" });
+
+		const plan = s.replaceAll({
+			groups: [{ title: "Task", todos: [{ title: "dup" }, { title: "dup" }] }],
+		});
+		const task = plan.groups.find((g) => g.title === "Task");
+		expect(task?.todos.map((t) => t.id)).toEqual([first.id, second.id]);
+		expect(task?.todos.map((t) => t.status)).toEqual(["in_progress", "done"]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

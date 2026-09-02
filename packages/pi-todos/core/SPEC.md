@@ -59,6 +59,35 @@ fresh plan is new work. Review *state* is never stored here: it is user-owned an
 ships the result on the wire DTO (`TodoGroupItem.status`, see [[submodule-server-todos]]), so `apps/web` —
 which may import `contracts` only — renders it rather than keeping a second copy of the truth table.
 
+**`replaceAll` is an identity-preserving reconcile, not a replace.** `todo_write` sends a *desired*
+plan; the model reaches for it to say "make the plan look like this, keep the progress", so
+`replaceAll(plan)` reconciles rather than rebuilding from scratch:
+
+- Each written grouped item is **matched** to an existing **agent** item by the key
+  `(group title, item title)` — both compared *decoded*; the first unconsumed match wins (duplicate
+  titles reconcile positionally). A **match reuses the existing item**: its `id`, `createdAt`, `status`,
+  `summary`, `verification`, `commitSubject`, and `artifacts` are kept; only `note` is updated from the
+  write. A `status` in the write is **ignored for a matched item** — status advances only through
+  `update`, so a re-listed `in_progress`/`done` step is never knocked back to `pending`. An **unmatched**
+  written item is created fresh.
+- **Leftovers** (existing items no written item matched): `origin: "user"` items are preserved into the
+  loose lane; `done` items are preserved (rejoin a fresh group of the same title, else carried over under
+  their original group, appended after the fresh groups); **agent + open** items are **dropped** — that is
+  the legitimate "removed a step". Consequence: re-writing the same plan is a **no-op on progress** (no
+  status reset, no duplicates, no orphaning).
+
+**Loose lane = user-only** (held structurally): `TodoPlan.todos` (the lane the UI renders as "Other")
+carries **only `origin: "user"` items** — agent-authored items always live in a group. Only user items
+ever reach `resultLoose`; the tools also refuse a direct loose agent write (`todo_add` needs
+`group`/`after`; `todo_write` takes `groups` only). The invariant is robust by construction, not
+dependent on the agent's tool discipline.
+
+**Matching is title-based, by design's current increment.** Because the key is `(group title, item
+title)`, a **group rename** or a **step rename** is not followed: the old item's done work is preserved
+(carried under the old name), its open work is dropped, and the renamed item appears fresh. This is the
+accepted cost of title matching; an optional per-item `id` in the `todo_write` schema is the planned next
+increment that makes matching rename-proof.
+
 **Linearity invariants** (held structurally): `update` setting `in_progress` auto-demotes every other
 `in_progress` item back to `pending` in the same write and returns them (`TodoUpdateResult.paused`) so
 the change stays visible; `replaceAll` re-establishes it over its **merged** result (fresh plan + the kept
