@@ -95,17 +95,20 @@ export function documentComponents(ctx: { workspaceId: string; path: string }): 
 			);
 		}
 		if (kind === "relative" && href) {
+			const target = resolveRelativePath(ctx.path, splitHash(href).path);
 			return (
-				<a
-					href={href}
-					onClick={(e) => {
-						e.preventDefault();
-						const target = resolveRelativePath(ctx.path, splitHash(href).path);
+				<button
+					type="button"
+					data-testid="markdown-file-link"
+					data-path={target}
+					disabled={!target}
+					onClick={() => {
 						if (target) void openFileInTab(ctx.workspaceId, target, "preview");
 					}}
+					className="cursor-pointer text-left text-primary underline decoration-primary-muted underline-offset-2 hover:decoration-primary disabled:cursor-default"
 				>
 					{children}
-				</a>
+				</button>
 			);
 		}
 		return (
