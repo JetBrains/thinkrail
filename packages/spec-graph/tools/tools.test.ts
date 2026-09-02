@@ -36,6 +36,7 @@ function foldsCase(): boolean {
 }
 
 const caseFolding = test.skipIf(!foldsCase());
+const windowsOnly = test.skipIf(process.platform !== "win32");
 
 const tools = new Map<string, ToolDefinition>();
 registerSpecTools({
@@ -227,6 +228,21 @@ test("spec_create refuses a path the index could never see, and writes nothing",
 		}
 		expect(existsSync(join(outer, "escape.md"))).toBe(false);
 		expect(existsSync(join(root, "notes/spec.txt"))).toBe(false);
+	});
+});
+
+windowsOnly("spec_create refuses Windows drive-relative and stream paths", async () => {
+	await withRoot(async (root) => {
+		let n = 0;
+		for (const path of ["C:..\\..\\outside.md", "notes.txt:SPEC.md"]) {
+			const result = await run(
+				"spec_create",
+				{ path, id: `windows-${n++}`, type: "task-spec", title: "Windows" },
+				root,
+			);
+			expect(isError(result)).toBe(true);
+			expect(text(result)).toContain("Windows drive or stream syntax");
+		}
 	});
 });
 

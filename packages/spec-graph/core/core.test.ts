@@ -10,7 +10,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, win32 } from "node:path";
 import {
 	buildGraph,
 	DEFAULT_GREP_LIMIT,
@@ -38,6 +38,8 @@ import {
 } from "./index.ts";
 import {
 	compareWalkEntries,
+	hasWindowsNamespaceSyntax,
+	isPathInsideRoot,
 	resolvePathSegment,
 	type SegmentResolution,
 	toWalkEntry,
@@ -89,6 +91,8 @@ const { foldsCase, foldsUnicode, deniesListing } = probeFilesystem();
 const caseFolding = test.skipIf(!foldsCase);
 const spellingPreserving = test.skipIf(foldsUnicode);
 const listingDenied = test.skipIf(!deniesListing);
+const windowsOnly = test.skipIf(process.platform !== "win32");
+const nonWindows = test.skipIf(process.platform === "win32");
 
 test("the finite-vocabulary tuples carry exactly their members", () => {
 	expect([...IDENTITY_FIELDS]).toEqual(["id", "type"]);
@@ -592,6 +596,63 @@ test("resolveSpecPath rejects every path the index could never see", () => {
 		]) {
 			expect(resolveSpecPath(root, path)).toHaveProperty("error");
 		}
+	});
+});
+
+test("Windows drive and stream syntax is never a root-relative spec path", () => {
+	for (const path of [
+		"C:SPEC.md",
+		"C:..\\..\\outside.md",
+		"notes.txt:SPEC.md",
+		"dir\\notes.txt:SPEC.md",
+		"\\rooted\\SPEC.md",
+		"\\\\server\\share\\SPEC.md",
+	]) {
+		expect(hasWindowsNamespaceSyntax(path)).toBe(true);
+	}
+	for (const path of ["SPEC.md", "dir\\SPEC.md"]) {
+		expect(hasWindowsNamespaceSyntax(path)).toBe(false);
+	}
+});
+
+test("the final containment gate catches Windows drive-relative traversal after joining", () => {
+	const root = "C:\\repo";
+	const attack = "C:..\\..\\..\\outside.md";
+	let target = root;
+	for (const segment of win32.normalize(attack).split(win32.sep)) {
+		target = win32.join(target, segment);
+	}
+
+	expect(win32.isAbsolute(attack)).toBe(false);
+	expect(target).toBe("C:\\outside.md");
+	expect(isPathInsideRoot(root, "C:\\repo\\docs\\SPEC.md", win32)).toBe(true);
+	expect(isPathInsideRoot(root, target, win32)).toBe(false);
+	expect(isPathInsideRoot(root, "D:\\outside.md", win32)).toBe(false);
+});
+
+windowsOnly("resolveSpecPath rejects Windows drive-relative and stream paths", () => {
+	withProject((root) => {
+		for (const path of ["C:..\\..\\outside.md", "notes.txt:SPEC.md"]) {
+			expect(resolveSpecPath(root, path)).toHaveProperty("error");
+		}
+	});
+});
+
+nonWindows("Windows-only syntax keeps its literal index identity on POSIX", () => {
+	withProject((root) => {
+		const names = ["notes.txt:SPEC.md", "dir\\SPEC.md"];
+		for (const [index, path] of names.entries()) {
+			const resolved = resolveSpecPath(root, path);
+			if ("error" in resolved) throw new Error(`expected a resolved path, got: ${resolved.error}`);
+			writeFileSync(
+				resolved.abs,
+				`---\nid: literal-${index}\ntype: module-design\ntitle: Literal\n---\n`,
+			);
+		}
+
+		const graph = new SpecIndex(root).graph();
+		expect(graph.nodes.get("literal-0")?.path).toBe(names[0]);
+		expect(graph.nodes.get("literal-1")?.path).toBe(names[1]);
 	});
 });
 

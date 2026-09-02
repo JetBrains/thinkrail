@@ -131,6 +131,7 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
+      - run: bun test packages/spec-graph
       - run: bun run build:binary
       - run: bun run smoke:binary
 

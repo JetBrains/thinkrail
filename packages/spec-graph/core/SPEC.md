@@ -21,9 +21,9 @@ grep with metadata filters, bounded graph slices, and structural validation. Imp
   read-only — the revalidation mechanism lives in `module-spec-graph` (*Derived read index*).
 - **Public surface:** the `index.ts` **barrel**. `tools/` imports the model only through it, never a leaf
   file directly. The barrel binds *consumers*; the module's own test (`core/core.test.ts`) may import a
-  leaf directly to reach helpers that are deliberately not public — the pure segment resolver and the
-  glob's order comparator in `store.ts`, which pin `resolveSpecPath` and the glob order without touching
-  a filesystem.
+  leaf directly to reach helpers that are deliberately not public — the pure path guards, segment
+  resolver, and glob order comparator in `store.ts`, which pin `resolveSpecPath` and the glob order
+  without touching a filesystem.
 - **Allowed deps:** `yaml`; Node built-ins.
 - **Forbidden:** any `@earendil-works/*` (this is what keeps `core/` isolated and unit-testable) and any
   `@thinkrail/*` package.
@@ -66,10 +66,17 @@ Acyclic and one-way: `parse` is the root, `graph` builds on it, and `query`/`val
   **canonical relative path**, so a caller can never report an identity the index will not produce.
   It requires: root-relative, inside the root, `.md`, outside the ignored dirs, an existing root, and no
   symlink at any component beneath the root — checked with `lstat` per component, dangling links included,
-  because the glob never descends a symlink. That last rule is what a string check and a `realpath`
-  comparison both miss: a link is rejected whether it leaves the project, lands in an ignored directory,
-  or points back at an indexed one, since in every case the file it creates is invisible to every other
-  spec tool.
+  because the glob never descends a symlink. On Windows, colon-bearing paths are refused before
+  normalization: this closes both drive-relative paths (`C:..\\outside.md`, which `isAbsolute` does not
+  recognize) and NTFS alternate data streams (`file:SPEC.md`, which `readdir` cannot see). Every `..`
+  segment that survives normalization is also refused, and the canonical absolute result must pass a
+  final `relative(root, target)` containment check. These overlapping gates are deliberate: path syntax,
+  normalization, and component-wise canonicalization must not be able to undermine each other. Portable
+  `win32` arithmetic tests pin the escape on every host; the Windows CI lane also runs the package tests
+  natively, including the `resolveSpecPath` and `spec_create` integrations. The symlink rule is what a
+  string check and a `realpath` comparison both miss: a link is rejected whether it
+  leaves the project, lands in an ignored directory, or points back at an indexed one, since in every case
+  the file it creates is invisible to every other spec tool.
 - `resolveSpecPath` canonicalizes each component to its **on-disk spelling** before it judges or reports
   it. A component whose bytes already match an entry of its parent directory is taken as written; a
   component that resolves on this filesystem *without* matching any entry byte-for-byte — a

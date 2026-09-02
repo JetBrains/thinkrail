@@ -1,5 +1,5 @@
 import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { isAbsolute, join, normalize, relative, sep } from "node:path";
+import { isAbsolute, join, normalize, relative, sep, win32 } from "node:path";
 import { buildGraph, type SpecGraph } from "./graph.ts";
 import { FIELDS, type Frontmatter, isSpec, parseFile, scalar } from "./parse.ts";
 import type { SpecContentEntry } from "./query.ts";
@@ -7,6 +7,27 @@ import type { SpecContentEntry } from "./query.ts";
 const IGNORED_DIRS = new Set(["node_modules", ".git", "dist", "build"]);
 
 export const SPEC_FILE_EXTENSION = ".md";
+
+interface PathSemantics {
+	isAbsolute(path: string): boolean;
+	relative(from: string, to: string): string;
+	sep: string;
+}
+
+const NATIVE_PATH_SEMANTICS: PathSemantics = { isAbsolute, relative, sep };
+
+export function hasWindowsNamespaceSyntax(path: string): boolean {
+	return win32.parse(path).root !== "" || path.includes(":");
+}
+
+export function isPathInsideRoot(
+	root: string,
+	target: string,
+	paths: PathSemantics = NATIVE_PATH_SEMANTICS,
+): boolean {
+	const rel = paths.relative(root, target);
+	return rel !== ".." && !rel.startsWith(`..${paths.sep}`) && !paths.isAbsolute(rel);
+}
 
 function isSymlink(target: string): boolean {
 	try {
@@ -75,12 +96,17 @@ export type SpecPathResolution = { rel: string; abs: string } | { error: string 
 export function resolveSpecPath(root: string, path: string): SpecPathResolution {
 	if (path.trim() === "") return { error: "Path must not be empty." };
 	if (isAbsolute(path)) return { error: `Path must be root-relative, not absolute: ${path}` };
+	if (process.platform === "win32" && hasWindowsNamespaceSyntax(path)) {
+		return { error: `Path must not use Windows drive or stream syntax: ${path}` };
+	}
 	if (!path.endsWith(SPEC_FILE_EXTENSION)) {
 		return { error: `Spec files must end in ${SPEC_FILE_EXTENSION}: ${path}` };
 	}
 
 	const segments = normalize(path).split(sep);
-	if (segments[0] === "..") return { error: `Path must stay inside the project root: ${path}` };
+	if (segments.includes("..")) {
+		return { error: `Path must stay inside the project root: ${path}` };
+	}
 	if (!existsSync(root)) return { error: `Project root does not exist: ${root}` };
 
 	let walked = root;
@@ -111,6 +137,9 @@ export function resolveSpecPath(root: string, path: string): SpecPathResolution 
 	const rel = canonical.join("/");
 	if (!rel.endsWith(SPEC_FILE_EXTENSION)) {
 		return { error: `Spec files must end in ${SPEC_FILE_EXTENSION}: ${path}` };
+	}
+	if (!isPathInsideRoot(root, walked)) {
+		return { error: `Path must stay inside the project root: ${path}` };
 	}
 	return { rel, abs: walked };
 }
