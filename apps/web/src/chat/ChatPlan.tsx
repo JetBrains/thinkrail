@@ -1,4 +1,7 @@
-import { RiArrowDownSLine as ChevronDown, RiArrowUpSLine as ChevronUp } from "@remixicon/react";
+import {
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+} from "@remixicon/react";
 import { PopoverContent } from "@/components/ui/popover";
 import { cn } from "../lib";
 import { type PlanGlance, planSummary, stripStatus } from "./planView";
@@ -18,7 +21,7 @@ export function ChatPlanStripContent({
 	const summary = planSummary(plan.data);
 	const { done, total } = summary;
 	const status = stripStatus(glance, summary);
-	const Chevron = open ? ChevronDown : ChevronUp;
+	const Chevron = open ? ChevronDown : ChevronRight;
 	const { Icon, label, className } = glanceIcon(glance);
 	return (
 		<>
@@ -53,16 +56,19 @@ export function ChatPlanContent({ plan, glance }: { plan: ChatTodos; glance: Pla
 	return (
 		<PopoverContent
 			data-testid="chat-plan-popover"
-			side="top"
+			side="bottom"
 			align="start"
 			sideOffset={0}
 			alignOffset={0}
-			className="flex max-h-[calc(var(--radix-popover-content-available-height)*0.5)] w-[24rem] flex-col overflow-hidden rounded-b-none border-b-0 bg-container-content-bg p-0"
+			className="flex max-h-[calc(var(--radix-popover-content-available-height)*0.5)] w-[24rem] flex-col overflow-hidden rounded-t-none border-t-0 bg-container-content-bg p-0"
 		>
+			<div className="shrink-0 border-border-muted border-b">
+				<TodoAddRow onAdd={plan.add} onOpenPlan={plan.openPlan} />
+			</div>
 			<div className="min-h-0 flex-1 overflow-auto p-4">
 				{empty ? (
 					<p className="px-4 py-4 text-text-muted tr-text-metadata">
-						No TODOs yet — the agent adds its plan here, or add one below.
+						No TODOs yet — the agent adds its plan here, or add one above.
 					</p>
 				) : (
 					<TodoRows
@@ -72,9 +78,6 @@ export function ChatPlanContent({ plan, glance }: { plan: ChatTodos; glance: Pla
 						onOpenChanges={plan.openChanges}
 					/>
 				)}
-			</div>
-			<div className="shrink-0 border-border-muted border-t">
-				<TodoAddRow onAdd={plan.add} onOpenPlan={plan.openPlan} />
 			</div>
 		</PopoverContent>
 	);
