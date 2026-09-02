@@ -323,6 +323,53 @@ test("exported import-equals declarations resolve star precedence", () => {
 	expect(run(root)).toMatchObject({ code: 0, stderr: "" });
 });
 
+test("direct CommonJS export assignments normalize to one default surface", () => {
+	const root = fixture();
+	write(
+		root,
+		"tsconfig.json",
+		JSON.stringify({
+			compilerOptions: { module: "CommonJS", moduleResolution: "Node10" },
+			include: ["**/*.ts"],
+		}),
+	);
+	write(root, "class/SPEC.md", spec("export-equals-class", "- **Public surface:** `default`."));
+	write(root, "class/index.ts", "class Api {}\nexport = Api;\n");
+	write(
+		root,
+		"function/SPEC.md",
+		spec("export-equals-function", "- **Public surface:** `default`."),
+	);
+	write(root, "function/index.ts", "function api() {}\nexport = api;\n");
+	write(root, "object/SPEC.md", spec("export-equals-object", "- **Public surface:** `default`."));
+	write(root, "object/index.ts", "const api = { value: 1 };\nexport = api;\n");
+
+	const result = run(root);
+	expect(result.code).toBe(0);
+	expect(result.stdout).toContain("3 enrolled, 3 compared");
+
+	const invalid = fixture();
+	write(
+		invalid,
+		"module/tsconfig.json",
+		JSON.stringify({
+			compilerOptions: { module: "CommonJS", moduleResolution: "Node10" },
+			files: ["index.ts"],
+		}),
+	);
+	write(
+		invalid,
+		"module/SPEC.md",
+		spec("export-equals-synthetic", "- **Public surface:** `prototype`."),
+	);
+	write(invalid, "module/index.ts", "class Api {}\nexport = Api;\n");
+
+	const mismatch = run(invalid);
+	expect(mismatch.code).toBe(1);
+	expect(mismatch.stderr).toContain("barrel no longer exports: prototype");
+	expect(mismatch.stderr).toContain("surface does not list: default");
+});
+
 test("invalid named and ambiguous star re-exports fail", () => {
 	const root = fixture();
 	write(root, "named/SPEC.md", spec("named", "- **Public surface:** `Missing`."));
