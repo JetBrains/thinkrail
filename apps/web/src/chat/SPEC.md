@@ -135,9 +135,6 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   only when it reports success; it does **not** reach the store toast the way `panels/PlanPane` does,
   keeping the message renderers props-driven.
   Skill-invocation and review-package cards keep their own disclosure UI and carry no copy affordance.
-  The transcript's Virtuoso list carries a 1600px `increaseViewportBy` on both edges so a short transcript
-  stays fully mounted even opened scrolled to the bottom — every row's hover-revealed copy action needs to
-  be in the DOM, not virtualized away, for it to be reachable at all.
 - `tool` — a **primary** tool call: the collapsible `ToolCard` frame (collapsed unless registered
   `defaultExpanded`; errors auto-expand; a manual toggle wins), or a `"bare"` renderer that owns its
   frame. A `"bare"` call on a dead message (`stopReason` aborted/error — pi never executes those calls)

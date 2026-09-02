@@ -817,7 +817,6 @@ export default function ChatView({
 							totalListHeightChanged={handleContentHeight}
 							atBottomThreshold={50}
 							atTopThreshold={50}
-							increaseViewportBy={{ top: 1600, bottom: 1600 }}
 							computeItemKey={(_, row) => row.id}
 							itemContent={(index, row) => (
 								<div
