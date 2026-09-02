@@ -12,7 +12,8 @@ test("a parent-relative file link cannot escape into browser navigation", async 
 	await expect(preview).toBeVisible();
 
 	await page.getByTestId("file-node").filter({ hasText: "LINKS.md" }).click();
-	await expect(page.getByTestId("editor-tab")).toHaveCount(2);
+	const priorPreview = page.getByTestId("editor-tab").filter({ hasText: "LINKS.md" });
+	await expect(priorPreview).toHaveAttribute("data-preview", "true");
 	await page.getByTestId("editor-tab").filter({ hasText: "COLOR.md" }).click();
 	await expect(preview.getByRole("heading", { name: "Colour system" })).toBeVisible();
 
@@ -27,7 +28,7 @@ test("a parent-relative file link cannot escape into browser navigation", async 
 	await expect(preview.getByRole("heading", { name: "Theme spec target" })).toBeVisible();
 	const targetTab = page.getByTestId("editor-tab").filter({ hasText: "SPEC.md" });
 	await expect(targetTab).toHaveAttribute("data-preview", "true");
-	await expect(page.getByTestId("editor-tab")).toHaveCount(2);
+	await expect(priorPreview).toHaveCount(0);
 	expect(page.url()).toBe(urlBefore);
 	expect(page.context().pages()).toHaveLength(pagesBefore);
 });
