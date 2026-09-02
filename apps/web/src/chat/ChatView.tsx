@@ -11,7 +11,7 @@ import type {
 } from "@thinkrail/contracts";
 import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import {
 	EMPTY_RUNTIME,
 	type SessionViewMode,
@@ -166,10 +166,12 @@ export default function ChatView({
 	sessionId,
 	workspaceId,
 	onOpenFile,
+	headerSlot,
 }: {
 	sessionId: string;
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
+	headerSlot?: HTMLElement | null;
 }) {
 	const sessionRuntime = useAppStore((s) => s.sessions[sessionId]);
 	const runtime = sessionRuntime ?? EMPTY_RUNTIME;
@@ -731,41 +733,34 @@ export default function ChatView({
 					className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
 				>
 					<Popover open={planOpen} onOpenChange={setPlanOpen}>
-						<PopoverAnchor asChild>
-							<div className="shrink-0">
-								<ChatHeader
-									stats={stats}
-									statusEntries={Object.entries(extUiStatus)}
-									left={
-										<>
-											<ViewSwitcher
-												view="chat"
-												workAvailable={workEnabled}
-												onSelect={onSelectView}
-											/>
-											{plan.data ? (
-												<PopoverTrigger asChild>
-													<button
-														type="button"
-														data-testid="chat-plan-toggle"
-														data-open={planOpen}
-														className="flex min-w-0 max-w-full items-center gap-4 overflow-clip whitespace-nowrap text-text-muted tr-text-metadata hover:text-text-default"
-													>
-														<ChatPlanStripContent
-															plan={plan}
-															open={planOpen}
-															glance={planGlanceState}
-														/>
-													</button>
-												</PopoverTrigger>
-											) : null}
-										</>
-									}
-									skillsStale={skillsStale}
-									{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
-								/>
-							</div>
-						</PopoverAnchor>
+						<ChatHeader
+							stats={stats}
+							statusEntries={Object.entries(extUiStatus)}
+							slot={headerSlot ?? null}
+							left={
+								<>
+									<ViewSwitcher view="chat" workAvailable={workEnabled} onSelect={onSelectView} />
+									{plan.data ? (
+										<PopoverTrigger asChild>
+											<button
+												type="button"
+												data-testid="chat-plan-toggle"
+												data-open={planOpen}
+												className="flex h-full min-w-0 max-w-full items-center gap-4 overflow-clip whitespace-nowrap text-text-muted tr-text-metadata hover:text-text-default"
+											>
+												<ChatPlanStripContent
+													plan={plan}
+													open={planOpen}
+													glance={planGlanceState}
+												/>
+											</button>
+										</PopoverTrigger>
+									) : null}
+								</>
+							}
+							skillsStale={skillsStale}
+							{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
+						/>
 						<ChatPlanContent plan={plan} glance={planGlanceState} />
 					</Popover>
 					<div

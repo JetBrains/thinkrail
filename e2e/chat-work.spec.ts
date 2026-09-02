@@ -29,9 +29,15 @@ test("Work stays disabled until the plan has content, never auto-switches, and t
 }) => {
 	await openWorkspaceChat(page);
 
-	await expect(page.getByTestId("session-view-switcher")).toBeVisible();
+	const strip = page.getByTestId("center-tab-strip").first();
+	await expect(strip.getByTestId("session-view-switcher")).toBeVisible();
 	await expect(page.getByTestId("session-view-chat")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("session-view-work")).toBeDisabled();
+
+	const stripBox = await strip.boundingBox();
+	const chatScrollBox = await page.getByTestId("chat-scroll").boundingBox();
+	if (!stripBox || !chatScrollBox) throw new Error("strip or chat scroll is not laid out");
+	expect(Math.round(chatScrollBox.y)).toBe(Math.round(stripBox.y + stripBox.height));
 
 	await addPlanItem(page, "Ship the feature");
 
@@ -43,7 +49,7 @@ test("Work stays disabled until the plan has content, never auto-switches, and t
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 	await expect(page.getByTestId("chat-view")).toHaveCount(0);
-	await expect(page.getByTestId("session-view-work")).toHaveAttribute("data-active", "true");
+	await expect(strip.getByTestId("session-view-work")).toHaveAttribute("data-active", "true");
 	await expect(pane.getByTestId("plan-item").filter({ hasText: "Ship the feature" })).toBeVisible();
 
 	await expect(page.locator('[data-testid="editor-tab"]')).toHaveCount(1);

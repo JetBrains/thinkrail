@@ -24,7 +24,12 @@ The shell-owned, headless workbench engine: the normalized frontend-local frame 
 One `WorkbenchFrame` belongs to a frontend surface, not a workspace. It carries stable group/split ids, center topology, left/right/bottom groups and geometry, auxiliary visibility/folds, bottom alignment, singleton-tool placement/order, and restore targets. It carries no workspace resource identity, preview, selected tab, navigation clock, pointer draft, or viewport compression.
 
 A `WorkspaceViewState` is keyed by workspace and references frame group ids. It carries
-file/diff/chat/terminal membership and order plus center preview identity. The separate
+file/diff/chat/terminal membership and order plus center preview identity. A center group's tab strip
+exposes a feature-agnostic **content slot** between the tab scroller and the trailing actions: the group
+holds the slot element and hands it to `renderTabBody(tab, headerSlot)`, so the active resource's own
+module can portal per-resource header controls into the one strip row (the chat surface's single-row
+header) without the layout engine knowing any feature; the scroller stops flex-growing when the slot
+exists so the slot owns the free width, and an empty slot renders nothing. The separate
 `LayoutAttention` overlay carries selection per group, last focus for center/each auxiliary region, and
 per-group navigation clocks. The mounted workbench document is a pure projection of the singular frame,
 active workspace view, and its attention; it is never stored as another authority.

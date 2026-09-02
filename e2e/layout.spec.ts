@@ -137,8 +137,13 @@ test("workbench strips and feature toolbars keep one-row geometry with ARIA tabs
 	await expect(bottomStrip.getByTestId("terminal-tab-close")).toHaveCount(1);
 
 	await page.getByTestId("tab-changes").click();
-	await expect(page.getByTestId("chat-toolbar")).toHaveCSS("height", "32px");
-	await expect(page.getByTestId("chat-toolbar")).toHaveCSS("overflow-x", "clip");
+	const toolbar = page.getByTestId("chat-toolbar");
+	await expect(toolbar).toHaveCSS("overflow-x", "clip");
+	const stripBox = await centerStrip.boundingBox();
+	const toolbarBox = await toolbar.boundingBox();
+	if (!stripBox || !toolbarBox) throw new Error("strip or chat toolbar is not laid out");
+	expect(toolbarBox.y).toBeGreaterThanOrEqual(stripBox.y);
+	expect(toolbarBox.y + toolbarBox.height).toBeLessThanOrEqual(stripBox.y + stripBox.height);
 	await expect(page.getByTestId("changes-view-toggle")).toHaveCSS("height", "32px");
 });
 

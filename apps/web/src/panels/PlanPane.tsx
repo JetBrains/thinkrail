@@ -17,6 +17,7 @@ import {
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -503,9 +504,11 @@ function downloadMarkdown(markdown: string, title: string): void {
 export default function PlanPane({
 	workspaceId,
 	sessionId,
+	headerSlot,
 }: {
 	workspaceId: string;
 	sessionId: string;
+	headerSlot?: HTMLElement | null;
 }) {
 	const plan = useChatTodos(workspaceId, sessionId);
 	const title = useAppStore((s) => selectChatTitle(s, workspaceId, sessionId));
@@ -532,13 +535,23 @@ export default function PlanPane({
 	const agentComments = useAppStore((s) => selectAgentReviewCommentCount(s, workspaceId));
 	const reviewComments = useAppStore((s) => s.reviewsByWorkspace[workspaceId]?.comments);
 
-	const switcherBar = (
+	const switcher = (
+		<ViewSwitcher
+			view="work"
+			workAvailable={workAvailable(plan.data)}
+			onSelect={(view) => useAppStore.getState().setSessionView(sessionId, view)}
+		/>
+	);
+	const switcherBar = headerSlot ? (
+		createPortal(
+			<div className="flex h-full min-w-0 flex-1 items-center gap-12 overflow-clip px-8">
+				{switcher}
+			</div>,
+			headerSlot,
+		)
+	) : (
 		<div className="flex h-panel-header-row shrink-0 items-center gap-12 border-border-muted border-b bg-container-workspace-bg px-12">
-			<ViewSwitcher
-				view="work"
-				workAvailable={workAvailable(plan.data)}
-				onSelect={(view) => useAppStore.getState().setSessionView(sessionId, view)}
-			/>
+			{switcher}
 		</div>
 	);
 	if (plan.data === null) {

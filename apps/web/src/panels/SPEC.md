@@ -433,8 +433,10 @@ a project picker, the prompt hero, and the reused
   after the last tab closes without introducing onboarding state. The lazy **`PlanPane`** — the chat plan's
   **live review-map page** — is the chat tab's **Work view**, its ONLY mount (the separate plan center-tab
   representation was removed — see `store/SPEC.md`): the shell swaps it in for `ChatView` on the SAME
-  session tab, and it renders a panel-header-row bar carrying `chat/ViewSwitcher` (view `work`) above the
-  page, so the user switches back to Chat in place — same session, same tab, no second lifecycle.
+  session tab, and it **portals `chat/ViewSwitcher` (view `work`) into the workbench strip's content
+  slot** (`headerSlot` prop from the shell — one header row, same as Chat; a missing slot degrades to its
+  own panel-header bar), so the user switches back to Chat in place — same session, same tab, no second
+  lifecycle.
   Availability for the Work segment re-derives from its own live plan (`chat/planView.workAvailable`); the
   active segment never disables, so an emptied plan cannot strand the user in Work. It renders the session's TODO plan document-scale
   (groups as sections, items with status glyphs) with a **scan-first item anatomy**: the item TITLE is

@@ -398,9 +398,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   directly via `thinking_level_changed`. Its rows follow the **live catalog** — `ChatView` resolves the
   session's model through `store`'s `selectCatalogModel` before passing it down, rather than reading the
   session's own snapshot, so a `model.refresh` that changes what a model supports changes the offered
-  levels with it), `SessionStatsBar`, `ChatHeader` (the fixed, single-line **panel-header row** —
-  `h-panel-header-row` (`--panel-header-row-height`, currently 32px), the shared structural geometry with
-  workbench Group Headers and the Changes toolbar, not a value pinned here; it never scrolls,
+  levels with it), `SessionStatsBar`, `ChatHeader` (the chat's header controls — switcher + plan strip,
+  spacer, status/usage, Skills — which do NOT own a second row: given the workbench group's **strip
+  content slot** (`slot` prop, threaded shell→`ChatResourceBody`→`ChatView` from
+  `renderTabBody(tab, headerSlot)`), it **portals** its content INTO the tab strip, so the chat surface
+  has ONE header row — tabs, then these controls, then the strip's trailing actions — and the
+  conversation starts immediately below the strip. React portals keep context, so the TODO `Popover`
+  trigger works from the strip while its state stays in `ChatView`; ownership never moves and no second
+  `useChatTodos` mounts. With no slot (first commit tick, standalone mounts) it degrades to its own
+  panel-header row. It never scrolls,
   and constrained widths clip/truncate TODO + status/usage text while preserving the trailing Skills
   action. Its `left` slot carries the session **`ViewSwitcher`** then the plan strip; its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
@@ -859,7 +865,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   execution truth. Enabling never auto-switches; selection is client view state
   (`store.sessionViewBySession`, per-session — concurrent sessions stay isolated — and in-memory, so a
   reload defaults back to Chat). `PlanPane` mounts the same switcher (view `work`) in its session-view
-  bar, so exactly one switcher is mounted either way. **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
+  slot, so exactly one switcher is mounted either way. **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
   "work in order" discipline is unaffected), `planMarkdown` (a pure `plan →
   markdown` compiler, `## <group> — n/m` sections — the plan page's **export** (copy / save-as-.md),
   never an interactive surface: a done item's change set renders as its short sha + `N files · +A −R`

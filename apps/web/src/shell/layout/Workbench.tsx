@@ -159,7 +159,10 @@ export interface WorkbenchProps {
 	maxBottomGroups: number;
 	projectionEpoch: number;
 	focusRequest?: LayoutTabFocusRequest;
-	renderTabBody: (tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>) => ReactNode;
+	renderTabBody: (
+		tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>,
+		headerSlot?: HTMLElement | null,
+	) => ReactNode;
 	renderTabAdornment: (tab: LayoutTab) => ReactNode;
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
 	renderEmptyCenter: (groupId: string) => ReactNode;
@@ -551,6 +554,7 @@ interface TabStripProps {
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
 	trailing?: ReactNode;
+	contentSlotRef?: (element: HTMLElement | null) => void;
 }
 
 function TabStrip({
@@ -574,6 +578,7 @@ function TabStrip({
 	renderTabAdornment,
 	splitGeometry,
 	trailing,
+	contentSlotRef,
 }: TabStripProps) {
 	const scroller = useRef<HTMLDivElement>(null);
 	const scrollOverflow = useHorizontalOverflow(scroller);
@@ -635,7 +640,7 @@ function TabStrip({
 			data-drop-active={groupDrop.isOver || undefined}
 			className="relative flex h-panel-header-row shrink-0 items-stretch border-border-default border-b bg-container-workspace-bg data-[drop-active]:bg-primary-subtle"
 		>
-			<div className="relative min-w-0 flex-1 overflow-hidden">
+			<div className={`relative min-w-0 overflow-hidden ${contentSlotRef ? "shrink" : "flex-1"}`}>
 				<div
 					ref={scroller}
 					role="tablist"
@@ -736,6 +741,13 @@ function TabStrip({
 					/>
 				) : null}
 			</div>
+			{contentSlotRef ? (
+				<div
+					ref={contentSlotRef}
+					data-testid="tab-strip-content-slot"
+					className="flex min-w-0 flex-1 items-stretch overflow-clip"
+				/>
+			) : null}
 			{trailing}
 			{overflowing ? (
 				<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
@@ -1234,6 +1246,7 @@ function CenterGroupView({
 	renderCenterActions: WorkbenchProps["renderCenterActions"];
 }) {
 	const location: LayoutGroupLocation = { area: "center", groupId: group.id };
+	const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
 	const size = useElementSize();
 	const splitGeometry = {
 		horizontal: size.width >= LAYOUT_LIMITS.minCenterWidth * 2,
@@ -1288,6 +1301,7 @@ function CenterGroupView({
 				onRevealTool={shared.onRevealTool}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
+				contentSlotRef={setHeaderSlot}
 				trailing={
 					<>
 						{renderCenterActions(group.id)}
@@ -1331,7 +1345,7 @@ function CenterGroupView({
 				className="relative min-h-0 flex-1 overflow-hidden"
 			>
 				{selected ? (
-					<Fragment key={selected.id}>{shared.renderTabBody(selected)}</Fragment>
+					<Fragment key={selected.id}>{shared.renderTabBody(selected, headerSlot)}</Fragment>
 				) : (
 					renderEmptyCenter(group.id)
 				)}
