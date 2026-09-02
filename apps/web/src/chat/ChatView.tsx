@@ -11,7 +11,7 @@ import type {
 } from "@thinkrail/contracts";
 import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { Popover, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
@@ -729,30 +729,13 @@ export default function ChatView({
 					data-message-order={chatMessageOrder}
 					className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
 				>
-					<Popover open={planOpen} onOpenChange={setPlanOpen}>
-						<ChatHeader
-							stats={stats}
-							statusEntries={Object.entries(extUiStatus)}
-							slot={headerSlot ?? null}
-							left={
-								plan.data ? (
-									<PopoverTrigger asChild>
-										<button
-											type="button"
-											data-testid="chat-plan-toggle"
-											data-open={planOpen}
-											className="flex h-full min-w-0 max-w-full items-center gap-4 overflow-clip whitespace-nowrap text-text-muted tr-text-metadata hover:text-text-default"
-										>
-											<ChatPlanStripContent plan={plan} open={planOpen} glance={planGlanceState} />
-										</button>
-									</PopoverTrigger>
-								) : null
-							}
-							skillsStale={skillsStale}
-							{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
-						/>
-						<ChatPlanContent plan={plan} glance={planGlanceState} />
-					</Popover>
+					<ChatHeader
+						stats={stats}
+						statusEntries={Object.entries(extUiStatus)}
+						slot={headerSlot ?? null}
+						skillsStale={skillsStale}
+						{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
+					/>
 					<div
 						data-testid="chat-scroll"
 						data-follow-state={followState}
@@ -841,6 +824,25 @@ export default function ChatView({
 						</div>
 					) : null}
 					<QueueStrip queue={queue} onEdit={onEditQueued} onRemove={onRemoveQueued} />
+					{plan.data ? (
+						<Popover open={planOpen} onOpenChange={setPlanOpen}>
+							<PopoverAnchor asChild>
+								<div className="flex shrink-0 items-center border-border-muted border-t px-12">
+									<PopoverTrigger asChild>
+										<button
+											type="button"
+											data-testid="chat-plan-toggle"
+											data-open={planOpen}
+											className="flex min-w-0 max-w-full items-center gap-4 overflow-clip whitespace-nowrap py-4 text-text-muted tr-text-metadata hover:text-text-default"
+										>
+											<ChatPlanStripContent plan={plan} open={planOpen} glance={planGlanceState} />
+										</button>
+									</PopoverTrigger>
+								</div>
+							</PopoverAnchor>
+							<ChatPlanContent plan={plan} glance={planGlanceState} />
+						</Popover>
+					) : null}
 					<div className="relative shrink-0">
 						<HistoryOverlay
 							state={historyState}
