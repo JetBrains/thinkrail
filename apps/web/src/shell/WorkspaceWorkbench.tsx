@@ -488,11 +488,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				case "specs":
 					body = (
 						<QuietScrollArea className="h-full" viewportClassName="p-12">
-							<SpecsPanel
-								workspaceId={workspaceId}
-								failed={specs.failed}
-								onRetry={specs.reload}
-							/>
+							<SpecsPanel workspaceId={workspaceId} failed={specs.failed} onRetry={specs.reload} />
 						</QuietScrollArea>
 					);
 					break;
