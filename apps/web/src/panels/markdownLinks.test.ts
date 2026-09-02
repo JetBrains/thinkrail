@@ -2,12 +2,7 @@ import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Markdown } from "../chat/Markdown";
-import {
-	classifyHref,
-	documentComponents,
-	resolveRelativePath,
-	slugify,
-} from "./markdownLinks";
+import { classifyHref, documentComponents, resolveRelativePath, slugify } from "./markdownLinks";
 
 test("classifyHref distinguishes anchors, external, and relative targets", () => {
 	expect(classifyHref(undefined)).toBe("empty");

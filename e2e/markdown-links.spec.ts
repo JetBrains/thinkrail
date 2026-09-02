@@ -47,6 +47,6 @@ test("relative links, images, and heading anchors work in the rendered markdown 
 	await expect(page.getByTestId("editor-tab")).toHaveCount(2);
 	await expect(preview).toBeVisible();
 
-	await preview.getByRole("link", { name: "the spec" }).click();
+	await preview.getByTestId("markdown-file-link").click();
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "SPEC.md" })).toBeVisible();
 });
