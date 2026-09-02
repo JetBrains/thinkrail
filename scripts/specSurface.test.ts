@@ -110,11 +110,15 @@ title: Public surface example
 
 The module reaches a public surface.
 
-\`\`\`md
+~~~md
+~~~not-a-close
+- ~~~
 - **Public surface:** \`wrong\`.
-\`\`\`
+~~~
 
-    - **Public surface:** \`alsoWrong\`.
+10. ~~~md
+    - **Public surface:** \`listWrong\`.
+    ~~~
 
 - **Public surface:** \`right\`.
 `;
@@ -142,7 +146,7 @@ test("declaredNames accepts type labels and ignores the bullet label", () => {
 
 test("readSurfaceBlock keeps an indented sub-bullet inside the block", () => {
 	const block = surfaceOf(
-		"- **Public surface (barrel):** `alpha`,\n  - `beta`\n- **Allowed deps:** `gamma`.\n",
+		"- **Public surface (barrel):** `alpha`,\n    - `beta`\n- **Allowed deps:** `gamma`.\n",
 	);
 	expect(isBareNameList(block)).toBe(true);
 	expect(declaredNames(block)).toEqual(["alpha", "beta"]);
@@ -242,6 +246,138 @@ test("direct and transitive unresolved re-exports fail", () => {
 	expect(result.code).toBe(1);
 	expect(result.stderr).toContain("direct/index.ts → ./missing");
 	expect(result.stderr).toContain("transitive/middle.ts → ./missing");
+});
+
+test("ambient-module re-export graphs are validated", () => {
+	const root = fixture();
+	write(
+		root,
+		"package/tsconfig.json",
+		JSON.stringify({
+			compilerOptions: {
+				module: "ESNext",
+				moduleResolution: "Bundler",
+				skipLibCheck: true,
+			},
+			files: ["globals.d.ts", "src/index.ts"],
+		}),
+	);
+	write(root, "package/SPEC.md", spec("ambient", "- **Public surface:** `x`."));
+	write(root, "package/src/index.ts", 'export * from "foo";\n');
+	write(
+		root,
+		"package/globals.d.ts",
+		'declare module "foo" { export const x: number; export * from "missing-package"; }\n',
+	);
+
+	const result = run(root);
+	expect(result.code).toBe(1);
+	expect(result.stderr).toContain("package/globals.d.ts → missing-package");
+});
+
+test("merged ambient modules share explicit star precedence", () => {
+	const root = fixture();
+	write(
+		root,
+		"package/tsconfig.json",
+		JSON.stringify({
+			compilerOptions: { module: "ESNext", moduleResolution: "Bundler", skipLibCheck: true },
+			files: ["globals.d.ts", "src/index.ts"],
+		}),
+	);
+	write(root, "package/SPEC.md", spec("ambient-merged", "- **Public surface:** `shared`."));
+	write(root, "package/src/index.ts", 'export * from "foo";\n');
+	write(
+		root,
+		"package/globals.d.ts",
+		`declare module "left" { export const shared: number }
+declare module "right" { export const shared: number }
+declare module "foo" { export * from "left"; export * from "right" }
+declare module "foo" { export { shared } from "left" }
+`,
+	);
+
+	expect(run(root)).toMatchObject({ code: 0, stderr: "" });
+});
+
+test("exported import-equals declarations resolve star precedence", () => {
+	const root = fixture();
+	write(
+		root,
+		"package/tsconfig.json",
+		JSON.stringify({
+			compilerOptions: { module: "CommonJS", moduleResolution: "Node10" },
+			files: ["src/index.ts", "src/namespace.ts", "src/left.ts", "src/right.ts"],
+		}),
+	);
+	write(root, "package/SPEC.md", spec("import-equals", "- **Public surface:** `Shared`."));
+	write(
+		root,
+		"package/src/index.ts",
+		'export import Shared = require("./namespace");\nexport * from "./left";\nexport * from "./right";\n',
+	);
+	write(root, "package/src/namespace.ts", "class Shared {}\nexport = Shared;\n");
+	write(root, "package/src/left.ts", "export const Shared = 1;\n");
+	write(root, "package/src/right.ts", "export const Shared = 2;\n");
+
+	expect(run(root)).toMatchObject({ code: 0, stderr: "" });
+});
+
+test("invalid named and ambiguous star re-exports fail", () => {
+	const root = fixture();
+	write(root, "named/SPEC.md", spec("named", "- **Public surface:** `Missing`."));
+	write(root, "named/index.ts", 'export { Missing } from "./types";\n');
+	write(root, "named/types.ts", "export interface Present {}\n");
+	write(root, "ambiguous/SPEC.md", spec("ambiguous", "- **Public surface:** `shared`."));
+	write(root, "ambiguous/index.ts", 'export * from "./left";\nexport * from "./right";\n');
+	write(root, "ambiguous/left.ts", "export const shared = 1;\n");
+	write(root, "ambiguous/right.ts", "export const shared = 2;\n");
+
+	const result = run(root);
+	expect(result.code).toBe(1);
+	expect(result.stderr).toContain("TS2305");
+	expect(result.stderr).toContain("TS2308");
+});
+
+test("alias and star validation survives TypeScript diagnostic suppression", () => {
+	const root = fixture();
+	write(
+		root,
+		"named/SPEC.md",
+		spec("named-suppressed", "- **Public surface:** `Missing`, `Surface`."),
+	);
+	write(
+		root,
+		"named/index.ts",
+		'// @ts-nocheck\nimport { Missing } from "./types";\nexport { Missing };\nexport { Present as Surface, Missing as Surface } from "./types";\n',
+	);
+	write(root, "named/types.ts", "export interface Present {}\n");
+	write(root, "ambiguous/SPEC.md", spec("ambiguous-suppressed", "- **Public surface:** `shared`."));
+	write(
+		root,
+		"ambiguous/index.ts",
+		'// @ts-nocheck\nexport * from "./left";\nexport * from "./right";\n',
+	);
+	write(root, "ambiguous/left.ts", "export const shared = 1;\n");
+	write(root, "ambiguous/right.ts", "export const shared = 2;\n");
+	write(root, "duplicate/SPEC.md", spec("duplicate-suppressed", "- **Public surface:** `shared`."));
+	write(
+		root,
+		"duplicate/index.ts",
+		'// @ts-nocheck\nexport { left as shared } from "./left";\nexport { right as shared } from "./right";\n',
+	);
+	write(root, "duplicate/left.ts", "export const left = 1;\n");
+	write(root, "duplicate/right.ts", "export const right = 2;\n");
+	write(root, "direct/SPEC.md", spec("direct-suppressed", "- **Public surface:** `x`."));
+	write(root, "direct/index.ts", "// @ts-nocheck\nexport const x = 1;\nexport { x };\n");
+
+	const result = run(root);
+	expect(result.code).toBe(1);
+	expect(result.stderr).toContain("invalid exported alias in named/index.ts: Missing");
+	expect(result.stderr).toContain("invalid export specifier in named/index.ts: Missing as Surface");
+	expect(result.stderr).toContain("ambiguous star export in ambiguous/index.ts: shared");
+	expect(result.stderr).toContain("duplicate explicit export in duplicate/index.ts: shared");
+	expect(result.stderr).toContain("duplicate explicit export in direct/index.ts: x");
 });
 
 test("untagged specs remain successful skips and list only when requested", () => {
