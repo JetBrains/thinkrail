@@ -11,6 +11,19 @@ const LARGE_TEXT = `Please refactor the transport layer. ${"Investigate the reco
 )}`;
 const SHORT_TEXT = "Quick question: does the reducer append or replace?";
 
+type Box = { x: number; y: number; width: number; height: number };
+
+function boxBottom(box: Box): number {
+	return box.y + box.height;
+}
+
+function expectContained(inner: Box, outer: Box): void {
+	expect(inner.x).toBeGreaterThanOrEqual(outer.x - 1);
+	expect(inner.y).toBeGreaterThanOrEqual(outer.y - 1);
+	expect(inner.x + inner.width).toBeLessThanOrEqual(outer.x + outer.width + 1);
+	expect(boxBottom(inner)).toBeLessThanOrEqual(boxBottom(outer) + 1);
+}
+
 test("a large user message with an agent reply collapses, and Show more re-expands it", async ({
 	page,
 }) => {
@@ -108,7 +121,7 @@ test("only the round's final agent answer carries a copy action, not intermediat
 	await expect(final.getByTestId("chat-copy")).toHaveCount(1);
 });
 
-test("the copy action overlays the bottom-right corner of the message, for both agent and user", async ({
+test("copy actions share the content line at the assistant left and user right without overlap", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -132,15 +145,42 @@ test("the copy action overlays the bottom-right corner of the message, for both 
 	const assistantMessage = page.locator('[data-testid="chat-message"][data-role="assistant"]');
 	await expect(assistantMessage).toBeVisible();
 
-	for (const message of [userMessage, assistantMessage]) {
-		const [messageBox, copyBox] = await Promise.all([
-			message.boundingBox(),
-			message.getByTestId("chat-copy").boundingBox(),
-		]);
-		if (!messageBox || !copyBox) throw new Error("expected both bounding boxes to be visible");
-		expect(messageBox.x + messageBox.width - (copyBox.x + copyBox.width)).toBeLessThan(8);
-		expect(messageBox.y + messageBox.height - (copyBox.y + copyBox.height)).toBeLessThan(8);
+	const [
+		userBox,
+		userCopyBox,
+		userContentBox,
+		assistantBox,
+		assistantCopyBox,
+		assistantContentBox,
+	] = await Promise.all([
+		userMessage.boundingBox(),
+		userMessage.getByTestId("chat-copy").boundingBox(),
+		userMessage.getByTestId("user-message-body").boundingBox(),
+		assistantMessage.boundingBox(),
+		assistantMessage.getByTestId("chat-copy").boundingBox(),
+		assistantMessage.locator("p").last().boundingBox(),
+	]);
+	if (
+		!userBox ||
+		!userCopyBox ||
+		!userContentBox ||
+		!assistantBox ||
+		!assistantCopyBox ||
+		!assistantContentBox
+	) {
+		throw new Error("expected message, content, and copy-action boxes to be visible");
 	}
+
+	expectContained(assistantCopyBox, assistantBox);
+	expectContained(userCopyBox, userBox);
+	expect(Math.abs(assistantCopyBox.x - assistantBox.x)).toBeLessThan(2);
+	expect(Math.abs(userBox.x + userBox.width - (userCopyBox.x + userCopyBox.width))).toBeLessThan(2);
+	expect(assistantCopyBox.x + assistantCopyBox.width).toBeLessThanOrEqual(
+		assistantContentBox.x + 1,
+	);
+	expect(userContentBox.x + userContentBox.width).toBeLessThanOrEqual(userCopyBox.x + 1);
+	expect(Math.abs(boxBottom(assistantCopyBox) - boxBottom(assistantContentBox))).toBeLessThan(2);
+	expect(Math.abs(boxBottom(userCopyBox) - boxBottom(userContentBox))).toBeLessThan(2);
 });
 
 test("copy actions copy the full source of both user and agent messages", async ({ page }) => {

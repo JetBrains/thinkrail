@@ -125,9 +125,10 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   content-only: the button is positioned against the outer wrapper, not injected into the bubble markup.
   The message content reserves one horizontal `size-24` band on the action's side (`pl-24` for the final
   assistant Markdown wrapper, `pr-24` for the user bubble) instead of a vertical band, so text and the
-  large-message toggle cannot sit beneath the hit target. The assistant wrapper removes only its final
-  Markdown block's trailing margin to align the action with the actual final line; inter-block and leading
-  margins stay unchanged. `MessageWithCopy` also carries the
+  large-message toggle cannot sit beneath the hit target. Final-answer list markers stay inside their
+  content box rather than painting back into the assistant's action band. The assistant wrapper removes
+  only its final Markdown block's trailing margin to align the action with the actual final line;
+  inter-block and leading margins stay unchanged. `MessageWithCopy` also carries the
   `data-testid="chat-message"`/`data-role` hooks the jump/flash + tests rely on. `CopyButton` is a
   self-contained presentational primitive that copies through the shared `copyText()` (`@/lib`) — the
   one clipboard-write path with its degradation baked in — flipping to a local ~1.2s `Copy`→`Check` icon
