@@ -20,8 +20,8 @@ durable* spec (any node whose `type` is not the ephemeral `task-spec`) — which
 requested only for the one project the Welcome screen renders, never eagerly for every project).
 
 The read is **synchronous** (core's walk is sync-fs, O(worktree dirs) per call). That's acceptable —
-fetches are on-demand (tab-visit / Refresh / a `workspace.fsChanged` nudge, no polling) and the
-per-file parse cache skips re-reads. If
+fetches are on-demand (workspace activation / a `workspace.fsChanged` nudge / an error-state Retry, no
+polling) and the per-file parse cache skips re-reads. If
 the walk ever dominates, the escalation is core's **watcher-as-dirty-flag** (see `pi-spec-graph`
 core/SPEC.md), not an async wrapper — that would still block the loop in one piece.
 

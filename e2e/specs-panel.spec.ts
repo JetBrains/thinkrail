@@ -1,7 +1,44 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { E2eWire } from "./fixtures/wire";
+
+async function proxyOneSpecGraphFailure(page: Page) {
+	let armed = false;
+	let injected = false;
+	let readCount = 0;
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const raw = typeof message === "string" ? message : message.toString();
+			let frame: { id?: string; method?: string };
+			try {
+				frame = JSON.parse(raw) as typeof frame;
+			} catch {
+				server.send(message);
+				return;
+			}
+			if (frame.id && frame.method === "spec.graph") {
+				readCount += 1;
+				if (armed && !injected) {
+					injected = true;
+					ws.send(JSON.stringify({ id: frame.id, ok: false, error: "injected spec failure" }));
+					return;
+				}
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+	return {
+		arm: () => {
+			armed = true;
+		},
+		readCount: () => readCount,
+		wasInjected: () => injected,
+	};
+}
 
 test("Specs tab renders the worktree's spec tree and opens a spec as an editor tab", async ({
 	page,
@@ -103,35 +140,60 @@ test("Specs offers Retry only after its automatic graph read fails", async ({ pa
 	const root = page.locator('[data-testid="spec-node"][data-spec-id="sample-root"]');
 	await expect(root).toBeVisible();
 
-	let injected = false;
-	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
-		const server = ws.connectToServer();
-		ws.onMessage((message) => {
-			const raw = typeof message === "string" ? message : message.toString();
-			let frame: { id?: string; method?: string };
-			try {
-				frame = JSON.parse(raw) as typeof frame;
-			} catch {
-				server.send(message);
-				return;
-			}
-			if (!injected && frame.id && frame.method === "spec.graph") {
-				injected = true;
-				ws.send(JSON.stringify({ id: frame.id, ok: false, error: "injected spec failure" }));
-				return;
-			}
-			server.send(message);
-		});
-		server.onMessage((message) => ws.send(message));
-	});
-
+	const failure = await proxyOneSpecGraphFailure(page);
+	failure.arm();
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await expect(page.getByTestId("specs-error")).toContainText("Couldn't load specs.");
+	const error = page.getByTestId("specs-error");
+	const retry = error.getByRole("button", { name: "Retry", exact: true });
+	await expect(error).toContainText("Couldn't load specs.");
 	await expect(page.getByRole("button", { name: "Refresh specs" })).toHaveCount(0);
-	await expect(page.getByTestId("skeleton-rows")).toHaveCount(0);
-	await page.getByTestId("specs-retry").click();
+	await expect(page.getByTestId("right-panel").getByTestId("skeleton-rows")).toHaveCount(0);
+	const failedReadCount = failure.readCount();
+	await retry.click();
+	await expect.poll(failure.readCount).toBeGreaterThan(failedReadCount);
 	await expect(page.getByTestId("specs-error")).toHaveCount(0);
 	await expect(root).toBeVisible();
-	expect(injected).toBe(true);
+	expect(failure.wasInjected()).toBe(true);
+});
+
+test("a failed automatic Specs update keeps the previous tree until Retry succeeds", async ({
+	page,
+}) => {
+	const failure = await proxyOneSpecGraphFailure(page);
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const root = page.locator('[data-testid="spec-node"][data-spec-id="sample-root"]');
+	await expect(root).toBeVisible();
+
+	const wire = await E2eWire.connect();
+	const readsBeforeReady = failure.readCount();
+	const readiness = await wire
+		.request("workspace.watchReady", { workspaceId: workspace.id })
+		.finally(() => wire.close());
+	if (readiness.startupNudge) {
+		await expect.poll(failure.readCount).toBeGreaterThan(readsBeforeReady);
+	}
+
+	const added = page.locator('[data-testid="spec-node"][data-spec-id="sample-retry"]');
+	failure.arm();
+	writeFileSync(
+		join(workspace.worktreePath, "module-a", "retry.md"),
+		"---\nid: sample-retry\ntype: module-design\ntitle: Retry Sample\nparent: sample-root\n---\n\n## Responsibility\n\nAdded after the initial graph read.\n",
+	);
+
+	const error = page.getByTestId("specs-error");
+	const retry = error.getByRole("button", { name: "Retry", exact: true });
+	await expect(error).toContainText("Couldn't update specs.");
+	await expect(retry).toBeVisible();
+	await expect(root).toBeVisible();
+	await expect(added).toHaveCount(0);
+	await expect(page.getByTestId("right-panel").getByTestId("skeleton-rows")).toHaveCount(0);
+	const failedReadCount = failure.readCount();
+	await retry.click();
+	await expect.poll(failure.readCount).toBeGreaterThan(failedReadCount);
+	await expect(page.getByTestId("specs-error")).toHaveCount(0);
+	await expect(root).toBeVisible();
+	await expect(added).toBeVisible();
+	expect(failure.wasInjected()).toBe(true);
 });

@@ -77,7 +77,10 @@ test("`/skill:setting-up-a-project` routes an existing codebase to import and dr
 
 	await page.getByTestId("tab-specs").click();
 	await expect(page.getByRole("button", { name: "Refresh specs" })).toHaveCount(0);
+	await expect(page.locator('[data-testid="spec-node"][data-spec-id="sample-root"]')).toHaveCount(
+		0,
+	);
 	await expect(
-		page.locator('[data-testid="spec-node"][title*="goal-and-requirements"]').first(),
+		page.locator('[data-testid="spec-node"][data-spec-type="goal-and-requirements"]').first(),
 	).toBeVisible();
 });

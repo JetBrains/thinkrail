@@ -56,7 +56,9 @@ export function SpecsPanel({
 				<LoadingRegion rows={6} className="px-4 py-4" />
 			)
 		) : nodes.length === 0 ? (
-			<p className="px-4 py-4 tr-text-metadata text-text-muted">No specs</p>
+			failed ? null : (
+				<p className="px-4 py-4 tr-text-metadata text-text-muted">No specs</p>
+			)
 		) : (
 			<ul className="flex flex-col motion-safe:animate-reveal">
 				{roots.map((root) => (
@@ -76,18 +78,12 @@ export function SpecsPanel({
 				<div
 					role="alert"
 					data-testid="specs-error"
-					className="flex items-center gap-8 rounded-[var(--radius-sm)] bg-feedback-error-subtle px-8 py-4 tr-text-metadata text-feedback-error"
+					className="flex items-center gap-8 rounded-[var(--radius-sm)] border border-feedback-error-muted bg-feedback-error-subtle px-8 py-4 tr-text-metadata text-text-default"
 				>
 					<span className="min-w-0 flex-1">
 						{nodes === null ? "Couldn't load specs." : "Couldn't update specs."}
 					</span>
-					<Button
-						variant="ghost"
-						size="sm"
-						data-testid="specs-retry"
-						onClick={onRetry}
-						className="text-feedback-error hover:text-feedback-error"
-					>
+					<Button variant="ghost" size="sm" data-testid="specs-retry" onClick={onRetry}>
 						<RefreshCw className="size-14" />
 						Retry
 					</Button>
