@@ -59,6 +59,7 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome = data as Partial<ServerWelcome>;
 		if (typeof welcome.protocolVersion !== "number" || !Array.isArray(welcome.projects)) return;
+		useAppStore.getState().hideInterviewPrompt();
 		useAppStore
 			.getState()
 			.installWelcomeSnapshot(
@@ -112,6 +113,10 @@ export function initTransport(): WsTransport {
 			.request("model.list", {})
 			.then((models) => useAppStore.getState().setModelsForProviderVersion(providerVersion, models))
 			.catch(() => {});
+	});
+
+	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {
+		useAppStore.getState().showInterviewPrompt();
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {

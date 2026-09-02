@@ -17,11 +17,12 @@ batches high-frequency Pi events without allowing later wire messages to overtak
 
 - **Owns:** `transport.ts` (`WsTransport`: id-correlated `request` — replies time out after 60s unless the
   caller raises `timeoutMs`, which a request the host answers *only once a human has* must do (an open
-  folder dialog: a fired timeout also drops the reply that follows it) —, the **`?client=` page identity** it
-  appends to the socket URL (minted lazily and *not* via the secure-context-only `crypto.randomUUID`, so a
-  plain-http remote origin still boots; it spans reconnects but not reloads, correlating replayed requests and
-  terminal stream routing while host-owned PTY tabs/shells survive and a reloaded page takes them over by
-  durable `tabKey`), **reconnect-safe unresolved requests** — a
+  folder dialog: a fired timeout also drops the reply that follows it) —, the **`?client=` page identity** and
+  **`?protocol=` current wire version** it appends to the socket URL (the identity is minted lazily and *not*
+  via the secure-context-only `crypto.randomUUID`, so a plain-http remote origin still boots; it spans
+  reconnects but not reloads, correlating replayed requests and terminal stream routing while host-owned PTY
+  tabs/shells survive and a reloaded page takes them over by durable `tabKey`; the version lets a newer host
+  avoid claiming an addressed feature for an independently shipped older client that cannot render it), **reconnect-safe unresolved requests** — a
   frame that was in flight when its socket died returns to the queue and is replayed under the same request id,
   while the host deduplicates `(clientKey, requestId)`, so an accepted mutation cannot become a false failure or
   execute twice —, the two frames that are this side's half of that bargain — **`{ ack: [id] }` receipts**
@@ -32,8 +33,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   response can, and the request it named is already gone from `pending`, so nothing would replay or re-ack it;
   `resume` repairs them all at once by restating the truth rather than confirming the confirmations —, channel
   `subscribe` with last-value replay for snapshots; append-only terminal data and the one-shot terminal
-  exit/detach + session-creation/deletion + `provider.changed` invalidation channels are never cached or replayed to
-  late subscribers, reconnect/backoff;
+  exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview`
+  channels are never cached or replayed to late subscribers, reconnect/backoff;
   `inferUrl` defaults to
   same-origin; **`httpBase()`** derives the host's HTTP origin
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
@@ -42,8 +43,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   one atomic delivery at roughly 30 Hz, a 128-event forced-flush ceiling, and `flush`/`dispose` lifecycle);
   `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes `server.welcome`, **`project.updated`**, `pi.event`, `pi.extensionUi`,
-  **`session.created`**, **`session.deleted`**, **`provider.changed`**, **the `workspace.created`/`updated`/`removed` lifecycle
-  trio, and `workspace.fsChanged`** into the store — and
+  **`session.created`**, **`session.deleted`**, **`provider.changed`**, addressed **`feedback.interview`**, **the
+  `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store — and
   folds every connection transition through
   `setStatus`, whose connected generation gives active-workspace hydration a distinct trigger on every
   reconnect; the complete welcome (protocol + open/recent project views + optional config) via the atomic
@@ -63,8 +64,10 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `noteProviderChanged()` plus a `model.list` re-read installed through the store's monotonic provider-version
   guard (the model-catalog hook uses the same guarded write for every list/refresh, so an older reply cannot
   restore a removed generation's models; provider settings observes the same version and re-reads
-  `provider.status`), `workspace.fsChanged` via `noteFsChanged(payload)`, and
-  **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
+  `provider.status`), each valid `server.welcome` first clearing any popup projection left by a host restart,
+  then `feedback.interview` via the idempotent `showInterviewPrompt()` (a surviving host claim re-delivers the
+  addressed event immediately after welcome),
+  `workspace.fsChanged` via `noteFsChanged(payload)`, and **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
   welcome config lands in the atomic install above. Before `WsTransport` dispatches any response or non-Pi
   push, `wireTransport` flushes queued Pi events synchronously; connection-status transitions do the same.
   This dispatch barrier preserves cross-message order and the store's transcript-revision fence while still
@@ -96,8 +99,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
-  `SessionDeletedPayload` for `session.deleted`,
-  `provider.changed`, `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for
+  `SessionDeletedPayload` for `session.deleted`, `provider.changed`, the empty addressed
+  `feedback.interview` invitation, `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for
   `server.welcome`'s config + `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page
   identity); the browser `WebSocket`.

@@ -316,10 +316,14 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Chat`/`Layout`/`Terminal`/`Templates`/`Privacy`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Chat`/`Layout`/`Terminal`/`Templates`/`Review`/`Privacy`/`Feedback`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
-  to a section without prop-drilling through the shell. The **theme** state — **`theme: ThemeId`** (the
+  to a section without prop-drilling through the shell. The ephemeral **`interviewPromptOpen`** plus
+  **`showInterviewPrompt()`** / **`hideInterviewPrompt()`** is the render projection of the host's addressed
+  invitation; transport opens it idempotently, clears it before each valid welcome's possible redelivery so
+  a host restart cannot leave a stale projection, and the panel hides it after `feedback.respond` is
+  acknowledged. Counts, postponement, dismissal, and client claims never live in the store. The **theme** state — **`theme: ThemeId`** (the
   host-owned selected opaque id; the themes module resolves visual fallback) with **`applyConfig(config)`**
   (folds the server-synced `AppConfig` in from
   `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the

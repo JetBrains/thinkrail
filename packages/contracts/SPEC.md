@@ -38,7 +38,7 @@ of the host.
   from `piProtocol` (the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
-  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`).
+  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
 - **Deployment obligation:** contracts describe host behavior and compatibility, never the launcher or
@@ -209,6 +209,8 @@ of the host.
   the installation id stays server-side by design, see `submodule-server-analytics`) carries it with the
   **`DEFAULT_CONFIG`** fallback
   (persisted host-side as `config.json`, delivered in `server.welcome`, mutated via `settings.update`).
+  **`InterviewResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic
+  feedback popup. No usage count, eligibility, dismissal state, or client identity crosses the wire.
   Contracts deliberately exports no theme enum/list/labels: a future manifest can mint an id unknown when
   the host was built, and a client missing it resolves its own bundled default;
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
@@ -372,7 +374,10 @@ of the host.
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side) / **`settings.update`** (merge + validate + persist a top-level partial `AppConfig`; when present,
   `customLayoutPresets` is one complete bounded catalog replacement; returns the merged config) /
-  **`history.search`** (the prompt-recall + conversation-search read; results capped,
+  **`feedback.respond`** (`{ action: InterviewResponse }` → ack; persists the automatic invitation's book,
+  postpone, or permanent-dismiss result; the Settings link never calls it;
+  `FEEDBACK_INTERVIEW_PROTOCOL_VERSION` pins the addressed channel's v56 introduction so the host does not
+  claim an independently shipped older client that omits the current `?protocol=` socket capability) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable
   `PromptHit` instead, never a separate `MessageHit`) / the **`review.*` set** — **`get`** (the open
   review + comments, lazily created; re-anchored on read) / **`commentAdd`**/**`commentUpdate`**/
@@ -408,14 +413,15 @@ of the host.
   session id; a non-replayable domain event broadcast after permanent deletion so every client removes the chat
   and blocks stale hydration) /
   **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
-  client converges) / **`provider.login`** — the session-less
+  client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to the host-claimed
+  frontend; not broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
   before any session exists) / **`provider.changed`** — a data-free invalidation broadcast after a watched
   Central state/rebuild result changes the host-authoritative provider status or current model generation;
   clients re-read `provider.status` and invalidate `model.list`, so no raw provider/model data rides the push /
-  `terminal.data` + **`terminal.exit`** + **`terminal.detached`** (the only
-  **addressed** channels — sent to the single *attached* client rather than broadcast, so a shell's bytes never
+  `terminal.data` + **`terminal.exit`** + **`terminal.detached`** (the addressed terminal channels — sent to
+  the single *attached* client rather than broadcast, so a shell's bytes never
   reach another browser; `terminal.data` may carry `truncated` when the host had to drop held output,
   `terminal.detached` says another client took the tab over) / the **workspace lifecycle
   trio** — **`workspace.created`**

@@ -85,6 +85,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `auth` | provider status/login plus native JetBrains Central orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `analytics` | anonymous usage analytics: closed event set → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
+| `feedback` | host-scoped usage count + addressed product-interview invitation lifecycle | [feedback/SPEC.md](src/feedback/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 | `editors` | detect installed editors/IDEs, launch one at a worktree, reveal a worktree in the file manager | [editors/SPEC.md](src/editors/SPEC.md) |
 | `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
@@ -98,14 +99,14 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
 - `projects` → `git` (shared runner), `persistence`
 - `git` → `subprocess` (every child that talks to a network or another CLI)
 - `github` → `subprocess` (both `gh auth status` probes run under the same bounded runner as `git`/`branch-review`)
-- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
+- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics`, `feedback` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
 - `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
   cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,
   `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`). `persistence` never imports
@@ -131,7 +132,8 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 `setSessionPublisher` + `setSessionCreatedPublisher` + `setSessionDeletedPublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
 `project.updated` lifecycle, `workspaces`' `setWorkspacePublisher` for the
 `workspace.created`/`updated`/`removed` lifecycle trio, `settings`' `setSettingsPublisher` for
-`settings.changed`, and auth's Central action analytics + `provider.changed` invalidation publishers) that
+`settings.changed`, `feedback`'s addressed invitation publisher, and auth's Central action analytics +
+`provider.changed` invalidation publishers) that
 `host` installs at `createServer`—so channel/analytics wiring lives only in `host`. Current layout has no
 host module, persistence, method, or publisher.
 

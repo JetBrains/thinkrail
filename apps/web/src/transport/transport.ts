@@ -1,5 +1,5 @@
 import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkrail/contracts";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { randomId } from "../lib";
 import { RequestError } from "./requestError";
 
@@ -23,6 +23,7 @@ const NON_REPLAYABLE_CHANNELS: ReadonlySet<string> = new Set([
 	WS_CHANNELS.terminalDetached,
 	WS_CHANNELS.sessionDeleted,
 	WS_CHANNELS.providerChanged,
+	WS_CHANNELS.feedbackInterview,
 ]);
 
 let clientId: string | undefined;
@@ -35,6 +36,7 @@ function pageClientId(): string {
 function withClientId(url: string): string {
 	const u = new URL(url);
 	u.searchParams.set("client", pageClientId());
+	u.searchParams.set("protocol", String(PROTOCOL_VERSION));
 	return u.toString();
 }
 

@@ -67,7 +67,8 @@ equals `border-default` is not a second weight, it is a second name).
 | Effects | `overlay` · `sunken` | written per light/dark by the theme engine |
 
 There is no `text-strong` and no `text-link` utility: they duplicate other tokens, and `--text-link`
-exists as a variable for `global.css`'s `a {}` alone.
+exists as a variable for `global.css`'s bare-anchor fallback alone. That fallback lives in the CSS base
+layer so an explicit semantic text utility on a link-shaped control always wins the cascade.
 
 ## Transparency: one form only
 

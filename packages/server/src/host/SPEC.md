@@ -390,9 +390,17 @@ channel fan-out, and the process-boot wrapper both launchers share.
   subscribes every client so permanent domain deletion converges beyond the initiating page. It remains a
   low-latency event, not a durable queue: a reconnecting client's active-workspace `session.list` is the
   authoritative read-side repair for an event missed while its socket was down.
+- **Interview invitation delivery:** the three user-send handlers share one post-`ackSend` path that
+  filters control traffic once, tracks anonymous `message_sent`, and records the local feedback count. The
+  feedback module's injected publisher maps an eligible claim to addressed `feedback.interview` delivery
+  for that request's opaque client key only when its socket-advertised protocol version supports the channel;
+  delivery failure or final client reap after the reconnect grace releases the claim, while a transient
+  reconnect retains and re-delivers it after `server.welcome`. A host restart has no claim to re-deliver, and
+  the welcome clears the frontend's stale popup projection. Popup `feedback.respond` actions are ordinary
+  replay-safe requests and never alter the Settings link.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer` (including
   idempotent `shutdown()`), `bootHost`, `BootHostOptions`, and `BootedHost`.
-- **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
+- **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
   `boot.ts`); `persistence` (`dataDir` — where `crashLog.ts` writes); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile` for the `/files` route); Bun/Node.
 - **Forbidden:** being imported by any feature module; importing `web`/`cli`/`desktop`.
@@ -409,10 +417,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   **`session.deleted`** (published from the agent module's injected publisher) + **`provider.changed`**
   (published from auth's Central/runtime invalidation seam) use push channels. Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
-  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Two channels are deliberately
-  **not** subscribed and not broadcast: `terminal.data`, `terminal.exit` and `terminal.detached` are sent with
-  `ws.send` to the single *attached* client (see [[submodule-server-terminal]]). Adding a terminal-style
-  addressed channel means wiring a publisher, not a subscription.
+  `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Four channels are deliberately
+  **not** subscribed and not broadcast: `feedback.interview`, `terminal.data`, `terminal.exit`, and
+  `terminal.detached` are sent with `ws.send` to one addressed client. Adding an addressed channel means
+  wiring a publisher, not a subscription.
 - The host is the single place features are wired together — features never reach back into it.
 - Separate host processes do not coordinate mutable state or events. They may use the same data directory,
   but each owns independent in-memory sessions, terminals, watchers, and connected clients; persistence

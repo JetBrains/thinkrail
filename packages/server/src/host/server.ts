@@ -8,7 +8,11 @@ import type {
 	TerminalTabsPush,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import {
+	FEEDBACK_INTERVIEW_PROTOCOL_VERSION,
+	PROTOCOL_VERSION,
+	WS_CHANNELS,
+} from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	disposeAllSessions,
@@ -37,6 +41,7 @@ import {
 	setLoginPublisher,
 	stopJbcentralRuntime,
 } from "../auth";
+import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
 import { resolveWorktreeFile } from "../fs";
 import { logger } from "../log";
 import { loadWorkspaces } from "../persistence";
@@ -106,6 +111,7 @@ export interface RunningServer {
 
 interface SocketData {
 	clientKey: string;
+	protocolVersion: number;
 }
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
@@ -113,6 +119,11 @@ const CLIENT_REPLAY_RETENTION_MS = 60_000;
 const log = logger("host");
 
 const isRequestId = (id: unknown): id is string => typeof id === "string";
+
+function clientProtocolVersion(value: string | null): number {
+	const parsed = Number(value);
+	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
 
 export async function createServer(options: CreateServerOptions = {}): Promise<RunningServer> {
 	await initializeJbcentralRuntime();
@@ -139,7 +150,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			setTimeout(() => {
 				reapTimers.delete(clientKey);
 				if (sockets.has(clientKey)) return;
-				if (!requestReplays.clearClient(clientKey)) armClientReap(clientKey);
+				if (!requestReplays.clearClient(clientKey)) {
+					armClientReap(clientKey);
+					return;
+				}
+				releaseInterview(clientKey);
 			}, CLIENT_REPLAY_RETENTION_MS),
 		);
 	};
@@ -151,7 +166,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			const url = new URL(req.url);
 			if (url.pathname === "/ws") {
 				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
-				return srv.upgrade(req, { data: { clientKey } })
+				const protocolVersion = clientProtocolVersion(url.searchParams.get("protocol"));
+				return srv.upgrade(req, { data: { clientKey, protocolVersion } })
 					? undefined
 					: new Response("ws upgrade failed", { status: 400 });
 			}
@@ -215,6 +231,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					terminalBackpressured.add(ws.data.clientKey);
 				}
 				resumeClientTerminals(ws.data.clientKey);
+				redeliverInterview(ws.data.clientKey);
 			},
 			async message(ws, message) {
 				const raw = typeof message === "string" ? message : message.toString();
@@ -286,8 +303,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				resumeClientTerminals(ws.data.clientKey);
 			},
 			close(ws) {
-				if (stopping) return;
 				const { clientKey } = ws.data;
+				if (stopping) return;
 				if (sockets.get(clientKey) === ws) {
 					sockets.delete(clientKey);
 					terminalBackpressured.delete(clientKey);
@@ -310,6 +327,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			terminalBackpressured.add(clientKey);
 			ws.close();
 			return "unavailable";
+		}
+	});
+
+	setFeedbackPublisher((clientKey) => {
+		const ws = sockets.get(clientKey);
+		if (!ws || ws.data.protocolVersion < FEEDBACK_INTERVIEW_PROTOCOL_VERSION) return false;
+		try {
+			return ws.send(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} })) !== 0;
+		} catch {
+			ws.close();
+			return false;
 		}
 	});
 
@@ -488,6 +516,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		requestReplays.clear();
 		persistTerminalSessions();
 		closeAllTerminals();
+		setFeedbackPublisher(null);
 		setSettingsPublisher(null);
 		setJbcentralAppliedPublisher(() => {});
 		setJbcentralChangedPublisher(() => {});

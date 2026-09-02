@@ -9,6 +9,7 @@ import { useEffect, useRef } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { IconTooltip } from "../components/ui/tooltip";
+import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
@@ -240,6 +241,7 @@ export function Shell() {
 					</ResizablePanelGroup>
 				</div>
 			)}
+			<InterviewPromptDialog />
 			<Toaster />
 		</div>
 	);
