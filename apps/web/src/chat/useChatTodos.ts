@@ -1,4 +1,9 @@
-import type { PiEvent, SessionEventPayload, TodoPlan } from "@thinkrail/contracts";
+import type {
+	PiEvent,
+	SessionEventPayload,
+	TodoChangedPayload,
+	TodoPlan,
+} from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
@@ -16,6 +21,7 @@ export interface ChatTodos {
 	failed: boolean;
 	add: (title: string) => Promise<void>;
 	remove: (id: string) => Promise<void>;
+	reorder: (ids: string[]) => Promise<void>;
 	openPlan: () => void;
 	openChanges: (target: { sha: string } | { path: string }) => void;
 	startReview: (id: string) => Promise<void>;
@@ -95,11 +101,16 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			if (event.sessionId !== sessionId && event.sessionId !== reviewerRef.current) return;
 			if (shouldRefreshTodos(event.event)) scheduleRefetch();
 		});
+		const unsubscribeTodoChanged = getTransport().subscribe(WS_CHANNELS.todoChanged, (payload) => {
+			const change = payload as TodoChangedPayload;
+			if (change.workspaceId === workspaceId && change.sessionId === sessionId) scheduleRefetch();
+		});
 		return () => {
 			cancelled = true;
 			readGeneration.current += 1;
 			if (refetch) clearTimeout(refetch);
 			unsubscribe();
+			unsubscribeTodoChanged();
 		};
 	}, [connectionGeneration, identity, live, sessionId, status, workspaceId]);
 
@@ -170,6 +181,12 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		}
 	};
 
+	const reorder = async (ids: string[]) => {
+		const requestIdentity = identity;
+		await getTransport().request("todo.reorder", { workspaceId, sessionId, ids });
+		if (live(requestIdentity)) await reloadPlan();
+	};
+
 	const openPlan = () => {
 		useAppStore.getState().setSessionView(sessionId, "work");
 	};
@@ -204,6 +221,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		failed,
 		add,
 		remove,
+		reorder,
 		openPlan,
 		openChanges,
 		startReview,

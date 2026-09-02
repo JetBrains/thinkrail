@@ -6,13 +6,14 @@ import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
 // The TODO → review workflow's user-visible half, no agent: a seeded plan whose done steps carry
 // completion summaries + real commit artifacts (the host's change-set shape) renders on the plan page
-// with the separate reviewed counter; an unsettled step wears the primary Start review button ON its
-// collapsed row, and a step whose review sidecar records `reviewed` (the state a settled review leaves
-// behind) wears the circled Verified glyph and no affordance. There is no in-page manual verdict UI
-// (the `manually` toggle + Approve/Ask-to-fix pair was removed) and no separate summary-first "Review
-// mode" page (task-plan-review-kebab): findings live in the right-panel Review tab, header actions are
-// a kebab menu. Actually settling a review (the reviewer chat, verdicts, ask-to-fix's fix cycle,
-// Review All's queue) is @agent territory; the seeded JSON here is exactly the shape those leave behind.
+// with the separate reviewed counter; Review All (the next-action banner) is the only review trigger
+// (per-step Start review buttons removed), and a step whose review sidecar records `reviewed` (the
+// state a settled review leaves behind) wears the circled Verified glyph. There is no in-page manual
+// verdict UI (the `manually` toggle + Approve/Ask-to-fix pair was removed) and no separate summary-first
+// "Review mode" page (task-plan-review-kebab): findings live in the right-panel Review tab, header
+// actions are a kebab menu. Actually settling a review (the reviewer chat, verdicts, ask-to-fix's fix
+// cycle, Review All's queue) is @agent territory; the seeded JSON here is exactly the shape those leave
+// behind.
 
 /** One real commit in the worktree (the shape artifacts.ts leaves), returning its sha. */
 function commitFile(worktree: string, path: string, content: string, subject: string): string {
@@ -28,9 +29,7 @@ function commitFile(worktree: string, path: string, content: string, subject: st
 	return git("rev-parse", "HEAD").trim();
 }
 
-test("reviewable steps show the reviewed counter, Start review, and the settled Verified state", async ({
-	page,
-}) => {
+test("reviewable steps show the reviewed counter and the settled states", async ({ page }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 	// The open chat's session id — the key its on-disk plan is seeded under.
@@ -176,8 +175,6 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	await expect(openItem).toHaveAttribute("data-expanded", "false");
 	await expect(openItem.getByTestId("todo-verification-glyph")).toBeVisible();
 	await expect(openItem.getByTestId("plan-item-summary")).not.toBeVisible();
-	// The review slot renders Start review on the row (revealed on hover).
-	await expect(openItem.getByTestId("plan-start-review")).toHaveCount(1);
 	await openItem.getByTestId("plan-item-toggle").click();
 	await expect(openItem).toHaveAttribute("data-expanded", "true");
 	await expect(openItem.getByTestId("plan-item-summary")).toContainText(
@@ -188,27 +185,18 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	await expect(verification).toContainText("bun test — 12 pass");
 	await expect(verification).toHaveAttribute("data-status", "claimed");
 
-	// The header kebab holds the export + Review All actions (portaled to the body). Review All is enabled
-	// while an unsettled reviewable item exists.
+	// The header kebab holds the export actions (portaled to the body).
 	await pane.getByTestId("plan-menu").click();
 	await expect(page.getByTestId("plan-copy-markdown")).toBeVisible();
 	await expect(page.getByTestId("plan-save-markdown")).toBeVisible();
-	await expect(page.getByTestId("plan-review-all")).not.toHaveAttribute("data-disabled", "");
 	await page.keyboard.press("Escape");
 
-	// The unsettled step: the row's review slot holds the primary Start review button (the AGENT
-	// review entry point — clicking it would spawn the reviewer chat, an @agent concern); the
-	// change-set disclosure carries no second one. No manual verdict UI exists beside it.
+	// The unsettled step (Review All is the only review entry point — no per-step review buttons).
 	await expect(openItem).toHaveAttribute("data-reviewed", "false");
-	await openItem.getByTestId("plan-change-set-toggle").click();
-	await expect(openItem.getByTestId("plan-start-review")).toHaveCount(1);
-	await expect(openItem.getByTestId("plan-review-manually")).toHaveCount(0);
 
-	// The settled step: circled Verified glyph, no review affordance anywhere on the row.
+	// The settled step: data-reviewed attribute on the row.
 	const reviewedItem = pane.getByTestId("plan-item").filter({ hasText: "Implement retry policy" });
 	await expect(reviewedItem).toHaveAttribute("data-reviewed", "true");
-	await expect(reviewedItem.locator('[data-reviewed="true"][class*="remixicon"]')).toBeVisible();
-	await expect(reviewedItem.getByTestId("plan-start-review")).toHaveCount(0);
 
 	// The changes-requested step wears the warning ON the collapsed row: alert glyph + the
 	// "Changes requested" chip; the reviewer's note is a detail (expand to read it).
@@ -217,8 +205,6 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	await expect(flaggedItem.getByTestId("plan-item-changes-requested")).toContainText(
 		"Changes requested",
 	);
-	// The review slot renders exactly one state — the chip displaces Start review.
-	await expect(flaggedItem.getByTestId("plan-start-review")).toHaveCount(0);
 	// The banner's Show step already scrolled here and auto-expanded the flagged row.
 	await expect(flaggedItem).toHaveAttribute("data-expanded", "true");
 	await expect(flaggedItem.getByTestId("plan-item-review-feedback")).toContainText(
@@ -231,9 +217,6 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	await expect(revisions.first()).toHaveAttribute("data-unreviewed", "false");
 	await expect(revisions.last()).toHaveAttribute("data-unreviewed", "true");
 	await expect(revisions.last()).toContainText("current");
-	await expect(
-		flaggedItem.locator('[data-changes-requested="true"][class*="remixicon"]'),
-	).toBeVisible();
 
 	// The research step never demands review.
 	const researchItem = pane

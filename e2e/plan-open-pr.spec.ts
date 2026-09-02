@@ -34,7 +34,13 @@ test("Open PR: no origin errors, with origin pushes, re-press follows the same b
 	const workspace = await createWorkspaceViaDialog(page);
 
 	await page.getByTestId("chat-plan-toggle").click();
-	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	const seedPopover = page.getByTestId("chat-plan-popover");
+	await seedPopover.getByTestId("todo-add-input").fill("Prepare the release");
+	await seedPopover.getByTestId("todo-add-input").press("Enter");
+	await expect(
+		seedPopover.getByTestId("todo-row").filter({ hasText: "Prepare the release" }),
+	).toBeVisible();
+	await seedPopover.getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 	const openPr = pane.getByTestId("plan-open-pr");
@@ -93,7 +99,13 @@ test("Open PR is disabled in the Default workspace, whose branch is its own base
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	await page.getByTestId("chat-plan-toggle").click();
-	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	const seedPopover = page.getByTestId("chat-plan-popover");
+	await seedPopover.getByTestId("todo-add-input").fill("Prepare the release");
+	await seedPopover.getByTestId("todo-add-input").press("Enter");
+	await expect(
+		seedPopover.getByTestId("todo-row").filter({ hasText: "Prepare the release" }),
+	).toBeVisible();
+	await seedPopover.getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 	const openPr = pane.getByTestId("plan-open-pr");

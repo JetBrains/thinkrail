@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
-// The agent-reviewer's reflection pass, end to end (@agent, real provider): Start review on a step whose
+// The agent-reviewer's reflection pass, end to end (@agent, real provider): Review All on a step whose
 // committed change carries a blatant problem (a hallucinated import + inverted logic under a "tests pass"
 // claim) drives a real reviewer to file a finding and request_changes; that fires an INDEPENDENT reflector
 // which judges each finding and writes its verdict via reflect_finding. We assert only the robust fact —
@@ -59,7 +59,7 @@ async function reflectionLanded(page: Page): Promise<boolean> {
 	);
 }
 
-test("Start review → reviewer requests changes → an independent reflector judges the findings", {
+test("Review All → reviewer requests changes → an independent reflector judges the findings", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(300_000);
@@ -107,8 +107,9 @@ test("Start review → reviewer requests changes → an independent reflector ju
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 
-	const item = pane.getByTestId("plan-item").filter({ hasText: "Add a sum helper" });
-	await item.getByTestId("plan-start-review").click();
+	// Use Review All from the next-action banner to trigger review (per-step review buttons were removed).
+	const reviewBanner = pane.locator('[data-testid="plan-next-action"][data-kind="review"]');
+	await reviewBanner.getByTestId("plan-next-action-go").click();
 
 	// The reviewer turn then the reflector turn both run in the background; poll until a reflection verdict
 	// lands on a finding (either kept or refuted proves the reflector ran and reflect_finding fired).

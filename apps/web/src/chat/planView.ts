@@ -84,6 +84,50 @@ export function flatItems(plan: TodoPlan): TodoItem[] {
 	return [...plan.groups.flatMap((g) => g.todos), ...plan.todos];
 }
 
+export function isQueuedUserTask(item: TodoItem): boolean {
+	return item.origin === "user" && item.status === "pending";
+}
+
+export function queuedUserTaskIds(plan: TodoPlan): string[] {
+	return plan.todos.filter(isQueuedUserTask).map((t) => t.id);
+}
+
+export function currentExecutionLoose(plan: TodoPlan): TodoItem[] {
+	return plan.todos.filter((t) => t.status !== "done");
+}
+
+type CompletedEntry =
+	| { kind: "group"; group: TodoGroupItem; at: string }
+	| { kind: "item"; item: TodoItem; at: string };
+
+export type CompletedBlock =
+	| { kind: "group"; group: TodoGroupItem }
+	| { kind: "items"; items: TodoItem[] };
+
+export function completedBlocks(plan: TodoPlan): CompletedBlock[] {
+	const entries: CompletedEntry[] = [];
+	for (const group of plan.groups) {
+		if (group.status !== "done") continue;
+		const at = group.todos.reduce((max, t) => (t.updatedAt > max ? t.updatedAt : max), "");
+		entries.push({ kind: "group", group, at });
+	}
+	for (const item of plan.todos) {
+		if (item.status === "done") entries.push({ kind: "item", item, at: item.updatedAt });
+	}
+	entries.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+	const blocks: CompletedBlock[] = [];
+	for (const entry of entries) {
+		if (entry.kind === "group") {
+			blocks.push({ kind: "group", group: entry.group });
+			continue;
+		}
+		const last = blocks.at(-1);
+		if (last?.kind === "items") last.items.push(entry.item);
+		else blocks.push({ kind: "items", items: [entry.item] });
+	}
+	return blocks;
+}
+
 export function workAvailable(plan: TodoPlan | null): boolean {
 	return plan !== null && (plan.groups.length > 0 || plan.todos.length > 0);
 }

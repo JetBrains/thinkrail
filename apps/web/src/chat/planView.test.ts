@@ -2,8 +2,11 @@ import { expect, test } from "bun:test";
 import type { AssistantMessage, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import type { AskState } from "./askState";
 import {
+	completedBlocks,
+	currentExecutionLoose,
 	flatItems,
 	groupProgress,
+	isQueuedUserTask,
 	itemChangeSet,
 	itemOpenFindings,
 	itemRevisions,
@@ -296,4 +299,56 @@ test("verificationStatus: an honest 'not verified' reads unverified; a named che
 	expect(verificationStatus("Not Verified — ran out of budget")).toBe("unverified");
 	expect(verificationStatus("unverified")).toBe("unverified");
 	expect(verificationStatus("no verification performed")).toBe("unverified");
+});
+
+const userTask = (title: string, status: TodoItem["status"] = "pending"): TodoItem => ({
+	...item(title, status),
+	origin: "user",
+});
+
+test("isQueuedUserTask: only un-started user-added items are the reorderable queue", () => {
+	expect(isQueuedUserTask(userTask("a"))).toBe(true);
+	expect(isQueuedUserTask(userTask("a", "in_progress"))).toBe(false);
+	expect(isQueuedUserTask(userTask("a", "done"))).toBe(false);
+	expect(isQueuedUserTask(item("a"))).toBe(false);
+});
+
+test("currentExecutionLoose keeps plan order and excludes completed items", () => {
+	const plan = {
+		todos: [item("agent step", "in_progress"), item("finished", "done"), userTask("queued")],
+		groups: [],
+	};
+	expect(currentExecutionLoose(plan).map((t) => t.title)).toEqual(["agent step", "queued"]);
+});
+
+test("completedBlocks orders newest-first by persisted updatedAt and chunks adjacent loose items", () => {
+	const at = (title: string, status: TodoItem["status"], updatedAt: string): TodoItem => ({
+		...item(title, status),
+		updatedAt,
+	});
+	const plan = {
+		todos: [
+			at("old loose", "done", "2026-01-01T00:00:00Z"),
+			at("new loose", "done", "2026-01-04T00:00:00Z"),
+			at("pending", "pending", "2026-01-05T00:00:00Z"),
+		],
+		groups: [
+			{
+				id: "g_done",
+				title: "shipped group",
+				status: "done" as const,
+				todos: [at("g1", "done", "2026-01-03T00:00:00Z")],
+			},
+			{
+				id: "g_open",
+				title: "open group",
+				status: "active" as const,
+				todos: [at("g2", "in_progress", "2026-01-06T00:00:00Z")],
+			},
+		],
+	};
+	const blocks = completedBlocks(plan);
+	expect(
+		blocks.map((b) => (b.kind === "group" ? b.group.title : b.items.map((t) => t.title))),
+	).toEqual([["new loose"], "shipped group", ["old loose"]]);
 });

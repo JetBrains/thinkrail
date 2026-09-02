@@ -12,16 +12,14 @@ import {
 	RiLoader4Line as Loader2,
 	RiChat1Line as MessageSquare,
 	RiMore2Line as MoreVertical,
+	RiAddLine as Plus,
 	RiCheckboxBlankCircleLine,
 	RiCheckboxCircleLine,
 	RiCloseCircleLine,
 	RiDeleteBin7Line,
 	RiDraggable,
 	RiLoader4Line,
-	RiPauseLine,
-	RiPlayLine,
 	RiSearchEyeLine,
-	RiStopLine,
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -37,9 +35,12 @@ import { planToMarkdown } from "../chat/planMarkdown";
 import {
 	changeSetCounts,
 	changeSetStat,
+	completedBlocks,
+	currentExecutionLoose,
 	flatItems,
 	groupProgress,
 	type ItemChangeSet,
+	isQueuedUserTask,
 	itemChangeSet,
 	itemOpenFindings,
 	itemRevisions,
@@ -168,36 +169,72 @@ function RevisionsBlock({
 }
 
 interface StepProto {
-	paused: boolean;
-	stopped: boolean;
 	comments: string[];
 }
 
-const EMPTY_STEP_PROTO: StepProto = { paused: false, stopped: false, comments: [] };
+const EMPTY_STEP_PROTO: StepProto = { comments: [] };
 
 const STEP_ACTION_CLASS =
 	"flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
 
+function AddTaskButton({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
+	const [open, setOpen] = useState(false);
+	const [draft, setDraft] = useState("");
+	const submit = async () => {
+		const title = draft.trim();
+		if (!title) return;
+		await onAdd(title);
+		setDraft("");
+		setOpen(false);
+	};
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<button
+					type="button"
+					data-testid="plan-add-task"
+					className="flex h-24 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				>
+					<Plus className="size-14 shrink-0" />
+					Add task
+				</button>
+			</PopoverTrigger>
+			<PopoverContent
+				side="bottom"
+				align="end"
+				data-testid="plan-add-task-popover"
+				className="flex w-288 flex-col gap-8 p-12"
+			>
+				<span className="tr-title-compact text-text-default">Queue a task for the agent</span>
+				<input
+					data-testid="plan-add-task-input"
+					value={draft}
+					onChange={(event) => setDraft(event.target.value)}
+					onKeyDown={(event) => {
+						if (event.key === "Enter") void submit();
+					}}
+					placeholder="What should the agent do next?"
+					className="w-full rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active"
+				/>
+				<span className="tr-text-metadata text-text-subtle">
+					Appends to the end of the queue — the agent picks it up in order.
+				</span>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
 function StepStatusIcon({
 	status,
-	paused,
-	stopped,
 	changesRequested,
 }: {
 	status: TodoItem["status"];
-	paused: boolean;
-	stopped: boolean;
 	changesRequested: boolean;
 }) {
-	if (stopped) return <RiCloseCircleLine className="size-14 shrink-0 text-feedback-error" />;
 	if (changesRequested)
 		return <RiCloseCircleLine className="size-14 shrink-0 text-feedback-warning" />;
 	if (status === "in_progress")
-		return (
-			<RiLoader4Line
-				className={`size-14 shrink-0 text-text-muted ${paused ? "" : "animate-spin"}`}
-			/>
-		);
+		return <RiLoader4Line className="size-14 shrink-0 animate-spin text-text-muted" />;
 	if (status === "done")
 		return <RiCheckboxCircleLine className="size-14 shrink-0 text-feedback-success" />;
 	return <RiCheckboxBlankCircleLine className="size-14 shrink-0 text-text-muted" />;
@@ -213,30 +250,38 @@ interface StepDrag {
 function StepList({
 	items,
 	renderItem,
+	reorderable = false,
+	onReorder,
 }: {
 	items: TodoItem[];
 	renderItem: (item: TodoItem, drag: StepDrag) => ReactNode;
+	reorderable?: boolean;
+	onReorder?: (ids: string[]) => void;
 }) {
-	const [localOrder, setLocalOrder] = useState<string[] | null>(null);
+	const [optimistic, setOptimistic] = useState<string[] | null>(null);
+	useEffect(() => {
+		setOptimistic(null);
+	}, [items]);
 	const ordered = useMemo(() => {
-		if (!localOrder) return items;
+		if (!optimistic) return items;
 		const byId = new Map(items.map((t) => [t.id, t] as const));
-		const sorted = localOrder.flatMap((id) => {
+		const sorted = optimistic.flatMap((id) => {
 			const t = byId.get(id);
 			if (!t) return [];
 			byId.delete(id);
 			return [t];
 		});
 		return [...sorted, ...byId.values()];
-	}, [items, localOrder]);
+	}, [items, optimistic]);
+	const eligible = (item: TodoItem) => reorderable && isQueuedUserTask(item);
 	const [drag, setDrag] = useState<{ id: string; slot: number } | null>(null);
 	const minSlot = useMemo(() => {
 		let lastLocked = -1;
 		ordered.forEach((t, i) => {
-			if (t.status !== "pending") lastLocked = i;
+			if (!eligible(t)) lastLocked = i;
 		});
 		return lastLocked + 1;
-	}, [ordered]);
+	}, [ordered, reorderable]);
 	const finishDrop = () => {
 		if (!drag) return;
 		const ids = ordered.map((t) => t.id);
@@ -246,14 +291,21 @@ function StepList({
 			ids.splice(from, 1);
 			if (to > from) to -= 1;
 			ids.splice(to, 0, drag.id);
-			setLocalOrder(ids);
+			setOptimistic(ids);
+			const byId = new Map(ordered.map((t) => [t.id, t] as const));
+			onReorder?.(
+				ids.flatMap((id) => {
+					const t = byId.get(id);
+					return t && eligible(t) ? [id] : [];
+				}),
+			);
 		}
 		setDrag(null);
 	};
 	return (
 		<ul className="flex flex-col gap-4">
 			{ordered.map((item, index) => {
-				const draggable = item.status === "pending";
+				const draggable = eligible(item);
 				const insertion: StepDrag["insertion"] =
 					drag !== null && drag.id !== item.id && drag.slot >= minSlot
 						? drag.slot === index
@@ -306,11 +358,9 @@ function ItemBlock({
 	workspaceId,
 	sessionId,
 	onOpenCommit,
-	onStartReview,
 	onOpenReview,
 	reviewComments,
 	reviewerSessionId,
-	startDisabled,
 	focusRequest,
 	proto,
 	onProtoChange,
@@ -321,11 +371,9 @@ function ItemBlock({
 	workspaceId: string;
 	sessionId: string;
 	onOpenCommit: (sha: string) => void;
-	onStartReview: (id: string) => Promise<void>;
 	onOpenReview: () => void;
 	reviewComments: ReviewComment[] | undefined;
 	reviewerSessionId?: string | undefined;
-	startDisabled: boolean;
 	focusRequest: { id: string; tick: number } | null;
 	proto: StepProto;
 	onProtoChange: (patch: Partial<StepProto>) => void;
@@ -335,7 +383,6 @@ function ItemBlock({
 	const reviewed = reviewSettled(item);
 	const reviewing = item.review?.reviewing === true;
 	const changesRequested = reviewChangesRequested(item) && !reviewing;
-	const needsReview = item.review !== undefined && !reviewed;
 	const findings = changesRequested ? itemOpenFindings(item, reviewComments, sessionId) : 0;
 	const set = itemChangeSet(item);
 	const counts = set ? changeSetCounts(set) : null;
@@ -362,9 +409,6 @@ function ItemBlock({
 		setExpanded(true);
 	}, [focusRequest, item.id, collapsible]);
 	const detailsClass = collapsible ? "hidden group-data-[expanded=true]:flex" : "flex";
-	const showReviewButton = needsReview && !reviewing && !changesRequested;
-	const queued = item.status === "pending" && !proto.stopped;
-	const running = item.status === "in_progress" && !proto.stopped;
 	const saveComment = () => {
 		const text = commentDraft.trim();
 		if (!text) return;
@@ -396,22 +440,9 @@ function ItemBlock({
 				<div className="flex min-h-24 items-center gap-8">
 					<span
 						className="flex shrink-0 items-center"
-						title={
-							proto.stopped
-								? "Stopped"
-								: proto.paused && running
-									? "Paused"
-									: changesRequested
-										? "Changes requested"
-										: undefined
-						}
+						title={changesRequested ? "Changes requested" : undefined}
 					>
-						<StepStatusIcon
-							status={item.status}
-							paused={proto.paused}
-							stopped={proto.stopped}
-							changesRequested={changesRequested}
-						/>
+						<StepStatusIcon status={item.status} changesRequested={changesRequested} />
 					</span>
 					<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
 						{item.title}
@@ -441,7 +472,7 @@ function ItemBlock({
 						</button>
 					) : null}
 					<div className="flex shrink-0 items-center gap-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-						{queued ? (
+						{drag.draggable ? (
 							<>
 								<IconTooltip label="Drag to reorder the queue">
 									<button
@@ -481,45 +512,6 @@ function ItemBlock({
 									</IconTooltip>
 								</ConfirmPopover>
 							</>
-						) : null}
-						{running && !proto.paused ? (
-							<IconTooltip label="Pause this step">
-								<button
-									type="button"
-									data-testid="step-pause"
-									aria-label="Pause this step"
-									onClick={() => onProtoChange({ paused: true })}
-									className={STEP_ACTION_CLASS}
-								>
-									<RiPauseLine className="size-14" />
-								</button>
-							</IconTooltip>
-						) : null}
-						{running && proto.paused ? (
-							<IconTooltip label="Resume this step">
-								<button
-									type="button"
-									data-testid="step-resume"
-									aria-label="Resume this step"
-									onClick={() => onProtoChange({ paused: false })}
-									className={STEP_ACTION_CLASS}
-								>
-									<RiPlayLine className="size-14" />
-								</button>
-							</IconTooltip>
-						) : null}
-						{running ? (
-							<IconTooltip label="Stop this step">
-								<button
-									type="button"
-									data-testid="step-stop"
-									aria-label="Stop this step"
-									onClick={() => onProtoChange({ stopped: true, paused: false })}
-									className={STEP_ACTION_CLASS}
-								>
-									<RiStopLine className="size-14" />
-								</button>
-							</IconTooltip>
 						) : null}
 						<Popover open={commentOpen} onOpenChange={setCommentOpen}>
 							<IconTooltip label="Add a note to this step" wrapTrigger>
@@ -636,28 +628,7 @@ function ItemBlock({
 					</div>
 				) : null}
 			</div>
-			<span className="flex w-24 shrink-0 justify-end">
-				{showReviewButton ? (
-					<IconTooltip
-						label={
-							startDisabled
-								? "Another step is being reviewed — one review at a time"
-								: "Review this step's work"
-						}
-					>
-						<button
-							type="button"
-							data-testid="plan-start-review"
-							aria-label="Review this step's work"
-							disabled={startDisabled}
-							onClick={() => onStartReview(item.id)}
-							className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text transition hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
-						>
-							<RiSearchEyeLine className="size-14" />
-						</button>
-					</IconTooltip>
-				) : null}
-			</span>
+			<span className="flex w-24 shrink-0 justify-end" />
 			{drag.insertion === "bottom" ? (
 				<div
 					data-testid="step-insertion-line"
@@ -706,11 +677,9 @@ function GroupSection({
 	workspaceId,
 	sessionId,
 	onOpenCommit,
-	onStartReview,
 	onOpenReview,
 	reviewComments,
 	reviewerSessionId,
-	startDisabled,
 	focusRequest,
 	protoFor,
 	patchProto,
@@ -720,11 +689,9 @@ function GroupSection({
 	workspaceId: string;
 	sessionId: string;
 	onOpenCommit: (sha: string) => void;
-	onStartReview: (id: string) => Promise<void>;
 	onOpenReview: () => void;
 	reviewComments: ReviewComment[] | undefined;
 	reviewerSessionId?: string | undefined;
-	startDisabled: boolean;
 	focusRequest: { id: string; tick: number } | null;
 	protoFor: (id: string) => StepProto;
 	patchProto: (id: string, patch: Partial<StepProto>) => void;
@@ -747,11 +714,9 @@ function GroupSection({
 						workspaceId={workspaceId}
 						sessionId={sessionId}
 						onOpenCommit={onOpenCommit}
-						onStartReview={onStartReview}
 						onOpenReview={onOpenReview}
 						reviewComments={reviewComments}
 						reviewerSessionId={reviewerSessionId}
-						startDisabled={startDisabled}
 						focusRequest={focusRequest}
 						proto={protoFor(item.id)}
 						onProtoChange={(patch) => patchProto(item.id, patch)}
@@ -804,6 +769,13 @@ export default function PlanPane({
 	} | null>(null);
 	const [focusRequest, setFocusRequest] = useState<{ id: string; tick: number } | null>(null);
 	const [stepProto, setStepProto] = useState<Record<string, StepProto>>({});
+	const onReorderQueue = async (ids: string[]) => {
+		try {
+			await plan.reorder(ids);
+		} catch (err) {
+			pushToast({ variant: "error", title: "Couldn't reorder the queue", message: errorText(err) });
+		}
+	};
 	const protoFor = (id: string): StepProto => stepProto[id] ?? EMPTY_STEP_PROTO;
 	const patchProto = (id: string, patch: Partial<StepProto>) =>
 		setStepProto((prev) => ({ ...prev, [id]: { ...(prev[id] ?? EMPTY_STEP_PROTO), ...patch } }));
@@ -833,9 +805,9 @@ export default function PlanPane({
 	const data = plan.data;
 	const { done, total } = planSummary(data);
 	const sections = planSections(data);
-	const groups = [...sections.activeGroups, ...sections.pendingGroups, ...sections.doneGroups];
-	const loose = [...sections.activeLoose, ...sections.pendingLoose, ...sections.doneLoose];
-	const empty = groups.length === 0 && loose.length === 0;
+	const currentGroups = [...sections.activeGroups, ...sections.pendingGroups];
+	const currentLoose = currentExecutionLoose(data);
+	const completed = completedBlocks(data);
 	const reviewables = reviewableItems(data);
 	const unsettledReviewables = reviewables.filter((t) => !reviewSettled(t));
 	const reviewedCount = reviewables.length - unsettledReviewables.length;
@@ -972,23 +944,6 @@ export default function PlanPane({
 		setPrSetup(null);
 		useAppStore.getState().addTerminal(workspaceId, command);
 	};
-	const startReview = async (id: string): Promise<void> =>
-		plan.startReview(id).then(
-			() => {
-				pushToast({
-					variant: "success",
-					title: "Review started",
-					message: "The reviewer agent is reading this step — findings land in the Review tab.",
-				});
-			},
-			(err) => {
-				pushToast({
-					variant: "error",
-					title: "Review didn't start",
-					message: errorText(err),
-				});
-			},
-		);
 	const reviewAll = async (): Promise<void> =>
 		plan.reviewAll().then(
 			({ total, alreadyRunning }) => {
@@ -1284,57 +1239,105 @@ export default function PlanPane({
 					</div>
 				) : null}
 				{overallSummary ? <OverallSummary text={overallSummary} /> : null}
-				{empty ? (
-					<p className="text-text-subtle tr-text-ui">
-						No items yet — the agent adds its plan here.
-					</p>
-				) : (
-					<>
-						{groups.map((group) => (
-							<GroupSection
-								key={group.id}
-								group={group}
-								workspaceId={workspaceId}
-								sessionId={sessionId}
-								onOpenCommit={onOpenCommit}
-								onStartReview={startReview}
-								onOpenReview={onOpenReview}
-								reviewComments={reviewComments}
-								reviewerSessionId={data.reviewerSessionId}
-								startDisabled={reviewingAny}
-								focusRequest={focusRequest}
-								protoFor={protoFor}
-								patchProto={patchProto}
-								onDelete={(id) => void plan.remove(id)}
-							/>
-						))}
-						{loose.length > 0 ? (
-							<section className="mb-16" data-testid="plan-loose">
-								<StepList
-									items={loose}
-									renderItem={(item, drag) => (
-										<ItemBlock
-											item={item}
-											workspaceId={workspaceId}
-											sessionId={sessionId}
-											onOpenCommit={onOpenCommit}
-											onStartReview={startReview}
-											onOpenReview={onOpenReview}
-											reviewComments={reviewComments}
-											reviewerSessionId={data.reviewerSessionId}
-											startDisabled={reviewingAny}
-											focusRequest={focusRequest}
-											proto={protoFor(item.id)}
-											onProtoChange={(patch) => patchProto(item.id, patch)}
-											onDelete={() => void plan.remove(item.id)}
-											drag={drag}
-										/>
-									)}
+				<section className="mb-16" data-testid="plan-current">
+					<div className="mb-4 flex min-h-24 items-center gap-8">
+						<h2 className="min-w-0 flex-1 truncate tr-text-eyebrow text-text-subtle">
+							Current execution
+						</h2>
+						<AddTaskButton onAdd={plan.add} />
+					</div>
+					{currentGroups.map((group) => (
+						<GroupSection
+							key={group.id}
+							group={group}
+							workspaceId={workspaceId}
+							sessionId={sessionId}
+							onOpenCommit={onOpenCommit}
+							onOpenReview={onOpenReview}
+							reviewComments={reviewComments}
+							reviewerSessionId={data.reviewerSessionId}
+							focusRequest={focusRequest}
+							protoFor={protoFor}
+							patchProto={patchProto}
+							onDelete={(id) => void plan.remove(id)}
+						/>
+					))}
+					{currentLoose.length > 0 ? (
+						<StepList
+							items={currentLoose}
+							reorderable
+							onReorder={(ids) => void onReorderQueue(ids)}
+							renderItem={(item, drag) => (
+								<ItemBlock
+									item={item}
+									workspaceId={workspaceId}
+									sessionId={sessionId}
+									onOpenCommit={onOpenCommit}
+									onOpenReview={onOpenReview}
+									reviewComments={reviewComments}
+									reviewerSessionId={data.reviewerSessionId}
+									focusRequest={focusRequest}
+									proto={protoFor(item.id)}
+									onProtoChange={(patch) => patchProto(item.id, patch)}
+									onDelete={() => void plan.remove(item.id)}
+									drag={drag}
 								/>
-							</section>
-						) : null}
-					</>
-				)}
+							)}
+						/>
+					) : null}
+					{currentGroups.length === 0 && currentLoose.length === 0 ? (
+						<p className="text-text-subtle tr-text-ui">
+							Nothing is queued — add a task for the agent.
+						</p>
+					) : null}
+				</section>
+				{completed.length > 0 ? (
+					<section className="mb-16" data-testid="plan-completed">
+						<h2 className="mb-4 flex min-h-24 items-center tr-text-eyebrow text-text-subtle">
+							Completed
+						</h2>
+						{completed.map((block) =>
+							block.kind === "group" ? (
+								<GroupSection
+									key={block.group.id}
+									group={block.group}
+									workspaceId={workspaceId}
+									sessionId={sessionId}
+									onOpenCommit={onOpenCommit}
+									onOpenReview={onOpenReview}
+									reviewComments={reviewComments}
+									reviewerSessionId={data.reviewerSessionId}
+									focusRequest={focusRequest}
+									protoFor={protoFor}
+									patchProto={patchProto}
+									onDelete={(id) => void plan.remove(id)}
+								/>
+							) : (
+								<div key={block.items[0]?.id ?? "items"} className="mb-4">
+									<StepList
+										items={block.items}
+										renderItem={(item, drag) => (
+											<ItemBlock
+												item={item}
+												workspaceId={workspaceId}
+												sessionId={sessionId}
+												onOpenCommit={onOpenCommit}
+												onOpenReview={onOpenReview}
+												reviewComments={reviewComments}
+												reviewerSessionId={data.reviewerSessionId}
+												focusRequest={focusRequest}
+												proto={protoFor(item.id)}
+												onProtoChange={(patch) => patchProto(item.id, patch)}
+												onDelete={() => void plan.remove(item.id)}
+												drag={drag}
+											/>
+										)}
+									/>
+								</div>
+							),
+						)}
+					</section>
+				) : null}
 				{data.unattributed && data.unattributed.length > 0 ? (
 					<section className="mb-16" data-testid="plan-unattributed">
 						<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">

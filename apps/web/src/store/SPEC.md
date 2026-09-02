@@ -415,8 +415,9 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   Chat/Work per-session view mode: client/frontend view state (in-memory — a reload defaults every session
   back to Chat), written by **`setSessionView(sessionId, view)`** (storing only `"work"` entries; `"chat"`
   deletes, and clearing an absent key is identity-preserving) and read through **`selectSessionView`**
-  (absent → `"chat"`). Work *availability* is NOT stored here — it derives from the host-owned plan
-  (`chat/planView.workAvailable`), so the store never carries a second execution truth. **`DiffTab`** is a read-only Monaco diff of one
+  (absent → `"chat"`). Work is always selectable; whether it shows plan content or the empty state
+  derives from the host-owned plan (`chat/planView.workAvailable`), so the store never carries a second
+  execution truth. **`DiffTab`** is a read-only Monaco diff of one
 changed file over **one diff scope** (id `${workspaceId}:diff:${scopeKey}:${path}` — one tab per *(file,
 scope)*: **the scope is part of a tab's identity**, because a tab's content must never change meaning
 because the Changes tool's scope flipped underneath it; the tab carries its own `scope`, which is also what

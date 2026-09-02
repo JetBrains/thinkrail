@@ -433,12 +433,23 @@ a project picker, the prompt hero, and the reused
   after the last tab closes without introducing onboarding state. The lazy **`PlanPane`** — the chat plan's
   **live review-map page** — is the chat tab's **Work view**, its ONLY mount (the separate plan center-tab
   representation was removed — see `store/SPEC.md`): the shell swaps it in for `ChatView` on the SAME
-  session tab, and it **portals `chat/ViewSwitcher` (view `work`) into the workbench strip's content
-  slot** (`headerSlot` prop from the shell — one header row, same as Chat; a missing slot degrades to its
-  own panel-header bar), so the user switches back to Chat in place — same session, same tab, no second
-  lifecycle.
-  Availability for the Work segment re-derives from its own live plan (`chat/planView.workAvailable`); the
-  active segment never disables, so an emptied plan cannot strand the user in Work. It renders the session's TODO plan document-scale
+  session tab (the Chat | Work segments live in the tab itself), so the user switches back to Chat in
+  place — same session, same tab, no second lifecycle. An empty plan (`!workAvailable`) renders the
+  session-scoped **`work-empty`** placeholder instead of the plan chrome. A non-empty plan renders the
+  approved IA — **Overview** (title/progress header, banners, kebab), **Current execution**
+  (`plan-current`: the active+pending groups, then the non-done loose items in PLAN order — started
+  agent work first, the untouched user queue at the tail — with an **Add task** popover
+  (`plan-add-task`) in the section header that appends via the real `todo.add`), and **Completed**
+  (`plan-completed`: done groups + done loose interleaved NEWEST-first by persisted `updatedAt` —
+  `planView.completedBlocks` — while each expanded step keeps its own chronology). The step lists are
+  `StepList` card stacks (4px gaps, gap connectors, insertion lines): **drag is gated to
+  `isQueuedUserTask` items in the loose Current-execution list only** (the DTO mirror of
+  `pi-todos/core`'s rule — started, completed, grouped, and agent-planned steps never expose drag), a
+  drop applies an optimistic view-order then calls `useChatTodos.reorder` (`todo.reorder`,
+  server-validated) and the re-read plan wins; the drag handle + confirm-guarded delete
+  (`todo.remove`) appear only on those queued user tasks. Per-step pause/stop/resume controls were
+  REMOVED — pi has no step-level execution control — and step notes remain a session-local prototype.
+  It renders the session's TODO plan document-scale
   (groups as sections, items with status glyphs) with a **scan-first item anatomy**: the item TITLE is
   the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,
   subtle/muted) — so titles never blend into prose. A **done item collapses to a compact two-line

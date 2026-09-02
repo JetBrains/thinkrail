@@ -14,6 +14,10 @@ const BASE_TS = 1_700_800_000_000;
 
 const repoCwd = () => realpathSync(E2E_FIXTURE_REPO);
 
+function activeTab(page: Page) {
+	return page.locator('[data-testid="editor-tab"][data-active="true"]');
+}
+
 async function addPlanItem(page: Page, title: string): Promise<void> {
 	await page.getByTestId("chat-plan-toggle").click();
 	const popover = page.getByTestId("chat-plan-popover");
@@ -24,41 +28,42 @@ async function addPlanItem(page: Page, title: string): Promise<void> {
 	await expect(page.getByTestId("chat-plan-popover")).toHaveCount(0);
 }
 
-test("Work stays disabled until the plan has content, never auto-switches, and the header switch is reversible", async ({
+test("Chat and Work are two views of one session tab: always-available Work, empty state, no extra tab", async ({
 	page,
 }) => {
 	await openWorkspaceChat(page);
 
-	const strip = page.getByTestId("center-tab-strip").first();
-	await expect(strip.getByTestId("session-view-switcher")).toBeVisible();
-	await expect(page.getByTestId("session-view-chat")).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("session-view-work")).toBeDisabled();
+	const tab = activeTab(page);
+	await expect(tab.getByTestId("session-view-chat")).toHaveAttribute("data-active", "true");
+	const work = tab.getByTestId("session-view-work");
+	await expect(work).toBeVisible();
+	await expect(work).toBeEnabled();
 
-	const stripBox = await strip.boundingBox();
-	const chatScrollBox = await page.getByTestId("chat-scroll").boundingBox();
-	if (!stripBox || !chatScrollBox) throw new Error("strip or chat scroll is not laid out");
-	expect(Math.round(chatScrollBox.y)).toBe(Math.round(stripBox.y + stripBox.height));
-
-	await addPlanItem(page, "Ship the feature");
-
-	await expect(page.getByTestId("session-view-work")).toBeEnabled();
-	await expect(page.getByTestId("chat-view")).toBeVisible();
-	await expect(page.getByTestId("session-view-chat")).toHaveAttribute("data-active", "true");
-
-	await page.getByTestId("session-view-work").click();
-	const pane = page.getByTestId("plan-pane");
-	await expect(pane).toBeVisible();
+	// empty plan: Work opens to the placeholder, same single tab
+	await work.click();
+	await expect(page.getByTestId("work-empty")).toBeVisible();
 	await expect(page.getByTestId("chat-view")).toHaveCount(0);
-	await expect(strip.getByTestId("session-view-work")).toHaveAttribute("data-active", "true");
-	await expect(pane.getByTestId("plan-item").filter({ hasText: "Ship the feature" })).toBeVisible();
-
 	await expect(page.locator('[data-testid="editor-tab"]')).toHaveCount(1);
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="plan"]')).toHaveCount(0);
-
-	await page.getByTestId("session-view-chat").click();
+	await tab.getByTestId("session-view-chat").click();
 	await expect(page.getByTestId("chat-view")).toBeVisible();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
+
+	// a plan item fills Work; switching stays within the one tab
+	await addPlanItem(page, "Ship the feature");
+	await expect(page.getByTestId("chat-view")).toBeVisible();
+	await work.click();
+	const pane = page.getByTestId("plan-pane");
+	await expect(pane).toBeVisible();
+	await expect(pane.getByTestId("plan-item").filter({ hasText: "Ship the feature" })).toBeVisible();
+	await expect(page.locator('[data-testid="editor-tab"]')).toHaveCount(1);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="plan"]')).toHaveCount(0);
+
+	// reload: view defaults back to Chat, Work content re-derives from the hydrated plan
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(page.getByTestId("chat-view")).toBeVisible();
+	await activeTab(page).getByTestId("session-view-work").click();
+	await expect(page.getByTestId("plan-item").filter({ hasText: "Ship the feature" })).toBeVisible();
 });
 
 test("one Work started action anchors the plan-creating turn and switches to Work", async ({
@@ -97,11 +102,13 @@ test("one Work started action anchors the plan-creating turn and switches to Wor
 		await openChatFromHistory(page, "work marker chat");
 		await expect(page.getByTestId("chat-view")).toBeVisible();
 
-		await expect(page.getByTestId("session-view-work")).toBeDisabled();
-		await expect(page.getByTestId("work-started")).toHaveCount(0);
+		// exactly one marker despite two plan-writing tool calls, stable across reloads
+		await expect(page.getByTestId("work-started")).toHaveCount(1);
+		await page.getByTestId("view-work").click();
+		await expect(page.getByTestId("work-empty")).toBeVisible();
+		await activeTab(page).getByTestId("session-view-chat").click();
 
 		await addPlanItem(page, "Import the data");
-
 		await expect(page.getByTestId("work-started")).toHaveCount(1);
 		await page.getByTestId("view-work").click();
 		const pane = page.getByTestId("plan-pane");
@@ -113,8 +120,6 @@ test("one Work started action anchors the plan-creating turn and switches to Wor
 		await page.reload();
 		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 		await expect(page.getByTestId("chat-view")).toBeVisible();
-		await expect(page.getByTestId("session-view-chat")).toHaveAttribute("data-active", "true");
-		await expect(page.getByTestId("session-view-work")).toBeEnabled();
 		await expect(page.getByTestId("work-started")).toHaveCount(1);
 	} finally {
 		rmSync(join(repoCwd(), ".thinkrail"), { recursive: true, force: true });

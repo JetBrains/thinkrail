@@ -111,7 +111,7 @@ function WorkTabButton({ tab, select }: { tab: LayoutChatTab; select: () => void
 				select();
 				useAppStore.getState().setSessionView(tab.sessionId, "work");
 			}}
-			className={`flex shrink-0 items-center gap-4 border-border-muted border-l px-6 ${
+			className={`flex shrink-0 items-center gap-4 border-border-muted border-l px-8 ${
 				view === "work"
 					? "text-text-default"
 					: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"

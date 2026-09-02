@@ -142,9 +142,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   toolCall (the plan-creating moment, persisted in the transcript so hydration re-derives it identically)
   flushes the run and anchors ONE `Work started · View work →` row (`work-started`/`view-work`) right
   after that activity — one per transcript, never one per todo event. It is a compact navigation row,
-  not an assistant message: `ChatView` supplies `onViewWork` only while `planView.workAvailable` holds,
-  so the link never leads to an empty Work view and ordinary conversational tool use never shows it;
-  without the callback the row renders nothing (history preview included).
+  not an assistant message: `ChatView` supplies `onViewWork` unconditionally (Work is always
+  selectable; an empty plan renders the Work empty state), and without the callback the row renders
+  nothing (history preview included).
 
 Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
 block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives
@@ -408,7 +408,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `useChatTodos` mounts. With no slot (first commit tick, standalone mounts) it degrades to its own
   panel-header row. It never scrolls,
   and constrained widths clip/truncate TODO + status/usage text while preserving the trailing Skills
-  action. Its `left` slot carries the session **`ViewSwitcher`** then the plan strip; its **Skills** button is the presentational **`SkillsButton`**
+  action. Its `left` slot carries the plan strip (the Chat | Work segments live in the session tab
+  itself, shell-owned); its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
   `NewWorkspaceDialog` so the two triggers cannot drift), `ExtUiDialog`, and **`SkillsDialog`** (the **Skills manager**: a catalog
   grouped by source with **sticky section headers** — the first-party **ThinkRail** and **Pi** groups lead
@@ -855,17 +856,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   button (`todo-open-plan`) — `useChatTodos.openPlan` switches the session to its **Work view**
   (`setSessionView(sessionId, "work")`): the same chat tab's body swaps to `panels/PlanPane` at the
   shell (see `shell/SPEC.md`), never a second tab, session, or lifecycle. This button is the explicit
-  escape hatch and stays live even on an empty plan (the PR funnel works from an empty Work view). The
-  *progressive* path is **`ViewSwitcher`** (`ViewSwitcher.tsx`, presentational `Chat | Work` segments,
-  `session-view-chat`/`session-view-work`, mounted in `ChatHeader`'s left slot): Chat selected by
-  default, Work visible but **disabled** (native `disabled` + semantic `control-disabled` tokens) until
-  **`planView.workAvailable(plan)`** — the host-persisted `todo.list` plan has any group or item. That
-  is the one availability signal: ordinary conversation never populates the plan (only
-  `todo_write`/`todo_add`/user adds do), and it re-derives identically after reload — no client-only
-  execution truth. Enabling never auto-switches; selection is client view state
+  entry point (an empty plan lands on the Work empty state). The primary path is the **session tab's
+  own Chat | Work segments** (shell-owned — see `shell/SPEC.md`): Work is ALWAYS selectable (no
+  availability gating; `planView.workAvailable` only decides empty-state vs plan rendering inside
+  `PlanPane`), switching never auto-fires, and selection is client view state
   (`store.sessionViewBySession`, per-session — concurrent sessions stay isolated — and in-memory, so a
-  reload defaults back to Chat). `PlanPane` mounts the same switcher (view `work`) in its session-view
-  slot, so exactly one switcher is mounted either way. **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
+  reload defaults back to Chat while Work content re-derives from the hydrated plan). `useChatTodos`
+  also exposes **`reorder(ids)`** — the `todo.reorder` call + plan re-read — and refetches on the
+  host's **`todo.changed`** broadcast (workspace+session matched) in addition to the `pi.event`
+  signals, so a second client converges on user edits it never witnessed. **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
   "work in order" discipline is unaffected), `planMarkdown` (a pure `plan →
   markdown` compiler, `## <group> — n/m` sections — the plan page's **export** (copy / save-as-.md),
   never an interactive surface: a done item's change set renders as its short sha + `N files · +A −R`
