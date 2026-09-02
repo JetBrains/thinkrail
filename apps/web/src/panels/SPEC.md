@@ -953,8 +953,8 @@ own section. The kebab menu (`plan-menu`, a
   stale — stamp, so neither effect sees any drift and the pane keeps the old target's diff under the new
   target's label indefinitely. Dropping the superseded read costs nothing: the read that superseded it is
   the one the user is waiting for. Panels are mounted only for the active workspace,
-  so scoping is natural; a degraded watcher just means back to read-on-demand. Editable-file conflict
-  handling waits for `fs.writeFile` (the viewer is read-only today).
+  so scoping is natural. A degraded host watcher pauses automatic invalidations until the next workspace
+  read re-establishes it; editable-file conflict handling waits for `fs.writeFile` (the viewer is read-only today).
 - **`useWorkspaceSpecs` owns the `spec.graph` read** (one fetcher, one definition of "this file is a spec"):
   the snapshot lands in the store (`specsByWorkspace`), not panel state, because the chat's turn divider
   needs the same answer to route its chips. It is called by **the workbench tool integration**, not by `SpecsPanel` — the
@@ -963,12 +963,13 @@ own section. The kebab menu (`plan-menu`, a
   file (the split silently undone by a tab selection). Being keyed per workspace, a switch shows that
   workspace's last known tree while the re-read is in flight (there is nothing to reset), and the failed-read
   flag is workspace-scoped so it can't leak a hint over a sibling's good tree. It returns `{ failed, reload }`
-  — the header's Refresh calls `reload` directly, so no refresh counter has to be held in panel state.
+  — `SpecsPanel`'s error-only Retry calls `reload` directly, so no retry counter has to be held in panel state.
 - `SpecsPanel` is the read-only spec-graph viewer — a pure reader of that snapshot. One fetch per
-  workspace-activation, refetched on the fs tick, plus a header **Refresh** button re-fetching on demand (the
-  manual escape hatch if the host's watcher degraded; the host side revalidates per read), rendered as
-  the **`parent` tree** (roots = no/dangling parent; default-expanded). A fetch **failure renders a distinct error hint** (pointing at Refresh), never the
-  "No specs" empty state — offline and empty are different answers. The tree build (`specTree.ts`)
+  workspace activation, refetched automatically on the fs tick, rendered as the **`parent` tree** (roots =
+  no/dangling parent; default-expanded). There is **no persistent Refresh control or panel toolbar row**:
+  routine synchronization is automatic. A fetch **failure renders a distinct inline error hint with Retry**,
+  never the "No specs" empty state — offline and empty are different answers. With a previous snapshot, the
+  hint sits above the retained tree; without one, it replaces the loading state. The tree build (`specTree.ts`)
   assumes a well-formed graph — **parent cycles are `spec_validate`'s problem, not the viewer's** (cycle
   members are unreachable from any root and simply don't render) — but the walk is **visited-guarded**,
   so a malformed graph can never hang or loop the UI. Tree only in this slice — no cross-edge display,
