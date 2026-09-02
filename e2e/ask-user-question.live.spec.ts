@@ -364,6 +364,12 @@ test("multi-question: page arrows, Tab-to-note, and Enter reach review before su
 		).toContainText(labels[0] ?? "");
 	}
 	await expect(card.locator('[data-testid="ask-tab"][data-answered="true"]')).toHaveCount(2);
+	await expect(card.getByTestId("ask-review-title")).toBeFocused();
+	await page.keyboard.press("Enter");
+	await expect(card).toHaveAttribute("data-tone", "active");
+	await page.keyboard.press("Tab");
+	await expect(card.getByTestId("ask-skip")).toBeFocused();
+	await page.keyboard.press("Tab");
 	await expect(card.getByTestId("ask-submit")).toBeFocused();
 	await page.keyboard.press("Enter");
 	const record = answeredRecord(page);

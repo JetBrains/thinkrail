@@ -68,10 +68,16 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     focus** at all: on a phone there is no keyboard flow to hand off to, and focusing a row (the Other input
     especially) raises the soft keyboard over someone who was reading — the reveal + scroll-into-view *are*
     the attention treatment there. A **page change** follows a tap, so it may focus — except into a text
-    field on a coarse pointer (`shouldFocusPageTarget`), which would raise that same keyboard. The empty
-    composer left focused after Send is safe to hand off. The retry window that out-waits a closing focus
-    scope **yields to the user**: the first real `pointerdown`/`keydown` after the reveal ends the claim, so
-    a later retry can never pull focus back out from under a click the user made while it was still trying.
+    field on a coarse pointer (`shouldFocusPageTarget`), which would raise that same keyboard. Each page
+    change first asks the parent chat scroll owner to align the new page's start with the transcript viewport,
+    then applies that focus rule with browser auto-scroll suppressed. A fresh `ChatView` attention claim repeats
+    that current-page reveal through one bounded settling window so Virtuoso's later initial-edge placement cannot
+    undo it; focus eligibility remains independent from reveal. The card stays in ordinary transcript flow — no
+    nested vertical scroller — so long pages use the same chat scrollbar to reach later answers and Next/Submit.
+    Reveal still occurs when coarse-pointer focus is withheld and never re-arms follow mode. The empty composer
+    left focused after Send is safe to hand off. The settling window **yields to the user**: the first real
+    `pointerdown`/`keydown`/`wheel` after the reveal ends the claim, so a later frame can never pull focus or the
+    transcript back out from under an interaction the user made while it was still trying.
     The mirror image holds on the way out: replying or declining unmounts the focused control, so the card
     hands focus **back to the composer**
     (`ChatActions.focusComposer`) instead of stranding it on `<body>` — but only when it still holds focus
@@ -102,10 +108,9 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     input via `htmlFor`** — `<button>` is a labelable element too, so on multi-select the implicit control
     would be the include/exclude toggle above the input in tree order, and clicking the row's chrome would
     flip an empty checkbox instead of putting the caret in the field (on touch, the only way in).
-    The **Submit button** is the review page's keyboard
-    landing point — Enter/Space activate the real control natively, where a heading wearing
-    `aria-keyshortcuts` announced static text; a review with nothing answered has no enabled Submit and
-    lands on its “Unanswered” nudge instead. On multi-question cards Left/Right moves without wrapping
+    The **review heading** is the review page's keyboard landing point. It keeps focus visibly beside the recap
+    start instead of arming an offscreen Submit/Unanswered action at the footer; Tab reaches those real controls
+    in ordinary order after the reader reviews the answers. On multi-question cards Left/Right moves without wrapping
     across question pages and the final review page; text inputs retain those keys. The question chips are
     a real `tablist` over the shared question `tabpanel` (each chip `aria-controls` it, the active chip
     labels it) with **automatic activation** — an arrow/click switches the page outright and focus follows

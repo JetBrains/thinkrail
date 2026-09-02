@@ -155,6 +155,17 @@ describe("deriveRows grouping", () => {
 		expect(second.steps.map((s) => s.id)).toEqual(["t3"]);
 	});
 
+	test("keeps one multi-paragraph assistant text block as one unchanged markdown row", () => {
+		const content = [
+			"The first paragraph explains the result without changing its Markdown structure.",
+			"The second paragraph preserves the exact text inside the same assistant block.",
+			"The third paragraph is still part of that one canonical row.",
+		].join("\n\n");
+		const rows = deriveRows([assistant("assistant-long", [text(content)])], {}, false);
+
+		expect(rows).toEqual([{ kind: "markdown", id: "assistant-long:text:0", text: content }]);
+	});
+
 	test("a primary tool escapes the fold as its own row and breaks the run (bare implies primary)", () => {
 		const turns = [
 			user("u1"),

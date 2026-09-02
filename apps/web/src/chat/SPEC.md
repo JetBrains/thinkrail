@@ -350,7 +350,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   without an intermediate wrong-edge paint. Switching the preference remounts the projection and lands at
   its new latest edge; preserving a pixel position across total reversal has no stable meaning.
   Jump-to-message runs post-mount and overrides either rule with its centered `scrollToIndex`.
-  `chat-history.spec.ts` pins the default latest edge; `chat-order.spec.ts` pins both projections.
+  Initial virtual geometry is **row-aware**: every projected row receives a conservative height estimate,
+  with Markdown estimated from prose wrapping, block breaks, and physical fenced-code lines. A canonical
+  assistant text block remains one Markdown row — estimation never splits syntax or changes projection.
+  Bounded pixel and item overscan gives nearby outlier rows time to replace estimates with authoritative
+  measurements before coarse wheel input can exhaust a false range. Native wheel physics remain untouched.
+  `chat-history.spec.ts` pins the default latest edge and tall-history geometry; `chat-order.spec.ts` pins
+  both projections.
 - **One direction-aware streaming controller** — `useChatScroll` remains the sole imperative,
   cancellable owner for every kind of live row growth; renderers and the message-order projection never
   scroll themselves. Both orders share explicit immediate-turn arming, queued-continuation currency,
@@ -362,6 +368,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   cancellation through the momentum tail and re-arms only if that explicit motion reaches the latest edge.
   Selection, interactive focus, and message/history jumps cancel either mode; navigation keys bubbling from
   an interactive descendant never undo that cancellation. Geometry alone never re-arms a detached reader.
+  Renderers needing attention expose an element through `ChatActions`; `useChatScroll` alone reveals it in
+  the transcript with a clamped direct scroll write. `nearest` reveal follows size-aware browser semantics for
+  targets taller than the viewport rather than hiding their useful leading edge. That local reveal never changes
+  follow state, while the **Latest** action always writes the physical latest edge even when no stream marker is
+  mounted, and keeps that edge pinned for its bounded settling window while newly mounted or delayed rows replace
+  estimates. A streaming-settled transition does not end that manual-return window; reader intent still does.
 - **Oldest-first reading band** — the established behavior remains intact. An immediate local send aligns
   its user row at 10% of transcript height clamped to 48–80px and gives the response a one-way 60%-viewport
   runway. A transient list header makes that inset possible even for the first row; the tail spacer starts

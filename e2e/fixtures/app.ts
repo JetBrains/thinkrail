@@ -148,9 +148,38 @@ export async function enterDefaultWorkspace(page: Page): Promise<void> {
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
-export async function openChatFromHistory(page: Page, title: string): Promise<void> {
-	await page.getByTestId("chat-history").first().click();
-	await page.getByTestId("closed-chat-item").filter({ hasText: title }).click();
+export async function openPersistedChat(page: Page, title: string): Promise<void> {
+	const chatTab = page
+		.locator('[data-testid="editor-tab"][data-kind="chat"]')
+		.filter({ hasText: title });
+	const historyButton = page.getByTestId("chat-history").first();
+	const historyItem = page.getByTestId("closed-chat-item").filter({ hasText: title });
+	const clickUnlessOpened = async (target: Locator) => {
+		try {
+			await target.click({ timeout: 5_000 });
+		} catch (error) {
+			if (!(await chatTab.isVisible())) throw error;
+		}
+	};
+
+	await expect
+		.poll(async () => (await chatTab.isVisible()) || (await historyButton.isVisible()), {
+			timeout: 30_000,
+		})
+		.toBe(true);
+	if (await chatTab.isVisible()) return;
+
+	await clickUnlessOpened(historyButton);
+	if (await chatTab.isVisible()) return;
+	await expect
+		.poll(async () => (await chatTab.isVisible()) || (await historyItem.isVisible()), {
+			timeout: 30_000,
+		})
+		.toBe(true);
+	if (await chatTab.isVisible()) return;
+
+	await clickUnlessOpened(historyItem);
+	await expect(chatTab).toBeVisible({ timeout: 30_000 });
 }
 
 export async function revealFirstProjectWorkspaces(page: Page): Promise<void> {

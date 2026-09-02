@@ -210,8 +210,12 @@ terminal-state contract. Scenarios whose subject is a client-side send transform
 outgoing `session.prompt` frame rather than treating a
 mounted optimistic transcript row as delivery evidence: a fast provider rejection can add a taller error,
 scroll to the latest row, and legitimately virtualize the preceding user row. Chat-order coverage seeds
-multi-round transcripts and asserts both latest edges, host-qualified browser-local persistence, and
-cross-browser isolation without involving a provider; desktop package tests separately pin the stable
+multi-round transcripts and asserts both latest edges, their physical **Latest** destinations, host-qualified
+browser-local persistence, and cross-browser isolation without involving a provider. Hydrated-history
+coverage seeds one canonical giant Markdown block and drives real coarse wheel input so initial virtual
+geometry cannot clamp before the row mounts. Questionnaire paging uses a canonical persisted tool-call/ack
+fixture to pin tall-page reveal, fresh-chat restored-page reveal, visible review focus, and coarse-pointer
+focus without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
 `@agent` because only Pi's real row growth exercises that lifecycle. Before handoff, every app-affecting
 change runs the complete `bun run e2e` no-agent gate. Artifact-only regressions remain covered by
