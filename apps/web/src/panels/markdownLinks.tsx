@@ -15,7 +15,7 @@ export function classifyHref(href: string | undefined): HrefKind {
 export function resolveRelativePath(fromFile: string, href: string): string | null {
 	let decoded: string;
 	try {
-		decoded = decodeURIComponent(href);
+		decoded = decodeURIComponent(href).replaceAll("\\", "/");
 	} catch {
 		return null;
 	}

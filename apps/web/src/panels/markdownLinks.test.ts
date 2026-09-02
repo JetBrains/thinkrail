@@ -32,6 +32,8 @@ test("resolveRelativePath resolves against the source file's directory (posix)",
 	expect(resolveRelativePath("docs/guide.md", "../themes/%E2%9C%93.md")).toBe("themes/✓.md");
 	expect(resolveRelativePath("docs/guide.md", "../../README.md")).toBeNull();
 	expect(resolveRelativePath("docs/guide.md", "%2e%2e/%2e%2e/README.md")).toBeNull();
+	expect(resolveRelativePath("docs/guide.md", "..%5cthemes%5cSPEC.md")).toBe("themes/SPEC.md");
+	expect(resolveRelativePath("docs/guide.md", "..%5c..%5coutside.md")).toBeNull();
 	expect(resolveRelativePath("docs/guide.md", "%E0%A4%A.md")).toBeNull();
 });
 
