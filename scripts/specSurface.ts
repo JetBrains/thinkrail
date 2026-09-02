@@ -273,7 +273,7 @@ function explicitExportNames(statements: readonly ts.Statement[]): Set<string> {
 	const names = new Set<string>();
 	for (const statement of statements) {
 		if (ts.isExportAssignment(statement)) {
-			names.add(statement.isExportEquals ? "export=" : "default");
+			names.add("default");
 			continue;
 		}
 		if (ts.isExportDeclaration(statement)) {
@@ -318,14 +318,34 @@ function resolvedAlias(symbol: ts.Symbol, checker: ts.TypeChecker): ts.Symbol {
 	return symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
 }
 
-function exportDeclarations(source: ts.SourceFile): ts.ExportDeclaration[] {
-	const declarations: ts.ExportDeclaration[] = [];
+function effectiveExportNames(
+	sourceFile: ts.SourceFile,
+	moduleSymbol: ts.Symbol,
+	checker: ts.TypeChecker,
+): string[] {
+	if (
+		sourceFile.statements.some(
+			(statement) => ts.isExportAssignment(statement) && statement.isExportEquals,
+		)
+	) {
+		return ["default"];
+	}
+	return checker
+		.getExportsOfModule(moduleSymbol)
+		.map((symbol) => symbol.getName())
+		.sort();
+}
+
+type ExportStatement = ts.ExportDeclaration | ts.ExportAssignment;
+
+function exportStatements(source: ts.SourceFile): ExportStatement[] {
+	const statements: ExportStatement[] = [];
 	const visit = (node: ts.Node): void => {
-		if (ts.isExportDeclaration(node)) declarations.push(node);
+		if (ts.isExportDeclaration(node) || ts.isExportAssignment(node)) statements.push(node);
 		ts.forEachChild(node, visit);
 	};
 	visit(source);
-	return declarations;
+	return statements;
 }
 
 function exportGraphIssues(
@@ -426,7 +446,7 @@ function exportGraphIssues(
 	};
 	visit(moduleSymbol);
 	for (const source of seenSources.values()) {
-		const declarations = exportDeclarations(source);
+		const declarations = exportStatements(source);
 		for (const diagnostic of program.getSemanticDiagnostics(source)) {
 			if (diagnostic.start === undefined || diagnostic.code === 2307) continue;
 			const declaration = declarations.find(
@@ -487,10 +507,7 @@ function checkCompilerGroup(
 			}
 			continue;
 		}
-		const exported = checker
-			.getExportsOfModule(moduleSymbol)
-			.map((symbol) => symbol.getName())
-			.sort();
+		const exported = effectiveExportNames(sourceFile, moduleSymbol, checker);
 		report.checked++;
 		const { promised, undeclared } = diffSurface(candidate.declared, exported);
 		if (promised.length > 0) {
