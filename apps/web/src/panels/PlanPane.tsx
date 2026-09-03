@@ -507,92 +507,89 @@ function ItemBlock({
 							{findings > 0 ? ` · ${findings}` : ""}
 						</button>
 					) : null}
-					<div
-						className={`relative z-10 flex shrink-0 items-center gap-2 transition-opacity focus-within:opacity-100 group-hover:opacity-100 ${
-							commentOpen || confirmOpen ? "opacity-100" : "opacity-0"
-						}`}
-					>
-						{drag.draggable ? (
-							<>
-								<IconTooltip label="Drag to reorder the queue">
-									<button
-										type="button"
-										data-testid="step-drag-handle"
-										aria-label="Drag to reorder the queue"
-										className={`${STEP_ACTION_CLASS} cursor-grab`}
-									>
-										<RiDraggable className="size-14" />
-									</button>
-								</IconTooltip>
-								<ConfirmPopover
-									open={confirmOpen}
-									onOpenChange={setConfirmOpen}
-									title={`Remove "${item.title}"?`}
-									description="The queued step is removed from this session's plan."
-									confirmLabel="Remove"
-									destructive
-									confirmTestId="step-confirm-delete"
-									onConfirm={() => {
-										setConfirmOpen(false);
-										onDelete();
-									}}
-									align="end"
-								>
-									<IconTooltip label="Remove this queued step" wrapTrigger>
-										<PopoverTrigger asChild>
-											<button
-												type="button"
-												data-testid="step-delete"
-												aria-label="Remove this queued step"
-												className={STEP_ACTION_CLASS}
-											>
-												<RiDeleteBin7Line className="size-14" />
-											</button>
-										</PopoverTrigger>
-									</IconTooltip>
-								</ConfirmPopover>
-							</>
-						) : null}
-						{item.verification ? (
-							<VerificationIndicator verification={item.verification} />
-						) : null}
-						<Popover open={commentOpen} onOpenChange={setCommentOpen}>
-							<IconTooltip label="Add a note to this step" wrapTrigger>
-								<PopoverTrigger asChild>
-									<button
-										type="button"
-										data-testid="step-comment-toggle"
-										aria-label="Add a note to this step"
-										className={STEP_ACTION_CLASS}
-									>
-										<MessageSquare className="size-14" />
-									</button>
-								</PopoverTrigger>
-							</IconTooltip>
-							<PopoverContent
-								side="bottom"
+					{drag.draggable ? (
+						<div
+							className={`relative z-10 flex shrink-0 items-center gap-2 transition-opacity focus-within:opacity-100 group-hover:opacity-100 ${
+								confirmOpen ? "opacity-100" : "opacity-0"
+							}`}
+						>
+							<ConfirmPopover
+								open={confirmOpen}
+								onOpenChange={setConfirmOpen}
+								title={`Remove "${item.title}"?`}
+								description="The queued step is removed from this session's plan."
+								confirmLabel="Remove"
+								destructive
+								confirmTestId="step-confirm-delete"
+								onConfirm={() => {
+									setConfirmOpen(false);
+									onDelete();
+								}}
 								align="end"
-								data-testid="step-comment-popover"
-								className="flex w-288 flex-col gap-8 p-12"
 							>
-								<span className="tr-title-compact text-text-default">Note for this step</span>
-								<input
-									value={commentDraft}
-									onChange={(event) => setCommentDraft(event.target.value)}
-									onKeyDown={(event) => {
-										if (event.key === "Enter") saveComment();
-									}}
-									placeholder="Add a note…"
-									className="w-full rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active"
-								/>
-								<span className="tr-text-metadata text-text-subtle">
-									Session-local prototype — notes aren't persisted yet.
-								</span>
-							</PopoverContent>
-						</Popover>
-					</div>
+								<IconTooltip label="Remove this queued step" wrapTrigger>
+									<PopoverTrigger asChild>
+										<button
+											type="button"
+											data-testid="step-delete"
+											aria-label="Remove this queued step"
+											className={STEP_ACTION_CLASS}
+										>
+											<RiDeleteBin7Line className="size-14" />
+										</button>
+									</PopoverTrigger>
+								</IconTooltip>
+							</ConfirmPopover>
+						</div>
+					) : null}
+					{item.verification ? <VerificationIndicator verification={item.verification} /> : null}
+					<Popover open={commentOpen} onOpenChange={setCommentOpen}>
+						<IconTooltip label="Add a note to this step" wrapTrigger>
+							<PopoverTrigger asChild>
+								<button
+									type="button"
+									data-testid="step-comment-toggle"
+									aria-label="Add a note to this step"
+									className={STEP_ACTION_CLASS}
+								>
+									<MessageSquare className="size-14" />
+								</button>
+							</PopoverTrigger>
+						</IconTooltip>
+						<PopoverContent
+							side="bottom"
+							align="end"
+							data-testid="step-comment-popover"
+							className="flex w-288 flex-col gap-8 p-12"
+						>
+							<span className="tr-title-compact text-text-default">Note for this step</span>
+							<input
+								value={commentDraft}
+								onChange={(event) => setCommentDraft(event.target.value)}
+								onKeyDown={(event) => {
+									if (event.key === "Enter") saveComment();
+								}}
+								placeholder="Add a note…"
+								className="w-full rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active"
+							/>
+							<span className="tr-text-metadata text-text-subtle">
+								Session-local prototype — notes aren't persisted yet.
+							</span>
+						</PopoverContent>
+					</Popover>
 					<div className="w-24 shrink-0">
-						{collapsible ? (
+						{drag.draggable ? (
+							<IconTooltip label="Drag to reorder the queue">
+								<button
+									type="button"
+									data-testid="step-drag-handle"
+									aria-label="Drag to reorder the queue"
+									className="flex size-24 shrink-0 cursor-grab items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+								>
+									<RiDraggable className="size-14" />
+								</button>
+							</IconTooltip>
+						) : collapsible ? (
 							<button
 								type="button"
 								data-testid="plan-item-toggle"
