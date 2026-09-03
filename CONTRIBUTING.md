@@ -48,16 +48,17 @@ shards (half the available CPUs, capped at eight):
 ```bash
 bunx playwright install chromium                    # one-time
 bun run e2e                                         # complete no-agent gate
-bun run e2e -- e2e/changes.spec.ts                  # focused iteration
-bun run e2e -- --last-failed                        # repair loop
+bun run e2e:focused -- e2e/changes.spec.ts          # serial; stop after first failure
+bun run e2e:repair                                  # serial; run every remembered failure
 bun run e2e:serial                                  # one-host debugging fallback
 bun run e2e -- --shards=12                          # explicit 1–16 override
 bun run e2e:full                                    # everything; needs pi auth
 bun run e2e:agent                                   # only @agent; remains serial
 ```
 
-Use focused or last-failed runs while iterating, then run the complete `bun run e2e`
-once before handoff. On macOS, every public browser E2E command prevents idle system sleep for the
+Use `e2e:focused` or `e2e:repair` while iterating, then run the complete `bun run e2e` once before
+handoff. Repair revisits the complete remembered failure set rather than stopping after its first failure.
+On macOS, every public browser E2E command prevents idle system sleep for the
 runner's lifetime while allowing the display to sleep normally. Completed runs append local timing evidence
 to the gitignored `e2e/.run-timings.jsonl`; `THINKRAIL_E2E_TIMING_FILE` redirects it for automation, and it
 is always safe to delete. Agent-driven specs are tagged `@agent` and run against a real provider on an

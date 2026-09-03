@@ -55,6 +55,8 @@
 		"prepare": "husky",
 		"e2e": "bun --preload ./e2e/idleSleepPreload.ts e2e/run.ts",
 		"e2e:serial": "bun --preload ./e2e/idleSleepPreload.ts e2e/run.ts --serial",
+		"e2e:focused": "bun --preload ./e2e/idleSleepPreload.ts e2e/run.ts --serial --max-failures=1",
+		"e2e:repair": "bun --preload ./e2e/idleSleepPreload.ts e2e/run.ts --serial --last-failed",
 		"e2e:binary": "bun --preload ./e2e/idleSleepPreload.ts e2e/run-binary.ts",
 		"e2e:desktop": "bun --preload ./e2e/idleSleepPreload.ts e2e/run-desktop.ts",
 		"test:workflows": "playwright test -c playwright.workflows.config.ts",

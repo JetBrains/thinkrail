@@ -9,6 +9,14 @@ import {
 	resolveShardCount,
 } from "./shardPlan";
 
+function rootScripts(): Record<string, string> {
+	return (
+		JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+			scripts: Record<string, string>;
+		}
+	).scripts;
+}
+
 test("one macOS runner owns one pid-scoped idle-sleep assertion", async () => {
 	const env: NodeJS.ProcessEnv = {};
 	const commands: string[][] = [];
@@ -54,12 +62,12 @@ test("a macOS assertion that exits during startup fails the runner", async () =>
 });
 
 test("every public browser E2E command preloads the idle-sleep assertion", () => {
-	const rootPackage = JSON.parse(
-		readFileSync(new URL("../package.json", import.meta.url), "utf8"),
-	) as { scripts: Record<string, string> };
+	const scripts = rootScripts();
 	for (const name of [
 		"e2e",
 		"e2e:serial",
+		"e2e:focused",
+		"e2e:repair",
 		"e2e:binary",
 		"e2e:desktop",
 		"e2e:full",
@@ -69,8 +77,20 @@ test("every public browser E2E command preloads the idle-sleep assertion", () =>
 		"e2e:headed",
 		"e2e:ui",
 	]) {
-		expect(rootPackage.scripts[name]).toContain("bun --preload ./e2e/idleSleepPreload.ts");
+		expect(scripts[name]).toContain("bun --preload ./e2e/idleSleepPreload.ts");
 	}
+});
+
+test("iteration commands separate first-failure focus from complete remembered repair", () => {
+	const scripts = rootScripts();
+	expect(scripts.e2e).toBe("bun --preload ./e2e/idleSleepPreload.ts e2e/run.ts");
+	expect(scripts["e2e:focused"]).toBe(
+		"bun --preload ./e2e/idleSleepPreload.ts e2e/run.ts --serial --max-failures=1",
+	);
+	expect(scripts["e2e:repair"]).toBe(
+		"bun --preload ./e2e/idleSleepPreload.ts e2e/run.ts --serial --last-failed",
+	);
+	expect(scripts["e2e:repair"]).not.toContain("max-failures");
 });
 
 test("automatic shard count budgets two CPUs per browser/host pair and stays bounded", () => {

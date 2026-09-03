@@ -157,8 +157,8 @@ uses a machine-adaptive number of independent shards (half the available CPUs, c
 ```bash
 bunx playwright install chromium                    # one-time
 bun run e2e                                         # complete no-agent gate
-bun run e2e -- e2e/changes.spec.ts                  # focused iteration
-bun run e2e -- --last-failed                        # repair loop
+bun run e2e:focused -- e2e/changes.spec.ts          # serial; stop after first failure
+bun run e2e:repair                                  # serial; run every remembered failure
 bun run e2e:serial                                  # one-host debugging fallback
 bun run e2e -- --shards=12                          # explicit 1–16 override
 bun run e2e:binary                                  # packaged CLI host (build first)
@@ -167,7 +167,9 @@ bun run e2e:full                                    # everything; needs pi auth
 bun run e2e:agent                                   # only @agent; remains serial
 ```
 
-On macOS, every public browser E2E command prevents idle system sleep while its runner is alive; the
+`e2e:repair` intentionally does not stop on its first failure, so every failure from the prior run is
+revisited before Playwright replaces its last-run file. On macOS, every public browser E2E command prevents
+idle system sleep while its runner is alive; the
 display may still sleep normally. Completed runs append local timing evidence to the gitignored
 `e2e/.run-timings.jsonl`; set `THINKRAIL_E2E_TIMING_FILE` to redirect it, or delete it at any time.
 

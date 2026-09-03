@@ -29,6 +29,9 @@ is one or many.
 The automatic count is half the available CPU parallelism, clamped to 1–8. Developers may explicitly
 select 1–16 lanes; `e2e:serial` is the stable debugging fallback. A focused invocation carrying Playwright
 arguments defaults to one lane unless its shard count is explicit, so an iteration on one spec stays cheap.
+`e2e:focused` makes that one-lane loop explicit and stops after the first failure. `e2e:repair` runs
+Playwright's complete remembered failure set serially and deliberately does not inherit focused fail-fast
+behavior, because an early stop could replace the last-run file before every remembered failure is revisited.
 Every public browser E2E runner owns one process-lifetime idle-sleep assertion on macOS before setup or
 build work begins; source, agent, full, binary, and desktop modes all receive it. The assertion uses the
 system `caffeinate` executable with idle-system-sleep scope and the owning runner pid, so display sleep stays
@@ -222,7 +225,8 @@ Windows lane into the real profile (see `module-shared`).
 
 ## Verification policy
 
-During iteration, run the affected specs and use Playwright's last-failed mode. Flake repairs replace
+During iteration, use `e2e:focused` for affected specs and `e2e:repair` for Playwright's complete
+last-failed set. Flake repairs replace
 irrelevant expensive setup with equivalent fixture state and wait for observable readiness; blanket retries,
 arbitrary sleeps, and assertion weakening are not synchronization policy. Live-provider completion waits on
 the session's streaming state after response evidence appears; the optional rendered `Done` row is not a

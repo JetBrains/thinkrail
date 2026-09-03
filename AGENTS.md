@@ -155,8 +155,8 @@ reusable by any pi UI (extraction-ready as a future `packages/chat-ui`).
 
 Every change that touches the app is verified by the **complete e2e suite once before it is considered
 done**. During implementation, iterate with the affected spec
-(`bun run e2e -- e2e/<feature>.spec.ts`) or `bun run e2e -- --last-failed`; do not rerun the full gate
-after every edit.
+(`bun run e2e:focused -- e2e/<feature>.spec.ts`) or `bun run e2e:repair`; do not rerun the full gate after
+every edit. Focused runs stop after the first failure; repair runs every failure remembered by Playwright.
 
 `bun run e2e` is **fully self-contained and machine-adaptive**: it builds the web app once, then runs the
 no-agent tests across isolated Playwright shard processes (automatic count = half the available CPUs,
