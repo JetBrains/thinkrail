@@ -367,7 +367,7 @@ test("done commits the window: one commit artifact (the sha), and only the item'
 	}
 });
 
-test("the agent's commitSubject is the commit subject verbatim; the title stays the artifact label", async () => {
+test("only the first commitSubject line is committed; the title stays the artifact label", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "Newest-first chat order" });
@@ -375,7 +375,7 @@ test("the agent's commitSubject is the commit subject verbatim; the title stays 
 		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		store.update(todo.id, {
 			status: "done",
-			commitSubject: "feat(web): add newest-first chat order",
+			commitSubject: "feat(web): add newest-first chat order\n\nGenerated explanation",
 		});
 		const subjects: string[] = [];
 		await reconcileChangeArtifacts(

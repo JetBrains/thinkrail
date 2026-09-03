@@ -226,7 +226,10 @@ export async function reconcileChangeArtifacts(
 		const exclusive = base?.shared !== true && !otherChatWorking();
 		const committed =
 			commit && base?.paths.every((p) => !now.includes(p)) && exclusive
-				? commit({ subject: todo.commitSubject ?? todo.title, paths: deltaPaths })
+				? commit({
+						subject: (todo.commitSubject ?? todo.title).split(/[\r\n]/u, 1)[0] ?? "",
+						paths: deltaPaths,
+					})
 				: null;
 		if (committed) {
 			changed = null;
