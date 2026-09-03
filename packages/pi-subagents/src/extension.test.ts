@@ -181,14 +181,20 @@ function lastToolResultText(session: AgentSession = parent): string {
 		.join("\n");
 }
 
-async function makeSession(isEnabled?: () => boolean): Promise<AgentSession> {
+async function makeSession(
+	isEnabled?: () => boolean,
+	boundService: DelegationService = service,
+): Promise<AgentSession> {
 	const settingsManager = SettingsManager.inMemory({});
 	const resourceLoader = new DefaultResourceLoader({
 		cwd: parentCwd,
 		agentDir: getAgentDir(),
 		settingsManager,
 		extensionFactories: [
-			createSubagentsExtension({ service, ...(isEnabled ? { isEnabled } : {}) }),
+			createSubagentsExtension({
+				service: boundService,
+				...(isEnabled ? { isEnabled } : {}),
+			}),
 		],
 		noPromptTemplates: true,
 		noThemes: true,
@@ -249,6 +255,55 @@ test("the live enabled predicate rejects a launch selected before embedder polic
 		expect(lastToolResultText(session)).toContain("Subagents are disabled");
 		expect(service.childrenOf(session.sessionId)).toEqual([]);
 	} finally {
+		await service.disposeChildrenOf(session.sessionId);
+		liveParents.delete(session.sessionId);
+		session.dispose();
+	}
+});
+
+test("a disable during asynchronous child creation disposes it before provider work starts", async () => {
+	let enabled = true;
+	let releaseChild = () => {};
+	const childGate = new Promise<void>((resolve) => {
+		releaseChild = resolve;
+	});
+	let signalChildCreated = () => {};
+	const childCreated = new Promise<void>((resolve) => {
+		signalChildCreated = resolve;
+	});
+	const gatedService: DelegationService = {
+		async createChild(spec) {
+			const child = await service.createChild(spec);
+			signalChildCreated();
+			await childGate;
+			return child;
+		},
+		findChild: (sessionId) => service.findChild(sessionId),
+		childrenOf: (parentSessionId) => service.childrenOf(parentSessionId),
+		onLifecycle: (listener) => service.onLifecycle(listener),
+		disposeChildrenOf: (parentSessionId) => service.disposeChildrenOf(parentSessionId),
+	};
+	const session = await makeSession(() => enabled, gatedService);
+	const childCallsBefore = fauxB.state.callCount;
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", { subagent_type: "bg-runner", task: "Do not start." }),
+			),
+			fauxAssistantMessage("PARENT_RECOVERED"),
+		]);
+		fauxB.setResponses([fauxAssistantMessage("CHILD_SHOULD_NOT_RUN")]);
+		const turn = session.prompt("Try to delegate during a policy change.");
+		await childCreated;
+		enabled = false;
+		releaseChild();
+		await turn;
+
+		expect(lastToolResultText(session)).toContain("Subagents are disabled");
+		expect(fauxB.state.callCount).toBe(childCallsBefore);
+		expect(service.childrenOf(session.sessionId)).toEqual([]);
+	} finally {
+		releaseChild();
 		await service.disposeChildrenOf(session.sessionId);
 		liveParents.delete(session.sessionId);
 		session.dispose();

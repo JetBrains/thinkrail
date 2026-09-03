@@ -43,8 +43,9 @@ choice was settled: the decision log below.
 - `createSubagentsExtension({ service?, delegationRoot?, scope?, isEnabled? })` — the embedder entry:
   ThinkRail passes its host-bound service, matching storage bindings (used for restart-loss error
   messages), and a live availability predicate. The predicate defaults to enabled for vanilla pi; it
-  removes both tools from the active set at `session_start` when false and is rechecked immediately
-  before `Agent` creates a child, closing an embedder-policy change race without unloading the extension.
+  removes both tools from the active set at `session_start` when false and is rechecked before child
+  assembly and again after its asynchronous setup, immediately before `runQueued`. A late disable disposes
+  that unstarted child before rejecting, closing both launch races without unloading the extension.
 - `SUBAGENT_COMPLETION_MESSAGE` — the custom-message type the web's completion card keys on.
 - Definitions: `AgentDefinition`, `discoverAgentDefinitions`, `parseAgentDefinition`,
   `BUILTIN_AGENTS`.

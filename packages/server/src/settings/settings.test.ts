@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -151,6 +151,17 @@ test("a non-boolean subagents update is rejected before persistence or broadcast
 	expect(getConfig()).toEqual(before);
 	expect(published).toEqual([]);
 	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+});
+
+test("a failed config write leaves the live cache and publisher unchanged", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	expect(getConfig().subagentsEnabled).toBe(true);
+	mkdirSync(join(dataDir, "config.json"));
+
+	expect(() => updateConfig({ subagentsEnabled: false })).toThrow();
+	expect(getConfig().subagentsEnabled).toBe(true);
+	expect(published).toEqual([]);
 });
 
 test("reviewModel/reviewEffort persist through the top-level partial merge", () => {

@@ -52,8 +52,8 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		if (reviewEffort === null) delete next.reviewEffort;
 		else next.reviewEffort = reviewEffort;
 	}
-	cached = next;
 	saveConfig(next);
+	cached = next;
 	publishSettings?.(next);
 	return next;
 }

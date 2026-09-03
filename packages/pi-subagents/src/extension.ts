@@ -164,6 +164,11 @@ ${known}`,
 						session: mapping.session,
 					});
 
+					if (!isEnabled()) {
+						await child.dispose();
+						throw new Error("Subagents are disabled in this session.");
+					}
+
 					const run = child.runQueued(params.task, {
 						...(mapping.maxTurns !== undefined ? { maxTurns: mapping.maxTurns } : {}),
 						...(!params.run_in_background && signal !== undefined ? { signal } : {}),
