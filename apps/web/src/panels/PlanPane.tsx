@@ -264,7 +264,7 @@ interface StepDrag {
 	draggable: boolean;
 	handlers: React.HTMLAttributes<HTMLLIElement>;
 	insertion: "top" | "bottom" | null;
-	connector: boolean;
+	isLast: boolean;
 }
 
 function StepList({
@@ -323,7 +323,7 @@ function StepList({
 		setDrag(null);
 	};
 	return (
-		<ul className="flex flex-col gap-4">
+		<ul className="flex flex-col">
 			{ordered.map((item, index) => {
 				const draggable = eligible(item);
 				const insertion: StepDrag["insertion"] =
@@ -364,7 +364,7 @@ function StepList({
 							draggable,
 							handlers,
 							insertion,
-							connector: index < ordered.length - 1,
+							isLast: index === ordered.length - 1,
 						})}
 					</Fragment>
 				);
@@ -388,6 +388,7 @@ function ItemBlock({
 	drag,
 	forceExpanded,
 	onExpandedChange,
+	isLast = false,
 }: {
 	item: TodoItem;
 	workspaceId: string;
@@ -403,6 +404,7 @@ function ItemBlock({
 	drag: StepDrag;
 	forceExpanded?: boolean | undefined;
 	onExpandedChange?: ((expanded: boolean) => void) | undefined;
+	isLast?: boolean;
 }) {
 	const reviewed = reviewSettled(item);
 	const reviewing = item.review?.reviewing === true;
@@ -459,10 +461,14 @@ function ItemBlock({
 			{drag.insertion === "top" ? (
 				<div
 					data-testid="step-insertion-line"
-					className="pointer-events-none absolute inset-x-0 top-[-3px] h-2 rounded-full bg-primary"
+					className="pointer-events-none absolute inset-x-0 top-[-1px] h-2 rounded-full bg-primary"
 				/>
 			) : null}
-			<div className="min-w-0 flex-1 rounded-[var(--radius-md)] px-12 py-12 transition-colors group-hover:bg-container-elevated-bg group-data-[expanded=true]:bg-container-elevated-bg">
+			<div
+				className={`min-w-0 flex-1 px-12 py-8 transition-colors ${
+					expanded ? "bg-container-elevated-bg" : ""
+				} ${!isLast && !expanded ? "border-border-muted border-b" : ""}`}
+			>
 				<div className="relative flex min-h-24 items-center gap-8">
 					<span
 						className="flex shrink-0 items-center"
@@ -678,14 +684,7 @@ function ItemBlock({
 			{drag.insertion === "bottom" ? (
 				<div
 					data-testid="step-insertion-line"
-					className="pointer-events-none absolute inset-x-0 bottom-[-3px] h-2 rounded-full bg-primary"
-				/>
-			) : null}
-			{drag.connector ? (
-				<div
-					data-testid="step-connector"
-					aria-hidden="true"
-					className="pointer-events-none absolute bottom-[-4px] left-[14px] h-4 w-2 bg-border-muted"
+					className="pointer-events-none absolute inset-x-0 bottom-[-1px] h-2 rounded-full bg-primary"
 				/>
 			) : null}
 		</li>
@@ -751,9 +750,9 @@ function GroupSection({
 }) {
 	const { done, total } = groupProgress(group);
 	return (
-		<section className="mb-16" data-testid="plan-group">
+		<section data-testid="plan-group">
 			{!hideHeader ? (
-				<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
+				<h2 className="flex items-baseline gap-8 border-border-muted border-b bg-container-elevated-bg px-12 py-8 tr-title-compact text-text-default">
 					<span className="min-w-0 flex-1 truncate">{group.title}</span>
 					<span className="shrink-0 tr-text-eyebrow text-text-subtle">
 						{done}/{total}
@@ -778,6 +777,7 @@ function GroupSection({
 						drag={drag}
 						forceExpanded={expandedIds?.has(item.id)}
 						onExpandedChange={(expanded) => onExpandedChange?.(item.id, expanded)}
+						isLast={drag.isLast}
 					/>
 				)}
 			/>
@@ -1427,10 +1427,10 @@ export default function PlanPane({
 				) : null}
 				{overallSummary ? <OverallSummary text={overallSummary} /> : null}
 				<section
-					className="mb-32 rounded-[var(--radius-md)] border border-border-muted p-16"
+					className="mb-32 overflow-hidden rounded-[var(--radius-md)] border border-border-muted"
 					data-testid="plan-current"
 				>
-					<div className="mb-12 flex flex-wrap items-center gap-8">
+					<div className="flex flex-wrap items-center gap-8 border-border-muted border-b bg-container-elevated-bg px-12 py-8">
 						<h2 className="flex min-w-0 flex-1 items-baseline gap-4">
 							<span className="shrink-0 tr-text-eyebrow text-text-subtle">Ongoing:</span>
 							<span className="min-w-0 truncate tr-title-compact text-text-default">
@@ -1504,22 +1504,23 @@ export default function PlanPane({
 											return next;
 										});
 									}}
+									isLast={drag.isLast}
 								/>
 							)}
 						/>
 					) : null}
 					{currentGroups.length === 0 && currentLoose.length === 0 ? (
-						<p className="text-text-subtle tr-text-ui">
+						<p className="px-12 py-8 text-text-subtle tr-text-ui">
 							Nothing is queued — add a task for the agent.
 						</p>
 					) : null}
 				</section>
 				{completed.length > 0 ? (
 					<section
-						className="mb-32 rounded-[var(--radius-md)] border border-border-muted p-16"
+						className="mb-32 overflow-hidden rounded-[var(--radius-md)] border border-border-muted"
 						data-testid="plan-completed"
 					>
-						<div className="mb-12 flex min-h-24 items-center gap-8">
+						<div className="flex min-h-24 items-center gap-8 border-border-muted border-b bg-container-elevated-bg px-12 py-8">
 							<h2 className="flex-1 tr-text-eyebrow text-text-subtle">Completed</h2>
 							{completedCollapsibleIds.length > 0 ? (
 								<ExpandCollapseToggle
@@ -1554,7 +1555,7 @@ export default function PlanPane({
 									}}
 								/>
 							) : (
-								<div key={block.items[0]?.id ?? "items"} className="mb-4">
+								<div key={block.items[0]?.id ?? "items"}>
 									<StepList
 										items={block.items}
 										renderItem={(item, drag) => (
@@ -1580,6 +1581,7 @@ export default function PlanPane({
 														return next;
 													});
 												}}
+												isLast={drag.isLast}
 											/>
 										)}
 									/>
