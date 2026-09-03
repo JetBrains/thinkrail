@@ -1,13 +1,18 @@
-const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+const LOOPBACK_HOSTS: readonly string[] = ["127.0.0.1", "localhost", "[::1]"];
+const LOOPBACK_HOST_SET = new Set(LOOPBACK_HOSTS);
 
 function isSameLoopbackOrigin(a: URL, b: URL): boolean {
 	if (a.origin === b.origin) return true;
 	return (
 		a.protocol === b.protocol &&
 		a.port === b.port &&
-		LOOPBACK_HOSTS.has(a.hostname) &&
-		LOOPBACK_HOSTS.has(b.hostname)
+		LOOPBACK_HOST_SET.has(a.hostname) &&
+		LOOPBACK_HOST_SET.has(b.hostname)
 	);
+}
+
+export function loopbackNavigationRules(port: number): string[] {
+	return ["^*", ...LOOPBACK_HOSTS.map((host) => `http://${host}:${port}/*`)];
 }
 
 export function externalNavigationUrl(value: unknown, origin: string): string | null {

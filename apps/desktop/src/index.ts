@@ -10,7 +10,7 @@ import Electrobun, {
 	Utils,
 } from "electrobun/bun";
 import { installDesktopApplicationMenu } from "./applicationMenu";
-import { externalNavigationUrl } from "./externalNavigation";
+import { externalNavigationUrl, loopbackNavigationRules } from "./externalNavigation";
 import {
 	injectInitialDesktopPreferences,
 	readDesktopPreferenceRemove,
@@ -95,7 +95,7 @@ async function start(): Promise<void> {
 		hidden:
 			process.env.THINKRAIL_DESKTOP_HIDDEN === "1" ||
 			process.env.THINKRAIL_DESKTOP_E2E_HOST === "1",
-		navigationRules: neutral ? null : JSON.stringify(["^*", `${origin}/*`]),
+		navigationRules: neutral ? null : JSON.stringify(loopbackNavigationRules(host.port)),
 		frame: { x: 80, y: 60, width: 1440, height: 920 },
 	});
 	const openExternal = (detail: unknown) => {
