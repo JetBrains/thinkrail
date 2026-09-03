@@ -240,6 +240,50 @@ test("foreground: one Agent call runs a builtin scout and returns its report to 
 	await service.disposeChildrenOf(parent.sessionId);
 });
 
+test("a per-call model runs an unpinned agent on a different model than the parent", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", {
+				subagent_type: "scout",
+				task: "Use the requested model.",
+				model: "fauxb/fauxb",
+			}),
+		),
+		fauxAssistantMessage("PARENT_USED_CALL_MODEL"),
+	]);
+	fauxB.setResponses([fauxAssistantMessage("CALL_MODEL_CHILD_OK")]);
+
+	await parent.prompt("Delegate on fauxb.");
+
+	expect(transcript()).toContain("CALL_MODEL_CHILD_OK");
+	expect(transcript()).toContain("PARENT_USED_CALL_MODEL");
+	const child = service.childrenOf(parent.sessionId)[0];
+	expect(child?.snapshot?.details.model).toBe("fauxb/fauxb");
+	await service.disposeChildrenOf(parent.sessionId);
+});
+
+test("a definition-pinned model silently wins over the per-call model", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", {
+				subagent_type: "bg-runner",
+				task: "Keep the definition pin.",
+				model: "unobtanium",
+			}),
+		),
+		fauxAssistantMessage("PARENT_USED_PINNED_MODEL"),
+	]);
+	fauxB.setResponses([fauxAssistantMessage("PINNED_MODEL_CHILD_OK")]);
+
+	await parent.prompt("Delegate with a redundant model.");
+
+	expect(transcript()).toContain("PINNED_MODEL_CHILD_OK");
+	expect(transcript()).toContain("PARENT_USED_PINNED_MODEL");
+	const child = service.childrenOf(parent.sessionId)[0];
+	expect(child?.snapshot?.details.model).toBe("fauxb/fauxb");
+	await service.disposeChildrenOf(parent.sessionId);
+});
+
 test("zero-config fallback mirrors a provider registered by another extension", async () => {
 	const extensionFaux = fauxCore("extension-faux");
 	const settingsManager = SettingsManager.inMemory({});
@@ -308,6 +352,8 @@ test("an unknown subagent_type surfaces as a tool error listing the available ty
 	const text = lastToolResultText();
 	expect(text).toContain('Unknown subagent type "nope"');
 	expect(text).toContain('"scout" (builtin)');
+	expect(text).toContain("model: call or parent");
+	expect(text).toContain("model: pinned fauxb");
 	expect(service.childrenOf(parent.sessionId)).toEqual([]);
 });
 

@@ -111,6 +111,24 @@ test("the mapping mirrors the definition onto SessionOptions with the recursion 
 	expect(mapping.maxTurns).toBe(9);
 });
 
+test("a per-call model selects the model for an unpinned definition", () => {
+	const mapping = toSpawnMapping(definition(), {
+		cwd: "/tmp/x",
+		availableModels: AVAILABLE,
+		model: "openai/gpt-5",
+	});
+	expect(mapping.session.model).toEqual({ provider: "openai", id: "gpt-5" });
+});
+
+test("a definition pin wins without resolving a supplied per-call model", () => {
+	const mapping = toSpawnMapping(definition({ model: "claude-haiku-4-5" }), {
+		cwd: "/tmp/x",
+		availableModels: AVAILABLE,
+		model: "unobtanium",
+	});
+	expect(mapping.session.model).toEqual({ provider: "anthropic", id: "claude-haiku-4-5" });
+});
+
 test("an unpinned definition inherits the parent: no model/thinking/tools in the options", () => {
 	const mapping = toSpawnMapping(definition(), { cwd: "/tmp/x", availableModels: AVAILABLE });
 	expect(mapping.session.model).toBeUndefined();
@@ -121,6 +139,18 @@ test("an unpinned definition inherits the parent: no model/thinking/tools in the
 	expect(mapping.session.extensions).toBeUndefined();
 	expect(mapping.maxTurns).toBeUndefined();
 	expect(mapping.session.excludeTools).toEqual([...RECURSION_GUARD_TOOLS]);
+});
+
+test("an unavailable or ambiguous per-call model throws loud", () => {
+	for (const model of ["unobtanium", "claude-"]) {
+		expect(() =>
+			toSpawnMapping(definition(), {
+				cwd: "/tmp/x",
+				availableModels: AVAILABLE,
+				model,
+			}),
+		).toThrow(`requests model "${model}"`);
+	}
 });
 
 test("a pinned model that matches nothing throws loud", () => {

@@ -37,10 +37,11 @@ function discoverFor(ctx: ExtensionContext): AgentDefinition[] {
 
 function agentListLines(definitions: AgentDefinition[]): string {
 	return definitions
-		.map(
-			(d) =>
-				`- "${d.name}" (${d.source}): ${d.description} [tools: ${d.tools?.join(", ") ?? "pi defaults: read, bash, edit, write"}]`,
-		)
+		.map((d) => {
+			const model = d.model === undefined ? "call or parent" : `pinned ${d.model}`;
+			const tools = d.tools?.join(", ") ?? "pi defaults: read, bash, edit, write";
+			return `- "${d.name}" (${d.source}): ${d.description} [model: ${model}; tools: ${tools}]`;
+		})
 		.join("\n");
 }
 
@@ -110,7 +111,8 @@ The subagent works autonomously and non-interactively: give it one complete, sel
 (everything it must know goes in the task text) and it returns a final report. Issue several Agent
 calls in ONE message to run subagents in parallel; sequence dependent steps yourself across turns.
 Set run_in_background for long tasks — you get the session id immediately, a completion message
-arrives when it finishes, and get_subagent_result fetches the result on demand.
+arrives when it finishes, and get_subagent_result fetches the result on demand. Set model to choose
+an available model for an unpinned agent; a definition's pinned model always wins.
 
 Available subagent types:
 ${known}`,
@@ -121,6 +123,12 @@ ${known}`,
 					task: Type.String({
 						description: "The complete, self-contained task for the subagent",
 					}),
+					model: Type.Optional(
+						Type.String({
+							description:
+								'Available model for an unpinned agent, preferably "provider/id"; a definition pin wins',
+						}),
+					),
 					run_in_background: Type.Optional(
 						Type.Boolean({
 							description: "Do not wait: return the child session id immediately",
@@ -139,6 +147,7 @@ ${known}`,
 					const mapping = toSpawnMapping(definition, {
 						cwd: ctx.cwd,
 						availableModels: ctx.modelRegistry.getAvailable(),
+						...(params.model !== undefined ? { model: params.model } : {}),
 					});
 					const child = await service.createChild({
 						parent: ctx.sessionManager.getSessionId(),
