@@ -362,14 +362,17 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     while parents created afterward project the new generation. The host-wide `getPiRuntime` resolver
     is passed as the core's dynamic fallback rather than captured at service creation. One
     `DelegationService` per workspace is cached (`delegationServiceFor`, synchronous — nothing awaits
-    at bind time); `subagentsExtensionFor(workspaceId)` hands the bound service to the
-    extension factory each session loads. A host-injected `setSubagentsEnabledResolver` maps that
+    at bind time); `subagentsExtensionFor(workspaceId, isEnabled)` hands the bound service and live
+    availability callback to the extension factory each session loads. A host-injected
+    `setSubagentsEnabledResolver` maps that
     workspace id to its current effective policy without creating an `agent` → settings/workspaces edge.
     The predicate reaches the extension's launch-time guard and initial/reload activation. For live
     policy changes, `refreshSubagentTools(workspaceId?)` removes/adds `Agent` +
     `get_subagent_result` through pi's active-tool API: idle sessions update synchronously, streaming
     sessions retain only a pending reevaluation applied at `agent_settled`, and repeated changes resolve
-    the latest policy then. The extension instance is never replaced, so already-running detached children
+    the latest policy then. Session registration re-resolves once after async extension binding and before
+    creation is published, so a policy mutation cannot fall into the bind-before-registry gap. The extension
+    instance is never replaced, so already-running detached children
     finish and retain completion delivery; a disabled launch is still rejected immediately by the live
     predicate even before a streaming parent's tool set can be refreshed.
     Cascades: `removeSession`/`disposeAllSessions` fire

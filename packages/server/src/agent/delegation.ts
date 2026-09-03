@@ -39,11 +39,15 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 	return service;
 }
 
-export function subagentsExtensionFor(workspaceId: string): BundledExtensionFactory {
+export function subagentsExtensionFor(
+	workspaceId: string,
+	isEnabled: () => boolean,
+): BundledExtensionFactory {
 	return createSubagentsExtension({
 		service: delegationServiceFor(workspaceId),
 		delegationRoot: delegationRootDir(),
 		scope: workspaceId,
+		isEnabled,
 	});
 }
 

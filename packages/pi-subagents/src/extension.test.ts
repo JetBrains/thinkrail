@@ -181,13 +181,15 @@ function lastToolResultText(session: AgentSession = parent): string {
 		.join("\n");
 }
 
-async function makeSession(): Promise<AgentSession> {
+async function makeSession(isEnabled?: () => boolean): Promise<AgentSession> {
 	const settingsManager = SettingsManager.inMemory({});
 	const resourceLoader = new DefaultResourceLoader({
 		cwd: parentCwd,
 		agentDir: getAgentDir(),
 		settingsManager,
-		extensionFactories: [createSubagentsExtension({ service })],
+		extensionFactories: [
+			createSubagentsExtension({ service, ...(isEnabled ? { isEnabled } : {}) }),
+		],
 		noPromptTemplates: true,
 		noThemes: true,
 		noContextFiles: true,
@@ -215,6 +217,43 @@ async function waitFor(predicate: () => boolean, timeoutMs = 10_000): Promise<vo
 		await Bun.sleep(20);
 	}
 }
+
+test("an embedder can keep subagent tools registered but inactive at session start", async () => {
+	const session = await makeSession(() => false);
+	try {
+		const configured = session.getAllTools().map((tool) => tool.name);
+		expect(configured).toContain("Agent");
+		expect(configured).toContain("get_subagent_result");
+		expect(session.getActiveToolNames()).not.toContain("Agent");
+		expect(session.getActiveToolNames()).not.toContain("get_subagent_result");
+	} finally {
+		liveParents.delete(session.sessionId);
+		session.dispose();
+	}
+});
+
+test("the live enabled predicate rejects a launch selected before embedder policy changed", async () => {
+	let enabled = true;
+	const session = await makeSession(() => enabled);
+	try {
+		enabled = false;
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", { subagent_type: "scout", task: "Should not start." }),
+			),
+			fauxAssistantMessage("PARENT_RECOVERED"),
+		]);
+
+		await session.prompt("Try to delegate.");
+
+		expect(lastToolResultText(session)).toContain("Subagents are disabled");
+		expect(service.childrenOf(session.sessionId)).toEqual([]);
+	} finally {
+		await service.disposeChildrenOf(session.sessionId);
+		liveParents.delete(session.sessionId);
+		session.dispose();
+	}
+});
 
 test("foreground: one Agent call runs a builtin scout and returns its report to the parent", async () => {
 	fauxA.setResponses([

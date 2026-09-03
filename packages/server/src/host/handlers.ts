@@ -13,6 +13,7 @@ import type {
 	ReviewCommentKind,
 	ReviewCommentStatus,
 	ReviewSendResult,
+	SubagentOverride,
 	TemplateScope,
 	ThinkingLevel,
 	TodoStatus,
@@ -45,6 +46,7 @@ import {
 	promptSession,
 	readChildTranscript,
 	refreshAvailableModels,
+	refreshSubagentTools,
 	reloadSessionResources,
 	removeQueuedSession,
 	removeSession,
@@ -156,6 +158,7 @@ import {
 	renameWorkspace,
 	setWorkspaceDiffBase,
 	setWorkspaceSkillOverride,
+	setWorkspaceSubagentsOverride,
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
@@ -569,6 +572,12 @@ const handlers: Record<string, Handler> = {
 	"workspace.setSkillOverride": (params) => {
 		const p = params as { id: string; name: string; override: "on" | "off" | null };
 		return setWorkspaceSkillOverride(p.id, p.name, p.override);
+	},
+	"workspace.setSubagentsOverride": (params) => {
+		const p = params as { id: string; override: SubagentOverride | null };
+		const workspace = setWorkspaceSubagentsOverride(p.id, p.override);
+		refreshSubagentTools(p.id);
+		return workspace;
 	},
 	"workspace.setDiffBase": (params) => {
 		const p = params as { id: string; ref: string | null };

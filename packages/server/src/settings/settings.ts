@@ -31,10 +31,15 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	const runtimeUpdate: RuntimeAppConfigUpdate = { ...partial };
 	delete runtimeUpdate.chatMessageOrder;
 	delete runtimeUpdate.layout;
-	const { reviewModel, reviewEffort, customLayoutPresets, ...rest } = runtimeUpdate;
+	const { reviewModel, reviewEffort, customLayoutPresets, subagentsEnabled, ...rest } =
+		runtimeUpdate;
+	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
+		throw new Error("subagentsEnabled must be a boolean");
+	}
 	const next: AppConfig = {
 		...getConfig(),
 		...rest,
+		...(subagentsEnabled === undefined ? {} : { subagentsEnabled }),
 		...(customLayoutPresets === undefined
 			? {}
 			: { customLayoutPresets: validateCustomLayoutPresets(customLayoutPresets) }),

@@ -15,7 +15,7 @@ import {
 } from "pi-delegation";
 import { Type } from "typebox";
 import { type AgentDefinition, discoverAgentDefinitions } from "./definitions";
-import { toSpawnMapping } from "./mapping";
+import { RECURSION_GUARD_TOOLS, toSpawnMapping } from "./mapping";
 
 export const SUBAGENT_COMPLETION_MESSAGE = "subagent-completion";
 
@@ -25,6 +25,7 @@ export interface SubagentsExtensionOptions {
 	service?: DelegationService;
 	delegationRoot?: string;
 	scope?: string;
+	isEnabled?: () => boolean;
 }
 
 function discoverFor(ctx: ExtensionContext): AgentDefinition[] {
@@ -63,6 +64,7 @@ export function createSubagentsExtension(
 	return (pi: ExtensionAPI) => {
 		const delegationRoot = options.delegationRoot ?? defaultDelegationRoot();
 		const scope = options.scope ?? DEFAULT_SCOPE;
+		const isEnabled = () => options.isEnabled?.() ?? true;
 
 		let shuttingDown = false;
 		const erroredRunDetails = new Map<string, DelegationRunDetails>();
@@ -138,6 +140,7 @@ ${known}`,
 					),
 				}),
 				async execute(toolCallId, params, signal, onUpdate, ctx) {
+					if (!isEnabled()) throw new Error("Subagents are disabled in this session.");
 					const definition = definitions.find((d) => d.name === params.subagent_type);
 					if (!definition) {
 						throw new Error(
@@ -278,6 +281,14 @@ ${known}`,
 					};
 				},
 			});
+
+			if (!isEnabled()) {
+				pi.setActiveTools(
+					pi
+						.getActiveTools()
+						.filter((name) => !RECURSION_GUARD_TOOLS.some((toolName) => toolName === name)),
+				);
+			}
 		});
 	};
 }

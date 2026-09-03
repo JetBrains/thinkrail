@@ -22,6 +22,8 @@ export interface DiffStats {
 	removed: number;
 }
 
+export type SubagentOverride = "on" | "off";
+
 export interface Workspace {
 	id: string;
 	projectId: string;
@@ -35,6 +37,7 @@ export interface Workspace {
 	initialTerminalPending?: true;
 	diffStats?: DiffStats;
 	skillOverrides?: Record<string, "on" | "off">;
+	subagentsOverride?: SubagentOverride;
 }
 
 export interface OpenBranchReview {
@@ -458,6 +461,7 @@ export interface AppConfig {
 	reviewEffort?: ThinkingLevel;
 	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
 	reviewAutoFix: boolean;
+	subagentsEnabled: boolean;
 }
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
@@ -477,6 +481,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	composerGrowthLimit: "half-chat",
 	customLayoutPresets: [],
 	reviewAutoFix: true,
+	subagentsEnabled: true,
 };
 
 export const TODO_NUDGE_PREFIX = "[thinkrail:todo-nudge] ";

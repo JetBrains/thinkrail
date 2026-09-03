@@ -202,7 +202,9 @@ of the host.
   **`ComposerGrowthLimit`** (`"compact" | "roomy" | "half-chat"`) is the closed, server-synced composer
   height preference: 6 visual lines, 10 visual lines, or 50% of the mounted chat panel respectively;
   `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;
-  **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, composerGrowthLimit,
+  **`SUBAGENT_SETTINGS_PROTOCOL_VERSION`** pins the global/workspace controls to their v57 wire
+  introduction so a later web client hides them against an older host without comparing against the moving
+  latest protocol; **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, composerGrowthLimit,
   customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled }` — an extensible bag;
   `subagentsEnabled` is the host-wide subagent default (`true` for current behavior), overridden only by
   `Workspace.subagentsOverride`; `customLayoutPresets` is the bounded resource-free catalog and is the **only** layout value synchronized

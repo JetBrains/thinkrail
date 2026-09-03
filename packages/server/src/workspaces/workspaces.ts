@@ -5,6 +5,7 @@ import type {
 	DiffStats,
 	ExistingWorktreeCandidate,
 	Project,
+	SubagentOverride,
 	Workspace,
 } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
@@ -438,6 +439,23 @@ export function setWorkspaceSkillOverride(
 	else overrides[name] = override;
 	if (Object.keys(overrides).length > 0) ws.skillOverrides = overrides;
 	else delete ws.skillOverrides;
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
+	return ws;
+}
+
+export function setWorkspaceSubagentsOverride(
+	id: string,
+	override: SubagentOverride | null,
+): Workspace {
+	const all = loadWorkspaces();
+	const ws = all.find((workspace) => workspace.id === id);
+	if (!ws) throw new Error(`Unknown workspace: ${id}`);
+	if (override !== null && override !== "on" && override !== "off") {
+		throw new Error("Invalid subagent override");
+	}
+	if (override === null) delete ws.subagentsOverride;
+	else ws.subagentsOverride = override;
 	saveWorkspaces(all);
 	emit({ kind: "updated", workspace: ws });
 	return ws;

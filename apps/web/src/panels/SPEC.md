@@ -385,7 +385,9 @@ a project picker, the prompt hero, and the reused
   remains a top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection.
   Labels use “message box” rather than the internal “composer” name when explaining where the user types.
   The final **Subagents** block pairs the host-wide `subagentsEnabled` switch with a named **This workspace**
-  `Use global` / `On` / `Off` control when a workspace is active; no workspace means no local block.
+  `Use global` / `On` / `Off` control when a workspace is active; no workspace means no local block. The
+  whole block requires `protocolVersion >= SUBAGENT_SETTINGS_PROTOCOL_VERSION`, so an independently shipped
+  client never offers unsupported mutations against an older host.
   Global mutation converges through `settings.changed`, local mutation through `workspace.updated`, and
   neither is optimistic. `Use global` sends `null`, so later global changes continue to flow through);
   the

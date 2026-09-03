@@ -82,6 +82,10 @@ export function loadConfig(): AppConfig {
 			: DEFAULT_CONFIG.composerGrowthLimit,
 		reviewAutoFix:
 			typeof value.reviewAutoFix === "boolean" ? value.reviewAutoFix : DEFAULT_CONFIG.reviewAutoFix,
+		subagentsEnabled:
+			typeof value.subagentsEnabled === "boolean"
+				? value.subagentsEnabled
+				: DEFAULT_CONFIG.subagentsEnabled,
 		customLayoutPresets: Array.isArray(value.customLayoutPresets)
 			? value.customLayoutPresets
 			: DEFAULT_CONFIG.customLayoutPresets,

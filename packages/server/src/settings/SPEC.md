@@ -33,7 +33,7 @@ layout presets because it owns their cross-frontend storage contract.
 ## Get right
 
 - **Converge on broadcast, no client optimism.** `updateConfig` persists before publishing; every frontend, including the initiator, adopts `settings.changed`. `server.welcome` seeds the same cached value.
-- `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.
+- `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior; a present non-boolean update is rejected before cache, persistence, or broadcast changes. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.
 - Theme availability/labels/palettes are not server concerns. Unknown theme ids remain persisted; each independently shipped frontend resolves visual fallback.
 - Retired host-layout and chat-message-order fields are ignored rather than persisted or broadcast. Layout instantiation and transcript order are frontend-local preferences.
 - Custom layout presets are a complete top-level catalog replacement, not a nested per-item patch. Each value is bounded, resource-free, uniquely identified, uses only the current preset schema, and contains no workspace/tab/session/terminal identity. A malformed persisted member is isolated during config validation; a wire mutation with any malformed member is rejected as a whole. No alternate config key or old preset schema is read or upgraded.

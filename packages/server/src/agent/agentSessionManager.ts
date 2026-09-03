@@ -35,6 +35,7 @@ import type {
 } from "@thinkrail/contracts";
 import { isTranscriptMessageRole } from "@thinkrail/contracts";
 import type { ParentContext } from "pi-delegation";
+import { RECURSION_GUARD_TOOLS } from "pi-subagents";
 import { logger } from "../log";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import {
@@ -75,6 +76,7 @@ interface Entry {
 	manualCompactionInProgress: boolean;
 	piCompactionInProgress: boolean;
 	registered: boolean;
+	subagentToolsRefreshPending: boolean;
 }
 
 const sessions = new Map<string, Entry>();
@@ -130,6 +132,43 @@ export function setSkillAdmissionResolver(
 	resolver: (workspaceId: string) => SkillAdmissionContext,
 ): void {
 	skillAdmissionResolver = resolver;
+}
+
+let subagentsEnabledResolver: (workspaceId: string) => boolean = () => true;
+export function setSubagentsEnabledResolver(resolver: (workspaceId: string) => boolean): void {
+	subagentsEnabledResolver = resolver;
+}
+
+function subagentsEnabled(workspaceId: string): boolean {
+	try {
+		return subagentsEnabledResolver(workspaceId);
+	} catch {
+		return false;
+	}
+}
+
+function isSubagentTool(name: string): boolean {
+	return RECURSION_GUARD_TOOLS.some((toolName) => toolName === name);
+}
+
+function applySubagentTools(entry: Entry): void {
+	const withoutSubagents = entry.session
+		.getActiveToolNames()
+		.filter((name) => !isSubagentTool(name));
+	entry.session.setActiveToolsByName(
+		subagentsEnabled(entry.workspaceId)
+			? [...withoutSubagents, ...RECURSION_GUARD_TOOLS]
+			: withoutSubagents,
+	);
+	entry.subagentToolsRefreshPending = false;
+}
+
+export function refreshSubagentTools(workspaceId?: string): void {
+	for (const entry of sessions.values()) {
+		if (workspaceId !== undefined && entry.workspaceId !== workspaceId) continue;
+		if (entry.session.isStreaming) entry.subagentToolsRefreshPending = true;
+		else applySubagentTools(entry);
+	}
 }
 
 function hasDeletionTombstone(sessionId: string): boolean {
@@ -231,6 +270,7 @@ async function prepareSessionEntry(
 		manualCompactionInProgress: false,
 		piCompactionInProgress: false,
 		registered: false,
+		subagentToolsRefreshPending: false,
 	};
 	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "queue_update") {
@@ -260,7 +300,10 @@ async function prepareSessionEntry(
 			baseEvent.type === "queue_update" && hasQueuedImages(entry)
 				? { ...baseEvent, hasImages: true as const }
 				: baseEvent;
-		if (event.type === "agent_settled") entry.lastSettlement = terminal;
+		if (event.type === "agent_settled") {
+			entry.lastSettlement = terminal;
+			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
+		}
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
 	});
@@ -311,6 +354,7 @@ async function registerSession(
 	const prepared = await prepareSessionEntry(session, workspaceId, generation);
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
+	applySubagentTools(prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
 	return prepared.result;
@@ -337,7 +381,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 			settingsManager,
 			() => skillAdmissionResolver(input.workspaceId),
 			generation.excludedSessionExtensionPaths,
-			[subagentsExtensionFor(input.workspaceId)],
+			[subagentsExtensionFor(input.workspaceId, () => subagentsEnabled(input.workspaceId))],
 		),
 		...(model ? { model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
@@ -552,7 +596,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 			settingsManager,
 			() => skillAdmissionResolver(workspaceId),
 			generation.excludedSessionExtensionPaths,
-			[subagentsExtensionFor(workspaceId)],
+			[subagentsExtensionFor(workspaceId, () => subagentsEnabled(workspaceId))],
 		),
 		...(exactModel ? { model: exactModel } : {}),
 	});

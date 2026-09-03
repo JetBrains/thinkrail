@@ -27,6 +27,7 @@ import {
 	renameWorkspace,
 	setWorkspaceDiffBase,
 	setWorkspacePublisher,
+	setWorkspaceSubagentsOverride,
 	type WorkspaceLifecycleEvent,
 } from "./workspaces";
 
@@ -459,6 +460,35 @@ test("renameWorkspace re-points siblings basing their diff on the old branch", a
 	const after = await listWorkspaces("p1");
 	expect(after.find((w) => w.id === dependent.id)?.baseBranch).toBe("core-work");
 	expect(after.find((w) => w.id === first.id)?.branch).toBe("core-work");
+});
+
+test("setWorkspaceSubagentsOverride persists explicit values and null restores inheritance", async () => {
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+	const ws = await createWorkspace("p1");
+
+	expect(ws.subagentsOverride).toBeUndefined();
+	expect(setWorkspaceSubagentsOverride(ws.id, "on").subagentsOverride).toBe("on");
+	expect(listWorkspaceRecords("p1").find((row) => row.id === ws.id)?.subagentsOverride).toBe("on");
+	expect(events.at(-1)).toMatchObject({
+		kind: "updated",
+		workspace: { id: ws.id, subagentsOverride: "on" },
+	});
+	expect(setWorkspaceSubagentsOverride(ws.id, "off").subagentsOverride).toBe("off");
+	expect(setWorkspaceSubagentsOverride(ws.id, null).subagentsOverride).toBeUndefined();
+	expect(
+		listWorkspaceRecords("p1").find((row) => row.id === ws.id)?.subagentsOverride,
+	).toBeUndefined();
+});
+
+test("setWorkspaceSubagentsOverride rejects unknown workspaces and values outside the wire union", async () => {
+	const ws = await createWorkspace("p1");
+	expect(() => setWorkspaceSubagentsOverride("missing", "on")).toThrow(
+		"Unknown workspace: missing",
+	);
+	expect(() => setWorkspaceSubagentsOverride(ws.id, "sometimes" as "on")).toThrow(
+		"Invalid subagent override",
+	);
 });
 
 test("setWorkspaceDiffBase re-points the diff target, leaving creation provenance alone", async () => {

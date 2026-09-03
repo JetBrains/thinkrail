@@ -7,8 +7,12 @@ import {
 	type Model,
 	type ModelsRefreshResult,
 } from "@earendil-works/pi-ai";
-import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
-import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+	createFauxCore,
+	fauxAssistantMessage,
+	fauxToolCall,
+} from "@earendil-works/pi-ai/providers/faux";
+import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
 	AgentSettlement,
 	ExtUiRequest,
@@ -35,6 +39,8 @@ import {
 	listSessions,
 	promptSession,
 	refreshAvailableModels,
+	refreshSubagentTools,
+	reloadSessionResources,
 	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
@@ -42,6 +48,7 @@ import {
 	setSessionDeletedPublisher,
 	setSessionManagerFactory,
 	setSessionPublisher,
+	setSubagentsEnabledResolver,
 	steerSession,
 	toWireModel,
 } from "./agentSessionManager";
@@ -90,6 +97,11 @@ const cfg = (faux: typeof fauxA, id: string) => ({
 
 const events = new Map<string, unknown[]>();
 const seen = (id: string) => JSON.stringify(events.get(id) ?? []);
+
+function subagentToolState(context: { tools?: ReadonlyArray<{ name: string }> }): string {
+	const names = new Set((context.tools ?? []).map((tool) => tool.name));
+	return names.has("Agent") && names.has("get_subagent_result") ? "SUBAGENTS_ON" : "SUBAGENTS_OFF";
+}
 
 const tmpDirs: string[] = [];
 function tmpCwd(prefix: string): string {
@@ -225,6 +237,291 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 	});
 	const hydrated = await getSessionMessages(session.sessionId, "ws-settled", cwd);
 	expect(hydrated.summary.lastSettlement).toEqual(settled?.terminal);
+});
+
+test("a disabled workspace creates chats without active subagent tools", async () => {
+	const workspaceId = "ws-subagents-initial-off";
+	setSubagentsEnabledResolver((id) => id !== workspaceId);
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-subagents-initial-off-"),
+			workspaceId,
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		fauxA.setResponses([(context) => fauxAssistantMessage(subagentToolState(context))]);
+
+		await promptSession(sessionId, "Which tools are active?");
+
+		expect(seen(sessionId)).toContain("SUBAGENTS_OFF");
+	} finally {
+		setSubagentsEnabledResolver(() => true);
+		if (sessionId) removeSession(sessionId);
+	}
+});
+
+test("session registration reconciles a policy change that lands after extension binding", async () => {
+	const workspaceId = "ws-subagents-bind-race";
+	let enabled = false;
+	setSubagentsEnabledResolver((id) => id !== workspaceId || enabled);
+	const originalBind = AgentSession.prototype.bindExtensions;
+	let signalBound = () => {};
+	const bound = new Promise<void>((resolve) => {
+		signalBound = resolve;
+	});
+	let releaseRegistration = () => {};
+	const registrationGate = new Promise<void>((resolve) => {
+		releaseRegistration = resolve;
+	});
+	AgentSession.prototype.bindExtensions = async function (bindings) {
+		await originalBind.call(this, bindings);
+		signalBound();
+		await registrationGate;
+	};
+	let sessionId: string | undefined;
+	try {
+		const creating = createSession({
+			cwd: tmpCwd("trpi-subagents-bind-race-"),
+			workspaceId,
+			model: toWireModel(fauxA.getModel()),
+		});
+		await bound;
+		enabled = true;
+		refreshSubagentTools(workspaceId);
+		releaseRegistration();
+		const session = await creating;
+		sessionId = session.sessionId;
+		fauxA.setResponses([(context) => fauxAssistantMessage(subagentToolState(context))]);
+
+		await promptSession(sessionId, "Check post-registration tools.");
+
+		expect(seen(sessionId)).toContain("SUBAGENTS_ON");
+	} finally {
+		releaseRegistration();
+		AgentSession.prototype.bindExtensions = originalBind;
+		setSubagentsEnabledResolver(() => true);
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("an idle chat adopts subagent policy changes, survives resource reload, and re-enables", async () => {
+	const workspaceId = "ws-subagents-idle-toggle";
+	let enabled = true;
+	setSubagentsEnabledResolver((id) => id !== workspaceId || enabled);
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-subagents-idle-toggle-"),
+			workspaceId,
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+
+		enabled = false;
+		refreshSubagentTools(workspaceId);
+		await reloadSessionResources(sessionId);
+		fauxA.setResponses([(context) => fauxAssistantMessage(subagentToolState(context))]);
+		await promptSession(sessionId, "Check disabled tools.");
+		expect(seen(sessionId)).toContain("SUBAGENTS_OFF");
+
+		enabled = true;
+		refreshSubagentTools(workspaceId);
+		fauxA.setResponses([(context) => fauxAssistantMessage(subagentToolState(context))]);
+		await promptSession(sessionId, "Check enabled tools.");
+		expect(seen(sessionId)).toContain("SUBAGENTS_ON");
+	} finally {
+		setSubagentsEnabledResolver(() => true);
+		if (sessionId) removeSession(sessionId);
+	}
+});
+
+test("a streaming chat defers its tool-set change until agent_settled", async () => {
+	const slow = createFauxCore({
+		provider: "faux-subagent-policy",
+		api: "faux-subagent-policy",
+		models: [modelDef("faux-subagent-policy")],
+		tokensPerSecond: 2000,
+	});
+	runtime.registerProvider("faux-subagent-policy", cfg(slow, "faux-subagent-policy"));
+	const workspaceId = "ws-subagents-streaming-toggle";
+	let enabled = true;
+	setSubagentsEnabledResolver((id) => id !== workspaceId || enabled);
+	let release = () => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let started = () => {};
+	const requestStarted = new Promise<void>((resolve) => {
+		started = resolve;
+	});
+	let firstState = "";
+	let automaticContinuationState = "";
+	let sessionId: string | undefined;
+	try {
+		const cwd = tmpCwd("trpi-subagents-streaming-toggle-");
+		writeFileSync(join(cwd, "probe.txt"), "probe\n");
+		slow.setResponses([
+			async (context) => {
+				firstState = subagentToolState(context);
+				started();
+				await gate;
+				return fauxAssistantMessage(fauxToolCall("read", { path: join(cwd, "probe.txt") }));
+			},
+			(context) => {
+				automaticContinuationState = subagentToolState(context);
+				return fauxAssistantMessage("AUTOMATIC_WORK_DONE");
+			},
+			(context) => fauxAssistantMessage(`NEXT_TURN_${subagentToolState(context)}`),
+		]);
+		const session = await createSession({
+			cwd,
+			workspaceId,
+			model: toWireModel(slow.getModel()),
+		});
+		sessionId = session.sessionId;
+		const firstTurn = promptSession(sessionId, "Start the gated turn.");
+		await requestStarted;
+
+		enabled = false;
+		refreshSubagentTools(workspaceId);
+		expect(firstState).toBe("SUBAGENTS_ON");
+		release();
+		await firstTurn;
+		expect(automaticContinuationState).toBe("SUBAGENTS_ON");
+		await promptSession(sessionId, "Check the next turn.");
+
+		expect(seen(sessionId)).toContain("NEXT_TURN_SUBAGENTS_OFF");
+	} finally {
+		release();
+		setSubagentsEnabledResolver(() => true);
+		if (sessionId) removeSession(sessionId);
+		runtime.unregisterProvider("faux-subagent-policy");
+	}
+});
+
+test("repeated streaming policy changes resolve only the latest value at settlement", async () => {
+	const slow = createFauxCore({
+		provider: "faux-subagent-policy-latest",
+		api: "faux-subagent-policy-latest",
+		models: [modelDef("faux-subagent-policy-latest")],
+		tokensPerSecond: 2000,
+	});
+	runtime.registerProvider("faux-subagent-policy-latest", cfg(slow, "faux-subagent-policy-latest"));
+	const workspaceId = "ws-subagents-streaming-latest";
+	let enabled = true;
+	const resolvedValues: boolean[] = [];
+	setSubagentsEnabledResolver((id) => {
+		if (id !== workspaceId) return true;
+		resolvedValues.push(enabled);
+		return enabled;
+	});
+	let release = () => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let started = () => {};
+	const requestStarted = new Promise<void>((resolve) => {
+		started = resolve;
+	});
+	let sessionId: string | undefined;
+	try {
+		slow.setResponses([
+			async () => {
+				started();
+				await gate;
+				return fauxAssistantMessage("LATEST_POLICY_TURN_DONE");
+			},
+		]);
+		const session = await createSession({
+			cwd: tmpCwd("trpi-subagents-streaming-latest-"),
+			workspaceId,
+			model: toWireModel(slow.getModel()),
+		});
+		sessionId = session.sessionId;
+		resolvedValues.length = 0;
+		const turn = promptSession(sessionId, "Start another gated turn.");
+		await requestStarted;
+
+		enabled = false;
+		refreshSubagentTools(workspaceId);
+		enabled = true;
+		refreshSubagentTools(workspaceId);
+		expect(resolvedValues).toEqual([]);
+		release();
+		await turn;
+
+		expect(resolvedValues).toEqual([true]);
+	} finally {
+		release();
+		setSubagentsEnabledResolver(() => true);
+		if (sessionId) await removeSession(sessionId);
+		runtime.unregisterProvider("faux-subagent-policy-latest");
+	}
+});
+
+test("disabling an idle parent lets its running background child finish and deliver", async () => {
+	const workspaceId = "ws-subagents-running-child";
+	let enabled = true;
+	setSubagentsEnabledResolver((id) => id !== workspaceId || enabled);
+	let releaseChild = () => {};
+	const childGate = new Promise<void>((resolve) => {
+		releaseChild = resolve;
+	});
+	let signalChildStarted = () => {};
+	const childStarted = new Promise<void>((resolve) => {
+		signalChildStarted = resolve;
+	});
+	let sessionId: string | undefined;
+	try {
+		const cwd = tmpCwd("trpi-subagents-running-child-");
+		mkdirSync(join(cwd, ".pi", "agents"), { recursive: true });
+		writeFileSync(
+			join(cwd, ".pi", "agents", "policy-bg.md"),
+			"---\nname: policy-bg\ndescription: Policy background runner\nmodel: fauxb\n---\n\nFinish the task.\n",
+		);
+		fauxB.setResponses([
+			async () => {
+				signalChildStarted();
+				await childGate;
+				return fauxAssistantMessage("BACKGROUND_FINISHED");
+			},
+		]);
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", {
+					subagent_type: "policy-bg",
+					task: "Wait, then finish.",
+					run_in_background: true,
+				}),
+			),
+			fauxAssistantMessage("BACKGROUND_STARTED"),
+			(context) => fauxAssistantMessage(`${subagentToolState(context)}_AT_COMPLETION`),
+		]);
+		const session = await createSession({
+			cwd,
+			workspaceId,
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		await Promise.all([promptSession(sessionId, "Start background work."), childStarted]);
+
+		enabled = false;
+		refreshSubagentTools(workspaceId);
+		releaseChild();
+		const deadline = Date.now() + 5000;
+		while (!seen(sessionId).includes("SUBAGENTS_OFF_AT_COMPLETION")) {
+			if (Date.now() > deadline) throw new Error("background completion was not delivered");
+			await Bun.sleep(20);
+		}
+
+		expect(seen(sessionId)).toContain("BACKGROUND_FINISHED");
+		expect(seen(sessionId)).toContain("subagent-completion");
+	} finally {
+		releaseChild();
+		setSubagentsEnabledResolver(() => true);
+		if (sessionId) await removeSession(sessionId);
+	}
 });
 
 test("buildSessionSettings disables image autoResize (in-memory, so the read tool sends images raw)", () => {
