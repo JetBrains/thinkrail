@@ -1357,27 +1357,24 @@ export default function PlanPane({
 				) : null}
 				{overallSummary ? <OverallSummary text={overallSummary} /> : null}
 				<section
-						className="mb-16 rounded-[var(--radius-md)] border border-border-muted p-16"
-						data-testid="plan-current"
-					>
-						<div className="mb-12 flex min-h-24 items-center gap-8">
-							<h2 className="min-w-0 flex-1 truncate tr-text-eyebrow text-text-subtle">
-								Current execution
-							</h2>
-							<AddTaskButton onAdd={plan.add} />
-						</div>
-						{sections.activeGroups[0] ? (
-							<div className="mb-12 flex items-baseline gap-8 border-border-default border-b pb-8">
-								<span className="min-w-0 flex-1 truncate tr-title-compact text-text-default">
-									{sections.activeGroups[0].title}
-								</span>
-								<span className="shrink-0 tr-text-eyebrow text-text-subtle">
-									{groupProgress(sections.activeGroups[0]).done}/
-									{groupProgress(sections.activeGroups[0]).total}
-								</span>
-							</div>
+					className="mb-16 rounded-[var(--radius-md)] border border-border-muted p-16"
+					data-testid="plan-current"
+				>
+					<div className="mb-12 flex flex-wrap items-center gap-x-12 gap-y-4">
+						<h2 className="flex min-w-0 flex-1 items-baseline gap-4">
+							<span className="shrink-0 tr-text-eyebrow text-text-subtle">Ongoing:</span>
+							<span className="min-w-0 truncate tr-title-compact text-text-default">
+								{activeGroup?.title ?? "Queued tasks"}
+							</span>
+						</h2>
+						{activeGroup ? (
+							<span className="shrink-0 tr-text-metadata text-text-subtle">
+								Done: {groupProgress(activeGroup).done}/{groupProgress(activeGroup).total}
+							</span>
 						) : null}
-						{currentGroups.map((group) => (
+						<AddTaskButton onAdd={plan.add} />
+					</div>
+					{currentGroups.map((group) => (
 						<GroupSection
 							key={group.id}
 							group={group}
