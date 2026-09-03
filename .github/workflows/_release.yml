@@ -1,7 +1,6 @@
 name: Release
 
-# Reusable: build every native CLI and desktop artifact and stage one DRAFT release. Publishing is
-# JetBrains/thinkrail-signing's job — see architecture.md decision #15.
+# Reusable: build every native CLI and desktop artifact and stage one DRAFT release for out-of-repo signing.
 # Called by nightly.yml (channel=nightly) and stable.yml (channel=stable).
 
 on:
@@ -49,10 +48,8 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          # pipefail matters: a failed ls-remote would otherwise read as "no such tag" and push blindly.
           set -euo pipefail
-          # Drafts create no tag, and next-version.sh reads tags; see architecture.md decision #15.
-          # Asked of the remote, not the checkout: this job clones at depth 1 without tags.
+          # The tag push, the remote lookup and pipefail are each load-bearing; see .github/SPEC.md.
           remote=$(git ls-remote --tags origin \
             "refs/tags/v${VERSION}" "refs/tags/v${VERSION}^{}" | awk '{print $1}')
           if [ -z "$remote" ]; then

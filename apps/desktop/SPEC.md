@@ -23,7 +23,8 @@ engine architecture.
   packaged resource staging; the PI-compatible server-runtime bundle; desktop route preload/persistence;
   a bounded generic client-preference adapter under stable backend-profile/window identity; desktop package
   smoke; and the desktop artifact adapter used by shared host probes.
-- **Public surface:** the packaged desktop application and unsigned installers; the build/test-only
+- **Public surface:** the packaged desktop application and its installers — the Windows setup stub
+  signed, the macOS `.dmg` and the Linux tarballs not (see *Signing*, below); the build/test-only
   `@thinkrail/desktop/artifact` launcher and installer locators consumed by smoke and E2E harnesses.
 - **Allowed deps:** `server` for the embedded host, build-support manifest, and artifact probes; `shared`
   for release identity and the retrying teardown both smokes clean up with; `contracts` for
@@ -135,6 +136,8 @@ runtime fork, and must stay limited to APIs the launcher and preload actually co
 
 Desktop installers ship beside the CLI artifacts for macOS ARM64, Windows x64, Linux x64, and
 Linux ARM64. Nightly maps to Electrobun canary and stable maps to stable. Updater UX is deferred.
+
+### Signing
 
 Signing happens outside this repository (`JetBrains/thinkrail-signing`), and reaches only the Windows
 installer's `ThinkRail-Setup.exe` stub. The payload beside it is keyed by the `hash` field in

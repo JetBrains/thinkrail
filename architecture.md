@@ -213,14 +213,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     still rejects without notarization, and the macOS `.dmg` stays unsigned because Electrobun's
     payload self-extracts after download.
 
-    The release job therefore **pushes the tag itself and stops at a draft**. Pushing the tag is not
-    incidental: a draft creates no tag, and `.github/scripts/next-version.sh` derives the next version
-    from `git tag -l`, so leaving the tag to publication would make the following nightly recompute the
-    same version and collide with the still-pending draft. The tag then records what was built even if
-    signing never completes. Because signing can only fail *closed*, a draft that is never published
-    means releases stop appearing rather than appearing unsigned — the failure mode that silently ended
-    the pre-pivot pipeline, and the reason the signing repo alerts on a stale draft.
-    Detail: [[module-desktop]].
+    Signing can only fail *closed*, so a draft that is never published means releases stop appearing
+    rather than appearing unsigned — the failure mode that silently ended the pre-pivot pipeline, and the
+    reason the signing repo alarms on a stale draft. How the tag and the draft are staged is
+    [[module-ci-release]]'s contract, not restated here.
+    Detail: [[module-desktop]], [[module-ci-release]].
 
 16. **Delegation is portable; ThinkRail is one embedder.** `packages/pi-delegation` owns the session
     fabric: one creation primitive with orthogonal axes, a run-owning handle, lineage, registry, and
