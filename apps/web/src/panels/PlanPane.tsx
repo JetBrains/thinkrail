@@ -719,6 +719,7 @@ function GroupSection({
 	protoFor,
 	patchProto,
 	onDelete,
+	hideHeader = false,
 }: {
 	group: TodoGroupItem;
 	workspaceId: string;
@@ -731,16 +732,19 @@ function GroupSection({
 	protoFor: (id: string) => StepProto;
 	patchProto: (id: string, patch: Partial<StepProto>) => void;
 	onDelete: (id: string) => void;
+	hideHeader?: boolean;
 }) {
 	const { done, total } = groupProgress(group);
 	return (
 		<section className="mb-16" data-testid="plan-group">
-			<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
-				<span className="min-w-0 flex-1 truncate">{group.title}</span>
-				<span className="shrink-0 tr-text-eyebrow text-text-subtle">
-					{done}/{total}
-				</span>
-			</h2>
+			{!hideHeader ? (
+				<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
+					<span className="min-w-0 flex-1 truncate">{group.title}</span>
+					<span className="shrink-0 tr-text-eyebrow text-text-subtle">
+						{done}/{total}
+					</span>
+				</h2>
+			) : null}
 			<StepList
 				items={group.todos}
 				renderItem={(item, drag) => (
@@ -1366,6 +1370,7 @@ export default function PlanPane({
 							protoFor={protoFor}
 							patchProto={patchProto}
 							onDelete={(id) => void plan.remove(id)}
+							hideHeader={group.id === activeGroup?.id}
 						/>
 					))}
 					{currentLoose.length > 0 ? (
