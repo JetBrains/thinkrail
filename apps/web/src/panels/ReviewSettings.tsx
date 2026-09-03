@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
 import { useModelCatalog } from "@/chat/useModelCatalog";
-import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
+import { SettingsSwitch } from "./SettingsSwitch";
 
 export function ReviewSettings() {
 	const reviewModel = useAppStore((s) => s.reviewModel);
@@ -39,9 +39,9 @@ export function ReviewSettings() {
 	const defaultLabel = fallback?.model
 		? `Your default model (${fallback.model.name})`
 		: "Your default model";
-	const toggleAutoFix = () => {
+	const setAutoFix = (reviewAutoFix: boolean) => {
 		getTransport()
-			.request("settings.update", { config: { reviewAutoFix: !autoFix } })
+			.request("settings.update", { config: { reviewAutoFix } })
 			.catch(() => toast.error("Couldn't change the auto-fix setting"));
 	};
 
@@ -89,26 +89,12 @@ export function ReviewSettings() {
 							: "Off — findings wait for you; nothing is auto-sent."}
 					</span>
 				</div>
-				<button
-					type="button"
-					role="switch"
-					aria-checked={autoFix}
-					aria-label="Auto-fix requested changes"
-					data-testid="review-autofix-toggle"
-					data-active={autoFix}
-					onClick={toggleAutoFix}
-					className={cn(
-						"relative h-20 w-36 shrink-0 rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
-						autoFix ? "bg-primary" : "bg-border-default",
-					)}
-				>
-					<span
-						className={cn(
-							"absolute top-2 left-2 size-16 rounded-full bg-container-workspace-bg transition-transform",
-							autoFix && "translate-x-16",
-						)}
-					/>
-				</button>
+				<SettingsSwitch
+					checked={autoFix}
+					label="Auto-fix requested changes"
+					testId="review-autofix-toggle"
+					onChange={setAutoFix}
+				/>
 			</div>
 		</section>
 	);

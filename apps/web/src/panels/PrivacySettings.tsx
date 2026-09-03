@@ -1,13 +1,13 @@
-import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
+import { SettingsSwitch } from "./SettingsSwitch";
 
 export function PrivacySettings() {
 	const enabled = useAppStore((s) => s.analyticsEnabled);
 
-	const toggle = () => {
+	const setEnabled = (analyticsEnabled: boolean) => {
 		getTransport()
-			.request("settings.update", { config: { analyticsEnabled: !enabled } })
+			.request("settings.update", { config: { analyticsEnabled } })
 			.catch(() => toast.error("Couldn't change the analytics setting"));
 	};
 
@@ -30,26 +30,12 @@ export function PrivacySettings() {
 						{enabled ? "On — thank you for helping improve ThinkRail." : "Off — nothing is sent."}
 					</span>
 				</div>
-				<button
-					type="button"
-					role="switch"
-					aria-checked={enabled}
-					aria-label="Share anonymous usage analytics"
-					data-testid="analytics-toggle"
-					data-active={enabled}
-					onClick={toggle}
-					className={cn(
-						"relative h-20 w-36 shrink-0 rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
-						enabled ? "bg-primary" : "bg-border-default",
-					)}
-				>
-					<span
-						className={cn(
-							"absolute top-2 left-2 size-16 rounded-full bg-container-workspace-bg transition-transform",
-							enabled && "translate-x-16",
-						)}
-					/>
-				</button>
+				<SettingsSwitch
+					checked={enabled}
+					label="Share anonymous usage analytics"
+					testId="analytics-toggle"
+					onChange={setEnabled}
+				/>
 			</div>
 
 			<div className="flex flex-col gap-4 tr-text-metadata">

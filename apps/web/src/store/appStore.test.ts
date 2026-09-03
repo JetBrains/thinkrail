@@ -2209,6 +2209,7 @@ test("updateWorkspace applies a pushed snapshot authoritatively: dropped fields 
 					...pushedWorkspace(),
 					diffBase: "release",
 					skillOverrides: { "spec-graph": "off" },
+					subagentsOverride: "off",
 					diffStats: { added: 3, removed: 1 },
 				},
 			],
@@ -2219,6 +2220,7 @@ test("updateWorkspace applies a pushed snapshot authoritatively: dropped fields 
 	const ws = useAppStore.getState().workspaces.p1?.[0];
 	expect(ws?.diffBase).toBeUndefined();
 	expect(ws?.skillOverrides).toBeUndefined();
+	expect(ws?.subagentsOverride).toBeUndefined();
 	expect(ws?.diffStats).toEqual({ added: 3, removed: 1 });
 });
 
@@ -2956,6 +2958,19 @@ test("applyConfig projects the composer growth limit", () => {
 		composerGrowthLimit: "roomy",
 	});
 	expect(useAppStore.getState()).toHaveProperty("composerGrowthLimit", "roomy");
+});
+
+test("applyConfig projects the host-wide subagent default", () => {
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		subagentsEnabled: false,
+	});
+	expect(useAppStore.getState()).toHaveProperty("subagentsEnabled", false);
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		subagentsEnabled: true,
+	});
+	expect(useAppStore.getState()).toHaveProperty("subagentsEnabled", true);
 });
 
 test("chat presentation preferences are client-local and cannot be overwritten by host config", () => {

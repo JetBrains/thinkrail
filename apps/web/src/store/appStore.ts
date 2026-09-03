@@ -772,6 +772,7 @@ interface AppState {
 	interviewPromptOpen: boolean;
 	theme: ThemeId;
 	analyticsEnabled: boolean;
+	subagentsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
 	chatMessageOrder: ChatMessageOrder;
@@ -982,6 +983,7 @@ function configPatch(config: AppConfig) {
 	return {
 		theme: config.theme,
 		analyticsEnabled: config.analyticsEnabled,
+		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
 		terminalReplayKb: config.terminalReplayKb,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
 		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
@@ -1577,6 +1579,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	interviewPromptOpen: false,
 	theme: DEFAULT_CONFIG.theme,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
+	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	chatMessageOrder: "oldest-first",
