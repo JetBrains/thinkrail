@@ -41,6 +41,8 @@ beforeEach(() => {
 		"user.email=t@thinkrail.test",
 		"-c",
 		"user.name=ThinkRail Test",
+		"-c",
+		"commit.gpgsign=false",
 		"commit",
 		"--allow-empty",
 		"-m",

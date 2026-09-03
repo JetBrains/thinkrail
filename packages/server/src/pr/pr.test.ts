@@ -398,6 +398,7 @@ describe("openPr — invalidates the open-review cache", () => {
 		sh(repo, "init", "-q", "-b", "main");
 		sh(repo, "config", "user.email", "t@thinkrail.test");
 		sh(repo, "config", "user.name", "test");
+		sh(repo, "config", "commit.gpgsign", "false");
 		writeFileSync(join(repo, "README.md"), "# repo\n");
 		sh(repo, "add", "-A");
 		sh(repo, "commit", "-q", "-m", "init");
@@ -610,6 +611,7 @@ describe("openPr — rejects when the branch is its own base (never push straigh
 		sh("init", "-b", "main");
 		sh("config", "user.email", "t@thinkrail.test");
 		sh("config", "user.name", "test");
+		sh("config", "commit.gpgsign", "false");
 		writeFileSync(join(repo, "README.md"), "# repo\n");
 		sh("add", "-A");
 		sh("commit", "-m", "init");

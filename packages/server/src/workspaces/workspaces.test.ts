@@ -57,6 +57,7 @@ beforeEach(() => {
 	git(repo, "init", "-b", "main");
 	git(repo, "config", "user.email", "t@thinkrail.test");
 	git(repo, "config", "user.name", "test");
+	git(repo, "config", "commit.gpgsign", "false");
 	writeFileSync(join(repo, "README.md"), "# repo\n");
 	git(repo, "add", "-A");
 	git(repo, "commit", "-m", "init");

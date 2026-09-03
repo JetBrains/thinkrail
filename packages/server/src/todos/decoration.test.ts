@@ -25,6 +25,7 @@ beforeEach(() => {
 	sh(repo, "init", "-b", "main");
 	sh(repo, "config", "user.email", "t@thinkrail.test");
 	sh(repo, "config", "user.name", "test");
+	sh(repo, "config", "commit.gpgsign", "false");
 	writeFileSync(join(repo, "README.md"), "# repo\n");
 	sh(repo, "add", "-A");
 	sh(repo, "commit", "-m", "init");

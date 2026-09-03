@@ -254,6 +254,8 @@ export default function syntheticExternalExtension(pi) {
 			"user.name=ThinkRail Smoke",
 			"-c",
 			"user.email=smoke@thinkrail.invalid",
+			"-c",
+			"commit.gpgsign=false",
 			"commit",
 			"--quiet",
 			"-m",

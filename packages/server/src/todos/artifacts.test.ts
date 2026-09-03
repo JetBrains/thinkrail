@@ -54,6 +54,7 @@ test("a newly active window is captured before a held queue or an earlier done i
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 	try {
 		execFileSync("git", ["init", "-b", "main"], { cwd: worktree, stdio: "ignore" });
+		execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd: worktree, stdio: "ignore" });
 		execFileSync(
 			"git",
 			["-c", "user.email=t@t", "-c", "user.name=t", "commit", "--allow-empty", "-m", "init"],
@@ -675,6 +676,7 @@ test("a UI removal landing during an in-flight reconcile leaves no orphan window
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 	try {
 		execFileSync("git", ["init", "-b", "main"], { cwd: worktree, stdio: "ignore" });
+		execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd: worktree, stdio: "ignore" });
 		execFileSync(
 			"git",
 			["-c", "user.email=t@t", "-c", "user.name=t", "commit", "--allow-empty", "-m", "init"],

@@ -37,6 +37,7 @@ function makeRepo(path: string): void {
 	git(path, "init", "-b", "main");
 	git(path, "config", "user.email", "t@thinkrail.test");
 	git(path, "config", "user.name", "test");
+	git(path, "config", "commit.gpgsign", "false");
 	writeFileSync(join(path, "README.md"), "# repo\n");
 	git(path, "add", "-A");
 	git(path, "commit", "-m", "init");
