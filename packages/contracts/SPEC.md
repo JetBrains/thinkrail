@@ -174,8 +174,9 @@ may depend on—so the UI ships host-independently.
   needs host reservation: host reserves the deterministic terminal, then clears it; absence = no
   provisioning work remains. Explicit wire fields, never id conventions.
 - **Two base fields:** `Workspace.baseBranch` = creation provenance (the ref the worktree was cut
-  from—the receipt's `branch · from baseBranch`; for a user-owned workspace, the repo default as
-  initial review target, UI shows no `from`); optional `Workspace.diffBase` = review target
+  from—the receipt's `branch · from baseBranch`; for a user-owned workspace, whose provenance
+  isn't ThinkRail's to claim, the repo default as initial review target, UI shows no `from`);
+  optional `Workspace.diffBase` = review target
   (`workspace.setDiffBase`). Every read resolves `diffBase ?? baseBranch` server-side, in one
   place—collapsing them would make a re-pointed target lie about where the branch came from.
 - **`GitDiffScope`**—what the Changes panel diffs: `branch` = work since diverging from the diff
