@@ -578,22 +578,29 @@ own section. The kebab menu (`plan-menu`, a
   **`unpushedCommits`** the label appends the count (`Push updates (N)`), the button turns
   primary-filled, and the next-action banner grows a `push` arm ("N new commits aren't in PR #N
   yet" + Push updates) so new work after the PR never sits silently local — a successful push
-  reseeds the state without the count, clearing both. Also a **`PR #N` chip**
+  re-reads the authoritative state and clears both when the remote-tracking branch caught up. Also a **`PR #N` chip**
   (`plan-pr-chip`) links out when the URL is known. The hook owns the ONE keyed PR state:
   `noteOpenReview(review, url?)` seeds it right after `pr.open` (no separate shadow state in the
-  page), and the focus-refetch overwrites it — a PR closed/merged on GitHub drops out of the chip,
-  the label, and the stepper on the next refetch instead of sticking until remount (the url is kept
-  across refetches while the review number matches). A `compare` result opens the prefilled GitHub
+  page) and supersedes any read already in flight for the same key, so a pre-mutation answer cannot
+  overwrite the mutation result. The keyed state and request generation are shared by every mounted
+  hook consumer, keeping the plan and shell scope label on one mutation result. A stale mutation closure
+  cannot write through after that hook has moved to another branch. The focus-refetch overwrites state.
+  Workspace activation explicitly opts into the host's 60-second settled-answer cache with
+  `allowCached: true`, while omission on focus preserves the wire's original force-fresh behavior for
+  older clients, so a PR closed/merged on GitHub drops out of the chip, label, and stepper on that
+  refetch instead of sticking until remount. Focus received while disconnected latches that fresh
+  intent and spends it on reconnect rather than falling back to a cache-eligible activation read. The
+  URL is kept across refetches while the review number matches. A `compare` result opens the prefilled
+  GitHub
   compare page (`window.open`); every outcome toasts, uncommitted files get a separate info toast.
   The `pr.open` request runs with a **180s timeout** (push + gh mutation can outlast the transport's
   60s default) and the header button wears a spinner while any PR work is in flight — the
   **Pushing…** label only during the actual submit (a preview fetch is not a push, and its failure
   toasts "Couldn't prepare the PR", never "Open PR failed"). The uncommitted-files info toast fires
-  once, before the outcome branches. A successful submit with no `review` in the result (gh broken
-  or non-GitHub remote) reseeds the open-review state WITHOUT `unpushedCommits` — the push
-  succeeded, so the count and the push banner must clear even when the PR lookup payload is absent —
-  but only when a count was actually showing, so the render-time closure can't overwrite a fresher
-  focus-refetch in the no-count case. The compose submit also reports whether the title was touched
+  once, before the outcome branches. Every successful submit starts a fresh shared open-review read
+  after seeding any review returned by `pr.open`. It never treats the mutation payload as the final
+  unpushed count: the post-push read decides whether the count cleared or newer local commits already
+  made it nonzero again. The compose submit also reports whether the title was touched
   (`titleEdited`) so the host never rewrites a GitHub-side rename with the regenerated prefill.
   **Failures that name a fixable setup gap open `PrSetupDialog` (`PrSetupDialog.tsx`,
   `pr-setup-dialog`) instead of a toast**: a `PUSH_AUTH_FAILED` rejection (matched via the

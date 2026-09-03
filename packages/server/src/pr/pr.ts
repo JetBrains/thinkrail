@@ -1,6 +1,11 @@
 import type { GhSetupProblem, OpenPrResult, PrDraft } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { providerFromRemoteUrl, reviewNumber, runProviderCommand } from "../branch-review";
+import {
+	forgetOpenBranchReview,
+	providerFromRemoteUrl,
+	reviewNumber,
+	runProviderCommand,
+} from "../branch-review";
 import { assertSafeRef, git, gitAsync, gitStatus } from "../git";
 import { ghSetupProblem } from "../github";
 import { listTodos } from "../todos";
@@ -220,6 +225,7 @@ export async function openPr(
 		if (isPushAuthFailure(detail)) throw new CodedError("PUSH_AUTH_FAILED", detail);
 		throw new Error(detail);
 	}
+	forgetOpenBranchReview(cwd);
 
 	const slug = providerFromRemoteUrl(origin.out) === "github" ? githubSlug(origin.out) : null;
 	if (!slug) return { action: "pushed", dirtyFiles };
@@ -241,7 +247,7 @@ export async function openPr(
 				...(params.draft ? { draft: true } : {}),
 			},
 			run,
-		);
+		).finally(() => forgetOpenBranchReview(cwd));
 		if (outcome) return { ...outcome, dirtyFiles };
 		problem = await ghProblem();
 	}

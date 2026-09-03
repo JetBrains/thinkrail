@@ -328,9 +328,12 @@ const handlers: Record<string, Handler> = {
 		).map((workspace) => ({ ...workspace, ...provisionInitialTerminal(workspace) }));
 	},
 	"workspace.openReview": async (params) => {
-		const ws = getWorkspace((params as { workspaceId: string }).workspaceId);
+		const p = params as { workspaceId: string; allowCached?: boolean };
+		const ws = getWorkspace(p.workspaceId);
 		const [review, unpushed] = await Promise.all([
-			findOpenBranchReview(ws.worktreePath, ws.branch),
+			findOpenBranchReview(ws.worktreePath, ws.branch, {
+				fresh: shouldRefreshOpenReview(p.allowCached),
+			}),
 			countUnpushedCommits(ws.worktreePath, ws.branch),
 		]);
 		if (!review) return review;
@@ -868,6 +871,10 @@ const handlers: Record<string, Handler> = {
 
 export function requestMethodDiagnostic(method: string): string {
 	return Object.hasOwn(handlers, method) ? method : "unknown method";
+}
+
+export function shouldRefreshOpenReview(allowCached: boolean | undefined): boolean {
+	return allowCached !== true;
 }
 
 export async function handleRequest(

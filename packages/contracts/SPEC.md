@@ -333,7 +333,9 @@ of the host.
   changes the display name while preserving the Git branch + cwd, and broadcasts the ordinary full-snapshot
   `workspace.updated`; `WORKSPACE_RENAME_PROTOCOL_VERSION` pins its v55 introduction so a newer client with
   this action omits it against an older host) / **`workspace.openReview`** (the active
-  branch's optional `OpenBranchReview` metadata) /
+  branch's optional `OpenBranchReview` metadata; optional `allowCached: true` permits a settled host
+  cache hit while omission preserves the original force-fresh behavior for older independently shipped
+  clients; either form still joins a lookup already in flight) /
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
   cross-agent skill aliases) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from

@@ -342,7 +342,7 @@ export interface WsMethodMap {
 		result: Workspace[];
 	};
 	"workspace.openReview": {
-		params: { workspaceId: string };
+		params: { workspaceId: string; allowCached?: boolean };
 		result: OpenBranchReview | null;
 	};
 	"workspace.remove": { params: { id: string }; result: Ack };

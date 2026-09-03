@@ -53,6 +53,8 @@ export type SubmitBehavior = "send" | "steer" | "followUp" | "interrupt";
 
 export type ComposerSubmitDisposition = { accepted: true } | { accepted: false; reason: string };
 
+const IME_SENTINEL_KEYCODE = 229;
+
 const COMPOSER_EDITOR_LIMIT_CLASS = {
 	compact: "max-h-[calc(6lh+var(--space-8)+var(--space-8))]",
 	roomy: "max-h-[calc(10lh+var(--space-8)+var(--space-8))]",
@@ -475,6 +477,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	};
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+		if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === IME_SENTINEL_KEYCODE) return;
 		if (slots && !menuOpen) {
 			if (e.key === "Tab") {
 				e.preventDefault();
