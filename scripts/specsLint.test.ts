@@ -93,26 +93,32 @@ test("spec-budget override above the ceiling or malformed is a violation", () =>
 		`${frontmatter("b", "module-design", `${SPEC_BUDGET_FIELD}: lots\n`)}${headings(2)}${tokens(100)}`,
 	);
 	const report = lint(root);
-	expect(report.violations.some((v) => v.path === "a/SPEC.md" && v.message.includes("hard ceiling"))).toBe(true);
-	expect(report.violations.some((v) => v.path === "b/SPEC.md" && v.message.includes("not a positive integer"))).toBe(true);
+	expect(
+		report.violations.some((v) => v.path === "a/SPEC.md" && v.message.includes("hard ceiling")),
+	).toBe(true);
+	expect(
+		report.violations.some(
+			(v) => v.path === "b/SPEC.md" && v.message.includes("not a positive integer"),
+		),
+	).toBe(true);
 });
 
 test("block cap: a long paragraph is flagged", () => {
 	const root = fixture();
 	write(root, "SPEC.md", `${frontmatter("a")}## Decisions\n\n${tokens(200)}\n`);
 	const report = lint(root);
-	expect(report.violations.some((v) => v.message.includes("prose block(s) over 120 words"))).toBe(true);
+	expect(report.violations.some((v) => v.message.includes("prose block(s) over 120 words"))).toBe(
+		true,
+	);
 });
 
 test("block cap: nested list items are their own blocks, not the parent's", () => {
 	const root = fixture();
 	const parentLead = tokens(80);
-	const nested = Array.from({ length: 6 }, (_, index) => `  - sub ${index} ${tokens(60)}`).join("\n");
-	write(
-		root,
-		"SPEC.md",
-		`${frontmatter("a")}## Decisions\n\n- parent ${parentLead}\n${nested}\n`,
+	const nested = Array.from({ length: 6 }, (_, index) => `  - sub ${index} ${tokens(60)}`).join(
+		"\n",
 	);
+	write(root, "SPEC.md", `${frontmatter("a")}## Decisions\n\n- parent ${parentLead}\n${nested}\n`);
 	const report = lint(root);
 	expect(report.violations).toEqual([]);
 	const metrics = report.metrics[0];
@@ -146,8 +152,14 @@ test("task-specs are exempt from budgets but not from graph checks", () => {
 	);
 	write(root, "SPEC.md", `${frontmatter("a")}## Boundary\n\n- **Owns:** things.\n`);
 	const report = lint(root);
-	expect(report.violations.some((v) => v.path.includes("TASK") && v.message.includes("budget"))).toBe(false);
-	expect(report.violations.some((v) => v.path.includes("TASK") && v.message.includes("missing spec id `ghost`"))).toBe(true);
+	expect(
+		report.violations.some((v) => v.path.includes("TASK") && v.message.includes("budget")),
+	).toBe(false);
+	expect(
+		report.violations.some(
+			(v) => v.path.includes("TASK") && v.message.includes("missing spec id `ghost`"),
+		),
+	).toBe(true);
 });
 
 test("graph validity: dangling frontmatter links, duplicates, and cycles are violations", () => {
@@ -160,13 +172,19 @@ test("graph validity: dangling frontmatter links, duplicates, and cycles are vio
 	write(root, "b/SPEC.md", `${frontmatter("dup")}## Boundary\n\n- **Owns:** b.\n`);
 	write(root, "c/SPEC.md", `${frontmatter("dup")}## Boundary\n\n- **Owns:** c.\n`);
 	const report = lint(root);
-	expect(report.violations.some((v) => v.message.includes("link to missing spec id `ghost`"))).toBe(true);
+	expect(report.violations.some((v) => v.message.includes("link to missing spec id `ghost`"))).toBe(
+		true,
+	);
 	expect(report.violations.some((v) => v.message.includes("duplicate spec id `dup`"))).toBe(true);
 });
 
 test("durable specs must not link task-spec ids; task-specs may link durable ones", () => {
 	const root = fixture();
-	write(root, ".thinkrail/context/TASK-x.md", `${frontmatter("task-x", "task-spec", "parent: a\n")}scratch\n`);
+	write(
+		root,
+		".thinkrail/context/TASK-x.md",
+		`${frontmatter("task-x", "task-spec", "parent: a\n")}scratch\n`,
+	);
 	write(
 		root,
 		"SPEC.md",
@@ -174,9 +192,13 @@ test("durable specs must not link task-spec ids; task-specs may link durable one
 	);
 	const report = lint(root);
 	expect(
-		report.violations.some((v) => v.path === "SPEC.md" && v.message.includes("durable spec links task-spec id")),
+		report.violations.some(
+			(v) => v.path === "SPEC.md" && v.message.includes("durable spec links task-spec id"),
+		),
 	).toBe(true);
-	expect(report.violations.some((v) => v.path.includes("TASK") && v.message.includes("durable"))).toBe(false);
+	expect(
+		report.violations.some((v) => v.path.includes("TASK") && v.message.includes("durable")),
+	).toBe(false);
 });
 
 test("tracked-file scoping hides untracked scratch specs from the lint", () => {

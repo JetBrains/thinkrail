@@ -5,7 +5,6 @@ status: active
 title: branch-review — open PR/MR metadata
 parent: module-server
 depends-on: [module-contracts]
-implements: [task-branch-pr-awareness]
 tags: [github, gitlab, pull-request]
 ---
 

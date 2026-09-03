@@ -42,8 +42,13 @@ description: "The project's specs are its ground truth: durable documents descri
 - **Say each thing once.** A fact lives in exactly one spec; others link to it by `id` rather than restate
   it. If a paragraph is being copied between specs, move it to the spec that owns the concept and point at
   it. Duplicated prose drifts and turns into contradictions.
-- **Prefer prose to exhaustive tables**, and cut anything that only paraphrases code, filenames, or a
-  sibling spec.
+- **Structure for scanning.** One decision per bullet, bold-led by topic; paragraphs stay at 2–3
+  sentences; tables earn their place for genuinely enumerable facts (a dependency DAG, a registry).
+  Cut anything that only paraphrases code, filenames, or a sibling spec.
+- **Use the skeleton.** Module/submodule specs run Responsibility → Boundary → (Internal modules →
+  Dependency graph once the first child lands) → Decisions → Get right → Later; `spec_create`
+  scaffolds the non-conditional sections. A spec that outgrows one sitting splits along genuine
+  boundaries into `submodule-design` children, cross-linked by `id`.
 
 ## The graph
 
@@ -66,7 +71,8 @@ description: "The project's specs are its ground truth: durable documents descri
   - `module-design` — a package or module's responsibility and boundary.
   - `submodule-design` — the same, for a directory-level module inside a package.
   - `task-spec` — a temporary working document for a piece of work; not durable, and removed once the
-    work lands.
+    work lands. A durable spec never links a task-spec `id` — the link dangles when the task-spec is
+    retired.
 
 ## Tools
 

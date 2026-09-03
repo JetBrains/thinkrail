@@ -5,7 +5,6 @@ status: active
 title: reviews — draft comments on files/diffs + review sessions
 parent: module-server
 depends-on: [module-contracts]
-references: [task-review-comments]
 tags: [v1, review]
 ---
 

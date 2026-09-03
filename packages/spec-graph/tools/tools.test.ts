@@ -446,9 +446,14 @@ test("spec_create scaffolds body headings by type (and none for an unknown type)
 	await withRoot(async (root) => {
 		const cases: Array<[string, string, string[]]> = [
 			[
+				"module-design",
+				"mod.md",
+				["## Responsibility", "## Boundary", "## Decisions", "## Get right"],
+			],
+			[
 				"architecture-design",
 				"arch.md",
-				["## Drivers", "## Decisions", "## Invariants", "## Out of scope"],
+				["## Drivers", "## Topology", "## Decisions", "## Invariants", "## Out of scope"],
 			],
 			["goal-and-requirements", "goal.md", ["## Goal", "## Scope"]],
 			["task-spec", "task.md", ["## Purpose", "## Open items"]],
@@ -599,7 +604,7 @@ test("spec_grep caps at limit and flags truncation only when more exist", async 
 		expect((cut.details as { truncated: boolean }).truncated).toBe(true);
 		expect(text(cut)).toContain("(truncated)");
 
-		const all = await run("spec_grep", { pattern: "#", limit: 4 }, root);
+		const all = await run("spec_grep", { pattern: "#", limit: 5 }, root);
 		expect((all.details as { truncated: boolean }).truncated).toBe(false);
 	});
 });

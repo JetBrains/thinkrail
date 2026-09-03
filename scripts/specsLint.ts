@@ -3,11 +3,11 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import {
 	buildGraph,
 	FIELDS,
-	linkTargets,
 	LINK_KINDS,
+	linkTargets,
 	parseFile,
-	scalar,
 	SpecIndex,
+	scalar,
 	validateGraph,
 } from "pi-spec-graph/core";
 
@@ -118,7 +118,9 @@ function budgetOverride(
 		return { violation: `\`${SPEC_BUDGET_FIELD}: ${raw}\` is not a positive integer` };
 	}
 	if (parsed > rules.maxBudgetOverride) {
-		return { violation: `\`${SPEC_BUDGET_FIELD}: ${parsed}\` exceeds the hard ceiling ${rules.maxBudgetOverride}` };
+		return {
+			violation: `\`${SPEC_BUDGET_FIELD}: ${parsed}\` exceeds the hard ceiling ${rules.maxBudgetOverride}`,
+		};
 	}
 	return { budget: parsed };
 }
@@ -233,7 +235,11 @@ export function lintSpecs(inputRoot: string, options: SpecLintOptions = {}): Spe
 }
 
 export function trackedSpecFiles(root: string): string[] {
-	const result = Bun.spawnSync(["git", "ls-files"], { cwd: join(root), stdout: "pipe", stderr: "pipe" });
+	const result = Bun.spawnSync(["git", "ls-files"], {
+		cwd: join(root),
+		stdout: "pipe",
+		stderr: "pipe",
+	});
 	if (result.exitCode !== 0) {
 		throw new Error(`git ls-files failed: ${result.stderr.toString().trim()}`);
 	}

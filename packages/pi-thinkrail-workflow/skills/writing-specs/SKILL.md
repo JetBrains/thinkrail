@@ -16,6 +16,10 @@ and is where the family's rules for specs and the spec graph accrue.
 - Small enough to read in one sitting. Target signal, not completeness.
 - Explain intent, not inventory: what the thing is for, what it owns, where its boundary runs — never
   a file listing or a restatement of the code.
+- Budget, enforced by `bun run check:specs`: ≤ 3,000 words per spec file, ≤ 120 words per paragraph
+  or list item (nested sub-items are their own blocks), ≥ one `##`+ heading per 500 words. Over
+  budget → split along a genuine boundary; a coherent document that must exceed earns a visible
+  frontmatter `spec-budget: <n>` (hard ceiling 4,500) plus a one-line rationale in the body.
 
 ## Honest
 
@@ -35,3 +39,6 @@ and is where the family's rules for specs and the spec graph accrue.
 - Say each thing once: link by `id` instead of restating; the dependency edges *between* sibling
   modules live in the parent's spec, not in each leaf.
 - One spec per *genuine* boundary — not per directory, not per file.
+- Structure for scanning: one decision per bullet, bold-led by topic; paragraphs of 2–3 sentences;
+  tables for enumerable facts. Durable specs never link `task-spec` ids — task-specs are removed
+  when work lands, and the link would dangle.

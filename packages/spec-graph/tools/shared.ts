@@ -21,9 +21,9 @@ export function errorResult(message: string): AgentToolResult<{ error: string }>
 }
 
 const SCAFFOLD_HEADINGS: Record<SpecType, string[]> = {
-	"module-design": ["Responsibility", "Boundary"],
-	"submodule-design": ["Responsibility", "Boundary"],
-	"architecture-design": ["Drivers", "Decisions", "Invariants", "Out of scope"],
+	"module-design": ["Responsibility", "Boundary", "Decisions", "Get right"],
+	"submodule-design": ["Responsibility", "Boundary", "Decisions", "Get right"],
+	"architecture-design": ["Drivers", "Topology", "Decisions", "Invariants", "Out of scope"],
 	"goal-and-requirements": ["Goal", "Scope"],
 	"task-spec": ["Purpose", "Open items"],
 };
