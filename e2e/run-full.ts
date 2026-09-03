@@ -10,6 +10,7 @@ import {
 	type FullRunPhase,
 	selectFocusedFullRunPhases,
 } from "./fullRunPlan";
+import { holdE2eIdleSleep } from "./idleSleep";
 import {
 	PARENT_SIGNAL_OWNER_ENV,
 	processRunnerInterruption,
@@ -65,6 +66,7 @@ async function runPhase(
 }
 
 async function main(): Promise<number> {
+	await holdE2eIdleSleep();
 	const args = process.argv.slice(2);
 	const listOnly = args.includes("--list");
 	let phases: FullRunPhase[] = ["no-agent", "agent"];

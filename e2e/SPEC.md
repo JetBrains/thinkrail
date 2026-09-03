@@ -29,6 +29,12 @@ is one or many.
 The automatic count is half the available CPU parallelism, clamped to 1–8. Developers may explicitly
 select 1–16 lanes; `e2e:serial` is the stable debugging fallback. A focused invocation carrying Playwright
 arguments defaults to one lane unless its shard count is explicit, so an iteration on one spec stays cheap.
+Every public browser E2E runner owns one process-lifetime idle-sleep assertion on macOS before setup or
+build work begins; source, agent, full, binary, and desktop modes all receive it. The assertion uses the
+system `caffeinate` executable with idle-system-sleep scope and the owning runner pid, so display sleep stays
+available and abrupt owner exit releases it. A private inherited owner marker makes composed full-run phases
+reuse the parent's assertion rather than multiplying helper processes. Other operating systems are a no-op,
+and a macOS host that cannot establish the assertion fails before spending test time.
 Direct no-agent use of the Playwright config remains self-contained and builds the web app when the shard
 runner has not already done so. Real-Central execution enters through the public `e2e:agent` or `e2e:full`
 runner; direct Central-mode test execution is rejected (while `--list` remains available), because the public
