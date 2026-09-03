@@ -579,20 +579,22 @@ function ItemBlock({
 							</PopoverContent>
 						</Popover>
 					</div>
-					{collapsible ? (
-						<button
-							type="button"
-							data-testid="plan-item-toggle"
-							aria-expanded={expanded}
-							onClick={() => setExpanded((v) => !v)}
-							title={expanded ? "Hide this step's details" : "Show this step's details"}
-							className="flex size-24 shrink-0 items-center justify-center text-text-muted transition after:absolute after:inset-0 after:content-[''] focus-visible:ring-2 focus-visible:ring-primary"
-						>
-							<ChevronRight
-								className={`size-14 transition-transform ${expanded ? "rotate-90" : ""}`}
-							/>
-						</button>
-					) : null}
+					<div className="w-24 shrink-0">
+						{collapsible ? (
+							<button
+								type="button"
+								data-testid="plan-item-toggle"
+								aria-expanded={expanded}
+								onClick={() => setExpanded((v) => !v)}
+								title={expanded ? "Hide this step's details" : "Show this step's details"}
+								className="flex size-24 shrink-0 items-center justify-center text-text-muted transition after:absolute after:inset-0 after:content-[''] focus-visible:ring-2 focus-visible:ring-primary"
+							>
+								<ChevronRight
+									className={`size-14 transition-transform ${expanded ? "rotate-90" : ""}`}
+								/>
+							</button>
+						) : null}
+					</div>
 				</div>
 				{set ? (
 					<div
