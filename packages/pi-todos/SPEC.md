@@ -13,9 +13,9 @@ tags: [pi-extension, todos, v2]
 
 `pi-todos` is a portable pi-package that gives the `pi` agent a **chat-scoped TODO list** — its working
 plan for the conversation, which the user can also add to. It is the *engine* behind the chat's TODO
-plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-graph]]: a skill, five `todo_*` custom tools, and one `before_agent_start` rule.
+plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-graph]]: a skill, six `todo_*` custom tools, and one `before_agent_start` rule.
 
-- **`index.ts`** — an `ExtensionFactory` registering the five tools and one always-on `before_agent_start`
+- **`index.ts`** — an `ExtensionFactory` registering the six tools and one always-on `before_agent_start`
   rule. The rule is deliberately **short and byte-stable** — awareness that a shared list + `todo_*` tools
   exist, plus a pointer to the todos skill. The lever is *understanding*, not prompt volume: **how to work
   with the list lives in the skill; each tool's invariants live in its own description.** (We tried
@@ -24,7 +24,7 @@ plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-gr
   `TodoStore` (read-modify-write `.thinkrail/context/todos/<sessionId>.json`). No `@earendil-works/*` imports, so
   the host can value-import `pi-todos/core` to power the plan viewer — reading the plan and writing the
   user's own edits (the `spec/` → `spec.graph` pattern).
-- **`tools/`** — the five `todo_*` custom tools ([[submodule-pi-todos-tools]]), thin wrappers over `core/`.
+- **`tools/`** — the six `todo_*` custom tools ([[submodule-pi-todos-tools]]), thin wrappers over `core/`.
 - **`skills/todos/SKILL.md`** — the bundled skill: the chat-plan discipline — group = task (one user
   ask, outcome-titled; 1–7 verifiable, ≈commit-sized steps), work tasks strictly in order with one step
   `in_progress` (blocked task = note why, tell the user, move on), fold in the user's mid-conversation
@@ -38,7 +38,8 @@ plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-gr
 | `todo_add` | Add one item — into a `group`, or `after` an existing item (**one of the two is required**: the agent can't author loose items). |
 | `todo_update` | Change an item's status / title / note / artifacts — how the agent flips `pending → in_progress → done`. Reports auto-demoted (`paused`) items; a `done` flip suggests the group's next open step. |
 | `todo_remove` | Drop an item. |
-| `todo_write` | Replace the agent's plan with fresh **groups only** — one group per task, steps inside (the plan-first pattern). |
+| `todo_write` | **Reconcile** the agent's plan from fresh **groups only** — one group per task, steps inside (the plan-first pattern). Identity-preserving, not a destructive replace: see below. |
+| `todo_plan_summary` | Set/clear the plan-level completion summary (`TodoFile.summary`) — the overall handoff note written when the whole plan is done. |
 
 **Group = task.** The plan's model is two-level: a group is one user ask (title = the outcome), its
 items are the steps. A group's own status is **derived, never stored** (`groupStatus` in `core/`:
@@ -75,10 +76,16 @@ wire method exists and accepts a status, but no UI path calls it today; it's res
 lever.)
 
 Each item carries an **`origin`** (`agent` | `user`) — UI adds are `user`, the agent's tools write
-`agent`. This is a **structural guard, not just guidance**: `todo_write` (the agent re-laying its plan)
-**preserves `user` items and any `done` item**, replacing only the agent's own open items — so a re-plan
-can never drop the user's requests or the completed history. The UI marks `user` items so the human sees
-which are theirs.
+`agent`. This is a **structural guard, not just guidance**: `todo_write` is an **identity-preserving
+reconcile, not a replace** — written steps are matched to existing ones by `(group title, step title)` and
+keep their id/status/summary/verification/commitSubject/artifacts (only `note` is refreshed; a written
+status on a match is ignored — status advances via `todo_update`). Unmatched written steps are created;
+omitted **agent-open** steps are dropped; **`user` items and any `done` item are always preserved** — so a
+re-plan can never drop the user's requests or the completed history, and re-running it is lossless. The
+**loose lane is user-only**: `WritePlan` has no `todos` field (writes are groups-only), so the agent never
+mints a loose item; the UI marks `user` items so the human sees which are theirs. See
+[[submodule-pi-todos-core]] for the full reconcile contract (title-matching is the accepted limit — a
+rename reads as a new step).
 
 ## Artifacts
 
@@ -89,8 +96,11 @@ the tools (a `spec` from `spec_create`'s `{path,id}`); **`change` and `commit` a
 agent marks an item `done`, the host commits the item's work and records just the `sha` (one `commit`
 artifact — the file list is derived from git at read time, never denormalized); `change` path-lists are
 the host's **no-commit fallback** only, see [[submodule-server-todos]]. The pi-free `core`/`tools`
-never touch git — they just store whatever artifacts they're handed. The on-disk file `version` is `4`
-(`3` added artifacts, `4` added the `commit` kind); an older file with no artifacts upgrades on write.
+never touch git — they just store whatever artifacts they're handed. Beyond artifacts, a done item may
+carry a **`summary`** + **`verification`** (the review trail) and a **`commitSubject`** (the git-facing
+title the host commits with); all three clear when the item leaves `done`, see [[submodule-pi-todos-core]].
+The on-disk file `version` is `6` (`3` added artifacts, `4` added the `commit` kind, `5` added the
+`summary` fields, `6` added `commitSubject`); an older file upgrades on the next write.
 
 ## Boundary
 

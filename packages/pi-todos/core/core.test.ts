@@ -92,13 +92,16 @@ test("replaceAll overwrites the agent's open items with fresh ones", () => {
 	const root = tempRoot();
 	try {
 		const s = store(root);
-		s.add({ title: "old" });
+		s.add({ title: "old", group: "Task" });
 		const plan = s.replaceAll({
-			todos: [{ title: "step 1", status: "done" }, { title: "step 2" }],
+			groups: [
+				{ title: "Task", todos: [{ title: "step 1", status: "done" }, { title: "step 2" }] },
+			],
 		});
-		expect(plan.todos).toHaveLength(2);
-		expect(plan.todos[0]?.status).toBe("done");
-		expect(plan.todos[1]?.status).toBe("pending");
+		const task = plan.groups.find((g) => g.title === "Task");
+		expect(task?.todos).toHaveLength(2);
+		expect(task?.todos[0]?.status).toBe("done");
+		expect(task?.todos[1]?.status).toBe("pending");
 		expect(s.list()).toHaveLength(2);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -110,10 +113,9 @@ test("replaceAll lays out named groups (created with fresh ids), preserving item
 	try {
 		const s = store(root);
 		const plan = s.replaceAll({
-			todos: [{ title: "loose one" }],
 			groups: [{ title: "Import", todos: [{ title: "parse" }, { title: "validate" }] }],
 		});
-		expect(plan.todos.map((t) => t.title)).toEqual(["loose one"]);
+		expect(plan.todos).toHaveLength(0);
 		expect(plan.groups).toHaveLength(1);
 		expect(plan.groups[0]?.id).toMatch(/^g_/);
 		expect(plan.groups[0]?.title).toBe("Import");
@@ -174,6 +176,35 @@ test("re-plan keeps the loose lane user-only: agent items never leak into it", (
 		const plan = s.replaceAll({ groups: [{ title: "Fresh", todos: [{ title: "step" }] }] });
 		expect(plan.todos.map((t) => t.id)).toEqual([userLoose.id]);
 		expect(plan.todos.every((t) => t.origin === "user")).toBe(true);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("re-plan carries a legacy agent done loose item into a group, never leaving it in the user lane", () => {
+	const root = tempRoot();
+	try {
+		const file = join(root, storeRel(SESSION));
+		mkdirSync(dirname(file), { recursive: true });
+		writeFileSync(
+			file,
+			JSON.stringify({
+				version: 6,
+				todos: [
+					{ id: "t_legacy_done", title: "legacy agent done", status: "done", origin: "agent" },
+					{ id: "t_legacy_open", title: "legacy agent open", status: "pending", origin: "agent" },
+				],
+				groups: [],
+			}),
+			"utf8",
+		);
+		const plan = store(root).replaceAll({
+			groups: [{ title: "Fresh", todos: [{ title: "step" }] }],
+		});
+		expect(plan.todos).toHaveLength(0);
+		const completed = plan.groups.find((g) => g.title === "Completed");
+		expect(completed?.todos.map((t) => t.title)).toEqual(["legacy agent done"]);
+		expect(flatItems(plan).map((t) => t.title)).not.toContain("legacy agent open");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -363,15 +394,19 @@ test("replaceAll preserves user items and done items, replacing only the agent's
 	try {
 		const s = store(root);
 		s.add({ title: "user task", origin: "user" });
-		s.add({ title: "agent open" });
-		const done = s.add({ title: "agent finished" });
+		s.add({ title: "agent open", group: "Task" });
+		const done = s.add({ title: "agent finished", group: "Task" });
 		s.update(done.id, { status: "done" });
 
-		const titles = s.replaceAll({ todos: [{ title: "new plan item" }] }).todos.map((t) => t.title);
+		const plan = s.replaceAll({
+			groups: [{ title: "Fresh", todos: [{ title: "new plan item" }] }],
+		});
+		const titles = flatItems(plan).map((t) => t.title);
 		expect(titles).toContain("new plan item");
 		expect(titles).toContain("user task");
 		expect(titles).toContain("agent finished");
 		expect(titles).not.toContain("agent open");
+		expect(plan.todos.map((t) => t.title)).toEqual(["user task"]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -517,7 +552,6 @@ test("replaceAll keeps only the first in_progress of a fresh plan (direct API: `
 	try {
 		const s = store(root);
 		const plan = s.replaceAll({
-			todos: [{ title: "loose", status: "in_progress" }],
 			groups: [
 				{
 					title: "Task",
@@ -529,7 +563,7 @@ test("replaceAll keeps only the first in_progress of a fresh plan (direct API: `
 			],
 		});
 		const statuses = flatItems(plan).map((t) => t.status);
-		expect(statuses).toEqual(["in_progress", "pending", "pending"]);
+		expect(statuses).toEqual(["in_progress", "pending"]);
 		expect(flatItems(plan)[0]?.title).toBe("one");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
