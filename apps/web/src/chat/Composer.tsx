@@ -475,6 +475,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	};
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+		// IME composition guard: while the input method is composing (e.g. pinyin
+		// candidates not yet committed), Enter/other keys must be handed back to
+		// the IME (commit the candidate), not treated as chat shortcuts. Without
+		// this, pressing Enter to confirm a candidate sends the raw pinyin.
+		if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
 		if (slots && !menuOpen) {
 			if (e.key === "Tab") {
 				e.preventDefault();
