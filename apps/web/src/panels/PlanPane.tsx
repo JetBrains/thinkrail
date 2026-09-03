@@ -436,7 +436,7 @@ function ItemBlock({
 					className="pointer-events-none absolute inset-x-0 top-[-3px] h-2 rounded-full bg-primary"
 				/>
 			) : null}
-			<div className="min-w-0 flex-1 rounded-[var(--radius-md)] bg-container-elevated-bg px-8 py-4">
+			<div className="min-w-0 flex-1 rounded-[var(--radius-md)] px-8 py-4 transition-colors group-hover:bg-container-elevated-bg group-data-[expanded=true]:bg-container-elevated-bg">
 				<div className="flex min-h-24 items-center gap-8">
 					<span
 						className="flex shrink-0 items-center"
