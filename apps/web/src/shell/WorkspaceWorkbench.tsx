@@ -82,14 +82,15 @@ function MissingResource({ label }: { label: string }) {
 
 function ChatTabLabel({ tab, tabActive }: { tab: LayoutChatTab; tabActive: boolean }) {
 	const view = useAppStore((state) => selectSessionView(state, tab.sessionId));
+	const chatSelected = view === "chat";
 	return (
 		<span
 			data-testid="session-view-chat"
-			data-active={view === "chat"}
-			className={`flex min-w-0 items-center gap-4 ${view === "chat" ? "" : "text-text-muted"}`}
+			data-active={chatSelected}
+			className={`flex min-w-0 items-center gap-4 ${chatSelected ? "" : "text-text-muted"}`}
 		>
-			{tabActive && view === "chat" ? (
-				<RiChat2Fill className="size-14 shrink-0" />
+			{tabActive && chatSelected ? (
+				<RiChat2Fill className="size-14 shrink-0 text-primary" />
 			) : (
 				<RiChat2Line className="size-14 shrink-0" />
 			)}
@@ -100,24 +101,25 @@ function ChatTabLabel({ tab, tabActive }: { tab: LayoutChatTab; tabActive: boole
 
 function WorkTabButton({ tab, select }: { tab: LayoutChatTab; select: () => void }) {
 	const view = useAppStore((state) => selectSessionView(state, tab.sessionId));
+	const workSelected = view === "work";
 	return (
 		<button
 			type="button"
 			tabIndex={-1}
 			data-testid="session-view-work"
-			data-active={view === "work"}
+			data-active={workSelected}
 			aria-label="Show this session's work"
 			onClick={() => {
 				select();
 				useAppStore.getState().setSessionView(tab.sessionId, "work");
 			}}
-			className={`flex shrink-0 items-center gap-4 border-border-muted border-l px-8 ${
-				view === "work"
+			className={`ml-8 flex shrink-0 items-center gap-4 border-border-default border-l pl-8 pr-16 ${
+				workSelected
 					? "text-text-default"
 					: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			}`}
 		>
-			<RiListCheck3 className="size-14 shrink-0" />
+			<RiListCheck3 className={`size-14 shrink-0 ${workSelected ? "text-primary" : ""}`} />
 			Work
 		</button>
 	);

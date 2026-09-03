@@ -1011,7 +1011,7 @@ function WorkbenchTab({
 						}}
 						onDoubleClick={selectFromDoubleClick}
 						onKeyDown={onKeyDown}
-						className={`flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${tab.kind === "tool" ? "pr-8" : ""}`}
+						className={`flex min-w-0 flex-1 items-center gap-4 py-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${tab.kind === "chat" ? "pl-16" : "pl-8"} ${tab.kind === "tool" ? "pr-8" : ""}`}
 					>
 						{tab.kind === "chat" && renderChatTabLabel ? (
 							renderChatTabLabel(tab, active)
@@ -1026,7 +1026,21 @@ function WorkbenchTab({
 					{tab.kind === "chat" && renderChatTabActions
 						? renderChatTabActions(tab, () => onSelect(tab.id))
 						: null}
-					{tab.kind !== "tool" ? (
+					{tab.kind === "chat" ? (
+						<>
+							<div className="h-16 w-px shrink-0 bg-border-default" aria-hidden="true" />
+							<button
+								type="button"
+								tabIndex={-1}
+								data-testid="editor-tab-close"
+								aria-label={`Close ${name}`}
+								onClick={onClose}
+								className="flex size-32 shrink-0 items-center justify-center hover:bg-control-bg-hovered"
+							>
+								<X className="size-14" />
+							</button>
+						</>
+					) : tab.kind !== "tool" ? (
 						<button
 							type="button"
 							tabIndex={-1}
