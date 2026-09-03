@@ -1,11 +1,13 @@
 import { rmSync } from "node:fs";
 import { createAgentRunPlan, WEB_BUILD_READY_ENV } from "./agentRunPlan";
 import { E2E_DATA_DIR } from "./fixtures/paths";
+import { holdE2eIdleSleep } from "./idleSleep";
 import { PARENT_SIGNAL_OWNER_ENV, runE2eProcess } from "./processRunner";
 
 const bun = process.execPath;
 
 async function main(): Promise<number> {
+	await holdE2eIdleSleep();
 	const playwrightArgs = process.argv.slice(2);
 	const plan = createAgentRunPlan(bun, playwrightArgs, process.env, {
 		webBuildReady: process.env[WEB_BUILD_READY_ENV] === "1",

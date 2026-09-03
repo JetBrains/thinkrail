@@ -57,8 +57,9 @@ bun run e2e:agent                                   # only @agent; remains seria
 ```
 
 Use focused or last-failed runs while iterating, then run the complete `bun run e2e`
-once before handoff. Agent-driven specs are tagged `@agent` and run against a real provider on an
-**isolated** `pi` agent dir — never your real `~/.pi/agent`.
+once before handoff. On macOS, every public browser E2E command prevents idle system sleep for the
+runner's lifetime while allowing the display to sleep normally. Agent-driven specs are tagged `@agent`
+and run against a real provider on an **isolated** `pi` agent dir — never your real `~/.pi/agent`.
 
 ## Module boundaries
 

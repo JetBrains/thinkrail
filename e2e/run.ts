@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { REAL_CENTRAL_E2E_ENV } from "./fixtures/centralAgent";
+import { holdE2eIdleSleep } from "./idleSleep";
 import {
 	E2E_ROOT_DIR,
 	PARENT_SIGNAL_OWNER_ENV,
@@ -138,6 +139,7 @@ async function runShards(shardCount: number, playwrightArgs: string[]): Promise<
 }
 
 async function main(): Promise<number> {
+	await holdE2eIdleSleep();
 	const { playwrightArgs, shardOverride } = parseRunnerArgs(process.argv.slice(2));
 	const shardCount = resolveShardCount({
 		shardOverride,
