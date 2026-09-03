@@ -492,7 +492,7 @@ function ItemBlock({
 					</span>
 					<span
 						className={`min-w-0 flex-1 truncate tr-title-section ${
-							item.status === "in_progress" ? "text-text-muted" : "text-text-default"
+							item.status === "pending" ? "text-text-muted" : "text-text-default"
 						}`}
 					>
 						{item.title}
