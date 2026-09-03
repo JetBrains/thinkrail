@@ -1078,7 +1078,7 @@ export default function PlanPane({
 				}}
 			/>
 			<div className="mx-auto max-w-[52rem] px-16 pb-16 pt-32">
-				<header className="relative mb-40 rounded-[var(--radius-md)] bg-container-elevated-bg p-16">
+				<header className="relative mb-32 rounded-[var(--radius-md)] bg-container-elevated-bg p-16">
 					{/* Actions anchored to top-right */}
 					<div className="absolute right-16 top-16 flex items-center gap-8">
 						{agentComments > 0 ? (
@@ -1339,7 +1339,7 @@ export default function PlanPane({
 				) : null}
 				{overallSummary ? <OverallSummary text={overallSummary} /> : null}
 				<section
-					className="mb-16 rounded-[var(--radius-md)] border border-border-muted p-16"
+					className="mb-32 rounded-[var(--radius-md)] border border-border-muted p-16"
 					data-testid="plan-current"
 				>
 					<div className="mb-12 flex flex-wrap items-center gap-x-12 gap-y-4">
@@ -1403,8 +1403,11 @@ export default function PlanPane({
 					) : null}
 				</section>
 				{completed.length > 0 ? (
-					<section className="mb-16" data-testid="plan-completed">
-						<h2 className="mb-4 flex min-h-24 items-center tr-text-eyebrow text-text-subtle">
+					<section
+						className="mb-32 rounded-[var(--radius-md)] border border-border-muted p-16"
+						data-testid="plan-completed"
+					>
+						<h2 className="mb-12 flex min-h-24 items-center tr-text-eyebrow text-text-subtle">
 							Completed
 						</h2>
 						{completed.map((block) =>
