@@ -52,6 +52,9 @@ export function groupStatus(group: TodoGroup): TodoGroupStatus {
 
 const CURRENT_VERSION = 6 as const;
 
+// Home for a legacy stray: an agent `done` item found in the (user-only) loose lane on re-plan (see core/SPEC.md).
+const CARRIED_LOOSE_GROUP = "Completed";
+
 const STATUS_SET: ReadonlySet<string> = new Set(TODO_STATUSES);
 const ORIGIN_SET: ReadonlySet<string> = new Set(TODO_ORIGINS);
 const ARTIFACT_KIND_SET: ReadonlySet<string> = new Set(TODO_ARTIFACT_KINDS);
@@ -323,17 +326,6 @@ export class TodoStore {
 	}
 
 	replaceAll(plan: WritePlan): TodoPlan {
-		const freshLoose = (plan.todos ?? []).map((w) =>
-			makeTodo(
-				w.title,
-				w.status ?? "pending",
-				"agent",
-				w.note,
-				w.artifacts,
-				w.summary,
-				w.verification,
-			),
-		);
 		const current = this.read();
 		const existingByKey = new Map<string, Todo[]>();
 		for (const g of current.groups) {
@@ -375,9 +367,9 @@ export class TodoStore {
 			const title = decodeEscapes(g.title);
 			return { id: freshId("g"), title, todos: g.todos.map((w) => reconcile(title, w)) };
 		});
-		const keptLoose = current.todos.filter((t) => t.origin === "user" || t.status === "done");
-		const resultLoose = [...freshLoose, ...keptLoose];
+		const resultLoose = current.todos.filter((t) => t.origin === "user");
 		const carriedGroups: TodoGroup[] = [];
+		const carriedLooseDone: Todo[] = [];
 		for (const old of current.groups) {
 			const carriedDone: Todo[] = [];
 			for (const t of old.todos) {
@@ -393,6 +385,19 @@ export class TodoStore {
 			if (carriedDone.length > 0) {
 				carriedGroups.push({ id: freshId("g"), title: old.title, todos: carriedDone });
 			}
+		}
+		for (const t of current.todos) {
+			if (t.origin === "agent" && t.status === "done") carriedLooseDone.push(t);
+		}
+		if (carriedLooseDone.length > 0) {
+			const match = freshGroups.find((g) => g.title === CARRIED_LOOSE_GROUP);
+			if (match) match.todos.push(...carriedLooseDone);
+			else
+				carriedGroups.push({
+					id: freshId("g"),
+					title: CARRIED_LOOSE_GROUP,
+					todos: carriedLooseDone,
+				});
 		}
 
 		const next: TodoPlan = { todos: resultLoose, groups: [...freshGroups, ...carriedGroups] };

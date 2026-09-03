@@ -73,13 +73,17 @@ plan; the model reaches for it to say "make the plan look like this, keep the pr
 - **Leftovers** (existing items no written item matched): `origin: "user"` items are preserved into the
   loose lane; `done` items are preserved (rejoin a fresh group of the same title, else carried over under
   their original group, appended after the fresh groups); **agent + open** items are **dropped** — that is
-  the legitimate "removed a step". Consequence: re-writing the same plan is a **no-op on progress** (no
+  the legitimate "removed a step". A leftover **agent `done` item in the loose lane** (only reachable from a
+  legacy/hand-edited file — no live path writes an agent loose item) is carried into a `"Completed"` group
+  rather than left in the user's lane, so the loose-lane invariant below holds after every reconcile. Consequence: re-writing the same plan is a **no-op on progress** (no
   status reset, no duplicates, no orphaning).
 
 **Loose lane = user-only** (held structurally): `TodoPlan.todos` (the lane the UI renders as "Other")
-carries **only `origin: "user"` items** — agent-authored items always live in a group. Only user items
-ever reach `resultLoose`; the tools also refuse a direct loose agent write (`todo_add` needs
-`group`/`after`; `todo_write` takes `groups` only). The invariant is robust by construction, not
+carries **only `origin: "user"` items** — agent-authored items always live in a group. `WritePlan` has
+**no `todos` field** (`todo_write` reconciles `groups` only), so a write can never mint a loose agent item,
+and `replaceAll` only ever admits `origin: "user"` items to `resultLoose` — a leftover agent `done` loose
+item (a legacy stray) is carried into a `"Completed"` group, an open one dropped. The tools also refuse a
+direct loose agent write (`todo_add` needs `group`/`after`). The invariant is robust by construction, not
 dependent on the agent's tool discipline.
 
 **Matching is title-based, by design's current increment.** Because the key is `(group title, item

@@ -86,6 +86,5 @@ export interface WriteItem {
 }
 
 export interface WritePlan {
-	todos?: WriteItem[];
 	groups?: { title: string; todos: WriteItem[] }[];
 }
