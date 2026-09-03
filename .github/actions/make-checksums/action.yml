@@ -1,5 +1,7 @@
 name: Make checksums
-description: Writes a SHA256SUMS file listing every regular file in the given directory.
+description: >-
+  Writes a SHA256SUMS file listing every regular file in the given directory. No caller here:
+  checksums must be taken after signing, so JetBrains/thinkrail-signing pins this by commit SHA.
 
 inputs:
   directory:

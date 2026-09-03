@@ -2,8 +2,9 @@ name: Sign binaries via JetBrains CodeSign
 description: >-
   Downloads the JetBrains codesign-client (GPG + checksum verified) and signs the macOS and Windows
   binaries in place. Must run on a runner with access to the JetBrains internal network
-  (codesign.labs.jb.gg). Currently unused — the release workflow gates the sign job off (`if: false`);
-  this is the ready-to-wire scaffold.
+  (codesign.labs.jb.gg), which excludes this public repository — so this action has no caller here
+  and is instead pinned by commit SHA from JetBrains/thinkrail-signing. Keeping the recipe public and
+  the credentials private is deliberate; do not move it.
 
 inputs:
   macos-binary:
