@@ -12,30 +12,47 @@ const GENERIC_REPAIR_TEXT =
 
 export function repairDanglingToolCalls(sessionManager: SessionManager): RepairedToolCall[] {
 	const { messages } = sessionManager.buildSessionContext();
+	const trailingResults = new Map<string, string>();
+	let repeatedTrailingResult = false;
+	let dangling: RepairedToolCall[] = [];
 
-	const resulted = new Set<string>();
-	for (const message of messages) {
-		if (message.role === "toolResult") resulted.add(message.toolCallId);
-	}
-
-	const repaired: RepairedToolCall[] = [];
-	for (const message of messages) {
-		if (message.role !== "assistant") continue;
-		for (const block of message.content) {
-			if (block.type !== "toolCall" || resulted.has(block.id)) continue;
-			const isAsk = block.name === ASK_USER_QUESTION_TOOL_NAME;
-			sessionManager.appendMessage({
-				role: "toolResult",
-				toolCallId: block.id,
-				toolName: block.name,
-				content: [{ type: "text", text: isAsk ? ASK_REPAIR_TEXT : GENERIC_REPAIR_TEXT }],
-				isError: !isAsk,
-				...(isAsk ? { details: { answers: [], cancelled: true } } : {}),
-				timestamp: Date.now(),
-			});
-			resulted.add(block.id);
-			repaired.push({ toolCallId: block.id, toolName: block.name });
+	for (let index = messages.length - 1; index >= 0; index--) {
+		const message = messages[index];
+		if (!message) continue;
+		if (message.role === "toolResult") {
+			if (trailingResults.has(message.toolCallId)) repeatedTrailingResult = true;
+			trailingResults.set(message.toolCallId, message.toolName);
+			continue;
 		}
+		if (message.role !== "assistant") break;
+		if (message.stopReason === "error" || message.stopReason === "aborted") break;
+		const toolCalls = message.content.filter((block) => block.type === "toolCall");
+		const toolCallNames = new Map(toolCalls.map((toolCall) => [toolCall.id, toolCall.name]));
+		if (
+			!repeatedTrailingResult &&
+			toolCallNames.size === toolCalls.length &&
+			[...trailingResults].every(
+				([toolCallId, toolName]) => toolCallNames.get(toolCallId) === toolName,
+			)
+		) {
+			dangling = toolCalls
+				.filter((toolCall) => !trailingResults.has(toolCall.id))
+				.map((toolCall) => ({ toolCallId: toolCall.id, toolName: toolCall.name }));
+		}
+		break;
 	}
-	return repaired;
+
+	for (const toolCall of dangling) {
+		const isAsk = toolCall.toolName === ASK_USER_QUESTION_TOOL_NAME;
+		sessionManager.appendMessage({
+			role: "toolResult",
+			toolCallId: toolCall.toolCallId,
+			toolName: toolCall.toolName,
+			content: [{ type: "text", text: isAsk ? ASK_REPAIR_TEXT : GENERIC_REPAIR_TEXT }],
+			isError: !isAsk,
+			...(isAsk ? { details: { answers: [], cancelled: true } } : {}),
+			timestamp: Date.now(),
+		});
+	}
+	return dangling;
 }

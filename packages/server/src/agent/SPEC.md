@@ -178,10 +178,17 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     every other re-open failure, so a merely-unreadable session can never be mistaken for an absent one
     and silently forked; the disk half is what survives a host **restart** — and re-attaching runs
     **`repairDanglingToolCalls` (the `sessionRepair` sibling) BEFORE `createAgentSession` seeds its
-    context**: a host death mid-tool leaves an assistant message with unpaired `toolCall`s, every provider
-    rejects such a context (the chat would brick), and appending behind a live session would desync its
-    in-memory state — so orphans are paired at the one choke point every post-restart session passes.
-    Generic orphans get pi's abort convention (`isError` "Operation aborted (host restarted…)"); an
+    context**: a host death mid-tool leaves the final replayable assistant tool batch unpaired, every
+    provider rejects such a leaf (the chat would brick), and appending behind a live session would desync
+    its in-memory state — so the missing results are paired at the one choke point every post-restart
+    session passes. Repair is **tail-only and replay-aware**: pi positionally closes a pending tool batch
+    before examining the next assistant message, then drops `error` / `aborted` attempts. Failed attempts
+    therefore never contribute candidates but still close an older one; any later user, custom,
+    compaction, or assistant message makes that gap ineligible for a persisted leaf append. Only unique
+    results whose call id **and tool name** match the final candidate batch may follow it, and parallel
+    calls already carrying valid results are left alone. This prevents a late result from surviving
+    without its omitted call and permanently poisoning OpenAI replay. Generic
+    missing calls get pi's abort convention (`isError` "Operation aborted (host restarted…)"); an
     old-format dangling ask gets the canonical decline + a re-ask hint (`details {answers:[],
     cancelled:true}`), so its card hydrates as the normal skipped record;
     **`answerQuestion(sessionId, toolCallId, result)`** — the `ask_user_question` reply path (see the
@@ -323,8 +330,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     re-implemented here so we own it and avoid the package's pi-tui/i18n peer deps.
   - `sessionRepair` — `repairDanglingToolCalls(sessionManager)`: the restart safety net (rationale under
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
-    `buildSessionContext`; idempotent; appends at the leaf, where orphans sit by construction) —
-    unit-tested against `SessionManager.inMemory`.
+    `buildSessionContext`; idempotent; appends only missing results from the active tail batch) —
+    unit-tested against `SessionManager.inMemory`, including failed-attempt and historical-gap replay.
   - `imageGuard` — the oversized-image guard: an inline extension (`oversizedImageGuard`, one of
     `buildResourceLoader`'s shared factories) hooked on pi's **`context` event** (fired before every LLM
     call, live sessions included). **Anthropic-family only**: the caps are Anthropic's model-level rules,
