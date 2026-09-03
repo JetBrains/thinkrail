@@ -373,3 +373,7 @@
 	-webkit-mask-image: url("/custom-icons/file-diff-fill.svg");
 	mask-image: url("/custom-icons/file-diff-fill.svg");
 }
+.custom-icon-list-check-3-solid {
+	-webkit-mask-image: url("/custom-icons/list-check-3-solid.svg");
+	mask-image: url("/custom-icons/list-check-3-solid.svg");
+}

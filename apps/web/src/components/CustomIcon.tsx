@@ -1,6 +1,6 @@
 import { cn } from "@/lib";
 
-export type CustomIconName = "file-diff-line" | "file-diff-fill";
+export type CustomIconName = "file-diff-line" | "file-diff-fill" | "list-check-3-solid";
 
 export function CustomIcon({
 	name,

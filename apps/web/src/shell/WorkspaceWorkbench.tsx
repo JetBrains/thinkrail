@@ -7,6 +7,7 @@ import {
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { CustomIcon } from "../components/CustomIcon";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { DropdownMenuItem } from "../components/ui/dropdown-menu";
@@ -119,7 +120,11 @@ function WorkTabButton({ tab, select }: { tab: LayoutChatTab; select: () => void
 					: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			}`}
 		>
-			<RiListCheck3 className={`size-14 shrink-0 ${workSelected ? "text-primary" : ""}`} />
+			{workSelected ? (
+				<CustomIcon name="list-check-3-solid" className="size-14 shrink-0 text-primary" />
+			) : (
+				<RiListCheck3 className="size-14 shrink-0" />
+			)}
 			Work
 		</button>
 	);
