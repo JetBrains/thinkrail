@@ -512,6 +512,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `send-mode-steer` / `send-mode-queue` / `send-mode-interrupt`) names each mode with a one-line
   meaning + shortcut. Menu rows are **actions** (send the current draft with that mode), never a
   sticky mode switch — a persistent mode would make the next plain Enter silently obey hidden state.
+  `Composer` yields every keydown to an active IME before slot, menu, recall, or send handling. It uses
+  `KeyboardEvent.isComposing` plus the legacy `keyCode` 229 sentinel because `compositionend` may precede
+  the final keydown, making `isComposing` false while the IME still owns that event. The guard does not
+  cancel the event, so candidate-confirming Enter commits; only a later ordinary Enter invokes send
+  semantics.
   **Interrupt** (`SubmitBehavior: "interrupt"`, Cmd/Ctrl+Shift+Enter while streaming; plain send when
   idle; Shift+Enter alone stays newline) is the "take my message NOW" gesture pi lacks: `ChatView`
   awaits `session.abort` (the ack means idle) then performs an ordinary idle send — the partial reply
