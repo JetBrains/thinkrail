@@ -49,16 +49,20 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          set -eu
+          # pipefail matters: a failed ls-remote would otherwise read as "no such tag" and push blindly.
+          set -euo pipefail
           # Drafts create no tag, and next-version.sh reads tags; see architecture.md decision #15.
-          existing=$(git rev-parse -q --verify "refs/tags/v${VERSION}" || true)
-          if [ -z "$existing" ]; then
+          # Asked of the remote, not the checkout: this job clones at depth 1 without tags.
+          remote=$(git ls-remote --tags origin \
+            "refs/tags/v${VERSION}" "refs/tags/v${VERSION}^{}" | awk '{print $1}')
+          if [ -z "$remote" ]; then
             git tag "v${VERSION}"
             git push origin "v${VERSION}"
-          elif [ "$existing" = "$GITHUB_SHA" ]; then
+            echo "Tagged v${VERSION} at $GITHUB_SHA"
+          elif printf '%s\n' "$remote" | grep -qx "$GITHUB_SHA"; then
             echo "v${VERSION} already tags $GITHUB_SHA; re-run, nothing to push"
           else
-            echo "::error::v${VERSION} already tags $existing, not $GITHUB_SHA"
+            echo "::error::v${VERSION} already exists on origin at $(printf '%s' "$remote" | tr '\n' ' ')— not $GITHUB_SHA"
             exit 1
           fi
 

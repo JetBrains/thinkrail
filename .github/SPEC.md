@@ -57,8 +57,11 @@ tags: `vX.Y.Z` stable, `vX.Y.Z-nightly.N`):
 **The release job pushes the tag itself.** A draft creates no tag, and `next-version.sh` reads
 `git tag -l`, so leaving the tag to publication would make the next nightly recompute the same version
 and collide with the still-pending draft — and `nightly.yml`'s "skips when no commits" check would
-compare against a stale tag. The push is idempotent, so re-running a release is safe, and it fails loudly
-if the tag already points at a different commit.
+compare against a stale tag. Existence is checked with `git ls-remote`, **not** against the checkout:
+this job clones at depth 1 without tags, so a local `rev-parse` would miss a tag the first attempt had
+already pushed and the re-run would die on a rejected push before staging anything. With the remote as
+the source of truth the push is genuinely idempotent, and it fails loudly if the tag exists at a
+different commit.
 
 ## Build strategy — native OS matrix
 
