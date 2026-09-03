@@ -72,8 +72,9 @@ export function createSubagentsExtension(
 			erroredRunDetails.delete(event.toolCallId);
 			return event.isError ? { details } : undefined;
 		});
-		pi.on("turn_end", () => {
+		pi.on("turn_end", (_event, ctx) => {
 			erroredRunDetails.clear();
+			registerAgentTool(ctx);
 		});
 		pi.on("session_shutdown", async (_event, ctx) => {
 			shuttingDown = true;
@@ -100,8 +101,9 @@ export function createSubagentsExtension(
 			return fallbackService;
 		}
 
-		pi.on("session_start", (_event, sessionCtx) => {
-			const known = agentListLines(discoverFor(sessionCtx));
+		function registerAgentTool(sessionCtx: ExtensionContext): void {
+			const definitions = discoverFor(sessionCtx);
+			const known = agentListLines(definitions);
 
 			pi.registerTool({
 				name: "Agent",
@@ -136,7 +138,6 @@ ${known}`,
 					),
 				}),
 				async execute(toolCallId, params, signal, onUpdate, ctx) {
-					const definitions = discoverFor(ctx);
 					const definition = definitions.find((d) => d.name === params.subagent_type);
 					if (!definition) {
 						throw new Error(
@@ -211,7 +212,14 @@ ${known}`,
 					};
 				},
 			});
+		}
 
+		pi.on("before_agent_start", (_event, ctx) => {
+			registerAgentTool(ctx);
+		});
+
+		pi.on("session_start", (_event, sessionCtx) => {
+			registerAgentTool(sessionCtx);
 			pi.registerTool({
 				name: "get_subagent_result",
 				label: "Get subagent result",
