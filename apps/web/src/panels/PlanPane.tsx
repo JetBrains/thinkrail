@@ -23,6 +23,7 @@ import {
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -190,14 +191,10 @@ function AddTaskButton({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
-				<button
-					type="button"
-					data-testid="plan-add-task"
-					className="flex h-24 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-				>
+				<Button variant="outline" size="sm" data-testid="plan-add-task" className="shrink-0 gap-4">
 					<Plus className="size-14 shrink-0" />
 					Add task
-				</button>
+				</Button>
 			</PopoverTrigger>
 			<PopoverContent
 				side="bottom"
@@ -227,16 +224,19 @@ function AddTaskButton({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
 function StepStatusIcon({
 	status,
 	changesRequested,
+	needsReview,
 }: {
 	status: TodoItem["status"];
 	changesRequested: boolean;
+	needsReview: boolean;
 }) {
 	if (changesRequested)
 		return <RiCloseCircleLine className="size-14 shrink-0 text-feedback-warning" />;
+	if (needsReview) return <RiSearchEyeLine className="size-14 shrink-0 text-primary" />;
 	if (status === "in_progress")
 		return <RiLoader4Line className="size-14 shrink-0 animate-spin text-text-muted" />;
 	if (status === "done")
-		return <RiCheckboxCircleLine className="size-14 shrink-0 text-feedback-success" />;
+		return <RiCheckboxCircleLine className="size-14 shrink-0 text-text-muted" />;
 	return <RiCheckboxBlankCircleLine className="size-14 shrink-0 text-text-muted" />;
 }
 
@@ -383,6 +383,7 @@ function ItemBlock({
 	const reviewed = reviewSettled(item);
 	const reviewing = item.review?.reviewing === true;
 	const changesRequested = reviewChangesRequested(item) && !reviewing;
+	const needsReview = item.review !== undefined && !reviewed && !changesRequested;
 	const findings = changesRequested ? itemOpenFindings(item, reviewComments, sessionId) : 0;
 	const set = itemChangeSet(item);
 	const counts = set ? changeSetCounts(set) : null;
@@ -437,14 +438,24 @@ function ItemBlock({
 				/>
 			) : null}
 			<div className="min-w-0 flex-1 rounded-[var(--radius-md)] px-8 py-4 transition-colors group-hover:bg-container-elevated-bg group-data-[expanded=true]:bg-container-elevated-bg">
-				<div className="flex min-h-24 items-center gap-8">
+				<div className="relative flex min-h-24 items-center gap-8">
 					<span
 						className="flex shrink-0 items-center"
-						title={changesRequested ? "Changes requested" : undefined}
+						title={
+							changesRequested ? "Changes requested" : needsReview ? "Needs review" : undefined
+						}
 					>
-						<StepStatusIcon status={item.status} changesRequested={changesRequested} />
+						<StepStatusIcon
+							status={item.status}
+							changesRequested={changesRequested}
+							needsReview={needsReview}
+						/>
 					</span>
-					<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
+					<span
+						className={`min-w-0 flex-1 truncate tr-title-section ${
+							item.status === "in_progress" ? "text-text-muted" : "text-text-default"
+						}`}
+					>
 						{item.title}
 					</span>
 					{reviewing ? (
@@ -455,7 +466,7 @@ function ItemBlock({
 							onClick={() =>
 								reviewerSessionId && void openChatInTab(workspaceId, reviewerSessionId)
 							}
-							className="shrink-0 tr-text-metadata text-primary underline-offset-2 hover:underline"
+							className="relative z-10 shrink-0 tr-text-metadata text-primary underline-offset-2 hover:underline"
 						>
 							Reviewing…
 						</button>
@@ -465,13 +476,13 @@ function ItemBlock({
 							data-testid="plan-item-changes-requested"
 							title="The review demanded changes — open the Review tab for the findings"
 							onClick={onOpenReview}
-							className="flex shrink-0 items-center gap-2 tr-text-metadata text-feedback-warning underline-offset-2 hover:underline"
+							className="relative z-10 flex shrink-0 items-center gap-2 tr-text-metadata text-feedback-warning underline-offset-2 hover:underline"
 						>
 							Changes requested
 							{findings > 0 ? ` · ${findings}` : ""}
 						</button>
 					) : null}
-					<div className="flex shrink-0 items-center gap-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+					<div className="relative z-10 flex shrink-0 items-center gap-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
 						{drag.draggable ? (
 							<>
 								<IconTooltip label="Drag to reorder the queue">
@@ -555,7 +566,7 @@ function ItemBlock({
 							aria-expanded={expanded}
 							onClick={() => setExpanded((v) => !v)}
 							title={expanded ? "Hide this step's details" : "Show this step's details"}
-							className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+							className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition after:absolute after:inset-0 after:content-[''] hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 						>
 							<ChevronRight
 								className={`size-14 transition-transform ${expanded ? "rotate-90" : ""}`}
@@ -1104,8 +1115,8 @@ export default function PlanPane({
 							</span>
 						)
 					) : null}
-					<button
-						type="button"
+					<Button
+						size="sm"
 						data-testid="plan-open-pr"
 						disabled={prBusy || sameBranch}
 						onClick={() => void openPrFlow(false)}
@@ -1116,11 +1127,7 @@ export default function PlanPane({
 									? "Push new commits to the open PR and refresh its description from the plan"
 									: "Push the branch and open a PR whose description comes from this plan"
 						}
-						className={`flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui disabled:opacity-50 ${
-							(planReady && !openReview) || unpushed > 0
-								? "bg-primary text-text-on-primary hover:opacity-90"
-								: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-						}`}
+						className="shrink-0 gap-4"
 					>
 						{prBusy ? (
 							<Loader2 className="size-14 animate-spin" />
@@ -1134,14 +1141,18 @@ export default function PlanPane({
 									? `Push updates (${unpushed})`
 									: "Push updates"
 								: "Open PR"}
-					</button>
+					</Button>
 					<DropdownMenu>
-						<DropdownMenuTrigger
-							data-testid="plan-menu"
-							aria-label="Plan actions"
-							className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-hovered"
-						>
-							<MoreVertical className="size-16" />
+						<DropdownMenuTrigger asChild>
+							<Button
+								variant="outline"
+								size="icon"
+								data-testid="plan-menu"
+								aria-label="Plan actions"
+								className="size-28 shrink-0 data-[state=open]:bg-control-bg-hovered"
+							>
+								<MoreVertical className="size-16" />
+							</Button>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end" data-testid="plan-menu-content">
 							<DropdownMenuItem data-testid="plan-copy-markdown" onSelect={() => copyMarkdown()}>
