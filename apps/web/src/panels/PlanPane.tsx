@@ -1073,8 +1073,8 @@ export default function PlanPane({
 					lastPrSubmit.current = null;
 				}}
 			/>
-			<div className="mx-auto max-w-[52rem] px-16 py-16">
-				<header className="mb-16 flex items-center gap-12">
+			<div className="mx-auto max-w-[52rem] px-16 pb-16 pt-32">
+				<header className="mb-40 flex items-center gap-12 rounded-[var(--radius-md)] bg-container-elevated-bg p-16">
 					<div className="min-w-0 flex-1">
 						<h1 className="truncate tr-title-section text-text-default">Plan · {title}</h1>
 						<div
@@ -1296,14 +1296,28 @@ export default function PlanPane({
 					</div>
 				) : null}
 				{overallSummary ? <OverallSummary text={overallSummary} /> : null}
-				<section className="mb-16" data-testid="plan-current">
-					<div className="mb-4 flex min-h-24 items-center gap-8">
-						<h2 className="min-w-0 flex-1 truncate tr-text-eyebrow text-text-subtle">
-							Current execution
-						</h2>
-						<AddTaskButton onAdd={plan.add} />
-					</div>
-					{currentGroups.map((group) => (
+				<section
+						className="mb-16 rounded-[var(--radius-md)] border border-border-muted p-16"
+						data-testid="plan-current"
+					>
+						<div className="mb-12 flex min-h-24 items-center gap-8">
+							<h2 className="min-w-0 flex-1 truncate tr-text-eyebrow text-text-subtle">
+								Current execution
+							</h2>
+							<AddTaskButton onAdd={plan.add} />
+						</div>
+						{sections.activeGroups[0] ? (
+							<div className="mb-12 flex items-baseline gap-8 border-border-default border-b pb-8">
+								<span className="min-w-0 flex-1 truncate tr-title-compact text-text-default">
+									{sections.activeGroups[0].title}
+								</span>
+								<span className="shrink-0 tr-text-eyebrow text-text-subtle">
+									{groupProgress(sections.activeGroups[0]).done}/
+									{groupProgress(sections.activeGroups[0]).total}
+								</span>
+							</div>
+						) : null}
+						{currentGroups.map((group) => (
 						<GroupSection
 							key={group.id}
 							group={group}
