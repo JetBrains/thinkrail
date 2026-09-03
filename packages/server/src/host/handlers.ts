@@ -129,6 +129,7 @@ import {
 } from "../terminal";
 import {
 	addTodo,
+	addTodoNote,
 	approveTodoReview,
 	countOpenTodos,
 	listTodos,
@@ -410,6 +411,10 @@ const handlers: Record<string, Handler> = {
 		const p = params as { workspaceId: string; sessionId: string; id: string };
 		return removeTodo(p, () => isItemUnderActiveReview(p.sessionId, p.id));
 	},
+	"todo.addNote": (params) =>
+		addTodoNote(
+			params as { workspaceId: string; sessionId: string; id: string; note: string },
+		),
 	"todo.review": (params) =>
 		approveTodoReview(params as { workspaceId: string; sessionId: string; id: string }),
 	"todo.startReview": (params) =>

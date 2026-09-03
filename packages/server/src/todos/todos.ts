@@ -35,6 +35,12 @@ import {
 	setReviewerSession,
 	type TodoReviewRecord,
 } from "./reviews";
+import {
+	addUserNote as addUserNoteToStore,
+	dropItemUserNotes,
+	readUserNotes,
+	removeSessionUserNotes,
+} from "./userNotes";
 
 function storeFor(workspaceId: string, sessionId: string): TodoStore {
 	return new TodoStore(getWorkspace(workspaceId).worktreePath, sessionId);
@@ -75,17 +81,22 @@ async function toWireItem(
 	item: StoredItem,
 	record: TodoReviewRecord | undefined,
 	reviewing: boolean,
+	userNotes?: string[],
 ): Promise<TodoItem> {
-	if (!item.artifacts) return item;
-	const artifacts = await Promise.all(
-		item.artifacts.map(async (a): Promise<TodoArtifact> => {
-			if (a.kind !== "commit" || !a.sha) return a;
-			const files = await resolveCommitFiles(workspaceId, a.sha);
-			return files ? { ...a, files } : a;
-		}),
-	);
+	const base: TodoItem = { ...item };
+	if (item.artifacts) {
+		base.artifacts = await Promise.all(
+			item.artifacts.map(async (a): Promise<TodoArtifact> => {
+				if (a.kind !== "commit" || !a.sha) return a;
+				const files = await resolveCommitFiles(workspaceId, a.sha);
+				return files ? { ...a, files } : a;
+			}),
+		);
+	}
 	const review = reviewInfo(item, record, reviewing);
-	return review ? { ...item, artifacts, review } : { ...item, artifacts };
+	if (review) base.review = review;
+	if (userNotes && userNotes.length > 0) base.userNotes = userNotes;
+	return base;
 }
 
 function commitShas(item: StoredItem): string[] {
@@ -144,15 +155,20 @@ export async function listTodos(params: {
 	const plan = new TodoStore(root, params.sessionId).read();
 	const records = readReviewRecords(root, params.sessionId);
 	const pending = readReviewMeta(root, params.sessionId).pending;
+	const userNotes = readUserNotes(root, params.sessionId);
 	const wire: TodoPlan = {
 		todos: await Promise.all(
-			plan.todos.map((t) => toWireItem(params.workspaceId, t, records[t.id], t.id in pending)),
+			plan.todos.map((t) =>
+				toWireItem(params.workspaceId, t, records[t.id], t.id in pending, userNotes[t.id]),
+			),
 		),
 		groups: await Promise.all(
 			plan.groups.map(async (group) => ({
 				...group,
 				todos: await Promise.all(
-					group.todos.map((t) => toWireItem(params.workspaceId, t, records[t.id], t.id in pending)),
+					group.todos.map((t) =>
+						toWireItem(params.workspaceId, t, records[t.id], t.id in pending, userNotes[t.id]),
+					),
 				),
 				status: groupStatus(group),
 			})),
@@ -182,6 +198,7 @@ export function removeSessionTodoWindows(params: {
 		const root = getWorkspace(params.workspaceId).worktreePath;
 		removeSessionBaselines(root, params.sessionId);
 		removeSessionReviews(root, params.sessionId);
+		removeSessionUserNotes(root, params.sessionId);
 	});
 }
 
@@ -237,6 +254,24 @@ export function updateTodo(params: {
 	});
 }
 
+export function addTodoNote(params: {
+	workspaceId: string;
+	sessionId: string;
+	id: string;
+	note: string;
+}): Promise<{ ok: true }> {
+	return enqueueTodoMutation(params.workspaceId, () => {
+		const note = params.note?.trim();
+		if (!note) throw new Error("A note is required.");
+		const root = getWorkspace(params.workspaceId).worktreePath;
+		const item = new TodoStore(root, params.sessionId).get(params.id);
+		if (!item) throw new Error(`No TODO with id "${params.id}".`);
+		addUserNoteToStore(root, params.sessionId, params.id, note);
+		publishTodoChanged(params.workspaceId, params.sessionId);
+		return { ok: true } as const;
+	});
+}
+
 export function removeTodo(
 	params: {
 		workspaceId: string;
@@ -258,6 +293,7 @@ export function removeTodo(
 		dropItemBaseline(root, params.sessionId, params.id);
 		dropReviewRecord(root, params.sessionId, params.id);
 		clearAutoCycles(root, params.sessionId, params.id);
+		dropItemUserNotes(root, params.sessionId, params.id);
 		publishTodoChanged(params.workspaceId, params.sessionId);
 		return { ok: true } as const;
 	});

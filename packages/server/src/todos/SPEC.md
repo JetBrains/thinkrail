@@ -42,7 +42,15 @@ at the plan's tail and hydration re-reads the same order deterministically. Beca
 queue — no second engine. When the agent starts a task (`todo_update` → `in_progress`) it leaves the
 eligible set with no extra state and can never re-enter reordering.
 
-**Host mutations broadcast.** `addTodo`/`updateTodo`/`removeTodo`/`reorderTodos` publish
+**User notes (`userNotes.ts`) — the user's annotation surface.** The Work card's "Add note" lets users
+attach notes to any item. Notes are **host-owned**, stored in a session-scoped sidecar
+(`.thinkrail/context/todos/<sessionId>.userNotes.json`, same lifecycle as baselines/reviews) — an agent
+re-plan can never drop user notes. `addTodoNote` appends to the item's note array and broadcasts
+`todo.changed`; `removeTodo` drops the item's notes; `removeSessionTodoWindows` removes the whole sidecar.
+`listTodos` decorates each wire item with its `userNotes` (empty = omitted). The notes array is
+append-only — no delete or edit surface exists yet.
+
+**Host mutations broadcast.** `addTodo`/`updateTodo`/`removeTodo`/`reorderTodos`/`addTodoNote` publish
 **`todo.changed`** `{workspaceId, sessionId}` through the `setTodoPublisher` seam (the
 `setReviewPublisher` pattern) — a refetch SIGNAL, never a payload of truth: every client re-reads
 `todo.list`, so a second viewer converges without witnessing the mutation live (hydrate-then-stream
@@ -242,6 +250,7 @@ it resolves immediately when nothing is in flight, and never rejects.
   `session.list` handler attaches for client history/status presentation; a session with no todo file counts
   0),
   `addTodo(...) → TodoItem` (validates a non-empty title; tags `origin: "user"`),
+  `addTodoNote(...) → { ok:true }` (appends a user note to an item; validates non-empty note + existing item),
   `updateTodo(...) → TodoItem` (throws on unknown id → a `{ ok:false }` WS response),
   `removeTodo(...) → Promise<{ ok:true }>` (idempotent; enqueued on the per-workspace reconcile chain —
   see the sidecar-writer serialization above — as is `removeSessionTodoWindows`;
