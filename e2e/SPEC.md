@@ -35,6 +35,20 @@ system `caffeinate` executable with idle-system-sleep scope and the owning runne
 available and abrupt owner exit releases it. A private inherited owner marker makes composed full-run phases
 reuse the parent's assertion rather than multiplying helper processes. Other operating systems are a no-op,
 and a macOS host that cannot establish the assertion fails before spending test time.
+
+Every completed, non-list public browser run appends one compact versioned timing record to the worktree's
+gitignored `e2e/.run-timings.jsonl`; `THINKRAIL_E2E_TIMING_FILE` redirects that local evidence. Timing
+begins in the shared preload before the macOS assertion, so assertion failures are recorded and successful
+totals include that startup. The five modes are `no-agent`, `agent`, `full`, `binary`, and `desktop`. A record
+carries its raw and effective
+selection, UTC start, monotonic total/build/shard-or-phase durations, outcome, and exit code; inapplicable
+measurements are absent rather than zero. Managed interrupted runs finish their timing only after the
+existing bounded descendant cleanup drains. A full run records its own phase timings and gives each selected
+child phase its run id as lineage, so both the whole gate and its source can be analysed without counting
+internal Playwright list preflights as runs. Parallel shard durations overlap and therefore do not sum to the
+parent wall time. Timing writes are best-effort local diagnostics, never product analytics: inability to
+append warns but cannot change the test result, and abrupt process death may leave no final record.
+
 Direct no-agent use of the Playwright config remains self-contained and builds the web app when the shard
 runner has not already done so. Real-Central execution enters through the public `e2e:agent` or `e2e:full`
 runner; direct Central-mode test execution is rejected (while `--list` remains available), because the public

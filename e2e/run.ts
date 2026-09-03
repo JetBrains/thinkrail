@@ -9,7 +9,14 @@ import {
 	processRunnerInterruption,
 	runE2eProcess,
 	signalExitCode,
+	waitForE2eProcessDrain,
 } from "./processRunner";
+import {
+	E2E_TIMING_PARENT_RUN_ID_ENV,
+	type E2eRunTiming,
+	isPlaywrightListRun,
+	startE2eRunTiming,
+} from "./runTiming";
 import { parseRunnerArgs, resolveShardCount } from "./shardPlan";
 
 const rootDir = E2E_ROOT_DIR;
@@ -33,6 +40,7 @@ function childEnv(): NodeJS.ProcessEnv {
 	delete env.PLAYWRIGHT_BLOB_OUTPUT_FILE;
 	delete env[REAL_CENTRAL_E2E_ENV];
 	delete env[PARENT_SIGNAL_OWNER_ENV];
+	delete env[E2E_TIMING_PARENT_RUN_ID_ENV];
 	return env;
 }
 
@@ -65,12 +73,16 @@ function mergeLastRunFiles(reportDir: string, shardCount: number, failed: boolea
 	writeFileSync(join(outputDir, ".last-run.json"), `${JSON.stringify(lastRun, null, 2)}\n`);
 }
 
-async function runSerial(playwrightArgs: string[]): Promise<number> {
+async function runSerial(playwrightArgs: string[], timing: E2eRunTiming): Promise<number> {
 	console.log("E2E: running serially (one host, one worker)");
-	return run(playwrightCommand(playwrightArgs), childEnv());
+	return timing.timeShard(1, 1, () => run(playwrightCommand(playwrightArgs), childEnv()));
 }
 
-async function runShards(shardCount: number, playwrightArgs: string[]): Promise<number> {
+async function runShards(
+	shardCount: number,
+	playwrightArgs: string[],
+	timing: E2eRunTiming,
+): Promise<number> {
 	const startedAt = performance.now();
 	const reportDir = mkdtempSync(join(tmpdir(), "thinkrail-e2e-blobs-"));
 	const children: Promise<number>[] = [];
@@ -93,14 +105,16 @@ async function runShards(shardCount: number, playwrightArgs: string[]): Promise<
 		]);
 		const shardStartedAt = performance.now();
 		children.push(
-			runE2eProcess(command, { env }).then(({ exitCode }) => {
-				console.log(
-					`E2E: shard ${shard}/${shardCount} ${
-						exitCode === 0 ? "passed" : `failed (${exitCode})`
-					} in ${elapsed(shardStartedAt)}`,
-				);
-				return exitCode;
-			}),
+			timing
+				.timeShard(shard, shardCount, () => runE2eProcess(command, { env }))
+				.then(({ exitCode }) => {
+					console.log(
+						`E2E: shard ${shard}/${shardCount} ${
+							exitCode === 0 ? "passed" : `failed (${exitCode})`
+						} in ${elapsed(shardStartedAt)}`,
+					);
+					return exitCode;
+				}),
 		);
 	}
 
@@ -114,14 +128,9 @@ async function runShards(shardCount: number, playwrightArgs: string[]): Promise<
 	let mergeCode = 1;
 	if (reports.length > 0) {
 		const reporters = process.env.CI ? "github,html" : "dot";
-		mergeCode = await run([
-			bun,
-			"x",
-			"playwright",
-			"merge-reports",
-			`--reporter=${reporters}`,
-			reportDir,
-		]);
+		mergeCode = await timing.timePhase("report-merge", () =>
+			run([bun, "x", "playwright", "merge-reports", `--reporter=${reporters}`, reportDir]),
+		);
 	} else {
 		console.error(`E2E: no shard reports were produced; temporary output retained at ${reportDir}`);
 	}
@@ -138,30 +147,39 @@ async function runShards(shardCount: number, playwrightArgs: string[]): Promise<
 	return failed ? 1 : 0;
 }
 
-async function main(): Promise<number> {
+async function main(rawArgs: string[], timing: E2eRunTiming): Promise<number> {
 	await holdE2eIdleSleep();
-	const { playwrightArgs, shardOverride } = parseRunnerArgs(process.argv.slice(2));
+	const { playwrightArgs, shardOverride } = parseRunnerArgs(rawArgs);
 	const shardCount = resolveShardCount({
 		shardOverride,
 		envValue: process.env.THINKRAIL_E2E_SHARDS,
 		availableCpuCount: availableParallelism(),
 		hasPlaywrightArgs: playwrightArgs.length > 0,
 	});
+	timing.setSelection({ playwrightArgs, shardCount });
 
-	if (!playwrightArgs.includes("--list") && process.env.THINKRAIL_E2E_SKIP_BUILD !== "1") {
+	if (!isPlaywrightListRun(playwrightArgs) && process.env.THINKRAIL_E2E_SKIP_BUILD !== "1") {
 		const buildStartedAt = performance.now();
 		console.log("E2E: building web once before host startup");
-		const buildCode = await run([bun, "run", "build:web"]);
+		const buildCode = await timing.timeBuild(() => run([bun, "run", "build:web"]));
 		if (buildCode !== 0) return buildCode;
 		console.log(`E2E: web build ready in ${elapsed(buildStartedAt)}`);
 	}
 
-	return shardCount === 1 ? runSerial(playwrightArgs) : runShards(shardCount, playwrightArgs);
+	return shardCount === 1
+		? runSerial(playwrightArgs, timing)
+		: runShards(shardCount, playwrightArgs, timing);
 }
 
+const rawArgs = process.argv.slice(2);
+const timing = startE2eRunTiming("no-agent", rawArgs);
+let exitCode = 1;
 try {
-	process.exitCode = await main();
+	exitCode = await main(rawArgs, timing);
 } catch (error) {
 	console.error(error instanceof Error ? error.message : error);
-	process.exitCode = 1;
 }
+const interruption = processRunnerInterruption();
+if (interruption) await waitForE2eProcessDrain();
+timing.finish(exitCode, { interrupted: interruption !== null });
+process.exitCode = exitCode;

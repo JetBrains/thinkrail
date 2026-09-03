@@ -166,7 +166,10 @@ HOME, pi-agent dir, fixture repo, and control files; reports merge into one resu
 paths derive in `e2e/fixtures/paths.ts`, never touch `~/.thinkrail`, and parallel runs from different
 worktrees never collide. Two complete invocations in the same worktree remain sequential. Every public
 browser E2E runner holds one macOS idle-system-sleep assertion for its lifetime while still allowing display
-sleep; composed full-run phases inherit the parent's assertion. Focused
+sleep; composed full-run phases inherit the parent's assertion. Completed non-list runs append versioned,
+local-only timing records to gitignored `e2e/.run-timings.jsonl` (redirectable with
+`THINKRAIL_E2E_TIMING_FILE`); full-run child records carry their parent run id, and timing I/O never changes
+the gate result. This is diagnostic evidence, not product analytics. Focused
 `e2e:full` runs preflight both modes and skips a mode with no selected tests; selecting nothing fails, while
 an argument-free run and `--list` retain both phases. Cancellation in the no-agent, agent, and full runners
 signals their complete child trees (POSIX snapshot; Windows tree-aware termination), then force-kills

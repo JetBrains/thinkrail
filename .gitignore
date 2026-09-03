@@ -9,7 +9,8 @@ playwright-report/
 blob-report/
 playwright/.cache/
 e2e/screenshots/
-# Workflow-test run log — local evidence, deliberately not a committed record (see e2e/workflows/SPEC.md).
+# Local test-run evidence, deliberately not committed (see e2e/SPEC.md and e2e/workflows/SPEC.md).
+e2e/.run-timings.jsonl
 e2e/.workflow-runs.jsonl
 
 docs/*

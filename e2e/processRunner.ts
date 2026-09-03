@@ -40,6 +40,7 @@ interface ActiveProcess {
 }
 
 const activeProcesses = new Set<ActiveProcess>();
+const processDrainWaiters = new Set<() => void>();
 let interruptedBy: NodeJS.Signals | null = null;
 let listening = false;
 
@@ -49,6 +50,11 @@ export function signalExitCode(signal: NodeJS.Signals): number {
 
 export function processRunnerInterruption(): NodeJS.Signals | null {
 	return interruptedBy;
+}
+
+export async function waitForE2eProcessDrain(): Promise<void> {
+	if (activeProcesses.size === 0) return;
+	await new Promise<void>((resolve) => processDrainWaiters.add(resolve));
 }
 
 function readPosixProcessSnapshot(): PosixProcessSnapshot[] {
@@ -208,6 +214,10 @@ function finishActiveProcess(active: ActiveProcess): void {
 	active.forceTimer = null;
 	activeProcesses.delete(active);
 	stopListeningWhenIdle();
+	if (activeProcesses.size === 0) {
+		for (const resolve of processDrainWaiters) resolve();
+		processDrainWaiters.clear();
+	}
 }
 
 function forceActiveProcess(active: ActiveProcess): void {

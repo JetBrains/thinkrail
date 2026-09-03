@@ -7,6 +7,7 @@ import {
 import { REAL_CENTRAL_E2E_ENV } from "./fixtures/centralAgent";
 import {
 	countSelectedPlaywrightTests,
+	createPlaywrightListArgs,
 	type FullRunPhase,
 	selectFocusedFullRunPhases,
 } from "./fullRunPlan";
@@ -16,7 +17,14 @@ import {
 	processRunnerInterruption,
 	runE2eProcess,
 	signalExitCode,
+	waitForE2eProcessDrain,
 } from "./processRunner";
+import {
+	type E2eRunTiming,
+	isPlaywrightListRun,
+	startE2eRunTiming,
+	withE2eTimingParent,
+} from "./runTiming";
 
 const bun = process.execPath;
 
@@ -33,8 +41,12 @@ function agentEnv(): NodeJS.ProcessEnv {
 	return createAgentRunPlan(bun, ["--list"], process.env).env;
 }
 
-function phaseRunnerEnv(phase: FullRunPhase, webBuildReady: boolean): NodeJS.ProcessEnv {
-	const env = phase === "agent" ? agentEnv() : noAgentEnv();
+function phaseRunnerEnv(
+	phase: FullRunPhase,
+	webBuildReady: boolean,
+	parentRunId: string,
+): NodeJS.ProcessEnv {
+	const env = withE2eTimingParent(phase === "agent" ? agentEnv() : noAgentEnv(), parentRunId);
 	env[PARENT_SIGNAL_OWNER_ENV] = "1";
 	if (phase === "agent" && webBuildReady) env[WEB_BUILD_READY_ENV] = "1";
 	return env;
@@ -42,7 +54,7 @@ function phaseRunnerEnv(phase: FullRunPhase, webBuildReady: boolean): NodeJS.Pro
 
 async function countSelectedTests(phase: FullRunPhase, args: readonly string[]): Promise<number> {
 	const result = await runE2eProcess(
-		[bun, "x", "playwright", "test", ...args, "--list", "--reporter=json", "--workers=1"],
+		[bun, "x", "playwright", "test", ...createPlaywrightListArgs(args)],
 		{ env: phase === "agent" ? agentEnv() : noAgentEnv(), stdout: "pipe" },
 	);
 	const count = countSelectedPlaywrightTests(result.stdout);
@@ -56,45 +68,52 @@ async function runPhase(
 	phase: FullRunPhase,
 	args: readonly string[],
 	webBuildReady: boolean,
+	timing: E2eRunTiming,
 ): Promise<number> {
 	const runner = phase === "agent" ? "run-agent.ts" : "run.ts";
 	return (
-		await runE2eProcess([bun, join("e2e", runner), ...args], {
-			env: phaseRunnerEnv(phase, webBuildReady),
-		})
+		await timing.timePhase(phase, () =>
+			runE2eProcess([bun, "--preload", "./e2e/idleSleepPreload.ts", join("e2e", runner), ...args], {
+				env: phaseRunnerEnv(phase, webBuildReady, timing.runId),
+			}),
+		)
 	).exitCode;
 }
 
-async function main(): Promise<number> {
+async function main(args: string[], timing: E2eRunTiming): Promise<number> {
 	await holdE2eIdleSleep();
-	const args = process.argv.slice(2);
-	const listOnly = args.includes("--list");
+	const listOnly = isPlaywrightListRun(args);
 	let phases: FullRunPhase[] = ["no-agent", "agent"];
 	if (args.length > 0 && !listOnly) {
 		const noAgentTests = await countSelectedTests("no-agent", args);
 		const agentTests = await countSelectedTests("agent", args);
 		phases = selectFocusedFullRunPhases(noAgentTests, agentTests);
 	}
+	timing.setSelection({ playwrightArgs: args, phases });
 	let webBuildReady = false;
 	if (!listOnly) {
-		const { exitCode } = await runE2eProcess([bun, "run", "build:web"]);
+		const { exitCode } = await timing.timeBuild(() => runE2eProcess([bun, "run", "build:web"]));
 		if (exitCode !== 0) return exitCode;
 		webBuildReady = true;
 	}
 	for (const phase of phases) {
-		const exitCode = await runPhase(phase, args, webBuildReady);
+		const exitCode = await runPhase(phase, args, webBuildReady, timing);
 		if (exitCode !== 0) return exitCode;
 	}
 	return 0;
 }
 
+const args = process.argv.slice(2);
+const timing = startE2eRunTiming("full", args);
+let exitCode = 1;
 try {
-	process.exitCode = await main();
+	exitCode = await main(args, timing);
 } catch (error) {
 	const interruption = processRunnerInterruption();
-	if (interruption) process.exitCode = signalExitCode(interruption);
-	else {
-		console.error(error instanceof Error ? error.message : error);
-		process.exitCode = 1;
-	}
+	if (interruption) exitCode = signalExitCode(interruption);
+	else console.error(error instanceof Error ? error.message : error);
 }
+const interruption = processRunnerInterruption();
+if (interruption) await waitForE2eProcessDrain();
+timing.finish(exitCode, { interrupted: interruption !== null });
+process.exitCode = exitCode;

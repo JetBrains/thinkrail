@@ -168,7 +168,8 @@ bun run e2e:agent                                   # only @agent; remains seria
 ```
 
 On macOS, every public browser E2E command prevents idle system sleep while its runner is alive; the
-display may still sleep normally.
+display may still sleep normally. Completed runs append local timing evidence to the gitignored
+`e2e/.run-timings.jsonl`; set `THINKRAIL_E2E_TIMING_FILE` to redirect it, or delete it at any time.
 
 ## Specification-driven development
 

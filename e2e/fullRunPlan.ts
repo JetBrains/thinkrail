@@ -1,5 +1,7 @@
 export type FullRunPhase = "no-agent" | "agent";
 
+const forcedListArgs = ["--list", "--reporter=json", "--workers=1"];
+
 type JsonRecord = Record<string, unknown>;
 
 function record(value: unknown): JsonRecord | null {
@@ -20,6 +22,13 @@ function countSuiteTests(value: unknown): number {
 		for (const child of suite.suites) count += countSuiteTests(child);
 	}
 	return count;
+}
+
+export function createPlaywrightListArgs(args: readonly string[]): string[] {
+	const separator = args.indexOf("--");
+	const options = separator === -1 ? args : args.slice(0, separator);
+	const positionals = separator === -1 ? [] : args.slice(separator);
+	return [...forcedListArgs, ...options, "--reporter=json", "--workers=1", ...positionals];
 }
 
 export function countSelectedPlaywrightTests(output: string): number {

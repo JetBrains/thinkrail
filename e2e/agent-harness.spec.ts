@@ -31,8 +31,13 @@ import {
 	writeE2eAgentSettings,
 } from "./fixtures/centralAgent";
 import { resolveBunExecutable } from "./fixtures/executables";
-import { countSelectedPlaywrightTests, selectFocusedFullRunPhases } from "./fullRunPlan";
+import {
+	countSelectedPlaywrightTests,
+	createPlaywrightListArgs,
+	selectFocusedFullRunPhases,
+} from "./fullRunPlan";
 import { signalExitCode } from "./processRunner";
+import { E2E_TIMING_FILE_ENV, E2E_TIMING_PARENT_RUN_ID_ENV } from "./runTiming";
 
 function temporaryDirectory(): string {
 	return mkdtempSync(join(tmpdir(), "thinkrail-agent-harness-"));
@@ -133,6 +138,12 @@ test("Central Playwright execution requires the public runner authorization and 
 	const plan = createAgentRunPlan("bun", [], centralEnv);
 	expect(() => assertCentralPlaywrightRunner(plan.env, [])).not.toThrow();
 	expect(() => assertCentralPlaywrightRunner(centralEnv, ["--list"])).not.toThrow();
+	expect(() => assertCentralPlaywrightRunner(centralEnv, ["--output", "--list"])).toThrow(
+		/e2e:agent.*e2e:full/,
+	);
+	expect(() => assertCentralPlaywrightRunner(centralEnv, ["--", "--list"])).toThrow(
+		/e2e:agent.*e2e:full/,
+	);
 	expect(() => assertCentralPlaywrightRunner({}, [])).not.toThrow();
 });
 
@@ -147,6 +158,8 @@ test("agent run plan ignores ambient skip, trusts only internal build readiness,
 		THINKRAIL_E2E_SKIP_BUILD: "1",
 		THINKRAIL_E2E_LANE: "4",
 		PLAYWRIGHT_BLOB_OUTPUT_FILE: "/tmp/report.zip",
+		[E2E_TIMING_FILE_ENV]: "/tmp/e2e-timings.jsonl",
+		[E2E_TIMING_PARENT_RUN_ID_ENV]: "full-run",
 	};
 	const plan = createAgentRunPlan("/developer/bin/bun", ["e2e/agent.live.spec.ts"], sourceEnv);
 	expect(plan.buildCommand).toEqual(["/developer/bin/bun", "run", "build:web"]);
@@ -169,6 +182,9 @@ test("agent run plan ignores ambient skip, trusts only internal build readiness,
 	expect(plan.env[REAL_CENTRAL_E2E_ENV]).toBe("1");
 	expect(plan.env.THINKRAIL_E2E_LANE).toBeUndefined();
 	expect(plan.env.PLAYWRIGHT_BLOB_OUTPUT_FILE).toBeUndefined();
+	expect(plan.env[E2E_TIMING_FILE_ENV]).toBe("/tmp/e2e-timings.jsonl");
+	expect(plan.env[E2E_TIMING_PARENT_RUN_ID_ENV]).toBeUndefined();
+	expect(sourceEnv[E2E_TIMING_PARENT_RUN_ID_ENV]).toBe("full-run");
 	expect(plan.env[WEB_BUILD_READY_ENV]).toBeUndefined();
 	expect(isRealCentralE2e(plan.env)).toBe(true);
 	expect(
@@ -177,6 +193,34 @@ test("agent run plan ignores ambient skip, trusts only internal build readiness,
 		}).buildCommand,
 	).toBeNull();
 	expect(createAgentRunPlan("bun", ["--list"], sourceEnv).buildCommand).toBeNull();
+});
+
+test("focused full-run preflights force list and reporter options before separators", () => {
+	expect(createPlaywrightListArgs(["e2e/host.spec.ts"])).toEqual([
+		"--list",
+		"--reporter=json",
+		"--workers=1",
+		"e2e/host.spec.ts",
+		"--reporter=json",
+		"--workers=1",
+	]);
+	expect(createPlaywrightListArgs(["--output"])).toEqual([
+		"--list",
+		"--reporter=json",
+		"--workers=1",
+		"--output",
+		"--reporter=json",
+		"--workers=1",
+	]);
+	expect(createPlaywrightListArgs(["--", "--list"])).toEqual([
+		"--list",
+		"--reporter=json",
+		"--workers=1",
+		"--reporter=json",
+		"--workers=1",
+		"--",
+		"--list",
+	]);
 });
 
 test("focused full-run planning skips empty phases and rejects an empty selection", () => {
@@ -236,9 +280,10 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 		const root = temporaryDirectory();
 		const statePath = join(root, `signal-tree-${signal}.json`);
 		const cleanupPath = join(root, `signal-tree-${signal}.cleaned`);
+		const timingPath = join(root, `signal-tree-${signal}.jsonl`);
 		const runner = spawn(
 			resolveBunExecutable(),
-			["e2e/fixtures/nested-signal-runner.ts", statePath, cleanupPath],
+			["e2e/fixtures/nested-signal-runner.ts", statePath, cleanupPath, timingPath],
 			{
 				cwd: fileURLToPath(new URL("..", import.meta.url)),
 				stdio: "ignore",
@@ -265,6 +310,9 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 			expect(processExists(runningState.grandchild)).toBe(true);
 			expect(await exited).toBe(signalExitCode(signal));
 			expect(Date.now() - startedAt).toBeLessThan(3_000);
+			const timing = JSON.parse(readFileSync(timingPath, "utf8"));
+			expect(timing).toMatchObject({ outcome: "interrupted", exitCode: signalExitCode(signal) });
+			expect(timing.durationMs).toBeGreaterThanOrEqual(450);
 			await expect
 				.poll(
 					() =>
