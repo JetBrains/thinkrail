@@ -12,7 +12,7 @@ import {
 	type WheelEventHandler,
 } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
-import type { ChatMessageOrder } from "./messageOrder";
+import type { ChatMessageOrder, StreamingResponseMovement } from "./chatPreferences";
 import {
 	createReadingBandController,
 	headerHeightScrollTarget,
@@ -55,7 +55,11 @@ export interface ChatScroll {
 	scrollToLatest: () => void;
 	armImmediateTurn: () => void;
 	releaseFollow: () => void;
-	revealElement: (target: HTMLElement, block?: RevealBlock) => void;
+	revealElement: (
+		target: HTMLElement,
+		block?: RevealBlock,
+		runway?: "preserve" | "release",
+	) => void;
 	runwayActive: boolean;
 	followState: "following" | "detached";
 	containerProps: ScrollContainerProps;
@@ -96,6 +100,7 @@ export function useChatScroll(
 	messageOrder: ChatMessageOrder,
 	latestUserRow: RowLocation | null,
 	latestRow: RowLocation | null,
+	movement: StreamingResponseMovement,
 ): ChatScroll {
 	const edge = latestEdge(messageOrder);
 	const scrollerRef = useRef<HTMLElement | null>(null);
@@ -103,6 +108,7 @@ export function useChatScroll(
 	const edgeRef = useRef<HTMLDivElement | null>(null);
 	const runwayEdgeElementRef = useRef<HTMLDivElement | null>(null);
 	const runwayElementRef = useRef<HTMLDivElement | null>(null);
+	const runwayHeightRef = useRef(0);
 	const measuredHeaderHeight = useRef(0);
 	const headerAnchorScrollTop = useRef(0);
 	const latestEdgeRef = useRef(edge);
@@ -177,6 +183,7 @@ export function useChatScroll(
 					}
 				},
 				writeRunwayHeight: (height) => {
+					runwayHeightRef.current = height;
 					const runway = runwayElementRef.current;
 					if (runway) runway.style.height = `${height}px`;
 				},
@@ -194,7 +201,7 @@ export function useChatScroll(
 				cancelFrame: (id) => cancelAnimationFrame(id),
 				onStateChange: setSnapshot,
 			},
-			{ streaming: isStreaming, latestEdge: edge },
+			{ streaming: isStreaming, latestEdge: edge, movement },
 		),
 	);
 
@@ -251,6 +258,10 @@ export function useChatScroll(
 	useLayoutEffect(() => {
 		controller.setStreaming(isStreaming);
 	}, [controller, isStreaming]);
+
+	useLayoutEffect(() => {
+		controller.setMovement(movement);
+	}, [controller, movement]);
 
 	useLayoutEffect(() => {
 		const row = latestUserRow;
@@ -401,9 +412,15 @@ export function useChatScroll(
 		setRunwayEdgeElement(element);
 	}, []);
 
-	const runwayRef = useCallback<RefCallback<HTMLDivElement>>((element) => {
-		runwayElementRef.current = element;
-	}, []);
+	const runwayRef = useCallback<RefCallback<HTMLDivElement>>(
+		(element) => {
+			runwayElementRef.current = element;
+			if (!element) return;
+			element.style.height = `${runwayHeightRef.current}px`;
+			controller.contentChanged();
+		},
+		[controller],
+	);
 
 	const armImmediateTurn = useCallback(() => {
 		clearReturnIntent();
@@ -412,11 +429,12 @@ export function useChatScroll(
 	}, [clearReturnIntent, controller]);
 
 	const revealElement = useCallback(
-		(target: HTMLElement, block: RevealBlock = "nearest") => {
+		(target: HTMLElement, block: RevealBlock = "nearest", runway = "preserve") => {
 			const scroller = scrollerRef.current;
 			if (!scroller?.contains(target)) return;
 			clearReturnIntent();
 			controller.cancelMovement();
+			if (runway === "release") controller.releaseRunway(false);
 			const viewportRect = scroller.getBoundingClientRect();
 			const targetRect = target.getBoundingClientRect();
 			scroller.scrollTop = revealScrollTop(
@@ -537,6 +555,10 @@ export function useChatScroll(
 	const onWheel = useCallback<WheelEventHandler>(
 		(event) => {
 			if (event.deltaY === 0) return;
+			if (controller.getSnapshot().following) {
+				readerLeft();
+				return;
+			}
 			const movesTowardLatest = edge === "bottom" ? event.deltaY > 0 : event.deltaY < 0;
 			if (!movesTowardLatest) {
 				readerLeft();
@@ -568,6 +590,10 @@ export function useChatScroll(
 				(event.key === " " && !event.shiftKey);
 			const movesTowardLatest = edge === "top" ? movesTowardTop : movesTowardBottom;
 			const movesTowardHistory = edge === "top" ? movesTowardBottom : movesTowardTop;
+			if (controller.getSnapshot().following && (movesTowardLatest || movesTowardHistory)) {
+				readerLeft();
+				return;
+			}
 			if (movesTowardHistory) {
 				readerLeft();
 				return;

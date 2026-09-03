@@ -56,7 +56,11 @@ let runtime: ModelRuntime;
 let parent: AgentSession;
 let parentCwd: string;
 let service: DelegationService;
+let bgRunnerPath: string;
 const liveParents = new Map<string, AgentSession>();
+
+const BG_RUNNER_DEFINITION =
+	"---\nname: bg-runner\ndescription: Background test runner\nmodel: fauxb\n---\n\nRun the delegated task.\n";
 
 function fauxConfig(core: typeof fauxA, id: string): ProviderConfig {
 	return {
@@ -91,10 +95,8 @@ beforeAll(async () => {
 	process.env.PI_OFFLINE = "1";
 
 	mkdirSync(join(agentDir, "agents"), { recursive: true });
-	writeFileSync(
-		join(agentDir, "agents", "bg-runner.md"),
-		"---\nname: bg-runner\ndescription: Background test runner\nmodel: fauxb\n---\n\nRun the delegated task.\n",
-	);
+	bgRunnerPath = join(agentDir, "agents", "bg-runner.md");
+	writeFileSync(bgRunnerPath, BG_RUNNER_DEFINITION);
 	writeFileSync(
 		join(agentDir, "agents", "capped.md"),
 		"---\nname: capped\ndescription: Turn-capped test agent\ntools: read, ls\nmax_turns: 1\n---\n\nWork until stopped.\n",
@@ -240,6 +242,78 @@ test("foreground: one Agent call runs a builtin scout and returns its report to 
 	await service.disposeChildrenOf(parent.sessionId);
 });
 
+test("a per-call model runs an unpinned agent on a different model than the parent", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", {
+				subagent_type: "scout",
+				task: "Use the requested model.",
+				model: "fauxb/fauxb",
+			}),
+		),
+		fauxAssistantMessage("PARENT_USED_CALL_MODEL"),
+	]);
+	fauxB.setResponses([fauxAssistantMessage("CALL_MODEL_CHILD_OK")]);
+
+	await parent.prompt("Delegate on fauxb.");
+
+	expect(transcript()).toContain("CALL_MODEL_CHILD_OK");
+	expect(transcript()).toContain("PARENT_USED_CALL_MODEL");
+	const child = service.childrenOf(parent.sessionId)[0];
+	expect(child?.snapshot?.details.model).toBe("fauxb/fauxb");
+	await service.disposeChildrenOf(parent.sessionId);
+});
+
+test("a definition-pinned model silently wins over the per-call model", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", {
+				subagent_type: "bg-runner",
+				task: "Keep the definition pin.",
+				model: "unobtanium",
+			}),
+		),
+		fauxAssistantMessage("PARENT_USED_PINNED_MODEL"),
+	]);
+	fauxB.setResponses([fauxAssistantMessage("PINNED_MODEL_CHILD_OK")]);
+
+	await parent.prompt("Delegate with a redundant model.");
+
+	expect(transcript()).toContain("PINNED_MODEL_CHILD_OK");
+	expect(transcript()).toContain("PARENT_USED_PINNED_MODEL");
+	const child = service.childrenOf(parent.sessionId)[0];
+	expect(child?.snapshot?.details.model).toBe("fauxb/fauxb");
+	await service.disposeChildrenOf(parent.sessionId);
+});
+
+test("a live definition edit refreshes advertised and effective model policy together", async () => {
+	try {
+		writeFileSync(bgRunnerPath, BG_RUNNER_DEFINITION.replace("model: fauxb", "model: fauxa"));
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "Use the refreshed definition pin.",
+					model: "unobtanium",
+				}),
+			),
+			fauxAssistantMessage("REFRESHED_PIN_CHILD_OK"),
+			fauxAssistantMessage("PARENT_USED_REFRESHED_PIN"),
+		]);
+
+		await parent.prompt("Delegate after the definition changes.");
+
+		expect(transcript()).toContain("REFRESHED_PIN_CHILD_OK");
+		expect(transcript()).toContain("PARENT_USED_REFRESHED_PIN");
+		expect(parent.getToolDefinition("Agent")?.description).toContain("model: pinned fauxa");
+		const child = service.childrenOf(parent.sessionId)[0];
+		expect(child?.snapshot?.details.model).toBe("fauxa/fauxa");
+	} finally {
+		writeFileSync(bgRunnerPath, BG_RUNNER_DEFINITION);
+		await service.disposeChildrenOf(parent.sessionId);
+	}
+});
+
 test("zero-config fallback mirrors a provider registered by another extension", async () => {
 	const extensionFaux = fauxCore("extension-faux");
 	const settingsManager = SettingsManager.inMemory({});
@@ -308,6 +382,8 @@ test("an unknown subagent_type surfaces as a tool error listing the available ty
 	const text = lastToolResultText();
 	expect(text).toContain('Unknown subagent type "nope"');
 	expect(text).toContain('"scout" (builtin)');
+	expect(text).toContain("model: call or parent");
+	expect(text).toContain("model: pinned fauxb");
 	expect(service.childrenOf(parent.sessionId)).toEqual([]);
 });
 

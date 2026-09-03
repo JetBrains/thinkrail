@@ -52,11 +52,13 @@ choice was settled: the decision log below.
 
 | Tool | Behavior |
 | --- | --- |
-| `Agent({ subagent_type, task, run_in_background? })` | Discovers definitions per call (editable mid-session), maps the named one to `SessionOptions`, spawns via `createChild` + `runQueued`. Foreground: awaits the outcome and rides the tool signal; `error` outcomes throw (tool error, reason-first) — and the error tool result **still carries the run's final `details`**: pi replaces a thrown tool error's result with `{content, details: {}}`, so the extension stashes the outcome details by `toolCallId` before throwing and re-injects them via a `tool_result` hook override (the stash is swept on `turn_end` — after finalization — and on `session_shutdown`, so a turn aborted before tool finalization cannot strand entries); a failed run's card keeps its child session id and the transcript stays openable (PR #304 review finding). Background: **never rides the parent turn's abort signal** (a detached run survives a parent abort — core-spec semantics, test-pinned); returns `{childSessionId}` text immediately; the terminal event injects a `subagent-completion` custom message (`deliverAs: "followUp", triggerTurn: true`). Live `onUpdate` details flow to `partialResult` (REPLACE). Results bounded to 50k chars — the full text stays in the child transcript. |
+| `Agent({ subagent_type, task, model?, run_in_background? })` | Snapshots definitions before each parent model turn (editable mid-session), then maps the named one plus the optional invocation model to `SessionOptions` and spawns via `createChild` + `runQueued`; the description and execution closure use that same snapshot, so a mid-session edit cannot make advertised model policy disagree with execution. Model precedence is definition pin → invocation model → live parent; a definition pin silently wins over a supplied invocation value, and the available-agent description advertises each definition's pin or call/parent selection before use. Foreground: awaits the outcome and rides the tool signal; `error` outcomes throw (tool error, reason-first) — and the error tool result **still carries the run's final `details`**: pi replaces a thrown tool error's result with `{content, details: {}}`, so the extension stashes the outcome details by `toolCallId` before throwing and re-injects them via a `tool_result` hook override (the stash is swept on `turn_end` — after finalization — and on `session_shutdown`, so a turn aborted before tool finalization cannot strand entries); a failed run's card keeps its child session id and the transcript stays openable (PR #304 review finding). Background: **never rides the parent turn's abort signal** (a detached run survives a parent abort — core-spec semantics, test-pinned); returns `{childSessionId}` text immediately; the terminal event injects a `subagent-completion` custom message (`deliverAs: "followUp", triggerTurn: true`). Live `onUpdate` details flow to `partialResult` (REPLACE). Results bounded to 50k chars — the full text stays in the child transcript. |
 | `get_subagent_result({ session_id })` | **Lineage-checked**: a child whose `record.parentSessionId` is not the calling session takes the unknown-id error path — with a shared (workspace-scoped) service, one tab must not read or mark-collected another parent's child (PR #302 review finding). Reads the core registry via `findChild` + `collectResult`: terminal → final text + details through the **same reason-first, 50k-bounded shaping** as a foreground result (marks collected; an errored run reports its `errorMessage` first — core decision #24); running → status snapshot; unknown id → error naming the restart-loss case + the derived transcript path. |
 
-Both tools register inside `session_start` (emitted by `bindExtensions`), so the `Agent`
-description enumerates the definitions actually visible to that session.
+Both tools register inside `session_start` (emitted by `bindExtensions`). `Agent` additionally
+re-registers in `before_agent_start` for the first provider turn and at each `turn_end` for the next
+one; pi replaces the same-name tool immediately, so each turn receives one definition snapshot for
+both its description and execution while edits remain live without `/reload`.
 
 ## Definitions: discovery, precedence, trust
 
@@ -78,10 +80,12 @@ review and thread semantics stay outside this portable role.
 
 ## The mapping (policy, not mechanism)
 
-`toSpawnMapping`: definition → `SessionOptions` + `RunOptions.maxTurns`. Model refs fuzzy-resolve
-against the session's available models (`provider/id` → exact id → unique prefix; ambiguous or
-unknown pinned refs throw loud). Child system prompt = definition body → subagent bridge → env
-block (cwd, git branch, platform) — **stable material first** for KV-cache prefix reuse. The
+`toSpawnMapping`: definition + optional invocation model → `SessionOptions` + `RunOptions.maxTurns`.
+The effective reference follows definition pin → invocation model → parent inheritance, so only an
+unpinned definition can use a per-call model. Model refs fuzzy-resolve against the session's available
+models (`provider/id` → exact id → unique prefix; ambiguous or unknown effective refs throw loud).
+Child system prompt = definition body → subagent bridge → env block (cwd, git branch, platform) —
+**stable material first** for KV-cache prefix reuse. The
 recursion guard (`excludeTools: ["Agent", "get_subagent_result"]`) is unconditional.
 `extensions: true` passes through to the core's curated-set opt-in (core decision #25) — which
 extensions that set holds is the **embedder's** choice, never this package's.
@@ -144,3 +148,10 @@ commit/CI gate.
    project-aware (pi example, gotgenes-append); nicobailon's narrow model was chosen as the
    cleanest base for a multi-pattern system, with gotgenes' KV-cache prompt ordering (stable
    material first) adopted within our own layout.
+8. **Per-call models are an unpinned-definition fallback.** `Agent.model` lets the parent choose any
+   unambiguous model available in its retained runtime generation when the definition has no `model`.
+   A definition pin silently wins over a supplied call value (user-settled) rather than failing or
+   becoming overrideable; the tool's available-agent list exposes that pin so precedence is visible.
+   Definition discovery is snapshotted per parent model turn, preventing a live edit from splitting
+   the advertised pin from the execution closure. With neither source set, the core preserves
+   parent-model inheritance.

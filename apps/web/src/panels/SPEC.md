@@ -374,12 +374,17 @@ a project picker, the prompt hero, and the reused
   apply), a rejected update raising a toast; the picker never owns a theme list — it renders the catalog
   the glob discovered at build time); **`ChatSettings`** (the live section immediately after Appearance —
   **Message order** radio cards over `store.chatMessageOrder` (Oldest first, the compatibility default /
-  Newest first, the opt-in) followed by the three existing composer-growth cards. Message order applies
-  immediately and persists only in this client: browsers use the current host-qualified key, while a native
-  shell may inject its stable backend-profile/window adapter. Another browser, native window, or host is
-  unaffected; `chat/messageOrder` owns its closed ids and default. Composer growth remains a
-  top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection. Labels use
-  “message box” rather than the internal “composer” name when explaining where the user types); the
+  Newest first, the opt-in), one **Streaming response movement** two-handle range over
+  `store.streamingResponseMovement`, then the three existing composer-growth cards. The movement control's
+  copy is “Choose when the chat moves while an answer grows and where its newest edge lands”; one axis runs
+  Top → Message box, Settle is 25–90, Trigger is 35–100, both step by 5 with a 10-point minimum gap, and
+  the displayed default is 75%→100%. It exposes no runway/tail/lifecycle controls. Message order and
+  movement both apply immediately and persist only in this client through the chat preference seam:
+  browsers use current-host-qualified keys, while a native shell may inject its stable
+  backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
+  remains a top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection.
+  Labels use “message box” rather than the internal “composer” name when explaining where the user types);
+  the
   **shell-owned injected Layout
   section** (Balanced/Focus/Review
   plus named custom preset cards. Custom capture/rename/delete updates the host-synchronized catalog and

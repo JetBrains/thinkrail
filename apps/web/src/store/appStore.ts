@@ -37,8 +37,8 @@ import {
 import { create } from "zustand";
 import type { LoginState } from "../auth";
 import { assistantFailureText } from "../chat/assistantFailure";
+import type { ChatMessageOrder } from "../chat/chatPreferences";
 import type { HydratedRuntime } from "../chat/hydrate";
-import type { ChatMessageOrder } from "../chat/messageOrder";
 import type {
 	ChatAttachment,
 	ChatTurn,
@@ -74,6 +74,16 @@ import {
 	selectWorkspaceSessionIds,
 	selectWorkspaceTick,
 } from "./selectors";
+
+export interface StreamingResponseMovement {
+	settle: number;
+	trigger: number;
+}
+
+export const DEFAULT_STREAMING_RESPONSE_MOVEMENT: StreamingResponseMovement = {
+	settle: 75,
+	trigger: 100,
+};
 
 export interface FileTab {
 	kind: "file";
@@ -765,6 +775,7 @@ interface AppState {
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
 	chatMessageOrder: ChatMessageOrder;
+	streamingResponseMovement: StreamingResponseMovement;
 	reviewModel: WireModel | undefined;
 	reviewEffort: ThinkingLevel | undefined;
 	reviewAutoFix: boolean;
@@ -942,6 +953,8 @@ interface AppState {
 	showInterviewPrompt: () => void;
 	hideInterviewPrompt: () => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
+	setStreamingResponseMovement: (movement: StreamingResponseMovement) => void;
+	setChatPreferences: (order: ChatMessageOrder, movement: StreamingResponseMovement) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
 	requestChangesView: (workspaceId: string, path: string) => void;
@@ -1567,6 +1580,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	chatMessageOrder: "oldest-first",
+	streamingResponseMovement: { ...DEFAULT_STREAMING_RESPONSE_MOVEMENT },
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	reviewModel: DEFAULT_CONFIG.reviewModel,
 	reviewEffort: DEFAULT_CONFIG.reviewEffort,
@@ -2905,6 +2919,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) => (state.interviewPromptOpen ? state : { interviewPromptOpen: true })),
 	hideInterviewPrompt: () => set({ interviewPromptOpen: false }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
+	setStreamingResponseMovement: (streamingResponseMovement) => set({ streamingResponseMovement }),
+	setChatPreferences: (chatMessageOrder, streamingResponseMovement) =>
+		set({ chatMessageOrder, streamingResponseMovement }),
 	applyConfig: (config) => set(configPatch(config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>
