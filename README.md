@@ -17,15 +17,18 @@ spec-graph viewer, and multiple concurrent `pi` chat sessions — all scoped to 
 
 ## Install
 
-ThinkRail ships in two additive forms: an unsigned native desktop installer and the self-contained
-`thinkrail` CLI, which opens the same app in your browser. Both embed the same in-process agent host and
-are published with `SHA256SUMS` on the [releases page](https://github.com/JetBrains/thinkrail/releases).
+ThinkRail ships in two additive forms: a native desktop installer and the self-contained `thinkrail`
+CLI, which opens the same app in your browser. Both embed the same in-process agent host and are
+published with `SHA256SUMS` on the [releases page](https://github.com/JetBrains/thinkrail/releases).
+
+Windows artifacts are signed by JetBrains. macOS artifacts are signed but not yet notarized, so macOS
+may refuse a build downloaded through a browser; Linux artifacts are unsigned.
 
 ### Desktop
 
 Download the matching `thinkrail-desktop-*` asset: a DMG for macOS Apple Silicon, a setup ZIP for Windows
-x64, or a setup tarball for Linux x64/ARM64. These initial desktop builds are unsigned, so the operating
-system may ask you to confirm the first launch.
+x64, or a setup tarball for Linux x64/ARM64. The macOS DMG and the Linux tarballs are unsigned, so the
+operating system may ask you to confirm the first launch.
 
 Linux desktop builds require Ubuntu 24.04 or another glibc 2.38+ distribution with GTK 3, WebKitGTK 4.1,
 Ayatana AppIndicator 3, and librsvg 2. On Ubuntu 24.04:
