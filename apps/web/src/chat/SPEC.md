@@ -208,7 +208,7 @@ every group's top-level rows: `1,2,3 | 4,5,6 → 6,5,4 | 3,2,1`. Stable row ids 
 flashes, tool state, and history anchors do not fork. The projection never reaches inside one row: Markdown
 paragraphs/code, a tool card body, review-package comments, and an Activity row's own disclosure hierarchy
 retain their semantic order. Virtuoso and DOM traversal consume the projected rows; Pi turns, persistence,
-stream status, and every non-presentation derivation remain chronological. `messageOrder.ts` owns the
+stream status, and every non-presentation derivation remain chronological. `chatPreferences.ts` owns the
 closed preference and its oldest-first default, then hydrates the store before React mounts. Browser clients
 read/write a host-qualified localStorage key and synchronize that key across same-origin tabs; a native shell
 may inject the same narrow string-storage adapter under its stable backend-profile/window identity so a
@@ -370,7 +370,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `agent_settled`, never `agent_end`. An awaiting `ask_user_question` clears it before the card's existing
   start-aligned attention reveal. Reader takeover during a stream cancels movement, clears the room, and
   detaches; later agent output cannot move that reader. Takeover retains the established intent boundary:
-  pointer/touch interaction, movement toward history by wheel/scrollbar/keyboard, selection, interactive
+  pointer/touch interaction, any wheel/scrollbar/navigation-key movement, selection, interactive
   focus, message/history reveal, and a live user submit. **Follow response** derives enough room to place
   the active edge at Settle, makes that one move, and rearms the Trigger→Settle cycle. Geometry alone never
   rearms a detached reader. After settlement, **Latest** retains its physical-latest-edge meaning and bounded
@@ -969,7 +969,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
-  is `ChatView.tsx`, `messageOrder.ts` (the client-local persistence adapter), plus the hooks and dialogs
+  is `ChatView.tsx`, `chatPreferences.ts` (the client-local persistence adapter), plus the hooks and dialogs
   it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
   `useModelCatalog.ts`, **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical
   transcript reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`,

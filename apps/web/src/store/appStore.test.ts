@@ -146,6 +146,7 @@ beforeEach(() => {
 		settingsSection: "providers",
 		interviewPromptOpen: false,
 		chatMessageOrder: "oldest-first",
+		streamingResponseMovement: { settle: 75, trigger: 100 },
 		toasts: [],
 	});
 });
@@ -2957,11 +2958,17 @@ test("applyConfig projects the composer growth limit", () => {
 	expect(useAppStore.getState()).toHaveProperty("composerGrowthLimit", "roomy");
 });
 
-test("chat message order is browser-local and cannot be overwritten by host config", () => {
+test("chat presentation preferences are client-local and cannot be overwritten by host config", () => {
 	useAppStore.getState().setChatMessageOrder("newest-first");
-	const legacyConfig = { ...DEFAULT_CONFIG, chatMessageOrder: "oldest-first" };
+	useAppStore.getState().setStreamingResponseMovement({ settle: 60, trigger: 90 });
+	const legacyConfig = {
+		...DEFAULT_CONFIG,
+		chatMessageOrder: "oldest-first",
+		streamingResponseMovement: { settle: 75, trigger: 100 },
+	};
 	useAppStore.getState().applyConfig(legacyConfig);
 	expect(useAppStore.getState().chatMessageOrder).toBe("newest-first");
+	expect(useAppStore.getState().streamingResponseMovement).toEqual({ settle: 60, trigger: 90 });
 });
 
 test("diff tabs: openTab dedupes by id + activates; view + contents update in place", () => {

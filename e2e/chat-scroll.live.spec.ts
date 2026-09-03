@@ -10,7 +10,7 @@ async function openChatAndSend(
 	await page.getByTestId("chat-send").click();
 }
 
-test("the reading band retains its runway and yields to reader intent", {
+test("the reading band removes its temporary runway when the agent settles", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(120_000);
@@ -32,22 +32,12 @@ test("the reading band retains its runway and yields to reader intent", {
 	await expect(chatScroll).toHaveAttribute("data-streaming", "true");
 	await expect(chatScroll).toHaveAttribute("data-streaming", "false", { timeout: 90_000 });
 
-	const runway = page.getByTestId("chat-stream-runway");
-	await expect(runway).toBeVisible();
+	await expect(page.getByTestId("chat-stream-runway")).toHaveCount(0);
 	await expect(page.getByTestId("scroll-to-bottom")).toHaveCount(0);
 
 	await page.setViewportSize({ width: 390, height: 844 });
 	await expect(chatScroll).toBeVisible();
-	await expect
-		.poll(() =>
-			chatScroll.evaluate((root) => {
-				const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
-				const spacer = root.querySelector<HTMLElement>('[data-testid="chat-stream-runway"]');
-				if (!scroller || !spacer) return Number.POSITIVE_INFINITY;
-				return Math.abs(spacer.getBoundingClientRect().height - scroller.clientHeight * 0.42);
-			}),
-		)
-		.toBeLessThanOrEqual(2);
+	await expect(page.getByTestId("chat-stream-runway")).toHaveCount(0);
 
 	const scrollPoint = await chatScroll.evaluate((root) => {
 		const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");

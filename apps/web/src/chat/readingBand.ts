@@ -1,15 +1,16 @@
 const TURN_INSET_RATIO = 0.1;
 const TURN_INSET_MIN = 48;
 const TURN_INSET_MAX = 80;
-const RESPONSE_RUNWAY_RATIO = 0.6;
-const EDGE_TRIGGER_RATIO = 0.82;
-const EDGE_SETTLE_RATIO = 0.58;
-const TAIL_RUNWAY_RATIO = 1 - EDGE_SETTLE_RATIO;
 const ADVANCE_DURATION_MS = 220;
 const EDGE_PIN_MAX_FRAMES = 30;
 const GEOMETRY_EPSILON = 0.5;
 
 export type ReadingBandLatestEdge = "top" | "bottom";
+
+export interface ReadingBandMovement {
+	settle: number;
+	trigger: number;
+}
 
 export interface ReadingBandScrollBounds {
 	scrollTop: number;
@@ -53,7 +54,9 @@ export interface ReadingBandController {
 	readerLeft: () => void;
 	readerReachedEdge: () => void;
 	returnToEdge: () => void;
+	releaseRunway: (smooth?: boolean) => void;
 	setStreaming: (streaming: boolean) => void;
+	setMovement: (movement: ReadingBandMovement) => void;
 	reconstructActiveStream: () => void;
 	setLatestEdge: (edge: ReadingBandLatestEdge) => void;
 	dispose: () => void;
@@ -116,8 +119,17 @@ function runwayBottom(geometry: ReadingBandGeometry): number | null {
 
 export function createReadingBandController(
 	environment: ReadingBandEnvironment,
-	{ streaming, latestEdge = "bottom" }: { streaming: boolean; latestEdge?: ReadingBandLatestEdge },
+	{
+		streaming,
+		latestEdge = "bottom",
+		movement: initialMovement,
+	}: {
+		streaming: boolean;
+		latestEdge?: ReadingBandLatestEdge;
+		movement: ReadingBandMovement;
+	},
 ): ReadingBandController {
+	let movement = initialMovement;
 	let state: ReadingBandState = {
 		following: true,
 		moving: false,
@@ -125,15 +137,16 @@ export function createReadingBandController(
 		streaming,
 	};
 	let frame: number | null = null;
+	let runwayFrame: number | null = null;
 	let anchorFrame: number | null = null;
 	let edgePinFrame: number | null = null;
 	let activeStreamMount = streaming;
 	let reconstructed = false;
-	let runwayMode: "turn" | "floor" | null = null;
+	let runwayHeight = 0;
 	let runwayStartEdge: number | null = null;
-	let runwayHeight: number | null = null;
-	let runwayViewportHeight: number | null = null;
-	let pendingTurnRunway = false;
+	let runwayStartHeight = 0;
+	let pendingSettleReturn = false;
+	let runwaySuppressed = false;
 
 	const publish = (patch: Partial<ReadingBandState>) => {
 		const next = { ...state, ...patch };
@@ -155,6 +168,11 @@ export function createReadingBandController(
 		if (state.moving) publish({ moving: false });
 	};
 
+	const cancelRunwayMotion = () => {
+		if (runwayFrame !== null) environment.cancelFrame(runwayFrame);
+		runwayFrame = null;
+	};
+
 	const cancelAnchor = () => {
 		if (anchorFrame !== null) environment.cancelFrame(anchorFrame);
 		anchorFrame = null;
@@ -165,44 +183,58 @@ export function createReadingBandController(
 		edgePinFrame = null;
 	};
 
+	const resetRunwayTracking = () => {
+		runwayStartEdge = null;
+		runwayStartHeight = 0;
+	};
+
 	const writeRunwayHeight = (height: number) => {
-		const pixels = Math.round(height);
-		if (runwayHeight !== null && Math.abs(runwayHeight - pixels) <= GEOMETRY_EPSILON) return;
+		const pixels = Math.max(0, Math.round(height));
+		if (Math.abs(runwayHeight - pixels) <= GEOMETRY_EPSILON) return;
 		runwayHeight = pixels;
 		environment.writeRunwayHeight(pixels);
+		if (pixels === 0) resetRunwayTracking();
 	};
 
-	const beginTurnRunway = (geometry: ReadingBandGeometry): boolean => {
-		const bottom = runwayBottom(geometry);
-		if (bottom === null) return false;
-		pendingTurnRunway = false;
-		runwayMode = "turn";
-		runwayStartEdge = geometry.scrollTop + bottom;
-		runwayViewportHeight = geometry.viewportHeight;
-		writeRunwayHeight(geometry.viewportHeight * (RESPONSE_RUNWAY_RATIO + TAIL_RUNWAY_RATIO));
-		return true;
+	const finishRunwayRelease = () => {
+		writeRunwayHeight(0);
+		resetRunwayTracking();
+		publish({ runway: false });
 	};
 
-	const resizeRunway = (geometry: ReadingBandGeometry) => {
-		if (runwayMode === null || runwayHeight === null) return;
-		const viewportChanged =
-			runwayViewportHeight === null ||
-			Math.abs(runwayViewportHeight - geometry.viewportHeight) > GEOMETRY_EPSILON;
-		const floor = geometry.viewportHeight * TAIL_RUNWAY_RATIO;
-		if (runwayMode === "floor") {
-			runwayViewportHeight = geometry.viewportHeight;
-			if (viewportChanged) writeRunwayHeight(floor);
+	const releaseRunway = (smooth = true) => {
+		pendingSettleReturn = false;
+		runwaySuppressed = true;
+		cancelRunwayMotion();
+		if (!smooth || runwayHeight <= GEOMETRY_EPSILON || environment.prefersReducedMotion()) {
+			finishRunwayRelease();
 			return;
 		}
-		if (runwayStartEdge === null) return;
+		const startHeight = runwayHeight;
+		const startedAt = environment.now();
+		const collapse = (time: number) => {
+			const progress = Math.min(1, Math.max(0, (time - startedAt) / ADVANCE_DURATION_MS));
+			writeRunwayHeight(startHeight * (1 - easeOutCubic(progress)));
+			if (progress < 1) {
+				runwayFrame = environment.requestFrame(collapse);
+				return;
+			}
+			runwayFrame = null;
+			finishRunwayRelease();
+		};
+		runwayFrame = environment.requestFrame(collapse);
+	};
+
+	const reconcileRunwayGrowth = (geometry: ReadingBandGeometry) => {
+		if (runwayStartHeight <= 0 || runwayFrame !== null) return;
 		const bottom = runwayBottom(geometry);
 		if (bottom === null) return;
-		runwayViewportHeight = geometry.viewportHeight;
+		if (runwayStartEdge === null) {
+			runwayStartEdge = geometry.scrollTop + bottom;
+			return;
+		}
 		const growth = Math.max(0, geometry.scrollTop + bottom - runwayStartEdge);
-		const available =
-			geometry.viewportHeight * (RESPONSE_RUNWAY_RATIO + TAIL_RUNWAY_RATIO) - growth;
-		const next = Math.max(floor, available);
-		writeRunwayHeight(viewportChanged ? next : Math.min(runwayHeight, next));
+		writeRunwayHeight(Math.max(0, runwayStartHeight - growth));
 	};
 
 	const latestScrollTop = (bounds: ReadingBandScrollBounds) =>
@@ -226,15 +258,18 @@ export function createReadingBandController(
 	const moveTo = (target: number, requireStreaming: boolean, reevaluate: boolean) => {
 		cancelEdgePin();
 		const bounds = environment.readScrollBounds();
-		if (!bounds || Math.abs(target - bounds.scrollTop) <= GEOMETRY_EPSILON) return;
+		if (!bounds) return;
+		const boundedTarget = Math.min(bounds.maxScrollTop, Math.max(0, target));
+		if (Math.abs(boundedTarget - bounds.scrollTop) <= GEOMETRY_EPSILON) return;
 		cancelMotion();
 		if (environment.prefersReducedMotion()) {
-			environment.writeScrollTop(target);
+			environment.writeScrollTop(boundedTarget);
+			if (reevaluate) contentChanged();
 			return;
 		}
 
 		const start = bounds.scrollTop;
-		const distance = target - start;
+		const distance = boundedTarget - start;
 		const startedAt = environment.now();
 		publish({ moving: true });
 		const advance = (time: number) => {
@@ -256,32 +291,71 @@ export function createReadingBandController(
 		frame = environment.requestFrame(advance);
 	};
 
-	const contentChanged = () => {
+	const addRunwayForTarget = (geometry: ReadingBandGeometry, target: number) => {
+		cancelRunwayMotion();
+		const naturalMaxScrollTop = Math.max(0, geometry.maxScrollTop - runwayHeight);
+		const required = Math.max(0, target - naturalMaxScrollTop);
+		const bottom = runwayBottom(geometry);
+		runwayStartEdge = bottom === null ? null : geometry.scrollTop + bottom;
+		runwayStartHeight = required;
+		writeRunwayHeight(required);
+		publish({ runway: true });
+	};
+
+	const settleTarget = (geometry: ReadingBandGeometry): number | null => {
+		if (geometry.edgeBottom === null) return null;
+		return Math.max(
+			0,
+			geometry.scrollTop + geometry.edgeBottom - geometry.viewportHeight * (movement.settle / 100),
+		);
+	};
+
+	const moveEdgeToSettle = (geometry: ReadingBandGeometry, animate: boolean) => {
+		const target = settleTarget(geometry);
+		if (target === null) return false;
+		addRunwayForTarget(geometry, target);
+		const refreshed = environment.readGeometry() ?? geometry;
+		const refreshedTarget = settleTarget(refreshed) ?? target;
+		if (animate) moveTo(refreshedTarget, true, true);
+		else environment.writeScrollTop(refreshedTarget);
+		return true;
+	};
+
+	function contentChanged() {
 		let geometry = environment.readGeometry();
 		if (!geometry || geometry.viewportHeight <= 0) return;
-		if (pendingTurnRunway) beginTurnRunway(geometry);
-		resizeRunway(geometry);
-		if (!state.streaming || !state.following || state.moving) return;
+		reconcileRunwayGrowth(geometry);
+		if (
+			!state.streaming ||
+			!state.following ||
+			state.moving ||
+			runwayFrame !== null ||
+			runwaySuppressed
+		) {
+			return;
+		}
 		geometry = environment.readGeometry() ?? geometry;
+		if (pendingSettleReturn) {
+			pendingSettleReturn = !moveEdgeToSettle(geometry, true);
+			return;
+		}
 		const bottom = geometry.edgeBottom;
 		if (bottom === null) return;
-		const trigger = geometry.viewportHeight * EDGE_TRIGGER_RATIO;
+		const trigger = geometry.viewportHeight * (movement.trigger / 100);
 		if (bottom <= trigger + GEOMETRY_EPSILON) return;
-		const target = Math.min(
-			geometry.maxScrollTop,
-			geometry.scrollTop + bottom - geometry.viewportHeight * EDGE_SETTLE_RATIO,
-		);
-		if (target <= geometry.scrollTop + GEOMETRY_EPSILON) return;
-		moveTo(target, true, true);
-	};
+		moveEdgeToSettle(geometry, true);
+	}
 
 	return {
 		getSnapshot: () => snapshotOf(state),
 		armImmediateTurn: () => {
 			cancelMotion();
+			cancelRunwayMotion();
 			cancelAnchor();
 			cancelEdgePin();
-			pendingTurnRunway = false;
+			pendingSettleReturn = false;
+			runwaySuppressed = false;
+			writeRunwayHeight(0);
 			publish({ following: true, runway: true });
 		},
 		userTurnArrived: (index, source) => {
@@ -291,8 +365,6 @@ export function createReadingBandController(
 			if (source === "immediate") publish({ following: true, runway: true });
 			const viewportHeight = environment.readViewportHeight();
 			if (viewportHeight <= 0) return;
-			const geometry = environment.readGeometry();
-			if (!geometry || !beginTurnRunway(geometry)) pendingTurnRunway = true;
 			const inset = turnInset(viewportHeight);
 			cancelAnchor();
 			anchorFrame = environment.requestFrame(() => {
@@ -312,59 +384,77 @@ export function createReadingBandController(
 			cancelEdgePin();
 		},
 		readerLeft: () => {
+			if (!state.following) return;
 			cancelMotion();
 			cancelAnchor();
 			cancelEdgePin();
 			publish({ following: false });
+			releaseRunway(true);
 		},
-		readerReachedEdge: () => publish({ following: true }),
+		readerReachedEdge: () => {
+			cancelRunwayMotion();
+			runwaySuppressed = false;
+			publish({ following: true, runway: state.streaming });
+		},
 		returnToEdge: () => {
 			cancelMotion();
 			cancelAnchor();
-			publish({ following: true });
-			pinLatestEdge();
+			cancelRunwayMotion();
+			runwaySuppressed = false;
+			publish({ following: true, runway: state.streaming });
+			if (!state.streaming) {
+				pinLatestEdge();
+				return;
+			}
+			const geometry = environment.readGeometry();
+			if (!geometry || !moveEdgeToSettle(geometry, true)) pendingSettleReturn = true;
 		},
+		releaseRunway,
 		setStreaming: (nextStreaming) => {
-			if (!nextStreaming) cancelMotion();
-			publish({
-				streaming: nextStreaming,
-				...(nextStreaming ? { runway: true } : {}),
-			});
+			if (!nextStreaming) {
+				cancelMotion();
+				publish({ streaming: false });
+				releaseRunway(true);
+				return;
+			}
+			cancelRunwayMotion();
+			runwaySuppressed = false;
+			publish({ streaming: true, runway: state.following });
+		},
+		setMovement: (nextMovement) => {
+			movement = nextMovement;
+			contentChanged();
 		},
 		reconstructActiveStream: () => {
 			if (!activeStreamMount || !state.streaming || reconstructed) return;
-			let geometry = environment.readGeometry();
+			const geometry = environment.readGeometry();
 			if (!geometry) return;
 			reconstructed = true;
-			pendingTurnRunway = false;
+			cancelRunwayMotion();
+			runwaySuppressed = false;
 			publish({ runway: true });
-			runwayMode = "floor";
-			runwayStartEdge = null;
-			runwayViewportHeight = geometry.viewportHeight;
-			writeRunwayHeight(geometry.viewportHeight * TAIL_RUNWAY_RATIO);
-			geometry = environment.readGeometry() ?? geometry;
-			environment.writeScrollTop(latestScrollTop(geometry));
+			if (!moveEdgeToSettle(geometry, false)) pendingSettleReturn = true;
 		},
 		setLatestEdge: (edge) => {
 			if (edge === latestEdge) return;
 			cancelMotion();
+			cancelRunwayMotion();
 			cancelAnchor();
 			cancelEdgePin();
 			latestEdge = edge;
 			activeStreamMount = state.streaming;
 			reconstructed = false;
-			pendingTurnRunway = false;
-			runwayMode = null;
-			runwayStartEdge = null;
-			runwayHeight = null;
-			runwayViewportHeight = null;
+			pendingSettleReturn = false;
+			runwaySuppressed = false;
+			writeRunwayHeight(0);
 			publish({ following: true, runway: state.streaming });
 		},
 		dispose: () => {
 			cancelMotion();
+			cancelRunwayMotion();
 			cancelAnchor();
 			cancelEdgePin();
-			pendingTurnRunway = false;
+			pendingSettleReturn = false;
 		},
 	};
 }

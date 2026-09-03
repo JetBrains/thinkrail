@@ -395,7 +395,7 @@ export function AskUserQuestionCard({
 		const frame = requestAnimationFrame(() => {
 			const card = cardRef.current;
 			if (!card) return;
-			actions?.revealChatElement(currentQuestionPageStart(card), "start");
+			actions?.revealChatElement(currentQuestionPageStart(card), "start", "release");
 			focusCurrentQuestionPage(card);
 		});
 		return () => cancelAnimationFrame(frame);
@@ -415,7 +415,7 @@ export function AskUserQuestionCard({
 		const settleAttention = () => {
 			const card = cardRef.current;
 			if (!card || userTookOver) return;
-			actions?.revealChatElement(currentQuestionPageStart(card), "start");
+			actions?.revealChatElement(currentQuestionPageStart(card), "start", "release");
 			if (!card.contains(document.activeElement)) {
 				const kind = focusTargetKind(document.activeElement, card);
 				if (shouldClaimQuestionFocus(kind, hasCoarsePointer())) focusQuestionAttention(card);

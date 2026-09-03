@@ -6,7 +6,11 @@ export interface ChatActions {
 	answerQuestion: (toolCallId: string, result: AskUserQuestionResult) => Promise<void>;
 	focusComposer: () => void;
 	openSubagentTranscript: (childSessionId: string) => void;
-	revealChatElement: (element: HTMLElement, block?: RevealBlock) => void;
+	revealChatElement: (
+		element: HTMLElement,
+		block?: RevealBlock,
+		runway?: "preserve" | "release",
+	) => void;
 }
 
 export const ChatActionsContext = createContext<ChatActions | null>(null);
