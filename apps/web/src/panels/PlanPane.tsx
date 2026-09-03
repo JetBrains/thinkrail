@@ -172,12 +172,6 @@ function RevisionsBlock({
 	);
 }
 
-interface StepProto {
-	comments: string[];
-}
-
-const EMPTY_STEP_PROTO: StepProto = { comments: [] };
-
 const STEP_ACTION_CLASS =
 	"flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
 
@@ -382,8 +376,7 @@ function ItemBlock({
 	reviewComments,
 	reviewerSessionId,
 	focusRequest,
-	proto,
-	onProtoChange,
+	onAddNote,
 	onDelete,
 	drag,
 	forceExpanded,
@@ -398,8 +391,7 @@ function ItemBlock({
 	reviewComments: ReviewComment[] | undefined;
 	reviewerSessionId?: string | undefined;
 	focusRequest: { id: string; tick: number } | null;
-	proto: StepProto;
-	onProtoChange: (patch: Partial<StepProto>) => void;
+	onAddNote: (note: string) => void;
 	onDelete: () => void;
 	drag: StepDrag;
 	forceExpanded?: boolean | undefined;
@@ -415,8 +407,9 @@ function ItemBlock({
 	const counts = set ? changeSetCounts(set) : null;
 	const fileCount = counts?.count ?? 0;
 	const feedback = changesRequested ? item.review?.feedback : undefined;
+	const userNotes = item.userNotes ?? [];
 	const hasDetails = Boolean(
-		item.note || item.summary || feedback || set !== null || proto.comments.length > 0 || item.verification,
+		item.note || item.summary || feedback || set !== null || userNotes.length > 0 || item.verification,
 	);
 	const collapsible = item.status === "done" && hasDetails;
 	const [localExpanded, setLocalExpanded] = useState(false);
@@ -440,7 +433,7 @@ function ItemBlock({
 	const saveComment = () => {
 		const text = commentDraft.trim();
 		if (!text) return;
-		onProtoChange({ comments: [...proto.comments, text] });
+		onAddNote(text);
 		setCommentDraft("");
 		setCommentOpen(false);
 	};
@@ -578,9 +571,6 @@ function ItemBlock({
 								placeholder="Add a note…"
 								className="w-full rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active"
 							/>
-							<span className="tr-text-metadata text-text-subtle">
-								Session-local prototype — notes aren't persisted yet.
-							</span>
 						</PopoverContent>
 					</Popover>
 					<div className="w-24 shrink-0">
@@ -667,14 +657,14 @@ function ItemBlock({
 								<span>{item.verification}</span>
 							</div>
 						) : null}
-						{proto.comments.map((comment, index) => (
+						{userNotes.map((note, index) => (
 							<div
-								key={`${index}:${comment}`}
-								data-testid="step-comment"
+								key={`${index}:${note}`}
+								data-testid="step-user-note"
 								className="flex items-start gap-4 tr-text-metadata text-text-muted"
 							>
 								<MessageSquare className="mt-2 size-12 shrink-0" />
-								<span className="min-w-0 flex-1">{comment}</span>
+								<span className="min-w-0 flex-1">{note}</span>
 							</div>
 						))}
 					</div>
@@ -726,8 +716,7 @@ function GroupSection({
 	reviewComments,
 	reviewerSessionId,
 	focusRequest,
-	protoFor,
-	patchProto,
+	onAddNote,
 	onDelete,
 	hideHeader = false,
 	expandedIds,
@@ -741,8 +730,7 @@ function GroupSection({
 	reviewComments: ReviewComment[] | undefined;
 	reviewerSessionId?: string | undefined;
 	focusRequest: { id: string; tick: number } | null;
-	protoFor: (id: string) => StepProto;
-	patchProto: (id: string, patch: Partial<StepProto>) => void;
+	onAddNote: (id: string, note: string) => void;
 	onDelete: (id: string) => void;
 	hideHeader?: boolean;
 	expandedIds?: Set<string> | undefined;
@@ -760,7 +748,7 @@ function GroupSection({
 				</h2>
 			) : null}
 			<StepList
-			items={group.todos}
+				items={group.todos}
 				renderItem={(item, drag) => (
 					<ItemBlock
 						item={item}
@@ -771,8 +759,7 @@ function GroupSection({
 						reviewComments={reviewComments}
 						reviewerSessionId={reviewerSessionId}
 						focusRequest={focusRequest}
-						proto={protoFor(item.id)}
-						onProtoChange={(patch) => patchProto(item.id, patch)}
+						onAddNote={(note) => onAddNote(item.id, note)}
 						onDelete={() => onDelete(item.id)}
 						drag={drag}
 						forceExpanded={expandedIds?.has(item.id)}
@@ -853,7 +840,6 @@ export default function PlanPane({
 	const [summaryExpanded, setSummaryExpanded] = useState(false);
 	const [ongoingExpandedIds, setOngoingExpandedIds] = useState<Set<string>>(new Set());
 	const [completedExpandedIds, setCompletedExpandedIds] = useState<Set<string>>(new Set());
-	const [stepProto, setStepProto] = useState<Record<string, StepProto>>({});
 	const onReorderQueue = async (ids: string[]) => {
 		try {
 			await plan.reorder(ids);
@@ -861,9 +847,13 @@ export default function PlanPane({
 			pushToast({ variant: "error", title: "Couldn't reorder the queue", message: errorText(err) });
 		}
 	};
-	const protoFor = (id: string): StepProto => stepProto[id] ?? EMPTY_STEP_PROTO;
-	const patchProto = (id: string, patch: Partial<StepProto>) =>
-		setStepProto((prev) => ({ ...prev, [id]: { ...(prev[id] ?? EMPTY_STEP_PROTO), ...patch } }));
+	const onAddNote = async (id: string, note: string) => {
+		try {
+			await plan.addNote(id, note);
+		} catch (err) {
+			pushToast({ variant: "error", title: "Couldn't add note", message: errorText(err) });
+		}
+	};
 	const agentComments = useAppStore((s) => selectAgentReviewCommentCount(s, workspaceId));
 	const reviewComments = useAppStore((s) => s.reviewsByWorkspace[workspaceId]?.comments);
 
@@ -953,7 +943,7 @@ export default function PlanPane({
 				item.summary ||
 				(reviewChangesRequested(item) && item.review?.feedback) ||
 				itemChangeSet(item) !== null ||
-				(stepProto[item.id]?.comments?.length ?? 0) > 0 ||
+				(item.userNotes?.length ?? 0) > 0 ||
 				item.verification,
 		);
 		return item.status === "done" && hasDetails;
@@ -1461,8 +1451,7 @@ export default function PlanPane({
 							reviewComments={reviewComments}
 							reviewerSessionId={data.reviewerSessionId}
 							focusRequest={focusRequest}
-							protoFor={protoFor}
-							patchProto={patchProto}
+							onAddNote={onAddNote}
 							onDelete={(id) => void plan.remove(id)}
 							hideHeader={group.id === activeGroup?.id}
 							expandedIds={ongoingExpandedIds}
@@ -1491,8 +1480,7 @@ export default function PlanPane({
 									reviewComments={reviewComments}
 									reviewerSessionId={data.reviewerSessionId}
 									focusRequest={focusRequest}
-									proto={protoFor(item.id)}
-									onProtoChange={(patch) => patchProto(item.id, patch)}
+									onAddNote={(note) => onAddNote(item.id, note)}
 									onDelete={() => void plan.remove(item.id)}
 									drag={drag}
 									forceExpanded={ongoingExpandedIds.has(item.id)}
@@ -1541,8 +1529,7 @@ export default function PlanPane({
 									reviewComments={reviewComments}
 									reviewerSessionId={data.reviewerSessionId}
 									focusRequest={focusRequest}
-									protoFor={protoFor}
-									patchProto={patchProto}
+									onAddNote={onAddNote}
 									onDelete={(id) => void plan.remove(id)}
 									expandedIds={completedExpandedIds}
 									onExpandedChange={(id, expanded) => {
@@ -1568,8 +1555,7 @@ export default function PlanPane({
 												reviewComments={reviewComments}
 												reviewerSessionId={data.reviewerSessionId}
 												focusRequest={focusRequest}
-												proto={protoFor(item.id)}
-												onProtoChange={(patch) => patchProto(item.id, patch)}
+												onAddNote={(note) => onAddNote(item.id, note)}
 												onDelete={() => void plan.remove(item.id)}
 												drag={drag}
 												forceExpanded={completedExpandedIds.has(item.id)}

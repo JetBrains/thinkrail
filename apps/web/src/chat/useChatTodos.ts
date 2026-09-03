@@ -22,6 +22,7 @@ export interface ChatTodos {
 	add: (title: string) => Promise<void>;
 	remove: (id: string) => Promise<void>;
 	reorder: (ids: string[]) => Promise<void>;
+	addNote: (id: string, note: string) => Promise<void>;
 	openPlan: () => void;
 	openChanges: (target: { sha: string } | { path: string }) => void;
 	startReview: (id: string) => Promise<void>;
@@ -187,6 +188,12 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		if (live(requestIdentity)) await reloadPlan();
 	};
 
+	const addNote = async (id: string, note: string) => {
+		const requestIdentity = identity;
+		await getTransport().request("todo.addNote", { workspaceId, sessionId, id, note });
+		if (live(requestIdentity)) await reloadPlan();
+	};
+
 	const openPlan = () => {
 		useAppStore.getState().setSessionView(sessionId, "work");
 	};
@@ -222,6 +229,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		add,
 		remove,
 		reorder,
+		addNote,
 		openPlan,
 		openChanges,
 		startReview,
