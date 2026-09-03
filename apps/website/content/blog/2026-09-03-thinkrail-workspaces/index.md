@@ -12,8 +12,9 @@ tags:
 When you start a project in ThinkRail, you have two options: work directly in the project folder or create a new workspace. 
 Working directly on the project folder means that all changes will immediately affect the current git branch. 
 This is straightforward but can also be unsafe. Unsaved changes may be removed by the AI agent. Saved changes could 
-still be overwritten if the agent has permissions to perform certain git operations. Moreover, you are limited to using 
-only one AI agent at a time. A workspace might be a solution to both those issues.
+still be overwritten if the agent has permissions to perform certain git operations.
+Moreover, while you still can use more than one AI agent at once when working in the project folder, you risk that 
+they will get in the way of each other. A workspace might be a solution to both those issues.
 
 ## Create an isolated workspace
 
