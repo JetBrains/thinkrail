@@ -31,7 +31,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { VerificationBadge, VerificationGlyph } from "../chat/planKit";
+import { VerificationGlyph } from "../chat/planKit";
 import { planToMarkdown } from "../chat/planMarkdown";
 import {
 	changeSetCounts,
@@ -51,6 +51,7 @@ import {
 	reviewableItems,
 	reviewChangesRequested,
 	reviewSettled,
+	verificationStatus,
 	workAvailable,
 } from "../chat/planView";
 import { useChatTodos } from "../chat/useChatTodos";
@@ -215,6 +216,48 @@ function AddTaskButton({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
 				/>
 				<span className="tr-text-metadata text-text-subtle">
 					Appends to the end of the queue — the agent picks it up in order.
+				</span>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+function VerificationAction({
+	verification,
+	open,
+	onOpenChange,
+}: {
+	verification: string;
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+}) {
+	const status = verificationStatus(verification);
+	const label = status === "claimed" ? "Verified" : "Not verified";
+	return (
+		<Popover open={open} onOpenChange={onOpenChange}>
+			<IconTooltip label={label} wrapTrigger>
+				<PopoverTrigger asChild>
+					<button
+						type="button"
+						data-testid="step-verification"
+						data-status={status}
+						aria-label={label}
+						className={STEP_ACTION_CLASS}
+					>
+						<VerificationGlyph verification={verification} />
+					</button>
+				</PopoverTrigger>
+			</IconTooltip>
+			<PopoverContent
+				side="bottom"
+				align="end"
+				data-testid="step-verification-popover"
+				className="flex w-288 flex-col gap-8 p-12"
+			>
+				<span className="tr-title-compact text-text-default">{label}</span>
+				<p className="tr-text-metadata text-text-muted">{verification}</p>
+				<span className="tr-text-metadata text-text-subtle">
+					As reported by the agent — not re-run by the host.
 				</span>
 			</PopoverContent>
 		</Popover>
@@ -390,17 +433,13 @@ function ItemBlock({
 	const fileCount = counts?.count ?? 0;
 	const feedback = changesRequested ? item.review?.feedback : undefined;
 	const hasDetails = Boolean(
-		item.note ||
-			item.summary ||
-			item.verification ||
-			feedback ||
-			set !== null ||
-			proto.comments.length > 0,
+		item.note || item.summary || feedback || set !== null || proto.comments.length > 0,
 	);
 	const collapsible = item.status === "done" && hasDetails;
 	const [expanded, setExpanded] = useState(false);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [commentOpen, setCommentOpen] = useState(false);
+	const [verifyOpen, setVerifyOpen] = useState(false);
 	const [commentDraft, setCommentDraft] = useState("");
 	const consumedFocusTick = useRef(0);
 	useEffect(() => {
@@ -482,7 +521,11 @@ function ItemBlock({
 							{findings > 0 ? ` · ${findings}` : ""}
 						</button>
 					) : null}
-					<div className="relative z-10 flex shrink-0 items-center gap-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+					<div
+						className={`relative z-10 flex shrink-0 items-center gap-2 transition-opacity focus-within:opacity-100 group-hover:opacity-100 ${
+							commentOpen || verifyOpen || confirmOpen ? "opacity-100" : "opacity-0"
+						}`}
+					>
 						{drag.draggable ? (
 							<>
 								<IconTooltip label="Drag to reorder the queue">
@@ -523,6 +566,13 @@ function ItemBlock({
 									</IconTooltip>
 								</ConfirmPopover>
 							</>
+						) : null}
+						{item.verification ? (
+							<VerificationAction
+								verification={item.verification}
+								open={verifyOpen}
+								onOpenChange={setVerifyOpen}
+							/>
 						) : null}
 						<Popover open={commentOpen} onOpenChange={setCommentOpen}>
 							<IconTooltip label="Add a note to this step" wrapTrigger>
@@ -574,13 +624,12 @@ function ItemBlock({
 						</button>
 					) : null}
 				</div>
-				{set || item.verification ? (
+				{set ? (
 					<div
 						data-testid="plan-item-meta"
 						className="flex items-center gap-8 py-2 tr-text-metadata text-text-subtle"
 					>
 						<span className="size-14 shrink-0" />
-						{item.verification ? <VerificationGlyph verification={item.verification} /> : null}
 						{set ? (
 							<span>
 								{fileCount} {fileCount === 1 ? "file" : "files"}
@@ -620,9 +669,6 @@ function ItemBlock({
 							<div data-testid="plan-item-summary" className="tr-text-metadata text-text-muted">
 								{item.summary}
 							</div>
-						) : null}
-						{item.status === "done" && item.verification ? (
-							<VerificationBadge verification={item.verification} />
 						) : null}
 						{set ? <ChangeSetFiles set={set} workspaceId={workspaceId} /> : null}
 						<RevisionsBlock item={item} onOpenCommit={onOpenCommit} />
