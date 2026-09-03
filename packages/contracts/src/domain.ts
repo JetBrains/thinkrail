@@ -141,6 +141,11 @@ export interface TodoItem {
 	verification?: string;
 	artifacts?: TodoArtifact[];
 	/**
+	 * User-added notes on this item — **host-owned, not agent-writable**. Stored in a sidecar
+	 * alongside the agent-writable plan file so an agent re-plan can't drop user notes.
+	 */
+	userNotes?: string[];
+	/**
 	 * The item's review decoration — **host-derived on `todo.list`, present only on reviewable items**
 	 * (those carrying a host change set). Review state is user-owned and host-stored (a sidecar, never the
 	 * agent-writable plan file), so an agent re-plan can't flip a review decision.

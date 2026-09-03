@@ -225,7 +225,9 @@ of the host.
   (same one-home rationale), never stored; absent = the sha no longer resolves, degrade silently.
   `TodoItem.summary` / `TodoPlan.summary` are the agent's completion notes (per step / whole plan, as
   stored) and `TodoItem.verification` the separate self-reported check line (exact command + result, or
-  "not verified" — clients render it as a badge labeled as the agent's own claim, never a host gate); **`TodoItem.review?: TodoReviewInfo`** (+ the **`TodoReviewState`** union) is the host-derived
+  "not verified" — clients render it as a badge labeled as the agent's own claim, never a host gate);
+  **`TodoItem.userNotes?: string[]`** — user-added notes on the item, host-owned (stored in a sidecar,
+  never the agent-writable plan), added via `todo.addNote`; **`TodoItem.review?: TodoReviewInfo`** (+ the **`TodoReviewState`** union) is the host-derived
   review decoration, present only on reviewable items (those with a host change set): `state`
   (`unreviewed`/`reviewed`/`changes_requested` — `unreviewed` = no stored record), `revision` (commit
   count — 1 TODO = N commits), `unreviewedShas` (commits since the user's watermark — the "changed since
@@ -297,8 +299,8 @@ of the host.
   `false` returns the same authoritative membership/order without the synchronous per-workspace diff-stat
   fan-out used nowhere by navigation restoration / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
-  **`reorder`**/**`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
-  item `origin:"user"`; `reorder` permutes exactly the un-started user-added loose queue — `ids` must
+  **`reorder`**/**`addNote`**/**`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
+  item `origin:"user"`; `addNote` appends a user note to an item (host-owned sidecar); `reorder` permutes exactly the un-started user-added loose queue — `ids` must
   name that whole set, validated host-side — and returns an Ack, with the new order arriving via re-read;
   host todo mutations broadcast **`todo.changed`** `{workspaceId, sessionId}` as a refetch signal), plus the review ops **`review`** (approve: record `reviewed` + the sha
   watermark), **`requestFix`** (record `changes_requested` + feedback, then the host fires the fix
