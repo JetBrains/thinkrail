@@ -192,7 +192,7 @@ function AddTaskButton({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
-				<Button variant="outline" size="sm" data-testid="plan-add-task" className="shrink-0 gap-4">
+				<Button variant="inverse" size="sm" data-testid="plan-add-task" className="shrink-0 gap-4">
 					<Plus className="size-14 shrink-0" />
 					Add task
 				</Button>
@@ -825,6 +825,7 @@ export default function PlanPane({
 		titleEdited: boolean;
 	} | null>(null);
 	const [focusRequest, setFocusRequest] = useState<{ id: string; tick: number } | null>(null);
+	const [summaryExpanded, setSummaryExpanded] = useState(false);
 	const [stepProto, setStepProto] = useState<Record<string, StepProto>>({});
 	const onReorderQueue = async (ids: string[]) => {
 		try {
@@ -897,6 +898,27 @@ export default function PlanPane({
 		pr: openReview ? "done" : planReady ? "active" : "pending",
 	};
 	const unpushed = openReview?.unpushedCommits ?? 0;
+	const activeGroup = sections.activeGroups[0];
+	const inProgressItem = allItems.find((t) => t.status === "in_progress");
+	const dynamicSummary = reviewingAny
+		? "Review in progress…"
+		: flagged.length > 0
+			? `${flagged.length} ${flagged.length === 1 ? "step needs" : "steps need"} fixes`
+			: unsettledReviewables.length > 0
+				? `${unsettledReviewables.length} ${unsettledReviewables.length === 1 ? "step awaits" : "steps await"} review`
+				: openReview && unpushed > 0
+					? `${unpushed} ${unpushed === 1 ? "commit" : "commits"} ready to push`
+					: planReady && !openReview
+						? "Ready to ship"
+						: inProgressItem
+							? `Working on: ${inProgressItem.title}`
+							: activeGroup
+								? `Working on: ${activeGroup.title}`
+								: total === 0
+									? "Waiting for tasks"
+									: openReview
+										? "PR open — up to date"
+										: "Session idle";
 	const openPrFlow = async (draft: boolean): Promise<void> => {
 		const edited = lastPrSubmit.current;
 		if (edited && edited.draft === draft) {
@@ -1074,156 +1096,194 @@ export default function PlanPane({
 				}}
 			/>
 			<div className="mx-auto max-w-[52rem] px-16 pb-16 pt-32">
-				<header className="mb-40 flex items-center gap-12 rounded-[var(--radius-md)] bg-container-elevated-bg p-16">
-					<div className="min-w-0 flex-1">
-						<h1 className="truncate tr-title-section text-text-default">Plan · {title}</h1>
-						<div
-							data-testid="plan-progress"
-							className="flex flex-wrap items-center gap-4 tr-text-metadata text-text-subtle"
-						>
-							<StageGlyph state={stages.build} />
-							<span>
-								{done}/{total} done
-							</span>
-							{reviewables.length > 0 ? (
-								<>
-									<ChevronRight className="size-12 shrink-0 text-text-muted" />
-									<span data-testid="plan-review-progress" className="flex items-center gap-4">
-										<StageGlyph state={stages.review} />
-										{reviewedCount}/{reviewables.length} reviewed
-									</span>
-								</>
-							) : null}
-							<ChevronRight className="size-12 shrink-0 text-text-muted" />
-							<span
-								data-testid="plan-pr-stage"
-								data-state={stages.pr}
-								className="flex items-center gap-4"
+				<header className="relative mb-40 rounded-[var(--radius-md)] bg-container-elevated-bg p-16">
+					{/* Actions anchored to top-right */}
+					<div className="absolute right-16 top-16 flex items-center gap-8">
+						{agentComments > 0 ? (
+							<button
+								type="button"
+								data-testid="plan-review-comments"
+								onClick={onOpenReview}
+								title="Open the Review tab — the reviewer's findings"
+								className="flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 							>
-								<StageGlyph state={stages.pr} />
-								{openReview ? openReviewLabel(openReview) : "PR"}
-							</span>
-						</div>
-						{workspace ? (
-							<div
-								data-testid="plan-context"
-								className="mt-2 flex flex-wrap items-center gap-8 tr-text-metadata text-text-subtle"
-							>
-								<span className="flex min-w-0 items-center gap-4">
-									<GitBranch className="size-12 shrink-0" />
-									<span className="truncate">
-										{workspace.branch} ← {workspace.baseBranch}
-									</span>
-								</span>
-								{commitCount > 0 ? (
-									<span className="shrink-0">
-										{commitCount} {commitCount === 1 ? "commit" : "commits"}
-									</span>
-								) : null}
-								{workspace.diffStats ? (
-									<DiffStatBadge
-										added={workspace.diffStats.added}
-										removed={workspace.diffStats.removed}
-									/>
-								) : null}
-							</div>
+								<MessageSquare className="size-14" />
+								{agentComments} {agentComments === 1 ? "comment" : "comments"}
+							</button>
 						) : null}
-					</div>
-					{agentComments > 0 ? (
-						<button
-							type="button"
-							data-testid="plan-review-comments"
-							onClick={onOpenReview}
-							title="Open the Review tab — the reviewer's findings"
-							className="flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-						>
-							<MessageSquare className="size-14" />
-							{agentComments} {agentComments === 1 ? "comment" : "comments"}
-						</button>
-					) : null}
-					{openReview ? (
-						openReviewUrl ? (
-							<a
-								data-testid="plan-pr-chip"
-								href={openReviewUrl}
-								target="_blank"
-								rel="noopener noreferrer"
-								className="shrink-0 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-							>
-								{openReviewLabel(openReview)}
-							</a>
-						) : (
-							<span
-								data-testid="plan-pr-chip"
-								className="shrink-0 px-8 py-4 tr-text-ui text-text-muted"
-							>
-								{openReviewLabel(openReview)}
-							</span>
-						)
-					) : null}
-					<Button
-						size="sm"
-						data-testid="plan-open-pr"
-						disabled={prBusy || sameBranch}
-						onClick={() => void openPrFlow(false)}
-						title={
-							sameBranch
-								? "This workspace's branch is its base branch — there's nothing to open a PR against."
-								: openReview
-									? "Push new commits to the open PR and refresh its description from the plan"
-									: "Push the branch and open a PR whose description comes from this plan"
-						}
-						className="shrink-0 gap-4"
-					>
-						{prBusy ? (
-							<Loader2 className="size-14 animate-spin" />
-						) : (
-							<GitPullRequestArrow className="size-14" />
-						)}
-						{prBusy && prCompose
-							? "Pushing…"
-							: openReview
-								? unpushed > 0
-									? `Push updates (${unpushed})`
-									: "Push updates"
-								: "Open PR"}
-					</Button>
-					<DropdownMenu>
-						<DropdownMenuTrigger asChild>
-							<Button
-								variant="outline"
-								size="icon"
-								data-testid="plan-menu"
-								aria-label="Plan actions"
-								className="size-28 shrink-0 data-[state=open]:bg-control-bg-hovered"
-							>
-								<MoreVertical className="size-16" />
-							</Button>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end" data-testid="plan-menu-content">
-							<DropdownMenuItem data-testid="plan-copy-markdown" onSelect={() => copyMarkdown()}>
-								<Copy />
-								Copy
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								data-testid="plan-save-markdown"
-								onSelect={() => downloadMarkdown(exportMarkdown(), title)}
-							>
-								<Download />
-								Save .md
-							</DropdownMenuItem>
-							{!openReview ? (
-								<DropdownMenuItem
-									data-testid="plan-open-draft-pr"
-									disabled={prBusy || sameBranch}
-									onSelect={() => void openPrFlow(true)}
+						{openReview ? (
+							openReviewUrl ? (
+								<a
+									data-testid="plan-pr-chip"
+									href={openReviewUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="shrink-0 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 								>
-									<GitPullRequestArrow />
-									Open draft PR
+									{openReviewLabel(openReview)}
+								</a>
+							) : (
+								<span
+									data-testid="plan-pr-chip"
+									className="shrink-0 px-8 py-4 tr-text-ui text-text-muted"
+								>
+									{openReviewLabel(openReview)}
+								</span>
+							)
+						) : null}
+						<Button
+							size="sm"
+							data-testid="plan-open-pr"
+							disabled={prBusy || sameBranch}
+							onClick={() => void openPrFlow(false)}
+							title={
+								sameBranch
+									? "This workspace's branch is its base branch — there's nothing to open a PR against."
+									: openReview
+										? "Push new commits to the open PR and refresh its description from the plan"
+										: "Push the branch and open a PR whose description comes from this plan"
+							}
+							className="shrink-0 gap-4"
+						>
+							{prBusy ? (
+								<Loader2 className="size-14 animate-spin" />
+							) : (
+								<GitPullRequestArrow className="size-14" />
+							)}
+							{prBusy && prCompose
+								? "Pushing…"
+								: openReview
+									? unpushed > 0
+										? `Push updates (${unpushed})`
+										: "Push updates"
+									: "Open PR"}
+						</Button>
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									variant="outline"
+									size="icon"
+									data-testid="plan-menu"
+									aria-label="Session actions"
+									className="size-28 shrink-0 data-[state=open]:bg-control-bg-hovered"
+								>
+									<MoreVertical className="size-16" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end" data-testid="plan-menu-content">
+								<DropdownMenuItem data-testid="plan-copy-markdown" onSelect={() => copyMarkdown()}>
+									<Copy />
+									Copy
 								</DropdownMenuItem>
+								<DropdownMenuItem
+									data-testid="plan-save-markdown"
+									onSelect={() => downloadMarkdown(exportMarkdown(), title)}
+								>
+									<Download />
+									Save .md
+								</DropdownMenuItem>
+								{!openReview ? (
+									<DropdownMenuItem
+										data-testid="plan-open-draft-pr"
+										disabled={prBusy || sameBranch}
+										onSelect={() => void openPrFlow(true)}
+									>
+										<GitPullRequestArrow />
+										Open draft PR
+									</DropdownMenuItem>
+								) : null}
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
+
+					{/* Header content */}
+					<h1 className="mb-4 tr-title-section text-text-default">Session state</h1>
+					<div
+						data-testid="plan-progress"
+						className="mb-12 flex flex-wrap items-center gap-4 tr-text-metadata text-text-subtle"
+					>
+						<StageGlyph state={stages.build} />
+						<span>
+							{done}/{total} done
+						</span>
+						{reviewables.length > 0 ? (
+							<>
+								<ChevronRight className="size-12 shrink-0 text-text-muted" />
+								<span data-testid="plan-review-progress" className="flex items-center gap-4">
+									<StageGlyph state={stages.review} />
+									{reviewedCount}/{reviewables.length} reviewed
+								</span>
+							</>
+						) : null}
+						<ChevronRight className="size-12 shrink-0 text-text-muted" />
+						<span
+							data-testid="plan-pr-stage"
+							data-state={stages.pr}
+							className="flex items-center gap-4"
+						>
+							<StageGlyph state={stages.pr} />
+							{openReview ? openReviewLabel(openReview) : "PR"}
+						</span>
+					</div>
+
+					{/* Expandable session summary */}
+					<button
+						type="button"
+						data-testid="session-summary-toggle"
+						aria-expanded={summaryExpanded}
+						onClick={() => setSummaryExpanded((v) => !v)}
+						className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] py-4 text-left tr-text-ui text-text-muted hover:text-text-default"
+					>
+						<span className="min-w-0 flex-1 truncate">{dynamicSummary}</span>
+						<ChevronRight
+							className={`size-14 shrink-0 transition-transform ${summaryExpanded ? "rotate-90" : ""}`}
+						/>
+					</button>
+					{summaryExpanded ? (
+						<div
+							data-testid="session-summary-details"
+							className="mt-8 flex flex-col gap-4 border-border-muted border-t pt-8 tr-text-metadata text-text-subtle"
+						>
+							{activeGroup ? (
+								<div className="flex items-baseline gap-4">
+									<span className="text-text-muted">Current task:</span>
+									<span className="text-text-default">{activeGroup.title}</span>
+									<span className="text-text-subtle">
+										{groupProgress(activeGroup).done}/{groupProgress(activeGroup).total}
+									</span>
+								</div>
 							) : null}
-						</DropdownMenuContent>
-					</DropdownMenu>
+							{inProgressItem ? (
+								<div className="flex items-baseline gap-4">
+									<span className="text-text-muted">In progress:</span>
+									<span className="text-text-default">{inProgressItem.title}</span>
+								</div>
+							) : null}
+							{commitCount > 0 ? (
+								<div className="flex items-baseline gap-4">
+									<span className="text-text-muted">Commits:</span>
+									<span className="text-text-default">{commitCount}</span>
+								</div>
+							) : null}
+							{flagged.length > 0 ? (
+								<div className="flex items-baseline gap-4">
+									<span className="text-feedback-warning">Needs fixes:</span>
+									<span className="text-text-default">
+										{flagged.length} {flagged.length === 1 ? "step" : "steps"}
+									</span>
+								</div>
+							) : null}
+							{unsettledReviewables.length > 0 ? (
+								<div className="flex items-baseline gap-4">
+									<span className="text-text-muted">Awaiting review:</span>
+									<span className="text-text-default">
+										{unsettledReviewables.length}{" "}
+										{unsettledReviewables.length === 1 ? "step" : "steps"}
+									</span>
+								</div>
+							) : null}
+						</div>
+					) : null}
 				</header>
 				{flagged.length > 0 ? (
 					<div data-testid="plan-next-action" data-kind="fix" className={NEXT_ACTION_CLASS}>

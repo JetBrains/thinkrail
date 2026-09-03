@@ -15,6 +15,8 @@ const buttonVariants = cva(
 					"border border-control-border-default bg-control-bg text-text-default hover:bg-control-bg-hovered active:border-control-border-active disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				ghost:
 					"text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text",
+				inverse:
+					"bg-control-inverse-bg text-control-inverse-text hover:bg-control-inverse-bg-hovered disabled:bg-control-inverse-disabled-bg disabled:text-control-inverse-disabled-text",
 			},
 			size: {
 				default: "h-32 px-12 tr-text-ui",

@@ -95,6 +95,33 @@
 			"publish": true,
 			"note": "disabled primary button label/icon = the normal primary text (`onAccent`, i.e. control-primary-text) at the `strong` (60%) alpha step"
 		},
+		"control-inverse-bg": {
+			"from": "text",
+			"publish": true,
+			"note": "inverse/high-contrast secondary button fill — text colour as background (light in dark theme, dark in light theme)"
+		},
+		"control-inverse-bg-hovered": {
+			"from": "muted",
+			"publish": true,
+			"note": "inverse button hover fill — muted text colour (dimmed from the normal inverse fill)"
+		},
+		"control-inverse-text": {
+			"from": "background",
+			"publish": true,
+			"note": "inverse button label/icon — background colour as text (dark in dark theme, light in light theme)"
+		},
+		"control-inverse-disabled-bg": {
+			"from": "text",
+			"alpha": "strong",
+			"publish": true,
+			"note": "disabled inverse button fill = the inverse fill (`text`) at the `strong` (60%) alpha step"
+		},
+		"control-inverse-disabled-text": {
+			"from": "background",
+			"alpha": "strong",
+			"publish": true,
+			"note": "disabled inverse button label/icon = the inverse text (`background`) at the `strong` (60%) alpha step"
+		},
 
 		"border-default": { "from": "borderStrong", "publish": true },
 		"border-muted": { "from": "border", "publish": true },
