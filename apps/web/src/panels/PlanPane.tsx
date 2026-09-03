@@ -222,45 +222,20 @@ function AddTaskButton({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
 	);
 }
 
-function VerificationAction({
-	verification,
-	open,
-	onOpenChange,
-}: {
-	verification: string;
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-}) {
+function VerificationIndicator({ verification }: { verification: string }) {
 	const status = verificationStatus(verification);
-	const label = status === "claimed" ? "Verified" : "Not verified";
+	const label = status === "claimed" ? "Verified by agent" : "Not verified";
 	return (
-		<Popover open={open} onOpenChange={onOpenChange}>
-			<IconTooltip label={label} wrapTrigger>
-				<PopoverTrigger asChild>
-					<button
-						type="button"
-						data-testid="step-verification"
-						data-status={status}
-						aria-label={label}
-						className={STEP_ACTION_CLASS}
-					>
-						<VerificationGlyph verification={verification} />
-					</button>
-				</PopoverTrigger>
-			</IconTooltip>
-			<PopoverContent
-				side="bottom"
-				align="end"
-				data-testid="step-verification-popover"
-				className="flex w-288 flex-col gap-8 p-12"
+		<IconTooltip label={label}>
+			<span
+				data-testid="step-verification"
+				data-status={status}
+				aria-label={label}
+				className="flex size-24 shrink-0 items-center justify-center text-text-muted"
 			>
-				<span className="tr-title-compact text-text-default">{label}</span>
-				<p className="tr-text-metadata text-text-muted">{verification}</p>
-				<span className="tr-text-metadata text-text-subtle">
-					As reported by the agent — not re-run by the host.
-				</span>
-			</PopoverContent>
-		</Popover>
+				<VerificationGlyph verification={verification} />
+			</span>
+		</IconTooltip>
 	);
 }
 
@@ -433,13 +408,12 @@ function ItemBlock({
 	const fileCount = counts?.count ?? 0;
 	const feedback = changesRequested ? item.review?.feedback : undefined;
 	const hasDetails = Boolean(
-		item.note || item.summary || feedback || set !== null || proto.comments.length > 0,
+		item.note || item.summary || feedback || set !== null || proto.comments.length > 0 || item.verification,
 	);
 	const collapsible = item.status === "done" && hasDetails;
 	const [expanded, setExpanded] = useState(false);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [commentOpen, setCommentOpen] = useState(false);
-	const [verifyOpen, setVerifyOpen] = useState(false);
 	const [commentDraft, setCommentDraft] = useState("");
 	const consumedFocusTick = useRef(0);
 	useEffect(() => {
@@ -468,7 +442,7 @@ function ItemBlock({
 			data-dragging={drag.draggable || undefined}
 			draggable={drag.draggable}
 			{...drag.handlers}
-			className="group relative flex items-start gap-8"
+			className="group relative flex items-start"
 		>
 			{drag.insertion === "top" ? (
 				<div
@@ -476,7 +450,7 @@ function ItemBlock({
 					className="pointer-events-none absolute inset-x-0 top-[-3px] h-2 rounded-full bg-primary"
 				/>
 			) : null}
-			<div className="min-w-0 flex-1 rounded-[var(--radius-md)] px-8 py-4 transition-colors group-hover:bg-container-elevated-bg group-data-[expanded=true]:bg-container-elevated-bg">
+			<div className="min-w-0 flex-1 rounded-[var(--radius-md)] px-12 py-8 transition-colors group-hover:bg-container-elevated-bg group-data-[expanded=true]:bg-container-elevated-bg">
 				<div className="relative flex min-h-24 items-center gap-8">
 					<span
 						className="flex shrink-0 items-center"
@@ -523,7 +497,7 @@ function ItemBlock({
 					) : null}
 					<div
 						className={`relative z-10 flex shrink-0 items-center gap-2 transition-opacity focus-within:opacity-100 group-hover:opacity-100 ${
-							commentOpen || verifyOpen || confirmOpen ? "opacity-100" : "opacity-0"
+							commentOpen || confirmOpen ? "opacity-100" : "opacity-0"
 						}`}
 					>
 						{drag.draggable ? (
@@ -568,11 +542,7 @@ function ItemBlock({
 							</>
 						) : null}
 						{item.verification ? (
-							<VerificationAction
-								verification={item.verification}
-								open={verifyOpen}
-								onOpenChange={setVerifyOpen}
-							/>
+							<VerificationIndicator verification={item.verification} />
 						) : null}
 						<Popover open={commentOpen} onOpenChange={setCommentOpen}>
 							<IconTooltip label="Add a note to this step" wrapTrigger>
@@ -616,7 +586,7 @@ function ItemBlock({
 							aria-expanded={expanded}
 							onClick={() => setExpanded((v) => !v)}
 							title={expanded ? "Hide this step's details" : "Show this step's details"}
-							className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition after:absolute after:inset-0 after:content-[''] hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+							className="flex size-24 shrink-0 items-center justify-center text-text-muted transition after:absolute after:inset-0 after:content-[''] focus-visible:ring-2 focus-visible:ring-primary"
 						>
 							<ChevronRight
 								className={`size-14 transition-transform ${expanded ? "rotate-90" : ""}`}
@@ -627,9 +597,8 @@ function ItemBlock({
 				{set ? (
 					<div
 						data-testid="plan-item-meta"
-						className="flex items-center gap-8 py-2 tr-text-metadata text-text-subtle"
+						className="flex items-center gap-8 py-2 pl-24 tr-text-metadata text-text-subtle"
 					>
-						<span className="size-14 shrink-0" />
 						{set ? (
 							<span>
 								{fileCount} {fileCount === 1 ? "file" : "files"}
@@ -653,7 +622,7 @@ function ItemBlock({
 					</div>
 				) : null}
 				{hasDetails ? (
-					<div className={`mt-4 flex-col gap-4 border-border-muted border-t pt-4 ${detailsClass}`}>
+					<div className={`mt-16 flex-col gap-16 pl-24 ${detailsClass}`}>
 						{feedback ? (
 							<div
 								data-testid="plan-item-review-feedback"
@@ -672,6 +641,15 @@ function ItemBlock({
 						) : null}
 						{set ? <ChangeSetFiles set={set} workspaceId={workspaceId} /> : null}
 						<RevisionsBlock item={item} onOpenCommit={onOpenCommit} />
+						{item.verification ? (
+							<div
+								data-testid="plan-item-verification"
+								className="flex items-center gap-4 tr-text-metadata text-text-subtle"
+							>
+								<VerificationGlyph verification={item.verification} />
+								<span>{item.verification}</span>
+							</div>
+						) : null}
 						{proto.comments.map((comment, index) => (
 							<div
 								key={`${index}:${comment}`}
@@ -685,7 +663,7 @@ function ItemBlock({
 					</div>
 				) : null}
 			</div>
-			<span className="flex w-24 shrink-0 justify-end" />
+
 			{drag.insertion === "bottom" ? (
 				<div
 					data-testid="step-insertion-line"
