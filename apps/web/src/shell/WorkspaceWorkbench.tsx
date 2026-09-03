@@ -127,12 +127,10 @@ function ChatResourceBody({
 	workspaceId,
 	tab,
 	onOpenFile,
-	headerSlot,
 }: {
 	workspaceId: string;
 	tab: Extract<LayoutCenterTab, { kind: "chat" }>;
 	onOpenFile: (path: string) => void;
-	headerSlot: HTMLElement | null;
 }) {
 	const available = useAppStore((state) => state.sessions[tab.sessionId] !== undefined);
 	const view = useAppStore((state) => selectSessionView(state, tab.sessionId));
@@ -143,12 +141,7 @@ function ChatResourceBody({
 					{view === "work" ? (
 						<PlanPane workspaceId={workspaceId} sessionId={tab.sessionId} />
 					) : (
-						<ChatView
-							sessionId={tab.sessionId}
-							workspaceId={workspaceId}
-							onOpenFile={onOpenFile}
-							headerSlot={headerSlot}
-						/>
+						<ChatView sessionId={tab.sessionId} workspaceId={workspaceId} onOpenFile={onOpenFile} />
 					)}
 				</Suspense>
 			</ErrorBoundary>
@@ -456,19 +449,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	);
 
 	const renderTabBody = useCallback(
-		(
-			tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>,
-			headerSlot?: HTMLElement | null,
-		) => {
+		(tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>) => {
 			if (tab.kind === "chat") {
-				return (
-					<ChatResourceBody
-						workspaceId={workspaceId}
-						tab={tab}
-						onOpenFile={openToolFile}
-						headerSlot={headerSlot ?? null}
-					/>
-				);
+				return <ChatResourceBody workspaceId={workspaceId} tab={tab} onOpenFile={openToolFile} />;
 			}
 			if (tab.kind === "terminal") {
 				const terminal = terminalByKey.get(tab.tabKey);

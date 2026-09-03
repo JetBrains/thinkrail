@@ -164,12 +164,10 @@ export default function ChatView({
 	sessionId,
 	workspaceId,
 	onOpenFile,
-	headerSlot,
 }: {
 	sessionId: string;
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
-	headerSlot?: HTMLElement | null;
 }) {
 	const sessionRuntime = useAppStore((s) => s.sessions[sessionId]);
 	const runtime = sessionRuntime ?? EMPTY_RUNTIME;
@@ -733,7 +731,6 @@ export default function ChatView({
 						<ChatHeader
 							stats={stats}
 							statusEntries={Object.entries(extUiStatus)}
-							slot={headerSlot ?? null}
 							left={
 								plan.data ? (
 									<PopoverTrigger asChild>
