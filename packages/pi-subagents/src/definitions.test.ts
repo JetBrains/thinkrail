@@ -126,3 +126,21 @@ test("the builtin set is the settled four, all with prompts and descriptions", (
 	expect(BUILTIN_AGENTS.find((d) => d.name === "scout")?.tools).toContain("web_search");
 	expect(BUILTIN_AGENTS.find((d) => d.name === "planner")?.tools).not.toContain("web_search");
 });
+
+test("the builtin reviewer carries the portable review contract", () => {
+	const reviewer = BUILTIN_AGENTS.find((definition) => definition.name === "reviewer");
+	expect(reviewer?.inheritProjectContext).toBe(true);
+	for (const phrase of [
+		"introduced or materially worsened",
+		"exact installed implementation",
+		"Try to disprove every candidate finding",
+		"reachable failure scenario",
+		"No existing mitigation",
+		"Deduplicate by root cause",
+		"Verdict: Approve",
+		"Verdict: Request changes",
+	]) {
+		expect(reviewer?.systemPrompt).toContain(phrase);
+	}
+	expect(reviewer?.systemPrompt).not.toContain("should-fix");
+});

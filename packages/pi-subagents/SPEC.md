@@ -70,7 +70,11 @@ typechecked; user-authored definitions keep the community `.md` + frontmatter co
 `skills`, `extensions`; body = system prompt). Malformed files are skipped, never fatal. All four
 builtins set `extensions: true` (the embedder's curated child set — inert under pure-pi
 zero-config) with the spec READ tools (`spec_grep`/`spec_get`/`spec_graph`) allowlisted for the
-read-only roles and web tools (`web_search`/`fetch_content`) for the scout.
+read-only roles and web tools (`web_search`/`fetch_content`) for the scout. The reviewer alone opts
+into project context: its judgment depends on repository guidance, and its prompt admits only
+material, reachable, unmitigated findings attributed to the named target. It must falsify candidate
+findings, complete the target, deduplicate by root cause, and end with one explicit verdict; GitHub
+review and thread semantics stay outside this portable role.
 
 ## The mapping (policy, not mechanism)
 
