@@ -4,8 +4,10 @@ import {
 	RiErrorWarningLine as CircleAlert,
 	RiCheckboxCircleLine as CircleCheck,
 	RiRecordCircleLine as CircleDot,
+	RiCollapseVerticalLine,
 	RiFileCopyLine as Copy,
 	RiDownloadLine as Download,
+	RiExpandVerticalLine,
 	RiGitBranchLine as GitBranch,
 	RiGitCommitLine as GitCommitHorizontal,
 	RiGitPullRequestLine as GitPullRequestArrow,
@@ -384,6 +386,8 @@ function ItemBlock({
 	onProtoChange,
 	onDelete,
 	drag,
+	forceExpanded,
+	onExpandedChange,
 }: {
 	item: TodoItem;
 	workspaceId: string;
@@ -397,6 +401,8 @@ function ItemBlock({
 	onProtoChange: (patch: Partial<StepProto>) => void;
 	onDelete: () => void;
 	drag: StepDrag;
+	forceExpanded?: boolean | undefined;
+	onExpandedChange?: ((expanded: boolean) => void) | undefined;
 }) {
 	const reviewed = reviewSettled(item);
 	const reviewing = item.review?.reviewing === true;
@@ -411,7 +417,13 @@ function ItemBlock({
 		item.note || item.summary || feedback || set !== null || proto.comments.length > 0 || item.verification,
 	);
 	const collapsible = item.status === "done" && hasDetails;
-	const [expanded, setExpanded] = useState(false);
+	const [localExpanded, setLocalExpanded] = useState(false);
+	const expanded = forceExpanded ?? localExpanded;
+	const setExpanded = (value: boolean | ((prev: boolean) => boolean)) => {
+		const newValue = typeof value === "function" ? value(expanded) : value;
+		setLocalExpanded(newValue);
+		onExpandedChange?.(newValue);
+	};
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [commentOpen, setCommentOpen] = useState(false);
 	const [commentDraft, setCommentDraft] = useState("");
@@ -722,6 +734,8 @@ function GroupSection({
 	patchProto,
 	onDelete,
 	hideHeader = false,
+	expandedIds,
+	onExpandedChange,
 }: {
 	group: TodoGroupItem;
 	workspaceId: string;
@@ -735,6 +749,8 @@ function GroupSection({
 	patchProto: (id: string, patch: Partial<StepProto>) => void;
 	onDelete: (id: string) => void;
 	hideHeader?: boolean;
+	expandedIds?: Set<string> | undefined;
+	onExpandedChange?: ((id: string, expanded: boolean) => void) | undefined;
 }) {
 	const { done, total } = groupProgress(group);
 	return (
@@ -748,7 +764,7 @@ function GroupSection({
 				</h2>
 			) : null}
 			<StepList
-				items={group.todos}
+			items={group.todos}
 				renderItem={(item, drag) => (
 					<ItemBlock
 						item={item}
@@ -763,10 +779,38 @@ function GroupSection({
 						onProtoChange={(patch) => patchProto(item.id, patch)}
 						onDelete={() => onDelete(item.id)}
 						drag={drag}
+						forceExpanded={expandedIds?.has(item.id)}
+						onExpandedChange={(expanded) => onExpandedChange?.(item.id, expanded)}
 					/>
 				)}
 			/>
 		</section>
+	);
+}
+
+function ExpandCollapseToggle({
+	allExpanded,
+	onToggle,
+}: {
+	allExpanded: boolean;
+	onToggle: () => void;
+}) {
+	return (
+		<IconTooltip label={allExpanded ? "Collapse all" : "Expand all"}>
+			<Button
+				variant="outline"
+				size="icon"
+				data-testid="expand-collapse-toggle"
+				aria-label={allExpanded ? "Collapse all" : "Expand all"}
+				onClick={onToggle}
+			>
+				{allExpanded ? (
+					<RiCollapseVerticalLine className="size-14" />
+				) : (
+					<RiExpandVerticalLine className="size-14" />
+				)}
+			</Button>
+		</IconTooltip>
 	);
 }
 
@@ -810,6 +854,8 @@ export default function PlanPane({
 	} | null>(null);
 	const [focusRequest, setFocusRequest] = useState<{ id: string; tick: number } | null>(null);
 	const [summaryExpanded, setSummaryExpanded] = useState(false);
+	const [ongoingExpandedIds, setOngoingExpandedIds] = useState<Set<string>>(new Set());
+	const [completedExpandedIds, setCompletedExpandedIds] = useState<Set<string>>(new Set());
 	const [stepProto, setStepProto] = useState<Record<string, StepProto>>({});
 	const onReorderQueue = async (ids: string[]) => {
 		try {
@@ -903,6 +949,49 @@ export default function PlanPane({
 									: openReview
 										? "PR open — up to date"
 										: "Session idle";
+
+	const isItemCollapsible = (item: TodoItem) => {
+		const hasDetails = Boolean(
+			item.note ||
+				item.summary ||
+				(reviewChangesRequested(item) && item.review?.feedback) ||
+				itemChangeSet(item) !== null ||
+				(stepProto[item.id]?.comments?.length ?? 0) > 0 ||
+				item.verification,
+		);
+		return item.status === "done" && hasDetails;
+	};
+
+	const ongoingItems = [...currentGroups.flatMap((g) => g.todos), ...currentLoose];
+	const ongoingCollapsibleIds = ongoingItems.filter(isItemCollapsible).map((t) => t.id);
+	const ongoingAllExpanded =
+		ongoingCollapsibleIds.length > 0 &&
+		ongoingCollapsibleIds.every((id) => ongoingExpandedIds.has(id));
+
+	const completedItems = completed.flatMap((block) =>
+		block.kind === "group" ? block.group.todos : block.items,
+	);
+	const completedCollapsibleIds = completedItems.filter(isItemCollapsible).map((t) => t.id);
+	const completedAllExpanded =
+		completedCollapsibleIds.length > 0 &&
+		completedCollapsibleIds.every((id) => completedExpandedIds.has(id));
+
+	const toggleOngoingExpandAll = () => {
+		if (ongoingAllExpanded) {
+			setOngoingExpandedIds(new Set());
+		} else {
+			setOngoingExpandedIds(new Set(ongoingCollapsibleIds));
+		}
+	};
+
+	const toggleCompletedExpandAll = () => {
+		if (completedAllExpanded) {
+			setCompletedExpandedIds(new Set());
+		} else {
+			setCompletedExpandedIds(new Set(completedCollapsibleIds));
+		}
+	};
+
 	const openPrFlow = async (draft: boolean): Promise<void> => {
 		const edited = lastPrSubmit.current;
 		if (edited && edited.draft === draft) {
@@ -1344,7 +1433,7 @@ export default function PlanPane({
 					className="mb-32 rounded-[var(--radius-md)] border border-border-muted p-16"
 					data-testid="plan-current"
 				>
-					<div className="mb-12 flex flex-wrap items-center gap-x-12 gap-y-4">
+					<div className="mb-12 flex flex-wrap items-center gap-8">
 						<h2 className="flex min-w-0 flex-1 items-baseline gap-4">
 							<span className="shrink-0 tr-text-eyebrow text-text-subtle">Ongoing:</span>
 							<span className="min-w-0 truncate tr-title-compact text-text-default">
@@ -1357,6 +1446,12 @@ export default function PlanPane({
 							</span>
 						) : null}
 						<AddTaskButton onAdd={plan.add} />
+						{ongoingCollapsibleIds.length > 0 ? (
+							<ExpandCollapseToggle
+								allExpanded={ongoingAllExpanded}
+								onToggle={toggleOngoingExpandAll}
+							/>
+						) : null}
 					</div>
 					{currentGroups.map((group) => (
 						<GroupSection
@@ -1373,6 +1468,15 @@ export default function PlanPane({
 							patchProto={patchProto}
 							onDelete={(id) => void plan.remove(id)}
 							hideHeader={group.id === activeGroup?.id}
+							expandedIds={ongoingExpandedIds}
+							onExpandedChange={(id, expanded) => {
+								setOngoingExpandedIds((prev) => {
+									const next = new Set(prev);
+									if (expanded) next.add(id);
+									else next.delete(id);
+									return next;
+								});
+							}}
 						/>
 					))}
 					{currentLoose.length > 0 ? (
@@ -1394,6 +1498,15 @@ export default function PlanPane({
 									onProtoChange={(patch) => patchProto(item.id, patch)}
 									onDelete={() => void plan.remove(item.id)}
 									drag={drag}
+									forceExpanded={ongoingExpandedIds.has(item.id)}
+									onExpandedChange={(expanded) => {
+										setOngoingExpandedIds((prev) => {
+											const next = new Set(prev);
+											if (expanded) next.add(item.id);
+											else next.delete(item.id);
+											return next;
+										});
+									}}
 								/>
 							)}
 						/>
@@ -1409,9 +1522,15 @@ export default function PlanPane({
 						className="mb-32 rounded-[var(--radius-md)] border border-border-muted p-16"
 						data-testid="plan-completed"
 					>
-						<h2 className="mb-12 flex min-h-24 items-center tr-text-eyebrow text-text-subtle">
-							Completed
-						</h2>
+						<div className="mb-12 flex min-h-24 items-center gap-8">
+							<h2 className="flex-1 tr-text-eyebrow text-text-subtle">Completed</h2>
+							{completedCollapsibleIds.length > 0 ? (
+								<ExpandCollapseToggle
+									allExpanded={completedAllExpanded}
+									onToggle={toggleCompletedExpandAll}
+								/>
+							) : null}
+						</div>
 						{completed.map((block) =>
 							block.kind === "group" ? (
 								<GroupSection
@@ -1427,6 +1546,15 @@ export default function PlanPane({
 									protoFor={protoFor}
 									patchProto={patchProto}
 									onDelete={(id) => void plan.remove(id)}
+									expandedIds={completedExpandedIds}
+									onExpandedChange={(id, expanded) => {
+										setCompletedExpandedIds((prev) => {
+											const next = new Set(prev);
+											if (expanded) next.add(id);
+											else next.delete(id);
+											return next;
+										});
+									}}
 								/>
 							) : (
 								<div key={block.items[0]?.id ?? "items"} className="mb-4">
@@ -1446,6 +1574,15 @@ export default function PlanPane({
 												onProtoChange={(patch) => patchProto(item.id, patch)}
 												onDelete={() => void plan.remove(item.id)}
 												drag={drag}
+												forceExpanded={completedExpandedIds.has(item.id)}
+												onExpandedChange={(expanded) => {
+													setCompletedExpandedIds((prev) => {
+														const next = new Set(prev);
+														if (expanded) next.add(item.id);
+														else next.delete(item.id);
+														return next;
+													});
+												}}
 											/>
 										)}
 									/>
