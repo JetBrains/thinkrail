@@ -67,6 +67,7 @@
 		"check:deps": "bun scripts/check-catalog.ts",
 		"check:boundaries": "bun test scripts/checkModuleBoundaries.test.ts && bun scripts/check-module-boundaries.ts",
 		"check:seams": "bun scripts/check-binary-seams.ts",
+		"check:specs": "bun scripts/check-specs.ts",
 		"check:spec-surface": "bun scripts/check-spec-surface.ts",
 		"typography:generate": "bun --filter @thinkrail/web typography:generate",
 		"typography:validate": "bun --filter @thinkrail/web typography:validate",
