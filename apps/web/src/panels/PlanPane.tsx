@@ -467,7 +467,7 @@ function ItemBlock({
 			<div
 				className={`min-w-0 flex-1 px-12 py-8 transition-colors ${
 					expanded ? "bg-container-elevated-bg" : ""
-				} ${!isLast && !expanded ? "border-border-muted border-b" : ""}`}
+				} ${!isLast ? "border-border-muted border-b" : ""}`}
 			>
 				<div className="relative flex min-h-24 items-center gap-8">
 					<span
@@ -752,7 +752,7 @@ function GroupSection({
 	return (
 		<section data-testid="plan-group">
 			{!hideHeader ? (
-				<h2 className="flex items-baseline gap-8 border-border-muted border-b bg-container-elevated-bg px-12 py-8 tr-title-compact text-text-default">
+				<h2 className="flex items-baseline gap-8 border-border-muted border-b px-12 py-8 tr-title-compact text-text-default">
 					<span className="min-w-0 flex-1 truncate">{group.title}</span>
 					<span className="shrink-0 tr-text-eyebrow text-text-subtle">
 						{done}/{total}
@@ -1430,7 +1430,7 @@ export default function PlanPane({
 					className="mb-32 overflow-hidden rounded-[var(--radius-md)] border border-border-muted"
 					data-testid="plan-current"
 				>
-					<div className="flex flex-wrap items-center gap-8 border-border-muted border-b bg-container-elevated-bg px-12 py-8">
+					<div className="flex flex-wrap items-center gap-8 border-border-muted border-b px-12 py-8">
 						<h2 className="flex min-w-0 flex-1 items-baseline gap-4">
 							<span className="shrink-0 tr-text-eyebrow text-text-subtle">Ongoing:</span>
 							<span className="min-w-0 truncate tr-title-compact text-text-default">
@@ -1520,7 +1520,7 @@ export default function PlanPane({
 						className="mb-32 overflow-hidden rounded-[var(--radius-md)] border border-border-muted"
 						data-testid="plan-completed"
 					>
-						<div className="flex min-h-24 items-center gap-8 border-border-muted border-b bg-container-elevated-bg px-12 py-8">
+						<div className="flex min-h-24 items-center gap-8 border-border-muted border-b px-12 py-8">
 							<h2 className="flex-1 tr-text-eyebrow text-text-subtle">Completed</h2>
 							{completedCollapsibleIds.length > 0 ? (
 								<ExpandCollapseToggle
