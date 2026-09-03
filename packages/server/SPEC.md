@@ -151,6 +151,10 @@ Analytics is host-mediated the same way: **every `track()` call site lives in `h
 session-create, login-success observation), and `host` syncs `setAnalyticsSending` off the settings
 broadcast — `analytics` has no `settings` edge and no feature module knows analytics exists.
 
+Subagent availability is also host-mediated: `settings` owns the global default, `workspaces` owns the
+optional local override, and `host` injects their effective value into `agent` plus requests live-session
+reevaluation after either mutation. No feature imports a sibling to derive the policy.
+
 ## Get right
 
 - **No process isolation** — a fatal agent/provider fault takes the whole host down (accepted tradeoff).

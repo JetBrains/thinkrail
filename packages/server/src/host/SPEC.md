@@ -266,7 +266,14 @@ channel fan-out, and the process-boot wrapper both launchers share.
   toggles; `session.reloadResources` re-scans a running session — the composition stays here; `agent` never
   imports its sibling. `createServer` also wires **`setSkillAdmissionResolver`**, mapping a session's
   `workspaceId` → its project's trust/acknowledged/disabled + that workspace's overrides (fail-closed), so
-  `agent` gates skills without importing `projects`/`workspaces`);
+  `agent` gates skills without importing `projects`/`workspaces`). The sibling subagent policy is composed
+  here the same way: `createServer` wires `setSubagentsEnabledResolver` to map an explicit
+  `Workspace.subagentsOverride` when present and otherwise use `AppConfig.subagentsEnabled` (unknown
+  workspace fails closed), the settings
+  publisher asks `refreshSubagentTools()` to reevaluate all live sessions after any global update, and
+  `workspace.setSubagentsOverride` persists through `workspaces` then refreshes only that workspace. The
+  two authoritative publishers remain the clients' convergence path; the host-to-agent refresh changes
+  runtime capability, not frontend state;
   **`reviewerSessionMonitor.ts`** (safety for stuck reviewer sessions) — when a reviewer session crashes/times out
   without sending a verdict, the item's `pending` review flag (the UI's `reviewing: true` spinner) previously
   persisted forever, deadlocking the Review All queue. The monitor subscribes to session settled events

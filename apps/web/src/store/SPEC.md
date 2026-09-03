@@ -70,7 +70,8 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `workspace.updated` snapshot in: **replace** the record by `id` in `workspaces[ws.projectId]`, carrying
   over only the list-computed `diffStats` aggregate (the snapshot is the persisted record, which has none).
   The push is authoritative, so a *replace* — never a merge: a merge could not clear an **optional field the
-  host dropped** (`diffBase` re-pointed back to the creation base, the last `skillOverrides` entry removed),
+  host dropped** (`diffBase` re-pointed back to the creation base, the last `skillOverrides` entry removed,
+  or `subagentsOverride` returned to inherited),
   leaving the client labelling and keying reads off a value the host no longer has; a project never fetched or an id absent from its list is a **no-op** — the next
   `workspace.list` reconciles; **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
   reaction (`removeWorkspace` drops the row + `clearWorkspaceState` drops its
@@ -329,9 +330,10 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the
   theme-application side-effect is the shell's, keyed off `theme`), and defaults to
   `DEFAULT_CONFIG.theme` until the welcome arrives. **`composerGrowthLimit: ComposerGrowthLimit`**,
-  **`customLayoutPresets: LayoutPreset[]`**, and **`analyticsEnabled: boolean`** ride the same `applyConfig`
-  fold (host-owned, defaulted from `DEFAULT_CONFIG`) — the Chat, shared Layout catalog, and Privacy read
-  sides. **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
+  **`customLayoutPresets: LayoutPreset[]`**, **`analyticsEnabled: boolean`**, and
+  **`subagentsEnabled: boolean`** ride the same `applyConfig` fold (host-owned, defaulted from
+  `DEFAULT_CONFIG`) — the Chat, shared Layout catalog, and Privacy read sides.
+  **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
   StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by
   the chat preference seam from host-qualified browser localStorage or the native shell's injected
   backend-profile/window-scoped adapter. Message order defaults oldest-first; movement defaults to

@@ -138,6 +138,8 @@ of the host.
   **`disabledSkills`** / **`disabledGroups`** (project-baseline per-skill and per-group off — a group is a
   plugin, a source tier, or the special `@plugins`), which gate what its skills contribute; a workspace layers
   **`Workspace.skillOverrides`** (per-skill on/off) over that baseline;
+  **`SubagentOverride`** (`"on" | "off"`) + optional **`Workspace.subagentsOverride`** let a workspace
+  force subagents on/off, while absence inherits the host's `AppConfig.subagentsEnabled` default;
   "does it have specs?" is **not** a field — it's the lazy `project.hasSpecs` query, since it's a full-tree
   walk), **`ProjectPathStatus`** (a
   candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a
@@ -201,8 +203,9 @@ of the host.
   height preference: 6 visual lines, 10 visual lines, or 50% of the mounted chat panel respectively;
   `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;
   **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, composerGrowthLimit,
-  customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix }` — an extensible bag;
-  `customLayoutPresets` is the bounded resource-free catalog and is the **only** layout value synchronized
+  customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled }` — an extensible bag;
+  `subagentsEnabled` is the host-wide subagent default (`true` for current behavior), overridden only by
+  `Workspace.subagentsOverride`; `customLayoutPresets` is the bounded resource-free catalog and is the **only** layout value synchronized
   by the host; current/default preset and group limits are web-local); `analyticsEnabled` is the anonymous
   usage-analytics switch, default `true`
   — it is the **only** analytics fact on the wire:
@@ -344,7 +347,8 @@ of the host.
   names, for the presence-gated notice's count) / **`project.acknowledgeSkills`** (confirm skills that
   appeared after trust) / **`project.setSkillEnabled`** (project baseline) / **`project.setGroupEnabled`**
   (turn a plugin / source tier / `@plugins` on/off at the baseline) / **`workspace.setSkillOverride`**
-  (per-workspace on/off/clear → the `Workspace`) / **`workspace.setDiffBase`** (re-point the diff target,
+  (per-workspace on/off/clear → the `Workspace`) / **`workspace.setSubagentsOverride`**
+  (`"on"` / `"off"` / `null`-to-inherit → the updated `Workspace`) / **`workspace.setDiffBase`** (re-point the diff target,
   `null` clears it back to the creation base — echoes the updated `Workspace` **and** broadcasts
   `workspace.updated`, so every client converges on the push) / **`workspace.watchReady`** (await the
   fresh watcher's conservative startup nudge before a skill-loading client captures its freshness baseline;

@@ -40,9 +40,11 @@ choice was settled: the decision log below.
   `session_shutdown` emitted through pi's public extension runner in the package suite). The
   detached run's late `onUpdate` calls need no such guard: pi-agent-core drops updates after the
   tool call resolves (`acceptingUpdates`), so they are a no-op by construction.
-- `createSubagentsExtension({ service?, delegationRoot?, scope? })` — the embedder entry: ThinkRail
-  passes its host-bound service (and the matching storage bindings, used for restart-loss error
-  messages).
+- `createSubagentsExtension({ service?, delegationRoot?, scope?, isEnabled? })` — the embedder entry:
+  ThinkRail passes its host-bound service, matching storage bindings (used for restart-loss error
+  messages), and a live availability predicate. The predicate defaults to enabled for vanilla pi; it
+  removes both tools from the active set at `session_start` when false and is rechecked immediately
+  before `Agent` creates a child, closing an embedder-policy change race without unloading the extension.
 - `SUBAGENT_COMPLETION_MESSAGE` — the custom-message type the web's completion card keys on.
 - Definitions: `AgentDefinition`, `discoverAgentDefinitions`, `parseAgentDefinition`,
   `BUILTIN_AGENTS`.
@@ -58,7 +60,9 @@ choice was settled: the decision log below.
 Both tools register inside `session_start` (emitted by `bindExtensions`). `Agent` additionally
 re-registers in `before_agent_start` for the first provider turn and at each `turn_end` for the next
 one; pi replaces the same-name tool immediately, so each turn receives one definition snapshot for
-both its description and execution while edits remain live without `/reload`.
+both its description and execution while edits remain live without `/reload`. Registration remains
+intact while an embedder deactivates the tools: same-session re-enable and detached completion delivery
+do not require extension reload or replacement.
 
 ## Definitions: discovery, precedence, trust
 

@@ -363,7 +363,16 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     is passed as the core's dynamic fallback rather than captured at service creation. One
     `DelegationService` per workspace is cached (`delegationServiceFor`, synchronous — nothing awaits
     at bind time); `subagentsExtensionFor(workspaceId)` hands the bound service to the
-    extension factory each session loads. Cascades: `removeSession`/`disposeAllSessions` fire
+    extension factory each session loads. A host-injected `setSubagentsEnabledResolver` maps that
+    workspace id to its current effective policy without creating an `agent` → settings/workspaces edge.
+    The predicate reaches the extension's launch-time guard and initial/reload activation. For live
+    policy changes, `refreshSubagentTools(workspaceId?)` removes/adds `Agent` +
+    `get_subagent_result` through pi's active-tool API: idle sessions update synchronously, streaming
+    sessions retain only a pending reevaluation applied at `agent_settled`, and repeated changes resolve
+    the latest policy then. The extension instance is never replaced, so already-running detached children
+    finish and retain completion delivery; a disabled launch is still rejected immediately by the live
+    predicate even before a streaming parent's tool set can be refreshed.
+    Cascades: `removeSession`/`disposeAllSessions` fire
     `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
     awaits it before `publishDeleted`/resolving** (safe: the cascade carries its own swallow, so a
     failing child abort can never fail a delete whose transcript is already trashed), and workspace
@@ -514,7 +523,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
   `isProjectSkillPath(relativePath)` (watch-classification predicate);
   `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
-  wires `workspaceId` → the admission context);
+  wires `workspaceId` → the admission context); the subagent-policy seams
+  **`setSubagentsEnabledResolver`** + **`refreshSubagentTools`** (host resolves the effective global default
+  plus workspace override; manager owns live-session activation timing);
   the bundled-artifact seam (`registerBundledRuntime` +
   `BundledExtensions`/`BundledExtensionFactory`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test

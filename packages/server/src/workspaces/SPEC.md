@@ -108,7 +108,11 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `listWorkspaceRecords`
   (raw registry records without Default ensure, folder-truth reconciliation, or per-workspace git diffStats —
   for internal read-only paths like history scope mapping that must not block on git spawns),
-  `workspaceDiffStats`, **`setWorkspaceDiffBase(id, ref | null)`** — re-point the ref this workspace's diff is
+  `workspaceDiffStats`, **`setWorkspaceSubagentsOverride(id, override)`** — persist `"on"` / `"off"`,
+  or delete `Workspace.subagentsOverride` for `null` (inherit), then emit the authoritative full
+  `workspace.updated` snapshot. It validates the closed value but never reads the global default or
+  resolves effective agent policy; the host composes that across sibling boundaries;
+  **`setWorkspaceDiffBase(id, ref | null)`** — re-point the ref this workspace's diff is
   measured against (`Workspace.diffBase`), `null` (or the creation base itself, which would be a redundant
   override) clearing it; persists + **broadcasts the updated record** so every client converges on the push,
   never optimistically (modelled exactly on `setWorkspaceSkillOverride`). Both **ref doors** — this one and
@@ -204,7 +208,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `listWorkspaces`, `listWorkspaceRecords`, `forgetWorkspace`, `reclaimWorktree`, `removeWorkspace`,
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
-  `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`.
+  `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
+  `setWorkspaceSubagentsOverride`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).
