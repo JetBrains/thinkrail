@@ -28,7 +28,8 @@ of the host.
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; the value re-exports
-  `DEFAULT_CONFIG`, `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
+  `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `MAX_HISTORY_LIMIT`,
+  `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
   hydrate, the host skips them in the history index and does not count them as `message_sent`; both
   sides agree here rather than each re-deriving `startsWith`) + **`isRetriedAttempt(messages, index)`**
@@ -203,11 +204,11 @@ of the host.
   light id plus one opaque dark id. `AppConfig.theme` remains the reversible fixed choice in both modes;
   `AppConfig.systemThemePair` is absent until system mode is first configured, then survives returns to
   fixed mode. Effective appearance never crosses the wire: every system-mode client resolves the same pair
-  against its own operating-system color scheme. These fields are additive on purpose: replacing `theme`
+  against its own operating-system color scheme. `THEME_SYSTEM_PROTOCOL_VERSION` pins this to v58.
+  These fields are additive on purpose: replacing `theme`
   with a nested object would break old clients (or create two fixed-theme authorities), while encoding a
-  pair inside the opaque id would turn a simple id into an unvalidated mini-protocol.
-  **`THEME_SYSTEM_PROTOCOL_VERSION`** pins these controls to their introduction so a later web client hides
-  them against an older host;
+  pair inside the opaque id would turn a simple id into an unvalidated mini-protocol. A later web client
+  hides the controls against an older host using that feature-introduction constant;
   **`ComposerGrowthLimit`** (`"compact" | "roomy" | "half-chat"`) is the closed, server-synced composer
   height preference: 6 visual lines, 10 visual lines, or 50% of the mounted chat panel respectively;
   `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;

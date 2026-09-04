@@ -7,6 +7,7 @@ import {
 
 interface ThemeOption {
 	id: string;
+	label: string;
 	appearance: "light" | "dark";
 	contrast: "normal" | "high";
 	active: boolean;
@@ -26,6 +27,7 @@ async function readThemeOptions(page: Page): Promise<ThemeOption[]> {
 	const options = await dialog.locator('[data-testid^="theme-option-"]').evaluateAll((nodes) =>
 		nodes.map((node) => ({
 			id: node.getAttribute("data-theme-id") ?? "",
+			label: node.textContent?.trim() ?? "",
 			appearance: node.getAttribute("data-appearance") === "light" ? "light" : "dark",
 			contrast: node.getAttribute("data-contrast") === "high" ? "high" : "normal",
 			active: node.getAttribute("data-active") === "true",
@@ -104,6 +106,9 @@ test("system mode follows each client and retains its explicit pair", async ({ p
 	await dialog.getByTestId("theme-mode-system").click();
 	await expect(page.locator("html")).toHaveAttribute("data-theme", initialLight?.id ?? "");
 	await expect(dialog.getByTestId("system-theme-current")).toContainText("Light");
+	await expect(dialog.getByTestId("system-theme-light-trigger")).toHaveAccessibleName(
+		`Light theme: ${initialLight?.label}`,
+	);
 	await dialog.getByTestId("system-theme-light-trigger").click();
 	await page.getByTestId(`system-theme-light-option-${alternateLight?.id}`).click();
 	await expect(page.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");

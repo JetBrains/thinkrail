@@ -59,18 +59,15 @@ function ThemeSelector({
 	onSelect: (id: ThemeId) => void;
 }) {
 	const label = appearance === "light" ? "Light theme" : "Dark theme";
-	const labelId = `system-theme-${appearance}-label`;
 	return (
 		<div className="flex flex-col gap-4">
-			<span id={labelId} className="tr-text-ui text-text-default">
-				{label}
-			</span>
+			<span className="tr-text-ui text-text-default">{label}</span>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button
 						variant="outline"
 						disabled={disabled}
-						aria-labelledby={labelId}
+						aria-label={`${label}: ${resolution.theme.label}`}
 						data-testid={`system-theme-${appearance}-trigger`}
 						className="w-full justify-between"
 					>
