@@ -18,8 +18,8 @@ This package has **no dependency on ThinkRail** and is installable into any bare
 
 ## What it owns
 
-- The `visualize` tool definition: name, description, TypeBox schema, per-type shape validation, and the
-  **tier-1 markdown fallback** returned as the tool's `content`.
+- The `visualize` tool definition: name, description, TypeBox schema, per-type shape validation,
+  Mermaid syntax validation, and the **tier-1 markdown fallback** returned as the tool's `content`.
 
 ## Public surface
 
@@ -32,8 +32,10 @@ This package has **no dependency on ThinkRail** and is installable into any bare
 ## Boundary
 
 - **Allowed deps:** `typebox` (schema), `@earendil-works/pi-ai` (`StringEnum`), and
-  `@earendil-works/pi-coding-agent` (**types only**). All declared as `peerDependencies` — the host pi
-  provides them at runtime.
+  `@earendil-works/pi-coding-agent` (**types only**) as `peerDependencies` supplied by the host pi;
+  `mermaid` (the syntax authority, catalog-pinned to the web renderer's version) and `linkedom` (the
+  temporary Node DOM needed to initialize Mermaid's sanitizer) as runtime dependencies of this portable
+  package.
 - **Forbidden:** anything from ThinkRail (`@thinkrail/*`, `apps/web`, the server). Reaching into the
   host would defeat portability.
 
@@ -42,14 +44,32 @@ This package has **no dependency on ThinkRail** and is installable into any bare
 - `index.ts` — factory + `registerTool` + `execute` (validate → build fallback `content` → return
   `{ content, details }`).
 - `src/schema.ts` — `VisualizeSchema` (flat object, discriminated by `type`) + inferred types.
-- `src/validate.ts` — `validateShape` (throws on bad per-type shape; mermaid *syntax* is not checked here).
+- `src/validate.ts` — payload-shape validation and ordered discovery of every Mermaid source in the
+  contract (`mermaid`, then `options[N].mermaid`).
+- `src/mermaid.ts` — lazy Node-compatible Mermaid initialization plus serialized syntax parsing.
 - `src/markdown.ts` — tier-1 fallback builders (`mermaidFence`, `comparisonMarkdown`).
 - `*.test.ts` — `bun test` unit coverage of the above.
 
+## Validation and agent feedback
+
+A Mermaid-bearing call succeeds only after the exact Mermaid parser version used by the web renderer
+accepts every source. Validation runs in the capability, before fallback content is returned, because a
+renderer-only failure happens after pi has already recorded a successful tool result and cannot become
+model feedback. Invalid syntax throws an actionable error naming `mermaid` or `options[N].mermaid` and
+asking the model to correct and retry; pi turns that throw into an `isError` tool result and performs its
+ordinary continuation. The extension never injects hidden prompts or forces retries.
+
+Mermaid expects browser DOM globals even for common parse paths. The extension supplies a lightweight DOM
+only while the module initializes and restores the host's previous global property descriptors on success
+or failure. Parse calls are serialized: Mermaid resets shared configuration on every parse, while ThinkRail
+sessions execute concurrently in one process. This is syntax validation, not SVG/layout rendering; web
+renderers retain their source fallback for failures after parse.
+
 ## Rendering tiers (graceful degradation)
 
-1. **`content` markdown** — *this package*. Readable in any host (TUI, piped output, a UI without a
-   custom renderer). For `diagram`, a fenced ```mermaid block; for `comparison`, a sectioned list.
+1. **`content` markdown** — *this package*, after successful shape and syntax validation. Readable in any
+   host (TUI, piped output, a UI without a custom renderer). For `diagram`, a fenced ```mermaid block; for
+   `comparison`, a sectioned list.
 2. **`renderResult` (TUI)** — **deferred.** A tier-2 renderer using pi-tui's `Markdown` component would
    render the fallback more nicely in pi's terminal. Deferred from V1: it's TUI-only polish, sourcing a
    `MarkdownTheme` is unconfirmed, and tier-1 already degrades acceptably. Adding it later touches only
@@ -59,4 +79,5 @@ This package has **no dependency on ThinkRail** and is installable into any bare
 ## Not here
 
 - Rich rendering (mermaid → SVG, styled comparison cards) — host-specific, keyed to the tool name.
-- mermaid *syntax* validation — a render-time concern for the renderer, not the capability.
+- Forced model retries or browser→agent render-error reporting — pi's normal tool-error continuation owns
+  the retry opportunity; post-parse presentation failures remain renderer-local fallback.
