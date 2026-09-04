@@ -25,6 +25,7 @@ import type {
 	RouteChatTarget,
 	SessionRuntime,
 	TerminalTab,
+	WorkspaceActivity,
 } from "./appStore";
 
 interface ConnectionGenerationState {
@@ -464,7 +465,7 @@ export function selectAgentReviewCommentCount(
 
 const ACTIVITY_ROLLUP_ORDER: readonly ActivityStatus[] = ["failed", "waiting", "running", "queued"];
 
-export type ActivityMap = Record<string, Record<string, ActivityStatus>>;
+export type ActivityMap = Record<string, WorkspaceActivity>;
 
 export interface ActivityRollup {
 	status: ActivityStatus;
@@ -484,21 +485,17 @@ export function workspaceActivityRollup(
 	activityByWorkspace: ActivityMap,
 	workspaceId: string,
 ): ActivityRollup | null {
-	const record = activityByWorkspace[workspaceId];
-	return record ? rollUp([record]) : null;
+	const entry = activityByWorkspace[workspaceId];
+	return entry ? rollUp([entry.sessions]) : null;
 }
 
 export function projectActivityRollup(
 	activityByWorkspace: ActivityMap,
-	workspaces: Record<string, Workspace[]>,
 	projectId: string,
 ): ActivityRollup | null {
-	const list = workspaces[projectId];
-	if (!list) return null;
 	const records: Record<string, ActivityStatus>[] = [];
-	for (const workspace of list) {
-		const record = activityByWorkspace[workspace.id];
-		if (record) records.push(record);
+	for (const entry of Object.values(activityByWorkspace)) {
+		if (entry.projectId === projectId) records.push(entry.sessions);
 	}
 	return rollUp(records);
 }

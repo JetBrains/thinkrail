@@ -158,6 +158,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   is presentation policy owned by the client's selectors (see `apps/web/src/store/SPEC.md`), and a
   precedence order baked in here would be a UI decision escaping into the host.
 
+  Every row and push carries its **`projectId`**, resolved through the **`setActivityProjectResolver`**
+  seam (the host owns the workspace registry; this module stays ignorant of projects, as with
+  `setSkillAdmissionResolver`). An unresolvable workspace — one being torn down — publishes nothing, since
+  the client's own workspace-removal fold has already dropped its activity. See `packages/contracts/SPEC.md`
+  for why attribution travels on the wire instead of being derived client-side.
+
   **Lifetime:** entries are never idle-evicted, so every status survives client reconnects. Because
   `waiting` and `failed` both fall back to the transcript, they also survive a **host restart** for any
   session that gets attached. What no status survives is a session this process has never loaded:
@@ -589,7 +595,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
   `buildAnswersMessage`/`awaitingQuestionToolCallId`); the activity layer
   (`deriveActivityStatus`/`ActivityInputs` + `listSessionActivity`/`syncSessionActivity`/
-  `setSessionActivityPublisher`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
+  `setSessionActivityPublisher`/`setActivityProjectResolver`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
   (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /

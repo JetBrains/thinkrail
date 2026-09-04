@@ -124,6 +124,7 @@ export interface SessionDeletedPayload {
 
 export interface SessionActivityPayload {
 	workspaceId: string;
+	projectId: string;
 	sessionId: string;
 	status: ActivityStatus | null;
 }

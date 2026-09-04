@@ -5,6 +5,7 @@ export type ActivityStatus = "running" | "waiting" | "queued" | "failed";
 export interface SessionActivity {
 	sessionId: string;
 	workspaceId: string;
+	projectId: string;
 	status: ActivityStatus;
 }
 

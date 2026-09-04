@@ -20,6 +20,7 @@ import {
 	getSessionWorkspaceId,
 	isProjectSkillPath,
 	refreshSubagentTools,
+	setActivityProjectResolver,
 	setExtUiPendingObserver,
 	setExtUiPublisher,
 	setReviewCommentHandler,
@@ -346,6 +347,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		} catch {
 			ws.close();
 			return false;
+		}
+	});
+
+	setActivityProjectResolver((workspaceId) => {
+		try {
+			return getWorkspace(workspaceId).projectId;
+		} catch {
+			return null;
 		}
 	});
 

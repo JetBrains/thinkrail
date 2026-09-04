@@ -502,9 +502,14 @@ gets for free rather than a value each one must remember to special-case, and th
 workspaces that have something to say. The single place idleness is spelled out is the push's
 `status: null`, because a *removal* has to be transmitted.
 
-- **`SessionActivity`** = `{ sessionId, workspaceId, status }` — a snapshot row.
-- **`session.activity`** push = `{ sessionId, workspaceId, status: ActivityStatus | null }`, emitted when a
-  session's derived status changes.
+- **`SessionActivity`** = `{ sessionId, workspaceId, projectId, status }` — a snapshot row.
+- **`session.activity`** push = `{ sessionId, workspaceId, projectId, status: ActivityStatus | null }`,
+  emitted when a session's derived status changes.
+- **`projectId` rides every row deliberately, even though it is derivable from `workspaceId`.** The client
+  can only make that derivation for projects whose `workspace.list` it has read, and it reads that list
+  only for *expanded* projects — so a collapsed, never-opened project would roll up to nothing, which is
+  exactly the state this feature exists to reveal. Attribution therefore travels with the row rather than
+  depending on unrelated data being loaded first.
 - **`session.activityList`** (no params) → `SessionActivity[]` for every workspace. A snapshot request
   exists because pushes are **not** replayed on reconnect (the dedup cache covers requests only), so
   without it a client that reconnected mid-run would show a stale or empty rail until the next transition.

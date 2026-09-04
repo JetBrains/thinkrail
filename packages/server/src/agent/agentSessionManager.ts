@@ -146,12 +146,16 @@ export function syncSessionActivity(sessionId: string): void {
 	if (!entry) return;
 	const status = isSessionDeleted(sessionId, entry.workspaceId) ? null : activityOf(entry);
 	if (status === entry.publishedActivity) return;
+	const projectId = activityProjectId(entry.workspaceId);
+	if (projectId === null) return;
 	entry.publishedActivity = status;
-	publishActivity({ sessionId, workspaceId: entry.workspaceId, status });
+	publishActivity({ sessionId, workspaceId: entry.workspaceId, projectId, status });
 }
 
 function retractActivity(sessionId: string, workspaceId: string): void {
-	publishActivity({ sessionId, workspaceId, status: null });
+	const projectId = activityProjectId(workspaceId);
+	if (projectId === null) return;
+	publishActivity({ sessionId, workspaceId, projectId, status: null });
 }
 
 export function listSessionActivity(): SessionActivity[] {
@@ -159,7 +163,10 @@ export function listSessionActivity(): SessionActivity[] {
 	for (const [sessionId, entry] of sessions) {
 		if (isSessionDeleted(sessionId, entry.workspaceId)) continue;
 		const status = activityOf(entry);
-		if (status) rows.push({ sessionId, workspaceId: entry.workspaceId, status });
+		if (!status) continue;
+		const projectId = activityProjectId(entry.workspaceId);
+		if (projectId === null) continue;
+		rows.push({ sessionId, workspaceId: entry.workspaceId, projectId, status });
 	}
 	return rows;
 }
@@ -180,6 +187,19 @@ export function setSkillAdmissionResolver(
 	resolver: (workspaceId: string) => SkillAdmissionContext,
 ): void {
 	skillAdmissionResolver = resolver;
+}
+
+let activityProjectResolver: (workspaceId: string) => string | null = () => null;
+export function setActivityProjectResolver(resolver: (workspaceId: string) => string | null): void {
+	activityProjectResolver = resolver;
+}
+
+function activityProjectId(workspaceId: string): string | null {
+	try {
+		return activityProjectResolver(workspaceId);
+	} catch {
+		return null;
+	}
 }
 
 let subagentsEnabledResolver: (workspaceId: string) => boolean = () => true;

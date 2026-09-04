@@ -278,6 +278,11 @@ export const SettingsSection = {
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
+export interface WorkspaceActivity {
+	projectId: string;
+	sessions: Record<string, ActivityStatus>;
+}
+
 export interface Toast {
 	id: string;
 	variant: "error" | "success" | "info";
@@ -744,7 +749,7 @@ interface AppState {
 	chatStartsByWorkspace: Record<string, number>;
 	worktreeCreationsByProject: Record<string, number>;
 	deletedSessionsByWorkspace: Record<string, Record<string, true>>;
-	activityByWorkspace: Record<string, Record<string, ActivityStatus>>;
+	activityByWorkspace: Record<string, WorkspaceActivity>;
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
 	sessions: Record<string, SessionRuntime>;
@@ -1077,19 +1082,19 @@ function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 }
 
 function sameActivityMap(
-	prev: Record<string, Record<string, ActivityStatus>>,
-	next: Record<string, Record<string, ActivityStatus>>,
+	prev: Record<string, WorkspaceActivity>,
+	next: Record<string, WorkspaceActivity>,
 ): boolean {
 	const prevKeys = Object.keys(prev);
 	if (prevKeys.length !== Object.keys(next).length) return false;
 	return prevKeys.every((workspaceId) => {
 		const before = prev[workspaceId];
 		const after = next[workspaceId];
-		if (!before || !after) return false;
-		const sessionIds = Object.keys(before);
+		if (!before || !after || before.projectId !== after.projectId) return false;
+		const sessionIds = Object.keys(before.sessions);
 		return (
-			sessionIds.length === Object.keys(after).length &&
-			sessionIds.every((sessionId) => before[sessionId] === after[sessionId])
+			sessionIds.length === Object.keys(after.sessions).length &&
+			sessionIds.every((sessionId) => before.sessions[sessionId] === after.sessions[sessionId])
 		);
 	});
 }
@@ -1099,12 +1104,14 @@ function withoutSessionActivity(
 	workspaceId: string,
 	sessionId: string,
 ): Pick<AppState, "activityByWorkspace"> {
-	const remaining = omitKey(s.activityByWorkspace[workspaceId] ?? {}, sessionId);
+	const current = s.activityByWorkspace[workspaceId];
+	if (!current) return { activityByWorkspace: s.activityByWorkspace };
+	const sessions = omitKey(current.sessions, sessionId);
 	return {
 		activityByWorkspace:
-			Object.keys(remaining).length === 0
+			Object.keys(sessions).length === 0
 				? omitKey(s.activityByWorkspace, workspaceId)
-				: { ...s.activityByWorkspace, [workspaceId]: remaining },
+				: { ...s.activityByWorkspace, [workspaceId]: { ...current, sessions } },
 	};
 }
 
@@ -1307,7 +1314,7 @@ function withoutChat(
 	const inHistory = closed.some((chat) => chat.sessionId === sessionId);
 	const hasRuntime = s.sessions[sessionId] !== undefined;
 	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
-	const hasActivity = s.activityByWorkspace[workspaceId]?.[sessionId] !== undefined;
+	const hasActivity = s.activityByWorkspace[workspaceId]?.sessions[sessionId] !== undefined;
 	const targetsLocation =
 		s.chatLocationRequest?.workspaceId === workspaceId &&
 		s.chatLocationRequest.sessionId === sessionId;
@@ -1583,7 +1590,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	recentProjects: [],
 	workspaces: {},
 	removedWorkspaceIds: Object.create(null) as Record<string, true>,
-	activityByWorkspace: Object.create(null) as Record<string, Record<string, ActivityStatus>>,
+	activityByWorkspace: Object.create(null) as Record<string, WorkspaceActivity>,
 	expandedProjectIds: Object.create(null) as Record<string, true>,
 	selectedProjectId: null,
 	activeWorkspaceId: null,
@@ -2673,29 +2680,34 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	hydrateSessionActivity: (rows) =>
 		set((s) => {
-			const next: Record<string, Record<string, ActivityStatus>> = Object.create(null);
+			const next: Record<string, WorkspaceActivity> = Object.create(null);
 			for (const row of rows) {
 				if (s.removedWorkspaceIds[row.workspaceId]) continue;
 				if (isSessionDeleted(s, row.workspaceId, row.sessionId)) continue;
-				const forWorkspace = next[row.workspaceId] ?? Object.create(null);
-				forWorkspace[row.sessionId] = row.status;
+				const forWorkspace =
+					next[row.workspaceId] ??
+					({ projectId: row.projectId, sessions: Object.create(null) } as WorkspaceActivity);
+				forWorkspace.sessions[row.sessionId] = row.status;
 				next[row.workspaceId] = forWorkspace;
 			}
 			return sameActivityMap(s.activityByWorkspace, next) ? {} : { activityByWorkspace: next };
 		}),
-	applySessionActivity: ({ workspaceId, sessionId, status }) =>
+	applySessionActivity: ({ workspaceId, projectId, sessionId, status }) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const current = s.activityByWorkspace[workspaceId];
 			if (status === null || isSessionDeleted(s, workspaceId, sessionId)) {
-				if (current?.[sessionId] === undefined) return {};
+				if (current?.sessions[sessionId] === undefined) return {};
 				return withoutSessionActivity(s, workspaceId, sessionId);
 			}
-			if (current?.[sessionId] === status) return {};
+			if (current?.sessions[sessionId] === status && current.projectId === projectId) return {};
 			return {
 				activityByWorkspace: {
 					...s.activityByWorkspace,
-					[workspaceId]: { ...current, [sessionId]: status },
+					[workspaceId]: {
+						projectId,
+						sessions: { ...current?.sessions, [sessionId]: status },
+					},
 				},
 			};
 		}),

@@ -269,9 +269,7 @@ export function ProjectTree() {
 								isSelected={selectedProjectId === project.id}
 								isExpanded={isExpanded}
 								activity={
-									isExpanded
-										? null
-										: projectActivityRollup(activityByWorkspace, workspaces, project.id)
+									isExpanded ? null : projectActivityRollup(activityByWorkspace, project.id)
 								}
 								workspaceCount={(list ?? []).filter((w) => !isDefaultWorkspace(w)).length}
 								onToggle={() => toggleExpand(project.id)}

@@ -28,6 +28,7 @@ import {
 	useAppStore,
 } from "./appStore";
 import {
+	projectActivityRollup,
 	selectCompactionTurnIds,
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
@@ -3806,32 +3807,68 @@ test("authority can be given up without replacing the list (a consumer activatin
 
 test("an activity push installs a status, and a null push retracts it", () => {
 	const store = useAppStore.getState();
-	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "running" });
-	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { s1: "running" } });
+	store.applySessionActivity({
+		workspaceId: "w1",
+		projectId: "p1",
+		sessionId: "s1",
+		status: "running",
+	});
+	expect(useAppStore.getState().activityByWorkspace).toEqual({
+		w1: { projectId: "p1", sessions: { s1: "running" } },
+	});
 
-	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "failed" });
-	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { s1: "failed" } });
+	store.applySessionActivity({
+		workspaceId: "w1",
+		projectId: "p1",
+		sessionId: "s1",
+		status: "failed",
+	});
+	expect(useAppStore.getState().activityByWorkspace).toEqual({
+		w1: { projectId: "p1", sessions: { s1: "failed" } },
+	});
 
-	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: null });
+	store.applySessionActivity({ workspaceId: "w1", projectId: "p1", sessionId: "s1", status: null });
 	expect(useAppStore.getState().activityByWorkspace).toEqual({});
 });
 
 test("retracting one chat keeps its siblings and prunes the workspace only when it empties", () => {
 	const store = useAppStore.getState();
-	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "running" });
-	store.applySessionActivity({ workspaceId: "w1", sessionId: "s2", status: "waiting" });
-	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: null });
-	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { s2: "waiting" } });
+	store.applySessionActivity({
+		workspaceId: "w1",
+		projectId: "p1",
+		sessionId: "s1",
+		status: "running",
+	});
+	store.applySessionActivity({
+		workspaceId: "w1",
+		projectId: "p1",
+		sessionId: "s2",
+		status: "waiting",
+	});
+	store.applySessionActivity({ workspaceId: "w1", projectId: "p1", sessionId: "s1", status: null });
+	expect(useAppStore.getState().activityByWorkspace).toEqual({
+		w1: { projectId: "p1", sessions: { s2: "waiting" } },
+	});
 
-	store.applySessionActivity({ workspaceId: "w1", sessionId: "s2", status: null });
+	store.applySessionActivity({ workspaceId: "w1", projectId: "p1", sessionId: "s2", status: null });
 	expect(useAppStore.getState().activityByWorkspace).toEqual({});
 });
 
 test("an unchanged status is not a state write, so a quiet rail never re-renders", () => {
 	const store = useAppStore.getState();
-	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "running" });
+	store.applySessionActivity({
+		workspaceId: "w1",
+		projectId: "p1",
+		sessionId: "s1",
+		status: "running",
+	});
 	const before = useAppStore.getState().activityByWorkspace;
-	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "running" });
+	store.applySessionActivity({
+		workspaceId: "w1",
+		projectId: "p1",
+		sessionId: "s1",
+		status: "running",
+	});
 	expect(useAppStore.getState().activityByWorkspace).toBe(before);
 });
 
@@ -3841,23 +3878,44 @@ test("activity for a removed workspace or a deleted chat is refused, live and on
 		deletedSessionsByWorkspace: { w1: { dead: true } },
 	});
 	const store = useAppStore.getState();
-	store.applySessionActivity({ workspaceId: "gone", sessionId: "s1", status: "running" });
-	store.applySessionActivity({ workspaceId: "w1", sessionId: "dead", status: "running" });
+	store.applySessionActivity({
+		workspaceId: "gone",
+		projectId: "p1",
+		sessionId: "s1",
+		status: "running",
+	});
+	store.applySessionActivity({
+		workspaceId: "w1",
+		projectId: "p1",
+		sessionId: "dead",
+		status: "running",
+	});
 	expect(useAppStore.getState().activityByWorkspace).toEqual({});
 
 	store.hydrateSessionActivity([
-		{ workspaceId: "gone", sessionId: "s1", status: "running" },
-		{ workspaceId: "w1", sessionId: "dead", status: "failed" },
-		{ workspaceId: "w1", sessionId: "alive", status: "waiting" },
+		{ workspaceId: "gone", projectId: "p1", sessionId: "s1", status: "running" },
+		{ workspaceId: "w1", projectId: "p1", sessionId: "dead", status: "failed" },
+		{ workspaceId: "w1", projectId: "p1", sessionId: "alive", status: "waiting" },
 	]);
-	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { alive: "waiting" } });
+	expect(useAppStore.getState().activityByWorkspace).toEqual({
+		w1: { projectId: "p1", sessions: { alive: "waiting" } },
+	});
 });
 
 test("hydration REPLACES the map, so a reconnect cannot leave a stale glyph behind", () => {
 	const store = useAppStore.getState();
-	store.applySessionActivity({ workspaceId: "w1", sessionId: "stale", status: "running" });
-	store.hydrateSessionActivity([{ workspaceId: "w2", sessionId: "fresh", status: "queued" }]);
-	expect(useAppStore.getState().activityByWorkspace).toEqual({ w2: { fresh: "queued" } });
+	store.applySessionActivity({
+		workspaceId: "w1",
+		projectId: "p1",
+		sessionId: "stale",
+		status: "running",
+	});
+	store.hydrateSessionActivity([
+		{ workspaceId: "w2", projectId: "p1", sessionId: "fresh", status: "queued" },
+	]);
+	expect(useAppStore.getState().activityByWorkspace).toEqual({
+		w2: { projectId: "p1", sessions: { fresh: "queued" } },
+	});
 });
 
 test("removing a workspace drops its activity along with its other local state", () => {
@@ -3870,33 +3928,57 @@ test("removing a workspace drops its activity along with its other local state",
 		baseBranch: "main",
 	};
 	useAppStore.setState({ projects: [], workspaces: { p1: [workspace] } });
-	useAppStore
-		.getState()
-		.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "running" });
+	useAppStore.getState().applySessionActivity({
+		workspaceId: "w1",
+		projectId: "p1",
+		sessionId: "s1",
+		status: "running",
+	});
 	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
 	expect(useAppStore.getState().activityByWorkspace).toEqual({});
 });
 
 test("deleting a chat drops its activity row", () => {
 	const store = useAppStore.getState();
-	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "failed" });
-	store.applySessionActivity({ workspaceId: "w1", sessionId: "s2", status: "running" });
+	store.applySessionActivity({
+		workspaceId: "w1",
+		projectId: "p1",
+		sessionId: "s1",
+		status: "failed",
+	});
+	store.applySessionActivity({
+		workspaceId: "w1",
+		projectId: "p1",
+		sessionId: "s2",
+		status: "running",
+	});
 	store.deleteChat("w1", "s1", false);
-	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { s2: "running" } });
+	expect(useAppStore.getState().activityByWorkspace).toEqual({
+		w1: { projectId: "p1", sessions: { s2: "running" } },
+	});
 });
 
 test("hydrating an empty snapshot clears the map — how a pre-activity host retires stale glyphs", () => {
 	const store = useAppStore.getState();
-	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "running" });
+	store.applySessionActivity({
+		workspaceId: "w1",
+		projectId: "p1",
+		sessionId: "s1",
+		status: "running",
+	});
 	store.hydrateSessionActivity([]);
 	expect(useAppStore.getState().activityByWorkspace).toEqual({});
 });
 
 test("hydrating an unchanged snapshot is not a state write, so a reconnect never churns the rail", () => {
 	const store = useAppStore.getState();
-	store.hydrateSessionActivity([{ workspaceId: "w1", sessionId: "s1", status: "waiting" }]);
+	store.hydrateSessionActivity([
+		{ workspaceId: "w1", projectId: "p1", sessionId: "s1", status: "waiting" },
+	]);
 	const before = useAppStore.getState().activityByWorkspace;
-	store.hydrateSessionActivity([{ workspaceId: "w1", sessionId: "s1", status: "waiting" }]);
+	store.hydrateSessionActivity([
+		{ workspaceId: "w1", projectId: "p1", sessionId: "s1", status: "waiting" },
+	]);
 	expect(useAppStore.getState().activityByWorkspace).toBe(before);
 
 	store.hydrateSessionActivity([]);
@@ -3907,18 +3989,60 @@ test("hydrating an unchanged snapshot is not a state write, so a reconnect never
 
 test("hydration notices a changed status, an added chat, and a dropped chat", () => {
 	const store = useAppStore.getState();
-	store.hydrateSessionActivity([{ workspaceId: "w1", sessionId: "s1", status: "running" }]);
-	store.hydrateSessionActivity([{ workspaceId: "w1", sessionId: "s1", status: "failed" }]);
-	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { s1: "failed" } });
-
 	store.hydrateSessionActivity([
-		{ workspaceId: "w1", sessionId: "s1", status: "failed" },
-		{ workspaceId: "w1", sessionId: "s2", status: "queued" },
+		{ workspaceId: "w1", projectId: "p1", sessionId: "s1", status: "running" },
+	]);
+	store.hydrateSessionActivity([
+		{ workspaceId: "w1", projectId: "p1", sessionId: "s1", status: "failed" },
 	]);
 	expect(useAppStore.getState().activityByWorkspace).toEqual({
-		w1: { s1: "failed", s2: "queued" },
+		w1: { projectId: "p1", sessions: { s1: "failed" } },
 	});
 
-	store.hydrateSessionActivity([{ workspaceId: "w1", sessionId: "s2", status: "queued" }]);
-	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { s2: "queued" } });
+	store.hydrateSessionActivity([
+		{ workspaceId: "w1", projectId: "p1", sessionId: "s1", status: "failed" },
+		{ workspaceId: "w1", projectId: "p1", sessionId: "s2", status: "queued" },
+	]);
+	expect(useAppStore.getState().activityByWorkspace).toEqual({
+		w1: { projectId: "p1", sessions: { s1: "failed", s2: "queued" } },
+	});
+
+	store.hydrateSessionActivity([
+		{ workspaceId: "w1", projectId: "p1", sessionId: "s2", status: "queued" },
+	]);
+	expect(useAppStore.getState().activityByWorkspace).toEqual({
+		w1: { projectId: "p1", sessions: { s2: "queued" } },
+	});
+});
+
+test("a project rollup works for a workspace whose project list was never loaded", () => {
+	useAppStore.getState().applySessionActivity({
+		workspaceId: "w9",
+		projectId: "never-loaded",
+		sessionId: "s1",
+		status: "running",
+	});
+	expect(
+		projectActivityRollup(useAppStore.getState().activityByWorkspace, "never-loaded")?.status,
+	).toBe("running");
+	expect(useAppStore.getState().workspaces["never-loaded"]).toBeUndefined();
+});
+
+test("a workspace that changes project is re-attributed rather than counted twice", () => {
+	const store = useAppStore.getState();
+	store.applySessionActivity({
+		workspaceId: "w1",
+		projectId: "pa",
+		sessionId: "s1",
+		status: "running",
+	});
+	store.applySessionActivity({
+		workspaceId: "w1",
+		projectId: "pb",
+		sessionId: "s1",
+		status: "running",
+	});
+	const map = useAppStore.getState().activityByWorkspace;
+	expect(projectActivityRollup(map, "pa")).toBeNull();
+	expect(projectActivityRollup(map, "pb")?.status).toBe("running");
 });
