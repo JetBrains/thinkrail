@@ -32,9 +32,9 @@ export async function runPowerShellScript(
 	await Bun.write(path, script.startsWith(BOM) ? script : `${BOM}${script}`);
 	try {
 		for (const host of HOSTS) {
-			let run: ReturnType<typeof Bun.spawnSync>;
+			let run: ReturnType<typeof Bun.spawn>;
 			try {
-				run = Bun.spawnSync([host, ...FLAGS, "-File", path, ...args], {
+				run = Bun.spawn([host, ...FLAGS, "-File", path, ...args], {
 					stdout: options.capture ? "pipe" : "inherit",
 					stderr: "inherit",
 					...(options.env ? { env: options.env } : {}),
@@ -42,7 +42,10 @@ export async function runPowerShellScript(
 			} catch {
 				continue;
 			}
-			return { exitCode: run.exitCode ?? 1, stdout: run.stdout?.toString() ?? "" };
+			const stdout =
+				run.stdout instanceof ReadableStream ? await new Response(run.stdout).text() : "";
+			const exitCode = await run.exited;
+			return { exitCode, stdout };
 		}
 		return undefined;
 	} finally {

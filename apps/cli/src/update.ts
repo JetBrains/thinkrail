@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { compareReleaseVersions, resolveLatestRelease } from "@thinkrail/shared/release";
 import { channel as bakedChannel, version } from "@thinkrail/shared/version";
 import { type InstallMeta, readInstallMeta } from "./paths";
 import { psQuote, runPowerShellScript } from "./powershell";
@@ -158,45 +159,96 @@ export function windowsManualUpdateMessage(
 	].join("\n");
 }
 
-async function fetchInstaller(url: string): Promise<string | undefined> {
-	try {
-		const response = await fetch(url);
-		if (!response.ok) throw new Error(`HTTP ${response.status}`);
-		const script = await response.text();
-		if (!script.trim()) throw new Error("empty response");
-		return script;
-	} catch (err) {
-		console.error(
-			`error: failed to fetch the installer (${err instanceof Error ? err.message : String(err)})`,
-		);
-		return undefined;
-	}
+async function fetchInstaller(url: string): Promise<string> {
+	const response = await fetch(url);
+	if (!response.ok) throw new Error(`HTTP ${response.status}`);
+	const script = await response.text();
+	if (!script.trim()) throw new Error("empty response");
+	return script;
 }
 
-async function runWindowsUpdate(
+export type UpdateExecution =
+	| { kind: "ok"; output: string }
+	| { kind: "manual"; reason: string; command: string; exitCode: number }
+	| { kind: "failed"; reason: string; output: string; exitCode: number };
+
+export interface ExecuteUpdateOptions {
+	env: Record<string, string | undefined>;
+	capture?: boolean;
+}
+
+function failureText(err: unknown): string {
+	return err instanceof Error ? err.message : String(err);
+}
+
+async function executeWindowsPlan(
 	plan: WindowsUpdatePlan,
-	env: Record<string, string | undefined>,
-): Promise<number> {
-	const manual = () => {
-		console.error(`\n${windowsManualUpdateMessage(plan.channel, plan.version, plan.manualPrefix)}`);
-	};
-	const script = await fetchInstaller(env.THINKRAIL_INSTALL_PS1_URL ?? DEFAULT_INSTALL_PS1_URL);
-	if (script === undefined) {
-		manual();
-		return 1;
+	options: ExecuteUpdateOptions,
+): Promise<UpdateExecution> {
+	const manual = (reason: string, exitCode: number): UpdateExecution => ({
+		kind: "manual",
+		reason,
+		command: windowsManualUpdateMessage(plan.channel, plan.version, plan.manualPrefix),
+		exitCode,
+	});
+
+	let script: string;
+	try {
+		script = await fetchInstaller(options.env.THINKRAIL_INSTALL_PS1_URL ?? DEFAULT_INSTALL_PS1_URL);
+	} catch (err) {
+		return manual(`failed to fetch the installer (${failureText(err)})`, 1);
 	}
-	const run = await runPowerShellScript(script, plan.psArgs, { env });
+
+	const run = await runPowerShellScript(script, plan.psArgs, {
+		env: options.env,
+		...(options.capture ? { capture: true } : {}),
+	});
 	if (run === undefined) {
-		console.error("error: no PowerShell found (looked for powershell.exe, then pwsh.exe)");
-		manual();
-		return 1;
+		return manual("no PowerShell found (looked for powershell.exe, then pwsh.exe)", 1);
 	}
 	if (run.exitCode !== 0) {
-		console.error(`error: the installer exited with code ${run.exitCode}`);
-		manual();
-		return run.exitCode;
+		return manual(`the installer exited with code ${run.exitCode}`, run.exitCode);
 	}
-	return 0;
+	return { kind: "ok", output: run.stdout };
+}
+
+async function executeUnixPlan(
+	plan: UpdatePlan,
+	options: ExecuteUpdateOptions,
+): Promise<UpdateExecution> {
+	const url = options.env.THINKRAIL_INSTALL_SCRIPT_URL ?? DEFAULT_INSTALL_SCRIPT_URL;
+	const fetched = Bun.spawn(["curl", "-fsSL", url], { stdout: "pipe", stderr: "inherit" });
+	const script = await new Response(fetched.stdout).arrayBuffer();
+	if ((await fetched.exited) !== 0 || script.byteLength === 0) {
+		return { kind: "failed", reason: "failed to fetch the installer", output: "", exitCode: 1 };
+	}
+
+	const run = Bun.spawn(["bash", ...plan.bashArgs], {
+		stdin: new Blob([script]),
+		stdout: options.capture ? "pipe" : "inherit",
+		stderr: options.capture ? "pipe" : "inherit",
+		env: options.env,
+	});
+	const output = options.capture
+		? `${await new Response(run.stdout).text()}${await new Response(run.stderr).text()}`
+		: "";
+	const exitCode = await run.exited;
+	if (exitCode !== 0) {
+		return {
+			kind: "failed",
+			reason: `the installer exited with code ${exitCode}`,
+			output,
+			exitCode,
+		};
+	}
+	return { kind: "ok", output };
+}
+
+export function executeUpdatePlan(
+	plan: UpdatePlan | WindowsUpdatePlan,
+	options: ExecuteUpdateOptions,
+): Promise<UpdateExecution> {
+	return "psArgs" in plan ? executeWindowsPlan(plan, options) : executeUnixPlan(plan, options);
 }
 
 export async function runUpdate(
@@ -209,13 +261,11 @@ export async function runUpdate(
 	}
 	const home = homedir();
 	let plan: UpdatePlan | WindowsUpdatePlan;
+	let wanted: string;
 	try {
-		const input = {
-			args: parseUpdateArgs(argv),
-			installMeta: readInstallMeta(home),
-			baked: bakedChannel,
-			home,
-		};
+		const args = parseUpdateArgs(argv);
+		wanted = args.version;
+		const input = { args, installMeta: readInstallMeta(home), baked: bakedChannel, home };
 		plan =
 			process.platform === "win32" ? resolveWindowsUpdatePlan(input) : resolveUpdatePlan(input);
 	} catch (err) {
@@ -226,20 +276,22 @@ export async function runUpdate(
 
 	console.log(`Updating ThinkRail (current: ${version}, channel: ${plan.channel}) …`);
 
-	if ("psArgs" in plan) return await runWindowsUpdate(plan, env);
-
-	const url = env.THINKRAIL_INSTALL_SCRIPT_URL ?? DEFAULT_INSTALL_SCRIPT_URL;
-	const fetched = Bun.spawnSync(["curl", "-fsSL", url], { stdout: "pipe", stderr: "inherit" });
-	if (!fetched.success || fetched.stdout.length === 0) {
-		console.error("error: failed to fetch the installer");
-		return 1;
+	if (wanted === "latest") {
+		try {
+			const latest = await resolveLatestRelease(plan.channel, { env });
+			if (latest && compareReleaseVersions(version, latest.version) >= 0) {
+				console.log(`Already on the newest ${plan.channel} build (${version}).`);
+				return 0;
+			}
+			if (latest) console.log(`Newest ${plan.channel} build: ${latest.version}`);
+		} catch (err) {
+			console.error(`warning: could not check the newest release (${failureText(err)})`);
+		}
 	}
 
-	const run = Bun.spawnSync(["bash", ...plan.bashArgs], {
-		stdin: fetched.stdout,
-		stdout: "inherit",
-		stderr: "inherit",
-		env,
-	});
-	return run.exitCode ?? 1;
+	const execution = await executeUpdatePlan(plan, { env });
+	if (execution.kind === "ok") return 0;
+	console.error(`error: ${execution.reason}`);
+	if (execution.kind === "manual") console.error(`\n${execution.command}`);
+	return execution.exitCode;
 }
