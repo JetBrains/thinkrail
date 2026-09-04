@@ -243,6 +243,12 @@ Before committing, opening/updating a PR, or declaring work done, re-read the fu
   change is warranted, finish with the concrete change + "apply?" (or just apply it if it's within the
   approved scope) — never with prose that makes the user say "do the cleanup then please".
 - **UI-visible changes:** offer before/after screenshots alongside the PR without being asked.
+- **PRs and issues follow their templates.** `gh pr create` / `gh issue create` do not apply
+  `.github/PULL_REQUEST_TEMPLATE.md` or `.github/ISSUE_TEMPLATE/*.md`, so anything opened
+  programmatically must reproduce the template by hand: same sections in the same order, every
+  checklist item kept and ticked only when actually done. For a PR, drop the `Related issues` line
+  only when it closes nothing. For an issue, pick the template that fits (bug report / feature
+  request) and pass its frontmatter `labels` via `--label`.
 
 ## Stack
 
