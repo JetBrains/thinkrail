@@ -124,9 +124,14 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `openTodos: countOpenTodos(…)` per session (a host-only composition of `agent` + `todos` — `agent`
   stays todos-free; a failed count omits the field, never fails the list); **`todo.requestFix`** is the
   same kind of composition (`todos` records + renders the fix package, `agent` delivers): the package is
-  fired **detached** into the item's own chat via `followUpSession` (`fireTodoFixPrompt`, the
-  `fireReviewPrompt` pattern) — a pre-turn rejection rolls the review record back (`rollbackTodoFix`) and
-  surfaces as an extension-UI notice, so an undelivered fix request never strands as `changes_requested`.
+  fired **detached** into the item's own chat as a **structured `todo-review-fix` custom message** —
+  `sendReviewFixToSession` (`fireTodoFixPrompt`), which calls `AgentSession.sendCustomMessage` with the
+  rendered package text as `content` (what the agent reads) and `ReviewFixDetails`
+  (`buildReviewFixDetails`: item id/title, the feedback note, and slim path/line-resolved findings) as
+  `details` (what the chat card renders), `deliverAs: "followUp"` + `triggerTurn` — **not** a synthetic
+  user turn (#363). Wrapped in `ackSend` exactly like the old `followUpSession` path, so a pre-turn
+  rejection rolls the review record back (`rollbackTodoFix`) and surfaces as an extension-UI notice, so an
+  undelivered fix request never strands as `changes_requested`.
   The manual fix package **carries the item's open agent findings** exactly like the automated cycle
   does (`itemFixFindings` — this item's unstale agent-authored drafts by `origin`, `markCommentsSent` +
   `buildSendPackage` under `withReviewLock`): with auto-fix off, the verdict path sends nothing, so
@@ -496,8 +501,10 @@ positioning gate in the `add_review_comment` seam (`reviews.anchorProblem`). The
   That branch calls `recordAgentChangesRequested({..., autoCycles: 2})` directly — the SAME terminal
   settlement `review_verdict` uses when the cycle is already spent or auto-fix is off — so the item reads
   as a normal "the human decides now" state, and notifies the reviewer chat why nothing was sent.
-  The send follows the same pre-turn rollback guarantee as every review send: a rejected
-  `followUpSession` (worker busy/detached) `rollbackSend`s the just-marked findings back to draft —
+  The send follows the same pre-turn rollback guarantee as every review send: the worker-facing fix
+  goes as the `todo-review-fix` custom message (`sendReviewFixToSession`, `ackSend`-wrapped like the
+  old `followUpSession`), and a rejected send (worker busy/detached) `rollbackSend`s the just-marked
+  findings back to draft —
   without it they'd strand as falsely-sent on a `changes_requested` item whose one auto cycle is
   already spent, invisible to a later manual Ask-to-fix.
   **Reflection never deletes — it annotates; automation trusts the annotation, the human sees

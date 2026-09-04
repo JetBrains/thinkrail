@@ -10,7 +10,12 @@ import {
 	RiAlertLine as TriangleAlert,
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
-import type { ImageContent, UserMessage } from "@thinkrail/contracts";
+import type {
+	ImageContent,
+	ReviewFixComment,
+	ReviewFixDetails,
+	UserMessage,
+} from "@thinkrail/contracts";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
 import { CustomIcon } from "@/components/CustomIcon";
 import { Button } from "@/components/ui/button";
@@ -124,6 +129,8 @@ export function ChatTurnView({
 			);
 		case "subagentCompletion":
 			return <SubagentCompletionCard id={row.id} details={row.details} text={row.text} />;
+		case "reviewFix":
+			return <ReviewFixCard id={row.id} details={row.details} />;
 		case "tool":
 			return <ToolRow row={row} workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />;
 		case "activity":
@@ -392,6 +399,60 @@ function SkillInvocationCard({
 				>
 					<Markdown text={invocation.content} />
 				</div>
+			) : null}
+		</div>
+	);
+}
+
+function reviewFixLineRef(c: ReviewFixComment): string {
+	const loc =
+		c.startLine === undefined
+			? ""
+			: c.endLine === undefined || c.endLine === c.startLine
+				? `L${c.startLine}`
+				: `L${c.startLine}\u2013${c.endLine}`;
+	if (c.path && loc) return `${c.path} ${loc}`;
+	return c.path ?? loc;
+}
+
+function reviewFixPackageItems(details: ReviewFixDetails): ReviewPackageItem[] {
+	return details.comments.map((c) => ({
+		path: c.path ?? null,
+		lineRef: reviewFixLineRef(c),
+		fragment: null,
+		body: c.body,
+	}));
+}
+
+function ReviewFixCard({ id, details }: { id: string; details: ReviewFixDetails }) {
+	const items = reviewFixPackageItems(details);
+	const noun = details.comments.length === 1 ? "finding" : "findings";
+	const summary =
+		details.comments.length > 0
+			? `Requested a fix on \u201c${details.itemTitle}\u201d \u00b7 ${details.comments.length} ${noun}`
+			: `Requested a fix on \u201c${details.itemTitle}\u201d`;
+	return (
+		<div
+			data-testid="review-fix-card"
+			className="max-w-[85%] overflow-hidden rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8"
+		>
+			<span data-testid="review-fix-summary" className="block tr-text-reading text-text-default">
+				{summary}
+			</span>
+			{details.note ? (
+				<p
+					data-testid="review-fix-note"
+					className="mt-4 whitespace-pre-wrap tr-text-reading text-text-muted"
+				>
+					{details.note}
+				</p>
+			) : null}
+			{items.length > 0 ? (
+				<ul className="mt-4 flex flex-col">
+					{keyPackageItems(items).map(({ key, item }) => (
+						<PackageCommentRow key={key} foldId={`${id}:${key}`} item={item} />
+					))}
+				</ul>
 			) : null}
 		</div>
 	);

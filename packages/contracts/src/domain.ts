@@ -740,3 +740,23 @@ export interface ReviewSnapshot {
 export interface ReviewChangedPayload extends ReviewSnapshot {
 	workspaceId: string;
 }
+
+/** Slim view of a sent review finding on a todo-review-fix message (path/lines pre-resolved host-side). */
+export interface ReviewFixComment {
+	id: string;
+	kind: ReviewCommentKind;
+	body: string;
+	path?: string;
+	startLine?: number;
+	endLine?: number;
+}
+
+/** Structured payload of a todo-review-fix custom message; the message `content` stays the agent-read text. */
+export interface ReviewFixDetails {
+	itemId: string;
+	itemTitle: string;
+	reviewId?: string;
+	/** The reviewer's/user's feedback prose (renderFixPackage note), when present. */
+	note?: string;
+	comments: ReviewFixComment[];
+}

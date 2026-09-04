@@ -144,6 +144,15 @@ of the host.
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the chat renders the questionnaire **inline** and replies via `session.answerQuestion`
     (correlated by the tool call id; rejected loud when the call is unknown/answered/superseded).
+  - the **todo plan-review fix** wire types — the **`TODO_REVIEW_FIX_CUSTOM_TYPE`** constant,
+    **`TodoReviewFixMessage`** (the tag↔details shape) + its **`isTodoReviewFixMessage`** guard (in
+    `wsProtocol`), and **`ReviewFixDetails`** / **`ReviewFixComment`** (in `domain`): a plan-review
+    verdict's fix request reaches the worker as a **structured custom message** (customType
+    `todo-review-fix`) instead of a synthetic user turn (#363). The message `content` stays the rendered
+    package text the agent reads; `details` (the item id/title, optional note, and slim path/line-resolved
+    findings) is what the chat card renders — the host resolves each finding's `path`/lines from its
+    anchor at send time so the client re-parses nothing. See [[submodule-server-todos]] +
+    [[submodule-web-chat]].
 - **domain.ts** — app entities: `Project` (git repo + unique `slug` + optional **`closed: true`** — the
   persisted open-rail membership bit; absence means open for backward compatibility, and closing never
   changes the project's id or deletes its workspace associations — plus the skill-trust fields **`trusted`**

@@ -31,6 +31,7 @@ import type {
 	ReviewComment,
 	ReviewCommentKind,
 	ReviewCommentStatus,
+	ReviewFixDetails,
 	ReviewSnapshot,
 	SessionActivity,
 	SpecGraphSnapshot,
@@ -314,6 +315,25 @@ export function isSubagentCompletionMessage(
 	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
 	if (m.role !== "custom" || m.customType !== SUBAGENT_COMPLETION_CUSTOM_TYPE) return false;
 	return isDelegationRunDetails(m.details);
+}
+
+export const TODO_REVIEW_FIX_CUSTOM_TYPE = "todo-review-fix";
+
+export interface TodoReviewFixMessage extends WireCustomMessage<ReviewFixDetails> {
+	customType: typeof TODO_REVIEW_FIX_CUSTOM_TYPE;
+	details: ReviewFixDetails;
+}
+
+export function isTodoReviewFixMessage(message: unknown): message is TodoReviewFixMessage {
+	if (!message || typeof message !== "object") return false;
+	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
+	if (m.role !== "custom" || m.customType !== TODO_REVIEW_FIX_CUSTOM_TYPE) return false;
+	const details = m.details as Partial<ReviewFixDetails> | undefined;
+	return (
+		typeof details?.itemId === "string" &&
+		typeof details.itemTitle === "string" &&
+		Array.isArray(details.comments)
+	);
 }
 
 export function customMessageText(content: WireCustomMessage["content"]): string {

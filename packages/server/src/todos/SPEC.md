@@ -182,8 +182,11 @@ completion note, agent-authored via `todo_plan_summary`; item `summary` rides th
   change-set *reference* (short shas / paths — never the full diff; the agent reads content with its own
   tools), the feedback verbatim, and the instruction to re-open **this exact item** — the revision must
   attach to the step it revises (the todos skill mirrors this from the agent's side). The **send is
-  composed in `host`** (this module never imports `agent`): `followUpSession` into the item's **own chat**
-  (per-session plan/windows force it), fired detached with the review-send pattern — a pre-turn rejection
+  composed in `host`** (this module never imports `agent`): the host delivers it as a structured
+  `todo-review-fix` custom message (`sendReviewFixToSession`) into the item's **own chat** (per-session
+  plan/windows force it) — the rendered package is the message `content` the agent reads, and
+  `ReviewFixDetails` (`buildReviewFixDetails`, exported from `reviews/`) rides as `details` for the chat
+  card; fired detached with the review-send pattern — a pre-turn rejection
   calls **`rollbackTodoFix`** (restores the record the request replaced) and surfaces in the chat, so an
   undelivered fix request never strands as `changes_requested`. Manual requests carry an opaque
   `requestId`; compensation restores the previous record only while that exact request is still current,
