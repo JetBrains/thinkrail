@@ -7,11 +7,11 @@ import { TooltipProvider } from "./components/ui/tooltip";
 import { initNavigation } from "./navigation";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
 import { Shell } from "./shell/Shell";
-import { applyTheme, initializeBundledThemes, readThemeHint } from "./themes";
+import { applyThemePreference, initializeBundledThemes, readThemeHint } from "./themes";
 import { initTransport } from "./transport";
 
 initializeBundledThemes();
-applyTheme(readThemeHint());
+applyThemePreference(readThemeHint());
 initTransport();
 initChatPreferencesPersistence();
 initProjectExpansionPersistence();

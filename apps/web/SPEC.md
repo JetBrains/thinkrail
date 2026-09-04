@@ -45,7 +45,8 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
 | `lib` | `cn()` + the shared UI/path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
-Leaf utilities without their own spec: `constants/` (branding) and `styles/` — which holds the three
+Leaf utilities without their own spec: `constants/` (branding), `clientPreferences.ts` (feature-neutral
+access to the optional native stable string adapter), and `styles/` — which holds the three
 design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
 structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
 [TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md).
@@ -76,7 +77,7 @@ return to stable.
 - `shell` → children `shell/layout` + `shell/layoutState`, `panels`, `chat` (app-integration render/hydration only), `store`, `transport` (domain hydration + endpoint identity), `contracts` (type-only), `components/ui`, `components` (`ErrorBoundary` around each mounted region + `QuietScrollArea` around shell-owned tool bodies), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of catalog/media resolution and atomic theme application, driven by the hydrated store preference or pre-hydration hint)
 - `shell/layout` → `contracts` (`LayoutPreset` + `GitDiffScope` types only), `lib` (attention/id primitives), and React / `react-resizable-panels` / `@dnd-kit/core`; `shell/layoutState` → `shell/layout`, `store`, `transport` (endpoint identity + error normalization), `contracts` (`LayoutPreset` type only), `lib`, and React. The parent injects store state and feature renderers, so the pure layout child has no feature-module runtime edge
 - `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector`+`useModelCatalog` — these are shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping)
-- `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `lib`; `store` + `transport`
+- `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `lib`, `clientPreferences`; `store` + `transport`
   (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)
 - `auth` → `components/ui` (the dialog is store/transport-free — the panel integrates it; the state types need no imports)
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts` (domain + custom-preset types, never current-layout DTOs), `lib` (shared path/array primitives — a leaf, so no cycle), and `shell/layout` (**type-only** for web-local frame/view state)
@@ -84,8 +85,8 @@ return to stable.
   the runtime graph is acyclic), `lib` (plain-HTTP-safe random page identity)
 - `components` (`ErrorBoundary`) → `lib` only (`shallowEqualArrays` for its reset keys — a leaf, so any region can still wrap in it); `components/ui` → `lib`
 - `lib` → `themes` (the lazy highlighter uses the one generic CSS-variable Shiki registration)
-- `themes` → `constants` (the branding storage prefix scopes the first-paint hint)
-- leaves (`constants`, `utils`, `styles`) → none internal
+- `themes` → `constants` (the branding storage prefix scopes the first-paint hint), `clientPreferences` (native-stable hint storage)
+- leaves (`clientPreferences`, `constants`, `utils`, `styles`) → none internal
 
 Rules: a panel never imports another panel sideways; nothing imports `shell` (it's the composition root).
 
