@@ -7,57 +7,7 @@ import {
 	waitTerminalReady,
 	worktreeRows,
 } from "./fixtures/app";
-
-function parseFrame(message: unknown): Record<string, unknown> | null {
-	if (typeof message !== "string") return null;
-	try {
-		const value: unknown = JSON.parse(message);
-		return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
-	} catch {
-		return null;
-	}
-}
-
-function signal() {
-	let send = () => {};
-	const received = new Promise<void>((resolve) => {
-		send = resolve;
-	});
-	return { received, send };
-}
-
-async function installChannelHold(page: Page) {
-	let armed:
-		| {
-				channel: "settings.changed" | "workspace.updated";
-				held: ReturnType<typeof signal>;
-				release: ReturnType<typeof signal>;
-		  }
-		| undefined;
-	await page.routeWebSocket(/\/ws(\?|$)/, (browserSocket) => {
-		const serverSocket = browserSocket.connectToServer();
-		browserSocket.onMessage((message) => serverSocket.send(message));
-		serverSocket.onMessage((message) => {
-			const pending = armed;
-			if (pending && parseFrame(message)?.channel === pending.channel) {
-				armed = undefined;
-				pending.held.send();
-				void pending.release.received.then(() => browserSocket.send(message));
-				return;
-			}
-			browserSocket.send(message);
-		});
-	});
-	return {
-		arm(channel: "settings.changed" | "workspace.updated") {
-			if (armed) throw new Error(`Already holding ${armed.channel}`);
-			const held = signal();
-			const release = signal();
-			armed = { channel, held, release };
-			return { held: held.received, release: release.send };
-		},
-	};
-}
+import { installChannelHold } from "./fixtures/channelHold";
 
 async function openChatSettings(page: Page): Promise<void> {
 	await page.getByTestId("open-settings").click();

@@ -2981,6 +2981,38 @@ test("applyConfig projects the composer growth limit", () => {
 	expect(useAppStore.getState()).toHaveProperty("composerGrowthLimit", "roomy");
 });
 
+test("applyConfig projects synchronized chat and file line-width settings", () => {
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		chatLineWidth: 84,
+		fileLineWidth: 156,
+		chatLineWidthBounded: false,
+		fileLineWidthBounded: true,
+	});
+	expect(useAppStore.getState()).toMatchObject({
+		chatLineWidth: 84,
+		fileLineWidth: 156,
+		chatLineWidthBounded: false,
+		fileLineWidthBounded: true,
+	});
+});
+
+test("applyConfig defaults absent or malformed line-width fields independently", () => {
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		chatLineWidth: 999,
+		fileLineWidth: 160,
+		chatLineWidthBounded: "yes",
+		fileLineWidthBounded: false,
+	} as Parameters<ReturnType<typeof useAppStore.getState>["applyConfig"]>[0]);
+	expect(useAppStore.getState()).toMatchObject({
+		chatLineWidth: 120,
+		fileLineWidth: 160,
+		chatLineWidthBounded: true,
+		fileLineWidthBounded: false,
+	});
+});
+
 test("applyConfig projects the host-wide subagent default", () => {
 	useAppStore.getState().applyConfig({
 		...DEFAULT_CONFIG,

@@ -49,6 +49,15 @@ describe("config defaults", () => {
 	test("the composer grows to half the chat by default", () => {
 		expect(DEFAULT_CONFIG).toHaveProperty("composerGrowthLimit", "half-chat");
 	});
+
+	test("chat and file lines default to 120-symbol pane-bounded measures", () => {
+		expect(DEFAULT_CONFIG).toMatchObject({
+			chatLineWidth: 120,
+			fileLineWidth: 120,
+			chatLineWidthBounded: true,
+			fileLineWidthBounded: true,
+		});
+	});
 });
 
 describe("image payload ceiling", () => {
