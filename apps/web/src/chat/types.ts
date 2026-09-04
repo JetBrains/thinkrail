@@ -3,6 +3,7 @@ import type {
 	DelegationRunDetails,
 	ExtUiRequest,
 	ImageContent,
+	ReviewFixDetails,
 	UserMessage,
 } from "@thinkrail/contracts";
 
@@ -25,6 +26,7 @@ export type ChatTurn =
 	| ({ kind: "compaction"; id: string } & CompactionState)
 	| { kind: "error"; id: string; text: string; recovery?: FailureRecovery }
 	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
+	| { kind: "reviewFix"; id: string; details: ReviewFixDetails; text: string }
 	| {
 			kind: "retry";
 			id: string;

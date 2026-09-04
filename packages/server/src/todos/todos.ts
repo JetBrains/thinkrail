@@ -481,6 +481,7 @@ export function requestTodoFix(params: {
 	feedback: string;
 }): {
 	pkg: string;
+	itemTitle: string;
 	previous: TodoReviewRecord | undefined;
 	requested: TodoReviewRecord;
 } {
@@ -495,7 +496,7 @@ export function requestTodoFix(params: {
 		requestId: randomUUID(),
 	};
 	const previous = putReviewRecord(root, params.sessionId, params.id, requested);
-	return { pkg: renderFixPackage(item, feedback), previous, requested };
+	return { pkg: renderFixPackage(item, feedback), itemTitle: item.title, previous, requested };
 }
 
 export function rollbackTodoFix(
