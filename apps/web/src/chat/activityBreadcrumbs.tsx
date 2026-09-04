@@ -87,10 +87,12 @@ function SegmentIcon({ kind }: { kind: ActivityBreadcrumbKind }) {
 
 export function ActivityBreadcrumbBar({
 	segments,
+	measureClassName,
 	onJump,
 	onToggle,
 }: {
 	segments: ActivityBreadcrumbSegment[];
+	measureClassName: string;
 	onJump: (id: string) => void;
 	onToggle: (id: string) => void;
 }) {
@@ -100,7 +102,9 @@ export function ActivityBreadcrumbBar({
 			data-testid="activity-breadcrumb-trail"
 			className="pointer-events-auto border-border-default border-b bg-container-header-bg shadow-[var(--shadow-md)]"
 		>
-			<div className="mx-auto flex h-[34px] max-w-3xl items-center overflow-hidden px-12 tr-text-metadata">
+			<div
+				className={`${measureClassName} flex h-[34px] items-center overflow-hidden px-12 tr-text-metadata`}
+			>
 				{segments.map((segment, index) => (
 					<div key={segment.id} className="flex min-w-0 items-center">
 						{index > 0 ? (
@@ -198,7 +202,13 @@ function originalActivityToggle(node: HTMLElement): HTMLButtonElement | undefine
 	return node.querySelector<HTMLButtonElement>(":scope > [data-activity-node-toggle]") ?? undefined;
 }
 
-export function ActivityBreadcrumbTrail({ scroller }: { scroller: HTMLElement | null }) {
+export function ActivityBreadcrumbTrail({
+	scroller,
+	measureClassName,
+}: {
+	scroller: HTMLElement | null;
+	measureClassName: string;
+}) {
 	const [path, setPath] = useState<ActivityBreadcrumbDescriptor[]>([]);
 	const [compact, setCompact] = useState(false);
 
@@ -274,6 +284,7 @@ export function ActivityBreadcrumbTrail({ scroller }: { scroller: HTMLElement | 
 		<div className="pointer-events-none absolute inset-x-0 top-0 z-20">
 			<ActivityBreadcrumbBar
 				segments={compressBreadcrumbPath(path, compact)}
+				measureClassName={measureClassName}
 				onJump={jump}
 				onToggle={toggle}
 			/>

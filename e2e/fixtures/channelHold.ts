@@ -4,9 +4,7 @@ function parseFrame(message: unknown): Record<string, unknown> | null {
 	if (typeof message !== "string") return null;
 	try {
 		const value: unknown = JSON.parse(message);
-		return value !== null && typeof value === "object"
-			? (value as Record<string, unknown>)
-			: null;
+		return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
 	} catch {
 		return null;
 	}

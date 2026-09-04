@@ -66,15 +66,14 @@ async function expectWrapped(viewLines: Locator): Promise<void> {
 	await expect.poll(() => viewLines.locator(":scope > .view-line").count()).toBeGreaterThan(1);
 }
 
-test("line-width controls validate drafts, converge on broadcasts, and persist", async ({ page }) => {
+test("line-width controls validate drafts, converge on broadcasts, and persist", async ({
+	page,
+}) => {
 	const channelHold = await installChannelHold(page);
 	let release = () => {};
 	try {
 		await page.goto("/");
-		await expect(page.getByTestId("connection-status")).toHaveAttribute(
-			"data-status",
-			"connected",
-		);
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 		await openLineWidthSettings(page);
 		const controls = widthControls(page);
 
@@ -92,7 +91,10 @@ test("line-width controls validate drafts, converge on broadcasts, and persist",
 		await expect(page.getByText("Enter a whole number from 40 to 240.")).toBeVisible();
 		await expect(controls.chatSave).toBeDisabled();
 
-		await saveWidth(controls.chatInput, controls.chatSave, 80);
+		await controls.chatInput.fill("80");
+		await expect(controls.chatSave).toBeEnabled();
+		await controls.chatInput.press("Enter");
+		await expect(controls.chatSave).toBeDisabled();
 		await saveWidth(controls.fileInput, controls.fileSave, 160);
 
 		const held = channelHold.arm("settings.changed");
@@ -106,10 +108,7 @@ test("line-width controls validate drafts, converge on broadcasts, and persist",
 		await expect(controls.fileBounded).toHaveAttribute("data-active", "true");
 
 		await page.reload();
-		await expect(page.getByTestId("connection-status")).toHaveAttribute(
-			"data-status",
-			"connected",
-		);
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 		await openLineWidthSettings(page);
 		await expect(controls.chatInput).toHaveValue("80");
 		await expect(controls.fileInput).toHaveValue("160");
@@ -121,13 +120,27 @@ test("line-width controls validate drafts, converge on broadcasts, and persist",
 	}
 });
 
-test("the default file width wraps one long logical line in source view", async ({ page }) => {
-	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
-	await page.getByTestId("tab-files").click();
-	await page.getByTestId("file-node").filter({ hasText: "LONG_LINE.txt" }).dblclick();
+test("the file width wraps source and updates an already-mounted editor", async ({ page }) => {
+	try {
+		await openFixtureProject(page);
+		await createWorkspaceViaDialog(page);
+		await page.getByTestId("tab-files").click();
+		await page.getByTestId("file-node").filter({ hasText: "LONG_LINE.txt" }).dblclick();
 
-	await expectWrapped(page.locator('[data-testid="editor-pane"]:visible .view-lines'));
+		const viewLines = page.locator('[data-testid="editor-pane"]:visible .view-lines');
+		await expectWrapped(viewLines);
+		const defaultVisualLines = await viewLines.locator(":scope > .view-line").count();
+
+		await openLineWidthSettings(page);
+		const controls = widthControls(page);
+		await saveWidth(controls.fileInput, controls.fileSave, 40);
+		await page.keyboard.press("Escape");
+		await expect
+			.poll(() => viewLines.locator(":scope > .view-line").count())
+			.toBeGreaterThan(defaultVisualLines);
+	} finally {
+		await restoreLineWidthDefaults(page).catch(() => {});
+	}
 });
 
 test("the default file width wraps both sides of a long-line diff", async ({ page }) => {
@@ -176,11 +189,11 @@ test("chat uses the selected measure and optionally exceeds a narrow pane", asyn
 		await page.keyboard.press("Escape");
 		await hideAuxiliaryWorkbench(page);
 		await page.setViewportSize(PHONE_VIEWPORT);
-		const chatScroll = page.getByTestId("chat-scroll");
+		const transcriptScroll = page.getByTestId("chat-transcript-scroll");
 		await expect
 			.poll(async () => {
 				const rowBox = await row.boundingBox();
-				const scrollBox = await chatScroll.boundingBox();
+				const scrollBox = await transcriptScroll.boundingBox();
 				return rowBox !== null && scrollBox !== null && rowBox.width <= scrollBox.width + 1;
 			})
 			.toBe(true);
@@ -190,11 +203,9 @@ test("chat uses the selected measure and optionally exceeds a narrow pane", asyn
 		await expect(controls.chatBounded).toHaveAttribute("data-active", "false");
 		await page.keyboard.press("Escape");
 		await expect
-			.poll(() =>
-				chatScroll.evaluate((element) => element.scrollWidth > element.clientWidth),
-			)
+			.poll(() => transcriptScroll.evaluate((element) => element.scrollWidth > element.clientWidth))
 			.toBe(true);
-		const overflow = await chatScroll.evaluate((element) => ({
+		const overflow = await transcriptScroll.evaluate((element) => ({
 			clientWidth: element.clientWidth,
 			scrollLeft: element.scrollLeft,
 			scrollWidth: element.scrollWidth,

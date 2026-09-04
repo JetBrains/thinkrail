@@ -17,6 +17,6 @@ test("subagent settings advance the protocol and name the workspace override mut
 	expect(WS_METHODS.workspaceSetSubagentsOverride).toBe("workspace.setSubagentsOverride");
 });
 
-test("line-width config advances the additive wire shape to v58", () => {
-	expect(PROTOCOL_VERSION).toBe(58);
+test("line-width config advances the additive wire shape to v59", () => {
+	expect(PROTOCOL_VERSION).toBe(59);
 });
