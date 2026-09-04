@@ -35,7 +35,11 @@ e2e).
   `bun build --compile` binary or packaged Electrobun server runtime) injects them as value-imported factories + a staged skills dir, injects
   the staged macOS/Windows OS-trash helper paths, and registers pi's statically-bundled provider flows
   (the OAuth flows + the Bedrock module) that pi otherwise reaches through binary-hostile
-  variable-specifier dynamic imports (see the agent SPEC). Build-only
+  variable-specifier dynamic imports (see the agent SPEC). Plus the
+  **`UpdateProvider`** port types (`UpdateProvider`, `UpdateProviderCapabilities`, `InstallOutcome`,
+  re-exported from `update/`): a launcher implements one and hands it to `createServer`/`bootHost`, which
+  is how release awareness stays one implementation across the CLI binary and the desktop app (see
+  [[submodule-server-update]]). Build-only
   **`@thinkrail/server/build-support`** is the single manifest of bundled extension entries, skill roots,
   per-platform `bun-pty` libraries, and trash helpers consumed by both launcher packagers. Test-only
   **`@thinkrail/server/artifact-probes`** owns the shared host-level artifact fixture/assertions behind thin
