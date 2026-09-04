@@ -39,6 +39,8 @@ import type {
 	TodoItem,
 	TodoPlan,
 	TodoStatus,
+	UpdateInstallTarget,
+	UpdateStatus,
 	Workspace,
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
@@ -89,7 +91,8 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 59;
+export const PROTOCOL_VERSION = 60;
+export const UPDATE_PROTOCOL_VERSION = 60;
 export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
 export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
 export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;
@@ -212,6 +215,9 @@ export const WS_METHODS = {
 	providerJbcentralUpdate: "provider.jbcentralUpdate",
 	providerJbcentralQuota: "provider.jbcentralQuota",
 	settingsUpdate: "settings.update",
+	updateCheck: "update.check",
+	updateInstall: "update.install",
+	updateDismiss: "update.dismiss",
 	feedbackRespond: "feedback.respond",
 	historySearch: "history.search",
 	reviewGet: "review.get",
@@ -246,6 +252,7 @@ export const WS_CHANNELS = {
 	workspaceRemoved: "workspace.removed",
 	workspaceFsChanged: "workspace.fsChanged",
 	settingsChanged: "settings.changed",
+	updateStatus: "update.status",
 	feedbackInterview: "feedback.interview",
 	reviewChanged: "review.changed",
 } as const;
@@ -527,6 +534,9 @@ export interface WsMethodMap {
 	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
 	"provider.jbcentralQuota": { params: { force?: boolean }; result: JbcentralQuotaSnapshot };
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
+	"update.check": { params: Record<string, never>; result: UpdateStatus };
+	"update.install": { params: UpdateInstallTarget; result: UpdateStatus };
+	"update.dismiss": { params: { version: string }; result: UpdateStatus };
 	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
 	"history.search": {
 		params: { query: string; scope: HistoryScope; limit?: number };
