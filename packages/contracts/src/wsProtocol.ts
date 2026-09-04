@@ -91,13 +91,13 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 59;
+export const PROTOCOL_VERSION = 60;
 export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
 export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
 export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;
 export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
 export const FEEDBACK_INTERVIEW_PROTOCOL_VERSION = 56;
-export const ACTIVITY_PROTOCOL_VERSION = 59;
+export const ACTIVITY_PROTOCOL_VERSION = 60;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
