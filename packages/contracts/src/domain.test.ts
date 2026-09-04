@@ -62,6 +62,15 @@ describe("config defaults", () => {
 			expect(isJbcentralQuotaRefreshSeconds(invalid)).toBe(false);
 		}
 	});
+
+	test("chat and file lines default to 120-symbol pane-bounded measures", () => {
+		expect(DEFAULT_CONFIG).toMatchObject({
+			chatLineWidth: 120,
+			fileLineWidth: 120,
+			chatLineWidthBounded: true,
+			fileLineWidthBounded: true,
+		});
+	});
 });
 
 describe("JetBrains Central health", () => {

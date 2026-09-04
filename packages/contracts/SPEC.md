@@ -231,7 +231,7 @@ of the host.
   composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded, fileLineWidthBounded,
   customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
-  the wire at protocol v60. `themeMode` defaults to `"fixed"` and no pair, preserving both legacy configs
+  the wire at protocol v61. `themeMode` defaults to `"fixed"` and no pair, preserving both legacy configs
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
   behavior), overridden only by `Workspace.subagentsOverride`; `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset

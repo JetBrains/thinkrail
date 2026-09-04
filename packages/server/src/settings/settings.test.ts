@@ -277,6 +277,51 @@ test("invalid JetBrains quota updates are rejected before persistence or broadca
 	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
 });
 
+test("line-width fields default independently when an older or malformed config is loaded", () => {
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({
+			...DEFAULT_CONFIG,
+			chatLineWidth: 39,
+			fileLineWidth: 180,
+			chatLineWidthBounded: "yes",
+			fileLineWidthBounded: false,
+		}),
+	);
+	resetConfigCache();
+
+	expect(getConfig()).toMatchObject({
+		chatLineWidth: 120,
+		fileLineWidth: 180,
+		chatLineWidthBounded: true,
+		fileLineWidthBounded: false,
+	});
+});
+
+test("invalid line-width updates are rejected before persistence or broadcast", () => {
+	const invalidUpdates = [
+		{ chatLineWidth: 39 },
+		{ fileLineWidth: 241 },
+		{ chatLineWidth: 80.5 },
+		{ fileLineWidth: Number.POSITIVE_INFINITY },
+		{ chatLineWidthBounded: "true" },
+		{ fileLineWidthBounded: 1 },
+	];
+
+	for (const update of invalidUpdates) {
+		rmSync(join(dataDir, "config.json"), { force: true });
+		resetConfigCache();
+		const published: AppConfig[] = [];
+		setSettingsPublisher((config) => published.push(config));
+		const before = getConfig();
+
+		expect(() => updateConfig(update as unknown as AppConfigUpdate)).toThrow();
+		expect(getConfig()).toEqual(before);
+		expect(published).toEqual([]);
+		expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+	}
+});
+
 test("a non-boolean subagents update is rejected before persistence or broadcast", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
