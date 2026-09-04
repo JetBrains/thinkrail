@@ -52,18 +52,13 @@ This package has **no dependency on ThinkRail** and is installable into any bare
 
 ## Validation and agent feedback
 
-A Mermaid-bearing call succeeds only after the exact Mermaid parser version used by the web renderer
-accepts every source. Validation runs in the capability, before fallback content is returned, because a
-renderer-only failure happens after pi has already recorded a successful tool result and cannot become
-model feedback. Invalid syntax throws an actionable error naming `mermaid` or `options[N].mermaid` and
-asking the model to correct and retry; pi turns that throw into an `isError` tool result and performs its
-ordinary continuation. The extension never injects hidden prompts or forces retries.
+Before returning fallback content, the exact Mermaid version used by the web renderer parses every diagram
+source. Invalid syntax throws a field-specific diagnostic asking the model to correct and retry; pi turns it
+into an `isError` tool result and continues normally. The extension injects no prompt and forces no retry.
 
-Mermaid expects browser DOM globals even for common parse paths. The extension supplies a lightweight DOM
-only while the module initializes and restores the host's previous global property descriptors on success
-or failure. Parse calls are serialized: Mermaid resets shared configuration on every parse, while ThinkRail
-sessions execute concurrently in one process. This is syntax validation, not SVG/layout rendering; web
-renderers retain their source fallback for failures after parse.
+Mermaid needs browser globals while its parser initializes, so a lightweight DOM exists only during module
+load and the previous descriptors are restored. Parse calls are serialized because Mermaid resets shared
+configuration. This validates syntax, not SVG/layout; web renderers retain their defensive fallback.
 
 ## Rendering tiers (graceful degradation)
 
@@ -79,5 +74,3 @@ renderers retain their source fallback for failures after parse.
 ## Not here
 
 - Rich rendering (mermaid → SVG, styled comparison cards) — host-specific, keyed to the tool name.
-- Forced model retries or browser→agent render-error reporting — pi's normal tool-error continuation owns
-  the retry opportunity; post-parse presentation failures remain renderer-local fallback.

@@ -25,31 +25,22 @@ describe("visualize extension", () => {
 		expect(loadTool().name).toBe("visualize");
 	});
 
-	test("execute restores the host DOM globals after parser initialization", async () => {
+	test("execute renders valid labeled Mermaid without leaking DOM globals", async () => {
 		const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
 		const documentDescriptor = Object.getOwnPropertyDescriptor(globalThis, "document");
-		await loadTool().execute("id", {
+		const res = await loadTool().execute("id", {
+			type: "diagram",
+			mermaid: "flowchart LR\n A[Start] --> B[Done]",
+		});
+		expect(res.content[0]?.type).toBe("text");
+		expect(res.content[0]?.text).toContain("```mermaid");
+		expect(res.content[0]?.text).toContain("A[Start] --> B[Done]");
+		expect(res.details).toEqual({
 			type: "diagram",
 			mermaid: "flowchart LR\n A[Start] --> B[Done]",
 		});
 		expect(Object.getOwnPropertyDescriptor(globalThis, "window")).toEqual(windowDescriptor);
 		expect(Object.getOwnPropertyDescriptor(globalThis, "document")).toEqual(documentDescriptor);
-	});
-
-	test("execute renders a diagram to a mermaid fence", async () => {
-		const res = await loadTool().execute("id", { type: "diagram", mermaid: "graph LR; A-->B" });
-		expect(res.content[0]?.type).toBe("text");
-		expect(res.content[0]?.text).toContain("```mermaid");
-		expect(res.content[0]?.text).toContain("A-->B");
-		expect(res.details).toEqual({ type: "diagram", mermaid: "graph LR; A-->B" });
-	});
-
-	test("execute accepts valid Mermaid with labels in the Node host", async () => {
-		const res = await loadTool().execute("id", {
-			type: "diagram",
-			mermaid: "flowchart LR\n A[Start] --> B[Done]",
-		});
-		expect(res.content[0]?.text).toContain("A[Start] --> B[Done]");
 	});
 
 	test("execute renders a comparison with pros and a recommended marker", async () => {

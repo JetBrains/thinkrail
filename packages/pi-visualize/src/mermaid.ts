@@ -55,15 +55,10 @@ async function parseMermaid(source: string): Promise<void> {
 	const current = parseTail(mermaid).then(async () => {
 		await mermaid.parse(source);
 	});
-	if (
-		!Reflect.set(
-			mermaid,
-			parseTailKey,
-			current.catch(() => undefined),
-		)
-	) {
-		throw new Error("visualize: unable to serialize Mermaid syntax validation.");
-	}
+	Object.defineProperty(mermaid, parseTailKey, {
+		configurable: true,
+		value: current.catch(() => undefined),
+	});
 	return current;
 }
 
