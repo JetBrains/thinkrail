@@ -350,7 +350,7 @@ of the host.
   the **JetBrains AI** set **`jbcentralConnect`** / **`jbcentralDisconnect`** /
   **`jbcentralStartProxy`** / **`jbcentralUpdate`** / **`jbcentralLogin`** (native global Central actions
   returning `JbcentralActionResult`; none accepts an executable, artifact path, output, URL, or secret from
-  the client) / **`jbcentralQuota`** (v58; optional `force` bypasses completed-cache age but still joins an
+  the client) / **`jbcentralQuota`** (v59; optional `force` bypasses completed-cache age but still joins an
   in-flight read; disabled/unhealthy returns `hidden` without invoking quota)) /
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
