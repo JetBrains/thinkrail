@@ -1,6 +1,12 @@
 import type { ThinkingLevel, WireModel } from "./piProtocol";
 
-export type TabStatus = "idle" | "running" | "waiting" | "error";
+export type ActivityStatus = "running" | "waiting" | "queued" | "failed";
+
+export interface SessionActivity {
+	sessionId: string;
+	workspaceId: string;
+	status: ActivityStatus;
+}
 
 export interface Project {
 	id: string;
@@ -83,14 +89,6 @@ export interface WorkspaceFsChangedPayload {
 	paths: string[];
 	truncated: boolean;
 	skillChange: WorkspaceSkillChange;
-}
-
-export interface Session {
-	id: string;
-	workspaceId: string;
-	sessionId: string;
-	title: string;
-	status: TabStatus;
 }
 
 export type FileKind = "file" | "dir";
