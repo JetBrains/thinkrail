@@ -370,7 +370,12 @@ a project picker, the prompt hero, and the reused
   re-read plus model-list invalidation. Status reads are request-sequenced so an older response cannot replace
   a newer watched/action result. Copy never promises only Claude/GPT, never asks for standalone PI,
   never renders child output/diagnostics/artifact content/paths/proxy data/secrets/raw models, and maps only
-  closed reason codes to ThinkRail-authored text. **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
+  closed reason codes to ThinkRail-authored text. On protocol v59+, the same card always shows the
+  synchronized **Show quota in top bar** switch and **Refresh every _ seconds** field, in every Central
+  lifecycle state. The flag defaults on; the interval defaults to 30 and accepts whole `1–3600` values.
+  Off disables (but retains) the interval. The field edits locally, commits on blur/Enter, reports invalid
+  range inline, and waits for `settings.changed` rather than installing optimistic authority. Older hosts get
+  neither control. **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
   Connected + login / Not connected + Refresh); **`AppearanceSettings`** (the catalog-driven theme
   settings, gated to fixed-only behavior below `THEME_SYSTEM_PROTOCOL_VERSION`. Current hosts explain that
   the mode/pair follow the user while each device reads its own system setting, then show one accessible

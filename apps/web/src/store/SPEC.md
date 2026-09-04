@@ -307,7 +307,8 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   increments it and clears `models`, freshness, and any old refresh spinner. Both `model.list` and
   `model.refresh` replies install through version-guarded store actions, so no picker or older async reply can
   offer a removed runtime generation. Transport owns the guarded re-read; the Providers settings pane observes
-  the version and re-reads status. Other catalog transport work lives in `chat/useModelCatalog`, not here (the
+  the version and re-reads status, while shell's quota controller treats it as an immediate closed-snapshot
+  invalidation. Other catalog transport work lives in `chat/useModelCatalog`, not here (the
   store→transport edge stays type-only). The **in-app login** state
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
   Welcome screen before any session exists — routing it through a session runtime would drop its frames):
@@ -335,9 +336,10 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   shell retains the pre-React preference hint instead of applying those placeholders over it. Reusing that
   readiness edge avoids a second derived config-hydration flag; after the first welcome, disconnect/reconnect
   keeps the last authoritative config while a later welcome can replace it. **`composerGrowthLimit: ComposerGrowthLimit`**,
-  **`customLayoutPresets: LayoutPreset[]`**, **`analyticsEnabled: boolean`**, and
-  **`subagentsEnabled: boolean`** ride the same `applyConfig` fold (host-owned, defaulted from
-  `DEFAULT_CONFIG`) — the Chat, shared Layout catalog, and Privacy read sides.
+  **`customLayoutPresets: LayoutPreset[]`**, **`analyticsEnabled: boolean`**,
+  **`subagentsEnabled: boolean`**, **`jbcentralQuotaEnabled: boolean`**, and
+  **`jbcentralQuotaRefreshSeconds: number`** ride the same `applyConfig` fold (host-owned, defaulted from
+  `DEFAULT_CONFIG`) — the Chat, shared Layout catalog, Privacy, provider controls, and shell quota read sides.
   **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
   StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by
   the chat preference seam from host-qualified browser localStorage or the native shell's injected

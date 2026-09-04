@@ -41,6 +41,21 @@ workspace use `text-text-default`, while branch/trailing metadata use `text-text
 responsive degradation. A selected project without an active workspace shows Project Home. No selected
 project leaves the logo alone.
 
+Immediately before host connection status, the topbar conditionally renders the **JetBrains recurring-quota
+readout** (protocol v59): a neutral Coins icon + locale-formatted `remaining / total credits`. It exists only
+when the synchronized setting is enabled and the host reports healthy Central; zero has no warning policy.
+Loaded/loading are non-button content with a freshness tooltip. First failure is `Quota unavailable · Retry`;
+later failure preserves the last value as stale with a small warning freshness marker and Retry. Neither
+numeric updates nor the polling loop are aria-live. Narrow widths hide `credits` and the existing connection
+label before either icon or quota number.
+
+`Shell` owns the visible-client polling controller: immediate request on activation/reconnect/provider
+invalidation/visible resume/config change, then one non-overlapping request after each configured
+`1–3600` second interval (default 30). Hidden documents and disabled/host-hidden results cancel the timer;
+Retry forces completed-cache age but still joins host single-flight. Request sequence guards prevent an old
+response restoring a superseded state. The host owns health, cache, and deduplication; shell never invokes or
+interprets Central directly.
+
 With an active workspace, `Shell` mounts the workbench projection of the window's singular frame and that workspace's local view. Switching workspace changes resource contents and attention but never frame topology, Projects/Specs/Files/Changes/Review placement, side/bottom geometry, folds, visibility, or alignment. Shell-owned wrappers around Projects, Files, and Specs use `components/QuietScrollArea`, as does the Project Home navigator; Changes/Review and xterm own their internal quiet-scroll surfaces in `panels`. These primitives never receive or infer placement. `react-resizable-panels` cannot reconcile a panel-count change in place, so switching to a workspace whose default preset has a different shape (e.g. Balanced ↔ Focus) forces the aligned-row and outer `ResizablePanelGroup`s to remount; they carry `motion-safe:animate-fade-in` (an opacity-only twin of `animate-reveal` — no `transform`, since these subtrees can contain ChatView's `position: sticky` breadcrumbs) so the shape change reads as a soft cross-fade rather than a jump. Without an active workspace, Shell mounts Welcome beside the projects navigator using separate local geometry. The Settings dialog, addressed interview invitation, and Toasts each mount once above both branches.
 After `main.tsx`'s synchronous first-paint apply, Shell is the sole mounted theme side-effect owner. While `welcomeGeneration === 0` it retains the versioned preference hint; afterward it projects store's opaque fixed id + fixed/system mode + optional pair through `themes` and writes the reconciled hint. Fixed mode has no media listener. System mode owns exactly one `prefers-color-scheme` listener, reapplies the locally resolved slot on change, and cleans it up on preference/unmount; that local event never mutates store, calls the host, or changes another client. No other component mutates `[data-theme]`.
 

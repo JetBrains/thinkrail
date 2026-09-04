@@ -12,8 +12,8 @@ tags: [v1, wire]
 ## Responsibility
 
 The browser↔host wire spine: the single source of truth for the protocol. Types-only, with the only
-runtime exports being the WS method/channel constants, the protocol version, and the small config default
-(`DEFAULT_CONFIG`). The one package `apps/web` may depend on—which is what lets the UI ship independently
+runtime exports being the WS method/channel constants, protocol/feature versions, the small config default,
+and narrow cross-ring guards. The one package `apps/web` may depend on—which is what lets the UI ship independently
 of the host.
 
 ## Boundary
@@ -28,8 +28,9 @@ of the host.
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; the value re-exports
-  `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`, `MAX_HISTORY_LIMIT`,
-  `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
+  `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
+  `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
+  `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
   hydrate, the host skips them in the history index and does not count them as `message_sent`; both
   sides agree here rather than each re-deriving `startsWith`) + **`isRetriedAttempt(messages, index)`**
@@ -197,7 +198,10 @@ of the host.
   Central action, artifact postcondition, and closed runtime-load failure without carrying messages. There
   are no pending, restart, blocked-session, recovery, migration, compensation, or reattachment outcomes. Raw
   stdout/stderr, generated extension content or paths, proxy URLs/secrets, diagnostics, affected-session ids,
-  and raw PI models are structurally absent; server and web map codes to their own generic copy);
+  and raw PI models are structurally absent; server and web map codes to their own generic copy). Protocol
+  v59 adds **`JbcentralQuotaSnapshot`**, the separate closed quota read: `hidden`, `available`, `stale`, or
+  `unavailable`; only available/stale carry finite recurring `remaining` / `total` numbers and an observation
+  timestamp. No account/plan/used/top-up/refill field or raw failure text exists;
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   opaque selections while the independently shipped web client owns the available manifest catalog;
   **`ThemeMode`** is the closed `"fixed" | "system"` behavior and **`SystemThemePair`** carries one opaque
@@ -214,16 +218,18 @@ of the host.
   `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;
   **`SUBAGENT_SETTINGS_PROTOCOL_VERSION`** pins the global/workspace controls to their v57 wire
   introduction so a later web client hides them against an older host without comparing against the moving
-  latest protocol; **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled,
-  terminalReplayKb, composerGrowthLimit, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix,
-  subagentsEnabled }` — an extensible bag; `themeMode` defaults to `"fixed"` and no pair, preserving both
-  legacy configs and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true`
-  for current behavior), overridden only by `Workspace.subagentsOverride`; `customLayoutPresets` is the
-  bounded resource-free catalog and is the **only** layout value synchronized by the host; current/default
-  preset and group limits are web-local); `analyticsEnabled` is the anonymous usage-analytics switch,
-  default `true` — it is the **only** analytics fact on the wire: the installation id stays server-side by
-  design, see `submodule-server-analytics`) carries it with the **`DEFAULT_CONFIG`** fallback (persisted
-  host-side as `config.json`, delivered in `server.welcome`, mutated via `settings.update`).
+  latest protocol; **`JBCENTRAL_QUOTA_PROTOCOL_VERSION`** likewise pins the v59 quota read + settings;
+  **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, terminalReplayKb,
+  composerGrowthLimit, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled,
+  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; `themeMode` defaults to
+  `"fixed"` and no pair, preserving both legacy configs and the explicit Dark default;
+  `subagentsEnabled` is the host-wide subagent default (`true` for current behavior), overridden only by
+  `Workspace.subagentsOverride`; `customLayoutPresets` is the bounded resource-free catalog and is the
+  **only** layout value synchronized by the host; current/default preset and group limits are web-local);
+  `analyticsEnabled` is the anonymous usage-analytics switch, default `true` — it is the **only** analytics
+  fact on the wire: the installation id stays server-side by design, see `submodule-server-analytics`) carries
+  it with the **`DEFAULT_CONFIG`** fallback (persisted host-side as `config.json`, delivered in
+  `server.welcome`, mutated via `settings.update`).
   **`InterviewResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic
   feedback popup. No usage count, eligibility, dismissal state, or client identity crosses the wire.
   Contracts deliberately exports no theme catalog enum/list/labels: a future manifest can mint an id
@@ -344,7 +350,8 @@ of the host.
   the **JetBrains AI** set **`jbcentralConnect`** / **`jbcentralDisconnect`** /
   **`jbcentralStartProxy`** / **`jbcentralUpdate`** / **`jbcentralLogin`** (native global Central actions
   returning `JbcentralActionResult`; none accepts an executable, artifact path, output, URL, or secret from
-  the client)) /
+  the client) / **`jbcentralQuota`** (v58; optional `force` bypasses completed-cache age but still joins an
+  in-flight read; disabled/unhealthy returns `hidden` without invoking quota)) /
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /

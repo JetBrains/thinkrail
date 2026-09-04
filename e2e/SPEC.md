@@ -90,8 +90,8 @@ that smoke under Xvfb with software rendering enabled only in the test environme
 the native-window path and broad browser behavior without introducing two competing clients.
 
 JetBrains Central coverage uses a stateful, independently authored fake executable implementing only the
-argv/exit/postcondition surface ThinkRail invokes (`--version`, `status`, `add pi`, `remove pi`, `login`,
-`update --install`). Its control file holds **space-separated tokens**, because the version a probe reports,
+argv/exit/postcondition surface ThinkRail invokes (`--version`, `status`, `quota --json`, `add pi`,
+`remove pi`, `login`, `update --install`). Its control file holds **space-separated tokens**, because the version a probe reports,
 whether credentials exist, and how an action fails are independent facts about a host: a single-valued control
 made real combinations unrepresentable, and a state that cannot be reached is a failure mode nothing asserts
 (`update --install` refusing while the host is below the minimum needs both at once). It
@@ -108,6 +108,13 @@ affected-chat blocking, or recovery seal to test. Sentinel values in synthetic c
 diagnostics, and provider routing fields
 are asserted absent from the closed results and rendered settings surface; structural DTO allowlists and
 generic host mapping keep those classes out of WS frames, analytics, logs, and persistence.
+
+Quota coverage adds test-owned structured recurring values and closed failure tokens—never real Central
+output. It proves the top-bar readout appears only for healthy + enabled Central, polls at the synchronized
+whole-second interval only while visible, deduplicates host reads, retains stale values with Retry, hides on
+disable/disconnect, and degrades at mobile width; the Providers card pins default/on-off/interval validation
+and persistence. The reviewed-argv assertion rejects any presentation-text quota fallback, while sentinels in
+ignored quota fields prove account/plan/used/top-up/refill/diagnostics never cross the wire or render.
 
 The Central specs share one fixture module for panel navigation, lifecycle-state waits, the argv log, and
 the out-of-band host mutations — installing/uninstalling the fake by moving it in and out of the lane's PATH
