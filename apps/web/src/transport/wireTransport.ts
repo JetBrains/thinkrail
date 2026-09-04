@@ -20,9 +20,16 @@ import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
 
+export function supportsSessionActivity(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= ACTIVITY_PROTOCOL_VERSION;
+}
+
 function refreshSessionActivity(connectionGeneration: number): void {
-	const { protocolVersion } = useAppStore.getState();
-	if (protocolVersion === null || protocolVersion < ACTIVITY_PROTOCOL_VERSION) return;
+	const state = useAppStore.getState();
+	if (!supportsSessionActivity(state.protocolVersion)) {
+		state.hydrateSessionActivity([]);
+		return;
+	}
 	void getTransport()
 		.request("session.activityList", {})
 		.then((rows) => {

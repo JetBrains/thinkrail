@@ -3884,3 +3884,41 @@ test("deleting a chat drops its activity row", () => {
 	store.deleteChat("w1", "s1", false);
 	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { s2: "running" } });
 });
+
+test("hydrating an empty snapshot clears the map — how a pre-activity host retires stale glyphs", () => {
+	const store = useAppStore.getState();
+	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "running" });
+	store.hydrateSessionActivity([]);
+	expect(useAppStore.getState().activityByWorkspace).toEqual({});
+});
+
+test("hydrating an unchanged snapshot is not a state write, so a reconnect never churns the rail", () => {
+	const store = useAppStore.getState();
+	store.hydrateSessionActivity([{ workspaceId: "w1", sessionId: "s1", status: "waiting" }]);
+	const before = useAppStore.getState().activityByWorkspace;
+	store.hydrateSessionActivity([{ workspaceId: "w1", sessionId: "s1", status: "waiting" }]);
+	expect(useAppStore.getState().activityByWorkspace).toBe(before);
+
+	store.hydrateSessionActivity([]);
+	const empty = useAppStore.getState().activityByWorkspace;
+	store.hydrateSessionActivity([]);
+	expect(useAppStore.getState().activityByWorkspace).toBe(empty);
+});
+
+test("hydration notices a changed status, an added chat, and a dropped chat", () => {
+	const store = useAppStore.getState();
+	store.hydrateSessionActivity([{ workspaceId: "w1", sessionId: "s1", status: "running" }]);
+	store.hydrateSessionActivity([{ workspaceId: "w1", sessionId: "s1", status: "failed" }]);
+	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { s1: "failed" } });
+
+	store.hydrateSessionActivity([
+		{ workspaceId: "w1", sessionId: "s1", status: "failed" },
+		{ workspaceId: "w1", sessionId: "s2", status: "queued" },
+	]);
+	expect(useAppStore.getState().activityByWorkspace).toEqual({
+		w1: { s1: "failed", s2: "queued" },
+	});
+
+	store.hydrateSessionActivity([{ workspaceId: "w1", sessionId: "s2", status: "queued" }]);
+	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { s2: "queued" } });
+});

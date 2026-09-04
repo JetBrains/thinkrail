@@ -200,7 +200,12 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   is what keeps an always-mounted rail from re-rendering on every event of every session.
   **`applySessionActivity`** folds one `session.activity` push; **`hydrateSessionActivity`** **replaces**
   the whole map from the `session.activityList` snapshot — replacement, not merge, because a reconnect must
-  not leave a glyph behind for a session that settled while the socket was down. Both refuse removed
+  not leave a glyph behind for a session that settled while the socket was down. Replacement is also what
+  makes an **empty** snapshot the retirement path: a client that has seen a v59 host and then reconnects
+  to a pre-activity one hydrates `[]` rather than skipping the read, because that host can send neither a
+  replacement snapshot nor a retraction, and the alternative is stale `running`/`failed` glyphs that never
+  clear. Hydration is equally a no-op when the computed map matches the current one, so a reconnect that
+  changes nothing does not re-render the rail. Both refuse removed
   workspaces and tombstoned sessions, so a late push cannot resurrect a deleted chat's glyph.
   The rollup is **not** stored: `workspaceActivityRollup`/`projectActivityRollup` derive it on read with a
   single shared precedence, **`failed` > `waiting` > `running` > `queued`** — a rare fault must never be

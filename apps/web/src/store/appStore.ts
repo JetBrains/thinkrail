@@ -1076,6 +1076,24 @@ function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 	return rest;
 }
 
+function sameActivityMap(
+	prev: Record<string, Record<string, ActivityStatus>>,
+	next: Record<string, Record<string, ActivityStatus>>,
+): boolean {
+	const prevKeys = Object.keys(prev);
+	if (prevKeys.length !== Object.keys(next).length) return false;
+	return prevKeys.every((workspaceId) => {
+		const before = prev[workspaceId];
+		const after = next[workspaceId];
+		if (!before || !after) return false;
+		const sessionIds = Object.keys(before);
+		return (
+			sessionIds.length === Object.keys(after).length &&
+			sessionIds.every((sessionId) => before[sessionId] === after[sessionId])
+		);
+	});
+}
+
 function withoutSessionActivity(
 	s: AppState,
 	workspaceId: string,
@@ -2663,7 +2681,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				forWorkspace[row.sessionId] = row.status;
 				next[row.workspaceId] = forWorkspace;
 			}
-			return { activityByWorkspace: next };
+			return sameActivityMap(s.activityByWorkspace, next) ? {} : { activityByWorkspace: next };
 		}),
 	applySessionActivity: ({ workspaceId, sessionId, status }) =>
 		set((s) => {

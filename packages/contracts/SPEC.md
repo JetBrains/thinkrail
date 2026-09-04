@@ -516,7 +516,10 @@ workspace's sessions at once — see the `agent` module SPEC for the derivation 
 orders.
 
 `ACTIVITY_PROTOCOL_VERSION` pins the layer, so a UI shipped ahead of its host renders no glyphs instead of
-an empty rail that looks like "nothing is running".
+an empty rail that looks like "nothing is running". The gate is **not** a plain early return: an older host
+can send neither a snapshot nor a retraction, so a client that has already seen a v59 host must actively
+*clear* what it holds when it reconnects to a pre-activity one — otherwise a downgraded or re-pointed
+endpoint strands glyphs that nothing can ever retire (see `apps/web/src/store/SPEC.md`).
 
 ## Get right
 
