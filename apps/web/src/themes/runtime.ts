@@ -1,10 +1,11 @@
 import {
+	type ThemePreference as ConfigThemePreference,
 	DEFAULT_CONFIG,
 	isSystemThemePair,
 	isThemeMode,
+	normalizeThemePreference as normalizeConfigThemePreference,
 	type SystemThemePair,
 	type ThemeId,
-	type ThemeMode,
 } from "@thinkrail/contracts";
 import {
 	asStablePreferenceAdapter,
@@ -38,11 +39,7 @@ export interface ThemeCatalog {
 	readonly list: readonly ThemeDescriptor[];
 }
 
-export interface ThemePreference {
-	readonly theme: ThemeId;
-	readonly themeMode: ThemeMode;
-	readonly systemThemePair?: SystemThemePair;
-}
+export type ThemePreference = ConfigThemePreference;
 
 export interface ThemeResolution {
 	readonly requestedId: ThemeId;
@@ -205,7 +202,7 @@ function defaultThemePreference(): ThemePreference {
 	return { theme: DEFAULT_CONFIG.theme, themeMode: DEFAULT_CONFIG.themeMode };
 }
 
-function normalizeThemePreference(value: unknown): ThemePreference {
+function normalizeThemeHint(value: unknown): ThemePreference {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
 		return defaultThemePreference();
 	}
@@ -215,12 +212,12 @@ function normalizeThemePreference(value: unknown): ThemePreference {
 	if (typeof theme !== "string" || !isThemeIdSlug(theme) || !isThemeMode(themeMode)) {
 		return defaultThemePreference();
 	}
-	const pair =
+	const systemThemePair =
 		isSystemThemePair(rawPair) && isThemeIdSlug(rawPair.light) && isThemeIdSlug(rawPair.dark)
 			? { light: rawPair.light, dark: rawPair.dark }
 			: undefined;
-	if (themeMode === "system" && !pair) return defaultThemePreference();
-	return { theme, themeMode, ...(pair ? { systemThemePair: pair } : {}) };
+	if (themeMode === "system" && !systemThemePair) return defaultThemePreference();
+	return normalizeConfigThemePreference({ theme, themeMode, systemThemePair });
 }
 
 function colorSchemeMediaQuery(): ColorSchemeMediaQuery | null {
@@ -283,7 +280,7 @@ export function resolveThemePreference(
 	preference: ThemePreference,
 	systemAppearance: ThemeAppearance = readSystemAppearance(),
 ): ThemeResolution {
-	const normalized = normalizeThemePreference(preference);
+	const normalized = normalizeConfigThemePreference(preference);
 	if (normalized.themeMode === "fixed" || !normalized.systemThemePair) {
 		const exact = exactTheme(normalized.theme);
 		return {
@@ -358,7 +355,7 @@ export function readThemeHint(): ThemePreference {
 		) {
 			return defaultThemePreference();
 		}
-		return normalizeThemePreference(parsed);
+		return normalizeThemeHint(parsed);
 	} catch {
 		return defaultThemePreference();
 	}
@@ -366,7 +363,7 @@ export function readThemeHint(): ThemePreference {
 
 export function writeThemeHint(preference: ThemePreference): void {
 	try {
-		const normalized = normalizeThemePreference(preference);
+		const normalized = normalizeThemeHint(preference);
 		themeHintStorage()?.setItem(HINT_KEY, JSON.stringify({ version: HINT_VERSION, ...normalized }));
 	} catch {
 		return;

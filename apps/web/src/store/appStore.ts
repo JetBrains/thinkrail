@@ -35,8 +35,7 @@ import {
 	isAskUserAnswersMessage,
 	isControlMessage,
 	isSubagentCompletionMessage,
-	isSystemThemePair,
-	isThemeMode,
+	normalizeThemePreference,
 } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
@@ -986,17 +985,10 @@ function sortProjects(projects: Project[]): Project[] {
 }
 
 function configPatch(config: AppConfig) {
-	const systemThemePair = isSystemThemePair(config.systemThemePair)
-		? { light: config.systemThemePair.light, dark: config.systemThemePair.dark }
-		: undefined;
-	const themeMode =
-		isThemeMode(config.themeMode) && (config.themeMode === "fixed" || systemThemePair)
-			? config.themeMode
-			: DEFAULT_CONFIG.themeMode;
+	const themePreference = normalizeThemePreference(config);
 	return {
-		theme: config.theme,
-		themeMode,
-		systemThemePair,
+		...themePreference,
+		systemThemePair: themePreference.systemThemePair,
 		analyticsEnabled: config.analyticsEnabled,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
 		terminalReplayKb: config.terminalReplayKb,
