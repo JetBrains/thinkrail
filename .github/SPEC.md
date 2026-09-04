@@ -153,6 +153,15 @@ The README documents the user-facing install. `thinkrail update` (the CLI's self
 download/verify/PATH logic lives; on Windows it prints the `install.ps1` one-liner instead of updating
 in place.
 
+The **published tags are also the app's update feed.** `install.sh`'s `resolve_tag` (stable =
+`releases/latest`, nightly = the newest `vX.Y.Z-nightly.N` in `releases?per_page=20`) is mirrored in
+`@thinkrail/shared/release` for the in-app check, and an in-app install **pins** the version it resolved
+into the installer call so the two can never disagree (`module-shared`). Two consequences for this
+module: a channel whose newest release is a draft is invisible to the app exactly as it is to the
+installers, and renaming a tag pattern breaks release awareness alongside both installers. Publishing
+Electrobun's updater metadata + patches (needed by the desktop update provider, `module-desktop`)
+remains the open release-side gap.
+
 ## Boundary
 
 - **Owns:** everything under `.github/` (workflows, composite actions, the version script) — the CI +

@@ -50,13 +50,31 @@ git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PO
 `THINKRAIL_STATIC_DIR` (flag > env > default). `THINKRAIL_NO_ANALYTICS` is documented in `--help` but
 deliberately **not** parsed here — the host's analytics module is its single reader (see below).
 
-## Self-update (`thinkrail update`)
+## Self-update (`thinkrail update`) + the in-app update provider
 
 `src/update.ts` ports the old repo's `thinkrail upgrade` (renamed): it re-invokes the **published
 installer** for the binary's channel — `install.sh` on macOS/Linux, `install.ps1` on Windows — so the
 installer stays the single source of the download → checksum → replace → PATH logic. Channel/prefix
 resolve the same way on both: flag > `~/.config/thinkrail/install.json` > baked channel (from
 `version.ts`; `dev` → `stable`) / `~/.local`.
+
+**Three layers, two front-ends.** Plan resolution is pure, plan *execution* is async and
+output-capturing, and the terminal command is one consumer of it — the in-app updater is the other:
+
+- `executeUpdatePlan(plan)` fetches the installer and runs it **without `spawnSync`**, returning a
+  structured outcome. This is not a style preference: the host runs on one event loop, and a
+  synchronous installer run would freeze every session for the whole download — the failure class
+  `subprocess`' bounded runner exists to prevent.
+- `runUpdate(argv, env)` stays the console front-end (its rendering, exit codes, and the Windows
+  manual-command fallback are unchanged). It now also *checks first* via
+  `@thinkrail/shared/release`, so re-running it on the newest build says so instead of reinstalling.
+- `src/updateProvider.ts` is the second front-end: the `UpdateProvider` the launcher passes into
+  `bootHost`, implementing `check` (resolve the newest release for the resolved channel, compare
+  against the baked version) and `install` (the same executor, with the resolved version **pinned**
+  into the installer call so it cannot re-resolve to a different build). It supplies **no `restart`**
+  — the CLI host does not restart itself; the app tells the user to. `capabilities.install` is `false`
+  for `0.0.0-dev`, so a source run and a locally compiled binary never reach the network. See
+  `submodule-server-update` for the port and `module-shared`'s `/release` for the feed.
 
 - **Unix:** `curl` the script, feed it to `bash -s -- --channel … --prefix … [--version …]`.
 - **Windows:** fetch `install.ps1`, write it to a temp `.ps1`, and run it through the first available
@@ -275,14 +293,17 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   `src/compiled-entry.ts`, `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`,
   `src/runtime-assets.generated.*`),
   `src/update.ts` (the `update`
-  subcommand), `src/uninstall.ts` (the `uninstall` subcommand), `src/paths.ts` (the installed layout:
+  subcommand + the shared plan executor), `src/updateProvider.ts` (the `UpdateProvider` this launcher
+  injects), `src/uninstall.ts` (the `uninstall` subcommand), `src/paths.ts` (the installed layout:
   `install.json` + the staging cache root), and `src/powershell.ts` (the Windows PowerShell seam). Central
   integration remains a server/auth feature; the launcher has no Central subcommand or protocol implementation.
 - **Allowed deps:** `@thinkrail/server` (`bootHost`, `registerBundledRuntime`, build-support and artifact-probe subpaths, `dataDir` — the
   uninstaller has to name the app state dir, and must name the *same* one the host uses — plus the
   test-only `history-test-fixtures` subpath in the artifact smoke to seed a real pi transcript),
   `@thinkrail/shared/startupMark` (the shared boot
-  signature renderer) + `@thinkrail/shared/version` (the shared release identity), Bun/Node; the generated build module may
+  signature renderer) + `@thinkrail/shared/version` (the shared release identity) +
+  `@thinkrail/shared/release` (the published-release feed both update front-ends resolve through),
+  Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).
 - **Forbidden:** product feature/domain logic; reaching into the server's internals (use only its public

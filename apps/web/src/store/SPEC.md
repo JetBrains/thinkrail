@@ -25,7 +25,15 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   config?)`** installs protocol + both sorted project views + optional config + navigation repair and then
   advances that readiness edge in one Zustand write; route validation never observes a protocol-only or
   project-only intermediate state. `installProjectSnapshot` remains the project-only primitive for focused
-  callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
+  callers. The same install records the host's **`appVersion`** and, once, **`bootAppVersion`** — the
+  version of the host that served *this page*. A later welcome reporting a different `appVersion` means
+  the host was replaced under an open tab (the normal end of an update), which the
+  `hostVersionChanged` selector names and `shell` acts on; keeping both values here is what stops a
+  reloaded bundle and a restarted host from becoming a mismatched pair.
+  **`applyUpdateStatus(status)`** folds the `update.status` snapshot (see [[submodule-server-update]]);
+  its render decisions are selectors, not component logic — `updateBannerRelease` (what the banner
+  shows, already accounting for `dismissedVersion`) and `updateIndicator` (whether the topbar gear
+  carries a badge). **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
   known open + closed project. **`applyProjectUpdated(project)`** is the one full-snapshot updater for
   `project.updated` pushes and authoritative project-mutation responses: it upserts/sorts Recents and either
   upserts/sorts the rail or removes the row when `closed === true`. Both actions reconcile stale navigation

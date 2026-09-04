@@ -232,6 +232,24 @@ of the host.
   `server.welcome`, mutated via `settings.update`).
   **`InterviewResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic
   feedback popup. No usage count, eligibility, dismissal state, or client identity crosses the wire.
+  `AppConfig.updateChecksEnabled` (default `true`) is the outbound-release-check switch — the only
+  update *preference* on the wire; everything else the feature remembers is host state inside
+  `UpdateStatus`;
+  **`UpdateStatus`** — the whole release-awareness surface as one snapshot: `current`
+  (`{ version, channel: ReleaseChannel | "dev", commit? }`), **`UpdateCapabilities`**
+  (`install` — false for a `0.0.0-dev` build or an install this host cannot replace; `restart`
+  (`"self" | "manual"`) — whether the host can bring itself back or the user must; `channelSwitch`
+  (`"in-app" | "download-page" | "unsupported"`); and the offerable `channels`), `phase`
+  (`idle | checking | available | installing | staged | error`), optional **`AvailableRelease`**
+  (`{ version, channel, notesUrl, publishedAt? }` — a link out, never rendered release notes),
+  `staged` (on disk, awaiting a restart), `lastCheckedAt`, `dismissedVersion` (banner-only silence),
+  and `error` (`kind: "manual" | "failed"` — `manual` is "here is the command", not a fault). The
+  capabilities are the client's **only** input for what to offer: a client never infers a launcher.
+  An unknown `phase` renders as a neutral busy line, which is what lets a host add one without a
+  lockstep client release. **`UpdateInstallTarget`** (`{ channel, version? }`) is one shape for
+  upgrade, downgrade *and* channel switch. `ReleaseChannel` (`"stable" | "nightly"`) is the published
+  channel pair `module-ci-release` produces. **Deliberately absent:** any "is it safe to restart"
+  field — streaming chats and live terminals are already client-side facts.
   Contracts deliberately exports no theme catalog enum/list/labels: a future manifest can mint an id
   unknown when the host was built, and a client missing it resolves a same-appearance bundled fallback;
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
@@ -432,6 +450,11 @@ of the host.
   (**`template.list`**, **`template.get`**
   — `scope` optional, project wins over global, **`template.save`**, **`template.delete`**) — all
   read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
+  plus the **`update.*` set** — **`update.check`** (force one check; the schedule is the host's),
+  **`update.install`** (an `UpdateInstallTarget`) and **`update.dismiss`** (silence the banner for a
+  version) — each answering the fresh `UpdateStatus` so a caller converges without a second read.
+  **`UPDATE_PROTOCOL_VERSION`** pins their introduction so an independently shipped older client hides
+  the feature instead of calling methods its host lacks,
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
   (open records) and **`recentProjects`** (all known records, open + closed), plus **`hostPlatform`**
   (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
@@ -444,7 +467,8 @@ of the host.
   session id; a non-replayable domain event broadcast after permanent deletion so every client removes the chat
   and blocks stale hydration) /
   **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
-  client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to the host-claimed
+  client converges) / **`update.status`** (the full `UpdateStatus`, replayed to late subscribers so a
+  reloaded page sees a staged update it never watched arrive) / **`feedback.interview`** (an empty, addressed invitation sent only to the host-claimed
   frontend; not broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
