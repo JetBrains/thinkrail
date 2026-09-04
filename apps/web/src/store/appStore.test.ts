@@ -131,6 +131,7 @@ beforeEach(() => {
 		navTickByWorkspace: {},
 		closedChatsByWorkspace: {},
 		deletedSessionsByWorkspace: {},
+		activityByWorkspace: {},
 		fsChangesByWorkspace: {},
 		skillChangeTickByWorkspace: {},
 		skillsSyncedTickBySession: {},
@@ -3801,4 +3802,85 @@ test("authority can be given up without replacing the list (a consumer activatin
 	s().dropModelsFreshness();
 	expect(s().modelsFresh).toBe(false);
 	expect(s().models).toBe(refreshed);
+});
+
+test("an activity push installs a status, and a null push retracts it", () => {
+	const store = useAppStore.getState();
+	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "running" });
+	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { s1: "running" } });
+
+	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "failed" });
+	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { s1: "failed" } });
+
+	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: null });
+	expect(useAppStore.getState().activityByWorkspace).toEqual({});
+});
+
+test("retracting one chat keeps its siblings and prunes the workspace only when it empties", () => {
+	const store = useAppStore.getState();
+	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "running" });
+	store.applySessionActivity({ workspaceId: "w1", sessionId: "s2", status: "waiting" });
+	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: null });
+	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { s2: "waiting" } });
+
+	store.applySessionActivity({ workspaceId: "w1", sessionId: "s2", status: null });
+	expect(useAppStore.getState().activityByWorkspace).toEqual({});
+});
+
+test("an unchanged status is not a state write, so a quiet rail never re-renders", () => {
+	const store = useAppStore.getState();
+	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "running" });
+	const before = useAppStore.getState().activityByWorkspace;
+	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "running" });
+	expect(useAppStore.getState().activityByWorkspace).toBe(before);
+});
+
+test("activity for a removed workspace or a deleted chat is refused, live and on hydration", () => {
+	useAppStore.setState({
+		removedWorkspaceIds: { gone: true },
+		deletedSessionsByWorkspace: { w1: { dead: true } },
+	});
+	const store = useAppStore.getState();
+	store.applySessionActivity({ workspaceId: "gone", sessionId: "s1", status: "running" });
+	store.applySessionActivity({ workspaceId: "w1", sessionId: "dead", status: "running" });
+	expect(useAppStore.getState().activityByWorkspace).toEqual({});
+
+	store.hydrateSessionActivity([
+		{ workspaceId: "gone", sessionId: "s1", status: "running" },
+		{ workspaceId: "w1", sessionId: "dead", status: "failed" },
+		{ workspaceId: "w1", sessionId: "alive", status: "waiting" },
+	]);
+	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { alive: "waiting" } });
+});
+
+test("hydration REPLACES the map, so a reconnect cannot leave a stale glyph behind", () => {
+	const store = useAppStore.getState();
+	store.applySessionActivity({ workspaceId: "w1", sessionId: "stale", status: "running" });
+	store.hydrateSessionActivity([{ workspaceId: "w2", sessionId: "fresh", status: "queued" }]);
+	expect(useAppStore.getState().activityByWorkspace).toEqual({ w2: { fresh: "queued" } });
+});
+
+test("removing a workspace drops its activity along with its other local state", () => {
+	const workspace: Workspace = {
+		id: "w1",
+		projectId: "p1",
+		name: "one",
+		branch: "one",
+		worktreePath: "/p/one",
+		baseBranch: "main",
+	};
+	useAppStore.setState({ projects: [], workspaces: { p1: [workspace] } });
+	useAppStore
+		.getState()
+		.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "running" });
+	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
+	expect(useAppStore.getState().activityByWorkspace).toEqual({});
+});
+
+test("deleting a chat drops its activity row", () => {
+	const store = useAppStore.getState();
+	store.applySessionActivity({ workspaceId: "w1", sessionId: "s1", status: "failed" });
+	store.applySessionActivity({ workspaceId: "w1", sessionId: "s2", status: "running" });
+	store.deleteChat("w1", "s1", false);
+	expect(useAppStore.getState().activityByWorkspace).toEqual({ w1: { s2: "running" } });
 });

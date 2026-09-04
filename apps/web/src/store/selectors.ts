@@ -1,4 +1,5 @@
 import type {
+	ActivityStatus,
 	GitDiffScope,
 	Project,
 	SpecGraphNode,
@@ -459,4 +460,41 @@ export function selectAgentReviewCommentCount(
 	return snapshot.comments.filter(
 		(c) => c.author === "agent" && c.status !== "resolved" && c.status !== "dismissed",
 	).length;
+}
+
+const ACTIVITY_ROLLUP_ORDER: readonly ActivityStatus[] = ["failed", "waiting", "running", "queued"];
+
+function rollUpActivity(statuses: Iterable<ActivityStatus>): ActivityStatus | null {
+	let best = ACTIVITY_ROLLUP_ORDER.length;
+	for (const status of statuses) {
+		const rank = ACTIVITY_ROLLUP_ORDER.indexOf(status);
+		if (rank >= 0 && rank < best) best = rank;
+		if (best === 0) break;
+	}
+	return ACTIVITY_ROLLUP_ORDER[best] ?? null;
+}
+
+export function selectWorkspaceActivity(
+	state: { activityByWorkspace: Record<string, Record<string, ActivityStatus>> },
+	workspaceId: string,
+): ActivityStatus | null {
+	const forWorkspace = state.activityByWorkspace[workspaceId];
+	return forWorkspace ? rollUpActivity(Object.values(forWorkspace)) : null;
+}
+
+export function selectProjectActivity(
+	state: {
+		activityByWorkspace: Record<string, Record<string, ActivityStatus>>;
+		workspaces: Record<string, Workspace[]>;
+	},
+	projectId: string,
+): ActivityStatus | null {
+	const list = state.workspaces[projectId];
+	if (!list) return null;
+	const statuses: ActivityStatus[] = [];
+	for (const workspace of list) {
+		const status = selectWorkspaceActivity(state, workspace.id);
+		if (status) statuses.push(status);
+	}
+	return rollUpActivity(statuses);
 }

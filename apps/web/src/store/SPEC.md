@@ -75,7 +75,7 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   leaving the client labelling and keying reads off a value the host no longer has; a project never fetched or an id absent from its list is a **no-op** — the next
   `workspace.list` reconciles; **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
   reaction (`removeWorkspace` drops the row + `clearWorkspaceState` drops its
-  local view/attention/terminal maps and chat runtimes + recency drops the dead id,
+  local view/attention/terminal/activity maps and chat runtimes + recency drops the dead id,
   and **if it was this client's active workspace** → activate the most recently selected loaded workspace
   whose project remains open, even across projects; when none remains, `selectProject(projectId)` falls back
   to the removed workspace's Project Home; either active fallback gets the same neutral toast that reads right
@@ -191,7 +191,22 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   otherwise the client renders the reply twice (frozen failed partial + retried copy). Hydration applies
   the same presentation rule to the persisted copy (`chat/hydrate.ts` hides retried attempts — an
   errored assistant followed by another assistant before any user message), so live and reloaded clients
-  agree. Closed
+  agree.
+- **Workspace activity** (`activityByWorkspace`) is the host's cross-workspace agent-state signal, the one
+  thing here that describes chats **nobody has open** — the Projects rail's glyphs. Keyed workspace →
+  session → `ActivityStatus`, and **idle is absence at every level**: a retraction deletes the session key
+  and then the workspace key once it empties, so "quiet" is an empty map rather than a map full of nulls.
+  A status that did not move is not a state write at all (the reducer returns the identical object), which
+  is what keeps an always-mounted rail from re-rendering on every event of every session.
+  **`applySessionActivity`** folds one `session.activity` push; **`hydrateSessionActivity`** **replaces**
+  the whole map from the `session.activityList` snapshot — replacement, not merge, because a reconnect must
+  not leave a glyph behind for a session that settled while the socket was down. Both refuse removed
+  workspaces and tombstoned sessions, so a late push cannot resurrect a deleted chat's glyph.
+  The rollup is **not** stored: `selectWorkspaceActivity`/`selectProjectActivity` derive it on read with a
+  single shared precedence, **`failed` > `waiting` > `running` > `queued`** — a rare fault must never be
+  masked by routine work, and both are "needs you" anyway. Note this is deliberately *not* the host's
+  per-session derivation order (see `packages/server/src/agent/SPEC.md`): there the question is "what is
+  this one chat doing", here it is "which of several chats should this row speak for". Closed
   chats are reopenable: the workbench close command atomically removes local placement and invokes
   **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
   **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending
@@ -207,7 +222,7 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   gaining local placement. **`deleteChat(workspaceId, sessionId)`** is the idempotent
   fold for both a confirmed local `session.delete` and the `session.deleted` broadcast: it atomically drops
   every tab the chat owns — its transcript, live plan page, and any dependent legacy document cache — plus
-  its history row/runtime + skill baseline, records a page-lifetime tombstone, removes queued opens for the
+  its history row/runtime + skill baseline + activity row, records a page-lifetime tombstone, removes queued opens for the
   chat or its dependent documents, and queues a resource-removal intent. The shell layout integration
   removes every matching chat placement and session-backed plan reference through its pure mutation path,
   then reconciles local attention in the same transition. Until then the tombstone renders no body, so a
@@ -496,7 +511,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
   `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (deduplicated local chat
-  placement + history membership used as a reconnect-reconciliation baseline);
+  placement + history membership used as a reconnect-reconciliation baseline),
+  **`selectWorkspaceActivity` / `selectProjectActivity`** (the Projects rail's agent-state rollup — see the
+  activity section);
   `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
   only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to

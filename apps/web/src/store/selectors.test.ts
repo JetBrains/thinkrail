@@ -22,7 +22,9 @@ import {
 	selectLayoutResourcePlacement,
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
+	selectProjectActivity,
 	selectSkillsStale,
+	selectWorkspaceActivity,
 	specPathMatcher,
 } from "./selectors";
 
@@ -453,4 +455,58 @@ test("selectAgentReviewCommentCount counts only OPEN agent-authored comments", (
 	expect(selectAgentReviewCommentCount(state, "w1")).toBe(2);
 	expect(selectAgentReviewCommentCount(state, "missing")).toBe(0);
 	expect(selectAgentReviewCommentCount(state, null)).toBe(0);
+});
+
+const activityWorkspaces: Record<string, Workspace[]> = {
+	p1: [
+		{ ...workspace, id: "wa", projectId: "p1", name: "a", branch: "a" },
+		{ ...workspace, id: "wb", projectId: "p1", name: "b", branch: "b" },
+	],
+};
+
+test("a workspace with no activity rows rolls up to null, so a quiet rail draws nothing", () => {
+	expect(selectWorkspaceActivity({ activityByWorkspace: {} }, "wa")).toBeNull();
+	expect(selectWorkspaceActivity({ activityByWorkspace: { wa: {} } }, "wa")).toBeNull();
+});
+
+test("a workspace rolls up to its single chat's status", () => {
+	expect(selectWorkspaceActivity({ activityByWorkspace: { wa: { s1: "running" } } }, "wa")).toBe(
+		"running",
+	);
+});
+
+test("failed outranks every other state — a rare fault is never masked by routine work", () => {
+	const activityByWorkspace = {
+		wa: {
+			s1: "running" as const,
+			s2: "waiting" as const,
+			s3: "failed" as const,
+			s4: "queued" as const,
+		},
+	};
+	expect(selectWorkspaceActivity({ activityByWorkspace }, "wa")).toBe("failed");
+});
+
+test("the rollup order is failed > waiting > running > queued", () => {
+	const at = (statuses: Record<string, "running" | "waiting" | "queued" | "failed">) =>
+		selectWorkspaceActivity({ activityByWorkspace: { wa: statuses } }, "wa");
+	expect(at({ s1: "waiting", s2: "running", s3: "queued" })).toBe("waiting");
+	expect(at({ s1: "running", s2: "queued" })).toBe("running");
+	expect(at({ s1: "queued" })).toBe("queued");
+});
+
+test("a project rolls up across its workspaces and ignores other projects", () => {
+	const activityByWorkspace = { wa: { s1: "running" as const }, wb: { s2: "failed" as const } };
+	expect(selectProjectActivity({ activityByWorkspace, workspaces: activityWorkspaces }, "p1")).toBe(
+		"failed",
+	);
+	expect(
+		selectProjectActivity({ activityByWorkspace, workspaces: activityWorkspaces }, "p2"),
+	).toBeNull();
+});
+
+test("a project with only quiet workspaces rolls up to null", () => {
+	expect(
+		selectProjectActivity({ activityByWorkspace: {}, workspaces: activityWorkspaces }, "p1"),
+	).toBeNull();
 });

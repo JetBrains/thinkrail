@@ -5,6 +5,7 @@ import type {
 	Project,
 	ReviewChangedPayload,
 	ServerWelcome,
+	SessionActivityPayload,
 	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
@@ -12,12 +13,25 @@ import type {
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
 } from "@thinkrail/contracts";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import { ACTIVITY_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
+
+function refreshSessionActivity(connectionGeneration: number): void {
+	const { protocolVersion } = useAppStore.getState();
+	if (protocolVersion === null || protocolVersion < ACTIVITY_PROTOCOL_VERSION) return;
+	void getTransport()
+		.request("session.activityList", {})
+		.then((rows) => {
+			const current = useAppStore.getState();
+			if (!isConnectedGeneration(current, connectionGeneration)) return;
+			current.hydrateSessionActivity(rows);
+		})
+		.catch(() => {});
+}
 
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	const snapshot = useAppStore.getState();
@@ -74,6 +88,7 @@ export function initTransport(): WsTransport {
 					: undefined,
 			);
 		refreshLoadedWorkspaceLists(useAppStore.getState().connectionGeneration);
+		refreshSessionActivity(useAppStore.getState().connectionGeneration);
 	});
 
 	transport.subscribe(WS_CHANNELS.projectUpdated, (data) => {
@@ -100,6 +115,10 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.sessionDeleted, (data) => {
 		const { workspaceId, sessionId } = data as SessionDeletedPayload;
 		useAppStore.getState().deleteChat(workspaceId, sessionId, false);
+	});
+
+	transport.subscribe(WS_CHANNELS.sessionActivity, (data) => {
+		useAppStore.getState().applySessionActivity(data as SessionActivityPayload);
 	});
 
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
