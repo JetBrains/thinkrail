@@ -383,7 +383,9 @@ a project picker, the prompt hero, and the reused
   cards. Mode is deliberately separate from the manifest list: making System another theme row nests configuration in a
   radio-like option, while always showing all three choices gives inactive values equal visual weight. Fixed
   mode shows the existing manifest list and retained fixed choice. System mode shows appearance-filtered
-  `Light theme` / `Dark theme` selectors plus `Current on this device: <Light|Dark> · <resolved label>`;
+  `Light theme` / `Dark theme` selectors plus a `Current on this device` row reading
+  `<device icon> <Light|Dark> → <palette icon> <resolved label>` — the icons carry which half is the device
+  appearance and which is the theme, since both halves are often the same word;
   either slot may independently be normal or high contrast. First enable sends mode + the themes-derived
   same-contrast pair atomically; later slot edits replace the complete pair, and returning to fixed changes
   only mode, preserving both choices. Exactly one theme mutation may be in flight from this panel; its

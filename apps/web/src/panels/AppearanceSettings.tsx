@@ -1,4 +1,10 @@
-import { RiCheckLine as Check, RiArrowDownSLine as ChevronDown } from "@remixicon/react";
+import {
+	RiArrowRightLine as ArrowRight,
+	RiCheckLine as Check,
+	RiArrowDownSLine as ChevronDown,
+	RiComputerLine as Device,
+	RiPaletteLine as Palette,
+} from "@remixicon/react";
 import {
 	type AppConfigUpdate,
 	type SystemThemePair,
@@ -206,8 +212,12 @@ export function AppearanceSettings() {
 						className="flex items-center justify-between gap-8"
 					>
 						<span className="tr-text-metadata text-text-muted">Current on this device</span>
-						<span className="tr-text-ui text-text-default">
-							{systemAppearance === "light" ? "Light" : "Dark"} · {current.theme.label}
+						<span className="flex items-center gap-4 tr-text-ui text-text-default">
+							<Device className="size-14 shrink-0 text-text-muted" />
+							{systemAppearance === "light" ? "Light" : "Dark"}
+							<ArrowRight className="size-14 shrink-0 text-text-muted" />
+							<Palette className="size-14 shrink-0 text-text-muted" />
+							{current.theme.label}
 						</span>
 					</div>
 					<ThemeSelector
