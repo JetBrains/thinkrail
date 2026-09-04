@@ -52,7 +52,7 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	const effort = dialog.getByTestId("thinking-selector");
 	await expect(effort).toBeVisible();
 	const modelResolved = !(await dialog.getByTestId("model-selector").textContent())?.includes(
-		"Select model",
+		"Default model",
 	);
 	if (modelResolved) await expect(effort).toBeEnabled();
 	else await expect(effort).toBeDisabled();

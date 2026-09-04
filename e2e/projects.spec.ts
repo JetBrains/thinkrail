@@ -103,6 +103,7 @@ function seedSecondRepo(): string {
 	git(repo, "init", "-b", "main");
 	git(repo, "config", "user.email", "e2e@thinkrail.test");
 	git(repo, "config", "user.name", "ThinkRail E2E");
+	git(repo, "config", "commit.gpgsign", "false");
 	writeFileSync(join(repo, "README.md"), "# second project\n");
 	git(repo, "add", "-A");
 	git(repo, "commit", "-m", "seed");

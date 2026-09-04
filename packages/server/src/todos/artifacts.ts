@@ -15,12 +15,7 @@ import { dropReviewRecord } from "./reviews";
 
 const log = logger("todos");
 
-export type CommitWindow = (opts: {
-	title: string;
-	sessionId: string;
-	todoId: string;
-	paths: string[];
-}) => { sha: string } | null;
+export type CommitWindow = (opts: { subject: string; paths: string[] }) => { sha: string } | null;
 
 const isAppStatePath = (path: string): boolean =>
 	path === WORKSPACE_INTERNAL_DIR || path.startsWith(`${WORKSPACE_INTERNAL_DIR}/`);
@@ -35,10 +30,6 @@ export function isTodoToolEnd(event: PiEvent): boolean {
 
 function flatten(plan: TodoPlan): TodoPlan["todos"] {
 	return [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
-}
-
-function commitMessage(title: string, sessionId: string, todoId: string): string {
-	return `todo: ${title}\n\nThinkRail-Todo: ${sessionId}/${todoId}`;
 }
 
 const commitQueues = new Map<string, Promise<void>>();
@@ -116,8 +107,7 @@ async function runReconcile(workspaceId: string, sessionId: string): Promise<voi
 			sessionId,
 			async () =>
 				(await gitStatus(workspaceId, { kind: "uncommitted" })).changes.map((c) => c.path),
-			({ title, todoId, paths }) =>
-				gitCommitPaths(workspaceId, commitMessage(title, sessionId, todoId), paths),
+			({ subject, paths }) => gitCommitPaths(workspaceId, subject, paths),
 			() => gitHeadSha(workspaceId),
 			false,
 		);
@@ -236,7 +226,10 @@ export async function reconcileChangeArtifacts(
 		const exclusive = base?.shared !== true && !otherChatWorking();
 		const committed =
 			commit && base?.paths.every((p) => !now.includes(p)) && exclusive
-				? commit({ title: todo.title, sessionId, todoId: todo.id, paths: deltaPaths })
+				? commit({
+						subject: (todo.commitSubject ?? todo.title).split(/[\r\n]/u, 1)[0] ?? "",
+						paths: deltaPaths,
+					})
 				: null;
 		if (committed) {
 			changed = null;

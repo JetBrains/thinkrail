@@ -25,6 +25,7 @@ beforeEach(() => {
 	sh(repo, "init", "-b", "main");
 	sh(repo, "config", "user.email", "t@thinkrail.test");
 	sh(repo, "config", "user.name", "test");
+	sh(repo, "config", "commit.gpgsign", "false");
 	writeFileSync(join(repo, "README.md"), "# repo\n");
 	sh(repo, "add", "-A");
 	sh(repo, "commit", "-m", "init");
@@ -57,7 +58,7 @@ afterEach(() => {
 test("listTodos decorates a commit artifact with the commit's derived files; a dead sha ships none", async () => {
 	const store = new TodoStore(repo, SESSION);
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
-	const committed = gitCommitPaths("w1", "todo: step", ["impl.ts"]);
+	const committed = gitCommitPaths("w1", "feat: step", ["impl.ts"]);
 	if (!committed) throw new Error("commit failed");
 	const good = store.add({
 		title: "committed step",

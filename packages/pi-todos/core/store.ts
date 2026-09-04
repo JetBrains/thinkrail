@@ -16,6 +16,7 @@ import {
 	type TodoPlan,
 	type TodoStatus,
 	type TodoUpdateResult,
+	type WriteItem,
 	type WritePlan,
 } from "./types.ts";
 
@@ -49,7 +50,10 @@ export function groupStatus(group: TodoGroup): TodoGroupStatus {
 	return "pending";
 }
 
-const CURRENT_VERSION = 5 as const;
+const CURRENT_VERSION = 6 as const;
+
+// Home for a legacy stray: an agent `done` item found in the (user-only) loose lane on re-plan (see core/SPEC.md).
+const CARRIED_LOOSE_GROUP = "Completed";
 
 const STATUS_SET: ReadonlySet<string> = new Set(TODO_STATUSES);
 const ORIGIN_SET: ReadonlySet<string> = new Set(TODO_ORIGINS);
@@ -115,6 +119,8 @@ function sanitize(raw: unknown): Todo | null {
 	if (typeof o.summary === "string" && o.summary) todo.summary = decodeIfAgent(o.summary, origin);
 	if (typeof o.verification === "string" && o.verification)
 		todo.verification = decodeIfAgent(o.verification, origin);
+	if (typeof o.commitSubject === "string" && o.commitSubject)
+		todo.commitSubject = decodeIfAgent(o.commitSubject, origin);
 	const artifacts = sanitizeArtifacts(o.artifacts, origin);
 	if (artifacts) todo.artifacts = artifacts;
 	return todo;
@@ -279,6 +285,7 @@ export class TodoStore {
 			if (wasDone && patch.status !== "done") {
 				delete todo.summary;
 				delete todo.verification;
+				delete todo.commitSubject;
 				delete plan.summary;
 			}
 		}
@@ -293,6 +300,10 @@ export class TodoStore {
 		if (patch.verification !== undefined) {
 			if (patch.verification) todo.verification = decodeIfAgent(patch.verification, todo.origin);
 			else delete todo.verification;
+		}
+		if (patch.commitSubject !== undefined) {
+			if (patch.commitSubject) todo.commitSubject = decodeIfAgent(patch.commitSubject, todo.origin);
+			else delete todo.commitSubject;
 		}
 		if (patch.artifacts !== undefined) {
 			const clean = sanitizeArtifacts(patch.artifacts, todo.origin);
@@ -315,22 +326,24 @@ export class TodoStore {
 	}
 
 	replaceAll(plan: WritePlan): TodoPlan {
-		const freshLoose = (plan.todos ?? []).map((w) =>
-			makeTodo(
-				w.title,
-				w.status ?? "pending",
-				"agent",
-				w.note,
-				w.artifacts,
-				w.summary,
-				w.verification,
-			),
-		);
-		const freshGroups: TodoGroup[] = (plan.groups ?? []).map((g) => ({
-			id: freshId("g"),
-			title: decodeEscapes(g.title),
-			todos: g.todos.map((w) =>
-				makeTodo(
+		const current = this.read();
+		const existingByKey = new Map<string, Todo[]>();
+		for (const g of current.groups) {
+			for (const t of g.todos) {
+				if (t.origin !== "agent") continue;
+				const key = `${g.title}\u0000${t.title}`;
+				const bucket = existingByKey.get(key);
+				if (bucket) bucket.push(t);
+				else existingByKey.set(key, [t]);
+			}
+		}
+		const consumed = new Set<string>();
+		const reconcile = (groupTitle: string, w: WriteItem): Todo => {
+			const hit = existingByKey
+				.get(`${groupTitle}\u0000${decodeEscapes(w.title)}`)
+				?.find((t) => !consumed.has(t.id));
+			if (!hit) {
+				return makeTodo(
 					w.title,
 					w.status ?? "pending",
 					"agent",
@@ -338,25 +351,56 @@ export class TodoStore {
 					w.artifacts,
 					w.summary,
 					w.verification,
-				),
-			),
-		}));
-		const current = this.read();
-		const keptLoose = current.todos.filter((t) => t.origin === "user" || t.status === "done");
-		const resultLoose = [...freshLoose, ...keptLoose];
+				);
+			}
+			consumed.add(hit.id);
+			const merged: Todo = { ...hit };
+			if (w.note !== undefined) {
+				const note = decodeEscapes(w.note);
+				if (note) merged.note = note;
+				else delete merged.note;
+				merged.updatedAt = nowIso();
+			}
+			return merged;
+		};
+		const freshGroups: TodoGroup[] = (plan.groups ?? []).map((g) => {
+			const title = decodeEscapes(g.title);
+			return { id: freshId("g"), title, todos: g.todos.map((w) => reconcile(title, w)) };
+		});
+		const resultLoose = current.todos.filter((t) => t.origin === "user");
+		const carriedGroups: TodoGroup[] = [];
+		const carriedLooseDone: Todo[] = [];
 		for (const old of current.groups) {
+			const carriedDone: Todo[] = [];
 			for (const t of old.todos) {
+				if (consumed.has(t.id)) continue;
 				if (t.origin === "user") {
 					resultLoose.push(t);
 				} else if (t.status === "done") {
 					const match = freshGroups.find((g) => g.title === old.title);
 					if (match) match.todos.push(t);
-					else resultLoose.push(t);
+					else carriedDone.push(t);
 				}
 			}
+			if (carriedDone.length > 0) {
+				carriedGroups.push({ id: freshId("g"), title: old.title, todos: carriedDone });
+			}
+		}
+		for (const t of current.todos) {
+			if (t.origin === "agent" && t.status === "done") carriedLooseDone.push(t);
+		}
+		if (carriedLooseDone.length > 0) {
+			const match = freshGroups.find((g) => g.title === CARRIED_LOOSE_GROUP);
+			if (match) match.todos.push(...carriedLooseDone);
+			else
+				carriedGroups.push({
+					id: freshId("g"),
+					title: CARRIED_LOOSE_GROUP,
+					todos: carriedLooseDone,
+				});
 		}
 
-		const next: TodoPlan = { todos: resultLoose, groups: freshGroups };
+		const next: TodoPlan = { todos: resultLoose, groups: [...freshGroups, ...carriedGroups] };
 		this.keepOneInProgress(next);
 		this.write(next);
 		return next;

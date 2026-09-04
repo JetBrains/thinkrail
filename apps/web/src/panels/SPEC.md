@@ -283,9 +283,12 @@ empty by default); while the prompt is non-empty (worktree mode), a secondary hi
 and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
 a project picker, the prompt hero, and the reused
-  `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's resolved
-  default via `model.default` so the exact model shows (values held in dialog state, applied at create
-  time). The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
+  `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's **pinned**
+  default via `model.default` so the exact model shows when there is one (values held in dialog state,
+  applied at create time). With **no pinned default the host answers `model: null`** and the dialog holds
+  none: the picker reads **Default model**, the effort control is disabled (no model, no supported set), and
+  create sends neither — so pi resolves both exactly as it does for a new chat tab. The dialog must not
+  substitute a model of its own choosing here; one resolver, pi's, see `submodule-agent`. The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
   lock). Their catalog is the shared one — `chat/useModelCatalog`, so the dialog and the chat composer
   cannot drift — which means it is **live**: the picker's Refresh row can replace the list underneath a
   held selection. The dialog therefore reconciles the held model against it on every change via the pure
@@ -296,7 +299,7 @@ a project picker, the prompt hero, and the reused
   current-but-unsettled list, which is no basis for a verdict), dropped by the next `model.list` install from any consumer (whose
   handler answers from before the detached refresh it starts) *and* dropped up front by any consumer
   activating. On a fresh catalog it returns **`"unavailable"`** — a verdict, not a replacement: the dialog
-  then asks **`model.default`** (pi's own `pinned ?? available[0]`, plus a consistent effort) exactly as it
+  then asks **`model.default`** (the host's pinned default or none, plus a consistent effort) exactly as it
   does for the preselect, through **one** `applyHostDefault` — so no client-side copy of the host's default
   policy exists here. Asked at most once per opening, so a still-missing model can't spin the effect. Effort is a separate concern: one effect keeps the held level
   runnable by the held model by asking the host for pi's clamp (**`model.clampThinking`**) rather than
@@ -313,8 +316,8 @@ a project picker, the prompt hero, and the reused
   updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
   **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active → **always open a
-  fresh chat** (`session.create({ model, thinkingLevel })` — the picked model + effort apply even
-  without a prompt) → a typed prompt is additionally sent as the first message (fire-and-forget
+  fresh chat** (`session.create({ workspaceId, model?, thinkingLevel? })` — a held model + effort apply even
+  without a prompt, and travel together: with none held both are omitted and pi resolves them) → a typed prompt is additionally sent as the first message (fire-and-forget
   `prompt`); an **empty prompt leaves the just-opened composer ready** — submitting the start-working
   surface always lands the user in a chat, never on a bare receipt (folder mode: the same tail after
   entering Default). A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
@@ -374,12 +377,23 @@ a project picker, the prompt hero, and the reused
   apply), a rejected update raising a toast; the picker never owns a theme list — it renders the catalog
   the glob discovered at build time); **`ChatSettings`** (the live section immediately after Appearance —
   **Message order** radio cards over `store.chatMessageOrder` (Oldest first, the compatibility default /
-  Newest first, the opt-in) followed by the three existing composer-growth cards. Message order applies
-  immediately and persists only in this client: browsers use the current host-qualified key, while a native
-  shell may inject its stable backend-profile/window adapter. Another browser, native window, or host is
-  unaffected; `chat/messageOrder` owns its closed ids and default. Composer growth remains a
-  top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection. Labels use
-  “message box” rather than the internal “composer” name when explaining where the user types); the
+  Newest first, the opt-in), one **Streaming response movement** two-handle range over
+  `store.streamingResponseMovement`, then the three existing composer-growth cards. The movement control's
+  copy is “Choose when the chat moves while an answer grows and where its newest edge lands”; one axis runs
+  Top → Message box, Settle is 25–90, Trigger is 35–100, both step by 5 with a 10-point minimum gap, and
+  the displayed default is 75%→100%. It exposes no runway/tail/lifecycle controls. Message order and
+  movement both apply immediately and persist only in this client through the chat preference seam:
+  browsers use current-host-qualified keys, while a native shell may inject its stable
+  backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
+  remains a top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection.
+  Labels use “message box” rather than the internal “composer” name when explaining where the user types.
+  The final **Subagents** block pairs the host-wide `subagentsEnabled` switch with a named **This workspace**
+  `Use global` / `On` / `Off` control when a workspace is active; no workspace means no local block. The
+  whole block requires `protocolVersion >= SUBAGENT_SETTINGS_PROTOCOL_VERSION`, so an independently shipped
+  client never offers unsupported mutations against an older host.
+  Global mutation converges through `settings.changed`, local mutation through `workspace.updated`, and
+  neither is optimistic. `Use global` sends `null`, so later global changes continue to flow through);
+  the
   **shell-owned injected Layout
   section** (Balanced/Focus/Review
   plus named custom preset cards. Custom capture/rename/delete updates the host-synchronized catalog and

@@ -56,7 +56,11 @@ let runtime: ModelRuntime;
 let parent: AgentSession;
 let parentCwd: string;
 let service: DelegationService;
+let bgRunnerPath: string;
 const liveParents = new Map<string, AgentSession>();
+
+const BG_RUNNER_DEFINITION =
+	"---\nname: bg-runner\ndescription: Background test runner\nmodel: fauxb\n---\n\nRun the delegated task.\n";
 
 function fauxConfig(core: typeof fauxA, id: string): ProviderConfig {
 	return {
@@ -91,10 +95,8 @@ beforeAll(async () => {
 	process.env.PI_OFFLINE = "1";
 
 	mkdirSync(join(agentDir, "agents"), { recursive: true });
-	writeFileSync(
-		join(agentDir, "agents", "bg-runner.md"),
-		"---\nname: bg-runner\ndescription: Background test runner\nmodel: fauxb\n---\n\nRun the delegated task.\n",
-	);
+	bgRunnerPath = join(agentDir, "agents", "bg-runner.md");
+	writeFileSync(bgRunnerPath, BG_RUNNER_DEFINITION);
 	writeFileSync(
 		join(agentDir, "agents", "capped.md"),
 		"---\nname: capped\ndescription: Turn-capped test agent\ntools: read, ls\nmax_turns: 1\n---\n\nWork until stopped.\n",
@@ -179,13 +181,21 @@ function lastToolResultText(session: AgentSession = parent): string {
 		.join("\n");
 }
 
-async function makeSession(): Promise<AgentSession> {
+async function makeSession(
+	isEnabled?: () => boolean,
+	boundService: DelegationService = service,
+): Promise<AgentSession> {
 	const settingsManager = SettingsManager.inMemory({});
 	const resourceLoader = new DefaultResourceLoader({
 		cwd: parentCwd,
 		agentDir: getAgentDir(),
 		settingsManager,
-		extensionFactories: [createSubagentsExtension({ service })],
+		extensionFactories: [
+			createSubagentsExtension({
+				service: boundService,
+				...(isEnabled ? { isEnabled } : {}),
+			}),
+		],
 		noPromptTemplates: true,
 		noThemes: true,
 		noContextFiles: true,
@@ -214,6 +224,92 @@ async function waitFor(predicate: () => boolean, timeoutMs = 10_000): Promise<vo
 	}
 }
 
+test("an embedder can keep subagent tools registered but inactive at session start", async () => {
+	const session = await makeSession(() => false);
+	try {
+		const configured = session.getAllTools().map((tool) => tool.name);
+		expect(configured).toContain("Agent");
+		expect(configured).toContain("get_subagent_result");
+		expect(session.getActiveToolNames()).not.toContain("Agent");
+		expect(session.getActiveToolNames()).not.toContain("get_subagent_result");
+	} finally {
+		liveParents.delete(session.sessionId);
+		session.dispose();
+	}
+});
+
+test("the live enabled predicate rejects a launch selected before embedder policy changed", async () => {
+	let enabled = true;
+	const session = await makeSession(() => enabled);
+	try {
+		enabled = false;
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", { subagent_type: "scout", task: "Should not start." }),
+			),
+			fauxAssistantMessage("PARENT_RECOVERED"),
+		]);
+
+		await session.prompt("Try to delegate.");
+
+		expect(lastToolResultText(session)).toContain("Subagents are disabled");
+		expect(service.childrenOf(session.sessionId)).toEqual([]);
+	} finally {
+		await service.disposeChildrenOf(session.sessionId);
+		liveParents.delete(session.sessionId);
+		session.dispose();
+	}
+});
+
+test("a disable during asynchronous child creation disposes it before provider work starts", async () => {
+	let enabled = true;
+	let releaseChild = () => {};
+	const childGate = new Promise<void>((resolve) => {
+		releaseChild = resolve;
+	});
+	let signalChildCreated = () => {};
+	const childCreated = new Promise<void>((resolve) => {
+		signalChildCreated = resolve;
+	});
+	const gatedService: DelegationService = {
+		async createChild(spec) {
+			const child = await service.createChild(spec);
+			signalChildCreated();
+			await childGate;
+			return child;
+		},
+		findChild: (sessionId) => service.findChild(sessionId),
+		childrenOf: (parentSessionId) => service.childrenOf(parentSessionId),
+		onLifecycle: (listener) => service.onLifecycle(listener),
+		disposeChildrenOf: (parentSessionId) => service.disposeChildrenOf(parentSessionId),
+	};
+	const session = await makeSession(() => enabled, gatedService);
+	const childCallsBefore = fauxB.state.callCount;
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", { subagent_type: "bg-runner", task: "Do not start." }),
+			),
+			fauxAssistantMessage("PARENT_RECOVERED"),
+		]);
+		fauxB.setResponses([fauxAssistantMessage("CHILD_SHOULD_NOT_RUN")]);
+		const turn = session.prompt("Try to delegate during a policy change.");
+		await childCreated;
+		enabled = false;
+		releaseChild();
+		await turn;
+
+		expect(lastToolResultText(session)).toContain("Subagents are disabled");
+		expect(fauxB.state.callCount).toBe(childCallsBefore);
+		expect(service.childrenOf(session.sessionId)).toEqual([]);
+	} finally {
+		releaseChild();
+		await service.disposeChildrenOf(session.sessionId);
+		liveParents.delete(session.sessionId);
+		session.dispose();
+	}
+});
+
 test("foreground: one Agent call runs a builtin scout and returns its report to the parent", async () => {
 	fauxA.setResponses([
 		fauxAssistantMessage(
@@ -238,6 +334,78 @@ test("foreground: one Agent call runs a builtin scout and returns its report to 
 	});
 	expect(children[0]?.snapshot?.status).toBe("completed");
 	await service.disposeChildrenOf(parent.sessionId);
+});
+
+test("a per-call model runs an unpinned agent on a different model than the parent", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", {
+				subagent_type: "scout",
+				task: "Use the requested model.",
+				model: "fauxb/fauxb",
+			}),
+		),
+		fauxAssistantMessage("PARENT_USED_CALL_MODEL"),
+	]);
+	fauxB.setResponses([fauxAssistantMessage("CALL_MODEL_CHILD_OK")]);
+
+	await parent.prompt("Delegate on fauxb.");
+
+	expect(transcript()).toContain("CALL_MODEL_CHILD_OK");
+	expect(transcript()).toContain("PARENT_USED_CALL_MODEL");
+	const child = service.childrenOf(parent.sessionId)[0];
+	expect(child?.snapshot?.details.model).toBe("fauxb/fauxb");
+	await service.disposeChildrenOf(parent.sessionId);
+});
+
+test("a definition-pinned model silently wins over the per-call model", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", {
+				subagent_type: "bg-runner",
+				task: "Keep the definition pin.",
+				model: "unobtanium",
+			}),
+		),
+		fauxAssistantMessage("PARENT_USED_PINNED_MODEL"),
+	]);
+	fauxB.setResponses([fauxAssistantMessage("PINNED_MODEL_CHILD_OK")]);
+
+	await parent.prompt("Delegate with a redundant model.");
+
+	expect(transcript()).toContain("PINNED_MODEL_CHILD_OK");
+	expect(transcript()).toContain("PARENT_USED_PINNED_MODEL");
+	const child = service.childrenOf(parent.sessionId)[0];
+	expect(child?.snapshot?.details.model).toBe("fauxb/fauxb");
+	await service.disposeChildrenOf(parent.sessionId);
+});
+
+test("a live definition edit refreshes advertised and effective model policy together", async () => {
+	try {
+		writeFileSync(bgRunnerPath, BG_RUNNER_DEFINITION.replace("model: fauxb", "model: fauxa"));
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "Use the refreshed definition pin.",
+					model: "unobtanium",
+				}),
+			),
+			fauxAssistantMessage("REFRESHED_PIN_CHILD_OK"),
+			fauxAssistantMessage("PARENT_USED_REFRESHED_PIN"),
+		]);
+
+		await parent.prompt("Delegate after the definition changes.");
+
+		expect(transcript()).toContain("REFRESHED_PIN_CHILD_OK");
+		expect(transcript()).toContain("PARENT_USED_REFRESHED_PIN");
+		expect(parent.getToolDefinition("Agent")?.description).toContain("model: pinned fauxa");
+		const child = service.childrenOf(parent.sessionId)[0];
+		expect(child?.snapshot?.details.model).toBe("fauxa/fauxa");
+	} finally {
+		writeFileSync(bgRunnerPath, BG_RUNNER_DEFINITION);
+		await service.disposeChildrenOf(parent.sessionId);
+	}
 });
 
 test("zero-config fallback mirrors a provider registered by another extension", async () => {
@@ -308,6 +476,8 @@ test("an unknown subagent_type surfaces as a tool error listing the available ty
 	const text = lastToolResultText();
 	expect(text).toContain('Unknown subagent type "nope"');
 	expect(text).toContain('"scout" (builtin)');
+	expect(text).toContain("model: call or parent");
+	expect(text).toContain("model: pinned fauxb");
 	expect(service.childrenOf(parent.sessionId)).toEqual([]);
 });
 

@@ -1185,6 +1185,45 @@ test("another window cannot cancel or adopt an active side resize", async ({ pag
 	await page2.close();
 });
 
+test("local layout transitions with no gesture in progress never announce a canceled drag", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	const before = await width(page.getByTestId("right-stack"));
+	const handle = page.getByTestId("resize-right");
+	const handleBox = await handle.boundingBox();
+	if (!handleBox) throw new Error("right resize handle has no box");
+	await dragHandle(page, handle, handleBox.x - 60, handleBox.y + handleBox.height / 2);
+	await expect.poll(() => width(page.getByTestId("right-stack"))).not.toBeCloseTo(before, 0);
+
+	const filesGroup = sideGroups(page, "right").filter({ has: page.getByTestId("tab-files") });
+	await filesGroup.getByTestId("side-group-fold").click();
+	await expect(filesGroup).toHaveAttribute("data-folded", "true");
+	await filesGroup.getByTestId("side-group-fold").click();
+	await expect(filesGroup).toHaveAttribute("data-folded", "false");
+	await page.getByTestId("tab-changes").click();
+	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("toast")).toHaveCount(0);
+});
+
+test("a local transition during a side resize cancels the gesture and says so", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	const handle = page.getByTestId("resize-right");
+	const handleBox = await handle.boundingBox();
+	if (!handleBox) throw new Error("right resize handle has no box");
+	await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(handleBox.x - 60, handleBox.y + handleBox.height / 2, { steps: 5 });
+
+	await pressPlatformShortcut(page, "j");
+	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("toast")).toContainText("Your drag was canceled");
+	await page.mouse.up();
+	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
+});
+
 test("a tab drag reveals every valid destination subtly, then emphasizes the one under the pointer", async ({
 	page,
 }) => {

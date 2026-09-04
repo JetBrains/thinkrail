@@ -92,13 +92,16 @@ test("replaceAll overwrites the agent's open items with fresh ones", () => {
 	const root = tempRoot();
 	try {
 		const s = store(root);
-		s.add({ title: "old" });
+		s.add({ title: "old", group: "Task" });
 		const plan = s.replaceAll({
-			todos: [{ title: "step 1", status: "done" }, { title: "step 2" }],
+			groups: [
+				{ title: "Task", todos: [{ title: "step 1", status: "done" }, { title: "step 2" }] },
+			],
 		});
-		expect(plan.todos).toHaveLength(2);
-		expect(plan.todos[0]?.status).toBe("done");
-		expect(plan.todos[1]?.status).toBe("pending");
+		const task = plan.groups.find((g) => g.title === "Task");
+		expect(task?.todos).toHaveLength(2);
+		expect(task?.todos[0]?.status).toBe("done");
+		expect(task?.todos[1]?.status).toBe("pending");
 		expect(s.list()).toHaveLength(2);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -110,10 +113,9 @@ test("replaceAll lays out named groups (created with fresh ids), preserving item
 	try {
 		const s = store(root);
 		const plan = s.replaceAll({
-			todos: [{ title: "loose one" }],
 			groups: [{ title: "Import", todos: [{ title: "parse" }, { title: "validate" }] }],
 		});
-		expect(plan.todos.map((t) => t.title)).toEqual(["loose one"]);
+		expect(plan.todos).toHaveLength(0);
 		expect(plan.groups).toHaveLength(1);
 		expect(plan.groups[0]?.id).toMatch(/^g_/);
 		expect(plan.groups[0]?.title).toBe("Import");
@@ -142,7 +144,7 @@ test("add places an item into a named group (created if new) or loose", () => {
 	}
 });
 
-test("done items in a group rejoin it across a re-plan; a dropped group's done items fall to loose", () => {
+test("across a re-plan done items rejoin a matching group and a dropped group's done items stay grouped, never loose", () => {
 	const root = tempRoot();
 	try {
 		const s = store(root);
@@ -154,8 +156,121 @@ test("done items in a group rejoin it across a re-plan; a dropped group's done i
 		const plan = s.replaceAll({ groups: [{ title: "Import", todos: [{ title: "next step" }] }] });
 		const importGroup = plan.groups.find((g) => g.title === "Import");
 		expect(importGroup?.todos.map((t) => t.title)).toContain("kept done");
-		expect(plan.groups.find((g) => g.title === "Gone")).toBeUndefined();
-		expect(plan.todos.map((t) => t.title)).toContain("orphan done");
+		const goneGroup = plan.groups.find((g) => g.title === "Gone");
+		expect(goneGroup?.todos.map((t) => t.title)).toEqual(["orphan done"]);
+		expect(plan.groups.map((g) => g.title)).toEqual(["Import", "Gone"]);
+		expect(plan.todos.map((t) => t.title)).not.toContain("orphan done");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("re-plan keeps the loose lane user-only: agent items never leak into it", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const userLoose = s.add({ title: "user request", origin: "user" });
+		const agentDone = s.add({ title: "agent done", group: "Gone" });
+		s.update(agentDone.id, { status: "done" });
+
+		const plan = s.replaceAll({ groups: [{ title: "Fresh", todos: [{ title: "step" }] }] });
+		expect(plan.todos.map((t) => t.id)).toEqual([userLoose.id]);
+		expect(plan.todos.every((t) => t.origin === "user")).toBe(true);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("re-plan carries a legacy agent done loose item into a group, never leaving it in the user lane", () => {
+	const root = tempRoot();
+	try {
+		const file = join(root, storeRel(SESSION));
+		mkdirSync(dirname(file), { recursive: true });
+		writeFileSync(
+			file,
+			JSON.stringify({
+				version: 6,
+				todos: [
+					{ id: "t_legacy_done", title: "legacy agent done", status: "done", origin: "agent" },
+					{ id: "t_legacy_open", title: "legacy agent open", status: "pending", origin: "agent" },
+				],
+				groups: [],
+			}),
+			"utf8",
+		);
+		const plan = store(root).replaceAll({
+			groups: [{ title: "Fresh", todos: [{ title: "step" }] }],
+		});
+		expect(plan.todos).toHaveLength(0);
+		const completed = plan.groups.find((g) => g.title === "Completed");
+		expect(completed?.todos.map((t) => t.title)).toEqual(["legacy agent done"]);
+		expect(flatItems(plan).map((t) => t.title)).not.toContain("legacy agent open");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("reconcile: re-listing a step keeps its id, in_progress status and summary (no reset, no dup)", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const a = s.add({ title: "step a", group: "Task" });
+		s.add({ title: "step b", group: "Task" });
+		s.update(a.id, { status: "in_progress", summary: "halfway" });
+
+		const plan = s.replaceAll({
+			groups: [
+				{
+					title: "Task",
+					todos: [{ title: "step a", status: "done" }, { title: "step b" }, { title: "step c" }],
+				},
+			],
+		});
+		const task = plan.groups.find((g) => g.title === "Task");
+		const reA = task?.todos.find((t) => t.title === "step a");
+		expect(reA?.id).toBe(a.id);
+		expect(reA?.status).toBe("in_progress");
+		expect(reA?.summary).toBe("halfway");
+		expect(task?.todos.filter((t) => t.title === "step a")).toHaveLength(1);
+		expect(task?.todos.map((t) => t.title)).toEqual(["step a", "step b", "step c"]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("reconcile: an agent-open step omitted from the re-plan is dropped; a done one is preserved", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		s.add({ title: "open step", group: "Task" });
+		const done = s.add({ title: "done step", group: "Task" });
+		s.update(done.id, { status: "done" });
+
+		const plan = s.replaceAll({ groups: [{ title: "Task", todos: [{ title: "new step" }] }] });
+		const task = plan.groups.find((g) => g.title === "Task");
+		expect(task?.todos.map((t) => t.title)).toContain("new step");
+		expect(task?.todos.map((t) => t.title)).toContain("done step");
+		expect(task?.todos.map((t) => t.title)).not.toContain("open step");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("reconcile: duplicate step titles in a group are matched positionally", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const first = s.add({ title: "dup", group: "Task" });
+		const second = s.add({ title: "dup", group: "Task" });
+		s.update(first.id, { status: "in_progress" });
+		s.update(second.id, { status: "done" });
+
+		const plan = s.replaceAll({
+			groups: [{ title: "Task", todos: [{ title: "dup" }, { title: "dup" }] }],
+		});
+		const task = plan.groups.find((g) => g.title === "Task");
+		expect(task?.todos.map((t) => t.id)).toEqual([first.id, second.id]);
+		expect(task?.todos.map((t) => t.status)).toEqual(["in_progress", "done"]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -279,15 +394,19 @@ test("replaceAll preserves user items and done items, replacing only the agent's
 	try {
 		const s = store(root);
 		s.add({ title: "user task", origin: "user" });
-		s.add({ title: "agent open" });
-		const done = s.add({ title: "agent finished" });
+		s.add({ title: "agent open", group: "Task" });
+		const done = s.add({ title: "agent finished", group: "Task" });
 		s.update(done.id, { status: "done" });
 
-		const titles = s.replaceAll({ todos: [{ title: "new plan item" }] }).todos.map((t) => t.title);
+		const plan = s.replaceAll({
+			groups: [{ title: "Fresh", todos: [{ title: "new plan item" }] }],
+		});
+		const titles = flatItems(plan).map((t) => t.title);
 		expect(titles).toContain("new plan item");
 		expect(titles).toContain("user task");
 		expect(titles).toContain("agent finished");
 		expect(titles).not.toContain("agent open");
+		expect(plan.todos.map((t) => t.title)).toEqual(["user task"]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -433,7 +552,6 @@ test("replaceAll keeps only the first in_progress of a fresh plan (direct API: `
 	try {
 		const s = store(root);
 		const plan = s.replaceAll({
-			todos: [{ title: "loose", status: "in_progress" }],
 			groups: [
 				{
 					title: "Task",
@@ -445,7 +563,7 @@ test("replaceAll keeps only the first in_progress of a fresh plan (direct API: `
 			],
 		});
 		const statuses = flatItems(plan).map((t) => t.status);
-		expect(statuses).toEqual(["in_progress", "pending", "pending"]);
+		expect(statuses).toEqual(["in_progress", "pending"]);
 		expect(flatItems(plan)[0]?.title).toBe("one");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -498,13 +616,13 @@ test("a version-3 file (pre-commit-kind) reads cleanly and upgrades to the curre
 		);
 		expect(store(root).get("t_old")?.artifacts).toEqual([{ kind: "change", path: "a.ts" }]);
 		store(root).add({ title: "new" }); // any write upgrades the file version
-		expect(JSON.parse(readFileSync(file, "utf8")).version).toBe(5);
+		expect(JSON.parse(readFileSync(file, "utf8")).version).toBe(6);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
 
-test("item summary: set with done, cleared by empty string, sanitized on read", () => {
+test("item summary/verification/commitSubject: set with done, cleared by empty string, sanitized on read", () => {
 	const root = tempRoot();
 	try {
 		const todo = store(root).add({ title: "Implement FloodWait handling" });
@@ -512,20 +630,25 @@ test("item summary: set with done, cleared by empty string, sanitized on read", 
 			status: "done",
 			summary: "Added throttling and fallback for failed batch sends.",
 			verification: "bun test src/todos — 34 pass",
+			commitSubject: "fix(sender): back off and retry on FloodWait",
 		});
 		expect(store(root).get(todo.id)?.summary).toBe(
 			"Added throttling and fallback for failed batch sends.",
 		);
 		expect(store(root).get(todo.id)?.verification).toBe("bun test src/todos — 34 pass");
-		store(root).update(todo.id, { summary: "", verification: "" });
+		expect(store(root).get(todo.id)?.commitSubject).toBe(
+			"fix(sender): back off and retry on FloodWait",
+		);
+		store(root).update(todo.id, { summary: "", verification: "", commitSubject: "" });
 		expect(store(root).get(todo.id)?.summary).toBeUndefined();
 		expect(store(root).get(todo.id)?.verification).toBeUndefined();
+		expect(store(root).get(todo.id)?.commitSubject).toBeUndefined();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
 
-test("reopening a done item clears its stale completion summary/verification and the plan summary", () => {
+test("reopening a done item clears its stale completion fields and the plan summary", () => {
 	const root = tempRoot();
 	try {
 		const s = store(root);
@@ -534,6 +657,7 @@ test("reopening a done item clears its stale completion summary/verification and
 			status: "done",
 			summary: "Added throttling and fallback for failed batch sends.",
 			verification: "bun test src/todos — 34 pass",
+			commitSubject: "fix(sender): back off and retry on FloodWait",
 		});
 		s.setSummary("All tasks landed; e2e suite green.");
 
@@ -541,15 +665,18 @@ test("reopening a done item clears its stale completion summary/verification and
 
 		expect(s.get(todo.id)?.summary).toBeUndefined();
 		expect(s.get(todo.id)?.verification).toBeUndefined();
+		expect(s.get(todo.id)?.commitSubject).toBeUndefined();
 		expect(s.read().summary).toBeUndefined();
 
 		s.update(todo.id, {
 			status: "done",
 			summary: "Retried with the corrected backoff window.",
 			verification: "bun test src/todos — 35 pass",
+			commitSubject: "fix(sender): widen the FloodWait backoff window",
 		});
 		expect(s.get(todo.id)?.summary).toBe("Retried with the corrected backoff window.");
 		expect(s.get(todo.id)?.verification).toBe("bun test src/todos — 35 pass");
+		expect(s.get(todo.id)?.commitSubject).toBe("fix(sender): widen the FloodWait backoff window");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

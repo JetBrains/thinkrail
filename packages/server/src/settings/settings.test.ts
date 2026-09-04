@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -128,6 +128,40 @@ test("reviewAutoFix defaults on; an old config without it loads the default; tog
 	expect(next.reviewAutoFix).toBe(false);
 	resetConfigCache();
 	expect(getConfig().reviewAutoFix).toBe(false);
+});
+
+test("subagents default on; an old config inherits that default; toggling off round-trips", () => {
+	expect(DEFAULT_CONFIG.subagentsEnabled).toBe(true);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
+	resetConfigCache();
+	expect(getConfig().subagentsEnabled).toBe(true);
+	const next = updateConfig({ subagentsEnabled: false });
+	expect(next.subagentsEnabled).toBe(false);
+	resetConfigCache();
+	expect(getConfig().subagentsEnabled).toBe(false);
+});
+
+test("a non-boolean subagents update is rejected before persistence or broadcast", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+	const invalid = { subagentsEnabled: "false" } as unknown as AppConfigUpdate;
+
+	expect(() => updateConfig(invalid)).toThrow("subagentsEnabled must be a boolean");
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+});
+
+test("a failed config write leaves the live cache and publisher unchanged", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	expect(getConfig().subagentsEnabled).toBe(true);
+	mkdirSync(join(dataDir, "config.json"));
+
+	expect(() => updateConfig({ subagentsEnabled: false })).toThrow();
+	expect(getConfig().subagentsEnabled).toBe(true);
+	expect(published).toEqual([]);
 });
 
 test("reviewModel/reviewEffort persist through the top-level partial merge", () => {

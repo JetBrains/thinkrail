@@ -15,7 +15,7 @@ import {
 } from "pi-delegation";
 import { Type } from "typebox";
 import { type AgentDefinition, discoverAgentDefinitions } from "./definitions";
-import { toSpawnMapping } from "./mapping";
+import { RECURSION_GUARD_TOOLS, toSpawnMapping } from "./mapping";
 
 export const SUBAGENT_COMPLETION_MESSAGE = "subagent-completion";
 
@@ -25,6 +25,7 @@ export interface SubagentsExtensionOptions {
 	service?: DelegationService;
 	delegationRoot?: string;
 	scope?: string;
+	isEnabled?: () => boolean;
 }
 
 function discoverFor(ctx: ExtensionContext): AgentDefinition[] {
@@ -37,10 +38,11 @@ function discoverFor(ctx: ExtensionContext): AgentDefinition[] {
 
 function agentListLines(definitions: AgentDefinition[]): string {
 	return definitions
-		.map(
-			(d) =>
-				`- "${d.name}" (${d.source}): ${d.description} [tools: ${d.tools?.join(", ") ?? "pi defaults: read, bash, edit, write"}]`,
-		)
+		.map((d) => {
+			const model = d.model === undefined ? "call or parent" : `pinned ${d.model}`;
+			const tools = d.tools?.join(", ") ?? "pi defaults: read, bash, edit, write";
+			return `- "${d.name}" (${d.source}): ${d.description} [model: ${model}; tools: ${tools}]`;
+		})
 		.join("\n");
 }
 
@@ -62,6 +64,7 @@ export function createSubagentsExtension(
 	return (pi: ExtensionAPI) => {
 		const delegationRoot = options.delegationRoot ?? defaultDelegationRoot();
 		const scope = options.scope ?? DEFAULT_SCOPE;
+		const isEnabled = () => options.isEnabled?.() ?? true;
 
 		let shuttingDown = false;
 		const erroredRunDetails = new Map<string, DelegationRunDetails>();
@@ -71,8 +74,9 @@ export function createSubagentsExtension(
 			erroredRunDetails.delete(event.toolCallId);
 			return event.isError ? { details } : undefined;
 		});
-		pi.on("turn_end", () => {
+		pi.on("turn_end", (_event, ctx) => {
 			erroredRunDetails.clear();
+			registerAgentTool(ctx);
 		});
 		pi.on("session_shutdown", async (_event, ctx) => {
 			shuttingDown = true;
@@ -99,8 +103,9 @@ export function createSubagentsExtension(
 			return fallbackService;
 		}
 
-		pi.on("session_start", (_event, sessionCtx) => {
-			const known = agentListLines(discoverFor(sessionCtx));
+		function registerAgentTool(sessionCtx: ExtensionContext): void {
+			const definitions = discoverFor(sessionCtx);
+			const known = agentListLines(definitions);
 
 			pi.registerTool({
 				name: "Agent",
@@ -110,7 +115,8 @@ The subagent works autonomously and non-interactively: give it one complete, sel
 (everything it must know goes in the task text) and it returns a final report. Issue several Agent
 calls in ONE message to run subagents in parallel; sequence dependent steps yourself across turns.
 Set run_in_background for long tasks — you get the session id immediately, a completion message
-arrives when it finishes, and get_subagent_result fetches the result on demand.
+arrives when it finishes, and get_subagent_result fetches the result on demand. Set model to choose
+an available model for an unpinned agent; a definition's pinned model always wins.
 
 Available subagent types:
 ${known}`,
@@ -121,6 +127,12 @@ ${known}`,
 					task: Type.String({
 						description: "The complete, self-contained task for the subagent",
 					}),
+					model: Type.Optional(
+						Type.String({
+							description:
+								'Available model for an unpinned agent, preferably "provider/id"; a definition pin wins',
+						}),
+					),
 					run_in_background: Type.Optional(
 						Type.Boolean({
 							description: "Do not wait: return the child session id immediately",
@@ -128,7 +140,7 @@ ${known}`,
 					),
 				}),
 				async execute(toolCallId, params, signal, onUpdate, ctx) {
-					const definitions = discoverFor(ctx);
+					if (!isEnabled()) throw new Error("Subagents are disabled in this session.");
 					const definition = definitions.find((d) => d.name === params.subagent_type);
 					if (!definition) {
 						throw new Error(
@@ -139,6 +151,7 @@ ${known}`,
 					const mapping = toSpawnMapping(definition, {
 						cwd: ctx.cwd,
 						availableModels: ctx.modelRegistry.getAvailable(),
+						...(params.model !== undefined ? { model: params.model } : {}),
 					});
 					const child = await service.createChild({
 						parent: ctx.sessionManager.getSessionId(),
@@ -150,6 +163,11 @@ ${known}`,
 						},
 						session: mapping.session,
 					});
+
+					if (!isEnabled()) {
+						await child.dispose();
+						throw new Error("Subagents are disabled in this session.");
+					}
 
 					const run = child.runQueued(params.task, {
 						...(mapping.maxTurns !== undefined ? { maxTurns: mapping.maxTurns } : {}),
@@ -202,7 +220,14 @@ ${known}`,
 					};
 				},
 			});
+		}
 
+		pi.on("before_agent_start", (_event, ctx) => {
+			registerAgentTool(ctx);
+		});
+
+		pi.on("session_start", (_event, sessionCtx) => {
+			registerAgentTool(sessionCtx);
 			pi.registerTool({
 				name: "get_subagent_result",
 				label: "Get subagent result",
@@ -261,6 +286,14 @@ ${known}`,
 					};
 				},
 			});
+
+			if (!isEnabled()) {
+				pi.setActiveTools(
+					pi
+						.getActiveTools()
+						.filter((name) => !RECURSION_GUARD_TOOLS.some((toolName) => toolName === name)),
+				);
+			}
 		});
 	};
 }

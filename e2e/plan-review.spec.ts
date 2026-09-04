@@ -33,32 +33,32 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 		workspace.worktreePath,
 		"flood.ts",
 		"export const wait = 1;\n",
-		"todo: implement FloodWait handling",
+		"fix(sender): handle FloodWait",
 	);
 	const shaFlagged = commitFile(
 		workspace.worktreePath,
 		"parse.ts",
 		"export const parse = 1;\n",
-		"todo: implement parser",
+		"feat(parser): implement the parser",
 	);
 	const shaFlaggedFix = commitFile(
 		workspace.worktreePath,
 		"parse.ts",
 		"export const parse = 2;\n",
-		"todo: fix parser edge case",
+		"fix(parser): handle the empty-input edge case",
 	);
 	const shaDone = commitFile(
 		workspace.worktreePath,
 		"retry.ts",
 		"export const retries = 3;\n",
-		"todo: implement retry policy",
+		"feat(sender): add the retry policy",
 	);
 	const todosDir = join(workspace.worktreePath, ".thinkrail", "context", "todos");
 	mkdirSync(todosDir, { recursive: true });
 	writeFileSync(
 		join(todosDir, `${sessionId}.json`),
 		JSON.stringify({
-			version: 5,
+			version: 6,
 			todos: [],
 			summary: "FloodWait handling shipped end to end; suite green.",
 			groups: [

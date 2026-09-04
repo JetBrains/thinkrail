@@ -1,6 +1,6 @@
 name: Release
 
-# Reusable: build every native CLI and desktop artifact, optionally sign, checksum, and publish one release.
+# Reusable: build every native CLI and desktop artifact and stage one DRAFT release for out-of-repo signing.
 # Called by nightly.yml (channel=nightly) and stable.yml (channel=stable).
 
 on:
@@ -31,58 +31,11 @@ jobs:
       channel: ${{ inputs.channel }}
     secrets: inherit
 
-  sign:
-    needs: build
-    # Codesigning is scaffolded but off — flip this to `${{ vars.CODESIGN_RUNNER != '' }}` and provide the
-    # JetBrains CodeSign secrets/runner to enable it (see .github/actions/codesign).
-    if: false
-    runs-on: ${{ vars.CODESIGN_RUNNER || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/download-artifact@v5
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - id: resolve
-        shell: bash
-        run: |
-          set -eu
-          mac=$(ls artifacts/thinkrail-darwin-arm64 2>/dev/null | head -1)
-          win=$(ls artifacts/thinkrail-windows-x64.exe 2>/dev/null | head -1)
-          [ -n "$mac" ] || { echo "::error::no darwin-arm64 artifact to sign"; exit 1; }
-          [ -n "$win" ] || { echo "::error::no windows-x64 artifact to sign"; exit 1; }
-          {
-            echo "mac=$mac"
-            echo "win=$win"
-            echo "mac_name=$(basename "$mac")"
-            echo "win_name=$(basename "$win")"
-          } >> "$GITHUB_OUTPUT"
-
-      - uses: ./.github/actions/codesign
-        with:
-          macos-binary: ${{ steps.resolve.outputs.mac }}
-          windows-binary: ${{ steps.resolve.outputs.win }}
-          service-account-name: ${{ secrets.CODESIGN_SERVICE_ACCOUNT_NAME }}
-          service-account-token: ${{ secrets.CODESIGN_SERVICE_ACCOUNT_TOKEN }}
-
-      - uses: actions/upload-artifact@v5
-        with:
-          name: ${{ steps.resolve.outputs.mac_name }}
-          path: ${{ steps.resolve.outputs.mac }}
-          overwrite: true
-
-      - uses: actions/upload-artifact@v5
-        with:
-          name: ${{ steps.resolve.outputs.win_name }}
-          path: ${{ steps.resolve.outputs.win }}
-          overwrite: true
-
   release:
-    needs: [build, sign]
-    if: ${{ always() && needs.build.result == 'success' && needs.sign.result != 'failure' }}
+    needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
 
@@ -91,20 +44,45 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - uses: ./.github/actions/make-checksums
-        with:
-          directory: artifacts
+      - name: Push the release tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          # The tag push, the remote lookup and pipefail are each load-bearing; see .github/SPEC.md.
+          remote=$(git ls-remote --tags origin \
+            "refs/tags/v${VERSION}" "refs/tags/v${VERSION}^{}" | awk '{print $1}')
+          if [ -z "$remote" ]; then
+            git tag "v${VERSION}"
+            git push origin "v${VERSION}"
+            echo "Tagged v${VERSION} at $GITHUB_SHA"
+          elif printf '%s\n' "$remote" | grep -qx "$GITHUB_SHA"; then
+            echo "v${VERSION} already tags $GITHUB_SHA; re-run, nothing to push"
+          else
+            echo "::error::v${VERSION} already exists on origin at $(printf '%s' "$remote" | tr '\n' ' ')— not $GITHUB_SHA"
+            exit 1
+          fi
 
-      - name: Create GitHub release
+      - name: Stage the draft release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ inputs.version }}
+          target_commitish: ${{ github.sha }}
           name: >-
             ${{ inputs.channel == 'nightly'
                 && format('Nightly {0}', inputs.version)
                 || format('v{0}', inputs.version) }}
+          draft: true
           prerelease: ${{ inputs.channel == 'nightly' }}
           generate_release_notes: true
           previous_tag: ${{ inputs.prev_tag }}
           files: artifacts/*
           fail_on_unmatched_files: true
+
+      - name: Summary
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -eu
+          echo "Staged draft v${VERSION}. JetBrains/thinkrail-signing signs and publishes it." \
+            >> "$GITHUB_STEP_SUMMARY"

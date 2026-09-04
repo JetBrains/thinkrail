@@ -12,8 +12,12 @@ depends-on: [module-cli, module-desktop, module-shared, module-repo-scripts]
 The repo's automation: PR **gates** and the multi-platform **release** pipeline. The shippable artifact
 is two additive artifact families: the single-file `thinkrail` CLI binary and the Electrobun desktop
 installer. This module builds and native-smokes both on every selected platform, stamps one shared release
-identity into them, and publishes them in the same GitHub release. It owns no product code — only
+identity into them, and **stages them in one draft GitHub release**. It owns no product code — only
 workflows and composite actions.
+
+**It does not publish.** Signing requires the JetBrains internal runners, which GitHub keeps away from
+public repositories, so `JetBrains/thinkrail-signing` (private) signs the staged assets, writes
+`SHA256SUMS`, and publishes the draft. This module's release contract therefore ends at a staged draft.
 
 ## CI vs release
 
@@ -26,9 +30,11 @@ workflows and composite actions.
   (`binary-windows`), plus a host-target Electrobun package, native-window smoke, shared artifact probes,
   and desktop-backed no-agent e2e. The Linux desktop target runs under Xvfb with CI-only software
   rendering. Fast enough for PRs, no provider auth. Gates merges.
-- **Release** (`nightly.yml` / `stable.yml` → `_release.yml` → `_build.yml`): trusts a green `main` and
-  produces native-smoked CLI binaries plus unsigned desktop installers in one GitHub release. Signing,
-  notarization, and desktop updater publication are separate deferred gates.
+- **Release** (`nightly.yml` / `stable.yml` → `_release.yml` → `_build.yml`): trusts a green `main`,
+  produces native-smoked CLI binaries plus desktop installers, pushes the tag, and stages them as a
+  **draft**. A draft and its assets are invisible to unauthenticated users, so nothing unsigned is ever
+  public. Signing and publication belong to `thinkrail-signing`; notarization and desktop updater
+  publication remain deferred gates.
 
 **Why Windows gates PRs and macOS does not.** A release build is all-or-nothing: `release` needs
 `build.result == 'success'`, so one red matrix leg publishes *nothing* — quietly, with no notification, and
@@ -44,9 +50,18 @@ Both channels are `main`-only, versioned by `scripts/next-version.sh` (channel-a
 tags: `vX.Y.Z` stable, `vX.Y.Z-nightly.N`):
 
 - **Nightly** — cron 06:00 UTC + manual dispatch. Computes the next nightly, **skips when no commits**
-  since the last one, publishes a **prerelease** `vX.Y.Z-nightly.N`.
-- **Stable** — manual dispatch with `bump = patch|minor|major|explicit`. Publishes `vX.Y.Z`. The script
+  since the last one, stages a **prerelease** draft `vX.Y.Z-nightly.N`.
+- **Stable** — manual dispatch with `bump = patch|minor|major|explicit`. Stages `vX.Y.Z`. The script
   guards that a minor/major bump clears any in-flight nightly base; patch hotfixes ship out-of-band.
+
+**The release job pushes the tag itself.** A draft creates no tag, and `next-version.sh` reads
+`git tag -l`, so leaving the tag to publication would make the next nightly recompute the same version
+and collide with the still-pending draft — and `nightly.yml`'s "skips when no commits" check would
+compare against a stale tag. Existence is checked with `git ls-remote`, **not** against the checkout:
+this job clones at depth 1 without tags, so a local `rev-parse` would miss a tag the first attempt had
+already pushed and the re-run would die on a rejected push before staging anything. With the remote as
+the source of truth the push is genuinely idempotent, and it fails loudly if the tag exists at a
+different commit.
 
 ## Build strategy — native OS matrix
 
@@ -99,10 +114,13 @@ never sends anyway, since the analytics module mutes on `CI`.
   package/native-smoke/shared-probe the expanded desktop app → create and execute Electrobun's
   first-install artifact in an isolated install root → collect both artifacts. Desktop-backed e2e runs in
   CI before release; each release runner still performs both target-native desktop smoke layers.
-- `actions/make-checksums` — writes `SHA256SUMS` over the release artifacts.
-- `actions/codesign` — JetBrains CodeSign client wrapper; **wired but disabled** (`_release.yml`'s `sign`
-  job is `if: false`). CLI and desktop artifacts ship unsigned until credentials and a separately approved
-  signing/notarization pass exist.
+- `actions/make-checksums` — writes `SHA256SUMS` over the release artifacts. **No caller here:** a
+  signature changes the bytes, so checksums must be taken after signing. `thinkrail-signing` pins it by
+  commit SHA, which is what keeps the published `SHA256SUMS` format identical to pre-signing releases.
+- `actions/codesign` — JetBrains CodeSign client wrapper. **No caller here either, and there can never be
+  one:** it needs the JetBrains internal network, unreachable from a public repo's runners.
+  `thinkrail-signing` pins it by commit SHA. Keeping the recipe public and the credentials private is
+  deliberate — do not move or delete it because it looks dead.
 
 ## Install side (`/install.sh` + `/install.ps1`)
 
@@ -138,13 +156,17 @@ in place.
 ## Boundary
 
 - **Owns:** everything under `.github/` (workflows, composite actions, the version script) — the CI +
-  release automation and the artifact/version contract.
+  release automation, the tag, and the artifact/version contract, up to and including a staged draft.
+- **Does not own:** signing, `SHA256SUMS`, and publication. Those are `thinkrail-signing`'s; its `SPEC.md`
+  is the source of truth for them.
 - **Consumes:** `apps/cli`'s binary build/smoke, `apps/desktop`'s package/native smoke, the shared
   version-stamping seam, and root scripts (`build:web`, `lint`, `typecheck`, `test`, `e2e` and artifact
   e2e variants). It **injects** the version at
   build time but does not otherwise reach into product code.
 - **Forbidden:** baking release logic into product code (the pipeline calls the same scripts a developer
-  runs); a release-only build path that CI never exercises (CI builds+smokes the host target every PR).
+  runs); a release-only build path that CI never exercises (CI builds+smokes the host target every PR);
+  publishing a release from this repo, or writing `SHA256SUMS` here — both would ship unsigned artifacts
+  or a manifest that the signing step then invalidates.
 
 ## Get right
 
@@ -156,3 +178,11 @@ in place.
   ignore doesn't bump `PROTOCOL_VERSION`. A field clients must understand does.
 - **Windows has no real SIGTERM** — `smoke:binary` relaxes its clean-exit assertion there (Bun
   force-terminates); it still requires the binary to boot, serve the UI, stage skills, and terminate.
+- **Never publish a draft by hand.** Both installers download `SHA256SUMS` and refuse an asset that does
+  not match it, and a staged draft has no `SHA256SUMS` — it is written during signing. Publishing a draft
+  manually therefore ships a release that `install.sh` and `install.ps1` both reject. If signing is stuck,
+  fix signing.
+- **Signing fails closed**, so a stuck pipeline means releases stop appearing rather than appearing
+  unsigned. That is the right direction but it is invisible — the same class as the red-release-matrix gap
+  above, and how the pre-pivot pipeline died unnoticed for three months. `thinkrail-signing` alarms on a
+  draft left pending too long; this repo still notifies nobody.

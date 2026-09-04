@@ -80,14 +80,20 @@ export interface SpawnMapping {
 
 export function toSpawnMapping(
 	definition: AgentDefinition,
-	options: { cwd: string; availableModels: readonly Pick<Model<string>, "provider" | "id">[] },
+	options: {
+		cwd: string;
+		availableModels: readonly Pick<Model<string>, "provider" | "id">[];
+		model?: string;
+	},
 ): SpawnMapping {
 	let model: { provider: string; id: string } | undefined;
-	if (definition.model !== undefined) {
-		model = resolveModelRef(definition.model, options.availableModels);
+	const modelRef = definition.model ?? options.model;
+	if (modelRef !== undefined) {
+		model = resolveModelRef(modelRef, options.availableModels);
 		if (!model) {
+			const selection = definition.model !== undefined ? "pins" : "requests";
 			throw new Error(
-				`Agent "${definition.name}" pins model "${definition.model}", which does not match exactly one available model — qualify it as "provider/id"`,
+				`Agent "${definition.name}" ${selection} model "${modelRef}", which does not match exactly one available model — qualify it as "provider/id"`,
 			);
 		}
 	}

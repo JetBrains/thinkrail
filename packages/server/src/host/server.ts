@@ -18,12 +18,14 @@ import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	isProjectSkillPath,
+	refreshSubagentTools,
 	setExtUiPublisher,
 	setReviewCommentHandler,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionPublisher,
 	setSkillAdmissionResolver,
+	setSubagentsEnabledResolver,
 	settleSessionsForShutdown,
 } from "../agent";
 import {
@@ -81,6 +83,7 @@ import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
+import { resolveSubagentsEnabled } from "./subagentPolicy";
 import { terminalDeliveryForSendStatus } from "./terminalSend";
 import {
 	handleReviewerSettled,
@@ -357,6 +360,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 
+	setSubagentsEnabledResolver((workspaceId) => {
+		try {
+			return resolveSubagentsEnabled(getConfig().subagentsEnabled, getWorkspace(workspaceId));
+		} catch {
+			return false;
+		}
+	});
+
 	setProjectPublisher((project) => {
 		server.publish(
 			WS_CHANNELS.projectUpdated,
@@ -421,6 +432,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
 		);
 		setAnalyticsSending(config.analyticsEnabled);
+		refreshSubagentTools();
 	});
 
 	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {

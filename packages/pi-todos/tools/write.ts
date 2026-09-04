@@ -31,9 +31,9 @@ export function registerTodoWrite(pi: ExtensionAPI): void {
 		name: "todo_write",
 		label: "Todo Write",
 		description:
-			"Lay out a fresh plan: replace your own open items with these groups — one group per task (a user ask; title = the outcome), each with its ordered steps. Use it once, at the start of a multi-step task. The user's items and any completed (done) items are preserved — but don't use it to tweak an existing plan; for that use todo_update (progress an item) and todo_add (insert one).",
+			"Lay out or reconcile the plan as these groups — one group per task (a user ask; title = the outcome), each with its ordered steps. This RECONCILES, it does not destructively replace: written steps are matched to existing ones by group title + step title and keep their status/summary/id, so re-running it is safe and lossless (a re-listed in-progress or done step is NOT reset — status advances only via todo_update, and a status you pass here for an existing step is ignored). Unmatched written steps are created; your steps you omit are dropped; the user's items and completed (done) items are always preserved. Keep step titles stable across a re-plan — a reworded title reads as a new step. For a single change prefer todo_add/todo_update (cheaper than restating the whole plan).",
 		promptSnippet:
-			"todo_write — lay out a FRESH plan (groups only: one per task, steps inside; replaces your open items; keeps user items + done; use once at the start).",
+			"todo_write — lay out or reconcile the plan (groups only; matches steps by title, keeps their progress; prefer todo_add/todo_update for one change).",
 		parameters,
 		async execute(_callId, params, _signal, _onUpdate, ctx) {
 			const write: WritePlan = { groups: params.groups };

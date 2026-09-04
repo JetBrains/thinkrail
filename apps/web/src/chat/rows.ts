@@ -1,5 +1,5 @@
 import type { DelegationRunDetails, UserMessage } from "@thinkrail/contracts";
-import type { ChatMessageOrder } from "./messageOrder";
+import type { ChatMessageOrder } from "./chatPreferences";
 import { resolveProminence } from "./toolRegistry";
 import { strArg } from "./tools/toolHelpers";
 import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";

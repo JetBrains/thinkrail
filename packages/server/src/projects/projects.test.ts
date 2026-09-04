@@ -37,9 +37,25 @@ function makeRepo(path: string): void {
 	git(path, "init", "-b", "main");
 	git(path, "config", "user.email", "t@thinkrail.test");
 	git(path, "config", "user.name", "test");
+	git(path, "config", "commit.gpgsign", "false");
 	writeFileSync(join(path, "README.md"), "# repo\n");
 	git(path, "add", "-A");
 	git(path, "commit", "-m", "init");
+}
+
+function withoutUserGitConfig<T>(run: () => T): T {
+	const savedGlobal = process.env.GIT_CONFIG_GLOBAL;
+	const savedSystem = process.env.GIT_CONFIG_SYSTEM;
+	process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+	process.env.GIT_CONFIG_SYSTEM = "/dev/null";
+	try {
+		return run();
+	} finally {
+		if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+		else process.env.GIT_CONFIG_GLOBAL = savedGlobal;
+		if (savedSystem === undefined) delete process.env.GIT_CONFIG_SYSTEM;
+		else process.env.GIT_CONFIG_SYSTEM = savedSystem;
+	}
 }
 
 let dataDir: string;
@@ -146,7 +162,7 @@ test("host-home paths resolve consistently across inspect, open, and init", () =
 		expect(inspectProjectPath("~/repo")).toEqual({ kind: "repo" });
 		expect(openProject("~/repo").path).toBe(realpathSync(repo));
 		expect(inspectProjectPath("~/plain")).toEqual({ kind: "initable" });
-		expect(initProject("~/plain").path).toBe(realpathSync(plain));
+		expect(withoutUserGitConfig(() => initProject("~/plain")).path).toBe(realpathSync(plain));
 	} finally {
 		if (savedHome === undefined) delete process.env.HOME;
 		else process.env.HOME = savedHome;
@@ -166,7 +182,7 @@ test("initProject: initialises a plain folder, commits its contents, and opens i
 	mkdirSync(dir);
 	writeFileSync(join(dir, "hello.txt"), "hi\n");
 
-	const project = initProject(dir);
+	const project = withoutUserGitConfig(() => initProject(dir));
 	expect(project.path).toBe(realpathSync(dir));
 	expect(existsSync(join(dir, ".git"))).toBe(true);
 	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
@@ -178,7 +194,7 @@ test("initProject: an empty folder gets an empty initial commit (a HEAD), so wor
 	const dir = join(dataDir, "empty");
 	mkdirSync(dir);
 
-	initProject(dir);
+	withoutUserGitConfig(() => initProject(dir));
 	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
 	expect(gitOut(dir, "ls-tree", "-r", "HEAD", "--name-only")).toBe("");
 	const wt = join(dataDir, "wt");
@@ -191,20 +207,9 @@ test("initProject: commits even with no configured git identity (the -c fallback
 	mkdirSync(dir);
 	writeFileSync(join(dir, "file.txt"), "x\n");
 
-	const savedGlobal = process.env.GIT_CONFIG_GLOBAL;
-	const savedSystem = process.env.GIT_CONFIG_SYSTEM;
-	process.env.GIT_CONFIG_GLOBAL = "/dev/null";
-	process.env.GIT_CONFIG_SYSTEM = "/dev/null";
-	try {
-		initProject(dir);
-		expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
-		expect(gitOut(dir, "log", "-1", "--format=%an")).toBe("ThinkRail");
-	} finally {
-		if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
-		else process.env.GIT_CONFIG_GLOBAL = savedGlobal;
-		if (savedSystem === undefined) delete process.env.GIT_CONFIG_SYSTEM;
-		else process.env.GIT_CONFIG_SYSTEM = savedSystem;
-	}
+	withoutUserGitConfig(() => initProject(dir));
+	expect(gitOut(dir, "rev-parse", "HEAD")).not.toBe("");
+	expect(gitOut(dir, "log", "-1", "--format=%an")).toBe("ThinkRail");
 });
 
 test("initProject: an existing repo is opened, not re-initialised (dedupe, history preserved)", () => {

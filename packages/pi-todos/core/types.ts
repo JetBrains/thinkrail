@@ -23,6 +23,7 @@ export interface Todo {
 	note?: string;
 	summary?: string;
 	verification?: string;
+	commitSubject?: string;
 	artifacts?: TodoArtifact[];
 	createdAt: string;
 	updatedAt: string;
@@ -45,7 +46,7 @@ export interface TodoPlan {
 }
 
 export interface TodoFile {
-	version: 5;
+	version: 6;
 	todos: Todo[];
 	groups: TodoGroup[];
 	summary?: string;
@@ -71,6 +72,7 @@ export interface TodoPatch {
 	note?: string;
 	summary?: string;
 	verification?: string;
+	commitSubject?: string;
 	artifacts?: TodoArtifact[];
 }
 
@@ -84,6 +86,5 @@ export interface WriteItem {
 }
 
 export interface WritePlan {
-	todos?: WriteItem[];
 	groups?: { title: string; todos: WriteItem[] }[];
 }

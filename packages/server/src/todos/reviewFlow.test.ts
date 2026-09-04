@@ -45,6 +45,7 @@ beforeEach(() => {
 	sh(repo, "init", "-b", "main");
 	sh(repo, "config", "user.email", "t@thinkrail.test");
 	sh(repo, "config", "user.name", "test");
+	sh(repo, "config", "commit.gpgsign", "false");
 	writeFileSync(join(repo, "README.md"), "# repo\n");
 	sh(repo, "add", "-A");
 	sh(repo, "commit", "-m", "init");
@@ -77,7 +78,7 @@ afterEach(() => {
 /** A committed done item the way artifacts.ts leaves one, returning its id + sha. */
 function committedItem(store: TodoStore, title: string, file: string): { id: string; sha: string } {
 	writeFileSync(join(repo, file), "export {};\n");
-	const committed = gitCommitPaths("w1", `todo: ${title}`, [file]);
+	const committed = gitCommitPaths("w1", title, [file]);
 	if (!committed) throw new Error("commit failed");
 	const todo = store.add({
 		title,
@@ -154,7 +155,7 @@ test("approve records the watermark; a later revision commit reads as the unrevi
 
 	// A fix cycle appends a second commit — only IT is the unreviewed delta.
 	writeFileSync(join(repo, "impl2.ts"), "export {};\n");
-	const second = gitCommitPaths("w1", "todo: step", ["impl2.ts"]);
+	const second = gitCommitPaths("w1", "feat: step", ["impl2.ts"]);
 	if (!second) throw new Error("commit failed");
 	store.update(id, {
 		artifacts: [
@@ -177,7 +178,7 @@ test("an agent verdict watermarks the START-time shas — a commit landed mid-re
 
 	// The worker lands another commit WHILE the reviewer's turn is streaming.
 	writeFileSync(join(repo, "impl2.ts"), "export {};\n");
-	const second = gitCommitPaths("w1", "todo: step", ["impl2.ts"]);
+	const second = gitCommitPaths("w1", "feat: step", ["impl2.ts"]);
 	if (!second) throw new Error("commit failed");
 	store.update(id, {
 		artifacts: [

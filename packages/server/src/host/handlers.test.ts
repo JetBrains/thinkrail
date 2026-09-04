@@ -36,6 +36,7 @@ beforeEach(() => {
 	git(repo, "init", "-b", "main");
 	git(repo, "config", "user.email", "t@thinkrail.test");
 	git(repo, "config", "user.name", "test");
+	git(repo, "config", "commit.gpgsign", "false");
 	writeFileSync(join(repo, "README.md"), "# repo\n");
 	git(repo, "add", "-A");
 	git(repo, "commit", "-m", "init");
@@ -105,6 +106,31 @@ test("workspace.rename locks the display name without changing Git or the worktr
 	expect(gitText(created.worktreePath, "symbolic-ref", "--short", "HEAD")).toBe(created.branch);
 	const listed = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
 	expect(listed.find((workspace) => workspace.id === created.id)).toMatchObject(renamed);
+});
+
+test("workspace.setSubagentsOverride persists on/off and null restores the global default", async () => {
+	const created = (await handleRequest("workspace.create", { projectId: "p1" }, CTX)) as Workspace;
+
+	const enabled = (await handleRequest(
+		"workspace.setSubagentsOverride",
+		{ id: created.id, override: "on" },
+		CTX,
+	)) as Workspace;
+	expect(enabled.subagentsOverride).toBe("on");
+
+	const disabled = (await handleRequest(
+		"workspace.setSubagentsOverride",
+		{ id: created.id, override: "off" },
+		CTX,
+	)) as Workspace;
+	expect(disabled.subagentsOverride).toBe("off");
+
+	const inherited = (await handleRequest(
+		"workspace.setSubagentsOverride",
+		{ id: created.id, override: null },
+		CTX,
+	)) as Workspace;
+	expect(inherited.subagentsOverride).toBeUndefined();
 });
 
 test("workspace.watchReady waits for startup once, then reports an already-ready watcher", async () => {

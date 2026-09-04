@@ -126,6 +126,45 @@ test("todo_write lays out a groups-only plan (no loose lane for the agent)", asy
 	}
 });
 
+test("todo_write reconciles a re-listed plan without resetting progress or nudging", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
+	try {
+		await run(
+			"todo_write",
+			{ groups: [{ title: "Task", todos: [{ title: "step a" }, { title: "step b" }] }] },
+			cwd,
+		);
+		const listed = (await run("todo_list", {}, cwd)) as AgentToolResult<{
+			plan: { groups: { todos: { id: string; title: string }[] }[] };
+		}>;
+		const stepA = listed.details.plan.groups[0]?.todos.find((t) => t.title === "step a");
+		if (!stepA) throw new Error("step a not found");
+		await run("todo_update", { id: stepA.id, status: "in_progress" }, cwd);
+
+		const replan = (await run(
+			"todo_write",
+			{
+				groups: [
+					{
+						title: "Task",
+						todos: [{ title: "step a" }, { title: "step b" }, { title: "step c" }],
+					},
+				],
+			},
+			cwd,
+		)) as AgentToolResult<{
+			plan: { groups: { todos: { id: string; title: string; status: string }[] }[] };
+		}>;
+		const reconciled = replan.details.plan.groups[0]?.todos ?? [];
+		const reA = reconciled.find((t) => t.title === "step a");
+		expect(reA?.id).toBe(stepA.id);
+		expect(reA?.status).toBe("in_progress");
+		expect(reconciled.map((t) => t.title)).toEqual(["step a", "step b", "step c"]);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
 test("todo_add requires group or after — the agent cannot author loose items", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
 	try {

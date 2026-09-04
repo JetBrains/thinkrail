@@ -36,10 +36,10 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
+import type { ChatMessageOrder } from "./chatPreferences";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
 import { deriveMessageActions } from "./messageActions";
-import type { ChatMessageOrder } from "./messageOrder";
 import {
 	compactSubmissionError,
 	mergeNativeChatCommands,
@@ -132,12 +132,7 @@ function StreamHeader({ context }: { context: ChatListContext }) {
 function StreamFooter({ context }: { context: ChatListContext }) {
 	if (context.messageOrder === "newest-first") {
 		return context.runwayActive ? (
-			<div
-				ref={context.runwayRef}
-				data-testid="chat-stream-runway"
-				className="h-[42cqh]"
-				aria-hidden
-			/>
+			<div ref={context.runwayRef} data-testid="chat-stream-runway" className="h-0" aria-hidden />
 		) : null;
 	}
 	if (!context.status && !context.runwayActive) return null;
@@ -154,7 +149,7 @@ function StreamFooter({ context }: { context: ChatListContext }) {
 					<div
 						ref={context.runwayRef}
 						data-testid="chat-stream-runway"
-						className="h-[42cqh]"
+						className="h-0"
 						aria-hidden
 					/>
 				</>
@@ -188,6 +183,7 @@ export default function ChatView({
 	});
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
+	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
 	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
 	const projectId = useAppStore(
 		(s) =>
@@ -328,7 +324,14 @@ export default function ChatView({
 		runwayActive,
 		followState,
 		containerProps,
-	} = useChatScroll(virtuosoRef, isStreaming, chatMessageOrder, latestUserRow, latestRow);
+	} = useChatScroll(
+		virtuosoRef,
+		isStreaming,
+		chatMessageOrder,
+		latestUserRow,
+		latestRow,
+		streamingResponseMovement,
+	);
 	const listContext = useMemo<ChatListContext>(
 		() => ({
 			messageOrder: chatMessageOrder,
@@ -494,6 +497,7 @@ export default function ChatView({
 		behavior: Exclude<SubmitBehavior, "interrupt">,
 	) => {
 		const queued = behavior !== "send";
+		if (queued) releaseFollow();
 		if (!queued && (text || attachments.length > 0)) {
 			armImmediateTurn();
 			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
@@ -745,6 +749,18 @@ export default function ChatView({
 				<div
 					data-testid="chat-view"
 					data-message-order={chatMessageOrder}
+					onPointerDownCapture={() => {
+						if (isStreaming) releaseFollow();
+					}}
+					onKeyDownCapture={(event) => {
+						if (
+							isStreaming &&
+							event.target instanceof Element &&
+							!event.target.closest('[data-testid="chat-scroll"]')
+						) {
+							releaseFollow();
+						}
+					}}
 					className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
 				>
 					<Popover open={planOpen} onOpenChange={setPlanOpen}>

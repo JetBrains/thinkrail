@@ -141,9 +141,18 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     entry) / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
     `listAvailableModels` / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host owns it so the pre-session picker, `getDefaultModel`, and a live
-    session all adjust effort identically) / `getDefaultModel` (the model + thinking a fresh session resolves to — settings
-    default if available, else first available — so the New-Workspace dialog shows the exact pre-session
-    model). **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
+    session all adjust effort identically) / `getDefaultModel` (the **pinned** default only — pi's settings
+    `defaultProvider`/`defaultModel` when that model is available, else `model: null` — plus the effort that
+    pairs with it). **The host never guesses a pre-session model:** pi's own resolver (settings pin →
+    provider default → first available) runs inside `createAgentSession`, so a caller without a pinned
+    default omits `model` and lets pi choose, and every creation path agrees by construction. The earlier
+    `pinned ?? available[0]` was a *second* resolver: with nothing pinned it answered `available[0]` while a
+    fresh session got pi's provider default, so the New-Workspace dialog pre-pinned a model no other path
+    would have picked — landing on `anthropic/claude-fable-5`, whose `compat.allowedFallbackModels` makes pi
+    send a `fallbacks` field, a 400 on an Anthropic proxy without the server-side-fallback beta, while a new
+    chat in the same worktree worked. Pi publishes no pre-session resolver (`findInitialModel` and
+    `defaultModelPerProvider` are not re-exported from the package root and its `exports` map blocks the deep
+    import), and copying its provider-default table here would recompute what `pi` owns. **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
     `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl`, `headers`, extension/provider
     routing data, and any other field are excluded by
     default — and the inbound side re-resolves the ref by `{provider,id}` via `resolveWireModel` against
@@ -369,8 +378,20 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     while parents created afterward project the new generation. The host-wide `getPiRuntime` resolver
     is passed as the core's dynamic fallback rather than captured at service creation. One
     `DelegationService` per workspace is cached (`delegationServiceFor`, synchronous — nothing awaits
-    at bind time); `subagentsExtensionFor(workspaceId)` hands the bound service to the
-    extension factory each session loads. Cascades: `removeSession`/`disposeAllSessions` fire
+    at bind time); `subagentsExtensionFor(workspaceId, isEnabled)` hands the bound service and live
+    availability callback to the extension factory each session loads. A host-injected
+    `setSubagentsEnabledResolver` maps that
+    workspace id to its current effective policy without creating an `agent` → settings/workspaces edge.
+    The predicate reaches the extension's launch-time guard and initial/reload activation. For live
+    policy changes, `refreshSubagentTools(workspaceId?)` removes/adds `Agent` +
+    `get_subagent_result` through pi's active-tool API: idle sessions update synchronously, streaming
+    sessions retain only a pending reevaluation applied at `agent_settled`, and repeated changes resolve
+    the latest policy then. Session registration re-resolves once after async extension binding and before
+    creation is published, so a policy mutation cannot fall into the bind-before-registry gap. The extension
+    instance is never replaced, so already-running detached children
+    finish and retain completion delivery; a disabled launch is still rejected immediately by the live
+    predicate even before a streaming parent's tool set can be refreshed.
+    Cascades: `removeSession`/`disposeAllSessions` fire
     `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
     awaits it before `publishDeleted`/resolving** (safe: the cascade carries its own swallow, so a
     failing child abort can never fail a delete whose transcript is already trashed), and workspace
@@ -521,7 +542,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
   `isProjectSkillPath(relativePath)` (watch-classification predicate);
   `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
-  wires `workspaceId` → the admission context);
+  wires `workspaceId` → the admission context); the subagent-policy seams
+  **`setSubagentsEnabledResolver`** + **`refreshSubagentTools`** (host resolves the effective global default
+  plus workspace override; manager owns live-session activation timing);
   the bundled-artifact seam (`registerBundledRuntime` +
   `BundledExtensions`/`BundledExtensionFactory`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test

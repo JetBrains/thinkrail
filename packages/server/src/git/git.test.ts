@@ -36,6 +36,7 @@ beforeEach(() => {
 	git(repo, "init", "-b", "main");
 	git(repo, "config", "user.email", "t@thinkrail.test");
 	git(repo, "config", "user.name", "test");
+	git(repo, "config", "commit.gpgsign", "false");
 	writeFileSync(join(repo, "README.md"), "# repo\n");
 	git(repo, "add", "-A");
 	git(repo, "commit", "-m", "init");
@@ -233,6 +234,7 @@ test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown p
 	git(clone, "checkout", "-B", "main", "origin/main");
 	git(clone, "config", "user.email", "t@thinkrail.test");
 	git(clone, "config", "user.name", "test");
+	git(clone, "config", "commit.gpgsign", "false");
 	writeFileSync(join(clone, "remote-only.txt"), "remote\n");
 	git(clone, "add", "-A");
 	git(clone, "commit", "-m", "remote-only");
@@ -665,7 +667,7 @@ test("gitCommitPaths commits EXACTLY the named paths and returns the sha; commit
 	writeFileSync(join(repo, ".thinkrail", "context", "todos.json"), "{}");
 
 	const before = gitHeadSha("w1");
-	const committed = gitCommitPaths("w1", "todo: step\n\nThinkRail-Todo: s/t1", ["impl.ts"]);
+	const committed = gitCommitPaths("w1", "feat: step", ["impl.ts"]);
 	expect(committed).not.toBeNull();
 	expect(committed?.sha).not.toBe(before);
 	expect(gitHeadSha("w1")).toBe(committed?.sha ?? "");
@@ -681,11 +683,11 @@ test("gitCommitPaths commits EXACTLY the named paths and returns the sha; commit
 
 test("gitCommitPaths stages a deletion, and returns null for an empty set or paths with nothing to commit", async () => {
 	seedWorkspace();
-	expect(gitCommitPaths("w1", "todo: nothing named", [])).toBeNull();
-	expect(gitCommitPaths("w1", "todo: clean path", ["README.md"])).toBeNull();
+	expect(gitCommitPaths("w1", "feat: nothing named", [])).toBeNull();
+	expect(gitCommitPaths("w1", "feat: clean path", ["README.md"])).toBeNull();
 
 	rmSync(join(repo, "README.md"));
-	const committed = gitCommitPaths("w1", "todo: drop the readme", ["README.md"]);
+	const committed = gitCommitPaths("w1", "chore: drop the readme", ["README.md"]);
 	expect(committed).not.toBeNull();
 	expect(
 		await (await gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" })).changes[0],
@@ -701,7 +703,7 @@ test("gitCommitPaths leaves the user's own staged work staged (never in the item
 	writeFileSync(join(repo, "mine.ts"), "export const mine = 1;\n");
 	git(repo, "add", "--", "mine.ts");
 
-	const committed = gitCommitPaths("w1", "todo: step", ["impl.ts"]);
+	const committed = gitCommitPaths("w1", "feat: step", ["impl.ts"]);
 	expect(
 		(await gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" })).changes.map(
 			(c) => c.path,
@@ -718,7 +720,7 @@ test("gitCommitPaths treats paths literally — a pathspec-magic filename never 
 	mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
 	writeFileSync(join(repo, ".thinkrail", "context", "todos.json"), "{}");
 
-	const committed = gitCommitPaths("w1", "todo: magic name", [magic]);
+	const committed = gitCommitPaths("w1", "feat: magic name", [magic]);
 	expect(committed).not.toBeNull();
 	expect(
 		(await gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" })).changes.map(
@@ -736,11 +738,12 @@ test("a failed commit restores the index — the user's staging area is never le
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
 	writeFileSync(join(repo, "mine.ts"), "export const mine = 1;\n");
 	git(repo, "add", "--", "mine.ts");
+	git(repo, "config", "gpg.format", "openpgp");
 	git(repo, "config", "commit.gpgsign", "true");
 	git(repo, "config", "gpg.program", join(dataDir, "no-such-gpg"));
 
 	const head = gitHeadSha("w1");
-	expect(gitCommitPaths("w1", "todo: unsignable", ["impl.ts"])).toBeNull();
+	expect(gitCommitPaths("w1", "feat: unsignable", ["impl.ts"])).toBeNull();
 	expect(gitHeadSha("w1")).toBe(head ?? "");
 	expect(stagedPaths()).toEqual(["mine.ts"]);
 });
@@ -750,11 +753,12 @@ test("a failed commit preserves index-only state — an intent-to-add entry surv
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
 	writeFileSync(join(repo, "intent.txt"), "later\n");
 	git(repo, "add", "-N", "--", "intent.txt");
+	git(repo, "config", "gpg.format", "openpgp");
 	git(repo, "config", "commit.gpgsign", "true");
 	git(repo, "config", "gpg.program", join(dataDir, "no-such-gpg"));
 
 	const head = gitHeadSha("w1");
-	expect(gitCommitPaths("w1", "todo: unsignable", ["impl.ts"])).toBeNull();
+	expect(gitCommitPaths("w1", "feat: unsignable", ["impl.ts"])).toBeNull();
 	expect(gitHeadSha("w1")).toBe(head ?? "");
 	const tracked = new TextDecoder()
 		.decode(
@@ -782,7 +786,7 @@ test("gitCommitPaths refuses to commit over a conflicted index (unmerged entries
 
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
 	const head = gitHeadSha("w1");
-	expect(gitCommitPaths("w1", "todo: mid-merge", ["impl.ts"])).toBeNull();
+	expect(gitCommitPaths("w1", "feat: mid-merge", ["impl.ts"])).toBeNull();
 	expect(gitHeadSha("w1")).toBe(head ?? "");
 });
 

@@ -226,7 +226,6 @@ function useCommittedSizes(
 	const keyboard = useRef(false);
 	const pending = useRef<number[] | null>(null);
 	const startEpoch = useRef(projectionEpoch);
-	const observedEpoch = useRef(projectionEpoch);
 	const epoch = useRef(projectionEpoch);
 	const currentRef = useRef(current);
 	const commitRef = useRef(commit);
@@ -235,24 +234,17 @@ function useCommittedSizes(
 	commitRef.current = commit;
 
 	const cancelStaleGesture = useCallback(() => {
-		if (startEpoch.current === epoch.current) return false;
+		const active = dragging.current || keyboard.current;
+		if (!active || startEpoch.current === epoch.current) return false;
 		dragging.current = false;
 		keyboard.current = false;
 		pending.current = null;
-		if (observedEpoch.current !== epoch.current) {
-			observedEpoch.current = epoch.current;
-			onCanceled?.();
-		}
+		onCanceled?.();
 		return true;
 	}, [onCanceled]);
 
 	useEffect(() => {
-		if (observedEpoch.current === projectionEpoch) return;
-		if (dragging.current || keyboard.current) {
-			cancelStaleGesture();
-			return;
-		}
-		observedEpoch.current = projectionEpoch;
+		if (startEpoch.current !== projectionEpoch) cancelStaleGesture();
 	}, [cancelStaleGesture, projectionEpoch]);
 
 	const flush = useCallback(() => {

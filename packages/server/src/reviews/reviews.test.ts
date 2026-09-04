@@ -51,6 +51,7 @@ beforeEach(() => {
 	worktree = mkdtempSync(join(tmpdir(), "reviews-wt-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 	gitIn(worktree, ["init", "-b", "main"]);
+	gitIn(worktree, ["config", "commit.gpgsign", "false"]);
 	gitIn(worktree, [
 		"-c",
 		"user.email=t@t",

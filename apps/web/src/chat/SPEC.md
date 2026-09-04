@@ -208,12 +208,16 @@ every group's top-level rows: `1,2,3 | 4,5,6 → 6,5,4 | 3,2,1`. Stable row ids 
 flashes, tool state, and history anchors do not fork. The projection never reaches inside one row: Markdown
 paragraphs/code, a tool card body, review-package comments, and an Activity row's own disclosure hierarchy
 retain their semantic order. Virtuoso and DOM traversal consume the projected rows; Pi turns, persistence,
-stream status, and every non-presentation derivation remain chronological. `messageOrder.ts` owns the
+stream status, and every non-presentation derivation remain chronological. `chatPreferences.ts` owns the
 closed preference and its oldest-first default, then hydrates the store before React mounts. Browser clients
 read/write a host-qualified localStorage key and synchronize that key across same-origin tabs; a native shell
 may inject the same narrow string-storage adapter under its stable backend-profile/window identity so a
 dynamic loopback port cannot erase the preference on restart. It never enters `AppConfig`, so choosing
-newest-first cannot change another browser, device, host, or native window.
+newest-first cannot change another browser, device, host, or native window. The same persistence seam owns
+**Streaming response movement**, one `{ settle, trigger }` client-local preference rather than a second
+adapter/subscription path: both values use 5-point steps, Settle is 25–90, Trigger is 35–100, the gap is at
+least 10 points, and the default is `{ settle: 75, trigger: 100 }`. Invalid storage falls back atomically to
+the default pair. It likewise never enters `AppConfig` or crosses the wire.
 
 **Sticky activity breadcrumb.** While the transcript's top visible content remains inside expanded
 Activity → Thinking → tool disclosures whose original headers have scrolled above the viewport, one
@@ -356,41 +360,39 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   both projections.
 - **One direction-aware streaming controller** — `useChatScroll` remains the sole imperative,
   cancellable owner for every kind of live row growth; renderers and the message-order projection never
-  scroll themselves. Both orders share explicit immediate-turn arming, queued-continuation currency,
-  reader-intent cancellation, one non-overlapping 220ms ease-out, reduced-motion immediacy, active-stream
-  reconstruction, and **Follow response** / **Latest** detached labels. Immediate turns derive their anchor
-  inset from the scroller even when the stream marker is virtualized, then initialize runway geometry once
-  that marker mounts. The latest edge is bottom for oldest-first and top for newest-first; wheel,
-  touch/scrollbar, and keyboard directions invert with it. Touch return intent survives pointer release or
-  cancellation through the momentum tail and re-arms only if that explicit motion reaches the latest edge.
-  Selection, interactive focus, and message/history jumps cancel either mode; navigation keys bubbling from
-  an interactive descendant never undo that cancellation. Geometry alone never re-arms a detached reader.
-  Renderers needing attention expose an element through `ChatActions`; `useChatScroll` alone reveals it in
-  the transcript with a clamped direct scroll write. `nearest` reveal follows size-aware browser semantics for
-  targets taller than the viewport rather than hiding their useful leading edge. That local reveal never changes
-  follow state, while the **Latest** action always writes the physical latest edge even when no stream marker is
-  mounted, and keeps that edge pinned for its bounded settling window while newly mounted or delayed rows replace
-  estimates. A streaming-settled transition does not end that manual-return window; reader intent still does.
-- **Oldest-first reading band** — the established behavior remains intact. An immediate local send aligns
-  its user row at 10% of transcript height clamped to 48–80px and gives the response a one-way 60%-viewport
-  runway. A transient list header makes that inset possible even for the first row; the tail spacer starts
-  as the 60% budget plus a 42% reading-band floor, shrinks one-for-one with response growth, never
-  re-inflates except to recalibrate after a viewport resize, and survives settlement in place. The active
-  edge grows without movement until it crosses 82% of the viewport, then one 220ms ease-out advances it to
-  58% (immediate under reduced motion); a large layout change is still one move and moves never overlap.
-  Settlement neither catches up nor collapses remaining runway.
-- **Newest-first reading band** — the newest stream surface begins after the same 48–80px top inset; its
-  live phase indicator leads the newest projected row. While follow is armed, appended content inside that
-  row uses the same sparse 82%→58% advance; a newly inserted top row returns to the latest band in one
-  controller-owned move. Runway consumption is measured separately at the stable trailing edge of the
-  latest request/answer group, excluding the changing header, so newly prepended assistant rows consume
-  their cumulative height instead of comparing unrelated first-row markers. `firstItemIndex` assigns
-  stable logical indices across projected prefix insertion and removal. The header's measured height delta
-  is applied directly to `scrollTop` only while detached; together those mechanisms preserve a detached
-  reader's visible historical anchor and pixel offset without invoking follow. Scrolling downward into
-  older groups detaches immediately, and no insertion moves that reader; upward return to the top or the
-  floating **↑ Follow response** / **↑ Latest** action re-arms. The synthetic tail space stays after the
-  oldest group, never between reversed request/answer rows, so it cannot split the selected group semantics.
+  scroll themselves. Both orders consume the client-local **Streaming response movement** window. While
+  following, the active response edge grows to Trigger (default 100%), then one non-overlapping 220ms
+  ease-out places it at Settle (default 75%); every crossing repeats that same move. The controller does
+  **not** preallocate a percentage runway: immediately before a move it adds only the scroll-range deficit
+  needed to reach Settle, then removes that room one-for-one as response growth fills the distance back to
+  Trigger. Reduced motion makes movement and removal immediate.
+- **Runway lifetime follows actual work** — remaining artificial room collapses smoothly at
+  `agent_settled`, never `agent_end`. An awaiting `ask_user_question` clears it before the card's existing
+  start-aligned attention reveal. Reader takeover during a stream cancels movement, clears the room, and
+  detaches; later agent output cannot move that reader. Takeover retains the established intent boundary:
+  pointer/touch interaction, any wheel/scrollbar/navigation-key movement, selection, interactive
+  focus, message/history reveal, and a live user submit. **Follow response** derives enough room to place
+  the active edge at Settle, makes that one move, and rearms the Trigger→Settle cycle. Geometry alone never
+  rearms a detached reader. After settlement, **Latest** retains its physical-latest-edge meaning and bounded
+  pin window while virtual measurements land.
+- **Order-aware geometry, one visible window** — an immediate local send still aligns its user row at 10%
+  of transcript height clamped to 48–80px; the transient list header still makes that inset possible for a
+  first row. Oldest first can need at most the lower `100% - Settle` band as temporary tail room (25% by
+  default), rather than the retired 102% initial / 42% floor. Newest first applies the same edge percentages;
+  older projected content supplies real scroll range where available, and any remaining synthetic space
+  stays after the oldest group, never between reversed request/answer rows. Its live phase indicator still
+  leads the newest projected row, runway consumption still measures the latest group's stable trailing edge,
+  and `firstItemIndex` still gives projected prefix insertion/removal stable logical indices.
+- **Intent and changing geometry** — latest-edge directions still invert with order. Touch return intent
+  survives pointer release/cancellation through momentum and rearms only when explicit motion reaches that
+  edge. Newest-first header height deltas apply directly to `scrollTop` only while detached, preserving the
+  historical anchor and pixel offset; no insertion moves a detached reader. While live and following, a
+  viewport resize immediately reevaluates the percentages: crossing the resized Trigger makes one move to
+  Settle, otherwise the current position stays and derived room reconciles to the new height. Opening an
+  already-streaming chat and switching order restore the active edge at Settle with derived room, not a
+  fixed floor. Renderers needing attention still route through `ChatActions` to the controller's clamped
+  `start`/`nearest` reveal; size-aware `nearest` keeps a tall target's useful leading edge visible and never
+  changes follow state by itself.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
@@ -967,7 +969,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
-  is `ChatView.tsx`, `messageOrder.ts` (the client-local persistence adapter), plus the hooks and dialogs
+  is `ChatView.tsx`, `chatPreferences.ts` (the client-local persistence adapter), plus the hooks and dialogs
   it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
   `useModelCatalog.ts`, **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical
   transcript reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`,

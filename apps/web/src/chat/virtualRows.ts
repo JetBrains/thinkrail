@@ -1,4 +1,4 @@
-import type { ChatMessageOrder } from "./messageOrder";
+import type { ChatMessageOrder } from "./chatPreferences";
 
 export const CHAT_VIRTUAL_INDEX_ORIGIN = 1_000_000;
 

@@ -31,6 +31,7 @@ import type {
 	ReviewCommentStatus,
 	ReviewSnapshot,
 	SpecGraphSnapshot,
+	SubagentOverride,
 	Template,
 	TemplateInfo,
 	TemplateScope,
@@ -87,7 +88,8 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 56;
+export const PROTOCOL_VERSION = 57;
+export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
 export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
 export const FEEDBACK_INTERVIEW_PROTOCOL_VERSION = 56;
 
@@ -136,6 +138,7 @@ export const WS_METHODS = {
 	workspaceRemove: "workspace.remove",
 	workspaceDiffStats: "workspace.diffStats",
 	workspaceSetSkillOverride: "workspace.setSkillOverride",
+	workspaceSetSubagentsOverride: "workspace.setSubagentsOverride",
 	workspaceSetDiffBase: "workspace.setDiffBase",
 	workspaceWatchReady: "workspace.watchReady",
 	workspaceOpenIn: "workspace.openIn",
@@ -349,6 +352,10 @@ export interface WsMethodMap {
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };
 	"workspace.setSkillOverride": {
 		params: { id: string; name: string; override: "on" | "off" | null };
+		result: Workspace;
+	};
+	"workspace.setSubagentsOverride": {
+		params: { id: string; override: SubagentOverride | null };
 		result: Workspace;
 	};
 	"workspace.setDiffBase": { params: { id: string; ref: string | null }; result: Workspace };

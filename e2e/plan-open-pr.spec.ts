@@ -49,7 +49,7 @@ test("Open PR: no origin errors, with origin pushes, re-press follows the same b
 	gitAs(workspace.worktreePath, "remote", "add", "origin", bare);
 	writeFileSync(join(workspace.worktreePath, "flood.ts"), "export const wait = 1;\n");
 	gitAs(workspace.worktreePath, "add", "--", "flood.ts");
-	gitAs(workspace.worktreePath, "commit", "--no-verify", "-m", "todo: implement FloodWait");
+	gitAs(workspace.worktreePath, "commit", "--no-verify", "-m", "fix(sender): handle FloodWait");
 	const firstSha = gitAs(workspace.worktreePath, "rev-parse", "HEAD");
 	const branch = gitAs(workspace.worktreePath, "rev-parse", "--abbrev-ref", "HEAD");
 
@@ -62,7 +62,13 @@ test("Open PR: no origin errors, with origin pushes, re-press follows the same b
 
 	writeFileSync(join(workspace.worktreePath, "flood.ts"), "export const wait = 2;\n");
 	gitAs(workspace.worktreePath, "add", "--", "flood.ts");
-	gitAs(workspace.worktreePath, "commit", "--no-verify", "-m", "todo: tune FloodWait");
+	gitAs(
+		workspace.worktreePath,
+		"commit",
+		"--no-verify",
+		"-m",
+		"fix(sender): tune the FloodWait backoff",
+	);
 	const secondSha = gitAs(workspace.worktreePath, "rev-parse", "HEAD");
 
 	await openPr.click();

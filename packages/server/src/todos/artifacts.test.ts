@@ -54,6 +54,7 @@ test("a newly active window is captured before a held queue or an earlier done i
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 	try {
 		execFileSync("git", ["init", "-b", "main"], { cwd: worktree, stdio: "ignore" });
+		execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd: worktree, stdio: "ignore" });
 		execFileSync(
 			"git",
 			["-c", "user.email=t@t", "-c", "user.name=t", "commit", "--allow-empty", "-m", "init"],
@@ -352,16 +353,45 @@ test("done commits the window: one commit artifact (the sha), and only the item'
 			root,
 			SESSION,
 			async () => ["src/foo.ts"],
-			({ paths, title, todoId }) => {
+			({ paths, subject }) => {
 				seen.push(paths);
-				expect(title).toBe("step");
-				expect(todoId).toBe(todo.id);
+				expect(subject).toBe("step");
 				return { sha: "abc1234def" };
 			},
 		);
 		expect(seen).toEqual([["src/foo.ts"]]);
 		expect(store.get(todo.id)?.artifacts).toEqual([
 			{ kind: "commit", sha: "abc1234def", label: "step" },
+		]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("only the first commitSubject line is committed; the title stays the artifact label", async () => {
+	const { store, root } = tempStore();
+	try {
+		const todo = store.add({ title: "Newest-first chat order" });
+		store.update(todo.id, { status: "in_progress" });
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
+		store.update(todo.id, {
+			status: "done",
+			commitSubject: "feat(web): add newest-first chat order\n\nGenerated explanation",
+		});
+		const subjects: string[] = [];
+		await reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			async () => ["src/foo.ts"],
+			({ subject }) => {
+				subjects.push(subject);
+				return { sha: "sha-subject" };
+			},
+		);
+		expect(subjects).toEqual(["feat(web): add newest-first chat order"]);
+		expect(store.get(todo.id)?.artifacts).toEqual([
+			{ kind: "commit", sha: "sha-subject", label: "Newest-first chat order" },
 		]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -646,6 +676,7 @@ test("a UI removal landing during an in-flight reconcile leaves no orphan window
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 	try {
 		execFileSync("git", ["init", "-b", "main"], { cwd: worktree, stdio: "ignore" });
+		execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd: worktree, stdio: "ignore" });
 		execFileSync(
 			"git",
 			["-c", "user.email=t@t", "-c", "user.name=t", "commit", "--allow-empty", "-m", "init"],

@@ -14,6 +14,7 @@ export function seedWorkspace(seed: WorkspaceSeed): string {
 	gitQuiet(cwd, "init", "-b", "main");
 	gitQuiet(cwd, "config", "user.email", "workflow-tests@thinkrail.test");
 	gitQuiet(cwd, "config", "user.name", "ThinkRail Workflow Tests");
+	gitQuiet(cwd, "config", "commit.gpgsign", "false");
 	if (typeof seed === "function") seed(cwd);
 	else seedKind(cwd, seed);
 	gitQuiet(cwd, "add", "-A");

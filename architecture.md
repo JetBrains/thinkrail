@@ -205,8 +205,19 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     and desktop share host boot and graceful shutdown, but launchers enforce no process-wide single-instance
     or canonical-data-directory ownership policy. Each host binds its own loopback port; when multiple hosts
     point at the same mutable data directory, cross-process consistency is intentionally not guaranteed.
-    Desktop artifacts are additive and unsigned initially; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
-    the supported Linux floor. Detail: [[module-desktop]].
+    Desktop artifacts are additive; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
+    the supported Linux floor. Releases are **staged as drafts here and signed elsewhere**: the
+    JetBrains signing runners are unavailable to public repositories, so `JetBrains/thinkrail-signing`
+    (private) signs the staged assets and publishes the draft. Windows artifacts carry an EV
+    Authenticode signature; the macOS CLI binary carries a Developer ID signature that Gatekeeper
+    still rejects without notarization, and the macOS `.dmg` stays unsigned because Electrobun's
+    payload self-extracts after download.
+
+    Signing can only fail *closed*, so a draft that is never published means releases stop appearing
+    rather than appearing unsigned — the failure mode that silently ended the pre-pivot pipeline, and the
+    reason the signing repo alarms on a stale draft. How the tag and the draft are staged is
+    [[module-ci-release]]'s contract, not restated here.
+    Detail: [[module-desktop]], [[module-ci-release]].
 
 16. **Delegation is portable; ThinkRail is one embedder.** `packages/pi-delegation` owns the session
     fabric: one creation primitive with orthogonal axes, a run-owning handle, lineage, registry, and

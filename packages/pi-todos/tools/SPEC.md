@@ -25,15 +25,23 @@ the host wire still use loose items):
   or done items), making the step appear among the user's requests and then vanish on the next re-plan. The
   policy lives here, not in `core`: `TodoStore.add` stays permissive because the host writes the user's own
   lane through it.
+- **`todo_write` reconciles, it never destructively replaces:** the tool forwards its `groups` to
+  `TodoStore.replaceAll`, which matches written steps to existing ones by group + step title and keeps
+  their progress (see [[submodule-pi-todos-core]]). So a mid-task re-plan is safe and lossless — there is
+  **no runtime nudge** discouraging it; the todos skill carries the (efficiency-only) preference for
+  `todo_add`/`todo_update` on a single change.
 - **In-band nudges** (the status-discipline feedback): every mutating/list result appends
   `consistencyNudge` when open items exist but none is `in_progress`; a `todo_update` → `done` names
   the group's next open step instead (suggest-only, never auto-started); auto-demoted items are
   reported as `(paused: …)`. A `done` that leaves **no open item anywhere** additionally nudges
   `todo_plan_summary` — the overall completion summary is asked for at exactly the moment it becomes due.
 - **Completion summaries (the review trail):** `todo_update` takes optional `summary` (what/why — the
-  decisions the diff can't show, plus any scope drift) and **`verification`** (the exact check run +
+  decisions the diff can't show, plus any scope drift), **`commitSubject`** (the git-facing subject line
+  for the step's delta, written in the host repository's own commit style — the schema description is
+  where the "read `git log` and match it" instruction lives, since the tools are the agent's only
+  contact with this field) and **`verification`** (the exact check run +
   result, or "not verified" — a separate field so the UI renders it as a status badge and a vague or
-  missing line is visible at a glance), both set together with `status: done` (skill-mandated for
+  missing line is visible at a glance) — all three set together with `status: done` (skill-mandated for
   code-changing steps, never a tool gate: the tool can't know whether the step changed code — git
   lives host-side). `todo_plan_summary` sets the plan-level handoff note
   (`TodoStore.setSummary`); it accepts an early call but flags how many items are still open (the UI
