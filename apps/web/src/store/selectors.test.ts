@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
+import type { ActivityStatus, Project, WireModel, Workspace } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
 import type { EditorTab } from "./appStore";
 import {
@@ -8,6 +8,7 @@ import {
 	isExternalWorkspace,
 	isUserOwnedWorkspace,
 	matchesWorktreePath,
+	projectActivityRollup,
 	selectActiveEditorTab,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
@@ -22,10 +23,9 @@ import {
 	selectLayoutResourcePlacement,
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
-	selectProjectActivity,
 	selectSkillsStale,
-	selectWorkspaceActivity,
 	specPathMatcher,
+	workspaceActivityRollup,
 } from "./selectors";
 
 const projects: Project[] = [
@@ -465,48 +465,48 @@ const activityWorkspaces: Record<string, Workspace[]> = {
 };
 
 test("a workspace with no activity rows rolls up to null, so a quiet rail draws nothing", () => {
-	expect(selectWorkspaceActivity({ activityByWorkspace: {} }, "wa")).toBeNull();
-	expect(selectWorkspaceActivity({ activityByWorkspace: { wa: {} } }, "wa")).toBeNull();
+	expect(workspaceActivityRollup({}, "wa")).toBeNull();
+	expect(workspaceActivityRollup({ wa: {} }, "wa")).toBeNull();
 });
 
-test("a workspace rolls up to its single chat's status", () => {
-	expect(selectWorkspaceActivity({ activityByWorkspace: { wa: { s1: "running" } } }, "wa")).toBe(
-		"running",
-	);
+test("a workspace rolls up to its single chat's status and counts it", () => {
+	expect(workspaceActivityRollup({ wa: { s1: "running" } }, "wa")).toEqual({
+		status: "running",
+		counts: { running: 1 },
+	});
 });
 
 test("failed outranks every other state — a rare fault is never masked by routine work", () => {
-	const activityByWorkspace = {
-		wa: {
-			s1: "running" as const,
-			s2: "waiting" as const,
-			s3: "failed" as const,
-			s4: "queued" as const,
-		},
-	};
-	expect(selectWorkspaceActivity({ activityByWorkspace }, "wa")).toBe("failed");
+	const rollup = workspaceActivityRollup(
+		{ wa: { s1: "running", s2: "waiting", s3: "failed", s4: "queued" } },
+		"wa",
+	);
+	expect(rollup?.status).toBe("failed");
+	expect(rollup?.counts).toEqual({ running: 1, waiting: 1, failed: 1, queued: 1 });
 });
 
 test("the rollup order is failed > waiting > running > queued", () => {
-	const at = (statuses: Record<string, "running" | "waiting" | "queued" | "failed">) =>
-		selectWorkspaceActivity({ activityByWorkspace: { wa: statuses } }, "wa");
+	const at = (statuses: Record<string, ActivityStatus>) =>
+		workspaceActivityRollup({ wa: statuses }, "wa")?.status;
 	expect(at({ s1: "waiting", s2: "running", s3: "queued" })).toBe("waiting");
 	expect(at({ s1: "running", s2: "queued" })).toBe("running");
 	expect(at({ s1: "queued" })).toBe("queued");
 });
 
+test("counts tally repeats, which is what lets the tooltip say '2 chats working'", () => {
+	expect(workspaceActivityRollup({ wa: { s1: "running", s2: "running" } }, "wa")?.counts).toEqual({
+		running: 2,
+	});
+});
+
 test("a project rolls up across its workspaces and ignores other projects", () => {
-	const activityByWorkspace = { wa: { s1: "running" as const }, wb: { s2: "failed" as const } };
-	expect(selectProjectActivity({ activityByWorkspace, workspaces: activityWorkspaces }, "p1")).toBe(
-		"failed",
-	);
-	expect(
-		selectProjectActivity({ activityByWorkspace, workspaces: activityWorkspaces }, "p2"),
-	).toBeNull();
+	const map = { wa: { s1: "running" as const }, wb: { s2: "failed" as const } };
+	const rollup = projectActivityRollup(map, activityWorkspaces, "p1");
+	expect(rollup?.status).toBe("failed");
+	expect(rollup?.counts).toEqual({ running: 1, failed: 1 });
+	expect(projectActivityRollup(map, activityWorkspaces, "p2")).toBeNull();
 });
 
 test("a project with only quiet workspaces rolls up to null", () => {
-	expect(
-		selectProjectActivity({ activityByWorkspace: {}, workspaces: activityWorkspaces }, "p1"),
-	).toBeNull();
+	expect(projectActivityRollup({}, activityWorkspaces, "p1")).toBeNull();
 });

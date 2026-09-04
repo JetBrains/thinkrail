@@ -74,9 +74,44 @@ treatment.
   come) surfaces an error toast, leaving the row in place. Each **workspace row** is **two-line**: the display
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
-  name is decoupled from the git branch (see [[submodule-server-workspaces]]). Workspace rows deliberately
-  show **no `+N −M` change badge**: the Projects view is for navigation and identity; change detail stays in
-  the dedicated Changes views. The **Default workspace**
+  name is decoupled from the git branch (see [[submodule-server-workspaces]]).
+
+  **One decoration class, and only one.** Workspace rows deliberately show **no `+N −M` change badge**:
+  the Projects view is for navigation and identity, and change detail stays in the dedicated Changes
+  views. The single admitted exception is the **activity glyph** — live agent state — because it is the
+  answer to a question the rail is the *only* place to ask: "what is happening in the workspaces I do not
+  have open?" Without it the user must open every workspace to find out, which is navigation, not detail.
+  A `+N −M` badge fails that test (the Changes view answers it better and the rail cannot show it
+  truthfully without watching every worktree), so the rule stands for everything else.
+
+  **`ActivityGlyph`** renders it: a `size-14` Remix line icon in a `size-20` box, keyed by
+  `ActivityStatus` — `RiRecordCircleLine`/`text-feedback-info` (running),
+  `RiQuestionnaireLine`/`text-feedback-warning` (waiting), `RiErrorWarningLine`/`text-feedback-error`
+  (failed), `RiTimeLine`/`text-text-subtle` (queued). Presentational and props-driven; the rollup arrives
+  as an `ActivityRollup` from the store's pure `workspaceActivityRollup`/`projectActivityRollup`, which
+  `ProjectTree` calls against its one stable `activityByWorkspace` subscription — a rollup returned *from*
+  a Zustand selector would be a fresh object every store change and re-render the whole rail.
+  - **Icons, not coloured dots** (`.review-thread-dot`'s 6px circle was the alternative): five states
+    encoded purely in hue fail colour-blind users and the shipped high-contrast themes. Shape carries the
+    meaning; colour reinforces it.
+  - **`running` is `feedback-info`, never the accent.** The active workspace's icon and name already
+    render `text-primary` on these very rows, so an accent-green glyph would read as selection.
+  - **No motion.** The rail is permanently in peripheral vision, and several concurrent runs pulsing out
+    of phase read as flicker. The chat plan pane keeps its pulse — that surface is actively read.
+  - **Idle draws nothing at all** (`ActivityRollup` is `null`), so a quiet rail is byte-identical to the
+    pre-feature one; twenty idle workspaces wearing twenty glyphs would destroy the signal.
+  - It sits in **its own flex column between the identity button and the kebab**, so the hover-revealed
+    kebab never covers it (a trailing overlay would).
+  - **Hover explains it**, via `IconTooltip` (`wrapTrigger` — a bare glyph is not focusable). One busy
+    chat shows the plain label; several show a per-state breakdown with counts in rollup order — which is
+    where the counts the row itself refuses to carry actually live. The tooltip is an *enhancement*: the
+    same text is always the glyph's `aria-label`, because Radix tooltips are hover/focus-only and a phone
+    has neither.
+  - Rows carry **`data-activity`** (absent when idle) as the e2e hook — on the row, not the glyph, so the
+    status has one home in the DOM.
+
+  **Project rows carry the rollup only while collapsed**, matching the collapsed-only workspace count;
+  expanded, their workspace rows already say it. The **Default workspace**
   (`kind === "default"` — the project folder itself) renders **pinned first** (the server pins it in
   `workspace.list`; `addWorkspace` appends created worktree rows after it), with a **`House` icon** in
   place of the `GitBranch` glyph and **no Rename or Remove item** (non-renamable/non-removable — the server

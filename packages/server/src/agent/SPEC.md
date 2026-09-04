@@ -125,8 +125,18 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   | 2 | `session.isStreaming` | `running` |
   | 3 | `session.pendingMessageCount > 0` | `queued` |
   | 4 | an unanswered `ask_user_question` | `waiting` |
-  | 5 | `lastSettlement.stopReason === "error"` | `failed` |
+  | 5 | the run failed (see below) | `failed` |
   | — | otherwise | idle, i.e. `null` |
+
+  **`failed` reads the settlement when there is one and the transcript otherwise**, mirroring exactly what
+  `lastSettlement`'s three states already mean: a value decides it outright; explicit **`null`** (run
+  active, or settled with no assistant) means *not failed* and must **not** consult the transcript, or a
+  new `agent_start` would let an older persisted failure reappear mid-run; **`undefined`** means this host
+  process observed nothing, so the persisted transcript is authoritative and the trailing assistant's
+  `stopReason` decides. "Trailing" stops at the next user message and takes the last assistant, so a
+  retried failure followed by a successful attempt is not failed — the same rule `chat/hydrate.ts` uses to
+  hide retried attempts, and the reason a re-attached session keeps its glyph across a host restart
+  instead of silently reading idle while the chat itself shows the failure.
 
   Every rung of that order is load-bearing and pinned by `activity.test.ts`:
   - **A dialog outranks streaming** because pi is technically mid-turn while blocked on it, yet the person
@@ -148,10 +158,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   is presentation policy owned by the client's selectors (see `apps/web/src/store/SPEC.md`), and a
   precedence order baked in here would be a UI decision escaping into the host.
 
-  **Lifetime:** in-memory, for this host process. Entries are never idle-evicted, so a `failed`/`waiting`
-  status survives client reconnects, but a host restart resets un-reattached sessions to idle; the
-  transcript stays authoritative and shows the failure once the chat is opened. Deriving those two states
-  from the disk-session scan is the deliberate follow-up, not V1.
+  **Lifetime:** entries are never idle-evicted, so every status survives client reconnects. Because
+  `waiting` and `failed` both fall back to the transcript, they also survive a **host restart** for any
+  session that gets attached. What no status survives is a session this process has never loaded:
+  `listSessionActivity` walks live entries only, so a disk-only chat contributes nothing. Extending the
+  snapshot to derive those two from the disk-session scan (`listSessionInfosStrict`) is the deliberate
+  follow-up, not V1.
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.
     `prompt`/`steer`/`followUp` (with images) /

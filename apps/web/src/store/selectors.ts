@@ -464,37 +464,41 @@ export function selectAgentReviewCommentCount(
 
 const ACTIVITY_ROLLUP_ORDER: readonly ActivityStatus[] = ["failed", "waiting", "running", "queued"];
 
-function rollUpActivity(statuses: Iterable<ActivityStatus>): ActivityStatus | null {
-	let best = ACTIVITY_ROLLUP_ORDER.length;
-	for (const status of statuses) {
-		const rank = ACTIVITY_ROLLUP_ORDER.indexOf(status);
-		if (rank >= 0 && rank < best) best = rank;
-		if (best === 0) break;
-	}
-	return ACTIVITY_ROLLUP_ORDER[best] ?? null;
+export type ActivityMap = Record<string, Record<string, ActivityStatus>>;
+
+export interface ActivityRollup {
+	status: ActivityStatus;
+	counts: Partial<Record<ActivityStatus, number>>;
 }
 
-export function selectWorkspaceActivity(
-	state: { activityByWorkspace: Record<string, Record<string, ActivityStatus>> },
+function rollUp(records: Iterable<Record<string, ActivityStatus>>): ActivityRollup | null {
+	const counts: Partial<Record<ActivityStatus, number>> = {};
+	for (const record of records) {
+		for (const status of Object.values(record)) counts[status] = (counts[status] ?? 0) + 1;
+	}
+	const status = ACTIVITY_ROLLUP_ORDER.find((candidate) => (counts[candidate] ?? 0) > 0);
+	return status ? { status, counts } : null;
+}
+
+export function workspaceActivityRollup(
+	activityByWorkspace: ActivityMap,
 	workspaceId: string,
-): ActivityStatus | null {
-	const forWorkspace = state.activityByWorkspace[workspaceId];
-	return forWorkspace ? rollUpActivity(Object.values(forWorkspace)) : null;
+): ActivityRollup | null {
+	const record = activityByWorkspace[workspaceId];
+	return record ? rollUp([record]) : null;
 }
 
-export function selectProjectActivity(
-	state: {
-		activityByWorkspace: Record<string, Record<string, ActivityStatus>>;
-		workspaces: Record<string, Workspace[]>;
-	},
+export function projectActivityRollup(
+	activityByWorkspace: ActivityMap,
+	workspaces: Record<string, Workspace[]>,
 	projectId: string,
-): ActivityStatus | null {
-	const list = state.workspaces[projectId];
+): ActivityRollup | null {
+	const list = workspaces[projectId];
 	if (!list) return null;
-	const statuses: ActivityStatus[] = [];
+	const records: Record<string, ActivityStatus>[] = [];
 	for (const workspace of list) {
-		const status = selectWorkspaceActivity(state, workspace.id);
-		if (status) statuses.push(status);
+		const record = activityByWorkspace[workspace.id];
+		if (record) records.push(record);
 	}
-	return rollUpActivity(statuses);
+	return rollUp(records);
 }

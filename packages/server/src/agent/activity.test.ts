@@ -121,3 +121,47 @@ test("only the most recent questionnaire decides — an old answered one does no
 	expect(awaitingQuestionToolCallId(messages)).toBe("tc-2");
 	expect(deriveActivityStatus(inputs({ messages }))).toBe("waiting");
 });
+
+const assistant = (stopReason: string) =>
+	({ role: "assistant", content: [{ type: "text", text: "…" }], stopReason }) as unknown as AgentMessage;
+
+test("an attached session whose transcript ends in a failure is failed, so a restart keeps the glyph", () => {
+	expect(deriveActivityStatus(inputs({ messages: [userMessage(), assistant("error")] }))).toBe(
+		"failed",
+	);
+});
+
+test("a transcript ending in a clean stop is idle", () => {
+	expect(deriveActivityStatus(inputs({ messages: [userMessage(), assistant("stop")] }))).toBeNull();
+});
+
+test("a retried failure is not failed — the succeeding attempt is the trailing assistant", () => {
+	expect(
+		deriveActivityStatus(inputs({ messages: [userMessage(), assistant("error"), assistant("stop")] })),
+	).toBeNull();
+});
+
+test("a user message after a failure clears it — asking again is not still-broken", () => {
+	expect(
+		deriveActivityStatus(inputs({ messages: [assistant("error"), userMessage()] })),
+	).toBeNull();
+});
+
+test("an explicit null settlement outranks the transcript, so an old failure cannot reappear mid-run", () => {
+	expect(
+		deriveActivityStatus(inputs({ lastSettlement: null, messages: [userMessage(), assistant("error")] })),
+	).toBeNull();
+});
+
+test("an observed settlement always wins over the transcript, in both directions", () => {
+	expect(
+		deriveActivityStatus(
+			inputs({ lastSettlement: { stopReason: "error" }, messages: [userMessage(), assistant("stop")] }),
+		),
+	).toBe("failed");
+	expect(
+		deriveActivityStatus(
+			inputs({ lastSettlement: { stopReason: "stop" }, messages: [userMessage(), assistant("error")] }),
+		),
+	).toBeNull();
+});
