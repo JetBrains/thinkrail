@@ -170,6 +170,9 @@ bun run e2e:full                                    # everything; needs pi auth
 bun run e2e:agent                                   # only @agent; remains serial
 ```
 
+On macOS, every public browser E2E command prevents idle system sleep while its runner is alive; the
+display may still sleep normally.
+
 ## Specification-driven development
 
 ThinkRail is developed spec-first: hierarchical, interconnected specs live in the repo alongside the

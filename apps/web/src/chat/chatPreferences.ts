@@ -1,3 +1,4 @@
+import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../clientPreferences";
 import { STORAGE_PREFIX } from "../constants/branding";
 import {
 	DEFAULT_STREAMING_RESPONSE_MOVEMENT,
@@ -6,6 +7,7 @@ import {
 } from "../store";
 import { getTransport } from "../transport";
 
+export type { StablePreferenceAdapter } from "../clientPreferences";
 export type { StreamingResponseMovement } from "../store";
 export { DEFAULT_STREAMING_RESPONSE_MOVEMENT } from "../store";
 
@@ -22,16 +24,8 @@ export const STREAMING_RESPONSE_MOVEMENT_LIMITS = {
 	minimumGap: 10,
 	step: 5,
 } as const;
-const STABLE_PREFERENCES_GLOBAL = "__THINKRAIL_STABLE_PREFERENCES__";
-
 function defaultStreamingResponseMovement(): StreamingResponseMovement {
 	return { ...DEFAULT_STREAMING_RESPONSE_MOVEMENT };
-}
-
-export interface StablePreferenceAdapter {
-	getItem(key: string): string | null;
-	setItem(key: string, value: string): void;
-	removeItem(key: string): void;
 }
 
 export function isChatMessageOrder(value: unknown): value is ChatMessageOrder {
@@ -127,21 +121,6 @@ function sameStreamingResponseMovement(
 	right: StreamingResponseMovement,
 ): boolean {
 	return left.settle === right.settle && left.trigger === right.trigger;
-}
-
-function isStablePreferenceAdapter(value: unknown): value is StablePreferenceAdapter {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		typeof Reflect.get(value, "getItem") === "function" &&
-		typeof Reflect.get(value, "setItem") === "function" &&
-		typeof Reflect.get(value, "removeItem") === "function"
-	);
-}
-
-function injectedStablePreferenceAdapter(): StablePreferenceAdapter | null {
-	const value = Reflect.get(globalThis, STABLE_PREFERENCES_GLOBAL);
-	return isStablePreferenceAdapter(value) ? value : null;
 }
 
 function readBrowserMessageOrder(storage: Storage | null, key: string): ChatMessageOrder {
@@ -262,7 +241,7 @@ export function streamingResponseMovementFromStorageEvent(
 }
 
 export function initChatPreferencesPersistence(
-	stablePreferences: StablePreferenceAdapter | null = injectedStablePreferenceAdapter(),
+	stablePreferences: StablePreferenceAdapter | null = getStablePreferenceAdapter(),
 ): () => void {
 	const httpBase = stablePreferences ? "" : getTransport().httpBase();
 	const messageOrderKey = stablePreferences ? "" : chatMessageOrderStorageKey(httpBase);

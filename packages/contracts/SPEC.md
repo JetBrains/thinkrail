@@ -28,7 +28,8 @@ of the host.
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; the value re-exports
-  `DEFAULT_CONFIG`, `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
+  `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`, `MAX_HISTORY_LIMIT`,
+  `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
   hydrate, the host skips them in the history index and does not count them as `message_sent`; both
   sides agree here rather than each re-deriving `startsWith`) + **`isRetriedAttempt(messages, index)`**
@@ -198,26 +199,35 @@ of the host.
   stdout/stderr, generated extension content or paths, proxy URLs/secrets, diagnostics, affected-session ids,
   and raw PI models are structurally absent; server and web map codes to their own generic copy);
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
-  an opaque selection while the independently shipped web client owns the available manifest catalog;
+  opaque selections while the independently shipped web client owns the available manifest catalog;
+  **`ThemeMode`** is the closed `"fixed" | "system"` behavior and **`SystemThemePair`** carries one opaque
+  light id plus one opaque dark id. `AppConfig.theme` remains the reversible fixed choice in both modes;
+  `AppConfig.systemThemePair` is absent until system mode is first configured, then survives returns to
+  fixed mode. Effective appearance never crosses the wire: every system-mode client resolves the same pair
+  against its own operating-system color scheme. `THEME_SYSTEM_PROTOCOL_VERSION` pins this to v58.
+  These fields are additive on purpose: replacing `theme`
+  with a nested object would break old clients (or create two fixed-theme authorities), while encoding a
+  pair inside the opaque id would turn a simple id into an unvalidated mini-protocol. A later web client
+  hides the controls against an older host using that feature-introduction constant;
   **`ComposerGrowthLimit`** (`"compact" | "roomy" | "half-chat"`) is the closed, server-synced composer
   height preference: 6 visual lines, 10 visual lines, or 50% of the mounted chat panel respectively;
   `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;
   **`SUBAGENT_SETTINGS_PROTOCOL_VERSION`** pins the global/workspace controls to their v57 wire
   introduction so a later web client hides them against an older host without comparing against the moving
-  latest protocol; **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, composerGrowthLimit,
-  customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled }` — an extensible bag;
-  `subagentsEnabled` is the host-wide subagent default (`true` for current behavior), overridden only by
-  `Workspace.subagentsOverride`; `customLayoutPresets` is the bounded resource-free catalog and is the **only** layout value synchronized
-  by the host; current/default preset and group limits are web-local); `analyticsEnabled` is the anonymous
-  usage-analytics switch, default `true`
-  — it is the **only** analytics fact on the wire:
-  the installation id stays server-side by design, see `submodule-server-analytics`) carries it with the
-  **`DEFAULT_CONFIG`** fallback
-  (persisted host-side as `config.json`, delivered in `server.welcome`, mutated via `settings.update`).
+  latest protocol; **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled,
+  terminalReplayKb, composerGrowthLimit, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix,
+  subagentsEnabled }` — an extensible bag; `themeMode` defaults to `"fixed"` and no pair, preserving both
+  legacy configs and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true`
+  for current behavior), overridden only by `Workspace.subagentsOverride`; `customLayoutPresets` is the
+  bounded resource-free catalog and is the **only** layout value synchronized by the host; current/default
+  preset and group limits are web-local); `analyticsEnabled` is the anonymous usage-analytics switch,
+  default `true` — it is the **only** analytics fact on the wire: the installation id stays server-side by
+  design, see `submodule-server-analytics`) carries it with the **`DEFAULT_CONFIG`** fallback (persisted
+  host-side as `config.json`, delivered in `server.welcome`, mutated via `settings.update`).
   **`InterviewResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic
   feedback popup. No usage count, eligibility, dismissal state, or client identity crosses the wire.
-  Contracts deliberately exports no theme enum/list/labels: a future manifest can mint an id unknown when
-  the host was built, and a client missing it resolves its own bundled default;
+  Contracts deliberately exports no theme catalog enum/list/labels: a future manifest can mint an id
+  unknown when the host was built, and a client missing it resolves a same-appearance bundled fallback;
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
   carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk);
@@ -385,7 +395,9 @@ of the host.
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side) / **`settings.update`** (merge + validate + persist a top-level partial `AppConfig`; when present,
-  `customLayoutPresets` is one complete bounded catalog replacement; returns the merged config) /
+  `customLayoutPresets` and `systemThemePair` are complete replacements; entering system mode requires a
+  complete existing-or-incoming pair. A legacy `{ theme }` mutation without explicit `themeMode` means a
+  fixed-theme selection and exits system mode; returns the merged config) /
   **`feedback.respond`** (`{ action: InterviewResponse }` → ack; persists the automatic invitation's book,
   postpone, or permanent-dismiss result; the Settings link never calls it;
   `FEEDBACK_INTERVIEW_PROTOCOL_VERSION` pins the addressed channel's v56 introduction so the host does not

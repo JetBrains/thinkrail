@@ -19,8 +19,10 @@ import type {
 	SessionSummary,
 	SlashCommandInfo,
 	SpecGraphNode,
+	SystemThemePair,
 	TerminalTabInfo,
 	ThemeId,
+	ThemeMode,
 	ThinkingLevel,
 	UserMessage,
 	WireModel,
@@ -33,6 +35,7 @@ import {
 	isAskUserAnswersMessage,
 	isControlMessage,
 	isSubagentCompletionMessage,
+	normalizeThemePreference,
 } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
@@ -771,6 +774,8 @@ interface AppState {
 	settingsSection: SettingsSection;
 	interviewPromptOpen: boolean;
 	theme: ThemeId;
+	themeMode: ThemeMode;
+	systemThemePair: SystemThemePair | undefined;
 	analyticsEnabled: boolean;
 	subagentsEnabled: boolean;
 	terminalReplayKb: number;
@@ -980,8 +985,10 @@ function sortProjects(projects: Project[]): Project[] {
 }
 
 function configPatch(config: AppConfig) {
+	const themePreference = normalizeThemePreference(config);
 	return {
-		theme: config.theme,
+		...themePreference,
+		systemThemePair: themePreference.systemThemePair,
 		analyticsEnabled: config.analyticsEnabled,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
 		terminalReplayKb: config.terminalReplayKb,
@@ -1578,6 +1585,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	settingsSection: SettingsSection.Providers,
 	interviewPromptOpen: false,
 	theme: DEFAULT_CONFIG.theme,
+	themeMode: DEFAULT_CONFIG.themeMode,
+	systemThemePair: DEFAULT_CONFIG.systemThemePair,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,

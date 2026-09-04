@@ -61,6 +61,83 @@ test("updateConfig merges, persists an opaque theme id, and returns the merged c
 	expect(getConfig().theme).toBe(opaqueTheme);
 });
 
+test("legacy theme config defaults to fixed mode without a system pair", () => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "light" }));
+	resetConfigCache();
+	const config = getConfig();
+	expect(config.theme).toBe("light");
+	expect(config.themeMode).toBe("fixed");
+	expect(config.systemThemePair).toBeUndefined();
+});
+
+test("stored theme mode and pair normalize without interpreting opaque ids", () => {
+	const pair = { light: "acme.light", dark: "acme.dark" };
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ ...DEFAULT_CONFIG, themeMode: "system", systemThemePair: pair }),
+	);
+	resetConfigCache();
+	expect(getConfig()).toMatchObject({ themeMode: "system", systemThemePair: pair });
+
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ ...DEFAULT_CONFIG, themeMode: "system", systemThemePair: { light: 1 } }),
+	);
+	resetConfigCache();
+	const malformed = getConfig();
+	expect(malformed.themeMode).toBe("fixed");
+	expect(malformed.systemThemePair).toBeUndefined();
+
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ ...DEFAULT_CONFIG, themeMode: "future", systemThemePair: pair }),
+	);
+	resetConfigCache();
+	const dormant = getConfig();
+	expect(dormant.themeMode).toBe("fixed");
+	expect(dormant.systemThemePair).toEqual(pair);
+});
+
+test("system mode requires a complete pair and replaces it atomically", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	expect(() => updateConfig({ themeMode: "system" })).toThrow(
+		"system theme mode requires a complete pair",
+	);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+
+	const first = { light: "first.light", dark: "first.dark" };
+	const second = { light: "second.light", dark: "second.dark" };
+	expect(updateConfig({ themeMode: "system", systemThemePair: first })).toMatchObject({
+		themeMode: "system",
+		systemThemePair: first,
+	});
+	expect(updateConfig({ systemThemePair: second }).systemThemePair).toEqual(second);
+});
+
+test("invalid theme updates are rejected and a legacy theme choice exits system mode", () => {
+	const pair = { light: "light", dark: "dark" };
+	updateConfig({ themeMode: "system", systemThemePair: pair });
+	const before = getConfig();
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+
+	expect(() => updateConfig({ themeMode: "automatic" } as unknown as AppConfigUpdate)).toThrow(
+		"themeMode must be fixed or system",
+	);
+	expect(() =>
+		updateConfig({ systemThemePair: { light: "light" } } as unknown as AppConfigUpdate),
+	).toThrow("systemThemePair must contain light and dark theme ids");
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+
+	const fixed = updateConfig({ theme: "acme.fixed" });
+	expect(fixed.theme).toBe("acme.fixed");
+	expect(fixed.themeMode).toBe("fixed");
+	expect(fixed.systemThemePair).toEqual(pair);
+});
+
 test("updateConfig broadcasts the new config through the injected publisher", () => {
 	const seen: string[] = [];
 	setSettingsPublisher((c) => seen.push(c.theme));

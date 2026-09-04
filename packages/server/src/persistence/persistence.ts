@@ -6,6 +6,7 @@ import {
 	type AppConfig,
 	DEFAULT_CONFIG,
 	isComposerGrowthLimit,
+	normalizeThemePreference,
 	type Project,
 	type Workspace,
 } from "@thinkrail/contracts";
@@ -66,9 +67,11 @@ export function loadConfig(): AppConfig {
 	const extensions = { ...value };
 	delete extensions.chatMessageOrder;
 	delete extensions.layout;
+	delete extensions.themeMode;
+	delete extensions.systemThemePair;
 	return {
 		...extensions,
-		theme: typeof value.theme === "string" ? value.theme : DEFAULT_CONFIG.theme,
+		...normalizeThemePreference(value),
 		analyticsEnabled:
 			typeof value.analyticsEnabled === "boolean"
 				? value.analyticsEnabled

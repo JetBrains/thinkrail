@@ -5,7 +5,7 @@ import {
 	RiCircleFill,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { IconTooltip } from "../components/ui/tooltip";
@@ -21,7 +21,12 @@ import {
 	selectContextProject,
 	useAppStore,
 } from "../store";
-import { applyTheme, writeThemeHint } from "../themes";
+import {
+	applyThemePreference,
+	onSystemAppearanceChange,
+	readThemeHint,
+	writeThemeHint,
+} from "../themes";
 import type { ConnectionStatus } from "../transport";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
@@ -56,11 +61,21 @@ export function Shell() {
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
 
+	const [themeHint] = useState(readThemeHint);
+	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
 	const theme = useAppStore((s) => s.theme);
+	const themeMode = useAppStore((s) => s.themeMode);
+	const systemThemePair = useAppStore((s) => s.systemThemePair);
 	useEffect(() => {
-		applyTheme(theme);
-		writeThemeHint(theme);
-	}, [theme]);
+		const preference =
+			welcomeGeneration === 0
+				? themeHint
+				: { theme, themeMode, ...(systemThemePair ? { systemThemePair } : {}) };
+		const apply = () => applyThemePreference(preference);
+		apply();
+		if (welcomeGeneration > 0) writeThemeHint(preference);
+		return preference.themeMode === "system" ? onSystemAppearanceChange(apply) : undefined;
+	}, [themeHint, welcomeGeneration, theme, themeMode, systemThemePair]);
 	useGlobalHotkeys({
 		onProjects: hasActiveWorkspace
 			? () => {

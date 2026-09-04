@@ -391,6 +391,34 @@ export interface GithubAuthStatus {
 
 export type ThemeId = string;
 
+export const THEME_MODES = ["fixed", "system"] as const;
+export type ThemeMode = (typeof THEME_MODES)[number];
+
+export interface SystemThemePair {
+	light: ThemeId;
+	dark: ThemeId;
+}
+
+export interface ThemePreference {
+	theme: ThemeId;
+	themeMode: ThemeMode;
+	systemThemePair?: SystemThemePair;
+}
+
+export function isThemeMode(value: unknown): value is ThemeMode {
+	return THEME_MODES.some((mode) => mode === value);
+}
+
+export function isSystemThemePair(value: unknown): value is SystemThemePair {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		!Array.isArray(value) &&
+		typeof Reflect.get(value, "light") === "string" &&
+		typeof Reflect.get(value, "dark") === "string"
+	);
+}
+
 export type LayoutToolId = "projects" | "specs" | "files" | "changes" | "review";
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
@@ -450,8 +478,7 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
 }
 
-export interface AppConfig {
-	theme: ThemeId;
+export interface AppConfig extends ThemePreference {
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
@@ -477,6 +504,7 @@ export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;
 
 export const DEFAULT_CONFIG: AppConfig = {
 	theme: "dark",
+	themeMode: "fixed",
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	composerGrowthLimit: "half-chat",
@@ -484,6 +512,25 @@ export const DEFAULT_CONFIG: AppConfig = {
 	reviewAutoFix: true,
 	subagentsEnabled: true,
 };
+
+export function normalizeThemePreference(value: unknown): ThemePreference {
+	const record = typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};
+	const rawTheme = Reflect.get(record, "theme");
+	const rawMode = Reflect.get(record, "themeMode");
+	const rawPair = Reflect.get(record, "systemThemePair");
+	const systemThemePair = isSystemThemePair(rawPair)
+		? { light: rawPair.light, dark: rawPair.dark }
+		: undefined;
+	const themeMode =
+		isThemeMode(rawMode) && (rawMode === "fixed" || systemThemePair)
+			? rawMode
+			: DEFAULT_CONFIG.themeMode;
+	return {
+		theme: typeof rawTheme === "string" ? rawTheme : DEFAULT_CONFIG.theme,
+		themeMode,
+		...(systemThemePair ? { systemThemePair } : {}),
+	};
+}
 
 export const TODO_NUDGE_PREFIX = "[thinkrail:todo-nudge] ";
 

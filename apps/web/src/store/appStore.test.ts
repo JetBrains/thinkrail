@@ -1,5 +1,6 @@
 import { beforeEach, expect, test } from "bun:test";
 import {
+	type AppConfig,
 	DEFAULT_CONFIG,
 	type ExtUiRequest,
 	type PiEvent,
@@ -2945,11 +2946,31 @@ test("the toast helper enqueues by variant and omits an absent title", () => {
 	expect(useAppStore.getState().toasts[0]).not.toHaveProperty("title");
 });
 
-test("applyConfig folds the server-synced app config in (theme is an opaque host-owned value)", () => {
-	useAppStore.getState().applyConfig({ theme: "acme.solarized" });
-	expect(useAppStore.getState().theme).toBe("acme.solarized");
-	useAppStore.getState().applyConfig({ theme: "custom.high-contrast" });
-	expect(useAppStore.getState().theme).toBe("custom.high-contrast");
+test("applyConfig folds and normalizes the server-synced theme preference", () => {
+	const pair = { light: "acme.light", dark: "acme.dark" };
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		theme: "acme.fixed",
+		themeMode: "system",
+		systemThemePair: pair,
+	});
+	expect(useAppStore.getState()).toMatchObject({
+		theme: "acme.fixed",
+		themeMode: "system",
+		systemThemePair: pair,
+	});
+
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		theme: "legacy.fixed",
+		themeMode: "future",
+		systemThemePair: { light: "only-light" },
+	} as unknown as AppConfig);
+	expect(useAppStore.getState()).toMatchObject({
+		theme: "legacy.fixed",
+		themeMode: "fixed",
+		systemThemePair: undefined,
+	});
 });
 
 test("applyConfig projects the composer growth limit", () => {

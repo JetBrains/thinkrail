@@ -164,7 +164,9 @@ clamped to 1–8). Every lane owns one serial worker + host and its own per-work
 HOME, pi-agent dir, fixture repo, and control files; reports merge into one result. Override with
 `THINKRAIL_E2E_SHARDS=N` or `--shards=N` (1–16); use `bun run e2e:serial` for one-lane debugging. The
 paths derive in `e2e/fixtures/paths.ts`, never touch `~/.thinkrail`, and parallel runs from different
-worktrees never collide. Two complete invocations in the same worktree remain sequential. Focused
+worktrees never collide. Two complete invocations in the same worktree remain sequential. Every public
+browser E2E runner holds one macOS idle-system-sleep assertion for its lifetime while still allowing display
+sleep; composed full-run phases inherit the parent's assertion. Focused
 `e2e:full` runs preflight both modes and skips a mode with no selected tests; selecting nothing fails, while
 an argument-free run and `--list` retain both phases. Cancellation in the no-agent, agent, and full runners
 signals their complete child trees (POSIX snapshot; Windows tree-aware termination), then force-kills

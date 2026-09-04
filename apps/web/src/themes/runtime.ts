@@ -1,4 +1,17 @@
-import { DEFAULT_CONFIG, type ThemeId } from "@thinkrail/contracts";
+import {
+	type ThemePreference as ConfigThemePreference,
+	DEFAULT_CONFIG,
+	isSystemThemePair,
+	isThemeMode,
+	normalizeThemePreference as normalizeConfigThemePreference,
+	type SystemThemePair,
+	type ThemeId,
+} from "@thinkrail/contracts";
+import {
+	asStablePreferenceAdapter,
+	getStablePreferenceAdapter,
+	type StablePreferenceAdapter,
+} from "../clientPreferences";
 import { STORAGE_PREFIX } from "../constants/branding";
 import {
 	ANSI_COLOR_KEYS,
@@ -26,7 +39,24 @@ export interface ThemeCatalog {
 	readonly list: readonly ThemeDescriptor[];
 }
 
+export type ThemePreference = ConfigThemePreference;
+
+export interface ThemeResolution {
+	readonly requestedId: ThemeId;
+	readonly theme: ThemeDescriptor;
+	readonly fallback: boolean;
+	readonly systemAppearance: ThemeAppearance | null;
+}
+
+interface ColorSchemeMediaQuery {
+	readonly matches: boolean;
+	addEventListener(type: "change", listener: (event: { matches: boolean }) => void): void;
+	removeEventListener(type: "change", listener: (event: { matches: boolean }) => void): void;
+}
+
 const HINT_KEY = `${STORAGE_PREFIX}theme`;
+const HINT_VERSION = 1;
+const SYSTEM_QUERY = "(prefers-color-scheme: dark)";
 
 const paletteVariable = (key: string) =>
 	`--${key.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase()}`;
@@ -107,6 +137,10 @@ export function buildThemeCatalog(candidates: Record<string, unknown>): ThemeCat
 	if (!byId.has(DEFAULT_CONFIG.theme)) {
 		throw new Error(`The bundled default theme is missing: ${DEFAULT_CONFIG.theme}`);
 	}
+	const appearances = new Set([...byId.values()].map((theme) => theme.appearance));
+	if (!appearances.has("light") || !appearances.has("dark")) {
+		throw new Error("The bundled theme catalog must include light and dark themes");
+	}
 	const list = Object.freeze(
 		[...byId.values()]
 			.sort((a, b) => {
@@ -131,15 +165,140 @@ const RENAMED_THEME_IDS: Readonly<Record<string, ThemeId>> = {
 	"high-contrast": "high-contrast-dark",
 };
 
+const canonicalThemeId = (id: ThemeId): ThemeId => RENAMED_THEME_IDS[id] ?? id;
+
+function exactTheme(id: ThemeId): ThemeManifest | undefined {
+	return catalog.byId.get(canonicalThemeId(id));
+}
+
 function requireResolvedTheme(id: ThemeId): ThemeManifest {
-	const canonical = RENAMED_THEME_IDS[id] ?? id;
-	const theme = catalog.byId.get(canonical) ?? catalog.byId.get(DEFAULT_CONFIG.theme);
+	const theme = exactTheme(id) ?? catalog.byId.get(DEFAULT_CONFIG.theme);
 	if (!theme) throw new Error(`The bundled default theme is missing: ${DEFAULT_CONFIG.theme}`);
 	return theme;
 }
 
+function themesByAppearance(appearance: ThemeAppearance): ThemeManifest[] {
+	return [...catalog.byId.values()]
+		.filter((theme) => theme.appearance === appearance)
+		.sort((a, b) => a.order - b.order || compareText(a.label, b.label) || compareText(a.id, b.id));
+}
+
+function fallbackTheme(
+	appearance: ThemeAppearance,
+	preferredContrast?: ThemeContrast,
+): ThemeManifest {
+	const themes = themesByAppearance(appearance);
+	const theme =
+		(preferredContrast
+			? themes.find((candidate) => candidate.contrast === preferredContrast)
+			: undefined) ??
+		themes.find((candidate) => candidate.contrast === "normal") ??
+		themes[0];
+	if (!theme) throw new Error(`The bundled theme catalog has no ${appearance} theme`);
+	return theme;
+}
+
+function defaultThemePreference(): ThemePreference {
+	return { theme: DEFAULT_CONFIG.theme, themeMode: DEFAULT_CONFIG.themeMode };
+}
+
+function normalizeThemeHint(value: unknown): ThemePreference {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+		return defaultThemePreference();
+	}
+	const theme = Reflect.get(value, "theme");
+	const themeMode = Reflect.get(value, "themeMode");
+	const rawPair = Reflect.get(value, "systemThemePair");
+	if (typeof theme !== "string" || !isThemeIdSlug(theme) || !isThemeMode(themeMode)) {
+		return defaultThemePreference();
+	}
+	const systemThemePair =
+		isSystemThemePair(rawPair) && isThemeIdSlug(rawPair.light) && isThemeIdSlug(rawPair.dark)
+			? { light: rawPair.light, dark: rawPair.dark }
+			: undefined;
+	if (themeMode === "system" && !systemThemePair) return defaultThemePreference();
+	return normalizeConfigThemePreference({ theme, themeMode, systemThemePair });
+}
+
+function colorSchemeMediaQuery(): ColorSchemeMediaQuery | null {
+	const matchMedia = Reflect.get(globalThis, "matchMedia");
+	if (typeof matchMedia !== "function") return null;
+	try {
+		const query = Reflect.apply(matchMedia, globalThis, [SYSTEM_QUERY]);
+		if (
+			typeof query !== "object" ||
+			query === null ||
+			typeof Reflect.get(query, "matches") !== "boolean"
+		) {
+			return null;
+		}
+		return query as ColorSchemeMediaQuery;
+	} catch {
+		return null;
+	}
+}
+
+export function readSystemAppearance(): ThemeAppearance {
+	return colorSchemeMediaQuery()?.matches ? "dark" : "light";
+}
+
+export function onSystemAppearanceChange(
+	listener: (appearance: ThemeAppearance) => void,
+): () => void {
+	const query = colorSchemeMediaQuery();
+	if (
+		!query ||
+		typeof query.addEventListener !== "function" ||
+		typeof query.removeEventListener !== "function"
+	) {
+		return () => undefined;
+	}
+	const onChange = (event: { matches: boolean }) => listener(event.matches ? "dark" : "light");
+	try {
+		query.addEventListener("change", onChange);
+	} catch {
+		return () => undefined;
+	}
+	return () => query.removeEventListener("change", onChange);
+}
+
+export function deriveSystemThemePair(id: ThemeId): SystemThemePair {
+	const fixed = requireResolvedTheme(id);
+	const pair = {
+		light: fallbackTheme("light", fixed.contrast).id,
+		dark: fallbackTheme("dark", fixed.contrast).id,
+	};
+	pair[fixed.appearance] = fixed.id;
+	return pair;
+}
+
 export function resolveTheme(id: ThemeId): ThemeDescriptor {
 	return descriptor(requireResolvedTheme(id));
+}
+
+export function resolveThemePreference(
+	preference: ThemePreference,
+	systemAppearance: ThemeAppearance = readSystemAppearance(),
+): ThemeResolution {
+	const normalized = normalizeConfigThemePreference(preference);
+	if (normalized.themeMode === "fixed" || !normalized.systemThemePair) {
+		const exact = exactTheme(normalized.theme);
+		return {
+			requestedId: normalized.theme,
+			theme: descriptor(exact ?? requireResolvedTheme(normalized.theme)),
+			fallback: exact === undefined,
+			systemAppearance: null,
+		};
+	}
+	const requestedId = normalized.systemThemePair[systemAppearance];
+	const exact = exactTheme(requestedId);
+	const resolved = exact?.appearance === systemAppearance ? exact : fallbackTheme(systemAppearance);
+	return {
+		requestedId,
+		theme: descriptor(resolved),
+		fallback: exact?.appearance !== systemAppearance,
+		systemAppearance,
+	};
 }
 
 function applyVariables(root: HTMLElement, theme: ThemeManifest): void {
@@ -156,8 +315,7 @@ function applyVariables(root: HTMLElement, theme: ThemeManifest): void {
 	root.style.setProperty("color-scheme", theme.appearance);
 }
 
-export function applyTheme(id: ThemeId): ThemeDescriptor {
-	const theme = requireResolvedTheme(id);
+function applyResolvedTheme(theme: ThemeManifest): ThemeDescriptor {
 	if (typeof document !== "undefined") {
 		const root = document.documentElement;
 		applyVariables(root, theme);
@@ -167,18 +325,46 @@ export function applyTheme(id: ThemeId): ThemeDescriptor {
 	return descriptor(theme);
 }
 
-export function readThemeHint(): ThemeId {
+export function applyTheme(id: ThemeId): ThemeDescriptor {
+	return applyResolvedTheme(requireResolvedTheme(id));
+}
+
+export function applyThemePreference(preference: ThemePreference): ThemeResolution {
+	const resolution = resolveThemePreference(preference);
+	applyResolvedTheme(requireResolvedTheme(resolution.theme.id));
+	return resolution;
+}
+
+function themeHintStorage(): StablePreferenceAdapter | null {
+	return (
+		getStablePreferenceAdapter() ??
+		asStablePreferenceAdapter(Reflect.get(globalThis, "localStorage"))
+	);
+}
+
+export function readThemeHint(): ThemePreference {
 	try {
-		const value = localStorage.getItem(HINT_KEY);
-		return typeof value === "string" && isThemeIdSlug(value) ? value : DEFAULT_CONFIG.theme;
+		const value = themeHintStorage()?.getItem(HINT_KEY);
+		if (typeof value !== "string") return defaultThemePreference();
+		if (isThemeIdSlug(value)) return { theme: value, themeMode: "fixed" };
+		const parsed = JSON.parse(value) as unknown;
+		if (
+			typeof parsed !== "object" ||
+			parsed === null ||
+			Reflect.get(parsed, "version") !== HINT_VERSION
+		) {
+			return defaultThemePreference();
+		}
+		return normalizeThemeHint(parsed);
 	} catch {
-		return DEFAULT_CONFIG.theme;
+		return defaultThemePreference();
 	}
 }
 
-export function writeThemeHint(id: ThemeId): void {
+export function writeThemeHint(preference: ThemePreference): void {
 	try {
-		localStorage.setItem(HINT_KEY, id);
+		const normalized = normalizeThemeHint(preference);
+		themeHintStorage()?.setItem(HINT_KEY, JSON.stringify({ version: HINT_VERSION, ...normalized }));
 	} catch {
 		return;
 	}

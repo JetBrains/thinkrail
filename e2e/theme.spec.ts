@@ -7,6 +7,7 @@ import {
 
 interface ThemeOption {
 	id: string;
+	label: string;
 	appearance: "light" | "dark";
 	contrast: "normal" | "high";
 	active: boolean;
@@ -26,6 +27,7 @@ async function readThemeOptions(page: Page): Promise<ThemeOption[]> {
 	const options = await dialog.locator('[data-testid^="theme-option-"]').evaluateAll((nodes) =>
 		nodes.map((node) => ({
 			id: node.getAttribute("data-theme-id") ?? "",
+			label: node.textContent?.trim() ?? "",
 			appearance: node.getAttribute("data-appearance") === "light" ? "light" : "dark",
 			contrast: node.getAttribute("data-contrast") === "high" ? "high" : "normal",
 			active: node.getAttribute("data-active") === "true",
@@ -81,6 +83,55 @@ test("appearance switches a discovered theme and persists it across reload", asy
 	await expect(page.locator("html")).toHaveAttribute("data-theme", target ?? "");
 
 	await pickTheme(page, defaultTheme ?? "");
+});
+
+test("system mode follows each client and retains its explicit pair", async ({ page }) => {
+	await page.emulateMedia({ colorScheme: "light" });
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+	const options = await readThemeOptions(page);
+	const fixed = options.find((option) => option.active);
+	const initialLight = options.find(
+		(option) => option.appearance === "light" && option.contrast === fixed?.contrast,
+	);
+	const alternateLight = options.find(
+		(option) => option.appearance === "light" && option.id !== initialLight?.id,
+	);
+	expect(fixed).toBeDefined();
+	expect(initialLight).toBeDefined();
+	expect(alternateLight).toBeDefined();
+
+	const dialog = await openAppearance(page);
+	await dialog.getByTestId("theme-mode-system").click();
+	await expect(page.locator("html")).toHaveAttribute("data-theme", initialLight?.id ?? "");
+	await expect(dialog.getByTestId("system-theme-current")).toContainText("Light");
+	await expect(dialog.getByTestId("system-theme-light-trigger")).toHaveAccessibleName(
+		`Light theme: ${initialLight?.label}`,
+	);
+	await dialog.getByTestId("system-theme-light-trigger").click();
+	await page.getByTestId(`system-theme-light-option-${alternateLight?.id}`).click();
+	await expect(page.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
+
+	await page.emulateMedia({ colorScheme: "dark" });
+	await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
+	await expect(dialog.getByTestId("system-theme-current")).toContainText("Dark");
+
+	const peer = await page.context().newPage();
+	await peer.emulateMedia({ colorScheme: "light" });
+	await peer.goto("/");
+	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(peer.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
+
+	await dialog.getByTestId("theme-mode-fixed").click();
+	await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
+	await expect(peer.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
+
+	await dialog.getByTestId("theme-mode-system").click();
+	await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
+	await expect(peer.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
+	await dialog.getByTestId("theme-mode-fixed").click();
+	await peer.close();
 });
 
 test("Monaco opens files and re-themes under every discovered manifest", async ({ page }) => {

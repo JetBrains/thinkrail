@@ -12,6 +12,7 @@ import {
 } from "./fixtures/paths";
 import globalSetup from "./global-setup";
 import globalTeardown from "./global-teardown";
+import { holdE2eIdleSleep } from "./idleSleep";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const desktopDir = fileURLToPath(new URL("../apps/desktop", import.meta.url));
@@ -49,6 +50,7 @@ async function waitForReady(exited: Promise<number>): Promise<string> {
 	return ready.origin;
 }
 
+await holdE2eIdleSleep();
 globalSetup();
 const desktop = Bun.spawn([launcher], {
 	cwd: repoRoot,
