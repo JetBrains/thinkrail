@@ -289,11 +289,8 @@ test("prefetch fetches from the remote the ref names, and refuses a remote-shape
 });
 
 test("prefetch honors a legal remote name containing a slash", async () => {
-	const teamRepo = join(dataDir, "team.git");
 	const nestedRepo = join(dataDir, "team-upstream.git");
-	git(repo, "init", "--bare", teamRepo);
 	git(repo, "init", "--bare", nestedRepo);
-	git(repo, "remote", "add", "team", teamRepo);
 	git(repo, "remote", "add", "team/upstream", nestedRepo);
 	git(repo, "push", "team/upstream", "main:trunk");
 	git(repo, "update-ref", "-d", "refs/remotes/team/upstream/trunk");
