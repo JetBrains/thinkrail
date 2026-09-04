@@ -324,12 +324,17 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   **`showInterviewPrompt()`** / **`hideInterviewPrompt()`** is the render projection of the host's addressed
   invitation; transport opens it idempotently, clears it before each valid welcome's possible redelivery so
   a host restart cannot leave a stale projection, and the panel hides it after `feedback.respond` is
-  acknowledged. Counts, postponement, dismissal, and client claims never live in the store. The **theme** state — **`theme: ThemeId`** (the
-  host-owned selected opaque id; the themes module resolves visual fallback) with **`applyConfig(config)`**
-  (folds the server-synced `AppConfig` in from
-  `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the
-  theme-application side-effect is the shell's, keyed off `theme`), and defaults to
-  `DEFAULT_CONFIG.theme` until the welcome arrives. **`composerGrowthLimit: ComposerGrowthLimit`**,
+  acknowledged. Counts, postponement, dismissal, and client claims never live in the store. The **theme**
+  preference state — **`theme: ThemeId`** (the retained opaque fixed choice), **`themeMode: ThemeMode`**,
+  and optional **`systemThemePair: SystemThemePair`** — arrives through **`applyConfig(config)`** from
+  `server.welcome` / the `settings.changed` broadcast. A welcome from a pre-feature host (or any malformed
+  runtime mode/pair) is normalized on this read side to fixed mode, retaining its valid opaque `theme` and
+  only a complete string pair. These are pure host values only: effective local
+  appearance/id and the media listener never enter Zustand; the shell drives those through `themes`.
+  Defaults remain fixed `DEFAULT_CONFIG.theme` with no pair, but while existing `welcomeGeneration === 0`
+  shell retains the pre-React preference hint instead of applying those placeholders over it. Reusing that
+  readiness edge avoids a second derived config-hydration flag; after the first welcome, disconnect/reconnect
+  keeps the last authoritative config while a later welcome can replace it. **`composerGrowthLimit: ComposerGrowthLimit`**,
   **`customLayoutPresets: LayoutPreset[]`**, **`analyticsEnabled: boolean`**, and
   **`subagentsEnabled: boolean`** ride the same `applyConfig` fold (host-owned, defaulted from
   `DEFAULT_CONFIG`) — the Chat, shared Layout catalog, and Privacy read sides.

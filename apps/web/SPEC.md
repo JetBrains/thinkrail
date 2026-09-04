@@ -53,8 +53,9 @@ Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time generator mo
 never ships, and turns those three JSON sources into `styles/generated/`.
 `index.html` names the product and links the local, symbol-only SVG favicon derived from the same
 ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
-`main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, applies the
-cached first-paint theme hint pre-React, initializes transport + client-local navigation, then wraps `<Shell />` in
+`main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, resolves and
+applies the versioned first-paint theme-preference hint (including the current system color scheme) pre-React,
+initializes transport + client-local navigation, then wraps `<Shell />` in
 `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
 screen, not a blank root) plus the app's single `TooltipProvider`.
 
@@ -72,7 +73,7 @@ return to stable.
 ### Dependency graph
 
 - `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration
-- `shell` → children `shell/layout` + `shell/layoutState`, `panels`, `chat` (app-integration render/hydration only), `store`, `transport` (domain hydration + endpoint identity), `contracts` (type-only), `components/ui`, `components` (`ErrorBoundary` around each mounted region + `QuietScrollArea` around shell-owned tool bodies), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of the atomic `applyTheme` DOM effect, driven by `store.theme`)
+- `shell` → children `shell/layout` + `shell/layoutState`, `panels`, `chat` (app-integration render/hydration only), `store`, `transport` (domain hydration + endpoint identity), `contracts` (type-only), `components/ui`, `components` (`ErrorBoundary` around each mounted region + `QuietScrollArea` around shell-owned tool bodies), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of catalog/media resolution and atomic theme application, driven by the hydrated store preference or pre-hydration hint)
 - `shell/layout` → `contracts` (`LayoutPreset` + `GitDiffScope` types only), `lib` (attention/id primitives), and React / `react-resizable-panels` / `@dnd-kit/core`; `shell/layoutState` → `shell/layout`, `store`, `transport` (endpoint identity + error normalization), `contracts` (`LayoutPreset` type only), `lib`, and React. The parent injects store state and feature renderers, so the pure layout child has no feature-module runtime edge
 - `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector`+`useModelCatalog` — these are shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping)
 - `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `lib`; `store` + `transport`
@@ -161,12 +162,16 @@ themselves.
   radii, motion and generic derived formulas — **no typography at all** (not a value and not an alias onto
   one; the `--font` / `--font-mono` / `--font-accent` / `--font-mono-size` / `--line-height` aliases are
   gone, because a second name for a value is what drifts) and no named theme blocks.
-- The selected id is **server-synced** (`AppConfig.theme`, host-owned and opaque): it arrives in
-  `server.welcome`, is folded into the store by transport, applied by the shell, and cached in localStorage
-  only as a first-paint hint. `settings.update` converges through `settings.changed`; an unavailable id
-  renders the bundled default without destructively rewriting the requested value. Themes ship with the
-  app: one is added only via a source PR, and runtime registration/extension loading is deliberately not
-  designed.
+- The theme preference is **server-synced**: `AppConfig.theme` remains the host-owned opaque fixed choice,
+  while closed `themeMode` and optional opaque `systemThemePair` opt into per-client system matching. Each
+  client resolves the pair against its own `prefers-color-scheme`; operating-system changes are local DOM
+  effects and never config writes, so two clients may simultaneously render different appearances. Fixed
+  Dark remains the default for both new and legacy config. `settings.update` converges through
+  `settings.changed`; a theme-only legacy mutation exits system mode. An unavailable system slot falls back
+  deterministically within the required appearance without destructively rewriting the requested value.
+  The versioned pre-React hint caches the preference, not the last effective id, using the injected stable
+  native preference adapter when present and localStorage otherwise. Themes ship with the app: one is added
+  only via a source PR, and runtime registration/extension loading is deliberately not designed.
 - **Every code surface is catalog-agnostic.** xterm and Monaco rebuild from generic variables after the
   atomic `[data-theme]` signal, including an optional selected-text foreground. Monaco chooses
   `vs`/`vs-dark` or the corresponding high-contrast base from manifest appearance/contrast metadata,

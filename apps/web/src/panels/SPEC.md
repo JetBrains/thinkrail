@@ -371,11 +371,23 @@ a project picker, the prompt hero, and the reused
   a newer watched/action result. Copy never promises only Claude/GPT, never asks for standalone PI,
   never renders child output/diagnostics/artifact content/paths/proxy data/secrets/raw models, and maps only
   closed reason codes to ThinkRail-authored text. **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
-  Connected + login / Not connected + Refresh); **`AppearanceSettings`** (the **theme picker** — the
-  bundled catalog from `themes`, with the resolved active selection from `store.theme` marked; clicking
-  one fires `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic
-  apply), a rejected update raising a toast; the picker never owns a theme list — it renders the catalog
-  the glob discovered at build time); **`ChatSettings`** (the live section immediately after Appearance —
+  Connected + login / Not connected + Refresh); **`AppearanceSettings`** (the catalog-driven theme
+  settings, gated to fixed-only behavior below `THEME_SYSTEM_PROTOCOL_VERSION`. Current hosts explain that
+  the mode/pair follow the user while each device reads its own system setting, then show one accessible
+  radio group with top-level `Fixed — Use one theme everywhere` / `Match system — Follow this device`
+  cards. Mode is deliberately separate from the manifest list: making System another theme row nests configuration in a
+  radio-like option, while always showing all three choices gives inactive values equal visual weight. Fixed
+  mode shows the existing manifest list and retained fixed choice. System mode shows appearance-filtered
+  `Light theme` / `Dark theme` selectors plus `Current on this device: <Light|Dark> · <resolved label>`;
+  either slot may independently be normal or high contrast. First enable sends mode + the themes-derived
+  same-contrast pair atomically; later slot edits replace the complete pair, and returning to fixed changes
+  only mode, preserving both choices. Exactly one theme mutation may be in flight from this panel; its
+  controls use their real disabled state until the request settles, preventing rapid complete-pair writes
+  from overwriting one another with stale sibling slots. Every action fires `settings.update` and
+  **converges on the `settings.changed` broadcast** with no optimistic apply; rejection leaves
+  controls/theme unchanged and raises a toast. An unavailable or wrong-appearance configured id is
+  disclosed beside the effective same-appearance fallback and is never silently written back. The panel never owns a theme list,
+  media-query logic, pair derivation, or fallback — all come from `themes`); **`ChatSettings`** (the live section immediately after Appearance —
   **Message order** radio cards over `store.chatMessageOrder` (Oldest first, the compatibility default /
   Newest first, the opt-in), one **Streaming response movement** two-handle range over
   `store.streamingResponseMovement`, then the three existing composer-growth cards. The movement control's
