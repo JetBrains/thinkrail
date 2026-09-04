@@ -1,4 +1,3 @@
-import { RiCheckLine as Check } from "@remixicon/react";
 import {
 	type AppConfigUpdate,
 	type ComposerGrowthLimit,
@@ -15,17 +14,10 @@ import {
 import { cn } from "@/lib";
 import { selectActiveWorkspace, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
+import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
 import { SettingsSwitch } from "./SettingsSwitch";
 
-interface RadioChoice<T extends string> {
-	id: T;
-	label: string;
-	hint: string;
-	description: string;
-	testId: string;
-}
-
-const MESSAGE_ORDER_CHOICES: RadioChoice<ChatMessageOrder>[] = [
+const MESSAGE_ORDER_CHOICES: SettingsRadioChoice<ChatMessageOrder>[] = [
 	{
 		id: "oldest-first",
 		label: "Oldest first",
@@ -46,7 +38,7 @@ const MESSAGE_ORDER_CHOICES: RadioChoice<ChatMessageOrder>[] = [
 const MOVEMENT_TRACK_SEGMENTS = Array.from({ length: 20 }, (_, index) => index * 5);
 type WorkspaceSubagentChoice = "inherit" | SubagentOverride;
 
-const GROWTH_CHOICES: RadioChoice<ComposerGrowthLimit>[] = [
+const GROWTH_CHOICES: SettingsRadioChoice<ComposerGrowthLimit>[] = [
 	{
 		id: "compact",
 		label: "Compact",
@@ -70,7 +62,7 @@ const GROWTH_CHOICES: RadioChoice<ComposerGrowthLimit>[] = [
 	},
 ];
 
-function subagentChoices(globalEnabled: boolean): RadioChoice<WorkspaceSubagentChoice>[] {
+function subagentChoices(globalEnabled: boolean): SettingsRadioChoice<WorkspaceSubagentChoice>[] {
 	return [
 		{
 			id: "inherit",
@@ -94,58 +86,6 @@ function subagentChoices(globalEnabled: boolean): RadioChoice<WorkspaceSubagentC
 			testId: "subagents-workspace-off",
 		},
 	];
-}
-
-function RadioCards<T extends string>({
-	name,
-	label,
-	choices,
-	value,
-	onSelect,
-}: {
-	name: string;
-	label: string;
-	choices: RadioChoice<T>[];
-	value: T;
-	onSelect: (value: T) => void;
-}) {
-	return (
-		<div role="radiogroup" aria-label={label} className="flex flex-col gap-4">
-			{choices.map((choice) => {
-				const active = choice.id === value;
-				return (
-					<label
-						key={choice.id}
-						data-testid={choice.testId}
-						data-active={active}
-						className={cn(
-							"flex cursor-pointer items-center gap-8 rounded-[var(--radius-sm)] border px-12 py-8 text-left transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
-							active
-								? "border-primary-muted bg-clip-padding bg-primary-subtle"
-								: "border-border-default hover:bg-control-bg-hovered",
-						)}
-					>
-						<input
-							type="radio"
-							name={name}
-							value={choice.id}
-							checked={active}
-							onChange={() => onSelect(choice.id)}
-							className="sr-only"
-						/>
-						<span className="min-w-0 flex-1">
-							<span className="flex items-center gap-4 tr-title-compact text-text-default">
-								{choice.label}
-								<span className="text-text-muted tr-text-metadata">{choice.hint}</span>
-							</span>
-							<span className="block text-text-muted tr-text-metadata">{choice.description}</span>
-						</span>
-						{active ? <Check className="size-16 shrink-0 text-primary" /> : null}
-					</label>
-				);
-			})}
-		</div>
-	);
 }
 
 function StreamingResponseMovementControl({
@@ -291,7 +231,7 @@ export function SubagentSettings({
 						</p>
 					</div>
 					<div data-testid="subagents-workspace-options">
-						<RadioCards
+						<SettingsRadioCards
 							name="workspace-subagents"
 							label={`Subagents in ${workspace.name}`}
 							choices={subagentChoices(globalEnabled)}
@@ -347,7 +287,7 @@ export function ChatSettings() {
 						bottom. Your choice is saved in this client for this host only.
 					</p>
 				</div>
-				<RadioCards
+				<SettingsRadioCards
 					name="chat-message-order"
 					label="Chat message order"
 					choices={MESSAGE_ORDER_CHOICES}
@@ -378,7 +318,7 @@ export function ChatSettings() {
 						saved on the host and follows you across devices.
 					</p>
 				</div>
-				<RadioCards
+				<SettingsRadioCards
 					name="composer-growth-limit"
 					label="Message box growth limit"
 					choices={GROWTH_CHOICES}
