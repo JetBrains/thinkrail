@@ -487,10 +487,25 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
 }
 
+export const LINE_WIDTH_COLUMNS = { min: 40, max: 240, default: 120 } as const;
+
+export function isLineWidth(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= LINE_WIDTH_COLUMNS.min &&
+		value <= LINE_WIDTH_COLUMNS.max
+	);
+}
+
 export interface AppConfig extends ThemePreference {
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
+	chatLineWidth: number;
+	fileLineWidth: number;
+	chatLineWidthBounded: boolean;
+	fileLineWidthBounded: boolean;
 	customLayoutPresets: LayoutPreset[];
 	/** The model the plan reviewer + reflector run on; unset ⇒ the pi default. */
 	reviewModel?: WireModel;
@@ -529,6 +544,10 @@ export const DEFAULT_CONFIG: AppConfig = {
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	composerGrowthLimit: "half-chat",
+	chatLineWidth: LINE_WIDTH_COLUMNS.default,
+	fileLineWidth: LINE_WIDTH_COLUMNS.default,
+	chatLineWidthBounded: true,
+	fileLineWidthBounded: true,
 	customLayoutPresets: [],
 	reviewAutoFix: true,
 	subagentsEnabled: true,

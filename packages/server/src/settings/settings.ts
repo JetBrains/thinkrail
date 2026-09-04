@@ -2,8 +2,10 @@ import {
 	type AppConfig,
 	type AppConfigUpdate,
 	isJbcentralQuotaRefreshSeconds,
+	isLineWidth,
 	isSystemThemePair,
 	isThemeMode,
+	LINE_WIDTH_COLUMNS,
 } from "@thinkrail/contracts";
 import { loadConfig, saveConfig } from "../persistence";
 import { normalizeStoredCustomLayoutPresets, validateCustomLayoutPresets } from "./layoutPresets";
@@ -37,6 +39,24 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	const runtimeUpdate: RuntimeAppConfigUpdate = { ...partial };
 	delete runtimeUpdate.chatMessageOrder;
 	delete runtimeUpdate.layout;
+	for (const [name, value] of [
+		["chatLineWidth", runtimeUpdate.chatLineWidth],
+		["fileLineWidth", runtimeUpdate.fileLineWidth],
+	] as const) {
+		if (value !== undefined && !isLineWidth(value)) {
+			throw new Error(
+				`${name} must be a whole number from ${LINE_WIDTH_COLUMNS.min} to ${LINE_WIDTH_COLUMNS.max}`,
+			);
+		}
+	}
+	for (const [name, value] of [
+		["chatLineWidthBounded", runtimeUpdate.chatLineWidthBounded],
+		["fileLineWidthBounded", runtimeUpdate.fileLineWidthBounded],
+	] as const) {
+		if (value !== undefined && typeof value !== "boolean") {
+			throw new Error(`${name} must be a boolean`);
+		}
+	}
 	const {
 		reviewModel,
 		reviewEffort,

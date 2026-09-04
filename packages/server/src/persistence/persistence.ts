@@ -7,6 +7,7 @@ import {
 	DEFAULT_CONFIG,
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
+	isLineWidth,
 	normalizeThemePreference,
 	type Project,
 	type Workspace,
@@ -84,6 +85,20 @@ export function loadConfig(): AppConfig {
 		composerGrowthLimit: isComposerGrowthLimit(value.composerGrowthLimit)
 			? value.composerGrowthLimit
 			: DEFAULT_CONFIG.composerGrowthLimit,
+		chatLineWidth: isLineWidth(value.chatLineWidth)
+			? value.chatLineWidth
+			: DEFAULT_CONFIG.chatLineWidth,
+		fileLineWidth: isLineWidth(value.fileLineWidth)
+			? value.fileLineWidth
+			: DEFAULT_CONFIG.fileLineWidth,
+		chatLineWidthBounded:
+			typeof value.chatLineWidthBounded === "boolean"
+				? value.chatLineWidthBounded
+				: DEFAULT_CONFIG.chatLineWidthBounded,
+		fileLineWidthBounded:
+			typeof value.fileLineWidthBounded === "boolean"
+				? value.fileLineWidthBounded
+				: DEFAULT_CONFIG.fileLineWidthBounded,
 		reviewAutoFix:
 			typeof value.reviewAutoFix === "boolean" ? value.reviewAutoFix : DEFAULT_CONFIG.reviewAutoFix,
 		subagentsEnabled:
