@@ -514,6 +514,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `selectCatalogModel` (a model ref resolved against the **live** `models` list — a session's own `model`
   is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
   through this; callers fall back to the snapshot when the ref has left the catalog);
+  the update selectors (`selectUpdateFeatureAvailable`, `selectUpdateIndicator`, `selectUpdateBanner`,
+  `selectHostVersionChanged`),
   `toast` (the fire-from-anywhere helper),
   `Toast` (type), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
   (file/diff/virtual-document/plan/chat), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
@@ -527,3 +529,11 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`, shell runtime (the web-local layout state edge is type-only), or transport runtime.
+
+**A selector that *composes* a new object is not a hook snapshot.** `useAppStore(selector)` compares
+snapshots by reference, so subscribing to a selector that builds a fresh object every call re-renders
+forever (React error #185 — how `selectUpdateBanner` first shipped, caught by e2e, not by typecheck).
+Such a selector stays a pure function the component *calls* on values it subscribed to individually
+(stable store references + primitives). Selectors that return a stored reference or a primitive are
+subscribed directly. Zustand's `useShallow` is deliberately absent from this codebase; do not introduce it
+as a workaround for a derivation that belongs in one place.

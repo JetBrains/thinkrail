@@ -8,8 +8,10 @@ import { SettingsSection, selectUpdateBanner, toast, useAppStore } from "@/store
 import { getTransport } from "@/transport";
 
 export function UpdateBanner() {
-	const banner = useAppStore(selectUpdateBanner);
+	const updateStatus = useAppStore((s) => s.updateStatus);
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const installing = useAppStore((s) => s.updateStatus?.phase === "installing");
+	const banner = selectUpdateBanner({ updateStatus, protocolVersion });
 	if (!banner) return null;
 
 	const install = () => {

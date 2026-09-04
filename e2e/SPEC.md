@@ -190,6 +190,14 @@ worktrees: the registry claim distinguishes
 a lane's logical key while checking staleness against the real worktree path. Legacy plain-path claims are
 still valid.
 
+**Dev-boot fixtures are tagged `@dev-seam`.** The source host registers a deterministic fake OAuth/API-key
+provider and a fake release provider (`THINKRAIL_E2E_FAKE_OAUTH` / `THINKRAIL_E2E_FAKE_UPDATE`, both wired
+in the dev boot only), because neither flow is drivable otherwise: a real login needs a provider and a real
+release check needs a published build the source host could never install. Those specs carry the
+`@dev-seam` tag and are therefore skipped in the artifact runs, whose hosts deliberately lack the seams.
+The update fake exercises the whole phase machine and UI through the real wire, and it makes no timing
+demands: the schedule is unit-covered, so a spec drives the check through the panel's own action.
+
 Different worktrees may run concurrently. Two complete E2E invocations in one worktree remain sequential;
 the lane ids are deliberately stable across runs so interrupted state is reclaimed rather than leaked.
 No path may fall back to `~/.thinkrail`, the developer's HOME/config trees, or the real pi agent dir. The
