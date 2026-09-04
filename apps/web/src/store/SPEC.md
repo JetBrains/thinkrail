@@ -202,7 +202,7 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   the whole map from the `session.activityList` snapshot — replacement, not merge, because a reconnect must
   not leave a glyph behind for a session that settled while the socket was down. Both refuse removed
   workspaces and tombstoned sessions, so a late push cannot resurrect a deleted chat's glyph.
-  The rollup is **not** stored: `selectWorkspaceActivity`/`selectProjectActivity` derive it on read with a
+  The rollup is **not** stored: `workspaceActivityRollup`/`projectActivityRollup` derive it on read with a
   single shared precedence, **`failed` > `waiting` > `running` > `queued`** — a rare fault must never be
   masked by routine work, and both are "needs you" anyway. Note this is deliberately *not* the host's
   per-session derivation order (see `packages/server/src/agent/SPEC.md`): there the question is "what is
@@ -512,8 +512,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
   `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (deduplicated local chat
   placement + history membership used as a reconnect-reconciliation baseline),
-  **`selectWorkspaceActivity` / `selectProjectActivity`** (the Projects rail's agent-state rollup — see the
-  activity section);
+  **`workspaceActivityRollup` / `projectActivityRollup`** (the Projects rail's agent-state rollup — pure
+  functions *over* the slice rather than Zustand selectors, since a fresh rollup object returned from a
+  selector would re-render the rail on every store change; see the activity section);
   `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
   only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
