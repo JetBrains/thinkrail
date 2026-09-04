@@ -7,6 +7,7 @@ import type {
 	GitFileChange,
 	GitFileStatus,
 	GitStatus,
+	RemoteBranchGroup,
 	Workspace,
 } from "@thinkrail/contracts";
 import { logger } from "../log";
@@ -80,19 +81,34 @@ function refWithin(ref: string, prefix: string): string | null {
 	return name || null;
 }
 
+function groupRemoteRefs(refs: string[], remotes: string[]): RemoteBranchGroup[] {
+	const groups = new Map<string | null, RemoteBranchGroup>();
+	for (const ref of refs) {
+		const remote = remoteNameOf(ref, remotes);
+		const branch = remote ? ref.slice(`${remote}/`.length) : ref;
+		const group = groups.get(remote);
+		if (group) group.branches.push({ ref, branch });
+		else groups.set(remote, { remote, branches: [{ ref, branch }] });
+	}
+	return [...groups.values()];
+}
+
 export async function listBranches(projectId: string): Promise<BranchList> {
 	const project = loadProjects().find((p) => p.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 	const repo = project.path;
 
-	const [localRefs, remoteRefs] = await Promise.all([
+	const [localRefs, remoteRefs, remoteNames] = await Promise.all([
 		gitAsync(repo, ["for-each-ref", "--format=%(refname)", "refs/heads"]),
 		gitAsync(repo, ["for-each-ref", "--format=%(refname)\t%(symref)", "refs/remotes"]),
+		gitAsync(repo, ["remote"]),
 	]);
 	if (!localRefs.ok)
 		throw new Error(`Could not list local branches: ${localRefs.err || "git failed"}`);
 	if (!remoteRefs.ok)
 		throw new Error(`Could not list remote branches: ${remoteRefs.err || "git failed"}`);
+	if (!remoteNames.ok)
+		throw new Error(`Could not list remotes: ${remoteNames.err || "git failed"}`);
 	const local = lines(localRefs.out)
 		.map((ref) => refWithin(ref, LOCAL_REF_PREFIX) ?? "")
 		.filter(Boolean);
@@ -102,7 +118,12 @@ export async function listBranches(projectId: string): Promise<BranchList> {
 		.map((parts) => refWithin(parts[0] ?? "", REMOTE_REF_PREFIX) ?? "")
 		.filter(Boolean);
 
-	return { local, remote, defaultBranch: resolveDefaultBranch(repo) };
+	return {
+		local,
+		remote,
+		remoteGroups: groupRemoteRefs(remote, lines(remoteNames.out)),
+		defaultBranch: resolveDefaultBranch(repo),
+	};
 }
 
 export function listRemotes(repoPath: string): string[] {

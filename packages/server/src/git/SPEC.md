@@ -40,8 +40,11 @@ ref off the workspace-create critical path.
   first-component parsing would fetch the wrong remote. Remote-ness is decided against the actual remote
   list, never the string's shape: `upstream/main` and a local `feature/main` are the same shape. So
   `listBranches` enumerates all of `refs/remotes` (every symbolic alias, including each remote's `HEAD`, is
-  skipped), `prefetchBranch` fetches from whichever configured remote the ref names, and `workspaces`
-  fetches and checks out that same fully-qualified tracking ref.
+  skipped) and reads `git remote` in the same async fan-out to attach authoritative ownership as optional
+  `BranchList.remoteGroups`. An ownership-read failure rejects the catalog rather than making the browser
+  guess; a tracking ref with no configured owner is retained under a `null` group. `prefetchBranch` fetches
+  from whichever configured remote the ref names, and `workspaces` fetches and checks out that same
+  fully-qualified tracking ref.
   **`resolveDefaultBranch` keeps its sync spawn budget** — it is called by every Default-workspace
   `folderTruth`, so a spare spawn is shared-event-loop time every workspace listing pays. Origin's HEAD
   stays a lone `symbolic-ref` (the only read that sees it while dangling), followed by one `for-each-ref`
@@ -157,9 +160,10 @@ ref off the workspace-create critical path.
   it) so the plan page can flag commits the PR doesn't have yet — the `origin/` here is the second
   deliberate survivor of the all-remotes sweep, because it asks where *this* workspace's own branch was
   pushed, not which remote a base was branched from; `listBranches(projectId)` → `{ local, remote,
-  defaultBranch }` (local `refs/heads`, remote all direct refs under `refs/remotes` with symbolic aliases
-  omitted, default = origin's `HEAD`→another remote's `HEAD`→`origin/main`→repo `HEAD`; either ref-list
-  failure throws, never a successful partial catalog),
+  remoteGroups?, defaultBranch }` (local `refs/heads`; canonical `remote` = every direct full ref under
+  `refs/remotes` with symbolic aliases omitted; additive `remoteGroups` = host-owned remote/branch metadata
+  for presentation; default = origin's `HEAD`→another remote's `HEAD`→`origin/main`→repo `HEAD`; any ref-list
+  or ownership-list failure throws, never a successful partial catalog),
   **`resolveDefaultBranch(repoPath)`** — that default-branch
   resolution factored out (named once), shared by `listBranches` and the `workspaces` module's
   Default-workspace ensure (its `baseBranch`); its last fallback is `currentBranch`, so an unborn `HEAD`

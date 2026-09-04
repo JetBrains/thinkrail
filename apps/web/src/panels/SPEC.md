@@ -186,11 +186,15 @@ treatment.
   used by both the flat list's path rows and the diff header's path chip. The **branch combobox** is the
   shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, refreshed on every
   open with an explicit Refresh control as well) — one component for the New-Workspace dialog's *base* branch
-  and the Changes header's *target* branch. **Remote stays one group across every remote**, each row carrying
-  its full ref (`origin/main`, `upstream/main`): the prefix distinguishes equal branch names, and keeping the
-  ref intact also supports legal remote names containing `/` without asking the browser to reverse-engineer
-  Git's namespace. A fork works two remotes, so a list that shows only `origin` hides the ref it branches
-  from. The whole state *around* it — the list, `refreshing`, `refresh()` — is the shared
+  and the Changes header's *target* branch. **Remote is two layers**: one `Remote` parent over a subgroup per
+  host-identified remote (`origin`, `upstream`), whose rows show branch names without repeating the remote.
+  The full ref remains every row's selection identity, search value, and `data-branch`; the browser never
+  splits `remote/branch`, because Git permits `/` in a remote name. Unconfigured tracking refs live under
+  `Other` and keep their full ref as the row label. `BranchList.remoteGroups` is additive: against an older
+  host that omits it, the picker falls back to one flat Remote group of full refs. The grouped path uses
+  nested cmdk groups; the force-mounted parent hides only when cmdk has hidden every child group. A fork
+  works two remotes, so a list that shows only `origin` hides the ref it branches from. The whole state
+  *around* it — the list, `refreshing`, `refresh()` — is the shared
   **`useBranchList(projectId, onLoaded?)`** (`branches.ts`, over the offline-degrading
   `listBranchesOrEmpty`), so both pickers are identical **by construction**: the list is **keyed to the
   project** (it clears on a project change, and both reads are generation-stamped, so a switch can never

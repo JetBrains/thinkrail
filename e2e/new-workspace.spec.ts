@@ -263,7 +263,7 @@ test("a base whose fetch fails reports git's error, not a request timeout", asyn
 	}
 });
 
-test("the branch picker shows every remote by full ref and creates from the selected one", async ({
+test("the branch picker groups by host-supplied remotes and creates from the selected ref", async ({
 	page,
 }) => {
 	await openAppFresh(page);
@@ -271,11 +271,20 @@ test("the branch picker shows every remote by full ref and creates from the sele
 	const dialog = await openPickedProjectWorkspaceDialog(page, repo);
 	await dialog.getByTestId("ws-branch-picker").click();
 
-	await expect(
-		page.locator('[data-testid="branch-option"][data-branch="origin/main"]'),
-	).toContainText("origin/main");
+	const headings = page.locator("[cmdk-group-heading]");
+	await expect(headings.filter({ hasText: /^Remote$/ })).toBeVisible();
+	await expect(headings.filter({ hasText: /^origin$/ })).toBeVisible();
+	await expect(headings.filter({ hasText: /^upstream$/ })).toBeVisible();
+	await expect(headings.filter({ hasText: /^Local$/ })).toBeVisible();
+	const origin = page.locator('[data-testid="branch-option"][data-branch="origin/main"]');
+	await expect(origin).toContainText("main");
+	await expect(origin).not.toContainText("origin/");
 	const upstream = page.locator('[data-testid="branch-option"][data-branch="upstream/trunk"]');
-	await expect(upstream).toContainText("upstream/trunk");
+	await expect(upstream).toContainText("trunk");
+	await expect(upstream).not.toContainText("upstream/");
+
+	await page.getByPlaceholder("Search branches…").fill("upstream/trunk");
+	await expect(page.getByTestId("branch-option")).toHaveCount(1);
 	await upstream.click();
 
 	const workspace = await createWorkspaceViaDialog(page);
