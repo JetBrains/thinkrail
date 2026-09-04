@@ -127,7 +127,8 @@ The engine is **`pi` only, run in-process** via `@earendil-works/pi-coding-agent
 `packages/contracts` only — never on the server — which is what makes the UI shippable on its own.
 
 See [`goal-and-requirements.md`](goal-and-requirements.md) and [`architecture.md`](architecture.md) for
-the canonical product and design specs.
+the canonical product and design specs. Exploratory product research lives in
+[Delegation and orchestration in ThinkRail](docs/delegation-orchestration.md).
 
 ## Repo layout
 
