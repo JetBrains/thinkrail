@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
+import type { Project, UpdateStatus, WireModel, Workspace } from "@thinkrail/contracts";
+import { UPDATE_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
 import type { EditorTab } from "./appStore";
 import {
@@ -18,11 +19,15 @@ import {
 	selectCatalogModel,
 	selectContextProject,
 	selectHistoryTarget,
+	selectHostVersionChanged,
 	selectKnownChatLocation,
 	selectLayoutResourcePlacement,
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
 	selectSkillsStale,
+	selectUpdateBanner,
+	selectUpdateFeatureAvailable,
+	selectUpdateIndicator,
 	specPathMatcher,
 } from "./selectors";
 
@@ -453,4 +458,101 @@ test("selectAgentReviewCommentCount counts only OPEN agent-authored comments", (
 	expect(selectAgentReviewCommentCount(state, "w1")).toBe(2);
 	expect(selectAgentReviewCommentCount(state, "missing")).toBe(0);
 	expect(selectAgentReviewCommentCount(state, null)).toBe(0);
+});
+
+function updateState(
+	status: Partial<UpdateStatus> | null,
+	protocolVersion = UPDATE_PROTOCOL_VERSION,
+) {
+	return {
+		protocolVersion,
+		updateStatus: status
+			? ({
+					current: { version: "1.3.0", channel: "stable" },
+					capabilities: {
+						install: true,
+						restart: "manual",
+						channelSwitch: "in-app",
+						channels: ["stable", "nightly"],
+					},
+					phase: "idle",
+					...status,
+				} as UpdateStatus)
+			: null,
+	};
+}
+
+const AVAILABLE = {
+	version: "1.4.0",
+	channel: "stable" as const,
+	notesUrl: "https://example.invalid/v1.4.0",
+};
+
+test("the update surface stays hidden against a host that predates it", () => {
+	const older = updateState(
+		{ phase: "available", available: AVAILABLE },
+		UPDATE_PROTOCOL_VERSION - 1,
+	);
+	expect(selectUpdateFeatureAvailable(older)).toBe(false);
+	expect(selectUpdateIndicator(older)).toBeNull();
+	expect(selectUpdateBanner(older)).toBeNull();
+	expect(selectUpdateIndicator(updateState(null))).toBeNull();
+});
+
+test("the indicator reports only the two states worth a badge", () => {
+	expect(selectUpdateIndicator(updateState({ phase: "idle" }))).toBeNull();
+	expect(selectUpdateIndicator(updateState({ phase: "checking" }))).toBeNull();
+	expect(selectUpdateIndicator(updateState({ phase: "error" }))).toBeNull();
+	expect(selectUpdateIndicator(updateState({ phase: "available", available: AVAILABLE }))).toBe(
+		"available",
+	);
+	expect(
+		selectUpdateIndicator(
+			updateState({ phase: "staged", staged: { version: "1.4.0", channel: "stable" } }),
+		),
+	).toBe("staged");
+});
+
+test("a dismissed version silences the banner but not the badge", () => {
+	const state = updateState({
+		phase: "available",
+		available: AVAILABLE,
+		dismissedVersion: "1.4.0",
+	});
+	expect(selectUpdateBanner(state)).toBeNull();
+	expect(selectUpdateIndicator(state)).toBe("available");
+});
+
+test("a dismissal does not carry to the next release", () => {
+	const state = updateState({
+		phase: "available",
+		available: { ...AVAILABLE, version: "1.5.0" },
+		dismissedVersion: "1.4.0",
+	});
+	expect(selectUpdateBanner(state)).toEqual({
+		kind: "available",
+		version: "1.5.0",
+		notesUrl: AVAILABLE.notesUrl,
+		channel: "stable",
+	});
+});
+
+test("a staged release banners regardless of an earlier dismissal", () => {
+	const state = updateState({
+		phase: "staged",
+		staged: { version: "1.4.0", channel: "stable" },
+		dismissedVersion: "1.4.0",
+	});
+	expect(selectUpdateBanner(state)).toEqual({
+		kind: "staged",
+		version: "1.4.0",
+		channel: "stable",
+	});
+});
+
+test("selectHostVersionChanged fires only once a different host answers", () => {
+	expect(selectHostVersionChanged({ appVersion: null, bootAppVersion: null })).toBe(false);
+	expect(selectHostVersionChanged({ appVersion: "1.3.0", bootAppVersion: "1.3.0" })).toBe(false);
+	expect(selectHostVersionChanged({ appVersion: "1.4.0", bootAppVersion: "1.3.0" })).toBe(true);
+	expect(selectHostVersionChanged({ appVersion: "1.4.0", bootAppVersion: null })).toBe(false);
 });

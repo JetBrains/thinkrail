@@ -60,11 +60,11 @@ With an active workspace, `Shell` mounts the workbench projection of the window'
 After `main.tsx`'s synchronous first-paint apply, Shell is the sole mounted theme side-effect owner. While `welcomeGeneration === 0` it retains the versioned preference hint; afterward it projects store's opaque fixed id + fixed/system mode + optional pair through `themes` and writes the reconciled hint. Fixed mode has no media listener. System mode owns exactly one `prefers-color-scheme` listener, reapplies the locally resolved slot on change, and cleans it up on preference/unmount; that local event never mutates store, calls the host, or changes another client. No other component mutates `[data-theme]`.
 
 Release awareness lands in this chrome as two quiet affordances plus one side effect. The topbar gear
-carries a badge while an update is available or staged (`updateIndicator`), and opening it lands on
-Settings → Updates. The dismissible `UpdateBanner` mounts once above both branches, beside Settings and
-Toaster — arrangement stays here, never in a panel. And because a host can be replaced under an open tab
+carries a badge while an update is available or staged (`selectUpdateIndicator`), and its label says so.
+The dismissible `UpdateBanner` mounts once between the header and the branching content — arrangement
+stays here, never in a panel. And because a host can be replaced under an open tab
 (the normal end of an update), shell is also the owner of the **post-update reload**: when
-`hostVersionChanged` turns true it reloads the page once, so the served bundle and the host it talks to
+`selectHostVersionChanged` turns true it reloads the page once, so the served bundle and the host it talks to
 are never a mismatched pair. It is the same class of decision as the theme side effect — a DOM-level act
 the composition root performs on store truth, not a transport or panel concern.
 

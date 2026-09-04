@@ -24,6 +24,7 @@ import type {
 	ThemeId,
 	ThemeMode,
 	ThinkingLevel,
+	UpdateStatus,
 	UserMessage,
 	WireModel,
 	Workspace,
@@ -271,6 +272,7 @@ export const SettingsSection = {
 	Templates: "templates",
 	Review: "review",
 	Privacy: "privacy",
+	Updates: "updates",
 	Feedback: "feedback",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
@@ -715,6 +717,9 @@ interface AppState {
 	welcomeGeneration: number;
 	protocolVersion: number | null;
 	hostPlatform: HostPlatform | null;
+	appVersion: string | null;
+	bootAppVersion: string | null;
+	updateStatus: UpdateStatus | null;
 	projects: Project[];
 	recentProjects: Project[];
 	workspaces: Record<string, Workspace[]>;
@@ -777,6 +782,7 @@ interface AppState {
 	themeMode: ThemeMode;
 	systemThemePair: SystemThemePair | undefined;
 	analyticsEnabled: boolean;
+	updateChecksEnabled: boolean;
 	subagentsEnabled: boolean;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
@@ -796,7 +802,10 @@ interface AppState {
 		recentProjects: Project[],
 		config?: AppConfig,
 		hostPlatform?: HostPlatform,
+		appVersion?: string,
+		update?: UpdateStatus,
 	) => void;
+	applyUpdateStatus: (status: UpdateStatus | null) => void;
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
 	applyProjectUpdated: (project: Project) => void;
 	setWorkspaces: (projectId: string, workspaces: Workspace[]) => void;
@@ -992,6 +1001,7 @@ function configPatch(config: AppConfig) {
 		...themePreference,
 		systemThemePair: themePreference.systemThemePair,
 		analyticsEnabled: config.analyticsEnabled,
+		updateChecksEnabled: config.updateChecksEnabled ?? DEFAULT_CONFIG.updateChecksEnabled,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
 		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled ?? DEFAULT_CONFIG.jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds:
@@ -1538,6 +1548,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	welcomeGeneration: 0,
 	protocolVersion: null,
 	hostPlatform: null,
+	appVersion: null,
+	bootAppVersion: null,
+	updateStatus: null,
 	projects: [],
 	recentProjects: [],
 	workspaces: {},
@@ -1593,6 +1606,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	themeMode: DEFAULT_CONFIG.themeMode,
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
+	updateChecksEnabled: DEFAULT_CONFIG.updateChecksEnabled,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
@@ -1612,7 +1626,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 			connectionGeneration:
 				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
 		})),
-	installWelcomeSnapshot: (protocolVersion, projects, recentProjects, config, hostPlatform) =>
+	installWelcomeSnapshot: (
+		protocolVersion,
+		projects,
+		recentProjects,
+		config,
+		hostPlatform,
+		appVersion,
+		update,
+	) =>
 		set((state) => {
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
 			return {
@@ -1620,6 +1642,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 				projects: openProjects,
 				recentProjects: sortProjects(recentProjects),
 				hostPlatform: hostPlatform ?? null,
+				appVersion: appVersion ?? null,
+				bootAppVersion: state.bootAppVersion ?? appVersion ?? null,
+				updateStatus: update ?? state.updateStatus,
 				...(config ? configPatch(config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),
@@ -2942,6 +2967,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setChatPreferences: (chatMessageOrder, streamingResponseMovement) =>
 		set({ chatMessageOrder, streamingResponseMovement }),
 	applyConfig: (config) => set(configPatch(config)),
+	applyUpdateStatus: (status) => set({ updateStatus: status }),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]

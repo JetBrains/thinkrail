@@ -8,6 +8,7 @@ import type {
 	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
+	UpdateStatus,
 	Workspace,
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
@@ -72,6 +73,8 @@ export function initTransport(): WsTransport {
 					welcome.hostPlatform === "win32"
 					? welcome.hostPlatform
 					: undefined,
+				welcome.appVersion,
+				welcome.update,
 			);
 		refreshLoadedWorkspaceLists(useAppStore.getState().connectionGeneration);
 	});
@@ -143,6 +146,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
 		useAppStore.getState().applyConfig(data as AppConfig);
+	});
+
+	transport.subscribe(WS_CHANNELS.updateStatus, (data) => {
+		useAppStore.getState().applyUpdateStatus(data as UpdateStatus);
 	});
 
 	transport.connect();
