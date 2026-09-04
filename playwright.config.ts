@@ -21,6 +21,7 @@ import {
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
 	E2E_PORT,
+	E2E_UPDATE_CONTROL,
 } from "./e2e/fixtures/paths";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
@@ -112,9 +113,10 @@ export default defineConfig({
 			// Register a deterministic fake OAuth provider (`e2e-oauth`) so the in-app login flow is drivable
 			// end-to-end without a real provider/browser (see packages/server/src/dev.ts).
 			THINKRAIL_E2E_FAKE_OAUTH: centralMode ? "0" : "1",
-			// Register a fake update provider so release awareness is drivable without a published release
-			// (a source-run host reports no updater at all — see packages/server/src/dev.ts).
-			...(centralMode ? {} : { THINKRAIL_E2E_FAKE_UPDATE: "1" }),
+			// The fake release provider's control *file*: empty (the default) means "no newer release", so a
+			// long-lived lane host never advertises one and no spec's layout shifts under it. See
+			// packages/server/src/dev.ts.
+			...(centralMode ? {} : { THINKRAIL_E2E_FAKE_UPDATE: E2E_UPDATE_CONTROL }),
 			// Analytics: every channel sends now, and `CI` is unset on a developer machine — so the suite
 			// mutes explicitly. Nothing an e2e run does may reach PostHog.
 			THINKRAIL_NO_ANALYTICS: "1",

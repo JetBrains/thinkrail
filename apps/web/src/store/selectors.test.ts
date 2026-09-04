@@ -537,17 +537,24 @@ test("a dismissal does not carry to the next release", () => {
 	});
 });
 
-test("a staged release banners regardless of an earlier dismissal", () => {
-	const state = updateState({
+test("the restart-to-finish banner is dismissible too, and the badge still reports it", () => {
+	const staged = updateState({
 		phase: "staged",
 		staged: { version: "1.4.0", channel: "stable" },
-		dismissedVersion: "1.4.0",
 	});
-	expect(selectUpdateBanner(state)).toEqual({
+	expect(selectUpdateBanner(staged)).toEqual({
 		kind: "staged",
 		version: "1.4.0",
 		channel: "stable",
 	});
+
+	const dismissed = updateState({
+		phase: "staged",
+		staged: { version: "1.4.0", channel: "stable" },
+		dismissedVersion: "1.4.0",
+	});
+	expect(selectUpdateBanner(dismissed)).toBeNull();
+	expect(selectUpdateIndicator(dismissed)).toBe("staged");
 });
 
 test("selectHostVersionChanged fires only once a different host answers", () => {

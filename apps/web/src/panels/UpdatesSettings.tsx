@@ -23,23 +23,18 @@ export function UpdatesSettings() {
 	const checksEnabled = useAppStore((s) => s.updateChecksEnabled);
 	const [pending, setPending] = useState(false);
 
-	const request = (
-		method: "update.check" | "update.install",
-		channel?: ReleaseChannel,
-		version?: string,
-	) => {
+	const track = (promise: Promise<unknown>, failure: string) => {
 		setPending(true);
-		const promise =
-			method === "update.check"
-				? getTransport().request("update.check", {})
-				: getTransport().request("update.install", {
-						channel: channel as ReleaseChannel,
-						...(version ? { version } : {}),
-					});
-		promise
-			.catch(() => toast.error(method === "update.check" ? "Couldn't check" : "Couldn't install"))
-			.finally(() => setPending(false));
+		promise.catch(() => toast.error(failure)).finally(() => setPending(false));
 	};
+
+	const check = () => track(getTransport().request("update.check", {}), "Couldn't check");
+
+	const install = (channel: ReleaseChannel, version?: string) =>
+		track(
+			getTransport().request("update.install", { channel, ...(version ? { version } : {}) }),
+			"Couldn't install the update",
+		);
 
 	const setChecksEnabled = (updateChecksEnabled: boolean) => {
 		getTransport()
@@ -103,7 +98,7 @@ export function UpdatesSettings() {
 								<Button
 									data-testid="update-install"
 									disabled={busy}
-									onClick={() => request("update.install", available.channel, available.version)}
+									onClick={() => install(available.channel, available.version)}
 								>
 									{phase === "installing" ? "Installing…" : "Install"}
 								</Button>
@@ -148,7 +143,7 @@ export function UpdatesSettings() {
 								variant="ghost"
 								size="sm"
 								disabled={busy}
-								onClick={() => request("update.check")}
+								onClick={check}
 							>
 								Check now
 							</Button>
@@ -175,7 +170,7 @@ export function UpdatesSettings() {
 								label={channel === "stable" ? "Stable" : "Nightly"}
 								active={current.channel === channel}
 								onClick={() => {
-									if (current.channel !== channel) request("update.install", channel);
+									if (current.channel !== channel) install(channel);
 								}}
 							/>
 						))}

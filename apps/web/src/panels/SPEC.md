@@ -485,7 +485,10 @@ a project picker, the prompt hero, and the reused
   (`UpdateInstallTarget` is one shape for upgrade, downgrade, and crossgrade — the copy tells the truth
   when the target is behind). **`UpdateBanner`** is its dismissible twin for the same state, mounted by
   the shell (arrangement is shell's, see [[submodule-web-shell]]); dismissal is per version via
-  `update.dismiss`, so it stays quiet for that release and speaks up for the next. A single dimmed
+  `update.dismiss`, so it stays quiet for that release and speaks up for the next. **Both kinds are
+  dismissible** — including "restart to finish", which would otherwise be a bar that can only be removed
+  by restarting; the badge and the panel keep reporting it, and installing a release clears the dismissal
+  it may have carried as *available*, so the two decisions never collapse into one. A single dimmed
   "General" nav item ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`AppearanceSettings`/`ChatSettings`/`TemplatesSettings`/
   `PrivacySettings`/`ReviewSettings`/`FeedbackSettings`/`UpdatesSettings`/`UpdateBanner` and the app-wide **`InterviewPromptDialog`** are the

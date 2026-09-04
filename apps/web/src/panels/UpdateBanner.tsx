@@ -16,10 +16,7 @@ export function UpdateBanner() {
 
 	const install = () => {
 		getTransport()
-			.request("update.install", {
-				channel: banner.channel as "stable" | "nightly",
-				version: banner.version,
-			})
+			.request("update.install", { channel: banner.channel, version: banner.version })
 			.catch(() => toast.error("Couldn't install the update"));
 	};
 
@@ -64,15 +61,6 @@ export function UpdateBanner() {
 						>
 							{installing ? "Installing…" : "Install"}
 						</Button>
-						<Button
-							data-testid="update-banner-dismiss"
-							variant="ghost"
-							size="icon"
-							aria-label="Dismiss this update"
-							onClick={dismiss}
-						>
-							<Close className="size-16" />
-						</Button>
 					</>
 				) : (
 					<Button
@@ -84,6 +72,15 @@ export function UpdateBanner() {
 						Details
 					</Button>
 				)}
+				<Button
+					data-testid="update-banner-dismiss"
+					variant="ghost"
+					size="icon"
+					aria-label="Dismiss this update"
+					onClick={dismiss}
+				>
+					<Close className="size-16" />
+				</Button>
 			</div>
 		</div>
 	);

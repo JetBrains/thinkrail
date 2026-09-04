@@ -84,12 +84,21 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 	});
 }
 
-const fakeUpdate = process.env.THINKRAIL_E2E_FAKE_UPDATE;
-const fakeUpdateProvider: UpdateProvider | undefined = fakeUpdate
+const fakeUpdateControl = process.env.THINKRAIL_E2E_FAKE_UPDATE;
+const readUpdateControl = async (): Promise<string> => {
+	if (!fakeUpdateControl) return "";
+	try {
+		return (await Bun.file(fakeUpdateControl).text()).trim();
+	} catch {
+		return "";
+	}
+};
+const fakeUpdateProvider: UpdateProvider | undefined = fakeUpdateControl
 	? {
 			capabilities: { install: true, channelSwitch: "in-app", channels: ["stable", "nightly"] },
 			current: { version: "1.2.3", channel: "stable" },
 			async check() {
+				if ((await readUpdateControl()) === "") return null;
 				return {
 					version: "1.4.0",
 					channel: "stable",
@@ -98,7 +107,7 @@ const fakeUpdateProvider: UpdateProvider | undefined = fakeUpdate
 				};
 			},
 			async install(target) {
-				if (fakeUpdate === "manual") {
+				if ((await readUpdateControl()) === "manual") {
 					return {
 						kind: "manual",
 						message: "no PowerShell found",

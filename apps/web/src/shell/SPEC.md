@@ -62,7 +62,9 @@ After `main.tsx`'s synchronous first-paint apply, Shell is the sole mounted them
 Release awareness lands in this chrome as two quiet affordances plus one side effect. The topbar gear
 carries a badge while an update is available or staged (`selectUpdateIndicator`), and its label says so.
 The dismissible `UpdateBanner` mounts once between the header and the branching content — arrangement
-stays here, never in a panel. And because a host can be replaced under an open tab
+stays here, never in a panel — inside a **slot element that is always rendered**: the shell's grid assigns
+rows positionally, so a child that disappears when there is no update slides the whole workbench into the
+header-sized row and collapses every panel (the e2e suite's geometry specs are what caught it). And because a host can be replaced under an open tab
 (the normal end of an update), shell is also the owner of the **post-update reload**: when
 `selectHostVersionChanged` turns true it reloads the page once, so the served bundle and the host it talks to
 are never a mismatched pair. It is the same class of decision as the theme side effect — a DOM-level act

@@ -1,6 +1,7 @@
 import type {
 	GitDiffScope,
 	Project,
+	ReleaseChannel,
 	SpecGraphNode,
 	UpdateStatus,
 	WireModel,
@@ -483,15 +484,19 @@ export function selectUpdateIndicator(state: UpdateStatusState): "available" | "
 	return phase === "available" ? "available" : null;
 }
 
-export function selectUpdateBanner(
-	state: UpdateStatusState,
-): { kind: "available" | "staged"; version: string; notesUrl?: string; channel: string } | null {
+export function selectUpdateBanner(state: UpdateStatusState): {
+	kind: "available" | "staged";
+	version: string;
+	notesUrl?: string;
+	channel: ReleaseChannel;
+} | null {
 	const indicator = selectUpdateIndicator(state);
 	const status = state.updateStatus;
 	if (!indicator || !status) return null;
 	if (indicator === "staged") {
 		const staged = status.staged;
-		return staged ? { kind: "staged", version: staged.version, channel: staged.channel } : null;
+		if (!staged || staged.version === status.dismissedVersion) return null;
+		return { kind: "staged", version: staged.version, channel: staged.channel };
 	}
 	const available = status.available;
 	if (!available || available.version === status.dismissedVersion) return null;

@@ -196,7 +196,11 @@ in the dev boot only), because neither flow is drivable otherwise: a real login 
 release check needs a published build the source host could never install. Those specs carry the
 `@dev-seam` tag and are therefore skipped in the artifact runs, whose hosts deliberately lack the seams.
 The update fake exercises the whole phase machine and UI through the real wire, and it makes no timing
-demands: the schedule is unit-covered, so a spec drives the check through the panel's own action.
+demands: the schedule is unit-covered, so a spec drives the check through the panel's own action. It
+answers from a **control file that starts empty**, meaning "no newer release" — without that, a lane host
+lives long enough for its own boot check to fire and every later spec renders under a banner it never
+asked for. For the same reason the update spec ends by dismissing what it staged: the host's phase
+survives the page, so a spec that advertises an update owns putting the chrome back.
 
 Different worktrees may run concurrently. Two complete E2E invocations in one worktree remain sequential;
 the lane ids are deliberately stable across runs so interrupted state is reclaimed rather than leaked.

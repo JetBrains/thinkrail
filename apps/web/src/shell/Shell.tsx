@@ -210,7 +210,9 @@ export function Shell() {
 				</div>
 				<SettingsDialog layoutSettings={<LayoutSettings />} />
 			</header>
-			<UpdateBanner />
+			<div>
+				<UpdateBanner />
+			</div>
 			{hasActiveWorkspace && activeWorkspaceId ? (
 				<div data-testid="workspace-shell-layout" className="h-full min-h-0 min-w-0">
 					<WorkspaceWorkbench key={activeWorkspaceId} workspaceId={activeWorkspaceId} />
