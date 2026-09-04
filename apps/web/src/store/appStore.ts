@@ -778,6 +778,8 @@ interface AppState {
 	systemThemePair: SystemThemePair | undefined;
 	analyticsEnabled: boolean;
 	subagentsEnabled: boolean;
+	jbcentralQuotaEnabled: boolean;
+	jbcentralQuotaRefreshSeconds: number;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
 	chatMessageOrder: ChatMessageOrder;
@@ -991,6 +993,9 @@ function configPatch(config: AppConfig) {
 		systemThemePair: themePreference.systemThemePair,
 		analyticsEnabled: config.analyticsEnabled,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
+		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled ?? DEFAULT_CONFIG.jbcentralQuotaEnabled,
+		jbcentralQuotaRefreshSeconds:
+			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 		terminalReplayKb: config.terminalReplayKb,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
 		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
@@ -1589,6 +1594,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
+	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
+	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	chatMessageOrder: "oldest-first",

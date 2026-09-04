@@ -1,6 +1,7 @@
 export {
 	connectJbcentral,
 	disconnectJbcentral,
+	getJbcentralQuota,
 	getJbcentralStatus,
 	initializeJbcentralRuntime,
 	jbcentralLogin,

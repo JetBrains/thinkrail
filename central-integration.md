@@ -5,7 +5,7 @@ status: active
 title: JetBrains AI via the Central CLI — cross-module lifecycle
 parent: architecture
 depends-on: [module-shared, submodule-server-auth, submodule-server-agent, module-contracts, submodule-web-panels, submodule-server-settings, submodule-web-shell, submodule-web-store]
-covers: [central-lifecycle, central-liveness, central-trust-boundary, central-artifact]
+covers: [central-lifecycle, central-liveness, central-trust-boundary, central-artifact, central-quota]
 tags: [v1, providers, central]
 ---
 
@@ -50,7 +50,8 @@ through one memory-only cache/single-flight and asks `shared` to run the absolut
 `central quota --json`. `shared` admits only recurring `remaining` + `total` numbers; `contracts` carries
 only hidden/available/stale/unavailable states; `shell` renders them immediately left of host connection
 status. Hidden frontends do not poll, disabled/unhealthy state performs no quota read, and no quota value is
-persisted.
+persisted. A lifecycle edge clears the last successful fallback so a later account cannot inherit stale
+numbers from the earlier one.
 
 Two facts the lifecycle table encodes that no single module states:
 

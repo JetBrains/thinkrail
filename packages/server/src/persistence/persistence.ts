@@ -6,6 +6,7 @@ import {
 	type AppConfig,
 	DEFAULT_CONFIG,
 	isComposerGrowthLimit,
+	isJbcentralQuotaRefreshSeconds,
 	normalizeThemePreference,
 	type Project,
 	type Workspace,
@@ -89,6 +90,13 @@ export function loadConfig(): AppConfig {
 			typeof value.subagentsEnabled === "boolean"
 				? value.subagentsEnabled
 				: DEFAULT_CONFIG.subagentsEnabled,
+		jbcentralQuotaEnabled:
+			typeof value.jbcentralQuotaEnabled === "boolean"
+				? value.jbcentralQuotaEnabled
+				: DEFAULT_CONFIG.jbcentralQuotaEnabled,
+		jbcentralQuotaRefreshSeconds: isJbcentralQuotaRefreshSeconds(value.jbcentralQuotaRefreshSeconds)
+			? value.jbcentralQuotaRefreshSeconds
+			: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 		customLayoutPresets: Array.isArray(value.customLayoutPresets)
 			? value.customLayoutPresets
 			: DEFAULT_CONFIG.customLayoutPresets,

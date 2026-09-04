@@ -6,6 +6,7 @@ import type { Workspace, WorkspaceWatchReadyResult } from "@thinkrail/contracts"
 import { TodoStore } from "pi-todos/core";
 import { recordAcceptedMessage, resetFeedbackForTests, setFeedbackPublisher } from "../feedback";
 import { addComment, getReviewSnapshot } from "../reviews";
+import { resetConfigCache } from "../settings";
 import { todoReviewRecord } from "../todos";
 import { stopAllWatches } from "../watch";
 import { handleRequest, requestMethodDiagnostic, shouldRefreshOpenReview } from "./handlers";
@@ -30,6 +31,7 @@ function gitText(cwd: string, ...args: string[]): string {
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-handlers-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
+	resetConfigCache();
 	resetFeedbackForTests();
 	repo = join(dataDir, "repo");
 	mkdirSync(repo);
@@ -48,6 +50,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	stopAllWatches();
+	resetConfigCache();
 	resetFeedbackForTests();
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
@@ -65,6 +68,13 @@ test("request diagnostics expose only registered method names", async () => {
 	expect(requestMethodDiagnostic("secret prompt value")).toBe("unknown method");
 	expect(requestMethodDiagnostic("toString")).toBe("unknown method");
 	await expect(handleRequest("toString", undefined, CTX)).rejects.toThrow("Unknown method");
+});
+
+test("disabled JetBrains quota returns hidden through its handler", async () => {
+	await handleRequest("settings.update", { config: { jbcentralQuotaEnabled: false } }, CTX);
+	expect(await handleRequest("provider.jbcentralQuota", { force: true }, CTX)).toEqual({
+		state: "hidden",
+	});
 });
 
 test("feedback.respond persists a popup action through the handler", async () => {

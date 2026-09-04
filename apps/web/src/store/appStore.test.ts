@@ -2994,6 +2994,22 @@ test("applyConfig projects the host-wide subagent default", () => {
 	expect(useAppStore.getState()).toHaveProperty("subagentsEnabled", true);
 });
 
+test("applyConfig projects JetBrains quota display and cadence", () => {
+	expect(useAppStore.getState()).toMatchObject({
+		jbcentralQuotaEnabled: true,
+		jbcentralQuotaRefreshSeconds: 30,
+	});
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		jbcentralQuotaEnabled: false,
+		jbcentralQuotaRefreshSeconds: 1,
+	});
+	expect(useAppStore.getState()).toMatchObject({
+		jbcentralQuotaEnabled: false,
+		jbcentralQuotaRefreshSeconds: 1,
+	});
+});
+
 test("chat presentation preferences are client-local and cannot be overwritten by host config", () => {
 	useAppStore.getState().setChatMessageOrder("newest-first");
 	useAppStore.getState().setStreamingResponseMovement({ settle: 60, trigger: 90 });

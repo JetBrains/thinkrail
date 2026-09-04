@@ -1,6 +1,7 @@
 import {
 	type AppConfig,
 	type AppConfigUpdate,
+	isJbcentralQuotaRefreshSeconds,
 	isSystemThemePair,
 	isThemeMode,
 } from "@thinkrail/contracts";
@@ -44,10 +45,21 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		theme,
 		themeMode,
 		systemThemePair,
+		jbcentralQuotaEnabled,
+		jbcentralQuotaRefreshSeconds,
 		...rest
 	} = runtimeUpdate;
 	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
 		throw new Error("subagentsEnabled must be a boolean");
+	}
+	if (jbcentralQuotaEnabled !== undefined && typeof jbcentralQuotaEnabled !== "boolean") {
+		throw new Error("jbcentralQuotaEnabled must be a boolean");
+	}
+	if (
+		jbcentralQuotaRefreshSeconds !== undefined &&
+		!isJbcentralQuotaRefreshSeconds(jbcentralQuotaRefreshSeconds)
+	) {
+		throw new Error("jbcentralQuotaRefreshSeconds must be a whole number from 1 to 3600");
 	}
 	if (themeMode !== undefined && !isThemeMode(themeMode)) {
 		throw new Error("themeMode must be fixed or system");
@@ -71,6 +83,8 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		themeMode: nextThemeMode,
 		...(nextSystemThemePair ? { systemThemePair: nextSystemThemePair } : {}),
 		...(subagentsEnabled === undefined ? {} : { subagentsEnabled }),
+		...(jbcentralQuotaEnabled === undefined ? {} : { jbcentralQuotaEnabled }),
+		...(jbcentralQuotaRefreshSeconds === undefined ? {} : { jbcentralQuotaRefreshSeconds }),
 		...(customLayoutPresets === undefined
 			? {}
 			: { customLayoutPresets: validateCustomLayoutPresets(customLayoutPresets) }),

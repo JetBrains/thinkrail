@@ -61,6 +61,7 @@ import {
 	cancelLogin,
 	connectJbcentral,
 	disconnectJbcentral,
+	getJbcentralQuota,
 	getProviderStatus,
 	jbcentralLogin,
 	logoutProvider,
@@ -113,7 +114,7 @@ import {
 	sendableComments,
 	updateComment,
 } from "../reviews";
-import { updateConfig } from "../settings";
+import { getConfig, updateConfig } from "../settings";
 import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
 import {
 	deleteTemplate,
@@ -749,6 +750,14 @@ const handlers: Record<string, Handler> = {
 	"provider.jbcentralStartProxy": () => startProxyJbcentral(),
 	"provider.jbcentralLogin": () => jbcentralLogin(),
 	"provider.jbcentralUpdate": () => updateJbcentral(),
+	"provider.jbcentralQuota": (params) => {
+		const config = getConfig();
+		if (!config.jbcentralQuotaEnabled) return { state: "hidden" } as const;
+		return getJbcentralQuota({
+			maxAgeMs: config.jbcentralQuotaRefreshSeconds * 1_000,
+			force: (params as { force?: boolean }).force === true,
+		});
+	},
 	"settings.update": (params) => {
 		const config = (params as { config: AppConfigUpdate }).config;
 		return updateConfig(config);

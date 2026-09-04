@@ -4,8 +4,10 @@ import type {
 	JbcentralActionResult,
 	JbcentralConnectResult,
 	JbcentralLoginResult,
+	JbcentralQuotaSnapshot,
 	JbcentralStatus,
 } from "@thinkrail/contracts";
+import { isJbcentralConnected } from "@thinkrail/contracts";
 import {
 	type JbcentralActionResult as CliActionResult,
 	inspectJbcentral,
@@ -15,6 +17,7 @@ import {
 	jbcentralExtensionPath,
 	launchJbcentralLogin,
 	probeJbcentralStatus,
+	readJbcentralQuota,
 	runJbcentralAction,
 	watchJbcentralArtifact,
 } from "@thinkrail/shared/jbcentral";
@@ -42,6 +45,12 @@ let statusObservation: JbcentralStatusObservation = { auth: "unknown", proxy: "u
 let statusProbedAt = 0;
 let statusGeneration = 0;
 let statusTask: Promise<void> | null = null;
+let quotaSuccess: Extract<JbcentralQuotaSnapshot, { state: "available" }> | null = null;
+let quotaSnapshot: Exclude<JbcentralQuotaSnapshot, { state: "hidden" }> | null = null;
+let quotaAttemptedAt = 0;
+let quotaGeneration = 0;
+let quotaTaskGeneration = 0;
+let quotaTask: Promise<Exclude<JbcentralQuotaSnapshot, { state: "hidden" }>> | null = null;
 let loadFailure: Extract<JbcentralStatus, { state: "load-failed" }> | null = null;
 let transientAction: JbcentralAction | null = null;
 let bootstrapped = false;
@@ -108,6 +117,17 @@ function invalidateStatusObservation(): void {
 	statusGeneration += 1;
 }
 
+function invalidateQuotaFreshness(): void {
+	quotaSuccess = null;
+	quotaAttemptedAt = 0;
+	quotaSnapshot = null;
+	quotaGeneration += 1;
+}
+
+function quotaObservationBlocked(observation: JbcentralStatusObservation): boolean {
+	return observation.auth === "signed-out" || observation.proxy === "stopped";
+}
+
 function sameStatusObservation(
 	left: JbcentralStatusObservation,
 	right: JbcentralStatusObservation,
@@ -118,6 +138,9 @@ function sameStatusObservation(
 function applyStatusObservation(observation: JbcentralStatusObservation): void {
 	statusProbedAt = Date.now();
 	if (sameStatusObservation(observation, statusObservation)) return;
+	if (quotaObservationBlocked(observation) !== quotaObservationBlocked(statusObservation)) {
+		invalidateQuotaFreshness();
+	}
 	statusObservation = observation;
 	publishChanged();
 }
@@ -243,6 +266,7 @@ function startRebuildDrain(): void {
 }
 
 function requestRuntimeRebuild(action?: JbcentralAction): Promise<RebuildResult> {
+	invalidateQuotaFreshness();
 	if (stopped) {
 		return Promise.resolve({
 			outcome: "failed",
@@ -338,6 +362,65 @@ export async function getJbcentralStatus(): Promise<JbcentralStatus> {
 	}
 	if (inspection.status.state === "supported") refreshStatusIfStale();
 	return mapInspectionStatus(inspection);
+}
+
+async function refreshJbcentralQuota(
+	generation: number,
+): Promise<Exclude<JbcentralQuotaSnapshot, { state: "hidden" }>> {
+	const result = await readJbcentralQuota();
+	const attemptedAt = Date.now();
+	const snapshot: Exclude<JbcentralQuotaSnapshot, { state: "hidden" }> =
+		result.outcome === "succeeded"
+			? {
+					state: "available",
+					remaining: result.remaining,
+					total: result.total,
+					observedAt: attemptedAt,
+				}
+			: quotaSuccess
+				? { ...quotaSuccess, state: "stale" }
+				: { state: "unavailable" };
+	if (generation === quotaGeneration) {
+		quotaAttemptedAt = attemptedAt;
+		quotaSnapshot = snapshot;
+		if (snapshot.state === "available") quotaSuccess = snapshot;
+	}
+	return snapshot;
+}
+
+export async function getJbcentralQuota({
+	maxAgeMs,
+	force = false,
+}: {
+	maxAgeMs: number;
+	force?: boolean;
+}): Promise<JbcentralQuotaSnapshot> {
+	const status = await getJbcentralStatus();
+	if (!isJbcentralConnected(status)) {
+		invalidateQuotaFreshness();
+		return { state: "hidden" };
+	}
+	if (quotaTask) {
+		const activeTask = quotaTask;
+		if (quotaTaskGeneration === quotaGeneration) return activeTask;
+		await activeTask;
+		return getJbcentralQuota({ maxAgeMs, force });
+	}
+	if (!force && quotaSnapshot && Date.now() - quotaAttemptedAt < Math.max(0, maxAgeMs)) {
+		return quotaSnapshot;
+	}
+	const generation = quotaGeneration;
+	const task = refreshJbcentralQuota(generation);
+	quotaTaskGeneration = generation;
+	quotaTask = task;
+	try {
+		return await task;
+	} finally {
+		if (quotaTask === task) {
+			quotaTask = null;
+			quotaTaskGeneration = 0;
+		}
+	}
 }
 
 async function connect(): Promise<JbcentralActionResult> {
@@ -497,12 +580,18 @@ export function jbcentralLogin(): Promise<JbcentralLoginResult> {
 
 export async function resetJbcentralStateForTests(): Promise<void> {
 	stopJbcentralRuntime();
-	await Promise.allSettled([actionTail, rebuildTask, statusTask]);
+	await Promise.allSettled([actionTail, rebuildTask, statusTask, quotaTask]);
 	appliedConfigured = false;
 	statusObservation = { auth: "unknown", proxy: "unknown" };
 	statusProbedAt = 0;
 	statusGeneration = 0;
 	statusTask = null;
+	quotaSuccess = null;
+	quotaSnapshot = null;
+	quotaAttemptedAt = 0;
+	quotaGeneration = 0;
+	quotaTaskGeneration = 0;
+	quotaTask = null;
 	loadFailure = null;
 	transientAction = null;
 	bootstrapped = false;

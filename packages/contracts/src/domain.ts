@@ -338,6 +338,10 @@ export type JbcentralStatus =
 			reason: "candidate-failed";
 	  };
 
+export function isJbcentralConnected(status: JbcentralStatus): boolean {
+	return status.state === "configured" && !status.signedOut && !status.proxyStopped;
+}
+
 export interface ProviderStatusReport {
 	providers: ProviderStatus[];
 	jbcentral: JbcentralStatus;
@@ -356,6 +360,12 @@ export type JbcentralLoginResult =
 			outcome: "failed";
 			reason: "not-installed" | "unsupported-version" | "version-probe-failed" | "launch-failed";
 	  };
+
+export type JbcentralQuotaSnapshot =
+	| { state: "hidden" }
+	| { state: "available"; remaining: number; total: number; observedAt: number }
+	| { state: "stale"; remaining: number; total: number; observedAt: number }
+	| { state: "unavailable" };
 
 export type LoginFrame =
 	| { kind: "authUrl"; url: string; instructions?: string }
@@ -490,6 +500,8 @@ export interface AppConfig extends ThemePreference {
 	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
 	reviewAutoFix: boolean;
 	subagentsEnabled: boolean;
+	jbcentralQuotaEnabled: boolean;
+	jbcentralQuotaRefreshSeconds: number;
 }
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
@@ -501,6 +513,16 @@ export type AppConfigUpdate = Partial<Omit<AppConfig, "reviewModel" | "reviewEff
 export type InterviewResponse = "book" | "postpone" | "never";
 
 export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;
+export const JBCENTRAL_QUOTA_REFRESH_SECONDS = { min: 1, max: 3600, default: 30 } as const;
+
+export function isJbcentralQuotaRefreshSeconds(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= JBCENTRAL_QUOTA_REFRESH_SECONDS.min &&
+		value <= JBCENTRAL_QUOTA_REFRESH_SECONDS.max
+	);
+}
 
 export const DEFAULT_CONFIG: AppConfig = {
 	theme: "dark",
@@ -511,6 +533,8 @@ export const DEFAULT_CONFIG: AppConfig = {
 	customLayoutPresets: [],
 	reviewAutoFix: true,
 	subagentsEnabled: true,
+	jbcentralQuotaEnabled: true,
+	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 };
 
 export function normalizeThemePreference(value: unknown): ThemePreference {

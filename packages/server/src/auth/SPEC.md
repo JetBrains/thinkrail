@@ -107,7 +107,9 @@ ourselves and never surface a credential value over the wire.
     in one process-global, memory-only cache and single-flight. An ordinary read reuses the latest completed
     attempt younger than `maxAgeMs`; force bypasses age but still joins an in-flight read. Failure returns
     the last successful numbers as `stale`, or closed `unavailable` before any success. Lifecycle change
-    invalidates freshness; values never persist. The caller supplies the settings-derived age, so auth does
+    clears both freshness and the old successful fallback, so another account can never inherit it; a read
+    after that edge waits out but never joins/returns an in-flight task from the prior generation. Values
+    never persist. The caller supplies the settings-derived age, so auth does
     not import the settings sibling.
 
     Watcher events are debounced/coalesced and each rebuild re-inspects the latest version + artifact

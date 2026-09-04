@@ -5,7 +5,10 @@ import {
 	DEFAULT_CONFIG,
 	IMAGE_MAX_BASE64_BYTES,
 	isDelegationRunDetails,
+	isJbcentralConnected,
+	isJbcentralQuotaRefreshSeconds,
 	isRetriedAttempt,
+	JBCENTRAL_QUOTA_REFRESH_SECONDS,
 	REQUEST_IMAGE_BASE64_BUDGET,
 } from "./domain";
 
@@ -48,6 +51,48 @@ describe("config defaults", () => {
 
 	test("the composer grows to half the chat by default", () => {
 		expect(DEFAULT_CONFIG).toHaveProperty("composerGrowthLimit", "half-chat");
+	});
+
+	test("JetBrains quota display defaults on with a bounded 30-second cadence", () => {
+		expect(JBCENTRAL_QUOTA_REFRESH_SECONDS).toEqual({ min: 1, max: 3600, default: 30 });
+		expect(DEFAULT_CONFIG).toHaveProperty("jbcentralQuotaEnabled", true);
+		expect(DEFAULT_CONFIG).toHaveProperty("jbcentralQuotaRefreshSeconds", 30);
+		for (const valid of [1, 30, 3600]) expect(isJbcentralQuotaRefreshSeconds(valid)).toBe(true);
+		for (const invalid of [0, 3601, 1.5, "30", null]) {
+			expect(isJbcentralQuotaRefreshSeconds(invalid)).toBe(false);
+		}
+	});
+});
+
+describe("JetBrains Central health", () => {
+	test("only configured, signed-in, non-stopped Central is connected", () => {
+		expect(
+			isJbcentralConnected({
+				state: "configured",
+				version: "1.6.2",
+				signedOut: false,
+				proxyStopped: false,
+			}),
+		).toBe(true);
+		expect(
+			isJbcentralConnected({
+				state: "configured",
+				version: "1.6.2",
+				signedOut: true,
+				proxyStopped: false,
+			}),
+		).toBe(false);
+		expect(
+			isJbcentralConnected({
+				state: "configured",
+				version: "1.6.2",
+				signedOut: false,
+				proxyStopped: true,
+			}),
+		).toBe(false);
+		expect(isJbcentralConnected({ state: "supported", version: "1.6.2", signedOut: false })).toBe(
+			false,
+		);
 	});
 });
 

@@ -30,6 +30,7 @@ import {
 import type { ConnectionStatus } from "../transport";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
+import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
@@ -159,6 +160,7 @@ export function Shell() {
 					) : null}
 				</div>
 				<div className="flex shrink-0 items-center gap-12">
+					<JbcentralQuotaTopbar />
 					<span
 						data-testid="connection-status"
 						data-status={status}

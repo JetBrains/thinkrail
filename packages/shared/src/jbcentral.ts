@@ -10,8 +10,10 @@ export const MINIMUM_CENTRAL_VERSION = "1.4.0" as const;
 const CENTRAL_BIN = "central";
 const VERSION_TIMEOUT_MS = 5_000;
 const STATUS_TIMEOUT_MS = 15_000;
+const QUOTA_TIMEOUT_MS = 15_000;
 const LOGIN_GRACE_MS = 1_500;
 const MAX_STATUS_OUTPUT_BYTES = 16_384;
+const MAX_QUOTA_OUTPUT_BYTES = 16_384;
 const ACTION_TIMEOUT_MS = 120_000;
 const UPDATE_TIMEOUT_MS = 300_000;
 const MAX_VERSION_OUTPUT_BYTES = 4_096;
@@ -47,6 +49,19 @@ export interface JbcentralStatusObservation {
 	auth: JbcentralAuthVerdict;
 	proxy: JbcentralProxyVerdict;
 }
+
+export type JbcentralQuotaReadResult =
+	| { outcome: "succeeded"; remaining: number; total: number }
+	| {
+			outcome: "failed";
+			reason:
+				| "not-installed"
+				| "launch-failed"
+				| "timed-out"
+				| "output-too-large"
+				| "nonzero-exit"
+				| "invalid-output";
+	  };
 
 export type JbcentralActionResult =
 	| { outcome: "succeeded"; observation?: JbcentralStatusObservation }
@@ -334,6 +349,58 @@ export function parseJbcentralStatusObservation(output: string): JbcentralStatus
 }
 
 export const JBCENTRAL_STATUS_TTL_MS = 3_000;
+
+function quotaAmount(value: unknown): number | null {
+	if (typeof value === "number") return Number.isFinite(value) ? value : null;
+	if (typeof value !== "string" || value.trim() === "") return null;
+	const amount = Number(value);
+	return Number.isFinite(amount) ? amount : null;
+}
+
+function parseJbcentralQuota(output: string): JbcentralQuotaReadResult {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(output);
+	} catch {
+		return { outcome: "failed", reason: "invalid-output" };
+	}
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+		return { outcome: "failed", reason: "invalid-output" };
+	}
+	const tariffQuota = (parsed as Record<string, unknown>).tariffQuota;
+	if (!tariffQuota || typeof tariffQuota !== "object" || Array.isArray(tariffQuota)) {
+		return { outcome: "failed", reason: "invalid-output" };
+	}
+	const values = tariffQuota as Record<string, unknown>;
+	const remaining = quotaAmount(values.available);
+	const total = quotaAmount(values.maximum);
+	if (remaining === null || total === null) {
+		return { outcome: "failed", reason: "invalid-output" };
+	}
+	return { outcome: "succeeded", remaining, total };
+}
+
+export async function readJbcentralQuota(
+	deps: JbcentralAdapterDependencies = {},
+): Promise<JbcentralQuotaReadResult> {
+	const executablePath = resolveJbcentralBin(deps);
+	if (!executablePath) return { outcome: "failed", reason: "not-installed" };
+
+	let result: ProcessResult;
+	try {
+		result = await processRunner(deps)({
+			argv: [executablePath, "quota", "--json"],
+			captureStdout: true,
+			timeoutMs: QUOTA_TIMEOUT_MS,
+			maxStdoutBytes: MAX_QUOTA_OUTPUT_BYTES,
+		});
+	} catch {
+		return { outcome: "failed", reason: "launch-failed" };
+	}
+	if (result.outcome !== "exited") return { outcome: "failed", reason: result.outcome };
+	if (result.exitCode !== 0) return { outcome: "failed", reason: "nonzero-exit" };
+	return parseJbcentralQuota(result.stdout);
+}
 
 export async function probeJbcentralStatus(
 	deps: JbcentralAdapterDependencies = {},
