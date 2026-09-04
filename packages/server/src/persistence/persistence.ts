@@ -6,6 +6,8 @@ import {
 	type AppConfig,
 	DEFAULT_CONFIG,
 	isComposerGrowthLimit,
+	isSystemThemePair,
+	isThemeMode,
 	type Project,
 	type Workspace,
 } from "@thinkrail/contracts";
@@ -66,9 +68,20 @@ export function loadConfig(): AppConfig {
 	const extensions = { ...value };
 	delete extensions.chatMessageOrder;
 	delete extensions.layout;
+	delete extensions.themeMode;
+	delete extensions.systemThemePair;
+	const systemThemePair = isSystemThemePair(value.systemThemePair)
+		? { light: value.systemThemePair.light, dark: value.systemThemePair.dark }
+		: undefined;
+	const themeMode =
+		isThemeMode(value.themeMode) && (value.themeMode === "fixed" || systemThemePair)
+			? value.themeMode
+			: DEFAULT_CONFIG.themeMode;
 	return {
 		...extensions,
 		theme: typeof value.theme === "string" ? value.theme : DEFAULT_CONFIG.theme,
+		themeMode,
+		...(systemThemePair ? { systemThemePair } : {}),
 		analyticsEnabled:
 			typeof value.analyticsEnabled === "boolean"
 				? value.analyticsEnabled

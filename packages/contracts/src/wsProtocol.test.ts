@@ -1,5 +1,15 @@
 import { expect, test } from "bun:test";
-import { PROTOCOL_VERSION, SUBAGENT_SETTINGS_PROTOCOL_VERSION, WS_METHODS } from "./wsProtocol";
+import {
+	PROTOCOL_VERSION,
+	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
+	THEME_SYSTEM_PROTOCOL_VERSION,
+	WS_METHODS,
+} from "./wsProtocol";
+
+test("system theme settings advance the protocol", () => {
+	expect(THEME_SYSTEM_PROTOCOL_VERSION).toBe(58);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(THEME_SYSTEM_PROTOCOL_VERSION);
+});
 
 test("subagent settings advance the protocol and name the workspace override mutation", () => {
 	expect(SUBAGENT_SETTINGS_PROTOCOL_VERSION).toBe(57);

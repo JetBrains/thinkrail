@@ -1,4 +1,9 @@
-import type { AppConfig, AppConfigUpdate } from "@thinkrail/contracts";
+import {
+	type AppConfig,
+	type AppConfigUpdate,
+	isSystemThemePair,
+	isThemeMode,
+} from "@thinkrail/contracts";
 import { loadConfig, saveConfig } from "../persistence";
 import { normalizeStoredCustomLayoutPresets, validateCustomLayoutPresets } from "./layoutPresets";
 
@@ -31,14 +36,40 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	const runtimeUpdate: RuntimeAppConfigUpdate = { ...partial };
 	delete runtimeUpdate.chatMessageOrder;
 	delete runtimeUpdate.layout;
-	const { reviewModel, reviewEffort, customLayoutPresets, subagentsEnabled, ...rest } =
-		runtimeUpdate;
+	const {
+		reviewModel,
+		reviewEffort,
+		customLayoutPresets,
+		subagentsEnabled,
+		theme,
+		themeMode,
+		systemThemePair,
+		...rest
+	} = runtimeUpdate;
 	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
 		throw new Error("subagentsEnabled must be a boolean");
 	}
+	if (themeMode !== undefined && !isThemeMode(themeMode)) {
+		throw new Error("themeMode must be fixed or system");
+	}
+	if (systemThemePair !== undefined && !isSystemThemePair(systemThemePair)) {
+		throw new Error("systemThemePair must contain light and dark theme ids");
+	}
+	const current = getConfig();
+	const nextThemeMode = themeMode ?? (theme !== undefined ? "fixed" : current.themeMode);
+	const nextSystemThemePair =
+		systemThemePair === undefined
+			? current.systemThemePair
+			: { light: systemThemePair.light, dark: systemThemePair.dark };
+	if (nextThemeMode === "system" && !nextSystemThemePair) {
+		throw new Error("system theme mode requires a complete pair");
+	}
 	const next: AppConfig = {
-		...getConfig(),
+		...current,
 		...rest,
+		...(theme === undefined ? {} : { theme }),
+		themeMode: nextThemeMode,
+		...(nextSystemThemePair ? { systemThemePair: nextSystemThemePair } : {}),
 		...(subagentsEnabled === undefined ? {} : { subagentsEnabled }),
 		...(customLayoutPresets === undefined
 			? {}

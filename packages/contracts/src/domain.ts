@@ -391,6 +391,28 @@ export interface GithubAuthStatus {
 
 export type ThemeId = string;
 
+export const THEME_MODES = ["fixed", "system"] as const;
+export type ThemeMode = (typeof THEME_MODES)[number];
+
+export interface SystemThemePair {
+	light: ThemeId;
+	dark: ThemeId;
+}
+
+export function isThemeMode(value: unknown): value is ThemeMode {
+	return THEME_MODES.some((mode) => mode === value);
+}
+
+export function isSystemThemePair(value: unknown): value is SystemThemePair {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		!Array.isArray(value) &&
+		typeof Reflect.get(value, "light") === "string" &&
+		typeof Reflect.get(value, "dark") === "string"
+	);
+}
+
 export type LayoutToolId = "projects" | "specs" | "files" | "changes" | "review";
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
@@ -452,6 +474,8 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 
 export interface AppConfig {
 	theme: ThemeId;
+	themeMode: ThemeMode;
+	systemThemePair?: SystemThemePair;
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
@@ -477,6 +501,7 @@ export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;
 
 export const DEFAULT_CONFIG: AppConfig = {
 	theme: "dark",
+	themeMode: "fixed",
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	composerGrowthLimit: "half-chat",
