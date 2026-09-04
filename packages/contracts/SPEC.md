@@ -459,7 +459,9 @@ of the host.
   (open records) and **`recentProjects`** (all known records, open + closed), plus **`hostPlatform`**
   (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
   offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from
-  the browser / **`project.updated`** — the
+  the browser, plus **`update`** (the current `UpdateStatus`, optional for older hosts) — the same
+  seed-then-converge shape as `config`: the channel carries transitions, so a page that loads *after* a
+  check would otherwise know nothing until the next one / **`project.updated`** — the
   full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
   atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
   **`session.created`** (the initial `SessionSummary`, broadcast when a new host-owned session registers so
@@ -467,8 +469,9 @@ of the host.
   session id; a non-replayable domain event broadcast after permanent deletion so every client removes the chat
   and blocks stale hydration) /
   **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
-  client converges) / **`update.status`** (the full `UpdateStatus`, replayed to late subscribers so a
-  reloaded page sees a staged update it never watched arrive) / **`feedback.interview`** (an empty, addressed invitation sent only to the host-claimed
+  client converges) / **`update.status`** (the full `UpdateStatus` after every
+  transition; the *seed* is `server.welcome`'s `update`, so a reloaded page starts from truth rather than
+  from the next transition) / **`feedback.interview`** (an empty, addressed invitation sent only to the host-claimed
   frontend; not broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen

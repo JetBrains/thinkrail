@@ -66,6 +66,14 @@ import {
 } from "../terminal";
 import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
 import {
+	getUpdateStatus,
+	setUpdateChecksEnabled,
+	setUpdatePublisher,
+	startUpdates,
+	stopUpdates,
+	type UpdateProvider,
+} from "../update";
+import {
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
 	setWatchPublisher,
@@ -104,6 +112,7 @@ export interface CreateServerOptions {
 		AnalyticsOptions,
 		"channel" | "build" | "posthogApiKey" | "posthogHost" | "mute"
 	>;
+	updateProvider?: UpdateProvider;
 }
 
 export interface RunningServer {
@@ -138,6 +147,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		projectPath,
 		appVersion,
 		analytics,
+		updateProvider,
 	} = options;
 
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
@@ -209,6 +219,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
+				ws.subscribe(WS_CHANNELS.updateStatus);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
@@ -220,6 +231,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					projects: listProjects(),
 					recentProjects: listRecentProjects(),
 					config: getConfig(),
+					update: getUpdateStatus(),
 					...(appVersion ? { appVersion } : {}),
 				};
 				const welcomeStatus = ws.send(
@@ -432,6 +444,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
 		);
 		setAnalyticsSending(config.analyticsEnabled);
+		setUpdateChecksEnabled(config.updateChecksEnabled);
 		refreshSubagentTools();
 	});
 
@@ -502,6 +515,18 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		enabled: getConfig().analyticsEnabled,
 	});
 
+	setUpdatePublisher((status) => {
+		server.publish(
+			WS_CHANNELS.updateStatus,
+			JSON.stringify({ channel: WS_CHANNELS.updateStatus, data: status }),
+		);
+	});
+	startUpdates({
+		...(updateProvider ? { provider: updateProvider } : {}),
+		...(appVersion ? { appVersion } : {}),
+		checksEnabled: getConfig().updateChecksEnabled,
+	});
+
 	reviveTerminalSessions();
 	for (const workspace of loadWorkspaces()) provisionInitialTerminal(workspace);
 
@@ -519,6 +544,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		void shutdownAnalytics();
 		cancelAllLogins();
 		stopJbcentralRuntime();
+		stopUpdates();
 		stopAllWatches();
 		disposeAllSessions();
 		for (const timer of reapTimers.values()) clearTimeout(timer);
@@ -530,6 +556,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		closeAllTerminals();
 		setFeedbackPublisher(null);
 		setSettingsPublisher(null);
+		setUpdatePublisher(null);
 		setJbcentralAppliedPublisher(() => {});
 		setJbcentralChangedPublisher(() => {});
 		server.stop(true);

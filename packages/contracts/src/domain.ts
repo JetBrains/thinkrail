@@ -584,13 +584,7 @@ export interface UpdateInstallTarget {
 	version?: string;
 }
 
-export type UpdatePhase =
-	| "idle"
-	| "checking"
-	| "available"
-	| "installing"
-	| "staged"
-	| "error";
+export type UpdatePhase = "idle" | "checking" | "available" | "installing" | "staged" | "error";
 
 export interface UpdateStatus {
 	current: { version: string; channel: ReleaseChannel | "dev"; commit?: string };

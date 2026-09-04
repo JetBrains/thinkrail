@@ -407,6 +407,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   reconnect retains and re-delivers it after `server.welcome`. A host restart has no claim to re-deliver, and
   the welcome clears the frontend's stale popup projection. Popup `feedback.respond` actions are ordinary
   replay-safe requests and never alter the Settings link.
+- The **update wiring**: `startUpdates` at boot with the launcher-threaded `updateProvider` option (absent
+  — `dev.ts`, tests, low-level embedders — means a no-updater status, not a broken one), the current
+  `updateChecksEnabled`, and a `setUpdatePublisher` that broadcasts `update.status`; the same tee off the
+  settings publisher that feeds `setAnalyticsSending` also calls `setUpdateChecksEnabled`; `server.welcome`
+  carries `update: getUpdateStatus()` as the seed the channel then updates; `stopUpdates()` runs in `stop()`
+  beside the other schedule teardown; and the three `update.*` handlers are thin passthroughs — the phase
+  machine is [[submodule-server-update]]'s, and nothing here decides whether an update exists.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for

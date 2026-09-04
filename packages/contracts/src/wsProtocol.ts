@@ -108,6 +108,7 @@ export interface ServerWelcome {
 	projects: Project[];
 	recentProjects: Project[];
 	config: AppConfig;
+	update?: UpdateStatus;
 }
 
 export interface WorkspaceRemoved {
