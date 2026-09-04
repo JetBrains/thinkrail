@@ -110,6 +110,15 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
   preview); until mounted it renders as highlighted source, so static contexts (`RenderedDiff`'s
   `renderToStaticMarkup`) degrade to code exactly like shiki blocks do.
+- **Configurable transcript measure** — the host-synchronized `chatLineWidth` (40–240, default 120)
+  is an approximate CSS `ch` text measure because chat retains its proportional reading font. `ChatView`,
+  the store-aware integration boundary, applies it to one centered outer column shared by every transcript
+  row, the stream indicator, and sticky activity breadcrumbs; ordinary row gutters sit outside the measure,
+  and user bubbles retain their 85% maximum inside it. Composer/header/queue/history chrome remains
+  pane-width. With `chatLineWidthBounded` (default `true`), the column is capped by the mounted chat pane;
+  without it, the column keeps its configured measure and the transcript viewport scrolls horizontally from
+  its left edge. Code blocks and tables retain their own inner scrolling. This changes presentation only:
+  canonical turns and the props-driven row renderers never acquire settings state.
 - **Message copy** — plain user bubbles and the **round's concluding assistant answer** carry a
   hover-revealed (`group`/`opacity-0 group-hover:opacity-100`) **`CopyButton`** (`chat/CopyButton.tsx`,
   `data-testid="chat-copy"`) that copies the full message **source** — `userText(message.content)` for a

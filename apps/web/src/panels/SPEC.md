@@ -430,7 +430,13 @@ a project picker, the prompt hero, and the reused
   **converges on the `settings.changed` broadcast** with no optimistic apply; rejection leaves
   controls/theme unchanged and raises a toast. An unavailable or wrong-appearance configured id is
   disclosed beside the effective same-appearance fallback and is never silently written back. The panel never owns a theme list,
-  media-query logic, pair derivation, or fallback — all come from `themes`); **`ChatSettings`** (the live section immediately after Appearance —
+  media-query logic, pair derivation, or fallback — all come from `themes`); **`LineWidthSettings`** (the
+  live section immediately after Appearance — one page with stacked **Chat** and **Files** groups. Each has
+  a 40–240 integer field with visible `symbols` suffix and explicit Save, plus an independent
+  host-synchronized **No bigger than pane width** switch; defaults are 120/on. Invalid drafts stay local
+  with an accessible range error; Escape restores the host value, Enter saves when valid, and a changed
+  authoritative width from `settings.changed` replaces a stale draft. Mutations converge only on that
+  broadcast and rejected calls toast without changing geometry); **`ChatSettings`** (the next live section —
   **Message order** radio cards over `store.chatMessageOrder` (Oldest first, the compatibility default /
   Newest first, the opt-in), one **Streaming response movement** two-handle range over
   `store.streamingResponseMovement`, then the three existing composer-growth cards. The movement control's
@@ -511,7 +517,7 @@ a project picker, the prompt hero, and the reused
   **auto-fix toggle** (`review-autofix-toggle`, a switch over `store.reviewAutoFix` →
   `settings.update { reviewAutoFix }`) — off means a `request_changes` verdict records findings and waits
   (the host gates its auto-fix cycle on it, see `submodule-server-todos`). A single dimmed "General" nav item ("Soon") still signals the shell is
-  built to grow. `ProvidersSettings`/`AppearanceSettings`/`ChatSettings`/`TemplatesSettings`/
+  built to grow. `ProvidersSettings`/`AppearanceSettings`/`LineWidthSettings`/`ChatSettings`/`TemplatesSettings`/
   `PrivacySettings`/`ReviewSettings`/`FeedbackSettings` and the app-wide **`InterviewPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and
   fixed Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
@@ -1272,6 +1278,12 @@ own section. The kebab menu (`plan-menu`, a
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
+- **Source lines wrap at the synchronized file column.** Every ordinary `MonacoEditor` and both inner
+  editors of `MonacoDiff` use `fileLineWidth` as `wordWrapColumn` (40–240, default 120). The independent
+  `fileLineWidthBounded` default maps to Monaco `wordWrap: "bounded"`, wrapping sooner at each mounted
+  editor pane; off maps to `"wordWrapColumn"`, preserving the selected column with horizontal scrolling in
+  a narrower pane. Broadcast changes update mounted editors. Rendered Markdown and rendered Markdown diffs
+  retain their separate ~78ch reading measure; no bytes, ruler, extension mask, or no-wrap mode is involved.
 - **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` defines the `thinkrail`
   theme from live surface + semantic syntax variables and chooses its normal/high-contrast base from
   manifest appearance/contrast metadata—never from a known id—then redefines it after the theme module's

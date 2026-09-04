@@ -30,7 +30,8 @@ of the host.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; the value re-exports
   `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
-  `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
+  `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
+  chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
   hydrate, the host skips them in the history index and does not count them as `message_sent`; both
   sides agree here rather than each re-deriving `startsWith`) + **`isRetriedAttempt(messages, index)`**
@@ -220,19 +221,24 @@ of the host.
   **`ComposerGrowthLimit`** (`"compact" | "roomy" | "half-chat"`) is the closed, server-synced composer
   height preference: 6 visual lines, 10 visual lines, or 50% of the mounted chat panel respectively;
   `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;
+  **`LINE_WIDTH_COLUMNS`** owns the shared `{ min: 40, max: 240, default: 120 }` integer contract for
+  the independently bounded chat/file visual wrap columns; **`isLineWidth`** is the one validator consumed
+  on both sides of the wire;
   **`SUBAGENT_SETTINGS_PROTOCOL_VERSION`** pins the global/workspace controls to their v57 wire
   introduction so a later web client hides them against an older host without comparing against the moving
   latest protocol; **`JBCENTRAL_QUOTA_PROTOCOL_VERSION`** likewise pins the v59 quota read + settings;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, terminalReplayKb,
-  composerGrowthLimit, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled,
-  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; `themeMode` defaults to
-  `"fixed"` and no pair, preserving both legacy configs and the explicit Dark default;
-  `subagentsEnabled` is the host-wide subagent default (`true` for current behavior), overridden only by
-  `Workspace.subagentsOverride`; `customLayoutPresets` is the bounded resource-free catalog and is the
-  **only** layout value synchronized by the host; current/default preset and group limits are web-local);
-  `analyticsEnabled` is the anonymous usage-analytics switch, default `true` — it is the **only** analytics
-  fact on the wire: the installation id stays server-side by design, see `submodule-server-analytics`) carries
-  it with the **`DEFAULT_CONFIG`** fallback (persisted host-side as `config.json`, delivered in
+  composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded, fileLineWidthBounded,
+  customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled,
+  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
+  the wire at protocol v60. `themeMode` defaults to `"fixed"` and no pair, preserving both legacy configs
+  and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
+  behavior), overridden only by `Workspace.subagentsOverride`; `customLayoutPresets` is the bounded
+  resource-free catalog and is the **only** layout value synchronized by the host; current/default preset
+  and group limits are web-local); `analyticsEnabled` is the anonymous usage-analytics switch, default
+  `true` — it is the **only** analytics fact on the wire: the installation id stays server-side by design,
+  see `submodule-server-analytics`) carries it with the **`DEFAULT_CONFIG`** fallback (persisted host-side
+  as `config.json`, delivered in
   `server.welcome`, mutated via `settings.update`).
   **`InterviewResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic
   feedback popup. No usage count, eligibility, dismissal state, or client identity crosses the wire.
