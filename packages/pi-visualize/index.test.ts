@@ -74,6 +74,15 @@ describe("visualize extension", () => {
 		).rejects.toThrow(/visualize: invalid Mermaid syntax in `options\[1\]\.mermaid`/);
 	});
 
+	test("execute rejects whitespace-only comparison Mermaid before browser rendering", async () => {
+		await expect(
+			loadTool().execute("id", {
+				type: "comparison",
+				options: [{ name: "Blank", mermaid: "   " }],
+			}),
+		).rejects.toThrow(/visualize: invalid Mermaid syntax in `options\[0\]\.mermaid`/);
+	});
+
 	test("execute rejects invalid top-level Mermaid with correction feedback", async () => {
 		await expect(
 			loadTool().execute("id", { type: "diagram", mermaid: "flowchart LR\n A -->" }),

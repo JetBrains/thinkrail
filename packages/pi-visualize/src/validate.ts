@@ -10,9 +10,7 @@ export function mermaidSources(params: VisualizeParams): MermaidSource[] {
 		return [{ location: "mermaid", source: params.mermaid ?? "" }];
 	}
 	return (params.options ?? []).flatMap((option, index) =>
-		option.mermaid?.trim()
-			? [{ location: `options[${index}].mermaid`, source: option.mermaid }]
-			: [],
+		option.mermaid ? [{ location: `options[${index}].mermaid`, source: option.mermaid }] : [],
 	);
 }
 
