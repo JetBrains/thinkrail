@@ -6,7 +6,15 @@ import {
 	reviewNumber,
 	runProviderCommand,
 } from "../branch-review";
-import { assertSafeRef, git, gitAsync, gitStatus } from "../git";
+import {
+	assertSafeRef,
+	git,
+	gitAsync,
+	gitStatus,
+	listRemotes,
+	remoteNameOf,
+	remoteRefOid,
+} from "../git";
 import { ghSetupProblem } from "../github";
 import { listTodos } from "../todos";
 import { getWorkspace, refreshUserOwnedWorkspace } from "../workspaces";
@@ -192,6 +200,17 @@ function prWorkspace(workspaceId: string) {
 	refreshUserOwnedWorkspace(workspaceId);
 	const ws = getWorkspace(workspaceId);
 	assertSafeRef(ws.branch);
+	const baseRemote = remoteNameOf(ws.baseBranch, listRemotes(ws.worktreePath));
+	const unconfiguredTrackingRef =
+		baseRemote === null &&
+		!ws.baseBranch.startsWith("origin/") &&
+		ws.baseBranch.includes("/") &&
+		remoteRefOid(ws.worktreePath, ws.baseBranch) !== null;
+	if ((baseRemote !== null && baseRemote !== "origin") || unconfiguredTrackingRef) {
+		throw new Error(
+			`Cannot open a PR from non-origin remote base "${ws.baseBranch}". Open it manually or create a workspace from a local or origin base.`,
+		);
+	}
 	if (ws.branch === baseRef(ws.baseBranch)) {
 		throw new Error(
 			`"${ws.branch}" is this workspace's base branch — there's nothing to open a PR against. Switch to a feature branch first.`,

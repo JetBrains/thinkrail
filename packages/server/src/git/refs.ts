@@ -25,7 +25,13 @@ export function assertSafeRef(ref: string): void {
 }
 
 export function remoteNameOf(ref: string, remotes: readonly string[]): string | null {
-	return remotes.find((remote) => ref.startsWith(`${remote}/`)) ?? null;
+	let match: string | null = null;
+	for (const remote of remotes) {
+		if (ref.startsWith(`${remote}/`) && (match === null || remote.length > match.length)) {
+			match = remote;
+		}
+	}
+	return match;
 }
 
 export function remoteTrackingRef(ref: string, remotes: readonly string[]): string | null {

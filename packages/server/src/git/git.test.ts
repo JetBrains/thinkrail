@@ -213,6 +213,19 @@ test("listBranches surfaces origin branches and the origin default", async () =>
 	expect(defaultBranch).toBe("origin/main");
 });
 
+test("the origin/main default survives a local branch with the same shorthand", async () => {
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "update-ref", "--no-deref", "-d", "refs/remotes/origin/HEAD");
+	git(repo, "update-ref", "refs/heads/origin/main", "HEAD");
+
+	const branches = await listBranches("p1");
+	expect(branches.remote).toContain("origin/main");
+	expect(branches.defaultBranch).toBe("origin/main");
+});
+
 function addSecondRemote(): void {
 	const originRepo = join(dataDir, "origin.git");
 	const upstreamRepo = join(dataDir, "upstream.git");
@@ -245,6 +258,14 @@ test("another remote's HEAD is the default when origin has none, over the origin
 	expect((await listBranches("p1")).defaultBranch).toBe("origin/main");
 });
 
+test("only a remote HEAD symref can become the non-origin default", async () => {
+	addSecondRemote();
+	git(repo, "update-ref", "refs/remotes/aaa/topic", "HEAD");
+	git(repo, "symbolic-ref", "refs/remotes/aaa/alias", "refs/remotes/aaa/topic");
+
+	expect((await listBranches("p1")).defaultBranch).toBe("upstream/trunk");
+});
+
 test("a remote HEAD still answers once its target is gone, so create can report the failed fetch", async () => {
 	addSecondRemote();
 	git(repo, "remote", "set-head", "origin", "main");
@@ -261,6 +282,22 @@ test("prefetch fetches from the remote the ref names, and refuses a remote-shape
 
 	git(repo, "branch", "upstairs/trunk");
 	expect(await prefetchBranch("p1", "upstairs/trunk")).toEqual({ ok: false, moved: false });
+});
+
+test("prefetch honors a legal remote name containing a slash", async () => {
+	const teamRepo = join(dataDir, "team.git");
+	const nestedRepo = join(dataDir, "team-upstream.git");
+	git(repo, "init", "--bare", teamRepo);
+	git(repo, "init", "--bare", nestedRepo);
+	git(repo, "remote", "add", "team", teamRepo);
+	git(repo, "remote", "add", "team/upstream", nestedRepo);
+	git(repo, "push", "team/upstream", "main:trunk");
+	git(repo, "update-ref", "-d", "refs/remotes/team/upstream/trunk");
+
+	expect(await prefetchBranch("p1", "team/upstream/trunk")).toEqual({
+		ok: true,
+		moved: true,
+	});
 });
 
 test("listBranches throws on an unknown project", async () => {

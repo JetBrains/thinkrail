@@ -71,24 +71,35 @@ function lines(out: string): string[] {
 		.filter(Boolean);
 }
 
+const LOCAL_REF_PREFIX = "refs/heads/";
+const REMOTE_REF_PREFIX = "refs/remotes/";
+
+function refWithin(ref: string, prefix: string): string | null {
+	if (!ref.startsWith(prefix)) return null;
+	const name = ref.slice(prefix.length);
+	return name || null;
+}
+
 export async function listBranches(projectId: string): Promise<BranchList> {
 	const project = loadProjects().find((p) => p.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 	const repo = project.path;
 
 	const [localRefs, remoteRefs] = await Promise.all([
-		gitAsync(repo, ["for-each-ref", "--format=%(refname:short)", "refs/heads"]),
-		gitAsync(repo, ["for-each-ref", "--format=%(refname:short)\t%(symref)", "refs/remotes"]),
+		gitAsync(repo, ["for-each-ref", "--format=%(refname)", "refs/heads"]),
+		gitAsync(repo, ["for-each-ref", "--format=%(refname)\t%(symref)", "refs/remotes"]),
 	]);
 	if (!localRefs.ok)
 		throw new Error(`Could not list local branches: ${localRefs.err || "git failed"}`);
 	if (!remoteRefs.ok)
 		throw new Error(`Could not list remote branches: ${remoteRefs.err || "git failed"}`);
-	const local = lines(localRefs.out);
+	const local = lines(localRefs.out)
+		.map((ref) => refWithin(ref, LOCAL_REF_PREFIX) ?? "")
+		.filter(Boolean);
 	const remote = lines(remoteRefs.out)
 		.map((line) => line.split("\t"))
 		.filter((parts) => !parts[1])
-		.map((parts) => parts[0] ?? "")
+		.map((parts) => refWithin(parts[0] ?? "", REMOTE_REF_PREFIX) ?? "")
 		.filter(Boolean);
 
 	return { local, remote, defaultBranch: resolveDefaultBranch(repo) };
@@ -99,15 +110,24 @@ export function listRemotes(repoPath: string): string[] {
 }
 
 export function resolveDefaultBranch(repoPath: string): string {
-	const originHead = git(repoPath, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]);
-	if (originHead.ok && originHead.out) return originHead.out;
+	const originHeadRef = `${REMOTE_REF_PREFIX}origin/HEAD`;
+	const originHead = git(repoPath, ["symbolic-ref", originHeadRef]);
+	const originDefault = originHead.ok ? refWithin(originHead.out, REMOTE_REF_PREFIX) : null;
+	if (originDefault) return originDefault;
 	const rows = lines(
-		git(repoPath, ["for-each-ref", "--format=%(refname:short)\t%(symref:short)", "refs/remotes"])
-			.out,
+		git(repoPath, ["for-each-ref", "--format=%(refname)\t%(symref)", "refs/remotes"]).out,
 	).map((line) => line.split("\t"));
-	const otherHead = rows.find(([ref, symref]) => symref && ref !== "origin/HEAD")?.[1];
-	if (otherHead) return otherHead;
-	if (rows.some(([ref, symref]) => ref === "origin/main" && !symref)) return "origin/main";
+	const otherHead = rows.find(
+		([ref, symref]) =>
+			ref !== originHeadRef &&
+			ref?.startsWith(REMOTE_REF_PREFIX) &&
+			ref.endsWith("/HEAD") &&
+			symref?.startsWith(REMOTE_REF_PREFIX),
+	)?.[1];
+	const otherDefault = refWithin(otherHead ?? "", REMOTE_REF_PREFIX);
+	if (otherDefault) return otherDefault;
+	if (rows.some(([ref, symref]) => ref === `${REMOTE_REF_PREFIX}origin/main` && !symref))
+		return "origin/main";
 	return currentBranch(repoPath);
 }
 
@@ -132,7 +152,7 @@ export function currentBranch(repoPath: string): string {
 
 export function remoteRefOid(repoPath: string, ref: string): string | null {
 	if (!isSafeRef(ref)) return null;
-	const remote = `refs/remotes/${ref}`;
+	const remote = `${REMOTE_REF_PREFIX}${ref}`;
 	const result = git(repoPath, ["rev-parse", "--verify", "--quiet", "--end-of-options", remote]);
 	return result.ok && result.out !== "" ? result.out : null;
 }

@@ -186,23 +186,20 @@ treatment.
   used by both the flat list's path rows and the diff header's path chip. The **branch combobox** is the
   shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, refreshed on every
   open with an explicit Refresh control as well) — one component for the New-Workspace dialog's *base* branch
-  and the Changes header's *target* branch. **Remote is two layers, Local one**: a `Remote` heading over one
-  nested group per remote (`origin`, `upstream`, from the pure `branchGroups.ts`' `groupBranchesByRemote`,
-  unit-tested — first-seen remote order, branch order kept), whose rows carry the branch alone because the
-  heading above them already names the remote. A fork works two remotes, so a list that shows only `origin`
-  hides the ref it branches from. The full ref stays each row's `value` and `data-branch`, so searching
-  `upstream/main` still finds it and the trigger still names the remote it picked. The nesting is **cmdk
-  groups inside cmdk groups, never a plain wrapper**: cmdk re-parents every `[cmdk-group]` to the list root
-  on each sort, so a `div` around them is torn out, while a nested group is kept inside its parent's items.
-  Only the leaf groups register items, so the `Remote` parent would hide itself the moment a search runs —
-  it is `forceMount`ed and instead hides on `not-has-[[cmdk-group]:not([hidden])]`, i.e. exactly when cmdk
-  has hidden every remote under it. The whole state *around* it — the list, `refreshing`, `refresh()` — is the shared
+  and the Changes header's *target* branch. **Remote stays one group across every remote**, each row carrying
+  its full ref (`origin/main`, `upstream/main`): the prefix distinguishes equal branch names, and keeping the
+  ref intact also supports legal remote names containing `/` without asking the browser to reverse-engineer
+  Git's namespace. A fork works two remotes, so a list that shows only `origin` hides the ref it branches
+  from. The whole state *around* it — the list, `refreshing`, `refresh()` — is the shared
   **`useBranchList(projectId, onLoaded?)`** (`branches.ts`, over the offline-degrading
   `listBranchesOrEmpty`), so both pickers are identical **by construction**: the list is **keyed to the
   project** (it clears on a project change, and both reads are generation-stamped, so a switch can never
   offer or land the previous project's branches), **only the initial read degrades** (a *refresh* keeps its
   last good list instead of blanking the picker on a transient failure), and `refreshing` always drives the
-  spinner. A `null` projectId reads nothing — how a closed dialog pauses. Its degraded default is
+  spinner. Initial-load prefetch always offers the non-empty default to the host, which is the authority on
+  whether it names a configured remote; this keeps a stale or missing default tracking ref off create's
+  critical path without reading the not-yet-rendered branch state. Manual picks prefetch only rows from the
+  loaded remote list. A `null` projectId reads nothing — how a closed dialog pauses. Its degraded default is
   `defaultBranch: ""`, **never the literal `HEAD`**: a sentinel that named a ref would be believed — the
   dialog would preselect it and persist it as the workspace's `baseBranch`, and that worktree would forever
   diff against its own head. Empty means "unknown", so `create` omits `baseRef` and the host resolves the
