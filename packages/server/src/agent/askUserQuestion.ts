@@ -248,6 +248,21 @@ export function assessAnswerability(
 	return { ok: true, args };
 }
 
+export function awaitingQuestionToolCallId(messages: readonly AgentMessage[]): string | null {
+	const views = messages as readonly MessageView[];
+	for (let i = views.length - 1; i >= 0; i--) {
+		const view = views[i];
+		if (!view) continue;
+		if (view.role === "user") return null;
+		for (const block of toolCallsOf(view)) {
+			const { id } = block;
+			if (id === undefined || block.name !== ASK_USER_QUESTION_TOOL_NAME) continue;
+			if (assessAnswerability(messages, id).ok) return id;
+		}
+	}
+	return null;
+}
+
 export const ANSWERABILITY_ERRORS: Record<Extract<Answerability, { ok: false }>["reason"], string> =
 	{
 		unknown_call: "Unknown ask_user_question tool call",

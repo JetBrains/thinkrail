@@ -13,6 +13,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type {
+	ActivityStatus,
 	AgentSettlement,
 	AskUserQuestionResult,
 	ImageContent,
@@ -21,6 +22,8 @@ import type {
 	QueueLane,
 	RefreshedModels,
 	RemovedQueuedMessage,
+	SessionActivity,
+	SessionActivityPayload,
 	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
@@ -37,6 +40,7 @@ import { isTranscriptMessageRole } from "@thinkrail/contracts";
 import type { ParentContext } from "pi-delegation";
 import { RECURSION_GUARD_TOOLS } from "pi-subagents";
 import { logger } from "../log";
+import { deriveActivityStatus } from "./activity";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import {
 	disposeSessionChildren,
@@ -55,7 +59,12 @@ import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { trashFile } from "./trash";
-import { cancelExtUiForSession, createWebUiContext, notifyExtensionError } from "./webUiContext";
+import {
+	cancelExtUiForSession,
+	createWebUiContext,
+	hasPendingExtUiDialog,
+	notifyExtensionError,
+} from "./webUiContext";
 
 const log = logger("agent");
 
@@ -77,6 +86,7 @@ interface Entry {
 	piCompactionInProgress: boolean;
 	registered: boolean;
 	subagentToolsRefreshPending: boolean;
+	publishedActivity: ActivityStatus | null;
 }
 
 const sessions = new Map<string, Entry>();
@@ -114,6 +124,44 @@ export function setSessionCreatedPublisher(fn: (payload: SessionCreatedPayload) 
 let publishDeleted: (payload: SessionDeletedPayload) => void = () => {};
 export function setSessionDeletedPublisher(fn: (payload: SessionDeletedPayload) => void): void {
 	publishDeleted = fn;
+}
+
+let publishActivity: (payload: SessionActivityPayload) => void = () => {};
+export function setSessionActivityPublisher(fn: (payload: SessionActivityPayload) => void): void {
+	publishActivity = fn;
+}
+
+function activityOf(entry: Entry): ActivityStatus | null {
+	return deriveActivityStatus({
+		isStreaming: entry.session.isStreaming,
+		pendingMessageCount: entry.session.pendingMessageCount,
+		messages: entry.session.messages,
+		lastSettlement: entry.lastSettlement,
+		hasPendingDialog: hasPendingExtUiDialog(entry.session.sessionId),
+	});
+}
+
+export function syncSessionActivity(sessionId: string): void {
+	const entry = sessions.get(sessionId);
+	if (!entry) return;
+	const status = isSessionDeleted(sessionId, entry.workspaceId) ? null : activityOf(entry);
+	if (status === entry.publishedActivity) return;
+	entry.publishedActivity = status;
+	publishActivity({ sessionId, workspaceId: entry.workspaceId, status });
+}
+
+function retractActivity(sessionId: string, workspaceId: string): void {
+	publishActivity({ sessionId, workspaceId, status: null });
+}
+
+export function listSessionActivity(): SessionActivity[] {
+	const rows: SessionActivity[] = [];
+	for (const [sessionId, entry] of sessions) {
+		if (isSessionDeleted(sessionId, entry.workspaceId)) continue;
+		const status = activityOf(entry);
+		if (status) rows.push({ sessionId, workspaceId: entry.workspaceId, status });
+	}
+	return rows;
 }
 
 let sessionManagerFactory: (cwd: string) => SessionManager = (cwd) => SessionManager.create(cwd);
@@ -271,6 +319,7 @@ async function prepareSessionEntry(
 		piCompactionInProgress: false,
 		registered: false,
 		subagentToolsRefreshPending: false,
+		publishedActivity: null,
 	};
 	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "queue_update") {
@@ -306,6 +355,7 @@ async function prepareSessionEntry(
 		}
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
+		if (sessions.get(sessionId) === entry) syncSessionActivity(sessionId);
 	});
 
 	const reportExtensionError = (failure: ExtensionError): void => {
@@ -357,6 +407,7 @@ async function registerSession(
 	applySubagentTools(prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
+	syncSessionActivity(session.sessionId);
 	return prepared.result;
 }
 
@@ -675,6 +726,7 @@ export async function answerQuestion(
 	await session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
 		triggerTurn: true,
 	});
+	syncSessionActivity(sessionId);
 }
 
 function synchronizeQueuedLane(entry: Entry, kind: QueueLane, texts: readonly string[]): void {
@@ -817,6 +869,7 @@ export function clearQueueSession(sessionId: string, requireTextOnly = false): S
 		throw new Error("Cannot restore queued image messages as text");
 	}
 	entry.session.clearQueue();
+	syncSessionActivity(sessionId);
 	return content;
 }
 
@@ -851,6 +904,7 @@ export async function removeQueuedSession(
 			);
 		}
 	}
+	syncSessionActivity(sessionId);
 	return { removed, queue: queueStateOf(entry) };
 }
 
@@ -1000,6 +1054,7 @@ function disposeSession(sessionId: string): Promise<void> {
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
+	if (entry.publishedActivity !== null) retractActivity(sessionId, entry.workspaceId);
 	log.debug(`session ${sessionId} disposed`);
 	return cascade;
 }

@@ -113,6 +113,45 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     destructive queue API returns text but drops image blocks; Pi's queue events remain authoritative for
     membership/order. The host projects only a conservative `hasImages` aggregate into summaries/events, so
     image bytes do not ride the ordinary read stream.
+- **Activity projection** (`activity.ts`) answers "what is happening in a workspace nobody has open?" —
+  the signal the Projects rail draws. `deriveActivityStatus` is a **pure function** of one session's
+  observable state; the manager owns only the publish-on-change bookkeeping (`publishedActivity` per
+  entry, so a status that did not move emits nothing), the `session.activityList` snapshot, and retraction
+  on disposal.
+
+  | # | condition | status |
+  |---|---|---|
+  | 1 | a pending blocking extension dialog | `waiting` |
+  | 2 | `session.isStreaming` | `running` |
+  | 3 | `session.pendingMessageCount > 0` | `queued` |
+  | 4 | an unanswered `ask_user_question` | `waiting` |
+  | 5 | `lastSettlement.stopReason === "error"` | `failed` |
+  | — | otherwise | idle, i.e. `null` |
+
+  Every rung of that order is load-bearing and pinned by `activity.test.ts`:
+  - **A dialog outranks streaming** because pi is technically mid-turn while blocked on it, yet the person
+    is the blocker. Reporting `running` would hide a prompt waiting for an answer.
+  - **`queued` outranks `failed`** (you already sent the follow-up, so the failure is handled and nagging
+    would be wrong) **and outranks `waiting`** — a queued message supersedes a pending questionnaire, but
+    it is still in pi's queue and *not yet in the transcript*, so `assessAnswerability` cannot see it.
+    This is why supersession is not modelled as mutable "awaiting" state on the entry: `waiting` is
+    **derived from the transcript** via `awaitingQuestionToolCallId`, which reuses `assessAnswerability`
+    rather than duplicating its already-answered/superseded rules. One authority, nothing to keep in sync.
+  - **`aborted` is idle, not `failed`** — cancelling is a choice, not a fault, and a red row for every
+    Escape would teach the user to ignore the signal.
+
+  The hot path costs nothing: rungs 1–2 return before the transcript scan, so the per-event sync that
+  fires during streaming never walks messages. The scan runs only at rest, and stops at the latest user
+  message.
+
+  The status is **per session and never pre-rolled per workspace** — collapsing several chats into one row
+  is presentation policy owned by the client's selectors (see `apps/web/src/store/SPEC.md`), and a
+  precedence order baked in here would be a UI decision escaping into the host.
+
+  **Lifetime:** in-memory, for this host process. Entries are never idle-evicted, so a `failed`/`waiting`
+  status survives client reconnects, but a host restart resets un-reattached sessions to idle; the
+  transcript stays authoritative and shows the failure once the chat is opened. Deriving those two states
+  from the disk-session scan is the deliberate follow-up, not V1.
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.
     `prompt`/`steer`/`followUp` (with images) /
@@ -536,7 +575,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
-  `buildAnswersMessage`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
+  `buildAnswersMessage`/`awaitingQuestionToolCallId`); the activity layer
+  (`deriveActivityStatus`/`ActivityInputs` + `listSessionActivity`/`syncSessionActivity`/
+  `setSessionActivityPublisher`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
   (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /

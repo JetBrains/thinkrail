@@ -39,6 +39,7 @@ import {
 	isSessionStreaming,
 	listAvailableModels,
 	listProjectAliasSkillNames,
+	listSessionActivity,
 	listSessions,
 	listSkillCatalog,
 	listSkillCommands,
@@ -692,6 +693,7 @@ const handlers: Record<string, Handler> = {
 			}
 		});
 	},
+	"session.activityList": () => listSessionActivity(),
 	"session.getMessages": (params) => {
 		const p = params as { sessionId: string; workspaceId: string };
 		return getSessionMessages(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);

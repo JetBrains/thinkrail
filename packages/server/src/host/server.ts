@@ -3,6 +3,7 @@ import { join, normalize } from "node:path";
 import type {
 	HostPlatform,
 	ServerWelcome,
+	SessionActivityPayload,
 	SessionCreatedPayload,
 	SessionDeletedPayload,
 	TerminalTabsPush,
@@ -19,14 +20,17 @@ import {
 	getSessionWorkspaceId,
 	isProjectSkillPath,
 	refreshSubagentTools,
+	setExtUiPendingObserver,
 	setExtUiPublisher,
 	setReviewCommentHandler,
+	setSessionActivityPublisher,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionPublisher,
 	setSkillAdmissionResolver,
 	setSubagentsEnabledResolver,
 	settleSessionsForShutdown,
+	syncSessionActivity,
 } from "../agent";
 import {
 	type AnalyticsOptions,
@@ -200,6 +204,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
 				ws.subscribe(WS_CHANNELS.sessionCreated);
 				ws.subscribe(WS_CHANNELS.sessionDeleted);
+				ws.subscribe(WS_CHANNELS.sessionActivity);
 				ws.subscribe(WS_CHANNELS.providerLogin);
 				ws.subscribe(WS_CHANNELS.providerChanged);
 				ws.subscribe(WS_CHANNELS.projectUpdated);
@@ -448,6 +453,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			JSON.stringify({ channel: WS_CHANNELS.sessionDeleted, data: payload }),
 		);
 	});
+
+	setSessionActivityPublisher((payload: SessionActivityPayload) => {
+		server.publish(
+			WS_CHANNELS.sessionActivity,
+			JSON.stringify({ channel: WS_CHANNELS.sessionActivity, data: payload }),
+		);
+	});
+
+	setExtUiPendingObserver(syncSessionActivity);
 
 	setSessionPublisher((payload) => {
 		server.publish(
