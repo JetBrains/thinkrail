@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { Review, ReviewComment } from "@thinkrail/contracts";
 import { buildTextQuote, hashContent } from "./anchoring";
-import { renderPackage } from "./packageRender";
+import { buildReviewFixDetails, renderPackage, toReviewFixComment } from "./packageRender";
 
 const CONTENT = Array.from({ length: 40 }, (_, i) => `line ${i + 1}`).join("\n");
 const BASE_CONTENT = Array.from({ length: 40 }, (_, i) => `old ${i + 1}`).join("\n");
@@ -109,6 +109,59 @@ test("review-level comments render without anchor attributes", () => {
 	});
 	expect(text).toContain('<comment id="rc_2" kind="review" anchor="anchored">');
 	expect(text).toContain("No tests at all.");
+});
+
+test("toReviewFixComment resolves path + lines from the anchor into a slim card view", () => {
+	expect(toReviewFixComment(comment({}))).toEqual({
+		id: "rc_1",
+		kind: "inline",
+		body: "Rename this.",
+		path: "src/x.ts",
+		startLine: 20,
+		endLine: 21,
+	});
+});
+
+test("toReviewFixComment omits path/lines for an anchorless (review-level) comment", () => {
+	expect(toReviewFixComment(comment({ id: "rc_2", kind: "review", anchor: null }))).toEqual({
+		id: "rc_2",
+		kind: "review",
+		body: "Rename this.",
+	});
+});
+
+test("buildReviewFixDetails carries item id/title, optional note/reviewId, and slim comments", () => {
+	const details = buildReviewFixDetails({
+		itemId: "t_1",
+		itemTitle: "Wire the login redirect",
+		reviewId: "rev_1",
+		note: "Two findings below.",
+		comments: [comment({})],
+	});
+	expect(details).toEqual({
+		itemId: "t_1",
+		itemTitle: "Wire the login redirect",
+		reviewId: "rev_1",
+		note: "Two findings below.",
+		comments: [
+			{
+				id: "rc_1",
+				kind: "inline",
+				body: "Rename this.",
+				path: "src/x.ts",
+				startLine: 20,
+				endLine: 21,
+			},
+		],
+	});
+});
+
+test("buildReviewFixDetails drops absent note/reviewId and accepts an empty comment set", () => {
+	expect(buildReviewFixDetails({ itemId: "t_1", itemTitle: "x", comments: [] })).toEqual({
+		itemId: "t_1",
+		itemTitle: "x",
+		comments: [],
+	});
 });
 
 test("the header and item lines keep the exact shape the web summary parser pins (chat/reviewPackage.ts)", () => {

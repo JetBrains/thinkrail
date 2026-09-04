@@ -9,6 +9,7 @@ import {
 	notifyExtUi,
 	type ReflectFindingParams,
 	type ReviewVerdictParams,
+	sendReviewFixToSession,
 	setAddReviewCommentHandler,
 	setReflectFindingHandler,
 	setReviewVerdictHandler,
@@ -17,6 +18,7 @@ import { getProjects } from "../projects";
 import {
 	addComment,
 	anchorProblem,
+	buildReviewFixDetails,
 	buildSendPackage,
 	getReviewSnapshot,
 	markCommentsSent,
@@ -511,7 +513,8 @@ async function sendReflectedFix(pending: PendingFix): Promise<void> {
 	try {
 		const prepared = await withReviewLock(pending.workspaceId, async () => {
 			const ids = new Set(pending.candidateIds);
-			const surviving = (await getReviewSnapshot(pending.workspaceId)).comments.filter(
+			const snapshot = await getReviewSnapshot(pending.workspaceId);
+			const surviving = snapshot.comments.filter(
 				(c) => ids.has(c.id) && c.status === "draft" && c.reflection?.verdict !== "refuted",
 			);
 			if (pending.candidateIds.length > 0 && surviving.length === 0) return null;
@@ -523,7 +526,14 @@ async function sendReflectedFix(pending: PendingFix): Promise<void> {
 			const fixText = reviewPackage
 				? `${renderFixPackage(pending.item, pending.note)}\n\n${reviewPackage}`
 				: renderFixPackage(pending.item, pending.note);
-			return { survivingIds, fixText };
+			const details = buildReviewFixDetails({
+				itemId: pending.item.id,
+				itemTitle: pending.item.title,
+				reviewId: snapshot.review.id,
+				note: pending.note,
+				comments: surviving,
+			});
+			return { survivingIds, fixText, details };
 		});
 		if (!prepared) {
 			recordAgentChangesRequested({
@@ -543,7 +553,7 @@ async function sendReflectedFix(pending: PendingFix): Promise<void> {
 		}
 		void ackSend(
 			runObservation.send(pending.workerSessionId, "internal", () =>
-				followUpSession(pending.workerSessionId, prepared.fixText),
+				sendReviewFixToSession(pending.workerSessionId, prepared.fixText, prepared.details),
 			),
 		)
 			.then(undefined, (err) => {

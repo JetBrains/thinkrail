@@ -12,6 +12,7 @@ import type {
 	ReviewComment,
 	ReviewCommentKind,
 	ReviewCommentStatus,
+	ReviewFixDetails,
 	ReviewSendResult,
 	SubagentOverride,
 	TemplateReadLocation,
@@ -59,6 +60,7 @@ import {
 	removeWorkspaceSessions,
 	renameSession,
 	resolveExtUi,
+	sendReviewFixToSession,
 	setSessionModel,
 	setSessionThinkingLevel,
 	steerSession,
@@ -107,6 +109,7 @@ import {
 } from "../projects";
 import {
 	addComment,
+	buildReviewFixDetails,
 	buildSendPackage,
 	clearReview,
 	deleteComment,
@@ -289,13 +292,16 @@ function fireReviewPrompt(
 function fireTodoFixPrompt(
 	p: { workspaceId: string; sessionId: string; id: string },
 	pkg: string,
+	details: ReviewFixDetails,
 	previous: TodoReviewRecord | undefined,
 	requested: TodoReviewRecord,
 	findingIds: string[],
 	capture: AdditionalAnalyticsCapture | null,
 ): void {
 	void ackSend(
-		runObservation.send(p.sessionId, "internal", () => followUpSession(p.sessionId, pkg)),
+		runObservation.send(p.sessionId, "internal", () =>
+			sendReviewFixToSession(p.sessionId, pkg, details),
+		),
 	)
 		.then(
 			() => {
@@ -535,13 +541,21 @@ const handlers: Record<string, Handler> = {
 			const prepared = await withReviewLock(p.workspaceId, async () => {
 				const request = requestTodoFix(p);
 				try {
+					const reviewId = (await getReviewSnapshot(p.workspaceId)).review.id;
 					const findings = await itemFixFindings(p);
+					const details = buildReviewFixDetails({
+						itemId: p.id,
+						itemTitle: request.itemTitle,
+						reviewId,
+						note: p.feedback.trim(),
+						comments: findings,
+					});
 					if (findings.length === 0)
-						return { ...request, fixText: request.pkg, findingIds: [] as string[] };
+						return { ...request, fixText: request.pkg, details, findingIds: [] as string[] };
 					const fixText = `${request.pkg}\n\n${await buildSendPackage(p.workspaceId, findings)}`;
 					const findingIds = findings.map((c) => c.id);
 					await markCommentsSent(p.workspaceId, findingIds, p.sessionId);
-					return { ...request, fixText, findingIds };
+					return { ...request, fixText, details, findingIds };
 				} catch (error) {
 					rollbackTodoFix(p, request.previous, request.requested);
 					throw error;
@@ -551,6 +565,7 @@ const handlers: Record<string, Handler> = {
 				fireTodoFixPrompt(
 					p,
 					prepared.fixText,
+					prepared.details,
 					prepared.previous,
 					prepared.requested,
 					prepared.findingIds,
