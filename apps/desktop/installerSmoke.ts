@@ -6,6 +6,7 @@ import {
 	globSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	writeFileSync,
 } from "node:fs";
@@ -13,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { locateWindowsSetupExecutable } from "./src/artifact";
+import { killWindowsProcessTree } from "./src/processTree";
 
 function resolveArtifact(value: string | undefined): string {
 	if (!value) throw new Error("desktop installer path is required");
@@ -119,6 +121,25 @@ async function waitForReady(exited: Promise<number>): Promise<void> {
 	);
 }
 
+function stopInstalledDesktop(): void {
+	killWindowsProcessTree(appProcess?.pid);
+	appProcess?.kill("SIGKILL");
+	if (appPid !== undefined && processAlive(appPid)) process.kill(appPid, "SIGKILL");
+}
+
+function reportHostLogs(): void {
+	const logsDir = join(root, "data", "logs");
+	if (!existsSync(logsDir)) {
+		console.error(`installed desktop wrote no host log under ${logsDir}`);
+		return;
+	}
+	for (const name of readdirSync(logsDir)) {
+		console.error(`installed desktop host log ${name}:`);
+		console.error(readFileSync(join(logsDir, name), "utf8").slice(-8000));
+	}
+}
+
+let failure: unknown;
 try {
 	const launcher = installedLauncher();
 	if (!existsSync(launcher)) throw new Error(`installed desktop launcher not found at ${launcher}`);
@@ -165,9 +186,15 @@ try {
 	if (launcherExit !== 0) throw new Error(`installed desktop exited ${launcherExit}`);
 	console.log(`installer smoke OK: ${artifact}`);
 } catch (error) {
-	appProcess?.kill("SIGKILL");
-	if (appPid && processAlive(appPid)) process.kill(appPid, "SIGKILL");
-	throw error;
-} finally {
-	removeTree(root);
+	failure = error;
+	stopInstalledDesktop();
+	reportHostLogs();
 }
+
+try {
+	removeTree(root);
+} catch (error) {
+	if (failure === undefined) throw error;
+	console.error(`installer smoke could not remove ${root}: ${error}`);
+}
+if (failure !== undefined) throw failure;
