@@ -1,11 +1,23 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import {
 	activeWorktreeRow,
 	createWorkspaceViaDialog,
 	openFixtureProject,
 	worktreeRows,
 } from "./fixtures/app";
+import { readChatViewportCenterOffsets } from "./fixtures/chatScroll";
 import { seedExternalCwdSessions, seedWorkspaceSession } from "./fixtures/sessions";
+
+type MessageOrder = "oldest-first" | "newest-first";
+
+async function selectMessageOrder(page: Page, order: MessageOrder) {
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-chat").click();
+	const option = page.getByTestId(`chat-order-${order}`);
+	await option.click();
+	await expect(option).toHaveAttribute("data-active", "true");
+	await page.keyboard.press("Escape");
+}
 
 test("selecting a same-workspace message hit opens the chat and flashes the matched row", async ({
 	page,
@@ -53,6 +65,60 @@ test("selecting a same-workspace message hit opens the chat and flashes the matc
 	await expect(flashRow).toContainText("jittered ceiling");
 	await expect(page.locator("[data-flash]")).toHaveCount(0, { timeout: 5_000 });
 });
+
+for (const order of ["oldest-first", "newest-first"] as const) {
+	test(`${order} offscreen jump in a newly mounted tall chat survives StrictMode materialization`, async ({
+		page,
+	}) => {
+		await openFixtureProject(page);
+		const workspace = await createWorkspaceViaDialog(page);
+		await selectMessageOrder(page, order);
+		seedWorkspaceSession(workspace.worktreePath, {
+			name: `${order} tall strict-mode jump`,
+			messages: Array.from({ length: 50 }, (_, index) => [
+				{
+					role: "user" as const,
+					text: `strict mode request ${index + 1}`,
+					timestamp: 1_700_150_000_000 + index * 2_000,
+				},
+				{
+					role: "assistant" as const,
+					text:
+						index === 10
+							? "quartz-offscreen-needle marks the exact history target"
+							: `strict mode answer ${index + 1}`,
+					timestamp: 1_700_150_001_000 + index * 2_000,
+				},
+			]).flat(),
+		});
+		await page.waitForTimeout(2_100);
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await page.getByTestId("chat-input").press("Control+r");
+		const overlay = page.getByTestId("history-overlay");
+		const query = page.getByTestId("history-query");
+		await query.fill("quartz-offscreen-needle");
+		await expect(page.getByTestId("history-expand-hint")).toBeVisible();
+		await query.press("Tab");
+		const hit = page
+			.locator('[data-testid="history-item"][data-kind="message"]')
+			.filter({ hasText: "quartz-offscreen-needle" });
+		await expect(hit).toBeVisible();
+		await query.press("Enter");
+
+		await expect(overlay).toBeHidden();
+		const chatScroll = page.getByTestId("chat-scroll");
+		const target = page.getByText("quartz-offscreen-needle marks the exact history target", {
+			exact: true,
+		});
+		await expect(page.locator("[data-flash]")).toContainText("quartz-offscreen-needle");
+		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
+		await expect(target).toBeAttached();
+		const centerOffsets = await readChatViewportCenterOffsets(target);
+		expect(Math.max(...centerOffsets.map((offset) => Math.abs(offset)))).toBeLessThanOrEqual(5);
+		expect(Math.max(...centerOffsets) - Math.min(...centerOffsets)).toBeLessThanOrEqual(1);
+	});
+}
 
 test("selecting a cross-workspace message hit switches the active workspace and flashes the row", async ({
 	page,

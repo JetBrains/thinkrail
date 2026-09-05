@@ -347,11 +347,21 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   turnId)`** (`rows.ts`), called with the projected rows — a turn's own row for
   `user`/`system`/`error`/`retry`, or its first `:text:` row for `assistant` (whose turns dissolve
   into `markdown`/`tool`/`activity` rows, never a row of their own)
-  — then a controller-owned centered row reveal plus a transient `flashRowId` (rendered as `data-flash` +
-  a `bg-primary-subtle` transition on the row wrapper, cleared after 1600ms) draw the eye to it. Either
-  resolving a row or giving up (toasted as "couldn't locate the message") clears that
-  exact still-current request; an older effect may not clear a newer jump. `ChatView` is its only terminal
-  consumer, so an unresolved current request must never linger.
+  — then a cancellable, non-animated materialization derives the target from Virtuoso's measured size
+  snapshot (with conservative estimates only for never-measured rows) before the controller-owned centered
+  pixel correction. Materialization remains pending until the exact row stays mounted and measured at that
+  alignment across stable frames; a transient mount during Virtuoso's estimate correction is not success.
+  It never starts Virtuoso's internally retrying `scrollToIndex`, so reader takeover can cancel every
+  outstanding write. Its lifecycle is keyed to request identity rather than streaming row-array churn, and
+  its live row-index resolver follows projections that change while the request is pending. A transient
+  `flashRowId` (rendered as `data-flash` + a `bg-primary-subtle` transition on the row wrapper, cleared after
+  1600ms) draws the eye only after the row mounts. Resolving a row, explicit reader cancellation, or
+  exhausting the bounded materialization wait (toasted as "couldn't locate the message") clears that exact
+  still-current request; an older effect may not clear a newer jump. Cancellation is the user-wins failure
+  path and is intentionally silent rather than restarted against the reader. Effect teardown defers its
+  identity-checked clear for one microtask: an immediate StrictMode or replacement mount claims the same
+  request first, while a real unmount terminates it. `ChatView` is its only terminal consumer, so an
+  unresolved current request must never linger.
 - **Open at the current alignment target** — `ChatMessageOrder` chooses the physical latest edge: bottom
   for oldest-first, top for newest-first. A freshly shown idle transcript mounts there; an already-working
   transcript reconstructs directly at Settle with only the room its active response needs. Switching order
@@ -372,9 +382,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   person took over.
 - **Reader intent and exact-edge rearm** — wheel, trackpad, touch, scrollbar, and navigation-key input
   detaches only when it can cause or has caused real viewport movement; pushing outward against the current
-  physical edge is a no-op. Movement into history detaches once. Explicit text selection and user-invoked
-  message/history, breadcrumb, or tool-page navigation also detach. A return gesture rearms once only when
-  it reaches the physical latest edge within the shared 1px geometry tolerance; directions invert with
+  physical edge is a no-op. Potential native input pauses competing controller motion without changing
+  alignment; if no movement follows, alignment resumes on the next frame. Movement into history detaches
+  once; native movement that interrupts an active alignment also detaches even when directed toward latest,
+  unless that movement itself reaches the exact edge. Explicit text selection and user-invoked
+  message/history, breadcrumb, or tool-page navigation also
+  detach. Pointer provenance survives release long enough for native scrollbar-track animation, keyboard
+  provenance covers focus-induced scrolling from interactive transcript controls, and both expire on
+  scroll-end or a bounded timeout so later geometry cannot inherit them. A return gesture rearms once only
+  when it reaches the physical latest edge within the shared 1px geometry tolerance; directions invert with
   order, and touch/trackpad intent survives through momentum. No 50px near-edge threshold and no geometry
   change alone may rearm. Expanding or collapsing an Activity, Thinking, tool, or message disclosure is a
   geometry change rather than navigation: it preserves alignment, retargets the current latest/response
@@ -394,20 +410,24 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   smooth move to the order's physical latest edge. The store exposes a monotonic per-session settlement
   tick alongside `isStreaming`, so a start and settlement coalesced into one React render cannot strand an
   optimistic turn inset or runway. Delayed virtual measurements retarget that same bounded return rather
-  than creating a hard-pin loop. A rejected immediate prompt likewise cancels its locally armed turn state.
+  than creating a hard-pin loop. If reader input intersects settlement, either idle reattach path carries
+  the partial room-to-zero leg forward instead of leaking hidden runway. A rejected immediate prompt likewise
+  cancels its locally armed turn state.
 - **Stable work-status geometry** — one fixed-size slot always occupies the logical latest transcript edge:
   after rows in oldest-first and before rows in newest-first. While work is active it always contains one
   polite live phase — **Working…**, **Thinking…**, **Running `<tool>`…**, **Writing…**, or
   **Compacting context…**; retry/provider gaps fall back to Working rather than unmounting it. Idle keeps an
-  inaccessible, visually empty slot with identical geometry. Starting, changing, or ending a phase therefore
-  moves neither transcript alignment nor composer.
+  inaccessible, visually empty slot with identical geometry. The visible phase is single-line and clipped
+  within the slot on narrow panes while its complete live-region text remains accessible. Starting, changing,
+  or ending a phase therefore moves neither transcript alignment nor composer.
 - **Tool attention preserves alignment provenance** — an awaiting `ask_user_question` may clear temporary
   room and perform its established bounded start reveal/focus, but that automatic path leaves following or
   detached exactly as it found it and cannot expose the button. A reader who was already detached keeps the
   affordance because of that prior action; a subsequent user-driven tool-page navigation may detach. All
   attention, history, breadcrumb, and row reveals route through the same controller. A history row outside
-  the virtual DOM gets one non-animated Virtuoso materialization; once mounted, its centered correction uses
-  the controller, so no independent smooth retry can compete with settlement. Size-aware `nearest` keeps a
+  the virtual DOM gets a bounded, hook-owned materialization from Virtuoso's measured size snapshot; once
+  mounted, its centered correction uses the controller, so no independent retry can outlive reader
+  cancellation or compete with settlement. Size-aware `nearest` keeps a
   tall target's useful leading edge visible.
 - **One cancellable, retargetable motion owner** — renderers and projections never scroll themselves.
   New-turn placement, Trigger→Settle advances, contextual-button returns, settlement, and explicit reveals

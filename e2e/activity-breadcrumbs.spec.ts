@@ -4,6 +4,7 @@ import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "
 import {
 	moveMouseToChatViewport,
 	readChatScrollGeometry,
+	readChatViewportCenterOffsets,
 	readChatViewportIntersection,
 } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -282,6 +283,12 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		await messageToggle.click();
 		await expect(messageToggle).toHaveAttribute("aria-expanded", "true");
 		await expectFollowingLatest();
+		await messageToggle.click();
+		await expect(messageToggle).toHaveAttribute("aria-expanded", "false");
+		await expectFollowingLatest();
+		await messageToggle.click();
+		await expect(messageToggle).toHaveAttribute("aria-expanded", "true");
+		await expectFollowingLatest();
 		const activity = page.getByTestId("activity-group").first();
 		const activityToggle = activity.getByTestId("activity-group-toggle");
 		await expect(activityToggle).toHaveAttribute("aria-expanded", "false");
@@ -516,6 +523,40 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		expect(Math.abs(collapsedHeaderOffset)).toBeLessThanOrEqual(2);
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
 		await expect(button).toContainText("Latest");
+
+		await activityToggle.click();
+		await expect(activityToggle).toHaveAttribute("aria-expanded", "true");
+		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
+		await button.click();
+		await expectFollowingLatest();
+		await page.getByTestId("chat-input").press("Control+r");
+		const history = page.getByTestId("history-overlay");
+		await expect(history).toBeVisible();
+		const historyQuery = page.getByTestId("history-query");
+		await historyQuery.fill("Historical watcher checkpoint 30 remained stable");
+		await expect(page.getByTestId("history-expand-hint")).toBeVisible();
+		await historyQuery.press("Tab");
+		const historyHit = page.locator('[data-testid="history-item"][data-kind="message"]');
+		await expect(historyHit).toHaveCount(1);
+		await expect(historyHit).toBeVisible();
+		await historyQuery.press("Enter");
+		await expect(history).toBeHidden();
+		const flashedHistoryRow = page.locator("[data-flash]");
+		await expect(flashedHistoryRow).toBeVisible();
+		await expect(flashedHistoryRow).toContainText(
+			"Historical watcher checkpoint 30 remained stable",
+		);
+		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
+		const exactHistoryAnchor = page.getByText("Historical watcher checkpoint 30 remained stable.", {
+			exact: true,
+		});
+		await expect(exactHistoryAnchor).toBeAttached();
+		expect((await readChatViewportIntersection(exactHistoryAnchor)).intersects).toBe(true);
+		const historyCenterOffsets = await readChatViewportCenterOffsets(exactHistoryAnchor);
+		expect(historyCenterOffsets.every((offset) => Math.abs(offset) <= 80)).toBe(true);
+		expect(
+			Math.max(...historyCenterOffsets) - Math.min(...historyCenterOffsets),
+		).toBeLessThanOrEqual(1);
 	});
 }
 

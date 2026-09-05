@@ -76,6 +76,7 @@ const TRY_AGAIN_PROMPT = "Try again.";
 const CHAT_VIEWPORT_INCREASE = 800;
 const CHAT_MIN_OVERSCAN_ITEMS = 2;
 const CHAT_LATEST_EDGE_MARGIN = 8;
+const chatLocationRevealClaims = new WeakMap<object, object>();
 
 function turnAnchorText(turn: ChatTurn): string {
 	if (turn.kind === "user") {
@@ -333,6 +334,7 @@ export default function ChatView({
 		chatMessageOrder,
 		latestUserRow,
 		latestRow,
+		firstItemIndex,
 		rowHeightEstimates,
 		streamingResponseMovement,
 	);
@@ -363,6 +365,14 @@ export default function ChatView({
 	} = useHistorySearch(sessionId, workspaceId, projectId);
 
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
+	const activeChatLocationReveal = useRef<typeof chatLocationRequest>(null);
+	const locationRowsRef = useRef(rows);
+	locationRowsRef.current = rows;
+	const locationTurnsRef = useRef(turns);
+	locationTurnsRef.current = turns;
+	const locationTurnMapRef = useRef(runtime.turnIdByMessageIndex);
+	locationTurnMapRef.current = runtime.turnIdByMessageIndex;
+	const locationRowsReady = rows.length > 0;
 	const [flashRowId, setFlashRowId] = useState<string | null>(null);
 
 	useEffect(() => {
@@ -642,42 +652,63 @@ export default function ChatView({
 			!chatLocationRequest ||
 			chatLocationRequest.workspaceId !== workspaceId ||
 			chatLocationRequest.sessionId !== sessionId ||
-			rows.length === 0
+			!locationRowsReady
 		) {
 			return;
 		}
 		if (useAppStore.getState().chatLocationRequest !== chatLocationRequest) return;
+		if (activeChatLocationReveal.current === chatLocationRequest) return;
 		const { messageIndex, anchorText } = chatLocationRequest;
+		const currentRows = locationRowsRef.current;
+		const currentTurns = locationTurnsRef.current;
 		const prefix = anchorText.slice(0, 40);
-		const mappedId = runtime.turnIdByMessageIndex?.[messageIndex];
-		const mapped = mappedId ? turns.find((t) => t.id === mappedId) : undefined;
+		const mappedId = locationTurnMapRef.current?.[messageIndex];
+		const mapped = mappedId ? currentTurns.find((t) => t.id === mappedId) : undefined;
 		const target =
 			mapped && turnAnchorText(mapped).includes(prefix)
 				? mapped
-				: turns.findLast((t) => turnAnchorText(t).includes(prefix));
-		const index = target ? rowIndexForTurn(rows, target.id) : -1;
+				: currentTurns.findLast((t) => turnAnchorText(t).includes(prefix));
+		const index = target ? rowIndexForTurn(currentRows, target.id) : -1;
 		if (index === -1) {
 			toast.error("couldn't locate the message — the session may have changed");
 			useAppStore.getState().clearChatLocation();
 			return;
 		}
-		const rowId = rows[index]?.id;
+		const rowId = currentRows[index]?.id;
 		if (!rowId) {
 			useAppStore.getState().clearChatLocation();
 			return;
 		}
-		revealRow(rowId, index, "center");
-		setFlashRowId(rowId);
-		useAppStore.getState().clearChatLocation();
-	}, [
-		chatLocationRequest,
-		revealRow,
-		rows,
-		runtime.turnIdByMessageIndex,
-		sessionId,
-		turns,
-		workspaceId,
-	]);
+		const revealClaim = {};
+		chatLocationRevealClaims.set(chatLocationRequest, revealClaim);
+		activeChatLocationReveal.current = chatLocationRequest;
+		const cancelReveal = revealRow(
+			rowId,
+			() => locationRowsRef.current.findIndex((row) => row.id === rowId),
+			"center",
+			(result) => {
+				if (activeChatLocationReveal.current !== chatLocationRequest) return;
+				activeChatLocationReveal.current = null;
+				if (useAppStore.getState().chatLocationRequest !== chatLocationRequest) return;
+				if (result === "found") setFlashRowId(rowId);
+				else if (result === "missing")
+					toast.error("couldn't locate the message — the session may have changed");
+				useAppStore.getState().clearChatLocation();
+			},
+		);
+		return () => {
+			if (activeChatLocationReveal.current === chatLocationRequest) {
+				activeChatLocationReveal.current = null;
+			}
+			cancelReveal();
+			queueMicrotask(() => {
+				if (chatLocationRevealClaims.get(chatLocationRequest) !== revealClaim) return;
+				chatLocationRevealClaims.delete(chatLocationRequest);
+				const state = useAppStore.getState();
+				if (state.chatLocationRequest === chatLocationRequest) state.clearChatLocation();
+			});
+		};
+	}, [chatLocationRequest, locationRowsReady, revealRow, sessionId, workspaceId]);
 
 	const historyOpenRequest = useAppStore((s) => s.historyOpenRequest);
 	const historyOverlayOpen = historyState.open;

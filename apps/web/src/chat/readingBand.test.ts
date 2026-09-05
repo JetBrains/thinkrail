@@ -362,6 +362,54 @@ describe("reading-band reader intent", () => {
 		expect(detached.controller.getSnapshot().following).toBe(false);
 	});
 
+	it("pauses for potential native input without detaching and can resume alignment", () => {
+		const harness = createHarness({ streaming: false });
+		harness.controller.returnToEdge();
+		expect(harness.controller.getSnapshot()).toMatchObject({ following: true, moving: true });
+
+		const resume = harness.controller.interruptForNativeInput();
+		expect(harness.cancelledFrames()).toBe(1);
+		expect(harness.controller.getSnapshot()).toMatchObject({ following: true, moving: false });
+
+		resume();
+		harness.advance(220);
+		expect(harness.writes.at(-1)).toBe(1_000);
+		expect(harness.controller.getSnapshot()).toMatchObject({ following: true, buttonLabel: null });
+
+		const detached = createHarness();
+		detached.controller.readerLeft();
+		detached.controller.revealTo(() => 700, true);
+		const resumeDetached = detached.controller.interruptForNativeInput();
+		expect(detached.controller.getSnapshot()).toMatchObject({ following: false, moving: false });
+		resumeDetached();
+		expect(detached.controller.getSnapshot()).toMatchObject({ following: false, moving: true });
+	});
+
+	it("keeps active streaming runway intact across a no-move native pause", () => {
+		const harness = createHarness();
+		harness.setGeometry({
+			scrollTop: 100,
+			maxScrollTop: 100,
+			edgeBottom: 601,
+			runwayBottom: 601,
+		});
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights).toEqual([151]);
+
+		const resume = harness.controller.interruptForNativeInput();
+		expect(harness.runwayHeights).toEqual([151]);
+		expect(harness.controller.getSnapshot()).toMatchObject({
+			following: true,
+			moving: false,
+			runway: true,
+		});
+
+		resume();
+		harness.advance(220);
+		expect(harness.writes.at(-1)).toBe(251);
+		expect(harness.controller.getSnapshot()).toMatchObject({ following: true, runway: true });
+	});
+
 	it("moves an automatic reveal through the shared motion without detaching", () => {
 		const harness = createHarness();
 		harness.controller.revealTo(() => 700, false);
@@ -408,17 +456,6 @@ describe("reading-band reader intent", () => {
 		expect(harness.pendingFrames()).toBe(1);
 		harness.controller.cancelReveal();
 		expect(harness.pendingFrames()).toBe(0);
-		expect(harness.controller.getSnapshot().following).toBe(true);
-	});
-
-	it("latest-directed native movement yields alignment motion without detaching", () => {
-		const harness = createHarness({ latestEdge: "bottom" });
-		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
-		harness.controller.settle();
-		const writesBeforeReader = harness.writes.length;
-		harness.controller.readerMovedWhileFollowing();
-		harness.advance(220);
-		expect(harness.writes).toHaveLength(writesBeforeReader);
 		expect(harness.controller.getSnapshot().following).toBe(true);
 	});
 
@@ -565,6 +602,34 @@ describe("reading-band reader intent", () => {
 		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
 		harness.controller.setStreaming(false);
 		expect(harness.pendingFrames()).toBe(1);
+	});
+
+	it("finishes partial settlement runway cleanup on either idle reattach path", () => {
+		for (const reattach of ["return", "edge"] as const) {
+			const harness = createHarness();
+			harness.setGeometry({
+				scrollTop: 100,
+				maxScrollTop: 100,
+				edgeBottom: 601,
+				runwayBottom: 601,
+			});
+			harness.controller.contentChanged();
+			harness.advance(220);
+			harness.controller.setStreaming(false);
+			harness.advance(110);
+			expect(harness.runwayHeights.at(-1)).toBeGreaterThan(0);
+
+			harness.controller.readerLeft();
+			if (reattach === "return") harness.controller.returnToEdge();
+			else harness.controller.readerReachedEdge();
+			harness.advance(220);
+
+			expect(harness.runwayHeights.at(-1)).toBe(0);
+			expect(harness.controller.getSnapshot()).toMatchObject({
+				following: true,
+				runway: false,
+			});
+		}
 	});
 
 	it("follows idle disclosure geometry after settlement suppression ends", () => {

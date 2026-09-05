@@ -44,7 +44,7 @@ export function phaseLabel({ phase, toolName }: StreamStatus): string {
 
 function TypingDots() {
 	return (
-		<span className="flex items-center gap-2" aria-hidden="true">
+		<span className="flex shrink-0 items-center gap-2" aria-hidden="true">
 			<span className="size-6 animate-pulse rounded-full bg-current" />
 			<span className="size-6 animate-pulse rounded-full bg-current [animation-delay:200ms]" />
 			<span className="size-6 animate-pulse rounded-full bg-current [animation-delay:400ms]" />
@@ -59,10 +59,10 @@ export function StreamIndicator({ status }: { status: StreamStatus }) {
 			data-phase={status.phase}
 			role="status"
 			aria-live="polite"
-			className="flex items-center gap-8 py-4 text-text-muted tr-text-metadata"
+			className="flex min-w-0 items-center gap-8 overflow-hidden py-4 text-text-muted tr-text-metadata"
 		>
 			<TypingDots />
-			<span>{phaseLabel(status)}</span>
+			<span className="min-w-0 truncate">{phaseLabel(status)}</span>
 		</div>
 	);
 }
@@ -73,7 +73,7 @@ export function StreamStatusSlot({ status }: { status: StreamStatus | null }) {
 			data-testid="chat-status-slot"
 			data-active={status !== null}
 			aria-hidden={status === null ? true : undefined}
-			className="mx-auto h-40 max-w-3xl px-12"
+			className="mx-auto h-40 max-w-3xl overflow-hidden px-12"
 		>
 			{status ? <StreamIndicator status={status} /> : null}
 		</div>

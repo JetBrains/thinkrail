@@ -52,12 +52,12 @@ export interface ReadingBandController {
 	latestRowArrived: (index: number) => void;
 	contentChanged: () => void;
 	cancelMovement: () => void;
+	interruptForNativeInput: () => () => void;
 	cancelReveal: () => void;
 	revealTo: (target: () => number | null, stabilize: boolean) => void;
 	stabilizeAnchor: (target: () => number | null) => void;
 	refreshAnchor: () => void;
 	readerLeft: () => void;
-	readerMovedWhileFollowing: () => void;
 	readerReachedEdge: () => void;
 	returnToEdge: () => void;
 	releaseRunway: (smooth?: boolean) => void;
@@ -164,6 +164,7 @@ export function createReadingBandController(
 	};
 	let frame: number | null = null;
 	let motion: ActiveMotion | null = null;
+	let motionEpoch = 0;
 	let anchorFrame: number | null = null;
 	let activeStreamMount = streaming;
 	let reconstructed = false;
@@ -224,6 +225,7 @@ export function createReadingBandController(
 	};
 
 	const cancelMotion = () => {
+		motionEpoch += 1;
 		if (frame !== null) environment.cancelFrame(frame);
 		frame = null;
 		motion = null;
@@ -361,6 +363,7 @@ export function createReadingBandController(
 		instant?: boolean;
 		instantScroll?: boolean;
 	}) => {
+		motionEpoch += 1;
 		const bounds = environment.readScrollBounds();
 		const initialScrollTarget = boundedScrollTarget(scrollTarget);
 		const scrollAlreadySettled =
@@ -607,6 +610,38 @@ export function createReadingBandController(
 		return true;
 	};
 
+	const interruptForNativeInput = () => {
+		const paused = motion;
+		if (!paused) return () => undefined;
+		if (frame !== null) environment.cancelFrame(frame);
+		frame = null;
+		motion = null;
+		const epoch = motionEpoch + 1;
+		motionEpoch = epoch;
+		const wasFollowing = state.following;
+		const wasStreaming = state.streaming;
+		if (state.moving) publish({ moving: false });
+		return () => {
+			if (
+				motionEpoch !== epoch ||
+				motion !== null ||
+				state.following !== wasFollowing ||
+				state.streaming !== wasStreaming
+			)
+				return;
+			motionEpoch += 1;
+			const bounds = environment.readScrollBounds();
+			motion = {
+				...paused,
+				startedAt: environment.now(),
+				startScrollTop: bounds?.scrollTop ?? paused.startScrollTop,
+				startRunwayHeight: runwayHeight,
+			};
+			publish({ moving: true });
+			frame = environment.requestFrame(advanceMotion);
+		};
+	};
+
 	const yieldMotionToReader = () => {
 		cancelAnchor();
 		immediateTurnPending = false;
@@ -663,6 +698,7 @@ export function createReadingBandController(
 			cancelMotion();
 			cancelAnchor();
 		},
+		interruptForNativeInput,
 		cancelReveal: () => {
 			if (motion?.kind !== "anchor" && motion?.kind !== "reveal") return;
 			if (!retainRunwayRelease()) cancelMotion();
@@ -694,7 +730,6 @@ export function createReadingBandController(
 			yieldMotionToReader();
 			publish({ following: false });
 		},
-		readerMovedWhileFollowing: yieldMotionToReader,
 		readerReachedEdge: () => {
 			cancelMotion();
 			runwaySuppressed = false;
@@ -702,6 +737,7 @@ export function createReadingBandController(
 			if (!state.streaming) {
 				startMotion({
 					scrollTarget: latestTarget,
+					runwayTarget: 0,
 					stabilityFrames: EDGE_STABILITY_FRAMES,
 				});
 				return;
@@ -718,6 +754,7 @@ export function createReadingBandController(
 			if (!state.streaming) {
 				startMotion({
 					scrollTarget: latestTarget,
+					runwayTarget: 0,
 					stabilityFrames: EDGE_STABILITY_FRAMES,
 				});
 				return;
