@@ -145,6 +145,9 @@ test("a persisted tall questionnaire reveals page changes and a restored page wi
 		);
 
 		const firstOption = card.getByTestId("ask-option").first();
+		await expect(firstOption).toBeFocused();
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+		await expect(page.getByTestId("scroll-to-bottom")).toHaveCount(0);
 		await firstOption.click();
 		await expect(firstOption).toHaveAttribute("data-selected", "true");
 		const next = card.getByTestId("ask-continue");
