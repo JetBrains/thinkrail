@@ -13,7 +13,7 @@ function reveal(targetTop: number, targetBottom: number, block: "start" | "neare
 }
 
 describe("virtual row materialization", () => {
-	test("derives an offscreen row from one mounted row and shared height estimates", () => {
+	test("derives an offscreen row from one mounted row and measured-height fallbacks", () => {
 		const heights = [40, 80, 60, 100];
 		expect(estimatedRowTop(heights, 1, 200, 3)).toBe(340);
 		expect(estimatedRowTop(heights, 2, 280, 0)).toBe(160);
