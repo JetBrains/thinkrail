@@ -199,7 +199,14 @@ and **`useSelection`** for a single-choice group — the divider's chips, which 
 `${rowId}:artifacts` rather than a boolean per side, so "only one list open" cannot be violated;
 the `AskUserQuestionCard` pattern, see tools/SPEC.md; deliberately
 never evicted — growth is bounded by manual toggles). A manual toggle always wins — over auto-expand
-defaults *and* over a virtualization remount.
+defaults *and* over a virtualization remount. `FoldGeometryProvider` is the transcript's explicit pre/post
+change seam: every fold header registers a stable row-derived id through `useFold`, including `Collapsible`
+and fallback-driven auto expansion/collapse. It routes detached anchor stabilization through
+`ReadingBandController`'s single motion channel and refreshes from the changing row's measured geometry.
+A wholly offscreen disclosure preserves the visible transcript by its own row-height delta. If a sticky
+breadcrumb collapses the disclosure body that contains the reader's viewport, that content no longer has a
+surviving anchor, so the collapsed original header takes its place at the viewport boundary. Reader input or
+a newer reveal supersedes only the stabilization's scroll leg and cannot strand an in-flight runway release.
 
 **Message-order projection.** `deriveRows` remains canonical and chronological. The pure
 `projectRows(rows, chatMessageOrder)` partitions that sequence at user rows (a pre-user notice span is its
@@ -340,59 +347,96 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   turnId)`** (`rows.ts`), called with the projected rows — a turn's own row for
   `user`/`system`/`error`/`retry`, or its first `:text:` row for `assistant` (whose turns dissolve
   into `markdown`/`tool`/`activity` rows, never a row of their own)
-  — then `virtuosoRef.scrollToIndex({ align: "center" })` plus a transient `flashRowId` (rendered as
-  `data-flash` + a `bg-primary-subtle` transition on the row wrapper, cleared after 1600ms) draw the
-  eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") clears that
-  exact still-current request; an older effect may not clear a newer jump. `ChatView` is its only terminal
-  consumer, so an unresolved current request must never linger.
-- **Open at the latest message** — `ChatMessageOrder` chooses the mounted edge: oldest-first starts at
-  `{ index: last row, align: "end" }`; newest-first starts at `{ index: 0, align: "start" }`. Thus every
-  freshly shown transcript (new tab, history reopen, local-placement restore, reload) shows the latest work
-  without an intermediate wrong-edge paint. Switching the preference remounts the projection and lands at
-  its new latest edge; preserving a pixel position across total reversal has no stable meaning.
-  Jump-to-message runs post-mount and overrides either rule with its centered `scrollToIndex`.
-  Initial virtual geometry is **row-aware**: every projected row receives a conservative height estimate,
-  with Markdown estimated from prose wrapping, block breaks, and physical fenced-code lines. A canonical
-  assistant text block remains one Markdown row — estimation never splits syntax or changes projection.
-  Bounded pixel and item overscan gives nearby outlier rows time to replace estimates with authoritative
-  measurements before coarse wheel input can exhaust a false range. Native wheel physics remain untouched.
-  `chat-history.spec.ts` pins the default latest edge and tall-history geometry; `chat-order.spec.ts` pins
-  both projections.
-- **One direction-aware streaming controller** — `useChatScroll` remains the sole imperative,
-  cancellable owner for every kind of live row growth; renderers and the message-order projection never
-  scroll themselves. Both orders consume the client-local **Streaming response movement** window. While
-  following, the active response edge grows to Trigger (default 100%), then one non-overlapping 220ms
-  ease-out places it at Settle (default 75%); every crossing repeats that same move. The controller does
-  **not** preallocate a percentage runway: immediately before a move it adds only the scroll-range deficit
-  needed to reach Settle, then removes that room one-for-one as response growth fills the distance back to
-  Trigger. Reduced motion makes movement and removal immediate.
-- **Runway lifetime follows actual work** — remaining artificial room collapses smoothly at
-  `agent_settled`, never `agent_end`. An awaiting `ask_user_question` clears it before the card's existing
-  start-aligned attention reveal. Reader takeover during a stream cancels movement, clears the room, and
-  detaches; later agent output cannot move that reader. Takeover retains the established intent boundary:
-  pointer/touch interaction, any wheel/scrollbar/navigation-key movement, selection, interactive
-  focus, message/history reveal, and a live user submit. **Follow response** derives enough room to place
-  the active edge at Settle, makes that one move, and rearms the Trigger→Settle cycle. Geometry alone never
-  rearms a detached reader. After settlement, **Latest** retains its physical-latest-edge meaning and bounded
-  pin window while virtual measurements land.
-- **Order-aware geometry, one visible window** — an immediate local send still aligns its user row at 10%
-  of transcript height clamped to 48–80px; the transient list header still makes that inset possible for a
-  first row. Oldest first can need at most the lower `100% - Settle` band as temporary tail room (25% by
-  default), rather than the retired 102% initial / 42% floor. Newest first applies the same edge percentages;
-  older projected content supplies real scroll range where available, and any remaining synthetic space
-  stays after the oldest group, never between reversed request/answer rows. Its live phase indicator still
-  leads the newest projected row, runway consumption still measures the latest group's stable trailing edge,
-  and `firstItemIndex` still gives projected prefix insertion/removal stable logical indices.
-- **Intent and changing geometry** — latest-edge directions still invert with order. Touch return intent
-  survives pointer release/cancellation through momentum and rearms only when explicit motion reaches that
-  edge. Newest-first header height deltas apply directly to `scrollTop` only while detached, preserving the
-  historical anchor and pixel offset; no insertion moves a detached reader. While live and following, a
-  viewport resize immediately reevaluates the percentages: crossing the resized Trigger makes one move to
-  Settle, otherwise the current position stays and derived room reconciles to the new height. Opening an
-  already-streaming chat and switching order restore the active edge at Settle with derived room, not a
-  fixed floor. Renderers needing attention still route through `ChatActions` to the controller's clamped
-  `start`/`nearest` reveal; size-aware `nearest` keeps a tall target's useful leading edge visible and never
-  changes follow state by itself.
+  — then a cancellable, non-animated materialization derives the target from Virtuoso's measured size
+  snapshot (with conservative estimates only for never-measured rows) before the controller-owned centered
+  pixel correction. Materialization remains pending until the exact row stays mounted and measured at that
+  alignment across stable frames; a transient mount during Virtuoso's estimate correction is not success.
+  It never starts Virtuoso's internally retrying `scrollToIndex`, so reader takeover can cancel every
+  outstanding write. Its lifecycle is keyed to request identity rather than streaming row-array churn, and
+  its live row-index resolver follows projections that change while the request is pending. A transient
+  `flashRowId` (rendered as `data-flash` + a `bg-primary-subtle` transition on the row wrapper, cleared after
+  1600ms) draws the eye only after the row mounts. Resolving a row, explicit reader cancellation, or
+  exhausting the bounded materialization wait (toasted as "couldn't locate the message") clears that exact
+  still-current request; an older effect may not clear a newer jump. Cancellation is the user-wins failure
+  path and is intentionally silent rather than restarted against the reader. Effect teardown defers its
+  identity-checked clear for one microtask: an immediate StrictMode or replacement mount claims the same
+  request first, while a real unmount terminates it. `ChatView` is its only terminal consumer, so an
+  unresolved current request must never linger.
+- **Open at the current alignment target** — `ChatMessageOrder` chooses the physical latest edge: bottom
+  for oldest-first, top for newest-first. A freshly shown idle transcript mounts there; an already-working
+  transcript reconstructs directly at Settle with only the room its active response needs. Switching order
+  remounts at that order's current target because preserving a pixel position across total reversal has no
+  stable meaning. A pending jump-to-message then overrides the mount with its centered controller reveal.
+  There is no intermediate wrong-edge paint or cross-order animation. Initial virtual geometry is
+  **row-aware**: each projected row receives a conservative estimate derived from prose wrapping, block
+  breaks, and physical fenced-code lines without splitting one canonical Markdown block. Bounded pixel and
+  item overscan lets nearby outliers replace estimates before coarse input exhausts a false range. Native
+  wheel physics remain untouched. `chat-history.spec.ts` pins the default latest edge and tall-history
+  geometry; `chat-order.spec.ts` pins both projections.
+- **Alignment is explicit, not inferred from proximity** — `useChatScroll` owns two orthogonal facts:
+  actual work (`agent_start` through `agent_settled`) and alignment (`following` or manually `detached`).
+  Following while working means the configured response window; following while idle means the physical
+  latest edge. Detached while working shows the order-aware **Follow response** button; detached while idle
+  shows **Latest**. Automatic focus, row measurement, content growth, programmatic reveal, and Virtuoso's
+  convenience edge thresholds can never create or clear detachment, so the button always means that a
+  person took over.
+- **Reader intent and exact-edge rearm** — wheel, trackpad, touch, scrollbar, and navigation-key input
+  detaches only when it can cause or has caused real viewport movement; pushing outward against the current
+  physical edge is a no-op. Potential native input pauses competing controller motion without changing
+  alignment; if no movement follows, alignment resumes on the next frame. Movement into history detaches
+  once; native movement that interrupts an active alignment also detaches even when directed toward latest,
+  unless that movement itself reaches the exact edge. Explicit text selection and user-invoked
+  message/history, breadcrumb, or tool-page navigation also
+  detach. Pointer provenance survives release long enough for native scrollbar-track animation, keyboard
+  provenance covers focus-induced scrolling from interactive transcript controls, and both expire on
+  scroll-end or a bounded timeout so later geometry cannot inherit them. A return gesture rearms once only
+  when it reaches the physical latest edge within the shared 1px geometry tolerance; directions invert with
+  order, and touch/trackpad intent survives through momentum. No 50px near-edge threshold and no geometry
+  change alone may rearm. Expanding or collapsing an Activity, Thinking, tool, or message disclosure is a
+  geometry change rather than navigation: it preserves alignment, retargets the current latest/response
+  destination while following, and leaves a detached reader's visible anchor fixed. An own Send deliberately
+  reattaches and places its user row at 10% of transcript height clamped to 48–80px; a queued/background
+  continuation preserves a detached reader when it starts.
+- **Streaming response movement exists only during work** — while following, the active response grows to
+  Trigger (default 100%), then the sole motion owner places it at Settle (default 75%); each later crossing
+  repeats the same sparse advance. Immediately before a move the controller adds only the scroll-range
+  deficit needed to reach Settle, then removes that room one-for-one as real response growth fills it.
+  Oldest-first therefore needs at most the lower `100% - Settle` band; newest-first uses older projected
+  content where available, keeps any synthetic remainder after the oldest group, and measures consumption
+  from the latest group's stable trailing edge. Synthetic room never splits a reversed request/answer group.
+  **Follow response** reconstructs the needed room, moves to Settle, and rearms the cycle.
+- **Settlement always returns to physical latest** — every `agent_settled`, never `agent_end`, ends response
+  movement, removes remaining synthetic room, reattaches even a manually detached reader, and makes one
+  smooth move to the order's physical latest edge. The store exposes a monotonic per-session settlement
+  tick alongside `isStreaming`, so a start and settlement coalesced into one React render cannot strand an
+  optimistic turn inset or runway. Delayed virtual measurements retarget that same bounded return rather
+  than creating a hard-pin loop. If reader input intersects settlement, either idle reattach path carries
+  the partial room-to-zero leg forward instead of leaking hidden runway. A rejected immediate prompt likewise
+  cancels its locally armed turn state.
+- **Stable work-status geometry** — one fixed-size slot always occupies the logical latest transcript edge:
+  after rows in oldest-first and before rows in newest-first. While work is active it always contains one
+  polite live phase — **Working…**, **Thinking…**, **Running `<tool>`…**, **Writing…**, or
+  **Compacting context…**; retry/provider gaps fall back to Working rather than unmounting it. Idle keeps an
+  inaccessible, visually empty slot with identical geometry. The visible phase is single-line and clipped
+  within the slot on narrow panes while its complete live-region text remains accessible. Starting, changing,
+  or ending a phase therefore moves neither transcript alignment nor composer.
+- **Tool attention preserves alignment provenance** — an awaiting `ask_user_question` may clear temporary
+  room and perform its established bounded start reveal/focus, but that automatic path leaves following or
+  detached exactly as it found it and cannot expose the button. A reader who was already detached keeps the
+  affordance because of that prior action; a subsequent user-driven tool-page navigation may detach. All
+  attention, history, breadcrumb, and row reveals route through the same controller. A history row outside
+  the virtual DOM gets a bounded, hook-owned materialization from Virtuoso's measured size snapshot; once
+  mounted, its centered correction uses the controller, so no independent retry can outlive reader
+  cancellation or compete with settlement. Size-aware `nearest` keeps a
+  tall target's useful leading edge visible.
+- **One cancellable, retargetable motion owner** — renderers and projections never scroll themselves.
+  New-turn placement, Trigger→Settle advances, contextual-button returns, settlement, and explicit reveals
+  share one non-overlapping channel whose destination can retarget as Virtuoso measurements, status geometry,
+  or runway changes land. Corrections continue the current motion instead of launching overlapping eases or
+  alternating hard writes. The first real reader movement cancels it synchronously and native physics win.
+  Newest-first header deltas preserve a detached historical anchor; viewport resize reevaluates the live
+  percentages without moving a below-Trigger response. Initial/order placement is direct, and reduced motion
+  makes every programmatic destination immediate while preserving identical state and final geometry.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in

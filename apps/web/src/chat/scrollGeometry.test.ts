@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { revealScrollTop } from "./scrollGeometry";
+import { alignedRowScrollTop, estimatedRowTop, revealScrollTop } from "./scrollGeometry";
 
 const viewport = {
 	scrollTop: 400,
@@ -11,6 +11,17 @@ const viewport = {
 function reveal(targetTop: number, targetBottom: number, block: "start" | "nearest") {
 	return revealScrollTop({ ...viewport, targetTop, targetBottom }, block);
 }
+
+describe("virtual row materialization", () => {
+	test("derives an offscreen row from one mounted row and measured-height fallbacks", () => {
+		const heights = [40, 80, 60, 100];
+		expect(estimatedRowTop(heights, 1, 200, 3)).toBe(340);
+		expect(estimatedRowTop(heights, 2, 280, 0)).toBe(160);
+		expect(alignedRowScrollTop(340, 100, 300, "start")).toBe(340);
+		expect(alignedRowScrollTop(340, 100, 300, "center")).toBe(240);
+		expect(alignedRowScrollTop(340, 100, 300, "end")).toBe(140);
+	});
+});
 
 describe("revealScrollTop", () => {
 	test("leaves an already visible target unchanged for nearest reveal", () => {
@@ -27,6 +38,12 @@ describe("revealScrollTop", () => {
 		expect(reveal(20, 80, "start")).toBe(320);
 		expect(reveal(550, 650, "start")).toBe(850);
 		expect(reveal(180, 900, "start")).toBe(480);
+	});
+
+	test("aligns a target below a reserved sticky-row inset", () => {
+		expect(
+			revealScrollTop({ ...viewport, targetTop: 420, targetBottom: 460, topInset: 34 }, "start"),
+		).toBe(686);
 	});
 
 	test("uses the useful edge when an oversized target is outside the viewport", () => {

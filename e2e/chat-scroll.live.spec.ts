@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { hideAuxiliaryWorkbench, openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
+import { readChatScrollGeometry } from "./fixtures/chatScroll";
 
 async function openChatAndSend(
 	page: import("@playwright/test").Page,
@@ -17,6 +18,11 @@ test("the reading band removes its temporary runway when the agent settles", {
 	await openWorkspaceChat(page);
 	await page.setViewportSize({ width: 1100, height: 800 });
 	await hideAuxiliaryWorkbench(page);
+	const statusSlot = page.getByTestId("chat-status-slot");
+	const composer = page.getByTestId("chat-composer");
+	await expect(statusSlot).toHaveAttribute("data-active", "false");
+	const idleStatusHeight = (await statusSlot.boundingBox())?.height;
+	const idleComposerTop = (await composer.boundingBox())?.y;
 	await page
 		.getByTestId("chat-input")
 		.fill(
@@ -30,8 +36,18 @@ test("the reading band removes its temporary runway when the agent settles", {
 	await expect(page.getByTestId("chat-stream-runway")).toBeVisible();
 	await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
 	await expect(chatScroll).toHaveAttribute("data-streaming", "true");
+	await expect(statusSlot).toHaveAttribute("data-active", "true");
+	expect((await statusSlot.boundingBox())?.height).toBe(idleStatusHeight);
+	expect((await composer.boundingBox())?.y).toBe(idleComposerTop);
 	await expect(chatScroll).toHaveAttribute("data-streaming", "false", { timeout: 90_000 });
 
+	await expect(statusSlot).toHaveAttribute("data-active", "false");
+	expect((await statusSlot.boundingBox())?.height).toBe(idleStatusHeight);
+	expect((await composer.boundingBox())?.y).toBe(idleComposerTop);
+	await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+	await expect
+		.poll(async () => (await readChatScrollGeometry(chatScroll)).distanceFromEnd)
+		.toBeLessThanOrEqual(1);
 	await expect(page.getByTestId("chat-stream-runway")).toHaveCount(0);
 	await expect(page.getByTestId("scroll-to-bottom")).toHaveCount(0);
 

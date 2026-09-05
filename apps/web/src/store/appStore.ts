@@ -323,6 +323,7 @@ export interface SessionRuntime {
 	currentAssistantId: string | null;
 	attemptAssistantId: string | null;
 	isStreaming: boolean;
+	settlementTick: number;
 	queue: SessionQueueState;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
@@ -351,6 +352,7 @@ function newRuntime(
 		currentAssistantId: null,
 		attemptAssistantId: null,
 		isStreaming: false,
+		settlementTick: 0,
 		queue: EMPTY_QUEUE,
 		model,
 		thinkingLevel,
@@ -633,6 +635,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 					closer,
 				],
 				isStreaming: false,
+				settlementTick: rt.settlementTick + 1,
 				currentAssistantId: null,
 				attemptAssistantId: null,
 			};
@@ -2905,10 +2908,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => ({
 				...rt,
-				isStreaming: false,
-				currentAssistantId: null,
-				attemptAssistantId: null,
-				turns: [...clearTurnStreaming(rt.turns), { kind: "error", id: crypto.randomUUID(), text }],
+				turns: [...rt.turns, { kind: "error", id: crypto.randomUUID(), text }],
 			})),
 		),
 	appendCompactionFailureUnlessObserved: (sessionId, observedTurnIds, detail) =>

@@ -5,7 +5,6 @@ import {
 	ActivityBreadcrumbBar,
 	type ActivityBreadcrumbDescriptor,
 	ActivityBreadcrumbTrail,
-	activityBreadcrumbJumpTop,
 	compressBreadcrumbPath,
 	deriveActiveBreadcrumbPath,
 	isCompactBreadcrumbWidth,
@@ -96,15 +95,19 @@ describe("activity breadcrumb path", () => {
 		expect(isCompact(390)).toBe(true);
 	});
 
-	test("aligns jump targets immediately below the sticky row", () => {
-		const jumpTop = activityBreadcrumbJumpTop;
-		expect(jumpTop(600, 100, 420)).toBe(886);
-		expect(jumpTop(10, 100, 80)).toBe(0);
-	});
-
 	test("mounts no sticky overlay until a transcript scroller is available", () => {
-		const Trail: ComponentType<{ scroller: HTMLElement | null }> = ActivityBreadcrumbTrail;
-		expect(renderToStaticMarkup(createElement(Trail, { scroller: null }))).toBe("");
+		const Trail: ComponentType<{
+			scroller: HTMLElement | null;
+			onReveal: (node: HTMLElement) => void;
+		}> = ActivityBreadcrumbTrail;
+		expect(
+			renderToStaticMarkup(
+				createElement(Trail, {
+					scroller: null,
+					onReveal: () => undefined,
+				}),
+			),
+		).toBe("");
 	});
 
 	test("renders one labelled root-to-leaf navigation row with separate fold controls", () => {

@@ -256,6 +256,31 @@ test("an ordered Pi-event batch commits once while preserving every session revi
 	expect(rt("b").isStreaming).toBe(true);
 });
 
+test("a settlement tick survives a batched false-to-false streaming endpoint", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	expect(rt("a").settlementTick).toBe(0);
+	let commits = 0;
+	const unsubscribe = useAppStore.subscribe(() => {
+		commits += 1;
+	});
+
+	store.handlePiEvents([
+		{ sessionId: "a", event: agentStart },
+		{ sessionId: "a", event: agentEnd },
+		{ sessionId: "a", event: agentSettled() },
+	]);
+	unsubscribe();
+
+	expect(commits).toBe(1);
+	expect(rt("a").isStreaming).toBe(false);
+	expect(rt("a").settlementTick).toBe(1);
+	store.handlePiEvent(agentEnd, "a");
+	expect(rt("a").settlementTick).toBe(1);
+	store.handlePiEvent(agentSettled(), "a");
+	expect(rt("a").settlementTick).toBe(2);
+});
+
 test("a host-fired USER message folds into the transcript; the composer's optimistic twin doesn't duplicate", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
@@ -969,6 +994,21 @@ test("appendErrorTurn surfaces a failed send (a rejected prompt) as a visible er
 	expect(err?.kind === "error" && err.text).toContain("No API key");
 	expect(failureRecovery("a")).toBeUndefined();
 	expect(rt("a").isStreaming).toBe(false);
+});
+
+test("a rejected queued send cannot settle work the host is still running", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(assistantStart, "a");
+	store.handlePiEvent(assistantText("still working"), "a");
+	const currentAssistantId = rt("a").currentAssistantId;
+
+	store.appendErrorTurn("a", "follow-up rejected");
+
+	expect(rt("a").isStreaming).toBe(true);
+	expect(rt("a").currentAssistantId).toBe(currentAssistantId);
+	expect(rt("a").turns.at(-1)).toMatchObject({ kind: "error", text: "follow-up rejected" });
 });
 
 test("a message_update with no prior message_start still builds the turn (mid-stream hydration)", () => {

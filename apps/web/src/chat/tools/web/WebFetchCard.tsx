@@ -24,7 +24,14 @@ export function webFetchSummary({ args }: ToolRenderProps): string {
 	return firstUrl(args);
 }
 
-export function WebFetchCard({ args, result, status, workspaceRoot, onOpenFile }: ToolRenderProps) {
+export function WebFetchCard({
+	toolCallId,
+	args,
+	result,
+	status,
+	workspaceRoot,
+	onOpenFile,
+}: ToolRenderProps) {
 	const url = firstUrl(args);
 	const external = httpUrl(url);
 	const label = external ? external.hostname.replace(/^www\./, "") : "fetch";
@@ -57,6 +64,7 @@ export function WebFetchCard({ args, result, status, workspaceRoot, onOpenFile }
 				)}
 			</div>
 			<WebResultBody
+				id={`${toolCallId}:content`}
 				output={output}
 				status={status}
 				runningLabel="Fetching…"

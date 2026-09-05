@@ -11,7 +11,7 @@ import {
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
 import type { ImageContent, UserMessage } from "@thinkrail/contracts";
-import { type ReactNode, useEffect, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
 import { CustomIcon } from "@/components/CustomIcon";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -301,11 +301,11 @@ function PlainUserTurn({
 	agentResponded: boolean;
 }) {
 	const large = text.length > LARGE_USER_MESSAGE;
-	const [expanded, toggle] = useFold(`${id}:user-collapse`, !agentResponded);
+	const [expanded, toggle, toggleRef] = useFold(`${id}:user-collapse`, !agentResponded);
 	const collapsed = large && !expanded;
 	return (
 		<MessageWithCopy messageRole="user" side="right" getText={() => text}>
-			<div className="flex w-fit max-w-[85%] flex-col items-end">
+			<div data-chat-fold-root className="flex w-fit max-w-[85%] flex-col items-end">
 				<div className={cn(USER_BUBBLE_BASE, "pr-24")}>
 					{attachments.length > 0 ? (
 						<div className="flex flex-wrap gap-4 pb-4" data-testid="chat-message-images">
@@ -323,6 +323,7 @@ function PlainUserTurn({
 					</div>
 					{large ? (
 						<button
+							ref={toggleRef}
 							type="button"
 							data-testid="user-message-toggle"
 							aria-expanded={expanded}
@@ -350,14 +351,16 @@ function SkillInvocationCard({
 	foldId: string;
 	invocation: SkillInvocation;
 }) {
-	const [expanded, toggle] = useFold(foldId);
+	const [expanded, toggle, toggleRef] = useFold(foldId);
 	return (
 		<div
 			data-testid="skill-invocation-card"
+			data-chat-fold-root
 			data-expanded={expanded}
 			className="max-w-[85%] overflow-hidden rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg"
 		>
 			<button
+				ref={toggleRef}
 				type="button"
 				data-testid="skill-invocation-toggle"
 				aria-expanded={expanded}
@@ -405,10 +408,11 @@ function keyPackageItems(items: ReviewPackageItem[]): { key: string; item: Revie
 }
 
 function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPackageItem }) {
-	const [expanded, toggle] = useFold(foldId);
+	const [expanded, toggle, toggleRef] = useFold(foldId);
 	return (
-		<li data-testid="review-package-item" data-expanded={expanded}>
+		<li data-testid="review-package-item" data-chat-fold-root data-expanded={expanded}>
 			<button
+				ref={toggleRef}
 				type="button"
 				data-testid="review-package-item-toggle"
 				aria-expanded={expanded}
@@ -507,15 +511,16 @@ function CompactionTurn({
 	tokensAfter?: number | undefined;
 	resuming?: boolean | undefined;
 }) {
-	const [open, toggle] = useFold(id);
+	const [open, toggle, toggleRef] = useFold(id);
 	const label = resuming ? "Context compacted — resuming…" : "Context compacted";
 	const tokens =
 		tokensAfter === undefined
 			? `${formatTokens(tokensBefore)} tokens`
 			: `${formatTokens(tokensBefore)} → ${formatTokens(tokensAfter)} tokens`;
 	return (
-		<div data-testid="chat-compaction" className="flex flex-col gap-8">
+		<div data-testid="chat-compaction" data-chat-fold-root className="flex flex-col gap-8">
 			<button
+				ref={toggleRef}
 				type="button"
 				aria-expanded={open}
 				onClick={toggle}
@@ -671,7 +676,7 @@ function ArtifactChip({
 }: {
 	group: ArtifactGroup;
 	listId: string;
-	onSelect: () => void;
+	onSelect: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }) {
 	const { id, icon: Icon, paths, label, expanded, onOpen, reveal } = group;
 	const many = paths.length > 1;
@@ -683,13 +688,13 @@ function ArtifactChip({
 			data-expanded={many && expanded ? true : undefined}
 			aria-expanded={many ? expanded : undefined}
 			aria-controls={many && expanded ? listId : undefined}
-			onClick={() => {
+			onClick={(event) => {
 				if (!many) {
 					if (first) onOpen(first);
 					return;
 				}
 				if (!expanded) reveal();
-				onSelect();
+				onSelect(event);
 			}}
 			className={cn(
 				"flex items-center gap-4 rounded-[var(--radius-sm)] px-4 text-primary hover:bg-control-bg-hovered",
@@ -787,6 +792,7 @@ export function TurnDivider({
 	return (
 		<div
 			data-testid="turn-divider"
+			data-chat-fold-root
 			className="my-8 flex flex-col gap-4 text-text-muted tr-text-metadata"
 		>
 			<div className="flex items-center gap-8">
@@ -802,7 +808,7 @@ export function TurnDivider({
 						key={group.id}
 						group={group}
 						listId={`${id}-${group.id}-list`}
-						onSelect={() => select(group.id)}
+						onSelect={(event) => select(group.id, event)}
 					/>
 				))}
 				{elapsedMs != null && elapsedMs >= 1000 ? (

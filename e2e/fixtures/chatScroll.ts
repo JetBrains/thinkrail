@@ -62,6 +62,26 @@ export async function readChatViewportIntersection(
 	});
 }
 
+export async function readChatViewportCenterOffsets(
+	element: Locator,
+	frames = 4,
+): Promise<number[]> {
+	return element.evaluate(async (node, sampleCount) => {
+		const scroller = node.closest<HTMLElement>("[data-virtuoso-scroller]");
+		if (!scroller) throw new Error("element is not inside a Virtuoso scroller");
+		const offsets: number[] = [];
+		for (let sample = 0; sample < sampleCount; sample += 1) {
+			await new Promise(requestAnimationFrame);
+			const elementRect = node.getBoundingClientRect();
+			const viewportRect = scroller.getBoundingClientRect();
+			offsets.push(
+				(elementRect.top + elementRect.bottom - viewportRect.top - viewportRect.bottom) / 2,
+			);
+		}
+		return offsets;
+	}, frames);
+}
+
 export interface NestedVerticalScrollSurface {
 	tag: string;
 	testId: string | null;
