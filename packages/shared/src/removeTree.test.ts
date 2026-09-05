@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { removeTree } from "./removeTree";
+import { removeTree, removeTreeAfter } from "./removeTree";
 
 function failing(
 	code: string,
@@ -69,6 +69,19 @@ test("retries the Windows mapped-image lock and keeps EACCES fatal elsewhere", (
 		removeTree("/does-not-matter", { remove: posix.remove, delayMs: 1, platform: "linux" }),
 	).toThrow("EACCES: simulated");
 	expect(posix.calls()).toBe(1);
+});
+
+test("teardown reports rather than replaces the failure already propagating", () => {
+	const attempt = failing("ENOTDIR", Number.POSITIVE_INFINITY);
+	const pending = new Error("the assertion that actually failed");
+
+	expect(() =>
+		removeTreeAfter("/does-not-matter", pending, { remove: attempt.remove, delayMs: 1 }),
+	).not.toThrow();
+
+	expect(() =>
+		removeTreeAfter("/does-not-matter", undefined, { remove: attempt.remove, delayMs: 1 }),
+	).toThrow("ENOTDIR: simulated");
 });
 
 test("waits between attempts instead of spinning", () => {

@@ -42,3 +42,16 @@ export function removeTree(path: string, options: RemoveTreeOptions = {}): void 
 		}
 	}
 }
+
+export function removeTreeAfter(
+	path: string,
+	pending: unknown,
+	options: RemoveTreeOptions = {},
+): void {
+	try {
+		removeTree(path, options);
+	} catch (error) {
+		if (pending === undefined) throw error;
+		console.error(`could not remove ${path} while reporting a failure: ${error}`);
+	}
+}

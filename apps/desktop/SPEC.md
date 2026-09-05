@@ -154,12 +154,11 @@ and fails the release *after* every assertion has already passed. `rmSync`'s own
 do not fix that here — Bun ignores them — so the retry loop has to be ours. The retry is teardown
 resilience, not error suppression: a tree that stays locked past the backoff still throws.
 
-Teardown must never *replace* the failure a smoke is already reporting. Both smokes therefore remove the
-tree after the outcome is decided rather than in a `finally`: a remove that fails with no failure pending
-is still fatal, but one that fails while a failure is propagating is reported and the original error is
-what leaves the process. Nightly run 33949193053 is why the rule is written down — the installed-desktop
-assertion failed, the `finally` then threw `EACCES` on the temp tree, and the release surfaced *only* the
-teardown error, so nothing about the actual failure reached the log.
+Teardown must never *replace* the failure a smoke is already reporting, so both smokes remove the tree
+through `removeTreeAfter()` once the outcome is decided rather than in a `finally`. Nightly run
+33949193053 is why the rule is written down — the installed-desktop assertion failed, the `finally` then
+threw `EACCES` on the temp tree, and the release surfaced *only* the teardown error, so nothing about the
+actual failure reached the log.
 
 A failing first-install smoke also prints the installed host's own log before it removes the tree.
 Nothing else survives the failure: a packaged (non-dev) Windows launcher attaches no console, so the

@@ -94,6 +94,11 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   can fix anywhere (`ENOTDIR`, …). The retry is teardown resilience, not error suppression: a tree still
   locked past the backoff throws. `options.remove` is the injected-remover seam the unit test drives,
   `options.platform` the injected platform; `attempts`/`delayMs` let a caller trade patience for speed.
+  `removeTreeAfter(path, pending, options?)` is the teardown form every smoke and probe uses instead of
+  a `finally`: it removes the tree once the outcome is decided, still throws when nothing else failed,
+  and reports rather than throws when `pending` holds the failure already on its way out. A teardown
+  error must never *replace* the failure a caller is reporting — nightly run 33949193053 surfaced only
+  an `EACCES` from the temp tree while the assertion that actually failed left no trace at all.
 - **/paths** — the worktree-relative path conventions ThinkRail owns, named once so current and future
   consumers agree (today: `workspaces` *creates* the scratch dir and git *ignores* it):
   `WORKSPACE_INTERNAL_DIR` (`.thinkrail` — the repo-local host-managed dir, today holding the ephemeral

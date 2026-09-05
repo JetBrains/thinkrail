@@ -8,7 +8,7 @@ import {
 	type RunningArtifactHost,
 	runArtifactHostProbes,
 } from "@thinkrail/server/artifact-probes";
-import { removeTree } from "@thinkrail/shared/removeTree";
+import { removeTreeAfter } from "@thinkrail/shared/removeTree";
 import { locateDesktopLauncher } from "./src/artifact";
 import { killWindowsProcessTree } from "./src/processTree";
 
@@ -141,7 +141,7 @@ const adapter: ArtifactHostAdapter = {
 	launch: (env, label) => launchDesktop(env, label, "host"),
 };
 
-let failed = false;
+let failure: unknown;
 try {
 	const isolated = join(root, "ui");
 	mkdirSync(isolated, { recursive: true });
@@ -180,13 +180,8 @@ try {
 	console.log(`smoke OK: ${launcher} passed native-window and shared artifact probes.`);
 } catch (error) {
 	console.error(`desktop smoke FAILED: ${error instanceof Error ? error.message : error}`);
-	failed = true;
+	failure = error;
 }
 
-try {
-	removeTree(root);
-} catch (error) {
-	if (!failed) throw error;
-	console.error(`desktop smoke could not remove ${root}: ${error}`);
-}
-if (failed) process.exitCode = 1;
+removeTreeAfter(root, failure);
+if (failure !== undefined) process.exitCode = 1;

@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { removeTree } from "@thinkrail/shared/removeTree";
+import { removeTreeAfter } from "@thinkrail/shared/removeTree";
 import { locateWindowsSetupExecutable } from "./src/artifact";
 import { killWindowsProcessTree } from "./src/processTree";
 
@@ -191,10 +191,5 @@ try {
 	reportHostLogs();
 }
 
-try {
-	removeTree(root);
-} catch (error) {
-	if (failure === undefined) throw error;
-	console.error(`installer smoke could not remove ${root}: ${error}`);
-}
+removeTreeAfter(root, failure);
 if (failure !== undefined) throw failure;

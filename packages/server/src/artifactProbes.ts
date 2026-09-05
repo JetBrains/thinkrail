@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
-import { removeTree } from "@thinkrail/shared/removeTree";
+import { removeTreeAfter } from "@thinkrail/shared/removeTree";
 
 export interface ArtifactResources {
 	readonly skillsDir: string;
@@ -278,6 +278,7 @@ export default function syntheticExternalExtension(pi) {
 	let defaultHost: RunningArtifactHost | undefined;
 	let customHost: RunningArtifactHost | undefined;
 	let socket: WebSocket | undefined;
+	let failure: unknown;
 	try {
 		const defaultEnv = hostEnvironment(
 			{
@@ -428,10 +429,12 @@ export default function syntheticExternalExtension(pi) {
 		socket = undefined;
 		await customHost.stop();
 		customHost = undefined;
-	} finally {
-		socket?.close();
-		await defaultHost?.stop().catch(() => {});
-		await customHost?.stop().catch(() => {});
-		removeTree(root);
+	} catch (error) {
+		failure = error;
 	}
+	socket?.close();
+	await defaultHost?.stop().catch(() => {});
+	await customHost?.stop().catch(() => {});
+	removeTreeAfter(root, failure);
+	if (failure !== undefined) throw failure;
 }
