@@ -159,8 +159,11 @@ export function windowsManualUpdateMessage(
 	].join("\n");
 }
 
+const INSTALLER_FETCH_TIMEOUT_MS = 60_000;
+const INSTALL_TIMEOUT_MS = 15 * 60_000;
+
 async function fetchInstaller(url: string): Promise<string> {
-	const response = await fetch(url);
+	const response = await fetch(url, { signal: AbortSignal.timeout(INSTALLER_FETCH_TIMEOUT_MS) });
 	if (!response.ok) throw new Error(`HTTP ${response.status}`);
 	const script = await response.text();
 	if (!script.trim()) throw new Error("empty response");
@@ -171,6 +174,54 @@ export type UpdateExecution =
 	| { kind: "ok"; output: string }
 	| { kind: "manual"; reason: string; command: string; exitCode: number }
 	| { kind: "failed"; reason: string; output: string; exitCode: number };
+
+export interface BoundedChild {
+	exitCode: number;
+	output: string;
+	timedOut: boolean;
+}
+
+async function readStream(stream: unknown): Promise<string> {
+	if (!(stream instanceof ReadableStream)) return "";
+	try {
+		return await new Response(stream).text();
+	} catch {
+		return "";
+	}
+}
+
+export async function awaitBoundedChild(
+	child: {
+		exited: Promise<number>;
+		stdout: unknown;
+		stderr: unknown;
+		kill: (signal?: number) => void;
+	},
+	timeoutMs: number,
+): Promise<BoundedChild> {
+	const drained = Promise.all([readStream(child.stdout), readStream(child.stderr)]).then(
+		([out, err]) => `${out}${err}`,
+	);
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const expiry = new Promise<"timeout">((resolve) => {
+		timer = setTimeout(() => resolve("timeout"), timeoutMs);
+		timer.unref?.();
+	});
+	try {
+		const finished = await Promise.race([child.exited, expiry]);
+		if (finished !== "timeout") {
+			return { exitCode: finished, output: await drained, timedOut: false };
+		}
+		child.kill();
+		const forced = setTimeout(() => child.kill(9), 2_000);
+		forced.unref?.();
+		const exitCode = await child.exited;
+		clearTimeout(forced);
+		return { exitCode, output: await drained, timedOut: true };
+	} finally {
+		if (timer) clearTimeout(timer);
+	}
+}
 
 export interface ExecuteUpdateOptions {
 	env: Record<string, string | undefined>;
@@ -201,10 +252,14 @@ async function executeWindowsPlan(
 
 	const run = await runPowerShellScript(script, plan.psArgs, {
 		env: options.env,
+		timeoutMs: INSTALL_TIMEOUT_MS,
 		...(options.capture ? { capture: true } : {}),
 	});
 	if (run === undefined) {
 		return manual("no PowerShell found (looked for powershell.exe, then pwsh.exe)", 1);
+	}
+	if (run.timedOut) {
+		return manual(`the installer did not finish within ${INSTALL_TIMEOUT_MS / 60_000} minutes`, 1);
 	}
 	if (run.exitCode !== 0) {
 		return manual(`the installer exited with code ${run.exitCode}`, run.exitCode);
@@ -217,7 +272,10 @@ async function executeUnixPlan(
 	options: ExecuteUpdateOptions,
 ): Promise<UpdateExecution> {
 	const url = options.env.THINKRAIL_INSTALL_SCRIPT_URL ?? DEFAULT_INSTALL_SCRIPT_URL;
-	const fetched = Bun.spawn(["curl", "-fsSL", url], { stdout: "pipe", stderr: "inherit" });
+	const fetched = Bun.spawn(
+		["curl", "-fsSL", "--max-time", String(INSTALLER_FETCH_TIMEOUT_MS / 1000), url],
+		{ stdout: "pipe", stderr: "inherit" },
+	);
 	const script = await new Response(fetched.stdout).arrayBuffer();
 	if ((await fetched.exited) !== 0 || script.byteLength === 0) {
 		return { kind: "failed", reason: "failed to fetch the installer", output: "", exitCode: 1 };
@@ -229,10 +287,15 @@ async function executeUnixPlan(
 		stderr: options.capture ? "pipe" : "inherit",
 		env: options.env,
 	});
-	const output = options.capture
-		? `${await new Response(run.stdout).text()}${await new Response(run.stderr).text()}`
-		: "";
-	const exitCode = await run.exited;
+	const { exitCode, output, timedOut } = await awaitBoundedChild(run, INSTALL_TIMEOUT_MS);
+	if (timedOut) {
+		return {
+			kind: "failed",
+			reason: `the installer did not finish within ${INSTALL_TIMEOUT_MS / 60_000} minutes`,
+			output,
+			exitCode,
+		};
+	}
 	if (exitCode !== 0) {
 		return {
 			kind: "failed",

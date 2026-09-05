@@ -64,7 +64,13 @@ output-capturing, and the terminal command is one consumer of it — the in-app 
 - `executeUpdatePlan(plan)` fetches the installer and runs it **without `spawnSync`**, returning a
   structured outcome. This is not a style preference: the host runs on one event loop, and a
   synchronous installer run would freeze every session for the whole download — the failure class
-  `subprocess`' bounded runner exists to prevent.
+  `subprocess`' bounded runner exists to prevent. Every step of it is **bounded**
+  (`awaitBoundedChild`: 15 minutes for the installer, 60s for fetching the script and for `curl`'s own
+  `--max-time`), and a child past its deadline is killed (SIGTERM, then SIGKILL) and reported as a
+  failure. An unbounded installer would be worse here than a slow one: the host holds a single
+  update operation slot, so one stalled download would leave the app in `installing` — refusing every
+  later check and install — until the process restarts. Both pipes are drained concurrently; Bun
+  happens to buffer them eagerly, but the drain order is not a runtime detail worth depending on.
 - `runUpdate(argv, env)` stays the console front-end (its rendering, exit codes, and the Windows
   manual-command fallback are unchanged). It now also *checks first* via
   `@thinkrail/shared/release`, so re-running it on the newest build says so instead of reinstalling.

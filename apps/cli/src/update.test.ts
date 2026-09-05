@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	alreadyNewest,
+	awaitBoundedChild,
 	parseUpdateArgs,
 	resolveUpdatePlan,
 	resolveWindowsInstallPrefix,
@@ -326,5 +327,39 @@ describe("alreadyNewest", () => {
 				targetChannel: "stable",
 			}),
 		).toBe(false);
+	});
+});
+
+describe("awaitBoundedChild", () => {
+	test("returns the child's own exit code and both streams when it finishes in time", async () => {
+		const child = Bun.spawn(["bash", "-c", "echo out; echo err >&2; exit 3"], {
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const result = await awaitBoundedChild(child, 30_000);
+		expect(result.timedOut).toBe(false);
+		expect(result.exitCode).toBe(3);
+		expect(result.output).toContain("out");
+		expect(result.output).toContain("err");
+	});
+
+	test("a child that never finishes is killed and reported, not awaited forever", async () => {
+		// Without a deadline the host's single update slot would stay `installing` until restart.
+		const child = Bun.spawn(["bash", "-c", "sleep 60"], { stdout: "pipe", stderr: "pipe" });
+		const result = await awaitBoundedChild(child, 150);
+		expect(result.timedOut).toBe(true);
+		expect(child.killed).toBe(true);
+	});
+
+	test("both streams are drained concurrently, so a chatty child cannot stall the read", async () => {
+		const child = Bun.spawn(["bash", "-c", "printf 'x%.0s' {1..300000} >&2; echo done"], {
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const result = await awaitBoundedChild(child, 30_000);
+		expect(result.timedOut).toBe(false);
+		expect(result.exitCode).toBe(0);
+		expect(result.output).toContain("done");
+		expect(result.output.length).toBeGreaterThan(300_000);
 	});
 });

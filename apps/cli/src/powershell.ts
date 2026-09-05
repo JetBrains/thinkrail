@@ -16,11 +16,22 @@ export function psQuote(value: string): string {
 export interface PowerShellResult {
 	exitCode: number;
 	stdout: string;
+	timedOut: boolean;
 }
 
 export interface RunPowerShellOptions {
 	env?: Record<string, string | undefined>;
 	capture?: boolean;
+	timeoutMs?: number;
+}
+
+async function readStream(stream: unknown): Promise<string> {
+	if (!(stream instanceof ReadableStream)) return "";
+	try {
+		return await new Response(stream).text();
+	} catch {
+		return "";
+	}
 }
 
 export async function runPowerShellScript(
@@ -42,10 +53,30 @@ export async function runPowerShellScript(
 			} catch {
 				continue;
 			}
-			const stdout =
-				run.stdout instanceof ReadableStream ? await new Response(run.stdout).text() : "";
-			const exitCode = await run.exited;
-			return { exitCode, stdout };
+			const drained = readStream(run.stdout);
+			if (options.timeoutMs === undefined) {
+				const exitCode = await run.exited;
+				return { exitCode, stdout: await drained, timedOut: false };
+			}
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			const expiry = new Promise<"timeout">((resolve) => {
+				timer = setTimeout(() => resolve("timeout"), options.timeoutMs);
+				timer.unref?.();
+			});
+			try {
+				const finished = await Promise.race([run.exited, expiry]);
+				if (finished !== "timeout") {
+					return { exitCode: finished, stdout: await drained, timedOut: false };
+				}
+				run.kill();
+				const forced = setTimeout(() => run.kill(9), 2_000);
+				forced.unref?.();
+				const exitCode = await run.exited;
+				clearTimeout(forced);
+				return { exitCode, stdout: await drained, timedOut: true };
+			} finally {
+				if (timer) clearTimeout(timer);
+			}
 		}
 		return undefined;
 	} finally {
