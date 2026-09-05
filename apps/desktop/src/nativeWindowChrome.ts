@@ -4,7 +4,7 @@ import {
 	type DesktopResizeEdge,
 	linuxResizeEdgeCode,
 	normalizeWindowsFrameStyle,
-	windowsResizeHitTest,
+	windowsResizeDirection,
 } from "./windowChrome";
 
 type WindowsLibrary = Library<{
@@ -95,7 +95,11 @@ export function createWindowsResizeStarter(handle: Pointer): (edge: DesktopResiz
 		const x = pointView.getInt32(0, true);
 		const y = pointView.getInt32(4, true);
 		const packedPoint = ((y & 0xffff) << 16) | (x & 0xffff);
-		if (!library.symbols.PostMessageW(handle, 0x00a1, windowsResizeHitTest(edge), packedPoint)) {
+		if (process.env.THINKRAIL_DESKTOP_NATIVE_INTERACTION === "1") {
+			console.error(`[desktop] Windows resize queued edge=${edge}`);
+		}
+		const command = 0x0000f000 | windowsResizeDirection(edge);
+		if (!library.symbols.PostMessageW(handle, 0x0112, command, packedPoint)) {
 			throw new Error(`could not start Windows window resize from ${edge}`);
 		}
 	};
