@@ -147,7 +147,9 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   detached subagent's terminal report is transcript-positioned, rendered by `chat`'s completion card —
   both narrowed by the shared contracts guards) /
   `currentAssistantId` / `attemptAssistantId` (scopes overflow removal to the attempt actually observed) /
-  `isStreaming` / `model` / `thinkingLevel` / **`eventRevision`** (browser-local, incremented for every
+  `isStreaming` / **`settlementTick`** (browser-local, monotonically incremented for every
+  `agent_settled`, so batched start+settle still exposes the completion edge to chat layout) / `model` /
+  `thinkingLevel` / **`eventRevision`** (browser-local, incremented for every
   received Pi event; the compare-and-install fence for an authoritative transcript read) /
   **`syncedConnectionGeneration`** (which connected host generation the runtime's transcript was last read
   from) / `stats` / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
@@ -167,7 +169,9 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   follow-on user turn, while `agent_start` consumes it for work begun by another client or a custom message.
   Thus the renderer can offer one ordinary `Try again.` send without parsing errors or leaving an actionable
   historical failure. `agent_end` is attempt-level and never clears `isStreaming`; settlement alone finishes
-  retries, compaction, and queued continuations. The
+  retries, compaction, and queued continuations. The same `agent_settled` fold increments `settlementTick`
+  independently of the final `isStreaming` value, preserving the transition when the Pi-event batcher gives
+  React only the batch's false→false endpoint. The
   **compaction lifecycle is a first-class turn**: `compaction_start` appends a `compaction` turn
   (`running`), `compaction_end` settles the trailing running one in place (success → `done` +
   tokens-before/after from the typed `CompactionEndResult`, guarded — wire data is untrusted; `aborted`
