@@ -168,9 +168,12 @@ evaluates its isolated config process.
 
 Desktop typecheck maps only the consumed Electrobun API surface to a package-local declaration adapter
 through a dedicated config; Electrobun/Hutch's generated devkit is a build input, not another repository
-source tree for the TypeScript project to absorb. The runtime build always resolves the real projected SDK.
-The adapter is a compatibility boundary, not a runtime fork, and stays limited to APIs the launcher and
-preload consume.
+source tree for the TypeScript project to absorb. The wrapper syncs that devkit before its external
+`Bun.build` and derives exact Electrobun aliases from the devkit export map. Falling through to the v2 npm
+bootstrap bundles its deliberate `moved.cjs` throw: injected data executes, then the custom preload dies
+before installing either browser adapter. The runtime build therefore always resolves the real projected
+SDK. The adapter is a compatibility boundary, not a runtime fork, and stays limited to APIs the launcher
+and preload consume.
 
 Desktop installers ship beside the CLI artifacts for macOS ARM64, Windows x64, Linux x64, and
 Linux ARM64. Nightly maps to Electrobun canary and stable maps to stable. Updater UX is deferred.

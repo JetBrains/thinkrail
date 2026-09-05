@@ -5,10 +5,11 @@ import {
 	RiCircleFill,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { IconTooltip } from "../components/ui/tooltip";
+import { getNativeWindowChromeAdapter } from "../nativeWindowChrome";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
@@ -33,6 +34,8 @@ import { CollapsedPanelRail } from "./CollapsedPanelRail";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
+import { NativeWindowControls } from "./NativeWindowControls";
+import { NativeWindowResizeHandles } from "./NativeWindowResizeHandles";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
@@ -49,8 +52,18 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 	disconnected: "text-feedback-error",
 };
 
+const BROWSER_WINDOW_SNAPSHOT = { maximized: false };
+const getBrowserWindowSnapshot = () => BROWSER_WINDOW_SNAPSHOT;
+const subscribeBrowserWindow = () => () => {};
+
 export function Shell() {
 	useLocalLayoutState();
+	const [nativeWindowChrome] = useState(getNativeWindowChromeAdapter);
+	const nativeWindowSnapshot = useSyncExternalStore(
+		nativeWindowChrome?.subscribe ?? subscribeBrowserWindow,
+		nativeWindowChrome?.getSnapshot ?? getBrowserWindowSnapshot,
+		getBrowserWindowSnapshot,
+	);
 	const status = useAppStore((s) => s.status);
 	const StatusDot = status === "connected" ? RiCircleFill : Circle;
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
@@ -110,7 +123,10 @@ export function Shell() {
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
-			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-16 py-8">
+			<header
+				data-native-window-platform={nativeWindowChrome?.platform}
+				className={`electrobun-webkit-app-region-drag flex items-center justify-between border-b border-border-default bg-container-header-bg py-8 pr-16 ${nativeWindowChrome?.platform === "macos" ? "pl-[calc(var(--space-64)+var(--space-16))]" : "pl-16"}`}
+			>
 				<div className="flex min-w-0 items-center gap-12">
 					<BrandLogo />
 					{contextProject ? (
@@ -159,7 +175,7 @@ export function Shell() {
 						</div>
 					) : null}
 				</div>
-				<div className="flex shrink-0 items-center gap-12">
+				<div className="electrobun-webkit-app-region-no-drag flex shrink-0 items-center gap-12">
 					<JbcentralQuotaTopbar />
 					<span
 						data-testid="connection-status"
@@ -187,6 +203,12 @@ export function Shell() {
 							<Settings className="size-16" />
 						</button>
 					</IconTooltip>
+					{nativeWindowChrome ? (
+						<NativeWindowControls
+							adapter={nativeWindowChrome}
+							maximized={nativeWindowSnapshot.maximized}
+						/>
+					) : null}
 				</div>
 				<SettingsDialog layoutSettings={<LayoutSettings />} />
 			</header>
@@ -258,6 +280,12 @@ export function Shell() {
 					</ResizablePanelGroup>
 				</div>
 			)}
+			{nativeWindowChrome ? (
+				<NativeWindowResizeHandles
+					adapter={nativeWindowChrome}
+					maximized={nativeWindowSnapshot.maximized}
+				/>
+			) : null}
 			<InterviewPromptDialog />
 			<Toaster />
 		</div>
