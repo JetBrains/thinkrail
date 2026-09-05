@@ -244,6 +244,17 @@ async function executeUnixPlan(
 	return { kind: "ok", output };
 }
 
+export function alreadyNewest(input: {
+	current: string;
+	latest: string | undefined;
+	installedChannel: "stable" | "nightly";
+	targetChannel: "stable" | "nightly";
+}): boolean {
+	if (input.latest === undefined) return false;
+	if (input.targetChannel !== input.installedChannel) return false;
+	return compareReleaseVersions(input.current, input.latest) >= 0;
+}
+
 export function executeUpdatePlan(
 	plan: UpdatePlan | WindowsUpdatePlan,
 	options: ExecuteUpdateOptions,
@@ -262,10 +273,17 @@ export async function runUpdate(
 	const home = homedir();
 	let plan: UpdatePlan | WindowsUpdatePlan;
 	let wanted: string;
+	let installedChannel: "stable" | "nightly";
 	try {
 		const args = parseUpdateArgs(argv);
 		wanted = args.version;
-		const input = { args, installMeta: readInstallMeta(home), baked: bakedChannel, home };
+		const installMeta = readInstallMeta(home);
+		installedChannel = resolveUpdateChannel(
+			{ version: "latest" },
+			installMeta.channel,
+			bakedChannel,
+		);
+		const input = { args, installMeta, baked: bakedChannel, home };
 		plan =
 			process.platform === "win32" ? resolveWindowsUpdatePlan(input) : resolveUpdatePlan(input);
 	} catch (err) {
@@ -279,11 +297,18 @@ export async function runUpdate(
 	if (wanted === "latest") {
 		try {
 			const latest = await resolveLatestRelease(plan.channel, { env });
-			if (latest && compareReleaseVersions(version, latest.version) >= 0) {
+			if (latest) console.log(`Newest ${plan.channel} build: ${latest.version}`);
+			if (
+				alreadyNewest({
+					current: version,
+					latest: latest?.version,
+					installedChannel,
+					targetChannel: plan.channel,
+				})
+			) {
 				console.log(`Already on the newest ${plan.channel} build (${version}).`);
 				return 0;
 			}
-			if (latest) console.log(`Newest ${plan.channel} build: ${latest.version}`);
 		} catch (err) {
 			console.error(`warning: could not check the newest release (${failureText(err)})`);
 		}

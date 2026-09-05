@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	alreadyNewest,
 	parseUpdateArgs,
 	resolveUpdatePlan,
 	resolveWindowsInstallPrefix,
@@ -268,5 +269,62 @@ describe("resolveWindowsPrefix", () => {
 		]) {
 			expect(() => resolveWindowsPrefix(bad, home)).toThrow("suspicious install prefix");
 		}
+	});
+});
+
+describe("alreadyNewest", () => {
+	test("skips a same-channel re-install of the build already running", () => {
+		expect(
+			alreadyNewest({
+				current: "2.0.0",
+				latest: "2.0.0",
+				installedChannel: "stable",
+				targetChannel: "stable",
+			}),
+		).toBe(true);
+	});
+
+	test("never skips a channel switch, in either direction", () => {
+		// stable 2.0.0 → nightly 2.0.0-nightly.5: semver says the running build is newer, but the
+		// user asked to change channel, so the install must happen.
+		expect(
+			alreadyNewest({
+				current: "2.0.0",
+				latest: "2.0.0-nightly.5",
+				installedChannel: "stable",
+				targetChannel: "nightly",
+			}),
+		).toBe(false);
+		// nightly 2.1.0-nightly.1 → stable 2.0.0 is a deliberate downgrade.
+		expect(
+			alreadyNewest({
+				current: "2.1.0-nightly.1",
+				latest: "2.0.0",
+				installedChannel: "nightly",
+				targetChannel: "stable",
+			}),
+		).toBe(false);
+	});
+
+	test("an unresolved feed never skips the install", () => {
+		expect(
+			alreadyNewest({
+				current: "2.0.0",
+				latest: undefined,
+				installedChannel: "stable",
+				targetChannel: "stable",
+			}),
+		).toBe(false);
+	});
+
+	test("a newer release does not skip", () => {
+		expect(
+			alreadyNewest({
+				current: "2.0.0",
+				latest: "2.1.0",
+				installedChannel: "stable",
+				targetChannel: "stable",
+			}),
+		).toBe(false);
 	});
 });
