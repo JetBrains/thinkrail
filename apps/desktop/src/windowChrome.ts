@@ -94,6 +94,21 @@ export function normalizeWindowsFrameStyle(
 	return true;
 }
 
+export function windowsResizeCursor(
+	edge: DesktopResizeEdge,
+	point: { x: number; y: number },
+	frame: { left: number; top: number; right: number; bottom: number },
+): { x: number; y: number } {
+	const west = edge === "north-west" || edge === "west" || edge === "south-west";
+	const east = edge === "north-east" || edge === "east" || edge === "south-east";
+	const north = edge === "north-west" || edge === "north" || edge === "north-east";
+	const south = edge === "south-west" || edge === "south" || edge === "south-east";
+	return {
+		x: west ? frame.left + 1 : east ? frame.right - 1 : point.x,
+		y: north ? frame.top + 1 : south ? frame.bottom - 1 : point.y,
+	};
+}
+
 export function windowsResizeHitTest(edge: string): number {
 	switch (edge) {
 		case "north-west":

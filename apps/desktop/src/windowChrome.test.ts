@@ -7,6 +7,7 @@ import {
 	preservedWindowsStyle,
 	probeDesktopWindowTransitions,
 	readDesktopResizeEdge,
+	windowsResizeCursor,
 	windowsResizeHitTest,
 } from "./windowChrome";
 
@@ -76,6 +77,34 @@ test("normalizes the live Windows frame only when capabilities are missing", () 
 		["write", "window", 0x00cf0000n],
 		["refresh", "window"],
 		["read", "window"],
+	]);
+});
+
+test("snaps Windows custom resize starts onto the native frame", () => {
+	const point = { x: 500, y: 500 };
+	const frame = { left: 100, top: 200, right: 900, bottom: 800 };
+	expect(
+		(
+			[
+				"north-west",
+				"north",
+				"north-east",
+				"west",
+				"east",
+				"south-west",
+				"south",
+				"south-east",
+			] as const
+		).map((edge) => windowsResizeCursor(edge, point, frame)),
+	).toEqual([
+		{ x: 101, y: 201 },
+		{ x: 500, y: 201 },
+		{ x: 899, y: 201 },
+		{ x: 101, y: 500 },
+		{ x: 899, y: 500 },
+		{ x: 101, y: 799 },
+		{ x: 500, y: 799 },
+		{ x: 899, y: 799 },
 	]);
 });
 
