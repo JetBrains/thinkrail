@@ -256,6 +256,31 @@ test("an ordered Pi-event batch commits once while preserving every session revi
 	expect(rt("b").isStreaming).toBe(true);
 });
 
+test("a settlement tick survives a batched false-to-false streaming endpoint", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	expect(rt("a").settlementTick).toBe(0);
+	let commits = 0;
+	const unsubscribe = useAppStore.subscribe(() => {
+		commits += 1;
+	});
+
+	store.handlePiEvents([
+		{ sessionId: "a", event: agentStart },
+		{ sessionId: "a", event: agentEnd },
+		{ sessionId: "a", event: agentSettled() },
+	]);
+	unsubscribe();
+
+	expect(commits).toBe(1);
+	expect(rt("a").isStreaming).toBe(false);
+	expect(rt("a").settlementTick).toBe(1);
+	store.handlePiEvent(agentEnd, "a");
+	expect(rt("a").settlementTick).toBe(1);
+	store.handlePiEvent(agentSettled(), "a");
+	expect(rt("a").settlementTick).toBe(2);
+});
+
 test("a host-fired USER message folds into the transcript; the composer's optimistic twin doesn't duplicate", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");

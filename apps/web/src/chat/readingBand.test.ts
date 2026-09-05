@@ -367,6 +367,24 @@ describe("reading-band reader intent", () => {
 		expect(harness.writes).toEqual([0]);
 	});
 
+	it("settlement reattaches a detached reader at the physical latest edge in both orders", () => {
+		for (const latestEdge of ["bottom", "top"] as const) {
+			const harness = createHarness({ latestEdge });
+			harness.setGeometry({ scrollTop: 300, maxScrollTop: 900, edgeBottom: 500 });
+			harness.controller.readerLeft();
+			harness.controller.setStreaming(false);
+			harness.advance(220);
+
+			expect(harness.controller.getSnapshot()).toEqual({
+				following: true,
+				moving: false,
+				runway: false,
+				buttonLabel: null,
+			});
+			expect(harness.writes.at(-1)).toBe(latestEdge === "bottom" ? 900 : 0);
+		}
+	});
+
 	it("keeps a settled Latest return pinned through delayed measurement", () => {
 		const harness = createHarness({ streaming: false });
 		harness.controller.readerLeft();
