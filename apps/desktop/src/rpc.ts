@@ -1,4 +1,4 @@
-import type { DesktopResizeEdge } from "./windowChrome";
+import type { DesktopResizeEdge, DesktopWindowChromePlatform } from "./windowChrome";
 
 export type DesktopRpc = {
 	bun: {
@@ -11,6 +11,7 @@ export type DesktopRpc = {
 			windowChromeToggleMaximize: Record<string, never>;
 			windowChromeRequestClose: Record<string, never>;
 			windowChromeStartResize: { edge: DesktopResizeEdge };
+			windowChromeReady: { platform: DesktopWindowChromePlatform };
 		};
 	};
 	webview: {

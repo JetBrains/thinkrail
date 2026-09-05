@@ -24,6 +24,19 @@ export interface DesktopWindowChromeHandle {
 	requestClose(): unknown;
 }
 
+export interface DesktopWindowTransitionHandle {
+	isMaximized(): boolean;
+	isMinimized(): boolean;
+	unminimize(): unknown;
+}
+
+export type DesktopWindowTransitionProbe = {
+	maximized: true;
+	restored: true;
+	minimized: true;
+	unminimized: true;
+};
+
 export interface DesktopWindowChromeController {
 	getSnapshot(): { maximized: boolean };
 	publishState(): void;
@@ -110,6 +123,41 @@ export function readDesktopResizeEdge(payload: unknown): DesktopResizeEdge | nul
 	return typeof edge === "string" && RESIZE_EDGES.has(edge as DesktopResizeEdge)
 		? (edge as DesktopResizeEdge)
 		: null;
+}
+
+async function waitForWindowState(
+	read: () => boolean,
+	expected: boolean,
+	label: string,
+): Promise<void> {
+	const deadline = performance.now() + 5_000;
+	while (read() !== expected) {
+		if (performance.now() >= deadline) throw new Error(`window did not become ${label}`);
+		await Bun.sleep(25);
+	}
+}
+
+export async function probeDesktopWindowTransitions(
+	controller: DesktopWindowChromeController,
+	window: DesktopWindowTransitionHandle,
+): Promise<DesktopWindowTransitionProbe> {
+	if (window.isMinimized()) {
+		window.unminimize();
+		await waitForWindowState(() => window.isMinimized(), false, "unminimized");
+	}
+	if (window.isMaximized()) {
+		controller.toggleMaximize();
+		await waitForWindowState(() => window.isMaximized(), false, "restored");
+	}
+	controller.toggleMaximize();
+	await waitForWindowState(() => window.isMaximized(), true, "maximized");
+	controller.toggleMaximize();
+	await waitForWindowState(() => window.isMaximized(), false, "restored");
+	controller.minimize();
+	await waitForWindowState(() => window.isMinimized(), true, "minimized");
+	window.unminimize();
+	await waitForWindowState(() => window.isMinimized(), false, "unminimized");
+	return { maximized: true, restored: true, minimized: true, unminimized: true };
 }
 
 export function createDesktopWindowChromeController({

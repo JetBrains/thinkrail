@@ -80,6 +80,8 @@ export class BrowserWindow {
 	});
 	show(): void;
 	minimize(): void;
+	unminimize(): void;
+	isMinimized(): boolean;
 	maximize(): void;
 	unmaximize(): void;
 	isMaximized(): boolean;

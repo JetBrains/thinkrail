@@ -87,13 +87,15 @@ write shared placement while the test page is asserting it. The desktop adapter 
 only after Playwright finishes, then requires normal graceful application exit.
 
 This is separate from `smoke:desktop`: native smoke loads the actual packaged ThinkRail UI in the system
-webview, requires DOM-ready plus host health, and quits through the real Electrobun lifecycle. Its
-platform-native chrome assertions require one content titlebar row; the correct native/app control policy;
-window move, every-edge resize, maximize/restore, minimize, graceful close; Windows snap/system-menu and
-editing accelerators; and accessible app controls where the web shell supplies them. Linux runs that smoke
-under Xvfb with software rendering enabled only in the test environment and drives the GTK compositor path,
-not a JavaScript frame-resize substitute. The split proves both the native-window path and broad browser
-behavior without introducing two competing clients.
+webview, requires the custom preload handshake after DOM-ready plus host health, exercises native state
+transitions, and closes through the real Electrobun controller/lifecycle. Windows additionally requires its
+preserved style and system menu, window move, every-edge frame resize, and top-edge snap through native
+input. Linux runs under Xvfb with an Openbox compositor and real pointer input across the titlebar and all
+eight web resize targets, so GTK/the compositor—not a JavaScript frame-resize substitute—must change the
+frame. macOS retains AppKit controls; accessibility geometry and drag probes cover the one-row placement and
+web drag region. Shell E2E separately pins browser absence, per-platform app controls, accessible names,
+maximize reflection, and Linux handle suppression; application-menu tests pin editing roles. The layers
+prove both native mechanics and broad browser behavior without introducing two competing clients.
 
 JetBrains Central coverage uses a stateful, independently authored fake executable implementing only the
 argv/exit/postcondition surface ThinkRail invokes (`--version`, `status`, `quota --json`, `add pi`,
