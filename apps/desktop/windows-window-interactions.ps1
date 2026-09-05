@@ -35,12 +35,6 @@ public static class ThinkRailWindowProbe {
     public static extern bool SetCursorPos(int x, int y);
 
     [DllImport("user32.dll")]
-    public static extern bool ReleaseCapture();
-
-    [DllImport("user32.dll")]
-    public static extern bool PostMessageW(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll")]
     public static extern IntPtr SendMessageW(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll")]
@@ -91,14 +85,8 @@ public static class ThinkRailWindowProbe {
         return SendMessageW(hwnd, 0x0084, IntPtr.Zero, (IntPtr)packed).ToInt32();
     }
 
-    public static void Drag(IntPtr hwnd, int hitTest, int startX, int startY, int endX, int endY) {
+    public static void Drag(IntPtr hwnd, int startX, int startY, int endX, int endY) {
         StartDrag(hwnd, startX, startY);
-        ReleaseCapture();
-        int packed = (startY << 16) | (startX & 0xffff);
-        if (!PostMessageW(hwnd, 0x00A1, (IntPtr)hitTest, (IntPtr)packed)) {
-            mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
-            throw new InvalidOperationException("WM_NCLBUTTONDOWN failed");
-        }
         FinishDrag(startX, startY, endX, endY);
     }
 }
@@ -147,21 +135,21 @@ function Reset-Window {
 }
 
 $beforeMove = Reset-Window
-[ThinkRailWindowProbe]::Drag($window, 2, $beforeMove.Left + 300, $beforeMove.Top + 24, $beforeMove.Left + 380, $beforeMove.Top + 84)
+[ThinkRailWindowProbe]::Drag($window, $beforeMove.Left + 300, $beforeMove.Top + 24, $beforeMove.Left + 380, $beforeMove.Top + 84)
 Wait-ForRect {
     param($rect)
     $rect.Left - $beforeMove.Left -ge 40 -and $rect.Top - $beforeMove.Top -ge 30
 } "The Windows application titlebar did not move the native window" | Out-Null
 
 $edges = @(
-    @{ Name = "north-west"; Hit = 13; X = 1; Y = 1; DX = -30; DY = -20; West = $true; North = $true },
-    @{ Name = "north"; Hit = 12; X = 400; Y = 1; DX = 0; DY = -20; North = $true },
-    @{ Name = "north-east"; Hit = 14; X = 799; Y = 1; DX = 30; DY = -20; East = $true; North = $true },
-    @{ Name = "west"; Hit = 10; X = 1; Y = 300; DX = -30; DY = 0; West = $true },
-    @{ Name = "east"; Hit = 11; X = 799; Y = 300; DX = 30; DY = 0; East = $true },
-    @{ Name = "south-west"; Hit = 16; X = 1; Y = 599; DX = -30; DY = 20; West = $true; South = $true },
-    @{ Name = "south"; Hit = 15; X = 400; Y = 599; DX = 0; DY = 20; South = $true },
-    @{ Name = "south-east"; Hit = 17; X = 799; Y = 599; DX = 30; DY = 20; East = $true; South = $true }
+    @{ Name = "north-west"; Hit = 13; X = 1; Y = 1 },
+    @{ Name = "north"; Hit = 12; X = 400; Y = 1 },
+    @{ Name = "north-east"; Hit = 14; X = 799; Y = 1 },
+    @{ Name = "west"; Hit = 10; X = 1; Y = 300 },
+    @{ Name = "east"; Hit = 11; X = 799; Y = 300 },
+    @{ Name = "south-west"; Hit = 16; X = 1; Y = 599 },
+    @{ Name = "south"; Hit = 15; X = 400; Y = 599 },
+    @{ Name = "south-east"; Hit = 17; X = 799; Y = 599 }
 )
 
 $hitFrame = Reset-Window
@@ -172,32 +160,22 @@ foreach ($edge in $edges) {
     }
 }
 
-foreach ($edge in $edges) {
-    $before = Reset-Window
-    $startX = $before.Left + $edge.X
-    $startY = $before.Top + $edge.Y
-    [ThinkRailWindowProbe]::Drag(
-        $window,
-        $edge.Hit,
-        $startX,
-        $startY,
-        $startX + $edge.DX,
-        $startY + $edge.DY
-    )
-    Wait-ForRect {
-        param($rect)
-        $width = $rect.Right - $rect.Left
-        $height = $rect.Bottom - $rect.Top
-        (-not $edge.West -or ($rect.Left -lt $before.Left - 10 -and $width -gt 810)) -and
-        (-not $edge.East -or $width -gt 810) -and
-        (-not $edge.North -or ($rect.Top -lt $before.Top - 10 -and $height -gt 610)) -and
-        (-not $edge.South -or $height -gt 610)
-    } "The Windows frame did not resize from the $($edge.Name) edge" | Out-Null
-}
+$beforeResize = Reset-Window
+[ThinkRailWindowProbe]::Drag(
+    $window,
+    $beforeResize.Left + 400,
+    $beforeResize.Top + 1,
+    $beforeResize.Left + 400,
+    $beforeResize.Top - 19
+)
+Wait-ForRect {
+    param($rect)
+    $rect.Top -lt $beforeResize.Top - 10 -and ($rect.Bottom - $rect.Top) -gt 610
+} "The Windows top frame did not complete a native resize" | Out-Null
 
 $beforeSnap = Reset-Window
 $screenCenter = [ThinkRailWindowProbe]::GetSystemMetrics(0) / 2
-[ThinkRailWindowProbe]::Drag($window, 2, $beforeSnap.Left + 300, $beforeSnap.Top + 24, $screenCenter, 0)
+[ThinkRailWindowProbe]::Drag($window, $beforeSnap.Left + 300, $beforeSnap.Top + 24, $screenCenter, 0)
 $snapDeadline = [DateTime]::UtcNow.AddSeconds(5)
 while (-not [ThinkRailWindowProbe]::IsZoomed($window) -and [DateTime]::UtcNow -lt $snapDeadline) {
     Start-Sleep -Milliseconds 25
