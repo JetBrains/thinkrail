@@ -11,7 +11,11 @@ import Electrobun, {
 } from "electrobun/bun";
 import { installDesktopApplicationMenu } from "./applicationMenu";
 import { externalNavigationUrl } from "./externalNavigation";
-import { createLinuxResizeStarter, preserveWindowsNativeFrame } from "./nativeWindowChrome";
+import {
+	createLinuxResizeStarter,
+	createWindowsResizeStarter,
+	preserveWindowsNativeFrame,
+} from "./nativeWindowChrome";
 import {
 	injectInitialDesktopPreferences,
 	readDesktopPreferenceRemove,
@@ -138,17 +142,19 @@ async function start(): Promise<void> {
 	const nativeWindowHandle = mainWindow.ptr;
 	if (!nativeWindowHandle) throw new Error("desktop native window handle is unavailable");
 	if (chromePolicy.platform === "windows") preserveWindowsNativeFrame(nativeWindowHandle);
-	const startLinuxResize =
-		chromePolicy.platform === "linux"
-			? createLinuxResizeStarter(runtimeDir, nativeWindowHandle)
-			: () => {};
+	const startNativeResize =
+		chromePolicy.platform === "windows"
+			? createWindowsResizeStarter(nativeWindowHandle)
+			: chromePolicy.platform === "linux"
+				? createLinuxResizeStarter(runtimeDir, nativeWindowHandle)
+				: () => {};
 	windowChromeController = createDesktopWindowChromeController({
 		platform: chromePolicy.platform,
 		window: mainWindow,
 		onState: (snapshot) => {
 			if (!neutral) rpc.send.windowChromeState(snapshot);
 		},
-		startLinuxResize,
+		startNativeResize,
 	});
 	mainWindow.on("resize", () => windowChromeController?.publishState());
 	if (!hidden) mainWindow.show();

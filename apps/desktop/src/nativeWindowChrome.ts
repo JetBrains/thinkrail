@@ -1,9 +1,10 @@
-import { cc, dlopen, FFIType, type Library, type Pointer } from "bun:ffi";
+import { cc, dlopen, FFIType, type Library, type Pointer, ptr } from "bun:ffi";
 import { join } from "node:path";
 import {
 	type DesktopResizeEdge,
 	linuxResizeEdgeCode,
 	normalizeWindowsFrameStyle,
+	windowsResizeHitTest,
 } from "./windowChrome";
 
 type WindowsLibrary = Library<{
@@ -22,6 +23,12 @@ type WindowsLibrary = Library<{
 			FFIType.i32,
 			FFIType.u32,
 		];
+		returns: FFIType.bool;
+	};
+	GetCursorPos: { args: [FFIType.ptr]; returns: FFIType.bool };
+	ReleaseCapture: { args: []; returns: FFIType.bool };
+	PostMessageW: {
+		args: [FFIType.ptr, FFIType.u32, FFIType.u64, FFIType.i64];
 		returns: FFIType.bool;
 	};
 }>;
@@ -51,6 +58,12 @@ function getWindowsLibrary(): WindowsLibrary {
 			],
 			returns: FFIType.bool,
 		},
+		GetCursorPos: { args: [FFIType.ptr], returns: FFIType.bool },
+		ReleaseCapture: { args: [], returns: FFIType.bool },
+		PostMessageW: {
+			args: [FFIType.ptr, FFIType.u32, FFIType.u64, FFIType.i64],
+			returns: FFIType.bool,
+		},
 	});
 	return windowsLibrary;
 }
@@ -68,6 +81,24 @@ export function preserveWindowsNativeFrame(handle: Pointer): boolean {
 			if (!refreshed) throw new Error("could not refresh the Windows window frame");
 		},
 	});
+}
+
+export function createWindowsResizeStarter(handle: Pointer): (edge: DesktopResizeEdge) => void {
+	const library = getWindowsLibrary();
+	return (edge) => {
+		const point = new Int32Array(2);
+		if (!library.symbols.GetCursorPos(ptr(point))) {
+			throw new Error("could not locate the pointer for Windows window resize");
+		}
+		library.symbols.ReleaseCapture();
+		const pointView = new DataView(point.buffer);
+		const x = pointView.getInt32(0, true);
+		const y = pointView.getInt32(4, true);
+		const packedPoint = ((y & 0xffff) << 16) | (x & 0xffff);
+		if (!library.symbols.PostMessageW(handle, 0x00a1, windowsResizeHitTest(edge), packedPoint)) {
+			throw new Error(`could not start Windows window resize from ${edge}`);
+		}
+	};
 }
 
 export function createLinuxResizeStarter(
