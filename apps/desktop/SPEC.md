@@ -95,7 +95,9 @@ stacked above it. The visual composition is shared while the mechanism is platfo
   style capabilities that Electrobun's collapsed caption omits. Because that collapsed caption returns
   client hit-testing along the top frame, a package-owned native hook delegates every message to
   Electrobun's window procedure except restored-window `WM_NCHITTEST` points inside the system-sized top
-  border, which become `HTTOP`. DWM therefore owns every resize edge without a JavaScript geometry loop.
+  border, which become `HTTOP`. An inset web fallback for the embedded renderer posts one private native
+  message; the hooked window procedure releases renderer capture on its own UI thread and enters
+  `WM_NCLBUTTONDOWN(HTTOP)`. DWM therefore owns every resize edge without a JavaScript geometry loop.
 - Linux uses `hidden`; the shell supplies Linux-style controls. Native move and all eight resize directions
   delegate to GTK/the compositor. A package-owned native helper enters the GTK main context and calls the
   standard move/resize primitives; JavaScript never synthesizes a resize loop from pointer deltas.

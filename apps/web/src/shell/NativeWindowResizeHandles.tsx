@@ -13,6 +13,30 @@ const handleClass: Record<NativeResizeEdge, string> = {
 
 const edges = Object.keys(handleClass) as NativeResizeEdge[];
 
+function ResizeHandle({
+	edge,
+	className,
+	onStart,
+}: {
+	edge: NativeResizeEdge;
+	className: string;
+	onStart(edge: NativeResizeEdge): void;
+}) {
+	return (
+		<div
+			aria-hidden="true"
+			data-testid="native-resize-handle"
+			data-edge={edge}
+			className={className}
+			onMouseDown={(event) => {
+				if (event.button !== 0) return;
+				event.preventDefault();
+				onStart(edge);
+			}}
+		/>
+	);
+}
+
 export function NativeWindowResizeHandles({
 	adapter,
 	maximized,
@@ -20,19 +44,22 @@ export function NativeWindowResizeHandles({
 	adapter: NativeWindowChromeAdapter;
 	maximized: boolean;
 }) {
-	if (adapter.platform !== "linux" || maximized) return null;
+	if (adapter.platform === "macos" || maximized) return null;
+	if (adapter.platform === "windows") {
+		return (
+			<ResizeHandle
+				edge="north"
+				className="fixed left-16 right-[calc(var(--space-64)+var(--space-40)+var(--space-16))] top-12 z-50 h-8 cursor-n-resize"
+				onStart={adapter.startResize}
+			/>
+		);
+	}
 	return edges.map((edge) => (
-		<div
+		<ResizeHandle
 			key={edge}
-			aria-hidden="true"
-			data-testid="native-resize-handle"
-			data-edge={edge}
+			edge={edge}
 			className={handleClass[edge]}
-			onMouseDown={(event) => {
-				if (event.button !== 0) return;
-				event.preventDefault();
-				adapter.startResize(edge);
-			}}
+			onStart={adapter.startResize}
 		/>
 	));
 }

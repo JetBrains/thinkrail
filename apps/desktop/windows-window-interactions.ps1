@@ -87,6 +87,7 @@ public static class ThinkRailWindowProbe {
 
     public static void Drag(IntPtr hwnd, int startX, int startY, int endX, int endY) {
         StartDrag(hwnd, startX, startY);
+        Thread.Sleep(150);
         FinishDrag(startX, startY, endX, endY);
     }
 }
@@ -164,7 +165,7 @@ $beforeResize = Reset-Window
 [ThinkRailWindowProbe]::Drag(
     $window,
     $beforeResize.Left + 400,
-    $beforeResize.Top + 1,
+    $beforeResize.Top + 16,
     $beforeResize.Left + 400,
     $beforeResize.Top - 19
 )

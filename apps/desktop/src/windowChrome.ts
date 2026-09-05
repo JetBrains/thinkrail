@@ -94,6 +94,29 @@ export function normalizeWindowsFrameStyle(
 	return true;
 }
 
+export function windowsResizeHitTest(edge: string): number {
+	switch (edge) {
+		case "north-west":
+			return 13;
+		case "north":
+			return 12;
+		case "north-east":
+			return 14;
+		case "west":
+			return 10;
+		case "east":
+			return 11;
+		case "south-west":
+			return 16;
+		case "south":
+			return 15;
+		case "south-east":
+			return 17;
+		default:
+			throw new Error(`unsupported resize edge: ${edge}`);
+	}
+}
+
 export function linuxResizeEdgeCode(edge: string): number {
 	switch (edge) {
 		case "north-west":
@@ -164,12 +187,12 @@ export function createDesktopWindowChromeController({
 	platform,
 	window,
 	onState,
-	startLinuxResize,
+	startNativeResize,
 }: {
 	platform: DesktopWindowChromePlatform;
 	window: DesktopWindowChromeHandle;
 	onState(snapshot: { maximized: boolean }): void;
-	startLinuxResize(edge: DesktopResizeEdge): void;
+	startNativeResize(edge: DesktopResizeEdge): void;
 }): DesktopWindowChromeController {
 	const getSnapshot = () => ({ maximized: window.isMaximized() });
 	const publishState = () => onState(getSnapshot());
@@ -188,8 +211,8 @@ export function createDesktopWindowChromeController({
 			window.requestClose();
 		},
 		startResize: (edge) => {
-			if (platform !== "linux") return false;
-			startLinuxResize(edge);
+			if (platform === "macos") return false;
+			startNativeResize(edge);
 			return true;
 		},
 	};

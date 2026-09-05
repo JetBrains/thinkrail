@@ -48,9 +48,9 @@ window buttons because AppKit owns the traffic lights. Windows and Linux append 
 minimize/maximize-or-restore/close buttons after Settings; Windows uses full-height caption buttons while
 Linux uses inset round controls. Both use Remix Line icons, semantic control/error tokens, accessible names,
 visible keyboard focus, and adapter-reported maximize state. Native close follows the host's graceful
-lifecycle. Linux additionally mounts pointer-only edge/corner resize targets while restored (never while
-maximized); mousedown delegates one resize-start action to the compositor, and the web client owns no resize
-loop. With no capability,
+lifecycle. While restored, Windows mounts one inset top-edge fallback clear of its caption controls and
+Linux mounts pointer-only targets for every edge/corner; neither exists while maximized. Mousedown delegates
+one resize-start action to DWM or the compositor, and the web client owns no resize loop. With no capability,
 the browser renders the current inset, no resize targets, and no window controls. No component reads a
 launcher name, user agent, or Electrobun global directly.
 

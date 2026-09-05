@@ -29,6 +29,7 @@ import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
 import type { DesktopServerRuntime } from "./serverRuntime";
 import {
 	createDesktopWindowChromeController,
+	type DesktopResizeEdge,
 	type DesktopWindowChromeController,
 	desktopWindowChromePolicy,
 	probeDesktopWindowTransitions,
@@ -145,21 +146,20 @@ async function start(): Promise<void> {
 	});
 	const nativeWindowHandle = mainWindow.ptr;
 	if (!nativeWindowHandle) throw new Error("desktop native window handle is unavailable");
+	let startNativeResize: (edge: DesktopResizeEdge) => void = () => {};
 	if (chromePolicy.platform === "windows") {
 		preserveWindowsNativeFrame(nativeWindowHandle);
-		installWindowsNativeChrome(runtimeDir, nativeWindowHandle);
+		startNativeResize = installWindowsNativeChrome(runtimeDir, nativeWindowHandle);
+	} else if (chromePolicy.platform === "linux") {
+		startNativeResize = createLinuxResizeStarter(runtimeDir, nativeWindowHandle);
 	}
-	const startLinuxResize =
-		chromePolicy.platform === "linux"
-			? createLinuxResizeStarter(runtimeDir, nativeWindowHandle)
-			: () => {};
 	windowChromeController = createDesktopWindowChromeController({
 		platform: chromePolicy.platform,
 		window: mainWindow,
 		onState: (snapshot) => {
 			if (!neutral) rpc.send.windowChromeState(snapshot);
 		},
-		startLinuxResize,
+		startNativeResize,
 	});
 	mainWindow.on("resize", () => windowChromeController?.publishState());
 	if (!hidden) mainWindow.show();

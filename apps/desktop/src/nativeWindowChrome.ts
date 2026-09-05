@@ -4,6 +4,7 @@ import {
 	type DesktopResizeEdge,
 	linuxResizeEdgeCode,
 	normalizeWindowsFrameStyle,
+	windowsResizeHitTest,
 } from "./windowChrome";
 
 type WindowsLibrary = Library<{
@@ -28,6 +29,10 @@ type WindowsLibrary = Library<{
 
 type WindowsChromeLibrary = Library<{
 	thinkrail_windows_install_chrome: { args: [FFIType.ptr]; returns: FFIType.bool };
+	thinkrail_windows_begin_resize: {
+		args: [FFIType.ptr, FFIType.i32];
+		returns: FFIType.bool;
+	};
 }>;
 
 let windowsLibrary: WindowsLibrary | undefined;
@@ -75,17 +80,35 @@ export function preserveWindowsNativeFrame(handle: Pointer): boolean {
 	});
 }
 
-export function installWindowsNativeChrome(runtimeDir: string, handle: Pointer): void {
-	windowsChromeLibrary ??= cc({
-		source: Bun.file(join(runtimeDir, "windows-window-chrome.c")),
-		library: "user32",
-		symbols: {
-			thinkrail_windows_install_chrome: { args: [FFIType.ptr], returns: FFIType.bool },
-		},
-	});
-	if (!windowsChromeLibrary.symbols.thinkrail_windows_install_chrome(handle)) {
+export function installWindowsNativeChrome(
+	runtimeDir: string,
+	handle: Pointer,
+): (edge: DesktopResizeEdge) => void {
+	if (!windowsChromeLibrary) {
+		windowsChromeLibrary = cc({
+			source: Bun.file(join(runtimeDir, "windows-window-chrome.c")),
+			library: "user32",
+			symbols: {
+				thinkrail_windows_install_chrome: { args: [FFIType.ptr], returns: FFIType.bool },
+				thinkrail_windows_begin_resize: {
+					args: [FFIType.ptr, FFIType.i32],
+					returns: FFIType.bool,
+				},
+			},
+		});
+	}
+	const library = windowsChromeLibrary;
+	if (!library.symbols.thinkrail_windows_install_chrome(handle)) {
 		throw new Error("could not install Windows native chrome integration");
 	}
+	return (edge) => {
+		if (process.env.THINKRAIL_DESKTOP_NATIVE_INTERACTION === "1") {
+			console.error(`[desktop] Windows resize queued edge=${edge}`);
+		}
+		if (!library.symbols.thinkrail_windows_begin_resize(handle, windowsResizeHitTest(edge))) {
+			throw new Error(`could not start Windows window resize from ${edge}`);
+		}
+	};
 }
 
 export function createLinuxResizeStarter(
