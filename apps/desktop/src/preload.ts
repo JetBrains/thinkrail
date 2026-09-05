@@ -5,6 +5,12 @@ import {
 	isDesktopPreferenceValue,
 	STABLE_PREFERENCES_GLOBAL,
 } from "./preferenceAdapter";
+import {
+	createPreloadWindowChrome,
+	INITIAL_WINDOW_CHROME_PLATFORM_GLOBAL,
+	readPreloadWindowChromePlatform,
+	WINDOW_CHROME_GLOBAL,
+} from "./preloadWindowChrome";
 import type { DesktopRpc } from "./rpc";
 
 interface DesktopPreferenceAdapter {
@@ -13,12 +19,51 @@ interface DesktopPreferenceAdapter {
 	removeItem(key: string): void;
 }
 
+const globals = globalThis as typeof globalThis & Record<string, unknown>;
+const platform = readPreloadWindowChromePlatform(
+	Reflect.get(globals, INITIAL_WINDOW_CHROME_PLATFORM_GLOBAL),
+);
+if (!platform) throw new Error("desktop window chrome platform is missing");
+Reflect.deleteProperty(globals, INITIAL_WINDOW_CHROME_PLATFORM_GLOBAL);
+let applyWindowChromeSnapshot = (_payload: unknown) => false;
 const rpc = Electroview.defineRPC<DesktopRpc>({
 	maxRequestTime: 5000,
-	handlers: { requests: {}, messages: {} },
+	handlers: {
+		requests: {},
+		messages: {
+			windowChromeState: (payload) => {
+				applyWindowChromeSnapshot(payload);
+			},
+		},
+	},
 });
 const electroview = new Electrobun.Electroview({ rpc });
-const globals = globalThis as typeof globalThis & Record<string, unknown>;
+const windowChrome = createPreloadWindowChrome({
+	platform,
+	dispatch: (command) => {
+		switch (command.kind) {
+			case "minimize":
+				electroview.rpc?.send.windowChromeMinimize({});
+				break;
+			case "toggle-maximize":
+				electroview.rpc?.send.windowChromeToggleMaximize({});
+				break;
+			case "request-close":
+				electroview.rpc?.send.windowChromeRequestClose({});
+				break;
+			case "start-resize":
+				electroview.rpc?.send.windowChromeStartResize({ edge: command.edge });
+				break;
+		}
+	},
+});
+applyWindowChromeSnapshot = windowChrome.applySnapshot;
+Object.defineProperty(globals, WINDOW_CHROME_GLOBAL, {
+	value: windowChrome.adapter,
+	writable: false,
+	configurable: false,
+	enumerable: false,
+});
 const injectedPreferences = Reflect.get(globals, INITIAL_DESKTOP_PREFERENCES_GLOBAL);
 const preferences = new Map<string, string>();
 if (typeof injectedPreferences === "object" && injectedPreferences !== null) {

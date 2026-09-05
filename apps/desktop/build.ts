@@ -133,6 +133,10 @@ async function stage(): Promise<void> {
 		sources.trashHelpers.windows,
 		join(runtimeDir, basename(sources.trashHelpers.windows)),
 	);
+	copyFileSync(
+		join(desktopDir, "linux-window-resize.c"),
+		join(runtimeDir, "linux-window-resize.c"),
+	);
 	if (process.platform !== "win32") chmodSync(join(runtimeDir, "macos-trash"), 0o755);
 	await buildBundles();
 }
