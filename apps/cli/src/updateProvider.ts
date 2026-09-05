@@ -78,21 +78,21 @@ export function createCliUpdateProvider(options: CliUpdateProviderOptions): Upda
 			return compareReleaseVersions(version, found.version) < 0 ? found : null;
 		},
 		async install(target) {
-			if (!samePath(ownedBinary, installedBinaryPath(readInstallMeta(home), home, windows))) {
-				return {
-					kind: "failed",
-					message:
-						"the recorded ThinkRail install moved since this host started — install it again from a terminal",
-					retryable: false,
-				};
-			}
-
 			const pinned = target.version ?? (await newestFor(target.channel))?.version;
 			if (!pinned) {
 				return {
 					kind: "failed",
 					message: `no ${target.channel} release has been published yet`,
 					retryable: true,
+				};
+			}
+
+			if (!samePath(ownedBinary, installedBinaryPath(readInstallMeta(home), home, windows))) {
+				return {
+					kind: "failed",
+					message:
+						"the recorded ThinkRail install moved since this host started — install it again from a terminal",
+					retryable: false,
 				};
 			}
 

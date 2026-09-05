@@ -15,19 +15,27 @@ function provider(latest?: Parameters<typeof createCliUpdateProvider>[0]["latest
 	}
 }
 
-function providerAt(input: { home: string; prefix?: string; execPath: string }) {
-	if (input.prefix) {
-		mkdirSync(installConfigDir(input.home), { recursive: true });
-		writeFileSync(
-			join(installConfigDir(input.home), "install.json"),
-			JSON.stringify({ channel: "stable", prefix: input.prefix }),
-		);
-	}
+function writeInstallMeta(home: string, prefix: string): void {
+	mkdirSync(installConfigDir(home), { recursive: true });
+	writeFileSync(
+		join(installConfigDir(home), "install.json"),
+		JSON.stringify({ channel: "stable", prefix }),
+	);
+}
+
+function providerAt(input: {
+	home: string;
+	prefix?: string;
+	execPath: string;
+	latest?: Parameters<typeof createCliUpdateProvider>[0]["latest"];
+}) {
+	if (input.prefix) writeInstallMeta(input.home, input.prefix);
 	return createCliUpdateProvider({
 		env: {},
 		home: input.home,
 		execPath: input.execPath,
 		platform: "linux",
+		...(input.latest ? { latest: input.latest } : {}),
 	});
 }
 
@@ -121,6 +129,31 @@ test("an install refuses when the recorded install no longer points at this prog
 			JSON.stringify({ channel: "stable", prefix: "/opt/b" }),
 		);
 		expect(await p.install({ channel: "stable", version: "1.0.0" })).toEqual({
+			kind: "failed",
+			message:
+				"the recorded ThinkRail install moved since this host started — install it again from a terminal",
+			retryable: false,
+		});
+	} finally {
+		rmSync(home, { recursive: true, force: true });
+	}
+});
+
+test("a channel switch revalidates ownership after its feed lookup, not before", async () => {
+	const home = mkdtempSync(join(tmpdir(), "trpi-cli-update-"));
+	try {
+		// The switch resolves the target version first; a manual install landing *during* that request
+		// must not be overtaken — the recheck has to sit immediately before execution.
+		const p = providerAt({
+			home,
+			prefix: "/opt/a",
+			execPath: "/opt/a/bin/thinkrail",
+			latest: async () => {
+				writeInstallMeta(home, "/opt/b");
+				return { version: "9.9.9", channel: "nightly", notesUrl: "https://example.invalid" };
+			},
+		});
+		expect(await p.install({ channel: "nightly" })).toEqual({
 			kind: "failed",
 			message:
 				"the recorded ThinkRail install moved since this host started — install it again from a terminal",

@@ -502,7 +502,6 @@ export interface AppConfig extends ThemePreference {
 	subagentsEnabled: boolean;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
-	/** When false, the host makes no outbound release check. */
 	updateChecksEnabled: boolean;
 }
 
