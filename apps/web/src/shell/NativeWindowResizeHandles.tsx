@@ -1,14 +1,14 @@
 import type { NativeResizeEdge, NativeWindowChromeAdapter } from "../nativeWindowChrome";
 
 const handleClass: Record<NativeResizeEdge, string> = {
-	"north-west": "fixed left-0 top-0 z-[51] size-12 cursor-nw-resize",
+	"north-west": "fixed left-0 top-0 z-[60] size-16 cursor-nw-resize",
 	north: "fixed left-12 right-12 top-0 z-50 h-8 cursor-n-resize",
-	"north-east": "fixed right-0 top-0 z-[51] size-12 cursor-ne-resize",
+	"north-east": "fixed right-0 top-0 z-[60] size-16 cursor-ne-resize",
 	west: "fixed bottom-12 left-0 top-12 z-50 w-8 cursor-w-resize",
 	east: "fixed bottom-12 right-0 top-12 z-50 w-8 cursor-e-resize",
-	"south-west": "fixed bottom-0 left-0 z-[51] size-12 cursor-sw-resize",
+	"south-west": "fixed bottom-0 left-0 z-[60] size-16 cursor-sw-resize",
 	south: "fixed bottom-0 left-12 right-12 z-50 h-8 cursor-s-resize",
-	"south-east": "fixed bottom-0 right-0 z-[51] size-12 cursor-se-resize",
+	"south-east": "fixed bottom-0 right-0 z-[60] size-16 cursor-se-resize",
 };
 
 const edges = Object.keys(handleClass) as NativeResizeEdge[];
@@ -27,7 +27,7 @@ function ResizeHandle({
 			aria-hidden="true"
 			data-testid="native-resize-handle"
 			data-edge={edge}
-			className={className}
+			className={`electrobun-webkit-app-region-no-drag ${className}`}
 			onMouseDown={(event) => {
 				if (event.button !== 0) return;
 				event.preventDefault();

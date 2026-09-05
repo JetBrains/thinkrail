@@ -107,8 +107,10 @@ test("native Windows capability turns the shared topbar into application chrome"
 	await expect(page.getByRole("button", { name: "Minimize window" })).toBeVisible();
 	await expect(page.getByRole("button", { name: "Maximize window" })).toBeVisible();
 	await expect(page.getByRole("button", { name: "Close window" })).toBeVisible();
-	await expect(page.getByTestId("native-resize-handle")).toHaveCount(1);
-	await page.getByTestId("native-resize-handle").dispatchEvent("mousedown", { button: 0 });
+	const resizeHandle = page.getByTestId("native-resize-handle");
+	await expect(resizeHandle).toHaveCount(1);
+	await expect(resizeHandle).toHaveClass(/electrobun-webkit-app-region-no-drag/);
+	await resizeHandle.dispatchEvent("mousedown", { button: 0 });
 	await page.getByTestId("window-minimize").click();
 	const maximize = page.getByTestId("window-toggle-maximize");
 	await expect(maximize).toHaveAttribute("aria-label", "Maximize window");

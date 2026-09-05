@@ -221,7 +221,7 @@ async function runLinuxWindowInteractions(pid: number): Promise<void> {
 		{ name: "south", start: { x: 400, y: 596 }, delta: { x: 0, y: 20 }, south: true },
 		{
 			name: "south-east",
-			start: { x: 794, y: 594 },
+			start: { x: 798, y: 598 },
 			delta: { x: 30, y: 20 },
 			east: true,
 			south: true,
