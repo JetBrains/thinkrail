@@ -15,6 +15,7 @@ import type {
 } from "@thinkrail/contracts";
 import { ACTIVITY_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
+import { createActivityHydration } from "./activityHydration";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
@@ -24,20 +25,28 @@ export function supportsSessionActivity(protocolVersion: number | null): boolean
 	return protocolVersion !== null && protocolVersion >= ACTIVITY_PROTOCOL_VERSION;
 }
 
+const activityHydration = createActivityHydration({
+	apply: (payload) => useAppStore.getState().applySessionActivity(payload),
+	hydrate: (rows) => useAppStore.getState().hydrateSessionActivity(rows),
+});
+
 function refreshSessionActivity(connectionGeneration: number): void {
 	const state = useAppStore.getState();
 	if (!supportsSessionActivity(state.protocolVersion)) {
 		state.hydrateSessionActivity([]);
 		return;
 	}
+	const token = activityHydration.begin();
 	void getTransport()
 		.request("session.activityList", {})
 		.then((rows) => {
-			const current = useAppStore.getState();
-			if (!isConnectedGeneration(current, connectionGeneration)) return;
-			current.hydrateSessionActivity(rows);
+			if (!isConnectedGeneration(useAppStore.getState(), connectionGeneration)) {
+				activityHydration.discard(token);
+				return;
+			}
+			activityHydration.settle(token, rows);
 		})
-		.catch(() => {});
+		.catch(() => activityHydration.fail(token));
 }
 
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
@@ -125,7 +134,7 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.sessionActivity, (data) => {
-		useAppStore.getState().applySessionActivity(data as SessionActivityPayload);
+		activityHydration.push(data as SessionActivityPayload);
 	});
 
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {

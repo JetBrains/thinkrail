@@ -74,7 +74,17 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   **Activity hydrates on welcome, and retires there too.** Alongside the workspace re-read, every welcome
   runs `session.activityList` → `hydrateSessionActivity(rows)` under the same connection-generation fence,
   because `session.activity` pushes are never replayed and a reconnecting surface would otherwise render a
-  rail from before the outage. The capability gate is **`supportsSessionActivity(protocolVersion)`**
+  rail from before the outage.
+
+  A generation fence alone is **not** enough, because the collision is *within* one connection:
+  `activityHydration` therefore **buffers pushes for the duration of the read** and replays them, in
+  arrival order, immediately after the snapshot installs. Without it a push that lands while the request is
+  in flight is silently reverted by a snapshot the host computed before it — leaving a wrong glyph until
+  that session next changes. Same shape as the Pi-event batcher above: the transport owns push *ordering*,
+  the store stays a plain fold. Reads are tokenized so a stale response cannot settle over a newer one; a
+  **failed** read still replays its buffer (no snapshot arrived, so those pushes are the only truth left),
+  while a **superseded generation** discards it (a fresh welcome is already re-reading, and replaying a
+  dead connection's pushes would resurrect stale rows). The capability gate is **`supportsSessionActivity(protocolVersion)`**
   (`ACTIVITY_PROTOCOL_VERSION`), and failing it does **not** skip the call: it hydrates `[]`, so a surface
   that has seen a newer host and then reconnects to an older one clears its glyphs rather than stranding
   them — that host can send neither a snapshot nor a retraction. Store semantics for the fold live in
