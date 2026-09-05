@@ -16,13 +16,18 @@ const repoRoot = resolve(desktopDir, "..", "..");
 const root = mkdtempSync(join(tmpdir(), "thinkrail-desktop-smoke-"));
 let sequence = 0;
 
-function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
-	return Promise.race([
-		promise,
-		new Promise<never>((_, reject) =>
-			setTimeout(() => reject(new Error(`timed out after ${ms}ms: ${what}`)), ms),
-		),
-	]);
+async function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			promise,
+			new Promise<never>((_, reject) => {
+				timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms: ${what}`)), ms);
+			}),
+		]);
+	} finally {
+		if (timer) clearTimeout(timer);
+	}
 }
 
 async function startWindowManager(): Promise<ReturnType<typeof Bun.spawn> | undefined> {
@@ -181,6 +186,7 @@ async function runLinuxWindowInteractions(pid: number): Promise<void> {
 	);
 
 	const edges: Array<{
+		name: string;
 		start: { x: number; y: number };
 		delta: { x: number; y: number };
 		west?: true;
@@ -188,14 +194,38 @@ async function runLinuxWindowInteractions(pid: number): Promise<void> {
 		north?: true;
 		south?: true;
 	}> = [
-		{ start: { x: 2, y: 2 }, delta: { x: -30, y: -20 }, west: true, north: true },
-		{ start: { x: 400, y: 2 }, delta: { x: 0, y: -20 }, north: true },
-		{ start: { x: 798, y: 2 }, delta: { x: 30, y: -20 }, east: true, north: true },
-		{ start: { x: 2, y: 300 }, delta: { x: -30, y: 0 }, west: true },
-		{ start: { x: 798, y: 300 }, delta: { x: 30, y: 0 }, east: true },
-		{ start: { x: 2, y: 598 }, delta: { x: -30, y: 20 }, west: true, south: true },
-		{ start: { x: 400, y: 598 }, delta: { x: 0, y: 20 }, south: true },
-		{ start: { x: 798, y: 598 }, delta: { x: 30, y: 20 }, east: true, south: true },
+		{
+			name: "north-west",
+			start: { x: 2, y: 2 },
+			delta: { x: -30, y: -20 },
+			west: true,
+			north: true,
+		},
+		{ name: "north", start: { x: 400, y: 2 }, delta: { x: 0, y: -20 }, north: true },
+		{
+			name: "north-east",
+			start: { x: 798, y: 2 },
+			delta: { x: 30, y: -20 },
+			east: true,
+			north: true,
+		},
+		{ name: "west", start: { x: 2, y: 300 }, delta: { x: -30, y: 0 }, west: true },
+		{ name: "east", start: { x: 798, y: 300 }, delta: { x: 30, y: 0 }, east: true },
+		{
+			name: "south-west",
+			start: { x: 2, y: 598 },
+			delta: { x: -30, y: 20 },
+			west: true,
+			south: true,
+		},
+		{ name: "south", start: { x: 400, y: 598 }, delta: { x: 0, y: 20 }, south: true },
+		{
+			name: "south-east",
+			start: { x: 798, y: 598 },
+			delta: { x: 30, y: 20 },
+			east: true,
+			south: true,
+		},
 	];
 	for (const edge of edges) {
 		const before = await resetLinuxWindow(windowId);
@@ -207,7 +237,7 @@ async function runLinuxWindowInteractions(pid: number): Promise<void> {
 				(!edge.east || geometry.width > before.width + 10) &&
 				(!edge.north || (geometry.y < before.y - 10 && geometry.height > before.height + 10)) &&
 				(!edge.south || geometry.height > before.height + 10),
-			"resize from every compositor edge",
+			`resize from the ${edge.name} compositor edge`,
 		);
 	}
 }
@@ -232,10 +262,26 @@ function copyApplication(launcher: string): string {
 
 const launcher = copyApplication(locateDesktopLauncher(desktopDir, process.argv[2]));
 
+function isolatedEnvironment(root: string): Record<string, string> {
+	return {
+		...Object.fromEntries(
+			Object.entries(process.env).filter(
+				(entry): entry is [string, string] => entry[1] !== undefined,
+			),
+		),
+		HOME: join(root, "home"),
+		THINKRAIL_DATA_DIR: join(root, "data"),
+		PI_CODING_AGENT_DIR: join(root, "agent"),
+		XDG_CACHE_HOME: join(root, "cache"),
+		THINKRAIL_NO_ANALYTICS: "1",
+		PI_OFFLINE: "1",
+	};
+}
+
 async function launchDesktop(
 	env: Record<string, string>,
 	label: string,
-	mode: "host" | "ui" | "chrome",
+	mode: "host" | "ui" | "chrome" | "interactions",
 ): Promise<
 	RunningArtifactHost & {
 		pid: number;
@@ -272,7 +318,7 @@ async function launchDesktop(
 		THINKRAIL_DESKTOP_READY_FILE: readyPath,
 		THINKRAIL_DESKTOP_CONTROL_FILE: controlPath,
 		THINKRAIL_DESKTOP_USER_DATA: userDataPath,
-		THINKRAIL_DESKTOP_HIDDEN: mode === "chrome" ? "0" : "1",
+		THINKRAIL_DESKTOP_HIDDEN: mode === "chrome" || mode === "interactions" ? "0" : "1",
 		...(mode === "host" ? { THINKRAIL_DESKTOP_E2E_HOST: "1" } : {}),
 		...(mode === "chrome" ? { THINKRAIL_DESKTOP_WINDOW_CHROME_PROBE: "1" } : {}),
 	};
@@ -368,23 +414,7 @@ try {
 	mkdirSync(isolated, { recursive: true });
 	let ui: Awaited<ReturnType<typeof launchDesktop>> | undefined;
 	try {
-		ui = await launchDesktop(
-			{
-				...Object.fromEntries(
-					Object.entries(process.env).filter(
-						(entry): entry is [string, string] => entry[1] !== undefined,
-					),
-				),
-				HOME: join(isolated, "home"),
-				THINKRAIL_DATA_DIR: join(isolated, "data"),
-				PI_CODING_AGENT_DIR: join(isolated, "agent"),
-				XDG_CACHE_HOME: join(isolated, "cache"),
-				THINKRAIL_NO_ANALYTICS: "1",
-				PI_OFFLINE: "1",
-			},
-			"native-ui",
-			"ui",
-		);
+		ui = await launchDesktop(isolatedEnvironment(join(isolated, "native-ui")), "native-ui", "ui");
 		const health = await within(fetch(`${ui.origin}/health`), 10_000, "desktop UI health");
 		if (!health.ok || (await health.text()) !== "ok") throw new Error("desktop UI health failed");
 		if (ui.mode !== "ui" || ui.windowUrl !== `${ui.origin}/#/v1/projects/desktop-smoke`) {
@@ -413,19 +443,7 @@ try {
 	let chrome: Awaited<ReturnType<typeof launchDesktop>> | undefined;
 	try {
 		chrome = await launchDesktop(
-			{
-				...Object.fromEntries(
-					Object.entries(process.env).filter(
-						(entry): entry is [string, string] => entry[1] !== undefined,
-					),
-				),
-				HOME: join(isolated, "chrome-home"),
-				THINKRAIL_DATA_DIR: join(isolated, "chrome-data"),
-				PI_CODING_AGENT_DIR: join(isolated, "chrome-agent"),
-				XDG_CACHE_HOME: join(isolated, "chrome-cache"),
-				THINKRAIL_NO_ANALYTICS: "1",
-				PI_OFFLINE: "1",
-			},
+			isolatedEnvironment(join(isolated, "chrome")),
 			"native-window-chrome",
 			"chrome",
 		);
@@ -441,13 +459,24 @@ try {
 		) {
 			throw new Error("desktop native window transitions did not complete");
 		}
-		if (process.env.THINKRAIL_DESKTOP_NATIVE_INTERACTION === "1") {
-			if (process.platform === "win32") await runWindowsWindowInteractions(chrome.pid);
-			if (process.platform === "linux") await runLinuxWindowInteractions(chrome.pid);
-		}
 		await chrome.requestWindowClose();
 	} finally {
 		if (chrome) await chrome.stop();
+	}
+	if (process.env.THINKRAIL_DESKTOP_NATIVE_INTERACTION === "1") {
+		let interactions: Awaited<ReturnType<typeof launchDesktop>> | undefined;
+		try {
+			interactions = await launchDesktop(
+				isolatedEnvironment(join(isolated, "interactions")),
+				"native-window-interactions",
+				"interactions",
+			);
+			if (process.platform === "win32") await runWindowsWindowInteractions(interactions.pid);
+			if (process.platform === "linux") await runLinuxWindowInteractions(interactions.pid);
+			await interactions.requestWindowClose();
+		} finally {
+			if (interactions) await interactions.stop();
+		}
 	}
 	await runArtifactHostProbes(adapter);
 	console.log(`smoke OK: ${launcher} passed native-window and shared artifact probes.`);
