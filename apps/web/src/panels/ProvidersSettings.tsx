@@ -7,7 +7,13 @@ import {
 	RiLogoutBoxLine as LogOut,
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
-import type { ProviderAuthKind, ProviderStatus, ProviderStatusReport } from "@thinkrail/contracts";
+import {
+	type AppConfigUpdate,
+	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
+	type ProviderAuthKind,
+	type ProviderStatus,
+	type ProviderStatusReport,
+} from "@thinkrail/contracts";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { LoginDialog } from "@/auth";
 import { SkeletonRows } from "@/components/Skeleton";
@@ -34,6 +40,9 @@ export function ProvidersSettings() {
 	const [showAllKeys, setShowAllKeys] = useState(false);
 	const activeLogin = useAppStore((s) => s.activeLogin);
 	const providerVersion = useAppStore((s) => s.providerVersion);
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const quotaEnabled = useAppStore((s) => s.jbcentralQuotaEnabled);
+	const quotaRefreshSeconds = useAppStore((s) => s.jbcentralQuotaRefreshSeconds);
 	const loadSequence = useRef(0);
 
 	const load = useCallback(async () => {
@@ -96,6 +105,26 @@ export function ProvidersSettings() {
 		[load],
 	);
 
+	const saveQuotaSetting = useCallback(async (config: AppConfigUpdate) => {
+		try {
+			await getTransport().request("settings.update", { config });
+		} catch (error) {
+			toast.error(errorText(error), "Couldn't save JetBrains quota settings");
+			throw error;
+		}
+	}, []);
+
+	const quotaSettings =
+		protocolVersion !== null && protocolVersion >= JBCENTRAL_QUOTA_PROTOCOL_VERSION
+			? {
+					enabled: quotaEnabled,
+					refreshSeconds: quotaRefreshSeconds,
+					onEnabledChange: (enabled: boolean) =>
+						saveQuotaSetting({ jbcentralQuotaEnabled: enabled }),
+					onRefreshSecondsChange: (seconds: number) =>
+						saveQuotaSetting({ jbcentralQuotaRefreshSeconds: seconds }),
+				}
+			: null;
 	const providers = report?.providers ?? [];
 	const configured = providers.filter((p) => p.configured);
 	const unconfigured = providers.filter((p) => !p.configured);
@@ -181,6 +210,7 @@ export function ProvidersSettings() {
 							status={report.jbcentral}
 							install={report.jbcentralInstall}
 							onChanged={load}
+							{...(quotaSettings ? { quotaSettings } : {})}
 						/>
 					) : null}
 

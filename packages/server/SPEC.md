@@ -67,7 +67,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `host` | `Bun.serve` HTTP+WS, static SPA, the WS dispatch registry, channel publish | [host/SPEC.md](src/host/SPEC.md) |
 | `persistence` | JSON domain/config state under the data dir | [persistence/SPEC.md](src/persistence/SPEC.md) |
 | `log` | explicit leveled diagnostics → pretty stderr + agent-oriented JSONL under `<dataDir>/logs` (pino-roll daily/10 MB rotation, 14 rotated + active); arbitrary console output stays terminal-only | [log/SPEC.md](src/log/SPEC.md) |
-| `settings` | server-synced app config, including the shared custom-layout-preset catalog (never current/default layout) | [settings/SPEC.md](src/settings/SPEC.md) |
+| `settings` | server-synced app config, including the shared custom-layout-preset catalog and Central quota preferences (never current/default layout) | [settings/SPEC.md](src/settings/SPEC.md) |
 | `projects` | stable known-repo registry: open/recent views + lossless close/reopen (validate, dedupe, slug) | [projects/SPEC.md](src/projects/SPEC.md) |
 | `workspaces` | workspaces = `git worktree`s on their own branch | [workspaces/SPEC.md](src/workspaces/SPEC.md) |
 | `git` | the `git(cwd, args)` runner + worktree status/diff vs base + branch list | [git/SPEC.md](src/git/SPEC.md) |
@@ -82,7 +82,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `watch` | per-worktree fs watcher → debounced `workspace.fsChanged` invalidation push | [watch/SPEC.md](src/watch/SPEC.md) |
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
 | `agent` | in-process pi sessions + current/retained runtime generations + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
-| `auth` | provider status/login plus native JetBrains Central orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
+| `auth` | provider status/login plus native JetBrains Central lifecycle and quota orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `analytics` | anonymous usage analytics: closed event set → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
 | `feedback` | host-scoped usage count + addressed product-interview invitation lifecycle | [feedback/SPEC.md](src/feedback/SPEC.md) |

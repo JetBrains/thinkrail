@@ -103,9 +103,9 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 - **/jbcentral** — the **single Central process/filesystem boundary**. It resolves Central by absolute path,
   parses a bounded `central --version` result into a compatibility verdict, exposes the
   global opaque artifact path (`~/.pi/agent/extensions/jetbrains-central.ts`, and the `~/.local/bin/`
-  installer fallback) and existence only, and invokes
-  only the reviewed argv: `status`, `add pi`, `remove pi`, `login`, `update --install`, and
-  `proxy start --ensure-updated`. Support is a **minimum version only** (`MINIMUM_CENTRAL_VERSION`,
+  installer fallback) and existence only, and invokes only the reviewed argv: `status`, `quota --json`,
+  `add pi`, `remove pi`, `login`, `update --install`, and `proxy start --ensure-updated`. Support is a
+  **minimum version only** (`MINIMUM_CENTRAL_VERSION`,
   `1.4.0` — the first Central release carrying the native PI surface): anything at or above it is supported,
   lower versions require update, and malformed output is
   unsupported. There is deliberately **no upper bound** — a newer Central is assumed forward-compatible with
@@ -124,6 +124,14 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   The probe is expensive by Central's design (a proxy health check plus a network update check, ~1.3s, and one
   CLI analytics event per call), so `JBCENTRAL_STATUS_TTL_MS` bounds how long a caller
   may serve an observation before re-probing; nothing here polls.
+
+  **Quota is a structured, numeric-only read.** `readJbcentralQuota()` resolves the same absolute executable
+  and runs only `quota --json` with bounded stdout and a deadline. It parses JSON internally and admits only
+  finite `tariffQuota.available` / `tariffQuota.maximum` values (numeric strings or numbers) as recurring
+  `remaining` / `total`; all other fields are ignored. Invalid JSON/shape/amount, timeout, oversized output,
+  launch failure, or non-zero exit becomes a closed reason. There is no text-output fallback and no cache or
+  polling here. Raw output plus account, plan, used, top-up, refill, and diagnostic data are discarded and
+  never returned, logged, or persisted.
 
   **A spawned login is not a started login.** `central login` drives its browser handoff from a terminal UI,
   so with no TTY it exits immediately and no sign-in happens — while the spawn itself succeeds. The launch
@@ -218,7 +226,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   request the same rebuild after their postcondition, so a dropped/coalesced filesystem event cannot lose a
   state transition.
 - **Never return or throw raw child/loader data.** Adapter errors are closed codes with no free-form child
-  text. The caller may report generic guidance only.
+  text. Quota success carries only recurring `remaining` / `total` numbers; the caller may report generic
+  guidance only.
 - **No legacy migration.** This is the first supported native integration; the adapter never touches prior
   provider overrides or maintains backup/rollback machinery.
 

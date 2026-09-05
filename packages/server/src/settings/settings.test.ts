@@ -218,6 +218,65 @@ test("subagents default on; an old config inherits that default; toggling off ro
 	expect(getConfig().subagentsEnabled).toBe(false);
 });
 
+test("JetBrains quota preferences default, persist, and survive an old partial config", () => {
+	expect(DEFAULT_CONFIG.jbcentralQuotaEnabled).toBe(true);
+	expect(DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds).toBe(30);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
+	resetConfigCache();
+	expect(getConfig()).toMatchObject({
+		jbcentralQuotaEnabled: true,
+		jbcentralQuotaRefreshSeconds: 30,
+	});
+
+	const next = updateConfig({
+		jbcentralQuotaEnabled: false,
+		jbcentralQuotaRefreshSeconds: 1,
+	});
+	expect(next).toMatchObject({
+		jbcentralQuotaEnabled: false,
+		jbcentralQuotaRefreshSeconds: 1,
+	});
+	resetConfigCache();
+	expect(getConfig()).toMatchObject({
+		jbcentralQuotaEnabled: false,
+		jbcentralQuotaRefreshSeconds: 1,
+	});
+});
+
+test("stored invalid JetBrains quota preferences fall back fieldwise", () => {
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({
+			...DEFAULT_CONFIG,
+			jbcentralQuotaEnabled: "yes",
+			jbcentralQuotaRefreshSeconds: 0,
+		}),
+	);
+	resetConfigCache();
+	expect(getConfig()).toMatchObject({
+		jbcentralQuotaEnabled: true,
+		jbcentralQuotaRefreshSeconds: 30,
+	});
+});
+
+test("invalid JetBrains quota updates are rejected before persistence or broadcast", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+	for (const update of [
+		{ jbcentralQuotaEnabled: "true" },
+		{ jbcentralQuotaRefreshSeconds: 0 },
+		{ jbcentralQuotaRefreshSeconds: 3601 },
+		{ jbcentralQuotaRefreshSeconds: 1.5 },
+		{ jbcentralQuotaRefreshSeconds: "30" },
+	]) {
+		expect(() => updateConfig(update as unknown as AppConfigUpdate)).toThrow();
+		expect(getConfig()).toEqual(before);
+	}
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+});
+
 test("a non-boolean subagents update is rejected before persistence or broadcast", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));

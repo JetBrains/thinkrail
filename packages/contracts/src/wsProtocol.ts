@@ -18,6 +18,7 @@ import type {
 	JbcentralActionResult,
 	JbcentralConnectResult,
 	JbcentralLoginResult,
+	JbcentralQuotaSnapshot,
 	LoginReply,
 	OpenBranchReview,
 	OpenPrResult,
@@ -88,9 +89,10 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 58;
+export const PROTOCOL_VERSION = 59;
 export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
 export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
+export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;
 export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
 export const FEEDBACK_INTERVIEW_PROTOCOL_VERSION = 56;
 
@@ -208,6 +210,7 @@ export const WS_METHODS = {
 	providerJbcentralStartProxy: "provider.jbcentralStartProxy",
 	providerJbcentralLogin: "provider.jbcentralLogin",
 	providerJbcentralUpdate: "provider.jbcentralUpdate",
+	providerJbcentralQuota: "provider.jbcentralQuota",
 	settingsUpdate: "settings.update",
 	feedbackRespond: "feedback.respond",
 	historySearch: "history.search",
@@ -522,6 +525,7 @@ export interface WsMethodMap {
 	"provider.jbcentralStartProxy": { params: Record<string, never>; result: JbcentralActionResult };
 	"provider.jbcentralLogin": { params: Record<string, never>; result: JbcentralLoginResult };
 	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
+	"provider.jbcentralQuota": { params: { force?: boolean }; result: JbcentralQuotaSnapshot };
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
 	"history.search": {

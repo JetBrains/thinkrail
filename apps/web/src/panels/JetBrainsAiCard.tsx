@@ -10,19 +10,23 @@ import {
 	RiBardLine,
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
-import type {
-	JbcentralAction,
-	JbcentralActionFailureReason,
-	JbcentralActionResult,
-	JbcentralInstall,
-	JbcentralStatus,
+import {
+	isJbcentralQuotaRefreshSeconds,
+	JBCENTRAL_QUOTA_REFRESH_SECONDS,
+	type JbcentralAction,
+	type JbcentralActionFailureReason,
+	type JbcentralActionResult,
+	type JbcentralInstall,
+	type JbcentralStatus,
 } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { copyText } from "@/lib";
 import { getTransport } from "@/transport";
+import { SettingsSwitch } from "./SettingsSwitch";
 
 const LOGIN_CMD = "central login";
+const QUOTA_INTERVAL_RANGE = `${JBCENTRAL_QUOTA_REFRESH_SECONDS.min}–${JBCENTRAL_QUOTA_REFRESH_SECONDS.max}`;
 
 type Notice =
 	| { kind: "failed"; action: JbcentralAction; reason: JbcentralActionFailureReason }
@@ -30,14 +34,118 @@ type Notice =
 	| { kind: "login-launched" }
 	| { kind: "login-failed" };
 
+interface JbcentralQuotaSettingsProps {
+	enabled: boolean;
+	refreshSeconds: number;
+	onEnabledChange: (enabled: boolean) => Promise<void>;
+	onRefreshSecondsChange: (seconds: number) => Promise<void>;
+}
+
+function JbcentralQuotaSettings({
+	enabled,
+	refreshSeconds,
+	onEnabledChange,
+	onRefreshSecondsChange,
+}: JbcentralQuotaSettingsProps) {
+	const [draft, setDraft] = useState(String(refreshSeconds));
+	const [error, setError] = useState<string | null>(null);
+
+	useEffect(() => setDraft(String(refreshSeconds)), [refreshSeconds]);
+
+	const saveInterval = async () => {
+		const seconds = Number(draft);
+		if (!isJbcentralQuotaRefreshSeconds(seconds)) {
+			setError(
+				`Enter a whole number from ${JBCENTRAL_QUOTA_REFRESH_SECONDS.min} to ${JBCENTRAL_QUOTA_REFRESH_SECONDS.max}.`,
+			);
+			return;
+		}
+		if (seconds === refreshSeconds) {
+			setError(null);
+			return;
+		}
+		try {
+			await onRefreshSecondsChange(seconds);
+			setError(null);
+		} catch {
+			setDraft(String(refreshSeconds));
+			setError("Couldn't save the refresh interval.");
+		}
+	};
+
+	return (
+		<div
+			data-testid="jbcentral-quota-settings"
+			className="flex flex-col gap-8 border-border-muted border-t pt-12"
+		>
+			<div className="flex items-center justify-between gap-12">
+				<div className="min-w-0">
+					<p className="text-text-default tr-text-ui">Show quota in top bar</p>
+					<p className="text-text-muted tr-text-metadata">
+						Display recurring JetBrains AI credits while Central is connected.
+					</p>
+				</div>
+				<SettingsSwitch
+					checked={enabled}
+					label="Show JetBrains AI quota in top bar"
+					testId="jbcentral-quota-toggle"
+					onChange={(next) => {
+						setError(null);
+						void onEnabledChange(next).catch(() =>
+							setError("Couldn't save the quota display setting."),
+						);
+					}}
+				/>
+			</div>
+			<div className="flex items-center gap-8">
+				<label htmlFor="jbcentral-quota-interval" className="text-text-muted tr-text-metadata">
+					Refresh every
+				</label>
+				<input
+					id="jbcentral-quota-interval"
+					type="number"
+					data-testid="jbcentral-quota-interval"
+					min={JBCENTRAL_QUOTA_REFRESH_SECONDS.min}
+					max={JBCENTRAL_QUOTA_REFRESH_SECONDS.max}
+					step={1}
+					value={draft}
+					disabled={!enabled}
+					aria-invalid={error ? true : undefined}
+					onChange={(event) => {
+						setDraft(event.currentTarget.value);
+						setError(null);
+					}}
+					onBlur={() => void saveInterval()}
+					onKeyDown={(event) => {
+						if (event.key === "Enter") event.currentTarget.blur();
+					}}
+					className="w-80 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 text-text-default tr-text-ui outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+				/>
+				<span className="text-text-muted tr-text-metadata">seconds</span>
+				<span className="ml-auto text-text-subtle tr-text-metadata">{QUOTA_INTERVAL_RANGE}</span>
+			</div>
+			{error ? (
+				<p
+					data-testid="jbcentral-quota-interval-error"
+					className="text-feedback-error tr-text-metadata"
+				>
+					{error}
+				</p>
+			) : null}
+		</div>
+	);
+}
+
 export function JetBrainsAiCard({
 	status,
 	install,
 	onChanged,
+	quotaSettings,
 }: {
 	status: JbcentralStatus;
 	install: JbcentralInstall;
 	onChanged: () => void | Promise<void>;
+	quotaSettings?: JbcentralQuotaSettingsProps;
 }) {
 	const [busyAction, setBusyAction] = useState<JbcentralAction | null>(null);
 	const [notice, setNotice] = useState<Notice | null>(null);
@@ -199,6 +307,8 @@ export function JetBrainsAiCard({
 					<CopyableCommand command={LOGIN_CMD} />
 				</div>
 			) : null}
+
+			{quotaSettings ? <JbcentralQuotaSettings {...quotaSettings} /> : null}
 		</section>
 	);
 }

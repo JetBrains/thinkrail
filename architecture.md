@@ -185,8 +185,9 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     model, env-propagation breakage, and polling-based capture — for restart survival we have already
     decided not to hold. Detail: [[submodule-server-terminal]].
 13. **Central's cross-module lifecycle has one architectural owner.** Its adapter, runtime generation,
-    wire status, and card remain in their bounded modules; the correspondence between those surfaces and
-    their liveness obligations belongs to [[central-integration]]. This keeps feature-specific mechanics in
+    wire status/quota, synchronized preferences, provider card, and top-bar readout remain in their bounded
+    modules; the correspondence between those surfaces and their liveness obligations belongs to
+    [[central-integration]]. This keeps feature-specific mechanics in
     their leaf specs while making a non-terminating composition visible at the architecture layer.
 
 14. **The public website is one origin, artifact, and production deployment.** `apps/website` owns `/`,

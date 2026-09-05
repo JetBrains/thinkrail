@@ -13,6 +13,7 @@ import {
 	parseJbcentralStatusObservation,
 	parseJbcentralVersion,
 	probeJbcentralStatus,
+	readJbcentralQuota,
 	resolveJbcentralBin,
 	runJbcentralAction,
 	watchJbcentralArtifact,
@@ -189,6 +190,101 @@ describe("Central status observation", () => {
 		for (const deps of failures) {
 			expect(await probeJbcentralStatus(deps)).toEqual({ auth: "unknown", proxy: "unknown" });
 		}
+	});
+});
+
+describe("Central quota read", () => {
+	test("runs structured quota through the absolute executable and returns only recurring numbers", async () => {
+		const requests: Array<{
+			argv: readonly string[];
+			captureStdout: boolean;
+			timeoutMs: number;
+			maxStdoutBytes: number;
+		}> = [];
+		const sensitive = {
+			email: "owner@example.test",
+			licenseName: "Synthetic Plan",
+			usedDollars: "0.08",
+			tariffQuota: { current: "0.08", maximum: "20.00", available: "19.92" },
+			topUpQuota: { current: "1.00", maximum: "100.00", available: "99.00" },
+			refillNext: 1_800_000_000_000,
+			diagnostic: "SYNTHETIC_QUOTA_SENTINEL",
+		};
+		const result = await readJbcentralQuota(
+			adapterDeps({
+				run: async (request) => {
+					requests.push({
+						argv: request.argv,
+						captureStdout: request.captureStdout,
+						timeoutMs: request.timeoutMs,
+						maxStdoutBytes: request.maxStdoutBytes,
+					});
+					return { outcome: "exited", exitCode: 0, stdout: JSON.stringify(sensitive) };
+				},
+			}),
+		);
+
+		expect(result).toEqual({ outcome: "succeeded", remaining: 19.92, total: 20 });
+		expect(requests).toEqual([
+			{
+				argv: [CENTRAL_BIN, "quota", "--json"],
+				captureStdout: true,
+				timeoutMs: 15_000,
+				maxStdoutBytes: 16_384,
+			},
+		]);
+		expect(JSON.stringify(result)).not.toContain("owner@example.test");
+		expect(JSON.stringify(result)).not.toContain("SYNTHETIC_QUOTA_SENTINEL");
+		expect(JSON.stringify(result)).not.toContain("topUpQuota");
+	});
+
+	test("accepts numeric amounts and rejects malformed or non-finite recurring quota", async () => {
+		async function read(stdout: string) {
+			return readJbcentralQuota(
+				adapterDeps({ run: async () => ({ outcome: "exited", exitCode: 0, stdout }) }),
+			);
+		}
+
+		expect(await read('{"tariffQuota":{"available":0,"maximum":20}}')).toEqual({
+			outcome: "succeeded",
+			remaining: 0,
+			total: 20,
+		});
+		for (const stdout of [
+			"not json",
+			"null",
+			'{"tariffQuota":{"available":"19.92"}}',
+			'{"tariffQuota":{"available":"Infinity","maximum":"20"}}',
+			'{"tariffQuota":{"available":"19 credits","maximum":"20"}}',
+		]) {
+			expect(await read(stdout)).toEqual({ outcome: "failed", reason: "invalid-output" });
+		}
+	});
+
+	test("maps every process failure to a closed reason without child output", async () => {
+		const secret = "SYNTHETIC_QUOTA_CHILD_OUTPUT";
+		expect(await readJbcentralQuota(adapterDeps({ which: () => null }))).toEqual({
+			outcome: "failed",
+			reason: "not-installed",
+		});
+		for (const [result, reason] of [
+			[{ outcome: "timed-out" }, "timed-out"],
+			[{ outcome: "output-too-large" }, "output-too-large"],
+			[{ outcome: "exited", exitCode: 7, stdout: secret }, "nonzero-exit"],
+		] as const) {
+			const read = await readJbcentralQuota(adapterDeps({ run: async () => result }));
+			expect(read).toEqual({ outcome: "failed", reason });
+			expect(JSON.stringify(read)).not.toContain(secret);
+		}
+		const thrown = await readJbcentralQuota(
+			adapterDeps({
+				run: async () => {
+					throw new Error(secret);
+				},
+			}),
+		);
+		expect(thrown).toEqual({ outcome: "failed", reason: "launch-failed" });
+		expect(JSON.stringify(thrown)).not.toContain(secret);
 	});
 });
 

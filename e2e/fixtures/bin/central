@@ -66,6 +66,24 @@ if [ "$1" = "status" ]; then
 	exit 0
 fi
 
+if [ "$1" = "quota" ] && [ "${2:-}" = "--json" ]; then
+	if has slow-quota; then
+		sleep 1
+	fi
+	if has quota-error; then
+		printf 'E2E_CENTRAL_CHILD_SENTINEL_quota_error\n' >&2
+		exit 16
+	fi
+	if has quota-invalid; then
+		printf '{"diagnostic":"E2E_CENTRAL_CHILD_SENTINEL_quota_invalid"}\n'
+	elif has quota-alt; then
+		printf '{"email":"E2E_CENTRAL_CHILD_SENTINEL_account","tariffQuota":{"available":"18.50","maximum":"20.00"},"topUpQuota":{"available":"99.00"},"diagnostic":"E2E_CENTRAL_CHILD_SENTINEL_quota"}\n'
+	else
+		printf '{"email":"E2E_CENTRAL_CHILD_SENTINEL_account","tariffQuota":{"available":"19.92","maximum":"20.00"},"topUpQuota":{"available":"99.00"},"diagnostic":"E2E_CENTRAL_CHILD_SENTINEL_quota"}\n'
+	fi
+	exit 0
+fi
+
 if [ "${CENTRAL_STUB_READ_ONLY:-}" = "1" ]; then
 	exit 15
 fi

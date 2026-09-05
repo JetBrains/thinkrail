@@ -14,6 +14,7 @@ import {
 const REVIEWED_ARGV = [
 	"--version",
 	"status",
+	"quota --json",
 	"add pi",
 	"remove pi",
 	"proxy start --ensure-updated",

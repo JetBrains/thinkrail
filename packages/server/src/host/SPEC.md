@@ -50,7 +50,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   record of work that finished and drops only its answer,
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`), the **`provider.changed`** invalidation broadcast after auth changes the Central status or
-  current runtime generation (clients re-read status/models), and the `provider.*` login handlers, the
+  current runtime generation (clients re-read status/models), and the `provider.*` handlers—including
+  `provider.jbcentralQuota`, whose handler composes `settings`' enabled/interval values with `auth`'s closed
+  cached read so the siblings never import each other—the
   **`watch` wiring** (inject the
   `workspace.fsChanged` publish callback into `watch` and inject `agent`'s project-skill path classifier so
   each capped batch carries independent `skillChange: none|detected|unknown` evidence; expose

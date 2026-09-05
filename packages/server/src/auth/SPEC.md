@@ -102,6 +102,16 @@ ourselves and never surface a credential value over the wire.
     action uses the resolved absolute executable. No action edits prior model configuration, preflights live
     chat models, compensates, or rolls back Central's global state.
 
+    `getJbcentralQuota({ maxAgeMs, force })` is the separate quota coordinator. It admits reads only while
+    the current lifecycle satisfies the card's Connected predicate, then wraps `shared`'s numeric-only read
+    in one process-global, memory-only cache and single-flight. An ordinary read reuses the latest completed
+    attempt younger than `maxAgeMs`; force bypasses age but still joins an in-flight read. Failure returns
+    the last successful numbers as `stale`, or closed `unavailable` before any success. Lifecycle change
+    clears both freshness and the old successful fallback, so another account can never inherit it; a read
+    after that edge waits out but never joins/returns an in-flight task from the prior generation. Values
+    never persist. The caller supplies the settings-derived age, so auth does
+    not import the settings sibling.
+
     Watcher events are debounced/coalesced and each rebuild re-inspects the latest version + artifact
     postcondition. A monotonic request sequence prevents an older candidate from activating after a newer
     file event. On success, auth activates the candidate for provider/model reads and future sessions, clears
@@ -117,13 +127,14 @@ ourselves and never surface a credential value over the wire.
 - **Public surface (barrel):** `getProviderStatus`, `buildProviderReport` (+ `ProviderStatusSources`);
   `startLogin`, `resolveLogin`, `cancelLogin`, `cancelAllLogins`, `logoutProvider`,
   `setLoginPublisher`; `initializeJbcentralRuntime`, `stopJbcentralRuntime`, `getJbcentralStatus`,
-  `connectJbcentral`, `disconnectJbcentral`, `startProxyJbcentral`, `updateJbcentral`, `jbcentralLogin`, the successful-action /
+  `getJbcentralQuota`, `connectJbcentral`, `disconnectJbcentral`, `startProxyJbcentral`,
+  `updateJbcentral`, `jbcentralLogin`, the successful-action /
   runtime-changed publisher seams, and the explicit `resetJbcentralStateForTests` lifecycle seam used by
   sibling host tests.
 - **Allowed deps:** `contracts` (wire types); `shared/jbcentral`; the **`agent` barrel** for the current
   runtime/auth facade plus candidate prepare/activate; `@earendil-works/pi-ai` (auth interaction **types** only).
-- **Forbidden:** reaching into `agent` internals (runtime and generation changes only through its barrel); importing `host` or
-  any other sibling; deep-importing pi's TUI (`modes/interactive/*`) for its private provider constants;
+- **Forbidden:** reaching into `agent` internals (runtime and generation changes only through its barrel); importing `host`,
+  `settings`, or any other sibling; deep-importing pi's TUI (`modes/interactive/*`) for its private provider constants;
   ever putting a credential **value** on the wire.
 
 ## Get right

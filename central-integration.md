@@ -4,22 +4,24 @@ type: architecture-design
 status: active
 title: JetBrains AI via the Central CLI — cross-module lifecycle
 parent: architecture
-depends-on: [module-shared, submodule-server-auth, submodule-server-agent, module-contracts, submodule-web-panels]
-covers: [central-lifecycle, central-liveness, central-trust-boundary, central-artifact]
+depends-on: [module-shared, submodule-server-auth, submodule-server-agent, module-contracts, submodule-web-panels, submodule-server-settings, submodule-web-shell, submodule-web-store]
+covers: [central-lifecycle, central-liveness, central-trust-boundary, central-artifact, central-quota]
 tags: [v1, providers, central]
 ---
 
 ## Drivers
 
 JetBrains AI models reach ThinkRail through the user's own `central` CLI, which writes a `pi` extension to
-one global path. That makes Central's behaviour a **chain across five modules** rather than a module
-boundary, and two of its properties live only in the chain: the end-to-end state mapping and its liveness.
+one global path and reports the account's recurring AI-credit quota. Central therefore behaves as a
+cross-module chain rather than one module boundary. Its end-to-end lifecycle mapping, liveness, and
+quota-read composition live only in that chain.
 
 **Boundary: this node owns the composition and nothing else.** Each module's spec stays authoritative for
-its own surface and is not restated here — the adapter's argv/version/parse contract is
-[[module-shared]], status and action orchestration is [[submodule-server-auth]], runtime generations are
-[[submodule-server-agent]], wire shapes are [[module-contracts]], the card's rendering is
-[[submodule-web-panels]]. A change that only affects one surface updates that leaf, not this file.
+its own surface and is not restated here — the adapter's argv/version/quota-parse contract is
+[[module-shared]], status/action/quota orchestration is [[submodule-server-auth]], runtime generations are
+[[submodule-server-agent]], synchronized quota preferences are [[submodule-server-settings]], wire shapes
+are [[module-contracts]], provider controls are [[submodule-web-panels]], and the global readout is
+[[submodule-web-shell]]. A change that only affects one surface updates that leaf, not this file.
 
 ## The chain
 
@@ -39,7 +41,19 @@ place the *correspondence* between them is stated.
 | rebuild outstanding or action in flight | — | `configuring` | spinner, no action offered |
 | candidate runtime failed to load | — | `load-failed` | Retry / Disconnect |
 
-Two facts the table encodes that no single module states:
+### Quota chain
+
+When quota display is enabled, the visible web shell requests a closed quota snapshot on the configured
+`1–3600` second cadence (30 seconds by default). The host first applies the synchronized setting and the
+same healthy-Central predicate the provider card labels Connected, then server `auth` deduplicates readers
+through one memory-only cache/single-flight and asks `shared` to run the absolute binary as
+`central quota --json`. `shared` admits only recurring `remaining` + `total` numbers; `contracts` carries
+only hidden/available/stale/unavailable states; `shell` renders them immediately left of host connection
+status. Hidden frontends do not poll, disabled/unhealthy state performs no quota read, and no quota value is
+persisted. A lifecycle edge clears the last successful fallback so a later account cannot inherit stale
+numbers from the earlier one.
+
+Two facts the lifecycle table encodes that no single module states:
 
 - **`configuring` and `load-failed` have no inspection counterpart.** They are properties of the host's
   rebuild machinery, not of the host filesystem, so a reader following only `shared` cannot derive them.
@@ -56,6 +70,11 @@ Two facts the table encodes that no single module states:
 2. **No Central-derived text reaches a client.** The process adapter, pre-extension provider allowlist, and
    closed wire status each enforce one part of that guarantee; their local contracts remain in
    [[module-shared]], [[submodule-server-agent]], [[submodule-server-auth]], and [[module-contracts]].
+   Quota extends the rule with a structured numeric allowlist: account, plan, usage, top-up, refill,
+   diagnostics, and raw output remain host-local and are discarded.
+3. **Quota is a separate read, not provider status and not a host ticker.** Provider lifecycle and quota have
+   different latency/failure semantics, while a host-owned timer would run without a visible consumer.
+   Visible clients own cadence; one host cache/single-flight prevents them multiplying CLI work.
 
 ## Invariants
 
@@ -78,12 +97,13 @@ no spec owned their liveness in composition.
 
 ## Out of scope
 
-The adapter's argv set, version policy, status-row parsing, login grace and process timeouts; the card's
-interaction and copy; candidate preparation and generation activation; wire field shapes; boot ordering;
-e2e fixtures. Each stays in its own module spec — listed here only so a reader knows this file is not where
-to change them.
+The adapter's exact argv/schema/timeouts; provider-card and top-bar interaction/copy; settings validation;
+candidate preparation and generation activation; wire field shapes; boot ordering; e2e fixtures. Each stays
+in its own module spec — listed here only so a reader knows this file is not where to change them.
 
 ## Consumed by
 
-[[module-shared]] · [[submodule-server-auth]] · [[submodule-server-agent]] · [[module-contracts]] ·
-[[submodule-web-panels]] · [[module-cli]] (boot ordering) · [[module-browser-e2e]] (`00-jbcentral*`)
+[[module-shared]] · [[submodule-server-auth]] · [[submodule-server-agent]] ·
+[[submodule-server-settings]] · [[module-contracts]] · [[submodule-web-store]] ·
+[[submodule-web-panels]] · [[submodule-web-shell]] · [[module-cli]] (boot ordering) ·
+[[module-browser-e2e]] (`00-jbcentral*`)

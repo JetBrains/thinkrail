@@ -25,6 +25,7 @@ import {
 import {
 	connectJbcentral,
 	disconnectJbcentral,
+	getJbcentralQuota,
 	getJbcentralStatus,
 	initializeJbcentralRuntime,
 	jbcentralLogin,
@@ -85,6 +86,23 @@ case "$1" in
       printf '\\033[1mProxy     \\033[m \\033[1mrunning on port 19516\\033[m\\n'
     fi
     printf 'synthetic-sensitive-child-output\\n'
+    ;;
+  quota)
+    [ "$2" = "--json" ]
+    quota_alt=0
+    if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/quota-alt" ]; then quota_alt=1; fi
+    while [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/quota-wait" ]; do sleep 0.01; done
+    if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/quota-fail" ]; then
+      printf 'synthetic-sensitive-quota-error\\n' >&2
+      exit 9
+    fi
+    if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/quota-invalid" ]; then
+      printf '{"diagnostic":"synthetic-sensitive-quota-output"}\\n'
+    elif [ "$quota_alt" = "1" ]; then
+      printf '{"email":"hidden@example.test","tariffQuota":{"available":"18.50","maximum":"20.00"},"topUpQuota":{"available":"99.00"},"diagnostic":"synthetic-sensitive-quota-output"}\\n'
+    else
+      printf '{"email":"hidden@example.test","tariffQuota":{"available":"19.92","maximum":"20.00"},"topUpQuota":{"available":"99.00"},"diagnostic":"synthetic-sensitive-quota-output"}\\n'
+    fi
     ;;
   add)
     if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/add-fail" ]; then
@@ -230,6 +248,126 @@ describe("watched native Central runtime", () => {
 			"central-test",
 		);
 		expect(commandLog()).toContain("add pi");
+	});
+
+	test("quota is hidden until Central is healthy, then exposes only recurring numbers", async () => {
+		expect(await getJbcentralQuota({ maxAgeMs: 30_000 })).toEqual({ state: "hidden" });
+		expect(commandLog()).not.toContain("quota --json");
+
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		const quota = await getJbcentralQuota({ maxAgeMs: 30_000 });
+		expect(quota).toMatchObject({ state: "available", remaining: 19.92, total: 20 });
+		expect(quota).toHaveProperty("observedAt");
+		expect(commandLog().filter((line) => line === "quota --json")).toHaveLength(1);
+		expect(JSON.stringify(quota)).not.toContain("hidden@example.test");
+		expect(JSON.stringify(quota)).not.toContain("synthetic-sensitive-quota-output");
+	});
+
+	test("quota cache and single-flight deduplicate readers while force refreshes", async () => {
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		control("quota-wait", true);
+		const first = getJbcentralQuota({ maxAgeMs: 30_000 });
+		const second = getJbcentralQuota({ maxAgeMs: 30_000 });
+		await waitFor(() => commandLog().includes("quota --json"));
+		control("quota-wait", false);
+		const [firstResult, secondResult] = await Promise.all([first, second]);
+		expect(firstResult).toEqual(secondResult);
+		expect(commandLog().filter((line) => line === "quota --json")).toHaveLength(1);
+
+		expect(await getJbcentralQuota({ maxAgeMs: 30_000 })).toEqual(firstResult);
+		expect(commandLog().filter((line) => line === "quota --json")).toHaveLength(1);
+		control("quota-alt", true);
+		expect(await getJbcentralQuota({ maxAgeMs: 30_000, force: true })).toMatchObject({
+			state: "available",
+			remaining: 18.5,
+			total: 20,
+		});
+		expect(commandLog().filter((line) => line === "quota --json")).toHaveLength(2);
+	});
+
+	test("quota failure is unavailable before success and stale afterward", async () => {
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		control("quota-fail", true);
+		expect(await getJbcentralQuota({ maxAgeMs: 30_000 })).toEqual({ state: "unavailable" });
+		control("quota-fail", false);
+		const available = await getJbcentralQuota({ maxAgeMs: 30_000, force: true });
+		expect(available).toMatchObject({ state: "available", remaining: 19.92, total: 20 });
+		if (available.state !== "available") throw new Error("quota did not become available");
+
+		control("quota-invalid", true);
+		expect(await getJbcentralQuota({ maxAgeMs: 30_000, force: true })).toEqual({
+			state: "stale",
+			remaining: 19.92,
+			total: 20,
+			observedAt: available.observedAt,
+		});
+	});
+
+	test("signed-out and stopped-proxy states hide quota without invoking it", async () => {
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		control("signed-out", true);
+		await waitFor(async () => {
+			const status = await getJbcentralStatus();
+			return status.state === "configured" && status.signedOut;
+		});
+		const beforeSignedOut = commandLog().filter((line) => line === "quota --json").length;
+		expect(await getJbcentralQuota({ maxAgeMs: 0, force: true })).toEqual({ state: "hidden" });
+		expect(commandLog().filter((line) => line === "quota --json")).toHaveLength(beforeSignedOut);
+
+		control("signed-out", false);
+		control("proxy-stopped", true);
+		await waitFor(async () => {
+			const status = await getJbcentralStatus();
+			return status.state === "configured" && status.proxyStopped;
+		});
+		const beforeStopped = commandLog().filter((line) => line === "quota --json").length;
+		expect(await getJbcentralQuota({ maxAgeMs: 0, force: true })).toEqual({ state: "hidden" });
+		expect(commandLog().filter((line) => line === "quota --json")).toHaveLength(beforeStopped);
+	});
+
+	test("disconnect invalidates quota freshness before a later reconnect", async () => {
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		expect(await getJbcentralQuota({ maxAgeMs: 30_000 })).toMatchObject({ remaining: 19.92 });
+		expect(await disconnectJbcentral()).toEqual({ outcome: "applied" });
+		expect(await getJbcentralQuota({ maxAgeMs: 30_000 })).toEqual({ state: "hidden" });
+		control("quota-alt", true);
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		expect(await getJbcentralQuota({ maxAgeMs: 30_000 })).toMatchObject({
+			state: "available",
+			remaining: 18.5,
+		});
+		expect(commandLog().filter((line) => line === "quota --json")).toHaveLength(2);
+	});
+
+	test("a post-lifecycle read never joins an in-flight quota from the previous generation", async () => {
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		control("quota-wait", true);
+		const oldRead = getJbcentralQuota({ maxAgeMs: 30_000 });
+		await waitFor(() => commandLog().includes("quota --json"));
+		expect(await disconnectJbcentral()).toEqual({ outcome: "applied" });
+		control("quota-alt", true);
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		const versionReads = commandLog().filter((line) => line === "--version").length;
+		const newRead = getJbcentralQuota({ maxAgeMs: 30_000 });
+		await waitFor(() => commandLog().filter((line) => line === "--version").length > versionReads);
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		control("quota-wait", false);
+
+		expect(await oldRead).toMatchObject({ state: "available", remaining: 19.92 });
+		expect(await newRead).toMatchObject({ state: "available", remaining: 18.5 });
+		expect(commandLog().filter((line) => line === "quota --json")).toHaveLength(2);
+	});
+
+	test("a Central lifecycle change prevents an old account balance becoming stale fallback", async () => {
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		expect(await getJbcentralQuota({ maxAgeMs: 30_000 })).toMatchObject({
+			state: "available",
+			remaining: 19.92,
+		});
+		expect(await disconnectJbcentral()).toEqual({ outcome: "applied" });
+		control("quota-fail", true);
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		expect(await getJbcentralQuota({ maxAgeMs: 30_000 })).toEqual({ state: "unavailable" });
 	});
 
 	test("disconnect affects new work while an existing Central chat keeps its generation", async () => {
