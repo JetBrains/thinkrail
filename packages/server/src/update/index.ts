@@ -10,5 +10,4 @@ export {
 	startUpdates,
 	stopUpdates,
 	type UpdateProvider,
-	type UpdateProviderCapabilities,
 } from "./update";

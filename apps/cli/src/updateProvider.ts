@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import type { UpdateProvider } from "@thinkrail/server";
 import {
@@ -6,7 +7,7 @@ import {
 	resolveLatestRelease,
 } from "@thinkrail/shared/release";
 import { channel as bakedChannel, commit, version } from "@thinkrail/shared/version";
-import { readInstallMeta } from "./paths";
+import { installedBinaryPath, readInstallMeta } from "./paths";
 import {
 	executeUpdatePlan,
 	parseUpdateArgs,
@@ -25,18 +26,35 @@ type LatestResolver = (
 export interface CliUpdateProviderOptions {
 	env: Record<string, string | undefined>;
 	home?: string;
+	execPath?: string;
+	platform?: string;
 	latest?: LatestResolver;
+}
+
+function samePath(a: string, b: string): boolean {
+	const resolve = (path: string): string => {
+		try {
+			return realpathSync(path);
+		} catch {
+			return path;
+		}
+	};
+	const left = resolve(a);
+	const right = resolve(b);
+	return process.platform === "win32"
+		? left.replace(/\//g, "\\").toLowerCase() === right.replace(/\//g, "\\").toLowerCase()
+		: left === right;
 }
 
 export function createCliUpdateProvider(options: CliUpdateProviderOptions): UpdateProvider {
 	const home = options.home ?? homedir();
 	const latest = options.latest ?? resolveLatestRelease;
-	const installed = version !== SOURCE_VERSION;
-	const channel = resolveUpdateChannel(
-		{ version: "latest" },
-		readInstallMeta(home).channel,
-		bakedChannel,
-	);
+	const execPath = options.execPath ?? process.execPath;
+	const windows = (options.platform ?? process.platform) === "win32";
+	const meta = readInstallMeta(home);
+	const target = installedBinaryPath(meta, home, windows);
+	const installed = version !== SOURCE_VERSION && samePath(execPath, target);
+	const channel = resolveUpdateChannel({ version: "latest" }, meta.channel, bakedChannel);
 
 	async function newestFor(target: "stable" | "nightly", signal?: AbortSignal) {
 		return await latest(target, { env: options.env, ...(signal ? { signal } : {}) });
@@ -48,6 +66,7 @@ export function createCliUpdateProvider(options: CliUpdateProviderOptions): Upda
 			channelSwitch: installed ? "in-app" : "unsupported",
 			channels: ["stable", "nightly"],
 		},
+		installationId: `cli:${target}`,
 		current: {
 			version,
 			channel: installed ? channel : "dev",

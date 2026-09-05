@@ -45,7 +45,7 @@ interface StubOptions {
 	found?: AvailableRelease | null;
 	checkError?: Error;
 	outcome?: InstallOutcome;
-	restart?: boolean;
+	installationId?: string;
 }
 
 interface Stub extends UpdateProvider {
@@ -62,6 +62,7 @@ function stubProvider(options: StubOptions = {}): Stub {
 			channelSwitch: "in-app",
 			channels: ["stable", "nightly"],
 		},
+		installationId: options.installationId ?? "cli:/home/u/.local/bin/thinkrail",
 		current: { version: options.current ?? "1.3.0", channel: "stable" },
 		async check() {
 			provider.checks += 1;
@@ -79,7 +80,6 @@ function stubProvider(options: StubOptions = {}): Stub {
 			);
 		},
 	};
-	if (options.restart) provider.restart = async () => process.exit(0);
 	return provider;
 }
 
@@ -92,7 +92,6 @@ test("no provider means no capability and no phase churn", () => {
 	expect(status.phase).toBe("idle");
 	expect(status.capabilities).toEqual({
 		install: false,
-		restart: "manual",
 		channelSwitch: "unsupported",
 		channels: [],
 	});
@@ -155,7 +154,12 @@ test("installing stages the release, clears the dismissal, and persists it", asy
 	expect(status.available).toBeUndefined();
 	expect(status.dismissedVersion).toBeUndefined();
 	expect(provider.installs).toEqual([{ channel: "stable", version: "1.4.0" }]);
-	expect(persistedRecord().staged).toEqual({ version: "1.4.0", channel: "stable" });
+	expect(persistedRecord().staged).toEqual({
+		version: "1.4.0",
+		channel: "stable",
+		from: "1.3.0",
+		installationId: "cli:/home/u/.local/bin/thinkrail",
+	});
 });
 
 test("a manual outcome is an instruction, not a fault", async () => {
@@ -215,17 +219,48 @@ test("a staged release whose version is now running is cleared at boot", async (
 	expect(persistedRecord().staged).toBeUndefined();
 });
 
+test("a staged release is void once the running version is neither the target nor the origin", async () => {
+	startUpdates({ provider: stubProvider() });
+	await installUpdate({ channel: "stable", version: "1.4.0" });
+
+	// The user installed 1.5.0 some other way: the staged expectation cannot come true any more.
+	const status = startUpdates({ provider: stubProvider({ current: "1.5.0" }) });
+	expect(status.phase).toBe("idle");
+	expect(persistedRecord().staged).toBeUndefined();
+});
+
+test("a staged release belongs to the installation that staged it, and is left alone by others", async () => {
+	startUpdates({ provider: stubProvider({ installationId: "cli:/opt/a/bin/thinkrail" }) });
+	await installUpdate({ channel: "stable", version: "1.4.0" });
+
+	// A second installation sharing the data dir must neither advertise nor delete it.
+	const other = startUpdates({
+		provider: stubProvider({ installationId: "cli:/opt/b/bin/thinkrail" }),
+	});
+	expect(other.phase).toBe("idle");
+	expect(other.staged).toBeUndefined();
+	expect(persistedRecord().staged).toMatchObject({ installationId: "cli:/opt/a/bin/thinkrail" });
+
+	// And a host that cannot install anything (a source run) reports nothing either.
+	const source = startUpdates({ appVersion: "0.0.0-dev" });
+	expect(source.phase).toBe("idle");
+	expect(source.staged).toBeUndefined();
+	expect(persistedRecord().staged).toMatchObject({ version: "1.4.0" });
+
+	// Its own installation still sees it.
+	const owner = startUpdates({
+		provider: stubProvider({ installationId: "cli:/opt/a/bin/thinkrail" }),
+	});
+	expect(owner.phase).toBe("staged");
+	expect(owner.staged).toEqual({ version: "1.4.0", channel: "stable" });
+});
+
 test("a staged release survives a boot that did not pick it up", async () => {
 	startUpdates({ provider: stubProvider() });
 	await installUpdate({ channel: "stable", version: "1.4.0" });
 
 	const status = startUpdates({ provider: stubProvider({ current: "1.3.0" }) });
 	expect(status.phase).toBe("staged");
-});
-
-test("a provider offering restart reports the self capability", () => {
-	const status = startUpdates({ provider: stubProvider({ restart: true }) });
-	expect(status.capabilities.restart).toBe("self");
 });
 
 test("the checks preference gates the schedule and the manual check alike", async () => {
@@ -253,4 +288,78 @@ test("stopping cancels the schedule", async () => {
 	stopUpdates();
 	await Bun.sleep(40);
 	expect(provider.checks).toBe(0);
+});
+
+test("a check cannot clear the phase of an install that started meanwhile", async () => {
+	let releaseCheck: (() => void) | undefined;
+	const provider = stubProvider();
+	provider.check = () =>
+		new Promise((resolve) => {
+			releaseCheck = () => resolve(RELEASE);
+		});
+	let releaseInstall: (() => void) | undefined;
+	let installs = 0;
+	provider.install = (target) => {
+		installs += 1;
+		return new Promise((resolve) => {
+			releaseInstall = () =>
+				resolve({ kind: "staged", version: target.version ?? "1.4.0", channel: target.channel });
+		});
+	};
+
+	startUpdates({ provider });
+	const checking = checkForUpdate();
+	expect(getUpdateStatus().phase).toBe("checking");
+
+	const installing = installUpdate({ channel: "stable" });
+	expect(getUpdateStatus().phase).toBe("installing");
+
+	releaseCheck?.();
+	await checking;
+	expect(getUpdateStatus().phase).toBe("installing");
+
+	// A second install while the first is in flight must not start another installer.
+	await installUpdate({ channel: "nightly" });
+	expect(installs).toBe(1);
+
+	releaseInstall?.();
+	await installing;
+	expect(getUpdateStatus().phase).toBe("staged");
+});
+
+test("a check started before a restart of the module cannot write into the new one", async () => {
+	let releaseCheck: (() => void) | undefined;
+	const old = stubProvider({ current: "1.0.0" });
+	old.check = () =>
+		new Promise((resolve) => {
+			releaseCheck = () => resolve({ ...RELEASE, version: "1.1.0" });
+		});
+
+	startUpdates({ provider: old });
+	const checking = checkForUpdate();
+
+	startUpdates({ provider: stubProvider({ current: "9.0.0", found: null }) });
+	releaseCheck?.();
+	await checking;
+
+	expect(getUpdateStatus().available).toBeUndefined();
+	expect(getUpdateStatus().phase).toBe("idle");
+	expect(getUpdateStatus().current.version).toBe("9.0.0");
+});
+
+test("an install that finishes during shutdown still persists what it staged", async () => {
+	let releaseInstall: (() => void) | undefined;
+	const provider = stubProvider();
+	provider.install = () =>
+		new Promise((resolve) => {
+			releaseInstall = () => resolve({ kind: "staged", version: "1.4.0", channel: "stable" });
+		});
+
+	startUpdates({ provider });
+	const installing = installUpdate({ channel: "stable", version: "1.4.0" });
+	stopUpdates();
+	releaseInstall?.();
+	await installing;
+
+	expect(persistedRecord().staged).toMatchObject({ version: "1.4.0", channel: "stable" });
 });

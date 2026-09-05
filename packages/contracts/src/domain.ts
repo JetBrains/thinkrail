@@ -567,8 +567,7 @@ export function isReleaseChannel(value: unknown): value is ReleaseChannel {
 
 export interface UpdateCapabilities {
 	install: boolean;
-	restart: "self" | "manual";
-	channelSwitch: "in-app" | "download-page" | "unsupported";
+	channelSwitch: "in-app" | "unsupported";
 	channels: ReleaseChannel[];
 }
 

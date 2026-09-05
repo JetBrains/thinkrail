@@ -96,6 +96,7 @@ const readUpdateControl = async (): Promise<string> => {
 const fakeUpdateProvider: UpdateProvider | undefined = fakeUpdateControl
 	? {
 			capabilities: { install: true, channelSwitch: "in-app", channels: ["stable", "nightly"] },
+			installationId: "e2e-fake-update",
 			current: { version: "1.2.3", channel: "stable" },
 			async check() {
 				if ((await readUpdateControl()) === "") return null;

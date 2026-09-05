@@ -16,19 +16,17 @@ const log = logger("update");
 const BOOT_DELAY_MS = 30_000;
 const INTERVAL_MS = 6 * 60 * 60 * 1000;
 
-export type UpdateProviderCapabilities = Omit<UpdateCapabilities, "restart">;
-
 export type InstallOutcome =
 	| { kind: "staged"; version: string; channel: ReleaseChannel }
 	| { kind: "manual"; message: string; command?: string }
 	| { kind: "failed"; message: string; retryable: boolean };
 
 export interface UpdateProvider {
-	readonly capabilities: UpdateProviderCapabilities;
+	readonly capabilities: UpdateCapabilities;
+	readonly installationId: string;
 	readonly current: { version: string; channel: ReleaseChannel | "dev"; commit?: string };
 	check(signal: AbortSignal): Promise<AvailableRelease | null>;
 	install(target: UpdateInstallTarget): Promise<InstallOutcome>;
-	restart?(): Promise<never>;
 }
 
 export interface StartUpdatesOptions {
@@ -44,6 +42,8 @@ type UpdatePublisher = (status: UpdateStatus) => void;
 interface StagedRelease {
 	version: string;
 	channel: ReleaseChannel;
+	from: string;
+	installationId: string;
 }
 
 interface UpdateRecord {
@@ -52,15 +52,21 @@ interface UpdateRecord {
 	lastCheckedAt?: number | undefined;
 }
 
+interface Operation {
+	kind: "checking" | "installing";
+	token: symbol;
+}
+
 interface Internals {
 	provider: UpdateProvider | null;
 	appVersion: string;
 	checksEnabled: boolean;
-	activity: "idle" | "checking" | "installing";
+	generation: number;
+	operation: Operation | null;
 	available?: AvailableRelease | undefined;
 	record: UpdateRecord;
 	error?: UpdateStatus["error"] | undefined;
-	inFlight: Promise<UpdateStatus> | null;
+	inFlightCheck: Promise<UpdateStatus> | null;
 	abort: AbortController | null;
 	bootTimer: ReturnType<typeof setTimeout> | null;
 	intervalTimer: ReturnType<typeof setInterval> | null;
@@ -72,9 +78,10 @@ const NO_PROVIDER: Internals = {
 	provider: null,
 	appVersion: "0.0.0-dev",
 	checksEnabled: true,
-	activity: "idle",
+	generation: 0,
+	operation: null,
 	record: {},
-	inFlight: null,
+	inFlightCheck: null,
 	abort: null,
 	bootTimer: null,
 	intervalTimer: null,
@@ -100,8 +107,19 @@ function parseRecord(value: unknown): UpdateRecord {
 		record.lastCheckedAt = candidate.lastCheckedAt;
 	}
 	const staged = candidate.staged as Record<string, unknown> | undefined;
-	if (staged && typeof staged.version === "string" && isReleaseChannel(staged.channel)) {
-		record.staged = { version: staged.version, channel: staged.channel };
+	if (
+		staged &&
+		typeof staged.version === "string" &&
+		isReleaseChannel(staged.channel) &&
+		typeof staged.from === "string" &&
+		typeof staged.installationId === "string"
+	) {
+		record.staged = {
+			version: staged.version,
+			channel: staged.channel,
+			from: staged.from,
+			installationId: staged.installationId,
+		};
 	}
 	return record;
 }
@@ -130,33 +148,30 @@ function saveRecord(record: UpdateRecord): void {
 }
 
 function capabilities(): UpdateCapabilities {
-	const provider = state.provider;
-	if (!provider) {
-		return { install: false, restart: "manual", channelSwitch: "unsupported", channels: [] };
-	}
-	return { ...provider.capabilities, restart: provider.restart ? "self" : "manual" };
+	return (
+		state.provider?.capabilities ?? { install: false, channelSwitch: "unsupported", channels: [] }
+	);
+}
+
+function ownStagedRelease(): StagedRelease | undefined {
+	const staged = state.record.staged;
+	if (!staged) return undefined;
+	return staged.installationId === state.provider?.installationId ? staged : undefined;
 }
 
 function snapshot(): UpdateStatus {
 	const provider = state.provider;
 	const current = provider?.current ?? { version: state.appVersion, channel: "dev" as const };
-	const staged = state.record.staged;
+	const staged = ownStagedRelease();
 	const phase: UpdateStatus["phase"] =
-		state.activity !== "idle"
-			? state.activity
-			: staged
-				? "staged"
-				: state.error
-					? "error"
-					: state.available
-						? "available"
-						: "idle";
+		state.operation?.kind ??
+		(staged ? "staged" : state.error ? "error" : state.available ? "available" : "idle");
 	return {
 		current,
 		capabilities: capabilities(),
 		phase,
 		...(state.available ? { available: state.available } : {}),
-		...(staged ? { staged } : {}),
+		...(staged ? { staged: { version: staged.version, channel: staged.channel } } : {}),
 		...(state.record.lastCheckedAt ? { lastCheckedAt: state.record.lastCheckedAt } : {}),
 		...(state.record.dismissedVersion ? { dismissedVersion: state.record.dismissedVersion } : {}),
 		...(state.error ? { error: state.error } : {}),
@@ -197,10 +212,24 @@ export function setUpdatePublisher(next: UpdatePublisher | null): void {
 	publisher = next;
 }
 
+function ownsOperation(generation: number, token: symbol): boolean {
+	return state.generation === generation && state.operation?.token === token;
+}
+
+function releaseOperation(generation: number, token: symbol): void {
+	if (!ownsOperation(generation, token)) return;
+	state.operation = null;
+	state.inFlightCheck = null;
+	state.abort = null;
+}
+
 export function startUpdates(options: StartUpdatesOptions = {}): UpdateStatus {
 	clearTimers();
+	state.abort?.abort();
+	const generation = state.generation + 1;
 	state = {
 		...NO_PROVIDER,
+		generation,
 		provider: options.provider ?? null,
 		appVersion: options.appVersion ?? NO_PROVIDER.appVersion,
 		checksEnabled: options.checksEnabled ?? true,
@@ -209,9 +238,9 @@ export function startUpdates(options: StartUpdatesOptions = {}): UpdateStatus {
 		intervalMs: options.intervalMs ?? INTERVAL_MS,
 	};
 
-	const staged = state.record.staged;
+	const staged = ownStagedRelease();
 	const running = state.provider?.current.version;
-	if (staged && running && staged.version === running) {
+	if (staged && running && running !== staged.from) {
 		state.record = { ...state.record, staged: undefined };
 		saveRecord(state.record);
 	}
@@ -224,8 +253,8 @@ export function stopUpdates(): void {
 	clearTimers();
 	state.abort?.abort();
 	state.abort = null;
-	state.inFlight = null;
-	if (state.activity === "checking") state.activity = "idle";
+	state.inFlightCheck = null;
+	state.operation = null;
 }
 
 export function getUpdateStatus(): UpdateStatus {
@@ -244,24 +273,28 @@ export function setUpdateChecksEnabled(enabled: boolean): void {
 }
 
 export function checkForUpdate(): Promise<UpdateStatus> {
-	if (state.inFlight) return state.inFlight;
-	if (!canCheck()) return Promise.resolve(snapshot());
+	if (state.operation?.kind === "checking" && state.inFlightCheck) return state.inFlightCheck;
+	if (state.operation || !canCheck()) return Promise.resolve(snapshot());
 	const provider = state.provider as UpdateProvider;
 
 	const abort = new AbortController();
+	const generation = state.generation;
+	const token = Symbol("check");
 	state.abort = abort;
-	state.activity = "checking";
+	state.operation = { kind: "checking", token };
 	publish();
 
 	const run = (async (): Promise<UpdateStatus> => {
 		try {
 			const found = await provider.check(abort.signal);
-			state.available = found ?? undefined;
-			state.error = undefined;
-			state.record = { ...state.record, lastCheckedAt: Date.now() };
-			saveRecord(state.record);
+			if (ownsOperation(generation, token)) {
+				state.available = found ?? undefined;
+				state.error = undefined;
+				state.record = { ...state.record, lastCheckedAt: Date.now() };
+				saveRecord(state.record);
+			}
 		} catch (err) {
-			if (!abort.signal.aborted) {
+			if (ownsOperation(generation, token) && !abort.signal.aborted) {
 				state.error = {
 					kind: "failed",
 					message: err instanceof Error ? err.message : String(err),
@@ -270,14 +303,12 @@ export function checkForUpdate(): Promise<UpdateStatus> {
 				log.debug(`release check failed: ${state.error.message}`);
 			}
 		} finally {
-			state.activity = "idle";
-			state.inFlight = null;
-			state.abort = null;
+			releaseOperation(generation, token);
 		}
 		return publish();
 	})();
 
-	state.inFlight = run;
+	state.inFlightCheck = run;
 	return run;
 }
 
@@ -286,18 +317,27 @@ export async function installUpdate(target: UpdateInstallTarget): Promise<Update
 	if (!provider?.capabilities.install) {
 		throw new Error("this ThinkRail host cannot install updates");
 	}
-	if (state.activity === "installing") return snapshot();
+	if (state.operation?.kind === "installing") return snapshot();
 
-	state.activity = "installing";
+	state.abort?.abort();
+	const generation = state.generation;
+	const token = Symbol("install");
+	state.operation = { kind: "installing", token };
 	state.error = undefined;
 	publish();
 
 	try {
 		const outcome = await provider.install(target);
+		if (state.generation !== generation) return snapshot();
 		if (outcome.kind === "staged") {
 			state.record = {
 				...state.record,
-				staged: { version: outcome.version, channel: outcome.channel },
+				staged: {
+					version: outcome.version,
+					channel: outcome.channel,
+					from: provider.current.version,
+					installationId: provider.installationId,
+				},
 				dismissedVersion: undefined,
 			};
 			saveRecord(state.record);
@@ -311,13 +351,14 @@ export async function installUpdate(target: UpdateInstallTarget): Promise<Update
 			};
 		}
 	} catch (err) {
+		if (state.generation !== generation) return snapshot();
 		state.error = {
 			kind: "failed",
 			message: err instanceof Error ? err.message : String(err),
 			retryable: true,
 		};
 	} finally {
-		state.activity = "idle";
+		releaseOperation(generation, token);
 	}
 	return publish();
 }

@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { version } from "@thinkrail/shared/version";
+import { installConfigDir } from "./paths";
 import { createCliUpdateProvider } from "./updateProvider";
 
 function provider(latest?: Parameters<typeof createCliUpdateProvider>[0]["latest"]) {
@@ -14,6 +15,22 @@ function provider(latest?: Parameters<typeof createCliUpdateProvider>[0]["latest
 	}
 }
 
+function providerAt(input: { home: string; prefix?: string; execPath: string }) {
+	if (input.prefix) {
+		mkdirSync(installConfigDir(input.home), { recursive: true });
+		writeFileSync(
+			join(installConfigDir(input.home), "install.json"),
+			JSON.stringify({ channel: "stable", prefix: input.prefix }),
+		);
+	}
+	return createCliUpdateProvider({
+		env: {},
+		home: input.home,
+		execPath: input.execPath,
+		platform: "linux",
+	});
+}
+
 test("a source build advertises nothing it cannot install", () => {
 	const p = provider();
 	expect(version).toBe("0.0.0-dev");
@@ -23,10 +40,6 @@ test("a source build advertises nothing it cannot install", () => {
 		channels: ["stable", "nightly"],
 	});
 	expect(p.current).toEqual({ version: "0.0.0-dev", channel: "dev" });
-});
-
-test("the CLI host never claims it can restart itself", () => {
-	expect(provider().restart).toBeUndefined();
 });
 
 test("a release newer than the running build is reported", async () => {
@@ -68,4 +81,31 @@ test("a wire-supplied version is validated before it can reach installer argv", 
 		message: "Invalid --version: 1.0.0 --prefix /etc",
 		retryable: false,
 	});
+});
+
+test("the installation identity names the binary this provider would replace", () => {
+	const home = mkdtempSync(join(tmpdir(), "trpi-cli-update-"));
+	try {
+		const p = providerAt({
+			home,
+			prefix: "/opt/thinkrail",
+			execPath: "/opt/thinkrail/bin/thinkrail",
+		});
+		expect(p.installationId).toBe("cli:/opt/thinkrail/bin/thinkrail");
+	} finally {
+		rmSync(home, { recursive: true, force: true });
+	}
+});
+
+test("a build running from somewhere other than its recorded install refuses to install", () => {
+	const home = mkdtempSync(join(tmpdir(), "trpi-cli-update-"));
+	try {
+		// The metadata names prefix B while this process runs A: installing would replace B and
+		// leave A untouched, so the host must not offer it.
+		const p = providerAt({ home, prefix: "/opt/b", execPath: "/opt/a/bin/thinkrail" });
+		expect(p.capabilities.install).toBe(false);
+		expect(p.capabilities.channelSwitch).toBe("unsupported");
+	} finally {
+		rmSync(home, { recursive: true, force: true });
+	}
 });
