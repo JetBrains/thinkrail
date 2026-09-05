@@ -92,8 +92,9 @@ stacked above it. The visual composition is shared while the mechanism is platfo
   controls over the preserved DWM frame. WebView2 non-client app-region handling owns native move, snap,
   drag-from-maximized, double-click, and system-menu behavior; the launcher restores the standard window
   style capabilities that Electrobun's collapsed caption omits. Because that collapsed caption returns
-  client hit-testing along the top edge, the shell's invisible edge targets start the corresponding native
-  DWM resize loop rather than synthesizing geometry in JavaScript.
+  client hit-testing along the top edge, the shell's invisible edge targets align the initiating pointer to
+  the matching frame edge and enter the corresponding native DWM resize loop rather than synthesizing
+  geometry in JavaScript.
 - Linux uses `hidden`; the shell supplies Linux-style controls. Native move and all eight resize directions
   delegate to GTK/the compositor. A package-owned native helper enters the GTK main context and calls the
   standard move/resize primitives; JavaScript never synthesizes a resize loop from pointer deltas.

@@ -4,6 +4,7 @@ import {
 	type DesktopResizeEdge,
 	linuxResizeEdgeCode,
 	normalizeWindowsFrameStyle,
+	windowsResizeCursor,
 	windowsResizeHitTest,
 } from "./windowChrome";
 
@@ -26,6 +27,8 @@ type WindowsLibrary = Library<{
 		returns: FFIType.bool;
 	};
 	GetCursorPos: { args: [FFIType.ptr]; returns: FFIType.bool };
+	GetWindowRect: { args: [FFIType.ptr, FFIType.ptr]; returns: FFIType.bool };
+	SetCursorPos: { args: [FFIType.i32, FFIType.i32]; returns: FFIType.bool };
 	ReleaseCapture: { args: []; returns: FFIType.bool };
 	PostMessageW: {
 		args: [FFIType.ptr, FFIType.u32, FFIType.u64, FFIType.i64];
@@ -59,6 +62,8 @@ function getWindowsLibrary(): WindowsLibrary {
 			returns: FFIType.bool,
 		},
 		GetCursorPos: { args: [FFIType.ptr], returns: FFIType.bool },
+		GetWindowRect: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.bool },
+		SetCursorPos: { args: [FFIType.i32, FFIType.i32], returns: FFIType.bool },
 		ReleaseCapture: { args: [], returns: FFIType.bool },
 		PostMessageW: {
 			args: [FFIType.ptr, FFIType.u32, FFIType.u64, FFIType.i64],
@@ -87,14 +92,30 @@ export function createWindowsResizeStarter(handle: Pointer): (edge: DesktopResiz
 	const library = getWindowsLibrary();
 	return (edge) => {
 		const point = new Int32Array(2);
-		if (!library.symbols.GetCursorPos(ptr(point))) {
-			throw new Error("could not locate the pointer for Windows window resize");
+		const frame = new Int32Array(4);
+		if (
+			!library.symbols.GetCursorPos(ptr(point)) ||
+			!library.symbols.GetWindowRect(handle, ptr(frame))
+		) {
+			throw new Error("could not locate the pointer or frame for Windows window resize");
+		}
+		const pointView = new DataView(point.buffer);
+		const frameView = new DataView(frame.buffer);
+		const cursor = windowsResizeCursor(
+			edge,
+			{ x: pointView.getInt32(0, true), y: pointView.getInt32(4, true) },
+			{
+				left: frameView.getInt32(0, true),
+				top: frameView.getInt32(4, true),
+				right: frameView.getInt32(8, true),
+				bottom: frameView.getInt32(12, true),
+			},
+		);
+		if (!library.symbols.SetCursorPos(cursor.x, cursor.y)) {
+			throw new Error("could not align the pointer for Windows window resize");
 		}
 		library.symbols.ReleaseCapture();
-		const pointView = new DataView(point.buffer);
-		const x = pointView.getInt32(0, true);
-		const y = pointView.getInt32(4, true);
-		const packedPoint = ((y & 0xffff) << 16) | (x & 0xffff);
+		const packedPoint = ((cursor.y & 0xffff) << 16) | (cursor.x & 0xffff);
 		if (process.env.THINKRAIL_DESKTOP_NATIVE_INTERACTION === "1") {
 			console.error(`[desktop] Windows resize queued edge=${edge}`);
 		}
