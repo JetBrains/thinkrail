@@ -2,7 +2,7 @@ const TURN_INSET_RATIO = 0.1;
 const TURN_INSET_MIN = 48;
 const TURN_INSET_MAX = 80;
 const ADVANCE_DURATION_MS = 220;
-const EDGE_PIN_MAX_FRAMES = 30;
+const EDGE_STABILITY_FRAMES = 30;
 const GEOMETRY_EPSILON = 0.5;
 
 export type ReadingBandLatestEdge = "top" | "bottom";
@@ -47,14 +47,19 @@ export interface ReadingBandEnvironment {
 export interface ReadingBandController {
 	getSnapshot: () => ReadingBandSnapshot;
 	armImmediateTurn: () => void;
+	cancelImmediateTurn: (streaming: boolean) => void;
 	userTurnArrived: (index: number, source: "immediate" | "queued") => void;
 	latestRowArrived: (index: number) => void;
 	contentChanged: () => void;
 	cancelMovement: () => void;
+	cancelReveal: () => void;
+	revealTo: (target: () => number | null, stabilize: boolean) => void;
 	readerLeft: () => void;
+	readerMovedWhileFollowing: () => void;
 	readerReachedEdge: () => void;
 	returnToEdge: () => void;
 	releaseRunway: (smooth?: boolean) => void;
+	settle: () => void;
 	setStreaming: (streaming: boolean) => void;
 	setMovement: (movement: ReadingBandMovement) => void;
 	reconstructActiveStream: () => void;
@@ -67,6 +72,24 @@ interface ReadingBandState {
 	moving: boolean;
 	runway: boolean;
 	streaming: boolean;
+}
+
+type ScrollTarget = () => number | null;
+
+interface ActiveMotion {
+	kind: "alignment" | "reveal" | "runway" | "settlement";
+	scrollTarget: ScrollTarget | null;
+	runwayTarget: number | null;
+	retainActiveRunway: boolean;
+	requireFollowing: boolean;
+	requireStreaming: boolean;
+	reevaluate: boolean;
+	startedAt: number;
+	startScrollTop: number;
+	startRunwayHeight: number;
+	stabilityFrames: number;
+	stabilizing: boolean;
+	instant: boolean;
 }
 
 function snapshotOf(state: ReadingBandState): ReadingBandSnapshot {
@@ -137,15 +160,17 @@ export function createReadingBandController(
 		streaming,
 	};
 	let frame: number | null = null;
-	let runwayFrame: number | null = null;
+	let motion: ActiveMotion | null = null;
 	let anchorFrame: number | null = null;
-	let edgePinFrame: number | null = null;
 	let activeStreamMount = streaming;
 	let reconstructed = false;
 	let runwayHeight = 0;
 	let runwayStartEdge: number | null = null;
 	let runwayStartHeight = 0;
+	let immediateTurnPending = false;
 	let pendingSettleReturn = false;
+	let deferredUserTurn: { index: number; source: "immediate" | "queued" } | null = null;
+	let deferredLatestRow: number | null = null;
 	let runwaySuppressed = false;
 
 	const publish = (patch: Partial<ReadingBandState>) => {
@@ -162,27 +187,6 @@ export function createReadingBandController(
 		environment.onStateChange(snapshotOf(state));
 	};
 
-	const cancelMotion = () => {
-		if (frame !== null) environment.cancelFrame(frame);
-		frame = null;
-		if (state.moving) publish({ moving: false });
-	};
-
-	const cancelRunwayMotion = () => {
-		if (runwayFrame !== null) environment.cancelFrame(runwayFrame);
-		runwayFrame = null;
-	};
-
-	const cancelAnchor = () => {
-		if (anchorFrame !== null) environment.cancelFrame(anchorFrame);
-		anchorFrame = null;
-	};
-
-	const cancelEdgePin = () => {
-		if (edgePinFrame !== null) environment.cancelFrame(edgePinFrame);
-		edgePinFrame = null;
-	};
-
 	const resetRunwayTracking = () => {
 		runwayStartEdge = null;
 		runwayStartHeight = 0;
@@ -196,37 +200,236 @@ export function createReadingBandController(
 		if (pixels === 0) resetRunwayTracking();
 	};
 
-	const finishRunwayRelease = () => {
-		writeRunwayHeight(0);
-		resetRunwayTracking();
-		publish({ runway: false });
+	const cancelAnchor = () => {
+		if (anchorFrame !== null) environment.cancelFrame(anchorFrame);
+		anchorFrame = null;
+	};
+
+	const completeMotion = (reevaluate: boolean) => {
+		const completed = motion;
+		motion = null;
+		frame = null;
+		if (completed?.runwayTarget === 0) {
+			writeRunwayHeight(0);
+			publish({
+				runway: completed.retainActiveRunway && state.streaming && state.following,
+			});
+		}
+		if (state.moving) publish({ moving: false });
+		const appliedDeferredRow = completed?.kind === "settlement" && flushDeferredRows();
+		if (reevaluate && !appliedDeferredRow) contentChanged();
+	};
+
+	const cancelMotion = () => {
+		if (frame !== null) environment.cancelFrame(frame);
+		frame = null;
+		motion = null;
+		if (state.moving) publish({ moving: false });
+	};
+
+	const boundedScrollTarget = (target: ScrollTarget | null): number | null => {
+		if (!target) return null;
+		const bounds = environment.readScrollBounds();
+		const value = target();
+		if (!bounds || value === null) return null;
+		return Math.min(bounds.maxScrollTop, Math.max(0, value));
+	};
+
+	const motionSettled = (active: ActiveMotion): boolean => {
+		const bounds = environment.readScrollBounds();
+		const target = boundedScrollTarget(active.scrollTarget);
+		const scrollSettled =
+			target === null || !bounds || Math.abs(target - bounds.scrollTop) <= GEOMETRY_EPSILON;
+		const runwaySettled =
+			active.runwayTarget === null ||
+			Math.abs(active.runwayTarget - runwayHeight) <= GEOMETRY_EPSILON;
+		return scrollSettled && runwaySettled;
+	};
+
+	const applyInstantMotion = (active: ActiveMotion) => {
+		const target = boundedScrollTarget(active.scrollTarget);
+		if (target !== null) environment.writeScrollTop(target);
+		if (active.runwayTarget !== null) writeRunwayHeight(active.runwayTarget);
+		if (active.runwayTarget === 0) {
+			publish({
+				runway: active.retainActiveRunway && state.streaming && state.following,
+			});
+		}
+	};
+
+	const advanceMotion = (time: number) => {
+		frame = null;
+		const active = motion;
+		if (!active) return;
+		if (
+			(active.requireFollowing && !state.following) ||
+			(active.requireStreaming && !state.streaming)
+		) {
+			completeMotion(false);
+			return;
+		}
+		if (active.stabilizing) {
+			if (!motionSettled(active)) {
+				if (active.instant) {
+					applyInstantMotion(active);
+				} else {
+					const bounds = environment.readScrollBounds();
+					active.startScrollTop = bounds?.scrollTop ?? active.startScrollTop;
+					active.startRunwayHeight = runwayHeight;
+					active.startedAt = time;
+					active.stabilizing = false;
+					frame = environment.requestFrame(advanceMotion);
+					return;
+				}
+			}
+			active.stabilityFrames -= 1;
+			if (active.stabilityFrames <= 0) {
+				completeMotion(active.reevaluate);
+				return;
+			}
+			frame = environment.requestFrame(advanceMotion);
+			return;
+		}
+		const progress = Math.min(1, Math.max(0, (time - active.startedAt) / ADVANCE_DURATION_MS));
+		const eased = easeOutCubic(progress);
+		const target = boundedScrollTarget(active.scrollTarget);
+		if (target !== null) {
+			environment.writeScrollTop(active.startScrollTop + (target - active.startScrollTop) * eased);
+		}
+		if (active.runwayTarget !== null) {
+			writeRunwayHeight(
+				active.startRunwayHeight + (active.runwayTarget - active.startRunwayHeight) * eased,
+			);
+			if (active.runwayTarget === 0 && runwayHeight <= GEOMETRY_EPSILON) {
+				active.runwayTarget = null;
+				publish({
+					runway: active.retainActiveRunway && state.streaming && state.following,
+				});
+			}
+		}
+		if (progress < 1) {
+			frame = environment.requestFrame(advanceMotion);
+			return;
+		}
+		if (!motionSettled(active)) {
+			const bounds = environment.readScrollBounds();
+			active.startScrollTop = bounds?.scrollTop ?? active.startScrollTop;
+			active.startRunwayHeight = runwayHeight;
+			active.startedAt = time;
+			frame = environment.requestFrame(advanceMotion);
+			return;
+		}
+		if (active.stabilityFrames > 0) {
+			active.stabilizing = true;
+			frame = environment.requestFrame(advanceMotion);
+			return;
+		}
+		completeMotion(active.reevaluate);
+	};
+
+	const startMotion = ({
+		kind = "alignment",
+		scrollTarget = null,
+		runwayTarget = null,
+		retainActiveRunway = false,
+		requireFollowing = true,
+		requireStreaming = false,
+		reevaluate = false,
+		stabilityFrames = 0,
+	}: {
+		kind?: ActiveMotion["kind"];
+		scrollTarget?: ScrollTarget | null;
+		runwayTarget?: number | null;
+		retainActiveRunway?: boolean;
+		requireFollowing?: boolean;
+		requireStreaming?: boolean;
+		reevaluate?: boolean;
+		stabilityFrames?: number;
+	}) => {
+		const bounds = environment.readScrollBounds();
+		const initialScrollTarget = boundedScrollTarget(scrollTarget);
+		const scrollAlreadySettled =
+			initialScrollTarget === null ||
+			!bounds ||
+			Math.abs(initialScrollTarget - bounds.scrollTop) <= GEOMETRY_EPSILON;
+		const runwayAlreadySettled =
+			runwayTarget === null || Math.abs(runwayTarget - runwayHeight) <= GEOMETRY_EPSILON;
+		if (scrollAlreadySettled && runwayAlreadySettled && stabilityFrames === 0) {
+			if (runwayTarget === 0) {
+				publish({ runway: retainActiveRunway && state.streaming && state.following });
+			}
+			if (reevaluate) contentChanged();
+			return;
+		}
+		if (environment.prefersReducedMotion()) {
+			cancelMotion();
+			const target = boundedScrollTarget(scrollTarget);
+			if (target !== null) environment.writeScrollTop(target);
+			if (runwayTarget !== null) writeRunwayHeight(runwayTarget);
+			if (runwayTarget === 0) {
+				publish({ runway: retainActiveRunway && state.streaming && state.following });
+			}
+			if (stabilityFrames > 0) {
+				const currentBounds = environment.readScrollBounds();
+				motion = {
+					kind,
+					scrollTarget,
+					runwayTarget,
+					retainActiveRunway,
+					requireFollowing,
+					requireStreaming,
+					reevaluate,
+					startedAt: environment.now(),
+					startScrollTop: currentBounds?.scrollTop ?? 0,
+					startRunwayHeight: runwayHeight,
+					stabilityFrames,
+					stabilizing: true,
+					instant: true,
+				};
+				publish({ moving: true });
+				frame = environment.requestFrame(advanceMotion);
+			} else if (reevaluate) {
+				contentChanged();
+			}
+			return;
+		}
+		motion = {
+			kind,
+			scrollTarget,
+			runwayTarget,
+			retainActiveRunway,
+			requireFollowing,
+			requireStreaming,
+			reevaluate,
+			startedAt: environment.now(),
+			startScrollTop: bounds?.scrollTop ?? 0,
+			startRunwayHeight: runwayHeight,
+			stabilityFrames,
+			stabilizing: false,
+			instant: false,
+		};
+		publish({ moving: true });
+		frame ??= environment.requestFrame(advanceMotion);
 	};
 
 	const releaseRunway = (smooth = true) => {
 		pendingSettleReturn = false;
 		runwaySuppressed = true;
-		cancelRunwayMotion();
 		if (!smooth || runwayHeight <= GEOMETRY_EPSILON || environment.prefersReducedMotion()) {
-			finishRunwayRelease();
+			cancelMotion();
+			writeRunwayHeight(0);
+			publish({ runway: false });
 			return;
 		}
-		const startHeight = runwayHeight;
-		const startedAt = environment.now();
-		const collapse = (time: number) => {
-			const progress = Math.min(1, Math.max(0, (time - startedAt) / ADVANCE_DURATION_MS));
-			writeRunwayHeight(startHeight * (1 - easeOutCubic(progress)));
-			if (progress < 1) {
-				runwayFrame = environment.requestFrame(collapse);
-				return;
-			}
-			runwayFrame = null;
-			finishRunwayRelease();
-		};
-		runwayFrame = environment.requestFrame(collapse);
+		startMotion({
+			kind: "runway",
+			runwayTarget: 0,
+			requireFollowing: false,
+		});
 	};
 
 	const reconcileRunwayGrowth = (geometry: ReadingBandGeometry) => {
-		if (runwayStartHeight <= 0 || runwayFrame !== null) return;
+		if (runwayStartHeight <= 0 || (motion && motion.runwayTarget !== null)) return;
 		const bottom = runwayBottom(geometry);
 		if (bottom === null) return;
 		if (runwayStartEdge === null) {
@@ -240,59 +443,12 @@ export function createReadingBandController(
 	const latestScrollTop = (bounds: ReadingBandScrollBounds) =>
 		latestEdge === "top" ? 0 : bounds.maxScrollTop;
 
-	const pinLatestEdge = () => {
-		cancelEdgePin();
-		let remainingFrames = EDGE_PIN_MAX_FRAMES;
-		const pin = () => {
-			edgePinFrame = null;
-			const bounds = environment.readScrollBounds();
-			if (!bounds) return;
-			environment.writeScrollTop(latestScrollTop(bounds));
-			remainingFrames -= 1;
-			if (remainingFrames <= 0) return;
-			edgePinFrame = environment.requestFrame(pin);
-		};
-		pin();
-	};
-
-	const moveTo = (target: number, requireStreaming: boolean, reevaluate: boolean) => {
-		cancelEdgePin();
+	const latestTarget: ScrollTarget = () => {
 		const bounds = environment.readScrollBounds();
-		if (!bounds) return;
-		const boundedTarget = Math.min(bounds.maxScrollTop, Math.max(0, target));
-		if (Math.abs(boundedTarget - bounds.scrollTop) <= GEOMETRY_EPSILON) return;
-		cancelMotion();
-		if (environment.prefersReducedMotion()) {
-			environment.writeScrollTop(boundedTarget);
-			if (reevaluate) contentChanged();
-			return;
-		}
-
-		const start = bounds.scrollTop;
-		const distance = boundedTarget - start;
-		const startedAt = environment.now();
-		publish({ moving: true });
-		const advance = (time: number) => {
-			if (!state.following || (requireStreaming && !state.streaming)) {
-				frame = null;
-				publish({ moving: false });
-				return;
-			}
-			const progress = Math.min(1, Math.max(0, (time - startedAt) / ADVANCE_DURATION_MS));
-			environment.writeScrollTop(start + distance * easeOutCubic(progress));
-			if (progress < 1) {
-				frame = environment.requestFrame(advance);
-				return;
-			}
-			frame = null;
-			publish({ moving: false });
-			if (reevaluate) contentChanged();
-		};
-		frame = environment.requestFrame(advance);
+		return bounds ? latestScrollTop(bounds) : null;
 	};
 
 	const addRunwayForTarget = (geometry: ReadingBandGeometry, target: number) => {
-		cancelRunwayMotion();
 		const naturalMaxScrollTop = Math.max(0, geometry.maxScrollTop - runwayHeight);
 		const required = Math.max(0, target - naturalMaxScrollTop);
 		const bottom = runwayBottom(geometry);
@@ -310,30 +466,56 @@ export function createReadingBandController(
 		);
 	};
 
+	const liveSettleTarget: ScrollTarget = () => {
+		const geometry = environment.readGeometry();
+		return geometry ? settleTarget(geometry) : null;
+	};
+
 	const moveEdgeToSettle = (geometry: ReadingBandGeometry, animate: boolean) => {
 		const target = settleTarget(geometry);
 		if (target === null) return false;
 		addRunwayForTarget(geometry, target);
-		const refreshed = environment.readGeometry() ?? geometry;
-		const refreshedTarget = settleTarget(refreshed) ?? target;
-		if (animate) moveTo(refreshedTarget, true, true);
-		else environment.writeScrollTop(refreshedTarget);
+		if (animate) {
+			startMotion({ scrollTarget: liveSettleTarget, requireStreaming: true, reevaluate: true });
+		} else {
+			const refreshedTarget = boundedScrollTarget(liveSettleTarget);
+			if (refreshedTarget !== null) environment.writeScrollTop(refreshedTarget);
+		}
 		return true;
+	};
+
+	const settle = () => {
+		cancelAnchor();
+		immediateTurnPending = false;
+		pendingSettleReturn = false;
+		deferredUserTurn = null;
+		deferredLatestRow = null;
+		runwaySuppressed = true;
+		publish({ following: true, streaming: false });
+		startMotion({
+			kind: "settlement",
+			scrollTarget: latestTarget,
+			runwayTarget: 0,
+			retainActiveRunway: true,
+			reevaluate: true,
+			stabilityFrames: EDGE_STABILITY_FRAMES,
+		});
 	};
 
 	function contentChanged() {
 		let geometry = environment.readGeometry();
 		if (!geometry || geometry.viewportHeight <= 0) return;
 		reconcileRunwayGrowth(geometry);
-		if (
-			!state.streaming ||
-			!state.following ||
-			state.moving ||
-			runwayFrame !== null ||
-			runwaySuppressed
-		) {
+		if (immediateTurnPending || !state.following) return;
+		if (state.moving) {
+			if (motion?.instant) applyInstantMotion(motion);
 			return;
 		}
+		if (!state.streaming) {
+			startMotion({ scrollTarget: latestTarget });
+			return;
+		}
+		if (runwaySuppressed) return;
 		geometry = environment.readGeometry() ?? geometry;
 		if (pendingSettleReturn) {
 			pendingSettleReturn = !moveEdgeToSettle(geometry, true);
@@ -346,78 +528,172 @@ export function createReadingBandController(
 		moveEdgeToSettle(geometry, true);
 	}
 
+	function applyUserTurn(index: number, source: "immediate" | "queued") {
+		if (source === "queued" && !state.following) return;
+		cancelMotion();
+		if (source === "immediate") publish({ following: true, runway: true });
+		const viewportHeight = environment.readViewportHeight();
+		if (viewportHeight <= 0) return;
+		const inset = turnInset(viewportHeight);
+		cancelAnchor();
+		anchorFrame = environment.requestFrame(() => {
+			anchorFrame = null;
+			if (state.following) environment.anchorTurn(index, inset);
+		});
+	}
+
+	function applyLatestRow(index: number) {
+		if (latestEdge !== "top" || index !== 0 || !state.following) return;
+		startMotion({ scrollTarget: latestTarget });
+	}
+
+	function flushDeferredRows(): boolean {
+		const userTurn = deferredUserTurn;
+		const latestRow = deferredLatestRow;
+		deferredUserTurn = null;
+		deferredLatestRow = null;
+		if (userTurn) {
+			applyUserTurn(userTurn.index, userTurn.source);
+			return true;
+		}
+		if (latestRow !== null) {
+			applyLatestRow(latestRow);
+			return true;
+		}
+		return false;
+	}
+
+	const yieldMotionToReader = () => {
+		cancelAnchor();
+		immediateTurnPending = false;
+		deferredUserTurn = null;
+		deferredLatestRow = null;
+		if (motion?.instant) {
+			cancelMotion();
+		} else if (motion?.runwayTarget === 0) {
+			if (motion.scrollTarget !== null || motion.requireFollowing || motion.stabilizing) {
+				const bounds = environment.readScrollBounds();
+				motion.kind = "runway";
+				motion.scrollTarget = null;
+				motion.retainActiveRunway = false;
+				motion.requireFollowing = false;
+				motion.requireStreaming = false;
+				motion.reevaluate = false;
+				motion.startScrollTop = bounds?.scrollTop ?? motion.startScrollTop;
+				motion.startRunwayHeight = runwayHeight;
+				motion.startedAt = environment.now();
+				motion.stabilityFrames = 0;
+				motion.stabilizing = false;
+			}
+		} else {
+			cancelMotion();
+		}
+		if (runwayHeight > GEOMETRY_EPSILON) {
+			if (motion?.runwayTarget !== 0) releaseRunway(true);
+		} else {
+			publish({ runway: false });
+		}
+	};
+
 	return {
 		getSnapshot: () => snapshotOf(state),
 		armImmediateTurn: () => {
 			cancelMotion();
-			cancelRunwayMotion();
 			cancelAnchor();
-			cancelEdgePin();
+			immediateTurnPending = true;
 			pendingSettleReturn = false;
+			deferredUserTurn = null;
+			deferredLatestRow = null;
 			runwaySuppressed = false;
 			writeRunwayHeight(0);
 			publish({ following: true, runway: true });
 		},
-		userTurnArrived: (index, source) => {
-			if (source === "queued" && !state.following) return;
-			cancelMotion();
-			cancelEdgePin();
-			if (source === "immediate") publish({ following: true, runway: true });
-			const viewportHeight = environment.readViewportHeight();
-			if (viewportHeight <= 0) return;
-			const inset = turnInset(viewportHeight);
+		cancelImmediateTurn: (streaming) => {
+			immediateTurnPending = false;
 			cancelAnchor();
-			anchorFrame = environment.requestFrame(() => {
-				anchorFrame = null;
-				if (state.following) environment.anchorTurn(index, inset);
-			});
+			if (!streaming) {
+				settle();
+				return;
+			}
+			runwaySuppressed = false;
+			publish({ streaming: true, runway: state.following });
+			contentChanged();
+		},
+		userTurnArrived: (index, source) => {
+			if (motion?.kind === "settlement") {
+				deferredUserTurn = { index, source };
+				return;
+			}
+			applyUserTurn(index, source);
 		},
 		latestRowArrived: (index) => {
-			if (latestEdge !== "top" || index !== 0 || !state.following) return;
-			const bounds = environment.readScrollBounds();
-			if (bounds) moveTo(latestScrollTop(bounds), false, false);
+			if (motion?.kind === "settlement") {
+				deferredLatestRow = index;
+				return;
+			}
+			applyLatestRow(index);
 		},
 		contentChanged,
 		cancelMovement: () => {
 			cancelMotion();
 			cancelAnchor();
-			cancelEdgePin();
+		},
+		cancelReveal: () => {
+			if (motion?.kind === "reveal") cancelMotion();
+		},
+		revealTo: (target, stabilize) => {
+			cancelAnchor();
+			startMotion({
+				kind: "reveal",
+				scrollTarget: target,
+				runwayTarget: runwayHeight > GEOMETRY_EPSILON ? 0 : null,
+				requireFollowing: false,
+				stabilityFrames: stabilize ? EDGE_STABILITY_FRAMES : 0,
+			});
 		},
 		readerLeft: () => {
-			if (!state.following) return;
-			cancelMotion();
-			cancelAnchor();
-			cancelEdgePin();
+			yieldMotionToReader();
 			publish({ following: false });
-			releaseRunway(true);
 		},
+		readerMovedWhileFollowing: yieldMotionToReader,
 		readerReachedEdge: () => {
-			cancelRunwayMotion();
+			cancelMotion();
 			runwaySuppressed = false;
 			publish({ following: true, runway: state.streaming });
+			if (!state.streaming) {
+				startMotion({
+					scrollTarget: latestTarget,
+					stabilityFrames: EDGE_STABILITY_FRAMES,
+				});
+				return;
+			}
+			const geometry = environment.readGeometry();
+			if (!geometry || !moveEdgeToSettle(geometry, true)) pendingSettleReturn = true;
 		},
 		returnToEdge: () => {
 			cancelMotion();
 			cancelAnchor();
-			cancelRunwayMotion();
+			immediateTurnPending = false;
 			runwaySuppressed = false;
 			publish({ following: true, runway: state.streaming });
 			if (!state.streaming) {
-				pinLatestEdge();
+				startMotion({
+					scrollTarget: latestTarget,
+					stabilityFrames: EDGE_STABILITY_FRAMES,
+				});
 				return;
 			}
 			const geometry = environment.readGeometry();
 			if (!geometry || !moveEdgeToSettle(geometry, true)) pendingSettleReturn = true;
 		},
 		releaseRunway,
+		settle,
 		setStreaming: (nextStreaming) => {
 			if (!nextStreaming) {
-				cancelMotion();
-				publish({ streaming: false });
-				releaseRunway(true);
+				settle();
 				return;
 			}
-			cancelRunwayMotion();
+			immediateTurnPending = false;
 			runwaySuppressed = false;
 			publish({ streaming: true, runway: state.following });
 		},
@@ -430,7 +706,7 @@ export function createReadingBandController(
 			const geometry = environment.readGeometry();
 			if (!geometry) return;
 			reconstructed = true;
-			cancelRunwayMotion();
+			cancelMotion();
 			runwaySuppressed = false;
 			publish({ runway: true });
 			if (!moveEdgeToSettle(geometry, false)) pendingSettleReturn = true;
@@ -438,10 +714,11 @@ export function createReadingBandController(
 		setLatestEdge: (edge) => {
 			if (edge === latestEdge) return;
 			cancelMotion();
-			cancelRunwayMotion();
 			cancelAnchor();
-			cancelEdgePin();
 			latestEdge = edge;
+			immediateTurnPending = false;
+			deferredUserTurn = null;
+			deferredLatestRow = null;
 			activeStreamMount = state.streaming;
 			reconstructed = false;
 			pendingSettleReturn = false;
@@ -451,10 +728,11 @@ export function createReadingBandController(
 		},
 		dispose: () => {
 			cancelMotion();
-			cancelRunwayMotion();
 			cancelAnchor();
-			cancelEdgePin();
+			immediateTurnPending = false;
 			pendingSettleReturn = false;
+			deferredUserTurn = null;
+			deferredLatestRow = null;
 		},
 	};
 }

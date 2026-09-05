@@ -996,6 +996,21 @@ test("appendErrorTurn surfaces a failed send (a rejected prompt) as a visible er
 	expect(rt("a").isStreaming).toBe(false);
 });
 
+test("a rejected queued send cannot settle work the host is still running", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(assistantStart, "a");
+	store.handlePiEvent(assistantText("still working"), "a");
+	const currentAssistantId = rt("a").currentAssistantId;
+
+	store.appendErrorTurn("a", "follow-up rejected");
+
+	expect(rt("a").isStreaming).toBe(true);
+	expect(rt("a").currentAssistantId).toBe(currentAssistantId);
+	expect(rt("a").turns.at(-1)).toMatchObject({ kind: "error", text: "follow-up rejected" });
+});
+
 test("a message_update with no prior message_start still builds the turn (mid-stream hydration)", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");

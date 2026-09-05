@@ -1,5 +1,7 @@
 import type { ChatTurn } from "./types";
 
+export const CHAT_STATUS_SLOT_HEIGHT = 40;
+
 export type StreamPhase = "working" | "thinking" | "running-tool" | "writing" | "compacting";
 
 export interface StreamStatus {
@@ -61,6 +63,19 @@ export function StreamIndicator({ status }: { status: StreamStatus }) {
 		>
 			<TypingDots />
 			<span>{phaseLabel(status)}</span>
+		</div>
+	);
+}
+
+export function StreamStatusSlot({ status }: { status: StreamStatus | null }) {
+	return (
+		<div
+			data-testid="chat-status-slot"
+			data-active={status !== null}
+			aria-hidden={status === null ? true : undefined}
+			className="mx-auto h-40 max-w-3xl px-12"
+		>
+			{status ? <StreamIndicator status={status} /> : null}
 		</div>
 	);
 }

@@ -36,14 +36,6 @@ export function isCompactBreadcrumbWidth(width: number): boolean {
 	return width < ACTIVITY_BREADCRUMB_COMPACT_WIDTH;
 }
 
-export function activityBreadcrumbJumpTop(
-	scrollTop: number,
-	scrollerTop: number,
-	nodeTop: number,
-): number {
-	return Math.max(0, scrollTop + nodeTop - scrollerTop - ACTIVITY_BREADCRUMB_HEIGHT);
-}
-
 export function deriveActiveBreadcrumbPath(
 	nodes: ActivityBreadcrumbGeometry[],
 	boundary: number,
@@ -198,7 +190,13 @@ function originalActivityToggle(node: HTMLElement): HTMLButtonElement | undefine
 	return node.querySelector<HTMLButtonElement>(":scope > [data-activity-node-toggle]") ?? undefined;
 }
 
-export function ActivityBreadcrumbTrail({ scroller }: { scroller: HTMLElement | null }) {
+export function ActivityBreadcrumbTrail({
+	scroller,
+	onReveal,
+}: {
+	scroller: HTMLElement | null;
+	onReveal: (node: HTMLElement) => void;
+}) {
 	const [path, setPath] = useState<ActivityBreadcrumbDescriptor[]>([]);
 	const [compact, setCompact] = useState(false);
 
@@ -242,19 +240,10 @@ export function ActivityBreadcrumbTrail({ scroller }: { scroller: HTMLElement | 
 			const node = originalActivityNode(scroller, id);
 			const toggle = node ? originalActivityToggle(node) : undefined;
 			if (!node || !toggle) return;
-			const view = scroller.ownerDocument.defaultView;
-			const top = activityBreadcrumbJumpTop(
-				scroller.scrollTop,
-				scroller.getBoundingClientRect().top,
-				node.getBoundingClientRect().top,
-			);
-			scroller.scrollTo({
-				top,
-				behavior: view?.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-			});
+			onReveal(node);
 			toggle.focus({ preventScroll: true });
 		},
-		[scroller],
+		[onReveal, scroller],
 	);
 
 	const toggle = useCallback(

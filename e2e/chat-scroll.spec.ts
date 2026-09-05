@@ -103,6 +103,7 @@ for (const testCase of orderCases) {
 			await moveMouseToChatViewport(page, chatScroll);
 			await page.mouse.wheel(0, testCase.historyWheel);
 			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			await page.waitForTimeout(150);
 
 			await chatScroll.evaluate((root, order) => {
 				const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
@@ -112,9 +113,16 @@ for (const testCase of orderCases) {
 				scroller.dispatchEvent(new Event("scroll"));
 			}, testCase.order);
 			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+			const positionedNearLatest = await readChatScrollGeometry(chatScroll);
+			const positionedDistance =
+				testCase.order === "newest-first"
+					? positionedNearLatest.distanceFromStart
+					: positionedNearLatest.distanceFromEnd;
+			expect(positionedDistance).toBeGreaterThan(1);
+			expect(positionedDistance).toBeLessThan(50);
 
 			await moveMouseToChatViewport(page, chatScroll);
-			await page.mouse.wheel(0, testCase.latestWheel > 0 ? 4 : -4);
+			await page.mouse.wheel(0, testCase.latestWheel > 0 ? 1 : -1);
 			const near = await readChatScrollGeometry(chatScroll);
 			const nearDistance =
 				testCase.order === "newest-first" ? near.distanceFromStart : near.distanceFromEnd;
@@ -137,7 +145,9 @@ for (const testCase of orderCases) {
 		}
 	});
 
-	test(`${testCase.order} keeps an idle status slot at the logical latest edge`, async ({ page }) => {
+	test(`${testCase.order} keeps an idle status slot at the logical latest edge`, async ({
+		page,
+	}) => {
 		const { session } = await openTallChat(page, testCase.order);
 		try {
 			const slot = page.getByTestId("chat-status-slot");

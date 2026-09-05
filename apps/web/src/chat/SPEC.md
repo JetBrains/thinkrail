@@ -369,8 +369,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   message/history, breadcrumb, or tool-page navigation also detach. A return gesture rearms once only when
   it reaches the physical latest edge within the shared 1px geometry tolerance; directions invert with
   order, and touch/trackpad intent survives through momentum. No 50px near-edge threshold and no geometry
-  change alone may rearm. An own Send deliberately reattaches and places its user row at 10% of transcript
-  height clamped to 48–80px; a queued/background continuation preserves a detached reader when it starts.
+  change alone may rearm. Expanding or collapsing an Activity, Thinking, tool, or message disclosure is a
+  geometry change rather than navigation: it preserves alignment, retargets the current latest/response
+  destination while following, and leaves a detached reader's visible anchor fixed. An own Send deliberately
+  reattaches and places its user row at 10% of transcript height clamped to 48–80px; a queued/background
+  continuation preserves a detached reader when it starts.
 - **Streaming response movement exists only during work** — while following, the active response grows to
   Trigger (default 100%), then the sole motion owner places it at Settle (default 75%); each later crossing
   repeats the same sparse advance. Immediately before a move the controller adds only the scroll-range
@@ -395,8 +398,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   room and perform its established bounded start reveal/focus, but that automatic path leaves following or
   detached exactly as it found it and cannot expose the button. A reader who was already detached keeps the
   affordance because of that prior action; a subsequent user-driven tool-page navigation may detach. All
-  attention, history, breadcrumb, and row reveals route through the same controller; size-aware `nearest`
-  keeps a tall target's useful leading edge visible.
+  attention, history, breadcrumb, and row reveals route through the same controller. A history row outside
+  the virtual DOM gets one non-animated Virtuoso materialization; once mounted, its centered correction uses
+  the controller, so no independent smooth retry can compete with settlement. Size-aware `nearest` keeps a
+  tall target's useful leading edge visible.
 - **One cancellable, retargetable motion owner** — renderers and projections never scroll themselves.
   New-turn placement, Trigger→Settle advances, contextual-button returns, settlement, and explicit reveals
   share one non-overlapping channel whose destination can retarget as Virtuoso measurements, status geometry,
