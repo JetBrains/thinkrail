@@ -1,5 +1,3 @@
-#include <stdint.h>
-
 #define CALLBACK __stdcall
 #define DLLIMPORT __declspec(dllimport)
 #define GWLP_WNDPROC -4
@@ -13,11 +11,13 @@
 typedef void *HWND;
 typedef unsigned int UINT;
 typedef int BOOL;
-typedef uintptr_t WPARAM;
-typedef intptr_t LPARAM;
-typedef intptr_t LRESULT;
-typedef intptr_t LONG_PTR;
-typedef struct { int32_t x; int32_t y; } POINT;
+typedef unsigned long long WPARAM;
+typedef long long LPARAM;
+typedef long long LRESULT;
+typedef long long LONG_PTR;
+typedef short INT16;
+typedef int INT32;
+typedef struct { INT32 x; INT32 y; } POINT;
 typedef LRESULT (CALLBACK *WNDPROC)(HWND, UINT, WPARAM, LPARAM);
 
 DLLIMPORT LONG_PTR CALLBACK SetWindowLongPtrW(HWND, int, LONG_PTR);
@@ -46,8 +46,8 @@ static LRESULT CALLBACK thinkrail_window_proc(
 	LRESULT result = CallWindowProcW(original, window, message, w_param, l_param);
 	if (message != WM_NCHITTEST || result != HTCLIENT || IsZoomed(window)) return result;
 	POINT point = {
-		(int16_t)(l_param & 0xffff),
-		(int16_t)((l_param >> 16) & 0xffff)
+		(INT16)(l_param & 0xffff),
+		(INT16)((l_param >> 16) & 0xffff)
 	};
 	if (!ScreenToClient(window, &point)) return result;
 	UINT dpi = GetDpiForWindow(window);
