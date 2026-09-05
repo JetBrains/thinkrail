@@ -207,9 +207,10 @@ configuration.
   menu on each target, exercises maximize/minimize/restore state through the live Windows/Linux window,
   closes through the same graceful controller path as the app button, runs the shared artifact probes with
   repository reads denied, and observes clean process exit. Windows' interaction probe additionally
-  requires the preserved native style/system menu, real window move, all eight frame-resize directions,
-  and top-edge snap; Linux drives the titlebar and all eight web resize targets with real pointer input
-  under Openbox so GTK/the compositor, rather than a JavaScript substitute, must change the frame. macOS
+  requires the preserved native style/system menu, real window move, native hit tests for all eight frame
+  edges, a real resize, and top-edge snap; Linux drives the titlebar and all eight web resize targets with
+  real pointer input under Openbox so GTK/the compositor, rather than a JavaScript substitute, must change
+  the frame. macOS
   retains native AppKit controls; local accessibility geometry and drag probes cover their placement and
   the web drag region.
 - First-install smoke executes the produced DMG app, Windows setup ZIP, or Linux setup tarball against

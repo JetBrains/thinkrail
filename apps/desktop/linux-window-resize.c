@@ -1,5 +1,6 @@
 #include <dlfcn.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 typedef int gboolean;
@@ -11,7 +12,8 @@ typedef void *(*display_get_default_seat)(void *);
 typedef void *(*seat_get_pointer)(void *);
 typedef void (*device_get_position)(void *, void **, int *, int *);
 typedef guint32 (*current_event_time)(void);
-typedef void (*window_begin_resize_drag)(void *, int, int, int, int, guint32);
+typedef void *(*widget_get_window)(void *);
+typedef void (*window_begin_resize_drag)(void *, int, void *, int, int, int, guint32);
 
 typedef struct {
 	main_context_invoke invoke;
@@ -20,6 +22,7 @@ typedef struct {
 	seat_get_pointer get_pointer;
 	device_get_position get_position;
 	current_event_time get_time;
+	widget_get_window get_window;
 	window_begin_resize_drag begin_resize;
 } resize_api;
 
@@ -30,6 +33,11 @@ typedef struct {
 
 static resize_api api;
 static int loaded;
+
+static int smoke_logging(void) {
+	const char *value = getenv("THINKRAIL_DESKTOP_NATIVE_INTERACTION");
+	return value && value[0] == '1' && value[1] == '\0';
+}
 
 static int load_api(void) {
 	if (loaded) return loaded > 0;
@@ -46,10 +54,13 @@ static int load_api(void) {
 	api.get_pointer = (seat_get_pointer)dlsym(gdk, "gdk_seat_get_pointer");
 	api.get_position = (device_get_position)dlsym(gdk, "gdk_device_get_position");
 	api.get_time = (current_event_time)dlsym(gtk, "gtk_get_current_event_time");
-	api.begin_resize =
-		(window_begin_resize_drag)dlsym(gtk, "gtk_window_begin_resize_drag");
+	api.get_window = (widget_get_window)dlsym(gtk, "gtk_widget_get_window");
+	api.begin_resize = (window_begin_resize_drag)dlsym(
+		gdk,
+		"gdk_window_begin_resize_drag_for_device"
+	);
 	loaded = api.invoke && api.get_display && api.get_seat && api.get_pointer &&
-		api.get_position && api.get_time && api.begin_resize ? 1 : -1;
+		api.get_position && api.get_time && api.get_window && api.begin_resize ? 1 : -1;
 	return loaded > 0;
 }
 
@@ -58,11 +69,22 @@ static gboolean begin_resize_on_main(void *data) {
 	void *display = api.get_display();
 	void *seat = display ? api.get_seat(display) : NULL;
 	void *pointer = seat ? api.get_pointer(seat) : NULL;
-	if (pointer) {
+	void *gdk_window = api.get_window(request->window);
+	if (pointer && gdk_window) {
 		int x = 0;
 		int y = 0;
 		api.get_position(pointer, NULL, &x, &y);
-		api.begin_resize(request->window, request->edge, 1, x, y, api.get_time());
+		guint32 timestamp = api.get_time();
+		if (smoke_logging()) {
+			fprintf(stderr, "[desktop] Linux resize edge=%d x=%d y=%d time=%u\n",
+				request->edge, x, y, timestamp);
+			fflush(stderr);
+		}
+		api.begin_resize(gdk_window, request->edge, pointer, 1, x, y, timestamp);
+	} else if (smoke_logging()) {
+		fprintf(stderr, "[desktop] Linux resize missing pointer=%p window=%p\n",
+			pointer, gdk_window);
+		fflush(stderr);
 	}
 	free(request);
 	return 0;
@@ -74,6 +96,10 @@ int thinkrail_linux_resize_ready(void) {
 
 int thinkrail_linux_begin_resize(void *window, int edge) {
 	if (!window || edge < 0 || edge > 7 || !load_api()) return 0;
+	if (smoke_logging()) {
+		fprintf(stderr, "[desktop] Linux resize queued edge=%d\n", edge);
+		fflush(stderr);
+	}
 	resize_request *request = (resize_request *)malloc(sizeof(resize_request));
 	if (!request) return 0;
 	request->window = window;
