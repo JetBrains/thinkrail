@@ -2,7 +2,7 @@ import { RiExternalLinkLine as ExternalLink } from "@remixicon/react";
 import type { ReleaseChannel } from "@thinkrail/contracts";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { selectUpdateFeatureAvailable, toast, useAppStore } from "@/store";
+import { selectUpdateBusy, selectUpdateFeatureAvailable, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { SettingsSwitch } from "./SettingsSwitch";
 import { ToggleSegment } from "./ToggleSegment";
@@ -20,6 +20,7 @@ function lastCheckedLabel(at: number | undefined): string {
 export function UpdatesSettings() {
 	const status = useAppStore((s) => s.updateStatus);
 	const supported = useAppStore(selectUpdateFeatureAvailable);
+	const working = useAppStore(selectUpdateBusy);
 	const checksEnabled = useAppStore((s) => s.updateChecksEnabled);
 	const [pending, setPending] = useState(false);
 
@@ -56,7 +57,7 @@ export function UpdatesSettings() {
 	}
 
 	const { current, capabilities, phase, available, staged, error } = status;
-	const busy = pending || phase === "checking" || phase === "installing";
+	const busy = pending || working;
 
 	return (
 		<section data-testid="settings-updates" className="flex flex-col gap-16">
@@ -116,7 +117,11 @@ export function UpdatesSettings() {
 						</>
 					) : (
 						<span className="tr-title-compact text-text-default">
-							{phase === "checking" ? "Checking for updates…" : "ThinkRail is up to date"}
+							{phase === "checking"
+								? "Checking for updates…"
+								: working
+									? "Update in progress…"
+									: "ThinkRail is up to date"}
 						</span>
 					)}
 
@@ -169,6 +174,7 @@ export function UpdatesSettings() {
 								testid={`update-channel-${channel}`}
 								label={channel === "stable" ? "Stable" : "Nightly"}
 								active={current.channel === channel}
+								disabled={busy}
 								onClick={() => {
 									if (current.channel !== channel) install(channel);
 								}}

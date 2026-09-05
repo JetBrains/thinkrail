@@ -477,6 +477,14 @@ export function selectUpdateFeatureAvailable(state: UpdateStatusState): boolean 
 	);
 }
 
+const SETTLED_UPDATE_PHASES = ["idle", "available", "staged", "error"] as const;
+
+export function selectUpdateBusy(state: UpdateStatusState): boolean {
+	const phase = state.updateStatus?.phase;
+	if (phase === undefined) return false;
+	return !SETTLED_UPDATE_PHASES.some((settled) => settled === phase);
+}
+
 export function selectUpdateIndicator(state: UpdateStatusState): "available" | "staged" | null {
 	if (!selectUpdateFeatureAvailable(state)) return null;
 	const phase = state.updateStatus?.phase;

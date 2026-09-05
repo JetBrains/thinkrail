@@ -26,6 +26,7 @@ import {
 	selectLayoutTabPlacement,
 	selectSkillsStale,
 	selectUpdateBanner,
+	selectUpdateBusy,
 	selectUpdateFeatureAvailable,
 	selectUpdateIndicator,
 	specPathMatcher,
@@ -562,4 +563,20 @@ test("selectHostVersionChanged fires only once a different host answers", () => 
 	expect(selectHostVersionChanged({ appVersion: "1.3.0", bootAppVersion: "1.3.0" })).toBe(false);
 	expect(selectHostVersionChanged({ appVersion: "1.4.0", bootAppVersion: "1.3.0" })).toBe(true);
 	expect(selectHostVersionChanged({ appVersion: "1.4.0", bootAppVersion: null })).toBe(false);
+});
+
+test("a phase this client does not know reads as busy, never as settled", () => {
+	// A newer host emits a phase this bundle predates (e.g. desktop's download/restart states).
+	const unknown = updateState({ phase: "downloading" as UpdateStatus["phase"] });
+	expect(selectUpdateBusy(unknown)).toBe(true);
+	expect(selectUpdateIndicator(unknown)).toBeNull();
+	expect(selectUpdateBanner(unknown)).toBeNull();
+
+	for (const phase of ["idle", "available", "staged", "error"] as const) {
+		expect(selectUpdateBusy(updateState({ phase }))).toBe(false);
+	}
+	for (const phase of ["checking", "installing"] as const) {
+		expect(selectUpdateBusy(updateState({ phase }))).toBe(true);
+	}
+	expect(selectUpdateBusy(updateState(null))).toBe(false);
 });
