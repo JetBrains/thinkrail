@@ -399,6 +399,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   subscribes every client so permanent domain deletion converges beyond the initiating page. It remains a
   low-latency event, not a durable queue: a reconnecting client's active-workspace `session.list` is the
   authoritative read-side repair for an event missed while its socket was down.
+- **Activity fan-out:** `createServer` installs the agent module's activity publisher and broadcasts each
+  `SessionActivityPayload` on `session.activity`, which the WS `open` handler subscribes for every client
+  alongside the other session channels; `session.activityList` serves the cross-workspace snapshot, since
+  pushes are never replayed and a reconnecting client would otherwise show a stale rail. This module also
+  satisfies the agent's **`setActivityProjectResolver`** seam by mapping a workspace id to its
+  `projectId` through the workspace registry (unresolvable → `null`, and the agent then publishes
+  nothing) — the registry lives here, so attribution is composed here rather than the agent learning what
+  a project is. Derivation, precedence, and lifetime belong to [[submodule-server-agent]]; the wire shape
+  and why `projectId` rides each row are in [[module-contracts]].
 - **Interview invitation delivery:** the three user-send handlers share one post-`ackSend` path that
   filters control traffic once, tracks anonymous `message_sent`, and records the local feedback count. The
   feedback module's injected publisher maps an eligible claim to addressed `feedback.interview` delivery

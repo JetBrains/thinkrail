@@ -60,7 +60,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   (peer-created domain state enters history only, never local placement), `session.deleted` via the idempotent
   `deleteChat(workspaceId, sessionId)` tombstone fold (an online fast path; because this event channel is
   deliberately not replayed, workbench hydration repairs any deletion missed while disconnected from the next
-  authoritative `session.list`), `provider.changed` via the atomic store invalidation
+  authoritative `session.list`), **`session.activity`** via `applySessionActivity(payload)`,
+  `provider.changed` via the atomic store invalidation
   `noteProviderChanged()` plus a `model.list` re-read installed through the store's monotonic provider-version
   guard (the model-catalog hook uses the same guarded write for every list/refresh, so an older reply cannot
   restore a removed generation's models; provider settings observes the same version and re-reads
@@ -68,7 +69,16 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   then `feedback.interview` via the idempotent `showInterviewPrompt()` (a surviving host claim re-delivers the
   addressed event immediately after welcome),
   `workspace.fsChanged` via `noteFsChanged(payload)`, and **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
-  welcome config lands in the atomic install above. Before `WsTransport` dispatches any response or non-Pi
+  welcome config lands in the atomic install above.
+
+  **Activity hydrates on welcome, and retires there too.** Alongside the workspace re-read, every welcome
+  runs `session.activityList` → `hydrateSessionActivity(rows)` under the same connection-generation fence,
+  because `session.activity` pushes are never replayed and a reconnecting surface would otherwise render a
+  rail from before the outage. The capability gate is **`supportsSessionActivity(protocolVersion)`**
+  (`ACTIVITY_PROTOCOL_VERSION`), and failing it does **not** skip the call: it hydrates `[]`, so a surface
+  that has seen a newer host and then reconnects to an older one clears its glyphs rather than stranding
+  them — that host can send neither a snapshot nor a retraction. Store semantics for the fold live in
+  [[submodule-web-store]]; the wire shape is [[module-contracts]]. Before `WsTransport` dispatches any response or non-Pi
   push, `wireTransport` flushes queued Pi events synchronously; connection-status transitions do the same.
   This dispatch barrier preserves cross-message order and the store's transcript-revision fence while still
   collapsing consecutive stream frames. All subscriptions happen once at init, never in component effects);
@@ -95,11 +105,13 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   than a caller convention).
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
-  `TransportOptions`.
+  `TransportOptions`. `supportsSessionActivity` stays module-internal (its own tests import the file
+  directly) — no sibling decides the activity capability, this module does.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
-  `SessionDeletedPayload` for `session.deleted`, `provider.changed`, the empty addressed
+  `SessionDeletedPayload` for `session.deleted`, `SessionActivityPayload` +
+  `ACTIVITY_PROTOCOL_VERSION` for `session.activity` and its snapshot gate, `provider.changed`, the empty addressed
   `feedback.interview` invitation, `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for
   `server.welcome`'s config + `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page
