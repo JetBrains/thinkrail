@@ -33,8 +33,8 @@ public repositories, so `JetBrains/thinkrail-signing` (private) signs the staged
 - **Release** (`nightly.yml` / `stable.yml` → `_release.yml` → `_build.yml`): trusts a green `main`,
   produces native-smoked CLI binaries plus desktop installers, pushes the tag, and stages them as a
   **draft**. A draft and its assets are invisible to unauthenticated users, so nothing unsigned is ever
-  public. Signing and publication belong to `thinkrail-signing`; notarization and desktop updater
-  publication remain deferred gates.
+  public. Signing, macOS desktop notarization, and publication belong to `thinkrail-signing`; bare
+  macOS CLI notarization and desktop updater publication remain deferred gates.
 
 **Why Windows gates PRs and macOS does not.** A release build is all-or-nothing: `release` needs
 `build.result == 'success'`, so one red matrix leg publishes *nothing* — quietly, with no notification, and
@@ -89,7 +89,7 @@ the artifact on the real OS. Bun *can* cross-compile all five from one Linux hos
 platform's lib in one npm package), but embedding a `dlopen`'d FFI lib into a `--compile` output is a
 bug-prone, host-target-only-proven path here, and a cross-built artifact can't be smoke-tested — and you'd
 still need native runners to verify it, so cross-compile saves little. It stays a documented fallback.
-`windows-arm64` (no stable Bun target), `linux-*-musl`, and notarization are deferred.
+`windows-arm64` (no stable Bun target), `linux-*-musl`, and bare macOS CLI notarization are deferred.
 
 ## Version stamping
 
@@ -113,7 +113,9 @@ never sends anyway, since the analytics module mutes on `CI`.
 - The native build action: stamp the shared version → `build:web` → build/smoke the CLI binary →
   package/native-smoke/shared-probe the expanded desktop app → create and execute Electrobun's
   first-install artifact in an isolated install root → collect both artifacts. Desktop-backed e2e runs in
-  CI before release; each release runner still performs both target-native desktop smoke layers.
+  CI before release; each release runner still performs both target-native desktop smoke layers. The
+  macOS release build replaces Electrobun's self-extracting wrapper with the complete expanded app before
+  uploading the unsigned DMG for private signing.
 - `actions/make-checksums` — writes `SHA256SUMS` over the release artifacts. **No caller here:** a
   signature changes the bytes, so checksums must be taken after signing. `thinkrail-signing` pins it by
   commit SHA, which is what keeps the published `SHA256SUMS` format identical to pre-signing releases.
@@ -171,9 +173,10 @@ in place.
 ## Get right
 
 - **Native build == correct runtime.** Do not collapse the matrix to cross-compilation without another
-  way to execute each target's PTY, trash helper, Electrobun wrapper/system renderer, and normal quit path.
-  Linux release additionally requires clean Ubuntu 24.04 x64/ARM64 smoke with glibc 2.38 and the declared
-  GTK/WebKitGTK/AppIndicator/RSVG packages.
+  way to execute each target's PTY, trash helper, Electrobun system renderer, and normal quit path. Linux
+  release additionally requires clean Ubuntu 24.04 x64/ARM64 smoke with glibc 2.38 and the declared
+  GTK/WebKitGTK/AppIndicator/RSVG packages. The macOS release DMG contains the complete expanded app; a
+  first-launch extractor cannot be signed as the final installed bundle.
 - **`server.welcome` stays additive.** `appVersion` is optional; adding wire fields that clients can
   ignore doesn't bump `PROTOCOL_VERSION`. A field clients must understand does.
 - **Windows has no real SIGTERM** — `smoke:binary` relaxes its clean-exit assertion there (Bun
