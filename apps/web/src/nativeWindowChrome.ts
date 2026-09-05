@@ -13,7 +13,7 @@ export type NativeResizeEdge =
 export interface NativeWindowChromeAdapter {
 	readonly version: 1;
 	readonly platform: "macos" | "windows" | "linux";
-	getSnapshot(): { maximized: boolean };
+	getSnapshot(): Readonly<{ maximized: boolean }>;
 	subscribe(listener: () => void): () => void;
 	minimize(): void;
 	toggleMaximize(): void;

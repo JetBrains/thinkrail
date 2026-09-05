@@ -38,6 +38,10 @@ test("native state updates are validated, observable, and unsubscribe cleanly", 
 		notifications += 1;
 	});
 
+	const initialSnapshot = chrome.adapter.getSnapshot();
+	expect(initialSnapshot).toEqual({ maximized: false });
+	expect(Object.isFrozen(initialSnapshot)).toBe(true);
+	expect(Reflect.set(initialSnapshot, "maximized", true)).toBe(false);
 	expect(chrome.adapter.getSnapshot()).toEqual({ maximized: false });
 	expect(chrome.applySnapshot({ maximized: true })).toBe(true);
 	expect(chrome.adapter.getSnapshot()).toEqual({ maximized: true });

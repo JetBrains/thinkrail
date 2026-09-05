@@ -28,7 +28,8 @@ test("maps each shipped desktop OS to its native titlebar mechanism", () => {
 	);
 });
 
-test("preserves the Windows system menu and minimize/maximize capabilities", () => {
+test("preserves the Windows resize frame, system menu, and minimize/maximize capabilities", () => {
+	expect(preservedWindowsStyle(0x00c00000n)).toBe(0x00cf0000n);
 	expect(preservedWindowsStyle(0x00c40000n)).toBe(0x00cf0000n);
 	expect(preservedWindowsStyle(0x00cf0000n)).toBe(0x00cf0000n);
 });

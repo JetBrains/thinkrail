@@ -65,7 +65,7 @@ export const BrowserView: {
 
 export class BrowserWindow {
 	readonly id: number;
-	readonly ptr: Pointer;
+	readonly ptr: Pointer | null;
 	readonly webview: Webview;
 	constructor(options: {
 		title: string;

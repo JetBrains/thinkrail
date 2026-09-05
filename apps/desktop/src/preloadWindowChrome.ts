@@ -25,7 +25,7 @@ export type DesktopWindowChromeCommand =
 export interface PreloadWindowChromeAdapter {
 	readonly version: 1;
 	readonly platform: DesktopWindowChromePlatform;
-	getSnapshot(): { maximized: boolean };
+	getSnapshot(): Readonly<{ maximized: boolean }>;
 	subscribe(listener: () => void): () => void;
 	minimize(): void;
 	toggleMaximize(): void;
@@ -43,7 +43,7 @@ export function createPreloadWindowChrome({
 	adapter: PreloadWindowChromeAdapter;
 	applySnapshot(payload: unknown): boolean;
 } {
-	let snapshot = { maximized: false };
+	let snapshot: Readonly<{ maximized: boolean }> = Object.freeze({ maximized: false });
 	const listeners = new Set<() => void>();
 	const adapter: PreloadWindowChromeAdapter = {
 		version: 1,
@@ -67,7 +67,7 @@ export function createPreloadWindowChrome({
 			const maximized = Reflect.get(payload, "maximized");
 			if (typeof maximized !== "boolean") return false;
 			if (snapshot.maximized === maximized) return true;
-			snapshot = { maximized };
+			snapshot = Object.freeze({ maximized });
 			for (const listener of listeners) listener();
 			return true;
 		},
