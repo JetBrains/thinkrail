@@ -430,6 +430,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   **not** subscribed and not broadcast: `feedback.interview`, `terminal.data`, `terminal.exit`, and
   `terminal.detached` are sent with `ws.send` to one addressed client. Adding an addressed channel means
   wiring a publisher, not a subscription.
+- **Terminal backpressure never trusts the `drain` event alone.** A backpressured `ws.send` latches the
+  client in `terminalBackpressured` and blocks its batchers, and the batcher deliberately retries only on
+  `resume()` — so the latch's lift must be guaranteed. Bun's `drain` is the fast path, but a drain lost
+  across a system sleep (observed after a macOS hibernate) left the latch set forever: the tab frozen,
+  the pty alive, the recorder still current. A 1s reconciler asks the socket itself: with the flag set,
+  `getBufferedAmount() === 0` means the drain the OS never delivered (`drainedClientKeys` in
+  `terminalSend.ts`), so the host lifts the latch and resumes that client's terminals. A socket with
+  buffered bytes stays latched, and a latch whose socket is already gone is left to `close`/`open`.
+  Reloading the client always recovered (open clears the flag and resumes), which is why this hid so long.
 - The host is the single place features are wired together — features never reach back into it.
 - Separate host processes do not coordinate mutable state or events. They may use the same data directory,
   but each owns independent in-memory sessions, terminals, watchers, and connected clients; persistence

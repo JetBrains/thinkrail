@@ -84,7 +84,11 @@ import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
 import { resolveSubagentsEnabled } from "./subagentPolicy";
-import { terminalDeliveryForSendStatus } from "./terminalSend";
+import {
+	BACKPRESSURE_RECONCILE_MS,
+	drainedClientKeys,
+	terminalDeliveryForSendStatus,
+} from "./terminalSend";
 import {
 	handleReviewerSettled,
 	installTodoReviewSeams,
@@ -144,6 +148,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
 	const terminalBackpressured = new Set<string>();
+	const backpressureReconciler = setInterval(() => {
+		const drained = drainedClientKeys(terminalBackpressured, (clientKey) =>
+			sockets.get(clientKey)?.getBufferedAmount(),
+		);
+		for (const clientKey of drained) {
+			terminalBackpressured.delete(clientKey);
+			resumeClientTerminals(clientKey);
+		}
+	}, BACKPRESSURE_RECONCILE_MS);
 	let stopping = false;
 	let shutdownPromise: Promise<void> | undefined;
 
@@ -524,6 +537,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();
 		sockets.clear();
+		clearInterval(backpressureReconciler);
 		terminalBackpressured.clear();
 		requestReplays.clear();
 		persistTerminalSessions();
