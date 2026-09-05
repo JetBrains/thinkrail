@@ -94,24 +94,24 @@ export function normalizeWindowsFrameStyle(
 	return true;
 }
 
-export function windowsResizeHitTest(edge: string): number {
+export function windowsResizeDirection(edge: string): number {
 	switch (edge) {
 		case "north-west":
-			return 13;
+			return 4;
 		case "north":
-			return 12;
+			return 3;
 		case "north-east":
-			return 14;
+			return 5;
 		case "west":
-			return 10;
+			return 1;
 		case "east":
-			return 11;
+			return 2;
 		case "south-west":
-			return 16;
+			return 7;
 		case "south":
-			return 15;
+			return 6;
 		case "south-east":
-			return 17;
+			return 8;
 		default:
 			throw new Error(`unsupported resize edge: ${edge}`);
 	}
