@@ -115,8 +115,8 @@ never sends anyway, since the analytics module mutes on `CI`.
   package/native-smoke/shared-probe the expanded desktop app → create and execute Electrobun's
   first-install artifact in an isolated install root → collect both artifacts. The expanded smoke requires
   the custom preload handshake and native maximize/minimize/restore/close transitions; Windows additionally
-  drives native move, all resize edges, top-edge snap, and system-menu capability, while Linux does the same
-  move/resize exercise through Openbox. Desktop-backed e2e runs in CI before release; each release runner
+  drives native move, verifies all eight edge hit tests, performs a real resize and top-edge snap, and checks
+  system-menu capability, while Linux drives its web-to-compositor move/resize path through Openbox. Desktop-backed e2e runs in CI before release; each release runner
   still performs both target-native desktop smoke layers.
 - `actions/make-checksums` — writes `SHA256SUMS` over the release artifacts. **No caller here:** a
   signature changes the bytes, so checksums must be taken after signing. `thinkrail-signing` pins it by

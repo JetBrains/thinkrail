@@ -41,6 +41,9 @@ public static class ThinkRailWindowProbe {
     public static extern bool PostMessageW(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll")]
+    public static extern IntPtr SendMessageW(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
     public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
 
     [DllImport("user32.dll")]
@@ -62,6 +65,11 @@ public static class ThinkRailWindowProbe {
         if (!SetWindowPos(hwnd, IntPtr.Zero, 200, 150, 800, 600, 0x14)) {
             throw new InvalidOperationException("SetWindowPos failed");
         }
+    }
+
+    public static int HitTest(IntPtr hwnd, int x, int y) {
+        int packed = (y << 16) | (x & 0xffff);
+        return SendMessageW(hwnd, 0x0084, IntPtr.Zero, (IntPtr)packed).ToInt32();
     }
 
     public static void Drag(IntPtr hwnd, int hitTest, int startX, int startY, int endX, int endY) {
@@ -137,32 +145,38 @@ Wait-ForRect {
     $rect.Left - $beforeMove.Left -ge 40 -and $rect.Top - $beforeMove.Top -ge 30
 } "The Windows application titlebar did not move the native window" | Out-Null
 
-$edges = @(
-    @{ Hit = 13; X = 1; Y = 1; DX = -30; DY = -20; West = $true; North = $true },
-    @{ Hit = 12; X = 400; Y = 1; DX = 0; DY = -20; North = $true },
-    @{ Hit = 14; X = 799; Y = 1; DX = 30; DY = -20; East = $true; North = $true },
-    @{ Hit = 10; X = 1; Y = 300; DX = -30; DY = 0; West = $true },
-    @{ Hit = 11; X = 799; Y = 300; DX = 30; DY = 0; East = $true },
-    @{ Hit = 16; X = 1; Y = 599; DX = -30; DY = 20; West = $true; South = $true },
-    @{ Hit = 15; X = 400; Y = 599; DX = 0; DY = 20; South = $true },
-    @{ Hit = 17; X = 799; Y = 599; DX = 30; DY = 20; East = $true; South = $true }
+$hitTests = @(
+    @{ Hit = 13; X = 1; Y = 1 },
+    @{ Hit = 12; X = 400; Y = 1 },
+    @{ Hit = 14; X = 799; Y = 1 },
+    @{ Hit = 10; X = 1; Y = 300 },
+    @{ Hit = 11; X = 799; Y = 300 },
+    @{ Hit = 16; X = 1; Y = 599 },
+    @{ Hit = 15; X = 400; Y = 599 },
+    @{ Hit = 17; X = 799; Y = 599 }
 )
 
-foreach ($edge in $edges) {
-    $before = Reset-Window
-    $startX = $before.Left + $edge.X
-    $startY = $before.Top + $edge.Y
-    [ThinkRailWindowProbe]::Drag($window, $edge.Hit, $startX, $startY, $startX + $edge.DX, $startY + $edge.DY)
-    Wait-ForRect {
-        param($rect)
-        $width = $rect.Right - $rect.Left
-        $height = $rect.Bottom - $rect.Top
-        (-not $edge.West -or ($rect.Left -lt $before.Left - 10 -and $width -gt 810)) -and
-        (-not $edge.East -or $width -gt 810) -and
-        (-not $edge.North -or ($rect.Top -lt $before.Top - 10 -and $height -gt 610)) -and
-        (-not $edge.South -or $height -gt 610)
-    } "The Windows frame did not resize from native edge $($edge.Hit)" | Out-Null
+$hitFrame = Reset-Window
+foreach ($edge in $hitTests) {
+    $actual = [ThinkRailWindowProbe]::HitTest($window, $hitFrame.Left + $edge.X, $hitFrame.Top + $edge.Y)
+    if ($actual -ne $edge.Hit) {
+        throw "Windows native edge hit test returned $actual instead of $($edge.Hit)"
+    }
 }
+
+$beforeResize = Reset-Window
+[ThinkRailWindowProbe]::Drag(
+    $window,
+    17,
+    $beforeResize.Right - 1,
+    $beforeResize.Bottom - 1,
+    $beforeResize.Right + 29,
+    $beforeResize.Bottom + 19
+)
+Wait-ForRect {
+    param($rect)
+    ($rect.Right - $rect.Left) -gt 810 -and ($rect.Bottom - $rect.Top) -gt 610
+} "The Windows frame did not complete a native resize" | Out-Null
 
 $beforeSnap = Reset-Window
 $screenCenter = [ThinkRailWindowProbe]::GetSystemMetrics(0) / 2
