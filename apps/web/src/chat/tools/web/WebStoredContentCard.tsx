@@ -27,7 +27,7 @@ export function storedContentSummary({ args, result }: ToolRenderProps): string 
 	return storedContentTarget(args, result) || strArg(args, "responseId");
 }
 
-export function WebStoredContentCard({ args, result, status }: ToolRenderProps) {
+export function WebStoredContentCard({ toolCallId, args, result, status }: ToolRenderProps) {
 	const responseId = strArg(args, "responseId");
 	const target = storedContentTarget(args, result);
 	const output = resultText(result);
@@ -45,6 +45,7 @@ export function WebStoredContentCard({ args, result, status }: ToolRenderProps) 
 				) : null}
 			</div>
 			<WebResultBody
+				id={`${toolCallId}:content`}
 				output={output}
 				status={status}
 				runningLabel="Loading stored content…"

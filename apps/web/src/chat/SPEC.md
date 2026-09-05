@@ -199,7 +199,14 @@ and **`useSelection`** for a single-choice group — the divider's chips, which 
 `${rowId}:artifacts` rather than a boolean per side, so "only one list open" cannot be violated;
 the `AskUserQuestionCard` pattern, see tools/SPEC.md; deliberately
 never evicted — growth is bounded by manual toggles). A manual toggle always wins — over auto-expand
-defaults *and* over a virtualization remount.
+defaults *and* over a virtualization remount. `FoldGeometryProvider` is the transcript's explicit pre/post
+change seam: every fold header registers a stable row-derived id through `useFold`, including `Collapsible`
+and fallback-driven auto expansion/collapse. It routes detached anchor stabilization through
+`ReadingBandController`'s single motion channel and refreshes from the changing row's measured geometry.
+A wholly offscreen disclosure preserves the visible transcript by its own row-height delta. If a sticky
+breadcrumb collapses the disclosure body that contains the reader's viewport, that content no longer has a
+surviving anchor, so the collapsed original header takes its place at the viewport boundary. Reader input or
+a newer reveal supersedes only the stabilization's scroll leg and cannot strand an in-flight runway release.
 
 **Message-order projection.** `deriveRows` remains canonical and chronological. The pure
 `projectRows(rows, chatMessageOrder)` partitions that sequence at user rows (a pre-user notice span is its

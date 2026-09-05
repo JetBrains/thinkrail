@@ -371,6 +371,37 @@ describe("reading-band reader intent", () => {
 		expect(harness.controller.getSnapshot().following).toBe(true);
 	});
 
+	it("owns detached fold-anchor stabilization and yields it to reader input", () => {
+		const harness = createHarness();
+		harness.controller.readerLeft();
+		let target = 100;
+		harness.controller.stabilizeAnchor(() => target);
+		expect(harness.pendingFrames()).toBe(1);
+		target = 260;
+		harness.controller.refreshAnchor();
+		expect(harness.writes.at(-1)).toBe(260);
+		harness.advance(16);
+		expect(harness.writes.at(-1)).toBe(260);
+		expect(harness.controller.getSnapshot()).toMatchObject({ following: false, moving: true });
+
+		const writesBeforeInput = harness.writes.length;
+		harness.controller.cancelReveal();
+		harness.advance(16);
+		expect(harness.writes).toHaveLength(writesBeforeInput);
+		expect(harness.pendingFrames()).toBe(0);
+		expect(harness.controller.getSnapshot()).toMatchObject({ following: false, moving: false });
+	});
+
+	it("lets a reveal supersede fold-anchor stabilization through the shared owner", () => {
+		const harness = createHarness();
+		harness.controller.readerLeft();
+		harness.controller.stabilizeAnchor(() => 300);
+		harness.controller.revealTo(() => 700, false);
+		harness.advance(220);
+		expect(harness.writes.at(-1)).toBe(700);
+		expect(harness.pendingFrames()).toBe(0);
+	});
+
 	it("cancels only the active automatic reveal when the user takes over", () => {
 		const harness = createHarness();
 		harness.controller.revealTo(() => 700, true);
@@ -732,6 +763,31 @@ describe("reading-band derived room", () => {
 		harness.advance(220);
 		expect(harness.runwayHeights.at(-1)).toBe(0);
 		expect(harness.controller.getSnapshot().runway).toBe(false);
+	});
+
+	it("keeps runway cleanup when fold anchoring is started and interrupted", () => {
+		const harness = createHarness();
+		harness.setGeometry({
+			scrollTop: 100,
+			maxScrollTop: 100,
+			edgeBottom: 601,
+			runwayBottom: 601,
+		});
+		harness.controller.contentChanged();
+		harness.advance(220);
+		harness.controller.readerLeft();
+		harness.advance(100);
+		expect(harness.runwayHeights.at(-1)).toBeGreaterThan(0);
+
+		harness.controller.stabilizeAnchor(() => 120);
+		harness.controller.cancelReveal();
+		expect(harness.pendingFrames()).toBe(1);
+		harness.advance(220);
+		expect(harness.runwayHeights.at(-1)).toBe(0);
+		expect(harness.controller.getSnapshot()).toMatchObject({
+			following: false,
+			runway: false,
+		});
 	});
 
 	it("reader takeover removes room, detaches, and ignores later growth", () => {

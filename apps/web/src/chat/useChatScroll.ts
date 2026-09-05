@@ -11,6 +11,7 @@ import {
 import type { VirtuosoHandle } from "react-virtuoso";
 import type { ChatRevealOptions } from "./ChatActions";
 import type { ChatMessageOrder, StreamingResponseMovement } from "./chatPreferences";
+import type { FoldAnchorResolver } from "./foldState";
 import {
 	createReadingBandController,
 	headerHeightScrollTarget,
@@ -45,15 +46,58 @@ export interface ChatScroll {
 	scrollerElement: HTMLElement | null;
 	showScrollButton: boolean;
 	scrollButtonLabel: "Follow response" | "Latest" | null;
+	scrollMoving: boolean;
 	scrollToLatest: () => void;
 	armImmediateTurn: () => void;
 	cancelImmediateTurn: (streaming: boolean) => void;
 	cancelAutomaticReveal: () => void;
 	revealElement: (target: HTMLElement, options: ChatRevealOptions) => void;
 	revealRow: (rowId: string, index: number, align: "start" | "center" | "end") => void;
+	prepareFoldChange: (resolveTarget: FoldAnchorResolver) => () => void;
 	runwayActive: boolean;
 	followState: "following" | "detached";
 	containerProps: ScrollContainerProps;
+}
+
+const TRANSIENT_MOTION_CANCEL_KEYS = new Set([
+	" ",
+	"ArrowDown",
+	"ArrowUp",
+	"End",
+	"Enter",
+	"Home",
+	"PageDown",
+	"PageUp",
+	"Tab",
+]);
+
+function nearestHtmlElement(element: Element | null): HTMLElement | null {
+	let current = element;
+	while (current && !(current instanceof HTMLElement)) current = current.parentElement;
+	return current;
+}
+
+function survivesInternalClipping(
+	element: HTMLElement,
+	scroller: HTMLElement,
+	anchorOffset: number,
+): boolean {
+	if (!element.isConnected) return false;
+	const elementRect = element.getBoundingClientRect();
+	if (elementRect.height <= 0 || anchorOffset < 0 || anchorOffset > elementRect.height)
+		return false;
+	const anchor = elementRect.top + anchorOffset;
+	let ancestor = element.parentElement;
+	while (ancestor && ancestor !== scroller) {
+		const { overflowY, visibility } = getComputedStyle(ancestor);
+		if (visibility === "hidden") return false;
+		if (["auto", "clip", "hidden", "scroll"].includes(overflowY)) {
+			const rect = ancestor.getBoundingClientRect();
+			if (anchor <= rect.top || anchor >= rect.bottom) return false;
+		}
+		ancestor = ancestor.parentElement;
+	}
+	return ancestor === scroller;
 }
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
@@ -150,6 +194,8 @@ export function useChatScroll(
 	const latestRowFrame = useRef<number | null>(null);
 	const rowRevealFrame = useRef<number | null>(null);
 	const rowRevealGeneration = useRef(0);
+	const foldResizeObserver = useRef<ResizeObserver | null>(null);
+	const foldSurvivorElement = useRef<HTMLElement | null>(null);
 	const [scrollerElement, setScrollerElement] = useState<HTMLElement | null>(null);
 	const [headerElement, setHeaderElement] = useState<HTMLDivElement | null>(null);
 	const [streamEdgeElement, setStreamEdgeElement] = useState<HTMLDivElement | null>(null);
@@ -257,6 +303,12 @@ export function useChatScroll(
 		rowRevealFrame.current = null;
 	}, []);
 
+	const clearFoldResizeObserver = useCallback(() => {
+		foldResizeObserver.current?.disconnect();
+		foldResizeObserver.current = null;
+		foldSurvivorElement.current = null;
+	}, []);
+
 	const settleTouch = useCallback(() => {
 		if (touchPointerActive.current) return;
 		const scroller = scrollerRef.current;
@@ -283,6 +335,119 @@ export function useChatScroll(
 		cancelRowReveal();
 		controller.readerLeft();
 	}, [cancelRowReveal, clearReturnIntent, controller]);
+
+	const prepareFoldChange = useCallback(
+		(resolveTarget: FoldAnchorResolver) => {
+			let afterChange = false;
+			const complete = () => {
+				afterChange = true;
+				controller.refreshAnchor();
+			};
+			const scroller = scrollerRef.current;
+			const target = resolveTarget();
+			if (!scroller || !target || !scroller.contains(target)) return complete;
+			controller.cancelReveal();
+			clearFoldResizeObserver();
+			if (controller.getSnapshot().following) return complete;
+			const changedRow = target.closest<HTMLElement>("[data-chat-row-id]");
+			const changedRowId = changedRow?.dataset.chatRowId;
+			const changedRowHeight = changedRow?.getBoundingClientRect().height ?? 0;
+			const resolveChangedRow = () =>
+				changedRowId
+					? (Array.from(scroller.querySelectorAll<HTMLElement>("[data-chat-row-id]")).find(
+							(row) => row.dataset.chatRowId === changedRowId,
+						) ?? null)
+					: null;
+			if (changedRow) {
+				foldResizeObserver.current = new ResizeObserver(() => controller.refreshAnchor());
+				foldResizeObserver.current.observe(changedRow);
+			}
+			const viewport = scroller.getBoundingClientRect();
+			const trail = scroller
+				.closest<HTMLElement>("[data-testid=chat-scroll]")
+				?.querySelector<HTMLElement>("[data-testid=activity-breadcrumb-trail]");
+			const unobscuredTop = Math.max(viewport.top, trail?.getBoundingClientRect().bottom ?? 0);
+			const targetRect = target.getBoundingClientRect();
+			const disclosure = target.closest<HTMLElement>("[data-chat-fold-root]") ?? changedRow;
+			const disclosureRect = disclosure?.getBoundingClientRect() ?? targetRect;
+			const targetVisible = targetRect.top >= unobscuredTop && targetRect.bottom <= viewport.bottom;
+			const disclosureAboveViewport = disclosureRect.bottom <= unobscuredTop;
+			const disclosureBelowViewport = disclosureRect.top >= viewport.bottom;
+			const initialScrollTop = boundedScrollTop(scroller);
+			const initialScrollHeight = scroller.scrollHeight;
+			if (targetVisible) {
+				const top = targetRect.top;
+				controller.stabilizeAnchor(() => {
+					if (controller.getSnapshot().following) return null;
+					const currentTarget = resolveTarget();
+					const bounds = scrollBounds(scroller);
+					return currentTarget
+						? bounds.scrollTop + currentTarget.getBoundingClientRect().top - top
+						: null;
+				});
+				return complete;
+			}
+			const centerX = viewport.left + viewport.width / 2;
+			const centerY = viewport.top + viewport.height / 2;
+			const survivorCandidate = target.ownerDocument.elementFromPoint(centerX, centerY);
+			const survivor = scroller.contains(survivorCandidate)
+				? nearestHtmlElement(survivorCandidate)
+				: null;
+			foldSurvivorElement.current = survivor;
+			const survivorTop = survivor?.getBoundingClientRect().top ?? 0;
+			const survivorOffset = centerY - survivorTop;
+			const survivorInsideDisclosure = Boolean(survivor && disclosure?.contains(survivor));
+			const visibleRow = survivor?.closest<HTMLElement>("[data-chat-row-id]");
+			const visibleRowId = visibleRow?.dataset.chatRowId;
+			const visibleRowTop = visibleRow?.getBoundingClientRect().top ?? 0;
+			const resolveVisibleRow = () =>
+				visibleRowId
+					? (Array.from(scroller.querySelectorAll<HTMLElement>("[data-chat-row-id]")).find(
+							(row) => row.dataset.chatRowId === visibleRowId,
+						) ?? null)
+					: null;
+			const alignToTop = targetRect.top < unobscuredTop;
+			controller.stabilizeAnchor(() => {
+				if (controller.getSnapshot().following) return null;
+				const bounds = scrollBounds(scroller);
+				const currentSurvivor = foldSurvivorElement.current;
+				if (
+					currentSurvivor &&
+					survivesInternalClipping(currentSurvivor, scroller, survivorOffset)
+				) {
+					return bounds.scrollTop + currentSurvivor.getBoundingClientRect().top - survivorTop;
+				}
+				if (!survivorInsideDisclosure) {
+					const currentVisibleRow = resolveVisibleRow();
+					if (currentVisibleRow) {
+						return bounds.scrollTop + currentVisibleRow.getBoundingClientRect().top - visibleRowTop;
+					}
+				}
+				if (disclosureAboveViewport) {
+					const currentRow = resolveChangedRow();
+					const heightDelta = currentRow
+						? currentRow.getBoundingClientRect().height - changedRowHeight
+						: scroller.scrollHeight - initialScrollHeight;
+					return initialScrollTop + heightDelta;
+				}
+				if (disclosureBelowViewport) return initialScrollTop;
+				if (!afterChange) return initialScrollTop;
+				const currentTarget = resolveTarget();
+				if (!currentTarget) return null;
+				const currentRect = currentTarget.getBoundingClientRect();
+				const currentViewport = scroller.getBoundingClientRect();
+				const currentTrail = scroller
+					.closest<HTMLElement>("[data-testid=chat-scroll]")
+					?.querySelector<HTMLElement>("[data-testid=activity-breadcrumb-trail]");
+				const destination = alignToTop
+					? Math.max(currentViewport.top, currentTrail?.getBoundingClientRect().bottom ?? 0)
+					: currentViewport.bottom - currentRect.height;
+				return bounds.scrollTop + currentRect.top - destination;
+			});
+			return complete;
+		},
+		[clearFoldResizeObserver, controller],
+	);
 
 	useLayoutEffect(() => {
 		clearReturnIntent();
@@ -311,6 +476,10 @@ export function useChatScroll(
 	useLayoutEffect(() => {
 		controller.setMovement(movement);
 	}, [controller, movement]);
+
+	useEffect(() => {
+		if (!snapshot.moving) clearFoldResizeObserver();
+	}, [clearFoldResizeObserver, snapshot.moving]);
 
 	useLayoutEffect(() => {
 		const row = latestUserRow;
@@ -467,10 +636,11 @@ export function useChatScroll(
 			clearReturnIntent();
 			if (latestRowFrame.current !== null) cancelAnimationFrame(latestRowFrame.current);
 			latestRowFrame.current = null;
+			clearFoldResizeObserver();
 			cancelRowReveal();
 			controller.dispose();
 		},
-		[cancelRowReveal, clearReturnIntent, controller],
+		[cancelRowReveal, clearFoldResizeObserver, clearReturnIntent, controller],
 	);
 
 	const handleScrollerRef = useCallback((element: HTMLElement | Window | null) => {
@@ -687,7 +857,9 @@ export function useChatScroll(
 	useEffect(() => {
 		if (!scrollerElement) return;
 		const onWheel = (event: WheelEvent) => {
-			if (event.deltaY === 0 || !canScrollBy(scrollerElement, event.deltaY)) return;
+			if (event.deltaY === 0) return;
+			controller.cancelReveal();
+			if (!canScrollBy(scrollerElement, event.deltaY)) return;
 			programmaticScrollTop.current = null;
 			cancelRowReveal();
 			const movesTowardLatest = edge === "bottom" ? event.deltaY > 0 : event.deltaY < 0;
@@ -709,12 +881,9 @@ export function useChatScroll(
 
 	const onKeyDown = useCallback(
 		(event: KeyboardEvent) => {
-			if (
-				event.defaultPrevented ||
-				(event.target !== scrollerRef.current && isInteractiveTarget(event.target))
-			) {
-				return;
-			}
+			if (event.defaultPrevented) return;
+			if (TRANSIENT_MOTION_CANCEL_KEYS.has(event.key)) controller.cancelReveal();
+			if (event.target !== scrollerRef.current && isInteractiveTarget(event.target)) return;
 			const movesTowardTop =
 				event.key === "ArrowUp" ||
 				event.key === "PageUp" ||
@@ -773,12 +942,14 @@ export function useChatScroll(
 		scrollerElement,
 		showScrollButton: snapshot.buttonLabel !== null,
 		scrollButtonLabel: snapshot.buttonLabel,
+		scrollMoving: snapshot.moving,
 		scrollToLatest,
 		armImmediateTurn,
 		cancelImmediateTurn,
 		cancelAutomaticReveal,
 		revealElement,
 		revealRow,
+		prepareFoldChange,
 		runwayActive: snapshot.runway,
 		followState: snapshot.following ? "following" : "detached",
 		containerProps: {

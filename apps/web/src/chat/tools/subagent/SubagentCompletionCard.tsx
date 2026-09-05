@@ -32,13 +32,14 @@ export function SubagentCompletionCard({
 	text: string;
 }) {
 	const actions = useChatActions();
-	const [reportOpen, toggleReport] = useFold(`${id}:report`, false);
+	const [reportOpen, toggleReport, reportToggleRef] = useFold(`${id}:report`, false);
 	const role = details.roleName ?? "subagent";
 	const counters = runCounters(details).join(" · ");
 
 	return (
 		<div
 			data-testid="subagent-completion"
+			data-chat-fold-root
 			data-status={details.status}
 			className="flex flex-col gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 tr-text-metadata"
 		>
@@ -77,6 +78,7 @@ export function SubagentCompletionCard({
 			{text ? (
 				<div className="flex flex-col gap-4">
 					<button
+						ref={reportToggleRef}
 						type="button"
 						data-testid="subagent-completion-report-toggle"
 						aria-expanded={reportOpen}

@@ -170,10 +170,11 @@ function GroupDisclosure({
 	summary: string;
 	children: React.ReactNode;
 }) {
-	const [expanded, toggle] = useFold(id);
+	const [expanded, toggle, toggleRef] = useFold(id);
 	return (
 		<div
 			data-testid={testId}
+			data-chat-fold-root
 			data-activity-node-id={id}
 			data-activity-parent-id={parentId}
 			data-activity-node-kind={kind}
@@ -185,6 +186,7 @@ function GroupDisclosure({
 			className="text-text-muted tr-text-metadata"
 		>
 			<button
+				ref={toggleRef}
 				type="button"
 				data-testid={`${testId}-toggle`}
 				data-activity-node-toggle
@@ -305,13 +307,14 @@ function RoutineToolRow({
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
-	const [expanded, toggle] = useFold(step.id);
+	const [expanded, toggle, toggleRef] = useFold(step.id);
 	const status: ToolStatus = step.tool?.status ?? (step.dead ? "error" : "running");
 	const renderProps = toolRenderProps(step, workspaceRoot, onOpenFile);
 	const summary = getToolSummary(step.toolName, renderProps);
 	return (
 		<div
 			data-testid="activity-step"
+			data-chat-fold-root
 			data-activity-node-id={step.id}
 			data-activity-parent-id={parentId}
 			data-activity-node-kind="tool"
@@ -326,6 +329,7 @@ function RoutineToolRow({
 			<StepHeader
 				expanded={expanded}
 				onToggle={toggle}
+				toggleRef={toggleRef}
 				icon={
 					status === "running" ? (
 						<Loader2 className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
@@ -350,18 +354,21 @@ function RoutineToolRow({
 function StepHeader({
 	expanded,
 	onToggle,
+	toggleRef,
 	icon,
 	name,
 	summary,
 }: {
 	expanded: boolean;
 	onToggle: () => void;
+	toggleRef: (element: HTMLButtonElement | null) => void;
 	icon: React.ReactNode;
 	name: string;
 	summary: string;
 }) {
 	return (
 		<button
+			ref={toggleRef}
 			type="button"
 			data-testid="activity-step-toggle"
 			data-activity-node-toggle
