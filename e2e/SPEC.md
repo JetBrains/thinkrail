@@ -85,9 +85,13 @@ write shared placement while the test page is asserting it. The desktop adapter 
 only after Playwright finishes, then requires normal graceful application exit.
 
 This is separate from `smoke:desktop`: native smoke loads the actual packaged ThinkRail UI in the system
-webview, requires DOM-ready plus host health, and quits through the real Electrobun lifecycle. Linux runs
-that smoke under Xvfb with software rendering enabled only in the test environment. The split proves both
-the native-window path and broad browser behavior without introducing two competing clients.
+webview, requires DOM-ready plus host health, and quits through the real Electrobun lifecycle. Its
+platform-native chrome assertions require one content titlebar row; the correct native/app control policy;
+window move, every-edge resize, maximize/restore, minimize, graceful close; Windows snap/system-menu and
+editing accelerators; and accessible app controls where the web shell supplies them. Linux runs that smoke
+under Xvfb with software rendering enabled only in the test environment and drives the GTK compositor path,
+not a JavaScript frame-resize substitute. The split proves both the native-window path and broad browser
+behavior without introducing two competing clients.
 
 JetBrains Central coverage uses a stateful, independently authored fake executable implementing only the
 argv/exit/postcondition surface ThinkRail invokes (`--version`, `status`, `quota --json`, `add pi`,
