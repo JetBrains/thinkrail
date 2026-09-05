@@ -478,10 +478,11 @@ a project picker, the prompt hero, and the reused
   page (`noopener noreferrer` — the app links out and never renders release notes), the channel selector
   when `capabilities.channelSwitch` allows it, the outbound-check toggle
   (`settings.update { updateChecksEnabled }`, converge-on-broadcast like Privacy's), and — for a `staged`
-  update — the *restart to finish* instruction, since `capabilities.restart` is `"manual"` on the CLI
-  host. Everything it offers is read from `UpdateStatus.capabilities`: the panel never learns which
-  launcher it is talking to, so an install button it cannot honour cannot appear, an unknown `phase`
-  reads as a neutral busy line, and a channel switch renders as one *Install* of the other channel
+  update — the *restart to finish* instruction, because no host can yet restart itself. Everything it offers is read from `UpdateStatus.capabilities`: the panel never learns which
+  launcher it is talking to, so an install button it cannot honour cannot appear; an unknown `phase`
+  reads as "Update in progress…" with every mutation disabled (`selectUpdateBusy` — a phase this
+  bundle predates means a newer host is mid-work, and the same branch is what keeps a channel-switch
+  install from reading as "up to date" while it runs), and a channel switch renders as one *Install* of the other channel
   (`UpdateInstallTarget` is one shape for upgrade, downgrade, and crossgrade — the copy tells the truth
   when the target is behind). **`UpdateBanner`** is its dismissible twin for the same state, mounted by
   the shell (arrangement is shell's, see [[submodule-web-shell]]); dismissal is per version via

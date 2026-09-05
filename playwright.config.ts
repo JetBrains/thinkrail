@@ -113,9 +113,7 @@ export default defineConfig({
 			// Register a deterministic fake OAuth provider (`e2e-oauth`) so the in-app login flow is drivable
 			// end-to-end without a real provider/browser (see packages/server/src/dev.ts).
 			THINKRAIL_E2E_FAKE_OAUTH: centralMode ? "0" : "1",
-			// The fake release provider's control *file*: empty (the default) means "no newer release", so a
-			// long-lived lane host never advertises one and no spec's layout shifts under it. See
-			// packages/server/src/dev.ts.
+			// The fake release provider's control *file*, empty by default (see e2e/SPEC.md).
 			...(centralMode ? {} : { THINKRAIL_E2E_FAKE_UPDATE: E2E_UPDATE_CONTROL }),
 			// Analytics: every channel sends now, and `CI` is unset on a developer machine — so the suite
 			// mutes explicitly. Nothing an e2e run does may reach PostHog.

@@ -141,12 +141,15 @@ Linux ARM64. Nightly maps to Electrobun canary and stable maps to stable.
 wire and UI are `submodule-server-update`'s and are already built. This launcher's remaining work is
 one `UpdateProvider`: `check` → `Updater.checkForUpdate`, `install` → `downloadUpdate` (its granular
 `onStatusChange` states coarsened onto `installing` → `staged`), and — unlike the CLI — a real
-`restart` → `applyUpdate`, which asks the same `before-quit` handlers this spec's lifecycle section
-owns and then swaps the app after exit. Electrobun's truth is its **own** channel/platform-prefixed
+restart via `applyUpdate`, which asks the same `before-quit` handlers this spec's lifecycle section
+owns and then swaps the app after exit. That last one is **not just a provider method**: the CLI ships
+no restart capability at all, so the desktop task adds the `restart` capability value, the
+`update.restart` wire method and the client's Restart action together, rather than inheriting a
+capability nothing could honour. Electrobun's truth is its **own** channel/platform-prefixed
 `update.json` under `release.baseUrl`, not the GitHub tag list, which is why the check belongs to the
-provider. Because its channels are separate builds, `capabilities.channelSwitch` is
-`"download-page"`: the panel links the other channel's installer rather than pretending to switch in
-place. Prerequisite outside this package: the release must publish Electrobun updater metadata +
+provider. Because its channels are separate builds, it will need a `channelSwitch` value the CLI does not have
+(link the other channel's installer rather than pretend to switch in place) — again added with the URL
+contract and the UI branch that honour it. Prerequisite outside this package: the release must publish Electrobun updater metadata +
 patches and set `release.baseUrl` (`module-ci-release`).
 
 ### Signing

@@ -68,13 +68,23 @@ output-capturing, and the terminal command is one consumer of it — the in-app 
 - `runUpdate(argv, env)` stays the console front-end (its rendering, exit codes, and the Windows
   manual-command fallback are unchanged). It now also *checks first* via
   `@thinkrail/shared/release`, so re-running it on the newest build says so instead of reinstalling.
+  That skip is `alreadyNewest()` (pure, unit-tested) and it is **conditioned on the target channel
+  being the installed one**: a `--channel` switch is an intent, not a version comparison, and plain
+  semver would refuse both directions of it — a stable build reads as newer than its own channel's
+  nightly, and the newest stable can sit behind the running nightly.
 - `src/updateProvider.ts` is the second front-end: the `UpdateProvider` the launcher passes into
   `bootHost`, implementing `check` (resolve the newest release for the resolved channel, compare
   against the baked version) and `install` (the same executor, with the resolved version **pinned**
-  into the installer call so it cannot re-resolve to a different build). It supplies **no `restart`**
-  — the CLI host does not restart itself; the app tells the user to. `capabilities.install` is `false`
-  for `0.0.0-dev`, so a source run and a locally compiled binary never reach the network. See
-  `submodule-server-update` for the port and `module-shared`'s `/release` for the feed.
+  into the installer call so it cannot re-resolve to a different build). The CLI host does not restart
+  itself; the app tells the user to, and no restart capability crosses the wire.
+  `capabilities.install` is `false` for `0.0.0-dev` **and** whenever `process.execPath` is not the
+  binary the install metadata names — running copy A while `install.json` records prefix B would
+  otherwise replace B, report success, and tell the user to restart into a build that never changes.
+  Its `installationId` is that same owned binary path, which is what scopes the host's staged record
+  in the shared data dir. `paths.ts` owns the one derivation of that path (`installedPrefix` /
+  `installedBinaryPath`), shared with `uninstall`, so the updater and the uninstaller cannot disagree
+  about which copy is ours. See `submodule-server-update` for the port and `module-shared`'s
+  `/release` for the feed.
 
 - **Unix:** `curl` the script, feed it to `bash -s -- --channel … --prefix … [--version …]`.
 - **Windows:** fetch `install.ps1`, write it to a temp `.ps1`, and run it through the first available
@@ -141,8 +151,9 @@ worktrees and any uncommitted work in them. pi's own state (`~/.pi`) is never to
   Stale `.old`/`.new` leftovers in the bin dir are swept too.
 - `src/powershell.ts` is the shared seam for both Windows paths (find a host, run a script text through
   it, `psQuote` a value into a single-quoted literal). `src/paths.ts` owns the *installed* layout —
-  `install.json` (read by `update` + `uninstall`) and the staging cache root (written by
-  `compiled-entry`, deleted by `uninstall`) — so those three agree by construction.
+  `install.json` (read by `update` + `uninstall`), the prefix/binary derivation both of them resolve
+  through, and the staging cache root (written by `compiled-entry`, deleted by `uninstall`) — so those
+  three agree by construction.
 
 ## Version stamping (release seam)
 

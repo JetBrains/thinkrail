@@ -557,6 +557,7 @@ export function normalizeThemePreference(value: unknown): ThemePreference {
 		themeMode,
 		...(systemThemePair ? { systemThemePair } : {}),
 	};
+}
 
 export const RELEASE_CHANNELS = ["stable", "nightly"] as const;
 export type ReleaseChannel = (typeof RELEASE_CHANNELS)[number];

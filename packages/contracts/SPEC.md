@@ -237,14 +237,16 @@ of the host.
   `UpdateStatus`;
   **`UpdateStatus`** — the whole release-awareness surface as one snapshot: `current`
   (`{ version, channel: ReleaseChannel | "dev", commit? }`), **`UpdateCapabilities`**
-  (`install` — false for a `0.0.0-dev` build or an install this host cannot replace; `restart`
-  (`"self" | "manual"`) — whether the host can bring itself back or the user must; `channelSwitch`
-  (`"in-app" | "download-page" | "unsupported"`); and the offerable `channels`), `phase`
+  (`install` — false for a `0.0.0-dev` build, an install this host does not own, or a host with no
+  updater at all; `channelSwitch` (`"in-app" | "unsupported"`); and the offerable `channels`), `phase`
   (`idle | checking | available | installing | staged | error`), optional **`AvailableRelease`**
   (`{ version, channel, notesUrl, publishedAt? }` — a link out, never rendered release notes),
   `staged` (on disk, awaiting a restart), `lastCheckedAt`, `dismissedVersion` (banner-only silence),
   and `error` (`kind: "manual" | "failed"` — `manual` is "here is the command", not a fault). The
-  capabilities are the client's **only** input for what to offer: a client never infers a launcher.
+  capabilities are the client's **only** input for what to offer: a client never infers a launcher, and
+  a capability value exists only once a client can actually honour it — a launcher that can restart
+  itself (desktop, later) arrives together with its wire method and its button, never as an
+  unhonourable promise.
   An unknown `phase` renders as a neutral busy line, which is what lets a host add one without a
   lockstep client release. **`UpdateInstallTarget`** (`{ channel, version? }`) is one shape for
   upgrade, downgrade *and* channel switch. `ReleaseChannel` (`"stable" | "nightly"`) is the published

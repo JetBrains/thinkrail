@@ -33,8 +33,10 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   **`applyUpdateStatus(status)`** folds the `update.status` snapshot, whose seed rides the welcome (see
   [[submodule-server-update]]); its render decisions are selectors, not component logic —
   `selectUpdateFeatureAvailable` (the `UPDATE_PROTOCOL_VERSION` gate), `selectUpdateBanner` (what the
-  banner shows, already accounting for `dismissedVersion`) and `selectUpdateIndicator` (whether the
-  topbar gear carries a badge — deliberately *not* silenced by a dismissal, which is banner-only). **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
+  banner shows, already accounting for `dismissedVersion`), `selectUpdateIndicator` (whether the
+  topbar gear carries a badge — deliberately *not* silenced by a dismissal, which is banner-only) and
+  `selectUpdateBusy` (any phase that is not one of the four settled ones, so a phase minted by a newer
+  host disables mutations instead of reading as "up to date"). **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
   known open + closed project. **`applyProjectUpdated(project)`** is the one full-snapshot updater for
   `project.updated` pushes and authoritative project-mutation responses: it upserts/sorts Recents and either
   upserts/sorts the rail or removes the row when `closed === true`. Both actions reconcile stale navigation
@@ -327,7 +329,7 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Chat`/`Layout`/`Terminal`/`Templates`/`Review`/`Privacy`/`Feedback`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Chat`/`Layout`/`Terminal`/`Templates`/`Review`/`Privacy`/`Updates`/`Feedback`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
   to a section without prop-drilling through the shell. The ephemeral **`interviewPromptOpen`** plus
@@ -515,7 +517,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
   through this; callers fall back to the snapshot when the ref has left the catalog);
   the update selectors (`selectUpdateFeatureAvailable`, `selectUpdateIndicator`, `selectUpdateBanner`,
-  `selectHostVersionChanged`),
+  `selectUpdateBusy`, `selectHostVersionChanged`),
   `toast` (the fire-from-anywhere helper),
   `Toast` (type), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
   (file/diff/virtual-document/plan/chat), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
