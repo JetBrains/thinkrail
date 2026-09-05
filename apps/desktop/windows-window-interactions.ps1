@@ -49,6 +49,9 @@ public static class ThinkRailWindowProbe {
     [DllImport("user32.dll")]
     public static extern int GetSystemMetrics(int index);
 
+    [DllImport("user32.dll")]
+    public static extern uint GetDpiForWindow(IntPtr hwnd);
+
     public static RECT ReadRect(IntPtr hwnd) {
         RECT rect;
         if (!GetWindowRect(hwnd, out rect)) throw new InvalidOperationException("GetWindowRect failed");
@@ -162,11 +165,15 @@ foreach ($edge in $edges) {
 }
 
 $beforeResize = Reset-Window
+$dpi = [ThinkRailWindowProbe]::GetDpiForWindow($window)
+$topHandleY = [Math]::Round(16 * $dpi / 96)
+$topHandleX = [Math]::Round(($beforeResize.Left + $beforeResize.Right) / 2)
+Write-Host "Windows native smoke DPI: $dpi"
 [ThinkRailWindowProbe]::Drag(
     $window,
-    $beforeResize.Left + 400,
-    $beforeResize.Top + 16,
-    $beforeResize.Left + 400,
+    $topHandleX,
+    $beforeResize.Top + $topHandleY,
+    $topHandleX,
     $beforeResize.Top - 19
 )
 Wait-ForRect {
