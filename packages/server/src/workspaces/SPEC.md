@@ -14,6 +14,9 @@ A workspace is a `git worktree` on its own branch under the data dir — the anc
 chats. Its **display `name` is decoupled from its git `branch`**: `name` is a human-readable label
 (Title Case, spaces) and `branch` is a kebab slug derived from it — they were once held equal, and still
 coincide for the auto `workspace-N` placeholder, but a named workspace carries both distinctly.
+**`suggestWorkspaceName`** exposes that placeholder before creation (the same `workspace-N` scan the
+create path runs) so a client can show the name it is about to get; it reserves nothing, and the
+creating call still resolves the name itself.
 
 Two kinds are **user-owned** — ThinkRail uses their cwd but never renames or reclaims them. Every project
 carries **exactly one built-in Default workspace** (`kind: "default"`) whose `worktreePath` is the project
@@ -209,7 +212,7 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
-  `setWorkspaceSubagentsOverride`.
+  `setWorkspaceSubagentsOverride`, `suggestWorkspaceName`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

@@ -14,23 +14,23 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await expect(dialog).toBeVisible();
 
-	await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
-	await expect(dialog).toContainText("A separate checkout on its own new branch");
+	await expect(dialog.getByRole("heading", { name: "Start work" })).toBeVisible();
+	await expect(dialog).toContainText("A separate git worktree on its own new branch");
 	await expect(dialog.getByTestId("ws-prompt-note")).toHaveCount(0);
-	await expect(dialog).toContainText("Files, chats, changes, and terminals stay scoped to it");
 	await expect(dialog.getByTestId("ws-target-worktree")).toHaveAttribute("data-active", "true");
 
 	await dialog.getByTestId("ws-target-default").click();
-	await expect(dialog.getByRole("heading", { name: "Work in project folder" })).toBeVisible();
-	await expect(dialog).toContainText("no isolation");
+	await expect(dialog).toContainText("No isolation");
 	await expect(dialog.getByTestId("ws-branch-picker")).toHaveCount(0);
+	await expect(dialog.getByTestId("ws-current-branch")).toContainText("main");
 	await expect(page.getByTestId("create-workspace")).toHaveText(/Start/);
 	await dialog.getByTestId("ws-target-worktree").click();
-	await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
+	await expect(dialog).toContainText("A separate git worktree on its own new branch");
 	await expect(dialog.getByTestId("ws-branch-picker")).toBeVisible();
 	await expect(page.getByTestId("create-workspace")).toHaveText(/Create/);
 
 	await expect(dialog.getByTestId("ws-project-picker")).toContainText("sample-project");
+	await expect(dialog.getByTestId("ws-name")).toHaveValue("workspace-1");
 
 	const branchPicker = dialog.getByTestId("ws-branch-picker");
 	await expect(branchPicker).toContainText("From");
@@ -96,6 +96,31 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
+});
+
+test("an edited name names the worktree, and the placeholder leaves naming to the host", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await page.getByTestId("add-workspace").first().click();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+
+	const name = dialog.getByTestId("ws-name");
+	await expect(name).toHaveValue("workspace-1");
+	await dialog.getByTestId("ws-prompt").fill("rework the login screen");
+	await expect(dialog.getByTestId("workspace-naming-hint")).toBeVisible();
+
+	await name.fill("Login Rework");
+	await expect(dialog.getByTestId("workspace-naming-hint")).toHaveCount(0);
+
+	await page.getByTestId("create-workspace").click();
+	await expect(dialog).toBeHidden();
+	await expect(worktreeRows(page)).toHaveCount(1);
+	await expect(page.getByTestId("scope-context")).toContainText("Login Rework");
+
+	await page.getByTestId("add-workspace").first().click();
+	await expect(dialog.getByTestId("ws-name")).toHaveValue("workspace-1");
 });
 
 test("folder-mode Start with an empty prompt lands in a fresh chat in the Default workspace", async ({

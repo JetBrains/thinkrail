@@ -160,6 +160,7 @@ import {
 	setWorkspaceDiffBase,
 	setWorkspaceSkillOverride,
 	setWorkspaceSubagentsOverride,
+	suggestWorkspaceName,
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
@@ -315,6 +316,9 @@ const handlers: Record<string, Handler> = {
 		const p = params as { projectId: string; name?: string; baseRef?: string };
 		return provisionInitialTerminal(await createWorkspace(p.projectId, p.name, p.baseRef));
 	},
+	"workspace.suggestName": (params) => ({
+		name: suggestWorkspaceName((params as { projectId: string }).projectId),
+	}),
 	"workspace.listExisting": (params) =>
 		listExistingWorktrees((params as { projectId: string }).projectId),
 	"workspace.openExisting": async (params) => {

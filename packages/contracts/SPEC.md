@@ -352,6 +352,8 @@ of the host.
   returning `JbcentralActionResult`; none accepts an executable, artifact path, output, URL, or secret from
   the client) / **`jbcentralQuota`** (v59; optional `force` bypasses completed-cache age but still joins an
   in-flight read; disabled/unhealthy returns `hidden` without invoking quota)) /
+  **`workspace.suggestName`** (the next free `workspace-N` for a project — the placeholder the New
+  Workspace dialog shows before the user renames it; suggesting reserves nothing) /
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /

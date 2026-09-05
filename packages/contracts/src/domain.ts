@@ -280,6 +280,7 @@ export interface BranchList {
 	local: string[];
 	remote: string[];
 	defaultBranch: string;
+	current: string;
 }
 
 export type ProviderAuthKind = "oauth" | "api-key" | "env" | "other";

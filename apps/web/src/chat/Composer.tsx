@@ -722,6 +722,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							refreshing={modelsRefreshing}
 							onRefresh={onRefreshModels}
 							onSelect={onSelectModel}
+							showLabel={false}
 							className="max-w-80 gap-4 px-4 sm:max-w-144"
 						/>
 						<ThinkingSelector

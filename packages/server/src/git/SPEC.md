@@ -139,7 +139,9 @@ ref off the workspace-create critical path.
   failures throw, and a normal nonzero with a still-present ref throws instead of impersonating absence — the host's
   `workspace.openReview` composes it onto an open review (in parallel with the gh lookup, not after
   it) so the plan page can flag commits the PR doesn't have yet; `listBranches(projectId)` → `{ local, remote,
-  defaultBranch }` (local `refs/heads`, remote `refs/remotes/origin` minus `origin/HEAD`, default =
+  defaultBranch, current }` (local `refs/heads`, remote `refs/remotes/origin` minus `origin/HEAD`,
+  `current` = the repo's checked-out branch, so a caller that offers no base — the New Workspace dialog in
+  folder mode — can still name where the work will land; default =
   `origin/HEAD`→`origin/main`→repo `HEAD`; either ref-list failure throws, never a successful partial catalog),
   **`resolveDefaultBranch(repoPath)`** — that default-branch
   resolution factored out (named once), shared by `listBranches` and the `workspaces` module's

@@ -91,7 +91,7 @@ export async function listBranches(projectId: string): Promise<BranchList> {
 		.map((parts) => parts[0] ?? "")
 		.filter(Boolean);
 
-	return { local, remote, defaultBranch: resolveDefaultBranch(repo) };
+	return { local, remote, defaultBranch: resolveDefaultBranch(repo), current: currentBranch(repo) };
 }
 
 export function resolveDefaultBranch(repoPath: string): string {

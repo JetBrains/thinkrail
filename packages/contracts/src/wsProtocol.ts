@@ -89,7 +89,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 59;
+export const PROTOCOL_VERSION = 60;
 export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
 export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
 export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;
@@ -133,6 +133,7 @@ export const WS_METHODS = {
 	projectSetGroupEnabled: "project.setGroupEnabled",
 	projectSkills: "project.skills",
 	workspaceCreate: "workspace.create",
+	workspaceSuggestName: "workspace.suggestName",
 	workspaceRename: "workspace.rename",
 	workspaceListExisting: "workspace.listExisting",
 	workspaceOpenExisting: "workspace.openExisting",
@@ -335,6 +336,7 @@ export interface WsMethodMap {
 		params: { projectId: string; name?: string; baseRef?: string };
 		result: Workspace;
 	};
+	"workspace.suggestName": { params: { projectId: string }; result: { name: string } };
 	"workspace.rename": { params: { id: string; name: string }; result: Workspace };
 	"workspace.listExisting": {
 		params: { projectId: string };

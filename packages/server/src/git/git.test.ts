@@ -206,11 +206,12 @@ test("listBranches surfaces origin branches and the origin default", async () =>
 	git(repo, "push", "origin", "main");
 	git(repo, "remote", "set-head", "origin", "main");
 
-	const { remote, defaultBranch } = await listBranches("p1");
+	const { remote, defaultBranch, current } = await listBranches("p1");
 	expect(remote).toContain("origin/main");
 	expect(remote).not.toContain("origin/HEAD");
 	expect(remote).not.toContain("origin");
 	expect(defaultBranch).toBe("origin/main");
+	expect(current).toBe("main");
 });
 
 test("listBranches throws on an unknown project", async () => {
