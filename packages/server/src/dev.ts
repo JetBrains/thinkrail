@@ -4,6 +4,7 @@ import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { configurePiRuntimeGenerationInitializer } from "./agent";
 import { initializeJbcentralRuntime } from "./auth";
 import { bootHost } from "./host";
+import type { UpdateProvider } from "./update";
 
 resolveShellEnv();
 
@@ -83,6 +84,46 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 	});
 }
 
+const fakeUpdateControl = process.env.THINKRAIL_E2E_FAKE_UPDATE;
+const readUpdateControl = async (): Promise<string> => {
+	if (!fakeUpdateControl) return "";
+	try {
+		return (await Bun.file(fakeUpdateControl).text()).trim();
+	} catch {
+		return "";
+	}
+};
+const fakeUpdateProvider: UpdateProvider | undefined = fakeUpdateControl
+	? {
+			capabilities: { install: true, channelSwitch: "in-app", channels: ["stable", "nightly"] },
+			installationId: "e2e-fake-update",
+			current: { version: "1.2.3", channel: "stable" },
+			async check() {
+				if ((await readUpdateControl()) === "") return null;
+				return {
+					version: "1.4.0",
+					channel: "stable",
+					notesUrl: "https://e2e.test/releases/tag/v1.4.0",
+					publishedAt: "2026-05-04T00:00:00Z",
+				};
+			},
+			async install(target) {
+				if ((await readUpdateControl()) === "manual") {
+					return {
+						kind: "manual",
+						message: "no PowerShell found",
+						command: "irm https://e2e.test/install.ps1 | iex",
+					};
+				}
+				return {
+					kind: "staged",
+					version: target.version ?? "1.4.0",
+					channel: target.channel,
+				};
+			},
+		}
+	: undefined;
+
 await initializeJbcentralRuntime();
 
 const host = process.env.THINKRAIL_HOST ?? "localhost";
@@ -95,5 +136,6 @@ const { port } = await bootHost({
 	portMode: envPort ? "exact" : "free",
 	...(staticDir ? { staticDir } : {}),
 	analytics: { channel: "dev", build: "source" },
+	...(fakeUpdateProvider ? { updateProvider: fakeUpdateProvider } : {}),
 });
 console.log(`thinkrail host: http://${host}:${port}`);

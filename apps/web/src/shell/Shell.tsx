@@ -13,12 +13,15 @@ import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
+import { UpdateBanner } from "../panels/UpdateBanner";
 import { openReviewLabel, useOpenBranchReview } from "../panels/useOpenBranchReview";
 import { WelcomePanel } from "../panels/WelcomePanel";
 import {
 	isUserOwnedWorkspace,
 	selectActiveWorkspace,
 	selectContextProject,
+	selectHostVersionChanged,
+	selectUpdateIndicator,
 	useAppStore,
 } from "../store";
 import {
@@ -58,6 +61,13 @@ export function Shell() {
 	const contextProject = useAppStore(selectContextProject);
 	const { review: openReview } = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
+	const updateIndicator = useAppStore(selectUpdateIndicator);
+	const hostReplaced = useAppStore(selectHostVersionChanged);
+
+	useEffect(() => {
+		if (hostReplaced) window.location.reload();
+	}, [hostReplaced]);
+	const settingsLabel = updateIndicator ? "Settings — an update is ready" : "Settings";
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
@@ -109,7 +119,7 @@ export function Shell() {
 			: {}),
 	});
 	return (
-		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
+		<div data-testid="shell" className="grid h-full grid-rows-[auto_auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-16 py-8">
 				<div className="flex min-w-0 items-center gap-12">
 					<BrandLogo />
@@ -176,20 +186,33 @@ export function Shell() {
 							{STATUS_LABEL[status]}
 						</span>
 					</span>
-					<IconTooltip label="Settings">
-						<button
-							type="button"
-							data-testid="open-settings"
-							aria-label="Settings"
-							onClick={() => useAppStore.getState().openSettings()}
-							className="flex size-28 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-						>
-							<Settings className="size-16" />
-						</button>
+					<IconTooltip label={settingsLabel}>
+						<span className="relative inline-flex">
+							<button
+								type="button"
+								data-testid="open-settings"
+								aria-label={settingsLabel}
+								onClick={() => useAppStore.getState().openSettings()}
+								className="flex size-28 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+							>
+								<Settings className="size-16" />
+							</button>
+							{updateIndicator ? (
+								<span
+									data-testid="update-indicator"
+									data-kind={updateIndicator}
+									aria-hidden="true"
+									className="pointer-events-none absolute top-0 right-0 size-8 rounded-full bg-primary"
+								/>
+							) : null}
+						</span>
 					</IconTooltip>
 				</div>
 				<SettingsDialog layoutSettings={<LayoutSettings />} />
 			</header>
+			<div>
+				<UpdateBanner />
+			</div>
 			{hasActiveWorkspace && activeWorkspaceId ? (
 				<div data-testid="workspace-shell-layout" className="h-full min-h-0 min-w-0">
 					<WorkspaceWorkbench key={activeWorkspaceId} workspaceId={activeWorkspaceId} />

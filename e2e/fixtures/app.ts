@@ -21,6 +21,7 @@ import {
 	E2E_PI_MODELS_SEED,
 	E2E_PICK_DIR_POINTER,
 	E2E_PLAIN_DIR,
+	E2E_UPDATE_CONTROL,
 } from "./paths";
 import { fixtureRepoHealthy, seedFixtureRepo } from "./repo";
 
@@ -60,6 +61,7 @@ function resetState(): void {
 		rmSync(`${modelsPath}.bak`, { force: true });
 	}
 	writeFileSync(E2E_CENTRAL_STATE, "");
+	writeFileSync(E2E_UPDATE_CONTROL, "");
 	rmSync(E2E_CENTRAL_LOG, { force: true });
 
 	if (!fixtureRepoHealthy()) seedFixtureRepo();

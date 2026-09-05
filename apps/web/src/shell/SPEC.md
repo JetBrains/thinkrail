@@ -13,7 +13,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 ## Boundary
 
-- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-workspace versus Project Home/Welcome branching; single Settings, interview-invitation, and Toaster mounts; the theme DOM side effect; global keyboard chords; the injected Layout settings section; and integration of the pure workbench engine with Zustand, local persistence, panel renderers, transport-backed domain state, and region error boundaries.
+- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-workspace versus Project Home/Welcome branching; single Settings, interview-invitation, update-banner, and Toaster mounts; the post-update page reload; the theme DOM side effect; global keyboard chords; the injected Layout settings section; and integration of the pure workbench engine with Zustand, local persistence, panel renderers, transport-backed domain state, and region error boundaries.
 - **Public surface:** `Shell`.
 - **Allowed deps:** child layout modules; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, and `themes`.
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
@@ -58,6 +58,17 @@ interprets Central directly.
 
 With an active workspace, `Shell` mounts the workbench projection of the window's singular frame and that workspace's local view. Switching workspace changes resource contents and attention but never frame topology, Projects/Specs/Files/Changes/Review placement, side/bottom geometry, folds, visibility, or alignment. Shell-owned wrappers around Projects, Files, and Specs use `components/QuietScrollArea`, as does the Project Home navigator; Changes/Review and xterm own their internal quiet-scroll surfaces in `panels`. These primitives never receive or infer placement. `react-resizable-panels` cannot reconcile a panel-count change in place, so switching to a workspace whose default preset has a different shape (e.g. Balanced ↔ Focus) forces the aligned-row and outer `ResizablePanelGroup`s to remount; they carry `motion-safe:animate-fade-in` (an opacity-only twin of `animate-reveal` — no `transform`, since these subtrees can contain ChatView's `position: sticky` breadcrumbs) so the shape change reads as a soft cross-fade rather than a jump. Without an active workspace, Shell mounts Welcome beside the projects navigator using separate local geometry. The Settings dialog, addressed interview invitation, and Toasts each mount once above both branches.
 After `main.tsx`'s synchronous first-paint apply, Shell is the sole mounted theme side-effect owner. While `welcomeGeneration === 0` it retains the versioned preference hint; afterward it projects store's opaque fixed id + fixed/system mode + optional pair through `themes` and writes the reconciled hint. Fixed mode has no media listener. System mode owns exactly one `prefers-color-scheme` listener, reapplies the locally resolved slot on change, and cleans it up on preference/unmount; that local event never mutates store, calls the host, or changes another client. No other component mutates `[data-theme]`.
+
+Release awareness lands in this chrome as two quiet affordances plus one side effect. The topbar gear
+carries a badge while an update is available or staged (`selectUpdateIndicator`), and its label says so.
+The dismissible `UpdateBanner` mounts once between the header and the branching content — arrangement
+stays here, never in a panel — inside a **slot element that is always rendered**: the shell's grid assigns
+rows positionally, so a child that disappears when there is no update slides the whole workbench into the
+header-sized row and collapses every panel (the e2e suite's geometry specs are what caught it). And because a host can be replaced under an open tab
+(the normal end of an update), shell is also the owner of the **post-update reload**: when
+`selectHostVersionChanged` turns true it reloads the page once, so the served bundle and the host it talks to
+are never a mismatched pair. It is the same class of decision as the theme side effect — a DOM-level act
+the composition root performs on store truth, not a transport or panel concern.
 
 ## Workbench behavior
 

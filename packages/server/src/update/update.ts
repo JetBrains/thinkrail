@@ -1,0 +1,381 @@
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import type {
+	AvailableRelease,
+	ReleaseChannel,
+	UpdateCapabilities,
+	UpdateInstallTarget,
+	UpdateStatus,
+} from "@thinkrail/contracts";
+import { isReleaseChannel } from "@thinkrail/contracts";
+import { logger } from "../log";
+import { dataDir } from "../persistence";
+
+const log = logger("update");
+
+const BOOT_DELAY_MS = 30_000;
+const INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+export type InstallOutcome =
+	| { kind: "staged"; version: string; channel: ReleaseChannel }
+	| { kind: "manual"; message: string; command?: string }
+	| { kind: "failed"; message: string; retryable: boolean };
+
+export interface UpdateProvider {
+	readonly capabilities: UpdateCapabilities;
+	readonly installationId: string;
+	readonly current: { version: string; channel: ReleaseChannel | "dev"; commit?: string };
+	check(signal: AbortSignal): Promise<AvailableRelease | null>;
+	install(target: UpdateInstallTarget): Promise<InstallOutcome>;
+}
+
+export interface StartUpdatesOptions {
+	provider?: UpdateProvider;
+	appVersion?: string;
+	checksEnabled?: boolean;
+	bootDelayMs?: number;
+	intervalMs?: number;
+}
+
+type UpdatePublisher = (status: UpdateStatus) => void;
+
+interface StagedRelease {
+	version: string;
+	channel: ReleaseChannel;
+	from: string;
+	installationId: string;
+}
+
+interface UpdateRecord {
+	dismissedVersion?: string | undefined;
+	staged?: StagedRelease | undefined;
+	lastCheckedAt?: number | undefined;
+}
+
+interface Operation {
+	kind: "checking" | "installing";
+	token: symbol;
+}
+
+interface Internals {
+	provider: UpdateProvider | null;
+	appVersion: string;
+	checksEnabled: boolean;
+	generation: number;
+	operation: Operation | null;
+	available?: AvailableRelease | undefined;
+	record: UpdateRecord;
+	error?: UpdateStatus["error"] | undefined;
+	inFlightCheck: Promise<UpdateStatus> | null;
+	abort: AbortController | null;
+	bootTimer: ReturnType<typeof setTimeout> | null;
+	intervalTimer: ReturnType<typeof setInterval> | null;
+	intervalMs: number;
+	bootDelayMs: number;
+}
+
+const NO_PROVIDER: Internals = {
+	provider: null,
+	appVersion: "0.0.0-dev",
+	checksEnabled: true,
+	generation: 0,
+	operation: null,
+	record: {},
+	inFlightCheck: null,
+	abort: null,
+	bootTimer: null,
+	intervalTimer: null,
+	intervalMs: INTERVAL_MS,
+	bootDelayMs: BOOT_DELAY_MS,
+};
+
+let state: Internals = { ...NO_PROVIDER };
+let publisher: UpdatePublisher | null = null;
+
+function recordFile(): string {
+	return join(dataDir(), "update.json");
+}
+
+function parseRecord(value: unknown): UpdateRecord {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+	const candidate = value as Record<string, unknown>;
+	const record: UpdateRecord = {};
+	if (typeof candidate.dismissedVersion === "string") {
+		record.dismissedVersion = candidate.dismissedVersion;
+	}
+	if (typeof candidate.lastCheckedAt === "number" && Number.isFinite(candidate.lastCheckedAt)) {
+		record.lastCheckedAt = candidate.lastCheckedAt;
+	}
+	const staged = candidate.staged as Record<string, unknown> | undefined;
+	if (
+		staged &&
+		typeof staged.version === "string" &&
+		isReleaseChannel(staged.channel) &&
+		typeof staged.from === "string" &&
+		typeof staged.installationId === "string"
+	) {
+		record.staged = {
+			version: staged.version,
+			channel: staged.channel,
+			from: staged.from,
+			installationId: staged.installationId,
+		};
+	}
+	return record;
+}
+
+function loadRecord(): UpdateRecord {
+	try {
+		return parseRecord(JSON.parse(readFileSync(recordFile(), "utf8")));
+	} catch {
+		return {};
+	}
+}
+
+function saveRecord(record: UpdateRecord): void {
+	const file = recordFile();
+	const temporary = `${file}.${process.pid}.tmp`;
+	try {
+		mkdirSync(dataDir(), { recursive: true });
+		writeFileSync(temporary, `${JSON.stringify(record, null, "\t")}\n`, "utf8");
+		renameSync(temporary, file);
+	} catch (err) {
+		try {
+			rmSync(temporary, { force: true });
+		} catch {}
+		log.warn(`could not persist update state: ${err instanceof Error ? err.message : err}`);
+	}
+}
+
+function capabilities(): UpdateCapabilities {
+	return (
+		state.provider?.capabilities ?? { install: false, channelSwitch: "unsupported", channels: [] }
+	);
+}
+
+function ownStagedRelease(): StagedRelease | undefined {
+	const staged = state.record.staged;
+	if (!staged) return undefined;
+	return staged.installationId === state.provider?.installationId ? staged : undefined;
+}
+
+function snapshot(): UpdateStatus {
+	const provider = state.provider;
+	const current = provider?.current ?? { version: state.appVersion, channel: "dev" as const };
+	const staged = ownStagedRelease();
+	const phase: UpdateStatus["phase"] =
+		state.operation?.kind ??
+		(staged ? "staged" : state.error ? "error" : state.available ? "available" : "idle");
+	return {
+		current,
+		capabilities: capabilities(),
+		phase,
+		...(state.available ? { available: state.available } : {}),
+		...(staged ? { staged: { version: staged.version, channel: staged.channel } } : {}),
+		...(state.record.lastCheckedAt ? { lastCheckedAt: state.record.lastCheckedAt } : {}),
+		...(state.record.dismissedVersion ? { dismissedVersion: state.record.dismissedVersion } : {}),
+		...(state.error ? { error: state.error } : {}),
+	};
+}
+
+function publish(): UpdateStatus {
+	const status = snapshot();
+	publisher?.(status);
+	return status;
+}
+
+function canInstall(): boolean {
+	return state.provider?.capabilities.install === true;
+}
+
+function canPoll(): boolean {
+	return canInstall() && state.checksEnabled;
+}
+
+function clearTimers(): void {
+	if (state.bootTimer) clearTimeout(state.bootTimer);
+	if (state.intervalTimer) clearInterval(state.intervalTimer);
+	state.bootTimer = null;
+	state.intervalTimer = null;
+}
+
+function scheduleChecks(): void {
+	clearTimers();
+	if (!canPoll()) return;
+	state.bootTimer = setTimeout(() => {
+		void checkForUpdate().catch(() => {});
+	}, state.bootDelayMs);
+	state.bootTimer.unref?.();
+	state.intervalTimer = setInterval(() => {
+		void checkForUpdate().catch(() => {});
+	}, state.intervalMs);
+	state.intervalTimer.unref?.();
+}
+
+export function setUpdatePublisher(next: UpdatePublisher | null): void {
+	publisher = next;
+}
+
+function ownsOperation(generation: number, token: symbol): boolean {
+	return state.generation === generation && state.operation?.token === token;
+}
+
+function releaseOperation(generation: number, token: symbol): void {
+	if (!ownsOperation(generation, token)) return;
+	state.operation = null;
+	state.inFlightCheck = null;
+	state.abort = null;
+}
+
+export function startUpdates(options: StartUpdatesOptions = {}): UpdateStatus {
+	clearTimers();
+	state.abort?.abort();
+	const generation = state.generation + 1;
+	state = {
+		...NO_PROVIDER,
+		generation,
+		provider: options.provider ?? null,
+		appVersion: options.appVersion ?? NO_PROVIDER.appVersion,
+		checksEnabled: options.checksEnabled ?? true,
+		record: loadRecord(),
+		bootDelayMs: options.bootDelayMs ?? BOOT_DELAY_MS,
+		intervalMs: options.intervalMs ?? INTERVAL_MS,
+	};
+
+	const staged = ownStagedRelease();
+	const running = state.provider?.current.version;
+	if (staged && running && running !== staged.from) {
+		state.record = { ...state.record, staged: undefined };
+		saveRecord(state.record);
+	}
+
+	scheduleChecks();
+	return publish();
+}
+
+export function stopUpdates(): void {
+	clearTimers();
+	state.abort?.abort();
+	state.abort = null;
+	state.inFlightCheck = null;
+	state.operation = null;
+}
+
+export function getUpdateStatus(): UpdateStatus {
+	return snapshot();
+}
+
+export function setUpdateChecksEnabled(enabled: boolean): void {
+	if (state.checksEnabled === enabled) return;
+	state.checksEnabled = enabled;
+	if (enabled) {
+		scheduleChecks();
+		return;
+	}
+	clearTimers();
+	state.abort?.abort();
+}
+
+export function checkForUpdate(): Promise<UpdateStatus> {
+	if (state.operation?.kind === "checking" && state.inFlightCheck) return state.inFlightCheck;
+	if (state.operation || !canInstall()) return Promise.resolve(snapshot());
+	const provider = state.provider as UpdateProvider;
+
+	const abort = new AbortController();
+	const generation = state.generation;
+	const token = Symbol("check");
+	state.abort = abort;
+	state.operation = { kind: "checking", token };
+	publish();
+
+	const run = (async (): Promise<UpdateStatus> => {
+		try {
+			const found = await provider.check(abort.signal);
+			if (ownsOperation(generation, token)) {
+				state.available = found ?? undefined;
+				state.error = undefined;
+				state.record = { ...state.record, lastCheckedAt: Date.now() };
+				saveRecord(state.record);
+			}
+		} catch (err) {
+			if (ownsOperation(generation, token) && !abort.signal.aborted) {
+				state.error = {
+					kind: "failed",
+					message: err instanceof Error ? err.message : String(err),
+					retryable: true,
+				};
+				log.debug(`release check failed: ${state.error.message}`);
+			}
+		} finally {
+			releaseOperation(generation, token);
+		}
+		return publish();
+	})();
+
+	state.inFlightCheck = run;
+	return run;
+}
+
+export async function installUpdate(target: UpdateInstallTarget): Promise<UpdateStatus> {
+	const provider = state.provider;
+	if (!provider?.capabilities.install) {
+		throw new Error("this ThinkRail host cannot install updates");
+	}
+	if (state.operation?.kind === "installing") return snapshot();
+
+	state.abort?.abort();
+	const generation = state.generation;
+	const token = Symbol("install");
+	state.operation = { kind: "installing", token };
+	state.error = undefined;
+	publish();
+
+	try {
+		const outcome = await provider.install(target);
+		if (state.generation !== generation) return snapshot();
+		if (outcome.kind === "staged") {
+			state.record = {
+				...state.record,
+				staged: {
+					version: outcome.version,
+					channel: outcome.channel,
+					from: provider.current.version,
+					installationId: provider.installationId,
+				},
+				dismissedVersion: undefined,
+			};
+			saveRecord(state.record);
+			state.available = undefined;
+		} else {
+			state.error = {
+				kind: outcome.kind === "manual" ? "manual" : "failed",
+				message: outcome.message,
+				retryable: outcome.kind === "failed" ? outcome.retryable : false,
+				...(outcome.kind === "manual" && outcome.command ? { command: outcome.command } : {}),
+			};
+		}
+	} catch (err) {
+		if (state.generation !== generation) return snapshot();
+		state.error = {
+			kind: "failed",
+			message: err instanceof Error ? err.message : String(err),
+			retryable: true,
+		};
+	} finally {
+		releaseOperation(generation, token);
+	}
+	return publish();
+}
+
+export function dismissUpdate(version: string): UpdateStatus {
+	state.record = { ...state.record, dismissedVersion: version };
+	saveRecord(state.record);
+	return publish();
+}
+
+export function resetUpdateState(): void {
+	clearTimers();
+	state.abort?.abort();
+	state = { ...NO_PROVIDER };
+	publisher = null;
+}

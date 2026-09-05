@@ -472,9 +472,28 @@ a project picker, the prompt hero, and the reused
   levels (fetched once from `model.default`) instead of an empty list. And an
   **auto-fix toggle** (`review-autofix-toggle`, a switch over `store.reviewAutoFix` →
   `settings.update { reviewAutoFix }`) — off means a `request_changes` verdict records findings and waits
-  (the host gates its auto-fix cycle on it, see `submodule-server-todos`). A single dimmed "General" nav item ("Soon") still signals the shell is
+  (the host gates its auto-fix cycle on it, see `submodule-server-todos`). **`UpdatesSettings`** is the release surface: the running
+  version + channel (from `server.welcome`'s `appVersion`, finally rendered somewhere), a last-checked
+  line with *Check now*, the available release with *Install* and a *What's new* anchor to the release
+  page (`noopener noreferrer` — the app links out and never renders release notes), the channel selector
+  when `capabilities.channelSwitch` allows it, the automatic-check toggle
+  (`settings.update { updateChecksEnabled }`, converge-on-broadcast like Privacy's) — which governs the
+  host's *polling* only, so *Check now* stays available with it off, and — for a `staged`
+  update — the *restart to finish* instruction, because no host can yet restart itself. Everything it offers is read from `UpdateStatus.capabilities`: the panel never learns which
+  launcher it is talking to, so an install button it cannot honour cannot appear; an unknown `phase`
+  reads as "Update in progress…" with every mutation disabled (`selectUpdateBusy` — a phase this
+  bundle predates means a newer host is mid-work, and the same branch is what keeps a channel-switch
+  install from reading as "up to date" while it runs), and a channel switch renders as one *Install* of the other channel
+  (`UpdateInstallTarget` is one shape for upgrade, downgrade, and crossgrade — the copy tells the truth
+  when the target is behind). **`UpdateBanner`** is its dismissible twin for the same state, mounted by
+  the shell (arrangement is shell's, see [[submodule-web-shell]]); dismissal is per version via
+  `update.dismiss`, so it stays quiet for that release and speaks up for the next. **Both kinds are
+  dismissible** — including "restart to finish", which would otherwise be a bar that can only be removed
+  by restarting; the badge and the panel keep reporting it, and installing a release clears the dismissal
+  it may have carried as *available*, so the two decisions never collapse into one. A single dimmed
+  "General" nav item ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`AppearanceSettings`/`ChatSettings`/`TemplatesSettings`/
-  `PrivacySettings`/`ReviewSettings`/`FeedbackSettings` and the app-wide **`InterviewPromptDialog`** are the
+  `PrivacySettings`/`ReviewSettings`/`FeedbackSettings`/`UpdatesSettings`/`UpdateBanner` and the app-wide **`InterviewPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and
   fixed Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
   middle-button booking activation open Calendar immediately and record `book`; close, Escape, and backdrop record `postpone`; permanent

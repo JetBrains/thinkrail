@@ -50,13 +50,57 @@ git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PO
 `THINKRAIL_STATIC_DIR` (flag > env > default). `THINKRAIL_NO_ANALYTICS` is documented in `--help` but
 deliberately **not** parsed here — the host's analytics module is its single reader (see below).
 
-## Self-update (`thinkrail update`)
+## Self-update (`thinkrail update`) + the in-app update provider
 
 `src/update.ts` ports the old repo's `thinkrail upgrade` (renamed): it re-invokes the **published
 installer** for the binary's channel — `install.sh` on macOS/Linux, `install.ps1` on Windows — so the
 installer stays the single source of the download → checksum → replace → PATH logic. Channel/prefix
 resolve the same way on both: flag > `~/.config/thinkrail/install.json` > baked channel (from
 `version.ts`; `dev` → `stable`) / `~/.local`.
+
+**Three layers, two front-ends.** Plan resolution is pure, plan *execution* is async and
+output-capturing, and the terminal command is one consumer of it — the in-app updater is the other:
+
+- `executeUpdatePlan(plan)` fetches the installer and runs it **without `spawnSync`**, returning a
+  structured outcome. This is not a style preference: the host runs on one event loop, and a
+  synchronous installer run would freeze every session for the whole download — the failure class
+  `subprocess`' bounded runner exists to prevent. Every step of it is **bounded**
+  (15 minutes for the installer, 60s for fetching the script and for `curl`'s own `--max-time`), and
+  it is bounded **as a process tree, not as one child**: `runInstallerScript` spawns `bash` in its own
+  process group and the deadline signals *that group* (SIGTERM, then SIGKILL after a grace), because
+  `install.sh` waits on a foreground `curl` — signalling only `bash` leaves that `curl` holding the
+  inherited pipes, and a read waiting for their EOF never returns. For the same reason the result is
+  never allowed to wait on EOF: past the deadline it settles on the child's close or a short drain
+  grace, whichever comes first, and reports what was captured (Windows: `taskkill /T /F` plus the same
+  bounded drain). Why any of this matters more than a slow download: the host holds a **single update
+  operation slot**, so one stalled installer would leave the app in `installing` — refusing every later
+  check and install — until the process restarts. Both pipes are also drained concurrently; Bun happens
+  to buffer them eagerly, but the drain order is not a runtime detail worth depending on.
+- `runUpdate(argv, env)` stays the console front-end (its rendering, exit codes, and the Windows
+  manual-command fallback are unchanged). It now also *checks first* via
+  `@thinkrail/shared/release`, so re-running it on the newest build says so instead of reinstalling.
+  That skip is `alreadyNewest()` (pure, unit-tested) and it is **conditioned on the target channel
+  being the installed one**: a `--channel` switch is an intent, not a version comparison, and plain
+  semver would refuse both directions of it — a stable build reads as newer than its own channel's
+  nightly, and the newest stable can sit behind the running nightly.
+- `src/updateProvider.ts` is the second front-end: the `UpdateProvider` the launcher passes into
+  `bootHost`, implementing `check` (resolve the newest release for the resolved channel, compare
+  against the baked version) and `install` (the same executor, with the resolved version **pinned**
+  into the installer call so it cannot re-resolve to a different build). The CLI host does not restart
+  itself; the app tells the user to, and no restart capability crosses the wire.
+  `capabilities.install` is `false` for `0.0.0-dev` **and** whenever `process.execPath` is not the
+  binary the install metadata names — running copy A while `install.json` records prefix B would
+  otherwise replace B, report success, and tell the user to restart into a build that never changes.
+  Its `installationId` is that same owned binary path, which is what scopes the host's staged record
+  in the shared data dir. `install.json` is **global and mutable**, so ownership is resolved once at
+  construction and the install runs against *that* metadata, re-checking **after the release lookup and
+  immediately before execution** (a channel switch awaits the feed first, and a manual install landing
+  during that request must not be overtaken) that the recorded install still resolves to the binary this
+  provider owns — a manual install to another prefix
+  mid-session would otherwise make this host replace that copy and then report itself as staged. `paths.ts` owns the one derivation of that path (`installedPrefix` /
+  `installedBinaryPath`), shared with `uninstall`, so the updater and the uninstaller cannot disagree
+  about which copy is ours. See `submodule-server-update` for the port and `module-shared`'s
+  `/release` for the feed.
 
 - **Unix:** `curl` the script, feed it to `bash -s -- --channel … --prefix … [--version …]`.
 - **Windows:** fetch `install.ps1`, write it to a temp `.ps1`, and run it through the first available
@@ -123,8 +167,9 @@ worktrees and any uncommitted work in them. pi's own state (`~/.pi`) is never to
   Stale `.old`/`.new` leftovers in the bin dir are swept too.
 - `src/powershell.ts` is the shared seam for both Windows paths (find a host, run a script text through
   it, `psQuote` a value into a single-quoted literal). `src/paths.ts` owns the *installed* layout —
-  `install.json` (read by `update` + `uninstall`) and the staging cache root (written by
-  `compiled-entry`, deleted by `uninstall`) — so those three agree by construction.
+  `install.json` (read by `update` + `uninstall`), the prefix/binary derivation both of them resolve
+  through, and the staging cache root (written by `compiled-entry`, deleted by `uninstall`) — so those
+  three agree by construction.
 
 ## Version stamping (release seam)
 
@@ -275,14 +320,17 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   `src/compiled-entry.ts`, `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`,
   `src/runtime-assets.generated.*`),
   `src/update.ts` (the `update`
-  subcommand), `src/uninstall.ts` (the `uninstall` subcommand), `src/paths.ts` (the installed layout:
+  subcommand + the shared plan executor), `src/updateProvider.ts` (the `UpdateProvider` this launcher
+  injects), `src/uninstall.ts` (the `uninstall` subcommand), `src/paths.ts` (the installed layout:
   `install.json` + the staging cache root), and `src/powershell.ts` (the Windows PowerShell seam). Central
   integration remains a server/auth feature; the launcher has no Central subcommand or protocol implementation.
 - **Allowed deps:** `@thinkrail/server` (`bootHost`, `registerBundledRuntime`, build-support and artifact-probe subpaths, `dataDir` — the
   uninstaller has to name the app state dir, and must name the *same* one the host uses — plus the
   test-only `history-test-fixtures` subpath in the artifact smoke to seed a real pi transcript),
   `@thinkrail/shared/startupMark` (the shared boot
-  signature renderer) + `@thinkrail/shared/version` (the shared release identity), Bun/Node; the generated build module may
+  signature renderer) + `@thinkrail/shared/version` (the shared release identity) +
+  `@thinkrail/shared/release` (the published-release feed both update front-ends resolve through),
+  Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).
 - **Forbidden:** product feature/domain logic; reaching into the server's internals (use only its public

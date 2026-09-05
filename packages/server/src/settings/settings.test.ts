@@ -289,6 +289,18 @@ test("a non-boolean subagents update is rejected before persistence or broadcast
 	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
 });
 
+test("a non-boolean update-check switch is rejected before anything changes", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+	const invalid = { updateChecksEnabled: "off" } as unknown as AppConfigUpdate;
+
+	expect(() => updateConfig(invalid)).toThrow("updateChecksEnabled must be a boolean");
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+});
+
 test("a failed config write leaves the live cache and publisher unchanged", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));

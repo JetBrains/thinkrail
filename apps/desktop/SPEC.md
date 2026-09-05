@@ -135,7 +135,22 @@ no such mapping and always resolves the real package. The adapter is a compatibi
 runtime fork, and must stay limited to APIs the launcher and preload actually consume.
 
 Desktop installers ship beside the CLI artifacts for macOS ARM64, Windows x64, Linux x64, and
-Linux ARM64. Nightly maps to Electrobun canary and stable maps to stable. Updater UX is deferred.
+Linux ARM64. Nightly maps to Electrobun canary and stable maps to stable.
+
+**Update UX is host-shared; only the provider is desktop's.** The release-awareness state, cadence,
+wire and UI are `submodule-server-update`'s and are already built. This launcher's remaining work is
+one `UpdateProvider`: `check` → `Updater.checkForUpdate`, `install` → `downloadUpdate` (its granular
+`onStatusChange` states coarsened onto `installing` → `staged`), and — unlike the CLI — a real
+restart via `applyUpdate`, which asks the same `before-quit` handlers this spec's lifecycle section
+owns and then swaps the app after exit. That last one is **not just a provider method**: the CLI ships
+no restart capability at all, so the desktop task adds the `restart` capability value, the
+`update.restart` wire method and the client's Restart action together, rather than inheriting a
+capability nothing could honour. Electrobun's truth is its **own** channel/platform-prefixed
+`update.json` under `release.baseUrl`, not the GitHub tag list, which is why the check belongs to the
+provider. Because its channels are separate builds, it will need a `channelSwitch` value the CLI does not have
+(link the other channel's installer rather than pretend to switch in place) — again added with the URL
+contract and the UI branch that honour it. Prerequisite outside this package: the release must publish Electrobun updater metadata +
+patches and set `release.baseUrl` (`module-ci-release`).
 
 ### Signing
 
@@ -187,5 +202,6 @@ CI-only and are never shipped as user configuration.
 
 ## Deferred
 
-Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, a signed and
-notarized macOS `.dmg` (see above), and Electrobun updater UX.
+Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, and a signed
+and notarized macOS `.dmg` (see above). The Electrobun updater provider is the *next* task, not a
+deferral: its seam and every surface around it already exist (see *Build and release*).

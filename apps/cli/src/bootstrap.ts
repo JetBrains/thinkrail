@@ -6,6 +6,7 @@ import { channel, version } from "@thinkrail/shared/version";
 import { type CliOptions, parseArgs, parseSubcommand, USAGE } from "./args";
 import { runUninstall } from "./uninstall";
 import { runUpdate } from "./update";
+import { createCliUpdateProvider } from "./updateProvider";
 
 const DEFAULT_STATIC_DIR = resolve(import.meta.dir, "../../web/dist");
 
@@ -65,6 +66,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 			build,
 			mute: options.noAnalytics,
 		},
+		updateProvider: createCliUpdateProvider({ env: process.env }),
 		...(options.projectDir ? { projectPath: resolve(process.cwd(), options.projectDir) } : {}),
 	});
 	if (port !== requested) {

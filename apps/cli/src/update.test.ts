@@ -1,10 +1,16 @@
 import { describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
+	alreadyNewest,
 	parseUpdateArgs,
 	resolveUpdatePlan,
 	resolveWindowsInstallPrefix,
 	resolveWindowsPrefix,
 	resolveWindowsUpdatePlan,
+	runInstallerScript,
 	windowsManualUpdateMessage,
 } from "./update";
 
@@ -268,5 +274,101 @@ describe("resolveWindowsPrefix", () => {
 		]) {
 			expect(() => resolveWindowsPrefix(bad, home)).toThrow("suspicious install prefix");
 		}
+	});
+});
+
+describe("alreadyNewest", () => {
+	test("skips a same-channel re-install of the build already running", () => {
+		expect(
+			alreadyNewest({
+				current: "2.0.0",
+				latest: "2.0.0",
+				installedChannel: "stable",
+				targetChannel: "stable",
+			}),
+		).toBe(true);
+	});
+
+	test("never skips a channel switch, in either direction", () => {
+		// stable 2.0.0 → nightly 2.0.0-nightly.5: semver says the running build is newer, but the
+		// user asked to change channel, so the install must happen.
+		expect(
+			alreadyNewest({
+				current: "2.0.0",
+				latest: "2.0.0-nightly.5",
+				installedChannel: "stable",
+				targetChannel: "nightly",
+			}),
+		).toBe(false);
+		// nightly 2.1.0-nightly.1 → stable 2.0.0 is a deliberate downgrade.
+		expect(
+			alreadyNewest({
+				current: "2.1.0-nightly.1",
+				latest: "2.0.0",
+				installedChannel: "nightly",
+				targetChannel: "stable",
+			}),
+		).toBe(false);
+	});
+
+	test("an unresolved feed never skips the install", () => {
+		expect(
+			alreadyNewest({
+				current: "2.0.0",
+				latest: undefined,
+				installedChannel: "stable",
+				targetChannel: "stable",
+			}),
+		).toBe(false);
+	});
+
+	test("a newer release does not skip", () => {
+		expect(
+			alreadyNewest({
+				current: "2.0.0",
+				latest: "2.1.0",
+				installedChannel: "stable",
+				targetChannel: "stable",
+			}),
+		).toBe(false);
+	});
+});
+
+describe("runInstallerScript", () => {
+	const budget = { env: { ...process.env }, capture: true, timeoutMs: 30_000 };
+
+	test("returns the installer's own exit code and both streams", async () => {
+		const result = await runInstallerScript("echo out; echo err >&2; exit 3", ["-s"], budget);
+		expect(result.timedOut).toBe(false);
+		expect(result.exitCode).toBe(3);
+		expect(result.output).toContain("out");
+		expect(result.output).toContain("err");
+	});
+
+	test("a chatty installer cannot stall the read", async () => {
+		const result = await runInstallerScript(
+			"printf 'x%.0s' {1..300000} >&2; echo done",
+			["-s"],
+			budget,
+		);
+		expect(result.timedOut).toBe(false);
+		expect(result.output).toContain("done");
+		expect(result.output.length).toBeGreaterThan(300_000);
+	});
+
+	test("the deadline terminates the installer's descendants, not just bash", async () => {
+		// The real shape of the hazard: install.sh waits on a foreground curl, so killing only bash
+		// leaves a descendant holding the inherited pipes — and the host's single update slot would
+		// stay `installing` forever waiting for an EOF that never comes.
+		const marker = join(tmpdir(), `trpi-descendant-${randomUUID()}`);
+		const started = Date.now();
+		const result = await runInstallerScript(`( sleep 20; touch ${marker} ) & wait`, ["-s"], {
+			...budget,
+			timeoutMs: 200,
+		});
+		expect(result.timedOut).toBe(true);
+		expect(Date.now() - started).toBeLessThan(15_000);
+		await Bun.sleep(300);
+		expect(existsSync(marker)).toBe(false);
 	});
 });

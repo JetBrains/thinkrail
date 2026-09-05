@@ -232,6 +232,27 @@ of the host.
   `server.welcome`, mutated via `settings.update`).
   **`InterviewResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic
   feedback popup. No usage count, eligibility, dismissal state, or client identity crosses the wire.
+  `AppConfig.updateChecksEnabled` (default `true`) is the **automatic**-release-check switch — the only
+  update *preference* on the wire, and it governs the host's polling alone: `update.check` means
+  "force one check" and stays honoured with it off; everything else the feature remembers is host state inside
+  `UpdateStatus`;
+  **`UpdateStatus`** — the whole release-awareness surface as one snapshot: `current`
+  (`{ version, channel: ReleaseChannel | "dev", commit? }`), **`UpdateCapabilities`**
+  (`install` — false for a `0.0.0-dev` build, an install this host does not own, or a host with no
+  updater at all; `channelSwitch` (`"in-app" | "unsupported"`); and the offerable `channels`), `phase`
+  (`idle | checking | available | installing | staged | error`), optional **`AvailableRelease`**
+  (`{ version, channel, notesUrl, publishedAt? }` — a link out, never rendered release notes),
+  `staged` (on disk, awaiting a restart), `lastCheckedAt`, `dismissedVersion` (banner-only silence),
+  and `error` (`kind: "manual" | "failed"` — `manual` is "here is the command", not a fault). The
+  capabilities are the client's **only** input for what to offer: a client never infers a launcher, and
+  a capability value exists only once a client can actually honour it — a launcher that can restart
+  itself (desktop, later) arrives together with its wire method and its button, never as an
+  unhonourable promise.
+  An unknown `phase` renders as a neutral busy line, which is what lets a host add one without a
+  lockstep client release. **`UpdateInstallTarget`** (`{ channel, version? }`) is one shape for
+  upgrade, downgrade *and* channel switch. `ReleaseChannel` (`"stable" | "nightly"`) is the published
+  channel pair `module-ci-release` produces. **Deliberately absent:** any "is it safe to restart"
+  field — streaming chats and live terminals are already client-side facts.
   Contracts deliberately exports no theme catalog enum/list/labels: a future manifest can mint an id
   unknown when the host was built, and a client missing it resolves a same-appearance bundled fallback;
   **`SpecGraphNode`/`SpecGraphSnapshot`** — the
@@ -432,11 +453,18 @@ of the host.
   (**`template.list`**, **`template.get`**
   — `scope` optional, project wins over global, **`template.save`**, **`template.delete`**) — all
   read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
+  plus the **`update.*` set** — **`update.check`** (force one check; the schedule is the host's),
+  **`update.install`** (an `UpdateInstallTarget`) and **`update.dismiss`** (silence the banner for a
+  version) — each answering the fresh `UpdateStatus` so a caller converges without a second read.
+  **`UPDATE_PROTOCOL_VERSION`** pins their introduction so an independently shipped older client hides
+  the feature instead of calling methods its host lacks,
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
   (open records) and **`recentProjects`** (all known records, open + closed), plus **`hostPlatform`**
   (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
   offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from
-  the browser / **`project.updated`** — the
+  the browser, plus **`update`** (the current `UpdateStatus`, optional for older hosts) — the same
+  seed-then-converge shape as `config`: the channel carries transitions, so a page that loads *after* a
+  check would otherwise know nothing until the next one / **`project.updated`** — the
   full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
   atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
   **`session.created`** (the initial `SessionSummary`, broadcast when a new host-owned session registers so
@@ -444,7 +472,9 @@ of the host.
   session id; a non-replayable domain event broadcast after permanent deletion so every client removes the chat
   and blocks stale hydration) /
   **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
-  client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to the host-claimed
+  client converges) / **`update.status`** (the full `UpdateStatus` after every
+  transition; the *seed* is `server.welcome`'s `update`, so a reloaded page starts from truth rather than
+  from the next transition) / **`feedback.interview`** (an empty, addressed invitation sent only to the host-claimed
   frontend; not broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen

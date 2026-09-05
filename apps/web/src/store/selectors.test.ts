@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
+import type { Project, UpdateStatus, WireModel, Workspace } from "@thinkrail/contracts";
+import { UPDATE_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
 import type { EditorTab } from "./appStore";
 import {
@@ -18,11 +19,16 @@ import {
 	selectCatalogModel,
 	selectContextProject,
 	selectHistoryTarget,
+	selectHostVersionChanged,
 	selectKnownChatLocation,
 	selectLayoutResourcePlacement,
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
 	selectSkillsStale,
+	selectUpdateBanner,
+	selectUpdateBusy,
+	selectUpdateFeatureAvailable,
+	selectUpdateIndicator,
 	specPathMatcher,
 } from "./selectors";
 
@@ -453,4 +459,141 @@ test("selectAgentReviewCommentCount counts only OPEN agent-authored comments", (
 	expect(selectAgentReviewCommentCount(state, "w1")).toBe(2);
 	expect(selectAgentReviewCommentCount(state, "missing")).toBe(0);
 	expect(selectAgentReviewCommentCount(state, null)).toBe(0);
+});
+
+function updateState(
+	status: Partial<UpdateStatus> | null,
+	protocolVersion = UPDATE_PROTOCOL_VERSION,
+) {
+	return {
+		protocolVersion,
+		updateStatus: status
+			? ({
+					current: { version: "1.3.0", channel: "stable" },
+					capabilities: {
+						install: true,
+						restart: "manual",
+						channelSwitch: "in-app",
+						channels: ["stable", "nightly"],
+					},
+					phase: "idle",
+					...status,
+				} as UpdateStatus)
+			: null,
+	};
+}
+
+const AVAILABLE = {
+	version: "1.4.0",
+	channel: "stable" as const,
+	notesUrl: "https://example.invalid/v1.4.0",
+};
+
+test("the update surface stays hidden against a host that predates it", () => {
+	const older = updateState(
+		{ phase: "available", available: AVAILABLE },
+		UPDATE_PROTOCOL_VERSION - 1,
+	);
+	expect(selectUpdateFeatureAvailable(older)).toBe(false);
+	expect(selectUpdateIndicator(older)).toBeNull();
+	expect(selectUpdateBanner(older)).toBeNull();
+	expect(selectUpdateIndicator(updateState(null))).toBeNull();
+});
+
+test("the indicator reports only the two states worth a badge", () => {
+	expect(selectUpdateIndicator(updateState({ phase: "idle" }))).toBeNull();
+	expect(selectUpdateIndicator(updateState({ phase: "checking" }))).toBeNull();
+	expect(selectUpdateIndicator(updateState({ phase: "error" }))).toBeNull();
+	expect(selectUpdateIndicator(updateState({ phase: "available", available: AVAILABLE }))).toBe(
+		"available",
+	);
+	expect(
+		selectUpdateIndicator(
+			updateState({ phase: "staged", staged: { version: "1.4.0", channel: "stable" } }),
+		),
+	).toBe("staged");
+});
+
+test("a later failed check does not hide a release that is still available", () => {
+	// The host keeps `available` on a failed check, so the news must survive a transient
+	// six-hourly failure instead of disappearing until the next successful one.
+	const state = updateState({
+		phase: "error",
+		available: AVAILABLE,
+		error: { kind: "failed", message: "offline", retryable: true },
+	});
+	expect(selectUpdateIndicator(state)).toBe("available");
+	expect(selectUpdateBanner(state)).toMatchObject({ kind: "available", version: "1.4.0" });
+});
+
+test("a check in flight does not hide the release the previous one found", () => {
+	const state = updateState({ phase: "checking", available: AVAILABLE });
+	expect(selectUpdateIndicator(state)).toBe("available");
+});
+
+test("a dismissed version silences the banner but not the badge", () => {
+	const state = updateState({
+		phase: "available",
+		available: AVAILABLE,
+		dismissedVersion: "1.4.0",
+	});
+	expect(selectUpdateBanner(state)).toBeNull();
+	expect(selectUpdateIndicator(state)).toBe("available");
+});
+
+test("a dismissal does not carry to the next release", () => {
+	const state = updateState({
+		phase: "available",
+		available: { ...AVAILABLE, version: "1.5.0" },
+		dismissedVersion: "1.4.0",
+	});
+	expect(selectUpdateBanner(state)).toEqual({
+		kind: "available",
+		version: "1.5.0",
+		notesUrl: AVAILABLE.notesUrl,
+		channel: "stable",
+	});
+});
+
+test("the restart-to-finish banner is dismissible too, and the badge still reports it", () => {
+	const staged = updateState({
+		phase: "staged",
+		staged: { version: "1.4.0", channel: "stable" },
+	});
+	expect(selectUpdateBanner(staged)).toEqual({
+		kind: "staged",
+		version: "1.4.0",
+		channel: "stable",
+	});
+
+	const dismissed = updateState({
+		phase: "staged",
+		staged: { version: "1.4.0", channel: "stable" },
+		dismissedVersion: "1.4.0",
+	});
+	expect(selectUpdateBanner(dismissed)).toBeNull();
+	expect(selectUpdateIndicator(dismissed)).toBe("staged");
+});
+
+test("selectHostVersionChanged fires only once a different host answers", () => {
+	expect(selectHostVersionChanged({ appVersion: null, bootAppVersion: null })).toBe(false);
+	expect(selectHostVersionChanged({ appVersion: "1.3.0", bootAppVersion: "1.3.0" })).toBe(false);
+	expect(selectHostVersionChanged({ appVersion: "1.4.0", bootAppVersion: "1.3.0" })).toBe(true);
+	expect(selectHostVersionChanged({ appVersion: "1.4.0", bootAppVersion: null })).toBe(false);
+});
+
+test("a phase this client does not know reads as busy, never as settled", () => {
+	// A newer host emits a phase this bundle predates (e.g. desktop's download/restart states).
+	const unknown = updateState({ phase: "downloading" as UpdateStatus["phase"] });
+	expect(selectUpdateBusy(unknown)).toBe(true);
+	expect(selectUpdateIndicator(unknown)).toBeNull();
+	expect(selectUpdateBanner(unknown)).toBeNull();
+
+	for (const phase of ["idle", "available", "staged", "error"] as const) {
+		expect(selectUpdateBusy(updateState({ phase }))).toBe(false);
+	}
+	for (const phase of ["checking", "installing"] as const) {
+		expect(selectUpdateBusy(updateState({ phase }))).toBe(true);
+	}
+	expect(selectUpdateBusy(updateState(null))).toBe(false);
 });

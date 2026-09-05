@@ -17,6 +17,7 @@ import type {
 	TemplateScope,
 	ThinkingLevel,
 	TodoStatus,
+	UpdateInstallTarget,
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
@@ -145,6 +146,7 @@ import {
 	type TodoReviewRecord,
 	updateTodo,
 } from "../todos";
+import { checkForUpdate, dismissUpdate, installUpdate } from "../update";
 import { ensureWatch, stopWatch } from "../watch";
 import {
 	createWorkspace,
@@ -762,6 +764,9 @@ const handlers: Record<string, Handler> = {
 		const config = (params as { config: AppConfigUpdate }).config;
 		return updateConfig(config);
 	},
+	"update.check": () => checkForUpdate(),
+	"update.install": (params) => installUpdate(params as UpdateInstallTarget),
+	"update.dismiss": (params) => dismissUpdate((params as { version: string }).version),
 	"feedback.respond": (params) => {
 		respondToInterview((params as { action: InterviewResponse }).action);
 		return { ok: true } as const;

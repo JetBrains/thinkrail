@@ -148,10 +148,20 @@ channel, download the platform asset + `SHA256SUMS`, verify the checksum, and dr
 Both depend on the **artifact-name contract** this module produces (`thinkrail-<os>-<arch>` with `os` ∈
 {`linux`,`darwin`,`windows`}, `arch` ∈ {`x64`,`arm64`}, `.exe` on Windows) and the `SHA256SUMS` file —
 change the asset names in `_build.yml`/`build-binary` and **both installers** must change in lockstep.
-The README documents the user-facing install. `thinkrail update` (the CLI's self-update, see
-`module-cli`) re-invokes `install.sh` on macOS/Linux — the installers stay the one place the
-download/verify/PATH logic lives; on Windows it prints the `install.ps1` one-liner instead of updating
-in place.
+The README documents the user-facing install. `thinkrail update` and the in-app updater (the CLI's
+self-update, see `module-cli`) both re-invoke these installers — they stay the one place the
+download/verify/PATH logic lives: `install.sh` through `bash` on macOS/Linux, `install.ps1` through a
+resolved PowerShell host on Windows, where the printed one-liner is the *fallback* for a Windows
+failure rather than the normal path.
+
+The **published tags are also the app's update feed.** `install.sh`'s `resolve_tag` (stable =
+`releases/latest`, nightly = the newest `vX.Y.Z-nightly.N` in `releases?per_page=20`) is mirrored in
+`@thinkrail/shared/release` for the in-app check, and an in-app install **pins** the version it resolved
+into the installer call so the two can never disagree (`module-shared`). Two consequences for this
+module: a channel whose newest release is a draft is invisible to the app exactly as it is to the
+installers, and renaming a tag pattern breaks release awareness alongside both installers. Publishing
+Electrobun's updater metadata + patches (needed by the desktop update provider, `module-desktop`)
+remains the open release-side gap.
 
 ## Boundary
 

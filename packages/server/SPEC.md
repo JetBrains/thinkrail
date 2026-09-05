@@ -35,7 +35,10 @@ e2e).
   `bun build --compile` binary or packaged Electrobun server runtime) injects them as value-imported factories + a staged skills dir, injects
   the staged macOS/Windows OS-trash helper paths, and registers pi's statically-bundled provider flows
   (the OAuth flows + the Bedrock module) that pi otherwise reaches through binary-hostile
-  variable-specifier dynamic imports (see the agent SPEC). Build-only
+  variable-specifier dynamic imports (see the agent SPEC). Plus the
+  **`UpdateProvider`** port types (`UpdateProvider`, `InstallOutcome`, re-exported from `update/`): a launcher implements one and hands it to `createServer`/`bootHost`, which
+  is how release awareness stays one implementation across the CLI binary and the desktop app (see
+  [[submodule-server-update]]). Build-only
   **`@thinkrail/server/build-support`** is the single manifest of bundled extension entries, skill roots,
   per-platform `bun-pty` libraries, and trash helpers consumed by both launcher packagers. Test-only
   **`@thinkrail/server/artifact-probes`** owns the shared host-level artifact fixture/assertions behind thin
@@ -90,6 +93,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `editors` | detect installed editors/IDEs, launch one at a worktree, reveal a worktree in the file manager | [editors/SPEC.md](src/editors/SPEC.md) |
 | `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
 | `templates` | file CRUD over pi's prompt-template dirs (global + project scoped) | [templates/SPEC.md](src/templates/SPEC.md) |
+| `update` | release awareness + install orchestration behind one launcher-injected `UpdateProvider` | [update/SPEC.md](src/update/SPEC.md) |
 
 `src/index.ts` re-exports `host` + the `agent` barrel's `registerBundledRuntime` seam; explicit package
 subpaths expose build support and artifact probes without widening the runtime barrel. `src/dev.ts` boots
@@ -99,7 +103,9 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`, `feedback`, `update`, `log`, `persistence` (`dataDir`, for the crash report)
+- `update` → `persistence` (its own record) — the launcher's `UpdateProvider` reaches it as a
+  `createServer` option `host` forwards, never as an import; `update` has no sibling edge at all
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
@@ -132,7 +138,8 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 `setSessionPublisher` + `setSessionCreatedPublisher` + `setSessionDeletedPublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
 `project.updated` lifecycle, `workspaces`' `setWorkspacePublisher` for the
 `workspace.created`/`updated`/`removed` lifecycle trio, `settings`' `setSettingsPublisher` for
-`settings.changed`, `feedback`'s addressed invitation publisher, and auth's Central action analytics +
+`settings.changed`, `feedback`'s addressed invitation publisher, `update`'s `setUpdatePublisher` for
+`update.status`, and auth's Central action analytics +
 `provider.changed` invalidation publishers) that
 `host` installs at `createServer`—so channel/analytics wiring lives only in `host`. Current layout has no
 host module, persistence, method, or publisher.
@@ -150,6 +157,10 @@ registry-free too — it takes a plain `cwd`, never a `workspaceId`; the `templa
 Analytics is host-mediated the same way: **every `track()` call site lives in `host`** (boot,
 session-create, login-success observation), and `host` syncs `setAnalyticsSending` off the settings
 broadcast — `analytics` has no `settings` edge and no feature module knows analytics exists.
+
+Update checking is host-mediated the same way: `settings` owns the `updateChecksEnabled` preference and
+`host` tees it into `update.setUpdateChecksEnabled` off the same settings broadcast that feeds
+`setAnalyticsSending`; `update` has no `settings` edge.
 
 Subagent availability is also host-mediated: `settings` owns the global default, `workspaces` owns the
 optional local override, and `host` injects their effective value into `agent` plus requests live-session

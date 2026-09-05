@@ -97,6 +97,10 @@ export function loadConfig(): AppConfig {
 		jbcentralQuotaRefreshSeconds: isJbcentralQuotaRefreshSeconds(value.jbcentralQuotaRefreshSeconds)
 			? value.jbcentralQuotaRefreshSeconds
 			: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
+		updateChecksEnabled:
+			typeof value.updateChecksEnabled === "boolean"
+				? value.updateChecksEnabled
+				: DEFAULT_CONFIG.updateChecksEnabled,
 		customLayoutPresets: Array.isArray(value.customLayoutPresets)
 			? value.customLayoutPresets
 			: DEFAULT_CONFIG.customLayoutPresets,

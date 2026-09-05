@@ -25,7 +25,20 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   config?)`** installs protocol + both sorted project views + optional config + navigation repair and then
   advances that readiness edge in one Zustand write; route validation never observes a protocol-only or
   project-only intermediate state. `installProjectSnapshot` remains the project-only primitive for focused
-  callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
+  callers. The same install records the host's **`appVersion`** and, once, **`bootAppVersion`** — the
+  version of the host that served *this page*. A later welcome reporting a different `appVersion` means
+  the host was replaced under an open tab (the normal end of an update), which
+  `selectHostVersionChanged` names and `shell` acts on; keeping both values here is what stops a
+  reloaded bundle and a restarted host from becoming a mismatched pair.
+  **`applyUpdateStatus(status)`** folds the `update.status` snapshot, whose seed rides the welcome (see
+  [[submodule-server-update]]); its render decisions are selectors, not component logic —
+  `selectUpdateFeatureAvailable` (the `UPDATE_PROTOCOL_VERSION` gate), `selectUpdateBanner` (what the
+  banner shows, already accounting for `dismissedVersion`), `selectUpdateIndicator` (whether the
+  topbar gear carries a badge — deliberately *not* silenced by a dismissal, which is banner-only, and
+  read from the retained `available`/`staged` payloads rather than the phase, so a transient failed
+  check cannot make a release that is still available disappear from the chrome) and
+  `selectUpdateBusy` (any phase that is not one of the four settled ones, so a phase minted by a newer
+  host disables mutations instead of reading as "up to date"). **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
   known open + closed project. **`applyProjectUpdated(project)`** is the one full-snapshot updater for
   `project.updated` pushes and authoritative project-mutation responses: it upserts/sorts Recents and either
   upserts/sorts the rail or removes the row when `closed === true`. Both actions reconcile stale navigation
@@ -318,7 +331,7 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Chat`/`Layout`/`Terminal`/`Templates`/`Review`/`Privacy`/`Feedback`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Chat`/`Layout`/`Terminal`/`Templates`/`Review`/`Privacy`/`Updates`/`Feedback`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
   to a section without prop-drilling through the shell. The ephemeral **`interviewPromptOpen`** plus
@@ -505,6 +518,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `selectCatalogModel` (a model ref resolved against the **live** `models` list — a session's own `model`
   is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
   through this; callers fall back to the snapshot when the ref has left the catalog);
+  the update selectors (`selectUpdateFeatureAvailable`, `selectUpdateIndicator`, `selectUpdateBanner`,
+  `selectUpdateBusy`, `selectHostVersionChanged`),
   `toast` (the fire-from-anywhere helper),
   `Toast` (type), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
   (file/diff/virtual-document/plan/chat), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
@@ -518,3 +533,11 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`, shell runtime (the web-local layout state edge is type-only), or transport runtime.
+
+**A selector that *composes* a new object is not a hook snapshot.** `useAppStore(selector)` compares
+snapshots by reference, so subscribing to a selector that builds a fresh object every call re-renders
+forever (React error #185 — how `selectUpdateBanner` first shipped, caught by e2e, not by typecheck).
+Such a selector stays a pure function the component *calls* on values it subscribed to individually
+(stable store references + primitives). Selectors that return a stored reference or a primitive are
+subscribed directly. Zustand's `useShallow` is deliberately absent from this codebase; do not introduce it
+as a workaround for a derivation that belongs in one place.

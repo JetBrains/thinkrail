@@ -67,7 +67,9 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `provider.status`), each valid `server.welcome` first clearing any popup projection left by a host restart,
   then `feedback.interview` via the idempotent `showInterviewPrompt()` (a surviving host claim re-delivers the
   addressed event immediately after welcome),
-  `workspace.fsChanged` via `noteFsChanged(payload)`, and **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
+  `workspace.fsChanged` via `noteFsChanged(payload)`, **`update.status`** via `applyUpdateStatus(status)`
+  (a replayed snapshot channel — a reloaded page learns about a staged update it never watched arrive),
+  and **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
   welcome config lands in the atomic install above. Before `WsTransport` dispatches any response or non-Pi
   push, `wireTransport` flushes queued Pi events synchronously; connection-status transitions do the same.
   This dispatch barrier preserves cross-message order and the store's transcript-revision fence while still

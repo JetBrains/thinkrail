@@ -5,3 +5,4 @@ export {
 } from "./agent";
 export * from "./host";
 export { dataDir } from "./persistence";
+export type { InstallOutcome, UpdateProvider } from "./update";

@@ -24,6 +24,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   and interactive-output gate used by every launcher;
   `@thinkrail/shared/version` → the baked `{ version, channel, commit }` release identity shared by CLI,
   desktop, and host provenance (with a committed `0.0.0-dev` source default);
+  `@thinkrail/shared/release` → `resolveLatestRelease()`, `compareReleaseVersions()`,
+  `releaseNotesUrl()` — the published-release *feed* beside that identity;
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
@@ -74,6 +76,21 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   overwrites this module in its throwaway checkout before building either artifact family so CLI
   `--version`, desktop package metadata, analytics, and `server.welcome.appVersion` cannot drift. It
   contains identity data only and has no launcher dependency.
+- **/release** — what the *published* releases are, as opposed to `/version`'s "what am I". Three pure-ish
+  pieces: `compareReleaseVersions(a, b)` (standard semver precedence — we only ever mint `-nightly.N`
+  prereleases, so `1.4.0-nightly.3 < 1.4.0 < 1.4.1-nightly.1` falls out of the spec rather than a custom
+  rule); `releaseNotesUrl(version)` (the release page — the app links out, it never renders notes); and
+  `resolveLatestRelease(channel, opts)`, which **mirrors `install.sh`'s `resolve_tag` exactly**:
+  `releases/latest` for stable (GitHub's own latest, prereleases excluded), else the first
+  `vX.Y.Z-nightly.N` tag in `releases?per_page=20`. `THINKRAIL_RELEASE_FEED_URL` overrides the feed for
+  tests and forks, like the installer-URL overrides in `module-cli`.
+
+  The two implementations of "latest for a channel" (bash and here) are a **deliberate mirrored pair**:
+  the installer must resolve it standing alone (`curl | bash` on a machine with no ThinkRail). They are
+  kept from disagreeing not by convention but by construction — an in-app update **resolves the version
+  here and pins it** into the installer invocation (`--version X.Y.Z`), so the installer never re-resolves
+  and a release published between check and install cannot substitute a different build than the one the
+  UI advertised.
 - **/codedError** — `CodedError(code, message)` + `errorCodeOf(err)`: an error carrying a wire
   `WsErrorCode`, so a failure a client must react to *specifically* travels as a name rather than a string
   to pattern-match. It lives here because both ends of the seam need it and neither may import the other:

@@ -11,6 +11,7 @@ import {
 	RiShieldCheckLine as ShieldCheck,
 	RiEqualizerLine as SlidersHorizontal,
 	RiTerminalBoxLine as SquareTerminal,
+	RiDownloadCloud2Line as UpdateIcon,
 } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -25,6 +26,7 @@ import { ProvidersSettings } from "./ProvidersSettings";
 import { ReviewSettings } from "./ReviewSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
+import { UpdatesSettings } from "./UpdatesSettings";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
@@ -36,6 +38,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
+	{ id: SettingsSection.Updates, label: "Updates", icon: UpdateIcon },
 	{ id: SettingsSection.Feedback, label: "Feedback", icon: Feedback },
 ];
 const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: SlidersHorizontal }];
@@ -116,6 +119,8 @@ export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }
 							<ReviewSettings />
 						) : section === SettingsSection.Privacy ? (
 							<PrivacySettings />
+						) : section === SettingsSection.Updates ? (
+							<UpdatesSettings />
 						) : section === SettingsSection.Feedback ? (
 							<FeedbackSettings />
 						) : (

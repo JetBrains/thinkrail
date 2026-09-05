@@ -27,6 +27,29 @@ export function readInstallMeta(home: string): InstallMeta {
 	}
 }
 
+export function isAbsoluteInstallPath(path: string, windows: boolean): boolean {
+	return windows ? /^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/])/.test(path) : path.startsWith("/");
+}
+
+export function installedPrefix(installMeta: InstallMeta, home: string, windows: boolean): string {
+	const recorded = installMeta.prefix;
+	return typeof recorded === "string" && isAbsoluteInstallPath(recorded, windows)
+		? recorded
+		: join(home, ".local");
+}
+
+export function installedBinaryName(windows: boolean): string {
+	return windows ? "thinkrail.exe" : "thinkrail";
+}
+
+export function installedBinaryPath(
+	installMeta: InstallMeta,
+	home: string,
+	windows: boolean,
+): string {
+	return join(installedPrefix(installMeta, home, windows), "bin", installedBinaryName(windows));
+}
+
 function cacheRoot(): string {
 	const xdg = process.env.XDG_CACHE_HOME;
 	if (xdg) return xdg;

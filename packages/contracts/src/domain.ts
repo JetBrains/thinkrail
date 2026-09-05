@@ -502,6 +502,7 @@ export interface AppConfig extends ThemePreference {
 	subagentsEnabled: boolean;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
+	updateChecksEnabled: boolean;
 }
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
@@ -535,6 +536,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	subagentsEnabled: true,
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
+	updateChecksEnabled: true,
 };
 
 export function normalizeThemePreference(value: unknown): ThemePreference {
@@ -554,6 +556,44 @@ export function normalizeThemePreference(value: unknown): ThemePreference {
 		themeMode,
 		...(systemThemePair ? { systemThemePair } : {}),
 	};
+}
+
+export const RELEASE_CHANNELS = ["stable", "nightly"] as const;
+export type ReleaseChannel = (typeof RELEASE_CHANNELS)[number];
+
+export function isReleaseChannel(value: unknown): value is ReleaseChannel {
+	return RELEASE_CHANNELS.some((channel) => channel === value);
+}
+
+export interface UpdateCapabilities {
+	install: boolean;
+	channelSwitch: "in-app" | "unsupported";
+	channels: ReleaseChannel[];
+}
+
+export interface AvailableRelease {
+	version: string;
+	channel: ReleaseChannel;
+	notesUrl: string;
+	publishedAt?: string;
+}
+
+export interface UpdateInstallTarget {
+	channel: ReleaseChannel;
+	version?: string;
+}
+
+export type UpdatePhase = "idle" | "checking" | "available" | "installing" | "staged" | "error";
+
+export interface UpdateStatus {
+	current: { version: string; channel: ReleaseChannel | "dev"; commit?: string };
+	capabilities: UpdateCapabilities;
+	phase: UpdatePhase;
+	available?: AvailableRelease;
+	staged?: { version: string; channel: ReleaseChannel };
+	lastCheckedAt?: number;
+	dismissedVersion?: string;
+	error?: { kind: "manual" | "failed"; message: string; retryable: boolean; command?: string };
 }
 
 export const TODO_NUDGE_PREFIX = "[thinkrail:todo-nudge] ";

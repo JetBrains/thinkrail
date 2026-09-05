@@ -1,10 +1,13 @@
 import type {
 	GitDiffScope,
 	Project,
+	ReleaseChannel,
 	SpecGraphNode,
+	UpdateStatus,
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
+import { UPDATE_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import {
 	isAbsolutePath,
 	type LayoutAttention,
@@ -459,4 +462,67 @@ export function selectAgentReviewCommentCount(
 	return snapshot.comments.filter(
 		(c) => c.author === "agent" && c.status !== "resolved" && c.status !== "dismissed",
 	).length;
+}
+
+interface UpdateStatusState {
+	updateStatus: UpdateStatus | null;
+	protocolVersion: number | null;
+}
+
+export function selectUpdateFeatureAvailable(state: UpdateStatusState): boolean {
+	return (
+		state.updateStatus !== null &&
+		state.protocolVersion !== null &&
+		state.protocolVersion >= UPDATE_PROTOCOL_VERSION
+	);
+}
+
+const SETTLED_UPDATE_PHASES = ["idle", "available", "staged", "error"] as const;
+
+export function selectUpdateBusy(state: UpdateStatusState): boolean {
+	const phase = state.updateStatus?.phase;
+	if (phase === undefined) return false;
+	return !SETTLED_UPDATE_PHASES.some((settled) => settled === phase);
+}
+
+export function selectUpdateIndicator(state: UpdateStatusState): "available" | "staged" | null {
+	if (!selectUpdateFeatureAvailable(state)) return null;
+	const status = state.updateStatus;
+	if (status?.staged) return "staged";
+	return status?.available ? "available" : null;
+}
+
+export function selectUpdateBanner(state: UpdateStatusState): {
+	kind: "available" | "staged";
+	version: string;
+	notesUrl?: string;
+	channel: ReleaseChannel;
+} | null {
+	const indicator = selectUpdateIndicator(state);
+	const status = state.updateStatus;
+	if (!indicator || !status) return null;
+	if (indicator === "staged") {
+		const staged = status.staged;
+		if (!staged || staged.version === status.dismissedVersion) return null;
+		return { kind: "staged", version: staged.version, channel: staged.channel };
+	}
+	const available = status.available;
+	if (!available || available.version === status.dismissedVersion) return null;
+	return {
+		kind: "available",
+		version: available.version,
+		notesUrl: available.notesUrl,
+		channel: available.channel,
+	};
+}
+
+export function selectHostVersionChanged(state: {
+	appVersion: string | null;
+	bootAppVersion: string | null;
+}): boolean {
+	return (
+		state.appVersion !== null &&
+		state.bootAppVersion !== null &&
+		state.appVersion !== state.bootAppVersion
+	);
 }

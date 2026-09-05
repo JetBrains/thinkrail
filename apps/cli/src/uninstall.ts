@@ -17,6 +17,8 @@ import { channel, version } from "@thinkrail/shared/version";
 import {
 	type InstallMeta,
 	installConfigDir,
+	installedBinaryName,
+	installedPrefix,
 	installMetaFile,
 	readInstallMeta,
 	stagingRoot,
@@ -115,12 +117,9 @@ export interface ResolveUninstallInput {
 
 export function resolveUninstallTargets(input: ResolveUninstallInput): UninstallTargets {
 	const windows = input.platform === "win32";
-	const exeName = windows ? "thinkrail.exe" : "thinkrail";
+	const exeName = installedBinaryName(windows);
 	const recordedPrefix = input.installMeta.prefix;
-	const prefix =
-		typeof recordedPrefix === "string" && isAbsolutePath(recordedPrefix, windows)
-			? recordedPrefix
-			: join(input.home, ".local");
+	const prefix = installedPrefix(input.installMeta, input.home, windows);
 	const binDir = join(prefix, "bin");
 
 	const pathEntryOwned =
@@ -155,10 +154,6 @@ export function resolveUninstallTargets(input: ResolveUninstallInput): Uninstall
 		stagingRoot: input.stagingRoot,
 		dataDir: input.dataDir,
 	};
-}
-
-function isAbsolutePath(path: string, windows: boolean): boolean {
-	return windows ? /^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/])/.test(path) : path.startsWith("/");
 }
 
 export function stripRcPathBlock(content: string): {
