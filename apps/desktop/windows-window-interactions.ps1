@@ -152,14 +152,14 @@ Wait-ForRect {
 } "The Windows application titlebar did not move the native window" | Out-Null
 
 $edges = @(
-    @{ Name = "north-west"; X = 6; Y = 6; DX = -30; DY = -20; West = $true; North = $true },
-    @{ Name = "north"; X = 400; Y = 4; DX = 0; DY = -20; North = $true },
-    @{ Name = "north-east"; X = 794; Y = 6; DX = 30; DY = -20; East = $true; North = $true },
-    @{ Name = "west"; X = 4; Y = 300; DX = -30; DY = 0; West = $true },
-    @{ Name = "east"; X = 796; Y = 300; DX = 30; DY = 0; East = $true },
-    @{ Name = "south-west"; X = 6; Y = 594; DX = -30; DY = 20; West = $true; South = $true },
-    @{ Name = "south"; X = 400; Y = 596; DX = 0; DY = 20; South = $true },
-    @{ Name = "south-east"; X = 794; Y = 594; DX = 30; DY = 20; East = $true; South = $true }
+    @{ Name = "north-west"; X = 10; Y = 10; DX = -30; DY = -20; West = $true; North = $true },
+    @{ Name = "north"; X = 400; Y = 10; DX = 0; DY = -20; North = $true },
+    @{ Name = "north-east"; X = 790; Y = 10; DX = 30; DY = -20; East = $true; North = $true },
+    @{ Name = "west"; X = 10; Y = 300; DX = -30; DY = 0; West = $true },
+    @{ Name = "east"; X = 790; Y = 300; DX = 30; DY = 0; East = $true },
+    @{ Name = "south-west"; X = 10; Y = 590; DX = -30; DY = 20; West = $true; South = $true },
+    @{ Name = "south"; X = 400; Y = 590; DX = 0; DY = 20; South = $true },
+    @{ Name = "south-east"; X = 790; Y = 590; DX = 30; DY = 20; East = $true; South = $true }
 )
 
 foreach ($edge in $edges) {
