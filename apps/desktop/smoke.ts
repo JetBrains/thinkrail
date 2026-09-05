@@ -134,15 +134,17 @@ async function dragLinuxPointer(
 async function resetLinuxWindow(windowId: string): Promise<LinuxWindowGeometry> {
 	runNativeCommand(["xdotool", "windowsize", "--sync", windowId, "800", "600"]);
 	runNativeCommand(["xdotool", "windowmove", "--sync", windowId, "200", "150"]);
-	return waitForLinuxGeometry(
+	const geometry = await waitForLinuxGeometry(
 		windowId,
-		(geometry) =>
-			Math.abs(geometry.x - 200) <= 3 &&
-			Math.abs(geometry.y - 150) <= 3 &&
-			Math.abs(geometry.width - 800) <= 3 &&
-			Math.abs(geometry.height - 600) <= 3,
+		(candidate) =>
+			Math.abs(candidate.x - 200) <= 3 &&
+			Math.abs(candidate.y - 150) <= 3 &&
+			Math.abs(candidate.width - 800) <= 3 &&
+			Math.abs(candidate.height - 600) <= 3,
 		"reset to its smoke-test frame",
 	);
+	await Bun.sleep(500);
+	return geometry;
 }
 
 async function runWindowsWindowInteractions(pid: number): Promise<void> {
