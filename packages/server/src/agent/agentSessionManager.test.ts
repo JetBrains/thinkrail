@@ -1620,3 +1620,87 @@ test("an unresolvable project keeps disk sessions out of the snapshot", async ()
 	});
 	expect(await listSessionActivity([{ id: "ws-orphan", cwd }])).toEqual([]);
 });
+
+test("an oversized terminal record is still classified — the tail grows to a record boundary", async () => {
+	setActivityProjectResolver(() => "project-big");
+	const cwd = tmpCwd("trpi-activity-big-");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	mkdirSync(dir, { recursive: true });
+	const huge = "x".repeat(200_000);
+
+	writeFixtureSession(dir, {
+		id: "disk-big-failed",
+		cwd,
+		messages: [
+			{ role: "user", text: "write the file", timestamp: 1 },
+			{ role: "assistant", text: huge, timestamp: 2, stopReason: "error" },
+		],
+	});
+
+	try {
+		const rows = await listSessionActivity([{ id: "ws-big", cwd }]);
+		expect(rows.filter((row) => row.workspaceId === "ws-big").map((row) => row.status)).toEqual([
+			"failed",
+		]);
+	} finally {
+		setActivityProjectResolver(() => null);
+	}
+});
+
+test("an oversized questionnaire record followed by its small ack still reads as waiting", async () => {
+	setActivityProjectResolver(() => "project-ask");
+	const cwd = tmpCwd("trpi-activity-bigask-");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	mkdirSync(dir, { recursive: true });
+	const huge = "y".repeat(200_000);
+
+	writeFixtureSession(dir, {
+		id: "disk-big-ask",
+		cwd,
+		messages: [
+			{ role: "user", text: "which one?", timestamp: 1 },
+			{
+				role: "assistant",
+				timestamp: 2,
+				stopReason: "toolUse",
+				content: [
+					{
+						type: "toolCall",
+						id: "tc-big",
+						name: "ask_user_question",
+						arguments: {
+							questions: [
+								{
+									question: "Which?",
+									header: "Pick",
+									options: [
+										{ label: "A", description: "a", preview: huge },
+										{ label: "B", description: "b" },
+									],
+								},
+							],
+						},
+					},
+				],
+			},
+			{
+				role: "toolResult",
+				timestamp: 3,
+				toolCallId: "tc-big",
+				toolName: "ask_user_question",
+				content: [{ type: "text", text: "shown" }],
+				details: { kind: "ack" },
+				isError: false,
+			},
+		],
+	});
+
+	try {
+		const rows = await listSessionActivity([{ id: "ws-bigask", cwd }]);
+		expect(rows.filter((row) => row.workspaceId === "ws-bigask").map((row) => row.status)).toEqual([
+			"waiting",
+		]);
+	} finally {
+		setActivityProjectResolver(() => null);
+	}
+});

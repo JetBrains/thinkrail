@@ -46,6 +46,7 @@ export function deriveActivityStatus(inputs: ActivityInputs): ActivityStatus | n
 }
 
 export const TRANSCRIPT_TAIL_BYTES = 64 * 1024;
+export const TRANSCRIPT_TAIL_MAX_BYTES = 8 * 1024 * 1024;
 
 export function parseTranscriptTail(text: string, partialFirstLine: boolean): AgentMessage[] {
 	const lines = text.split("\n");

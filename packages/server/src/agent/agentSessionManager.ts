@@ -46,6 +46,7 @@ import {
 	deriveDiskActivityStatus,
 	parseTranscriptTail,
 	TRANSCRIPT_TAIL_BYTES,
+	TRANSCRIPT_TAIL_MAX_BYTES,
 } from "./activity";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import {
@@ -171,14 +172,27 @@ interface DiskActivityMemo {
 }
 const diskActivityMemo = new Map<string, DiskActivityMemo>();
 
+const NEWLINE = 0x0a;
+
 async function readTranscriptTail(path: string): Promise<AgentMessage[]> {
 	const handle = await open(path, "r");
 	try {
 		const { size } = await handle.stat();
-		const length = Math.min(size, TRANSCRIPT_TAIL_BYTES);
-		const buffer = Buffer.allocUnsafe(length);
-		await handle.read(buffer, 0, length, size - length);
-		return parseTranscriptTail(buffer.toString("utf8"), length < size);
+		let length = Math.min(size, TRANSCRIPT_TAIL_BYTES);
+		for (;;) {
+			const start = size - length;
+			const probe = start > 0 ? 1 : 0;
+			const buffer = Buffer.allocUnsafe(length + probe);
+			await handle.read(buffer, 0, length + probe, start - probe);
+			if (probe === 0) return parseTranscriptTail(buffer.toString("utf8"), false);
+			if (buffer[0] === NEWLINE) {
+				return parseTranscriptTail(buffer.subarray(1).toString("utf8"), false);
+			}
+			if (length >= TRANSCRIPT_TAIL_MAX_BYTES) {
+				return parseTranscriptTail(buffer.toString("utf8"), true);
+			}
+			length = Math.min(size, length * 8);
+		}
 	} finally {
 		await handle.close();
 	}

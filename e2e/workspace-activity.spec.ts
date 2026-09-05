@@ -39,7 +39,6 @@ function seedWaitingChat(worktree: string): void {
 			{ role: "user", text: "pick a database", timestamp: BASE_TS + 10_000 },
 			{
 				role: "assistant",
-				text: "",
 				timestamp: BASE_TS + 11_000,
 				stopReason: "toolUse",
 				content: [
@@ -64,7 +63,6 @@ function seedWaitingChat(worktree: string): void {
 			},
 			{
 				role: "toolResult",
-				text: "",
 				timestamp: BASE_TS + 12_000,
 				toolCallId: "tc-activity-1",
 				toolName: "ask_user_question",

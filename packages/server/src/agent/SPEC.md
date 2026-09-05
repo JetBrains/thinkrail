@@ -191,7 +191,14 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     same files. A sidecar would then claim "waiting for your answer" after the user answered in the
     terminal: a *wrong* signal, which is worse than a missing one. Only signals at the transcript's **tail**
     are needed (a trailing assistant's `stopReason`; an `ask_user_question` plus its `ack`), so a bounded
-    `TRANSCRIPT_TAIL_BYTES` window suffices, with the partial leading line dropped. Repeat reads are
+    `TRANSCRIPT_TAIL_BYTES` window suffices — but the window must **start at a record boundary**, not merely
+    drop its partial first line. Pi writes each message as one unbounded `JSON.stringify` line, so a
+    decisive record can exceed the window: dropping the fragment would then discard the very assistant that
+    failed, and — subtler — a huge questionnaire record followed by its small `ack` yields a *non-empty*
+    parse that is still missing the tool call, so "retry when empty" would not catch it either. The reader
+    therefore probes the byte before the window and grows (×8, to `TRANSCRIPT_TAIL_MAX_BYTES`) until that
+    byte is a newline; only a single record beyond that cap degrades to the best-effort fragment drop.
+    Repeat reads are
     memoized per file on `(mtime, messageCount)` — **in memory only**, so a fresh process re-derives and no
     stale verdict can outlive a crash. An unreadable workspace is logged and skipped, never fatal to the
     snapshot.
