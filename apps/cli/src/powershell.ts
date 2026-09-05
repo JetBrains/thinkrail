@@ -85,8 +85,6 @@ export async function runPowerShellScript(
 				run.kill();
 				const forced = setTimeout(() => run.kill(9), KILL_GRACE_MS);
 				forced.unref?.();
-				// Never wait on EOF here: a descendant of the installer can hold the inherited pipe open
-				// past its parent's death, and the caller's operation slot must be released regardless.
 				const exitCode = await Promise.race([
 					run.exited,
 					Bun.sleep(DRAIN_GRACE_MS).then(() => 124),

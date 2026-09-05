@@ -199,10 +199,6 @@ function killTree(pid: number, signal: NodeJS.Signals): void {
 	}
 }
 
-/**
- * Runs `bash` with the installer script on stdin in its OWN process group, so a deadline can
- * terminate the installer's descendants too — see `module-cli`.
- */
 export function runInstallerScript(
 	script: ArrayBufferLike | string,
 	args: readonly string[],
@@ -239,8 +235,6 @@ export function runInstallerScript(
 				const forced = setTimeout(() => killTree(pid, "SIGKILL"), KILL_GRACE_MS);
 				forced.unref?.();
 			}
-			// A descendant that inherited the pipes can keep them open past its parent's death, so the
-			// answer is never allowed to wait on EOF: report what was captured and let the slot go.
 			const abandon = setTimeout(() => settle(124), DRAIN_GRACE_MS);
 			abandon.unref?.();
 		}, options.timeoutMs);
