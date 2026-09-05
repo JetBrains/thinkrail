@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { compareReleaseVersions, resolveLatestRelease } from "@thinkrail/shared/release";
@@ -175,61 +176,87 @@ export type UpdateExecution =
 	| { kind: "manual"; reason: string; command: string; exitCode: number }
 	| { kind: "failed"; reason: string; output: string; exitCode: number };
 
+function failureText(err: unknown): string {
+	return err instanceof Error ? err.message : String(err);
+}
+
 export interface BoundedChild {
 	exitCode: number;
 	output: string;
 	timedOut: boolean;
 }
 
-async function readStream(stream: unknown): Promise<string> {
-	if (!(stream instanceof ReadableStream)) return "";
+const KILL_GRACE_MS = 2_000;
+const DRAIN_GRACE_MS = 3_000;
+
+function killTree(pid: number, signal: NodeJS.Signals): void {
 	try {
-		return await new Response(stream).text();
+		process.kill(-pid, signal);
 	} catch {
-		return "";
+		try {
+			process.kill(pid, signal);
+		} catch {}
 	}
 }
 
-export async function awaitBoundedChild(
-	child: {
-		exited: Promise<number>;
-		stdout: unknown;
-		stderr: unknown;
-		kill: (signal?: number) => void;
-	},
-	timeoutMs: number,
+/**
+ * Runs `bash` with the installer script on stdin in its OWN process group, so a deadline can
+ * terminate the installer's descendants too — see `module-cli`.
+ */
+export function runInstallerScript(
+	script: ArrayBufferLike | string,
+	args: readonly string[],
+	options: { env: Record<string, string | undefined>; capture: boolean; timeoutMs: number },
 ): Promise<BoundedChild> {
-	const drained = Promise.all([readStream(child.stdout), readStream(child.stderr)]).then(
-		([out, err]) => `${out}${err}`,
-	);
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	const expiry = new Promise<"timeout">((resolve) => {
-		timer = setTimeout(() => resolve("timeout"), timeoutMs);
-		timer.unref?.();
+	const child = spawn("bash", [...args], {
+		detached: true,
+		env: options.env,
+		stdio: ["pipe", options.capture ? "pipe" : "inherit", options.capture ? "pipe" : "inherit"],
 	});
-	try {
-		const finished = await Promise.race([child.exited, expiry]);
-		if (finished !== "timeout") {
-			return { exitCode: finished, output: await drained, timedOut: false };
-		}
-		child.kill();
-		const forced = setTimeout(() => child.kill(9), 2_000);
-		forced.unref?.();
-		const exitCode = await child.exited;
-		clearTimeout(forced);
-		return { exitCode, output: await drained, timedOut: true };
-	} finally {
-		if (timer) clearTimeout(timer);
-	}
+	return new Promise<BoundedChild>((resolve) => {
+		let output = "";
+		child.stdout?.on("data", (chunk: Buffer) => {
+			output += chunk.toString();
+		});
+		child.stderr?.on("data", (chunk: Buffer) => {
+			output += chunk.toString();
+		});
+
+		let settled = false;
+		let expired = false;
+		const settle = (exitCode: number): void => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(deadline);
+			resolve({ exitCode, output, timedOut: expired });
+		};
+
+		const deadline = setTimeout(() => {
+			expired = true;
+			const pid = child.pid;
+			if (pid !== undefined) {
+				killTree(pid, "SIGTERM");
+				const forced = setTimeout(() => killTree(pid, "SIGKILL"), KILL_GRACE_MS);
+				forced.unref?.();
+			}
+			// A descendant that inherited the pipes can keep them open past its parent's death, so the
+			// answer is never allowed to wait on EOF: report what was captured and let the slot go.
+			const abandon = setTimeout(() => settle(124), DRAIN_GRACE_MS);
+			abandon.unref?.();
+		}, options.timeoutMs);
+		deadline.unref?.();
+
+		child.once("error", () => settle(1));
+		child.once("close", (code) => settle(code ?? 124));
+
+		child.stdin?.on("error", () => {});
+		child.stdin?.end(script instanceof ArrayBuffer ? Buffer.from(script) : script);
+	});
 }
 
 export interface ExecuteUpdateOptions {
 	env: Record<string, string | undefined>;
 	capture?: boolean;
-}
-
-function failureText(err: unknown): string {
-	return err instanceof Error ? err.message : String(err);
 }
 
 async function executeWindowsPlan(
@@ -281,13 +308,11 @@ async function executeUnixPlan(
 		return { kind: "failed", reason: "failed to fetch the installer", output: "", exitCode: 1 };
 	}
 
-	const run = Bun.spawn(["bash", ...plan.bashArgs], {
-		stdin: new Blob([script]),
-		stdout: options.capture ? "pipe" : "inherit",
-		stderr: options.capture ? "pipe" : "inherit",
+	const { exitCode, output, timedOut } = await runInstallerScript(script, plan.bashArgs, {
 		env: options.env,
+		capture: options.capture === true,
+		timeoutMs: INSTALL_TIMEOUT_MS,
 	});
-	const { exitCode, output, timedOut } = await awaitBoundedChild(run, INSTALL_TIMEOUT_MS);
 	if (timedOut) {
 		return {
 			kind: "failed",

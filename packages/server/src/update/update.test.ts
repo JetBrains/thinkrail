@@ -263,15 +263,28 @@ test("a staged release survives a boot that did not pick it up", async () => {
 	expect(status.phase).toBe("staged");
 });
 
-test("the checks preference gates the schedule and the manual check alike", async () => {
+test("the preference stops the host polling, but never a check the user asked for", async () => {
 	const provider = stubProvider();
-	startUpdates({ provider, checksEnabled: false, bootDelayMs: 1 });
-	await checkForUpdate();
+	startUpdates({ provider, checksEnabled: false, bootDelayMs: 5, intervalMs: 10 });
+
+	// No schedule while polling is off...
+	await Bun.sleep(40);
 	expect(provider.checks).toBe(0);
 
-	setUpdateChecksEnabled(true);
-	await checkForUpdate();
+	// ...but `update.check` is defined as "force one check", so an explicit request is honoured.
+	const status = await checkForUpdate();
 	expect(provider.checks).toBe(1);
+	expect(status.available).toEqual(RELEASE);
+	stopUpdates();
+});
+
+test("turning the preference back on starts the schedule", async () => {
+	const provider = stubProvider();
+	startUpdates({ provider, checksEnabled: false, bootDelayMs: 5, intervalMs: 10_000 });
+	setUpdateChecksEnabled(true);
+	await Bun.sleep(40);
+	expect(provider.checks).toBe(1);
+	stopUpdates();
 });
 
 test("the boot check runs on its own after the configured delay", async () => {

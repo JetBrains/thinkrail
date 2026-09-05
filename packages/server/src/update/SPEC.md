@@ -89,6 +89,10 @@ bundle formats.
 - **Never advertise what cannot be applied.** `capabilities.install === false` ⇒ no check runs at
   all, so a source run and a locally compiled binary make no outbound request — which is also what
   keeps the default e2e suites network-free. The panel still reports the running version.
+- **`updateChecksEnabled` governs the *schedule*, not the method.** It stops the host polling on its
+  own; `update.check` is defined on the wire as "force one check", so an explicit request is honoured
+  whenever the provider can install. Folding the preference into both would have made a client's own
+  action a silent no-op.
 - **`staged` is persisted, scoped, and self-clearing.** The new build sits on disk while the old host
   keeps running, so the banner must survive a page reload — but the record lives in a data dir shared
   by every launcher and every installed copy, so it carries the `installationId` that staged it plus

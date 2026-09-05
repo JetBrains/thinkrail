@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
 	alreadyNewest,
-	awaitBoundedChild,
 	parseUpdateArgs,
 	resolveUpdatePlan,
 	resolveWindowsInstallPrefix,
 	resolveWindowsPrefix,
 	resolveWindowsUpdatePlan,
+	runInstallerScript,
 	windowsManualUpdateMessage,
 } from "./update";
 
@@ -330,36 +334,41 @@ describe("alreadyNewest", () => {
 	});
 });
 
-describe("awaitBoundedChild", () => {
-	test("returns the child's own exit code and both streams when it finishes in time", async () => {
-		const child = Bun.spawn(["bash", "-c", "echo out; echo err >&2; exit 3"], {
-			stdout: "pipe",
-			stderr: "pipe",
-		});
-		const result = await awaitBoundedChild(child, 30_000);
+describe("runInstallerScript", () => {
+	const budget = { env: { ...process.env }, capture: true, timeoutMs: 30_000 };
+
+	test("returns the installer's own exit code and both streams", async () => {
+		const result = await runInstallerScript("echo out; echo err >&2; exit 3", ["-s"], budget);
 		expect(result.timedOut).toBe(false);
 		expect(result.exitCode).toBe(3);
 		expect(result.output).toContain("out");
 		expect(result.output).toContain("err");
 	});
 
-	test("a child that never finishes is killed and reported, not awaited forever", async () => {
-		// Without a deadline the host's single update slot would stay `installing` until restart.
-		const child = Bun.spawn(["bash", "-c", "sleep 60"], { stdout: "pipe", stderr: "pipe" });
-		const result = await awaitBoundedChild(child, 150);
-		expect(result.timedOut).toBe(true);
-		expect(child.killed).toBe(true);
-	});
-
-	test("both streams are drained concurrently, so a chatty child cannot stall the read", async () => {
-		const child = Bun.spawn(["bash", "-c", "printf 'x%.0s' {1..300000} >&2; echo done"], {
-			stdout: "pipe",
-			stderr: "pipe",
-		});
-		const result = await awaitBoundedChild(child, 30_000);
+	test("a chatty installer cannot stall the read", async () => {
+		const result = await runInstallerScript(
+			"printf 'x%.0s' {1..300000} >&2; echo done",
+			["-s"],
+			budget,
+		);
 		expect(result.timedOut).toBe(false);
-		expect(result.exitCode).toBe(0);
 		expect(result.output).toContain("done");
 		expect(result.output.length).toBeGreaterThan(300_000);
+	});
+
+	test("the deadline terminates the installer's descendants, not just bash", async () => {
+		// The real shape of the hazard: install.sh waits on a foreground curl, so killing only bash
+		// leaves a descendant holding the inherited pipes — and the host's single update slot would
+		// stay `installing` forever waiting for an EOF that never comes.
+		const marker = join(tmpdir(), `trpi-descendant-${randomUUID()}`);
+		const started = Date.now();
+		const result = await runInstallerScript(`( sleep 20; touch ${marker} ) & wait`, ["-s"], {
+			...budget,
+			timeoutMs: 200,
+		});
+		expect(result.timedOut).toBe(true);
+		expect(Date.now() - started).toBeLessThan(15_000);
+		await Bun.sleep(300);
+		expect(existsSync(marker)).toBe(false);
 	});
 });

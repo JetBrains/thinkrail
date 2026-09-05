@@ -476,8 +476,9 @@ a project picker, the prompt hero, and the reused
   version + channel (from `server.welcome`'s `appVersion`, finally rendered somewhere), a last-checked
   line with *Check now*, the available release with *Install* and a *What's new* anchor to the release
   page (`noopener noreferrer` — the app links out and never renders release notes), the channel selector
-  when `capabilities.channelSwitch` allows it, the outbound-check toggle
-  (`settings.update { updateChecksEnabled }`, converge-on-broadcast like Privacy's), and — for a `staged`
+  when `capabilities.channelSwitch` allows it, the automatic-check toggle
+  (`settings.update { updateChecksEnabled }`, converge-on-broadcast like Privacy's) — which governs the
+  host's *polling* only, so *Check now* stays available with it off, and — for a `staged`
   update — the *restart to finish* instruction, because no host can yet restart itself. Everything it offers is read from `UpdateStatus.capabilities`: the panel never learns which
   launcher it is talking to, so an install button it cannot honour cannot appear; an unknown `phase`
   reads as "Update in progress…" with every mutation disabled (`selectUpdateBusy` — a phase this

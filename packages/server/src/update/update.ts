@@ -184,8 +184,12 @@ function publish(): UpdateStatus {
 	return status;
 }
 
-function canCheck(): boolean {
-	return state.provider?.capabilities.install === true && state.checksEnabled;
+function canInstall(): boolean {
+	return state.provider?.capabilities.install === true;
+}
+
+function canPoll(): boolean {
+	return canInstall() && state.checksEnabled;
 }
 
 function clearTimers(): void {
@@ -197,7 +201,7 @@ function clearTimers(): void {
 
 function scheduleChecks(): void {
 	clearTimers();
-	if (!canCheck()) return;
+	if (!canPoll()) return;
 	state.bootTimer = setTimeout(() => {
 		void checkForUpdate().catch(() => {});
 	}, state.bootDelayMs);
@@ -274,7 +278,7 @@ export function setUpdateChecksEnabled(enabled: boolean): void {
 
 export function checkForUpdate(): Promise<UpdateStatus> {
 	if (state.operation?.kind === "checking" && state.inFlightCheck) return state.inFlightCheck;
-	if (state.operation || !canCheck()) return Promise.resolve(snapshot());
+	if (state.operation || !canInstall()) return Promise.resolve(snapshot());
 	const provider = state.provider as UpdateProvider;
 
 	const abort = new AbortController();

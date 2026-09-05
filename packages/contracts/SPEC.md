@@ -232,8 +232,9 @@ of the host.
   `server.welcome`, mutated via `settings.update`).
   **`InterviewResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic
   feedback popup. No usage count, eligibility, dismissal state, or client identity crosses the wire.
-  `AppConfig.updateChecksEnabled` (default `true`) is the outbound-release-check switch — the only
-  update *preference* on the wire; everything else the feature remembers is host state inside
+  `AppConfig.updateChecksEnabled` (default `true`) is the **automatic**-release-check switch — the only
+  update *preference* on the wire, and it governs the host's polling alone: `update.check` means
+  "force one check" and stays honoured with it off; everything else the feature remembers is host state inside
   `UpdateStatus`;
   **`UpdateStatus`** — the whole release-awareness surface as one snapshot: `current`
   (`{ version, channel: ReleaseChannel | "dev", commit? }`), **`UpdateCapabilities`**

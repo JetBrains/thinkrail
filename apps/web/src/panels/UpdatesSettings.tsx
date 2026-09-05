@@ -142,17 +142,15 @@ export function UpdatesSettings() {
 						<span className="text-text-muted tr-text-metadata">
 							{lastCheckedLabel(status.lastCheckedAt)}
 						</span>
-						{checksEnabled ? (
-							<Button
-								data-testid="update-check"
-								variant="ghost"
-								size="sm"
-								disabled={busy}
-								onClick={check}
-							>
-								Check now
-							</Button>
-						) : null}
+						<Button
+							data-testid="update-check"
+							variant="ghost"
+							size="sm"
+							disabled={busy}
+							onClick={check}
+						>
+							Check now
+						</Button>
 					</div>
 				</div>
 			) : null}
@@ -192,7 +190,7 @@ export function UpdatesSettings() {
 					<span className="text-text-muted tr-text-metadata">
 						{checksEnabled
 							? "On — ThinkRail asks GitHub for the newest release of your channel."
-							: "Off — no release check leaves this machine."}
+							: "Off — ThinkRail never checks on its own; Check now still works."}
 					</span>
 				</div>
 				<SettingsSwitch

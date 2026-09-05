@@ -52,18 +52,21 @@ test("release awareness: check → banner → dismiss → install → restart to
 	await expect(page.locator(BANNER)).toHaveCount(0);
 });
 
-test("turning off automatic checks removes the manual check too", {
+test("turning off automatic checks stops the polling, not the button", {
 	tag: "@dev-seam",
 }, async ({ page }) => {
 	await openAppFresh(page);
 	await page.getByTestId("open-settings").click();
 	await page.getByTestId("settings-nav-updates").click();
+	const toggle = page.getByTestId("update-checks-toggle");
+	await expect(toggle).toHaveAttribute("data-active", "true");
+
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("data-active", "false");
+	await expect(page.getByTestId("settings-updates")).toContainText("never checks on its own");
+	// `update.check` is "force one check" on the wire, so the user's own action still works.
 	await expect(page.getByTestId("update-check")).toBeVisible();
 
-	await page.getByTestId("update-checks-toggle").click();
-	await expect(page.getByTestId("settings-updates")).toContainText("no release check leaves");
-	await expect(page.getByTestId("update-check")).toHaveCount(0);
-
-	await page.getByTestId("update-checks-toggle").click();
-	await expect(page.getByTestId("update-check")).toBeVisible();
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("data-active", "true");
 });
