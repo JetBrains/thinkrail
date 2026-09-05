@@ -30,9 +30,9 @@ type WindowsLibrary = Library<{
 	GetWindowRect: { args: [FFIType.ptr, FFIType.ptr]; returns: FFIType.bool };
 	SetCursorPos: { args: [FFIType.i32, FFIType.i32]; returns: FFIType.bool };
 	ReleaseCapture: { args: []; returns: FFIType.bool };
-	PostMessageW: {
+	SendMessageW: {
 		args: [FFIType.ptr, FFIType.u32, FFIType.u64, FFIType.i64];
-		returns: FFIType.bool;
+		returns: FFIType.i64;
 	};
 }>;
 
@@ -65,9 +65,9 @@ function getWindowsLibrary(): WindowsLibrary {
 		GetWindowRect: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.bool },
 		SetCursorPos: { args: [FFIType.i32, FFIType.i32], returns: FFIType.bool },
 		ReleaseCapture: { args: [], returns: FFIType.bool },
-		PostMessageW: {
+		SendMessageW: {
 			args: [FFIType.ptr, FFIType.u32, FFIType.u64, FFIType.i64],
-			returns: FFIType.bool,
+			returns: FFIType.i64,
 		},
 	});
 	return windowsLibrary;
@@ -119,9 +119,7 @@ export function createWindowsResizeStarter(handle: Pointer): (edge: DesktopResiz
 		if (process.env.THINKRAIL_DESKTOP_NATIVE_INTERACTION === "1") {
 			console.error(`[desktop] Windows resize queued edge=${edge}`);
 		}
-		if (!library.symbols.PostMessageW(handle, 0x00a1, windowsResizeHitTest(edge), packedPoint)) {
-			throw new Error(`could not start Windows window resize from ${edge}`);
-		}
+		library.symbols.SendMessageW(handle, 0x00a1, windowsResizeHitTest(edge), packedPoint);
 	};
 }
 
