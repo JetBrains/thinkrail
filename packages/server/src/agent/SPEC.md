@@ -173,12 +173,28 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     the client's own workspace-removal fold has already dropped its activity. See `packages/contracts/SPEC.md`
     for why attribution travels on the wire instead of being derived client-side.
 
-    **Lifetime:** entries are never idle-evicted, so every status survives client reconnects. Because
-    `waiting` and `failed` both fall back to the transcript, they also survive a **host restart** for any
-    session that gets attached. What no status survives is a session this process has never loaded:
-    `listSessionActivity` walks live entries only, so a disk-only chat contributes nothing. Extending the
-    snapshot to derive those two from the disk-session scan (`listSessionInfosStrict`) is the deliberate
-    follow-up, not V1.
+    **Lifetime:** entries are never idle-evicted, so every status survives client reconnects, and
+    `listSessionActivity` **unions live entries with on-disk sessions** for each workspace the host passes
+    in (`cwd` stays an input, never a persistence lookup) — so a chat this process never loaded still
+    reports its durable state. That mirrors `session.list`, which already unions the two, and honours
+    architecture decision #8: a host restart rebuilds the same state.
+
+    A disk row runs the **same** `deriveActivityStatus` through `deriveDiskActivityStatus`, which pins
+    `isStreaming: false`, `pendingMessageCount: 0`, `hasPendingDialog: false` and an `undefined`
+    settlement. `running` and `queued` are therefore *structurally unreachable* from disk rather than
+    filtered out afterwards — both describe a live process, and a persisted one would be a permanent lie
+    after a crash.
+
+    **The transcript is the only durable store, deliberately.** Both durable states are already functions
+    of it, so a status file would cache a derivation rather than record new knowledge — and it would have a
+    second writer, since sessions live in pi's own cwd-keyed directory and plain `pi` reads and writes the
+    same files. A sidecar would then claim "waiting for your answer" after the user answered in the
+    terminal: a *wrong* signal, which is worse than a missing one. Only signals at the transcript's **tail**
+    are needed (a trailing assistant's `stopReason`; an `ask_user_question` plus its `ack`), so a bounded
+    `TRANSCRIPT_TAIL_BYTES` window suffices, with the partial leading line dropped. Repeat reads are
+    memoized per file on `(mtime, messageCount)` — **in memory only**, so a fresh process re-derives and no
+    stale verdict can outlive a crash. An unreadable workspace is logged and skipped, never fatal to the
+    snapshot.
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.
     `prompt`/`steer`/`followUp` (with images) /

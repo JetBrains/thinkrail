@@ -159,14 +159,18 @@ before any provider turn; PI's ordinary first-available fallback is never accept
 The same copy and hermetic environment seed the private restart host.
 
 **Workspace activity** (`workspace-activity.spec.ts`) covers the Projects rail's agent-state glyphs without
-an agent, and is the reason the host's `failed`/`waiting` derivations fall back to the transcript: a seeded
-fixture transcript (an assistant with `stopReason: "error"`, or an `ask_user_question` call plus its `ack`
-tool result) becomes real activity the moment opening the chat attaches the session, so the whole chain —
-host derivation, `session.activity` push, store fold, rollup, render — runs for real on the no-agent lane.
-It asserts the row's `data-activity` and the glyph's `aria-label` (never the tooltip, which needs hover),
-including the rollup breakdown when one workspace holds both states. Note that **seeding must happen after
-`openFixtureProject`**: `openAppFresh` calls `resetState`, which deletes the isolated agent dir's `sessions`
-tree, so anything seeded earlier is wiped.
+an agent, and is the reason the host's `failed`/`waiting` derivations read the transcript: a seeded fixture
+transcript (an assistant with `stopReason: "error"`, or an `ask_user_question` call plus its `ack` tool
+result) becomes real activity, so the whole chain — host derivation, `session.activity` push, store fold,
+rollup, render — runs for real on the no-agent lane. It asserts the row's `data-activity` and the glyph's
+`aria-label` (never the tooltip, which needs hover), the rollup breakdown when one workspace holds both
+states, and the collapsed-project rollup.
+
+Two entry paths are covered on purpose. Opening the chat attaches the session and exercises the **live**
+path; a **reload after seeding** exercises the **disk** path — the snapshot union — by asserting the glyph
+appears while the workspace is never activated and no chat tab exists, which is the reviewer scenario a
+host restart produces. Note that **seeding must happen after `openFixtureProject`**: `openAppFresh` calls
+`resetState`, which deletes the isolated agent dir's `sessions` tree, so anything seeded earlier is wiped.
 
 Workbench scenarios exercise the normalized frontend-local frame rather than only the pure model: frame
 geometry/tool placement survives workspace switches while resource tabs and attention differ; closing a final

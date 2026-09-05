@@ -510,9 +510,12 @@ workspaces that have something to say. The single place idleness is spelled out 
   only for *expanded* projects — so a collapsed, never-opened project would roll up to nothing, which is
   exactly the state this feature exists to reveal. Attribution therefore travels with the row rather than
   depending on unrelated data being loaded first.
-- **`session.activityList`** (no params) → `SessionActivity[]` for every workspace. A snapshot request
+- **`session.activityList`** (no params) → `SessionActivity[]` for every workspace, **unioning live and
+  on-disk sessions** exactly as `session.list` does, so a host restart rebuilds the rail (architecture #8)
+  rather than hiding a waiting question in a workspace nobody has opened yet. A snapshot request
   exists because pushes are **not** replayed on reconnect (the dedup cache covers requests only), so
   without it a client that reconnected mid-run would show a stale or empty rail until the next transition.
+  Only `waiting`/`failed` can arrive from disk — `running` and `queued` describe a live process.
 
 The status is **per session, deliberately not pre-rolled per workspace**: how several chats collapse into
 one row is presentation policy that belongs to the client's selectors, and the host has no business

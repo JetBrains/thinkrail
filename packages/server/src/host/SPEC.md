@@ -402,7 +402,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - **Activity fan-out:** `createServer` installs the agent module's activity publisher and broadcasts each
   `SessionActivityPayload` on `session.activity`, which the WS `open` handler subscribes for every client
   alongside the other session channels; `session.activityList` serves the cross-workspace snapshot, since
-  pushes are never replayed and a reconnecting client would otherwise show a stale rail. This module also
+  pushes are never replayed and a reconnecting client would otherwise show a stale rail. That handler is
+  where the workspace **registry** meets the agent: it passes every record's `{id, cwd}` (via
+  `listAllWorkspaceRecords`) so the agent can union on-disk sessions without ever performing a persistence
+  lookup of its own — the same shape as `session.list` receiving one workspace's `worktreePath`. This module also
   satisfies the agent's **`setActivityProjectResolver`** seam by mapping a workspace id to its
   `projectId` through the workspace registry (unresolvable → `null`, and the agent then publishes
   nothing) — the registry lives here, so attribution is composed here rather than the agent learning what

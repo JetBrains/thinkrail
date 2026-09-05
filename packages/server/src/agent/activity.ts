@@ -44,3 +44,35 @@ export function deriveActivityStatus(inputs: ActivityInputs): ActivityStatus | n
 	if (awaitingQuestionToolCallId(inputs.messages) !== null) return "waiting";
 	return failed(inputs) ? "failed" : null;
 }
+
+export const TRANSCRIPT_TAIL_BYTES = 64 * 1024;
+
+export function parseTranscriptTail(text: string, partialFirstLine: boolean): AgentMessage[] {
+	const lines = text.split("\n");
+	if (partialFirstLine) lines.shift();
+	const messages: AgentMessage[] = [];
+	for (const line of lines) {
+		if (!line.trim()) continue;
+		let entry: unknown;
+		try {
+			entry = JSON.parse(line);
+		} catch {
+			continue;
+		}
+		if (typeof entry !== "object" || entry === null) continue;
+		if (Reflect.get(entry, "type") !== "message") continue;
+		const message = Reflect.get(entry, "message");
+		if (typeof message === "object" && message !== null) messages.push(message as AgentMessage);
+	}
+	return messages;
+}
+
+export function deriveDiskActivityStatus(messages: readonly AgentMessage[]): ActivityStatus | null {
+	return deriveActivityStatus({
+		isStreaming: false,
+		pendingMessageCount: 0,
+		hasPendingDialog: false,
+		lastSettlement: undefined,
+		messages,
+	});
+}

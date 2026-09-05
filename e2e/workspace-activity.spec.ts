@@ -183,3 +183,20 @@ test("a collapsed project row carries the rollup, so activity survives folding t
 	await expand.click();
 	await expect(project).not.toHaveAttribute("data-activity", /.+/);
 });
+
+test("a never-opened chat's failure reaches the rail from disk, without entering its workspace", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	seedFailedChat(realpathSync(E2E_FIXTURE_REPO));
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+	const row = defaultWorkspaceRow(page);
+	await expect(row).toHaveAttribute("data-activity", "failed");
+	await expect(row.getByTestId("activity-glyph")).toHaveAttribute("aria-label", "Last run failed");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+	await expect(row).not.toHaveAttribute("data-active", "true");
+	await shot(page.getByTestId("project-tree"), "activity", "workspace-from-disk");
+});

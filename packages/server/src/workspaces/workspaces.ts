@@ -513,6 +513,10 @@ export function listWorkspaceRecords(projectId: string): Workspace[] {
 	return loadWorkspaces().filter((w) => w.projectId === projectId);
 }
 
+export function listAllWorkspaceRecords(): Workspace[] {
+	return loadWorkspaces();
+}
+
 export function forgetWorkspace(id: string): Workspace | null {
 	const all = loadWorkspaces();
 	const ws = all.find((w) => w.id === id);

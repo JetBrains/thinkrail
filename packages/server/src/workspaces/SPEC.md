@@ -107,7 +107,9 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   fan-out for cold navigation — an automatic reload on a shared host must not diff every worktree),
   `listWorkspaceRecords`
   (raw registry records without Default ensure, folder-truth reconciliation, or per-workspace git diffStats —
-  for internal read-only paths like history scope mapping that must not block on git spawns),
+  for internal read-only paths like history scope mapping that must not block on git spawns) and its
+  project-free sibling `listAllWorkspaceRecords` (every record, for host reads that must span workspaces
+  without knowing which projects are open — the activity snapshot),
   `workspaceDiffStats`, **`setWorkspaceSubagentsOverride(id, override)`** — persist `"on"` / `"off"`,
   or delete `Workspace.subagentsOverride` for `null` (inherit), then emit the authoritative full
   `workspace.updated` snapshot. It validates the closed value but never reads the global default or
@@ -205,7 +207,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   module the **single source of workspace lifecycle pushes** (the auto-rename tee no longer pushes — rename
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
 - **Public surface (barrel):** `createWorkspace`, `listExistingWorktrees`, `openExistingWorktree`,
-  `listWorkspaces`, `listWorkspaceRecords`, `forgetWorkspace`, `reclaimWorktree`, `removeWorkspace`,
+  `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,
+  `reclaimWorktree`, `removeWorkspace`,
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,

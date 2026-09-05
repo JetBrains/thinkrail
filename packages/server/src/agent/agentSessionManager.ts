@@ -1,5 +1,5 @@
 import { createReadStream, existsSync, rmSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { open, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/pi-ai";
@@ -14,6 +14,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type {
 	ActivityStatus,
+	AgentMessage,
 	AgentSettlement,
 	AskUserQuestionResult,
 	ImageContent,
@@ -40,7 +41,12 @@ import { isTranscriptMessageRole } from "@thinkrail/contracts";
 import type { ParentContext } from "pi-delegation";
 import { RECURSION_GUARD_TOOLS } from "pi-subagents";
 import { logger } from "../log";
-import { deriveActivityStatus } from "./activity";
+import {
+	deriveActivityStatus,
+	deriveDiskActivityStatus,
+	parseTranscriptTail,
+	TRANSCRIPT_TAIL_BYTES,
+} from "./activity";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import {
 	disposeSessionChildren,
@@ -158,7 +164,60 @@ function retractActivity(sessionId: string, workspaceId: string): void {
 	publishActivity({ sessionId, workspaceId, projectId, status: null });
 }
 
-export function listSessionActivity(): SessionActivity[] {
+interface DiskActivityMemo {
+	modifiedMs: number;
+	messageCount: number;
+	status: ActivityStatus | null;
+}
+const diskActivityMemo = new Map<string, DiskActivityMemo>();
+
+async function readTranscriptTail(path: string): Promise<AgentMessage[]> {
+	const handle = await open(path, "r");
+	try {
+		const { size } = await handle.stat();
+		const length = Math.min(size, TRANSCRIPT_TAIL_BYTES);
+		const buffer = Buffer.allocUnsafe(length);
+		await handle.read(buffer, 0, length, size - length);
+		return parseTranscriptTail(buffer.toString("utf8"), length < size);
+	} finally {
+		await handle.close();
+	}
+}
+
+async function diskActivityStatus(info: SessionInfo): Promise<ActivityStatus | null> {
+	const modifiedMs = info.modified.getTime();
+	const cached = diskActivityMemo.get(info.path);
+	if (cached && cached.modifiedMs === modifiedMs && cached.messageCount === info.messageCount) {
+		return cached.status;
+	}
+	const status = deriveDiskActivityStatus(await readTranscriptTail(info.path));
+	diskActivityMemo.set(info.path, { modifiedMs, messageCount: info.messageCount, status });
+	return status;
+}
+
+async function diskActivityRows(workspaceId: string, cwd: string): Promise<SessionActivity[]> {
+	const liveFiles = new Set<string>();
+	for (const entry of sessions.values()) {
+		if (entry.workspaceId !== workspaceId) continue;
+		const file = entry.session.sessionManager.getSessionFile();
+		if (file) liveFiles.add(resolve(file));
+	}
+	const projectId = activityProjectId(workspaceId);
+	if (projectId === null) return [];
+	const infos = await listSessionInfosStrict(cwd, liveFiles);
+	const rows: SessionActivity[] = [];
+	for (const info of infos) {
+		if (info.cwd !== cwd) continue;
+		if (sessions.has(info.id) || isSessionDeleted(info.id, workspaceId)) continue;
+		const status = await diskActivityStatus(info);
+		if (status) rows.push({ sessionId: info.id, workspaceId, projectId, status });
+	}
+	return rows;
+}
+
+export async function listSessionActivity(
+	workspaces: readonly { id: string; cwd: string }[] = [],
+): Promise<SessionActivity[]> {
 	const rows: SessionActivity[] = [];
 	for (const [sessionId, entry] of sessions) {
 		if (isSessionDeleted(sessionId, entry.workspaceId)) continue;
@@ -167,6 +226,13 @@ export function listSessionActivity(): SessionActivity[] {
 		const projectId = activityProjectId(entry.workspaceId);
 		if (projectId === null) continue;
 		rows.push({ sessionId, workspaceId: entry.workspaceId, projectId, status });
+	}
+	for (const workspace of workspaces) {
+		try {
+			rows.push(...(await diskActivityRows(workspace.id, workspace.cwd)));
+		} catch (error) {
+			log.warn(`activity snapshot skipped workspace ${workspace.id}`, error as Error);
+		}
 	}
 	return rows;
 }

@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test";
 import type { AgentMessage, StopReason } from "@thinkrail/contracts";
 import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
-import { type ActivityInputs, deriveActivityStatus } from "./activity";
+import {
+	type ActivityInputs,
+	deriveActivityStatus,
+	deriveDiskActivityStatus,
+	parseTranscriptTail,
+} from "./activity";
 import { ASK_ACK_TEXT, awaitingQuestionToolCallId } from "./askUserQuestion";
 
 const askCall = (toolCallId: string) =>
@@ -204,4 +209,42 @@ test("error and length are classified identically on both the settlement and tra
 			deriveActivityStatus(inputs({ messages: [userMessage(), assistant(stopReason)] })),
 		).toBeNull();
 	}
+});
+
+const entry = (message: unknown) => JSON.stringify({ type: "message", id: "e", message });
+
+test("a transcript tail parses only message entries, ignoring session headers and junk", () => {
+	const text = [
+		JSON.stringify({ type: "session", id: "s1", cwd: "/w" }),
+		entry({ role: "user", content: [{ type: "text", text: "go" }] }),
+		"not json at all",
+		JSON.stringify({ type: "summary", id: "x" }),
+		entry({ role: "assistant", content: [], stopReason: "error" }),
+		"",
+	].join("\n");
+	const messages = parseTranscriptTail(text, false);
+	expect(messages.map((m) => (m as { role: string }).role)).toEqual(["user", "assistant"]);
+});
+
+test("a truncated window drops its partial first line rather than parsing half an entry", () => {
+	const text = ['e": "hal', entry({ role: "assistant", content: [], stopReason: "error" })].join(
+		"\n",
+	);
+	expect(parseTranscriptTail(text, true)).toHaveLength(1);
+	expect(parseTranscriptTail(text, false)).toHaveLength(1);
+});
+
+test("a disk session can only ever be waiting, failed, or idle — never running or queued", () => {
+	expect(deriveDiskActivityStatus([userMessage(), assistant("error")])).toBe("failed");
+	expect(deriveDiskActivityStatus([userMessage(), assistant("length")])).toBe("failed");
+	expect(deriveDiskActivityStatus(awaiting)).toBe("waiting");
+	expect(deriveDiskActivityStatus([userMessage(), assistant("stop")])).toBeNull();
+	expect(deriveDiskActivityStatus([])).toBeNull();
+});
+
+test("the disk derivation runs the SAME precedence as a live session, not a copy of it", () => {
+	const messages = [...awaiting];
+	expect(deriveDiskActivityStatus(messages)).toBe(
+		deriveActivityStatus(inputs({ messages, lastSettlement: undefined })),
+	);
 });

@@ -1,5 +1,13 @@
 import { afterAll, beforeAll, expect, jest, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	appendFileSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -20,6 +28,7 @@ import type {
 	ImageContent,
 	SessionSummary,
 } from "@thinkrail/contracts";
+import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import {
 	abortSession,
 	buildSessionSettings,
@@ -1509,14 +1518,15 @@ test("a rolled-back delete republishes activity — a suppressed glyph would out
 		sessionId = session.sessionId;
 		await promptSession(session.sessionId, "fail please");
 
-		const mine = () => listSessionActivity().filter((row) => row.sessionId === sessionId);
+		const mine = async () =>
+			(await listSessionActivity()).filter((row) => row.sessionId === sessionId);
 		expect(published.at(-1)).toBe("failed");
-		expect(mine().map((row) => row.status)).toEqual(["failed"]);
-		expect(mine()[0]?.projectId).toBe("project-1");
+		expect((await mine()).map((row) => row.status)).toEqual(["failed"]);
+		expect((await mine())[0]?.projectId).toBe("project-1");
 
 		deleting = deleteSession(session.sessionId, "ws-delete-activity", cwd);
 		await trashStarted;
-		expect(mine()).toEqual([]);
+		expect(await mine()).toEqual([]);
 
 		syncSessionActivity(session.sessionId);
 		expect(published.at(-1)).toBeNull();
@@ -1526,7 +1536,7 @@ test("a rolled-back delete republishes activity — a suppressed glyph would out
 
 		expect(hasSession(session.sessionId)).toBe(true);
 		expect(published.at(-1)).toBe("failed");
-		expect(mine().map((row) => row.status)).toEqual(["failed"]);
+		expect((await mine()).map((row) => row.status)).toEqual(["failed"]);
 	} finally {
 		failTrash();
 		await deleting?.catch(() => {});
@@ -1536,4 +1546,77 @@ test("a rolled-back delete republishes activity — a suppressed glyph would out
 		setActivityProjectResolver(() => null);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
+});
+
+test("the activity snapshot finds durable states on disk with no session ever attached", async () => {
+	setActivityProjectResolver(() => "project-disk");
+	const cwd = tmpCwd("trpi-activity-disk-");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	mkdirSync(dir, { recursive: true });
+
+	const broken = writeFixtureSession(dir, {
+		id: "disk-failed",
+		cwd,
+		messages: [
+			{ role: "user", text: "ship it", timestamp: 1 },
+			{ role: "assistant", text: "tried", timestamp: 2, stopReason: "error" },
+		],
+	});
+	writeFixtureSession(dir, {
+		id: "disk-done",
+		cwd,
+		messages: [
+			{ role: "user", text: "tidy up", timestamp: 3 },
+			{ role: "assistant", text: "done", timestamp: 4, stopReason: "stop" },
+		],
+	});
+
+	try {
+		const rows = await listSessionActivity([{ id: "ws-disk", cwd }]);
+		const mine = rows.filter((row) => row.workspaceId === "ws-disk");
+		expect(mine).toEqual([
+			{
+				sessionId: "disk-failed",
+				workspaceId: "ws-disk",
+				projectId: "project-disk",
+				status: "failed",
+			},
+		]);
+		expect(hasSession("disk-failed")).toBe(false);
+
+		const repeated = (await listSessionActivity([{ id: "ws-disk", cwd }])).filter(
+			(row) => row.workspaceId === "ws-disk",
+		);
+		expect(repeated).toEqual(mine);
+
+		appendFileSync(
+			broken.path,
+			`${JSON.stringify({
+				type: "message",
+				id: "recovered",
+				message: { role: "assistant", content: [], stopReason: "stop" },
+			})}\n`,
+		);
+		const after = (await listSessionActivity([{ id: "ws-disk", cwd }])).filter(
+			(row) => row.workspaceId === "ws-disk",
+		);
+		expect(after).toEqual([]);
+	} finally {
+		setActivityProjectResolver(() => null);
+	}
+});
+
+test("an unresolvable project keeps disk sessions out of the snapshot", async () => {
+	const cwd = tmpCwd("trpi-activity-noproject-");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	mkdirSync(dir, { recursive: true });
+	writeFixtureSession(dir, {
+		id: "disk-orphan",
+		cwd,
+		messages: [
+			{ role: "user", text: "hello", timestamp: 1 },
+			{ role: "assistant", text: "broke", timestamp: 2, stopReason: "error" },
+		],
+	});
+	expect(await listSessionActivity([{ id: "ws-orphan", cwd }])).toEqual([]);
 });
