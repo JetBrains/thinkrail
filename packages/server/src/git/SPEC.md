@@ -33,8 +33,25 @@ ref off the workspace-create critical path.
   execution failure, so semantic probes can distinguish "ref absent" from "Git never answered". The
   reads take that same 55s default (`opts.timeoutMs` overrides it): a local read that has to be *bounded*
   at all is a wedged git, and every one of them was unbounded before it moved off the loop;
-  **`remoteTrackingRef(ref)`** → `refs/remotes/<ref>` for an `origin/` ref, else `null` — **the one place
-  that spelling is built**, so the probe below and `workspaces`' `worktree add` cannot drift apart. Its
+  **`remoteTrackingRef(ref, remotes)`** → `refs/remotes/<ref>` when the ref begins with one of the
+  repository's configured remote names (`remoteNameOf`, fed by `listRemotes`), else `null` — **the one
+  place that spelling is built**, so the probe below and `workspaces`' `worktree add` cannot drift apart.
+  Matching chooses the longest remote prefix because Git permits `/` in a remote name (`team/upstream`);
+  first-component parsing would fetch the wrong remote. Remote-ness is decided against the actual remote
+  list, never the string's shape: `upstream/main` and a local `feature/main` are the same shape. So
+  `listBranches` enumerates all of `refs/remotes` (every symbolic alias, including each remote's `HEAD`, is
+  skipped) and reads `git remote` in the same async fan-out to attach authoritative ownership as optional
+  `BranchList.remoteGroups`. An ownership-read failure rejects the catalog rather than making the browser
+  guess; a tracking ref with no configured owner is retained under a `null` group. `prefetchBranch` fetches
+  from whichever configured remote the ref names, and `workspaces` fetches and checks out that same
+  fully-qualified tracking ref.
+  **`resolveDefaultBranch` keeps its sync spawn budget** — it is called by every Default-workspace
+  `folderTruth`, so a spare spawn is shared-event-loop time every workspace listing pays. Origin's HEAD
+  stays a lone `symbolic-ref` (the only read that sees it while dangling), followed by one `for-each-ref`
+  over full `refs/remotes/…` names. Only refs whose full name ends in `/HEAD` may supply another remote's
+  default; arbitrary symbolic aliases are ignored, and the exact full-name check for
+  `refs/remotes/origin/main` cannot be confused by a local branch literally named `origin/main`. A dangling
+  non-origin HEAD remains invisible to `for-each-ref` and degrades to the existing guess. Its
   reach is **creation only**, and `resolveDiffRange` is the named survivor: `diffBaseRef` hands git the
   `origin/<b>` shorthand recorded in `baseBranch`, so in the very setup create now guards against — a local
   branch literally named `origin/main` — the worktree is cut from `refs/remotes/origin/main` while the diff
@@ -42,7 +59,9 @@ ref off the workspace-create critical path.
   ref, so qualifying it is a change to what a *pinned* base means, not a spelling fix;
   **`remoteRefOid(repoPath, ref)`** → the oid `refs/remotes/<ref>` resolves to, or `null` — **the one way
   to ask whether a remote-tracking ref is present**, shared by `prefetchBranch` (which compares oids to
-  report `moved`), `resolveDefaultBranch`'s `origin/main` fallback, and `workspaces`' create fallback. It
+  report `moved`) and `workspaces`' create fallback. It
+  gates on `isSafeRef` rather than the remote list, because whether the tracking ref *resolves* is the
+  whole of what it answers and such a ref outlives the remote's configuration. It
   probes the **full** `refs/remotes/` path behind
   `--end-of-options`: the `origin/<b>` shorthand goes through git's disambiguation and can resolve to a
   tag or a local branch of that name, so the call sites would have raced over different objects. "One way"
@@ -138,9 +157,13 @@ ref off the workspace-create critical path.
   remote-tracking ref, no network), `null` only when that ref doesn't exist (never pushed); timeout/launch
   failures throw, and a normal nonzero with a still-present ref throws instead of impersonating absence — the host's
   `workspace.openReview` composes it onto an open review (in parallel with the gh lookup, not after
-  it) so the plan page can flag commits the PR doesn't have yet; `listBranches(projectId)` → `{ local, remote,
-  defaultBranch }` (local `refs/heads`, remote `refs/remotes/origin` minus `origin/HEAD`, default =
-  `origin/HEAD`→`origin/main`→repo `HEAD`; either ref-list failure throws, never a successful partial catalog),
+  it) so the plan page can flag commits the PR doesn't have yet — the `origin/` here is the second
+  deliberate survivor of the all-remotes sweep, because it asks where *this* workspace's own branch was
+  pushed, not which remote a base was branched from; `listBranches(projectId)` → `{ local, remote,
+  remoteGroups?, defaultBranch }` (local `refs/heads`; canonical `remote` = every direct full ref under
+  `refs/remotes` with symbolic aliases omitted; additive `remoteGroups` = host-owned remote/branch metadata
+  for presentation; default = origin's `HEAD`→another remote's `HEAD`→`origin/main`→repo `HEAD`; any ref-list
+  or ownership-list failure throws, never a successful partial catalog),
   **`resolveDefaultBranch(repoPath)`** — that default-branch
   resolution factored out (named once), shared by `listBranches` and the `workspaces` module's
   Default-workspace ensure (its `baseBranch`); its last fallback is `currentBranch`, so an unborn `HEAD`
@@ -152,8 +175,9 @@ ref off the workspace-create critical path.
   detach); **`canonicalPath(path)`** — the symlink-resolved form any path compared against git output must
   take (git resolves symlinks, a caller's path does not), shared with `workspaces`' worktree-identity
   checks; `prefetchBranch(projectId, ref)` — best-effort background
-  `git fetch` of a remote ref (via `gitAsync`), so a later `createWorkspace` branches off a fresh tip
-  without the network round-trip on its critical path (non-`origin/` ref / offline → no-op). Its ref is
+  `git fetch` of a configured remote ref (via `gitAsync`), so a later `createWorkspace` branches off a
+  fresh tip without the network round-trip on its critical path (local/unknown ref or offline → no-op).
+  Its ref is
   **wire-supplied and passes the same `isSafeRef` gate `createWorkspace` uses** before it reaches git:
   `--` separates *options*, not refspecs, so `--`-after-`fetch` alone stopped a `-`-prefixed name and
   nothing else — `origin/+main:refs/heads/victim` would have arrived as a **refspec** and let any client
@@ -201,7 +225,7 @@ ref off the workspace-create critical path.
   `gitCommitPaths`, `gitHeadSha`, `listCommits`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
-  `canonicalPath`, `prefetchBranch`, `countUnpushedCommits`.
+  `canonicalPath`, `prefetchBranch`, `countUnpushedCommits`, `listRemotes`, `remoteNameOf`.
 - **Allowed deps:** `persistence` (workspace + project lookup), `log`; `contracts` (`Git*`/`BranchList` types);
   `subprocess` (`runBounded`, the bounded child behind `gitAsync`);
   `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn, for the sync runner).

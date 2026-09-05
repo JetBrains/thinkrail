@@ -1,9 +1,62 @@
+import { spawnSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "@playwright/test";
-import { openAppFresh, openFixtureProject, worktreeRows } from "./fixtures/app";
-import { git } from "./fixtures/git";
+import { expect, type Page, test } from "@playwright/test";
+import {
+	createWorkspaceViaDialog,
+	openAppFresh,
+	openFixtureProject,
+	worktreeRows,
+} from "./fixtures/app";
+import { git, gitAs, gitText } from "./fixtures/git";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PICK_DIR_POINTER } from "./fixtures/paths";
+
+function seedRemoteProject(name: string, withUpstream = false) {
+	const root = join(E2E_DATA_DIR, name);
+	const repo = join(root, "repo");
+	const origin = join(root, "origin.git");
+	rmSync(root, { recursive: true, force: true });
+	mkdirSync(repo, { recursive: true });
+	git(repo, "init", "-b", "main");
+	git(repo, "config", "user.email", "e2e@thinkrail.test");
+	git(repo, "config", "user.name", "ThinkRail E2E");
+	git(repo, "config", "commit.gpgsign", "false");
+	writeFileSync(join(repo, "README.md"), "base\n");
+	git(repo, "add", "README.md");
+	git(repo, "commit", "-m", "base");
+	git(root, "init", "--bare", "-b", "main", origin);
+	git(repo, "remote", "add", "origin", origin);
+	git(repo, "push", "origin", "main");
+	git(repo, "fetch", "origin");
+	git(repo, "remote", "set-head", "origin", "main");
+	if (withUpstream) {
+		const upstream = join(root, "upstream.git");
+		git(root, "init", "--bare", "-b", "trunk", upstream);
+		git(repo, "remote", "add", "upstream", upstream);
+		git(repo, "push", "upstream", "main:trunk");
+		git(repo, "fetch", "upstream");
+		git(repo, "remote", "set-head", "upstream", "trunk");
+	}
+	return { root, repo, origin };
+}
+
+async function openPickedProjectWorkspaceDialog(page: Page, repo: string) {
+	writeFileSync(E2E_PICK_DIR_POINTER, repo);
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-open-project").click();
+	await expect(page.getByTestId("project-item").first()).toBeVisible();
+	await page.getByTestId("add-workspace").first().click();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	return dialog;
+}
+
+function refOid(repo: string, ref: string): string | null {
+	const result = spawnSync("git", ["-C", repo, "rev-parse", "--verify", ref], {
+		encoding: "utf8",
+	});
+	return result.status === 0 ? result.stdout.trim() : null;
+}
 
 test("the dialog lists local branches (no stray origin) and creates a worktree", async ({
 	page,
@@ -208,4 +261,69 @@ test("a base whose fetch fails reports git's error, not a request timeout", asyn
 		writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 		rmSync(repo, { recursive: true, force: true });
 	}
+});
+
+test("the branch picker groups by host-supplied remotes and creates from the selected ref", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+	const { repo } = seedRemoteProject("all-remotes-picker", true);
+	const dialog = await openPickedProjectWorkspaceDialog(page, repo);
+	await dialog.getByTestId("ws-branch-picker").click();
+
+	const headings = page.locator("[cmdk-group-heading]");
+	await expect(headings.filter({ hasText: /^Remote$/ })).toBeVisible();
+	await expect(headings.filter({ hasText: /^origin$/ })).toBeVisible();
+	await expect(headings.filter({ hasText: /^upstream$/ })).toBeVisible();
+	await expect(headings.filter({ hasText: /^Local$/ })).toBeVisible();
+	const origin = page.locator('[data-testid="branch-option"][data-branch="origin/main"]');
+	await expect(origin).toContainText("main");
+	await expect(origin).not.toContainText("origin/");
+	const upstream = page.locator('[data-testid="branch-option"][data-branch="upstream/trunk"]');
+	await expect(upstream).toContainText("trunk");
+	await expect(upstream).not.toContainText("upstream/");
+
+	await page.getByPlaceholder("Search branches…").fill("upstream/trunk");
+	await expect(page.getByTestId("branch-option")).toHaveCount(1);
+	await upstream.click();
+
+	const workspace = await createWorkspaceViaDialog(page);
+	expect(workspace.baseBranch).toBe("upstream/trunk");
+	expect(gitText(workspace.worktreePath, "rev-parse", "HEAD").trim()).toBe(
+		gitText(repo, "rev-parse", "refs/remotes/upstream/trunk").trim(),
+	);
+});
+
+test("opening New Workspace prefetches a stale default before create", async ({ page }) => {
+	await openAppFresh(page);
+	const { root, repo, origin } = seedRemoteProject("stale-default-prefetch");
+	const oldSha = gitText(repo, "rev-parse", "refs/remotes/origin/main").trim();
+	const writer = join(root, "writer");
+	git(root, "clone", origin, writer);
+	git(writer, "config", "commit.gpgsign", "false");
+	writeFileSync(join(writer, "README.md"), "new\n");
+	gitAs(writer, "add", "README.md");
+	gitAs(writer, "commit", "-m", "new");
+	git(writer, "push", "origin", "main");
+	const newSha = gitText(writer, "rev-parse", "HEAD").trim();
+	expect(newSha).not.toBe(oldSha);
+
+	const dialog = await openPickedProjectWorkspaceDialog(page, repo);
+	await expect(dialog.getByTestId("ws-branch-picker")).toContainText("origin/main");
+	await expect
+		.poll(() => refOid(repo, "refs/remotes/origin/main"), { timeout: 5_000 })
+		.toBe(newSha);
+});
+
+test("opening New Workspace prefetches a missing default tracking ref", async ({ page }) => {
+	await openAppFresh(page);
+	const { repo } = seedRemoteProject("missing-default-prefetch");
+	const expectedSha = gitText(repo, "rev-parse", "HEAD").trim();
+	git(repo, "update-ref", "-d", "refs/remotes/origin/main");
+
+	const dialog = await openPickedProjectWorkspaceDialog(page, repo);
+	await expect(dialog.getByTestId("ws-branch-picker")).toContainText("origin/main");
+	await expect
+		.poll(() => refOid(repo, "refs/remotes/origin/main"), { timeout: 5_000 })
+		.toBe(expectedSha);
 });

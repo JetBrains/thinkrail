@@ -163,8 +163,12 @@ of the host.
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types — incl. **`GitDiffScope`** (what the Changes
   panel is diffing: `branch` → the workspace's work since diverging from its diff base (the range starts at
   their merge-base, never the base's tip) / `uncommitted` → worktree vs `HEAD` /
-  `commit` → one commit, `sha^` vs `sha`; omitted on the wire = `branch`, so an older client is unchanged)
-  and **`GitCommit`** (a commit row of the scope menu's list). The two meanings of a workspace's base are
+  `commit` → one commit, `sha^` vs `sha`; omitted on the wire = `branch`, so an older client is unchanged),
+  **`GitCommit`** (a commit row of the scope menu's list), and **`BranchList`**: `remote` remains the
+  canonical full-ref string list, while optional host-authored `remoteGroups` carries each configured
+  remote and its `{ ref, branch }` rows for two-layer presentation. The field is additive so a newer UI
+  falls back to full refs against an older host; a `null` remote group preserves tracking refs whose
+  configuration was removed without inventing ownership in the browser. The two meanings of a workspace's base are
   **two fields**: `Workspace.baseBranch` is *creation provenance* (the ref the worktree was cut from — what
   the receipt's `branch · from baseBranch` shows; for a **user-owned** workspace, whose provenance isn't
   ThinkRail's to claim, it is the repo default as the *initial* review target and the UI shows no `from`)

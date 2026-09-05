@@ -29,15 +29,20 @@ when present; the title/body defaults come from ONE place — openPr consumes `p
 previewed draft and the pushed PR can never diverge). The call opens with **`assertSafeRef(ws.branch)`**:
 adopted/external worktree branches are stored verbatim from git (only created workspaces pass
 `toBranch`), so an option-shaped branch from an untrusted repo (`--repo=x` is creatable via
-`git update-ref`) must be rejected before it reaches any git/gh argv, **then rejects when the branch
-IS its base** (`ws.branch === baseRef(ws.baseBranch)`, before the origin check or any push): the
-Default workspace's cwd is the project's own checkout, so `branch`/`baseBranch` commonly coincide
-whenever the user is on the repository's default branch (`workspaces`' `folderTruth` tracks both off
-the live `git symbolic-ref`), and an external (adopted) workspace can equally sit on its base — without
-this guard, Open PR would `git push origin <default-branch>` straight to the shared branch on an
-unprotected remote, publishing the commits before any PR could offer its review boundary. The client
-disables the Open PR affordances (header button, draft-PR menu item, the "ready to ship" banner) the
-same way for the same reason. **`refreshUserOwnedWorkspace(workspaceId)` resolves the LIVE branch for
+`git update-ref`) must be rejected before it reaches any git/gh argv. It then rejects a **non-origin
+remote base before the dirty-file read or push**: V1 pushes and opens against `origin`; silently treating
+`upstream/main` as a branch in that repository would first publish the workspace branch and only later
+fail to identify its PR target. A remote-tracking ref that outlived its remote configuration is rejected
+on the same side. The error directs the user to open it manually or create from a local/`origin` base;
+cross-repository fork PR creation is future scope, not guessed from string prefixes.
+The next guard rejects when the branch **IS its base** (`ws.branch === baseRef(ws.baseBranch)`, still
+before the origin check or any push): the Default workspace's cwd is the project's own checkout, so
+`branch`/`baseBranch` commonly coincide whenever the user is on the repository's default branch
+(`workspaces`' `folderTruth` tracks both off the live `git symbolic-ref`), and an external (adopted)
+workspace can equally sit on its base — without this guard, Open PR would `git push origin
+<default-branch>` straight to the shared branch on an unprotected remote, publishing the commits before
+any PR could offer its review boundary. The client mirrors the ordinary local/`origin` same-branch case;
+the host remains authoritative for unsupported remote bases. **`refreshUserOwnedWorkspace(workspaceId)` resolves the LIVE branch for
 Default/external workspaces** (`workspaces`' same sync used by the fs-watcher tee) and persists it — a
 no-op for created workspaces, whose branch only ThinkRail ever moves. Open PR validates once before its
 async dirty-file read (preserving the safe base-branch fast failure), then refreshes, reloads, and

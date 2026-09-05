@@ -16,6 +16,7 @@ export {
 	gitUncommittedPaths,
 	listBranches,
 	listCommits,
+	listRemotes,
 	prefetchBranch,
 	readBlobAt,
 	remoteRefOid,
@@ -23,4 +24,4 @@ export {
 	tryCurrentBranch,
 } from "./git";
 export { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";
-export { assertSafeRef, isSafeRef, remoteTrackingRef } from "./refs";
+export { assertSafeRef, isSafeRef, remoteNameOf, remoteTrackingRef } from "./refs";

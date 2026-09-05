@@ -213,6 +213,100 @@ test("listBranches surfaces origin branches and the origin default", async () =>
 	expect(defaultBranch).toBe("origin/main");
 });
 
+test("the origin/main default survives a local branch with the same shorthand", async () => {
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "update-ref", "--no-deref", "-d", "refs/remotes/origin/HEAD");
+	git(repo, "update-ref", "refs/heads/origin/main", "HEAD");
+
+	const branches = await listBranches("p1");
+	expect(branches.remote).toContain("origin/main");
+	expect(branches.defaultBranch).toBe("origin/main");
+});
+
+function addSecondRemote(): void {
+	const originRepo = join(dataDir, "origin.git");
+	const upstreamRepo = join(dataDir, "upstream.git");
+	git(repo, "init", "--bare", originRepo);
+	git(repo, "init", "--bare", upstreamRepo);
+	git(repo, "remote", "add", "origin", originRepo);
+	git(repo, "remote", "add", "upstream", upstreamRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "push", "upstream", "main:trunk");
+	git(repo, "fetch", "upstream");
+	git(repo, "remote", "set-head", "upstream", "trunk");
+}
+
+test("listBranches lists every remote's branches, each remote's HEAD symref dropped", async () => {
+	addSecondRemote();
+
+	const { remote, remoteGroups } = await listBranches("p1");
+	expect(remote).toContain("origin/main");
+	expect(remote).toContain("upstream/trunk");
+	expect(remote).not.toContain("upstream/HEAD");
+	expect(remote).not.toContain("origin/HEAD");
+	expect(remoteGroups).toEqual([
+		{ remote: "origin", branches: [{ ref: "origin/main", branch: "main" }] },
+		{ remote: "upstream", branches: [{ ref: "upstream/trunk", branch: "trunk" }] },
+	]);
+});
+
+test("another remote's HEAD is the default when origin has none, over the origin/main guess", async () => {
+	addSecondRemote();
+
+	expect((await listBranches("p1")).defaultBranch).toBe("upstream/trunk");
+
+	git(repo, "remote", "set-head", "origin", "main");
+	expect((await listBranches("p1")).defaultBranch).toBe("origin/main");
+});
+
+test("only a remote HEAD symref can become the non-origin default", async () => {
+	addSecondRemote();
+	git(repo, "update-ref", "refs/remotes/aaa/topic", "HEAD");
+	git(repo, "symbolic-ref", "refs/remotes/aaa/alias", "refs/remotes/aaa/topic");
+
+	expect((await listBranches("p1")).defaultBranch).toBe("upstream/trunk");
+});
+
+test("a remote HEAD still answers once its target is gone, so create can report the failed fetch", async () => {
+	addSecondRemote();
+	git(repo, "remote", "set-head", "origin", "main");
+	git(repo, "update-ref", "-d", "refs/remotes/origin/main");
+
+	expect((await listBranches("p1")).defaultBranch).toBe("origin/main");
+});
+
+test("prefetch fetches from the remote the ref names, and refuses a remote-shaped local branch", async () => {
+	addSecondRemote();
+
+	git(repo, "update-ref", "-d", "refs/remotes/upstream/trunk");
+	expect(await prefetchBranch("p1", "upstream/trunk")).toEqual({ ok: true, moved: true });
+
+	git(repo, "branch", "upstairs/trunk");
+	expect(await prefetchBranch("p1", "upstairs/trunk")).toEqual({ ok: false, moved: false });
+});
+
+test("prefetch honors a legal remote name containing a slash", async () => {
+	const nestedRepo = join(dataDir, "team-upstream.git");
+	git(repo, "init", "--bare", nestedRepo);
+	git(repo, "remote", "add", "team/upstream", nestedRepo);
+	git(repo, "push", "team/upstream", "main:trunk");
+	git(repo, "update-ref", "-d", "refs/remotes/team/upstream/trunk");
+
+	expect(await prefetchBranch("p1", "team/upstream/trunk")).toEqual({
+		ok: true,
+		moved: true,
+	});
+	expect((await listBranches("p1")).remoteGroups).toEqual([
+		{
+			remote: "team/upstream",
+			branches: [{ ref: "team/upstream/trunk", branch: "trunk" }],
+		},
+	]);
+});
+
 test("listBranches throws on an unknown project", async () => {
 	await expect(listBranches("nope")).rejects.toThrow(/Unknown project/);
 });
@@ -221,6 +315,12 @@ test("listBranches never returns a partial catalog when either ref read fails", 
 	failGitSubcommand("for-each-ref");
 
 	await expect(listBranches("p1")).rejects.toThrow(/Could not list local branches/);
+});
+
+test("listBranches fails rather than inventing remote ownership", async () => {
+	failGitSubcommand("remote");
+
+	await expect(listBranches("p1")).rejects.toThrow(/Could not list remotes/);
 });
 
 test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown project", async () => {

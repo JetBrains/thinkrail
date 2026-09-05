@@ -186,14 +186,24 @@ treatment.
   used by both the flat list's path rows and the diff header's path chip. The **branch combobox** is the
   shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, refreshed on every
   open with an explicit Refresh control as well) — one component for the New-Workspace dialog's *base* branch
-  and the Changes header's *target* branch; the whole state *around* it — the list, `refreshing`, `refresh()` —
-  is the shared
+  and the Changes header's *target* branch. **Remote is two layers**: one `Remote` parent over a subgroup per
+  host-identified remote (`origin`, `upstream`), whose rows show branch names without repeating the remote.
+  The full ref remains every row's selection identity, search value, and `data-branch`; the browser never
+  splits `remote/branch`, because Git permits `/` in a remote name. Unconfigured tracking refs live under
+  `Other` and keep their full ref as the row label. `BranchList.remoteGroups` is additive: against an older
+  host that omits it, the picker falls back to one flat Remote group of full refs. The grouped path uses
+  nested cmdk groups; the force-mounted parent hides only when cmdk has hidden every child group. A fork
+  works two remotes, so a list that shows only `origin` hides the ref it branches from. The whole state
+  *around* it — the list, `refreshing`, `refresh()` — is the shared
   **`useBranchList(projectId, onLoaded?)`** (`branches.ts`, over the offline-degrading
   `listBranchesOrEmpty`), so both pickers are identical **by construction**: the list is **keyed to the
   project** (it clears on a project change, and both reads are generation-stamped, so a switch can never
   offer or land the previous project's branches), **only the initial read degrades** (a *refresh* keeps its
   last good list instead of blanking the picker on a transient failure), and `refreshing` always drives the
-  spinner. A `null` projectId reads nothing — how a closed dialog pauses. Its degraded default is
+  spinner. Initial-load prefetch always offers the non-empty default to the host, which is the authority on
+  whether it names a configured remote; this keeps a stale or missing default tracking ref off create's
+  critical path without reading the not-yet-rendered branch state. Manual picks prefetch only rows from the
+  loaded remote list. A `null` projectId reads nothing — how a closed dialog pauses. Its degraded default is
   `defaultBranch: ""`, **never the literal `HEAD`**: a sentinel that named a ref would be believed — the
   dialog would preselect it and persist it as the workspace's `baseBranch`, and that worktree would forever
   diff against its own head. Empty means "unknown", so `create` omits `baseRef` and the host resolves the

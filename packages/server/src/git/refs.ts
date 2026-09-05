@@ -24,6 +24,16 @@ export function assertSafeRef(ref: string): void {
 	if (!isSafeRef(ref)) throw new Error(`Not a usable git ref: ${ref}`);
 }
 
-export function remoteTrackingRef(ref: string): string | null {
-	return ref.startsWith("origin/") ? `refs/remotes/${ref}` : null;
+export function remoteNameOf(ref: string, remotes: readonly string[]): string | null {
+	let match: string | null = null;
+	for (const remote of remotes) {
+		if (ref.startsWith(`${remote}/`) && (match === null || remote.length > match.length)) {
+			match = remote;
+		}
+	}
+	return match;
+}
+
+export function remoteTrackingRef(ref: string, remotes: readonly string[]): string | null {
+	return remoteNameOf(ref, remotes) ? `refs/remotes/${ref}` : null;
 }
