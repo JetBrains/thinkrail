@@ -60,8 +60,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    **One feature path across deployments.** An ordinary product feature changes its contract, the owning
    server feature module, the shared web client, and their tests — never each launcher. Launchers and future
    deployments own only composition, lifecycle, endpoint selection, native presentation, and artifact
-   packaging. A real second environment that cannot supply an existing host operation earns one narrow port
-   in the feature module that owns that behavior; do not pre-abstract the host behind a global platform
+   packaging. One optional, capability-shaped native-window adapter is the deliberate presentation seam:
+   the desktop preload injects it before React, only the web composition shell consumes it, and browser
+   clients simply have no capability. It carries window actions/state, never a deployment name, wire method,
+   domain state, or alternative UI. A real second environment that cannot supply an existing host operation
+   earns one narrow port in the feature module that owns that behavior; do not pre-abstract the host behind a global platform
    adapter. Physical runtime requirements are declared once through the server-owned build-support manifest,
    then transformed by each packager. The same behavior and artifact suites run through every launcher, so
    reuse is enforced by boundaries and conformance rather than parallel implementations.
@@ -197,8 +200,8 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     exact `thinkrail.ai` origin. The retired `vibecoding.thinkrail.ai` hostname is an edge redirect that
     preserves path and query, never a proxy to a second site.
 
-15. **Desktop packaging preserves the host/runtime boundary.** Electrobun `1.18.1` packages Bun `1.3.14`
-    and embeds the host in its Bun process; it never wraps or spawns the CLI. The native window loads the
+15. **Desktop packaging preserves the host/runtime boundary.** Electrobun `2.0.1` packages Bun `1.4.0`
+    and embeds the host in its Bun main process; it never wraps or spawns the CLI. The native window loads the
     packaged web build from the host's actual loopback port so UI, wire, files, and SPA fallback keep one
     origin. Native resources that require paths stay unpacked. The shell sets the staged `bun-pty` library
     before server import and loads PI from a separately bundled `.ts` runtime so external TypeScript
@@ -207,7 +210,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     or canonical-data-directory ownership policy. Each host binds its own loopback port; when multiple hosts
     point at the same mutable data directory, cross-process consistency is intentionally not guaranteed.
     Desktop artifacts are additive; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
-    the supported Linux floor. Releases are **staged as drafts here and signed elsewhere**: the
+    the supported Linux floor. The native window has one app-chrome row with platform-specific mechanics:
+    AppKit traffic lights on macOS, a preserved DWM frame plus web controls on Windows, and web controls plus
+    compositor-owned GTK move/resize on Linux. The preload's bounded capability lets the one web shell adapt
+    that presentation without learning a deployment identity; native behavior is target-smoke-gated.
+    Releases are **staged as drafts here and signed elsewhere**: the
     JetBrains signing runners are unavailable to public repositories, so `JetBrains/thinkrail-signing`
     (private) signs the staged assets and publishes the draft. Windows artifacts carry an EV
     Authenticode signature; the macOS CLI binary carries a Developer ID signature that Gatekeeper
