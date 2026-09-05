@@ -78,9 +78,11 @@ therefore proven through every composition root.
 ## Desktop-backed mode
 
 `bun run e2e:desktop` runs the complete no-agent suite against the host embedded in the packaged
-Electrobun process. A test-only environment seam keeps Electrobun's required native window hidden on a
-neutral local page and publishes the dynamic host origin through a ready file. Playwright is therefore the
-only hydrated application client: the native webview cannot take over exclusive terminal attachment or
+Electrobun process. A test-only environment seam keeps Electrobun's required native window hidden on the
+loopback `/health` document and publishes the dynamic host origin through a ready file. `about:blank` is not
+neutral under Electrobun 2: its trusted preload cannot initialize WebCrypto there and emits an encryption
+error, while loopback is a secure context and still hydrates no application client. Playwright is therefore
+the only hydrated application client: the native webview cannot take over exclusive terminal attachment or
 write shared placement while the test page is asserting it. The desktop adapter writes the control file
 only after Playwright finishes, then requires normal graceful application exit.
 

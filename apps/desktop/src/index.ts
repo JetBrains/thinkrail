@@ -53,6 +53,7 @@ async function start(): Promise<void> {
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const initialPreferences = preferences.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const neutral = process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
+	const windowUrl = neutral ? `${origin}/health` : `${origin}/${initialRoute}`;
 	const rpc = BrowserView.defineRPC<DesktopRpc>({
 		maxRequestTime: 5000,
 		handlers: {
@@ -89,7 +90,7 @@ async function start(): Promise<void> {
 			);
 	const mainWindow = new BrowserWindow({
 		title: "ThinkRail",
-		url: neutral ? "about:blank" : `${origin}/${initialRoute}`,
+		url: windowUrl,
 		preload,
 		...(neutral ? {} : { rpc }),
 		hidden:
@@ -116,7 +117,7 @@ async function start(): Promise<void> {
 				runtimeDir,
 				applicationMenuInstalled,
 				pid: process.pid,
-				windowUrl: neutral ? "about:blank" : `${origin}/${initialRoute}`,
+				windowUrl,
 				mode: neutral ? "host" : "ui",
 			});
 		}
