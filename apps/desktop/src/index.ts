@@ -18,7 +18,7 @@ import {
 	readDesktopPreferenceWrite,
 } from "./preferenceAdapter";
 import { PreferenceStore } from "./preferenceStore";
-import { injectWindowChromePlatform } from "./preloadWindowChrome";
+import { injectWindowChromePlatform, readPreloadWindowChromePlatform } from "./preloadWindowChrome";
 import { RouteStore } from "./routeStore";
 import type { DesktopRpc } from "./rpc";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
@@ -102,7 +102,12 @@ async function start(): Promise<void> {
 					if (edge) windowChromeController?.startResize(edge);
 				},
 				windowChromeReady: (payload) => {
-					windowChromePreloadReady = payload.platform === chromePolicy.platform;
+					windowChromePreloadReady =
+						readPreloadWindowChromePlatform(
+							typeof payload === "object" && payload !== null
+								? Reflect.get(payload, "platform")
+								: null,
+						) === chromePolicy.platform;
 					publishReady();
 				},
 			},
@@ -130,10 +135,12 @@ async function start(): Promise<void> {
 			: {}),
 		frame: { x: 80, y: 60, width: 1440, height: 920 },
 	});
-	if (chromePolicy.platform === "windows") preserveWindowsNativeFrame(mainWindow.ptr);
+	const nativeWindowHandle = mainWindow.ptr;
+	if (!nativeWindowHandle) throw new Error("desktop native window handle is unavailable");
+	if (chromePolicy.platform === "windows") preserveWindowsNativeFrame(nativeWindowHandle);
 	const startLinuxResize =
 		chromePolicy.platform === "linux"
-			? createLinuxResizeStarter(runtimeDir, mainWindow.ptr)
+			? createLinuxResizeStarter(runtimeDir, nativeWindowHandle)
 			: () => {};
 	windowChromeController = createDesktopWindowChromeController({
 		platform: chromePolicy.platform,

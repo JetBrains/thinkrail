@@ -75,7 +75,7 @@ export function desktopWindowChromePolicy(platform: NodeJS.Platform): DesktopWin
 }
 
 export function preservedWindowsStyle(style: bigint): bigint {
-	return style | 0x000b0000n;
+	return style | 0x000f0000n;
 }
 
 export function normalizeWindowsFrameStyle(
