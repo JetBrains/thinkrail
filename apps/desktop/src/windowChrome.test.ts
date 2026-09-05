@@ -7,6 +7,7 @@ import {
 	preservedWindowsStyle,
 	probeDesktopWindowTransitions,
 	readDesktopResizeEdge,
+	windowsResizeHitTest,
 } from "./windowChrome";
 
 test("maps each shipped desktop OS to its native titlebar mechanism", () => {
@@ -78,6 +79,15 @@ test("normalizes the live Windows frame only when capabilities are missing", () 
 	]);
 });
 
+test("maps web resize directions to Windows non-client hit tests", () => {
+	expect(
+		["north-west", "north", "north-east", "west", "east", "south-west", "south", "south-east"].map(
+			(edge) => windowsResizeHitTest(edge),
+		),
+	).toEqual([13, 12, 14, 10, 11, 16, 15, 17]);
+	expect(() => windowsResizeHitTest("center")).toThrow("unsupported resize edge: center");
+});
+
 test("maps web resize directions to GTK's native edge enum", () => {
 	expect(
 		["north-west", "north", "north-east", "west", "east", "south-west", "south", "south-east"].map(
@@ -116,7 +126,7 @@ test("native transition probe exercises maximize, restore, minimize, and unminim
 		platform: "windows",
 		window,
 		onState: () => {},
-		startLinuxResize: () => {},
+		startNativeResize: () => {},
 	});
 
 	expect(await probeDesktopWindowTransitions(controller, window)).toEqual({
@@ -150,7 +160,7 @@ test("window chrome actions preserve native state and graceful close", () => {
 		platform: "linux",
 		window,
 		onState: ({ maximized }) => snapshots.push(maximized),
-		startLinuxResize: (edge) => resized.push(edge),
+		startNativeResize: (edge) => resized.push(edge),
 	});
 
 	expect(linux.getSnapshot()).toEqual({ maximized: false });
@@ -164,13 +174,13 @@ test("window chrome actions preserve native state and graceful close", () => {
 	expect(snapshots).toEqual([true, true, false]);
 	expect(resized).toEqual(["south-east"]);
 
+	const windowsResized: string[] = [];
 	const windows = createDesktopWindowChromeController({
 		platform: "windows",
 		window,
 		onState: () => {},
-		startLinuxResize: () => {
-			throw new Error("Windows must retain its DWM resize frame");
-		},
+		startNativeResize: (edge) => windowsResized.push(edge),
 	});
-	expect(windows.startResize("east")).toBe(false);
+	expect(windows.startResize("east")).toBe(true);
+	expect(windowsResized).toEqual(["east"]);
 });

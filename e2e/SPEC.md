@@ -89,10 +89,10 @@ only after Playwright finishes, then requires normal graceful application exit.
 This is separate from `smoke:desktop`: native smoke loads the actual packaged ThinkRail UI in the system
 webview, requires the custom preload handshake after DOM-ready plus host health, exercises native state
 transitions, and closes through the real Electrobun controller/lifecycle. Windows additionally requires its
-preserved style and system menu, native hit tests for every frame edge, a real move and resize, and top-edge
-snap through native input. Linux runs under Xvfb with an Openbox compositor and real pointer input across the titlebar and all
-eight web resize targets, so GTK/the compositor—not a JavaScript frame-resize substitute—must change the
-frame. macOS retains AppKit controls; accessibility geometry and drag probes cover the one-row placement and
+preserved style and system menu plus native input across the titlebar, all eight web-to-DWM resize targets,
+and top-edge snap. Linux runs under Xvfb with an Openbox compositor and real pointer input across the titlebar
+and all eight web-to-GTK resize targets. The window manager/compositor—not a JavaScript frame-resize
+substitute—must change each frame. macOS retains AppKit controls; accessibility geometry and drag probes cover the one-row placement and
 web drag region. Shell E2E separately pins browser absence, per-platform app controls, accessible names,
 maximize reflection, and Linux handle suppression; application-menu tests pin editing roles. The layers
 prove both native mechanics and broad browser behavior without introducing two competing clients.

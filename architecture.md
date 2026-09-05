@@ -211,8 +211,8 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     point at the same mutable data directory, cross-process consistency is intentionally not guaranteed.
     Desktop artifacts are additive; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
     the supported Linux floor. The native window has one app-chrome row with platform-specific mechanics:
-    AppKit traffic lights on macOS, a preserved DWM frame plus web controls on Windows, and web controls plus
-    compositor-owned GTK move/resize on Linux. The preload's bounded capability lets the one web shell adapt
+    AppKit traffic lights on macOS, a preserved DWM frame plus web controls/native-resize targets on Windows,
+    and web controls plus compositor-owned GTK move/resize on Linux. The preload's bounded capability lets the one web shell adapt
     that presentation without learning a deployment identity; native behavior is target-smoke-gated.
     Releases are **staged as drafts here and signed elsewhere**: the
     JetBrains signing runners are unavailable to public repositories, so `JetBrains/thinkrail-signing`
