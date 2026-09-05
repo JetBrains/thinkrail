@@ -13,13 +13,12 @@ export default {
 		exitOnLastWindowClosed: true,
 	},
 	build: {
-		bunVersion: "1.3.14",
+		mainProcess: "bun",
 		bun: { entrypoint: "src/index.ts" },
 		copy: {
 			".stage/web": "views/web",
 			".stage/runtime": "runtime",
 		},
-		useAsar: false,
 		mac: { bundleCEF: false, icons: "assets/icon.iconset" },
 		linux: { bundleCEF: false, icon: "assets/icon.png" },
 		win: { bundleCEF: false, icon: "assets/icon.ico" },
