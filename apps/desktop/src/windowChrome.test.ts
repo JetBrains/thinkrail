@@ -7,7 +7,7 @@ import {
 	preservedWindowsStyle,
 	probeDesktopWindowTransitions,
 	readDesktopResizeEdge,
-	windowsResizeDirection,
+	windowsResizeHitTest,
 } from "./windowChrome";
 
 test("maps each shipped desktop OS to its native titlebar mechanism", () => {
@@ -79,13 +79,13 @@ test("normalizes the live Windows frame only when capabilities are missing", () 
 	]);
 });
 
-test("maps web resize directions to Windows system resize directions", () => {
+test("maps web resize directions to Windows non-client hit tests", () => {
 	expect(
 		["north-west", "north", "north-east", "west", "east", "south-west", "south", "south-east"].map(
-			(edge) => windowsResizeDirection(edge),
+			(edge) => windowsResizeHitTest(edge),
 		),
-	).toEqual([4, 3, 5, 1, 2, 7, 6, 8]);
-	expect(() => windowsResizeDirection("center")).toThrow("unsupported resize edge: center");
+	).toEqual([13, 12, 14, 10, 11, 16, 15, 17]);
+	expect(() => windowsResizeHitTest("center")).toThrow("unsupported resize edge: center");
 });
 
 test("maps web resize directions to GTK's native edge enum", () => {
