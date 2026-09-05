@@ -81,7 +81,10 @@ output-capturing, and the terminal command is one consumer of it — the in-app 
   binary the install metadata names — running copy A while `install.json` records prefix B would
   otherwise replace B, report success, and tell the user to restart into a build that never changes.
   Its `installationId` is that same owned binary path, which is what scopes the host's staged record
-  in the shared data dir. `paths.ts` owns the one derivation of that path (`installedPrefix` /
+  in the shared data dir. `install.json` is **global and mutable**, so ownership is resolved once at
+  construction and the install runs against *that* metadata, re-checking at the point of action that the
+  recorded install still resolves to the binary this provider owns — a manual install to another prefix
+  mid-session would otherwise make this host replace that copy and then report itself as staged. `paths.ts` owns the one derivation of that path (`installedPrefix` /
   `installedBinaryPath`), shared with `uninstall`, so the updater and the uninstaller cannot disagree
   about which copy is ours. See `submodule-server-update` for the port and `module-shared`'s
   `/release` for the feed.

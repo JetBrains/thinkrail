@@ -34,7 +34,9 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   [[submodule-server-update]]); its render decisions are selectors, not component logic —
   `selectUpdateFeatureAvailable` (the `UPDATE_PROTOCOL_VERSION` gate), `selectUpdateBanner` (what the
   banner shows, already accounting for `dismissedVersion`), `selectUpdateIndicator` (whether the
-  topbar gear carries a badge — deliberately *not* silenced by a dismissal, which is banner-only) and
+  topbar gear carries a badge — deliberately *not* silenced by a dismissal, which is banner-only, and
+  read from the retained `available`/`staged` payloads rather than the phase, so a transient failed
+  check cannot make a release that is still available disappear from the chrome) and
   `selectUpdateBusy` (any phase that is not one of the four settled ones, so a phase minted by a newer
   host disables mutations instead of reading as "up to date"). **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
   known open + closed project. **`applyProjectUpdated(project)`** is the one full-snapshot updater for

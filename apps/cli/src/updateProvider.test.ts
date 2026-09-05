@@ -109,3 +109,24 @@ test("a build running from somewhere other than its recorded install refuses to 
 		rmSync(home, { recursive: true, force: true });
 	}
 });
+
+test("an install refuses when the recorded install no longer points at this program", async () => {
+	const home = mkdtempSync(join(tmpdir(), "trpi-cli-update-"));
+	try {
+		// The metadata this provider resolved at boot, then a manual install rewrote install.json to
+		// another prefix: installing now would replace that copy and report this one as staged.
+		const p = providerAt({ home, prefix: "/opt/a", execPath: "/opt/a/bin/thinkrail" });
+		writeFileSync(
+			join(installConfigDir(home), "install.json"),
+			JSON.stringify({ channel: "stable", prefix: "/opt/b" }),
+		);
+		expect(await p.install({ channel: "stable", version: "1.0.0" })).toEqual({
+			kind: "failed",
+			message:
+				"the recorded ThinkRail install moved since this host started — install it again from a terminal",
+			retryable: false,
+		});
+	} finally {
+		rmSync(home, { recursive: true, force: true });
+	}
+});

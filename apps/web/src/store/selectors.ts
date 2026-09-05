@@ -487,9 +487,9 @@ export function selectUpdateBusy(state: UpdateStatusState): boolean {
 
 export function selectUpdateIndicator(state: UpdateStatusState): "available" | "staged" | null {
 	if (!selectUpdateFeatureAvailable(state)) return null;
-	const phase = state.updateStatus?.phase;
-	if (phase === "staged") return "staged";
-	return phase === "available" ? "available" : null;
+	const status = state.updateStatus;
+	if (status?.staged) return "staged";
+	return status?.available ? "available" : null;
 }
 
 export function selectUpdateBanner(state: UpdateStatusState): {

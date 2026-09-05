@@ -514,6 +514,23 @@ test("the indicator reports only the two states worth a badge", () => {
 	).toBe("staged");
 });
 
+test("a later failed check does not hide a release that is still available", () => {
+	// The host keeps `available` on a failed check, so the news must survive a transient
+	// six-hourly failure instead of disappearing until the next successful one.
+	const state = updateState({
+		phase: "error",
+		available: AVAILABLE,
+		error: { kind: "failed", message: "offline", retryable: true },
+	});
+	expect(selectUpdateIndicator(state)).toBe("available");
+	expect(selectUpdateBanner(state)).toMatchObject({ kind: "available", version: "1.4.0" });
+});
+
+test("a check in flight does not hide the release the previous one found", () => {
+	const state = updateState({ phase: "checking", available: AVAILABLE });
+	expect(selectUpdateIndicator(state)).toBe("available");
+});
+
 test("a dismissed version silences the banner but not the badge", () => {
 	const state = updateState({
 		phase: "available",

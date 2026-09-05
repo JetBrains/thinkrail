@@ -52,12 +52,12 @@ export function createCliUpdateProvider(options: CliUpdateProviderOptions): Upda
 	const execPath = options.execPath ?? process.execPath;
 	const windows = (options.platform ?? process.platform) === "win32";
 	const meta = readInstallMeta(home);
-	const target = installedBinaryPath(meta, home, windows);
-	const installed = version !== SOURCE_VERSION && samePath(execPath, target);
+	const ownedBinary = installedBinaryPath(meta, home, windows);
+	const installed = version !== SOURCE_VERSION && samePath(execPath, ownedBinary);
 	const channel = resolveUpdateChannel({ version: "latest" }, meta.channel, bakedChannel);
 
-	async function newestFor(target: "stable" | "nightly", signal?: AbortSignal) {
-		return await latest(target, { env: options.env, ...(signal ? { signal } : {}) });
+	async function newestFor(channel: "stable" | "nightly", signal?: AbortSignal) {
+		return await latest(channel, { env: options.env, ...(signal ? { signal } : {}) });
 	}
 
 	return {
@@ -66,7 +66,7 @@ export function createCliUpdateProvider(options: CliUpdateProviderOptions): Upda
 			channelSwitch: installed ? "in-app" : "unsupported",
 			channels: ["stable", "nightly"],
 		},
-		installationId: `cli:${target}`,
+		installationId: `cli:${ownedBinary}`,
 		current: {
 			version,
 			channel: installed ? channel : "dev",
@@ -78,6 +78,15 @@ export function createCliUpdateProvider(options: CliUpdateProviderOptions): Upda
 			return compareReleaseVersions(version, found.version) < 0 ? found : null;
 		},
 		async install(target) {
+			if (!samePath(ownedBinary, installedBinaryPath(readInstallMeta(home), home, windows))) {
+				return {
+					kind: "failed",
+					message:
+						"the recorded ThinkRail install moved since this host started — install it again from a terminal",
+					retryable: false,
+				};
+			}
+
 			const pinned = target.version ?? (await newestFor(target.channel))?.version;
 			if (!pinned) {
 				return {
@@ -91,7 +100,7 @@ export function createCliUpdateProvider(options: CliUpdateProviderOptions): Upda
 			try {
 				const input = {
 					args: parseUpdateArgs(["--channel", target.channel, "--version", pinned]),
-					installMeta: readInstallMeta(home),
+					installMeta: meta,
 					baked: bakedChannel,
 					home,
 				};
