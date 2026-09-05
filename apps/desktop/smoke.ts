@@ -145,7 +145,7 @@ async function resetLinuxWindow(windowId: string): Promise<LinuxWindowGeometry> 
 	);
 }
 
-async function runWindowsWindowInteractions(pid: number, controlPath: string): Promise<void> {
+async function runWindowsWindowInteractions(pid: number): Promise<void> {
 	const probe = Bun.spawn(
 		[
 			"powershell.exe",
@@ -156,8 +156,6 @@ async function runWindowsWindowInteractions(pid: number, controlPath: string): P
 			join(desktopDir, "windows-window-interactions.ps1"),
 			"-ProcessId",
 			String(pid),
-			"-ControlPath",
-			controlPath,
 		],
 		{ stdout: "inherit", stderr: "inherit" },
 	);
@@ -198,32 +196,32 @@ async function runLinuxWindowInteractions(pid: number): Promise<void> {
 	}> = [
 		{
 			name: "north-west",
-			start: { x: 10, y: 10 },
+			start: { x: 6, y: 6 },
 			delta: { x: -30, y: -20 },
 			west: true,
 			north: true,
 		},
-		{ name: "north", start: { x: 400, y: 10 }, delta: { x: 0, y: -20 }, north: true },
+		{ name: "north", start: { x: 400, y: 4 }, delta: { x: 0, y: -20 }, north: true },
 		{
 			name: "north-east",
-			start: { x: 790, y: 10 },
+			start: { x: 794, y: 6 },
 			delta: { x: 30, y: -20 },
 			east: true,
 			north: true,
 		},
-		{ name: "west", start: { x: 10, y: 300 }, delta: { x: -30, y: 0 }, west: true },
-		{ name: "east", start: { x: 790, y: 300 }, delta: { x: 30, y: 0 }, east: true },
+		{ name: "west", start: { x: 4, y: 300 }, delta: { x: -30, y: 0 }, west: true },
+		{ name: "east", start: { x: 796, y: 300 }, delta: { x: 30, y: 0 }, east: true },
 		{
 			name: "south-west",
-			start: { x: 10, y: 590 },
+			start: { x: 6, y: 594 },
 			delta: { x: -30, y: 20 },
 			west: true,
 			south: true,
 		},
-		{ name: "south", start: { x: 400, y: 590 }, delta: { x: 0, y: 20 }, south: true },
+		{ name: "south", start: { x: 400, y: 596 }, delta: { x: 0, y: 20 }, south: true },
 		{
 			name: "south-east",
-			start: { x: 790, y: 590 },
+			start: { x: 794, y: 594 },
 			delta: { x: 30, y: 20 },
 			east: true,
 			south: true,
@@ -287,7 +285,6 @@ async function launchDesktop(
 ): Promise<
 	RunningArtifactHost & {
 		pid: number;
-		controlPath: string;
 		windowUrl: string;
 		mode: string;
 		applicationMenuInstalled: boolean;
@@ -384,7 +381,6 @@ async function launchDesktop(
 		return {
 			origin: ready.origin,
 			pid: ready.pid,
-			controlPath,
 			windowUrl: ready.windowUrl,
 			mode: ready.mode,
 			applicationMenuInstalled: ready.applicationMenuInstalled,
@@ -479,9 +475,7 @@ try {
 				"native-window-interactions",
 				"interactions",
 			);
-			if (process.platform === "win32") {
-				await runWindowsWindowInteractions(interactions.pid, interactions.controlPath);
-			}
+			if (process.platform === "win32") await runWindowsWindowInteractions(interactions.pid);
 			if (process.platform === "linux") await runLinuxWindowInteractions(interactions.pid);
 			await interactions.requestWindowClose();
 		} finally {

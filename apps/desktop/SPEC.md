@@ -92,9 +92,9 @@ stacked above it. The visual composition is shared while the mechanism is platfo
   controls over the preserved DWM frame. WebView2 non-client app-region handling owns native move, snap,
   drag-from-maximized, double-click, and system-menu behavior; the launcher restores the standard window
   style capabilities that Electrobun's collapsed caption omits. Because that collapsed caption returns
-  client hit-testing along the top edge, the shell's invisible edge targets align the initiating pointer to
-  the matching frame edge and enter the corresponding native DWM resize loop rather than synthesizing
-  geometry in JavaScript.
+  client hit-testing along the top frame, a package-owned native hook delegates every message to
+  Electrobun's window procedure except restored-window `WM_NCHITTEST` points inside the system-sized top
+  border, which become `HTTOP`. DWM therefore owns every resize edge without a JavaScript geometry loop.
 - Linux uses `hidden`; the shell supplies Linux-style controls. Native move and all eight resize directions
   delegate to GTK/the compositor. A package-owned native helper enters the GTK main context and calls the
   standard move/resize primitives; JavaScript never synthesizes a resize loop from pointer deltas.
@@ -205,18 +205,16 @@ configuration.
 
 ## Verification
 
-- Expanded-app smoke uses isolated HOME/data/PI/cache paths and ready/control files. It requires the
-  real custom preload and the shell's actual native-chrome mount to handshake after DOM-ready, confirms the
-  titlebar policy and native application
-  menu on each target, exercises maximize/minimize/restore state through the live Windows/Linux window,
-  closes through the same graceful controller path as the app button, runs the shared artifact probes with
-  repository reads denied, and observes clean process exit. Windows' interaction probe additionally
-  requires the preserved native style/system menu and drives the titlebar plus all eight web-to-DWM resize
-  targets with real input before top-edge snap; Linux drives the titlebar and all eight web-to-GTK resize
-  targets with real pointer input under Openbox. The native window manager/compositor, rather than a
-  JavaScript substitute, must change each frame. macOS
-  retains native AppKit controls; local accessibility geometry and drag probes cover their placement and
-  the web drag region.
+- Expanded-app smoke uses isolated HOME/data/PI/cache paths and ready/control files. It requires the real
+  custom preload and the shell's actual native-chrome mount to handshake after DOM-ready, confirms the
+  titlebar policy and native application menu on each target, exercises maximize/minimize/restore state
+  through the live Windows/Linux window, closes through the same graceful controller path as the app
+  button, runs the shared artifact probes with repository reads denied, and observes clean process exit.
+  Windows' interaction probe additionally requires the preserved native style/system menu, all eight DWM
+  edge hit tests and real resize behavior, titlebar move, and top-edge snap; Linux drives the titlebar and
+  all eight web-to-GTK resize targets with real pointer input under Openbox. The native window
+  manager/compositor, rather than a JavaScript substitute, must change each frame. macOS retains native
+  AppKit controls; local accessibility geometry and drag probes cover their placement and web drag region.
 - First-install smoke executes the produced DMG app, Windows setup ZIP, or Linux setup tarball against
   isolated installation roots, boots the installed host, checks health, and requires graceful exit. The
   release matrix must pass both smoke layers before uploading the installer.

@@ -1,6 +1,5 @@
 #include <dlfcn.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 typedef int gboolean;
@@ -33,11 +32,6 @@ typedef struct {
 
 static resize_api api;
 static int loaded;
-
-static int smoke_logging(void) {
-	const char *value = getenv("THINKRAIL_DESKTOP_NATIVE_INTERACTION");
-	return value && value[0] == '1' && value[1] == '\0';
-}
 
 static int load_api(void) {
 	if (loaded) return loaded > 0;
@@ -74,17 +68,7 @@ static gboolean begin_resize_on_main(void *data) {
 		int x = 0;
 		int y = 0;
 		api.get_position(pointer, NULL, &x, &y);
-		guint32 timestamp = api.get_time();
-		if (smoke_logging()) {
-			fprintf(stderr, "[desktop] Linux resize edge=%d x=%d y=%d time=%u\n",
-				request->edge, x, y, timestamp);
-			fflush(stderr);
-		}
-		api.begin_resize(gdk_window, request->edge, pointer, 1, x, y, timestamp);
-	} else if (smoke_logging()) {
-		fprintf(stderr, "[desktop] Linux resize missing pointer=%p window=%p\n",
-			pointer, gdk_window);
-		fflush(stderr);
+		api.begin_resize(gdk_window, request->edge, pointer, 1, x, y, api.get_time());
 	}
 	free(request);
 	return 0;
@@ -96,10 +80,6 @@ int thinkrail_linux_resize_ready(void) {
 
 int thinkrail_linux_begin_resize(void *window, int edge) {
 	if (!window || edge < 0 || edge > 7 || !load_api()) return 0;
-	if (smoke_logging()) {
-		fprintf(stderr, "[desktop] Linux resize queued edge=%d\n", edge);
-		fflush(stderr);
-	}
 	resize_request *request = (resize_request *)malloc(sizeof(resize_request));
 	if (!request) return 0;
 	request->window = window;

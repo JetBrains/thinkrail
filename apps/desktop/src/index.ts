@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { channel, version } from "@thinkrail/shared/version";
@@ -13,7 +13,7 @@ import { installDesktopApplicationMenu } from "./applicationMenu";
 import { externalNavigationUrl } from "./externalNavigation";
 import {
 	createLinuxResizeStarter,
-	createWindowsResizeStarter,
+	installWindowsNativeChrome,
 	preserveWindowsNativeFrame,
 } from "./nativeWindowChrome";
 import {
@@ -145,20 +145,21 @@ async function start(): Promise<void> {
 	});
 	const nativeWindowHandle = mainWindow.ptr;
 	if (!nativeWindowHandle) throw new Error("desktop native window handle is unavailable");
-	if (chromePolicy.platform === "windows") preserveWindowsNativeFrame(nativeWindowHandle);
-	const startNativeResize =
-		chromePolicy.platform === "windows"
-			? createWindowsResizeStarter(nativeWindowHandle)
-			: chromePolicy.platform === "linux"
-				? createLinuxResizeStarter(runtimeDir, nativeWindowHandle)
-				: () => {};
+	if (chromePolicy.platform === "windows") {
+		preserveWindowsNativeFrame(nativeWindowHandle);
+		installWindowsNativeChrome(runtimeDir, nativeWindowHandle);
+	}
+	const startLinuxResize =
+		chromePolicy.platform === "linux"
+			? createLinuxResizeStarter(runtimeDir, nativeWindowHandle)
+			: () => {};
 	windowChromeController = createDesktopWindowChromeController({
 		platform: chromePolicy.platform,
 		window: mainWindow,
 		onState: (snapshot) => {
 			if (!neutral) rpc.send.windowChromeState(snapshot);
 		},
-		startNativeResize,
+		startLinuxResize,
 	});
 	mainWindow.on("resize", () => windowChromeController?.publishState());
 	if (!hidden) mainWindow.show();
@@ -230,15 +231,8 @@ async function start(): Promise<void> {
 	if (controlPath) {
 		const poll = setInterval(() => {
 			if (!existsSync(controlPath)) return;
-			const command = readFileSync(controlPath, "utf8").trim();
-			if (command.startsWith("resize:")) {
-				unlinkSync(controlPath);
-				const edge = readDesktopResizeEdge({ edge: command.slice("resize:".length) });
-				if (edge) windowChromeController?.startResize(edge);
-				return;
-			}
 			clearInterval(poll);
-			if (command === "close") {
+			if (readFileSync(controlPath, "utf8").trim() === "close") {
 				windowChromeController?.requestClose();
 				return;
 			}

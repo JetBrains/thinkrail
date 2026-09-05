@@ -107,10 +107,7 @@ test("native Windows capability turns the shared topbar into application chrome"
 	await expect(page.getByRole("button", { name: "Minimize window" })).toBeVisible();
 	await expect(page.getByRole("button", { name: "Maximize window" })).toBeVisible();
 	await expect(page.getByRole("button", { name: "Close window" })).toBeVisible();
-	await expect(page.getByTestId("native-resize-handle")).toHaveCount(8);
-	await page
-		.locator('[data-testid="native-resize-handle"][data-edge="north"]')
-		.dispatchEvent("mousedown", { button: 0 });
+	await expect(page.getByTestId("native-resize-handle")).toHaveCount(0);
 	await page.getByTestId("window-minimize").click();
 	const maximize = page.getByTestId("window-toggle-maximize");
 	await expect(maximize).toHaveAttribute("aria-label", "Maximize window");
@@ -118,12 +115,7 @@ test("native Windows capability turns the shared topbar into application chrome"
 	await expect(maximize).toHaveAttribute("aria-label", "Restore window");
 	await page.getByTestId("window-close").click();
 
-	expect(await nativeWindowChromeCalls(page)).toEqual([
-		"resize:north",
-		"minimize",
-		"maximize",
-		"close",
-	]);
+	expect(await nativeWindowChromeCalls(page)).toEqual(["minimize", "maximize", "close"]);
 });
 
 test("native macOS chrome reserves traffic-light space without drawing duplicate controls", async ({

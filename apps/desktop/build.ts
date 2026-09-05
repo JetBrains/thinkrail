@@ -155,6 +155,10 @@ async function stage(): Promise<void> {
 		join(desktopDir, "linux-window-resize.c"),
 		join(runtimeDir, "linux-window-resize.c"),
 	);
+	copyFileSync(
+		join(desktopDir, "windows-window-chrome.c"),
+		join(runtimeDir, "windows-window-chrome.c"),
+	);
 	if (process.platform !== "win32") chmodSync(join(runtimeDir, "macos-trash"), 0o755);
 	await buildBundles();
 }

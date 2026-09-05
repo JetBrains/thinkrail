@@ -7,8 +7,6 @@ import {
 	preservedWindowsStyle,
 	probeDesktopWindowTransitions,
 	readDesktopResizeEdge,
-	windowsResizeCursor,
-	windowsResizeHitTest,
 } from "./windowChrome";
 
 test("maps each shipped desktop OS to its native titlebar mechanism", () => {
@@ -80,43 +78,6 @@ test("normalizes the live Windows frame only when capabilities are missing", () 
 	]);
 });
 
-test("snaps Windows custom resize starts onto the native frame", () => {
-	const point = { x: 500, y: 500 };
-	const frame = { left: 100, top: 200, right: 900, bottom: 800 };
-	expect(
-		(
-			[
-				"north-west",
-				"north",
-				"north-east",
-				"west",
-				"east",
-				"south-west",
-				"south",
-				"south-east",
-			] as const
-		).map((edge) => windowsResizeCursor(edge, point, frame)),
-	).toEqual([
-		{ x: 101, y: 201 },
-		{ x: 500, y: 201 },
-		{ x: 899, y: 201 },
-		{ x: 101, y: 500 },
-		{ x: 899, y: 500 },
-		{ x: 101, y: 799 },
-		{ x: 500, y: 799 },
-		{ x: 899, y: 799 },
-	]);
-});
-
-test("maps web resize directions to Windows non-client hit tests", () => {
-	expect(
-		["north-west", "north", "north-east", "west", "east", "south-west", "south", "south-east"].map(
-			(edge) => windowsResizeHitTest(edge),
-		),
-	).toEqual([13, 12, 14, 10, 11, 16, 15, 17]);
-	expect(() => windowsResizeHitTest("center")).toThrow("unsupported resize edge: center");
-});
-
 test("maps web resize directions to GTK's native edge enum", () => {
 	expect(
 		["north-west", "north", "north-east", "west", "east", "south-west", "south", "south-east"].map(
@@ -155,7 +116,7 @@ test("native transition probe exercises maximize, restore, minimize, and unminim
 		platform: "windows",
 		window,
 		onState: () => {},
-		startNativeResize: () => {},
+		startLinuxResize: () => {},
 	});
 
 	expect(await probeDesktopWindowTransitions(controller, window)).toEqual({
@@ -189,7 +150,7 @@ test("window chrome actions preserve native state and graceful close", () => {
 		platform: "linux",
 		window,
 		onState: ({ maximized }) => snapshots.push(maximized),
-		startNativeResize: (edge) => resized.push(edge),
+		startLinuxResize: (edge) => resized.push(edge),
 	});
 
 	expect(linux.getSnapshot()).toEqual({ maximized: false });
@@ -203,13 +164,13 @@ test("window chrome actions preserve native state and graceful close", () => {
 	expect(snapshots).toEqual([true, true, false]);
 	expect(resized).toEqual(["south-east"]);
 
-	const windowsResized: string[] = [];
 	const windows = createDesktopWindowChromeController({
 		platform: "windows",
 		window,
 		onState: () => {},
-		startNativeResize: (edge) => windowsResized.push(edge),
+		startLinuxResize: () => {
+			throw new Error("Windows must retain its DWM resize frame");
+		},
 	});
-	expect(windows.startResize("east")).toBe(true);
-	expect(windowsResized).toEqual(["east"]);
+	expect(windows.startResize("east")).toBe(false);
 });

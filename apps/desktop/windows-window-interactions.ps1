@@ -1,7 +1,4 @@
-param(
-    [Parameter(Mandatory = $true)][int]$ProcessId,
-    [Parameter(Mandatory = $true)][string]$ControlPath
-)
+param([Parameter(Mandatory = $true)][int]$ProcessId)
 
 $ErrorActionPreference = "Stop"
 
@@ -42,6 +39,9 @@ public static class ThinkRailWindowProbe {
 
     [DllImport("user32.dll")]
     public static extern bool PostMessageW(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr SendMessageW(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll")]
     public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
@@ -86,6 +86,11 @@ public static class ThinkRailWindowProbe {
         mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
     }
 
+    public static int HitTest(IntPtr hwnd, int x, int y) {
+        int packed = (y << 16) | (x & 0xffff);
+        return SendMessageW(hwnd, 0x0084, IntPtr.Zero, (IntPtr)packed).ToInt32();
+    }
+
     public static void Drag(IntPtr hwnd, int hitTest, int startX, int startY, int endX, int endY) {
         StartDrag(hwnd, startX, startY);
         ReleaseCapture();
@@ -94,21 +99,6 @@ public static class ThinkRailWindowProbe {
             mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
             throw new InvalidOperationException("WM_NCLBUTTONDOWN failed");
         }
-        FinishDrag(startX, startY, endX, endY);
-    }
-
-    public static void DragClient(IntPtr hwnd, string controlPath, string edge, int startX, int startY, int endX, int endY) {
-        StartDrag(hwnd, startX, startY);
-        System.IO.File.WriteAllText(controlPath, "resize:" + edge);
-        DateTime deadline = DateTime.UtcNow.AddSeconds(5);
-        while (System.IO.File.Exists(controlPath) && DateTime.UtcNow < deadline) {
-            Thread.Sleep(10);
-        }
-        if (System.IO.File.Exists(controlPath)) {
-            mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
-            throw new InvalidOperationException("desktop resize control was not acknowledged");
-        }
-        Thread.Sleep(100);
         FinishDrag(startX, startY, endX, endY);
     }
 }
@@ -164,24 +154,31 @@ Wait-ForRect {
 } "The Windows application titlebar did not move the native window" | Out-Null
 
 $edges = @(
-    @{ Name = "north-west"; X = 10; Y = 10; DX = -30; DY = -20; West = $true; North = $true },
-    @{ Name = "north"; X = 400; Y = 10; DX = 0; DY = -20; North = $true },
-    @{ Name = "north-east"; X = 790; Y = 10; DX = 30; DY = -20; East = $true; North = $true },
-    @{ Name = "west"; X = 10; Y = 300; DX = -30; DY = 0; West = $true },
-    @{ Name = "east"; X = 790; Y = 300; DX = 30; DY = 0; East = $true },
-    @{ Name = "south-west"; X = 10; Y = 590; DX = -30; DY = 20; West = $true; South = $true },
-    @{ Name = "south"; X = 400; Y = 590; DX = 0; DY = 20; South = $true },
-    @{ Name = "south-east"; X = 790; Y = 590; DX = 30; DY = 20; East = $true; South = $true }
+    @{ Name = "north-west"; Hit = 13; X = 1; Y = 1; DX = -30; DY = -20; West = $true; North = $true },
+    @{ Name = "north"; Hit = 12; X = 400; Y = 1; DX = 0; DY = -20; North = $true },
+    @{ Name = "north-east"; Hit = 14; X = 799; Y = 1; DX = 30; DY = -20; East = $true; North = $true },
+    @{ Name = "west"; Hit = 10; X = 1; Y = 300; DX = -30; DY = 0; West = $true },
+    @{ Name = "east"; Hit = 11; X = 799; Y = 300; DX = 30; DY = 0; East = $true },
+    @{ Name = "south-west"; Hit = 16; X = 1; Y = 599; DX = -30; DY = 20; West = $true; South = $true },
+    @{ Name = "south"; Hit = 15; X = 400; Y = 599; DX = 0; DY = 20; South = $true },
+    @{ Name = "south-east"; Hit = 17; X = 799; Y = 599; DX = 30; DY = 20; East = $true; South = $true }
 )
+
+$hitFrame = Reset-Window
+foreach ($edge in $edges) {
+    $actual = [ThinkRailWindowProbe]::HitTest($window, $hitFrame.Left + $edge.X, $hitFrame.Top + $edge.Y)
+    if ($actual -ne $edge.Hit) {
+        throw "Windows native $($edge.Name) hit test returned $actual instead of $($edge.Hit)"
+    }
+}
 
 foreach ($edge in $edges) {
     $before = Reset-Window
     $startX = $before.Left + $edge.X
     $startY = $before.Top + $edge.Y
-    [ThinkRailWindowProbe]::DragClient(
+    [ThinkRailWindowProbe]::Drag(
         $window,
-        $ControlPath,
-        $edge.Name,
+        $edge.Hit,
         $startX,
         $startY,
         $startX + $edge.DX,
@@ -195,7 +192,7 @@ foreach ($edge in $edges) {
         (-not $edge.East -or $width -gt 810) -and
         (-not $edge.North -or ($rect.Top -lt $before.Top - 10 -and $height -gt 610)) -and
         (-not $edge.South -or $height -gt 610)
-    } "The Windows app handle did not resize from the $($edge.Name) edge" | Out-Null
+    } "The Windows frame did not resize from the $($edge.Name) edge" | Out-Null
 }
 
 $beforeSnap = Reset-Window

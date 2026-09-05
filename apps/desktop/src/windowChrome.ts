@@ -94,44 +94,6 @@ export function normalizeWindowsFrameStyle(
 	return true;
 }
 
-export function windowsResizeCursor(
-	edge: DesktopResizeEdge,
-	point: { x: number; y: number },
-	frame: { left: number; top: number; right: number; bottom: number },
-): { x: number; y: number } {
-	const west = edge === "north-west" || edge === "west" || edge === "south-west";
-	const east = edge === "north-east" || edge === "east" || edge === "south-east";
-	const north = edge === "north-west" || edge === "north" || edge === "north-east";
-	const south = edge === "south-west" || edge === "south" || edge === "south-east";
-	return {
-		x: west ? frame.left + 1 : east ? frame.right - 1 : point.x,
-		y: north ? frame.top + 1 : south ? frame.bottom - 1 : point.y,
-	};
-}
-
-export function windowsResizeHitTest(edge: string): number {
-	switch (edge) {
-		case "north-west":
-			return 13;
-		case "north":
-			return 12;
-		case "north-east":
-			return 14;
-		case "west":
-			return 10;
-		case "east":
-			return 11;
-		case "south-west":
-			return 16;
-		case "south":
-			return 15;
-		case "south-east":
-			return 17;
-		default:
-			throw new Error(`unsupported resize edge: ${edge}`);
-	}
-}
-
 export function linuxResizeEdgeCode(edge: string): number {
 	switch (edge) {
 		case "north-west":
@@ -202,12 +164,12 @@ export function createDesktopWindowChromeController({
 	platform,
 	window,
 	onState,
-	startNativeResize,
+	startLinuxResize,
 }: {
 	platform: DesktopWindowChromePlatform;
 	window: DesktopWindowChromeHandle;
 	onState(snapshot: { maximized: boolean }): void;
-	startNativeResize(edge: DesktopResizeEdge): void;
+	startLinuxResize(edge: DesktopResizeEdge): void;
 }): DesktopWindowChromeController {
 	const getSnapshot = () => ({ maximized: window.isMaximized() });
 	const publishState = () => onState(getSnapshot());
@@ -226,8 +188,8 @@ export function createDesktopWindowChromeController({
 			window.requestClose();
 		},
 		startResize: (edge) => {
-			if (platform === "macos") return false;
-			startNativeResize(edge);
+			if (platform !== "linux") return false;
+			startLinuxResize(edge);
 			return true;
 		},
 	};

@@ -90,8 +90,8 @@ This is separate from `smoke:desktop`: native smoke loads the actual packaged Th
 webview, requires both the custom preload and shell's native-chrome mount to handshake after DOM-ready plus
 host health, exercises native state
 transitions, and closes through the real Electrobun controller/lifecycle. Windows additionally requires its
-preserved style and system menu plus native input across the titlebar, all eight web-to-DWM resize targets,
-and top-edge snap. Linux runs under Xvfb with an Openbox compositor and real pointer input across the titlebar
+preserved style and system menu plus native input across the titlebar, all eight DWM edge hit tests and
+real resize behavior, and top-edge snap. Linux runs under Xvfb with an Openbox compositor and real pointer input across the titlebar
 and all eight web-to-GTK resize targets. The window manager/compositor—not a JavaScript frame-resize
 substitute—must change each frame. macOS retains AppKit controls; accessibility geometry and drag probes cover the one-row placement and
 web drag region. Shell E2E separately pins browser absence, per-platform app controls, accessible names,
