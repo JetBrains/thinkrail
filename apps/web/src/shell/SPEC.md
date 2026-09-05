@@ -13,9 +13,9 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 ## Boundary
 
-- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-workspace versus Project Home/Welcome branching; single Settings, interview-invitation, and Toaster mounts; the theme DOM side effect; global keyboard chords; the injected Layout settings section; and integration of the pure workbench engine with Zustand, local persistence, panel renderers, transport-backed domain state, and region error boundaries.
+- **Owns:** `Shell` as the one composition root; topbar, optional native-window chrome enhancement, and persistent location context; active-workspace versus Project Home/Welcome branching; single Settings, interview-invitation, and Toaster mounts; the theme DOM side effect; global keyboard chords; the injected Layout settings section; and integration of the pure workbench engine with Zustand, local persistence, panel renderers, transport-backed domain state, and region error boundaries.
 - **Public surface:** `Shell`.
-- **Allowed deps:** child layout modules; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, and `themes`.
+- **Allowed deps:** child layout modules; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, the leaf `nativeWindowChrome` capability reader, `lib`, and `themes`.
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
 
 ## Internal modules
@@ -40,6 +40,19 @@ through semantic `text-primary`—with no divider before location. An active wor
 workspace use `text-text-default`, while branch/trailing metadata use `text-text-muted`, with progressive
 responsive degradation. A selected project without an active workspace shows Project Home. No selected
 project leaves the logo alone.
+
+When `nativeWindowChrome` validates a preload-injected capability, this same topbar becomes the native
+window's one titlebar row. It is an Electrobun drag region; the complete trailing action cluster and every
+other interactive descendant are no-drag. macOS reserves the adapter's leading safe area and renders no web
+window buttons because AppKit owns the traffic lights. Windows and Linux append platform-styled
+minimize/maximize-or-restore/close buttons after Settings; Windows uses full-height caption buttons while
+Linux uses inset round controls. Both use Remix Line icons, semantic control/error tokens, accessible names,
+visible keyboard focus, and adapter-reported maximize state. Native close follows the host's graceful
+lifecycle. Windows and Linux additionally mount pointer-only edge/corner resize targets while restored
+(never while maximized); mousedown delegates one resize-start action to DWM or the compositor, and the web
+client owns no resize loop. With no capability,
+the browser renders the current inset, no resize targets, and no window controls. No component reads a
+launcher name, user agent, or Electrobun global directly.
 
 Immediately before host connection status, the topbar conditionally renders the **JetBrains recurring-quota
 readout** (protocol v59): a neutral Coins icon + locale-formatted `remaining / total credits`. It exists only

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { channel, version } from "@thinkrail/shared/version";
@@ -12,15 +12,28 @@ import Electrobun, {
 import { installDesktopApplicationMenu } from "./applicationMenu";
 import { externalNavigationUrl } from "./externalNavigation";
 import {
+	createLinuxResizeStarter,
+	createWindowsResizeStarter,
+	preserveWindowsNativeFrame,
+} from "./nativeWindowChrome";
+import {
 	injectInitialDesktopPreferences,
 	readDesktopPreferenceRemove,
 	readDesktopPreferenceWrite,
 } from "./preferenceAdapter";
 import { PreferenceStore } from "./preferenceStore";
+import { injectWindowChromePlatform, readPreloadWindowChromePlatform } from "./preloadWindowChrome";
 import { RouteStore } from "./routeStore";
 import type { DesktopRpc } from "./rpc";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
 import type { DesktopServerRuntime } from "./serverRuntime";
+import {
+	createDesktopWindowChromeController,
+	type DesktopWindowChromeController,
+	desktopWindowChromePolicy,
+	probeDesktopWindowTransitions,
+	readDesktopResizeEdge,
+} from "./windowChrome";
 
 const BACKEND_PROFILE_ID = "local";
 const WINDOW_ID = "main";
@@ -31,6 +44,7 @@ function writeReady(path: string, payload: unknown): void {
 }
 
 async function start(): Promise<void> {
+	const chromePolicy = desktopWindowChromePolicy(process.platform);
 	const applicationMenuInstalled = installDesktopApplicationMenu(ApplicationMenu, process.platform);
 	const runtimeDir = join(PATHS.RESOURCES_FOLDER, "app", "runtime");
 	process.env.BUN_PTY_LIB = join(
@@ -53,6 +67,17 @@ async function start(): Promise<void> {
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const initialPreferences = preferences.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const neutral = process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
+	const hidden =
+		process.env.THINKRAIL_DESKTOP_HIDDEN === "1" || process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
+	const windowUrl = neutral ? `${origin}/health` : `${origin}/${initialRoute}`;
+	let windowChromeController: DesktopWindowChromeController | undefined;
+	let windowChromePreloadReady = false;
+	let windowChromeShellReady = false;
+	let publishReady = () => {};
+	const hasExpectedChromePlatform = (payload: unknown) =>
+		readPreloadWindowChromePlatform(
+			typeof payload === "object" && payload !== null ? Reflect.get(payload, "platform") : null,
+		) === chromePolicy.platform;
 	const rpc = BrowserView.defineRPC<DesktopRpc>({
 		maxRequestTime: 5000,
 		handlers: {
@@ -78,26 +103,65 @@ async function start(): Promise<void> {
 						console.error("[desktop] could not remove a local preference");
 					}
 				},
+				windowChromeMinimize: () => windowChromeController?.minimize(),
+				windowChromeToggleMaximize: () => windowChromeController?.toggleMaximize(),
+				windowChromeRequestClose: () => windowChromeController?.requestClose(),
+				windowChromeStartResize: (payload) => {
+					const edge = readDesktopResizeEdge(payload);
+					if (edge) windowChromeController?.startResize(edge);
+				},
+				windowChromeReady: (payload) => {
+					windowChromePreloadReady = hasExpectedChromePlatform(payload);
+					publishReady();
+				},
+				windowChromeShellReady: (payload) => {
+					windowChromeShellReady = hasExpectedChromePlatform(payload);
+					publishReady();
+				},
 			},
 		},
 	});
 	const preload = neutral
 		? null
-		: injectInitialDesktopPreferences(
-				await Bun.file(join(runtimeDir, "preload.js")).text(),
-				initialPreferences,
+		: injectWindowChromePlatform(
+				injectInitialDesktopPreferences(
+					await Bun.file(join(runtimeDir, "preload.js")).text(),
+					initialPreferences,
+				),
+				chromePolicy.platform,
 			);
 	const mainWindow = new BrowserWindow({
 		title: "ThinkRail",
-		url: neutral ? "about:blank" : `${origin}/${initialRoute}`,
+		url: windowUrl,
 		preload,
 		...(neutral ? {} : { rpc }),
-		hidden:
-			process.env.THINKRAIL_DESKTOP_HIDDEN === "1" ||
-			process.env.THINKRAIL_DESKTOP_E2E_HOST === "1",
+		hidden: true,
 		navigationRules: neutral ? null : JSON.stringify(["^*", `${origin}/*`]),
+		titleBarStyle: chromePolicy.titleBarStyle,
+		...(chromePolicy.trafficLightOffset
+			? { trafficLightOffset: chromePolicy.trafficLightOffset }
+			: {}),
 		frame: { x: 80, y: 60, width: 1440, height: 920 },
 	});
+	const nativeWindowHandle = mainWindow.ptr;
+	if (!nativeWindowHandle) throw new Error("desktop native window handle is unavailable");
+	if (chromePolicy.platform === "windows") preserveWindowsNativeFrame(nativeWindowHandle);
+	const startNativeResize =
+		chromePolicy.platform === "windows"
+			? createWindowsResizeStarter(nativeWindowHandle)
+			: chromePolicy.platform === "linux"
+				? createLinuxResizeStarter(runtimeDir, nativeWindowHandle)
+				: () => {};
+	windowChromeController = createDesktopWindowChromeController({
+		platform: chromePolicy.platform,
+		window: mainWindow,
+		onState: (snapshot) => {
+			if (!neutral) rpc.send.windowChromeState(snapshot);
+		},
+		startNativeResize,
+	});
+	mainWindow.on("resize", () => windowChromeController?.publishState());
+	if (!hidden) mainWindow.show();
 	const openExternal = (detail: unknown) => {
 		const url = externalNavigationUrl(detail, origin);
 		if (url) Utils.openExternal(url);
@@ -106,20 +170,50 @@ async function start(): Promise<void> {
 	mainWindow.webview.on("new-window-open", (event) => openExternal(event.data.detail));
 
 	let ready = false;
-	mainWindow.webview.on("dom-ready", () => {
-		if (ready) return;
+	let domReady = false;
+	let probingWindowChrome = false;
+	let windowChromeProbe:
+		| { nativeControls: true }
+		| Awaited<ReturnType<typeof probeDesktopWindowTransitions>>
+		| undefined;
+	publishReady = () => {
+		if (ready || !domReady || (!neutral && (!windowChromePreloadReady || !windowChromeShellReady)))
+			return;
 		ready = true;
 		const readyPath = process.env.THINKRAIL_DESKTOP_READY_FILE;
-		if (readyPath) {
-			writeReady(readyPath, {
-				origin,
-				runtimeDir,
-				applicationMenuInstalled,
-				pid: process.pid,
-				windowUrl: neutral ? "about:blank" : `${origin}/${initialRoute}`,
-				mode: neutral ? "host" : "ui",
-			});
-		}
+		if (!readyPath) return;
+		writeReady(readyPath, {
+			origin,
+			runtimeDir,
+			applicationMenuInstalled,
+			pid: process.pid,
+			windowUrl,
+			mode: neutral ? "host" : "ui",
+			windowChromePlatform: chromePolicy.platform,
+			titleBarStyle: chromePolicy.titleBarStyle,
+			windowChromePreloadReady,
+			windowChromeShellReady,
+			windowChromeProbe,
+		});
+	};
+	mainWindow.webview.on("dom-ready", () => {
+		if (domReady || probingWindowChrome) return;
+		probingWindowChrome = true;
+		void (async () => {
+			windowChromeController?.publishState();
+			if (process.env.THINKRAIL_DESKTOP_WINDOW_CHROME_PROBE === "1") {
+				if (!windowChromeController) throw new Error("window chrome controller is unavailable");
+				windowChromeProbe =
+					chromePolicy.platform === "macos"
+						? { nativeControls: true }
+						: await probeDesktopWindowTransitions(windowChromeController, mainWindow);
+			}
+			domReady = true;
+			publishReady();
+		})().catch((error) => {
+			console.error(error instanceof Error ? error.message : String(error));
+			Utils.quit();
+		});
 	});
 
 	let shutdownComplete = false;
@@ -136,7 +230,18 @@ async function start(): Promise<void> {
 	if (controlPath) {
 		const poll = setInterval(() => {
 			if (!existsSync(controlPath)) return;
+			const command = readFileSync(controlPath, "utf8").trim();
+			if (command.startsWith("resize:")) {
+				unlinkSync(controlPath);
+				const edge = readDesktopResizeEdge({ edge: command.slice("resize:".length) });
+				if (edge) windowChromeController?.startResize(edge);
+				return;
+			}
 			clearInterval(poll);
+			if (command === "close") {
+				windowChromeController?.requestClose();
+				return;
+			}
 			Utils.quit();
 		}, 50);
 	}

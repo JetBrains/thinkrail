@@ -78,16 +78,25 @@ therefore proven through every composition root.
 ## Desktop-backed mode
 
 `bun run e2e:desktop` runs the complete no-agent suite against the host embedded in the packaged
-Electrobun process. A test-only environment seam keeps Electrobun's required native window hidden on a
-neutral local page and publishes the dynamic host origin through a ready file. Playwright is therefore the
-only hydrated application client: the native webview cannot take over exclusive terminal attachment or
+Electrobun process. A test-only environment seam keeps Electrobun's required native window hidden on the
+loopback `/health` document and publishes the dynamic host origin through a ready file. `about:blank` is not
+neutral under Electrobun 2: its trusted preload cannot initialize WebCrypto there and emits an encryption
+error, while loopback is a secure context and still hydrates no application client. Playwright is therefore
+the only hydrated application client: the native webview cannot take over exclusive terminal attachment or
 write shared placement while the test page is asserting it. The desktop adapter writes the control file
 only after Playwright finishes, then requires normal graceful application exit.
 
 This is separate from `smoke:desktop`: native smoke loads the actual packaged ThinkRail UI in the system
-webview, requires DOM-ready plus host health, and quits through the real Electrobun lifecycle. Linux runs
-that smoke under Xvfb with software rendering enabled only in the test environment. The split proves both
-the native-window path and broad browser behavior without introducing two competing clients.
+webview, requires both the custom preload and shell's native-chrome mount to handshake after DOM-ready plus
+host health, exercises native state
+transitions, and closes through the real Electrobun controller/lifecycle. Windows additionally requires its
+preserved style and system menu plus native input across the titlebar, all eight web-to-DWM resize targets,
+and top-edge snap. Linux runs under Xvfb with an Openbox compositor and real pointer input across the titlebar
+and all eight web-to-GTK resize targets. The window manager/compositor—not a JavaScript frame-resize
+substitute—must change each frame. macOS retains AppKit controls; accessibility geometry and drag probes cover the one-row placement and
+web drag region. Shell E2E separately pins browser absence, per-platform app controls, accessible names,
+maximize reflection, and Linux handle suppression; application-menu tests pin editing roles. The layers
+prove both native mechanics and broad browser behavior without introducing two competing clients.
 
 JetBrains Central coverage uses a stateful, independently authored fake executable implementing only the
 argv/exit/postcondition surface ThinkRail invokes (`--version`, `status`, `quota --json`, `add pi`,
