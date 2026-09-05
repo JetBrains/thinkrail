@@ -1,7 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { comparisonMarkdown, mermaidFence } from "./src/markdown.ts";
+import { validateMermaidSyntax } from "./src/mermaid.ts";
 import { VisualizeSchema } from "./src/schema.ts";
-import { validateShape } from "./src/validate.ts";
+import { mermaidSources, validateShape } from "./src/validate.ts";
 
 const DESCRIPTION =
 	"Render a rich visualization in the UI instead of ASCII art or a plain markdown table. Two kinds, " +
@@ -23,6 +24,9 @@ export default function (pi: ExtensionAPI): void {
 		parameters: VisualizeSchema,
 		async execute(_toolCallId, params) {
 			validateShape(params);
+			for (const { location, source } of mermaidSources(params)) {
+				await validateMermaidSyntax(location, source);
+			}
 			const text =
 				params.type === "diagram"
 					? mermaidFence(params.title, params.mermaid ?? "")

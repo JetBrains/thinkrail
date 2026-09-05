@@ -1,5 +1,19 @@
 import type { VisualizeParams } from "./schema.ts";
 
+export interface MermaidSource {
+	location: string;
+	source: string;
+}
+
+export function mermaidSources(params: VisualizeParams): MermaidSource[] {
+	if (params.type === "diagram") {
+		return [{ location: "mermaid", source: params.mermaid ?? "" }];
+	}
+	return (params.options ?? []).flatMap((option, index) =>
+		option.mermaid ? [{ location: `options[${index}].mermaid`, source: option.mermaid }] : [],
+	);
+}
+
 export function validateShape(params: VisualizeParams): void {
 	if (params.type === "diagram") {
 		if (!params.mermaid || params.mermaid.trim() === "") {

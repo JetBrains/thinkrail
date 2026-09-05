@@ -8,6 +8,10 @@
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"
 	},
+	"dependencies": {
+		"linkedom": "0.16.11",
+		"mermaid": "catalog:"
+	},
 	"peerDependencies": {
 		"@earendil-works/pi-ai": "*",
 		"@earendil-works/pi-coding-agent": "*",
