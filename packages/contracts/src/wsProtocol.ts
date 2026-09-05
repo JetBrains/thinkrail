@@ -88,7 +88,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 58;
+export const PROTOCOL_VERSION = 59;
 export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
 export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
 export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;

@@ -12,6 +12,7 @@ import type {
 import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib";
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
@@ -108,10 +109,20 @@ type ChatListContext = {
 	messageOrder: ChatMessageOrder;
 	status: StreamStatus | null;
 	runwayActive: boolean;
+	measureClassName: string;
 	headerRef: RefCallback<HTMLDivElement>;
 	streamEdgeRef: RefCallback<HTMLDivElement>;
 	runwayRef: RefCallback<HTMLDivElement>;
 };
+
+function transcriptMeasureClassName(bounded: boolean): string {
+	return cn(
+		"mx-auto box-border",
+		bounded
+			? "w-full max-w-[var(--chat-transcript-width)]"
+			: "w-[var(--chat-transcript-width)] max-w-none",
+	);
+}
 
 function StreamHeader({ context }: { context: ChatListContext }) {
 	const inset = context.runwayActive ? (
@@ -121,7 +132,7 @@ function StreamHeader({ context }: { context: ChatListContext }) {
 		<div ref={context.headerRef}>
 			{inset}
 			{context.messageOrder === "newest-first" && context.status ? (
-				<div className="mx-auto max-w-3xl px-12 pb-8">
+				<div className={cn(context.measureClassName, "px-12 pb-8")}>
 					<StreamIndicator status={context.status} />
 				</div>
 			) : null}
@@ -139,7 +150,7 @@ function StreamFooter({ context }: { context: ChatListContext }) {
 	return (
 		<>
 			{context.status ? (
-				<div className="mx-auto max-w-3xl px-12 pb-8">
+				<div className={cn(context.measureClassName, "px-12 pb-8")}>
 					<StreamIndicator status={context.status} />
 				</div>
 			) : null}
@@ -182,6 +193,8 @@ export default function ChatView({
 		enabled: sessionRuntime !== undefined,
 	});
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
+	const chatLineWidth = useAppStore((state) => state.chatLineWidth);
+	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
 	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
 	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
@@ -332,16 +345,37 @@ export default function ChatView({
 		latestRow,
 		streamingResponseMovement,
 	);
+	const measureClassName = transcriptMeasureClassName(chatLineWidthBounded);
+	const chatViewRef = useCallback(
+		(element: HTMLDivElement | null) => {
+			if (element) {
+				element.style.setProperty(
+					"--chat-transcript-width",
+					`calc(${chatLineWidth}ch + var(--space-24))`,
+				);
+			}
+		},
+		[chatLineWidth],
+	);
 	const listContext = useMemo<ChatListContext>(
 		() => ({
 			messageOrder: chatMessageOrder,
 			status: currentStreamStatus,
 			runwayActive,
+			measureClassName,
 			headerRef,
 			streamEdgeRef,
 			runwayRef,
 		}),
-		[chatMessageOrder, currentStreamStatus, headerRef, runwayActive, runwayRef, streamEdgeRef],
+		[
+			chatMessageOrder,
+			currentStreamStatus,
+			headerRef,
+			measureClassName,
+			runwayActive,
+			runwayRef,
+			streamEdgeRef,
+		],
 	);
 	const composerRef = useRef<ComposerHandle>(null);
 	const askFocusScope = useRef<object>({}).current;
@@ -747,7 +781,9 @@ export default function ChatView({
 		<ChatActionsContext.Provider value={chatActions}>
 			<AskStatesContext.Provider value={askContext}>
 				<div
+					ref={chatViewRef}
 					data-testid="chat-view"
+					data-line-width-bounded={chatLineWidthBounded}
 					data-message-order={chatMessageOrder}
 					onPointerDownCapture={() => {
 						if (isStreaming) releaseFollow();
@@ -802,68 +838,88 @@ export default function ChatView({
 						className="relative flex min-h-0 flex-1 flex-col [container-type:size]"
 						{...containerProps}
 					>
-						<Virtuoso<ChatRow, ChatListContext>
-							key={chatMessageOrder}
-							ref={virtuosoRef}
-							data={rows}
-							heightEstimates={rowHeightEstimates}
-							firstItemIndex={firstItemIndex}
-							increaseViewportBy={CHAT_VIEWPORT_INCREASE}
-							minOverscanItemCount={CHAT_MIN_OVERSCAN_ITEMS}
-							scrollerRef={handleScrollerRef}
-							context={listContext}
-							components={CHAT_LIST_COMPONENTS}
-							className="min-h-0 flex-1 overflow-x-hidden"
-							initialTopMostItemIndex={
-								chatMessageOrder === "newest-first"
-									? { index: 0, align: "start" }
-									: {
-											index: Math.max(rows.length - 1, 0),
-											align: "end",
-											offset: CHAT_LATEST_EDGE_MARGIN,
-										}
-							}
-							followOutput={followOutput}
-							atBottomStateChange={handleAtBottom}
-							atTopStateChange={handleAtTop}
-							rangeChanged={({ startIndex }) => {
-								const localIndex = startIndex - firstItemIndex;
-								visibleAnchorRowId.current = rows[localIndex]?.id ?? null;
-							}}
-							totalListHeightChanged={handleContentHeight}
-							atBottomThreshold={50}
-							atTopThreshold={50}
-							computeItemKey={(_, row) => row.id}
-							itemContent={(index, row) => (
-								<div
-									data-flash={row.id === flashRowId || undefined}
-									className="mx-auto max-w-3xl rounded-[var(--radius-sm)] px-12 py-4 transition-colors data-[flash]:bg-primary-subtle"
-								>
-									<ChatTurnView
-										row={row}
-										workspaceRoot={workspaceRoot}
-										onOpenFile={onOpenFile}
-										agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
-										isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
-										onOpenSpec={onOpenSpec}
-										onOpenChange={onOpenChange}
-										onReveal={onReveal}
-										onTryAgain={() => performSend(TRY_AGAIN_PROMPT, [], "send")}
-									/>
-									{chatMessageOrder === "newest-first" &&
-									runwayActive &&
-									index === firstItemIndex ? (
-										<div ref={streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
-									) : null}
-									{chatMessageOrder === "newest-first" &&
-									runwayActive &&
-									row.id === runwayMarkerRowId ? (
-										<div ref={runwayEdgeRef} data-testid="chat-runway-edge" className="h-0" />
-									) : null}
-								</div>
+						<div
+							data-testid="chat-transcript-scroll"
+							className={cn(
+								"relative min-h-0 flex-1 overflow-y-hidden",
+								chatLineWidthBounded ? "overflow-x-hidden" : "overflow-x-auto",
 							)}
-						/>
-						<ActivityBreadcrumbTrail scroller={scrollerElement} />
+						>
+							<Virtuoso<ChatRow, ChatListContext>
+								key={chatMessageOrder}
+								ref={virtuosoRef}
+								data={rows}
+								heightEstimates={rowHeightEstimates}
+								firstItemIndex={firstItemIndex}
+								increaseViewportBy={CHAT_VIEWPORT_INCREASE}
+								minOverscanItemCount={CHAT_MIN_OVERSCAN_ITEMS}
+								scrollerRef={handleScrollerRef}
+								context={listContext}
+								components={CHAT_LIST_COMPONENTS}
+								className={cn(
+									"h-full min-h-0 overflow-x-hidden",
+									chatLineWidthBounded
+										? "w-full"
+										: "w-[var(--chat-transcript-width)] min-w-full max-w-none",
+								)}
+								initialTopMostItemIndex={
+									chatMessageOrder === "newest-first"
+										? { index: 0, align: "start" }
+										: {
+												index: Math.max(rows.length - 1, 0),
+												align: "end",
+												offset: CHAT_LATEST_EDGE_MARGIN,
+											}
+								}
+								followOutput={followOutput}
+								atBottomStateChange={handleAtBottom}
+								atTopStateChange={handleAtTop}
+								rangeChanged={({ startIndex }) => {
+									const localIndex = startIndex - firstItemIndex;
+									visibleAnchorRowId.current = rows[localIndex]?.id ?? null;
+								}}
+								totalListHeightChanged={handleContentHeight}
+								atBottomThreshold={50}
+								atTopThreshold={50}
+								computeItemKey={(_, row) => row.id}
+								itemContent={(index, row) => (
+									<div
+										data-testid="chat-row"
+										data-flash={row.id === flashRowId || undefined}
+										className={cn(
+											measureClassName,
+											"rounded-[var(--radius-sm)] px-12 py-4 transition-colors data-[flash]:bg-primary-subtle",
+										)}
+									>
+										<ChatTurnView
+											row={row}
+											workspaceRoot={workspaceRoot}
+											onOpenFile={onOpenFile}
+											agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
+											isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
+											onOpenSpec={onOpenSpec}
+											onOpenChange={onOpenChange}
+											onReveal={onReveal}
+											onTryAgain={() => performSend(TRY_AGAIN_PROMPT, [], "send")}
+										/>
+										{chatMessageOrder === "newest-first" &&
+										runwayActive &&
+										index === firstItemIndex ? (
+											<div ref={streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
+										) : null}
+										{chatMessageOrder === "newest-first" &&
+										runwayActive &&
+										row.id === runwayMarkerRowId ? (
+											<div ref={runwayEdgeRef} data-testid="chat-runway-edge" className="h-0" />
+										) : null}
+									</div>
+								)}
+							/>
+							<ActivityBreadcrumbTrail
+								scroller={scrollerElement}
+								measureClassName={measureClassName}
+							/>
+						</div>
 						{showScrollButton ? (
 							<button
 								type="button"
