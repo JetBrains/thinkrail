@@ -12,6 +12,7 @@ export type DesktopRpc = {
 			windowChromeRequestClose: Record<string, never>;
 			windowChromeStartResize: { edge: DesktopResizeEdge };
 			windowChromeReady: { platform: DesktopWindowChromePlatform };
+			windowChromeShellReady: { platform: DesktopWindowChromePlatform };
 		};
 	};
 	webview: {

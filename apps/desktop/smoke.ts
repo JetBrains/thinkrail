@@ -145,7 +145,7 @@ async function resetLinuxWindow(windowId: string): Promise<LinuxWindowGeometry> 
 	);
 }
 
-async function runWindowsWindowInteractions(pid: number): Promise<void> {
+async function runWindowsWindowInteractions(pid: number, controlPath: string): Promise<void> {
 	const probe = Bun.spawn(
 		[
 			"powershell.exe",
@@ -156,6 +156,8 @@ async function runWindowsWindowInteractions(pid: number): Promise<void> {
 			join(desktopDir, "windows-window-interactions.ps1"),
 			"-ProcessId",
 			String(pid),
+			"-ControlPath",
+			controlPath,
 		],
 		{ stdout: "inherit", stderr: "inherit" },
 	);
@@ -285,12 +287,14 @@ async function launchDesktop(
 ): Promise<
 	RunningArtifactHost & {
 		pid: number;
+		controlPath: string;
 		windowUrl: string;
 		mode: string;
 		applicationMenuInstalled: boolean;
 		windowChromePlatform: string;
 		titleBarStyle: string;
 		windowChromePreloadReady: boolean;
+		windowChromeShellReady: boolean;
 		windowChromeProbe?: {
 			nativeControls?: true;
 			maximized?: true;
@@ -360,6 +364,7 @@ async function launchDesktop(
 			windowChromePlatform: string;
 			titleBarStyle: string;
 			windowChromePreloadReady: boolean;
+			windowChromeShellReady: boolean;
 			windowChromeProbe?: {
 				nativeControls?: true;
 				maximized?: true;
@@ -379,12 +384,14 @@ async function launchDesktop(
 		return {
 			origin: ready.origin,
 			pid: ready.pid,
+			controlPath,
 			windowUrl: ready.windowUrl,
 			mode: ready.mode,
 			applicationMenuInstalled: ready.applicationMenuInstalled,
 			windowChromePlatform: ready.windowChromePlatform,
 			titleBarStyle: ready.titleBarStyle,
 			windowChromePreloadReady: ready.windowChromePreloadReady,
+			windowChromeShellReady: ready.windowChromeShellReady,
 			...(ready.windowChromeProbe ? { windowChromeProbe: ready.windowChromeProbe } : {}),
 			resources: {
 				skillsDir: join(ready.runtimeDir, "skills"),
@@ -433,7 +440,8 @@ try {
 		if (
 			ui.windowChromePlatform !== expectedChrome.platform ||
 			ui.titleBarStyle !== expectedChrome.titleBarStyle ||
-			!ui.windowChromePreloadReady
+			!ui.windowChromePreloadReady ||
+			!ui.windowChromeShellReady
 		) {
 			throw new Error("desktop native window chrome did not initialize its platform policy");
 		}
@@ -471,7 +479,9 @@ try {
 				"native-window-interactions",
 				"interactions",
 			);
-			if (process.platform === "win32") await runWindowsWindowInteractions(interactions.pid);
+			if (process.platform === "win32") {
+				await runWindowsWindowInteractions(interactions.pid, interactions.controlPath);
+			}
 			if (process.platform === "linux") await runLinuxWindowInteractions(interactions.pid);
 			await interactions.requestWindowClose();
 		} finally {
