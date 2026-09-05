@@ -11,6 +11,7 @@ export interface ActivityHydration {
 	settle: (token: number, rows: SessionActivity[]) => void;
 	fail: (token: number) => void;
 	discard: (token: number) => void;
+	abandon: () => void;
 	buffered: () => number;
 }
 
@@ -45,6 +46,10 @@ export function createActivityHydration(sink: ActivityHydrationSink): ActivityHy
 		},
 		discard: (requestToken) => {
 			if (requestToken !== token) return;
+			buffer = null;
+		},
+		abandon: () => {
+			token += 1;
 			buffer = null;
 		},
 		buffered: () => buffer?.length ?? 0,

@@ -84,7 +84,15 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   the store stays a plain fold. Reads are tokenized so a stale response cannot settle over a newer one; a
   **failed** read still replays its buffer (no snapshot arrived, so those pushes are the only truth left),
   while a **superseded generation** discards it (a fresh welcome is already re-reading, and replaying a
-  dead connection's pushes would resurrect stale rows). The capability gate is **`supportsSessionActivity(protocolVersion)`**
+  dead connection's pushes would resurrect stale rows). Both settle *and* failure are generation-fenced for
+  that reason — `WsTransport` **resends** pending requests across a reconnect, so an outcome can arrive
+  after the connection it was issued on is gone.
+
+  The unsupported-welcome path additionally **abandons** any in-flight hydration before clearing, and that
+  ordering is load-bearing: a v60 read can be in flight with pushes buffered when the endpoint reconnects
+  to a pre-activity host, whose rejection of the resent `session.activityList` would otherwise replay those
+  pushes *after* the clear — stranding a glyph the older host can never retract. `abandon` invalidates the
+  read's token, so its late settle or failure is inert. The capability gate is **`supportsSessionActivity(protocolVersion)`**
   (`ACTIVITY_PROTOCOL_VERSION`), and failing it does **not** skip the call: it hydrates `[]`, so a surface
   that has seen a newer host and then reconnects to an older one clears its glyphs rather than stranding
   them — that host can send neither a snapshot nor a retraction. Store semantics for the fold live in

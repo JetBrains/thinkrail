@@ -33,20 +33,23 @@ const activityHydration = createActivityHydration({
 function refreshSessionActivity(connectionGeneration: number): void {
 	const state = useAppStore.getState();
 	if (!supportsSessionActivity(state.protocolVersion)) {
+		activityHydration.abandon();
 		state.hydrateSessionActivity([]);
 		return;
 	}
 	const token = activityHydration.begin();
+	const current = (): boolean =>
+		isConnectedGeneration(useAppStore.getState(), connectionGeneration);
 	void getTransport()
 		.request("session.activityList", {})
 		.then((rows) => {
-			if (!isConnectedGeneration(useAppStore.getState(), connectionGeneration)) {
-				activityHydration.discard(token);
-				return;
-			}
-			activityHydration.settle(token, rows);
+			if (current()) activityHydration.settle(token, rows);
+			else activityHydration.discard(token);
 		})
-		.catch(() => activityHydration.fail(token));
+		.catch(() => {
+			if (current()) activityHydration.fail(token);
+			else activityHydration.discard(token);
+		});
 }
 
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {

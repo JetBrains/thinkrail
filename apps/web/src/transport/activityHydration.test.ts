@@ -88,3 +88,36 @@ test("buffering stops once a read settles, so later pushes apply immediately", (
 	hydration.push(payload("s1", "running"));
 	expect(log).toEqual(["hydrate:[]", "apply:s1=running"]);
 });
+
+test("abandon drops the buffer, so a downgraded host cannot inherit a newer host's pushes", () => {
+	const { log, hydration } = harness();
+	const token = hydration.begin();
+	hydration.push(payload("s1", "running"));
+
+	hydration.abandon();
+	expect(hydration.buffered()).toBe(0);
+
+	hydration.fail(token);
+	hydration.settle(token, [row("s9", "failed")]);
+	expect(log).toEqual([]);
+});
+
+test("after abandon, pushes apply straight through again", () => {
+	const { log, hydration } = harness();
+	hydration.begin();
+	hydration.abandon();
+	hydration.push(payload("s1", "waiting"));
+	expect(log).toEqual(["apply:s1=waiting"]);
+});
+
+test("a resent request rejected by an older host cannot replay its buffer once abandoned", () => {
+	const { log, hydration } = harness();
+	const token = hydration.begin();
+	hydration.push(payload("s1", "failed"));
+
+	hydration.abandon();
+	log.push("cleared");
+	hydration.fail(token);
+
+	expect(log).toEqual(["cleared"]);
+});
