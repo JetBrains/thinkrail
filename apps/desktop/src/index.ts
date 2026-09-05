@@ -248,12 +248,14 @@ try {
 } catch (error) {
 	const message = error instanceof Error ? error.message : String(error);
 	console.error(message);
-	await Utils.showMessageBox({
-		type: "error",
-		title: "ThinkRail could not start",
-		message: "ThinkRail could not start",
-		detail: message,
-		buttons: ["Quit"],
-	});
+	if (!process.env.THINKRAIL_DESKTOP_READY_FILE) {
+		await Utils.showMessageBox({
+			type: "error",
+			title: "ThinkRail could not start",
+			message: "ThinkRail could not start",
+			detail: message,
+			buttons: ["Quit"],
+		});
+	}
 	Utils.quit();
 }

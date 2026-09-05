@@ -75,7 +75,8 @@ another.
 The Electrobun entry bundle contains native-shell code only. A static server import there is forbidden:
 it can load `bun-pty` before `BUN_PTY_LIB` and flatten PI into the wrong extension-loader mode. Startup
 failure is logged through the shared crash path, shown in a native error dialog, and exits without leaving
-a hidden host.
+a hidden host. A run carrying the smoke ready-file seam suppresses that modal and exits immediately so a
+startup regression cannot strand the native child behind the harness timeout.
 
 Packaged resources remain physical and unpacked: web assets and skills are read through filesystem paths,
 the PTY uses FFI, trash helpers are executable sidecars, and the preload is read as source text. ASAR is
