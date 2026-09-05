@@ -5,7 +5,14 @@ import { Collapsible, countLines } from "./Collapsible";
 import { ToolFileLink } from "./ToolFileLink";
 import { languageFromPath, resultText, strArg } from "./toolHelpers";
 
-export function WriteCard({ args, result, status, workspaceRoot, onOpenFile }: ToolRenderProps) {
+export function WriteCard({
+	toolCallId,
+	args,
+	result,
+	status,
+	workspaceRoot,
+	onOpenFile,
+}: ToolRenderProps) {
 	const path = strArg(args, "path");
 	const content = strArg(args, "content");
 	const lang = languageFromPath(path);
@@ -27,7 +34,7 @@ export function WriteCard({ args, result, status, workspaceRoot, onOpenFile }: T
 			{status === "error" ? (
 				<pre className="overflow-auto px-8 py-4 text-feedback-error tr-code-text">{message}</pre>
 			) : content ? (
-				<Collapsible lines={countLines(content)}>
+				<Collapsible id={`${toolCallId}:content`} lines={countLines(content)}>
 					<CodeBlock code={content} lang={lang} />
 				</Collapsible>
 			) : (

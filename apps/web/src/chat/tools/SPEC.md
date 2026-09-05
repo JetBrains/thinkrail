@@ -205,7 +205,8 @@ registration runs once when the chat module mounts. Unregistered tools fall back
 - **`subagent/`** — delegation renderers for `pi-subagents`: `AgentCard` (the `Agent` tool — **primary**;
   also registered for `get_subagent_result`, routine), the `SubagentCompletionCard` turn card, and the
   pure `runDetails` readers/formatters; own child spec ([subagent/SPEC.md](subagent/SPEC.md)).
-- **Shared pieces** — `CodeBlock` (shiki), `Collapsible` ("Show all N lines" fold for long output),
+- **Shared pieces** — `CodeBlock` (shiki), `Collapsible` ("Show all N lines" fold for long output;
+  callers supply a stable tool-call-derived id so state and geometry anchoring survive virtualization),
   `ToolFileLink` + exact-reference linked text backed by the parent chat module's shared
   `workspaceFileTarget`, pure `toolHelpers` (arg readers, `resultText`, `languageFromPath`) + `lib`'s
   `projectRelativePath`. `resultText` delegates canonical result parsing to
@@ -217,7 +218,7 @@ registration runs once when the chat module mounts. Unregistered tools fall back
 - **Public surface:** the side-effect `register` import + the shared `CodeBlock`/`Collapsible`/
   `toolHelpers` for sibling renderers + `visualize/MermaidView` for the parent `Markdown` primitive. No barrel (chat pulls shiki — per-file imports, as in the parent).
 - **Allowed deps:** parent chat primitives (`toolRegistry`, `Markdown`, `ChatActions`, `askState`,
-  `fileTargets`);
+  `fileTargets`, `foldState`);
   `contracts` (type-only + the `ASK_USER_ANSWERS_CUSTOM_TYPE` constant); `components/ui`; `lib`;
   `@remixicon/react`; `mermaid` (**lazy, `visualize/` only**).
 - **Forbidden:** value-importing any `pi` package; `store`/`transport` (renderers stay presentational —

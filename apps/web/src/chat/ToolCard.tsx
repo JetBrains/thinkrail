@@ -44,17 +44,19 @@ export function ToolCard({
 	const summary = getToolSummary(toolName, renderProps);
 
 	const autoExpand = isError || (resolveProminence(toolName).defaultExpanded && status === "done");
-	const [expanded, toggle] = useFold(toolCallId, autoExpand);
+	const [expanded, toggle, toggleRef] = useFold(toolCallId, autoExpand);
 
 	return (
 		<div
 			data-testid="tool-card"
+			data-chat-fold-root
 			data-tool={toolName}
 			data-status={status}
 			data-expanded={expanded}
 			className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg"
 		>
 			<button
+				ref={toggleRef}
 				type="button"
 				data-testid="tool-card-toggle"
 				aria-expanded={expanded}

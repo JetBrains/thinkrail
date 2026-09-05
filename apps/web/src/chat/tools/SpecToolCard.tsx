@@ -168,6 +168,7 @@ export function specToolSummary({ toolName, args }: ToolRenderProps): string {
 }
 
 export function SpecToolCard({
+	toolCallId,
 	toolName,
 	args,
 	result,
@@ -199,7 +200,9 @@ export function SpecToolCard({
 	);
 	return (
 		<div data-testid={`tool-${toolName}`}>
-			<Collapsible lines={countLines(output)}>{content}</Collapsible>
+			<Collapsible id={`${toolCallId}:content`} lines={countLines(output)}>
+				{content}
+			</Collapsible>
 		</div>
 	);
 }

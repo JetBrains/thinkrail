@@ -54,6 +54,8 @@ export interface ReadingBandController {
 	cancelMovement: () => void;
 	cancelReveal: () => void;
 	revealTo: (target: () => number | null, stabilize: boolean) => void;
+	stabilizeAnchor: (target: () => number | null) => void;
+	refreshAnchor: () => void;
 	readerLeft: () => void;
 	readerMovedWhileFollowing: () => void;
 	readerReachedEdge: () => void;
@@ -77,7 +79,7 @@ interface ReadingBandState {
 type ScrollTarget = () => number | null;
 
 interface ActiveMotion {
-	kind: "alignment" | "reveal" | "runway" | "settlement";
+	kind: "alignment" | "anchor" | "reveal" | "runway" | "settlement";
 	scrollTarget: ScrollTarget | null;
 	runwayTarget: number | null;
 	retainActiveRunway: boolean;
@@ -90,6 +92,7 @@ interface ActiveMotion {
 	stabilityFrames: number;
 	stabilizing: boolean;
 	instant: boolean;
+	instantScroll: boolean;
 }
 
 function snapshotOf(state: ReadingBandState): ReadingBandSnapshot {
@@ -273,6 +276,10 @@ export function createReadingBandController(
 				if (active.instant) {
 					applyInstantMotion(active);
 				} else {
+					if (active.instantScroll) {
+						const target = boundedScrollTarget(active.scrollTarget);
+						if (target !== null) environment.writeScrollTop(target);
+					}
 					const bounds = environment.readScrollBounds();
 					active.startScrollTop = bounds?.scrollTop ?? active.startScrollTop;
 					active.startRunwayHeight = runwayHeight;
@@ -294,7 +301,11 @@ export function createReadingBandController(
 		const eased = easeOutCubic(progress);
 		const target = boundedScrollTarget(active.scrollTarget);
 		if (target !== null) {
-			environment.writeScrollTop(active.startScrollTop + (target - active.startScrollTop) * eased);
+			environment.writeScrollTop(
+				active.instantScroll
+					? target
+					: active.startScrollTop + (target - active.startScrollTop) * eased,
+			);
 		}
 		if (active.runwayTarget !== null) {
 			writeRunwayHeight(
@@ -336,6 +347,8 @@ export function createReadingBandController(
 		requireStreaming = false,
 		reevaluate = false,
 		stabilityFrames = 0,
+		instant = false,
+		instantScroll = false,
 	}: {
 		kind?: ActiveMotion["kind"];
 		scrollTarget?: ScrollTarget | null;
@@ -345,6 +358,8 @@ export function createReadingBandController(
 		requireStreaming?: boolean;
 		reevaluate?: boolean;
 		stabilityFrames?: number;
+		instant?: boolean;
+		instantScroll?: boolean;
 	}) => {
 		const bounds = environment.readScrollBounds();
 		const initialScrollTarget = boundedScrollTarget(scrollTarget);
@@ -361,7 +376,7 @@ export function createReadingBandController(
 			if (reevaluate) contentChanged();
 			return;
 		}
-		if (environment.prefersReducedMotion()) {
+		if (instant || environment.prefersReducedMotion()) {
 			cancelMotion();
 			const target = boundedScrollTarget(scrollTarget);
 			if (target !== null) environment.writeScrollTop(target);
@@ -385,6 +400,7 @@ export function createReadingBandController(
 					stabilityFrames,
 					stabilizing: true,
 					instant: true,
+					instantScroll,
 				};
 				publish({ moving: true });
 				frame = environment.requestFrame(advanceMotion);
@@ -407,6 +423,7 @@ export function createReadingBandController(
 			stabilityFrames,
 			stabilizing: false,
 			instant: false,
+			instantScroll,
 		};
 		publish({ moving: true });
 		frame ??= environment.requestFrame(advanceMotion);
@@ -484,6 +501,12 @@ export function createReadingBandController(
 		return true;
 	};
 
+	const refreshAnchor = () => {
+		if (motion?.kind !== "anchor") return;
+		const target = boundedScrollTarget(motion.scrollTarget);
+		if (target !== null) environment.writeScrollTop(target);
+	};
+
 	const settle = () => {
 		cancelAnchor();
 		immediateTurnPending = false;
@@ -503,6 +526,7 @@ export function createReadingBandController(
 	};
 
 	function contentChanged() {
+		refreshAnchor();
 		let geometry = environment.readGeometry();
 		if (!geometry || geometry.viewportHeight <= 0) return;
 		reconcileRunwayGrowth(geometry);
@@ -563,31 +587,32 @@ export function createReadingBandController(
 		return false;
 	}
 
+	const retainRunwayRelease = () => {
+		if (motion?.runwayTarget !== 0) return false;
+		if (motion.scrollTarget !== null || motion.requireFollowing || motion.stabilizing) {
+			const bounds = environment.readScrollBounds();
+			motion.kind = "runway";
+			motion.scrollTarget = null;
+			motion.retainActiveRunway = false;
+			motion.requireFollowing = false;
+			motion.requireStreaming = false;
+			motion.reevaluate = false;
+			motion.startScrollTop = bounds?.scrollTop ?? motion.startScrollTop;
+			motion.startRunwayHeight = runwayHeight;
+			motion.startedAt = environment.now();
+			motion.stabilityFrames = 0;
+			motion.stabilizing = false;
+			motion.instantScroll = false;
+		}
+		return true;
+	};
+
 	const yieldMotionToReader = () => {
 		cancelAnchor();
 		immediateTurnPending = false;
 		deferredUserTurn = null;
 		deferredLatestRow = null;
-		if (motion?.instant) {
-			cancelMotion();
-		} else if (motion?.runwayTarget === 0) {
-			if (motion.scrollTarget !== null || motion.requireFollowing || motion.stabilizing) {
-				const bounds = environment.readScrollBounds();
-				motion.kind = "runway";
-				motion.scrollTarget = null;
-				motion.retainActiveRunway = false;
-				motion.requireFollowing = false;
-				motion.requireStreaming = false;
-				motion.reevaluate = false;
-				motion.startScrollTop = bounds?.scrollTop ?? motion.startScrollTop;
-				motion.startRunwayHeight = runwayHeight;
-				motion.startedAt = environment.now();
-				motion.stabilityFrames = 0;
-				motion.stabilizing = false;
-			}
-		} else {
-			cancelMotion();
-		}
+		if (!retainRunwayRelease()) cancelMotion();
 		if (runwayHeight > GEOMETRY_EPSILON) {
 			if (motion?.runwayTarget !== 0) releaseRunway(true);
 		} else {
@@ -639,7 +664,8 @@ export function createReadingBandController(
 			cancelAnchor();
 		},
 		cancelReveal: () => {
-			if (motion?.kind === "reveal") cancelMotion();
+			if (motion?.kind !== "anchor" && motion?.kind !== "reveal") return;
+			if (!retainRunwayRelease()) cancelMotion();
 		},
 		revealTo: (target, stabilize) => {
 			cancelAnchor();
@@ -651,6 +677,19 @@ export function createReadingBandController(
 				stabilityFrames: stabilize ? EDGE_STABILITY_FRAMES : 0,
 			});
 		},
+		stabilizeAnchor: (target) => {
+			cancelAnchor();
+			const runwayTarget = motion?.runwayTarget === 0 ? 0 : null;
+			startMotion({
+				kind: "anchor",
+				scrollTarget: target,
+				runwayTarget,
+				requireFollowing: false,
+				stabilityFrames: EDGE_STABILITY_FRAMES,
+				instantScroll: true,
+			});
+		},
+		refreshAnchor,
 		readerLeft: () => {
 			yieldMotionToReader();
 			publish({ following: false });

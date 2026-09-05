@@ -39,6 +39,7 @@ import {
 } from "./Composer";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { ExtUiDialog } from "./ExtUiDialog";
+import { FoldGeometryProvider } from "./foldState";
 import { HistoryOverlay } from "./HistoryOverlay";
 import { deriveMessageActions } from "./messageActions";
 import {
@@ -327,12 +328,14 @@ export default function ChatView({
 		scrollerElement,
 		showScrollButton,
 		scrollButtonLabel,
+		scrollMoving,
 		scrollToLatest,
 		armImmediateTurn,
 		cancelImmediateTurn,
 		cancelAutomaticReveal,
 		revealElement,
 		revealRow,
+		prepareFoldChange,
 		runwayActive,
 		followState,
 		containerProps,
@@ -832,6 +835,7 @@ export default function ChatView({
 						data-follow-state={followState}
 						data-latest-edge={chatMessageOrder === "newest-first" ? "top" : "bottom"}
 						data-streaming={isStreaming}
+						data-scroll-moving={scrollMoving}
 						className="relative flex min-h-0 flex-1 flex-col [container-type:size]"
 						{...containerProps}
 					>
@@ -886,17 +890,19 @@ export default function ChatView({
 											"rounded-[var(--radius-sm)] px-12 py-4 transition-colors data-[flash]:bg-primary-subtle",
 										)}
 									>
-										<ChatTurnView
-											row={row}
-											workspaceRoot={workspaceRoot}
-											onOpenFile={onOpenFile}
-											agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
-											isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
-											onOpenSpec={onOpenSpec}
-											onOpenChange={onOpenChange}
-											onReveal={onReveal}
-											onTryAgain={() => performSend(TRY_AGAIN_PROMPT, [], "send")}
-										/>
+										<FoldGeometryProvider onBeforeChange={prepareFoldChange}>
+											<ChatTurnView
+												row={row}
+												workspaceRoot={workspaceRoot}
+												onOpenFile={onOpenFile}
+												agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
+												isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
+												onOpenSpec={onOpenSpec}
+												onOpenChange={onOpenChange}
+												onReveal={onReveal}
+												onTryAgain={() => performSend(TRY_AGAIN_PROMPT, [], "send")}
+											/>
+										</FoldGeometryProvider>
 										{chatMessageOrder === "newest-first" &&
 										runwayActive &&
 										index === firstItemIndex ? (

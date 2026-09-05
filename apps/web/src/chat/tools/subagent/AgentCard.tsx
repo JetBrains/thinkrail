@@ -22,10 +22,10 @@ export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps)
 	const backgroundAck = args.run_in_background === true && details !== undefined && !terminal;
 	const meta = details ? [details.model, ...runCounters(details, "split")].filter(Boolean) : [];
 	const output = resultText(result);
-	const [reportOpen, toggleReport] = useFold(`${toolCallId}:report`, false);
+	const [reportOpen, toggleReport, reportToggleRef] = useFold(`${toolCallId}:report`, false);
 
 	return (
-		<div data-testid="tool-agent" className="flex flex-col gap-4">
+		<div data-testid="tool-agent" data-chat-fold-root className="flex flex-col gap-4">
 			<div className="flex items-center gap-4 tr-text-metadata">
 				<Bot className="size-12 shrink-0 text-text-muted" />
 				<span className="shrink-0 text-primary">{role || "subagent"}</span>
@@ -36,7 +36,7 @@ export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps)
 				) : null}
 			</div>
 			{task ? (
-				<Collapsible lines={countLines(task)}>
+				<Collapsible id={`${toolCallId}:task`} lines={countLines(task)}>
 					<div className="whitespace-pre-wrap break-words text-text-muted tr-text-metadata">
 						{task}
 					</div>
@@ -74,6 +74,7 @@ export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps)
 			) : status === "done" && output ? (
 				<div className="flex flex-col gap-4">
 					<button
+						ref={reportToggleRef}
 						type="button"
 						data-testid="agent-report-toggle"
 						aria-expanded={reportOpen}

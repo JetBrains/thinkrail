@@ -22,7 +22,7 @@ function providerOf(result: unknown): string {
 	return typeof p === "string" ? p : "";
 }
 
-export function WebSearchCard({ args, result, status }: ToolRenderProps) {
+export function WebSearchCard({ toolCallId, args, result, status }: ToolRenderProps) {
 	const query = firstQuery(args);
 	const provider = providerOf(result);
 	const output = resultText(result);
@@ -37,6 +37,7 @@ export function WebSearchCard({ args, result, status }: ToolRenderProps) {
 				{provider ? <span className="shrink-0 text-text-muted">via {provider}</span> : null}
 			</div>
 			<WebResultBody
+				id={`${toolCallId}:content`}
 				output={output}
 				status={status}
 				runningLabel="Searching…"

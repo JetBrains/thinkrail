@@ -4,7 +4,14 @@ import { Collapsible } from "./Collapsible";
 import { ToolFileLink } from "./ToolFileLink";
 import { resultText, strArg } from "./toolHelpers";
 
-export function EditCard({ args, result, status, workspaceRoot, onOpenFile }: ToolRenderProps) {
+export function EditCard({
+	toolCallId,
+	args,
+	result,
+	status,
+	workspaceRoot,
+	onOpenFile,
+}: ToolRenderProps) {
 	const path = strArg(args, "path");
 	const oldText = strArg(args, "oldText") || strArg(args, "old_string") || strArg(args, "old");
 	const newText = strArg(args, "newText") || strArg(args, "new_string") || strArg(args, "new");
@@ -36,6 +43,7 @@ export function EditCard({ args, result, status, workspaceRoot, onOpenFile }: To
 				disabled={status !== "done"}
 			/>
 			<Collapsible
+				id={`${toolCallId}:content`}
 				lines={oldLines.length + newLines.length}
 				fadeClass="bg-[linear-gradient(to_top,var(--container-elevated-bg),transparent)]"
 			>
