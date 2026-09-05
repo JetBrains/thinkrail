@@ -1,6 +1,7 @@
 import { appendFileSync, realpathSync, utimesSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import { readChatScrollGeometry } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -194,12 +195,25 @@ test("sticky activity breadcrumbs expose the off-screen Activity â†’ Thinking â†
 	await enterDefaultWorkspace(page);
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
+	const chatScroll = page.getByTestId("chat-scroll");
+	const assertFollowingLatest = async () => {
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+		await expect(page.getByTestId("scroll-to-bottom")).toHaveCount(0);
+		await expect
+			.poll(async () => (await readChatScrollGeometry(chatScroll)).distanceFromEnd)
+			.toBeLessThanOrEqual(1);
+	};
+	await assertFollowingLatest();
+
 	const activity = page.getByTestId("activity-group").first();
 	await activity.getByTestId("activity-group-toggle").click();
+	await assertFollowingLatest();
 	const thinking = activity.getByTestId("thinking-group").last();
 	await thinking.getByTestId("thinking-group-toggle").click();
+	await assertFollowingLatest();
 	const tool = thinking.locator('[data-testid="activity-step"][data-tool="bash"]');
 	await tool.getByTestId("activity-step-toggle").click();
+	await assertFollowingLatest();
 
 	const trail = page.getByTestId("activity-breadcrumb-trail");
 	await expect

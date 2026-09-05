@@ -5,7 +5,6 @@ import {
 	ActivityBreadcrumbBar,
 	type ActivityBreadcrumbDescriptor,
 	ActivityBreadcrumbTrail,
-	activityBreadcrumbJumpTop,
 	compressBreadcrumbPath,
 	deriveActiveBreadcrumbPath,
 	isCompactBreadcrumbWidth,
@@ -96,20 +95,27 @@ describe("activity breadcrumb path", () => {
 		expect(isCompact(390)).toBe(true);
 	});
 
-	test("aligns jump targets immediately below the sticky row", () => {
-		const jumpTop = activityBreadcrumbJumpTop;
-		expect(jumpTop(600, 100, 420)).toBe(886);
-		expect(jumpTop(10, 100, 80)).toBe(0);
-	});
-
 	test("mounts no sticky overlay until a transcript scroller is available", () => {
-		const Trail: ComponentType<{ scroller: HTMLElement | null }> = ActivityBreadcrumbTrail;
-		expect(renderToStaticMarkup(createElement(Trail, { scroller: null }))).toBe("");
+		const Trail: ComponentType<{
+			scroller: HTMLElement | null;
+			measureClassName: string;
+			onReveal: (node: HTMLElement) => void;
+		}> = ActivityBreadcrumbTrail;
+		expect(
+			renderToStaticMarkup(
+				createElement(Trail, {
+					scroller: null,
+					measureClassName: "mx-auto",
+					onReveal: () => undefined,
+				}),
+			),
+		).toBe("");
 	});
 
 	test("renders one labelled root-to-leaf navigation row with separate fold controls", () => {
 		type BarProps = {
 			segments: ActivityBreadcrumbDescriptor[];
+			measureClassName: string;
 			onJump: (id: string) => void;
 			onToggle: (id: string) => void;
 		};
@@ -121,6 +127,7 @@ describe("activity breadcrumb path", () => {
 					{ ...node("Thinking", "thinking", 0, 1, "7 steps"), meta: "1 step · bash" },
 					{ ...node("bash", "tool", 0, 1, "Thinking"), meta: "bun test watch.test.ts" },
 				],
+				measureClassName: "mx-auto",
 				onJump: () => {},
 				onToggle: () => {},
 			}),

@@ -25,7 +25,7 @@ import {
 	useAppStore,
 } from "@/store";
 import { errorText, getTransport } from "@/transport";
-import { ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
+import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
@@ -51,7 +51,12 @@ import { QueueStrip } from "./QueueStrip";
 import { estimateChatRowHeights, type RowHeightEstimateCache } from "./rowHeightEstimates";
 import { type ChatRow, deriveRows, projectRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
-import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
+import {
+	CHAT_STATUS_SLOT_HEIGHT,
+	type StreamStatus,
+	StreamStatusSlot,
+	streamStatus,
+} from "./StreamIndicator";
 import { SubagentTranscriptDialog } from "./SubagentTranscriptDialog";
 import { parseTemplateSlots } from "./slotSession";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
@@ -131,10 +136,8 @@ function StreamHeader({ context }: { context: ChatListContext }) {
 	return (
 		<div ref={context.headerRef}>
 			{inset}
-			{context.messageOrder === "newest-first" && context.status ? (
-				<div className={cn(context.measureClassName, "px-12 pb-8")}>
-					<StreamIndicator status={context.status} />
-				</div>
+			{context.messageOrder === "newest-first" ? (
+				<StreamStatusSlot status={context.status} measureClassName={context.measureClassName} />
 			) : null}
 		</div>
 	);
@@ -146,14 +149,9 @@ function StreamFooter({ context }: { context: ChatListContext }) {
 			<div ref={context.runwayRef} data-testid="chat-stream-runway" className="h-0" aria-hidden />
 		) : null;
 	}
-	if (!context.status && !context.runwayActive) return null;
 	return (
 		<>
-			{context.status ? (
-				<div className={cn(context.measureClassName, "px-12 pb-8")}>
-					<StreamIndicator status={context.status} />
-				</div>
-			) : null}
+			<StreamStatusSlot status={context.status} measureClassName={context.measureClassName} />
 			{context.runwayActive ? (
 				<>
 					<div ref={context.streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
@@ -223,6 +221,7 @@ export default function ChatView({
 		turns,
 		toolResults,
 		isStreaming,
+		settlementTick,
 		currentAssistantId,
 		stats,
 		commands,
@@ -278,10 +277,10 @@ export default function ChatView({
 		[chronologicalRows, isStreaming],
 	);
 
-	const currentStreamStatus = useMemo<StreamStatus | null>(() => {
-		const last = turns[turns.length - 1];
-		return isStreaming && last?.kind !== "retry" ? streamStatus(turns, currentAssistantId) : null;
-	}, [turns, isStreaming, currentAssistantId]);
+	const currentStreamStatus = useMemo<StreamStatus | null>(
+		() => (isStreaming ? streamStatus(turns, currentAssistantId) : null),
+		[turns, isStreaming, currentAssistantId],
+	);
 
 	const recentPrompts = useMemo(() => {
 		const texts = turns
@@ -319,8 +318,6 @@ export default function ChatView({
 			: null;
 	const {
 		followOutput,
-		handleAtBottom,
-		handleAtTop,
 		handleContentHeight,
 		handleScrollerRef,
 		headerRef,
@@ -332,17 +329,21 @@ export default function ChatView({
 		scrollButtonLabel,
 		scrollToLatest,
 		armImmediateTurn,
-		releaseFollow,
+		cancelImmediateTurn,
+		cancelAutomaticReveal,
 		revealElement,
+		revealRow,
 		runwayActive,
 		followState,
 		containerProps,
 	} = useChatScroll(
 		virtuosoRef,
 		isStreaming,
+		settlementTick,
 		chatMessageOrder,
 		latestUserRow,
 		latestRow,
+		rowHeightEstimates,
 		streamingResponseMovement,
 	);
 	const measureClassName = transcriptMeasureClassName(chatLineWidthBounded);
@@ -531,7 +532,6 @@ export default function ChatView({
 		behavior: Exclude<SubmitBehavior, "interrupt">,
 	) => {
 		const queued = behavior !== "send";
-		if (queued) releaseFollow();
 		if (!queued && (text || attachments.length > 0)) {
 			armImmediateTurn();
 			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
@@ -549,6 +549,10 @@ export default function ChatView({
 			.catch((err) => {
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
 				if (queued) restoreTextToDraft(text);
+				else {
+					const streaming = useAppStore.getState().sessions[sessionId]?.isStreaming ?? false;
+					cancelImmediateTurn(streaming);
+				}
 			});
 	};
 
@@ -688,13 +692,17 @@ export default function ChatView({
 			useAppStore.getState().clearChatLocation();
 			return;
 		}
-		releaseFollow();
-		virtuosoRef.current?.scrollToIndex({ index, align: "center" });
-		setFlashRowId(rows[index]?.id ?? null);
+		const rowId = rows[index]?.id;
+		if (!rowId) {
+			useAppStore.getState().clearChatLocation();
+			return;
+		}
+		revealRow(rowId, index, "center");
+		setFlashRowId(rowId);
 		useAppStore.getState().clearChatLocation();
 	}, [
 		chatLocationRequest,
-		releaseFollow,
+		revealRow,
 		rows,
 		runtime.turnIdByMessageIndex,
 		sessionId,
@@ -759,11 +767,12 @@ export default function ChatView({
 				getTransport()
 					.request("session.answerQuestion", { sessionId, toolCallId, result })
 					.then(() => undefined),
+			cancelAutomaticReveal,
 			focusComposer: () => composerRef.current?.refocus(),
 			openSubagentTranscript: setTranscriptChildId,
 			revealChatElement: revealElement,
 		}),
-		[revealElement, sessionId],
+		[cancelAutomaticReveal, revealElement, sessionId],
 	);
 
 	const onExtUiReply = (value: string | boolean | null) => {
@@ -785,18 +794,6 @@ export default function ChatView({
 					data-testid="chat-view"
 					data-line-width-bounded={chatLineWidthBounded}
 					data-message-order={chatMessageOrder}
-					onPointerDownCapture={() => {
-						if (isStreaming) releaseFollow();
-					}}
-					onKeyDownCapture={(event) => {
-						if (
-							isStreaming &&
-							event.target instanceof Element &&
-							!event.target.closest('[data-testid="chat-scroll"]')
-						) {
-							releaseFollow();
-						}
-					}}
 					className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
 				>
 					<Popover open={planOpen} onOpenChange={setPlanOpen}>
@@ -864,7 +861,7 @@ export default function ChatView({
 								)}
 								initialTopMostItemIndex={
 									chatMessageOrder === "newest-first"
-										? { index: 0, align: "start" }
+										? { index: 0, align: "start", offset: -CHAT_STATUS_SLOT_HEIGHT }
 										: {
 												index: Math.max(rows.length - 1, 0),
 												align: "end",
@@ -872,19 +869,17 @@ export default function ChatView({
 											}
 								}
 								followOutput={followOutput}
-								atBottomStateChange={handleAtBottom}
-								atTopStateChange={handleAtTop}
 								rangeChanged={({ startIndex }) => {
 									const localIndex = startIndex - firstItemIndex;
 									visibleAnchorRowId.current = rows[localIndex]?.id ?? null;
 								}}
 								totalListHeightChanged={handleContentHeight}
-								atBottomThreshold={50}
-								atTopThreshold={50}
 								computeItemKey={(_, row) => row.id}
 								itemContent={(index, row) => (
 									<div
 										data-testid="chat-row"
+										data-chat-row-id={row.id}
+										data-chat-row-index={index - firstItemIndex}
 										data-flash={row.id === flashRowId || undefined}
 										className={cn(
 											measureClassName,
@@ -918,6 +913,15 @@ export default function ChatView({
 							<ActivityBreadcrumbTrail
 								scroller={scrollerElement}
 								measureClassName={measureClassName}
+								onReveal={(node) =>
+									revealElement(node, {
+										block: "start",
+										provenance: "user-navigation",
+										runway: "preserve",
+										stability: "none",
+										topInset: ACTIVITY_BREADCRUMB_HEIGHT,
+									})
+								}
 							/>
 						</div>
 						{showScrollButton ? (

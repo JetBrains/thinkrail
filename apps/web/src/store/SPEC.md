@@ -160,7 +160,8 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
   (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
   so a failed send lands in the chat instead of being swallowed; it carries no recovery action because Pi
-  never accepted the missing turn. A *streaming* fault instead ends the run through
+  never accepted the missing turn. It does not clear `isStreaming` or the active assistant id: a rejected
+  steer/follow-up cannot settle work the host is still running. A *streaming* fault instead ends the run through
   **`reduceSessionEvent`** at `agent_settled`, using the host-projected final terminal metadata:
   `stopReason: "error"` carries Pi's `errorMessage`, and `stopReason: "length"` becomes an actionable
   truncation error — neither may become "✓ Done". That settlement-created error turn alone carries the

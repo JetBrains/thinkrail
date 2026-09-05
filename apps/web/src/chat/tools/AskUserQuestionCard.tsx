@@ -395,7 +395,12 @@ export function AskUserQuestionCard({
 		const frame = requestAnimationFrame(() => {
 			const card = cardRef.current;
 			if (!card) return;
-			actions?.revealChatElement(currentQuestionPageStart(card), "start", "release");
+			actions?.revealChatElement(currentQuestionPageStart(card), {
+				block: "start",
+				provenance: "user-navigation",
+				runway: "release",
+				stability: "bounded",
+			});
 			focusCurrentQuestionPage(card);
 		});
 		return () => cancelAnimationFrame(frame);
@@ -408,6 +413,7 @@ export function AskUserQuestionCard({
 		let userTookOver = false;
 		const yieldToUser = () => {
 			userTookOver = true;
+			actions?.cancelAutomaticReveal();
 		};
 		window.addEventListener("pointerdown", yieldToUser, { capture: true, once: true });
 		window.addEventListener("keydown", yieldToUser, { capture: true, once: true });
@@ -415,7 +421,14 @@ export function AskUserQuestionCard({
 		const settleAttention = () => {
 			const card = cardRef.current;
 			if (!card || userTookOver) return;
-			actions?.revealChatElement(currentQuestionPageStart(card), "start", "release");
+			if (attempts === 0) {
+				actions?.revealChatElement(currentQuestionPageStart(card), {
+					block: "start",
+					provenance: "automatic-attention",
+					runway: "release",
+					stability: "bounded",
+				});
+			}
 			if (!card.contains(document.activeElement)) {
 				const kind = focusTargetKind(document.activeElement, card);
 				if (shouldClaimQuestionFocus(kind, hasCoarsePointer())) focusQuestionAttention(card);

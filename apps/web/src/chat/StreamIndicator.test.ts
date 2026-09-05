@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
-import { phaseLabel, streamStatus } from "./StreamIndicator";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { phaseLabel, StreamStatusSlot, streamStatus } from "./StreamIndicator";
 import type { ChatTurn } from "./types";
 
 type Block =
@@ -84,6 +86,20 @@ test("a trailing running compaction outranks assistant fallbacks — the footer 
 		{ kind: "compaction", id: "c1", status: "done" },
 	];
 	expect(streamStatus(settled, null)).toEqual({ phase: "working" });
+});
+
+test("the status slot keeps one fixed shell while idle content stays inaccessible", () => {
+	const idle = renderToStaticMarkup(createElement(StreamStatusSlot, { status: null }));
+	const active = renderToStaticMarkup(
+		createElement(StreamStatusSlot, { status: { phase: "working" } }),
+	);
+
+	expect(idle).toContain('data-testid="chat-status-slot"');
+	expect(idle).toContain('data-active="false"');
+	expect(idle).toContain('aria-hidden="true"');
+	expect(idle).not.toContain('data-testid="stream-indicator"');
+	expect(active).toContain('data-active="true"');
+	expect(active).toContain('data-testid="stream-indicator"');
 });
 
 test("phaseLabel names every phase (and falls back to a generic tool label)", () => {
