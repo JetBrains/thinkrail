@@ -83,6 +83,7 @@ public static class ThinkRailWindowProbe {
             Thread.Sleep(20);
         }
         mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(250);
     }
 }
 "@
