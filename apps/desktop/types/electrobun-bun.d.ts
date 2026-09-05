@@ -1,3 +1,5 @@
+import type { Pointer } from "bun:ffi";
+
 interface ElectrobunEvent<T> {
 	data: T;
 	response?: { allow: boolean };
@@ -20,11 +22,23 @@ type RpcShape = {
 		requests: Record<string, unknown>;
 		messages: Record<string, unknown>;
 	};
+	webview: {
+		requests: Record<string, unknown>;
+		messages: Record<string, unknown>;
+	};
 };
 
 type BunMessageHandlers<T extends RpcShape> = {
 	[K in keyof T["bun"]["messages"]]: (payload: T["bun"]["messages"][K]) => void;
 };
+
+type MessageSenders<T extends Record<string, unknown>> = {
+	[K in keyof T]: (payload: T[K]) => void;
+};
+
+interface DefinedRpc<T extends RpcShape> {
+	readonly send: MessageSenders<T["webview"]["messages"]>;
+}
 
 export type ApplicationMenuItemConfig =
 	| { type: "divider" | "separator" }
@@ -46,11 +60,12 @@ export const BrowserView: {
 			requests: Record<string, never>;
 			messages: BunMessageHandlers<T>;
 		};
-	}): unknown;
+	}): DefinedRpc<T>;
 };
 
 export class BrowserWindow {
 	readonly id: number;
+	readonly ptr: Pointer;
 	readonly webview: Webview;
 	constructor(options: {
 		title: string;
@@ -59,8 +74,17 @@ export class BrowserWindow {
 		rpc?: unknown;
 		hidden: boolean;
 		navigationRules: string | null;
+		titleBarStyle: "default" | "hidden" | "hiddenInset";
+		trafficLightOffset?: { x: number; y: number };
 		frame: { x: number; y: number; width: number; height: number };
 	});
+	show(): void;
+	minimize(): void;
+	maximize(): void;
+	unmaximize(): void;
+	isMaximized(): boolean;
+	requestClose(): void;
+	on(name: "resize", handler: (event: ElectrobunEvent<unknown>) => void): void;
 }
 
 export const PATHS: {
