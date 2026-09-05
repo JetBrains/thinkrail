@@ -210,9 +210,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     the supported Linux floor. Releases are **staged as drafts here and signed elsewhere**: the
     JetBrains signing runners are unavailable to public repositories, so `JetBrains/thinkrail-signing`
     (private) signs the staged assets and publishes the draft. Windows artifacts carry an EV
-    Authenticode signature; the macOS CLI binary carries a Developer ID signature that Gatekeeper
-    still rejects without notarization, and the macOS `.dmg` stays unsigned because Electrobun's
-    payload self-extracts after download.
+    Authenticode signature, and the existing Linux, Windows, macOS CLI, scheduling, dry-run, checksum, and
+    publication paths remain unchanged. The macOS CLI binary still lacks notarization; the desktop DMG
+    instead contains the complete expanded app and is signed, notarized, and stapled through the JetBrains
+    CodeSign service. Only the macOS desktop artifact leaves the existing passthrough path, and the private
+    signer transforms it without rebuilding product code.
 
     Signing can only fail *closed*, so a draft that is never published means releases stop appearing
     rather than appearing unsigned — the failure mode that silently ended the pre-pivot pipeline, and the

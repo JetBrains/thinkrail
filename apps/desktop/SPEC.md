@@ -24,7 +24,8 @@ engine architecture.
   a bounded generic client-preference adapter under stable backend-profile/window identity; desktop package
   smoke; and the desktop artifact adapter used by shared host probes.
 - **Public surface:** the packaged desktop application and its installers — the Windows setup stub
-  signed, the macOS `.dmg` and the Linux tarballs not (see *Signing*, below); the build/test-only
+  signed, the macOS `.dmg` Developer ID signed and notarized, and the Linux tarballs unsigned (see
+  *Signing*, below); the build/test-only
   `@thinkrail/desktop/artifact` launcher and installer locators consumed by smoke and E2E harnesses.
 - **Allowed deps:** `server` for the embedded host, build-support manifest, and artifact probes; `shared`
   for release identity and the retrying teardown both smokes clean up with; `contracts` for
@@ -76,7 +77,8 @@ a hidden host.
 
 Packaged resources remain physical and unpacked: web assets and skills are read through filesystem paths,
 the PTY uses FFI, trash helpers are executable sidecars, and the preload is read as source text. ASAR is
-not part of this design.
+not part of this design. The macOS DMG carries this complete app directly; first launch does not extract an
+archive or replace the application bundle.
 
 ## Native application menu
 
@@ -125,8 +127,11 @@ The package pins Electrobun `1.18.1` and packaged Bun `1.3.14`. Its explicit bui
 completed `apps/web/dist`, consumes the server-owned runtime manifest, stages target PTY/trash/skill/web
 resources under an ignored package-local directory, emits the transient static factory entry, bundles the
 self-contained server runtime to a packaged `.ts` filename, runs Electrobun, and removes generated source
-even on failure. Ordinary root development and web-build commands do not download or build Electrobun.
-The wrapper also injects the shared baked version while Electrobun evaluates its isolated config process.
+even on failure. For macOS canary/stable builds, it then extracts Electrobun's complete inner app archive
+and replaces the self-extracting wrapper DMG with that expanded app plus the `/Applications` link. The
+archive remains an internal/update build output, not a release asset or first-launch mechanism. Ordinary
+root development and web-build commands do not download or build Electrobun. The wrapper also injects the
+shared baked version while Electrobun evaluates its isolated config process.
 
 Electrobun `1.18.1` publishes implementation `.ts` files that do not typecheck under the repository's
 strict TypeScript 6 settings. Desktop typecheck therefore maps only the consumed Electrobun API surface
@@ -139,14 +144,12 @@ Linux ARM64. Nightly maps to Electrobun canary and stable maps to stable. Update
 
 ### Signing
 
-Signing happens outside this repository (`JetBrains/thinkrail-signing`), and reaches only the Windows
-installer's `ThinkRail-Setup.exe` stub. The payload beside it is keyed by the `hash` field in
-`ThinkRail-Setup.metadata.json`, so rewriting it would desync the installer. The macOS `.dmg` is not
-signed at all: `ThinkRail.app` seals no resources and its real payload — Bun runtime, `bun-pty` — is a
-`.tar.zst` under `Contents/Resources/` that self-extracts on first launch. Notarization requires every
-executable to be present and signed at submission, so signing the `.dmg` would be cosmetic while
-Gatekeeper still blocked the download. Making macOS desktop signable is a packaging change here, not a
-pipeline change.
+Signing happens outside this repository (`JetBrains/thinkrail-signing`). The existing Windows CLI,
+Windows installer-stub, macOS CLI, Linux passthrough, checksum, schedule, dry-run, and publication paths are
+unchanged. For the macOS desktop only, the private workflow removes the expanded DMG from passthrough,
+signs every nested Mach-O and the app through JetBrains CodeSign, embeds that signed app back into the same
+image, then signs, notarizes, and staples the DMG. The app is not distributed or stapled separately. The
+private hop does not rebuild product code, and no signing implementation or credential lives here.
 
 Smoke teardown of a temp tree that a launcher ran from must go through `@thinkrail/shared/removeTree`.
 Windows releases handles asynchronously after a child exits, so a bare recursive remove throws `EBUSY`
@@ -164,9 +167,9 @@ CI-only and are never shipped as user configuration.
   real webview to reach DOM-ready, confirms native application-menu registration on supported targets,
   runs the shared artifact probes with repository reads denied, quits through normal lifecycle, and
   observes clean process exit.
-- First-install smoke executes the produced DMG app, Windows setup ZIP, or Linux setup tarball against
-  isolated installation roots, boots the installed host, checks health, and requires graceful exit. The
-  release matrix must pass both smoke layers before uploading the installer.
+- First-install smoke executes the produced expanded DMG app, Windows setup ZIP, or Linux setup tarball
+  against isolated installation roots, boots the installed host, checks health, and requires graceful exit.
+  The release matrix must pass both smoke layers before uploading the installer.
 - Electrobun names installer artifacts per channel, and the channel lands in a different position on each
   platform: the Linux setup tarball carries it in the app-file stem (`ThinkRail-canary-Setup.tar.gz`)
   while the Windows setup executable inside the ZIP carries it after `-Setup`
@@ -187,5 +190,5 @@ CI-only and are never shipped as user configuration.
 
 ## Deferred
 
-Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, a signed and
-notarized macOS `.dmg` (see above), and Electrobun updater UX.
+Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, bare macOS CLI
+notarization, standalone app distribution/ticketing, and Electrobun updater UX.

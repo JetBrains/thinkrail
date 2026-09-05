@@ -14,6 +14,7 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import type { BundledExtensions } from "@thinkrail/server";
 import { resolveBuildRuntimeSources } from "@thinkrail/server/build-support";
 import { version } from "@thinkrail/shared/version";
+import { isMacosPackageChannel, postPackageExpandedMacosDmg } from "./src/macosPackage";
 import { ptyLibraryName, runtimeTarget } from "./src/runtimeTarget";
 
 const desktopDir = import.meta.dir;
@@ -150,6 +151,9 @@ function electrobun(...args: string[]): void {
 try {
 	await stage();
 	electrobun("build", `--env=${environment}`);
+	if (process.platform === "darwin" && isMacosPackageChannel(environment)) {
+		postPackageExpandedMacosDmg(desktopDir, environment);
+	}
 	if (shouldRun) electrobun("run");
 } finally {
 	rmSync(stageDir, { recursive: true, force: true });
