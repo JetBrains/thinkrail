@@ -47,6 +47,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		systemThemePair,
 		jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds,
+		updateChecksEnabled,
 		...rest
 	} = runtimeUpdate;
 	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
@@ -54,6 +55,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	}
 	if (jbcentralQuotaEnabled !== undefined && typeof jbcentralQuotaEnabled !== "boolean") {
 		throw new Error("jbcentralQuotaEnabled must be a boolean");
+	}
+	if (updateChecksEnabled !== undefined && typeof updateChecksEnabled !== "boolean") {
+		throw new Error("updateChecksEnabled must be a boolean");
 	}
 	if (
 		jbcentralQuotaRefreshSeconds !== undefined &&
@@ -84,6 +88,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(nextSystemThemePair ? { systemThemePair: nextSystemThemePair } : {}),
 		...(subagentsEnabled === undefined ? {} : { subagentsEnabled }),
 		...(jbcentralQuotaEnabled === undefined ? {} : { jbcentralQuotaEnabled }),
+		...(updateChecksEnabled === undefined ? {} : { updateChecksEnabled }),
 		...(jbcentralQuotaRefreshSeconds === undefined ? {} : { jbcentralQuotaRefreshSeconds }),
 		...(customLayoutPresets === undefined
 			? {}
