@@ -339,18 +339,23 @@ async function launchDesktop(
 		stderr: "inherit",
 	});
 	try {
-		await within(
-			Promise.race([
-				(async () => {
-					while (!existsSync(readyPath)) await Bun.sleep(50);
-				})(),
-				proc.exited.then((code) => {
-					throw new Error(`${label} desktop host exited early with ${code}`);
-				}),
-			]),
-			30_000,
-			`${label} desktop ready`,
-		);
+		let waitingForReady = true;
+		try {
+			await within(
+				Promise.race([
+					(async () => {
+						while (waitingForReady && !existsSync(readyPath)) await Bun.sleep(50);
+					})(),
+					proc.exited.then((code) => {
+						throw new Error(`${label} desktop host exited early with ${code}`);
+					}),
+				]),
+				30_000,
+				`${label} desktop ready`,
+			);
+		} finally {
+			waitingForReady = false;
+		}
 		const ready = JSON.parse(readFileSync(readyPath, "utf8")) as {
 			origin: string;
 			pid: number;
