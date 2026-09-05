@@ -87,7 +87,8 @@ write shared placement while the test page is asserting it. The desktop adapter 
 only after Playwright finishes, then requires normal graceful application exit.
 
 This is separate from `smoke:desktop`: native smoke loads the actual packaged ThinkRail UI in the system
-webview, requires the custom preload handshake after DOM-ready plus host health, exercises native state
+webview, requires both the custom preload and shell's native-chrome mount to handshake after DOM-ready plus
+host health, exercises native state
 transitions, and closes through the real Electrobun controller/lifecycle. Windows additionally requires its
 preserved style and system menu plus native input across the titlebar, all eight web-to-DWM resize targets,
 and top-edge snap. Linux runs under Xvfb with an Openbox compositor and real pointer input across the titlebar

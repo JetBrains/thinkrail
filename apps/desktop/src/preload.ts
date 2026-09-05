@@ -97,6 +97,19 @@ Object.defineProperty(globals, STABLE_PREFERENCES_GLOBAL, {
 
 const sendRoute = () => electroview.rpc?.send.routeChanged({ hash: window.location.hash });
 const sendWindowChromeReady = () => electroview.rpc?.send.windowChromeReady({ platform });
+const sendWindowChromeShellReady = () => {
+	const selector = `[data-native-window-platform="${platform}"]`;
+	if (document.querySelector(selector)) {
+		electroview.rpc?.send.windowChromeShellReady({ platform });
+		return;
+	}
+	const observer = new MutationObserver(() => {
+		if (!document.querySelector(selector)) return;
+		observer.disconnect();
+		electroview.rpc?.send.windowChromeShellReady({ platform });
+	});
+	observer.observe(document.documentElement, { childList: true, subtree: true });
+};
 const replaceState = history.replaceState.bind(history);
 history.replaceState = (...args: Parameters<History["replaceState"]>) => {
 	replaceState(...args);
@@ -112,5 +125,6 @@ window.addEventListener("popstate", sendRoute);
 window.addEventListener("DOMContentLoaded", () => {
 	sendRoute();
 	sendWindowChromeReady();
+	sendWindowChromeShellReady();
 });
 queueMicrotask(sendRoute);

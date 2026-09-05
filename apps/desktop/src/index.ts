@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { channel, version } from "@thinkrail/shared/version";
@@ -72,7 +72,12 @@ async function start(): Promise<void> {
 	const windowUrl = neutral ? `${origin}/health` : `${origin}/${initialRoute}`;
 	let windowChromeController: DesktopWindowChromeController | undefined;
 	let windowChromePreloadReady = false;
+	let windowChromeShellReady = false;
 	let publishReady = () => {};
+	const hasExpectedChromePlatform = (payload: unknown) =>
+		readPreloadWindowChromePlatform(
+			typeof payload === "object" && payload !== null ? Reflect.get(payload, "platform") : null,
+		) === chromePolicy.platform;
 	const rpc = BrowserView.defineRPC<DesktopRpc>({
 		maxRequestTime: 5000,
 		handlers: {
@@ -106,12 +111,11 @@ async function start(): Promise<void> {
 					if (edge) windowChromeController?.startResize(edge);
 				},
 				windowChromeReady: (payload) => {
-					windowChromePreloadReady =
-						readPreloadWindowChromePlatform(
-							typeof payload === "object" && payload !== null
-								? Reflect.get(payload, "platform")
-								: null,
-						) === chromePolicy.platform;
+					windowChromePreloadReady = hasExpectedChromePlatform(payload);
+					publishReady();
+				},
+				windowChromeShellReady: (payload) => {
+					windowChromeShellReady = hasExpectedChromePlatform(payload);
 					publishReady();
 				},
 			},
@@ -173,7 +177,8 @@ async function start(): Promise<void> {
 		| Awaited<ReturnType<typeof probeDesktopWindowTransitions>>
 		| undefined;
 	publishReady = () => {
-		if (ready || !domReady || (!neutral && !windowChromePreloadReady)) return;
+		if (ready || !domReady || (!neutral && (!windowChromePreloadReady || !windowChromeShellReady)))
+			return;
 		ready = true;
 		const readyPath = process.env.THINKRAIL_DESKTOP_READY_FILE;
 		if (!readyPath) return;
@@ -187,6 +192,7 @@ async function start(): Promise<void> {
 			windowChromePlatform: chromePolicy.platform,
 			titleBarStyle: chromePolicy.titleBarStyle,
 			windowChromePreloadReady,
+			windowChromeShellReady,
 			windowChromeProbe,
 		});
 	};
@@ -224,8 +230,15 @@ async function start(): Promise<void> {
 	if (controlPath) {
 		const poll = setInterval(() => {
 			if (!existsSync(controlPath)) return;
+			const command = readFileSync(controlPath, "utf8").trim();
+			if (command.startsWith("resize:")) {
+				unlinkSync(controlPath);
+				const edge = readDesktopResizeEdge({ edge: command.slice("resize:".length) });
+				if (edge) windowChromeController?.startResize(edge);
+				return;
+			}
 			clearInterval(poll);
-			if (readFileSync(controlPath, "utf8").trim() === "close") {
+			if (command === "close") {
 				windowChromeController?.requestClose();
 				return;
 			}

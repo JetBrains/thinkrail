@@ -205,7 +205,8 @@ configuration.
 ## Verification
 
 - Expanded-app smoke uses isolated HOME/data/PI/cache paths and ready/control files. It requires the
-  real custom preload to handshake after DOM-ready, confirms the titlebar policy and native application
+  real custom preload and the shell's actual native-chrome mount to handshake after DOM-ready, confirms the
+  titlebar policy and native application
   menu on each target, exercises maximize/minimize/restore state through the live Windows/Linux window,
   closes through the same graceful controller path as the app button, runs the shared artifact probes with
   repository reads denied, and observes clean process exit. Windows' interaction probe additionally

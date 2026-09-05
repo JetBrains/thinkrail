@@ -1,4 +1,7 @@
-param([Parameter(Mandatory = $true)][int]$ProcessId)
+param(
+    [Parameter(Mandatory = $true)][int]$ProcessId,
+    [Parameter(Mandatory = $true)][string]$ControlPath
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -94,9 +97,18 @@ public static class ThinkRailWindowProbe {
         FinishDrag(startX, startY, endX, endY);
     }
 
-    public static void DragClient(IntPtr hwnd, int startX, int startY, int endX, int endY) {
+    public static void DragClient(IntPtr hwnd, string controlPath, string edge, int startX, int startY, int endX, int endY) {
         StartDrag(hwnd, startX, startY);
-        Thread.Sleep(150);
+        System.IO.File.WriteAllText(controlPath, "resize:" + edge);
+        DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+        while (System.IO.File.Exists(controlPath) && DateTime.UtcNow < deadline) {
+            Thread.Sleep(10);
+        }
+        if (System.IO.File.Exists(controlPath)) {
+            mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+            throw new InvalidOperationException("desktop resize control was not acknowledged");
+        }
+        Thread.Sleep(100);
         FinishDrag(startX, startY, endX, endY);
     }
 }
@@ -166,7 +178,15 @@ foreach ($edge in $edges) {
     $before = Reset-Window
     $startX = $before.Left + $edge.X
     $startY = $before.Top + $edge.Y
-    [ThinkRailWindowProbe]::DragClient($window, $startX, $startY, $startX + $edge.DX, $startY + $edge.DY)
+    [ThinkRailWindowProbe]::DragClient(
+        $window,
+        $ControlPath,
+        $edge.Name,
+        $startX,
+        $startY,
+        $startX + $edge.DX,
+        $startY + $edge.DY
+    )
     Wait-ForRect {
         param($rect)
         $width = $rect.Right - $rect.Left
