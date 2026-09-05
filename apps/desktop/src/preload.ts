@@ -96,6 +96,7 @@ Object.defineProperty(globals, STABLE_PREFERENCES_GLOBAL, {
 });
 
 const sendRoute = () => electroview.rpc?.send.routeChanged({ hash: window.location.hash });
+const sendWindowChromeReady = () => electroview.rpc?.send.windowChromeReady({ platform });
 const replaceState = history.replaceState.bind(history);
 history.replaceState = (...args: Parameters<History["replaceState"]>) => {
 	replaceState(...args);
@@ -108,5 +109,8 @@ history.pushState = (...args: Parameters<History["pushState"]>) => {
 };
 window.addEventListener("hashchange", sendRoute);
 window.addEventListener("popstate", sendRoute);
-window.addEventListener("DOMContentLoaded", sendRoute);
+window.addEventListener("DOMContentLoaded", () => {
+	sendRoute();
+	sendWindowChromeReady();
+});
 queueMicrotask(sendRoute);

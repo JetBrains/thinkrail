@@ -66,7 +66,9 @@ async function buildBundles(): Promise<void> {
 	const { electrobunViteAliases } = await import(
 		pathToFileURL(join(desktopDir, ".hutch/devkit/api/config/electrobun-vite.ts")).href
 	);
-	const aliases = electrobunViteAliases(join(desktopDir, ".hutch/devkit"));
+	const aliases: Array<{ find: RegExp; replacement: string }> = electrobunViteAliases(
+		join(desktopDir, ".hutch/devkit"),
+	);
 	const electrobunDevkit: Bun.BunPlugin = {
 		name: "electrobun-devkit",
 		setup(builder) {

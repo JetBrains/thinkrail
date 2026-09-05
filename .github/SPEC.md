@@ -27,9 +27,10 @@ public repositories, so `JetBrains/thinkrail-signing` (private) signs the staged
   `module-repo-scripts`), unit tests, no-agent e2e, and a **host-target** binary
   build+smoke+**e2e-vs-binary** (`bun run e2e:binary`: the same no-agent suite against the compiled
   artifact, minus the `@dev-seam` fake-login specs), a **windows-latest binary build+smoke**
-  (`binary-windows`), plus a host-target Electrobun package, native-window smoke, shared artifact probes,
-  and desktop-backed no-agent e2e. The Linux desktop target runs under Xvfb with CI-only software
-  rendering. Fast enough for PRs, no provider auth. Gates merges.
+  (`binary-windows`) plus a target-native Windows Electrobun package/chrome smoke, and a host-target
+  Electrobun package, native-window smoke, shared artifact probes, and desktop-backed no-agent e2e. The
+  Linux desktop target runs under Xvfb with CI-only software rendering and an Openbox compositor so its
+  real move/eight-edge-resize path is exercisable. Fast enough for PRs, no provider auth. Gates merges.
 - **Release** (`nightly.yml` / `stable.yml` → `_release.yml` → `_build.yml`): trusts a green `main`,
   produces native-smoked CLI binaries plus desktop installers, pushes the tag, and stages them as a
   **draft**. A draft and its assets are invisible to unauthenticated users, so nothing unsigned is ever
@@ -112,8 +113,11 @@ never sends anyway, since the analytics module mutes on `CI`.
 - `scripts/next-version.sh` — channel-aware semver from tags; carries a `--tags=` override for testing.
 - The native build action: stamp the shared version → `build:web` → build/smoke the CLI binary →
   package/native-smoke/shared-probe the expanded desktop app → create and execute Electrobun's
-  first-install artifact in an isolated install root → collect both artifacts. Desktop-backed e2e runs in
-  CI before release; each release runner still performs both target-native desktop smoke layers.
+  first-install artifact in an isolated install root → collect both artifacts. The expanded smoke requires
+  the custom preload handshake and native maximize/minimize/restore/close transitions; Windows additionally
+  drives native move, all resize edges, top-edge snap, and system-menu capability, while Linux does the same
+  move/resize exercise through Openbox. Desktop-backed e2e runs in CI before release; each release runner
+  still performs both target-native desktop smoke layers.
 - `actions/make-checksums` — writes `SHA256SUMS` over the release artifacts. **No caller here:** a
   signature changes the bytes, so checksums must be taken after signing. `thinkrail-signing` pins it by
   commit SHA, which is what keeps the published `SHA256SUMS` format identical to pre-signing releases.

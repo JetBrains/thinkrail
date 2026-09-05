@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { channel, version } from "@thinkrail/shared/version";
@@ -27,6 +27,7 @@ import {
 	createDesktopWindowChromeController,
 	type DesktopWindowChromeController,
 	desktopWindowChromePolicy,
+	probeDesktopWindowTransitions,
 	readDesktopResizeEdge,
 } from "./windowChrome";
 
@@ -66,6 +67,8 @@ async function start(): Promise<void> {
 		process.env.THINKRAIL_DESKTOP_HIDDEN === "1" || process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
 	const windowUrl = neutral ? `${origin}/health` : `${origin}/${initialRoute}`;
 	let windowChromeController: DesktopWindowChromeController | undefined;
+	let windowChromePreloadReady = false;
+	let publishReady = () => {};
 	const rpc = BrowserView.defineRPC<DesktopRpc>({
 		maxRequestTime: 5000,
 		handlers: {
@@ -97,6 +100,10 @@ async function start(): Promise<void> {
 				windowChromeStartResize: (payload) => {
 					const edge = readDesktopResizeEdge(payload);
 					if (edge) windowChromeController?.startResize(edge);
+				},
+				windowChromeReady: (payload) => {
+					windowChromePreloadReady = payload.platform === chromePolicy.platform;
+					publishReady();
 				},
 			},
 		},
@@ -146,21 +153,48 @@ async function start(): Promise<void> {
 	mainWindow.webview.on("new-window-open", (event) => openExternal(event.data.detail));
 
 	let ready = false;
-	mainWindow.webview.on("dom-ready", () => {
-		windowChromeController?.publishState();
-		if (ready) return;
+	let domReady = false;
+	let probingWindowChrome = false;
+	let windowChromeProbe:
+		| { nativeControls: true }
+		| Awaited<ReturnType<typeof probeDesktopWindowTransitions>>
+		| undefined;
+	publishReady = () => {
+		if (ready || !domReady || (!neutral && !windowChromePreloadReady)) return;
 		ready = true;
 		const readyPath = process.env.THINKRAIL_DESKTOP_READY_FILE;
-		if (readyPath) {
-			writeReady(readyPath, {
-				origin,
-				runtimeDir,
-				applicationMenuInstalled,
-				pid: process.pid,
-				windowUrl,
-				mode: neutral ? "host" : "ui",
-			});
-		}
+		if (!readyPath) return;
+		writeReady(readyPath, {
+			origin,
+			runtimeDir,
+			applicationMenuInstalled,
+			pid: process.pid,
+			windowUrl,
+			mode: neutral ? "host" : "ui",
+			windowChromePlatform: chromePolicy.platform,
+			titleBarStyle: chromePolicy.titleBarStyle,
+			windowChromePreloadReady,
+			windowChromeProbe,
+		});
+	};
+	mainWindow.webview.on("dom-ready", () => {
+		if (domReady || probingWindowChrome) return;
+		probingWindowChrome = true;
+		void (async () => {
+			windowChromeController?.publishState();
+			if (process.env.THINKRAIL_DESKTOP_WINDOW_CHROME_PROBE === "1") {
+				if (!windowChromeController) throw new Error("window chrome controller is unavailable");
+				windowChromeProbe =
+					chromePolicy.platform === "macos"
+						? { nativeControls: true }
+						: await probeDesktopWindowTransitions(windowChromeController, mainWindow);
+			}
+			domReady = true;
+			publishReady();
+		})().catch((error) => {
+			console.error(error instanceof Error ? error.message : String(error));
+			Utils.quit();
+		});
 	});
 
 	let shutdownComplete = false;
@@ -178,6 +212,10 @@ async function start(): Promise<void> {
 		const poll = setInterval(() => {
 			if (!existsSync(controlPath)) return;
 			clearInterval(poll);
+			if (readFileSync(controlPath, "utf8").trim() === "close") {
+				windowChromeController?.requestClose();
+				return;
+			}
 			Utils.quit();
 		}, 50);
 	}

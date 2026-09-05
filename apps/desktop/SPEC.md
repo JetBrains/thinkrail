@@ -196,16 +196,22 @@ do not fix that here — Bun ignores them — so the retry loop has to be ours. 
 resilience, not error suppression: a tree that stays locked past the backoff still throws.
 
 Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 plus `libgtk-3-0`,
-`libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are
-CI-only and are never shipped as user configuration.
+`libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb, Openbox, `wmctrl`, `xdotool`,
+and software-rendering flags are CI-only smoke infrastructure and are never shipped as user
+configuration.
 
 ## Verification
 
 - Expanded-app smoke uses isolated HOME/data/PI/cache paths and ready/control files. It requires the
-  real webview to reach DOM-ready, confirms native application-menu registration on supported targets,
-  verifies the platform titlebar policy plus move/resize/maximize/minimize/close and editing behavior,
-  runs the shared artifact probes with repository reads denied, quits through normal lifecycle, and
-  observes clean process exit.
+  real custom preload to handshake after DOM-ready, confirms the titlebar policy and native application
+  menu on each target, exercises maximize/minimize/restore state through the live Windows/Linux window,
+  closes through the same graceful controller path as the app button, runs the shared artifact probes with
+  repository reads denied, and observes clean process exit. Windows' interaction probe additionally
+  requires the preserved native style/system menu, real window move, all eight frame-resize directions,
+  and top-edge snap; Linux drives the titlebar and all eight web resize targets with real pointer input
+  under Openbox so GTK/the compositor, rather than a JavaScript substitute, must change the frame. macOS
+  retains native AppKit controls; local accessibility geometry and drag probes cover their placement and
+  the web drag region.
 - First-install smoke executes the produced DMG app, Windows setup ZIP, or Linux setup tarball against
   isolated installation roots, boots the installed host, checks health, and requires graceful exit. The
   release matrix must pass both smoke layers before uploading the installer.

@@ -104,6 +104,9 @@ test("native Windows capability turns the shared topbar into application chrome"
 		/electrobun-webkit-app-region-no-drag/,
 	);
 
+	await expect(page.getByRole("button", { name: "Minimize window" })).toBeVisible();
+	await expect(page.getByRole("button", { name: "Maximize window" })).toBeVisible();
+	await expect(page.getByRole("button", { name: "Close window" })).toBeVisible();
 	await page.getByTestId("window-minimize").click();
 	const maximize = page.getByTestId("window-toggle-maximize");
 	await expect(maximize).toHaveAttribute("aria-label", "Maximize window");
@@ -136,6 +139,9 @@ test("native Linux chrome exposes controls and delegates every-edge resize", asy
 	const topbar = page.getByTestId("shell").locator("header").first();
 	await expect(topbar).toHaveAttribute("data-native-window-platform", "linux");
 	await expect(page.getByTestId("window-controls")).toHaveAttribute("data-platform", "linux");
+	await expect(page.getByRole("button", { name: "Minimize window" })).toBeVisible();
+	await expect(page.getByRole("button", { name: "Maximize window" })).toBeVisible();
+	await expect(page.getByRole("button", { name: "Close window" })).toBeVisible();
 	await expect(page.getByTestId("native-resize-handle")).toHaveCount(8);
 	const minimizeBox = await page.getByTestId("window-minimize").boundingBox();
 	expect(minimizeBox).not.toBeNull();

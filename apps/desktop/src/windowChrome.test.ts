@@ -5,6 +5,7 @@ import {
 	linuxResizeEdgeCode,
 	normalizeWindowsFrameStyle,
 	preservedWindowsStyle,
+	probeDesktopWindowTransitions,
 	readDesktopResizeEdge,
 } from "./windowChrome";
 
@@ -83,6 +84,47 @@ test("maps web resize directions to GTK's native edge enum", () => {
 		),
 	).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
 	expect(() => linuxResizeEdgeCode("center")).toThrow("unsupported resize edge: center");
+});
+
+test("native transition probe exercises maximize, restore, minimize, and unminimize", async () => {
+	let maximized = false;
+	let minimized = false;
+	const calls: string[] = [];
+	const window = {
+		minimize: () => {
+			calls.push("minimize");
+			minimized = true;
+		},
+		maximize: () => {
+			calls.push("maximize");
+			maximized = true;
+		},
+		unmaximize: () => {
+			calls.push("restore");
+			maximized = false;
+		},
+		isMaximized: () => maximized,
+		isMinimized: () => minimized,
+		unminimize: () => {
+			calls.push("unminimize");
+			minimized = false;
+		},
+		requestClose: () => calls.push("request-close"),
+	};
+	const controller = createDesktopWindowChromeController({
+		platform: "windows",
+		window,
+		onState: () => {},
+		startLinuxResize: () => {},
+	});
+
+	expect(await probeDesktopWindowTransitions(controller, window)).toEqual({
+		maximized: true,
+		restored: true,
+		minimized: true,
+		unminimized: true,
+	});
+	expect(calls).toEqual(["maximize", "restore", "minimize", "unminimize"]);
 });
 
 test("window chrome actions preserve native state and graceful close", () => {
