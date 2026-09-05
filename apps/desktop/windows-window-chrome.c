@@ -1,5 +1,5 @@
-#define CALLBACK __stdcall
-#define DLLIMPORT __declspec(dllimport)
+#define CALLBACK
+#define DLLIMPORT
 #define GWLP_WNDPROC -4
 #define HTCLIENT 1
 #define HTTOP 12
