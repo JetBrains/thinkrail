@@ -14,6 +14,7 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
+	ActivityStatus,
 	AgentSettlement,
 	ExtUiRequest,
 	ImageContent,
@@ -36,6 +37,7 @@ import {
 	getSessionStats,
 	hasSession,
 	listAvailableModels,
+	listSessionActivity,
 	listSessions,
 	promptSession,
 	refreshAvailableModels,
@@ -44,12 +46,15 @@ import {
 	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
+	setActivityProjectResolver,
+	setSessionActivityPublisher,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionManagerFactory,
 	setSessionPublisher,
 	setSubagentsEnabledResolver,
 	steerSession,
+	syncSessionActivity,
 	toWireModel,
 } from "./agentSessionManager";
 import { configurePiRuntime } from "./piRuntime";
@@ -1468,5 +1473,67 @@ test("an extension failing in session_start reaches the client, named, before th
 	} finally {
 		setExtUiPublisher(() => {});
 		rmSync(extensionPath, { force: true });
+	}
+});
+
+test("a rolled-back delete republishes activity — a suppressed glyph would outlive the failed deletion", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const published: (ActivityStatus | null)[] = [];
+	setSessionActivityPublisher((payload) => published.push(payload.status));
+	setActivityProjectResolver(() => "project-1");
+	let reportTrashStarted: () => void = () => {};
+	const trashStarted = new Promise<void>((resolve) => {
+		reportTrashStarted = resolve;
+	});
+	let failTrash: () => void = () => {};
+	const trashOutcome = new Promise<void>((_resolve, reject) => {
+		failTrash = () => reject(new Error("recycle bin unavailable"));
+	});
+	setTrashImplementationForTests(async () => {
+		reportTrashStarted();
+		await trashOutcome;
+	});
+
+	let sessionId: string | undefined;
+	let deleting: Promise<void> | undefined;
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage("broke", { stopReason: "error", errorMessage: "provider down" }),
+		]);
+		const cwd = tmpCwd("trpi-delete-activity-");
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-delete-activity",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		await promptSession(session.sessionId, "fail please");
+
+		const mine = () => listSessionActivity().filter((row) => row.sessionId === sessionId);
+		expect(published.at(-1)).toBe("failed");
+		expect(mine().map((row) => row.status)).toEqual(["failed"]);
+		expect(mine()[0]?.projectId).toBe("project-1");
+
+		deleting = deleteSession(session.sessionId, "ws-delete-activity", cwd);
+		await trashStarted;
+		expect(mine()).toEqual([]);
+
+		syncSessionActivity(session.sessionId);
+		expect(published.at(-1)).toBeNull();
+
+		failTrash();
+		await expect(deleting).rejects.toThrow("recycle bin unavailable");
+
+		expect(hasSession(session.sessionId)).toBe(true);
+		expect(published.at(-1)).toBe("failed");
+		expect(mine().map((row) => row.status)).toEqual(["failed"]);
+	} finally {
+		failTrash();
+		await deleting?.catch(() => {});
+		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+		setTrashImplementationForTests(undefined);
+		setSessionActivityPublisher(() => {});
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });

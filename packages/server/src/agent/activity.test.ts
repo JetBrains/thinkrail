@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { AgentMessage } from "@thinkrail/contracts";
+import type { AgentMessage, StopReason } from "@thinkrail/contracts";
 import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
 import { type ActivityInputs, deriveActivityStatus } from "./activity";
 import { ASK_ACK_TEXT, awaitingQuestionToolCallId } from "./askUserQuestion";
@@ -178,4 +178,30 @@ test("an observed settlement always wins over the transcript, in both directions
 			}),
 		),
 	).toBeNull();
+});
+
+test("a truncated run is failed too — the rail must not call idle what the chat calls an error", () => {
+	expect(deriveActivityStatus(inputs({ lastSettlement: { stopReason: "length" } }))).toBe("failed");
+	expect(deriveActivityStatus(inputs({ messages: [userMessage(), assistant("length")] }))).toBe(
+		"failed",
+	);
+});
+
+test("error and length are classified identically on both the settlement and transcript paths", () => {
+	for (const stopReason of ["error", "length"] as const) {
+		expect(
+			deriveActivityStatus(inputs({ lastSettlement: { stopReason: stopReason as StopReason } })),
+		).toBe("failed");
+		expect(deriveActivityStatus(inputs({ messages: [userMessage(), assistant(stopReason)] }))).toBe(
+			"failed",
+		);
+	}
+	for (const stopReason of ["stop", "toolUse", "aborted"] as const) {
+		expect(
+			deriveActivityStatus(inputs({ lastSettlement: { stopReason: stopReason as StopReason } })),
+		).toBeNull();
+		expect(
+			deriveActivityStatus(inputs({ messages: [userMessage(), assistant(stopReason)] })),
+		).toBeNull();
+	}
 });

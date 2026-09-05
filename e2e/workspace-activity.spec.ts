@@ -157,3 +157,29 @@ test("deleting the marked chat clears the row", async ({ page }) => {
 
 	await expect(row).not.toHaveAttribute("data-activity", /.+/);
 });
+
+test("a collapsed project row carries the rollup, so activity survives folding the project away", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	seedFailedChat(realpathSync(E2E_FIXTURE_REPO));
+	await enterDefaultWorkspace(page);
+	await openPersistedChat(page, FAILED_CHAT);
+
+	const project = page.getByTestId("project-item").first();
+	const expand = project.getByTestId("project-expand");
+	await expect(expand).toHaveAttribute("data-expanded", "true");
+	await expect(project).not.toHaveAttribute("data-activity", /.+/);
+
+	await expand.click();
+	await expect(expand).toHaveAttribute("data-expanded", "false");
+	await expect(project).toHaveAttribute("data-activity", "failed");
+	await expect(project.getByTestId("activity-glyph")).toHaveAttribute(
+		"aria-label",
+		"Last run failed",
+	);
+	await shot(page.getByTestId("project-tree"), "activity", "project-collapsed");
+
+	await expand.click();
+	await expect(project).not.toHaveAttribute("data-activity", /.+/);
+});

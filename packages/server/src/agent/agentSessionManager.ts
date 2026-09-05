@@ -1205,7 +1205,10 @@ async function runDeleteTransaction(
 		}
 		if (path && existsSync(path)) await trashFile(path);
 	} catch (error) {
-		if (installedTombstone) deletedSessions.delete(sessionId);
+		if (installedTombstone) {
+			deletedSessions.delete(sessionId);
+			syncSessionActivity(sessionId);
+		}
 		throw error;
 	}
 	if (liveEntry && sessions.get(sessionId) === liveEntry) await disposeSession(sessionId);

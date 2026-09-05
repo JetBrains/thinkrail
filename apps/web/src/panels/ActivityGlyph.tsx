@@ -39,6 +39,10 @@ const PRESENTATION: Record<
 
 const BREAKDOWN_ORDER: readonly ActivityStatus[] = ["failed", "waiting", "running", "queued"];
 
+export function activityChatCount(counts: Partial<Record<ActivityStatus, number>>): number {
+	return BREAKDOWN_ORDER.reduce((total, status) => total + (counts[status] ?? 0), 0);
+}
+
 export function activityBreakdown(counts: Partial<Record<ActivityStatus, number>>): string[] {
 	return BREAKDOWN_ORDER.flatMap((status) => {
 		const count = counts[status] ?? 0;
@@ -56,7 +60,7 @@ export function ActivityGlyph({
 }) {
 	const { Icon, label, className } = PRESENTATION[status];
 	const lines = counts ? activityBreakdown(counts) : [];
-	const detailed = lines.length > 1;
+	const detailed = counts !== undefined && activityChatCount(counts) > 1;
 	return (
 		<IconTooltip
 			wrapTrigger

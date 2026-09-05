@@ -397,6 +397,7 @@ function ProjectRow({
 		<div
 			data-testid="project-item"
 			data-menu-open={menuOpen}
+			{...(activity ? { "data-activity": activity.status } : {})}
 			className={`group flex h-28 items-center gap-4 rounded-[var(--radius-sm)] pr-4 pl-4 transition-colors ${
 				menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 			}`}

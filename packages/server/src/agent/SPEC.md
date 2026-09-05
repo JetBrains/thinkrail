@@ -113,63 +113,72 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     destructive queue API returns text but drops image blocks; Pi's queue events remain authoritative for
     membership/order. The host projects only a conservative `hasImages` aggregate into summaries/events, so
     image bytes do not ride the ordinary read stream.
-- **Activity projection** (`activity.ts`) answers "what is happening in a workspace nobody has open?" —
-  the signal the Projects rail draws. `deriveActivityStatus` is a **pure function** of one session's
-  observable state; the manager owns only the publish-on-change bookkeeping (`publishedActivity` per
-  entry, so a status that did not move emits nothing), the `session.activityList` snapshot, and retraction
-  on disposal.
+  - **Activity projection** (`activity.ts`) answers "what is happening in a workspace nobody has open?" —
+    the signal the Projects rail draws. `deriveActivityStatus` is a **pure function** of one session's
+    observable state; the manager owns only the publish-on-change bookkeeping (`publishedActivity` per
+    entry, so a status that did not move emits nothing), the `session.activityList` snapshot, and retraction
+    on disposal. A delete that **fails and rolls its tombstone back** re-syncs, because the retraction
+    published while the tombstone stood has already set `publishedActivity` to null: without that
+    republish the change-detector would suppress the session's real status until its next event, leaving a
+    live failed chat with no glyph.
 
-  | # | condition | status |
-  |---|---|---|
-  | 1 | a pending blocking extension dialog | `waiting` |
-  | 2 | `session.isStreaming` | `running` |
-  | 3 | `session.pendingMessageCount > 0` | `queued` |
-  | 4 | an unanswered `ask_user_question` | `waiting` |
-  | 5 | the run failed (see below) | `failed` |
-  | — | otherwise | idle, i.e. `null` |
+    | # | condition | status |
+    |---|---|---|
+    | 1 | a pending blocking extension dialog | `waiting` |
+    | 2 | `session.isStreaming` | `running` |
+    | 3 | `session.pendingMessageCount > 0` | `queued` |
+    | 4 | an unanswered `ask_user_question` | `waiting` |
+    | 5 | the run failed (see below) | `failed` |
+    | — | otherwise | idle, i.e. `null` |
 
-  **`failed` reads the settlement when there is one and the transcript otherwise**, mirroring exactly what
-  `lastSettlement`'s three states already mean: a value decides it outright; explicit **`null`** (run
-  active, or settled with no assistant) means *not failed* and must **not** consult the transcript, or a
-  new `agent_start` would let an older persisted failure reappear mid-run; **`undefined`** means this host
-  process observed nothing, so the persisted transcript is authoritative and the trailing assistant's
-  `stopReason` decides. "Trailing" stops at the next user message and takes the last assistant, so a
-  retried failure followed by a successful attempt is not failed — the same rule `chat/hydrate.ts` uses to
-  hide retried attempts, and the reason a re-attached session keeps its glyph across a host restart
-  instead of silently reading idle while the chat itself shows the failure.
+    **A failure is `stopReason` `error` *or* `length`.** Both are actionable faults the chat already renders
+    as such (`apps/web/src/store/SPEC.md`: a length stop "becomes an actionable truncation error — neither
+    may become '✓ Done'"), so the rail must not disagree with the transcript by calling a truncated run
+    idle. The set is one constant consulted by both the settlement and transcript paths, so the two can
+    never classify differently.
 
-  Every rung of that order is load-bearing and pinned by `activity.test.ts`:
-  - **A dialog outranks streaming** because pi is technically mid-turn while blocked on it, yet the person
-    is the blocker. Reporting `running` would hide a prompt waiting for an answer.
-  - **`queued` outranks `failed`** (you already sent the follow-up, so the failure is handled and nagging
-    would be wrong) **and outranks `waiting`** — a queued message supersedes a pending questionnaire, but
-    it is still in pi's queue and *not yet in the transcript*, so `assessAnswerability` cannot see it.
-    This is why supersession is not modelled as mutable "awaiting" state on the entry: `waiting` is
-    **derived from the transcript** via `awaitingQuestionToolCallId`, which reuses `assessAnswerability`
-    rather than duplicating its already-answered/superseded rules. One authority, nothing to keep in sync.
-  - **`aborted` is idle, not `failed`** — cancelling is a choice, not a fault, and a red row for every
-    Escape would teach the user to ignore the signal.
+    **`failed` reads the settlement when there is one and the transcript otherwise**, mirroring exactly what
+    `lastSettlement`'s three states already mean: a value decides it outright; explicit **`null`** (run
+    active, or settled with no assistant) means *not failed* and must **not** consult the transcript, or a
+    new `agent_start` would let an older persisted failure reappear mid-run; **`undefined`** means this host
+    process observed nothing, so the persisted transcript is authoritative and the trailing assistant's
+    `stopReason` decides. "Trailing" stops at the next user message and takes the last assistant, so a
+    retried failure followed by a successful attempt is not failed — the same rule `chat/hydrate.ts` uses to
+    hide retried attempts, and the reason a re-attached session keeps its glyph across a host restart
+    instead of silently reading idle while the chat itself shows the failure.
 
-  The hot path costs nothing: rungs 1–2 return before the transcript scan, so the per-event sync that
-  fires during streaming never walks messages. The scan runs only at rest, and stops at the latest user
-  message.
+    Every rung of that order is load-bearing and pinned by `activity.test.ts`:
+    - **A dialog outranks streaming** because pi is technically mid-turn while blocked on it, yet the person
+      is the blocker. Reporting `running` would hide a prompt waiting for an answer.
+    - **`queued` outranks `failed`** (you already sent the follow-up, so the failure is handled and nagging
+      would be wrong) **and outranks `waiting`** — a queued message supersedes a pending questionnaire, but
+      it is still in pi's queue and *not yet in the transcript*, so `assessAnswerability` cannot see it.
+      This is why supersession is not modelled as mutable "awaiting" state on the entry: `waiting` is
+      **derived from the transcript** via `awaitingQuestionToolCallId`, which reuses `assessAnswerability`
+      rather than duplicating its already-answered/superseded rules. One authority, nothing to keep in sync.
+    - **`aborted` is idle, not `failed`** — cancelling is a choice, not a fault, and a red row for every
+      Escape would teach the user to ignore the signal.
 
-  The status is **per session and never pre-rolled per workspace** — collapsing several chats into one row
-  is presentation policy owned by the client's selectors (see `apps/web/src/store/SPEC.md`), and a
-  precedence order baked in here would be a UI decision escaping into the host.
+    The hot path costs nothing: rungs 1–2 return before the transcript scan, so the per-event sync that
+    fires during streaming never walks messages. The scan runs only at rest, and stops at the latest user
+    message.
 
-  Every row and push carries its **`projectId`**, resolved through the **`setActivityProjectResolver`**
-  seam (the host owns the workspace registry; this module stays ignorant of projects, as with
-  `setSkillAdmissionResolver`). An unresolvable workspace — one being torn down — publishes nothing, since
-  the client's own workspace-removal fold has already dropped its activity. See `packages/contracts/SPEC.md`
-  for why attribution travels on the wire instead of being derived client-side.
+    The status is **per session and never pre-rolled per workspace** — collapsing several chats into one row
+    is presentation policy owned by the client's selectors (see `apps/web/src/store/SPEC.md`), and a
+    precedence order baked in here would be a UI decision escaping into the host.
 
-  **Lifetime:** entries are never idle-evicted, so every status survives client reconnects. Because
-  `waiting` and `failed` both fall back to the transcript, they also survive a **host restart** for any
-  session that gets attached. What no status survives is a session this process has never loaded:
-  `listSessionActivity` walks live entries only, so a disk-only chat contributes nothing. Extending the
-  snapshot to derive those two from the disk-session scan (`listSessionInfosStrict`) is the deliberate
-  follow-up, not V1.
+    Every row and push carries its **`projectId`**, resolved through the **`setActivityProjectResolver`**
+    seam (the host owns the workspace registry; this module stays ignorant of projects, as with
+    `setSkillAdmissionResolver`). An unresolvable workspace — one being torn down — publishes nothing, since
+    the client's own workspace-removal fold has already dropped its activity. See `packages/contracts/SPEC.md`
+    for why attribution travels on the wire instead of being derived client-side.
+
+    **Lifetime:** entries are never idle-evicted, so every status survives client reconnects. Because
+    `waiting` and `failed` both fall back to the transcript, they also survive a **host restart** for any
+    session that gets attached. What no status survives is a session this process has never loaded:
+    `listSessionActivity` walks live entries only, so a disk-only chat contributes nothing. Extending the
+    snapshot to derive those two from the disk-session scan (`listSessionInfosStrict`) is the deliberate
+    follow-up, not V1.
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.
     `prompt`/`steer`/`followUp` (with images) /

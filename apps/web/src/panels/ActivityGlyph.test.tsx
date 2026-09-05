@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import type { ActivityStatus } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ActivityGlyph, activityBreakdown } from "./ActivityGlyph";
+import { ActivityGlyph, activityBreakdown, activityChatCount } from "./ActivityGlyph";
 
 function render(status: ActivityStatus, counts?: Partial<Record<ActivityStatus, number>>): string {
 	return renderToStaticMarkup(
@@ -52,4 +52,22 @@ test("the breakdown omits states nothing is in", () => {
 test("several busy chats surface the breakdown as the accessible name too", () => {
 	const markup = render("failed", { failed: 1, running: 2 });
 	expect(markup).toContain("1 chat failed, 2 chats working");
+});
+
+test("repeated statuses still show the breakdown — the count is what the row cannot say", () => {
+	const markup = render("running", { running: 2 });
+	expect(markup).toContain('aria-label="2 chats working"');
+	expect(markup).not.toContain('aria-label="Agent is working"');
+});
+
+test("the breakdown threshold counts CHATS, not distinct statuses", () => {
+	expect(activityChatCount({ running: 2 })).toBe(2);
+	expect(activityChatCount({ failed: 1, running: 3 })).toBe(4);
+	expect(activityChatCount({ running: 1 })).toBe(1);
+	expect(activityChatCount({})).toBe(0);
+});
+
+test("one chat keeps the plain label whichever status it is in", () => {
+	expect(render("failed", { failed: 1 })).toContain('aria-label="Last run failed"');
+	expect(render("queued", { queued: 1 })).toContain('aria-label="Message queued"');
 });

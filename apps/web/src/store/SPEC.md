@@ -192,31 +192,31 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   the same presentation rule to the persisted copy (`chat/hydrate.ts` hides retried attempts — an
   errored assistant followed by another assistant before any user message), so live and reloaded clients
   agree.
-- **Workspace activity** (`activityByWorkspace`) is the host's cross-workspace agent-state signal, the one
-  thing here that describes chats **nobody has open** — the Projects rail's glyphs. Keyed workspace →
-  **`WorkspaceActivity`** (`{ projectId, sessions }`), and **idle is absence at every level**: a retraction
-  deletes the session key and then the workspace key once it empties, so "quiet" is an empty map rather
-  than a map full of nulls. Each entry carries its **own `projectId`** rather than looking one up in
-  `workspaces`: that list is fetched only for *expanded* projects, so a rollup that depended on it would
-  return nothing for the collapsed, never-opened project whose activity the rail most needs to show. A
-  workspace re-attributed to another project replaces its entry, so it is never counted under both.
-  A status that did not move is not a state write at all (the reducer returns the identical object), which
-  is what keeps an always-mounted rail from re-rendering on every event of every session.
-  **`applySessionActivity`** folds one `session.activity` push; **`hydrateSessionActivity`** **replaces**
-  the whole map from the `session.activityList` snapshot — replacement, not merge, because a reconnect must
-  not leave a glyph behind for a session that settled while the socket was down. Replacement is also what
-  makes an **empty** snapshot the retirement path: a client that has seen a v59 host and then reconnects
-  to a pre-activity one hydrates `[]` rather than skipping the read, because that host can send neither a
-  replacement snapshot nor a retraction, and the alternative is stale `running`/`failed` glyphs that never
-  clear. Hydration is equally a no-op when the computed map matches the current one, so a reconnect that
-  changes nothing does not re-render the rail. Both refuse removed
-  workspaces and tombstoned sessions, so a late push cannot resurrect a deleted chat's glyph.
-  The rollup is **not** stored: `workspaceActivityRollup`/`projectActivityRollup` derive it on read from
-  the map alone — no workspace list, no second store slice — with a single shared precedence, **`failed` > `waiting` > `running` > `queued`** — a rare fault must never be
-  masked by routine work, and both are "needs you" anyway. Note this is deliberately *not* the host's
-  per-session derivation order (see `packages/server/src/agent/SPEC.md`): there the question is "what is
-  this one chat doing", here it is "which of several chats should this row speak for". Closed
-  chats are reopenable: the workbench close command atomically removes local placement and invokes
+  - **Workspace activity** (`activityByWorkspace`) is the host's cross-workspace agent-state signal, the one
+    thing here that describes chats **nobody has open** — the Projects rail's glyphs. Keyed workspace →
+    **`WorkspaceActivity`** (`{ projectId, sessions }`), and **idle is absence at every level**: a retraction
+    deletes the session key and then the workspace key once it empties, so "quiet" is an empty map rather
+    than a map full of nulls. Each entry carries its **own `projectId`** rather than looking one up in
+    `workspaces`: that list is fetched only for *expanded* projects, so a rollup that depended on it would
+    return nothing for the collapsed, never-opened project whose activity the rail most needs to show. A
+    workspace re-attributed to another project replaces its entry, so it is never counted under both.
+    A status that did not move is not a state write at all (the reducer returns the identical object), which
+    is what keeps an always-mounted rail from re-rendering on every event of every session.
+    **`applySessionActivity`** folds one `session.activity` push; **`hydrateSessionActivity`** **replaces**
+    the whole map from the `session.activityList` snapshot — replacement, not merge, because a reconnect must
+    not leave a glyph behind for a session that settled while the socket was down. Replacement is also what
+    makes an **empty** snapshot the retirement path: a client that has seen a v59 host and then reconnects
+    to a pre-activity one hydrates `[]` rather than skipping the read, because that host can send neither a
+    replacement snapshot nor a retraction, and the alternative is stale `running`/`failed` glyphs that never
+    clear. Hydration is equally a no-op when the computed map matches the current one, so a reconnect that
+    changes nothing does not re-render the rail. Both refuse removed
+    workspaces and tombstoned sessions, so a late push cannot resurrect a deleted chat's glyph.
+    The rollup is **not** stored: `workspaceActivityRollup`/`projectActivityRollup` derive it on read from
+    the map alone — no workspace list, no second store slice — with a single shared precedence, **`failed` > `waiting` > `running` > `queued`** — a rare fault must never be
+    masked by routine work, and both are "needs you" anyway. Note this is deliberately *not* the host's
+    per-session derivation order (see `packages/server/src/agent/SPEC.md`): there the question is "what is
+    this one chat doing", here it is "which of several chats should this row speak for".
+  Closed chats are reopenable: the workbench close command atomically removes local placement and invokes
   **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
   **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending
   jump/history-open requests—but never a newer `routeChatTarget`, whose lifecycle belongs to navigation

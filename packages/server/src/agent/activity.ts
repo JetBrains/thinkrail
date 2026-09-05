@@ -9,9 +9,15 @@ export interface ActivityInputs {
 	hasPendingDialog: boolean;
 }
 
+const FAILED_STOP_REASONS: ReadonlySet<string> = new Set(["error", "length"]);
+
 interface AssistantView {
 	role?: string;
 	stopReason?: string;
+}
+
+function failedStopReason(stopReason: string | undefined): boolean {
+	return stopReason !== undefined && FAILED_STOP_REASONS.has(stopReason);
 }
 
 function trailingAssistantFailed(messages: readonly AgentMessage[]): boolean {
@@ -20,13 +26,14 @@ function trailingAssistantFailed(messages: readonly AgentMessage[]): boolean {
 		const view = views[i];
 		if (!view) continue;
 		if (view.role === "user") return false;
-		if (view.role === "assistant") return view.stopReason === "error";
+		if (view.role === "assistant") return failedStopReason(view.stopReason);
 	}
 	return false;
 }
 
 function failed(inputs: ActivityInputs): boolean {
-	if (inputs.lastSettlement !== undefined) return inputs.lastSettlement?.stopReason === "error";
+	if (inputs.lastSettlement !== undefined)
+		return failedStopReason(inputs.lastSettlement?.stopReason);
 	return trailingAssistantFailed(inputs.messages);
 }
 

@@ -104,11 +104,14 @@ treatment.
     kebab never covers it (a trailing overlay would).
   - **Hover explains it**, via `IconTooltip` (`wrapTrigger` — a bare glyph is not focusable). One busy
     chat shows the plain label; several show a per-state breakdown with counts in rollup order — which is
-    where the counts the row itself refuses to carry actually live. The tooltip is an *enhancement*: the
+    where the counts the row itself refuses to carry actually live. "Several" counts **chats**
+    (`activityChatCount`), not distinct statuses: two chats both working must read "2 chats working", so a
+    threshold on the number of breakdown *lines* would silently drop the count in exactly the
+    single-status case. The tooltip is an *enhancement*: the
     same text is always the glyph's `aria-label`, because Radix tooltips are hover/focus-only and a phone
     has neither.
-  - Rows carry **`data-activity`** (absent when idle) as the e2e hook — on the row, not the glyph, so the
-    status has one home in the DOM.
+  - **Both** row kinds carry **`data-activity`** (absent when idle) as the e2e hook — workspace rows and
+    collapsed project rows alike, on the row rather than the glyph, so the status has one home in the DOM.
 
   **Project rows carry the rollup only while collapsed**, matching the collapsed-only workspace count;
   expanded, their workspace rows already say it. The **Default workspace**
