@@ -154,6 +154,23 @@ and fails the release *after* every assertion has already passed. `rmSync`'s own
 do not fix that here — Bun ignores them — so the retry loop has to be ours. The retry is teardown
 resilience, not error suppression: a tree that stays locked past the backoff still throws.
 
+Teardown must never *replace* the failure a smoke is already reporting, so both smokes remove the tree
+through `removeTreeAfter()` once the outcome is decided rather than in a `finally`. Nightly run
+33949193053 is why the rule is written down — the installed-desktop assertion failed, the `finally` then
+threw `EACCES` on the temp tree, and the release surfaced *only* the teardown error, so nothing about the
+actual failure reached the log.
+
+A failing first-install smoke also prints the installed host's own log before it removes the tree.
+Nothing else survives the failure: a packaged (non-dev) Windows launcher attaches no console, so the
+installed app's stdout never reaches CI, and the log file lives inside the tree teardown deletes.
+
+The same run is why abandoning a launcher means abandoning its tree. On Windows the launcher is a thin
+parent, so killing it alone strands the `bun.exe` host it spawned — and that host keeps its executable
+image mapped under the installed tree, which is what turns every later teardown into `EACCES`. A smoke
+that gives up before the ready document names the host pid has no other handle on that process, so
+`killWindowsProcessTree()` (`src/processTree.ts`) takes the whole tree down with `taskkill /T /F` before
+the launcher's own signal. It is a no-op elsewhere: POSIX termination stays with the caller's signal.
+
 Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 plus `libgtk-3-0`,
 `libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are
 CI-only and are never shipped as user configuration.
