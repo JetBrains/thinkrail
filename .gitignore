@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .turbo/
+.hutch/
 *.tsbuildinfo
 .DS_Store
 .idea/
