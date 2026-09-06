@@ -9,15 +9,17 @@ depends-on: [module-cli, module-desktop, module-shared, module-repo-scripts]
 
 ## Responsibility
 
-The repo's automation: PR **gates** and the multi-platform **release** pipeline. The shippable artifact
+The public repo's automation: PR **gates** and reusable **build/version recipes**. The shippable artifact
 is two additive artifact families: the single-file `thinkrail` CLI binary and the Electrobun desktop
-installer. This module builds and native-smokes both on every selected platform, stamps one shared release
-identity into them, and **stages them in one draft GitHub release**. It owns no product code — only
-workflows and composite actions.
+installer. The build action stamps their shared release identity, builds both, and runs their native
+smokes. It owns no product code.
 
-**It does not publish.** Signing requires the JetBrains internal runners, which GitHub keeps away from
-public repositories, so `JetBrains/thinkrail-signing` (private) signs the staged assets, writes
-`SHA256SUMS`, and publishes the draft. This module's release contract therefore ends at a staged draft.
+**Release orchestration lives in `JetBrains/thinkrail-signing` (private).** That repository owns nightly
+scheduling, stable dispatch, source-commit selection, the native build matrix, existing signing,
+checksums, public tags, release notes, and publication back to `JetBrains/thinkrail`. It checks out the
+public source at an explicit commit and invokes this module's recipes. PR CI and the recipes remain
+public; there is no public draft-release handoff. A final upload-only draft may still keep incomplete
+uploads invisible until publication.
 
 ## CI vs release
 
@@ -30,11 +32,11 @@ public repositories, so `JetBrains/thinkrail-signing` (private) signs the staged
   (`binary-windows`), plus a host-target Electrobun package, native-window smoke, shared artifact probes,
   and desktop-backed no-agent e2e. The Linux desktop target runs under Xvfb with CI-only software
   rendering. Fast enough for PRs, no provider auth. Gates merges.
-- **Release** (`nightly.yml` / `stable.yml` → `_release.yml` → `_build.yml`): trusts a green `main`,
-  produces native-smoked CLI binaries plus desktop installers, pushes the tag, and stages them as a
-  **draft**. A draft and its assets are invisible to unauthenticated users, so nothing unsigned is ever
-  public. Signing and publication belong to `thinkrail-signing`; notarization and desktop updater
-  publication remain deferred gates.
+- **Release** (private `thinkrail-signing` workflows): selects public `main`, invokes this repo's
+  native build recipes at that source commit, passes artifacts between jobs within the private run,
+  applies the existing signing policy, and creates the public tag/release. Moving orchestration does
+  not expand signing coverage: macOS notarization and desktop updater publication remain deferred.
+  The public repo contains no nightly/stable release entrypoint or reusable release orchestration.
 
 **Why Windows gates PRs and macOS does not.** A release build is all-or-nothing: `release` needs
 `build.result == 'success'`, so one red matrix leg publishes *nothing* — quietly, with no notification, and
@@ -42,32 +44,27 @@ with the other platforms' green artifacts discarded. #255 spent two nightlies an
 way on a Windows-only smoke fixture defect (see `module-cli`). Windows is where the host's assumptions
 diverge most (executable resolution, `PATH` shape, `USERPROFILE` vs `HOME`, real-OS trash), and its runner is
 the cheap half of that risk; macOS divergence is narrower (path canonicalization) and its runner minutes are
-dearer, so it stays release-matrix-only. A red release matrix still notifies nobody — an open gap.
+dearer, so it stays release-matrix-only. The private release controller owns release-run failure and
+missing-nightly monitoring; this public CI continues to own merge qualification.
 
-## Channels
+## Version and channel contract
 
-Both channels are `main`-only, versioned by `scripts/next-version.sh` (channel-aware semver from git
-tags: `vX.Y.Z` stable, `vX.Y.Z-nightly.N`):
+`.github/scripts/next-version.sh` remains the single version algorithm. Its caller runs it against the
+public source checkout and public tags: `vX.Y.Z` stable, `vX.Y.Z-nightly.N` nightly. Stable supports
+`bump = patch|minor|major|explicit`; minor/major must clear an in-flight nightly base, while patch
+hotfixes ship out-of-band. The private controller preserves nightly's unchanged-source skip behavior.
 
-- **Nightly** — cron 06:00 UTC + manual dispatch. Computes the next nightly, **skips when no commits**
-  since the last one, stages a **prerelease** draft `vX.Y.Z-nightly.N`.
-- **Stable** — manual dispatch with `bump = patch|minor|major|explicit`. Stages `vX.Y.Z`. The script
-  guards that a minor/major bump clears any in-flight nightly base; patch hotfixes ship out-of-band.
-
-**The release job pushes the tag itself.** A draft creates no tag, and `next-version.sh` reads
-`git tag -l`, so leaving the tag to publication would make the next nightly recompute the same version
-and collide with the still-pending draft — and `nightly.yml`'s "skips when no commits" check would
-compare against a stale tag. Existence is checked with `git ls-remote`, **not** against the checkout:
-this job clones at depth 1 without tags, so a local `rev-parse` would miss a tag the first attempt had
-already pushed and the re-run would die on a rejected push before staging anything. With the remote as
-the source of truth the push is genuinely idempotent, and it fails loudly if the tag exists at a
-different commit.
+The private workflow's own repository/SHA is not product identity. Source selection, tag lookup,
+version calculation, and tag creation must all explicitly refer to `JetBrains/thinkrail`; the private
+controller forwards that resolved source commit and computed version/channel to the native build
+jobs. Scheduling, serialization, idempotent public tag creation, and publication belong to the private
+controller rather than being duplicated here.
 
 ## Build strategy — native OS matrix
 
-`_build.yml` builds both artifact families on the selected native runners. CLI passes its matching
-`--target`; Electrobun builds for the current runner so every FFI/helper/native-wrapper path is executed
-where it will ship:
+The private native matrix invokes `actions/build-binary` for each supported target below. CLI passes
+its matching `--target`; Electrobun builds for the current runner so every FFI/helper/native-wrapper
+path is executed where it will ship:
 
 | target             | runner             | CLI artifact                | desktop installer |
 | ------------------ | ------------------ | --------------------------- | ----------------- |
@@ -76,8 +73,8 @@ where it will ship:
 | `bun-darwin-arm64` | `macos-14`         | `thinkrail-darwin-arm64`    | Electrobun macOS ARM64 `.dmg` |
 | `bun-windows-x64`  | `windows-latest`   | `thinkrail-windows-x64.exe` | Electrobun Windows x64 setup `.zip` |
 
-`bun-darwin-x64` (Intel mac, `macos-13`) is **commented out** in `_build.yml`: that runner's queue is
-long enough to stall every release. Re-enable the matrix leg if macOS x64 downloads are needed.
+`bun-darwin-x64` (Intel mac) remains outside the active matrix after its runner queue stalled releases.
+Restoring it requires an explicit coordinated target/signing decision in the private controller.
 
 (Four targets ship both families; `darwin-x64` remains disabled for runner-queue latency.) Electrobun's
 canary channel maps to ThinkRail nightly; stable maps to stable. The release uploads first-install desktop
@@ -147,7 +144,7 @@ channel, download the platform asset + `SHA256SUMS`, verify the checksum, and dr
 
 Both depend on the **artifact-name contract** this module produces (`thinkrail-<os>-<arch>` with `os` ∈
 {`linux`,`darwin`,`windows`}, `arch` ∈ {`x64`,`arm64`}, `.exe` on Windows) and the `SHA256SUMS` file —
-change the asset names in `_build.yml`/`build-binary` and **both installers** must change in lockstep.
+change the asset names in `build-binary` and the private release matrix, and **both installers** must change in lockstep.
 The README documents the user-facing install. `thinkrail update` (the CLI's self-update, see
 `module-cli`) re-invokes `install.sh` on macOS/Linux — the installers stay the one place the
 download/verify/PATH logic lives; on Windows it prints the `install.ps1` one-liner instead of updating
@@ -155,18 +152,20 @@ in place.
 
 ## Boundary
 
-- **Owns:** everything under `.github/` (workflows, composite actions, the version script) — the CI +
-  release automation, the tag, and the artifact/version contract, up to and including a staged draft.
-- **Does not own:** signing, `SHA256SUMS`, and publication. Those are `thinkrail-signing`'s; its `SPEC.md`
-  is the source of truth for them.
+- **Owns:** public PR/site automation, reusable native build/smoke recipes, the version algorithm,
+  and the public artifact/version naming contract under `.github/`.
+- **Does not own:** nightly/stable release orchestration, signing, tag writes, `SHA256SUMS` production,
+  or publication. Those are `thinkrail-signing`'s; its `SPEC.md` is the source of truth for them.
 - **Consumes:** `apps/cli`'s binary build/smoke, `apps/desktop`'s package/native smoke, the shared
   version-stamping seam, and root scripts (`build:web`, `lint`, `typecheck`, `test`, `e2e` and artifact
   e2e variants). It **injects** the version at
   build time but does not otherwise reach into product code.
 - **Forbidden:** baking release logic into product code (the pipeline calls the same scripts a developer
   runs); a release-only build path that CI never exercises (CI builds+smokes the host target every PR);
-  publishing a release from this repo, or writing `SHA256SUMS` here — both would ship unsigned artifacts
-  or a manifest that the signing step then invalidates.
+  restoring a public nightly/stable controller, publishing a release from this repo, or writing a
+  release `SHA256SUMS` before signing — those bypass the private controller or invalidate its manifest.
+  Root-script conformance tests pin the absence of retired public release entrypoints and the continued
+  presence of public CI/build/version recipes.
 
 ## Get right
 
@@ -178,11 +177,13 @@ in place.
   ignore doesn't bump `PROTOCOL_VERSION`. A field clients must understand does.
 - **Windows has no real SIGTERM** — `smoke:binary` relaxes its clean-exit assertion there (Bun
   force-terminates); it still requires the binary to boot, serve the UI, stage skills, and terminate.
-- **Never publish a draft by hand.** Both installers download `SHA256SUMS` and refuse an asset that does
-  not match it, and a staged draft has no `SHA256SUMS` — it is written during signing. Publishing a draft
-  manually therefore ships a release that `install.sh` and `install.ps1` both reject. If signing is stuck,
-  fix signing.
-- **Signing fails closed**, so a stuck pipeline means releases stop appearing rather than appearing
-  unsigned. That is the right direction but it is invisible — the same class as the red-release-matrix gap
-  above, and how the pre-pivot pipeline died unnoticed for three months. `thinkrail-signing` alarms on a
-  draft left pending too long; this repo still notifies nobody.
+- **Never bypass the private publisher.** Both installers require the final `SHA256SUMS`; manually
+  publishing incomplete assets or pre-signing checksums breaks that contract. Final drafts are upload
+  staging only, not inputs for a second pipeline.
+- **Coordinate the two-repository cutover.** Pause the old public release triggers, finish or explicitly
+  resolve their pending drafts/runs, and merge the private controller plus this public retirement in a
+  maintenance window. Verify that no old run can still publish before activating the private schedule
+  or dispatching a release. Do not leave two independent controllers allocating public versions.
+- **Preserve current behavior, not an unsigned fallback.** This orchestration migration carries the
+  existing signing coverage unchanged. New notarization/expanded-payload signing belongs to later
+  work; the migration is not a claim that those distributions are already trusted by Gatekeeper.

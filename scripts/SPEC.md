@@ -15,7 +15,7 @@ Repository-wide development orchestration and conformance gates that do not belo
 
 ## Boundary
 
-- **Owns:** the multi-process development launcher; exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; and declared-spec-surface to TypeScript-barrel conformance.
+- **Owns:** the multi-process development launcher; exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; declared-spec-surface to TypeScript-barrel conformance; and the public release-ownership boundary check.
 - **Public surface:** the root `package.json` commands consumed by developers, Husky, and CI.
 - **Allowed deps:** Bun/Node, the TypeScript compiler API, `pi-spec-graph/core` for the canonical spec/frontmatter model, and `mdast-util-from-markdown` for CommonMark block structure; read-only inspection of workspace manifests and source trees; the public package metadata and bundle outputs each check validates.
 - **Forbidden:** product runtime logic, a second source of package or feature behavior, editing source as part of a check, or importing application internals to execute them.
@@ -25,3 +25,5 @@ Repository-wide development orchestration and conformance gates that do not belo
 `check:spec-surface` enrolls only valid specs tagged `public-surface-checked`. Enrollment is explicit so adding prose cannot silently turn enforcement off: an enrolled spec must retain a bare backticked identifier list and a discoverable TypeScript barrel, or the check fails. Unenrolled prose surfaces remain descriptive and are reported only by `--list-skipped`.
 
 The TypeScript compiler resolves the barrel's effective export names, including type-only and default exports and transitive re-exports; a CommonJS `export =` assignment is the module's singular `default` surface rather than the assigned value's synthetic members. An unresolved re-export is a violation rather than a silently incomplete surface. The declared and effective name sets must match in both directions. Filesystem-level tests exercise enrollment, resolution, and failure behavior through the same runner CI invokes.
+
+Release-ownership tests pin the coordinated migration boundary: retired public nightly/stable/release-matrix workflows stay absent while public PR/merge-queue CI and reusable build/version/signing/checksum recipes remain available. They do not inspect the private repository or certify its deployment state.

@@ -207,17 +207,17 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     or canonical-data-directory ownership policy. Each host binds its own loopback port; when multiple hosts
     point at the same mutable data directory, cross-process consistency is intentionally not guaranteed.
     Desktop artifacts are additive; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
-    the supported Linux floor. Releases are **staged as drafts here and signed elsewhere**: the
-    JetBrains signing runners are unavailable to public repositories, so `JetBrains/thinkrail-signing`
-    (private) signs the staged assets and publishes the draft. Windows artifacts carry an EV
-    Authenticode signature; the macOS CLI binary carries a Developer ID signature that Gatekeeper
-    still rejects without notarization, and the macOS `.dmg` stays unsigned because Electrobun's
-    payload self-extracts after download.
+    the supported Linux floor. **Release orchestration lives in `JetBrains/thinkrail-signing` (private)**:
+    nightly/stable entrypoints select an explicit public source commit, invoke the public build recipes
+    on native runners, pass same-run artifacts through the existing signing steps, and create tags and
+    releases back in this public repository. The internal signing runners remain inaccessible to public
+    workflows. Product code, PR CI, and reusable build/version recipes stay public; a public draft is
+    only final upload staging, never the build/signing handoff.
 
-    Signing can only fail *closed*, so a draft that is never published means releases stop appearing
-    rather than appearing unsigned — the failure mode that silently ended the pre-pivot pipeline, and the
-    reason the signing repo alarms on a stale draft. How the tag and the draft are staged is
-    [[module-ci-release]]'s contract, not restated here.
+    This is an orchestration migration, not expanded signing coverage. Windows CLI/setup artifacts keep
+    their EV Authenticode signatures, the macOS CLI retains Developer ID signing without notarization,
+    and the macOS DMG remains unsigned. The private controller owns scheduling, publication, and
+    release monitoring; [[module-ci-release]] owns the public recipes and artifact/version contract.
     Detail: [[module-desktop]], [[module-ci-release]].
 
 16. **Delegation is portable; ThinkRail is one embedder.** `packages/pi-delegation` owns the session
