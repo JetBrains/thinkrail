@@ -32,3 +32,7 @@ test("JetBrains quota advances the protocol and names its read", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(JBCENTRAL_QUOTA_PROTOCOL_VERSION);
 	expect(WS_METHODS.providerJbcentralQuota).toBe("provider.jbcentralQuota");
 });
+
+test("line-width config advances the additive wire shape to v61", () => {
+	expect(PROTOCOL_VERSION).toBe(61);
+});

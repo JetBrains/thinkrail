@@ -37,6 +37,7 @@ import {
 	DEFAULT_CONFIG,
 	isAskUserAnswersMessage,
 	isControlMessage,
+	isLineWidth,
 	isSubagentCompletionMessage,
 	normalizeThemePreference,
 } from "@thinkrail/contracts";
@@ -268,6 +269,7 @@ export const SettingsSection = {
 	Providers: "providers",
 	Github: "github",
 	Appearance: "appearance",
+	LineWidth: "line-width",
 	Chat: "chat",
 	Layout: "layout",
 	Terminal: "terminal",
@@ -791,6 +793,10 @@ interface AppState {
 	jbcentralQuotaRefreshSeconds: number;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
+	chatLineWidth: number;
+	fileLineWidth: number;
+	chatLineWidthBounded: boolean;
+	fileLineWidthBounded: boolean;
 	chatMessageOrder: ChatMessageOrder;
 	streamingResponseMovement: StreamingResponseMovement;
 	reviewModel: WireModel | undefined;
@@ -1009,6 +1015,20 @@ function configPatch(config: AppConfig) {
 			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 		terminalReplayKb: config.terminalReplayKb,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
+		chatLineWidth: isLineWidth(config.chatLineWidth)
+			? config.chatLineWidth
+			: DEFAULT_CONFIG.chatLineWidth,
+		fileLineWidth: isLineWidth(config.fileLineWidth)
+			? config.fileLineWidth
+			: DEFAULT_CONFIG.fileLineWidth,
+		chatLineWidthBounded:
+			typeof config.chatLineWidthBounded === "boolean"
+				? config.chatLineWidthBounded
+				: DEFAULT_CONFIG.chatLineWidthBounded,
+		fileLineWidthBounded:
+			typeof config.fileLineWidthBounded === "boolean"
+				? config.fileLineWidthBounded
+				: DEFAULT_CONFIG.fileLineWidthBounded,
 		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
 		reviewModel: config.reviewModel,
 		reviewEffort: config.reviewEffort,
@@ -1647,6 +1667,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
+	chatLineWidth: DEFAULT_CONFIG.chatLineWidth,
+	fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
+	chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,
+	fileLineWidthBounded: DEFAULT_CONFIG.fileLineWidthBounded,
 	chatMessageOrder: "oldest-first",
 	streamingResponseMovement: { ...DEFAULT_STREAMING_RESPONSE_MOVEMENT },
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,

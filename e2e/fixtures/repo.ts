@@ -3,6 +3,11 @@ import { join } from "node:path";
 import { gitQuiet } from "./git";
 import { E2E_FIXTURE_REPO } from "./paths";
 
+export const LONG_LINE = Array.from(
+	{ length: 80 },
+	(_, index) => `segment-${String(index + 1).padStart(2, "0")}`,
+).join(" ");
+
 export function fixtureRepoHealthy(): boolean {
 	try {
 		gitQuiet(E2E_FIXTURE_REPO, "rev-parse", "--git-dir");
@@ -21,6 +26,7 @@ export function seedFixtureRepo(): void {
 	git("config", "commit.gpgsign", "false");
 	writeFileSync(join(E2E_FIXTURE_REPO, "README.md"), "# sample-project\n");
 	writeFileSync(join(E2E_FIXTURE_REPO, "notes.txt"), "plain-text-fixture\n");
+	writeFileSync(join(E2E_FIXTURE_REPO, "LONG_LINE.txt"), LONG_LINE);
 	writeFileSync(
 		join(E2E_FIXTURE_REPO, "ALERTS.md"),
 		[

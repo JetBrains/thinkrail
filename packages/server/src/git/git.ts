@@ -7,13 +7,14 @@ import type {
 	GitFileChange,
 	GitFileStatus,
 	GitStatus,
+	RemoteBranchGroup,
 	Workspace,
 } from "@thinkrail/contracts";
 import { logger } from "../log";
 import { loadProjects, loadWorkspaces } from "../persistence";
 import { changedFileArgs, type DiffRange, diffBaseRef, resolveDiffRange } from "./diffScope";
 import { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";
-import { isSafeRef, remoteTrackingRef } from "./refs";
+import { isSafeRef, remoteNameOf } from "./refs";
 
 const log = logger("git");
 
@@ -71,33 +72,83 @@ function lines(out: string): string[] {
 		.filter(Boolean);
 }
 
+const LOCAL_REF_PREFIX = "refs/heads/";
+const REMOTE_REF_PREFIX = "refs/remotes/";
+
+function refWithin(ref: string, prefix: string): string | null {
+	if (!ref.startsWith(prefix)) return null;
+	const name = ref.slice(prefix.length);
+	return name || null;
+}
+
+function groupRemoteRefs(refs: string[], remotes: string[]): RemoteBranchGroup[] {
+	const groups = new Map<string | null, RemoteBranchGroup>();
+	for (const ref of refs) {
+		const remote = remoteNameOf(ref, remotes);
+		const branch = remote ? ref.slice(`${remote}/`.length) : ref;
+		const group = groups.get(remote);
+		if (group) group.branches.push({ ref, branch });
+		else groups.set(remote, { remote, branches: [{ ref, branch }] });
+	}
+	return [...groups.values()];
+}
+
 export async function listBranches(projectId: string): Promise<BranchList> {
 	const project = loadProjects().find((p) => p.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 	const repo = project.path;
 
-	const [localRefs, remoteRefs] = await Promise.all([
-		gitAsync(repo, ["for-each-ref", "--format=%(refname:short)", "refs/heads"]),
-		gitAsync(repo, ["for-each-ref", "--format=%(refname:short)\t%(symref)", "refs/remotes/origin"]),
+	const [localRefs, remoteRefs, remoteNames] = await Promise.all([
+		gitAsync(repo, ["for-each-ref", "--format=%(refname)", "refs/heads"]),
+		gitAsync(repo, ["for-each-ref", "--format=%(refname)\t%(symref)", "refs/remotes"]),
+		gitAsync(repo, ["remote"]),
 	]);
 	if (!localRefs.ok)
 		throw new Error(`Could not list local branches: ${localRefs.err || "git failed"}`);
 	if (!remoteRefs.ok)
 		throw new Error(`Could not list remote branches: ${remoteRefs.err || "git failed"}`);
-	const local = lines(localRefs.out);
+	if (!remoteNames.ok)
+		throw new Error(`Could not list remotes: ${remoteNames.err || "git failed"}`);
+	const local = lines(localRefs.out)
+		.map((ref) => refWithin(ref, LOCAL_REF_PREFIX) ?? "")
+		.filter(Boolean);
 	const remote = lines(remoteRefs.out)
 		.map((line) => line.split("\t"))
 		.filter((parts) => !parts[1])
-		.map((parts) => parts[0] ?? "")
+		.map((parts) => refWithin(parts[0] ?? "", REMOTE_REF_PREFIX) ?? "")
 		.filter(Boolean);
 
-	return { local, remote, defaultBranch: resolveDefaultBranch(repo) };
+	return {
+		local,
+		remote,
+		remoteGroups: groupRemoteRefs(remote, lines(remoteNames.out)),
+		defaultBranch: resolveDefaultBranch(repo),
+	};
+}
+
+export function listRemotes(repoPath: string): string[] {
+	return lines(git(repoPath, ["remote"]).out);
 }
 
 export function resolveDefaultBranch(repoPath: string): string {
-	const head = git(repoPath, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]);
-	if (head.ok && head.out) return head.out;
-	if (remoteRefOid(repoPath, "origin/main") !== null) return "origin/main";
+	const originHeadRef = `${REMOTE_REF_PREFIX}origin/HEAD`;
+	const originHead = git(repoPath, ["symbolic-ref", originHeadRef]);
+	const originDefault = originHead.ok ? refWithin(originHead.out, REMOTE_REF_PREFIX) : null;
+	if (originDefault) return originDefault;
+	const rows = lines(
+		git(repoPath, ["for-each-ref", "--format=%(refname)\t%(symref)", "refs/remotes"]).out,
+	).map((line) => line.split("\t"));
+	const otherHead = rows.find(
+		([ref, symref]) =>
+			ref !== originHeadRef &&
+			ref?.startsWith(REMOTE_REF_PREFIX) &&
+			ref.endsWith("/HEAD") &&
+			symref?.startsWith(REMOTE_REF_PREFIX),
+	)?.[1];
+	const otherDefault = refWithin(otherHead ?? "", REMOTE_REF_PREFIX);
+	if (otherDefault) return otherDefault;
+	if (rows.some(([ref, symref]) => ref === `${REMOTE_REF_PREFIX}origin/main` && !symref))
+		return "origin/main";
 	return currentBranch(repoPath);
 }
 
@@ -121,8 +172,8 @@ export function currentBranch(repoPath: string): string {
 }
 
 export function remoteRefOid(repoPath: string, ref: string): string | null {
-	const remote = remoteTrackingRef(ref);
-	if (!remote) return null;
+	if (!isSafeRef(ref)) return null;
+	const remote = `${REMOTE_REF_PREFIX}${ref}`;
 	const result = git(repoPath, ["rev-parse", "--verify", "--quiet", "--end-of-options", remote]);
 	return result.ok && result.out !== "" ? result.out : null;
 }
@@ -132,11 +183,13 @@ export async function prefetchBranch(
 	ref: string,
 ): Promise<{ ok: boolean; moved: boolean }> {
 	const project = loadProjects().find((p) => p.id === projectId);
-	if (!project || !ref.startsWith("origin/") || !isSafeRef(ref)) return { ok: false, moved: false };
+	if (!project || !isSafeRef(ref)) return { ok: false, moved: false };
+	const remoteName = remoteNameOf(ref, listRemotes(project.path));
+	if (!remoteName) return { ok: false, moved: false };
 	const before = remoteRefOid(project.path, ref);
 	const result = await gitAsync(
 		project.path,
-		["fetch", "origin", "--", ref.slice("origin/".length)],
+		["fetch", remoteName, "--", ref.slice(`${remoteName}/`.length)],
 		{ network: true },
 	);
 	const after = remoteRefOid(project.path, ref);

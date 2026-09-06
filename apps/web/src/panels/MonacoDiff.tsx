@@ -7,6 +7,7 @@ import {
 import type { editor } from "monaco-editor";
 import { useCallback, useEffect, useRef } from "react";
 import { LoadingRegion } from "../components/Skeleton";
+import { useAppStore } from "../store";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
 	defineThinkrailTheme,
@@ -44,6 +45,8 @@ export default function MonacoDiff({
 	ignoreWhitespace: boolean;
 	review?: EditorReview;
 }) {
+	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
+	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
 	const menuIconsRef = useRef<{ dispose(): void }[]>([]);
 	const editorRef = useRef<MonacoDiffEditor | null>(null);
@@ -150,7 +153,7 @@ export default function MonacoDiff({
 			onMount={onMount}
 			loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
 			options={{
-				...sharedEditorOptions(),
+				...sharedEditorOptions(fileLineWidth, fileLineWidthBounded),
 				renderSideBySide: view === "split",
 				useInlineViewWhenSpaceIsLimited: false,
 				hideUnchangedRegions: { enabled: true },

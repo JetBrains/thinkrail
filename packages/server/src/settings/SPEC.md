@@ -11,8 +11,9 @@ tags: [v1]
 ## Responsibility
 
 The server-synchronized app config: opaque fixed-theme selection, fixed/system mode and optional light/dark
-pair, analytics switch, terminal replay budget, chat composer growth preset, bounded custom layout-preset
-catalog, JetBrains quota display/cadence, the host-wide subagent default, and plan-review policy. `reviewModel` /
+pair, analytics switch, terminal replay budget, chat composer growth preset, chat/file visual line widths
+plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota display/cadence, the
+host-wide subagent default, and plan-review policy. `reviewModel` /
 `reviewEffort` select the reviewer/reflector runtime (unset means pi
 default); `reviewAutoFix: false` records a `request_changes` verdict and waits instead of auto-sending a fix.
 The module reads, normalizes, persists, caches, and broadcasts values that intentionally follow the owner
@@ -20,15 +21,15 @@ across frontends.
 
 Current workbench frame, workspace resource placement, current/default preset selection, side/bottom group limits, selection, and focus are explicitly absent. Those are frontend-surface-local view state under [[submodule-web-shell-layout-state]]. Built-in layout presets remain web-owned.
 
-A numeric setting is bounded by its consumer when the domain owns the safety cap—for example `terminal`
-clamps `terminalReplayKb`, so a hand-edited config cannot exhaust memory. Settings itself validates custom
-layout presets because it owns their cross-frontend storage contract. It also validates the global
-`jbcentralQuotaEnabled` boolean and whole `jbcentralQuotaRefreshSeconds` interval (`1–3600`, default 30),
-because those values govern host process cadence across every frontend.
+A numeric setting is bounded by its consumer when that domain owns the safety cap—for example `terminal`
+clamps `terminalReplayKb`, so a hand-edited config cannot exhaust memory. Settings validates the shared
+40–240 line-width contract and custom layout presets because it owns their cross-frontend storage contract.
+It also validates the global `jbcentralQuotaEnabled` boolean and whole `jbcentralQuotaRefreshSeconds`
+interval (`1–3600`, default 30), because those values govern host process cadence across every frontend.
 
 ## Boundary
 
-- **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (merge → validate known fields → persist → broadcast); resource-free custom-preset validation/normalization and safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
+- **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (merge → validate known fields → persist → broadcast); line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
 - **Public surface (barrel):** `getConfig`, `updateConfig`, `setSettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
 - **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`).
 - **Forbidden:** host or another feature sibling; current-layout document/snapshot types; workspace ids/resources; current frame validation; owning WS channels; or importing web preset definitions.
@@ -36,6 +37,7 @@ because those values govern host process cadence across every frontend.
 ## Get right
 
 - **Converge on broadcast, no client optimism.** `updateConfig` persists before replacing the live cache or publishing; a failed write changes neither runtime reads nor frontends. Every frontend, including the initiator, adopts `settings.changed`. `server.welcome` seeds the same cached value.
+- `chatLineWidth` / `fileLineWidth` independently default to 120 and accept only finite integers from 40 through 240; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field rejects the complete mutation before cache, persistence, or broadcast changes.
 - `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior; a present non-boolean update is rejected before cache, persistence, or broadcast changes. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.
 - JetBrains quota display defaults on and its interval defaults to 30 seconds when either stored field is absent/invalid. Wire updates reject a non-boolean flag or a non-integer/out-of-range interval atomically; they never clamp a caller's value into a different persisted choice.
 - Theme availability/labels/palettes, operating-system appearance, and the effective theme are not server concerns. `theme` remains the opaque fixed choice; `themeMode` defaults to `"fixed"`, and `systemThemePair` remains absent until first use. A persisted pair is retained only when both slots are strings; malformed pairs are dropped, and system mode without a retained pair normalizes to fixed without replacing a valid fixed id. A missing/invalid mode also normalizes to fixed while an independently valid dormant pair may survive. Entering system mode requires a complete valid-shaped existing-or-incoming pair; a pair mutation replaces both slots atomically. Unknown ids remain persisted for each independently shipped frontend to resolve by required appearance.

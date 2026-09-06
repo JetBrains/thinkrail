@@ -305,7 +305,7 @@ describe("ghPrFlow", () => {
 	});
 });
 
-describe("openPr — invalidates the open-review cache", () => {
+describe("openPr — push lifecycle and cache invalidation", () => {
 	let dataDir: string;
 	let repo: string;
 	let remote: string;
@@ -510,6 +510,41 @@ describe("openPr — invalidates the open-review cache", () => {
 			kind: "pull-request",
 			number: 7,
 		});
+	});
+
+	test("a non-origin remote base is rejected before the workspace branch is pushed", async () => {
+		const upstream = join(dataDir, "upstream.git");
+		mkdirSync(upstream);
+		sh(upstream, "init", "-q", "--bare");
+		sh(repo, "remote", "add", "upstream", upstream);
+		sh(repo, "push", "upstream", "main");
+		writeFileSync(
+			join(dataDir, "workspaces.json"),
+			JSON.stringify([
+				{
+					id: "w1",
+					projectId: "p1",
+					name: "Feature",
+					branch: "feature",
+					baseBranch: "upstream/main",
+					worktreePath: repo,
+					createdAt: 1,
+				},
+			]),
+		);
+
+		await expect(openPr({ workspaceId: "w1", sessionId: "s1" })).rejects.toThrow(
+			/non-origin remote base/,
+		);
+		const pushed = Bun.spawnSync([
+			"git",
+			"-C",
+			remote,
+			"show-ref",
+			"--verify",
+			"refs/heads/feature",
+		]);
+		expect(pushed.success).toBe(false);
 	});
 });
 

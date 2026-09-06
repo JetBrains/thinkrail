@@ -224,14 +224,24 @@ treatment.
   used by both the flat list's path rows and the diff header's path chip. The **branch combobox** is the
   shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, refreshed on every
   open with an explicit Refresh control as well) — one component for the New-Workspace dialog's *base* branch
-  and the Changes header's *target* branch; the whole state *around* it — the list, `refreshing`, `refresh()` —
-  is the shared
+  and the Changes header's *target* branch. **Remote is two layers**: one `Remote` parent over a subgroup per
+  host-identified remote (`origin`, `upstream`), whose rows show branch names without repeating the remote.
+  The full ref remains every row's selection identity, search value, and `data-branch`; the browser never
+  splits `remote/branch`, because Git permits `/` in a remote name. Unconfigured tracking refs live under
+  `Other` and keep their full ref as the row label. `BranchList.remoteGroups` is additive: against an older
+  host that omits it, the picker falls back to one flat Remote group of full refs. The grouped path uses
+  nested cmdk groups; the force-mounted parent hides only when cmdk has hidden every child group. A fork
+  works two remotes, so a list that shows only `origin` hides the ref it branches from. The whole state
+  *around* it — the list, `refreshing`, `refresh()` — is the shared
   **`useBranchList(projectId, onLoaded?)`** (`branches.ts`, over the offline-degrading
   `listBranchesOrEmpty`), so both pickers are identical **by construction**: the list is **keyed to the
   project** (it clears on a project change, and both reads are generation-stamped, so a switch can never
   offer or land the previous project's branches), **only the initial read degrades** (a *refresh* keeps its
   last good list instead of blanking the picker on a transient failure), and `refreshing` always drives the
-  spinner. A `null` projectId reads nothing — how a closed dialog pauses. Its degraded default is
+  spinner. Initial-load prefetch always offers the non-empty default to the host, which is the authority on
+  whether it names a configured remote; this keeps a stale or missing default tracking ref off create's
+  critical path without reading the not-yet-rendered branch state. Manual picks prefetch only rows from the
+  loaded remote list. A `null` projectId reads nothing — how a closed dialog pauses. Its degraded default is
   `defaultBranch: ""`, **never the literal `HEAD`**: a sentinel that named a ref would be believed — the
   dialog would preselect it and persist it as the workspace's `baseBranch`, and that worktree would forever
   diff against its own head. Empty means "unknown", so `create` omits `baseRef` and the host resolves the
@@ -421,7 +431,9 @@ a project picker, the prompt hero, and the reused
   cards. Mode is deliberately separate from the manifest list: making System another theme row nests configuration in a
   radio-like option, while always showing all three choices gives inactive values equal visual weight. Fixed
   mode shows the existing manifest list and retained fixed choice. System mode shows appearance-filtered
-  `Light theme` / `Dark theme` selectors plus `Current on this device: <Light|Dark> · <resolved label>`;
+  `Light theme` / `Dark theme` selectors plus a `Current on this device` row reading
+  `<device icon> <Light|Dark> → <palette icon> <resolved label>` — the icons carry which half is the device
+  appearance and which is the theme, since both halves are often the same word;
   either slot may independently be normal or high contrast. First enable sends mode + the themes-derived
   same-contrast pair atomically; later slot edits replace the complete pair, and returning to fixed changes
   only mode, preserving both choices. Exactly one theme mutation may be in flight from this panel; its
@@ -430,7 +442,13 @@ a project picker, the prompt hero, and the reused
   **converges on the `settings.changed` broadcast** with no optimistic apply; rejection leaves
   controls/theme unchanged and raises a toast. An unavailable or wrong-appearance configured id is
   disclosed beside the effective same-appearance fallback and is never silently written back. The panel never owns a theme list,
-  media-query logic, pair derivation, or fallback — all come from `themes`); **`ChatSettings`** (the live section immediately after Appearance —
+  media-query logic, pair derivation, or fallback — all come from `themes`); **`LineWidthSettings`** (the
+  live section immediately after Appearance — one page with stacked **Chat** and **Files** groups. Each has
+  a 40–240 integer field with visible `symbols` suffix and explicit Save, plus an independent
+  host-synchronized **No bigger than pane width** switch; defaults are 120/on. Invalid drafts stay local
+  with an accessible range error; Escape restores the host value, Enter saves when valid, and a changed
+  authoritative width from `settings.changed` replaces a stale draft. Mutations converge only on that
+  broadcast and rejected calls toast without changing geometry); **`ChatSettings`** (the next live section —
   **Message order** radio cards over `store.chatMessageOrder` (Oldest first, the compatibility default /
   Newest first, the opt-in), one **Streaming response movement** two-handle range over
   `store.streamingResponseMovement`, then the three existing composer-growth cards. The movement control's
@@ -511,7 +529,7 @@ a project picker, the prompt hero, and the reused
   **auto-fix toggle** (`review-autofix-toggle`, a switch over `store.reviewAutoFix` →
   `settings.update { reviewAutoFix }`) — off means a `request_changes` verdict records findings and waits
   (the host gates its auto-fix cycle on it, see `submodule-server-todos`). A single dimmed "General" nav item ("Soon") still signals the shell is
-  built to grow. `ProvidersSettings`/`AppearanceSettings`/`ChatSettings`/`TemplatesSettings`/
+  built to grow. `ProvidersSettings`/`AppearanceSettings`/`LineWidthSettings`/`ChatSettings`/`TemplatesSettings`/
   `PrivacySettings`/`ReviewSettings`/`FeedbackSettings` and the app-wide **`InterviewPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and
   fixed Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
@@ -1272,6 +1290,12 @@ own section. The kebab menu (`plan-menu`, a
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
+- **Source lines wrap at the synchronized file column.** Every ordinary `MonacoEditor` and both inner
+  editors of `MonacoDiff` use `fileLineWidth` as `wordWrapColumn` (40–240, default 120). The independent
+  `fileLineWidthBounded` default maps to Monaco `wordWrap: "bounded"`, wrapping sooner at each mounted
+  editor pane; off maps to `"wordWrapColumn"`, preserving the selected column with horizontal scrolling in
+  a narrower pane. Broadcast changes update mounted editors. Rendered Markdown and rendered Markdown diffs
+  retain their separate ~78ch reading measure; no bytes, ruler, extension mask, or no-wrap mode is involved.
 - **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` defines the `thinkrail`
   theme from live surface + semantic syntax variables and chooses its normal/high-contrast base from
   manifest appearance/contrast metadata—never from a known id—then redefines it after the theme module's

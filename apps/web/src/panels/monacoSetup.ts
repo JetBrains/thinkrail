@@ -8,6 +8,7 @@ import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { cssColorToHex } from "@/lib";
 import { onThemeSwap } from "../themes";
+import { editorWrappingOptions } from "./editorWrapping";
 
 declare global {
 	interface Window {
@@ -48,11 +49,12 @@ function cssVar(name: string): string | undefined {
 	return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || undefined;
 }
 
-export function sharedEditorOptions() {
+export function sharedEditorOptions(lineWidth: number, bounded: boolean) {
 	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
 	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
 	return {
 		readOnly: true,
+		...editorWrappingOptions(lineWidth, bounded),
 		minimap: { enabled: false },
 		scrollBeyondLastLine: false,
 		automaticLayout: true,

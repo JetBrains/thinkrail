@@ -342,7 +342,7 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Chat`/`Layout`/`Terminal`/`Templates`/`Review`/`Privacy`/`Feedback`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`LineWidth`/`Chat`/`Layout`/`Terminal`/`Templates`/`Review`/`Privacy`/`Feedback`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
   to a section without prop-drilling through the shell. The ephemeral **`interviewPromptOpen`** plus
@@ -360,10 +360,12 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   shell retains the pre-React preference hint instead of applying those placeholders over it. Reusing that
   readiness edge avoids a second derived config-hydration flag; after the first welcome, disconnect/reconnect
   keeps the last authoritative config while a later welcome can replace it. **`composerGrowthLimit: ComposerGrowthLimit`**,
-  **`customLayoutPresets: LayoutPreset[]`**, **`analyticsEnabled: boolean`**,
-  **`subagentsEnabled: boolean`**, **`jbcentralQuotaEnabled: boolean`**, and
-  **`jbcentralQuotaRefreshSeconds: number`** ride the same `applyConfig` fold (host-owned, defaulted from
-  `DEFAULT_CONFIG`) — the Chat, shared Layout catalog, Privacy, provider controls, and shell quota read sides.
+  **`chatLineWidth` / `fileLineWidth`**, their independent **`chatLineWidthBounded` /
+  `fileLineWidthBounded`** switches, **`customLayoutPresets: LayoutPreset[]`**,
+  **`analyticsEnabled: boolean`**, **`subagentsEnabled: boolean`**, **`jbcentralQuotaEnabled: boolean`**,
+  and **`jbcentralQuotaRefreshSeconds: number`** ride the same `applyConfig` fold (host-owned, fieldwise
+  defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
+  geometry) — the Line width, Chat, shared Layout catalog, Privacy, provider controls, and shell quota read sides.
   **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
   StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by
   the chat preference seam from host-qualified browser localStorage or the native shell's injected

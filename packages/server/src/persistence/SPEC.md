@@ -20,8 +20,8 @@ Durable host state—projects, workspaces, cross-frontend app config, terminal c
 - **Forbidden:** importing feature siblings or `host`; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys or old schemas; or reading, rewriting, or deleting old host layout snapshots.
 
 Config validation normalizes the closed theme mode plus complete opaque system pair, the closed
-composer-growth preference, and the JetBrains quota boolean + whole `1–3600` second cadence over their
-defaults; it accepts only the current bounded `customLayoutPresets` catalog as synchronized layout data.
-Current/default preset ids, group limits, and chat message order are not config fields; retired config shapes
-are stripped rather than upgraded or preserved as extensions. Historical `layouts/` files remain untouched
-and inert.
+composer-growth preference, chat/file line widths plus their pane-bound switches, and the JetBrains quota
+boolean + whole `1–3600` second cadence over their defaults; it accepts only the current bounded
+`customLayoutPresets` catalog as synchronized layout data. Current/default preset ids, group limits, and
+chat message order are not config fields; retired config shapes are stripped rather than upgraded or
+preserved as extensions. Historical `layouts/` files remain untouched and inert.

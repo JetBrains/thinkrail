@@ -11,6 +11,7 @@ import {
 	RiShieldCheckLine as ShieldCheck,
 	RiEqualizerLine as SlidersHorizontal,
 	RiTerminalBoxLine as SquareTerminal,
+	RiTextWrap as TextWrap,
 } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -20,6 +21,7 @@ import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
+import { LineWidthSettings } from "./LineWidthSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
 import { ReviewSettings } from "./ReviewSettings";
@@ -30,6 +32,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
 	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
 	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
+	{ id: SettingsSection.LineWidth, label: "Line width", icon: TextWrap },
 	{ id: SettingsSection.Chat, label: "Chat", icon: MessageSquareText },
 	{ id: SettingsSection.Layout, label: "Layout", icon: LayoutPanelTop },
 	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
@@ -53,6 +56,14 @@ export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }
 		>
 			<DialogContent
 				data-testid="settings-dialog"
+				onEscapeKeyDown={(event) => {
+					if (
+						document.activeElement instanceof HTMLElement &&
+						document.activeElement.hasAttribute("data-line-width-input")
+					) {
+						event.preventDefault();
+					}
+				}}
 				className="flex h-[80vh] max-h-[85vh] w-full max-w-[52rem] flex-col gap-0 overflow-hidden p-0"
 			>
 				<DialogHeader className="border-border-default border-b px-16 py-12">
@@ -104,6 +115,8 @@ export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }
 							<ProvidersSettings />
 						) : section === SettingsSection.Github ? (
 							<GithubSettings />
+						) : section === SettingsSection.LineWidth ? (
+							<LineWidthSettings />
 						) : section === SettingsSection.Chat ? (
 							<ChatSettings />
 						) : section === SettingsSection.Layout ? (

@@ -16,6 +16,8 @@ import {
 	currentBranch,
 	git,
 	gitAsync,
+	listRemotes,
+	remoteNameOf,
 	remoteRefOid,
 	remoteTrackingRef,
 	resolveDefaultBranch,
@@ -237,18 +239,20 @@ export async function createWorkspace(
 		baseBranch = head.ok ? head.out : "HEAD";
 	}
 	assertSafeRef(baseBranch);
-	const remoteBase = remoteTrackingRef(baseBranch);
+	const remotes = listRemotes(project.path);
+	const remoteName = remoteNameOf(baseBranch, remotes);
+	const remoteBase = remoteTrackingRef(baseBranch, remotes);
 	const baseMissing = () => remoteRefOid(project.path, baseBranch) === null;
-	if (remoteBase && baseMissing()) {
+	if (remoteName && baseMissing()) {
 		const fetched = await gitAsync(
 			project.path,
-			["fetch", "origin", "--", baseBranch.slice("origin/".length)],
+			["fetch", remoteName, "--", baseBranch.slice(`${remoteName}/`.length)],
 			{ network: true },
 		);
 		if (baseMissing())
 			throw new Error(
 				fetched.ok
-					? `Could not fetch ${baseBranch}: origin does not map it into refs/remotes — check remote.origin.fetch`
+					? `Could not fetch ${baseBranch}: ${remoteName} does not map it into refs/remotes — check remote.${remoteName}.fetch`
 					: `Could not fetch ${baseBranch}: ${fetched.err || "git wrote no error output"}`,
 			);
 	}
