@@ -81,14 +81,16 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   host's request handler reads it onto `WsResponse.errorCode`.
 - **/removeTree** — `removeTree(path, options?)`: delete a tree that a child process ran from, and keep
   trying while the failure is one a short wait can resolve (`EBUSY`, `EMFILE`, `ENFILE`, `ENOTEMPTY`,
-  `EPERM`) — ten attempts with a linear 100 ms backoff by default. It exists because Windows releases
-  executable handles asynchronously after a child exits, so a bare recursive remove of a smoke/e2e temp
-  tree throws `EBUSY` *after* every assertion has already passed, and because **`rmSync`'s own
-  `maxRetries`/`retryDelay` are inert under Bun** — nightly run 33166583594 threw `EBUSY` 252 ms after
-  printing `installer smoke OK` under a policy that mandated seconds of backoff. The retry is teardown
-  resilience, not error suppression: a tree still locked past the backoff throws, and a failure no delay
-  can fix (`EACCES`, `ENOTDIR`, …) throws on the first attempt. `options.remove` is the injected-remover
-  seam the unit test drives; `attempts`/`delayMs` let a caller trade patience for speed.
+  `EPERM`, `EACCES`) — ten attempts with a linear 100 ms backoff by default. It exists because Windows
+  releases executable handles asynchronously after a child exits, so a bare recursive remove of a
+  smoke/e2e temp tree throws `EBUSY` *after* every assertion has already passed, and because **`rmSync`'s
+  own `maxRetries`/`retryDelay` are inert under Bun** — nightly run 33166583594 threw `EBUSY` 252 ms after
+  printing `installer smoke OK` under a policy that mandated seconds of backoff. `EACCES` joined the
+  retryable set after nightly run 33949193053: the same not-yet-released handle surfaces as `EACCES` as
+  often as `EBUSY` on Windows. The retry is teardown resilience, not error suppression: a tree still
+  locked past the backoff throws, and a failure no delay can fix (`ENOTDIR`, …) throws on the first
+  attempt. `options.remove` is the injected-remover seam the unit test drives; `attempts`/`delayMs` let a
+  caller trade patience for speed.
 - **/paths** — the worktree-relative path conventions ThinkRail owns, named once so current and future
   consumers agree (today: `workspaces` *creates* the scratch dir and git *ignores* it):
   `WORKSPACE_INTERNAL_DIR` (`.thinkrail` — the repo-local host-managed dir, today holding the ephemeral
