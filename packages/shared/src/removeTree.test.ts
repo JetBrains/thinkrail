@@ -48,12 +48,20 @@ test("gives up on a tree that stays locked past the backoff", () => {
 });
 
 test("never retries a failure that a delay cannot resolve", () => {
-	const attempt = failing("EACCES", Number.POSITIVE_INFINITY);
+	const attempt = failing("ENOENT", Number.POSITIVE_INFINITY);
 
 	expect(() => removeTree("/does-not-matter", { remove: attempt.remove, delayMs: 1 })).toThrow(
-		"EACCES: simulated",
+		"ENOENT: simulated",
 	);
 	expect(attempt.calls()).toBe(1);
+});
+
+test("retries EACCES, since Windows reports a file a just-exited process still holds this way", () => {
+	const attempt = failing("EACCES", 3);
+
+	removeTree("/does-not-matter", { remove: attempt.remove, delayMs: 1 });
+
+	expect(attempt.calls()).toBe(3);
 });
 
 test("waits between attempts instead of spinning", () => {

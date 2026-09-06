@@ -1,6 +1,6 @@
 import { rmSync } from "node:fs";
 
-const RETRYABLE_CODES = new Set(["EBUSY", "EMFILE", "ENFILE", "ENOTEMPTY", "EPERM"]);
+const RETRYABLE_CODES = new Set(["EBUSY", "EMFILE", "ENFILE", "ENOTEMPTY", "EPERM", "EACCES"]);
 const DEFAULT_ATTEMPTS = 10;
 const DEFAULT_DELAY_MS = 100;
 
