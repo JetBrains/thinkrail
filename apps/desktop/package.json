@@ -19,7 +19,7 @@
 	"dependencies": {
 		"@thinkrail/server": "workspace:*",
 		"@thinkrail/shared": "workspace:*",
-		"electrobun": "1.18.1"
+		"electrobun": "2.0.1"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",

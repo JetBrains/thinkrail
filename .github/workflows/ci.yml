@@ -118,7 +118,7 @@ jobs:
           retention-days: 7
 
   binary-windows:
-    name: Binary smoke (windows)
+    name: Windows binary & desktop smoke
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -135,6 +135,10 @@ jobs:
       - run: bun test packages/spec-graph
       - run: bun run build:binary
       - run: bun run smoke:binary
+      - run: bun run desktop:build
+      - run: bun run smoke:desktop
+        env:
+          THINKRAIL_DESKTOP_NATIVE_INTERACTION: "1"
 
   desktop:
     name: Desktop smoke & e2e
@@ -155,11 +159,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            dbus-x11 xauth xvfb libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
+            dbus-x11 xauth xvfb openbox wmctrl xdotool libgtk-3-0 libwebkit2gtk-4.1-0 \
+            libayatana-appindicator3-1 librsvg2-2
           bunx playwright install --with-deps chromium
       - run: bun run desktop:build
       - name: Smoke native desktop window and packaged runtime
-        run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a bun run smoke:desktop
+        run: >-
+          env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1
+          THINKRAIL_DESKTOP_SMOKE_WINDOW_MANAGER=openbox
+          THINKRAIL_DESKTOP_NATIVE_INTERACTION=1
+          xvfb-run -a bun run smoke:desktop
       - name: Run no-agent e2e against the embedded desktop host
         run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a bun run e2e:desktop
       - name: Upload Playwright report

@@ -11,6 +11,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { BundledExtensions } from "@thinkrail/server";
 import { resolveBuildRuntimeSources } from "@thinkrail/server/build-support";
 import { version } from "@thinkrail/shared/version";
@@ -62,6 +63,22 @@ function stageSkills(roots: string[]): void {
 }
 
 async function buildBundles(): Promise<void> {
+	const { electrobunViteAliases } = await import(
+		pathToFileURL(join(desktopDir, ".hutch/devkit/api/config/electrobun-vite.ts")).href
+	);
+	const aliases: Array<{ find: RegExp; replacement: string }> = electrobunViteAliases(
+		join(desktopDir, ".hutch/devkit"),
+	);
+	const electrobunDevkit: Bun.BunPlugin = {
+		name: "electrobun-devkit",
+		setup(builder) {
+			builder.onResolve({ filter: /^electrobun(?:\/.*)?$/ }, ({ path }) => {
+				const alias = aliases.find(({ find }) => find.test(path));
+				if (!alias) throw new Error(`Electrobun devkit has no export for ${path}`);
+				return { path: alias.replacement };
+			});
+		},
+	};
 	const sources = resolveBuildRuntimeSources();
 	const factoryImports = sources.extensions
 		.map((extension, index) => `import factory${index} from ${JSON.stringify(extension.entry)};`)
@@ -106,6 +123,7 @@ export async function startDesktopHost(options) {
 			naming: "preload.js",
 			target: "browser",
 			sourcemap: "none",
+			plugins: [electrobunDevkit],
 		}),
 	]);
 	if (!serverResult.success) {
@@ -133,6 +151,14 @@ async function stage(): Promise<void> {
 		sources.trashHelpers.windows,
 		join(runtimeDir, basename(sources.trashHelpers.windows)),
 	);
+	copyFileSync(
+		join(desktopDir, "linux-window-resize.c"),
+		join(runtimeDir, "linux-window-resize.c"),
+	);
+	copyFileSync(
+		join(desktopDir, "windows-window-chrome.c"),
+		join(runtimeDir, "windows-window-chrome.c"),
+	);
 	if (process.platform !== "win32") chmodSync(join(runtimeDir, "macos-trash"), 0o755);
 	await buildBundles();
 }
@@ -148,6 +174,7 @@ function electrobun(...args: string[]): void {
 }
 
 try {
+	electrobun("sync");
 	await stage();
 	electrobun("build", `--env=${environment}`);
 	if (shouldRun) electrobun("run");

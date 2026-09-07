@@ -41,6 +41,7 @@ const ARBITRARY_SPACING_EXEMPT = new Set([
 	"pl-[1.6em]",
 	"pl-[calc(0.875rem+var(--space-8))]",
 	"pl-[calc(1.125rem+var(--space-8))]",
+	"pl-[calc(var(--space-64)+var(--space-16))]",
 ]);
 
 function allowsSpacingSuffix(prefix: string, suffix: string): boolean {

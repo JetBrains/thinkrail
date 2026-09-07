@@ -94,9 +94,11 @@ runs:
         case "$TARGET" in
           bun-linux-*)
             env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
+              THINKRAIL_DESKTOP_SMOKE_WINDOW_MANAGER=openbox \
+              THINKRAIL_DESKTOP_NATIVE_INTERACTION=1 \
               xvfb-run -a bun apps/desktop/smoke.ts "$launcher"
             ;;
-          *) bun apps/desktop/smoke.ts "$launcher" ;;
+          *) env THINKRAIL_DESKTOP_NATIVE_INTERACTION=1 bun apps/desktop/smoke.ts "$launcher" ;;
         esac
 
     - name: Package desktop installer
