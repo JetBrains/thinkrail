@@ -48,6 +48,8 @@ The additive `desktop-app-archive-path` output names Electrobun's official expan
 (empty for other targets); the private build job uploads it only as a same-run signing intermediate.
 It stamps the common version, builds/smokes the CLI, invokes the official Electrobun dev and channel build
 commands, runs expanded-app and first-install smoke, and collects the two artifact families.
+[[module-artifact-tests]] owns the isolated contract tests that execute this action's collector against
+fixture outputs for each supported target/channel; the action and delivery contract remain owned here.
 
 Supported desktop targets and public download names:
 
