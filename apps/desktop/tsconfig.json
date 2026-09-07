@@ -3,8 +3,13 @@
 	"compilerOptions": {
 		"noEmit": true,
 		"allowImportingTsExtensions": true,
-		"types": ["bun"]
+		"types": ["bun"],
+		"paths": {
+			"electrobun": ["./.hutch/devkit/api/config/ElectrobunConfig.ts"],
+			"electrobun/main": ["./.hutch/devkit/api/sdks/main/index.ts"],
+			"electrobun/view": ["./.hutch/devkit/api/browser/index.ts"]
+		}
 	},
 	"include": ["src", "*.ts"],
-	"exclude": [".stage", "build", "artifacts"]
+	"exclude": [".hutch", ".stage", "build", "artifacts"]
 }

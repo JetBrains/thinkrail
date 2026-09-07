@@ -14,6 +14,7 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import type { BundledExtensions } from "@thinkrail/server";
 import { resolveBuildRuntimeSources } from "@thinkrail/server/build-support";
 import { version } from "@thinkrail/shared/version";
+import { electrobunDevkitPlugin } from "./src/devkit";
 import { ptyLibraryName, runtimeTarget } from "./src/runtimeTarget";
 
 const desktopDir = import.meta.dir;
@@ -106,6 +107,7 @@ export async function startDesktopHost(options) {
 			naming: "preload.js",
 			target: "browser",
 			sourcemap: "none",
+			plugins: [electrobunDevkitPlugin(join(desktopDir, ".hutch", "devkit"))],
 		}),
 	]);
 	if (!serverResult.success) {
@@ -138,7 +140,7 @@ async function stage(): Promise<void> {
 }
 
 function electrobun(...args: string[]): void {
-	const result = Bun.spawnSync([process.execPath, "x", "electrobun", ...args], {
+	const result = Bun.spawnSync([process.execPath, "x", "--no-install", "electrobun", ...args], {
 		cwd: desktopDir,
 		env: { ...process.env, THINKRAIL_DESKTOP_VERSION: version },
 		stdout: "inherit",
@@ -148,6 +150,7 @@ function electrobun(...args: string[]): void {
 }
 
 try {
+	electrobun("prepare");
 	await stage();
 	electrobun("build", `--env=${environment}`);
 	if (shouldRun) electrobun("run");

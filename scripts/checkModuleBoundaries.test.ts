@@ -83,6 +83,16 @@ test("accepts the declared package rings and thin launcher edges", () => {
 	expect(moduleBoundaryViolations(root)).toEqual([]);
 });
 
+test("ignores the generated Hutch SDK without excluding desktop source", () => {
+	const root = fixture();
+	write(root, "apps/desktop/.hutch/devkit/api/example.ts", 'import "@thinkrail/web";');
+	write(root, "apps/desktop/src/example.ts", 'import "@thinkrail/web";');
+
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'apps/desktop/src/example.ts: import "@thinkrail/web" creates forbidden apps/desktop -> apps/web edge',
+	]);
+});
+
 test("rejects manifest, type-only, dynamic, CommonJS, and relative cross-boundary edges", () => {
 	const root = fixture();
 	write(

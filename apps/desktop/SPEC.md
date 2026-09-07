@@ -29,7 +29,7 @@ engine architecture.
 - **Allowed deps:** `server` for the embedded host, build-support manifest, and artifact probes; `shared`
   for release identity and the retrying teardown both smokes clean up with; `contracts` for
   compatibility/native-bridge types; the completed built web
-  artifact; Electrobun `1.18.1`; Bun/Node.
+  artifact; Electrobun `2.0.1` and its generated SDK; Bun/Node.
 - **Forbidden:** spawning the CLI or a second engine process; implementing ordinary product feature or
   agent/domain logic; importing web source at runtime; introducing a desktop-only wire or UI state model;
   storing one active location on the backend; or bundling CEF without a new acceptance failure that
@@ -51,8 +51,8 @@ another.
 ## Startup and packaged runtime
 
 1. Resolve app resources and set `BUN_PTY_LIB` to the staged current-target FFI library before any server
-   import. Electrobun uses ordinary `Bun.build`; unlike `bun build --compile`, it does not embed
-   `bun-pty`'s library.
+   import. Electrobun emits an ordinary JavaScript entry, not a `bun build --compile` executable, so it
+   does not embed `bun-pty`'s library.
 2. Dynamically import the separately built, unpacked `server-runtime.ts` resource. The `.ts` filename is a
    runtime contract: PI then selects its TypeScript source-runtime Jiti path and supplies bundled virtual
    modules to external extensions. Flattening PI into Electrobun's normal `.js` entry makes it select
@@ -86,7 +86,7 @@ flow through the operating-system responder chain across ordinary inputs, Monaco
 webview surfaces without competing with their local key handling.
 
 macOS receives the conventional application, Edit, and Window role menus. Windows receives the supported
-Edit role menu. Linux skips registration because Electrobun 1.18.1 does not support application menus
+Edit role menu. Linux skips registration because Electrobun 2.0.1 does not support application menus
 there; WebKitGTK keeps its renderer-native editing behavior. The policy is platform-pure and the packaged
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
 pins production wiring.
@@ -121,18 +121,34 @@ Electrobun's synchronous `before-quit` callback cancels quit while that promise 
 
 ## Build and release
 
-The package pins Electrobun `1.18.1` and packaged Bun `1.3.14`. Its explicit build wrapper requires a
-completed `apps/web/dist`, consumes the server-owned runtime manifest, stages target PTY/trash/skill/web
-resources under an ignored package-local directory, emits the transient static factory entry, bundles the
-self-contained server runtime to a packaged `.ts` filename, runs Electrobun, and removes generated source
-even on failure. Ordinary root development and web-build commands do not download or build Electrobun.
-The wrapper also injects the shared baked version while Electrobun evaluates its isolated config process.
+The package pins the Electrobun `2.0.1` npm bootstrap as a build-only dependency. That exact pin selects
+its paired Hutch toolchain and SDK; direct global Hutch invocation and floating version overrides are not
+part of the build path. The application explicitly selects the real Bun main process, not the default
+Cottontail runtime. Electrobun owns the packaged Bun `1.4.0` version; per-project runtime overrides are
+unsupported. The repository's development Bun pin is independent and remains unchanged.
 
-Electrobun `1.18.1` publishes implementation `.ts` files that do not typecheck under the repository's
-strict TypeScript 6 settings. Desktop typecheck therefore maps only the consumed Electrobun API surface
-to a package-local declaration adapter through a dedicated typecheck config. The runtime build config has
-no such mapping and always resolves the real package. The adapter is a compatibility boundary, not a
-runtime fork, and must stay limited to APIs the launcher and preload actually consume.
+Desktop builds run sequentially within one worktree because they share the staging directory and SDK
+projection. The explicit build wrapper requires a completed `apps/web/dist`, prepares the pinned SDK,
+consumes the server-owned runtime manifest, stages target PTY/trash/skill/web resources under an ignored package-local
+directory, emits the transient static factory entry, bundles the self-contained server runtime to a
+packaged `.ts` filename, runs Electrobun, and removes generated source even on failure. The wrapper injects
+the shared baked version while Electrobun evaluates its isolated config process. App-local Hutch
+configuration retains Bun as package manager: the workspace catalog and `bun.lock` remain authoritative;
+no Hutch dependency resolver or second lockfile is introduced.
+
+Hutch owns the generated `.hutch/devkit` SDK projection and its shared download cache. The projection is
+ignored, never edited or committed, and excluded from repository source-boundary scans. Electrobun's own
+bundler resolves its SDK; the independent Bun preload build derives exact aliases from the projected
+export map and rejects targets outside its `api/` tree. Falling through to the npm package is forbidden:
+the v2 npm package contains only the CLI bootstrap and deliberately throws for SDK imports. Ordinary
+install, root development, web builds, unit tests, and fast typechecks do not download native toolchains.
+
+The upstream SDK exposes implementation `.ts` files. Desktop's download-free strict TypeScript 6 check
+maps only the consumed API surface to a package-local declaration adapter. Canonical main imports use
+`electrobun/main`; the browser preload retains `electrobun/view` and the RPC schema retains its
+`bun`/`webview` keys. The runtime build never resolves those declarations. The adapter is a limited
+compatibility boundary, not proof of native compatibility: real packaged builds and smoke exercise the
+selected SDK, preload messages, navigation events, and cancellable quit lifecycle.
 
 Desktop installers ship beside the CLI artifacts for macOS ARM64, Windows x64, Linux x64, and
 Linux ARM64. Nightly maps to Electrobun canary and stable maps to stable. Updater UX is deferred.
@@ -162,11 +178,24 @@ CI-only and are never shipped as user configuration.
 
 - Expanded-app smoke uses isolated HOME/data/PI/cache paths and ready/control files. It requires the
   real webview to reach DOM-ready, confirms native application-menu registration on supported targets,
-  runs the shared artifact probes with repository reads denied, quits through normal lifecycle, and
+  and requires the real client's canonicalization of a seeded missing-project route to return through
+  the preload/RPC bridge into its route document. This proves native messaging rather than only a ready
+  event. It runs the shared artifact probes with repository reads denied on macOS, quits normally, and
   observes clean process exit.
+- Stable v2 installer filenames omit the leading `stable-` prefix; updater metadata and payloads retain
+  it. App identity and stable/canary channels remain unchanged, including existing channel-scoped routes
+  and preferences. Artifact collection must distinguish installer outputs from updater payloads.
 - First-install smoke executes the produced DMG app, Windows setup ZIP, or Linux setup tarball against
-  isolated installation roots, boots the installed host, checks health, and requires graceful exit. The
-  release matrix must pass both smoke layers before uploading the installer.
+  isolated installation roots, checks the automatically launched host's health, and requires graceful
+  exit of the installer, host, and installed launcher. V2 installers launch the installed app themselves;
+  the harness supplies its complete isolated host environment before installer invocation and never starts
+  a duplicate host. Only the harness sets `ELECTROBUN_INSTALLER_UI_AUTOCLOSE=1` to dismiss the installer's
+  terminal progress dialog. The ready seam reports the v2 launcher's `ELECTROBUN_LAUNCHER_PID` separately
+  from the Bun host pid. Windows installer smoke runs only on disposable GitHub-hosted Actions runners:
+  v2 uses Windows known folders and writes HKCU uninstall registration, which environment-only HOME/
+  APPDATA overrides cannot isolate. The harness refuses Windows execution elsewhere before creating
+  temporary files or starting an installer; it never snapshots or mutates a developer's real integration.
+  The release matrix must pass both smoke layers before uploading the installer.
 - Electrobun names installer artifacts per channel, and the channel lands in a different position on each
   platform: the Linux setup tarball carries it in the app-file stem (`ThinkRail-canary-Setup.tar.gz`)
   while the Windows setup executable inside the ZIP carries it after `-Setup`

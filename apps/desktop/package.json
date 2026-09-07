@@ -18,11 +18,11 @@
 	},
 	"dependencies": {
 		"@thinkrail/server": "workspace:*",
-		"@thinkrail/shared": "workspace:*",
-		"electrobun": "1.18.1"
+		"@thinkrail/shared": "workspace:*"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",
+		"electrobun": "2.0.1",
 		"typescript": "catalog:"
 	}
 }

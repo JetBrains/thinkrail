@@ -107,6 +107,18 @@ async function launchDesktop(
 			mode: string;
 			applicationMenuInstalled: boolean;
 		};
+		if (mode === "ui") {
+			await within(
+				(async () => {
+					const routePath = join(userDataPath, "routes.json");
+					while (JSON.parse(readFileSync(routePath, "utf8")).routes["local:main"] !== "#/v1") {
+						await Bun.sleep(50);
+					}
+				})(),
+				15_000,
+				"native route preload/RPC round-trip",
+			);
+		}
 		let stopped = false;
 		return {
 			origin: ready.origin,

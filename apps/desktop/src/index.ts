@@ -8,7 +8,7 @@ import Electrobun, {
 	BrowserWindow,
 	PATHS,
 	Utils,
-} from "electrobun/bun";
+} from "electrobun/main";
 import { installDesktopApplicationMenu } from "./applicationMenu";
 import { externalNavigationUrl } from "./externalNavigation";
 import {
@@ -116,6 +116,7 @@ async function start(): Promise<void> {
 				runtimeDir,
 				applicationMenuInstalled,
 				pid: process.pid,
+				launcherPid: Number(process.env.ELECTROBUN_LAUNCHER_PID),
 				windowUrl: neutral ? "about:blank" : `${origin}/${initialRoute}`,
 				mode: neutral ? "host" : "ui",
 			});

@@ -1,4 +1,4 @@
-import type { ApplicationMenuItemConfig } from "electrobun/bun";
+import type { ApplicationMenuItemConfig } from "electrobun/main";
 
 type ApplicationMenuApi = {
 	setApplicationMenu(menu: ApplicationMenuItemConfig[]): void;

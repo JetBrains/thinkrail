@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { ApplicationMenuItemConfig } from "electrobun/bun";
+import type { ApplicationMenuItemConfig } from "electrobun/main";
 import { desktopApplicationMenu, installDesktopApplicationMenu } from "./applicationMenu";
 
 const editMenu: ApplicationMenuItemConfig = {

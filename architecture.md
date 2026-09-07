@@ -197,8 +197,10 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     exact `thinkrail.ai` origin. The retired `vibecoding.thinkrail.ai` hostname is an edge redirect that
     preserves path and query, never a proxy to a second site.
 
-15. **Desktop packaging preserves the host/runtime boundary.** Electrobun `1.18.1` packages Bun `1.3.14`
-    and embeds the host in its Bun process; it never wraps or spawns the CLI. The native window loads the
+15. **Desktop packaging preserves the host/runtime boundary.** Electrobun `2.0.1` explicitly selects
+    its release-owned Bun `1.4.0` runtime and embeds the host in that process, not the default Cottontail
+    runtime; it never wraps or spawns the CLI. Its exact npm bootstrap pin selects the Hutch build
+    toolchain and generated SDK; Bun remains the workspace package manager. The native window loads the
     packaged web build from the host's actual loopback port so UI, wire, files, and SPA fallback keep one
     origin. Native resources that require paths stay unpacked. The shell sets the staged `bun-pty` library
     before server import and loads PI from a separately bundled `.ts` runtime so external TypeScript

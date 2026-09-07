@@ -71,7 +71,7 @@ export const PATHS: {
 export const Utils: {
 	readonly paths: { readonly userData: string };
 	openExternal(url: string): boolean;
-	quit(): void;
+	quit(code?: number): boolean;
 	showMessageBox(options: {
 		type: "error";
 		title: string;

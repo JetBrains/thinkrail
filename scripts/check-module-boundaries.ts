@@ -52,6 +52,7 @@ const DEPENDENCY_SECTIONS = [
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 const EXCLUDED_DIRECTORIES = new Set([
 	".git",
+	".hutch",
 	".stage",
 	"artifacts",
 	"build",

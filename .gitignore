@@ -21,6 +21,7 @@ docs/*
 
 # Build-only manifests written transiently by apps/cli/scripts/build-binary.ts
 apps/cli/src/*.generated.ts
+.hutch/
 apps/desktop/.stage/
 apps/desktop/build/
 apps/desktop/artifacts/
