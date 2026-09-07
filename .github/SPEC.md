@@ -15,7 +15,7 @@ integration follows its [build → sign → publish coordinator](https://github.
 not the retired unsigned-draft discovery/scheduled-signing flow. The private repository's spec owns that
 orchestration; this module owns the public action inputs/outputs and artifact/version contract it consumes.
 
-- **Owns:** public CI/site workflows, native build and signing-client recipes, version calculation, and
+- **Owns:** public CI/site workflows, native build recipes, version calculation, and
   the artifact interface consumed by the private controller.
 - **Consumes:** CLI and desktop build commands, [[module-artifact-tests]] smoke entrypoints, shared
   version stamping, root conformance/unit/browser commands, git and native platform tools.
@@ -95,8 +95,8 @@ by a local application build.
 Credentials and access to `codesign.labs.jb.gg` remain private. The internal signing runner is restricted
 to the private `sign.yml` on main; native hosted build jobs do not inherit service credentials or build
 product source on the internal signer. The private CodeSign action verifies its client with JetBrains
-GPG keys and checksum before use and is versioned with the workflow. The retained public compatibility
-recipe is not a dependency of the current private coordinator.
+GPG keys and checksum before use and is versioned with the workflow. CodeSign and checksum generation
+are private composite actions; no public compatibility copy is retained.
 
 Existing coverage signs the Windows CLI and installer stub, and the macOS CLI binary. The Windows
 payload beside its setup stub is hash-keyed and must remain byte-identical during stub replacement.
@@ -133,6 +133,5 @@ locked-executable replacement/rollback and per-shell invocation semantics. CLI s
 same installers rather than duplicating their logic.
 
 Website deploy/preview workflows remain separate and contain no signing credentials. CODEOWNERS and the
-main-branch review rule still protect all paths. The public checksum action remains a reusable recipe,
-while the current private coordinator owns final checksum execution after signing; neither a local build
-nor a public PR job publishes artifacts to users.
+main-branch review rule still protect all paths. The private coordinator owns checksum generation after
+signing; neither a local build nor a public PR job publishes artifacts to users.
