@@ -223,9 +223,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
     a documented pre-build hook prepares ThinkRail's physical resources and PI runtime. Release workflows
     in `JetBrains/thinkrail-signing` consume the public build recipes and coordinate build → JetBrains
     service signing → publication for an explicit public source commit. Product code and ordinary CI stay
-    public; credentials and publication stay private. The incomplete macOS service-signing/notarization
-    boundary and exact delivery contracts belong to [[module-ci-release]], not an invented local Apple
-    credential flow or custom SDK packaging. Detail: [[module-desktop]], [[module-ci-release]].
+    public; credentials and publication stay private. macOS service signing consumes the framework's
+    expanded app archive and finalizes the DMG through the documented JetBrains SRE flow, without a local
+    Apple credential flow or mutation of Electrobun's compressed wrapper. Exact handoff and release
+    verification contracts belong to [[module-ci-release]]. Detail: [[module-desktop]], [[module-ci-release]].
 
 16. **Delegation is portable; ThinkRail is one embedder.** `packages/pi-delegation` owns the session
     fabric: one creation primitive with orthogonal axes, a run-owning handle, lineage, registry, and

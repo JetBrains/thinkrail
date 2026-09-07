@@ -26,6 +26,9 @@ outputs:
   desktop-artifact-path:
     description: "Desktop first-install artifact path"
     value: ${{ steps.resolve-desktop.outputs.path }}
+  desktop-app-archive-path:
+    description: "Official expanded macOS app archive for private signing; empty on other targets"
+    value: ${{ steps.resolve-desktop.outputs.app-archive-path }}
 
 runs:
   using: composite
@@ -114,14 +117,17 @@ runs:
         set -eu
         mkdir -p apps/desktop/dist
         case "$CHANNEL" in
-          nightly) prefix='canary-'; suffix='-canary' ;;
-          stable) prefix=''; suffix='' ;;
+          nightly) environment='canary'; prefix='canary-'; suffix='-canary' ;;
+          stable) environment='stable'; prefix=''; suffix='' ;;
           *) echo "::error::unsupported release channel $CHANNEL"; exit 1 ;;
         esac
+        app_archive_path=''
         case "$TARGET" in
           bun-darwin-arm64)
             source="${prefix}macos-arm64-ThinkRail${suffix}.dmg"
             name='thinkrail-desktop-darwin-arm64.dmg'
+            app_archive_path="apps/desktop/artifacts/${environment}-macos-arm64-ThinkRail${suffix}.app.tar.zst"
+            [ -f "$app_archive_path" ] || { echo "::error::desktop app archive not found at $app_archive_path"; exit 1; }
             ;;
           bun-windows-x64)
             source="${prefix}win-x64-ThinkRail-Setup${suffix}.zip"
@@ -144,6 +150,7 @@ runs:
         {
           echo "name=$name"
           echo "path=$path"
+          echo "app-archive-path=$app_archive_path"
         } >> "$GITHUB_OUTPUT"
 
     - name: Smoke desktop first-install artifact

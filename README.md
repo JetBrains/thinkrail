@@ -22,16 +22,18 @@ CLI, which opens the same app in your browser. Both embed the same in-process ag
 published with `SHA256SUMS` on the [releases page](https://github.com/JetBrains/thinkrail/releases).
 
 JetBrains signs the Windows CLI and desktop setup executable. The macOS CLI is signed but not yet
-notarized; the desktop DMG is not yet service-signed/notarized and may be blocked by Gatekeeper after a
-browser download. Linux artifacts are unsigned. Local installer smoke is not notarization verification.
+notarized. Signed/notarized desktop DMGs require the coordinated JetBrains service pipeline; older
+published DMGs and local Electrobun packages may still be unsigned and blocked by Gatekeeper. Linux
+artifacts are unsigned. Local installer smoke is not notarization verification.
 
 ### Desktop
 
 Download the matching `thinkrail-desktop-*` asset: a DMG for macOS Apple Silicon, a setup ZIP for Windows
 x64, or a setup tarball for Linux x64/ARM64. Extract the complete Windows ZIP before running its setup
 executable, keeping its adjacent payload; extract the Linux tarball and run `installer`. Electrobun 2.0.1
-does not provide a macOS Intel desktop build. The macOS signing limitation above remains until the
-JetBrains signing/notary handoff is integrated.
+does not provide a macOS Intel desktop build. The coordinated macOS release pipeline uses Electrobun's
+expanded app archive for JetBrains signing and SRE DMG finalization; that intermediate archive is not a
+public download. The signing limitation above remains until that private pipeline update is deployed.
 
 Linux desktop builds require Ubuntu 24.04 or another glibc 2.38+ distribution with GTK 3, WebKitGTK 4.1,
 Ayatana AppIndicator 3, and librsvg 2. On Ubuntu 24.04:

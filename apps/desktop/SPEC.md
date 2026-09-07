@@ -175,8 +175,9 @@ Desktop installers ship beside the CLI artifacts for macOS ARM64, Windows x64, L
 Linux ARM64. Electrobun 2.0.1 publishes no macOS x64 core. Nightly maps to Electrobun canary and stable
 maps to stable. Standard formats are DMG on macOS, a setup-EXE-plus-payload ZIP on Windows, and a setup
 tar.gz on Linux. The private release pipeline retains the existing `thinkrail-desktop-*` download aliases;
-its collector selects the exact framework artifact for the channel and native target. Updater UX and
-publication of updater metadata/patches remain deferred.
+its collector selects the exact framework artifact for the channel and native target. The macOS app
+archive is transferred privately for SRE finalization, never published as an updater payload. Updater UX
+and publication of updater metadata/patches remain deferred.
 
 ### Signing
 
@@ -184,13 +185,12 @@ Signing and notarization use JetBrains-provided services through the private rel
 public builds contain neither service credentials nor a new Apple-login/keychain flow. Current Windows
 coverage signs the setup stub without rewriting its hash-keyed adjacent payload.
 
-The current macOS DMG is not yet service-signed/notarized. Electrobun supports signing with its native
-Apple tooling, so self-extraction does not make signed releases inherently impossible. However, the
-paired Hutch 0.24.3 writes version metadata after `postBuild` and compresses the inner app before
-`postWrap`: sealing an app in the former is premature, while signing only the latter's wrapper omits the
-inner application's signing/notarization. A supported external-service integration must cover the final
-inner app and the final DMG; local install smoke alone is not download-time Gatekeeper acceptance. The
-private pipeline and unresolved integration boundary are recorded in [[module-ci-release]].
+The native macOS build also exposes Electrobun's standard expanded `.app.tar.zst` as a private signing
+input. The approved JetBrains SRE flow signs the expanded app and finalizes a conventional DMG around it,
+then signs/notarizes/staples that container. It does not mutate Electrobun's compressed self-extractor
+payload or use an incorrect pre-metadata sealing hook. Local framework DMGs remain unsigned build outputs;
+only the private pipeline's verified final DMG is a signed release. The handoff and verification contract
+belong to [[module-ci-release]].
 
 Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 plus `libgtk-3-0`,
 `libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are

@@ -44,6 +44,8 @@ not publish only the platforms that happened to pass.
 The private native matrix checks out the selected public source commit and invokes the checked-out
 `.github/actions/build-binary` recipe. The action accepts `version`, `channel` and host-matching `target`,
 and retains four outputs: `artifact-name`, `artifact-path`, `desktop-artifact-name`, `desktop-artifact-path`.
+The additive `desktop-app-archive-path` output names Electrobun's official expanded macOS app archive
+(empty for other targets); the private build job uploads it only as a same-run signing intermediate.
 It stamps the common version, builds/smokes the CLI, invokes the official Electrobun dev and channel build
 commands, runs expanded-app and first-install smoke, and collects the two artifact families.
 
@@ -56,9 +58,10 @@ Supported desktop targets and public download names:
 | `bun-linux-x64` | `ubuntu-24.04` | `thinkrail-desktop-linux-x64.tar.gz` |
 | `bun-linux-arm64` | `ubuntu-24.04-arm` | `thinkrail-desktop-linux-arm64.tar.gz` |
 
-These are aliases for the untouched framework-generated installer files, not custom installer formats.
-The Windows ZIP contains its setup executable and hidden payload; Linux's setup tarball contains the
-installer and README. The collector selects the exact framework filename for the requested target and
+Windows/Linux aliases name the untouched framework installers. For macOS, the private JetBrains SRE
+flow finalizes a conventional DMG containing the signed expanded app; it replaces the unsigned framework
+DMG under the same published alias without rewriting Electrobun's self-extractor payload. The Windows
+ZIP contains its setup executable and hidden payload; Linux's setup tarball contains the installer and README. The collector selects the exact framework filename for the requested target and
 channel, never a first wildcard match. Stable framework installers omit the `stable-` prefix; nightly
 uses Electrobun's `canary` prefix/suffix. Updater metadata and patches are not release uploads in this
 scope. Changing the published aliases requires coordinating the private signing workflow's archive
@@ -94,21 +97,29 @@ with JetBrains GPG keys and checksum before use; the private workflow pins that 
 
 Existing coverage signs the Windows CLI and installer stub, and the macOS CLI binary. The Windows
 payload beside its setup stub is hash-keyed and must remain byte-identical during stub replacement.
-The current private coordinator still treats Linux artifacts and the macOS DMG as unsigned passthrough.
-Its explicit allowlist prevents an unreviewed new asset from silently acquiring that status.
+The coordinated signing update permits only Linux artifacts as unsigned passthrough. The macOS app
+archive and framework DMG are not passthrough: the former is a private intermediate, and the latter is
+replaced by the SRE-finalized signed/notarized DMG. The explicit allowlist prevents an unreviewed new
+asset from silently acquiring unsigned-publication status.
 
 JetBrains CodeSign supports archive/app signing and distinct notarize/staple operations. Signing alone
 is not notarization. Production macOS acceptance must cover the final expanded application's native
 code/resources and the final DMG, with signature, entitlement, Gatekeeper and stapled-ticket verification
 on macOS. A successful local unsigned installer smoke does not establish this acceptance.
 
-The requested macOS service integration is not yet complete: Hutch 0.24.3 mutates version metadata after
-`postBuild` and compresses the inner app before `postWrap`. Those documented hooks do not provide an
-external-service sealing point after the last metadata mutation and before compression. Native hosted
-macOS and the protected internal service runner also need a sanctioned handoff. No direct Apple-login
-flow, invented service flags, SDK patch, or custom payload unpack/repack is substituted silently. Until
-that boundary is resolved and the private coordinator changes its DMG handling, the DMG must not be
-represented as signed/notarized.
+Hutch 0.24.3 mutates version metadata after `postBuild` and compresses the inner app before `postWrap`,
+so neither hook is used for premature external app sealing. The approved alternative consumes its
+standard expanded `.app.tar.zst` output in the private pipeline. Hosted macOS prepares native-file and
+app-archive transfers; the protected Linux runner signs native Mach-O code, seals the completed app ZIP,
+and notarizes it in distinct service operations. macOS then staples the app's issued ticket and creates
+the final DMG with standard `hdiutil`. Separate service operations sign/notarize/staple that DMG. Final
+macOS verification checks the app/container signatures, JetBrains identity, Bun entitlements, Gatekeeper
+assessment, tickets and installer startup before the complete release set can be published.
+
+No Apple login/keychain credentials are introduced, product builds never run on the internal signer,
+and signing archives are never public assets. The public archive output must land before the private
+signing update is activated; the merged PR #4 coordinator alone does not yet implement desktop macOS
+notarization. Local fake-client and unsigned-layout tests are not live CodeSign/notary verification.
 
 ## CLI install scripts and other automation
 
