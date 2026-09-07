@@ -13,7 +13,7 @@ The repo's automation: PR **gates** and reusable multi-platform **release build 
 artifact is two additive families: the single-file `thinkrail` CLI and Electrobun desktop installer.
 The release workflows live in `JetBrains/thinkrail-signing`; they check out public source and use these
 recipes to build, native-smoke, stamp, tag, and **stage the same public draft release**. Product source,
-PR CI, composite actions, and the version script remain here.
+PR CI, the native-build action, and the version script remain here.
 
 **It does not publish.** Signing requires the JetBrains internal runners, which GitHub keeps away from
 public repositories, so `JetBrains/thinkrail-signing` (private) signs the staged assets, writes
@@ -120,10 +120,6 @@ never sends anyway, since the analytics module mutes on `CI`.
   package/native-smoke/shared-probe the expanded desktop app → create and execute Electrobun's
   first-install artifact in an isolated install root → collect both artifacts. Desktop-backed e2e runs in
   CI before release; each release runner still performs both target-native desktop smoke layers.
-- `actions/codesign` — JetBrains CodeSign client wrapper. **No caller here, and there can never be
-  one:** it needs the JetBrains internal network, unreachable from a public repo's runners.
-  `thinkrail-signing` pins it by commit SHA. Keeping the recipe public and the credentials private is
-  deliberate — do not move or delete it because it looks dead.
 
 ## Install side (`/install.sh` + `/install.ps1`)
 
@@ -159,11 +155,12 @@ in place.
 
 ## Boundary
 
-- **Owns:** public CI/site workflows, reusable composite actions, the version script, and the
+- **Owns:** public CI/site workflows, the reusable native-build action, the version script, and the
   artifact/version contract.
 - **Does not own:** the relocated nightly/stable/build/release workflows, tag/draft writes, signing,
   `SHA256SUMS`, or publication. Those run in `thinkrail-signing`; its `SPEC.md` owns their orchestration.
-  Checksum generation is local to its post-sign publication step, not a reusable public action.
+  CodeSign and checksum generation are private composite actions alongside those workflows, not
+  reusable public actions. Product build/version recipes remain here.
 - **Consumes:** `apps/cli`'s binary build/smoke, `apps/desktop`'s package/native smoke, the shared
   version-stamping seam, and root scripts (`build:web`, `lint`, `typecheck`, `test`, `e2e` and artifact
   e2e variants). It **injects** the version at
