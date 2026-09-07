@@ -125,7 +125,8 @@ The package pins the Electrobun `2.0.1` npm bootstrap as a build-only dependency
 its paired Hutch toolchain and SDK; direct global Hutch invocation and floating version overrides are not
 part of the build path. The application explicitly selects the real Bun main process, not the default
 Cottontail runtime. Electrobun owns the packaged Bun `1.4.0` version; per-project runtime overrides are
-unsupported. The repository's development Bun pin is independent and remains unchanged.
+unsupported. The repository's independently pinned development/CI runtime is aligned with it through
+[[architecture]]'s root toolchain contract.
 
 Desktop builds run sequentially within one worktree because they share the staging directory and SDK
 projection. The explicit build wrapper requires a completed `apps/web/dist`, prepares the pinned SDK,

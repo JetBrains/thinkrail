@@ -156,6 +156,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     pin (`19.3.0-canary-a1124489-20260826`); the checker accepts the full identifier grammar, including
     hyphens, without admitting a range.
 
+    The root `packageManager` field also pins Bun for development, CI, and CLI compilation; Bun types
+    live in the catalog. Bun `1.4.0` aligns these paths with the desktop runtime, whose version is still
+    owned independently by its Electrobun release (see [[module-desktop]]). CI reads the root pin rather
+    than maintaining a second version in workflow YAML.
+
 11. **Terminal = xterm.js on the DOM renderer.** The browser terminal is `@xterm/xterm`, driven from
     `apps/web/src/panels/TerminalInstance.tsx` against a real PTY (`bun-pty`) in
     `packages/server/src/terminal`. It stays the choice because it is the only production-ready browser

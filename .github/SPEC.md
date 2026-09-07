@@ -22,6 +22,11 @@ migration only relocates the build workflows and supplies their public repositor
 
 ## CI vs release
 
+Public workflow Bun setup reads the root `package.json` `packageManager` pin via
+`bun-version-file`; CI and CLI compilation therefore use the same runtime as development. Workflow YAML
+carries no independent Bun version. Desktop's packaged runtime remains release-owned by Electrobun
+(see [[module-desktop]]), not selected by setup-bun.
+
 - **CI** (`ci.yml`, on PRs to `main` and merge-queue check requests): dependency/module-boundary checks,
   lint+typecheck (incl. `check:seams` — the pi binary-seam canary, see `scripts/check-binary-seams.ts` —
   and `check:spec-surface`, which holds explicitly enrolled exact public surfaces to their TypeScript-resolved barrels, see
