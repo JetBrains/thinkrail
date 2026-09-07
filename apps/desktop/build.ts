@@ -13,9 +13,9 @@ import {
 import { basename, join, relative, resolve, sep } from "node:path";
 import type { BundledExtensions } from "@thinkrail/server";
 import { resolveBuildRuntimeSources } from "@thinkrail/server/build-support";
-import { version } from "@thinkrail/shared/version";
 import { electrobunDevkitPlugin } from "./src/devkit";
 import { ptyLibraryName, runtimeTarget } from "./src/runtimeTarget";
+import { electrobun, prepareElectrobun } from "./src/toolchain";
 
 const desktopDir = import.meta.dir;
 const repoRoot = resolve(desktopDir, "..", "..");
@@ -31,7 +31,6 @@ const bundledRuntimeKeys = {
 	trashHelpers: "trashHelpers",
 	webAccessFactory: "webAccessFactory",
 } as const satisfies { [Key in keyof BundledExtensions]-?: Key };
-process.env.THINKRAIL_DESKTOP_VERSION = version;
 if (!new Set(["dev", "canary", "stable"]).has(environment)) {
 	throw new Error(`unsupported Electrobun environment: ${environment}`);
 }
@@ -139,18 +138,8 @@ async function stage(): Promise<void> {
 	await buildBundles();
 }
 
-function electrobun(...args: string[]): void {
-	const result = Bun.spawnSync([process.execPath, "x", "--no-install", "electrobun", ...args], {
-		cwd: desktopDir,
-		env: { ...process.env, THINKRAIL_DESKTOP_VERSION: version },
-		stdout: "inherit",
-		stderr: "inherit",
-	});
-	if (!result.success) throw new Error(`Electrobun ${args.join(" ")} exited ${result.exitCode}`);
-}
-
 try {
-	electrobun("prepare");
+	prepareElectrobun();
 	await stage();
 	electrobun("build", `--env=${environment}`);
 	if (shouldRun) electrobun("run");

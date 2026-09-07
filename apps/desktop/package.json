@@ -13,7 +13,7 @@
 		"package:stable": "bun build.ts --env=stable",
 		"smoke": "bun smoke.ts",
 		"smoke:installer": "bun installerSmoke.ts",
-		"typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+		"typecheck": "bun prepare.ts && tsc --noEmit -p tsconfig.json",
 		"test": "bun test"
 	},
 	"dependencies": {

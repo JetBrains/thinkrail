@@ -94,7 +94,12 @@ pins production wiring.
 ## Navigation and window security
 
 The native window permits navigation only within its exact loopback origin. User-requested external URLs
-open through the OS instead of replacing the app surface.
+open through the OS instead of replacing the app surface. Navigation listeners use the SDK emitter's
+webview-scoped `will-navigate-<id>` and `new-window-open-<id>` channels; the unscoped payload has no
+webview id, and the instance listener's typed event list omits popups. Payload types are derived from
+SDK event factories, not copied into local declarations. Detail can be a raw URL, a popup object, or
+serialized navigation JSON; bounded decoding retains only a string URL and the HTTP/HTTPS/mailto
+allowlist. Native `navigationRules` enforce confinement: navigation-event responses cannot cancel it.
 
 A desktop preload sends typed, one-way route and local-preference messages. It wraps
 `history.replaceState` and `history.pushState` before page scripts and also reports initial/hash/pop
@@ -141,15 +146,24 @@ Hutch owns the generated `.hutch/devkit` SDK projection and its shared download 
 ignored, never edited or committed, and excluded from repository source-boundary scans. Electrobun's own
 bundler resolves its SDK; the independent Bun preload build derives exact aliases from the projected
 export map and rejects targets outside its `api/` tree. Falling through to the npm package is forbidden:
-the v2 npm package contains only the CLI bootstrap and deliberately throws for SDK imports. Ordinary
-install, root development, web builds, unit tests, and fast typechecks do not download native toolchains.
+the v2 npm package contains only the CLI bootstrap and deliberately throws for SDK imports. Builds and
+desktop typechecks run the same pinned `electrobun prepare` path and verify the projected release before
+consuming it. Hutch owns cache reuse; a fresh machine needs network access, and preparation failure or a
+wrong SDK version fails the check rather than falling back to substitute types. Ordinary install, web
+development/builds, and unit tests do not prepare the native SDK.
 
-The upstream SDK exposes implementation `.ts` files. Desktop's download-free strict TypeScript 6 check
-maps only the consumed API surface to a package-local declaration adapter. Canonical main imports use
-`electrobun/main`; the browser preload retains `electrobun/view` and the RPC schema retains its
-`bun`/`webview` keys. The runtime build never resolves those declarations. The adapter is a limited
-compatibility boundary, not proof of native compatibility: real packaged builds and smoke exercise the
-selected SDK, preload messages, navigation events, and cancellable quit lifecycle.
+Desktop typechecking consumes the official SDK's `.ts` sources through the same baseUrl-free paths used
+by editor tooling; no handwritten API declarations or shadow typecheck config exist. As explicitly
+approved, desktop alone sets `exactOptionalPropertyTypes: false` to match Electrobun's source contract,
+while retaining `strict: true` and `noUncheckedIndexedAccess: true`. This setting applies to the desktop
+compilation, including imported workspace source; every other package retains its separate unchanged
+strict check. The upstream source incompatibility is tracked in Electrobun issue #516; `skipLibCheck`
+cannot exclude imported implementation `.ts`. The direct-source approach follows the v2 migration guide
+and avoids a second declaration-generation pipeline. Canonical main imports use `electrobun/main`; the
+preload retains `electrobun/view`, and the RPC schema retains its `bun`/`webview` keys.
+
+References: [official v2 migration](https://framework.blackboard.sh/electrobun/guides/migrating-to-v2/),
+[upstream optional-property issue](https://github.com/blackboardsh/electrobun/issues/516).
 
 Desktop installers ship beside the CLI artifacts for macOS ARM64, Windows x64, Linux x64, and
 Linux ARM64. Nightly maps to Electrobun canary and stable maps to stable. Updater UX is deferred.
@@ -181,8 +195,12 @@ CI-only and are never shipped as user configuration.
   real webview to reach DOM-ready, confirms native application-menu registration on supported targets,
   and requires the real client's canonicalization of a seeded missing-project route to return through
   the preload/RPC bridge into its route document. This proves native messaging rather than only a ready
-  event. It runs the shared artifact probes with repository reads denied on macOS, quits normally, and
-  observes clean process exit.
+  event. Its opt-in navigation probe then requests a blocked external navigation from the real webview
+  through the control file's `navigate` command. Only when the probe result path is supplied, the normal
+  external-open callback records the URL there instead of launching a user's browser. Smoke requires
+  that native event to traverse the production scoped listener and URL parser. Ordinary control-file
+  shutdown is unchanged. It runs the shared artifact probes with repository reads denied on macOS,
+  quits normally, and observes clean process exit.
 - Stable v2 installer filenames omit the leading `stable-` prefix; updater metadata and payloads retain
   it. App identity and stable/canary channels remain unchanged, including existing channel-scoped routes
   and preferences. Artifact collection must distinguish installer outputs from updater payloads.

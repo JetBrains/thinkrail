@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { channel, version } from "@thinkrail/shared/version";
@@ -10,7 +10,7 @@ import Electrobun, {
 	Utils,
 } from "electrobun/main";
 import { installDesktopApplicationMenu } from "./applicationMenu";
-import { externalNavigationUrl } from "./externalNavigation";
+import { installExternalNavigation } from "./externalNavigation";
 import {
 	injectInitialDesktopPreferences,
 	readDesktopPreferenceRemove,
@@ -21,6 +21,8 @@ import { RouteStore } from "./routeStore";
 import type { DesktopRpc } from "./rpc";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
 import type { DesktopServerRuntime } from "./serverRuntime";
+
+type BeforeQuitEvent = ReturnType<typeof Electrobun.events.events.app.beforeQuit>;
 
 const BACKEND_PROFILE_ID = "local";
 const WINDOW_ID = "main";
@@ -98,12 +100,19 @@ async function start(): Promise<void> {
 		navigationRules: neutral ? null : JSON.stringify(["^*", `${origin}/*`]),
 		frame: { x: 80, y: 60, width: 1440, height: 920 },
 	});
-	const openExternal = (detail: unknown) => {
-		const url = externalNavigationUrl(detail, origin);
-		if (url) Utils.openExternal(url);
-	};
-	mainWindow.webview.on("will-navigate", (event) => openExternal(event.data.detail));
-	mainWindow.webview.on("new-window-open", (event) => openExternal(event.data.detail));
+	const navigationProbePath = neutral
+		? undefined
+		: process.env.THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE;
+	const removeNavigationListeners = installExternalNavigation(
+		Electrobun.events,
+		mainWindow.webview.id,
+		origin,
+		(url) => {
+			if (navigationProbePath) writeReady(navigationProbePath, { url });
+			else Utils.openExternal(url);
+		},
+	);
+	mainWindow.on("close", removeNavigationListeners);
 
 	let ready = false;
 	mainWindow.webview.on("dom-ready", () => {
@@ -125,7 +134,7 @@ async function start(): Promise<void> {
 
 	let shutdownComplete = false;
 	let shutdownPromise: Promise<void> | undefined;
-	Electrobun.events.on("before-quit", (event) => {
+	Electrobun.events.on("before-quit", (event: BeforeQuitEvent) => {
 		if (shutdownComplete) return;
 		event.response = { allow: false };
 		shutdownPromise ??= host.server.shutdown().finally(() => {
@@ -135,8 +144,19 @@ async function start(): Promise<void> {
 	});
 	const controlPath = process.env.THINKRAIL_DESKTOP_CONTROL_FILE;
 	if (controlPath) {
+		let navigationProbeStarted = false;
 		const poll = setInterval(() => {
 			if (!existsSync(controlPath)) return;
+			if (navigationProbePath) {
+				const command = readFileSync(controlPath, "utf8");
+				if (command === "navigate" && !navigationProbeStarted) {
+					navigationProbeStarted = true;
+					mainWindow.webview.executeJavascript(
+						'window.location.assign("https://example.invalid/thinkrail-navigation-probe");',
+					);
+				}
+				if (command !== "stop") return;
+			}
 			clearInterval(poll);
 			Utils.quit();
 		}, 50);

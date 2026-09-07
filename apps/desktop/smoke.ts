@@ -55,6 +55,7 @@ async function launchDesktop(
 	const id = sequence++;
 	const readyPath = join(root, `${id}-${label}.ready.json`);
 	const controlPath = join(root, `${id}-${label}.control`);
+	const navigationProbePath = join(root, `${id}-${label}.navigation.json`);
 	const userDataPath = join(root, `${id}-${label}-user-data`);
 	const restoredRoute = mode === "ui" ? "#/v1/projects/desktop-smoke" : undefined;
 	if (restoredRoute) {
@@ -70,7 +71,9 @@ async function launchDesktop(
 		THINKRAIL_DESKTOP_CONTROL_FILE: controlPath,
 		THINKRAIL_DESKTOP_USER_DATA: userDataPath,
 		THINKRAIL_DESKTOP_HIDDEN: "1",
-		...(mode === "host" ? { THINKRAIL_DESKTOP_E2E_HOST: "1" } : {}),
+		...(mode === "host"
+			? { THINKRAIL_DESKTOP_E2E_HOST: "1" }
+			: { THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE: navigationProbePath }),
 	};
 	const command =
 		process.platform === "darwin"
@@ -118,6 +121,18 @@ async function launchDesktop(
 				15_000,
 				"native route preload/RPC round-trip",
 			);
+			writeFileSync(controlPath, "navigate");
+			await within(
+				(async () => {
+					while (!existsSync(navigationProbePath)) await Bun.sleep(50);
+				})(),
+				15_000,
+				"native external navigation",
+			);
+			const navigation = JSON.parse(readFileSync(navigationProbePath, "utf8"));
+			if (navigation.url !== "https://example.invalid/thinkrail-navigation-probe") {
+				throw new Error(`native external navigation reported an unexpected URL: ${navigation.url}`);
+			}
 		}
 		let stopped = false;
 		return {
