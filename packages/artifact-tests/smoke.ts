@@ -2,17 +2,16 @@
 
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
+import { removeTree } from "@thinkrail/shared/removeTree";
+import { locateDesktopLauncher, repoRoot } from "./src/artifact";
 import {
 	type ArtifactHostAdapter,
+	hostEnvironment,
 	type RunningArtifactHost,
 	runArtifactHostProbes,
-} from "@thinkrail/server/artifact-probes";
-import { removeTree } from "@thinkrail/shared/removeTree";
-import { locateDesktopLauncher } from "./src/artifact";
+} from "./src/artifactProbes";
 
-const desktopDir = import.meta.dir;
-const repoRoot = resolve(desktopDir, "..", "..");
 const root = mkdtempSync(join(tmpdir(), "thinkrail-desktop-smoke-"));
 let sequence = 0;
 
@@ -43,7 +42,7 @@ function copyApplication(launcher: string): string {
 	return join(copiedRoot, relative(bundleRoot, launcher));
 }
 
-const launcher = copyApplication(locateDesktopLauncher(desktopDir, process.argv[2]));
+const launcher = copyApplication(locateDesktopLauncher(undefined, process.argv[2]));
 
 async function launchDesktop(
 	env: Record<string, string>,
@@ -65,16 +64,19 @@ async function launchDesktop(
 			JSON.stringify({ version: 1, routes: { "local:main": restoredRoute } }),
 		);
 	}
-	const appEnv = {
-		...env,
-		THINKRAIL_DESKTOP_READY_FILE: readyPath,
-		THINKRAIL_DESKTOP_CONTROL_FILE: controlPath,
-		THINKRAIL_DESKTOP_USER_DATA: userDataPath,
-		THINKRAIL_DESKTOP_HIDDEN: "1",
-		...(mode === "host"
-			? { THINKRAIL_DESKTOP_E2E_HOST: "1" }
-			: { THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE: navigationProbePath }),
-	};
+	const appEnv = hostEnvironment(
+		{
+			THINKRAIL_DESKTOP_READY_FILE: readyPath,
+			THINKRAIL_DESKTOP_CONTROL_FILE: controlPath,
+			THINKRAIL_DESKTOP_USER_DATA: userDataPath,
+			THINKRAIL_DESKTOP_HIDDEN: "1",
+			...(mode === "host"
+				? { THINKRAIL_DESKTOP_E2E_HOST: "1" }
+				: { THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE: navigationProbePath }),
+		},
+		["THINKRAIL_DESKTOP_E2E_HOST", "THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE"],
+		env,
+	);
 	const command =
 		process.platform === "darwin"
 			? [
@@ -172,19 +174,15 @@ try {
 	let ui: Awaited<ReturnType<typeof launchDesktop>> | undefined;
 	try {
 		ui = await launchDesktop(
-			{
-				...Object.fromEntries(
-					Object.entries(process.env).filter(
-						(entry): entry is [string, string] => entry[1] !== undefined,
-					),
-				),
+			hostEnvironment({
 				HOME: join(isolated, "home"),
+				USERPROFILE: join(isolated, "home"),
 				THINKRAIL_DATA_DIR: join(isolated, "data"),
 				PI_CODING_AGENT_DIR: join(isolated, "agent"),
 				XDG_CACHE_HOME: join(isolated, "cache"),
 				THINKRAIL_NO_ANALYTICS: "1",
 				PI_OFFLINE: "1",
-			},
+			}),
 			"native-ui",
 			"ui",
 		);

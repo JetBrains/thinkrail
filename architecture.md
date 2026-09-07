@@ -46,6 +46,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
                     (bundled into every session; workspace-internal, not portable)
 ```
 
+Artifact verification is a separate source-only workspace, [[module-artifact-tests]]. It depends on
+CLI build metadata, server test fixtures, and shared teardown; root tools and browser E2E consume it.
+No product package imports the test workspace, and it has no application build step or Electrobun SDK
+dependency. This keeps test process drivers outside both launchers and the server library.
+
 ## Decisions
 
 1. **Client/host split.** Engine host owns `pi` and state; the UI is a portable client; the wire is the
@@ -214,20 +219,13 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     or canonical-data-directory ownership policy. Each host binds its own loopback port; when multiple hosts
     point at the same mutable data directory, cross-process consistency is intentionally not guaranteed.
     Desktop artifacts are additive; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
-    the supported Linux floor. Release build workflows run in `JetBrains/thinkrail-signing` (private),
-    checking out an explicit public source commit and invoking the unchanged public build/version
-    recipes. They create the same tags and draft releases in this public repository; the existing
-    private signing workflow still discovers, signs, and publishes those drafts. Product source and
-    ordinary CI remain public. This is a workflow relocation, not a signing or handoff redesign.
-    Windows artifacts carry an EV Authenticode signature; the macOS CLI binary carries a Developer ID signature that Gatekeeper
-    still rejects without notarization, and the macOS `.dmg` stays unsigned because Electrobun's
-    payload self-extracts after download.
-
-    Signing can only fail *closed*, so a draft that is never published means releases stop appearing
-    rather than appearing unsigned — the failure mode that silently ended the pre-pivot pipeline, and the
-    reason the signing repo alarms on a stale draft. How the tag and the draft are staged is
-    [[module-ci-release]]'s contract, not restated here.
-    Detail: [[module-desktop]], [[module-ci-release]].
+    the supported Linux floor. The standard framework CLI/configuration owns bundling and installers;
+    a documented pre-build hook prepares ThinkRail's physical resources and PI runtime. Release workflows
+    in `JetBrains/thinkrail-signing` consume the public build recipes and coordinate build → JetBrains
+    service signing → publication for an explicit public source commit. Product code and ordinary CI stay
+    public; credentials and publication stay private. The incomplete macOS service-signing/notarization
+    boundary and exact delivery contracts belong to [[module-ci-release]], not an invented local Apple
+    credential flow or custom SDK packaging. Detail: [[module-desktop]], [[module-ci-release]].
 
 16. **Delegation is portable; ThinkRail is one embedder.** `packages/pi-delegation` owns the session
     fabric: one creation primitive with orthogonal axes, a run-owning handle, lineage, registry, and

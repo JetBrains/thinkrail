@@ -2,7 +2,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { locateDesktopLauncher } from "@thinkrail/desktop/artifact";
+import { locateDesktopLauncher } from "@thinkrail/artifact-tests";
 import { artifactHostEnvironment } from "./artifactPlaywright";
 import {
 	E2E_DESKTOP_CACHE,

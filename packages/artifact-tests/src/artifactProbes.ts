@@ -160,13 +160,14 @@ async function assertOAuthLoginReachesAuthUrl(socket: WebSocket): Promise<void> 
 	}
 }
 
-function hostEnvironment(
+export function hostEnvironment(
 	overrides: Record<string, string>,
 	unset: string[] = [],
+	env: Record<string, string | undefined> = process.env,
 ): Record<string, string> {
 	const shadowed = new Set([...Object.keys(overrides), ...unset].map((name) => name.toLowerCase()));
 	const inherited: Record<string, string> = {};
-	for (const [name, value] of Object.entries(process.env)) {
+	for (const [name, value] of Object.entries(env)) {
 		if (value !== undefined && !shadowed.has(name.toLowerCase())) inherited[name] = value;
 	}
 	return { ...inherited, ...overrides };

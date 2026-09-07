@@ -21,14 +21,17 @@ ThinkRail ships in two additive forms: a native desktop installer and the self-c
 CLI, which opens the same app in your browser. Both embed the same in-process agent host and are
 published with `SHA256SUMS` on the [releases page](https://github.com/JetBrains/thinkrail/releases).
 
-Windows artifacts are signed by JetBrains. macOS artifacts are signed but not yet notarized, so macOS
-may refuse a build downloaded through a browser; Linux artifacts are unsigned.
+JetBrains signs the Windows CLI and desktop setup executable. The macOS CLI is signed but not yet
+notarized; the desktop DMG is not yet service-signed/notarized and may be blocked by Gatekeeper after a
+browser download. Linux artifacts are unsigned. Local installer smoke is not notarization verification.
 
 ### Desktop
 
 Download the matching `thinkrail-desktop-*` asset: a DMG for macOS Apple Silicon, a setup ZIP for Windows
-x64, or a setup tarball for Linux x64/ARM64. The macOS DMG and the Linux tarballs are unsigned, so the
-operating system may ask you to confirm the first launch.
+x64, or a setup tarball for Linux x64/ARM64. Extract the complete Windows ZIP before running its setup
+executable, keeping its adjacent payload; extract the Linux tarball and run `installer`. Electrobun 2.0.1
+does not provide a macOS Intel desktop build. The macOS signing limitation above remains until the
+JetBrains signing/notary handoff is integrated.
 
 Linux desktop builds require Ubuntu 24.04 or another glibc 2.38+ distribution with GTK 3, WebKitGTK 4.1,
 Ayatana AppIndicator 3, and librsvg 2. On Ubuntu 24.04:
@@ -88,7 +91,7 @@ real provider credentials). App state lives under `~/.thinkrail`.
 
 ### Prerequisites (developing ThinkRail)
 
-- **Bun** ≥ 1.3 (the package manager and runtime)
+- **Bun** 1.4.0 (the repository's pinned package manager and runtime)
 - **Node.js** ≥ 22.19 (required by the in-process `pi` engine)
 - An authenticated `pi` provider (the agent runs against your real provider credentials)
 
@@ -111,6 +114,13 @@ bun run build:binary                 # standalone CLI artifact
 bun run desktop:dev                  # package and open the Electrobun app
 bun run desktop:build                # package without opening it
 ```
+
+Desktop commands use the standard Electrobun CLI/configuration. Its pre-build hook builds the shared UI
+and stages ThinkRail's PI/native resources; Electrobun owns preload bundling and installer creation.
+Create host-native installers with `bun run desktop:package:stable` or `bun run desktop:package:canary`.
+Native/installer smoke and shared CLI/desktop probes live in `packages/artifact-tests`, outside the
+application packages. Run `bun run smoke:desktop` after a dev build; installer smoke takes an artifact
+path and channel via `bun run smoke:desktop:installer <path> <stable|canary>`.
 
 On-disk app state (projects, workspaces, worktrees) lives under `~/.thinkrail`.
 
@@ -138,6 +148,7 @@ apps/
   desktop/    Electrobun local-host launcher + native packaging
   website/    public landing + blog + vibecoding site (Cloudflare Pages)
 packages/
+  artifact-tests/ source-only CLI/desktop artifact and installer tests
   server/     createServer(): Bun.serve + AgentSessionManager
   contracts/  the wire (types-only)
   shared/     server-side helpers (shellEnv, freePort)

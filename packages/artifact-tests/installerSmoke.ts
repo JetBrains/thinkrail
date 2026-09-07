@@ -1,18 +1,11 @@
 #!/usr/bin/env bun
 
-import {
-	cpSync,
-	existsSync,
-	globSync,
-	mkdirSync,
-	mkdtempSync,
-	readFileSync,
-	writeFileSync,
-} from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { locateWindowsSetupExecutable } from "./src/artifact";
+import { hostEnvironment } from "./src/artifactProbes";
 import { assertInstallerSmokeEnvironment } from "./src/installerEnvironment";
 
 assertInstallerSmokeEnvironment(process.platform, process.env);
@@ -32,8 +25,7 @@ const channel = process.argv[3] ?? "stable";
 if (channel !== "stable" && channel !== "canary") {
 	throw new Error(`unsupported desktop installer channel: ${channel}`);
 }
-const isolationEnv = {
-	...process.env,
+const isolationEnv = hostEnvironment({
 	HOME: join(root, "home"),
 	USERPROFILE: join(root, "home"),
 	LOCALAPPDATA: join(root, "local"),
@@ -50,7 +42,7 @@ const isolationEnv = {
 	THINKRAIL_DESKTOP_USER_DATA: join(root, "user-data"),
 	THINKRAIL_DESKTOP_E2E_HOST: "1",
 	THINKRAIL_DESKTOP_HIDDEN: "1",
-};
+});
 let installerProcess: ReturnType<typeof Bun.spawn> | undefined;
 let appPid: number | undefined;
 let launcherPid: number | undefined;
@@ -80,8 +72,9 @@ function installerExecutable(): string {
 		mkdirSync(mount, { recursive: true });
 		run(["hdiutil", "attach", artifact, "-nobrowse", "-readonly", "-mountpoint", mount]);
 		try {
-			const app = globSync(join(mount, "*.app"))[0];
-			if (!app) throw new Error("desktop DMG does not contain an app bundle");
+			const appName = channel === "stable" ? "ThinkRail.app" : `ThinkRail-${channel}.app`;
+			const app = join(mount, appName);
+			if (!existsSync(app)) throw new Error(`desktop DMG does not contain ${appName}`);
 			const installed = join(root, "ThinkRail.app");
 			cpSync(app, installed, { recursive: true });
 			return join(installed, "Contents", "MacOS", "launcher");

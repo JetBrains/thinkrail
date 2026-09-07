@@ -6,6 +6,7 @@ title: Engine host (server library)
 parent: architecture
 depends-on: [module-contracts, module-shared]
 tags: [v1, host]
+references: [module-artifact-tests]
 ---
 
 ## Responsibility
@@ -37,16 +38,14 @@ e2e).
   (the OAuth flows + the Bedrock module) that pi otherwise reaches through binary-hostile
   variable-specifier dynamic imports (see the agent SPEC). Build-only
   **`@thinkrail/server/build-support`** is the single manifest of bundled extension entries, skill roots,
-  per-platform `bun-pty` libraries, and trash helpers consumed by both launcher packagers. Test-only
-  **`@thinkrail/server/artifact-probes`** owns the shared host-level artifact fixture/assertions behind thin
-  CLI and desktop process/resource adapters. The package also exposes the
+  per-platform `bun-pty` libraries, and trash helpers consumed by both launcher packagers. Artifact
+  fixture/assertion runners live in [[module-artifact-tests]], not in this library. The package also exposes the
   **`@thinkrail/server/agent` subpath export** (the `agent` barrel): the
   server-side session surface for the **headless workflow-test harness** (`e2e/workflows/`), which
   drives real in-process sessions through the production wiring without booting the HTTP host — a
   deliberate second entry that avoids evaluating `host` (Bun-only: `Bun.serve`, `bun-pty`) under the
   node-run e2e worker. Not for `apps/*` use — the web/CLI boundary rules are unchanged.
-- **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv`, the Central adapter, and the
-  retrying teardown helper the artifact probes clean up with), `bun-pty`,
+- **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv` and the Central adapter), `bun-pty`,
   `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `pino` + its pretty/rolling
   destinations (host diagnostics), Bun/Node.
 - **Deployment obligation:** product behavior lives in the owning server feature module and is composed by
@@ -92,7 +91,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `templates` | file CRUD over pi's prompt-template dirs (global + project scoped) | [templates/SPEC.md](src/templates/SPEC.md) |
 
 `src/index.ts` re-exports `host` + the `agent` barrel's `registerBundledRuntime` seam; explicit package
-subpaths expose build support and artifact probes without widening the runtime barrel. `src/dev.ts` boots
+subpaths expose build support and sanctioned history fixtures without widening the runtime barrel. `src/dev.ts` boots
 the host from env via `bootHost` for dev/e2e.
 
 ## Internal dependency graph

@@ -86,7 +86,7 @@ async function start(): Promise<void> {
 	const preload = neutral
 		? null
 		: injectInitialDesktopPreferences(
-				await Bun.file(join(runtimeDir, "preload.js")).text(),
+				await Bun.file(join(PATHS.VIEWS_FOLDER, "preload", "index.js")).text(),
 				initialPreferences,
 			);
 	const mainWindow = new BrowserWindow({

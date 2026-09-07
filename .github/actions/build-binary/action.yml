@@ -81,22 +81,14 @@ runs:
         TARGET: ${{ inputs.target }}
       run: |
         set -eu
-        bun apps/desktop/build.ts --env=dev
-        case "$TARGET" in
-          bun-darwin-arm64) folder="dev-macos-arm64"; name="launcher" ;;
-          bun-windows-x64) folder="dev-win-x64"; name="launcher.exe" ;;
-          bun-linux-x64) folder="dev-linux-x64"; name="launcher" ;;
-          bun-linux-arm64) folder="dev-linux-arm64"; name="launcher" ;;
-          *) echo "::error::unsupported desktop target $TARGET"; exit 1 ;;
-        esac
-        launcher=$(find "apps/desktop/build/$folder" -type f -name "$name" | head -1)
-        [ -n "$launcher" ] || { echo "::error::desktop launcher not found in $folder"; exit 1; }
+        bun run desktop:build
+        launcher=$(bun -e 'import { locateDesktopLauncher } from "@thinkrail/artifact-tests"; console.log(locateDesktopLauncher("apps/desktop"));')
         case "$TARGET" in
           bun-linux-*)
             env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
-              xvfb-run -a bun apps/desktop/smoke.ts "$launcher"
+              xvfb-run -a bun run smoke:desktop "$launcher"
             ;;
-          *) bun apps/desktop/smoke.ts "$launcher" ;;
+          *) bun run smoke:desktop "$launcher" ;;
         esac
 
     - name: Package desktop installer
@@ -110,37 +102,43 @@ runs:
           stable) environment="stable" ;;
           *) echo "::error::unsupported release channel $CHANNEL"; exit 1 ;;
         esac
-        bun apps/desktop/build.ts --env="$environment"
+        bun run --cwd apps/desktop "package:$environment"
 
     - id: resolve-desktop
       name: Resolve desktop installer
       shell: bash
       env:
         TARGET: ${{ inputs.target }}
+        CHANNEL: ${{ inputs.channel }}
       run: |
         set -eu
         mkdir -p apps/desktop/dist
+        case "$CHANNEL" in
+          nightly) prefix='canary-'; suffix='-canary' ;;
+          stable) prefix=''; suffix='' ;;
+          *) echo "::error::unsupported release channel $CHANNEL"; exit 1 ;;
+        esac
         case "$TARGET" in
           bun-darwin-arm64)
-            pattern='*.dmg'
+            source="${prefix}macos-arm64-ThinkRail${suffix}.dmg"
             name='thinkrail-desktop-darwin-arm64.dmg'
             ;;
           bun-windows-x64)
-            pattern='*.zip'
+            source="${prefix}win-x64-ThinkRail-Setup${suffix}.zip"
             name='thinkrail-desktop-windows-x64.zip'
             ;;
           bun-linux-x64)
-            pattern='*-Setup.tar.gz'
+            source="${prefix}linux-x64-ThinkRail${suffix}-Setup.tar.gz"
             name='thinkrail-desktop-linux-x64.tar.gz'
             ;;
           bun-linux-arm64)
-            pattern='*-Setup.tar.gz'
+            source="${prefix}linux-arm64-ThinkRail${suffix}-Setup.tar.gz"
             name='thinkrail-desktop-linux-arm64.tar.gz'
             ;;
           *) echo "::error::unsupported desktop target $TARGET"; exit 1 ;;
         esac
-        source=$(find apps/desktop/artifacts -maxdepth 1 -type f -name "$pattern" | head -1)
-        [ -n "$source" ] || { echo "::error::desktop installer matching $pattern not found"; exit 1; }
+        source="apps/desktop/artifacts/$source"
+        [ -f "$source" ] || { echo "::error::desktop installer not found at $source"; exit 1; }
         path="apps/desktop/dist/$name"
         cp "$source" "$path"
         {
@@ -163,11 +161,11 @@ runs:
         case "$TARGET" in
           bun-linux-*)
             env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
-              xvfb-run -a bun apps/desktop/installerSmoke.ts \
+              xvfb-run -a bun run smoke:desktop:installer \
               "${{ steps.resolve-desktop.outputs.path }}" "$environment"
             ;;
           *)
-            bun apps/desktop/installerSmoke.ts \
+            bun run smoke:desktop:installer \
               "${{ steps.resolve-desktop.outputs.path }}" "$environment"
             ;;
         esac

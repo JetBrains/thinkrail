@@ -6,6 +6,7 @@ title: CLI host launcher
 parent: architecture
 depends-on: [module-server, module-shared]
 tags: [v1, host]
+references: [module-artifact-tests]
 ---
 
 ## Responsibility
@@ -194,9 +195,9 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   platform's matching `bun-pty` lib. The binary is platform-specific and self-extracts a few MB on first run.
 - **Verify by booting the artifact** (not just building it): extension wiring regressions surface only at
   runtime — e.g. path-loading broke silently for every extension added after the binary build first landed.
-  `scripts/smoke-binary.ts` (root: `bun run smoke:binary`, after `build:binary`) boots the built binary
+  [[module-artifact-tests]]'s CLI smoke (root: `bun run smoke:binary`, after `build:binary`) boots the built binary
   against throwaway data/agent/cache dirs. Its CLI adapter runs the shared
-  `@thinkrail/server/artifact-probes` host assertions also used by desktop; CLI-only assertions additionally
+  test workspace's shared host assertions also used by desktop; CLI-only assertions additionally
   prove the staged-cache and command-line shape. Together they assert: a project-local `bunfig.toml` preload does **not**
   execute, `/health` answers, `/` serves the staged UI, the bundled skills staged to the cache dir,
   **an external synthetic PI extension loads by absolute path** through the compiled artifact's public PI
@@ -267,8 +268,9 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
 
 - **Owns:** `src/args.ts` (pure `parseArgs(argv, env) → CliOptions` + `parseSubcommand` + `USAGE`),
   `src/index.ts` (the run-from-source `bootstrap()`: shell env → server → browser open → signal handlers),
-  and the binary build + its boot smoke (`scripts/build-binary.ts`, `scripts/smoke-binary.ts`,
-  `scripts/artifactName.ts` — the one place the artifact filename rule lives, including the `.exe` Bun
+  and the binary build (`scripts/build-binary.ts`,
+  `scripts/artifactName.ts` — exposed as `@thinkrail/cli/artifact` and the one place the artifact filename
+  rule lives, including the `.exe` Bun
   appends for a Windows target, so the build's output path and the smoke's default input cannot disagree
   the way they did on Windows; the release action re-derives the same name in bash because it is also the
   published-asset contract, see `module-ci-release`),
@@ -278,16 +280,16 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   subcommand), `src/uninstall.ts` (the `uninstall` subcommand), `src/paths.ts` (the installed layout:
   `install.json` + the staging cache root), and `src/powershell.ts` (the Windows PowerShell seam). Central
   integration remains a server/auth feature; the launcher has no Central subcommand or protocol implementation.
-- **Allowed deps:** `@thinkrail/server` (`bootHost`, `registerBundledRuntime`, build-support and artifact-probe subpaths, `dataDir` — the
-  uninstaller has to name the app state dir, and must name the *same* one the host uses — plus the
-  test-only `history-test-fixtures` subpath in the artifact smoke to seed a real pi transcript),
+- **Allowed deps:** `@thinkrail/server` (`bootHost`, `registerBundledRuntime`, build-support, `dataDir` — the
+  uninstaller has to name the app state dir, and must name the *same* one the host uses),
   `@thinkrail/shared/startupMark` (the shared boot
   signature renderer) + `@thinkrail/shared/version` (the shared release identity), Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).
 - **Forbidden:** product feature/domain logic; reaching into the server's internals (use only its public
   surface); importing the web, desktop, or `contracts` UI layers; `@earendil-works/pi-coding-agent`
-  directly. An ordinary product feature must not need a CLI implementation.
+  directly; importing the artifact test workspace. Its smoke adapter and shared probes belong to
+  [[module-artifact-tests]]. An ordinary product feature must not need a CLI implementation.
 
 ## Get right
 

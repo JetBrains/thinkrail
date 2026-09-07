@@ -3,17 +3,12 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
-	"exports": {
-		"./artifact": "./src/artifact.ts"
-	},
 	"scripts": {
-		"package:dev": "bun build.ts --env=dev",
-		"dev": "bun build.ts --env=dev --run",
-		"package:canary": "bun build.ts --env=canary",
-		"package:stable": "bun build.ts --env=stable",
-		"smoke": "bun smoke.ts",
-		"smoke:installer": "bun installerSmoke.ts",
-		"typecheck": "bun prepare.ts && tsc --noEmit -p tsconfig.json",
+		"package:dev": "electrobun build --env=dev",
+		"dev": "electrobun dev",
+		"package:canary": "electrobun build --env=canary",
+		"package:stable": "electrobun build --env=stable",
+		"typecheck": "electrobun prepare && tsc --noEmit",
 		"test": "bun test"
 	},
 	"dependencies": {

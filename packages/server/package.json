@@ -6,7 +6,6 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./agent": "./src/agent/index.ts",
-		"./artifact-probes": "./src/artifactProbes.ts",
 		"./build-support": "./src/buildSupport.ts",
 		"./history-test-fixtures": "./src/history/testFixtures.ts"
 	},

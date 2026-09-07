@@ -7,6 +7,7 @@ import { moduleBoundaryViolations } from "./check-module-boundaries";
 const roots: string[] = [];
 
 const modules = {
+	"packages/artifact-tests": "@thinkrail/artifact-tests",
 	"packages/contracts": "@thinkrail/contracts",
 	"packages/shared": "@thinkrail/shared",
 	"packages/pi-delegation": "pi-delegation",
@@ -31,6 +32,11 @@ function fixture(): string {
 	const root = mkdtempSync(join(tmpdir(), "thinkrail-module-boundaries-"));
 	roots.push(root);
 	const dependencies: Record<string, Record<string, string>> = {
+		"packages/artifact-tests": {
+			"@thinkrail/cli": "workspace:*",
+			"@thinkrail/server": "workspace:*",
+			"@thinkrail/shared": "workspace:*",
+		},
 		"packages/shared": { "@thinkrail/contracts": "workspace:*" },
 		"packages/pi-subagents": { "pi-delegation": "workspace:*" },
 		"packages/server": {
@@ -76,6 +82,11 @@ test("accepts the declared package rings and thin launcher edges", () => {
 	write(root, "apps/cli/src/value.ts", 'import { bootHost } from "@thinkrail/server";');
 	write(
 		root,
+		"packages/artifact-tests/src/value.ts",
+		'import "@thinkrail/server/history-test-fixtures"; import "@thinkrail/cli/artifact";',
+	);
+	write(
+		root,
 		"apps/desktop/src/value.ts",
 		'const host = import("@thinkrail/server/build-support");',
 	);
@@ -83,9 +94,22 @@ test("accepts the declared package rings and thin launcher edges", () => {
 	expect(moduleBoundaryViolations(root)).toEqual([]);
 });
 
-test("ignores the generated Hutch SDK without excluding desktop source", () => {
+test("keeps artifact test infrastructure out of product code", () => {
+	const root = fixture();
+	write(root, "apps/desktop/src/testLeak.ts", 'import "@thinkrail/artifact-tests";');
+	write(root, "packages/server/src/testLeak.ts", 'import "@thinkrail/artifact-tests";');
+	write(root, "packages/artifact-tests/src/webLeak.ts", 'import "@thinkrail/web";');
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'apps/desktop/src/testLeak.ts: import "@thinkrail/artifact-tests" creates forbidden apps/desktop -> packages/artifact-tests edge',
+		'packages/artifact-tests/src/webLeak.ts: import "@thinkrail/web" creates forbidden packages/artifact-tests -> apps/web edge',
+		'packages/server/src/testLeak.ts: import "@thinkrail/artifact-tests" creates forbidden packages/server -> packages/artifact-tests edge',
+	]);
+});
+
+test("ignores generated framework files without excluding desktop source", () => {
 	const root = fixture();
 	write(root, "apps/desktop/.hutch/devkit/api/example.ts", 'import "@thinkrail/web";');
+	write(root, "apps/desktop/.cottontail-tmp/loader.mjs", 'import "@thinkrail/web";');
 	write(root, "apps/desktop/src/example.ts", 'import "@thinkrail/web";');
 
 	expect(moduleBoundaryViolations(root)).toEqual([

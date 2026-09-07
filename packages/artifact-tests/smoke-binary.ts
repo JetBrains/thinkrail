@@ -1,18 +1,18 @@
 #!/usr/bin/env bun
 
-import { existsSync, globSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, globSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { removeTree } from "@thinkrail/shared/removeTree";
+import { binaryArtifactPath } from "./src/artifact";
 import {
 	type ArtifactHostAdapter,
+	hostEnvironment,
 	type RunningArtifactHost,
 	runArtifactHostProbes,
-} from "@thinkrail/server/artifact-probes";
-import { binaryArtifactName } from "./artifactName";
+} from "./src/artifactProbes";
 
-const binary = resolve(
-	process.argv[2] ?? join(import.meta.dir, "..", "dist", binaryArtifactName()),
-);
+const binary = binaryArtifactPath(process.argv[2]);
 if (!existsSync(binary)) {
 	console.error(`binary not found at ${binary} — run \`bun run build:binary\` first.`);
 	process.exit(1);
@@ -104,12 +104,12 @@ try {
 		`import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(marker)}, "ran");\n`,
 	);
 	const subcommand = Bun.spawnSync([binary, "uninstall", "--help"], {
-		env: {
-			...process.env,
+		env: hostEnvironment({
 			XDG_CACHE_HOME: cache,
 			HOME: home,
+			USERPROFILE: home,
 			THINKRAIL_NO_ANALYTICS: "1",
-		},
+		}),
 		stdout: "pipe",
 		stderr: "inherit",
 		cwd: project,
@@ -128,5 +128,5 @@ try {
 	console.error(`smoke FAILED: ${error instanceof Error ? error.message : error}`);
 	process.exitCode = 1;
 } finally {
-	rmSync(temp, { recursive: true, force: true });
+	removeTree(temp);
 }

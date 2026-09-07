@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Browser E2E harness
 parent: architecture
-depends-on: [module-server, module-web, module-cli, module-desktop, module-shared]
+depends-on: [module-server, module-web, module-cli, module-desktop, module-shared, module-artifact-tests]
 references: [module-ci-release]
 tags: [testing, playwright, e2e]
 ---
@@ -221,8 +221,9 @@ Windows lane into the real profile (see `module-shared`).
   `commitFile`); `gitAs`/`commitFile` pin a throwaway e2e identity so a seeded commit's authorship never
   depends on the developer machine's real git config.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
-  exports, CLI binary, packaged desktop adapter, shared retrying teardown helper, git, Chromium, and
-  Playwright.
+  exports, CLI binary, the locator from [[module-artifact-tests]], shared retrying teardown helper, git,
+  Chromium, and Playwright. Standalone native/installer smoke and shared artifact probes are owned by
+  that test workspace, outside Playwright discovery.
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into
   product modules, default/no-agent tests depending on developer state, agent tests reading anything beyond
   the explicitly authorized Central artifact, or parallel workers sharing one mutable host.

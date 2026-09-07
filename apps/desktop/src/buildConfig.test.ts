@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { resolve } from "node:path";
+import { version } from "@thinkrail/shared/version";
 import hutchConfig from "../hutch.config";
 import manifest from "../package.json";
 
@@ -14,7 +15,7 @@ test("selects real Bun and preserves the physical runtime resources without reti
 		],
 		{
 			cwd: desktopDir,
-			env: { ...process.env, THINKRAIL_DESKTOP_VERSION: "0.0.0-test" },
+			env: process.env,
 			stdout: "pipe",
 			stderr: "pipe",
 		},
@@ -24,17 +25,19 @@ test("selects real Bun and preserves the physical runtime resources without reti
 	expect(config.app).toEqual({
 		name: "ThinkRail",
 		identifier: "ai.thinkrail.app",
-		version: "0.0.0-test",
+		version,
 	});
 	expect(config.runtime).toEqual({ exitOnLastWindowClosed: true });
 	expect(config.build).toMatchObject({
 		mainProcess: "bun",
 		bun: { entrypoint: "src/index.ts" },
-		copy: { ".stage/web": "views/web", ".stage/runtime": "runtime" },
+		views: { preload: { entrypoint: "src/preload.ts", format: "iife" } },
+		copy: { "../web/dist": "views/web", ".stage/runtime": "runtime" },
 		mac: { bundleCEF: false },
 		linux: { bundleCEF: false },
 		win: { bundleCEF: false },
 	});
+	expect(config.scripts).toEqual({ preBuild: "preBuild.ts", postBuild: "postBuild.ts" });
 	expect(config.build).not.toHaveProperty("bunVersion");
 	expect(config.build).not.toHaveProperty("useAsar");
 });
