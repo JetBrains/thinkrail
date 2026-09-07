@@ -120,10 +120,7 @@ never sends anyway, since the analytics module mutes on `CI`.
   package/native-smoke/shared-probe the expanded desktop app → create and execute Electrobun's
   first-install artifact in an isolated install root → collect both artifacts. Desktop-backed e2e runs in
   CI before release; each release runner still performs both target-native desktop smoke layers.
-- `actions/make-checksums` — writes `SHA256SUMS` over the release artifacts. **No caller here:** a
-  signature changes the bytes, so checksums must be taken after signing. `thinkrail-signing` pins it by
-  commit SHA, which is what keeps the published `SHA256SUMS` format identical to pre-signing releases.
-- `actions/codesign` — JetBrains CodeSign client wrapper. **No caller here either, and there can never be
+- `actions/codesign` — JetBrains CodeSign client wrapper. **No caller here, and there can never be
   one:** it needs the JetBrains internal network, unreachable from a public repo's runners.
   `thinkrail-signing` pins it by commit SHA. Keeping the recipe public and the credentials private is
   deliberate — do not move or delete it because it looks dead.
@@ -166,6 +163,7 @@ in place.
   artifact/version contract.
 - **Does not own:** the relocated nightly/stable/build/release workflows, tag/draft writes, signing,
   `SHA256SUMS`, or publication. Those run in `thinkrail-signing`; its `SPEC.md` owns their orchestration.
+  Checksum generation is local to its post-sign publication step, not a reusable public action.
 - **Consumes:** `apps/cli`'s binary build/smoke, `apps/desktop`'s package/native smoke, the shared
   version-stamping seam, and root scripts (`build:web`, `lint`, `typecheck`, `test`, `e2e` and artifact
   e2e variants). It **injects** the version at
