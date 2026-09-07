@@ -92,8 +92,9 @@ by a local application build.
 
 Credentials and access to `codesign.labs.jb.gg` remain private. The internal signing runner is restricted
 to the private `sign.yml` on main; native hosted build jobs do not inherit service credentials or build
-product source on the internal signer. The public CodeSign-client recipe verifies its downloaded client
-with JetBrains GPG keys and checksum before use; the private workflow pins that recipe by source commit.
+product source on the internal signer. The private CodeSign action verifies its client with JetBrains
+GPG keys and checksum before use and is versioned with the workflow. The retained public compatibility
+recipe is not a dependency of the current private coordinator.
 
 Existing coverage signs the Windows CLI and installer stub, and the macOS CLI binary. The Windows
 payload beside its setup stub is hash-keyed and must remain byte-identical during stub replacement.
