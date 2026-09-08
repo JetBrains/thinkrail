@@ -45,7 +45,7 @@ function defaultTrashImplementation(): TrashImplementation {
 	if (!helper) return trash;
 	return async (input) => {
 		const paths = typeof input === "string" ? [input] : [...input];
-		await Promise.all(paths.map((path) => execFileAsync(helper, [path])));
+		await Promise.all(paths.map((path) => execFileAsync(helper, [path], { windowsHide: true })));
 	};
 }
 

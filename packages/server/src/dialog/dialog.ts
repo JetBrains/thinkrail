@@ -126,7 +126,7 @@ export function noPickerMessage(platform: NodeJS.Platform): string {
 }
 
 const defaultRunPicker: PickerRunner = async (cmd, env) => {
-	const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe", env });
+	const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe", env, windowsHide: true });
 	const [stdout, stderr, code] = await Promise.all([
 		new Response(proc.stdout).text(),
 		new Response(proc.stderr).text(),

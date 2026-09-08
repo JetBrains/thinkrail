@@ -34,7 +34,7 @@ export const defaultWhich: WhichFn = (bin) =>
 export type SpawnFn = (cmd: string[]) => void;
 
 export const defaultSpawn: SpawnFn = (cmd) => {
-	Bun.spawn(cmd, { stdout: "ignore", stderr: "ignore" }).unref();
+	Bun.spawn(cmd, { stdout: "ignore", stderr: "ignore", windowsHide: true }).unref();
 };
 
 export function listAvailableEditors(which: WhichFn = defaultWhich): EditorInfo[] {
