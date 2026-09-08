@@ -52,18 +52,31 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		landing: await Bun.file(`${distDirectory}/index.html`).text(),
 		blog: await Bun.file(`${distDirectory}/blog/index.html`).text(),
 		vibecoding: await Bun.file(`${distDirectory}/vibecoding/index.html`).text(),
+		agenticDevelopment: await Bun.file(`${distDirectory}/agentic-development/index.html`).text(),
 	};
+	const islandPages = ["vibecoding", "agenticDevelopment"] as const;
 
-	for (const required of [
-		'<link rel="canonical" href="https://thinkrail.ai/vibecoding/">',
-		'<meta property="og:url" content="https://thinkrail.ai/vibecoding/">',
-		'<meta property="og:image" content="https://thinkrail.ai/vibecoding/og.png">',
-		'<link rel="icon" href="/vibecoding/favicon.svg" type="image/svg+xml">',
-		'src="/vibecoding/thinkrail-text-logo-gradient.svg"',
-	]) {
-		if (!pages.vibecoding.includes(required)) {
-			failures.push(`vibecoding/index.html missing: ${required}`);
+	for (const name of islandPages) {
+		for (const required of [
+			'<link rel="canonical" href="https://thinkrail.ai/vibecoding/">',
+			'<meta property="og:url" content="https://thinkrail.ai/vibecoding/">',
+			'<meta property="og:image" content="https://thinkrail.ai/vibecoding/og.png">',
+			'<link rel="icon" href="/vibecoding/favicon.svg" type="image/svg+xml">',
+			'src="/vibecoding/thinkrail-text-logo-gradient.svg"',
+		]) {
+			if (!pages[name].includes(required)) {
+				failures.push(`${name}: missing ${required}`);
+			}
 		}
+	}
+	if (!pages.vibecoding.includes("Vibe code without losing control.")) {
+		failures.push("vibecoding: missing hero title");
+	}
+	if (!pages.agenticDevelopment.includes("Agentic development without losing control.")) {
+		failures.push("agenticDevelopment: missing hero title");
+	}
+	if (pages.agenticDevelopment.includes("Vibe code without losing control.")) {
+		failures.push("agenticDevelopment: hero title fell back to the vibecoding default");
 	}
 
 	for (const [name, html] of Object.entries(pages)) {
@@ -87,18 +100,24 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	for (const name of ["landing", "blog"] as const) {
 		if (pages[name].includes("<astro-island")) failures.push(`${name}: React island leaked`);
 	}
-	if (occurrences(pages.vibecoding, "<astro-island") !== 1) {
-		failures.push("vibecoding: expected one React island");
+	for (const name of islandPages) {
+		if (occurrences(pages[name], "<astro-island") !== 1) {
+			failures.push(`${name}: expected one React island`);
+		}
 	}
 
 	const ideStyles = new Set([...stylesheetUrls(pages.landing), ...stylesheetUrls(pages.blog)]);
-	for (const stylesheet of stylesheetUrls(pages.vibecoding)) {
-		if (ideStyles.has(stylesheet)) failures.push(`shared route stylesheet: ${stylesheet}`);
+	for (const name of islandPages) {
+		for (const stylesheet of stylesheetUrls(pages[name])) {
+			if (ideStyles.has(stylesheet)) failures.push(`shared route stylesheet: ${stylesheet}`);
+		}
 	}
 
-	const ids = [...pages.vibecoding.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
-	const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
-	for (const id of new Set(duplicateIds)) failures.push(`vibecoding duplicate id: ${id}`);
+	for (const name of islandPages) {
+		const ids = [...pages[name].matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
+		const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
+		for (const id of new Set(duplicateIds)) failures.push(`${name} duplicate id: ${id}`);
+	}
 
 	const robots = await Bun.file(`${distDirectory}/robots.txt`).text();
 	if (!robots.includes("Sitemap: https://thinkrail.ai/sitemap-index.xml")) {
@@ -107,6 +126,9 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	const sitemap = await Bun.file(`${distDirectory}/sitemap-0.xml`).text();
 	for (const url of requiredSitemapUrls) {
 		if (!sitemap.includes(`<loc>${url}</loc>`)) failures.push(`sitemap missing: ${url}`);
+	}
+	if (sitemap.includes("https://thinkrail.ai/agentic-development/")) {
+		failures.push("sitemap lists the non-canonical agentic-development route");
 	}
 
 	if (failures.length > 0) {

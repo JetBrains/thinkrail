@@ -1,6 +1,13 @@
 const apexOrigin = "https://thinkrail.ai";
 const legacyOrigin = "https://vibecoding.thinkrail.ai";
-const directPaths = ["/", "/blog/", "/vibecoding/", "/robots.txt", "/sitemap-index.xml"];
+const directPaths = [
+	"/",
+	"/blog/",
+	"/vibecoding/",
+	"/agentic-development/",
+	"/robots.txt",
+	"/sitemap-index.xml",
+];
 
 async function requireDirectResponse(path: string): Promise<void> {
 	const url = new URL(path, apexOrigin);

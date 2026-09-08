@@ -6,7 +6,7 @@ import { Reveal } from "./Reveal";
 import { Subtitle } from "./Subtitle";
 import { VerticalBars } from "./VerticalBars";
 
-export function Hero() {
+export function Hero({ title }: { title: string }) {
 	return (
 		<section
 			id="top"
@@ -28,7 +28,7 @@ export function Hero() {
 
 						<Reveal delay={80}>
 							<h1 className="font-display mx-auto mt-9 max-w-[650px] text-center text-[2.2rem] leading-[1.08] font-normal sm:mx-0 sm:text-left sm:text-[2.55rem] md:text-[3.19rem]">
-								Vibe code without losing control.
+								{title}
 							</h1>
 						</Reveal>
 

@@ -11,7 +11,8 @@ depends-on: [module-website-analytics]
 ## Responsibility
 
 The project's public website at `thinkrail.ai`: the IDE-shell landing, its blog, and the audience-specific
-vibecoding experience at `/vibecoding/`. The landing and blog's creative conceit is that **the site IS
+vibecoding experience at `/vibecoding/` (also served, with a swapped hero title and a canonical back
+to `/vibecoding/`, at `/agentic-development/`). The landing and blog's creative conceit is that **the site IS
 the IDE**: a faithful HTML/CSS recreation of the ThinkRail shell (title bar, project rail, tab strip,
 files rail, terminal, status bar) whose center "editor" is the normally-scrolling page content. Each
 landing section poses as a file of a `website` workspace (`README.md`, `why.md`, `features/*.md`,
@@ -64,9 +65,11 @@ binary.
 The parent owns the route-composition edges; the vibecoding leaf has no sibling dependency:
 
 ```text
-src/pages/vibecoding/index.astro ──▶ src/vibecoding (through index.ts)
-src/pages/vibecoding/index.astro ──▶ src/components/Analytics.astro
-landing + blog shells             ──▶ src/components/Analytics.astro
+src/pages/vibecoding/index.astro           ──▶ src/vibecoding (through index.ts)
+src/pages/agentic-development/index.astro  ──▶ src/vibecoding (through index.ts)
+src/pages/vibecoding/index.astro           ──▶ src/components/Analytics.astro
+src/pages/agentic-development/index.astro  ──▶ src/components/Analytics.astro
+landing + blog shells                      ──▶ src/components/Analytics.astro
 ```
 
 - **Fonts are self-hosted; the site makes no external font request.** Packages and stacks are copied
@@ -177,8 +180,9 @@ second hosting pipeline.
 
 `.github/workflows/site-preview.yml` runs the same build command and uploads to branch `pr-<number>` in
 `thinkrail-website`. The deterministic alias `https://pr-<number>.thinkrail-website.pages.dev` is
-surfaced as one sticky PR comment and one `Website preview` commit status covering `/`, `/blog/`, and
-`/vibecoding/`. It waits for all three route families to serve before publishing the URL.
+surfaced as one sticky PR comment and one `Website preview` commit status covering `/`, `/blog/`,
+`/vibecoding/`, and `/agentic-development/`. It waits for all of those routes to serve before
+publishing the URL.
 
 Same-repository PRs only receive previews; fork PRs skip because Cloudflare credentials never cross the
 repository boundary. Preview URLs are public and analytics-silent while their PR is open. A separate
@@ -263,8 +267,9 @@ The `/blog` subsite is a typed Astro content collection over Markdown posts in `
 
 One apex `robots.txt` allows the public site and points crawlers at Astro's generated sitemap. The
 sitemap derives from the same static route build and therefore covers `/`, the blog index and published
-posts, and `/vibecoding/`; previews keep production canonical URLs and do not become a second search
-identity.
+posts, and `/vibecoding/`; `/agentic-development/` is filtered out of the sitemap because it
+canonicalizes to `/vibecoding/` (see [[submodule-website-vibecoding]]). Previews keep production
+canonical URLs and do not become a second search identity.
 
 `public/favicon.svg` is the IDE-shell landing/blog tab icon: a rounded tile in the brand primary green carrying the
 **header wordmark's TR mark** (same `viewBox` + paths, not redrawn) in black, centred with balanced

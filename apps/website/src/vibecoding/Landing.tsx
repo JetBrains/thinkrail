@@ -11,7 +11,11 @@ import { SiteFooter } from "./SiteFooter";
 import { SiteHeader } from "./SiteHeader";
 import { Isolation, SpecFirst } from "./Workflow";
 
-export function Landing() {
+export function Landing({
+	heroTitle = "Vibe code without losing control.",
+}: {
+	heroTitle?: string;
+}) {
 	useEffect(() => {
 		document.documentElement.dataset.landingReady = "true";
 	}, []);
@@ -20,7 +24,7 @@ export function Landing() {
 		<div className="min-h-screen bg-background">
 			<SiteHeader />
 			<main>
-				<Hero />
+				<Hero title={heroTitle} />
 				<SectionDivider />
 				<ChatDemo />
 				<SectionDivider />

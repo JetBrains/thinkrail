@@ -9,7 +9,10 @@ export default defineConfig({
 	site: "https://thinkrail.ai",
 	// HTML whitespace rules; the 'jsx' default drops newline spacing around inline tags
 	compressHTML: true,
-	integrations: [react(), sitemap()],
+	integrations: [
+		react(),
+		sitemap({ filter: (page) => page !== "https://thinkrail.ai/agentic-development/" }),
+	],
 	vite: {
 		plugins: [tailwindcss()],
 	},
