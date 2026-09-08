@@ -6,7 +6,7 @@ title: Desktop launcher/client (Electrobun)
 parent: architecture
 depends-on: [module-server, module-contracts, module-shared]
 tags: [desktop, v1, launcher, packaging]
-references: [submodule-web-navigation, module-artifact-tests]
+references: [submodule-web-navigation, module-artifact-tests, module-ci-release]
 ---
 
 ## Responsibility
@@ -185,8 +185,8 @@ Linux ARM64. Electrobun 2.0.1 publishes no macOS x64 core. Nightly maps to Elect
 maps to stable. Standard formats are DMG on macOS, a setup-EXE-plus-payload ZIP on Windows, and a setup
 tar.gz on Linux. The private release pipeline retains the existing `thinkrail-desktop-*` download aliases;
 its collector selects the exact framework artifact for the channel and native target. The macOS app
-archive is transferred privately for SRE finalization, never published as an updater payload. Updater UX
-and publication of updater metadata/patches remain deferred.
+archive is transferred privately for SRE finalization, never published as an updater payload. Runtime
+updating and updater publication are not yet implemented; the target policy is defined below.
 
 ### Signing
 
@@ -205,6 +205,30 @@ Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 pl
 `libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are
 CI-only and are never shipped as user configuration.
 
+## Auto-update policy (implementation pending)
+
+Desktop updates check and download in the background without blocking startup. Installation requires an
+explicit **Restart to Update** action; **Later** preserves the running app, and ordinary quit does not
+silently install. A cross-platform in-app control exposes manual checking, progress, the available version
+and retry; native menus are supplementary because this SDK has no Linux application menu. Installations
+stay on their packaged channel; CLI and remote-host updates are outside this capability. Release scope and
+manual-first acceptance belong to [[module-ci-release]].
+
+The intended integration keeps Electrobun calls and update lifecycle in desktop, input protection in the
+web client, and graceful host shutdown in server. A bounded optional native capability uses contract types;
+web imports no desktop SDK, and a browser connection does not acquire a host-update operation. An update
+restarts the entire local host: active agents may be aborted and PTYs terminate. User confirmation and
+protection of unsent input precede shutdown; cancellation must leave the current app usable.
+
+Quit coordination must preserve its completion action. Electrobun 2.0.1's `applyUpdate()` returns on a
+`before-quit` veto before arming its replacement helper; the current asynchronous guard's ordinary
+`Utils.quit()` retry would therefore exit without applying. Update completion must resume `applyUpdate()`
+after shutdown instead, with an explicit recovery path if helper startup fails. SDK replacement rollback
+is not application-health or user-data rollback. Existing installations without update code/feed identity
+require one manual bootstrap installation.
+
+Reference: [pinned updater handoff](https://github.com/blackboardsh/electrobun/blob/v2.0.1/package/src/sdks/main/core/Updater.ts#L2220-L2330).
+
 ## Verification
 
 [[module-artifact-tests]] owns expanded-app/first-install smoke, shared host probes, native navigation/
@@ -215,5 +239,5 @@ release checks described in [[module-ci-release]].
 
 ## Deferred
 
-Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, and Electrobun
-updater UX.
+Shared/remote backend profiles, profile selection, multi-window/deep-link routing, and CEF. Auto-updates
+have the target policy above but no runtime integration or published feed yet.
