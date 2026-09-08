@@ -195,7 +195,9 @@ function readBounded(
 			}
 			chunks.push(chunk);
 		});
-		stream.once("end", () => settle({ outcome: "ok", text: Buffer.concat(chunks).toString("utf8") }));
+		stream.once("end", () =>
+			settle({ outcome: "ok", text: Buffer.concat(chunks).toString("utf8") }),
+		);
 		stream.once("error", () =>
 			settle({ outcome: "ok", text: Buffer.concat(chunks).toString("utf8") }),
 		);
