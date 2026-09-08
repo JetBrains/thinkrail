@@ -39,6 +39,7 @@ function childrenViaCim(pid: number): boolean | null {
 				stdout: "pipe",
 				stderr: "ignore",
 				env: { ...process.env, TR_PARENT_PID: String(pid) },
+				windowsHide: true,
 			});
 			if (run.exitCode !== 0) continue;
 			const count = Number.parseInt(run.stdout.toString().trim(), 10);

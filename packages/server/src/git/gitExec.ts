@@ -36,6 +36,7 @@ export function git(cwd: string, args: string[], opts: { raw?: boolean } = {}): 
 		stdout: "pipe",
 		stderr: "pipe",
 		env: nonInteractiveGitEnv(),
+		windowsHide: process.platform === "win32",
 	});
 	const stdout = new TextDecoder().decode(result.stdout);
 	return {
