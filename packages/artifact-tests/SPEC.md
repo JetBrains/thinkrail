@@ -18,12 +18,13 @@ It consumes finished artifacts; it does not build the application or supply appl
 ## Boundary
 
 - **Owns:** artifact locators, isolated environments, native/installer smoke entrypoints, shared host
-  probes, their fixtures and helper unit tests, and the public build action's desktop-artifact collector
-  contract tests.
+  probes, their fixtures and helper unit tests, and the public build action's desktop packaging-invocation
+  and artifact-collector contract tests.
 - **Public surface:** `locateDesktopLauncher`
 - **Allowed deps:** CLI's public artifact-name helper; server's sanctioned history-fixture export;
   shared retrying teardown; read-only access to `.github/actions/build-binary/action.yml` for executing
-  its collector in isolated fixture directories; Bun/Node and native installer tools.
+  its packaging invocation and collector in isolated fixture directories; Bun/Node and native installer
+  tools.
 - **Forbidden:** application or SDK source internals, Electrobun imports/dependency, a fake host or agent,
   production packages importing this package, or real-user state mutation during tests.
 

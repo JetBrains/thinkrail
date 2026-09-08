@@ -51,8 +51,8 @@ Its stable public outputs are:
 
 The recipe stamps the shared version, builds and smokes the CLI, invokes the normal Electrobun dev and
 channel builds, runs expanded-app and first-install smoke, then collects exact target/channel outputs.
-[[module-artifact-tests]] owns isolated collector contract tests; this module owns the action and delivery
-contract.
+[[module-artifact-tests]] owns isolated packaging-invocation and collector contract tests; this module
+owns the action and delivery contract.
 
 Supported desktop assets:
 
@@ -69,9 +69,9 @@ private SRE flow replaces the unsigned framework DMG with a conventional DMG con
 expanded app, under the same published alias. The app archive is a private signing intermediate, never
 a public release asset.
 
-The collector resolves exact framework filenames. On Windows, the release invocation puts System32
-first so Hutch's bare `tar` resolves to Windows bsdtar; Git's GNU tar interprets drive-letter paths as
-remote `host:path` operands. Stable installers omit the `stable-` prefix; nightly
+On Windows, the packaging invocation puts System32 first so Hutch's bare `tar` resolves to Windows
+bsdtar; Git's GNU tar interprets drive-letter paths as remote `host:path` operands. The collector resolves
+exact framework filenames. Stable installers omit the `stable-` prefix; nightly
 uses Electrobun's `canary` prefix/suffix. Updater metadata and patches are not published. Electrobun 2.0.1
 has no macOS x64 core. Linux requires Ubuntu 24.04+/glibc 2.38 and the declared GTK, WebKitGTK,
 AppIndicator, and librsvg dependencies. CEF and additional installer formats are outside this contract.
