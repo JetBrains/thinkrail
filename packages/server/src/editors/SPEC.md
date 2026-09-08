@@ -34,7 +34,7 @@ worktree in the host's file manager — the workspace row's "Open in" menu.
   (the same trap `shared`'s jbcentral notes) — `resolveShellEnv()` re-resolves PATH at host boot, so every
   lookup here passes `{ PATH: process.env.PATH }` explicitly (`defaultWhich`), or the fixed-up PATH would
   never be seen and an installed-but-not-on-the-snapshotted-PATH editor would wrongly read as absent.
-- **`WhichFn`/`SpawnFn` are injectable seams**, not mocks of `Bun.which`/`node:child_process`:
+- **`WhichFn`/`SpawnFn` are injectable seams**, not mocks of `Bun.which`/`Bun.spawn`:
   `listAvailableEditors`/`openEditor` take an optional `which`, and `openEditor`/`revealInFileManager` an
   optional `spawn` (defaulting to `Bun.which` and `@thinkrail/shared/spawn`'s `spawnDetached`
   respectively) — so unit tests can fake which

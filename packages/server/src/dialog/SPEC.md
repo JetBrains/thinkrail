@@ -45,6 +45,6 @@ The host's native directory picker, so the browser "Open project" gets a real OS
   re-parse do not preserve.
 - **Public surface (barrel):** `selectDirectory` (+ `pickersFor` / `Picker` and the two message builders
   `pickerFailure` / `noPickerMessage`, exposed for unit tests).
-- **Allowed deps:** `node:child_process` (`spawn`, with `windowsHide` — Bun ignores it; see
-  `architecture.md` Invariants), `process.env`.
+- **Allowed deps:** Bun (`Bun.spawn`, with `windowsHide`; see `architecture.md` Invariants),
+  `process.env`.
 - **Forbidden:** `host`; sibling features; `contracts` (none needed).

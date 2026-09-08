@@ -51,11 +51,9 @@ export async function runPowerShellScript(
 	}
 }
 
-export async function spawnDetachedPowerShell(command: string): Promise<boolean> {
+export function spawnDetachedPowerShell(command: string): boolean {
 	for (const host of HOSTS) {
-		if (await spawnDetached([host, ...FLAGS, "-WindowStyle", "Hidden", "-Command", command])) {
-			return true;
-		}
+		if (spawnDetached([host, ...FLAGS, "-WindowStyle", "Hidden", "-Command", command])) return true;
 	}
 	return false;
 }

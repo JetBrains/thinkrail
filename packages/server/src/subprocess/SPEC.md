@@ -108,10 +108,9 @@ never what a particular child's output means.
   stays unbuilt and needs the cancellation seam `dialog` wants above.
 - **Windows has no process groups.** `detached` maps to `UV_PROCESS_DETACHED` and the kill falls back to
   the direct child, so a grandchild there survives the timeout as before. The group-kill test is skipped
-  there rather than pretending otherwise. Bounded children are spawned through **`node:child_process`**
-  with `windowsHide: true` — not `Bun.spawn`, which ignores `windowsHide` (through Bun 1.4.x) and would
-  flash a focus-stealing console window on Windows. Background lookups must not create a visible console
-  window or steal focus from the browser client (see `architecture.md` Invariants; `@thinkrail/shared/spawn`).
+  there rather than pretending otherwise. Bounded children set `windowsHide: true`; Bun 1.4.0 maps it to
+  libuv `UV_PROCESS_WINDOWS_HIDE`. Background lookups must not create a visible console window or steal
+  focus from the browser client (see `architecture.md` Invariants; `@thinkrail/shared/spawn`).
 - **The env defaults to the live `process.env`, not the launch-time snapshot** — `boot`'s
   `resolveShellEnv()` repairs `PATH`/`LANG` by mutating `process.env` *after* startup, and a child spawned
   from the snapshot silently misses that repair. Both halves are pinned separately — a caller's `env`/`cwd`

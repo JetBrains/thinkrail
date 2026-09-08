@@ -293,7 +293,7 @@ function removeTree(path: string): Outcome {
 	}
 }
 
-async function removeExecutable(path: string): Promise<Step> {
+function removeExecutable(path: string): Step {
 	try {
 		unlinkSync(path);
 		return step("executable", path, "removed");
@@ -314,7 +314,7 @@ async function removeExecutable(path: string): Promise<Step> {
 			);
 		}
 		const quoted = psQuote(aside);
-		const scheduled = await spawnDetachedPowerShell(
+		const scheduled = spawnDetachedPowerShell(
 			`for ($i = 0; $i -lt 40; $i++) { Start-Sleep -Milliseconds 500; Remove-Item -LiteralPath ${quoted} -Force -ErrorAction SilentlyContinue; if (-not (Test-Path -LiteralPath ${quoted})) { break } }`,
 		);
 		return step(
@@ -535,7 +535,7 @@ export async function runUninstall(
 	}
 
 	const steps: Step[] = [];
-	for (const binary of targets.binaries) steps.push(await removeExecutable(binary));
+	for (const binary of targets.binaries) steps.push(removeExecutable(binary));
 	steps.push(...removeWindowsLeftovers(targets));
 	steps.push(
 		...(process.platform === "win32"

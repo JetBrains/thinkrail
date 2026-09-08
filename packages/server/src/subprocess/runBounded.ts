@@ -1,5 +1,3 @@
-import { type ChildProcess, spawn } from "node:child_process";
-
 export type BoundedRun = {
 	ok: boolean;
 	out: string;
@@ -26,21 +24,22 @@ function boundedTimeout(ms: number): number {
 
 type Sink = { text: () => string; done: Promise<void>; cancel: () => void };
 
-function sink(stream: NodeJS.ReadableStream): Sink {
+function sink(stream: ReadableStream<Uint8Array>): Sink {
+	const reader = stream.getReader();
 	const decoder = new TextDecoder();
 	let text = "";
-	const done = new Promise<void>((resolve) => {
-		stream.on("data", (chunk: Buffer) => {
-			text += decoder.decode(chunk, { stream: true });
-		});
-		stream.on("end", () => resolve());
-		stream.on("error", () => resolve());
-	});
+	const done = (async () => {
+		while (true) {
+			const { done: finished, value } = await reader.read();
+			if (finished) return;
+			if (value) text += decoder.decode(value, { stream: true });
+		}
+	})().catch(() => {});
 	return {
 		text: () => text,
 		done,
 		cancel: () => {
-			(stream as { destroy?: () => void }).destroy?.();
+			void reader.cancel().catch(() => {});
 		},
 	};
 }
@@ -54,83 +53,58 @@ function delay(ms: number): { promise: Promise<void>; cancel: () => void } {
 	return { promise, cancel: () => clearTimeout(timer) };
 }
 
-function killTree(child: ChildProcess): void {
-	if (process.platform !== "win32" && child.pid !== undefined) {
+function killTree(proc: Bun.Subprocess): void {
+	if (process.platform !== "win32") {
 		try {
-			process.kill(-child.pid, "SIGKILL");
+			process.kill(-proc.pid, "SIGKILL");
 			return;
-		} catch {}
+		} catch {
+			proc.kill("SIGKILL");
+			return;
+		}
 	}
-	try {
-		child.kill("SIGKILL");
-	} catch {}
+	proc.kill("SIGKILL");
 }
 
 export async function runBounded(argv: string[], opts: BoundedRunOptions): Promise<BoundedRun> {
 	const startedAt = performance.now();
 	const waitedMs = () => performance.now() - startedAt;
-	const [command, ...args] = argv;
 
-	let child: ChildProcess;
+	let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
 	try {
-		child = spawn(command ?? "", args, {
+		proc = Bun.spawn(argv, {
 			cwd: opts.cwd ?? process.cwd(),
-			env: (opts.env ?? process.env) as NodeJS.ProcessEnv,
-			stdio: ["ignore", "pipe", "pipe"],
-			detached: process.platform !== "win32",
-			windowsHide: true,
+			env: opts.env ?? process.env,
+			stdin: "ignore",
+			stdout: "pipe",
+			stderr: "pipe",
+			detached: true,
+			windowsHide: process.platform === "win32",
 		});
 	} catch (cause) {
 		const err = cause instanceof Error ? cause.message : String(cause);
 		return { ok: false, out: "", err, timedOut: false, launchFailed: true, waitedMs: waitedMs() };
 	}
 
-	let launchErrorMessage: string | null = null;
-	const errored = new Promise<void>((resolve) => {
-		child.once("error", (cause: Error) => {
-			launchErrorMessage = cause.message || "launch failed";
-			resolve();
-		});
-	});
-	let exitCode: number | null = null;
-	const exited = new Promise<void>((resolve) => {
-		child.once("exit", (code) => {
-			exitCode = code;
-			resolve();
-		});
-	});
-
-	const out = sink(child.stdout as NodeJS.ReadableStream);
-	const err = sink(child.stderr as NodeJS.ReadableStream);
+	const out = sink(proc.stdout);
+	const err = sink(proc.stderr);
 	const drained = Promise.all([out.done, err.done]);
 	const deadline = delay(boundedTimeout(opts.timeoutMs));
 
 	const outcome = await Promise.race([
-		exited.then(() => "exited" as const),
-		errored.then(() => "errored" as const),
+		proc.exited.then(() => "exited" as const),
 		deadline.promise.then(() => "timed-out" as const),
 	]);
 	deadline.cancel();
-	if (outcome === "timed-out") killTree(child);
+	if (outcome === "timed-out") killTree(proc);
 	const grace = delay(DRAIN_GRACE_MS);
 	await Promise.race([drained, grace.promise]);
 	grace.cancel();
 	out.cancel();
 	err.cancel();
 
-	if (outcome === "errored" || launchErrorMessage !== null) {
-		return {
-			ok: false,
-			out: "",
-			err: launchErrorMessage ?? "launch failed",
-			timedOut: false,
-			launchFailed: true,
-			waitedMs: waitedMs(),
-		};
-	}
-
 	return {
-		ok: outcome === "exited" && exitCode === 0,
+		ok: outcome === "exited" && proc.exitCode === 0,
 		out: out.text(),
 		err: err.text(),
 		timedOut: outcome === "timed-out",

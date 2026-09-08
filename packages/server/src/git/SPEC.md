@@ -229,7 +229,7 @@ ref off the workspace-create critical path.
 - **Allowed deps:** `persistence` (workspace + project lookup), `log`; `contracts` (`Git*`/`BranchList` types);
   `subprocess` (`runBounded`, the bounded child behind `gitAsync`);
   `@thinkrail/shared/codedError` (naming a failure for the wire); `@thinkrail/shared/spawn`
-  (`spawnSyncCaptured`, the sync runner — `node:child_process` under the hood so `windowsHide` is honored).
+  (`spawnSyncCaptured`, the sync runner with `windowsHide`).
 - **Forbidden:** `host`; sibling features.
 
 ## Get right
@@ -271,8 +271,7 @@ ref off the workspace-create critical path.
   asserting it outright mis-diagnosed every `https://` stall and every slow-link fetch as an auth problem.
   Elapsed seconds are floored at 1: `Math.round` renders a sub-500ms wait as `0s`, which reads as a bug.
   **It is a lower bound, not a ceiling.** `setTimeout` cannot fire while the loop is blocked, and the
-  *sync* runner blocks it by design (`spawnSyncCaptured`, a synchronous `node:child_process` spawn), so
-  the real wait is the budget plus whatever
+  *sync* runner blocks it by design (`spawnSyncCaptured`), so the real wait is the budget plus whatever
   sibling `git()` calls hold the loop for — measured at 6× the budget under a deliberate storm. Hence the
   message reports the **elapsed** time rather than the configured budget: the number the user reads is
   never a fiction. Closing the gap would mean moving git off the loop entirely, which this ticket does not

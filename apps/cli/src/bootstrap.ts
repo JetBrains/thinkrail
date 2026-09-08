@@ -10,14 +10,14 @@ import { runUpdate } from "./update";
 
 const DEFAULT_STATIC_DIR = resolve(import.meta.dir, "../../web/dist");
 
-async function openBrowser(url: string): Promise<void> {
+function openBrowser(url: string): void {
 	const command =
 		process.platform === "darwin"
 			? ["open", url]
 			: process.platform === "win32"
 				? ["cmd", "/c", "start", "", url]
 				: ["xdg-open", url];
-	await spawnDetached(command);
+	spawnDetached(command);
 }
 
 async function bootstrap(build: BuildKind): Promise<void> {
@@ -74,7 +74,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	const url = `http://${openHost}:${port}`;
 	printStartupMark({ status: "host ready", endpoint: url });
 	console.log(`thinkrail → ${url}`);
-	if (options.open) await openBrowser(url);
+	if (options.open) openBrowser(url);
 }
 
 export async function launch(build: BuildKind): Promise<void> {
