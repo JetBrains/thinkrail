@@ -211,6 +211,7 @@ async function runProcess(request: ProcessRequest): Promise<ProcessResult> {
 			stdout: request.captureStdout ? "pipe" : "ignore",
 			stderr: "ignore",
 			env: process.env,
+			windowsHide: true,
 		});
 	} catch {
 		return { outcome: "launch-failed" };
@@ -486,6 +487,7 @@ export async function launchJbcentralLogin(
 				stdout: "ignore",
 				stderr: "ignore",
 				env: process.env,
+				windowsHide: true,
 			});
 			processHandle.unref();
 			return { exited: processHandle.exited };
