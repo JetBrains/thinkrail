@@ -251,6 +251,12 @@ dependency. This keeps test process drivers outside both launchers and the serve
 - `pi` owns state and emits the truth; the host is a thin bridge — it **exposes** `pi`'s state through read
   methods (it does not recompute it) and forwards `pi`'s events as deltas. Clients **hydrate from the reads,
   then stream the deltas** — they hold only view state of their own.
+- Every console child process the host or CLI spawns sets **`windowsHide`** on Windows (`Bun.spawn` /
+  `Bun.spawnSync` / `execFile`). The host has no console of its own, so any omitted flag flashes a
+  transient console window on focus/refresh — worst on the periodic pollers (git status, terminal-busy
+  probes, Central quota). GUI launchers (`explorer`, `code`, browser) are unaffected but still set it.
+  The only exempt spawns are those that inherit an existing terminal's stdio (the `update`/`uninstall`
+  CLI subcommands) and shell probes that are no-ops on win32.
 
 ## Out of scope (V1)
 
