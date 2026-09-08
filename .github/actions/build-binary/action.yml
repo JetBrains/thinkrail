@@ -97,9 +97,15 @@ runs:
     - name: Package desktop installer
       shell: bash
       env:
+        TARGET: ${{ inputs.target }}
         CHANNEL: ${{ inputs.channel }}
       run: |
         set -eu
+        if [ "$TARGET" = bun-windows-x64 ]; then
+          system32="$(cygpath -u "$SYSTEMROOT")/System32"
+          export PATH="$system32:$PATH"
+          echo "Electrobun tar: $(command -v tar)"
+        fi
         case "$CHANNEL" in
           nightly) environment="canary" ;;
           stable) environment="stable" ;;

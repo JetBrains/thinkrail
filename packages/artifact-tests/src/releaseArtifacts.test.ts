@@ -14,7 +14,7 @@ import { join, resolve } from "node:path";
 const actionPath = resolve(import.meta.dir, "../../../.github/actions/build-binary/action.yml");
 const action = Bun.YAML.parse(readFileSync(actionPath, "utf8")) as {
 	outputs: Record<string, { value: string }>;
-	runs: { steps: { id?: string; run?: string }[] };
+	runs: { steps: { id?: string; name?: string; run?: string }[] };
 };
 const roots: string[] = [];
 
@@ -71,6 +71,23 @@ function fixture(): string {
 	return root;
 }
 
+function packageDesktop(root: string, target: string, channel: string) {
+	const script = action.runs.steps.find((step) => step.name === "Package desktop installer")?.run;
+	if (!script) throw new Error("desktop package script is missing");
+	return Bun.spawnSync(["bash", "-c", script], {
+		cwd: root,
+		env: {
+			...process.env,
+			PATH: `${join(root, "bin")}:${process.env.PATH}`,
+			SYSTEMROOT: "C:\\Windows",
+			TARGET: target,
+			CHANNEL: channel,
+		},
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+}
+
 function collect(root: string, target: string, channel: string) {
 	const collector = action.runs.steps.find((step) => step.id === "resolve-desktop")?.run;
 	if (!collector) throw new Error("desktop artifact collector is missing");
@@ -86,6 +103,45 @@ function collect(root: string, target: string, channel: string) {
 		stderr: "pipe",
 	});
 }
+
+test("Windows packaging places System32 tar ahead of Git tar", () => {
+	const root = fixture();
+	const bin = join(root, "bin");
+	const system32 = join(root, "windows", "System32");
+	mkdirSync(bin, { recursive: true });
+	mkdirSync(system32, { recursive: true });
+	writeFileSync(
+		join(bin, "cygpath"),
+		`#!/bin/sh\nprintf '%s\\n' ${JSON.stringify(join(root, "windows"))}\n`,
+		{ mode: 0o755 },
+	);
+	writeFileSync(join(system32, "tar"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+	writeFileSync(
+		join(bin, "bun"),
+		`#!/bin/sh\nprintf '%s\\n%s\\n' "$PATH" "$*" > ${JSON.stringify(join(root, "package-call"))}\n`,
+		{ mode: 0o755 },
+	);
+	const result = packageDesktop(root, "bun-windows-x64", "nightly");
+	expect(result.exitCode).toBe(0);
+	const [path, args] = readFileSync(join(root, "package-call"), "utf8").split("\n");
+	expect(path?.split(":")[0]).toBe(system32);
+	expect(args).toBe("run --cwd apps/desktop package:canary");
+});
+
+test("non-Windows packaging does not require cygpath or rewrite PATH", () => {
+	const root = fixture();
+	const bin = join(root, "bin");
+	mkdirSync(bin, { recursive: true });
+	writeFileSync(
+		join(bin, "bun"),
+		`#!/bin/sh\nprintf '%s\\n%s\\n' "$PATH" "$*" > ${JSON.stringify(join(root, "package-call"))}\n`,
+		{ mode: 0o755 },
+	);
+	expect(packageDesktop(root, "bun-linux-x64", "stable").exitCode).toBe(0);
+	const [path, args] = readFileSync(join(root, "package-call"), "utf8").split("\n");
+	expect(path?.split(":")[0]).toBe(bin);
+	expect(args).toBe("run --cwd apps/desktop package:stable");
+});
 
 test("preserves the four public installer/CLI outputs and adds the app archive path", () => {
 	expect(

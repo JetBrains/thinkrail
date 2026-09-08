@@ -69,7 +69,9 @@ private SRE flow replaces the unsigned framework DMG with a conventional DMG con
 expanded app, under the same published alias. The app archive is a private signing intermediate, never
 a public release asset.
 
-The collector resolves exact framework filenames. Stable installers omit the `stable-` prefix; nightly
+The collector resolves exact framework filenames. On Windows, the release invocation puts System32
+first so Hutch's bare `tar` resolves to Windows bsdtar; Git's GNU tar interprets drive-letter paths as
+remote `host:path` operands. Stable installers omit the `stable-` prefix; nightly
 uses Electrobun's `canary` prefix/suffix. Updater metadata and patches are not published. Electrobun 2.0.1
 has no macOS x64 core. Linux requires Ubuntu 24.04+/glibc 2.38 and the declared GTK, WebKitGTK,
 AppIndicator, and librsvg dependencies. CEF and additional installer formats are outside this contract.
