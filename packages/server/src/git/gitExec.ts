@@ -1,3 +1,4 @@
+import { spawnSyncCaptured } from "@thinkrail/shared/spawn";
 import { runBounded } from "../subprocess";
 
 const NETWORK_TIMEOUT_MS = 55_000;
@@ -32,17 +33,14 @@ function boundedStderr(raw: string): string {
 }
 
 export function git(cwd: string, args: string[], opts: { raw?: boolean } = {}): GitResult {
-	const result = Bun.spawnSync(["git", "-C", cwd, ...args], {
-		stdout: "pipe",
-		stderr: "pipe",
+	const result = spawnSyncCaptured(["git", "-C", cwd, ...args], {
 		env: nonInteractiveGitEnv(),
-		windowsHide: process.platform === "win32",
+		maxBuffer: Number.POSITIVE_INFINITY,
 	});
-	const stdout = new TextDecoder().decode(result.stdout);
 	return {
-		ok: result.success,
-		out: opts.raw ? stdout : stdout.trim(),
-		err: boundedStderr(new TextDecoder().decode(result.stderr)),
+		ok: result.launched && result.exitCode === 0,
+		out: opts.raw ? result.stdout : result.stdout.trim(),
+		err: boundedStderr(result.stderr),
 	};
 }
 

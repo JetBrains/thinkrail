@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { spawnSyncCaptured } from "@thinkrail/shared/spawn";
 
 export function parseProcChildren(contents: string): number[] {
 	return contents
@@ -16,14 +17,11 @@ function childrenViaProc(pid: number): boolean | null {
 }
 
 function childrenViaPgrep(pid: number): boolean | null {
-	try {
-		const run = Bun.spawnSync(["pgrep", "-P", String(pid)], { stdout: "pipe", stderr: "ignore" });
-		if (run.exitCode === 0) return true;
-		if (run.exitCode === 1) return false;
-		return null;
-	} catch {
-		return null;
-	}
+	const run = spawnSyncCaptured(["pgrep", "-P", String(pid)]);
+	if (!run.launched) return null;
+	if (run.exitCode === 0) return true;
+	if (run.exitCode === 1) return false;
+	return null;
 }
 
 export const WINDOWS_CHILD_COUNT = [
@@ -34,17 +32,12 @@ export const WINDOWS_CHILD_COUNT = [
 
 function childrenViaCim(pid: number): boolean | null {
 	for (const shell of ["powershell.exe", "pwsh.exe"]) {
-		try {
-			const run = Bun.spawnSync([shell, "-NoProfile", "-Command", WINDOWS_CHILD_COUNT], {
-				stdout: "pipe",
-				stderr: "ignore",
-				env: { ...process.env, TR_PARENT_PID: String(pid) },
-				windowsHide: true,
-			});
-			if (run.exitCode !== 0) continue;
-			const count = Number.parseInt(run.stdout.toString().trim(), 10);
-			if (Number.isInteger(count)) return count > 0;
-		} catch {}
+		const run = spawnSyncCaptured([shell, "-NoProfile", "-Command", WINDOWS_CHILD_COUNT], {
+			env: { ...process.env, TR_PARENT_PID: String(pid) },
+		});
+		if (!run.launched || run.exitCode !== 0) continue;
+		const count = Number.parseInt(run.stdout.trim(), 10);
+		if (Number.isInteger(count)) return count > 0;
 	}
 	return null;
 }
