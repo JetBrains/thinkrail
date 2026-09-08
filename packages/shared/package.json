@@ -11,7 +11,8 @@
 		"./jbcentral": "./src/jbcentral.ts",
 		"./paths": "./src/paths.ts",
 		"./codedError": "./src/codedError.ts",
-		"./removeTree": "./src/removeTree.ts"
+		"./removeTree": "./src/removeTree.ts",
+		"./spawn": "./src/spawn.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",

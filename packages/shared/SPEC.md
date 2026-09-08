@@ -29,10 +29,20 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
   `@thinkrail/shared/removeTree` → `removeTree()`, the retrying recursive remove every teardown of a tree
   a child process ran from goes through;
+  `@thinkrail/shared/spawn` → `spawnSyncCaptured()` + `spawnDetached()`, the hidden-child-process seam every
+  console child the host or CLI launches goes through;
   `@thinkrail/shared/jbcentral` → the native Central CLI adapter: absolute executable/version/status
   probing; the minimum supported version and the global opaque PI-extension path; a one-directional auth
   verdict; an artifact-location watcher; `add pi` / `remove pi` / `login` / `update --install` actions; and
   the per-OS official install plan. It never edits PI model or credential configuration.
+- **/spawn** — `spawnSyncCaptured()` (sync capture → `{ launched, exitCode, stdout, stderr }`) and
+  `spawnDetached()` (fire-and-forget, `unref`ed) over **`node:child_process`**, always `windowsHide: true`.
+  The seam exists because **Bun's `Bun.spawn`/`Bun.spawnSync` silently ignore `windowsHide`** (through Bun
+  1.4.x), so a console child launched through them flashes a focus-stealing console window on Windows —
+  worst on the pollers that fire on workspace/terminal switch and window focus. Node's `child_process`
+  (mapped to libuv `UV_PROCESS_WINDOWS_HIDE`) is honored, so every synchronous or detached console spawn
+  routes here; the two bespoke async-bounded runners (`server/subprocess` `runBounded`, `jbcentral`'s
+  version/quota runner) use `node:child_process` directly for the same reason.
 - **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape `jbcentralInstall`
   returns — kept in the wire so the server can carry it to the card verbatim).
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
