@@ -1,3 +1,4 @@
+import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, watch } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join } from "node:path";
@@ -172,44 +173,41 @@ function compareVersions(left: SemanticVersion, right: SemanticVersion): number 
 	return left.major - right.major || left.minor - right.minor || left.patch - right.patch;
 }
 
-async function readBounded(
-	stream: ReadableStream<Uint8Array>,
+function readBounded(
+	stream: NodeJS.ReadableStream,
 	maxBytes: number,
 ): Promise<{ outcome: "ok"; text: string } | { outcome: "output-too-large" }> {
-	const reader = stream.getReader();
-	const chunks: Uint8Array[] = [];
-	let length = 0;
-	try {
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			length += value.byteLength;
+	return new Promise((resolve) => {
+		const chunks: Buffer[] = [];
+		let length = 0;
+		let settled = false;
+		const settle = (result: { outcome: "ok"; text: string } | { outcome: "output-too-large" }) => {
+			if (settled) return;
+			settled = true;
+			resolve(result);
+		};
+		stream.on("data", (chunk: Buffer) => {
+			length += chunk.byteLength;
 			if (length > maxBytes) {
-				await reader.cancel();
-				return { outcome: "output-too-large" };
+				(stream as { destroy?: () => void }).destroy?.();
+				settle({ outcome: "output-too-large" });
+				return;
 			}
-			chunks.push(value);
-		}
-	} finally {
-		reader.releaseLock();
-	}
-
-	const bytes = new Uint8Array(length);
-	let offset = 0;
-	for (const chunk of chunks) {
-		bytes.set(chunk, offset);
-		offset += chunk.byteLength;
-	}
-	return { outcome: "ok", text: new TextDecoder().decode(bytes) };
+			chunks.push(chunk);
+		});
+		stream.once("end", () => settle({ outcome: "ok", text: Buffer.concat(chunks).toString("utf8") }));
+		stream.once("error", () =>
+			settle({ outcome: "ok", text: Buffer.concat(chunks).toString("utf8") }),
+		);
+	});
 }
 
 async function runProcess(request: ProcessRequest): Promise<ProcessResult> {
-	let processHandle: ReturnType<typeof Bun.spawn>;
+	const [command, ...args] = request.argv;
+	let child: ChildProcess;
 	try {
-		processHandle = Bun.spawn([...request.argv], {
-			stdin: "ignore",
-			stdout: request.captureStdout ? "pipe" : "ignore",
-			stderr: "ignore",
+		child = spawn(command ?? "", args, {
+			stdio: ["ignore", request.captureStdout ? "pipe" : "ignore", "ignore"],
 			env: process.env,
 			windowsHide: true,
 		});
@@ -217,32 +215,36 @@ async function runProcess(request: ProcessRequest): Promise<ProcessResult> {
 		return { outcome: "launch-failed" };
 	}
 
+	const launchFailed = new Promise<ProcessResult>((resolve) => {
+		child.once("error", () => resolve({ outcome: "launch-failed" }));
+	});
+
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const deadline = new Promise<ProcessResult>((resolve) => {
 		timer = setTimeout(() => {
-			processHandle.kill();
+			child.kill();
 			resolve({ outcome: "timed-out" });
 		}, request.timeoutMs);
 	});
 
 	const completion = (async (): Promise<ProcessResult> => {
 		const stdoutResult = request.captureStdout
-			? await readBounded(
-					processHandle.stdout as ReadableStream<Uint8Array>,
-					request.maxStdoutBytes,
-				)
+			? await readBounded(child.stdout as NodeJS.ReadableStream, request.maxStdoutBytes)
 			: { outcome: "ok" as const, text: "" };
 		if (stdoutResult.outcome === "output-too-large") {
-			processHandle.kill();
+			child.kill();
 			return stdoutResult;
 		}
-		const exitCode = await processHandle.exited;
+		const exitCode = await new Promise<number>((resolve) => {
+			if (child.exitCode !== null) return resolve(child.exitCode);
+			child.once("exit", (code) => resolve(code ?? 0));
+		});
 		return { outcome: "exited", exitCode, stdout: stdoutResult.text };
 	})();
 	completion.catch(() => {});
 
 	try {
-		return await Promise.race([completion, deadline]);
+		return await Promise.race([launchFailed, completion, deadline]);
 	} finally {
 		clearTimeout(timer);
 	}
@@ -482,15 +484,19 @@ export async function launchJbcentralLogin(
 	const launch =
 		deps.launchDetached ??
 		((argv: readonly string[]) => {
-			const processHandle = Bun.spawn([...argv], {
-				stdin: "ignore",
-				stdout: "ignore",
-				stderr: "ignore",
+			const [command, ...args] = argv;
+			const child = spawn(command ?? "", args, {
+				stdio: "ignore",
 				env: process.env,
 				windowsHide: true,
+				detached: process.platform !== "win32",
 			});
-			processHandle.unref();
-			return { exited: processHandle.exited };
+			const exited = new Promise<number>((resolve) => {
+				child.once("exit", (code) => resolve(code ?? 1));
+				child.once("error", () => resolve(1));
+			});
+			child.unref();
+			return { exited };
 		});
 
 	let handle: LoginHandle | null;

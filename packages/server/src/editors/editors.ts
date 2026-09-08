@@ -1,4 +1,5 @@
 import type { EditorInfo } from "@thinkrail/contracts";
+import { spawnDetached } from "@thinkrail/shared/spawn";
 
 interface GuiCandidate {
 	id: string;
@@ -34,7 +35,7 @@ export const defaultWhich: WhichFn = (bin) =>
 export type SpawnFn = (cmd: string[]) => void;
 
 export const defaultSpawn: SpawnFn = (cmd) => {
-	Bun.spawn(cmd, { stdout: "ignore", stderr: "ignore", windowsHide: true }).unref();
+	if (!spawnDetached(cmd)) throw new Error("Failed to launch the requested application");
 };
 
 export function listAvailableEditors(which: WhichFn = defaultWhich): EditorInfo[] {

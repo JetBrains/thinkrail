@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 
 interface PickerExecution {
@@ -125,14 +126,25 @@ export function noPickerMessage(platform: NodeJS.Platform): string {
 		: `No native folder picker is available on this host (${platform}).`;
 }
 
-const defaultRunPicker: PickerRunner = async (cmd, env) => {
-	const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe", env, windowsHide: true });
-	const [stdout, stderr, code] = await Promise.all([
-		new Response(proc.stdout).text(),
-		new Response(proc.stderr).text(),
-		proc.exited,
-	]);
-	return { stdout, stderr, code };
+const defaultRunPicker: PickerRunner = (cmd, env) => {
+	const [command, ...args] = cmd;
+	const child = spawn(command ?? "", args, {
+		stdio: ["ignore", "pipe", "pipe"],
+		env,
+		windowsHide: true,
+	});
+	let stdout = "";
+	let stderr = "";
+	child.stdout?.on("data", (chunk: Buffer) => {
+		stdout += chunk.toString();
+	});
+	child.stderr?.on("data", (chunk: Buffer) => {
+		stderr += chunk.toString();
+	});
+	return new Promise<PickerExecution>((resolve, reject) => {
+		child.once("error", reject);
+		child.once("close", (code) => resolve({ stdout, stderr, code: code ?? 1 }));
+	});
 };
 
 export async function selectDirectory({

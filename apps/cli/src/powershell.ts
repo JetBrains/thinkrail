@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawnDetached } from "@thinkrail/shared/spawn";
 
 const HOSTS = ["powershell.exe", "pwsh.exe"];
 
@@ -52,15 +53,7 @@ export async function runPowerShellScript(
 
 export function spawnDetachedPowerShell(command: string): boolean {
 	for (const host of HOSTS) {
-		try {
-			Bun.spawn([host, ...FLAGS, "-WindowStyle", "Hidden", "-Command", command], {
-				stdin: "ignore",
-				stdout: "ignore",
-				stderr: "ignore",
-				windowsHide: true,
-			}).unref();
-			return true;
-		} catch {}
+		if (spawnDetached([host, ...FLAGS, "-WindowStyle", "Hidden", "-Command", command])) return true;
 	}
 	return false;
 }

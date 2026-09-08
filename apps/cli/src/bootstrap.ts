@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { type BuildKind, bootHost } from "@thinkrail/server";
+import { spawnDetached } from "@thinkrail/shared/spawn";
 import { printStartupMark } from "@thinkrail/shared/startupMark";
 import { channel, version } from "@thinkrail/shared/version";
 import { type CliOptions, parseArgs, parseSubcommand, USAGE } from "./args";
@@ -16,9 +17,7 @@ function openBrowser(url: string): void {
 			: process.platform === "win32"
 				? ["cmd", "/c", "start", "", url]
 				: ["xdg-open", url];
-	try {
-		Bun.spawn(command, { stdout: "ignore", stderr: "ignore", windowsHide: true }).unref();
-	} catch {}
+	spawnDetached(command);
 }
 
 async function bootstrap(build: BuildKind): Promise<void> {
