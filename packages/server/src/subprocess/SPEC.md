@@ -41,11 +41,12 @@ never what a particular child's output means.
   of duplicating them.
 
   The census above is about *unbounded waits*, not about every spawn in the repo — the rest are already
-  bounded or cannot wait on anything: `git`'s sync `git()` and `shared/shellEnv` pass their own
-  `Bun.spawnSync` timeout, `terminal/shellBusy` shells out to `pgrep` locally, and `editors`,
-  `cli/bootstrap` and `cli/powershell` are fire-and-forget `.unref()`s whose output nobody reads.
-  `agent/trash`'s `execFile` is the one true straggler: unbounded, but a local trash helper with no
-  network and no prompt, so it fails the letter of this module and not its purpose.
+  bounded or cannot wait on anything: `git`'s sync `git()` and `terminal/shellBusy` go through
+  `@thinkrail/shared/spawn`'s `spawnSyncCaptured` (`shared/shellEnv` keeps its own `Bun.spawnSync` — a
+  win32 no-op), and `editors`, `cli/bootstrap` and `cli/powershell` are fire-and-forget
+  `@thinkrail/shared/spawn` `spawnDetached`s whose output nobody reads. `agent/trash`'s `execFile` is the
+  one true straggler: unbounded, but a local trash helper with no network and no prompt, so it fails the
+  letter of this module and not its purpose.
 
 ## Get right
 
@@ -107,9 +108,11 @@ never what a particular child's output means.
   stays unbuilt and needs the cancellation seam `dialog` wants above.
 - **Windows has no process groups.** `detached` maps to `UV_PROCESS_DETACHED` and the kill falls back to
   the direct child, so a grandchild there survives the timeout as before. The group-kill test is skipped
-  there rather than pretending otherwise. Bounded children use `windowsHide` on Windows: background
-  lookups must not create a visible console window or steal focus from the browser client.
-- **The env defaults to the live `process.env`, not Bun's launch-time snapshot** — `boot`'s
+  there rather than pretending otherwise. Bounded children are spawned through **`node:child_process`**
+  with `windowsHide: true` — not `Bun.spawn`, which ignores `windowsHide` (through Bun 1.4.x) and would
+  flash a focus-stealing console window on Windows. Background lookups must not create a visible console
+  window or steal focus from the browser client (see `architecture.md` Invariants; `@thinkrail/shared/spawn`).
+- **The env defaults to the live `process.env`, not the launch-time snapshot** — `boot`'s
   `resolveShellEnv()` repairs `PATH`/`LANG` by mutating `process.env` *after* startup, and a child spawned
   from the snapshot silently misses that repair. Both halves are pinned separately — a caller's `env`/`cwd`
   arriving at the child, and a post-startup mutation being visible to one spawned without `env` — because a
