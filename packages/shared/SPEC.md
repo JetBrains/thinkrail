@@ -36,7 +36,9 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   verdict; an artifact-location watcher; `add pi` / `remove pi` / `login` / `update --install` actions; and
   the per-OS official install plan. It never edits PI model or credential configuration.
 - **/spawn** — `spawnSyncCaptured()` (sync capture → `{ launched, exitCode, stdout, stderr }`) and
-  `spawnDetached()` (fire-and-forget, `unref`ed) over **`node:child_process`**, always `windowsHide: true`.
+  `spawnDetached()` (async launch confirmation, then fire-and-forget `unref`) over **`node:child_process`**,
+  always `windowsHide: true`. `spawnDetached()` resolves `false` on both synchronous launch failure and
+  the asynchronous child `error` event; fallback callers never accept a missing executable.
   The seam exists because **Bun's `Bun.spawn`/`Bun.spawnSync` silently ignore `windowsHide`** (through Bun
   1.4.x), so a console child launched through them flashes a focus-stealing console window on Windows —
   worst on the pollers that fire on workspace/terminal switch and window focus. Node's `child_process`

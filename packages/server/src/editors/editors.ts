@@ -35,7 +35,7 @@ export const defaultWhich: WhichFn = (bin) =>
 export type SpawnFn = (cmd: string[]) => void;
 
 export const defaultSpawn: SpawnFn = (cmd) => {
-	if (!spawnDetached(cmd)) throw new Error("Failed to launch the requested application");
+	void spawnDetached(cmd);
 };
 
 export function listAvailableEditors(which: WhichFn = defaultWhich): EditorInfo[] {

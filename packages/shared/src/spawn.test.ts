@@ -33,7 +33,8 @@ test("spawnSyncCaptured passes env through", () => {
 	expect(result.stdout).toBe("from-env");
 });
 
-test("spawnDetached returns true for a real binary and false for a missing one", () => {
-	expect(spawnDetached([process.execPath, "-e", ""])).toBe(true);
-	expect(spawnDetached([])).toBe(false);
+test("spawnDetached confirms a real launch and rejects empty or missing commands", async () => {
+	expect(await spawnDetached([process.execPath, "-e", ""])).toBe(true);
+	expect(await spawnDetached([])).toBe(false);
+	expect(await spawnDetached(["thinkrail-no-such-binary-xyz"])).toBe(false);
 });

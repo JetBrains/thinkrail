@@ -35,20 +35,28 @@ export function spawnSyncCaptured(
 	};
 }
 
-export function spawnDetached(argv: readonly string[], options: SpawnEnvironment = {}): boolean {
+export function spawnDetached(
+	argv: readonly string[],
+	options: SpawnEnvironment = {},
+): Promise<boolean> {
 	const [command, ...args] = argv;
-	if (!command) return false;
-	try {
-		const child = spawn(command, args, {
-			cwd: options.cwd,
-			env: options.env as NodeJS.ProcessEnv | undefined,
-			stdio: "ignore",
-			windowsHide: true,
-			detached: process.platform !== "win32",
-		});
+	if (!command) return Promise.resolve(false);
+	return new Promise((resolve) => {
+		let child: ReturnType<typeof spawn>;
+		try {
+			child = spawn(command, args, {
+				cwd: options.cwd,
+				env: options.env as NodeJS.ProcessEnv | undefined,
+				stdio: "ignore",
+				windowsHide: true,
+				detached: process.platform !== "win32",
+			});
+		} catch {
+			resolve(false);
+			return;
+		}
+		child.once("error", () => resolve(false));
+		child.once("spawn", () => resolve(true));
 		child.unref();
-		return true;
-	} catch {
-		return false;
-	}
+	});
 }
