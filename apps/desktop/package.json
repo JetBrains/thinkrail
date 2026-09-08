@@ -18,6 +18,8 @@
 	"devDependencies": {
 		"@types/bun": "catalog:",
 		"electrobun": "2.0.1",
+		"pe-library": "2.0.1",
+		"resedit": "3.1.0",
 		"typescript": "catalog:"
 	}
 }
