@@ -17,8 +17,9 @@ never what a particular child's output means.
 ## Boundary
 
 - **Owns:** `runBounded(argv, { timeoutMs, cwd?, env? })` →
-  `{ ok, out, err, timedOut, launchFailed, waitedMs }`: spawn detached, capture both streams, complete on
-  the child's **exit**, and on expiry kill the whole process group. A failed launch is a result
+  `{ ok, out, err, timedOut, launchFailed, waitedMs }`: capture both streams and complete on the child's
+  **exit**; POSIX children are detached process-group leaders, while Windows children retain a nonvisual
+  console. Expiry kills the POSIX group or the direct Windows child. A failed launch is a result
   (`ok: false`, `launchFailed: true`, the launch error as `err`), never a throw; callers can distinguish
   infrastructure failure from a child that ran and exited nonzero.
 - **Public surface:** `runBounded`, `BoundedRun`, `BoundedRunOptions`.
@@ -85,7 +86,7 @@ never what a particular child's output means.
   reading: "not a number" is a broken caller, and the safe failure for a broken budget is to expire at
   once, not to wait 24 days. Finite values clamp into `[0, 2^31-1]`, and a negative budget expires
   immediately because it already had.
-- **On expiry, kill the process group — that, not the timer, is what releases the descriptors.**
+- **On POSIX expiry, kill the process group — that, not the timer, is what releases the descriptors.**
   `detached: true` (`setsid`) makes the child a group leader, so `process.kill(-pid, "SIGKILL")` reaps the
   grandchildren still holding our pipes; the reads then hit EOF on their own. Abandoning reads instead is
   what pins Bun's event loop for the orphan's whole lifetime — measured at a 20s hold against an unref'd
@@ -106,11 +107,15 @@ never what a particular child's output means.
   host terminal's signal group, so the budget — never a `Ctrl-C` on the host — is what ends a stalled call.
   Surfacing the passphrase request in the UI (#209's headline ask, as opposed to its "at minimum" clause)
   stays unbuilt and needs the cancellation seam `dialog` wants above.
-- **Windows has no process groups.** `detached` maps to `UV_PROCESS_DETACHED` and the kill falls back to
-  the direct child, so a grandchild there survives the timeout as before. The group-kill test is skipped
-  there rather than pretending otherwise. Bounded children set `windowsHide: true`; Bun 1.4.0 maps it to
-  libuv `UV_PROCESS_WINDOWS_HIDE`. Background lookups must not create a visible console window or steal
-  focus from the browser client (see `architecture.md` Invariants; `@thinkrail/shared/spawn`).
+- **Windows children are hidden, not detached.** `windowsHide: true` with `detached: false` preserves a
+  nonvisual console for ordinary descendants to inherit. Detachment removes that console: the immediate
+  child stays hidden, but a helper it launches can allocate a visible console. This is why a focus-triggered
+  `gh` lookup could still flash `tzutil`, Git, and SSH windows despite hiding the direct child. Windows
+  does not support the POSIX group-kill path; expiry still terminates only the direct child, not a promised
+  whole tree. Non-detached children participate in libuv's normal job lifetime; this runner is for bounded
+  host-owned work, not independently surviving daemons. The native Windows regression uses a no-console
+  driver, the real runner, and an ordinary console grandchild, with a detached positive control. It checks
+  native console ownership/window state rather than option presence, output success, or browser DOM.
 - **The env defaults to the live `process.env`, not the launch-time snapshot** — `boot`'s
   `resolveShellEnv()` repairs `PATH`/`LANG` by mutating `process.env` *after* startup, and a child spawned
   from the snapshot silently misses that repair. Both halves are pinned separately — a caller's `env`/`cwd`
