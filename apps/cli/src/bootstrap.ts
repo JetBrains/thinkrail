@@ -17,7 +17,7 @@ function openBrowser(url: string): void {
 				? ["cmd", "/c", "start", "", url]
 				: ["xdg-open", url];
 	try {
-		Bun.spawn(command, { stdout: "ignore", stderr: "ignore" }).unref();
+		Bun.spawn(command, { stdout: "ignore", stderr: "ignore", windowsHide: true }).unref();
 	} catch {}
 }
 

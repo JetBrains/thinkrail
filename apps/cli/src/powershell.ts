@@ -57,6 +57,7 @@ export function spawnDetachedPowerShell(command: string): boolean {
 				stdin: "ignore",
 				stdout: "ignore",
 				stderr: "ignore",
+				windowsHide: true,
 			}).unref();
 			return true;
 		} catch {}
