@@ -652,18 +652,23 @@ own section. The kebab menu (`plan-menu`, a
   (disabled when none are unsettled; a toast reports how many were queued, the per-row `Reviewing…` pulses
   track progress), plus **Open draft PR** (`plan-open-draft-pr`, hidden once a PR exists). **The header
   also owns the plan's finish line — Open PR** (`plan-open-pr`, task-open-pr): a deterministic
-  host-side flow (push + `gh`, NEVER an agent prompt) that goes through the **compose dialog**
-  (`PrComposeDialog.tsx`, `pr-compose-dialog`): the click fetches `pr.preview` and opens editable
+  host-side flow (push + `gh`, NEVER an agent prompt) that, **for first-time creation only**
+  (`openReview` absent), goes through the **compose dialog** (`PrComposeDialog.tsx`,
+  `pr-compose-dialog`): the click fetches `pr.preview` and opens editable
   Title (`pr-compose-title`) + Description (`pr-compose-body`, prefilled from the plan) fields;
-  only the submit (`pr-compose-submit`, label follows the action — Open PR / Open draft PR / Push
-  updates) runs `pr.open` with the edited `title`/`body`. The dialog closes on success, stays open
+  only the submit (`pr-compose-submit`, label follows the action — Open PR / Open draft PR) runs
+  `pr.open` with the edited `title`/`body`. The dialog closes on success, stays open
   on a generic failure (edits survive the toast), and hands off to `PrSetupDialog` on
   `PUSH_AUTH_FAILED` — whose Try again re-submits the LAST edited title/body (kept in a ref), never
   a re-rendered draft. The header button is primary-filled when the plan is
   *ready* (all done + all reviews settled) and quiet otherwise; once an open PR exists (the same
   `workspace.openReview` lookup the shell's scope label uses, via `useOpenBranchReview` — the hook
   lives in `panels` because nothing may import `shell`) the label flips to **Push updates**
-  (same call — the host pushes to the SAME branch/PR and refreshes its body); when the lookup reports
+  and the button **bypasses the compose dialog entirely** — pressing it (or the next-action `push`
+  arm) calls `pr.open` directly with no `title`/`body`, so the host pushes to the SAME branch/PR and
+  silently refreshes its body from the plan (`renderPrBody`) while leaving the PR title untouched
+  (no `titleEdited`). Re-editing a PR's description each push read as "set up the PR again"; the modal
+  is only the creation affordance. When the lookup reports
   **`unpushedCommits`** the label appends the count (`Push updates (N)`), the button turns
   primary-filled, and the next-action banner grows a `push` arm ("N new commits aren't in PR #N
   yet" + Push updates) so new work after the PR never sits silently local — a successful push

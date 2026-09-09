@@ -524,8 +524,8 @@ export default function PlanPane({
 	const [prCompose, setPrCompose] = useState<PrComposeState | null>(null);
 	const lastPrSubmit = useRef<{
 		draft: boolean;
-		title: string;
-		body: string;
+		title?: string | undefined;
+		body?: string | undefined;
 		titleEdited: boolean;
 	} | null>(null);
 	const [focusRequest, setFocusRequest] = useState<{ id: string; tick: number } | null>(null);
@@ -581,8 +581,17 @@ export default function PlanPane({
 	};
 	const unpushed = openReview?.unpushedCommits ?? 0;
 	const openPrFlow = async (draft: boolean): Promise<void> => {
+		if (openReview) {
+			await submitPr({ draft: false });
+			return;
+		}
 		const edited = lastPrSubmit.current;
-		if (edited && edited.draft === draft) {
+		if (
+			edited &&
+			edited.title !== undefined &&
+			edited.body !== undefined &&
+			edited.draft === draft
+		) {
 			setPrCompose({
 				draft,
 				title: edited.title,
@@ -601,13 +610,19 @@ export default function PlanPane({
 			setPrBusy(false);
 		}
 	};
-	const submitPr = async (
-		draft: boolean,
-		prTitle: string,
-		prBody: string,
-		titleEdited: boolean,
-	): Promise<void> => {
-		lastPrSubmit.current = { draft, title: prTitle, body: prBody, titleEdited };
+	const submitPr = async (opts: {
+		draft: boolean;
+		title?: string | undefined;
+		body?: string | undefined;
+		titleEdited?: boolean | undefined;
+	}): Promise<void> => {
+		const { draft, title: prTitle, body: prBody, titleEdited } = opts;
+		lastPrSubmit.current = {
+			draft,
+			title: prTitle,
+			body: prBody,
+			titleEdited: Boolean(titleEdited),
+		};
 		setPrBusy(true);
 		try {
 			const result = await getTransport().request(
@@ -615,9 +630,9 @@ export default function PlanPane({
 				{
 					workspaceId,
 					sessionId,
-					title: prTitle,
+					...(prTitle !== undefined ? { title: prTitle } : {}),
 					...(titleEdited ? { titleEdited: true } : {}),
-					body: prBody,
+					...(prBody !== undefined ? { body: prBody } : {}),
 					...(draft ? { draft: true } : {}),
 				},
 				{ timeoutMs: 180_000 },
@@ -677,7 +692,7 @@ export default function PlanPane({
 	const retryPrSetup = () => {
 		setPrSetup(null);
 		const last = lastPrSubmit.current;
-		if (last) void submitPr(last.draft, last.title, last.body, last.titleEdited);
+		if (last) void submitPr(last);
 	};
 	const runPrSetupCommand = (command: string) => {
 		setPrSetup(null);
@@ -761,7 +776,8 @@ export default function PlanPane({
 					lastPrSubmit.current = null;
 				}}
 				onSubmit={(prTitle, prBody, titleEdited) => {
-					if (prCompose) void submitPr(prCompose.draft, prTitle, prBody, titleEdited);
+					if (prCompose)
+						void submitPr({ draft: prCompose.draft, title: prTitle, body: prBody, titleEdited });
 				}}
 			/>
 			<PrSetupDialog
@@ -886,7 +902,7 @@ export default function PlanPane({
 						) : (
 							<GitPullRequestArrow className="size-14" />
 						)}
-						{prBusy && prCompose
+						{prBusy && (prCompose || openReview)
 							? "Pushing…"
 							: openReview
 								? unpushed > 0
