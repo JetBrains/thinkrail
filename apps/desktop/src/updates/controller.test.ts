@@ -6,11 +6,7 @@ import {
 	type NativeUpdaterInfo,
 	type NativeUpdaterStatusEntry,
 } from "./controller";
-import {
-	DESKTOP_UPDATE_BASE_URL,
-	hasDesktopArtifactTestSeam,
-	nativeUpdatesEnabled,
-} from "./enablement";
+import { hasDesktopArtifactTestSeam, nativeUpdatesEnabled } from "./enablement";
 
 interface Deferred<T> {
 	promise: Promise<T>;
@@ -85,7 +81,7 @@ test("enables only supported packaged production identities and blocks artifact 
 	const enabled = {
 		isPackaged: true,
 		channel: "stable",
-		baseUrl: DESKTOP_UPDATE_BASE_URL,
+		baseUrl: "https://updates.example.test/releases",
 		platform: "darwin" as const,
 		arch: "arm64",
 		artifactTestSeam: false,
@@ -95,6 +91,7 @@ test("enables only supported packaged production identities and blocks artifact 
 	expect(nativeUpdatesEnabled({ ...enabled, isPackaged: false })).toBe(false);
 	expect(nativeUpdatesEnabled({ ...enabled, channel: "dev" })).toBe(false);
 	expect(nativeUpdatesEnabled({ ...enabled, baseUrl: "" })).toBe(false);
+	expect(nativeUpdatesEnabled({ ...enabled, baseUrl: "not a URL" })).toBe(false);
 	expect(nativeUpdatesEnabled({ ...enabled, baseUrl: "http://updates.example.test" })).toBe(false);
 	expect(nativeUpdatesEnabled({ ...enabled, artifactTestSeam: true })).toBe(false);
 	expect(nativeUpdatesEnabled({ ...enabled, platform: "darwin", arch: "x64" })).toBe(false);
@@ -134,7 +131,7 @@ test("checks after readiness, coalesces prompt requests, downloads, and publishe
 	expect(scheduled.at(-1)?.delay).toBe(6 * 60 * 60 * 1000);
 });
 
-test("keeps a prepared update across a failed poll and revalidates before one restart", async () => {
+test("keeps a prepared update when restart revalidation fails, then retries and restarts once", async () => {
 	const updater = new FakeUpdater();
 	const restart = deferred<void>();
 	let restartCalls = 0;
@@ -153,13 +150,14 @@ test("keeps a prepared update across a failed poll and revalidates before one re
 		updateReady: false,
 		error: "temporary feed failure",
 	};
-	await controller.checkForUpdates();
+	await controller.restartToUpdate();
 	await settle();
 	expect(await controller.getState()).toMatchObject({
 		status: "ready",
 		availableVersion: "1.1.0",
 		error: "temporary feed failure",
 	});
+	expect(restartCalls).toBe(0);
 
 	updater.info = {
 		version: "1.1.0",
@@ -167,10 +165,13 @@ test("keeps a prepared update across a failed poll and revalidates before one re
 		updateReady: true,
 		error: "",
 	};
+	await controller.checkForUpdates();
+	await settle();
+	expect((await controller.getState()).error).toBeNull();
 	await controller.restartToUpdate();
 	await controller.restartToUpdate();
 	await settle();
-	expect(updater.checkCalls).toBe(3);
+	expect(updater.checkCalls).toBe(4);
 	expect(restartCalls).toBe(1);
 	expect((await controller.getState()).status).toBe("installing");
 	restart.resolve();

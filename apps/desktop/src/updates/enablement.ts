@@ -1,6 +1,3 @@
-export const DESKTOP_UPDATE_BASE_URL =
-	"https://github.com/JetBrains/thinkrail/releases/download/desktop-updates";
-
 const ARTIFACT_TEST_ENVIRONMENT_KEYS = [
 	"THINKRAIL_DESKTOP_READY_FILE",
 	"THINKRAIL_DESKTOP_CONTROL_FILE",
@@ -10,7 +7,7 @@ const ARTIFACT_TEST_ENVIRONMENT_KEYS = [
 	"THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE",
 ] as const;
 
-export interface NativeUpdateEnablement {
+interface NativeUpdateEnablement {
 	isPackaged: boolean;
 	channel: string;
 	baseUrl: string;
@@ -28,12 +25,12 @@ export function hasDesktopArtifactTestSeam(
 export function nativeUpdatesEnabled(input: NativeUpdateEnablement): boolean {
 	if (!input.isPackaged || input.artifactTestSeam) return false;
 	if (input.channel !== "stable" && input.channel !== "canary") return false;
-	if (input.baseUrl !== DESKTOP_UPDATE_BASE_URL) return false;
-	const target = `${input.platform}-${input.arch}`;
-	return (
-		target === "darwin-arm64" ||
-		target === "linux-arm64" ||
-		target === "linux-x64" ||
-		target === "win32-x64"
+	try {
+		if (new URL(input.baseUrl).protocol !== "https:") return false;
+	} catch {
+		return false;
+	}
+	return ["darwin-arm64", "linux-arm64", "linux-x64", "win32-x64"].includes(
+		`${input.platform}-${input.arch}`,
 	);
 }

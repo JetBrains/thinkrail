@@ -215,9 +215,10 @@ SDK's single status callback, coalesces concurrent work, reconciles returned err
 and retains a prepared newer version across transient poll failures. Electrobun's hash inequality alone is
 not eligibility: same-version and downgrade manifests are not downloaded or offered.
 
-Production checks are enabled only in packaged supported stable/canary applications whose stamped updater
-base URL is the expected HTTPS feed. Development and standard artifact-test seams stay disabled and cannot
-select a feed. Installation requires an explicit **Restart to Update** action; **Later** preserves the
+Production checks are enabled only in packaged supported stable/canary applications whose stamped release
+metadata supplies a nonempty HTTPS updater base URL. That packaged metadata is the sole feed authority;
+development and standard artifact-test seams stay disabled and cannot select a feed. Installation requires an
+explicit **Restart to Update** action; **Later** preserves the
 running app, and ordinary quit does not silently install. A cross-platform in-app control exposes manual
 checking, progress, the available version and retry; native menus are supplementary because this SDK has no
 Linux application menu. Installations stay on their packaged channel; CLI and remote-host updates are outside

@@ -351,7 +351,7 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider warning, and native-ready
   shell affordance can deep-link without prop-drilling. The optional Update key is navigation only: native
-  updater snapshots/actions remain in `nativeUpdates`' local external store and never enter Zustand. The
+  updater snapshots/actions remain in `nativeUpdates`' shell-local hook state and never enter Zustand. The
   ephemeral **`interviewPromptOpen`** plus
   **`showInterviewPrompt()`** / **`hideInterviewPrompt()`** is the render projection of the host's addressed
   invitation; transport opens it idempotently, clears it before each valid welcome's possible redelivery so

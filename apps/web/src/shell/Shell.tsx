@@ -9,11 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { IconTooltip } from "../components/ui/tooltip";
-import {
-	hasNativeUpdateCapability,
-	NativeUpdateReadyButton,
-	NativeUpdateSettings,
-} from "../nativeUpdates";
+import { NativeUpdateReadyButton, NativeUpdateSettings, useNativeUpdates } from "../nativeUpdates";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
@@ -64,7 +60,7 @@ export function Shell() {
 	const contextProject = useAppStore(selectContextProject);
 	const { review: openReview } = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
-	const nativeUpdatesAvailable = hasNativeUpdateCapability();
+	const nativeUpdates = useNativeUpdates();
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
@@ -167,9 +163,12 @@ export function Shell() {
 					) : null}
 				</div>
 				<div className="flex shrink-0 items-center gap-12">
-					<NativeUpdateReadyButton
-						onOpen={() => useAppStore.getState().openSettings(SettingsSection.Updates)}
-					/>
+					{nativeUpdates ? (
+						<NativeUpdateReadyButton
+							state={nativeUpdates.state}
+							onOpen={() => useAppStore.getState().openSettings(SettingsSection.Updates)}
+						/>
+					) : null}
 					<JbcentralQuotaTopbar />
 					<span
 						data-testid="connection-status"
@@ -201,8 +200,14 @@ export function Shell() {
 				<SettingsDialog
 					layoutSettings={<LayoutSettings />}
 					updateSettings={
-						nativeUpdatesAvailable ? (
-							<NativeUpdateSettings onLater={() => useAppStore.getState().closeSettings()} />
+						nativeUpdates ? (
+							<NativeUpdateSettings
+								state={nativeUpdates.state}
+								requestError={nativeUpdates.requestError}
+								onCheck={nativeUpdates.checkForUpdates}
+								onRestart={nativeUpdates.restartToUpdate}
+								onLater={() => useAppStore.getState().closeSettings()}
+							/>
 						) : undefined
 					}
 				/>

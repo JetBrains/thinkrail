@@ -36,9 +36,9 @@ The sibling dependency graph is: `layoutState → layout`; `chatReconciliation �
 The topbar keeps ThinkRail identity, connection state, Settings, and compact location context. When the
 optional native updater reports `ready`, a compact Update ready affordance remains beside the settings and
 connection chrome; it opens the injected Update section and remains after Later until native state changes.
-Ordinary browsers render neither that affordance nor the section. Capability discovery and updater state stay
-inside `nativeUpdates`; shell only composes them and panels receive optional React content, never a launcher
-or native-runtime check. The topbar identity is the icon-only ThinkRail mark—the same vector served as
+Ordinary browsers render neither that affordance nor the section. `Shell` mounts `nativeUpdates`' one capability
+hook and passes its state/actions into the props-driven controls; panels receive optional React content, never a
+launcher or native-runtime check. The topbar identity is the icon-only ThinkRail mark—the same vector served as
 `public/favicon.svg`, inlined at 32×32 and rendered
 through semantic `text-primary`—with no divider before location. An active workspace shows one line of
 `project / workspace  branch · from baseBranch` plus optional review metadata on `tr-text-ui`; project and

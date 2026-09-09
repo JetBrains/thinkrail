@@ -1,26 +1,10 @@
 import { expect, test } from "bun:test";
 import type { NativeUpdateState } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
-import { NativeUpdateReadyButtonView } from "./NativeUpdateReadyButton";
-import { NativeUpdateSettingsView } from "./NativeUpdateSettings";
-import { deriveNativeUpdatePresentation } from "./presentation";
+import { NativeUpdateReadyButton } from "./NativeUpdateReadyButton";
+import { NativeUpdateSettings } from "./NativeUpdateSettings";
 
-function render(state: NativeUpdateState, actionError: string | null = null): string {
-	return renderToStaticMarkup(
-		<NativeUpdateSettingsView
-			presentation={deriveNativeUpdatePresentation({
-				state,
-				pendingAction: null,
-				actionError,
-			})}
-			onCheck={() => {}}
-			onRestart={() => {}}
-			onLater={() => {}}
-		/>,
-	);
-}
-
-function state(
+function updateState(
 	status: NativeUpdateState["status"],
 	overrides: Partial<NativeUpdateState> = {},
 ): NativeUpdateState {
@@ -36,8 +20,20 @@ function state(
 	};
 }
 
+function render(state: NativeUpdateState | null, requestError: string | null = null): string {
+	return renderToStaticMarkup(
+		<NativeUpdateSettings
+			state={state}
+			requestError={requestError}
+			onCheck={() => {}}
+			onRestart={() => {}}
+			onLater={() => {}}
+		/>,
+	);
+}
+
 test("ready updates expose direct restart and Later actions with installation identity", () => {
-	const markup = render(state("ready", { availableVersion: "0.1.0-nightly.46" }));
+	const markup = render(updateState("ready", { availableVersion: "0.1.0-nightly.46" }));
 	expect(markup).toContain("Restart to Update");
 	expect(markup).toContain("Later");
 	expect(markup).toContain("Version 0.1.0-nightly.45 · canary channel");
@@ -47,22 +43,40 @@ test("ready updates expose direct restart and Later actions with installation id
 
 test("the ready affordance remains a direct path back to update settings", () => {
 	const markup = renderToStaticMarkup(
-		<NativeUpdateReadyButtonView version="0.1.0-nightly.46" onOpen={() => {}} />,
+		<NativeUpdateReadyButton
+			state={updateState("ready", { availableVersion: "0.1.0-nightly.46" })}
+			onOpen={() => {}}
+		/>,
 	);
 	expect(markup).toContain('data-testid="native-update-ready"');
 	expect(markup).toContain("Update ready");
 	expect(markup).toContain("ThinkRail 0.1.0-nightly.46 is ready to install");
 });
 
-test("download progress and retry errors stay on the shared settings surface", () => {
+test("download progress and request errors stay on the settings surface", () => {
 	const downloading = render(
-		state("downloading", { availableVersion: "0.1.0-nightly.46", progress: 42 }),
+		updateState("downloading", {
+			availableVersion: "0.1.0-nightly.46",
+			progress: 42,
+		}),
 	);
 	expect(downloading).toContain('value="42"');
 	expect(downloading).toContain("Downloading update — 42%");
 
-	const failed = render(state("error", { error: "The update feed is offline" }));
+	const failed = render(updateState("idle"), "The update request timed out");
 	expect(failed).toContain("Retry");
 	expect(failed).toContain('role="alert"');
-	expect(failed).toContain("The update feed is offline");
+	expect(failed).toContain("The update request timed out");
+});
+
+test("an error on retained ready state stays visible and offers retry and restart", () => {
+	const markup = render(
+		updateState("ready", {
+			availableVersion: "0.1.0-nightly.46",
+			error: "The pre-restart check failed",
+		}),
+	);
+	expect(markup).toContain("The pre-restart check failed");
+	expect(markup).toContain("Retry");
+	expect(markup).toContain("Restart to Update");
 });
