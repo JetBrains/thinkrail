@@ -370,7 +370,7 @@ test("validates explicit signing-input mode values before building", () => {
 		["bun-darwin-arm64", "true"],
 		["bun-darwin-arm64", "false"],
 		["bun-windows-x64", "false"],
-	]) {
+	] as const) {
 		expect(validateSigningInput(fixture(), target, mode).exitCode).toBe(0);
 	}
 	for (const mode of ["", "yes", "1"]) {
