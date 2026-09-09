@@ -221,6 +221,13 @@ Green gates are necessary, not sufficient — they can't see duplication, suppre
 Before committing, opening/updating a PR, or declaring work done, re-read the full diff
 (`git diff origin/main...HEAD` + working tree) as a reviewer would, and enforce:
 
+- **Simplicity is a separate gate.** Before a commit or PR, ask what can be deleted, reused from the
+  existing code or framework, or assigned to an existing owner. Each new abstraction, state owner,
+  dependency, compatibility layer, and fallback must earn its place through a current requirement.
+  After parallel work, do a subtraction pass across the combined change, not just a correctness review
+  of each piece. Preserve behavior, module boundaries, and meaningful tests; fewer responsibilities and
+  sources of truth matter more than fewer files or denser code. Report what was removed and justify
+  the layers that remain — do not wait for the user to request this review.
 - **No silent suppressions.** Never add `biome-ignore` / `@ts-expect-error` / `@ts-ignore` /
   `eslint-disable` / `as any` to make a gate pass. A lint/type error is a design signal: first ask
   whether the state, dependency, or structure it flags should exist at all — prefer deleting the cause
