@@ -48,7 +48,7 @@ export function TreeRow({
 			onClick={onClick}
 			onDoubleClick={onDoubleClick}
 			onContextMenu={onContextMenu}
-			className={`flex h-24 w-full min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 text-left tr-text-ui text-text-muted ${
+			className={`flex h-24 w-full min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 text-left tr-text-ui text-text-muted outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${
 				highlight === "self"
 					? `hover:bg-control-bg-hovered ${active ? "bg-control-bg-selected" : ""}`
 					: ""
