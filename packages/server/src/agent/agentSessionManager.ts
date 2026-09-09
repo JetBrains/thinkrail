@@ -140,10 +140,15 @@ export function setSessionActivityPublisher(fn: (payload: SessionActivityPayload
 	publishActivity = fn;
 }
 
+function effectivePendingCount(entry: Entry): number {
+	const stuck = entry.stuckEmptyDeliveries.steering + entry.stuckEmptyDeliveries.followUp;
+	return Math.max(0, entry.session.pendingMessageCount - stuck);
+}
+
 function activityOf(entry: Entry): ActivityStatus | null {
 	return deriveActivityStatus({
 		isStreaming: entry.session.isStreaming,
-		pendingMessageCount: entry.session.pendingMessageCount,
+		pendingMessageCount: effectivePendingCount(entry),
 		messages: entry.session.messages,
 		lastSettlement: entry.lastSettlement,
 		hasPendingDialog: hasPendingExtUiDialog(entry.session.sessionId),
@@ -569,7 +574,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		updatedAt: Date.now(),
 		live: true,
 		...(entry.lastSettlement !== undefined ? { lastSettlement: entry.lastSettlement } : {}),
-		...(session.pendingMessageCount > 0 ? { queue: queueStateOf(entry) } : {}),
+		...(effectivePendingCount(entry) > 0 ? { queue: queueStateOf(entry) } : {}),
 	};
 }
 

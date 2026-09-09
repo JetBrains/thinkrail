@@ -1313,6 +1313,81 @@ test("removing one queued image message returns its complete content", async () 
 	removeSession(s.sessionId);
 });
 
+test("a delivered image-only steer clears its queue chip despite pi's empty-text defect", async () => {
+	const slow = createFauxCore({
+		provider: "faux-steer-image",
+		api: "faux-steer-image",
+		models: [modelDef("faux-steer-image")],
+		tokensPerSecond: 2000,
+	});
+	runtime.registerProvider("faux-steer-image", cfg(slow, "faux-steer-image"));
+	let release = () => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let started = () => {};
+	const requestStarted = new Promise<void>((resolve) => {
+		started = resolve;
+	});
+	const cwd = tmpCwd("trpi-steer-image-");
+	writeFileSync(join(cwd, "probe.txt"), "probe\n");
+	setActivityProjectResolver(() => "project-steer-image");
+	try {
+		slow.setResponses([
+			async () => {
+				started();
+				await gate;
+				return fauxAssistantMessage(fauxToolCall("read", { path: join(cwd, "probe.txt") }));
+			},
+			() => fauxAssistantMessage("STEER_DELIVERED"),
+		]);
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-steer-image",
+			model: toWireModel(slow.getModel()),
+		});
+		const turn = promptSession(s.sessionId, "start the gated turn");
+		turn.catch(() => {});
+		await requestStarted;
+
+		const queuedImage = {
+			type: "image",
+			data: "AA==",
+			mimeType: "image/png",
+		} satisfies ImageContent;
+		await steerSession(s.sessionId, "", [queuedImage]);
+
+		const queuedSummary = (await listSessions("ws-steer-image", cwd)).find(
+			(row) => row.sessionId === s.sessionId,
+		);
+		expect(queuedSummary?.queue).toEqual({ steering: [""], followUp: [], hasImages: true });
+
+		release();
+		await turn;
+
+		expect(seen(s.sessionId)).toContain("STEER_DELIVERED");
+		expect(
+			(await listSessions("ws-steer-image", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toBeUndefined();
+		const activity = await listSessionActivity([{ id: "ws-steer-image", cwd }]);
+		expect(activity.find((a) => a.sessionId === s.sessionId)?.status).not.toBe("queued");
+
+		const queueEvents = (events.get(s.sessionId) ?? []).filter(
+			(event): event is { type: "queue_update"; steering: string[] } =>
+				typeof event === "object" &&
+				event !== null &&
+				"type" in event &&
+				(event as { type: string }).type === "queue_update",
+		);
+		expect(queueEvents.at(-1)?.steering).toEqual([]);
+		removeSession(s.sessionId);
+	} finally {
+		release();
+		setActivityProjectResolver(() => null);
+		runtime.unregisterProvider("faux-steer-image");
+	}
+}, 20000);
+
 test("compactSession rejects an overlapping manual compaction", async () => {
 	const slow = createFauxCore({
 		provider: "faux-compact-lock",
