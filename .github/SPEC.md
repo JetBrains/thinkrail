@@ -132,9 +132,9 @@ content types. Entitlement extraction requests XML before plist parsing.
 ## Desktop updater qualification and publication
 
 Auto-update scope includes every current native desktop target in the matrix above. Canary qualification
-precedes stable; each target needs an observed installed-version A to version B upgrade before enablement.
-The public build handoff now includes the raw Electrobun manifest and full archive; the private runtime feed
-and publication automation are not yet live. Runtime policy belongs to [[module-desktop]].
+precedes stable; each target needs an observed installed-version A to version B upgrade before stable enablement.
+The public build handoff supplies the raw Electrobun manifest and full archive; the private pipeline
+finalizes and publishes the runtime feed. Runtime policy belongs to [[module-desktop]].
 
 The private pipeline consumes those raw names, finalizes the macOS application through the existing signing
 flow, and creates its update archive from those final bytes. It assigns each finalized archive an immutable,
