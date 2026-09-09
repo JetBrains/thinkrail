@@ -1367,7 +1367,8 @@ test("a delivered image-only steer clears its queue chip despite pi's empty-text
 
 		expect(seen(s.sessionId)).toContain("STEER_DELIVERED");
 		expect(
-			(await listSessions("ws-steer-image", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+			(await listSessions("ws-steer-image", cwd)).find((row) => row.sessionId === s.sessionId)
+				?.queue,
 		).toBeUndefined();
 		const activity = await listSessionActivity([{ id: "ws-steer-image", cwd }]);
 		expect(activity.find((a) => a.sessionId === s.sessionId)?.status).not.toBe("queued");

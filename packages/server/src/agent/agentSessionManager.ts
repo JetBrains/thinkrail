@@ -435,7 +435,8 @@ async function prepareSessionEntry(
 			if (lane) {
 				entry.stuckEmptyDeliveries[lane]++;
 				synchronizeQueueFromSession(entry);
-				if (sessions.get(sessionId) === entry) publish({ sessionId, event: queueUpdateEventOf(entry) });
+				if (sessions.get(sessionId) === entry)
+					publish({ sessionId, event: queueUpdateEventOf(entry) });
 			}
 		}
 		if (event.type === "queue_update") {
