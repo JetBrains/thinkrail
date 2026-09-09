@@ -43,6 +43,9 @@
 	--font-mono: var(--tr-font-family-code);
 
 	--spacing-panel-header-row: var(--panel-header-row-height);
+	--spacing-topbar-row: var(--topbar-row-height);
+	--spacing-window-chrome-inset-left: var(--window-chrome-inset-left, 0px);
+	--spacing-window-chrome-inset-right: var(--window-chrome-inset-right, 0px);
 
 	/* A block appearing in place (e.g. the ask-question card's atomic reveal once its args are final). */
 	--animate-reveal: reveal 150ms ease-out;
@@ -88,6 +91,15 @@
 			transform: translateY(12px);
 		}
 	}
+}
+
+@utility window-drag {
+	-webkit-app-region: drag;
+	app-region: drag;
+}
+@utility window-no-drag {
+	-webkit-app-region: no-drag;
+	app-region: no-drag;
 }
 
 /* Review Monaco surfaces (panels/reviewGutter.ts + reviewWidgets.ts): commented-line decorations, the
