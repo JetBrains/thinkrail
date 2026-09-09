@@ -125,6 +125,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     sync, and `queueStateOf` — first drops that many empty-text entries from Pi's list, so a later genuine
     `queue_update` cannot resurrect the phantom. The counter is per live entry only (Pi's ephemeral queues
     never survive a process restart) and resets whenever `clearQueue()` empties both lanes.
+
+    **Remove this whole override on the next pi bump that ships the upstream fix**
+    (earendil-works/pi#8612 — merged but unreleased as of `pi@0.85.1`): once Pi clears empty-text image
+    deliveries natively, drop `stuckEmptyDeliveries`, `displayedLane`, the synthesized `queue_update`, and
+    the `effectivePendingCount` adjustment. Re-check on every pi bump by grepping the installed
+    `agent-session.js` for the `if (messageText)` guard around `this._steeringMessages.indexOf` — while that
+    guard is present the workaround is still required; when it is gone the fix has shipped.
   - **Activity projection** (`activity.ts`) answers "what is happening in a workspace nobody has open?" —
     the signal the Projects rail draws. `deriveActivityStatus` is a **pure function** of one session's
     observable state; the manager owns only the publish-on-change bookkeeping (`publishedActivity` per
