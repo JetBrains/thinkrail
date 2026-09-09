@@ -6,13 +6,35 @@ import {
 	isDesktopPreferenceValue,
 	STABLE_PREFERENCES_GLOBAL,
 } from "./preferenceAdapter";
+import { takePreloadGlobal } from "./preloadGlobals";
 import type { DesktopRpc } from "./rpc";
+import {
+	INITIAL_WINDOW_CHROME_GLOBAL,
+	readWindowChromeGeometry,
+	type WindowChromeGeometry,
+	windowChromeCssDeclarations,
+} from "./windowChrome";
 
 interface DesktopPreferenceAdapter {
 	getItem(key: string): string | null;
 	setItem(key: string, value: string): void;
 	removeItem(key: string): void;
 }
+
+function applyWindowChrome(geometry: WindowChromeGeometry): void {
+	const apply = () => {
+		for (const [property, value] of windowChromeCssDeclarations(geometry)) {
+			document.documentElement.style.setProperty(property, value);
+		}
+	};
+	if (document.documentElement) apply();
+	else window.addEventListener("DOMContentLoaded", apply, { once: true });
+}
+
+const initialWindowChrome = readWindowChromeGeometry(
+	takePreloadGlobal(INITIAL_WINDOW_CHROME_GLOBAL),
+);
+if (initialWindowChrome) applyWindowChrome(initialWindowChrome);
 
 const updateListeners = new Set<(state: NativeUpdateState) => void>();
 const rpc = Electroview.defineRPC<DesktopRpc>({
@@ -22,6 +44,10 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 		messages: {
 			updateStateChanged: (state) => {
 				for (const listener of updateListeners) listener(state);
+			},
+			windowChromeChanged: (payload) => {
+				const geometry = readWindowChromeGeometry(payload);
+				if (geometry) applyWindowChrome(geometry);
 			},
 		},
 	},
@@ -43,7 +69,7 @@ Object.defineProperty(globals, "__THINKRAIL_NATIVE_UPDATES__", {
 	configurable: false,
 	enumerable: false,
 });
-const injectedPreferences = Reflect.get(globals, INITIAL_DESKTOP_PREFERENCES_GLOBAL);
+const injectedPreferences = takePreloadGlobal(INITIAL_DESKTOP_PREFERENCES_GLOBAL);
 const preferences = new Map<string, string>();
 if (typeof injectedPreferences === "object" && injectedPreferences !== null) {
 	for (const key of Object.keys(injectedPreferences)) {
@@ -53,7 +79,6 @@ if (typeof injectedPreferences === "object" && injectedPreferences !== null) {
 		}
 	}
 }
-Reflect.deleteProperty(globals, INITIAL_DESKTOP_PREFERENCES_GLOBAL);
 const preferenceAdapter: DesktopPreferenceAdapter = Object.freeze({
 	getItem: (key: string) => (isDesktopPreferenceKey(key) ? (preferences.get(key) ?? null) : null),
 	setItem: (key: string, value: string) => {
