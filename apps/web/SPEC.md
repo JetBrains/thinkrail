@@ -104,6 +104,14 @@ themselves.
   `px-12`) and a **generated semantic typography class** for type (`tr-text-ui`, `tr-title-dialog`,
   `tr-code-text`, …) — **never inline `style` objects, never raw hex.** Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come
   from Tailwind (inline styles can't express them, and the responsive shell needs them).
+- **Chrome geometry lives in `index.css`, host geometry arrives as CSS custom properties.** Beside the
+  generated colour/spacing layers, `index.css` maps the shell's structural rows (`--spacing-panel-header-row`,
+  `--spacing-topbar-row` from `tokens.css`) and the two host-published window-chrome insets
+  (`--spacing-window-chrome-inset-left|right: var(--window-chrome-inset-*, 0px)`), and declares the only
+  two non-typographic handwritten utilities, `window-drag` / `window-no-drag` (`-webkit-app-region` +
+  `app-region`). A native host may set the inset properties on `<html>`; the app never detects the host,
+  it reads the properties with their `0px` fallbacks ([[submodule-web-shell]] owns the consumer,
+  [[module-desktop]] the publisher).
 - **The colour and type systems are this app's, not the monorepo's.** `apps/website` keeps its own
   hardcoded stylesheet on purpose — a static page with no theming has no use for a token layer, and
   reaching across apps would couple them for nothing.

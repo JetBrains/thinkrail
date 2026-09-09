@@ -6,7 +6,7 @@ title: Desktop launcher/client (Electrobun)
 parent: architecture
 depends-on: [module-server, module-contracts, module-shared]
 tags: [desktop, v1, launcher, packaging]
-references: [submodule-web-navigation, module-artifact-tests]
+references: [submodule-web-navigation, module-artifact-tests, submodule-web-shell]
 ---
 
 ## Responsibility
@@ -19,7 +19,8 @@ engine architecture.
 
 ## Boundary
 
-- **Owns:** Electrobun configuration and lifecycle; native window policy; local `bootHost()` startup;
+- **Owns:** Electrobun configuration and lifecycle; native window policy, including the per-platform
+  title-bar treatment and the window-chrome geometry it publishes to the web client; local `bootHost()` startup;
   packaged resource staging; the PI-compatible server-runtime bundle; desktop route preload/persistence;
   a bounded generic client-preference adapter under stable backend-profile/window identity; and the
   opt-in live-window test seam. Standalone artifact harnesses belong to [[module-artifact-tests]].
@@ -91,6 +92,47 @@ there; WebKitGTK keeps its renderer-native editing behavior. The policy is platf
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
 pins production wiring.
 
+## Native window chrome
+
+The web topbar ([[submodule-web-shell]]) is the window's title bar wherever the framework lets native
+controls survive without a native strip. Electrobun 2.0.1 exposes no caption-colour API on any platform
+(macOS and Windows only follow the system light/dark setting), so a theme-coloured title bar means
+removing the native strip and letting the web header occupy it. The policy is platform-pure
+(`windowChrome.ts`, pinned by unit tests) and spread into the main `BrowserWindow`:
+
+| platform | `titleBarStyle` | traffic lights | published left inset |
+|---|---|---|---|
+| macOS | `hiddenInset` — transparent strip, hidden title, full-size content view; native traffic lights stay | `trafficLightOffset { x: 0, y: 4 }` centres the 12px buttons in the 40px topbar (measured on a packaged build: the default position centres them at 16px, so +4 lands on 20) | `64px` — the traffic-light zone (7 + 3×12 + 2×8 = 59px on the spacing grid) |
+| Windows, Linux | `default` | — | `0px` |
+
+Windows is deferred because `hiddenInset` there strips the caption *including* minimize/maximize/close,
+which would have to be HTML controls over RPC (and Electrobun has no `HTMAXBUTTON` hit-test, so Win11
+snap layouts would not appear). Linux is not planned: `hiddenInset` is a no-op under GTK and `hidden`
+removes decorations together with WM-provided resize handles. Fully custom macOS chrome
+(`titleBarStyle: "hidden"` with drawn traffic lights) was rejected because the platform provides real
+ones.
+
+**Geometry contract.** The desktop publishes window-chrome geometry to the page as exactly two CSS custom
+properties on `<html>` — `--window-chrome-inset-left` and `--window-chrome-inset-right`, each a `<px>`
+length naming the edge zone native controls occupy — and nothing else: no global the web must call, no
+platform name, no reason. The web consumes them with `0px` fallbacks, so a browser-hosted client and the
+neutral E2E-host window (`about:blank`, no preload) are unaffected and the *web client still has no
+desktop branch*. Initial values ride the preload the same way initial preferences do (a serialized
+`__THINKRAIL_INITIAL_WINDOW_CHROME__` prepended to the preload source; the preload validates finite
+non-negative numbers, writes both properties at document-start, and deletes the global). Later changes
+arrive as the one bun→webview message in the RPC schema, `windowChromeChanged { insetLeft, insetRight }`,
+applied identically. The right inset is always `0px` today and exists so the Windows follow-up changes a
+value, not the contract.
+
+**Fullscreen.** macOS native fullscreen auto-hides the traffic lights with the menu bar, so the main
+process watches the window `resize` event, reads `isFullScreen()`, and on a transition sends
+`windowChromeChanged` with a `0px` left inset (fullscreen) or the policy value (normal).
+
+**Dragging** needs no desktop involvement: the web header declares `-webkit-app-region: drag` (inert in
+a browser tab), and Electrobun's own injected preload rewrites app-region declarations from same-origin
+stylesheets into a mirrored custom property it hit-tests against. Double-click-to-zoom on the header is
+not promised — the webview covers the strip, so the click reaches `NSWindow` only incidentally.
+
 ## Navigation and window security
 
 The native window permits navigation only within its exact loopback origin. User-requested external URLs
@@ -101,7 +143,8 @@ SDK event factories, not copied into local declarations. Detail can be a raw URL
 serialized navigation JSON; bounded decoding retains only a string URL and the HTTP/HTTPS/mailto
 allowlist. Native `navigationRules` enforce confinement: navigation-event responses cannot cancel it.
 
-A desktop preload sends typed, one-way route and local-preference messages. It wraps
+A desktop preload sends typed, one-way route and local-preference messages, and is the only writer of
+the window-chrome CSS properties described above. It wraps
 `history.replaceState` and `history.pushState` before page scripts and also reports initial/hash/pop
 navigation, because Electrobun's native navigation events do not observe History API route changes. The
 main process accepts messages only from the main window. Routes persist as bounded fragment strings in a
@@ -215,5 +258,6 @@ release checks described in [[module-ci-release]].
 
 ## Deferred
 
-Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, and Electrobun
-updater UX.
+Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, Electrobun
+updater UX, and the Windows frameless title bar (HTML minimize/maximize/close over RPC behind a
+window-controls capability the geometry contract does not yet carry).

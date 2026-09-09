@@ -5,6 +5,7 @@ status: active
 title: shell — responsive frame
 parent: module-web
 tags: [v1, ui]
+references: [module-desktop]
 ---
 
 ## Responsibility
@@ -33,7 +34,20 @@ The sibling dependency graph is: `layoutState → layout`; `chatReconciliation �
 
 ## Composition
 
-The topbar keeps ThinkRail identity, connection state, Settings, and compact location context. The identity
+The topbar keeps ThinkRail identity, connection state, Settings, and compact location context, and doubles
+as the **window title bar** when a native host removes its own strip ([[module-desktop]], *Native window
+chrome*). It is a fixed `h-topbar-row` (`--topbar-row-height`, 40px — macOS title-bar proportions, so
+native traffic lights sit centred in it) with `px-16`, and it is host-agnostic: the only host-shaped input
+is two CSS custom properties, `--window-chrome-inset-left` / `--window-chrome-inset-right`, consumed
+through the `w-window-chrome-inset-*` spacing tokens by one `aria-hidden` edge spacer on each side
+(`window-chrome-inset-left|right`). Unset (any browser) they resolve to `0px` and the header looks as
+before; the desktop publishes `64px` on macOS so content starts at 80px and collapses it to `0px` in
+fullscreen. Padding was deliberately not used for the inset: the `spacingUsage` gate lets padding
+utilities name only canonical steps, and a CSS `padding-left: max(…)` would need a gate exemption. The
+whole header is a window-drag region (`window-drag select-none`; inert outside a native host) and every
+interactive control inside it — the Settings gear, the quota Retry, any future button or link — must
+carry `window-no-drag`, while plain text (breadcrumb, connection label) stays draggable. `SettingsDialog`
+portals out of the header and is unaffected. Nothing in the shell names or imports the desktop host. The identity
 is the icon-only ThinkRail mark—the same vector served as `public/favicon.svg`, inlined at 32×32 and rendered
 through semantic `text-primary`—with no divider before location. An active workspace shows one line of
 `project / workspace  branch · from baseBranch` plus optional review metadata on `tr-text-ui`; project and
