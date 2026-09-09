@@ -43,18 +43,23 @@ Native macOS and Linux ARM64 acceptance belongs to the release matrix.
 ## Native build contract
 
 The private native matrix checks out an explicit public source commit and invokes
-`.github/actions/build-binary`. The action accepts `version`, `channel`, and a host-matching `target`.
+`.github/actions/build-binary`. The action accepts `version`, `channel`, a host-matching `target`, and
+`macos-signing-input-only` (default false). That macOS-only opt-in uses the normal package command with
+Electrobun's documented DMG creation disabled; the private signer owns the final installer instead.
 Its stable public outputs are:
 
 - `artifact-name` / `artifact-path` — native CLI;
-- `desktop-artifact-name` / `desktop-artifact-path` — first-install desktop artifact;
+- `desktop-artifact-name` / `desktop-artifact-path` — first-install desktop artifact, empty only in
+  macOS signing-input-only mode;
 - `desktop-app-archive-path` — Electrobun's expanded macOS app archive, empty on non-macOS targets;
 - `desktop-update-manifest-path` / `desktop-update-archive-path` — Electrobun's updater metadata and
   full application archive, both non-empty on every desktop target.
 
 The recipe stamps the shared version, builds and smokes the CLI, invokes the normal Electrobun dev and
 channel builds, runs expanded-app and first-install smoke, then collects exact target/channel outputs.
-Update outputs preserve Electrobun's generated basenames and compressed bytes. The manifest is the exact
+Signing-input-only mode retains expanded-app smoke and requires the app archive and updater pair, but has
+no unsigned DMG to collect or smoke. Default local/CI installers and the private final signed-installer
+verification remain unchanged. Update outputs preserve Electrobun's generated basenames and compressed bytes. The manifest is the exact
 `<stable|canary>-<macos|win|linux>-<arm64|x64>-update.json`. Its `artifact.file` is the archive basename:
 `stable-<platform>-ThinkRail[.app].tar.zst` for stable or
 `canary-<platform>-ThinkRail-canary[.app].tar.zst` for nightly, where `<platform>` is the manifest's
@@ -76,8 +81,8 @@ Supported desktop assets:
 
 Windows and Linux aliases name untouched framework installers. The Windows ZIP contains its setup
 executable and adjacent payload; Linux's tarball contains the installer and README. For macOS, the
-private SRE flow replaces the unsigned framework DMG with a conventional DMG containing the signed
-expanded app, under the same published alias. The app archive is a private signing intermediate, never
+private SRE flow creates a conventional DMG containing the signed expanded app under the same published
+alias; its signing-input-only build avoids a discarded unsigned DMG. The app archive is a private signing intermediate, never
 a public release asset.
 
 On Windows, the packaging invocation puts System32 first so Hutch's bare `tar` resolves to Windows
