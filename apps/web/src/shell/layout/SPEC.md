@@ -25,8 +25,10 @@ One `WorkbenchFrame` belongs to a frontend surface, not a workspace. It carries 
 
 A `WorkspaceViewState` is keyed by workspace and references frame group ids. It carries
 file/diff/chat/document/terminal membership and order plus center preview identity. The separate
-`LayoutAttention` overlay carries selection per group, last focus for center/each auxiliary region, and
-per-group navigation clocks. The mounted workbench document is a pure projection of the singular frame,
+`LayoutAttention` overlay carries selection per group, last focus for center/each auxiliary region,
+per-group navigation clocks, and the optional session id of the last focused chat. That chat memory is
+workspace-local context for the TODO follower, not a resource placement or frame field. The mounted
+workbench document is a pure projection of the singular frame,
 active workspace view, and its attention; it is never stored as another authority.
 
 Pure operations return either one complete local-state result or an unavailable reason. A resource-only
@@ -46,7 +48,7 @@ Frame groups may remain empty in any workspace. Closing a final resource therefo
 ## Layout grammar
 
 - **Center:** a recursive horizontal/vertical binary tree, maximum four leaves. A split replaces one leaf with equal halves. User creation/resize requires each child to remain at least 320 px wide and 180 px high. Empty leaves are valid frame slots and render the shell-provided empty surface. Remove/Merge promotes a sibling and rehomes every affected workspace's tabs deterministically.
-- **Auxiliary eligibility:** Projects, Specs, Files, Changes, and Review are singleton auxiliary-only tools owned by the frame; terminals are workspace resources and may occupy center or any auxiliary region. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
+- **Auxiliary eligibility:** Projects, Specs, Files, Changes, TODO, and Review are singleton auxiliary-only tools owned by the frame; terminals are workspace resources and may occupy center or any auxiliary region. TODO is a web-local extension of the frame's tool id, deliberately outside `contracts.LayoutToolId` and synchronized custom presets because its availability and placement are per surface. It is eligible only under the client-local `side-tool` preference; `chat-popover` hides it and excludes it from restore/Add commands. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
 - **Left/right:** ordered vertical frame stacks. Dragging an outer separator through its minimum hides that side, retains the last expanded width, and exposes its full-height restore rail. Broad upper/lower targets create groups before/after each row, including folded or currently empty rows. Expanded bodies have a 120 px normal minimum; folded groups occupy 27 px and retain normalized expanded weights. An empty frame group remains available across workspaces until explicit removal and renders a named
   Add/Reveal surface rather than disappearing; a region with groups may stay hidden.
 - **Bottom:** ordered left-to-right frame groups resize on vertical separators. A group may fold to a 27 px
@@ -66,7 +68,7 @@ Frame groups may remain empty in any workspace. Closing a final resource therefo
 - **Limits:** left/right share a local setting defaulting to six groups per side; bottom has an independent local setting defaulting to three. Both accept 1–32, with closed hard safety bounds enforced even for untrusted local state or shared presets. Existing overages survive; creation is unavailable until below the configured limit, while reorder/join/reducing moves remain legal. Stable-id uniqueness, one canonical resource placement per workspace view, normalized geometry, and the final-center-leaf invariant are enforced by every mutation.
 - **Small viewports:** restoring onto less space may compress below operation minimums locally. Content scrolls/clips; bottom alignment projects from actual compressed side spans, while frame topology, alignment choice, and ratios are never rewritten merely because this viewport is narrow.
 
-Ordinary opens target the active workspace's last-focused surviving center group. Reopening a canonical resource selects its existing local placement rather than duplicating it and refreshes non-identity metadata in place. Each center group has one workspace-local preview slot: preview replaces in place, keep promotes one-way, and navigation clocks are group-local. A passive restore may select its first result without incrementing the user-navigation clock. A user open advances its clock at request time and carries that stamp through acceptance rather than counting twice; reselecting the active center tab also advances once so it defeats older deferred work. Incidental DOM focus changes update last-focus routing but not navigation.
+Ordinary opens target the active workspace's last-focused surviving center group. Reopening a canonical resource selects its existing local placement rather than duplicating it and refreshes non-identity metadata in place. Each center group has one workspace-local preview slot: preview replaces in place, keep promotes one-way, and navigation clocks are group-local. A passive restore may select its first result without incrementing the user-navigation clock. A user open advances its clock at request time and carries that stamp through acceptance rather than counting twice; reselecting the active center tab also advances once so it defeats older deferred work. Direct chat selection/open/route navigation and an incidental DOM focus entering a group whose selected resource is a chat explicitly record that session as `lastFocusedChatSessionId`; selecting a non-chat preserves it. Focus recovery caused by close/delete, frame reconciliation, preset application, or hydration is not a chat-focus gesture and preserves the prior id; session deletion separately clears a matching id. Background session activity never changes attention.
 
 Async completion reroutes from a removed group to current last focus and advances the surviving destination once, unless newer local placement already contains the resource. File/chat/document closes update local attention immediately. Terminal close waits for host-domain acceptance, then removes that terminal from every local workspace view for the workspace; a rejection leaves placement and attention untouched. Any newer tab gesture or navigation suppresses delayed close-focus recovery.
 
@@ -106,20 +108,26 @@ act: overflow search only while clipped, and fold only while a side has multiple
 Singleton tool tabs have no inline close glyph; Close/Hide stays in their menu and on Delete, while terminals
 and center resources retain their direct control.
 
-Each auxiliary strip trails an add-to-this-group menu. It offers shell-injected actions plus unplaced tools valid for that region; two rails never offer the same singleton. Center tab menus offer no singleton tools. A terminal created from an auxiliary group lands in that workspace's matching group; a vanished target reroutes through the current local focus rule.
+Each auxiliary strip trails an add-to-this-group menu. It offers shell-injected actions plus unplaced tools valid for that region; two rails never offer the same singleton, and TODO is absent while `chat-popover` is selected. Center tab menus offer no singleton tools. A terminal created from an auxiliary group lands in that workspace's matching group; a vanished target reroutes through the current local focus rule.
 
 ## Presets and local persistence
 
 Balanced, Focus, and Review are web-owned resource-free frame definitions with a below-center bottom slot:
 Balanced and Review show it; Focus hides it. Balanced and Focus start with one center group; Review provides
-its deliberate vertical pair. Custom presets use the same grammar and capture geometry,
-topology, tools, folds, and empty structural slots, never workspace resources or terminal count. Preset node
+its deliberate vertical pair. In Side tab mode, pristine/Reset frame construction adds the web-local TODO
+tool to the right workflow group between Changes and Review; Chat popover omits it. An explicit mode change
+to `chat-popover` hides TODO with its restore target preserved, while a change to `side-tool` always reveals
+it at that target (or the deterministic right-side default). A later manual hide in Side tab mode remains a
+user decision until header reveal/Add or Side tab is explicitly re-enabled; renderers never filter a placed
+tab out of a projected document. Custom presets use the synchronized grammar and capture geometry,
+topology, contract tools, folds, and empty structural slots, never the web-local TODO tool, workspace resources,
+or terminal count. Preset node
 ids are template-local labels: instantiation mints frontend-local frame ids and returns the old→new group map
 used to rehome every workspace view. Only custom definitions cross the wire through settings.
 
-Applying a preset creates one replacement frame, raises this surface's local side/bottom limits if required, and remaps all retained workspace views atomically. Center resources preserve visual order and distribute across destination leaves; terminals map into compatible slots; singleton tool placement ids survive where possible. Omitted tools receive deterministic restore targets, so a sparse preset cannot strand Projects or another tool. The local default preset is the target of the explicit Reset frame command; ordinary workspace switches retain the current frame. Default selection and limits persist locally, not in host settings.
+Applying a preset creates one replacement frame, raises this surface's local side/bottom limits if required, and remaps all retained workspace views atomically. Center resources preserve visual order and distribute across destination leaves; terminals map into compatible slots; singleton tool placement ids survive where possible. Omitted contract tools receive deterministic restore targets, so a sparse preset cannot strand Projects or another shared tool. Custom capture omits TODO, and custom apply preserves its frame-local placed/hidden intent independently, rehoming an obsolete group through the ordinary restore fallback; Reset instead uses the selected mode's deterministic default described above. The local default preset is the target of the explicit Reset frame command; ordinary workspace switches retain the current frame. Default selection, limits, and TODO view mode persist locally, not in host settings.
 
-`layoutState` validates and persists the normalized frame/views/attention document under browser endpoint + frontend-surface identity or the native stable adapter's profile/window scope. Reload and supported session restoration reuse it; simultaneous windows never consume each other's storage events. Persistence contains references only. Failure leaves live state intact; unknown schema falls back to the Balanced safe frame.
+`layoutState` validates and persists the normalized frame/views/attention document under browser endpoint + frontend-surface identity or the native stable adapter's profile/window scope. The optional last-focused-chat id decodes additively: its absence preserves an old document with no follower target rather than invalidating the frame. Reload and supported session restoration reuse it; simultaneous windows never consume each other's storage events. Persistence contains references only. Failure leaves live state intact; unknown schema falls back to the Balanced safe frame.
 
 The complete current-layout grammar, including the derived `WorkspaceLayoutDocument` projection consumed by existing shell renderers, is web-local. A pristine surface instantiates Balanced; no host snapshot or prior layout schema is imported.
 

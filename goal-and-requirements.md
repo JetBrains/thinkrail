@@ -31,8 +31,10 @@ the shell is built first, `pi` connected last:
   newcomers aren't lost in the worktree model, and any **existing worktree** the user attaches in place
   from the project menu (ThinkRail uses its cwd, never touches its checkout).
 - **Desktop workbench**: a recursively splittable center for files, diffs, registered documents, chats, and terminals,
-  bounded to four visible groups; Projects / Specs / Files / Changes / Review and terminals may occupy
+  bounded to four visible groups; Projects / Specs / Files / Changes / TODO / Review and terminals may occupy
   movable auxiliary groups—vertical stacks at left/right and a horizontally grouped, alignable bottom panel.
+  TODO remains a per-chat plan: a client-local Chat setting keeps the current header popover by default or
+  opts into a singleton tool that follows that workspace's last-focused chat.
   New workspaces place one terminal in that bottom panel by default. Each frontend window owns one locally
   persisted, resource-free frame—topology, tool placement, visibility, and geometry—reused across all of its
   opened workspaces. Open resources, previews, selection, and focus remain local per workspace and window;

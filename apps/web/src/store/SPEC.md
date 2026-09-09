@@ -117,8 +117,15 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   generation before reconciliation may prune a local reference.
 
   **Workspace-local attention** is selected tab per stable frame group, last-focused center group,
-  last-focused auxiliary group, and group navigation clocks. Selection/focus never mutates the frame.
-  Frame replacement reconciles each workspace's attention to a surviving group/tab. Navigation clocks advance
+  last-focused auxiliary group, group navigation clocks, and optional **`lastFocusedChatSessionId`** — the
+  source identity for the TODO follower tool. Direct chat select/open/route transitions and a focus gesture
+  entering a group whose selected resource is a chat record that session. Non-chat focus, background
+  activity, catalog reads that select nothing, and close/delete focus recovery retain the prior id; the
+  session-deletion transition separately clears it when it names the deleted session. Chat close-to-history
+  therefore retains it because placement close is not session lifetime; authoritative session absence and
+  workspace removal clear it.
+  Frame replacement reconciles each workspace's attention to a surviving group/tab while carrying this
+  independent chat memory. Selection/focus never mutates the frame. Navigation clocks advance
   at request time for local focus-changing opens and explicit re-selection; the stamp travels with the intent
   so acceptance does not count twice. A slow completion is discarded when newer navigation overtakes it.
   Preview identity is workspace-local per center group: `preview` replaces that group's slot and `keep`
@@ -396,16 +403,21 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `DEFAULT_CONFIG.terminalWindowsShell`; `TerminalSettings` consumes both terminal fields, while terminal
   spawning remains server-owned — the Terminal, Line width, Chat, shared Layout catalog, Privacy, provider
   controls, and shell quota read sides.
+  **`todoViewMode: TodoViewMode`** (`"chat-popover" | "side-tool"`) is a frontend-surface-local layout
+  presentation preference, hydrated and persisted by `shell/layoutState` under the same browser
+  endpoint/surface or native backend-profile/window identity as the frame. It defaults independently to
+  `chat-popover`; only `layoutState`'s atomic mode transition installs a new value together with the required
+  frame hide/restore result, and `applyConfig` can never overwrite it.
   **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
   StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by
   the chat preference seam from host-qualified browser localStorage or the native shell's injected
   backend-profile/window-scoped adapter. Message order defaults oldest-first; movement defaults to
-  `{ settle: 75, trigger: 100 }`. `setChatMessageOrder` / `setStreamingResponseMovement` change them
-  without a server round trip, and `applyConfig` can never overwrite either. `ChatView` projects each
-  runtime from order without rewriting canonical turns and passes the movement window into its sole scroll
-  controller. The instantiated
-  workbench frame, current/default preset id, and group limits are separate local values hydrated by
-  `shell/layoutState`; `applyConfig` can never overwrite them. The
+  `{ settle: 75, trigger: 100 }`; invalid fields fall back without discarding valid siblings.
+  `setChatMessageOrder` / `setStreamingResponseMovement` change them without a server round trip, and
+  `applyConfig` can never overwrite either. `ChatView` projects each runtime from order without rewriting
+  canonical turns and passes the movement window into its sole scroll controller. The instantiated
+  workbench frame, current/default preset id, group limits, and TODO view mode are the separate local values
+  hydrated by `shell/layoutState`; `applyConfig` can never overwrite them. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React
   call site — a `.catch` in a fire-and-forget wire call — can fire one) — lives here so any surface can raise
@@ -545,6 +557,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   target: the locally selected chat resource, or the workspace's newest chat otherwise),
   `selectContextProject`, the layout placement selectors (recursive center plus left/right/bottom auxiliary
   groups), `selectAttentionCenterTab` (the selected resource in local last center focus),
+  **`selectTodoChatTarget`** (the active workspace's validated remembered-chat
+  `{ workspaceId, sessionId, title }`, or null until membership is authoritative / when absent),
   `selectCurrentRouteChatTarget` (exact-chat intent only while its workspace and stamped navigation remain
   current), `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
   Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref
