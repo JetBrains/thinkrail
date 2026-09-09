@@ -1,3 +1,5 @@
+import type { WindowChromeGeometry } from "./windowChrome";
+
 export type DesktopRpc = {
 	bun: {
 		requests: Record<string, never>;
@@ -9,6 +11,8 @@ export type DesktopRpc = {
 	};
 	webview: {
 		requests: Record<string, never>;
-		messages: Record<string, never>;
+		messages: {
+			windowChromeChanged: WindowChromeGeometry;
+		};
 	};
 };
