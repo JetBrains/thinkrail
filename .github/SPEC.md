@@ -119,7 +119,7 @@ Updater publication is not implemented, and the current artifact outputs and sig
 Runtime policy belongs to [[module-desktop]].
 
 Native update acceptance is **manual-first**. It uses finalized release bytes in disposable installations,
-records both versions and per-target results, and covers explicit restart/cancellation, channel isolation,
+records both versions and per-target results, and covers explicit restart, deferral with Later, channel isolation,
 interrupted download/retry, post-update version/host health and restoration of local state. Running agents
 and terminal commands are not expected to survive host restart. Windows qualification uses a disposable
 VM/runner because installation integrates beyond HOME. Relevant checks repeat when

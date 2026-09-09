@@ -214,11 +214,12 @@ and retry; native menus are supplementary because this SDK has no Linux applicat
 stay on their packaged channel; CLI and remote-host updates are outside this capability. Release scope and
 manual-first acceptance belong to [[module-ci-release]].
 
-The intended integration keeps Electrobun calls and update lifecycle in desktop, input protection in the
+The intended integration keeps Electrobun calls and update lifecycle in desktop, update controls in the
 web client, and graceful host shutdown in server. A bounded optional native capability uses contract types;
 web imports no desktop SDK, and a browser connection does not acquire a host-update operation. An update
-restarts the entire local host: active agents may be aborted and PTYs terminate. User confirmation and
-protection of unsent input precede shutdown; cancellation must leave the current app usable.
+restarts the entire local host: active agents may be aborted and PTYs terminate. **Restart to Update** is
+the sole confirmation and uses the existing ordinary-quit shutdown. There is no additional warning dialog,
+update-specific draft saving, or renderer-preparation handshake.
 
 Quit coordination must preserve its completion action. Electrobun 2.0.1's `applyUpdate()` returns on a
 `before-quit` veto before arming its replacement helper; the current asynchronous guard's ordinary
