@@ -1,5 +1,6 @@
 import type { LayoutPreset } from "@thinkrail/contracts";
 import { useEffect } from "react";
+import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../../clientPreferences";
 import { type LayoutAttention, randomId } from "../../lib";
 import {
 	DEFAULT_LOCAL_LAYOUT_PREFERENCES,
@@ -30,6 +31,8 @@ import {
 
 const LOCAL_LAYOUT_VERSION = 1;
 const SURFACE_ID_KEY = "thinkrail:layout-surface-id";
+const NATIVE_LAYOUT_PREFERENCE_KEY = "workbench-layout";
+const NATIVE_LAYOUT_MAX_CHARACTERS = 256 * 1024;
 const TOOL_IDS = new Set<string>(LAYOUT_TOOLS);
 
 interface PersistedLocalLayout {
@@ -47,7 +50,9 @@ interface StoragePair {
 
 let storageOverride: StoragePair | null = null;
 let endpointOverride: string | null = null;
+let stablePreferenceOverride: StablePreferenceAdapter | null | undefined;
 let persistenceKey: string | null = null;
+let activeStablePreferences: StablePreferenceAdapter | null = null;
 let stopPersistence: (() => void) | null = null;
 let releaseSurfaceLease: (() => void) | null = null;
 let initialization: Promise<void> | null = null;
@@ -476,11 +481,18 @@ function encodeLocalLayout(state: ReturnType<typeof useAppStore.getState>): stri
 }
 
 function persistCurrentLayout(): void {
-	const storage = stores();
-	if (!storage || !persistenceKey) return;
 	const encoded = encodeLocalLayout(useAppStore.getState());
 	if (!encoded) return;
 	try {
+		if (activeStablePreferences) {
+			if (encoded.length > NATIVE_LAYOUT_MAX_CHARACTERS) {
+				throw new Error("The local layout is too large to save in this native window");
+			}
+			activeStablePreferences.setItem(NATIVE_LAYOUT_PREFERENCE_KEY, encoded);
+			return;
+		}
+		const storage = stores();
+		if (!storage || !persistenceKey) return;
 		storage.local.setItem(persistenceKey, encoded);
 	} catch (error) {
 		toast.error(errorText(error), "Couldn't save the local layout");
@@ -504,6 +516,19 @@ function startPersistence(): void {
 }
 
 async function loadPersistedLayout(): Promise<LocalLayoutStatePayload | undefined> {
+	activeStablePreferences =
+		stablePreferenceOverride === undefined
+			? getStablePreferenceAdapter()
+			: stablePreferenceOverride;
+	if (activeStablePreferences) {
+		persistenceKey = null;
+		try {
+			const raw = activeStablePreferences.getItem(NATIVE_LAYOUT_PREFERENCE_KEY);
+			return raw ? decodeLocalLayout(raw) : undefined;
+		} catch {
+			return undefined;
+		}
+	}
 	const storage = stores();
 	if (!storage) return undefined;
 	try {
@@ -740,6 +765,13 @@ export function setLayoutStateStorageForTests(
 ): void {
 	storageOverride = storage;
 	endpointOverride = endpoint;
+	stablePreferenceOverride = null;
+}
+
+export function setLayoutStateStablePreferencesForTests(
+	preferences: StablePreferenceAdapter | null,
+): void {
+	stablePreferenceOverride = preferences;
 }
 
 export function resetLayoutStateForTests(): void {
@@ -750,6 +782,8 @@ export function resetLayoutStateForTests(): void {
 	releaseSurfaceLease = null;
 	initialization = null;
 	persistenceKey = null;
+	activeStablePreferences = null;
 	storageOverride = null;
 	endpointOverride = null;
+	stablePreferenceOverride = undefined;
 }

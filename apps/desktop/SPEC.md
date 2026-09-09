@@ -106,8 +106,9 @@ A desktop preload sends typed, one-way route and local-preference messages. It w
 navigation, because Electrobun's native navigation events do not observe History API route changes. The
 main process accepts messages only from the main window. Routes persist as bounded fragment strings in a
 versioned channel-scoped document; unreadable/invalid state falls back to `#/v1`. Preferences persist in a
-separate bounded, versioned generic string map scoped by `{ backendProfileId, windowId }`; the native side
-validates only size/shape and never learns feature meaning. Its frozen preload adapter exposes `getItem`,
+separate bounded, versioned generic string map scoped by `{ backendProfileId, windowId }`; each value is capped
+at 256 Ki characters and the complete document remains capped at 1 MiB. The native side validates only
+size/shape and never learns feature meaning. Its frozen preload adapter exposes `getItem`,
 `setItem`, and `removeItem` only, with writes returning over the typed one-way channel. Malformed messages
 are ignored; a filesystem refusal is logged without changing the in-memory document or terminating the
 client. The web feature still owns each value's validation and default. The web router remains the route
@@ -186,7 +187,7 @@ maps to stable. Standard formats are DMG on macOS, a setup-EXE-plus-payload ZIP 
 tar.gz on Linux. The private release pipeline retains the existing `thinkrail-desktop-*` download aliases;
 its collector selects the exact framework artifact for the channel and native target. The macOS app
 archive is transferred privately for SRE finalization, never published as an updater payload. Runtime
-updating and updater publication are not yet implemented; the target policy is defined below.
+updating is integrated below; feed publication remains release-owned and gated by the target policy.
 
 ### Signing
 
@@ -205,28 +206,39 @@ Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 pl
 `libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are
 CI-only and are never shipped as user configuration.
 
-## Auto-update policy (implementation pending)
+## Auto-update policy
 
-Desktop updates check and download in the background without blocking startup. Installation requires an
-explicit **Restart to Update** action; **Later** preserves the running app, and ordinary quit does not
-silently install. A cross-platform in-app control exposes manual checking, progress, the available version
-and retry; native menus are supplementary because this SDK has no Linux application menu. Installations
-stay on their packaged channel; CLI and remote-host updates are outside this capability. Release scope and
-manual-first acceptance belong to [[module-ci-release]].
+Desktop updates check after window readiness and then on a jittered six-hour schedule with bounded retries.
+Checks and full-package downloads run in the background without blocking startup. Manual checks acknowledge
+promptly and state converges asynchronously through monotonic revisions. The one native controller owns the
+SDK's single status callback, coalesces concurrent work, reconciles returned errors as well as thrown ones,
+and retains a prepared newer version across transient poll failures. Electrobun's hash inequality alone is
+not eligibility: same-version and downgrade manifests are not downloaded or offered.
 
-The intended integration keeps Electrobun calls and update lifecycle in desktop, update controls in the
-web client, and graceful host shutdown in server. A bounded optional native capability uses contract types;
-web imports no desktop SDK, and a browser connection does not acquire a host-update operation. An update
-restarts the entire local host: active agents may be aborted and PTYs terminate. **Restart to Update** is
-the sole confirmation and uses the existing ordinary-quit shutdown. There is no additional warning dialog,
-update-specific draft saving, or renderer-preparation handshake.
+Production checks are enabled only in packaged supported stable/canary applications whose stamped updater
+base URL is the expected HTTPS feed. Development and standard artifact-test seams stay disabled and cannot
+select a feed. Installation requires an explicit **Restart to Update** action; **Later** preserves the
+running app, and ordinary quit does not silently install. A cross-platform in-app control exposes manual
+checking, progress, the available version and retry; native menus are supplementary because this SDK has no
+Linux application menu. Installations stay on their packaged channel; CLI and remote-host updates are outside
+this capability. Release scope and manual-first acceptance belong to [[module-ci-release]].
 
-Quit coordination must preserve its completion action. Electrobun 2.0.1's `applyUpdate()` returns on a
-`before-quit` veto before arming its replacement helper; the current asynchronous guard's ordinary
-`Utils.quit()` retry would therefore exit without applying. Update completion must resume `applyUpdate()`
-after shutdown instead, with an explicit recovery path if helper startup fails. SDK replacement rollback
-is not application-health or user-data rollback. Existing installations without update code/feed identity
-require one manual bootstrap installation.
+Electrobun calls, updater scheduling and update lifecycle stay behind the bounded desktop `updates` module;
+update controls stay in the web client and graceful host shutdown stays in server. The frozen optional
+`__THINKRAIL_NATIVE_UPDATES__` preload capability carries `getState`, prompt `checkForUpdates` and
+`restartToUpdate` requests, plus state subscription over the typed native RPC. Web imports no desktop SDK,
+and an ordinary browser connection acquires no host-update operation. An update restarts the entire local
+host: active agents may be aborted and PTYs terminate. **Restart to Update** is the sole confirmation and
+uses the existing ordinary-quit shutdown. There is no additional warning dialog, update-specific draft
+saving, or renderer-preparation handshake.
+
+Quit coordination preserves its completion action. Electrobun 2.0.1's first `applyUpdate()` returns on the
+asynchronous `before-quit` veto before arming its replacement helper. The update intent waits for the same
+idempotent host shutdown, waits for that first SDK call to settle, and then resumes `applyUpdate()` under the
+completed guard; ordinary completion still calls only `Utils.quit()`. A failed second handoff reports a
+native error and exits instead of leaving a serverless window. SDK replacement rollback is not
+application-health or user-data rollback. Existing installations without update code/feed identity require
+one manual bootstrap installation.
 
 Reference: [pinned updater handoff](https://github.com/blackboardsh/electrobun/blob/v2.0.1/package/src/sdks/main/core/Updater.ts#L2220-L2330).
 
@@ -240,5 +252,5 @@ release checks described in [[module-ci-release]].
 
 ## Deferred
 
-Shared/remote backend profiles, profile selection, multi-window/deep-link routing, and CEF. Auto-updates
-have the target policy above but no runtime integration or published feed yet.
+Shared/remote backend profiles, profile selection, multi-window/deep-link routing, and CEF. The update feed
+publication described above remains release-owned.

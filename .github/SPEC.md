@@ -48,12 +48,22 @@ Its stable public outputs are:
 
 - `artifact-name` / `artifact-path` — native CLI;
 - `desktop-artifact-name` / `desktop-artifact-path` — first-install desktop artifact;
-- `desktop-app-archive-path` — Electrobun's expanded macOS app archive, empty on non-macOS targets.
+- `desktop-app-archive-path` — Electrobun's expanded macOS app archive, empty on non-macOS targets;
+- `desktop-update-manifest-path` / `desktop-update-archive-path` — Electrobun's updater metadata and
+  full application archive, both non-empty on every desktop target.
 
 The recipe stamps the shared version, builds and smokes the CLI, invokes the normal Electrobun dev and
 channel builds, runs expanded-app and first-install smoke, then collects exact target/channel outputs.
-[[module-artifact-tests]] owns isolated packaging-invocation and collector contract tests; this module
-owns the action and delivery contract.
+Update outputs preserve Electrobun's generated basenames and compressed bytes. The manifest is the exact
+`<stable|canary>-<macos|win|linux>-<arm64|x64>-update.json`. Its `artifact.file` is the archive basename:
+`stable-<platform>-ThinkRail[.app].tar.zst` for stable or
+`canary-<platform>-ThinkRail-canary[.app].tar.zst` for nightly, where `<platform>` is the manifest's
+OS-architecture pair and `.app` occurs only on macOS. Collection resolves both names for the requested
+channel and target rather than accepting the first glob match. The paths point directly
+into Electrobun's output tree; updater payloads do not change the installer-only dist aliases. On macOS the
+update archive may be the same expanded-app archive exposed through `desktop-app-archive-path`; the recipe
+does not duplicate or repackage it. [[module-artifact-tests]] owns isolated packaging-invocation and
+collector contract tests; this module owns the action and delivery contract.
 
 Supported desktop assets:
 
@@ -73,8 +83,9 @@ a public release asset.
 On Windows, the packaging invocation puts System32 first so Hutch's bare `tar` resolves to Windows
 bsdtar; Git's GNU tar interprets drive-letter paths as remote `host:path` operands. The collector resolves
 exact framework filenames. Stable installers omit the `stable-` prefix; nightly
-uses Electrobun's `canary` prefix/suffix. Updater metadata and patches are not published. Electrobun 2.0.1
-has no macOS x64 core. Linux requires Ubuntu 24.04+/glibc 2.38 and the declared GTK, WebKitGTK,
+uses Electrobun's `canary` prefix/suffix. Full updater archives and metadata are handed to the private
+pipeline under their raw framework names; patch generation remains disabled. Electrobun 2.0.1 has no
+macOS x64 core. Linux requires Ubuntu 24.04+/glibc 2.38 and the declared GTK, WebKitGTK,
 AppIndicator, and librsvg dependencies. CEF and additional installer formats are outside this contract.
 
 ## Release identity and trust
@@ -111,12 +122,19 @@ hardened runtime, Bun entitlements, strict signature checks, Gatekeeper assessme
 and first-install smoke. Signing and notarization are distinct service operations and retain explicit
 content types. Entitlement extraction requests XML before plist parsing.
 
-## Desktop updater qualification (implementation pending)
+## Desktop updater qualification and publication
 
 Auto-update scope includes every current native desktop target in the matrix above. Canary qualification
 precedes stable; each target needs an observed installed-version A to version B upgrade before enablement.
-Updater publication is not implemented, and the current artifact outputs and signing rules remain unchanged.
-Runtime policy belongs to [[module-desktop]].
+The public build handoff now includes the raw Electrobun manifest and full archive; the private runtime feed
+and publication automation are not yet live. Runtime policy belongs to [[module-desktop]].
+
+The private pipeline consumes those raw names, finalizes the macOS application through the existing signing
+flow, and creates its update archive from those final bytes. It assigns each finalized archive an immutable,
+version-qualified protocol-compatible basename and changes only `artifact.file` in the corresponding
+framework manifest before publication. Other manifest identity fields remain framework-generated. Payloads
+are uploaded and made publicly retrievable before their channel manifests. This updater handoff adds no new
+signing, notarization, verification, or publication gate; the existing platform requirements remain in force.
 
 Native update acceptance is **manual-first**. It uses finalized release bytes in disposable installations,
 records both versions and per-target results, and covers explicit restart, deferral with Later, channel isolation,

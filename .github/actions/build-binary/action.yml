@@ -29,6 +29,12 @@ outputs:
   desktop-app-archive-path:
     description: "Official expanded macOS app archive for private signing; empty on other targets"
     value: ${{ steps.resolve-desktop.outputs.app-archive-path }}
+  desktop-update-manifest-path:
+    description: "Official Electrobun update manifest with its framework-generated filename"
+    value: ${{ steps.resolve-desktop.outputs.update-manifest-path }}
+  desktop-update-archive-path:
+    description: "Official Electrobun full update archive with its framework-generated filename"
+    value: ${{ steps.resolve-desktop.outputs.update-archive-path }}
 
 runs:
   using: composite
@@ -130,33 +136,49 @@ runs:
         app_archive_path=''
         case "$TARGET" in
           bun-darwin-arm64)
-            source="${prefix}macos-arm64-ThinkRail${suffix}.dmg"
+            platform='macos-arm64'
+            source="${prefix}${platform}-ThinkRail${suffix}.dmg"
             name='thinkrail-desktop-darwin-arm64.dmg'
-            app_archive_path="apps/desktop/artifacts/${environment}-macos-arm64-ThinkRail${suffix}.app.tar.zst"
-            [ -f "$app_archive_path" ] || { echo "::error::desktop app archive not found at $app_archive_path"; exit 1; }
+            update_archive_name="${environment}-${platform}-ThinkRail${suffix}.app.tar.zst"
+            app_archive_path="apps/desktop/artifacts/$update_archive_name"
             ;;
           bun-windows-x64)
-            source="${prefix}win-x64-ThinkRail-Setup${suffix}.zip"
+            platform='win-x64'
+            source="${prefix}${platform}-ThinkRail-Setup${suffix}.zip"
             name='thinkrail-desktop-windows-x64.zip'
+            update_archive_name="${environment}-${platform}-ThinkRail${suffix}.tar.zst"
             ;;
           bun-linux-x64)
-            source="${prefix}linux-x64-ThinkRail${suffix}-Setup.tar.gz"
+            platform='linux-x64'
+            source="${prefix}${platform}-ThinkRail${suffix}-Setup.tar.gz"
             name='thinkrail-desktop-linux-x64.tar.gz'
+            update_archive_name="${environment}-${platform}-ThinkRail${suffix}.tar.zst"
             ;;
           bun-linux-arm64)
-            source="${prefix}linux-arm64-ThinkRail${suffix}-Setup.tar.gz"
+            platform='linux-arm64'
+            source="${prefix}${platform}-ThinkRail${suffix}-Setup.tar.gz"
             name='thinkrail-desktop-linux-arm64.tar.gz'
+            update_archive_name="${environment}-${platform}-ThinkRail${suffix}.tar.zst"
             ;;
           *) echo "::error::unsupported desktop target $TARGET"; exit 1 ;;
         esac
+        if [ -n "$app_archive_path" ]; then
+          [ -f "$app_archive_path" ] || { echo "::error::desktop app archive not found at $app_archive_path"; exit 1; }
+        fi
         source="apps/desktop/artifacts/$source"
         [ -f "$source" ] || { echo "::error::desktop installer not found at $source"; exit 1; }
+        update_manifest_path="apps/desktop/artifacts/${environment}-${platform}-update.json"
+        [ -f "$update_manifest_path" ] || { echo "::error::desktop update manifest not found at $update_manifest_path"; exit 1; }
+        update_archive_path="apps/desktop/artifacts/$update_archive_name"
+        [ -f "$update_archive_path" ] || { echo "::error::desktop update archive not found at $update_archive_path"; exit 1; }
         path="apps/desktop/dist/$name"
         cp "$source" "$path"
         {
           echo "name=$name"
           echo "path=$path"
           echo "app-archive-path=$app_archive_path"
+          echo "update-manifest-path=$update_manifest_path"
+          echo "update-archive-path=$update_archive_path"
         } >> "$GITHUB_OUTPUT"
 
     - name: Smoke desktop first-install artifact

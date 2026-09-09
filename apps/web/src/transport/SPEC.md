@@ -134,7 +134,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `server.welcome`'s config + `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page
   identity); the browser `WebSocket`.
-- **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`; or requesting, subscribing to, or folding current-layout state. Layout persistence uses only `httpBase()` as part of its frontend-local storage identity.
+- **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`; or requesting, subscribing to, or folding current-layout state. Browser layout persistence uses only `httpBase()` as part of its frontend-local storage identity; native stable persistence has no transport edge.
 
 ## Get right
 

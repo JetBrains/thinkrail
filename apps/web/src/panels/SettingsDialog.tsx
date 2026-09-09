@@ -1,4 +1,5 @@
 import {
+	RiDownloadCloud2Line as DownloadCloud,
 	RiFeedbackLine as Feedback,
 	RiGitBranchLine as GitBranch,
 	RiKeyLine as KeyRound,
@@ -28,13 +29,24 @@ import { ReviewSettings } from "./ReviewSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
-const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
+const SECTIONS: {
+	id: SettingsSection;
+	label: string;
+	icon: LucideIcon;
+	requiresInjectedContent?: true;
+}[] = [
 	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
 	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
 	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
 	{ id: SettingsSection.LineWidth, label: "Line width", icon: TextWrap },
 	{ id: SettingsSection.Chat, label: "Chat", icon: MessageSquareText },
 	{ id: SettingsSection.Layout, label: "Layout", icon: LayoutPanelTop },
+	{
+		id: SettingsSection.Updates,
+		label: "Updates",
+		icon: DownloadCloud,
+		requiresInjectedContent: true,
+	},
 	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
@@ -43,9 +55,18 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 ];
 const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: SlidersHorizontal }];
 
-export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }) {
+export function SettingsDialog({
+	layoutSettings,
+	updateSettings,
+}: {
+	layoutSettings: ReactNode;
+	updateSettings?: ReactNode;
+}) {
 	const open = useAppStore((s) => s.settingsOpen);
 	const section = useAppStore((s) => s.settingsSection);
+	const sections = SECTIONS.filter(
+		(candidate) => !candidate.requiresInjectedContent || updateSettings !== undefined,
+	);
 
 	return (
 		<Dialog
@@ -75,7 +96,7 @@ export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }
 						aria-label="Settings sections"
 						className="flex shrink-0 gap-4 overflow-x-auto border-border-default border-b p-8 md:w-[192px] md:flex-col md:gap-2 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-elevated-bg md:p-12"
 					>
-						{SECTIONS.map(({ id, label, icon: Icon }) => {
+						{sections.map(({ id, label, icon: Icon }) => {
 							const active = section === id;
 							return (
 								<button
@@ -121,6 +142,8 @@ export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }
 							<ChatSettings />
 						) : section === SettingsSection.Layout ? (
 							layoutSettings
+						) : section === SettingsSection.Updates && updateSettings !== undefined ? (
+							updateSettings
 						) : section === SettingsSection.Terminal ? (
 							<TerminalSettings />
 						) : section === SettingsSection.Templates ? (

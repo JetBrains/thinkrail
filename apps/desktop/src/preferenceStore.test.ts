@@ -73,6 +73,21 @@ test("rejects unbounded or control-bearing keys and values", () => {
 	expect(existsSync(path)).toBe(false);
 });
 
+test("accepts a 256 Ki-character value while retaining the whole-document byte bound", () => {
+	const path = preferencePath();
+	const preferences = new PreferenceStore(path);
+	const value = "v".repeat(MAX_DESKTOP_PREFERENCE_VALUE_LENGTH);
+	expect(preferences.write("local", "main", "layout-one", value)).toBe(true);
+	expect(preferences.write("local", "main", "layout-two", value)).toBe(true);
+	expect(preferences.write("local", "main", "layout-three", value)).toBe(true);
+	expect(preferences.write("local", "main", "layout-four", value)).toBe(false);
+	expect(preferences.read("local", "main")).toEqual({
+		"layout-one": value,
+		"layout-two": value,
+		"layout-three": value,
+	});
+});
+
 test("falls back from corrupt, oversized, and unsupported documents", () => {
 	const path = preferencePath();
 	writeFileSync(path, "not-json");

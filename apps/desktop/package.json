@@ -12,6 +12,7 @@
 		"test": "bun test"
 	},
 	"dependencies": {
+		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/server": "workspace:*",
 		"@thinkrail/shared": "workspace:*"
 	},

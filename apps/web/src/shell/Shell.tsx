@@ -9,6 +9,11 @@ import { useEffect, useRef, useState } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { IconTooltip } from "../components/ui/tooltip";
+import {
+	hasNativeUpdateCapability,
+	NativeUpdateReadyButton,
+	NativeUpdateSettings,
+} from "../nativeUpdates";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
@@ -17,6 +22,7 @@ import { openReviewLabel, useOpenBranchReview } from "../panels/useOpenBranchRev
 import { WelcomePanel } from "../panels/WelcomePanel";
 import {
 	isUserOwnedWorkspace,
+	SettingsSection,
 	selectActiveWorkspace,
 	selectContextProject,
 	useAppStore,
@@ -58,6 +64,7 @@ export function Shell() {
 	const contextProject = useAppStore(selectContextProject);
 	const { review: openReview } = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
+	const nativeUpdatesAvailable = hasNativeUpdateCapability();
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
@@ -160,6 +167,9 @@ export function Shell() {
 					) : null}
 				</div>
 				<div className="flex shrink-0 items-center gap-12">
+					<NativeUpdateReadyButton
+						onOpen={() => useAppStore.getState().openSettings(SettingsSection.Updates)}
+					/>
 					<JbcentralQuotaTopbar />
 					<span
 						data-testid="connection-status"
@@ -188,7 +198,14 @@ export function Shell() {
 						</button>
 					</IconTooltip>
 				</div>
-				<SettingsDialog layoutSettings={<LayoutSettings />} />
+				<SettingsDialog
+					layoutSettings={<LayoutSettings />}
+					updateSettings={
+						nativeUpdatesAvailable ? (
+							<NativeUpdateSettings onLater={() => useAppStore.getState().closeSettings()} />
+						) : undefined
+					}
+				/>
 			</header>
 			{hasActiveWorkspace && activeWorkspaceId ? (
 				<div data-testid="workspace-shell-layout" className="h-full min-h-0 min-w-0">

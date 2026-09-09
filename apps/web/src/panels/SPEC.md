@@ -473,7 +473,9 @@ a project picker, the prompt hero, and the reused
   converges through `settings.changed`; current/default selection and independent side/bottom limits are
   frontend-local. With an active workspace each preset offers confirmable **Apply now…**, which asks shell
   to replace this window's frame and atomically preserve/reflow open resource identities in every retained
-  workspace view; no current layout is published); and
+  workspace view; no current layout is published); the optional **shell-owned injected Update section**
+  (the Settings shell includes its row only when content is provided; `panels` neither discovers a native
+  global nor imports the update capability, while ordinary browsers therefore have no Update row); and
   **`TemplatesSettings`** — two groups, **Global** and **This
   project** (the project group renders only with an active workspace), each a header with a **New**
   button plus its rows, fetched via **two independent `template.list` calls** (both refetched whenever the

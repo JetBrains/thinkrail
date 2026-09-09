@@ -39,6 +39,7 @@
       "name": "@thinkrail/desktop",
       "version": "0.0.0",
       "dependencies": {
+        "@thinkrail/contracts": "workspace:*",
         "@thinkrail/server": "workspace:*",
         "@thinkrail/shared": "workspace:*",
       },
