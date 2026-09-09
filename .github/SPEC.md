@@ -120,22 +120,13 @@ Runtime policy belongs to [[module-desktop]].
 
 Native update acceptance is **manual-first**. It uses finalized release bytes in disposable installations,
 records both versions and per-target results, and covers explicit restart/cancellation, channel isolation,
-interrupted download/retry, payload authenticity, post-update identity/host health and restoration of local
-state. Running agents and terminal commands are not expected to survive host restart. Windows qualification
-uses a disposable VM/runner because installation integrates beyond HOME. Relevant checks repeat when
+interrupted download/retry, post-update version/host health and restoration of local state. Running agents
+and terminal commands are not expected to survive host restart. Windows qualification uses a disposable
+VM/runner because installation integrates beyond HOME. Relevant checks repeat when
 Electrobun, packaging, signing or restart handling changes. This limits investment in a broad new updater
 suite for an infrequently changing integration; it does not remove existing signing, artifact-smoke, fast
 or complete no-agent browser gates. New automated coverage stays narrow around application-owned lifecycle
 regressions and the existing public artifact-output contract tests; no dedicated updater CI matrix is required.
-
-Updater payloads need their own finalization and client-authentication decision before publication. The
-current macOS expanded archive is a pre-signing intermediate; signing a DMG or a Windows setup stub does
-not authenticate a separately downloaded application archive. Electrobun 2.0.1 validates update identity,
-not the expected publisher or an artifact digest, and adding SHA-256 fields to its manifest does not make
-it verify them. The private pipeline's capabilities and the client verification mechanism require explicit
-qualification; checksums over published bytes alone are not evidence of client enforcement.
-
-Reference: [pinned updater digest-field behavior](https://github.com/blackboardsh/electrobun/blob/v2.0.1/package/src/sdks/main/core/UpdaterPreparation.test.ts#L166-L181).
 
 ## CLI installation and other automation
 
