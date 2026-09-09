@@ -236,7 +236,7 @@ test("macOS signing-input packaging keeps the stable command and selects the bui
 	);
 });
 
-test("declares signing-input-only as an opt-in and skips installer smoke only for its valid target", () => {
+test("declares signing-input-only as an opt-in and derives installer smoke from the collector output", () => {
 	expect(action.inputs["macos-signing-input-only"]?.default).toBe("false");
 	for (const name of ["Build and smoke desktop app", "Package desktop installer"]) {
 		expect(
@@ -245,9 +245,7 @@ test("declares signing-input-only as an opt-in and skips installer smoke only fo
 	}
 	expect(
 		action.runs.steps.find((step) => step.name === "Smoke desktop first-install artifact")?.if,
-	).toBe(
-		`\${{ inputs.macos-signing-input-only != 'true' || inputs.target != 'bun-darwin-arm64' }}`,
-	);
+	).toBe(`\${{ steps.resolve-desktop.outputs.path != '' }}`);
 });
 
 test("preserves existing public outputs and adds both update artifact paths", () => {

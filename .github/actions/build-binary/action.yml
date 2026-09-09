@@ -218,7 +218,7 @@ runs:
         } >> "$GITHUB_OUTPUT"
 
     - name: Smoke desktop first-install artifact
-      if: ${{ inputs.macos-signing-input-only != 'true' || inputs.target != 'bun-darwin-arm64' }}
+      if: ${{ steps.resolve-desktop.outputs.path != '' }}
       shell: bash
       env:
         CHANNEL: ${{ inputs.channel }}

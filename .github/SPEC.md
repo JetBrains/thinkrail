@@ -67,8 +67,10 @@ OS-architecture pair and `.app` occurs only on macOS. Collection resolves both n
 channel and target rather than accepting the first glob match. The paths point directly
 into Electrobun's output tree; updater payloads do not change the installer-only dist aliases. On macOS the
 update archive may be the same expanded-app archive exposed through `desktop-app-archive-path`; the recipe
-does not duplicate or repackage it. [[module-artifact-tests]] owns isolated packaging-invocation and
-collector contract tests; this module owns the action and delivery contract.
+does not duplicate or repackage it. The collector's installer path determines whether first-install
+smoke runs; consumers do not repeat its mode/target decision. [[module-artifact-tests]] owns isolated
+packaging-invocation, mode-validation and collector contract tests; this module owns the action and
+delivery contract.
 
 Supported desktop assets:
 
