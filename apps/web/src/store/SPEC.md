@@ -152,7 +152,8 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `thinkingLevel` / **`eventRevision`** (browser-local, incremented for every
   received Pi event; the compare-and-install fence for an authoritative transcript read) /
   **`syncedConnectionGeneration`** (which connected host generation the runtime's transcript was last read
-  from) / `stats` / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
+  from) / `stats` / **`statsRefreshTick`** (browser-local invalidation for the mounted chat's authoritative
+  stats read) / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
   promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
@@ -259,13 +260,16 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   connectionGeneration)`** is the separate authoritative path for an existing runtime after successful
   compaction or reconnect. It compare-and-installs only at the expected Pi-event revision, rejects a removed
   workspace/session or cross-workspace identity, replaces turns/tool results/ask answers/queue/model/thinking
-  + streaming state, and preserves draft/stats/commands/extension UI/placement/history/focus. It marks the
+  + streaming state, and preserves draft/stats/statsRefreshTick/commands/extension UI/placement/history/focus. It marks the
   connected generation and advances the revision so two reads cannot regress one another. When the latest
   live compaction matches the durable record, its id + estimated-after count survive, and `resuming` survives
   only while the returned summary is still streaming. The
-  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvents` folds an ordered batch in
-  one atomic store write while incrementing each affected runtime's revision once per event, even for a
-  UI-ignored event**, because ignored still means it crossed the snapshot ordering boundary. The
+  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime. Every `message_end`, `compaction_end`, and
+  `agent_settled` also advances `statsRefreshTick`, even when that event changes no rendered turn, so a
+  finalized Pi usage/context boundary cannot be lost behind presentation filtering or a batched
+  `isStreaming` false→false endpoint. **`handlePiEvents` folds an ordered batch in one atomic store write
+  while incrementing each affected runtime's revision once per event, even for a UI-ignored event**, because
+  ignored still means it crossed the snapshot ordering boundary. The
   single-event **`handlePiEvent`** delegates to that same path so tests and non-wire callers cannot drift.
   Transport flushes a pending batch before delivering any later response or non-Pi push, preserving the
   revision fence's received-message ordering. **Only idle sends enter the transcript

@@ -524,6 +524,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,
   disabled while streaming) or project (`project.skills`, per-project-baseline toggles, no session) — the
   latter reused by `panels` pre-session). All props-driven; behavior detail lives in the components' jsdoc.
+- **Live session telemetry follows Pi's finalized boundaries.** `SessionStatsBar` renders only the host's
+  authoritative `session.getStats` snapshot; the web never derives billed totals or context usage from
+  message content. The mounted chat refreshes on mount/reconnect, after each finalized message, compaction,
+  and settlement, and after Pi accepts a model change. Consecutive Pi events batched into one store commit
+  collapse to one read, and a response superseded by a newer session revision, host generation, or unmount
+  is ignored. Text deltas do not trigger reads because Pi itself cannot finalize new usage until the message
+  boundary; transient read failure keeps the last good snapshot rather than replacing it with guessed state.
 - **Adaptive composer geometry** (`Composer`) — an idle draft that fits one visual line renders as a
   shared two-tier shell: a full-width, one-visual-line message row above a stable action footer. Model and
   effort share a compact visual group on the footer's left while remaining two independently
