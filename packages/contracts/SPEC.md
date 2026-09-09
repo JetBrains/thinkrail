@@ -44,8 +44,12 @@ of the host.
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
-- **Deployment obligation:** contracts describe host behavior and compatibility, never the launcher or
-  deployment that supplies it. A feature's wire shape is shared by browser, desktop, and future clients.
+- **Deployment obligation:** wire contracts describe host behavior and compatibility, never the launcher
+  or deployment that supplies it. A feature's wire shape is shared by browser, desktop, and future clients.
+  Separate type-only native client capabilities describe an optional shell-local bridge, not host WS
+  methods: `NativeUpdateState` and `NativeUpdateBridge` carry update presentation and explicit local
+  actions. The same web bundle discovers that capability without importing a native SDK; an ordinary
+  browser connection acquires no updater authority.
 - **Forbidden:** any *value* import of a `pi` package; **any** import (even `type`) of
   `@earendil-works/pi-coding-agent` (pulls `node:fs`); the pi-ai **provider / API subpaths**
   (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
