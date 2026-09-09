@@ -175,6 +175,9 @@ test("stale and unavailable quota are Retry buttons while zero stays neutral", (
 	const unavailable = render({ state: "unavailable" });
 	expect(unavailable).toContain("Quota unavailable");
 	expect(unavailable).toContain("Retry");
+	for (const markup of [stale, unavailable]) {
+		expect(markup).toMatch(/<button[^>]*class="[^"]*\bwindow-no-drag\b/);
+	}
 
 	const zero = render({ ...AVAILABLE, remaining: 0 });
 	expect(zero).toContain("0 / 20");

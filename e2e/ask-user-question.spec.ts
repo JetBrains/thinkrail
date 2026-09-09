@@ -190,7 +190,7 @@ test("a persisted tall questionnaire reveals page changes and a restored page wi
 			.toEqual({ heading: true, firstOption: true });
 
 		await reopenedFirstOption.click();
-		await page.setViewportSize({ width: 1280, height: 480 });
+		await page.setViewportSize({ width: 1280, height: 440 });
 		const reviewNext = reopenedCard.getByTestId("ask-continue");
 		await wheelUntilChatElementIntersects(page, chatScroll, reviewNext);
 		await reviewNext.click();
