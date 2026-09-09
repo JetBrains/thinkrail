@@ -1389,6 +1389,146 @@ test("a delivered image-only steer clears its queue chip despite pi's empty-text
 	}
 }, 20000);
 
+test("a delivered image-only follow-up clears its queue chip despite pi's empty-text defect", async () => {
+	const slow = createFauxCore({
+		provider: "faux-followup-image",
+		api: "faux-followup-image",
+		models: [modelDef("faux-followup-image")],
+		tokensPerSecond: 2000,
+	});
+	runtime.registerProvider("faux-followup-image", cfg(slow, "faux-followup-image"));
+	let release = () => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let started = () => {};
+	const requestStarted = new Promise<void>((resolve) => {
+		started = resolve;
+	});
+	const cwd = tmpCwd("trpi-followup-image-");
+	setActivityProjectResolver(() => "project-followup-image");
+	try {
+		slow.setResponses([
+			async () => {
+				started();
+				await gate;
+				return fauxAssistantMessage("FIRST_TURN_DONE");
+			},
+			() => fauxAssistantMessage("FOLLOWUP_DELIVERED"),
+		]);
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-followup-image",
+			model: toWireModel(slow.getModel()),
+		});
+		const turn = promptSession(s.sessionId, "start the gated turn");
+		turn.catch(() => {});
+		await requestStarted;
+
+		const queuedImage = {
+			type: "image",
+			data: "AA==",
+			mimeType: "image/png",
+		} satisfies ImageContent;
+		await followUpSession(s.sessionId, "", [queuedImage]);
+
+		const queuedSummary = (await listSessions("ws-followup-image", cwd)).find(
+			(row) => row.sessionId === s.sessionId,
+		);
+		expect(queuedSummary?.queue).toEqual({ steering: [], followUp: [""], hasImages: true });
+
+		release();
+		await turn;
+
+		expect(seen(s.sessionId)).toContain("FOLLOWUP_DELIVERED");
+		expect(
+			(await listSessions("ws-followup-image", cwd)).find((row) => row.sessionId === s.sessionId)
+				?.queue,
+		).toBeUndefined();
+		const activity = await listSessionActivity([{ id: "ws-followup-image", cwd }]);
+		expect(activity.find((a) => a.sessionId === s.sessionId)?.status).not.toBe("queued");
+
+		const queueEvents = (events.get(s.sessionId) ?? []).filter(
+			(event): event is { type: "queue_update"; followUp: string[] } =>
+				typeof event === "object" &&
+				event !== null &&
+				"type" in event &&
+				(event as { type: string }).type === "queue_update",
+		);
+		expect(queueEvents.at(-1)?.followUp).toEqual([]);
+		removeSession(s.sessionId);
+	} finally {
+		release();
+		setActivityProjectResolver(() => null);
+		runtime.unregisterProvider("faux-followup-image");
+	}
+}, 20000);
+
+test("an idle image-only prompt never inflates the stuck-delivery counters", async () => {
+	const slow = createFauxCore({
+		provider: "faux-prompt-image",
+		api: "faux-prompt-image",
+		models: [modelDef("faux-prompt-image")],
+		tokensPerSecond: 2000,
+	});
+	runtime.registerProvider("faux-prompt-image", cfg(slow, "faux-prompt-image"));
+	let release = () => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let started = () => {};
+	const requestStarted = new Promise<void>((resolve) => {
+		started = resolve;
+	});
+	const cwd = tmpCwd("trpi-prompt-image-");
+	writeFileSync(join(cwd, "probe.txt"), "probe\n");
+	try {
+		const queuedImage = {
+			type: "image",
+			data: "AA==",
+			mimeType: "image/png",
+		} satisfies ImageContent;
+
+		slow.setResponses([fauxAssistantMessage("PROMPT_IMAGE_DONE")]);
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-prompt-image",
+			model: toWireModel(slow.getModel()),
+		});
+		await promptSession(s.sessionId, "", [queuedImage]);
+		expect(seen(s.sessionId)).toContain("PROMPT_IMAGE_DONE");
+
+		slow.setResponses([
+			async () => {
+				started();
+				await gate;
+				return fauxAssistantMessage(fauxToolCall("read", { path: join(cwd, "probe.txt") }));
+			},
+			() => fauxAssistantMessage("STEER_DELIVERED"),
+		]);
+		const turn = promptSession(s.sessionId, "start the gated turn");
+		turn.catch(() => {});
+		await requestStarted;
+		await steerSession(s.sessionId, "", [queuedImage]);
+
+		expect(
+			(await listSessions("ws-prompt-image", cwd)).find((row) => row.sessionId === s.sessionId)
+				?.queue,
+		).toEqual({ steering: [""], followUp: [], hasImages: true });
+
+		release();
+		await turn;
+		expect(
+			(await listSessions("ws-prompt-image", cwd)).find((row) => row.sessionId === s.sessionId)
+				?.queue,
+		).toBeUndefined();
+		removeSession(s.sessionId);
+	} finally {
+		release();
+		runtime.unregisterProvider("faux-prompt-image");
+	}
+}, 20000);
+
 test("compactSession rejects an overlapping manual compaction", async () => {
 	const slow = createFauxCore({
 		provider: "faux-compact-lock",
