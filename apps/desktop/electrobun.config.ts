@@ -22,7 +22,11 @@ export default {
 			"../web/dist": "views/web",
 			".stage/runtime": "runtime",
 		},
-		mac: { bundleCEF: false, icons: "assets/icon.iconset" },
+		mac: {
+			bundleCEF: false,
+			icons: "assets/icon.iconset",
+			createDmg: process.env.THINKRAIL_MACOS_SIGNING_INPUT_ONLY !== "true",
+		},
 		linux: { bundleCEF: false, icon: "assets/icon.png" },
 		win: { bundleCEF: false, icon: "assets/icon.ico" },
 	},

@@ -13,6 +13,10 @@ inputs:
   target:
     description: "Bun compile target matching this native runner"
     required: true
+  macos-signing-input-only:
+    description: "Build macOS signing inputs without creating the unsigned DMG"
+    required: false
+    default: "false"
 outputs:
   artifact-name:
     description: "CLI artifact filename"
@@ -21,10 +25,10 @@ outputs:
     description: "CLI artifact path"
     value: ${{ steps.resolve-cli.outputs.path }}
   desktop-artifact-name:
-    description: "Desktop first-install artifact filename"
+    description: "Desktop first-install artifact filename; empty in macOS signing-input-only mode"
     value: ${{ steps.resolve-desktop.outputs.name }}
   desktop-artifact-path:
-    description: "Desktop first-install artifact path"
+    description: "Desktop first-install artifact path; empty in macOS signing-input-only mode"
     value: ${{ steps.resolve-desktop.outputs.path }}
   desktop-app-archive-path:
     description: "Official expanded macOS app archive for private signing; empty on other targets"
@@ -39,6 +43,27 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Validate macOS signing input mode
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+        MACOS_SIGNING_INPUT_ONLY: ${{ inputs.macos-signing-input-only }}
+      run: |
+        set -eu
+        case "$MACOS_SIGNING_INPUT_ONLY" in
+          false) ;;
+          true)
+            [ "$TARGET" = bun-darwin-arm64 ] || {
+              echo "::error::macos-signing-input-only is unsupported for target $TARGET"
+              exit 1
+            }
+            ;;
+          *)
+            echo "::error::macos-signing-input-only must be true or false"
+            exit 1
+            ;;
+        esac
+
     - name: Stamp shared release identity
       shell: bash
       env:
@@ -88,6 +113,7 @@ runs:
       shell: bash
       env:
         TARGET: ${{ inputs.target }}
+        THINKRAIL_MACOS_SIGNING_INPUT_ONLY: ${{ inputs.macos-signing-input-only }}
       run: |
         set -eu
         bun run desktop:build
@@ -105,6 +131,7 @@ runs:
       env:
         TARGET: ${{ inputs.target }}
         CHANNEL: ${{ inputs.channel }}
+        THINKRAIL_MACOS_SIGNING_INPUT_ONLY: ${{ inputs.macos-signing-input-only }}
       run: |
         set -eu
         if [ "$TARGET" = bun-windows-x64 ]; then
@@ -125,6 +152,7 @@ runs:
       env:
         TARGET: ${{ inputs.target }}
         CHANNEL: ${{ inputs.channel }}
+        MACOS_SIGNING_INPUT_ONLY: ${{ inputs.macos-signing-input-only }}
       run: |
         set -eu
         mkdir -p apps/desktop/dist
@@ -137,10 +165,15 @@ runs:
         case "$TARGET" in
           bun-darwin-arm64)
             platform='macos-arm64'
-            source="${prefix}${platform}-ThinkRail${suffix}.dmg"
-            name='thinkrail-desktop-darwin-arm64.dmg'
             update_archive_name="${environment}-${platform}-ThinkRail${suffix}.app.tar.zst"
             app_archive_path="apps/desktop/artifacts/$update_archive_name"
+            if [ "$MACOS_SIGNING_INPUT_ONLY" = true ]; then
+              source=''
+              name=''
+            else
+              source="${prefix}${platform}-ThinkRail${suffix}.dmg"
+              name='thinkrail-desktop-darwin-arm64.dmg'
+            fi
             ;;
           bun-windows-x64)
             platform='win-x64'
@@ -165,14 +198,17 @@ runs:
         if [ -n "$app_archive_path" ]; then
           [ -f "$app_archive_path" ] || { echo "::error::desktop app archive not found at $app_archive_path"; exit 1; }
         fi
-        source="apps/desktop/artifacts/$source"
-        [ -f "$source" ] || { echo "::error::desktop installer not found at $source"; exit 1; }
+        path=''
+        if [ -n "$source" ]; then
+          source="apps/desktop/artifacts/$source"
+          [ -f "$source" ] || { echo "::error::desktop installer not found at $source"; exit 1; }
+          path="apps/desktop/dist/$name"
+          cp "$source" "$path"
+        fi
         update_manifest_path="apps/desktop/artifacts/${environment}-${platform}-update.json"
         [ -f "$update_manifest_path" ] || { echo "::error::desktop update manifest not found at $update_manifest_path"; exit 1; }
         update_archive_path="apps/desktop/artifacts/$update_archive_name"
         [ -f "$update_archive_path" ] || { echo "::error::desktop update archive not found at $update_archive_path"; exit 1; }
-        path="apps/desktop/dist/$name"
-        cp "$source" "$path"
         {
           echo "name=$name"
           echo "path=$path"
@@ -182,6 +218,7 @@ runs:
         } >> "$GITHUB_OUTPUT"
 
     - name: Smoke desktop first-install artifact
+      if: ${{ steps.resolve-desktop.outputs.path != '' }}
       shell: bash
       env:
         CHANNEL: ${{ inputs.channel }}

@@ -43,18 +43,23 @@ Native macOS and Linux ARM64 acceptance belongs to the release matrix.
 ## Native build contract
 
 The private native matrix checks out an explicit public source commit and invokes
-`.github/actions/build-binary`. The action accepts `version`, `channel`, and a host-matching `target`.
+`.github/actions/build-binary`. The action accepts `version`, `channel`, a host-matching `target`, and
+`macos-signing-input-only` (default false). That macOS-only opt-in uses the normal package command with
+Electrobun's documented DMG creation disabled; the private signer owns the final installer instead.
 Its stable public outputs are:
 
 - `artifact-name` / `artifact-path` — native CLI;
-- `desktop-artifact-name` / `desktop-artifact-path` — first-install desktop artifact;
+- `desktop-artifact-name` / `desktop-artifact-path` — first-install desktop artifact, empty only in
+  macOS signing-input-only mode;
 - `desktop-app-archive-path` — Electrobun's expanded macOS app archive, empty on non-macOS targets;
 - `desktop-update-manifest-path` / `desktop-update-archive-path` — Electrobun's updater metadata and
   full application archive, both non-empty on every desktop target.
 
 The recipe stamps the shared version, builds and smokes the CLI, invokes the normal Electrobun dev and
 channel builds, runs expanded-app and first-install smoke, then collects exact target/channel outputs.
-Update outputs preserve Electrobun's generated basenames and compressed bytes. The manifest is the exact
+Signing-input-only mode retains expanded-app smoke and requires the app archive and updater pair, but has
+no unsigned DMG to collect or smoke. Default local/CI installers and the private final signed-installer
+verification remain unchanged. Update outputs preserve Electrobun's generated basenames and compressed bytes. The manifest is the exact
 `<stable|canary>-<macos|win|linux>-<arm64|x64>-update.json`. Its `artifact.file` is the archive basename:
 `stable-<platform>-ThinkRail[.app].tar.zst` for stable or
 `canary-<platform>-ThinkRail-canary[.app].tar.zst` for nightly, where `<platform>` is the manifest's
@@ -62,8 +67,10 @@ OS-architecture pair and `.app` occurs only on macOS. Collection resolves both n
 channel and target rather than accepting the first glob match. The paths point directly
 into Electrobun's output tree; updater payloads do not change the installer-only dist aliases. On macOS the
 update archive may be the same expanded-app archive exposed through `desktop-app-archive-path`; the recipe
-does not duplicate or repackage it. [[module-artifact-tests]] owns isolated packaging-invocation and
-collector contract tests; this module owns the action and delivery contract.
+does not duplicate or repackage it. The collector's installer path determines whether first-install
+smoke runs; consumers do not repeat its mode/target decision. [[module-artifact-tests]] owns isolated
+packaging-invocation, mode-validation and collector contract tests; this module owns the action and
+delivery contract.
 
 Supported desktop assets:
 
@@ -76,8 +83,8 @@ Supported desktop assets:
 
 Windows and Linux aliases name untouched framework installers. The Windows ZIP contains its setup
 executable and adjacent payload; Linux's tarball contains the installer and README. For macOS, the
-private SRE flow replaces the unsigned framework DMG with a conventional DMG containing the signed
-expanded app, under the same published alias. The app archive is a private signing intermediate, never
+private SRE flow creates a conventional DMG containing the signed expanded app under the same published
+alias; its signing-input-only build avoids a discarded unsigned DMG. The app archive is a private signing intermediate, never
 a public release asset.
 
 On Windows, the packaging invocation puts System32 first so Hutch's bare `tar` resolves to Windows
@@ -125,9 +132,9 @@ content types. Entitlement extraction requests XML before plist parsing.
 ## Desktop updater qualification and publication
 
 Auto-update scope includes every current native desktop target in the matrix above. Canary qualification
-precedes stable; each target needs an observed installed-version A to version B upgrade before enablement.
-The public build handoff now includes the raw Electrobun manifest and full archive; the private runtime feed
-and publication automation are not yet live. Runtime policy belongs to [[module-desktop]].
+precedes stable; each target needs an observed installed-version A to version B upgrade before stable enablement.
+The public build handoff supplies the raw Electrobun manifest and full archive; the private pipeline
+finalizes and publishes the runtime feed. Runtime policy belongs to [[module-desktop]].
 
 The private pipeline consumes those raw names, finalizes the macOS application through the existing signing
 flow, and creates its update archive from those final bytes. It assigns each finalized archive an immutable,

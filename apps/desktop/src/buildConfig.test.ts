@@ -6,7 +6,12 @@ import manifest from "../package.json";
 
 const desktopDir = resolve(import.meta.dir, "..");
 
-test("selects real Bun and preserves the physical runtime resources without retired v1 fields", () => {
+function loadBuildConfig(macosSigningInputOnly?: string) {
+	const env = { ...process.env };
+	delete env.THINKRAIL_MACOS_SIGNING_INPUT_ONLY;
+	if (macosSigningInputOnly !== undefined) {
+		env.THINKRAIL_MACOS_SIGNING_INPUT_ONLY = macosSigningInputOnly;
+	}
 	const result = Bun.spawnSync(
 		[
 			process.execPath,
@@ -15,13 +20,17 @@ test("selects real Bun and preserves the physical runtime resources without reti
 		],
 		{
 			cwd: desktopDir,
-			env: process.env,
+			env,
 			stdout: "pipe",
 			stderr: "pipe",
 		},
 	);
 	expect(result.exitCode).toBe(0);
-	const config = JSON.parse(result.stdout.toString());
+	return JSON.parse(result.stdout.toString());
+}
+
+test("selects real Bun and preserves the physical runtime resources without retired v1 fields", () => {
+	const config = loadBuildConfig();
 	expect(config.app).toEqual({
 		name: "ThinkRail",
 		identifier: "ai.thinkrail.app",
@@ -33,13 +42,18 @@ test("selects real Bun and preserves the physical runtime resources without reti
 		bun: { entrypoint: "src/index.ts" },
 		views: { preload: { entrypoint: "src/preload.ts", format: "iife" } },
 		copy: { "../web/dist": "views/web", ".stage/runtime": "runtime" },
-		mac: { bundleCEF: false, icons: "assets/icon.iconset" },
+		mac: { bundleCEF: false, icons: "assets/icon.iconset", createDmg: true },
 		linux: { bundleCEF: false, icon: "assets/icon.png" },
 		win: { bundleCEF: false, icon: "assets/icon.ico" },
 	});
 	expect(config.scripts).toEqual({ preBuild: "preBuild.ts", postBuild: "postBuild.ts" });
 	expect(config.build).not.toHaveProperty("bunVersion");
 	expect(config.build).not.toHaveProperty("useAsar");
+});
+
+test("disables macOS DMG creation only for signing-input builds", () => {
+	expect(loadBuildConfig("true").build.mac.createDmg).toBe(false);
+	expect(loadBuildConfig("false").build.mac.createDmg).toBe(true);
 });
 
 test("uses the exact npm bootstrap pin while Bun owns the workspace dependency graph", () => {

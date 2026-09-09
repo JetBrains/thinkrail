@@ -199,8 +199,10 @@ The native macOS build also exposes Electrobun's standard expanded `.app.tar.zst
 input. The approved JetBrains SRE flow signs the expanded app and finalizes a conventional DMG around it,
 then signs/notarizes/staples that container. It does not mutate Electrobun's compressed self-extractor
 payload or use an incorrect pre-metadata sealing hook. Local framework DMGs remain unsigned build outputs;
-only the private pipeline's verified final DMG is a signed release. The handoff and verification contract
-belong to [[module-ci-release]].
+only the private pipeline's verified final DMG is a signed release. The build-only opt-in
+`THINKRAIL_MACOS_SIGNING_INPUT_ONLY=true` selects the SDK's `build.mac.createDmg: false` while retaining
+the expanded app and update archive; it changes no runtime behavior. The default still creates a DMG.
+The handoff and verification contract belong to [[module-ci-release]].
 
 Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 plus `libgtk-3-0`,
 `libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are
