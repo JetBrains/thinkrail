@@ -113,6 +113,18 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     destructive queue API returns text but drops image blocks; Pi's queue events remain authoritative for
     membership/order. The host projects only a conservative `hasImages` aggregate into summaries/events, so
     image bytes do not ride the ordinary read stream.
+
+    **One membership override compensates for a Pi defect: a delivered image-only (empty-text) queued
+    message is never cleared.** Pi keys its on-delivery queue removal on the delivered user message's text
+    (`contentText`), so a message queued with images but no text stays in Pi's `_steeringMessages` /
+    `_followUpMessages` forever and its "Steering"/"Follow-up" chip never disappears. The manager therefore
+    counts such deliveries per lane (`stuckEmptyDeliveries`): on a user `message_start` whose text is empty,
+    whose content carries an image, and for which Pi still reports more empty-text entries in a lane than
+    already counted, it increments that lane's counter and **synthesizes the emptying `queue_update`** Pi
+    withheld. Every place that reads a lane for display — the projected `queue_update`, the transient-mirror
+    sync, and `queueStateOf` — first drops that many empty-text entries from Pi's list, so a later genuine
+    `queue_update` cannot resurrect the phantom. The counter is per live entry only (Pi's ephemeral queues
+    never survive a process restart) and resets whenever `clearQueue()` empties both lanes.
   - **Activity projection** (`activity.ts`) answers "what is happening in a workspace nobody has open?" —
     the signal the Projects rail draws. `deriveActivityStatus` is a **pure function** of one session's
     observable state; the manager owns only the publish-on-change bookkeeping (`publishedActivity` per
