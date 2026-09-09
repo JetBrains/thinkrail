@@ -21,6 +21,11 @@ import { RouteStore } from "./routeStore";
 import type { DesktopRpc } from "./rpc";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
 import type { DesktopServerRuntime } from "./serverRuntime";
+import {
+	desktopWindowChrome,
+	injectInitialWindowChrome,
+	windowChromeGeometry,
+} from "./windowChrome";
 
 type BeforeQuitEvent = ReturnType<typeof Electrobun.events.events.app.beforeQuit>;
 
@@ -83,11 +88,15 @@ async function start(): Promise<void> {
 			},
 		},
 	});
+	const windowChrome = desktopWindowChrome(process.platform);
 	const preload = neutral
 		? null
-		: injectInitialDesktopPreferences(
-				await Bun.file(join(PATHS.VIEWS_FOLDER, "preload", "index.js")).text(),
-				initialPreferences,
+		: injectInitialWindowChrome(
+				injectInitialDesktopPreferences(
+					await Bun.file(join(PATHS.VIEWS_FOLDER, "preload", "index.js")).text(),
+					initialPreferences,
+				),
+				windowChrome.geometry,
 			);
 	const mainWindow = new BrowserWindow({
 		title: "ThinkRail",
@@ -99,7 +108,20 @@ async function start(): Promise<void> {
 			process.env.THINKRAIL_DESKTOP_E2E_HOST === "1",
 		navigationRules: neutral ? null : JSON.stringify(["^*", `${origin}/*`]),
 		frame: { x: 80, y: 60, width: 1440, height: 920 },
+		titleBarStyle: windowChrome.titleBarStyle,
+		...(windowChrome.trafficLightOffset
+			? { trafficLightOffset: windowChrome.trafficLightOffset }
+			: {}),
 	});
+	if (!neutral) {
+		let fullScreen = false;
+		mainWindow.on("resize", () => {
+			const next = mainWindow.isFullScreen();
+			if (next === fullScreen) return;
+			fullScreen = next;
+			rpc.send.windowChromeChanged(windowChromeGeometry(windowChrome, fullScreen));
+		});
+	}
 	const navigationProbePath = neutral
 		? undefined
 		: process.env.THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE;

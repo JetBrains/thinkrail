@@ -1,3 +1,5 @@
+import { prependPreloadGlobal } from "./preloadGlobals";
+
 export const INITIAL_DESKTOP_PREFERENCES_GLOBAL = "__THINKRAIL_INITIAL_DESKTOP_PREFERENCES__";
 export const STABLE_PREFERENCES_GLOBAL = "__THINKRAIL_STABLE_PREFERENCES__";
 export const MAX_DESKTOP_PREFERENCE_KEY_LENGTH = 128;
@@ -49,16 +51,9 @@ export function readDesktopPreferenceRemove(payload: unknown): { key: string } |
 	return isDesktopPreferenceKey(key) ? { key } : null;
 }
 
-function serializeForPreload(values: Readonly<Record<string, string>>): string {
-	return JSON.stringify(JSON.stringify(values))
-		.replaceAll("<", "\\u003c")
-		.replaceAll("\u2028", "\\u2028")
-		.replaceAll("\u2029", "\\u2029");
-}
-
 export function injectInitialDesktopPreferences(
 	preloadSource: string,
 	values: Readonly<Record<string, string>>,
 ): string {
-	return `Object.defineProperty(globalThis, ${JSON.stringify(INITIAL_DESKTOP_PREFERENCES_GLOBAL)}, { value: JSON.parse(${serializeForPreload(values)}), configurable: true });\n${preloadSource}`;
+	return prependPreloadGlobal(preloadSource, INITIAL_DESKTOP_PREFERENCES_GLOBAL, values);
 }

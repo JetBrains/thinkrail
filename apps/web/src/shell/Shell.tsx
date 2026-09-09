@@ -110,7 +110,12 @@ export function Shell() {
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
-			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-16 py-8">
+			<header className="window-drag flex h-topbar-row select-none items-center border-b border-border-default bg-container-header-bg px-16">
+				<div
+					aria-hidden="true"
+					data-testid="window-chrome-inset-left"
+					className="w-window-chrome-inset-left shrink-0"
+				/>
 				<div className="flex min-w-0 items-center gap-12">
 					<BrandLogo />
 					{contextProject ? (
@@ -159,7 +164,7 @@ export function Shell() {
 						</div>
 					) : null}
 				</div>
-				<div className="flex shrink-0 items-center gap-12">
+				<div className="ml-auto flex shrink-0 items-center gap-12">
 					<JbcentralQuotaTopbar />
 					<span
 						data-testid="connection-status"
@@ -182,12 +187,17 @@ export function Shell() {
 							data-testid="open-settings"
 							aria-label="Settings"
 							onClick={() => useAppStore.getState().openSettings()}
-							className="flex size-28 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+							className="window-no-drag flex size-28 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 						>
 							<Settings className="size-16" />
 						</button>
 					</IconTooltip>
 				</div>
+				<div
+					aria-hidden="true"
+					data-testid="window-chrome-inset-right"
+					className="w-window-chrome-inset-right shrink-0"
+				/>
 				<SettingsDialog layoutSettings={<LayoutSettings />} />
 			</header>
 			{hasActiveWorkspace && activeWorkspaceId ? (
