@@ -285,6 +285,47 @@ test("a settlement tick survives a batched false-to-false streaming endpoint", (
 	expect(rt("a").settlementTick).toBe(2);
 });
 
+test("stats refresh ticks survive batching at finalized Pi state boundaries", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	let commits = 0;
+	const unsubscribe = useAppStore.subscribe(() => {
+		commits += 1;
+	});
+
+	store.handlePiEvents([
+		{ sessionId: "a", event: agentStart },
+		{ sessionId: "a", event: assistantStart },
+		{ sessionId: "a", event: assistantText("streaming") },
+		{
+			sessionId: "a",
+			event: {
+				type: "message_end",
+				message: { role: "toolResult" },
+			} as unknown as PiEvent,
+		},
+		{ sessionId: "a", event: { type: "compaction_start", reason: "manual" } },
+		{
+			sessionId: "a",
+			event: {
+				type: "compaction_end",
+				reason: "manual",
+				result: { tokensBefore: 1_000, estimatedTokensAfter: 200 },
+				aborted: false,
+				willRetry: false,
+			},
+		},
+		{ sessionId: "a", event: agentEnd },
+		{ sessionId: "a", event: agentSettled() },
+	]);
+	unsubscribe();
+
+	expect(commits).toBe(1);
+	expect(rt("a").statsRefreshTick).toBe(3);
+	store.handlePiEvent(toolEnd("t1", {}), "a");
+	expect(rt("a").statsRefreshTick).toBe(3);
+});
+
 test("a host-fired USER message folds into the transcript; the composer's optimistic twin doesn't duplicate", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
@@ -1697,6 +1738,7 @@ test("reconcileSession replaces stale host state while preserving browser-local 
 	expect(after.thinkingLevel).toBe("high");
 	expect(after.syncedConnectionGeneration).toBe(7);
 	expect(after.eventRevision).toBe(before.eventRevision + 1);
+	expect(after.statsRefreshTick).toBe(before.statsRefreshTick);
 });
 
 test("reconcileSession rejects a transcript read crossed by even a UI-ignored Pi event", () => {

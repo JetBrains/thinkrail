@@ -64,6 +64,7 @@ import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { shouldApplyTemplatePick } from "./templatePick";
 import { stripFrontmatter } from "./templateText";
 import { useModelCatalog } from "./useModelCatalog";
+import { useSessionStats } from "./useSessionStats";
 import "./tools/register";
 import { ChatTurnView } from "./turns";
 import type { ChatAttachment, ChatTurn } from "./types";
@@ -224,6 +225,8 @@ export default function ChatView({
 		toolResults,
 		isStreaming,
 		settlementTick,
+		statsRefreshTick,
+		syncedConnectionGeneration,
 		currentAssistantId,
 		stats,
 		commands,
@@ -237,6 +240,14 @@ export default function ChatView({
 	} = runtime;
 
 	const currentModel = selectCatalogModel(models, sessionModel) ?? sessionModel;
+	const refreshStats = useSessionStats({
+		sessionId,
+		statsRefreshTick,
+		syncedConnectionGeneration,
+		status,
+		connectionGeneration,
+		enabled: sessionRuntime !== undefined,
+	});
 
 	const chronologicalRows = useMemo(
 		() => deriveRows(turns, toolResults, isStreaming, isSpec),
@@ -442,13 +453,6 @@ export default function ChatView({
 	);
 
 	useEffect(() => {
-		getTransport()
-			.request("session.getStats", { sessionId })
-			.then((st) => useAppStore.getState().setStats(sessionId, st))
-			.catch(() => {});
-	}, [sessionId, isStreaming]);
-
-	useEffect(() => {
 		if (mentionQuery === null) {
 			setMentionCandidates([]);
 			return;
@@ -485,6 +489,7 @@ export default function ChatView({
 		useAppStore.getState().setCurrentModel(sessionId, model);
 		getTransport()
 			.request("session.setModel", { sessionId, model })
+			.then(() => refreshStats())
 			.catch(() => {});
 	};
 
