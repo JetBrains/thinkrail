@@ -200,6 +200,61 @@ test("a project's committed skills are gated behind trust, then autocomplete", a
 	await expect(worktreeRows(page)).toHaveCount(0);
 });
 
+test("the start prompt shares template completion and slot behavior without live-only commands", async ({
+	page,
+}) => {
+	const templateFile = join(E2E_FIXTURE_REPO, ".pi", "prompts", "workspace-kickoff.md");
+	mkdirSync(join(E2E_FIXTURE_REPO, ".pi", "prompts"), { recursive: true });
+	writeFileSync(
+		templateFile,
+		`---
+description: Prepare a workspace task
+argument-hint: "[topic] [check]"
+---
+Prepare $1 and verify \${2:-tests}.
+`,
+	);
+
+	try {
+		await openFixtureProject(page);
+		await page.getByTestId("add-workspace").first().click();
+		const dialog = page.getByTestId("new-workspace-dialog");
+		const prompt = dialog.getByTestId("ws-prompt");
+
+		await prompt.fill("/compact");
+		await expect(dialog.getByTestId("slash-command").filter({ hasText: "/compact" })).toHaveCount(
+			0,
+		);
+
+		await prompt.fill("/review");
+		const globalTemplate = dialog.getByTestId("slash-command").filter({ hasText: "/review" });
+		await expect(globalTemplate).toBeVisible();
+		await expect(globalTemplate).toContainText("prompt/user");
+
+		await prompt.fill("/workspace-k");
+		const projectTemplate = dialog
+			.getByTestId("slash-command")
+			.filter({ hasText: "/workspace-kickoff" });
+		await expect(projectTemplate).toBeVisible();
+		await expect(projectTemplate).toContainText("prompt/project");
+		await projectTemplate.click();
+
+		await expect(prompt).toHaveValue("Prepare ⟨topic⟩ and verify tests.");
+		await expect(dialog.getByTestId("slot-hint")).toContainText("slot 1/2");
+		await prompt.pressSequentially("parser");
+		await prompt.press("Tab");
+		await expect(dialog.getByTestId("slot-hint")).toContainText("slot 2/2");
+
+		await prompt.press("Enter");
+		await expect(dialog).toBeHidden();
+		await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toContainText(
+			"Prepare parser and verify tests.",
+		);
+	} finally {
+		rmSync(templateFile, { force: true });
+	}
+});
+
 test("Enter in the prompt creates; Shift+Enter inserts a newline", async ({ page }) => {
 	await openFixtureProject(page);
 

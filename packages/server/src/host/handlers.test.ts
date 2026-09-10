@@ -2,7 +2,12 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Workspace, WorkspaceWatchReadyResult } from "@thinkrail/contracts";
+import type {
+	Template,
+	TemplateInfo,
+	Workspace,
+	WorkspaceWatchReadyResult,
+} from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import { recordAcceptedMessage, resetFeedbackForTests, setFeedbackPublisher } from "../feedback";
 import { addComment, getReviewSnapshot } from "../reviews";
@@ -68,6 +73,41 @@ test("request diagnostics expose only registered method names", async () => {
 	expect(requestMethodDiagnostic("secret prompt value")).toBe("unknown method");
 	expect(requestMethodDiagnostic("toString")).toBe("unknown method");
 	await expect(handleRequest("toString", undefined, CTX)).rejects.toThrow("Unknown method");
+});
+
+test("template reads resolve a project's current checkout and reject ambiguous locations", async () => {
+	const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
+	const agentDir = join(dataDir, "agent");
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	try {
+		const globalDir = join(agentDir, "prompts");
+		const projectDir = join(repo, ".pi", "prompts");
+		mkdirSync(globalDir, { recursive: true });
+		mkdirSync(projectDir, { recursive: true });
+		writeFileSync(join(globalDir, "kickoff.md"), "global body");
+		writeFileSync(join(projectDir, "kickoff.md"), "project body");
+
+		const listed = (await handleRequest("template.list", { projectId: "p1" }, CTX)) as {
+			templates: TemplateInfo[];
+		};
+		expect(listed.templates).toContainEqual(
+			expect.objectContaining({ name: "kickoff", scope: "project" }),
+		);
+
+		const template = (await handleRequest(
+			"template.get",
+			{ projectId: "p1", name: "kickoff" },
+			CTX,
+		)) as Template;
+		expect(template).toMatchObject({ scope: "project", content: "project body" });
+
+		await expect(
+			handleRequest("template.list", { workspaceId: "unused", projectId: "p1" }, CTX),
+		).rejects.toThrow("either workspaceId or projectId");
+	} finally {
+		if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+	}
 });
 
 test("disabled JetBrains quota returns hidden through its handler", async () => {

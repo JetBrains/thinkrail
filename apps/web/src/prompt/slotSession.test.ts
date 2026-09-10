@@ -1,13 +1,60 @@
 import { expect, test } from "bun:test";
 import type { TemplateSlot } from "./slotSession";
 import {
+	applyTemplateSlotEdit,
+	beginTemplateSlotSession,
+	finalizeTemplateSlotSession,
 	highlightSegments,
 	mirrorAllGroups,
 	mirrorSlotGroup,
 	parseTemplateSlots,
 	shiftSlots,
+	stepTemplateSlotSession,
 	stripUntouchedSlots,
 } from "./slotSession";
+
+test("the shared slot session begins, tracks an edit, advances, and finalizes", () => {
+	const begun = beginTemplateSlotSession(
+		parseTemplateSlots(`Review $1 with \${2:-src/}`, "[file] [scope]"),
+	);
+	const session = begun.session;
+	expect(session).not.toBeNull();
+	if (!session) return;
+
+	const replacement = "README.md";
+	const nextValue =
+		begun.value.slice(0, begun.selection.start) +
+		replacement +
+		begun.value.slice(begun.selection.end);
+	const edited = applyTemplateSlotEdit(
+		begun.value,
+		nextValue,
+		begun.selection.start + replacement.length,
+		session,
+	);
+	expect(edited?.slots[0]).toMatchObject({ filled: true, edited: true });
+	if (!edited) return;
+
+	const stepped = stepTemplateSlotSession(nextValue, edited, 1);
+	expect(stepped.value.slice(stepped.selection.start, stepped.selection.end)).toBe("src/");
+	expect(finalizeTemplateSlotSession(stepped.value, stepped.session)).toBe(
+		"Review README.md with src/",
+	);
+});
+
+test("the shared slot session removes an untouched marker on finalization", () => {
+	const begun = beginTemplateSlotSession(parseTemplateSlots("Review $1 now"));
+	expect(finalizeTemplateSlotSession(begun.value, begun.session)).toBe("Review now");
+});
+
+test("a template without placeholders does not start a slot session", () => {
+	const begun = beginTemplateSlotSession(parseTemplateSlots("Plain prompt"));
+	expect(begun).toEqual({
+		value: "Plain prompt",
+		session: null,
+		selection: { start: 12, end: 12 },
+	});
+});
 
 test("$1 repeated shares one group; no argumentHint falls back to argN", () => {
 	const { text, slots } = parseTemplateSlots("fix $1 then fix $1 again");
