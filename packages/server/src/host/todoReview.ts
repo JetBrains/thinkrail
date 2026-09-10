@@ -233,7 +233,11 @@ export async function startReviewAllFlow(p: {
 		return { ok: true, total: 0, alreadyRunning: true };
 	try {
 		const plan = await listTodos(p);
-		const items = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+		const items = [
+			...plan.todos,
+			...plan.groups.flatMap((g) => g.todos),
+			...(plan.adoptedCommits ?? []),
+		];
 		const pending = items
 			.filter((t) => t.review !== undefined && !isReviewSettled(t) && t.review.reviewing !== true)
 			.map((t) => t.id);

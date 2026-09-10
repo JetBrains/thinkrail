@@ -103,8 +103,12 @@ export function verificationStatus(verification: string): "claimed" | "unverifie
 		: "claimed";
 }
 
+export function adoptedCommits(plan: TodoPlan): TodoItem[] {
+	return plan.adoptedCommits ?? [];
+}
+
 export function reviewableItems(plan: TodoPlan): TodoItem[] {
-	return flatItems(plan).filter((t) => t.review !== undefined);
+	return [...flatItems(plan), ...adoptedCommits(plan)].filter((t) => t.review !== undefined);
 }
 
 export function reviewSettled(item: TodoItem): boolean {

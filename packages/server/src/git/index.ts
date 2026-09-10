@@ -19,6 +19,7 @@ export {
 	listRemotes,
 	prefetchBranch,
 	readBlobAt,
+	readCommitSubject,
 	remoteRefOid,
 	resolveDefaultBranch,
 	tryCurrentBranch,

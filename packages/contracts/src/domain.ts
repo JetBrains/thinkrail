@@ -120,7 +120,7 @@ export interface SpecGraphSnapshot {
 }
 
 export type TodoStatus = "pending" | "in_progress" | "done";
-export type TodoOrigin = "agent" | "user";
+export type TodoOrigin = "agent" | "user" | "adopted";
 
 export type TodoArtifactKind = "file" | "change" | "spec" | "commit";
 
@@ -192,6 +192,13 @@ export interface TodoPlan {
 	 * of silently absent.
 	 */
 	unattributed?: GitFileChange[];
+	/**
+	 * Branch commits (`base..HEAD`) owned by NO item of this plan — **host-derived on `todo.list`,
+	 * present only when non-empty**. The committed counterpart of `unattributed`: each is a wire-only
+	 * `done` item (`origin: "adopted"`, `id: "commit:<sha>"`, one `commit` artifact) so a chat that
+	 * committed without planning still shows — and can review — that work. Never stored.
+	 */
+	adoptedCommits?: TodoItem[];
 }
 
 export type DelegationRunStatus = "queued" | "running" | "completed" | "error" | "aborted";

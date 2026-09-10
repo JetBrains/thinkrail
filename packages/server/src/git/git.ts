@@ -65,6 +65,13 @@ export function gitHeadSha(workspaceId: string): string | null {
 	return head.ok && head.out ? head.out : null;
 }
 
+export function readCommitSubject(workspaceId: string, sha: string): string | null {
+	if (!/^[0-9a-f]{4,64}$/.test(sha)) return null;
+	const cwd = workspace(workspaceId).worktreePath;
+	const out = git(cwd, ["log", "-1", "--format=%s", "--end-of-options", `${sha}^{commit}`, "--"]);
+	return out.ok ? plainText(out.out) : null;
+}
+
 function lines(out: string): string[] {
 	return out
 		.split("\n")
