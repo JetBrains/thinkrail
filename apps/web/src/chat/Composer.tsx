@@ -138,6 +138,7 @@ interface ComposerProps {
 	isStreaming: boolean;
 	growthLimit: ComposerGrowthLimit;
 	commands: SlashCommandItem[];
+	templatePending: boolean;
 	mentionCandidates: MentionCandidate[];
 	recentPrompts: string[];
 	models: WireModel[];
@@ -177,6 +178,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		isStreaming,
 		growthLimit,
 		commands,
+		templatePending,
 		mentionCandidates,
 		recentPrompts,
 		models,
@@ -301,7 +303,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		[onChange, focusSelection],
 	);
 
-	const canSubmit = (raw: string) => pendingImages === 0 && (!!raw.trim() || images.length > 0);
+	const canSubmit = (raw: string) =>
+		!templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
 
 	const submitText = (raw: string, behavior: SubmitBehavior) => {
 		if (!canSubmit(raw)) return;

@@ -34,6 +34,8 @@ input. Catalog merge is deterministic and lets the caller's more-specific later 
 earlier source.
 
 Template selection is latest-pick-wins and applies only while the draft is byte-identical to its value at pick
-time. A selected template replaces the complete draft. Tab and Shift+Tab cycle placeholders, Escape ends the
+time and the caller's project/workspace context is unchanged. The picker exposes pending state so submit
+controls stay disabled while it resolves; the draft remains editable, and an edit or context switch invalidates
+the delayed application. A selected template replaces the complete draft. Tab and Shift+Tab cycle placeholders, Escape ends the
 slot session, edited repeated groups mirror when leaving a slot, and submission removes untouched markers.
 Presentation helpers expose the same hint and highlight states while leaving each input's layout to its owner.

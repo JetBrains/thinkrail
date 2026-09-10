@@ -654,8 +654,9 @@ export default function ChatView({
 		(template: ParsedTemplate) => composerRef.current?.insertTemplate(template),
 		[],
 	);
-	const onPickTemplate = useTemplateCommandPicker({
+	const { pending: templatePending, pick: onPickTemplate } = useTemplateCommandPicker({
 		draft,
+		contextKey: `${workspaceId}:${sessionId}`,
 		load: loadTemplate,
 		onApply: applyTemplate,
 	});
@@ -988,6 +989,7 @@ export default function ChatView({
 							isStreaming={isStreaming}
 							growthLimit={composerGrowthLimit}
 							commands={mergedCommands}
+							templatePending={templatePending}
 							mentionCandidates={mentionCandidates}
 							recentPrompts={recentPrompts}
 							models={models}

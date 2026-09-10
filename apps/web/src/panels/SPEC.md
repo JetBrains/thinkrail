@@ -363,8 +363,11 @@ a project picker, the prompt hero, and the reused
   `template.get({projectId, name})`, replaces the complete draft with its body, and activates its placeholders.
   Up/Down navigate, Enter/Tab select, Escape dismisses the menu; outside an open menu Tab/Shift+Tab cycle active
   template slots and Escape ends that session. Submission mirrors edited repeated slots and removes untouched
-  markers before the finalized text becomes the first prompt. Listing/get failures preserve the draft and
-  degrade to whichever source remains available. Extension commands and `/compact` stay absent because no live
+  markers before the finalized text becomes the first prompt. While a selected template body is loading,
+  submission is held but the prompt remains editable; editing cancels the delayed apply. Changing projects also
+  invalidates an in-flight pick, so a response from the previous checkout cannot populate the next project's
+  prompt. The first prompt is snapshotted before asynchronous workspace creation begins.
+  Listing/get failures preserve the draft and degrade to whichever source remains available. Extension commands and `/compact` stay absent because no live
   session exists. A caption under the prompt marks the catalog as **from the current checkout** (the created
   worktree's session is authoritative if the selected base branch differs). When the selected project is **untrusted AND ships
   committed skills** (a count from `project.aliasSkills`, never their names), a **trust notice** shows a

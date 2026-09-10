@@ -17,7 +17,7 @@ import {
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
@@ -112,18 +112,34 @@ export function NewWorkspaceDialog({
 	const [trusting, setTrusting] = useState(false);
 	const [manageSkills, setManageSkills] = useState(false);
 	const promptRef = useRef<HTMLTextAreaElement>(null);
+	const [pendingPromptSelection, setPendingPromptSelection] = useState<{
+		start: number;
+		end: number;
+	} | null>(null);
 	const hostDefaultAsked = useRef(false);
 	const targetGroupName = useId();
 	const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
+	const updatePromptDraft = useCallback(
+		(nextPrompt: string, nextSlotSession: TemplateSlotSessionState | null) => {
+			setPrompt(nextPrompt);
+			setSlotSession(nextSlotSession);
+		},
+		[],
+	);
 
 	const focusPromptSelection = useCallback((start: number, end: number = start) => {
-		requestAnimationFrame(() => {
-			const input = promptRef.current;
-			if (!input) return;
-			input.focus();
-			input.setSelectionRange(start, end);
-		});
+		setPendingPromptSelection({ start, end });
 	}, []);
+
+	useLayoutEffect(() => {
+		if (!pendingPromptSelection) return;
+		const input = promptRef.current;
+		if (input) {
+			input.focus();
+			input.setSelectionRange(pendingPromptSelection.start, pendingPromptSelection.end);
+		}
+		setPendingPromptSelection(null);
+	}, [pendingPromptSelection]);
 
 	const supportsProjectTemplatePreview =
 		protocolVersion !== null && protocolVersion >= PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION;
@@ -139,14 +155,14 @@ export function NewWorkspaceDialog({
 	const applyTemplate = useCallback(
 		(template: ParsedTemplate) => {
 			const transition = beginTemplateSlotSession(template);
-			setPrompt(transition.value);
-			setSlotSession(transition.session);
+			updatePromptDraft(transition.value, transition.session);
 			focusPromptSelection(transition.selection.start, transition.selection.end);
 		},
-		[focusPromptSelection],
+		[focusPromptSelection, updatePromptDraft],
 	);
-	const pickTemplate = useTemplateCommandPicker({
+	const { pending: templatePending, pick: pickTemplate } = useTemplateCommandPicker({
 		draft: prompt,
+		contextKey: `${selectedProjectId}:${supportsProjectTemplatePreview ? "project" : "global"}`,
 		load: loadTemplate,
 		onApply: applyTemplate,
 	});
@@ -155,12 +171,11 @@ export function NewWorkspaceDialog({
 		commands: [...skillCommands, ...templates.map(templateToSlashCommand)],
 		onSelect: (command) => {
 			if (command.source === "prompt") {
-				pickTemplate(command.name);
+				void pickTemplate(command.name);
 				return;
 			}
 			const next = selectedSlashCommandValue(command);
-			setPrompt(next);
-			setSlotSession(null);
+			updatePromptDraft(next, null);
 			focusPromptSelection(next.length);
 		},
 	});
@@ -169,20 +184,18 @@ export function NewWorkspaceDialog({
 	const stepPromptSlot = (direction: 1 | -1) => {
 		if (!slotSession) return;
 		const transition = stepTemplateSlotSession(prompt, slotSession, direction);
-		setPrompt(transition.value);
-		setSlotSession(transition.session);
+		updatePromptDraft(transition.value, transition.session);
 		focusPromptSelection(transition.selection.start, transition.selection.end);
 	};
 
 	useEffect(() => {
 		if (!open) return;
 		setSelectedProjectId(projectId);
-		setPrompt(initialPrompt ?? "");
-		setSlotSession(null);
+		updatePromptDraft(initialPrompt ?? "", null);
 		setTarget("worktree");
 		setCreating(false);
 		hostDefaultAsked.current = false;
-	}, [open, projectId, initialPrompt]);
+	}, [open, projectId, initialPrompt, updatePromptDraft]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -319,10 +332,12 @@ export function NewWorkspaceDialog({
 		setBaseRef(list.defaultBranch);
 		prefetchBase(list.defaultBranch);
 	});
+	const submitEnabled = !creating && !templatePending;
 
 	const create = async () => {
-		if (creating) return;
+		if (!submitEnabled) return;
 		setCreating(true);
+		const text = finalizeTemplateSlotSession(prompt, slotSession).trim();
 		let workspace: Workspace;
 		if (target === "default") {
 			const def = await enterDefaultWorkspace(selectedProjectId);
@@ -354,7 +369,6 @@ export function NewWorkspaceDialog({
 		}
 		onOpenChange(false);
 
-		const text = finalizeTemplateSlotSession(prompt, slotSession).trim();
 		store.beginChatStart(workspace.id);
 		try {
 			const { result: session, syncedTick } = await createSessionWithSkillBaseline({
@@ -418,7 +432,7 @@ export function NewWorkspaceDialog({
 					}
 					if (!slotSession) return;
 					event.preventDefault();
-					setSlotSession(null);
+					updatePromptDraft(prompt, null);
 				}}
 				onOpenAutoFocus={(e) => {
 					e.preventDefault();
@@ -520,14 +534,13 @@ export function NewWorkspaceDialog({
 						ref={promptRef}
 						data-testid="ws-prompt"
 						value={prompt}
+						disabled={creating}
 						onChange={(e) => {
 							const next = e.target.value;
-							if (slotSession) {
-								setSlotSession(
-									applyTemplateSlotEdit(prompt, next, e.target.selectionStart, slotSession),
-								);
-							}
-							setPrompt(next);
+							const nextSlotSession = slotSession
+								? applyTemplateSlotEdit(prompt, next, e.target.selectionStart, slotSession)
+								: null;
+							updatePromptDraft(next, nextSlotSession);
 						}}
 						placeholder="What do you want to work on?"
 						spellCheck={false}
@@ -545,14 +558,14 @@ export function NewWorkspaceDialog({
 								if (e.key === "Escape") {
 									e.preventDefault();
 									e.stopPropagation();
-									setSlotSession(null);
+									updatePromptDraft(prompt, null);
 									return;
 								}
 							}
 							if (slashCompletion.handleKeyDown(e)) return;
 							if (e.key === "Enter" && !e.shiftKey) {
 								e.preventDefault();
-								void create();
+								if (submitEnabled) void create();
 							}
 						}}
 					/>
@@ -608,7 +621,7 @@ export function NewWorkspaceDialog({
 					<button
 						type="button"
 						data-testid="create-workspace"
-						disabled={creating}
+						disabled={!submitEnabled}
 						onClick={() => void create()}
 						className="flex h-32 shrink-0 items-center gap-8 rounded-[var(--radius-sm)] bg-control-primary-bg px-12 tr-text-action text-control-primary-text outline-none transition-colors hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 					>

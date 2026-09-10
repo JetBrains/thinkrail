@@ -738,7 +738,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   slots → a plain insert, caret at the end, no session. The async response is applied only while the pick
   is still **current** — newest pick wins AND the draft is byte-identical to pick time — so a slow
   response can never clobber a draft the user typed (or a second template they picked) in the meantime;
-  the rule lives in `prompt`'s shared template-pick controller and is unit-tested for delayed and
+  while that selected-template read is pending, the shared picker disables Composer submission so a fast
+  Enter cannot send the raw slash token. The rule lives in `prompt`'s shared template-pick controller and is unit-tested for delayed and
   out-of-order responses. **The session** (shared `prompt` state, held locally by `Composer`, with no
   store/transport): `Tab`/`Shift+Tab` step to the
   next/previous slot (wrap; `preventDefault`; a no-op while the mention/slash menu is open — checked at
