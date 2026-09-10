@@ -218,6 +218,26 @@ test("subagents default on; an old config inherits that default; toggling off ro
 	expect(getConfig().subagentsEnabled).toBe(false);
 });
 
+test("Windows shell updates reject unknown values before persistence or broadcast", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+
+	expect(() =>
+		updateConfig({ terminalWindowsShell: "future-shell" } as unknown as AppConfigUpdate),
+	).toThrow("terminalWindowsShell must be auto, pwsh, powershell, or cmd");
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+
+	expect(updateConfig({ terminalWindowsShell: "cmd" }).terminalWindowsShell).toBe("cmd");
+	expect(published).toHaveLength(1);
+	expect(JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"))).toHaveProperty(
+		"terminalWindowsShell",
+		"cmd",
+	);
+});
+
 test("JetBrains quota preferences default, persist, and survive an old partial config", () => {
 	expect(DEFAULT_CONFIG.jbcentralQuotaEnabled).toBe(true);
 	expect(DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds).toBe(30);
