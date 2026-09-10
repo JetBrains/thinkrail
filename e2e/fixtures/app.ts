@@ -112,7 +112,7 @@ function loadPersistedWorkspaces(): Workspace[] {
 	}
 }
 
-export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
+export async function submitWorkspaceViaDialog(page: Page): Promise<Workspace> {
 	const before = new Set(loadPersistedWorkspaces().map((w) => w.id));
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await expect(async () => {
@@ -121,9 +121,14 @@ export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
 	}).toPass({ timeout: 30_000 });
 	await page.getByTestId("create-workspace").click();
 	await expect(dialog).toBeHidden();
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]').first()).toBeVisible();
 	const created = loadPersistedWorkspaces().find((w) => !before.has(w.id) && w.kind !== "default");
 	if (!created) throw new Error("Workspace was not persisted after creation");
+	return created;
+}
+
+export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
+	const created = await submitWorkspaceViaDialog(page);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]').first()).toBeVisible();
 	return created;
 }
 

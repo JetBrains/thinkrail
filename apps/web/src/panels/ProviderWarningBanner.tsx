@@ -21,25 +21,30 @@ export function ProviderWarningBanner() {
 		if (!settingsOpen) void check();
 	}, [check, settingsOpen]);
 
-	if (hasProvider !== false) return null;
+	if (hasProvider === null) return null;
 
 	return (
-		<div
-			data-testid="welcome-provider-warning"
-			className="mt-16 flex w-full max-w-[560px] items-center gap-8 rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
-		>
-			<TriangleAlert className="size-16 shrink-0 text-feedback-warning" />
-			<span className="min-w-0 flex-1 tr-text-reading text-text-default">
-				No model provider connected — the agent can't run.
-			</span>
-			<Button
-				size="sm"
-				data-testid="welcome-connect-provider"
-				onClick={() => useAppStore.getState().openSettings("providers")}
-				className="shrink-0"
-			>
-				Connect a provider
-			</Button>
-		</div>
+		<>
+			<span hidden data-testid="welcome-provider-ready" />
+			{!hasProvider && (
+				<div
+					data-testid="welcome-provider-warning"
+					className="mt-16 flex w-full max-w-[560px] items-center gap-8 rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
+				>
+					<TriangleAlert className="size-16 shrink-0 text-feedback-warning" />
+					<span className="min-w-0 flex-1 tr-text-reading text-text-default">
+						No model provider connected — the agent can't run.
+					</span>
+					<Button
+						size="sm"
+						data-testid="welcome-connect-provider"
+						onClick={() => useAppStore.getState().openSettings("providers")}
+						className="shrink-0"
+					>
+						Connect a provider
+					</Button>
+				</div>
+			)}
+		</>
 	);
 }

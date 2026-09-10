@@ -115,6 +115,9 @@ async function openTallChat(page: Page, order: MessageOrder) {
 	const session = seedTallChat(`${order} deterministic scrolling`);
 	await selectMessageOrder(page, order);
 	await enterDefaultWorkspace(page);
+	await page
+		.locator(`[data-testid="editor-tab"][data-kind="chat"][data-session-id="${session.id}"]`)
+		.waitFor({ state: "attached" });
 	const chatScroll = page.getByTestId("chat-scroll");
 	await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
 	await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
