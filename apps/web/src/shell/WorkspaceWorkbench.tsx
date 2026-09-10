@@ -207,6 +207,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		(state) => state.layoutProjectionEpochByWorkspace[workspaceId] ?? 0,
 	);
 	const layoutPreferences = useAppStore((state) => state.localLayoutPreferences);
+	const todoViewMode = useAppStore((state) => state.todoViewMode);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
@@ -502,6 +503,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				case "changes":
 					body = <ChangesPanel workspaceId={workspaceId} />;
 					break;
+				case "todos":
+					body = null;
+					break;
 				case "review":
 					body = <ReviewPanel workspaceId={workspaceId} failed={review.failed} />;
 					break;
@@ -566,6 +570,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				attention={attention}
 				maxSideGroups={layoutPreferences.maxSideGroups}
 				maxBottomGroups={layoutPreferences.maxBottomGroups}
+				todoViewMode={todoViewMode}
 				projectionEpoch={projectionEpoch}
 				{...(focusRequest ? { focusRequest } : {})}
 				renderTabBody={renderTabBody}

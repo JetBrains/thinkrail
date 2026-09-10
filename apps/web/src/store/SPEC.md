@@ -105,7 +105,10 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   that document once; a missing or invalid document is represented by a Balanced frame with no workspace views. `clearWorkspaceTabs` removes the
   workspace view, attention, and associated local state when the workspace disappears. A page-lifetime
   `removedWorkspaceIds` tombstone rejects stale catalog/session/cache/workspace arrivals so an in-flight read
-  cannot recreate it.
+  cannot recreate it. The ephemeral `sessionMembershipGenerationByWorkspace` map records the connection
+  generation of each successful authoritative session-list reconciliation and is dropped by the same workspace
+  cleanup; reconnect advances invalidate old entries by comparison rather than clearing unrelated workspace
+  state.
 
   **Browser-local resource render state** is keyed by workspace + canonical resource id, never embedded in
   the frame. Loaded file/diff content and ticks, editor modes, live chat runtimes, and resolved document
@@ -265,8 +268,9 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   stale `session.list` / `session.getMessages` results already in flight cannot recreate a deleted chat;
   the tombstone survives workspace teardown because an older read can still settle afterward. The
   active-workspace hydration pass snapshots **`selectWorkspaceSessionIds`** before each `session.list`; when
-  that authoritative read lands, **`reconcileWorkspaceSessions`** applies the same tombstone fold to every
-  baseline id absent from the host result, repairing deletion events missed while disconnected without
+  that authoritative read lands, **`reconcileWorkspaceSessions`** rejects a stale connection generation,
+  stamps that workspace's session-membership authority generation, and applies the same tombstone fold to
+  every baseline id absent from the host result, repairing deletion events missed while disconnected without
   deleting a session created after the read began or advancing a user-navigation clock. Otherwise
   **`hydrateSession`** rebuilds browser-local
   runtime/render state from a host `SessionSummary` + converted transcript on connect; placement comes only
@@ -558,7 +562,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `selectContextProject`, the layout placement selectors (recursive center plus left/right/bottom auxiliary
   groups), `selectAttentionCenterTab` (the selected resource in local last center focus),
   **`selectTodoChatTarget`** (the active workspace's validated remembered-chat
-  `{ workspaceId, sessionId, title }`, or null until membership is authoritative / when absent),
+  `{ workspaceId, sessionId, title }` only while connection status is `connected` and either that workspace's
+  membership stamp or the remembered session's authoritative runtime matches the current nonzero connection
+  generation; null otherwise),
   `selectCurrentRouteChatTarget` (exact-chat intent only while its workspace and stamped navigation remain
   current), `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
   Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref

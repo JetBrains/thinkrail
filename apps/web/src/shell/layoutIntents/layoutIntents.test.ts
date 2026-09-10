@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { LayoutAttention } from "../../lib";
 import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "../layout";
 import { findTabLocation } from "../layout";
-import { placeTerminalForIntent } from "./layoutIntents";
+import { placeTerminalForIntent, shouldSuppressGenericChatFocus } from "./layoutIntents";
 
 function document(): WorkspaceLayoutDocument {
 	return {
@@ -38,6 +38,17 @@ const terminal: LayoutTerminalTab = {
 };
 
 const limits = { maxSideGroups: 6, maxBottomGroups: 3 } as const;
+
+describe("generic intent focus", () => {
+	test("only activating non-passive opens may record incidental chat focus", () => {
+		expect(shouldSuppressGenericChatFocus({ kind: "toggle-side" })).toBe(true);
+		expect(shouldSuppressGenericChatFocus({ kind: "toggle-bottom" })).toBe(true);
+		expect(shouldSuppressGenericChatFocus({ kind: "close" })).toBe(true);
+		expect(shouldSuppressGenericChatFocus({ kind: "open", countNavigation: false })).toBe(true);
+		expect(shouldSuppressGenericChatFocus({ kind: "open" })).toBe(false);
+		expect(shouldSuppressGenericChatFocus({ kind: "open", countNavigation: true })).toBe(false);
+	});
+});
 
 describe("terminal intent routing", () => {
 	test("global creation uses and reveals the last-focused surviving bottom group", () => {

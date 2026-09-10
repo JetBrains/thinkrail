@@ -109,6 +109,7 @@ import {
 	layoutTabName,
 	moveTabToGroup,
 	reconcileAttention,
+	rememberFocusedChat,
 	removeLayoutGroup,
 	resizeAuxiliaryGroups,
 	resizeBottomRegion,
@@ -138,6 +139,7 @@ import type {
 	LayoutSideTab,
 	LayoutTab,
 	LayoutToolId,
+	TodoViewMode,
 	WorkspaceLayoutDocument,
 } from "./types";
 
@@ -145,6 +147,7 @@ export interface LayoutTabFocusRequest {
 	key: string;
 	location: LayoutGroupLocation;
 	tabId?: string;
+	suppressChatFocus?: boolean;
 }
 
 interface PreparedLayoutClose {
@@ -157,6 +160,7 @@ export interface WorkbenchProps {
 	attention: LayoutAttention;
 	maxSideGroups: number;
 	maxBottomGroups: number;
+	todoViewMode: TodoViewMode;
 	projectionEpoch: number;
 	focusRequest?: LayoutTabFocusRequest;
 	renderTabBody: (tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>) => ReactNode;
@@ -585,6 +589,7 @@ interface TabStripProps {
 	previewId?: string | undefined;
 	maxSideGroups: number;
 	maxBottomGroups: number;
+	todoViewMode: TodoViewMode;
 	draggingTab: LayoutTab | null;
 	onSelect: (tabId: string, keep?: boolean) => void;
 	onClose: (tab: LayoutTab) => void;
@@ -608,6 +613,7 @@ function TabStrip({
 	previewId,
 	maxSideGroups,
 	maxBottomGroups,
+	todoViewMode,
 	draggingTab,
 	onSelect,
 	onClose,
@@ -705,6 +711,7 @@ function TabStrip({
 							document={document}
 							maxSideGroups={maxSideGroups}
 							maxBottomGroups={maxBottomGroups}
+							todoViewMode={todoViewMode}
 							register={(node) => {
 								if (node) tabRefs.current.set(tab.id, node);
 								else tabRefs.current.delete(tab.id);
@@ -843,6 +850,7 @@ interface WorkbenchTabProps {
 	document: WorkspaceLayoutDocument;
 	maxSideGroups: number;
 	maxBottomGroups: number;
+	todoViewMode: TodoViewMode;
 	register: (node: HTMLButtonElement | null) => void;
 	onSelect: (tabId: string, keep?: boolean) => void;
 	onClose: () => void;
@@ -869,6 +877,7 @@ function WorkbenchTab({
 	document,
 	maxSideGroups,
 	maxBottomGroups,
+	todoViewMode,
 	register,
 	onSelect,
 	onClose,
@@ -932,7 +941,7 @@ function WorkbenchTab({
 		disabled: !acceptsAfter,
 	});
 	const groups = collectAllGroups(document);
-	const missingTools = unplacedTools(document);
+	const missingTools = unplacedTools(document, todoViewMode);
 	const splitReason = (direction: CenterSplitDirection): string | null => {
 		if (location.area !== "center") return "Only center tabs can split the center.";
 		if (tab.kind === "tool") return "Tools stay in a side region.";
@@ -1249,8 +1258,10 @@ interface SharedGroupProps {
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
 	selectionEpoch: React.MutableRefObject<number>;
+	suppressChatFocus: React.MutableRefObject<boolean>;
 	maxSideGroups: number;
 	maxBottomGroups: number;
+	todoViewMode: TodoViewMode;
 	draggingTab: LayoutTab | null;
 	renderTabBody: WorkbenchProps["renderTabBody"];
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
@@ -1298,7 +1309,12 @@ function CenterGroupView({
 				return;
 			}
 		}
-		shared.onAttentionChange(selectTab(shared.attention, location, tabId, true, true));
+		shared.onAttentionChange(
+			rememberFocusedChat(
+				selectTab(shared.attention, location, tabId, true, true),
+				group.tabs.find((tab) => tab.id === tabId),
+			),
+		);
 	};
 	return (
 		<section
@@ -1310,8 +1326,12 @@ function CenterGroupView({
 			aria-label={group.tabs.length === 0 ? "Empty center group" : "Center group"}
 			className="relative flex h-full min-h-0 min-w-0 flex-col bg-container-content-bg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
 			onFocusCapture={() => {
-				if (selected)
-					shared.onAttentionChange(selectTab(shared.attention, location, selected.id, false));
+				if (selected) {
+					const next = selectTab(shared.attention, location, selected.id, false);
+					shared.onAttentionChange(
+						shared.suppressChatFocus.current ? next : rememberFocusedChat(next, selected),
+					);
+				}
 			}}
 		>
 			<TabStrip
@@ -1324,6 +1344,7 @@ function CenterGroupView({
 				previewId={group.previewTabId}
 				maxSideGroups={shared.maxSideGroups}
 				maxBottomGroups={shared.maxBottomGroups}
+				todoViewMode={shared.todoViewMode}
 				draggingTab={shared.draggingTab}
 				splitGeometry={splitGeometry}
 				onSelect={applySelect}
@@ -1622,6 +1643,7 @@ function SideGroupView({
 						selectedId={selected?.id}
 						maxSideGroups={shared.maxSideGroups}
 						maxBottomGroups={shared.maxBottomGroups}
+						todoViewMode={shared.todoViewMode}
 						draggingTab={group.folded ? null : shared.draggingTab}
 						onSelect={(tabId) =>
 							shared.onAttentionChange(selectTab(shared.attention, location, tabId))
@@ -1638,6 +1660,7 @@ function SideGroupView({
 								document={shared.document}
 								side={side}
 								groupId={group.id}
+								todoViewMode={shared.todoViewMode}
 								renderSideMenuActions={shared.renderSideMenuActions}
 								onRevealTool={shared.onRevealTool}
 							/>
@@ -1717,16 +1740,18 @@ function SideGroupMenu({
 	document,
 	side,
 	groupId,
+	todoViewMode,
 	renderSideMenuActions,
 	onRevealTool,
 }: {
 	document: WorkspaceLayoutDocument;
 	side: LayoutSide;
 	groupId: string;
+	todoViewMode: TodoViewMode;
 	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
 	onRevealTool: (tool: LayoutToolId) => void;
 }) {
-	const missing = unplacedToolsForSide(document, side);
+	const missing = unplacedToolsForSide(document, side, todoViewMode);
 	const actions = renderSideMenuActions(side, groupId);
 	if (missing.length === 0 && !actions) return null;
 	return (
@@ -2019,6 +2044,7 @@ function BottomGroupView({
 						selectedId={selected?.id}
 						maxSideGroups={shared.maxSideGroups}
 						maxBottomGroups={shared.maxBottomGroups}
+						todoViewMode={shared.todoViewMode}
 						draggingTab={shared.draggingTab}
 						onSelect={(tabId) =>
 							shared.onAttentionChange(selectTab(shared.attention, location, tabId))
@@ -2449,6 +2475,7 @@ export function Workbench({
 	attention,
 	maxSideGroups,
 	maxBottomGroups,
+	todoViewMode,
 	projectionEpoch,
 	focusRequest,
 	renderTabBody,
@@ -2484,18 +2511,37 @@ export function Workbench({
 	documentRef.current = document;
 	attentionRef.current = attention;
 	const [localFocusRequest, setLocalFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
+	const suppressChatFocus = useRef(false);
 	const dragStartEpoch = useRef(projectionEpoch);
 	const canceled = useRef(false);
 
 	useEffect(() => {
 		if (!focusRequest) return;
-		const frame = requestAnimationFrame(() => focusLayoutRequest(focusRequest));
+		const frame = requestAnimationFrame(() => {
+			if (!focusRequest.suppressChatFocus) {
+				focusLayoutRequest(focusRequest);
+				return;
+			}
+			suppressChatFocus.current = true;
+			try {
+				focusLayoutRequest(focusRequest);
+			} finally {
+				suppressChatFocus.current = false;
+			}
+		});
 		return () => cancelAnimationFrame(frame);
 	}, [focusRequest]);
 
 	useEffect(() => {
 		if (!localFocusRequest) return;
-		const frame = requestAnimationFrame(() => focusLayoutRequest(localFocusRequest));
+		const frame = requestAnimationFrame(() => {
+			suppressChatFocus.current = true;
+			try {
+				focusLayoutRequest(localFocusRequest);
+			} finally {
+				suppressChatFocus.current = false;
+			}
+		});
 		return () => cancelAnimationFrame(frame);
 	}, [localFocusRequest]);
 
@@ -2662,7 +2708,12 @@ export function Workbench({
 			return;
 		}
 		const frame = requestAnimationFrame(() => {
-			globalThis.document.getElementById(pending.fallbackDomId)?.focus();
+			suppressChatFocus.current = true;
+			try {
+				globalThis.document.getElementById(pending.fallbackDomId)?.focus();
+			} finally {
+				suppressChatFocus.current = false;
+			}
 			setFocusAfterClose((current) => (current === pending ? null : current));
 		});
 		return () => cancelAnimationFrame(frame);
@@ -2928,7 +2979,9 @@ export function Workbench({
 				) ?? target.tabs[0];
 			onUserNavigation();
 			if (selected) {
-				onAttentionChange(selectTab(currentAttention, target.location, selected.id));
+				onAttentionChange(
+					rememberFocusedChat(selectTab(currentAttention, target.location, selected.id), selected),
+				);
 				setLocalFocusRequest({
 					key: createLayoutId("focus-group"),
 					location: target.location,
@@ -2983,17 +3036,19 @@ export function Workbench({
 	);
 	const revealMissingTool = useCallback(
 		(tool: LayoutToolId) => {
-			const result = revealTool(document, tool, maxSideGroups, maxBottomGroups);
+			const result = revealTool(document, tool, maxSideGroups, maxBottomGroups, todoViewMode);
 			if (!isLayoutUnavailable(result)) apply(result);
 		},
-		[apply, document, maxBottomGroups, maxSideGroups],
+		[apply, document, maxBottomGroups, maxSideGroups, todoViewMode],
 	);
 	const shared: SharedGroupProps = {
 		document,
 		attention,
 		selectionEpoch: tabSelectionEpoch,
+		suppressChatFocus,
 		maxSideGroups,
 		maxBottomGroups,
+		todoViewMode,
 		draggingTab,
 		renderTabBody,
 		renderTabAdornment,
@@ -3248,10 +3303,10 @@ export function Workbench({
 					<HiddenSideRail
 						side="left"
 						onShow={() => {
-							const result = showSide(document, "left", maxSideGroups, attention);
+							const result = showSide(document, "left", maxSideGroups, attention, todoViewMode);
 							if (!isLayoutUnavailable(result)) apply(result);
 						}}
-						showEnabled={canShowSide(document, "left")}
+						showEnabled={canShowSide(document, "left", todoViewMode)}
 						dropEnabled={
 							!!draggingTab &&
 							canPlaceLayoutTab(draggingTab, "left") &&
@@ -3271,10 +3326,10 @@ export function Workbench({
 					<HiddenSideRail
 						side="right"
 						onShow={() => {
-							const result = showSide(document, "right", maxSideGroups, attention);
+							const result = showSide(document, "right", maxSideGroups, attention, todoViewMode);
 							if (!isLayoutUnavailable(result)) apply(result);
 						}}
-						showEnabled={canShowSide(document, "right")}
+						showEnabled={canShowSide(document, "right", todoViewMode)}
 						dropEnabled={
 							!!draggingTab &&
 							canPlaceLayoutTab(draggingTab, "right") &&

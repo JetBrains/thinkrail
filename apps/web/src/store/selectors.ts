@@ -270,6 +270,7 @@ export function selectWorkspaceSessionIds(
 		tabsByWorkspace: Record<string, EditorTab[]>;
 		closedChatsByWorkspace: Record<string, ClosedChat[]>;
 		layoutDocumentsByWorkspace?: Record<string, WorkspaceLayoutDocument>;
+		layoutAttentionByWorkspace?: Record<string, LayoutAttention>;
 	},
 	workspaceId: string,
 ): string[] {
@@ -300,7 +301,44 @@ export function selectWorkspaceSessionIds(
 	};
 	const document = state.layoutDocumentsByWorkspace?.[workspaceId];
 	if (document) visit(document.center);
+	const remembered = state.layoutAttentionByWorkspace?.[workspaceId]?.lastFocusedChatSessionId;
+	if (remembered) sessionIds.add(remembered);
 	return [...sessionIds];
+}
+
+export interface TodoChatTarget {
+	workspaceId: string;
+	sessionId: string;
+	title: string;
+}
+
+export function selectTodoChatTarget(state: {
+	activeWorkspaceId: string | null;
+	status: string;
+	connectionGeneration: number;
+	sessionMembershipGenerationByWorkspace: Record<string, number>;
+	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
+	tabsByWorkspace: Record<string, EditorTab[]>;
+	closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	deletedSessionsByWorkspace: Record<string, Record<string, true>>;
+	sessions: Record<string, Pick<SessionRuntime, "syncedConnectionGeneration">>;
+}): TodoChatTarget | null {
+	const workspaceId = state.activeWorkspaceId;
+	if (!workspaceId || state.status !== "connected" || state.connectionGeneration === 0) return null;
+	const sessionId = state.layoutAttentionByWorkspace[workspaceId]?.lastFocusedChatSessionId;
+	if (!sessionId || state.deletedSessionsByWorkspace[workspaceId]?.[sessionId]) return null;
+	const membershipIsAuthoritative =
+		state.sessionMembershipGenerationByWorkspace[workspaceId] === state.connectionGeneration ||
+		state.sessions[sessionId]?.syncedConnectionGeneration === state.connectionGeneration;
+	if (!membershipIsAuthoritative) return null;
+	const open = (state.tabsByWorkspace[workspaceId] ?? []).find(
+		(tab) => tab.kind === "chat" && tab.sessionId === sessionId,
+	);
+	const closed = state.closedChatsByWorkspace[workspaceId]?.find(
+		(chat) => chat.sessionId === sessionId,
+	);
+	const title = open?.name ?? closed?.title;
+	return title === undefined ? null : { workspaceId, sessionId, title: title.trim() || "Chat" };
 }
 
 export function selectCatalogModel(

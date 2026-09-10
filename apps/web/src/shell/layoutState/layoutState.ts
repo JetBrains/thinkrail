@@ -12,9 +12,11 @@ import {
 import { errorText, getTransport } from "../../transport";
 import {
 	applyProjectedLayoutDocument,
+	applyTodoViewModeToFrame,
 	applyWorkbenchPreset,
 	BUILTIN_LAYOUT_PRESETS,
 	DEFAULT_LAYOUT_PRESET_ID,
+	DEFAULT_TODO_VIEW_MODE,
 	emptyWorkspaceView,
 	ensureWorkbenchToolPlacementIds,
 	instantiateWorkbenchFrame,
@@ -23,6 +25,7 @@ import {
 	minimumSideGroupLimit,
 	projectWorkspaceLayout,
 	reconcileAttention,
+	type TodoViewMode,
 	validateLayoutDocument,
 	type WorkbenchFrame,
 	type WorkspaceLayoutDocument,
@@ -41,6 +44,7 @@ interface PersistedLocalLayout {
 	viewsByWorkspace: Record<string, WorkspaceViewState>;
 	attentionByWorkspace: Record<string, LayoutAttention>;
 	preferences: LocalLayoutPreferences;
+	todoViewMode: TodoViewMode;
 }
 
 interface StoragePair {
@@ -206,7 +210,9 @@ function parseAttention(value: unknown): LayoutAttention | undefined {
 				(region !== "left" && region !== "right" && region !== "bottom") ||
 				typeof entry !== "string",
 		) ||
-		Object.values(clocks).some((entry) => !Number.isSafeInteger(entry) || Number(entry) < 0)
+		Object.values(clocks).some((entry) => !Number.isSafeInteger(entry) || Number(entry) < 0) ||
+		(value.lastFocusedChatSessionId !== undefined &&
+			typeof value.lastFocusedChatSessionId !== "string")
 	) {
 		return undefined;
 	}
@@ -215,6 +221,9 @@ function parseAttention(value: unknown): LayoutAttention | undefined {
 		lastFocusedCenterGroupId: value.lastFocusedCenterGroupId,
 		lastFocusedSideGroupId: { ...focused } as Partial<Record<"left" | "right" | "bottom", string>>,
 		navigationClockByGroup: { ...clocks } as Record<string, number>,
+		...(typeof value.lastFocusedChatSessionId === "string"
+			? { lastFocusedChatSessionId: value.lastFocusedChatSessionId }
+			: {}),
 	};
 }
 
@@ -424,6 +433,7 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 				"viewsByWorkspace",
 				"attentionByWorkspace",
 				"preferences",
+				"todoViewMode",
 			])
 		) {
 			return undefined;
@@ -434,7 +444,14 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 		}
 		const preferences = parsePreferences(parsed.preferences);
 		if (!preferences) return undefined;
-		const frame = parsed.frame;
+		const todoViewMode: TodoViewMode =
+			parsed.todoViewMode === "side-tool" || parsed.todoViewMode === "chat-popover"
+				? parsed.todoViewMode
+				: DEFAULT_TODO_VIEW_MODE;
+		const frame =
+			todoViewMode === "chat-popover"
+				? applyTodoViewModeToFrame(parsed.frame, todoViewMode, 32, 32)
+				: parsed.frame;
 		const validGroupIds = frameGroupIds(frame);
 		const viewsByWorkspace: Record<string, WorkspaceViewState> = {};
 		const documentsByWorkspace: Record<string, WorkspaceLayoutDocument> = {};
@@ -462,6 +479,7 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 			documentsByWorkspace,
 			attentionByWorkspace,
 			preferences,
+			todoViewMode,
 		};
 	} catch {
 		return undefined;
@@ -476,6 +494,7 @@ function encodeLocalLayout(state: ReturnType<typeof useAppStore.getState>): stri
 		viewsByWorkspace: state.workspaceViewsByWorkspace,
 		attentionByWorkspace: state.layoutAttentionByWorkspace,
 		preferences: state.localLayoutPreferences,
+		todoViewMode: state.todoViewMode,
 	};
 	return JSON.stringify(value);
 }
@@ -507,6 +526,7 @@ function startPersistence(): void {
 			state.workspaceViewsByWorkspace === previous.workspaceViewsByWorkspace &&
 			state.layoutAttentionByWorkspace === previous.layoutAttentionByWorkspace &&
 			state.localLayoutPreferences === previous.localLayoutPreferences &&
+			state.todoViewMode === previous.todoViewMode &&
 			state.layoutStateReady === previous.layoutStateReady
 		) {
 			return;
@@ -578,6 +598,7 @@ export function initializeLocalLayoutState(): Promise<void> {
 					documentsByWorkspace: {},
 					attentionByWorkspace: {},
 					preferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
+					todoViewMode: DEFAULT_TODO_VIEW_MODE,
 				});
 			}
 		}
@@ -618,6 +639,7 @@ export function ensureWorkspaceLayoutState(workspaceId: string): Promise<Workspa
 					[workspaceId]: reconcileAttention(document, undefined),
 				},
 				preferences: state.localLayoutPreferences,
+				todoViewMode: state.todoViewMode,
 			},
 			[workspaceId],
 		);
@@ -633,12 +655,13 @@ export function ensureWorkspaceLayoutState(workspaceId: string): Promise<Workspa
 	return request;
 }
 
-export function applyLayoutPresetLocally(preset: LayoutPreset): void {
+function installLayoutPresetLocally(preset: LayoutPreset, reset: boolean): void {
 	const state = useAppStore.getState();
 	if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
 	const next = applyWorkbenchPreset(
 		{ frame: state.workbenchFrame, viewsByWorkspace: state.workspaceViewsByWorkspace },
 		preset,
+		reset ? state.todoViewMode : undefined,
 	);
 	const documentsByWorkspace = documentsForViews(next.frame, next.viewsByWorkspace);
 	const attentionByWorkspace: Record<string, LayoutAttention> = {};
@@ -666,9 +689,52 @@ export function applyLayoutPresetLocally(preset: LayoutPreset): void {
 					minimumBottomGroupLimit(preset),
 				),
 			},
+			todoViewMode: state.todoViewMode,
 		},
 		Object.keys(documentsByWorkspace),
 		true,
+	);
+}
+
+export function applyLayoutPresetLocally(preset: LayoutPreset): void {
+	installLayoutPresetLocally(preset, false);
+}
+
+export function resetLayoutPresetLocally(preset: LayoutPreset): void {
+	installLayoutPresetLocally(preset, true);
+}
+
+export function transitionTodoViewMode(todoViewMode: TodoViewMode): void {
+	const state = useAppStore.getState();
+	if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
+	const transitionedFrame = applyTodoViewModeToFrame(
+		state.workbenchFrame,
+		todoViewMode,
+		state.localLayoutPreferences.maxSideGroups,
+		state.localLayoutPreferences.maxBottomGroups,
+	);
+	const frame = ensureWorkbenchToolPlacementIds(transitionedFrame, state.workspaceViewsByWorkspace);
+	const documentsByWorkspace = documentsForViews(frame, state.workspaceViewsByWorkspace);
+	const attentionByWorkspace: Record<string, LayoutAttention> = {};
+	for (const [workspaceId, document] of Object.entries(documentsByWorkspace)) {
+		attentionByWorkspace[workspaceId] = reconcileAttention(
+			document,
+			state.layoutAttentionByWorkspace[workspaceId],
+			state.layoutDocumentsByWorkspace[workspaceId],
+		);
+	}
+	const changedWorkspaceIds = Object.keys(documentsByWorkspace);
+	state.applyLocalLayoutState(
+		{
+			frame,
+			viewsByWorkspace: state.workspaceViewsByWorkspace,
+			documentsByWorkspace,
+			attentionByWorkspace,
+			preferences: state.localLayoutPreferences,
+			todoViewMode,
+		},
+		changedWorkspaceIds,
+		frame !== state.workbenchFrame,
 	);
 }
 
@@ -734,6 +800,7 @@ export async function commitWorkspaceLayout(
 			documentsByWorkspace,
 			attentionByWorkspace,
 			preferences: state.localLayoutPreferences,
+			todoViewMode: state.todoViewMode,
 		},
 		changedWorkspaceIds,
 		frameChanged,

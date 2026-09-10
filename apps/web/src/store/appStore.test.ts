@@ -130,6 +130,7 @@ beforeEach(() => {
 		workbenchFrame: null,
 		workspaceViewsByWorkspace: {},
 		layoutStateReady: false,
+		todoViewMode: "chat-popover",
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
 		layoutProjectionEpochByWorkspace: {},
@@ -142,6 +143,7 @@ beforeEach(() => {
 		navTickByWorkspace: {},
 		closedChatsByWorkspace: {},
 		deletedSessionsByWorkspace: {},
+		sessionMembershipGenerationByWorkspace: {},
 		activityByWorkspace: {},
 		fsChangesByWorkspace: {},
 		skillChangeTickByWorkspace: {},
@@ -1447,6 +1449,30 @@ test("closing a chat moves it to history with its runtime kept; reopening restor
 	expect(st.sessions.a?.isStreaming).toBe(true);
 });
 
+test("remembered chat focus survives close-to-history and clears on authoritative deletion", () => {
+	useAppStore.setState({ status: "connected", connectionGeneration: 3 });
+	const store = useAppStore.getState();
+	store.setLayoutAttention("ws1", {
+		selectedByGroup: {},
+		lastFocusedCenterGroupId: "center",
+		lastFocusedSideGroupId: {},
+		navigationClockByGroup: {},
+		lastFocusedChatSessionId: "remembered",
+	});
+	expect(selectWorkspaceSessionIds(useAppStore.getState(), "ws1")).toEqual(["remembered"]);
+	store.openChatSession("ws1", "remembered", null, "medium");
+	store.closeChatToHistory("remembered", false, "ws1");
+	expect(useAppStore.getState().layoutAttentionByWorkspace.ws1?.lastFocusedChatSessionId).toBe(
+		"remembered",
+	);
+	store.reconcileWorkspaceSessions("ws1", ["remembered"], [], 3);
+	const reconciled = useAppStore.getState();
+	const attention = reconciled.layoutAttentionByWorkspace.ws1;
+	expect(reconciled.sessionMembershipGenerationByWorkspace.ws1).toBe(3);
+	expect(attention?.lastFocusedChatSessionId).toBeUndefined();
+	expect(attention ? Object.hasOwn(attention, "lastFocusedChatSessionId") : true).toBe(false);
+});
+
 test("reopening a chat targets its captured workspace after the user switches away", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
@@ -1486,16 +1512,20 @@ test("deleteChat removes history/runtime state and falls back when deleting the 
 	expect(st.sessions.c).toBeUndefined();
 });
 
-test("session-list reconciliation removes missed deletions without deleting a chat created mid-read", () => {
+test("session-list reconciliation is generation-fenced and preserves chats created mid-read", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1", connectionGeneration: 2 });
 	const store = useAppStore.getState();
-	useAppStore.setState({ activeWorkspaceId: "ws1" });
 	store.openChatSession("ws1", "stale", null, "medium");
 	const baseline = selectWorkspaceSessionIds(useAppStore.getState(), "ws1");
 
 	store.openChatSession("ws1", "newcomer", null, "medium");
-	store.reconcileWorkspaceSessions("ws1", baseline, []);
+	store.reconcileWorkspaceSessions("ws1", baseline, [], 1);
+	expect(useAppStore.getState().sessions.stale).toBeDefined();
+	expect(useAppStore.getState().sessionMembershipGenerationByWorkspace.ws1).toBeUndefined();
+	store.reconcileWorkspaceSessions("ws1", baseline, [], 2);
 
 	const state = useAppStore.getState();
+	expect(state.sessionMembershipGenerationByWorkspace.ws1).toBe(2);
 	expect(state.sessions.stale).toBeUndefined();
 	expect(state.deletedSessionsByWorkspace.ws1?.stale).toBe(true);
 	expect(
@@ -1510,7 +1540,7 @@ test("authoritative session reconciliation never impersonates user navigation", 
 	store.openChatSession("ws1", "missing", null, "medium");
 	const baseline = selectWorkspaceSessionIds(useAppStore.getState(), "ws1");
 	const before = useAppStore.getState().navTickByWorkspace.ws1 ?? 0;
-	store.reconcileWorkspaceSessions("ws1", baseline, []);
+	store.reconcileWorkspaceSessions("ws1", baseline, [], 0);
 	const state = useAppStore.getState();
 	expect(state.activeTabByWorkspace.ws1).toBeNull();
 	expect(state.navTickByWorkspace.ws1 ?? 0).toBe(before);
@@ -1904,6 +1934,7 @@ test("clearWorkspaceTabs drops both open and closed chat runtimes + clears histo
 	store.openChatSession("ws1", "a", null, "medium");
 	store.openChatSession("ws1", "b", null, "medium");
 	store.closeChatToHistory("a");
+	useAppStore.setState({ sessionMembershipGenerationByWorkspace: { ws1: 2 } });
 
 	store.clearWorkspaceTabs("ws1");
 	const st = useAppStore.getState();
@@ -1911,6 +1942,7 @@ test("clearWorkspaceTabs drops both open and closed chat runtimes + clears histo
 	expect(st.sessions.b).toBeUndefined();
 	expect(st.closedChatsByWorkspace.ws1).toBeUndefined();
 	expect(st.tabsByWorkspace.ws1).toBeUndefined();
+	expect(st.sessionMembershipGenerationByWorkspace.ws1).toBeUndefined();
 });
 
 test("requestChatLocation sets the jump deep link AND switches project+workspace atomically; clearChatLocation drops it", () => {
@@ -2491,6 +2523,7 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 		closedChatsByWorkspace: {
 			w1: [{ sessionId: "removed-chat", title: "Removed", closedAt: 1 }],
 		},
+		sessionMembershipGenerationByWorkspace: { w1: 1 },
 		toasts: [],
 	});
 	let cleanupSubscriberAttempted = false;
@@ -2522,6 +2555,7 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	expect(s.chatLocationRequest).toBeNull();
 	expect(s.historyOpenRequest).toBeNull();
 	expect(s.reviewFocusRequest).toBeNull();
+	expect(s.sessionMembershipGenerationByWorkspace.w1).toBeUndefined();
 
 	s.setLayoutAttention("w1", {
 		selectedByGroup: {},
@@ -2542,7 +2576,7 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	s.setWorkspaceSpecs("w1", []);
 	s.noteFsChanged({ workspaceId: "w1", paths: ["late"], truncated: false, skillChange: "none" });
 	s.requestToolView("w1", "files");
-	s.reconcileWorkspaceSessions("w1", ["removed-chat"], []);
+	s.reconcileWorkspaceSessions("w1", ["removed-chat"], [], 0);
 	s.noteClosedChats("w1", [{ sessionId: "late-chat", title: "Late", closedAt: 2 }]);
 	s.requestChatLocation({
 		workspaceId: "w1",
@@ -2646,6 +2680,15 @@ test("requestToolView reveals a tool without fabricating a path request", () => 
 	const second = useAppStore.getState().layoutIntents[1];
 	expect(second).toMatchObject({ kind: "reveal-tool", workspaceId: "w1", tool: "specs" });
 	expect(second?.id).not.toBe(first?.id);
+	useAppStore.getState().requestToolView("w1", "todos");
+	expect(useAppStore.getState().layoutIntents).toHaveLength(2);
+	useAppStore.setState({ todoViewMode: "side-tool" });
+	useAppStore.getState().requestToolView("w1", "todos");
+	expect(useAppStore.getState().layoutIntents.at(-1)).toMatchObject({
+		kind: "reveal-tool",
+		workspaceId: "w1",
+		tool: "todos",
+	});
 });
 
 test("clearSpecRequest consumes the spec intent once — it opens a tab, so it must not replay", () => {
@@ -3190,7 +3233,8 @@ test("applyConfig projects JetBrains quota display and cadence", () => {
 	});
 });
 
-test("chat presentation preferences are client-local and cannot be overwritten by host config", () => {
+test("frontend-local presentation preferences cannot be overwritten by host config", () => {
+	useAppStore.setState({ todoViewMode: "side-tool" });
 	useAppStore.getState().setChatMessageOrder("newest-first");
 	useAppStore.getState().setStreamingResponseMovement({ settle: 60, trigger: 90 });
 	const legacyConfig = {
@@ -3199,6 +3243,7 @@ test("chat presentation preferences are client-local and cannot be overwritten b
 		streamingResponseMovement: { settle: 75, trigger: 100 },
 	};
 	useAppStore.getState().applyConfig(legacyConfig);
+	expect(useAppStore.getState().todoViewMode).toBe("side-tool");
 	expect(useAppStore.getState().chatMessageOrder).toBe("newest-first");
 	expect(useAppStore.getState().streamingResponseMovement).toEqual({ settle: 60, trigger: 90 });
 });

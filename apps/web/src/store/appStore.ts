@@ -70,6 +70,7 @@ import {
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutToolId,
+	TodoViewMode,
 	WorkbenchFrame,
 	WorkspaceLayoutDocument,
 	WorkspaceViewState,
@@ -195,6 +196,7 @@ export interface LocalLayoutStatePayload {
 	documentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	attentionByWorkspace: Record<string, LayoutAttention>;
 	preferences: LocalLayoutPreferences;
+	todoViewMode: TodoViewMode;
 }
 
 export interface CenterNavigationStamp {
@@ -757,6 +759,7 @@ interface AppState {
 	workspaceViewsByWorkspace: Record<string, WorkspaceViewState>;
 	layoutStateReady: boolean;
 	localLayoutPreferences: LocalLayoutPreferences;
+	todoViewMode: TodoViewMode;
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
 	layoutProjectionEpochByWorkspace: Record<string, number>;
@@ -769,6 +772,7 @@ interface AppState {
 	chatStartsByWorkspace: Record<string, number>;
 	worktreeCreationsByProject: Record<string, number>;
 	deletedSessionsByWorkspace: Record<string, Record<string, true>>;
+	sessionMembershipGenerationByWorkspace: Record<string, number>;
 	activityByWorkspace: Record<string, WorkspaceActivity>;
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
@@ -943,6 +947,7 @@ interface AppState {
 		workspaceId: string,
 		baselineSessionIds: readonly string[],
 		authoritativeSessionIds: readonly string[],
+		connectionGeneration: number,
 	) => void;
 	reopenChat: (workspaceId: string, sessionId: string, options?: LayoutOpenOptions) => void;
 	restorePlacedChatCache: (
@@ -1344,6 +1349,11 @@ function layoutIntentTargetsSession(
 	return false;
 }
 
+function withoutRememberedChat(attention: LayoutAttention): LayoutAttention {
+	const { lastFocusedChatSessionId: _removed, ...remaining } = attention;
+	return remaining;
+}
+
 function withoutChat(
 	s: AppState,
 	workspaceId: string,
@@ -1365,6 +1375,8 @@ function withoutChat(
 	const targetsRoute =
 		s.routeChatTarget?.workspaceId === workspaceId && s.routeChatTarget.sessionId === sessionId;
 	const targetsHistory = s.historyOpenRequest?.sessionId === sessionId;
+	const targetsRememberedChat =
+		s.layoutAttentionByWorkspace[workspaceId]?.lastFocusedChatSessionId === sessionId;
 	const hasStaleLayoutIntent = s.layoutIntents.some((intent) =>
 		layoutIntentTargetsSession(intent, workspaceId, sessionId),
 	);
@@ -1378,6 +1390,7 @@ function withoutChat(
 		!targetsLocation &&
 		!targetsRoute &&
 		!targetsHistory &&
+		!targetsRememberedChat &&
 		!hasStaleLayoutIntent
 	) {
 		return s;
@@ -1394,6 +1407,10 @@ function withoutChat(
 				(intent) => !layoutIntentTargetsSession(intent, workspaceId, sessionId),
 			)
 		: s.layoutIntents;
+	const rememberedAttention = s.layoutAttentionByWorkspace[workspaceId];
+	const attentionWithoutRememberedChat = rememberedAttention
+		? withoutRememberedChat(rememberedAttention)
+		: undefined;
 	return {
 		...s,
 		layoutIntents: alreadyDeleted
@@ -1446,6 +1463,14 @@ function withoutChat(
 		...(targetsLocation ? { chatLocationRequest: null } : {}),
 		...(targetsRoute ? { routeChatTarget: null } : {}),
 		...(targetsHistory ? { historyOpenRequest: null } : {}),
+		...(targetsRememberedChat && attentionWithoutRememberedChat
+			? {
+					layoutAttentionByWorkspace: {
+						...s.layoutAttentionByWorkspace,
+						[workspaceId]: attentionWithoutRememberedChat,
+					},
+				}
+			: {}),
 	};
 }
 
@@ -1646,6 +1671,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workspaceViewsByWorkspace: {},
 	layoutStateReady: false,
 	localLayoutPreferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
+	todoViewMode: "chat-popover",
 	layoutDocumentsByWorkspace: {},
 	layoutAttentionByWorkspace: {},
 	layoutProjectionEpochByWorkspace: {},
@@ -1658,6 +1684,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	chatStartsByWorkspace: {},
 	worktreeCreationsByProject: {},
 	deletedSessionsByWorkspace: Object.create(null) as Record<string, Record<string, true>>,
+	sessionMembershipGenerationByWorkspace: Object.create(null) as Record<string, number>,
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
 	sessions: {},
@@ -1926,6 +1953,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						layoutDocumentsByWorkspace: payload.documentsByWorkspace,
 						layoutAttentionByWorkspace: payload.attentionByWorkspace,
 						localLayoutPreferences: payload.preferences,
+						todoViewMode: payload.todoViewMode,
 						layoutStateReady: true,
 					},
 		),
@@ -1944,6 +1972,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				layoutDocumentsByWorkspace: payload.documentsByWorkspace,
 				layoutAttentionByWorkspace: payload.attentionByWorkspace,
 				localLayoutPreferences: payload.preferences,
+				todoViewMode: payload.todoViewMode,
 				layoutProjectionEpochByWorkspace,
 			};
 		}),
@@ -2304,6 +2333,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				previewTabByWorkspace: omitKey(s.previewTabByWorkspace, workspaceId),
 				navTickByWorkspace: omitKey(s.navTickByWorkspace, workspaceId),
 				closedChatsByWorkspace: omitKey(s.closedChatsByWorkspace, workspaceId),
+				sessionMembershipGenerationByWorkspace: omitKey(
+					s.sessionMembershipGenerationByWorkspace,
+					workspaceId,
+				),
 				chatStartsByWorkspace: omitKey(s.chatStartsByWorkspace, workspaceId),
 				terminalsByWorkspace: omitKey(s.terminalsByWorkspace, workspaceId),
 				activeTerminalByWorkspace: omitKey(s.activeTerminalByWorkspace, workspaceId),
@@ -2626,11 +2659,27 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	deleteChat: (workspaceId, sessionId, countNavigation = true) =>
 		set((s) => withoutChat(s, workspaceId, sessionId, countNavigation)),
-	reconcileWorkspaceSessions: (workspaceId, baselineSessionIds, authoritativeSessionIds) =>
+	reconcileWorkspaceSessions: (
+		workspaceId,
+		baselineSessionIds,
+		authoritativeSessionIds,
+		connectionGeneration,
+	) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId] || s.connectionGeneration !== connectionGeneration) {
+				return {};
+			}
 			const authoritative = new Set(authoritativeSessionIds);
-			let next = s;
+			let next =
+				s.sessionMembershipGenerationByWorkspace[workspaceId] === connectionGeneration
+					? s
+					: {
+							...s,
+							sessionMembershipGenerationByWorkspace: {
+								...s.sessionMembershipGenerationByWorkspace,
+								[workspaceId]: connectionGeneration,
+							},
+						};
 			for (const sessionId of baselineSessionIds) {
 				if (!authoritative.has(sessionId)) {
 					next = withoutChat(next, workspaceId, sessionId, false);
@@ -3084,7 +3133,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	applyConfig: (config) => set(configPatch(config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>
-			state.removedWorkspaceIds[workspaceId]
+			state.removedWorkspaceIds[workspaceId] ||
+			(tool === "todos" && state.todoViewMode !== "side-tool")
 				? {}
 				: {
 						layoutIntents: appendLayoutIntent(state.layoutIntents, {

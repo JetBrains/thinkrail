@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { ActivityStatus, Project, WireModel, Workspace } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
-import type { EditorTab } from "./appStore";
+import type { ClosedChat, EditorTab, SessionRuntime } from "./appStore";
 import {
 	isConnectedGeneration,
 	isDefaultWorkspace,
@@ -24,6 +24,7 @@ import {
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
 	selectSkillsStale,
+	selectTodoChatTarget,
 	specPathMatcher,
 	workspaceActivityRollup,
 } from "./selectors";
@@ -295,6 +296,81 @@ const fileTab: EditorTab = {
 	name: "a.ts",
 	path: "src/a.ts",
 };
+
+test("TODO chat target requires a connected current-generation authority", () => {
+	const state = {
+		activeWorkspaceId: "workspace" as string | null,
+		status: "connected",
+		connectionGeneration: 4,
+		sessionMembershipGenerationByWorkspace: {} as Record<string, number>,
+		layoutAttentionByWorkspace: {
+			workspace: {
+				selectedByGroup: {},
+				lastFocusedCenterGroupId: "center",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: {},
+				lastFocusedChatSessionId: "session",
+			},
+		},
+		tabsByWorkspace: {} as Record<string, EditorTab[]>,
+		closedChatsByWorkspace: {} as Record<string, ClosedChat[]>,
+		deletedSessionsByWorkspace: {} as Record<string, Record<string, true>>,
+		sessions: {} as Record<string, Pick<SessionRuntime, "syncedConnectionGeneration">>,
+	};
+	expect(selectTodoChatTarget(state)).toBeNull();
+	state.tabsByWorkspace.workspace = [
+		{
+			kind: "chat",
+			id: "chat",
+			workspaceId: "workspace",
+			name: "Open title",
+			sessionId: "session",
+		},
+	];
+	expect(selectTodoChatTarget(state)).toBeNull();
+	state.sessions.session = { syncedConnectionGeneration: 3 };
+	expect(selectTodoChatTarget(state)).toBeNull();
+	state.sessions.session = { syncedConnectionGeneration: 4 };
+	expect(selectTodoChatTarget(state)).toEqual({
+		workspaceId: "workspace",
+		sessionId: "session",
+		title: "Open title",
+	});
+	delete state.sessions.session;
+	state.sessionMembershipGenerationByWorkspace.workspace = 4;
+	expect(selectTodoChatTarget(state)).toEqual({
+		workspaceId: "workspace",
+		sessionId: "session",
+		title: "Open title",
+	});
+	state.status = "disconnected";
+	expect(selectTodoChatTarget(state)).toBeNull();
+	state.status = "connecting";
+	expect(selectTodoChatTarget(state)).toBeNull();
+	state.status = "connected";
+	expect(selectTodoChatTarget(state)).toEqual({
+		workspaceId: "workspace",
+		sessionId: "session",
+		title: "Open title",
+	});
+	state.connectionGeneration = 5;
+	expect(selectTodoChatTarget(state)).toBeNull();
+	state.tabsByWorkspace.workspace = [];
+	state.closedChatsByWorkspace.workspace = [
+		{ sessionId: "session", title: "History title", closedAt: 1 },
+	];
+	expect(selectTodoChatTarget(state)).toBeNull();
+	state.sessionMembershipGenerationByWorkspace.workspace = 5;
+	expect(selectTodoChatTarget(state)).toEqual({
+		workspaceId: "workspace",
+		sessionId: "session",
+		title: "History title",
+	});
+	state.deletedSessionsByWorkspace.workspace = { session: true };
+	expect(selectTodoChatTarget(state)).toBeNull();
+	state.activeWorkspaceId = null;
+	expect(selectTodoChatTarget(state)).toBeNull();
+});
 
 test("selectKnownChatLocation resolves open and history chats without guessing unknown sessions", () => {
 	const state = {
