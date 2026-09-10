@@ -9,7 +9,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import {
 	InMemoryCredentialStore,
 	type Model,
@@ -122,6 +122,14 @@ function tmpCwd(prefix: string): string {
 	const dir = mkdtempSync(join(tmpdir(), prefix));
 	tmpDirs.push(dir);
 	return dir;
+}
+
+function equivalentCwd(cwd: string): string {
+	const alternate = process.platform === "win32" ? cwd.replaceAll("\\", "/") : `${cwd}/.`;
+	if (alternate === cwd || resolve(alternate) !== resolve(cwd)) {
+		throw new Error("could not construct an equivalent cwd spelling");
+	}
+	return alternate;
 }
 
 let priorAgentDir: string | undefined;
@@ -872,7 +880,7 @@ test("listSessions ignores a live session's transient physical rewrite but stays
 	}
 });
 
-test("disk-reopen: a disposed session is re-listed from disk and re-opened with its transcript (restart survival)", async () => {
+test("disk-reopen accepts an equivalent cwd spelling after restart", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	try {
 		fauxA.setResponses([fauxAssistantMessage("DISK_REPLY")]);
@@ -885,8 +893,11 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 		});
 		await promptSession(s.sessionId, "persist me");
 		removeSession(s.sessionId);
+		const reopenedCwd = equivalentCwd(cwd);
 
-		const fromDisk = (await listSessions("ws-disk", cwd)).find((x) => x.sessionId === s.sessionId);
+		const fromDisk = (await listSessions("ws-disk", reopenedCwd)).find(
+			(x) => x.sessionId === s.sessionId,
+		);
 		expect(fromDisk).toBeDefined();
 		expect(fromDisk?.live).toBe(false);
 
@@ -895,22 +906,45 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 			s.sessionId,
 		);
 
-		const { summary, messages } = await getSessionMessages(s.sessionId, "ws-disk", cwd);
+		const { summary, messages } = await getSessionMessages(s.sessionId, "ws-disk", reopenedCwd);
 		expect(summary.live).toBe(true);
 		expect(messages.some((m) => m.role === "user")).toBe(true);
 		removeSession(s.sessionId);
 
 		const [a, b] = await Promise.all([
-			getSessionMessages(s.sessionId, "ws-disk", cwd),
-			getSessionMessages(s.sessionId, "ws-disk", cwd),
+			getSessionMessages(s.sessionId, "ws-disk", reopenedCwd),
+			getSessionMessages(s.sessionId, "ws-disk", reopenedCwd),
 		]);
 		expect(a.summary.live && b.summary.live).toBe(true);
 		expect(
-			(await listSessions("ws-disk", cwd)).filter((x) => x.sessionId === s.sessionId),
+			(await listSessions("ws-disk", reopenedCwd)).filter((x) => x.sessionId === s.sessionId),
 		).toHaveLength(1);
 		removeSession(s.sessionId);
 	} finally {
 		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("an empty persisted cwd never inherits the host process cwd", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("missing isolated agent directory");
+	const cwd = process.cwd();
+	const fixture = writeFixtureSession(defaultSessionDirFor(agentDir, cwd), {
+		cwd: "",
+		name: "Legacy unscoped chat",
+		messages: [{ role: "user", text: "stay unscoped", timestamp: Date.now() }],
+	});
+	try {
+		expect((await listSessions("ws-empty-cwd", cwd)).map((row) => row.sessionId)).not.toContain(
+			fixture.id,
+		);
+		await expect(getSessionMessages(fixture.id, "ws-empty-cwd", cwd)).rejects.toThrow(
+			`Unknown session: ${fixture.id}`,
+		);
+		await removeWorkspaceSessions("ws-empty-cwd", cwd);
+		expect(existsSync(fixture.path)).toBe(true);
+	} finally {
+		rmSync(fixture.path, { force: true });
 	}
 });
 

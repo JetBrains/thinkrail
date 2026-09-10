@@ -301,7 +301,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     session's retained runtime. Therefore a model newly shown in the global picker can be unavailable to an
     older live chat and fails with a closed model-unavailable error rather than crossing generations. Pi uses
     `Model.baseUrl` verbatim, so a client's baseUrl
-    is never trusted (blocks disclosure *and* arbitrary-URL injection). The **hydration read side** —
+    is never trusted (blocks disclosure *and* arbitrary-URL injection). Every persisted-session ownership
+    check first rejects an empty transcript cwd, then compares it with the requested workspace cwd by lexical
+    resolved-path equivalence, never raw string spelling: legacy unscoped transcripts cannot inherit the host
+    process cwd, Windows slash variants remain one workspace, and genuinely distinct resolved paths remain
+    isolated. The one predicate governs disk activity, listing, attach/reopen, archive purge, and
+    recoverable deletion so those lifecycle paths cannot disagree after a host restart. The **hydration read side** —
     `listSessions(workspaceId, cwd)` (live sessions
     **unioned with on-disk** ones pi persisted under `cwd`, live winning on id → `SessionSummary[]` tagged
     `live`; before treating the **detached** disk list as authoritative it strictly scans every transcript
@@ -355,8 +360,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     guard that `removeSession` enforces, so a chat whose recoverable delete is mid-trash cannot abort the
     teardown loop and strand its siblings — then delete pi's on-disk transcripts rooted at
     the worktree `cwd` — pi's `SessionManager` is append-only, so purge = `list(cwd)` then `rm` the files
-    whose recorded `cwd` matches, never `rm -rf` the encoded dir since pi's cwd→dir encoding can alias
-    distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
+    whose recorded `cwd` resolves to that worktree cwd, never `rm -rf` the encoded dir since pi's cwd→dir
+    encoding can alias distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
     **`deleteSession(sessionId, workspaceId, cwd)`** (mark it deleted before any await so an in-flight disk
     attach cannot register afterward; that tombstone also makes a retained live entry non-addressable to
     **every session command, including `session.dispose`, for the full delete transaction**, so another

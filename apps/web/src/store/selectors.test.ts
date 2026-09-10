@@ -367,6 +367,11 @@ test("TODO chat target requires a connected current-generation authority", () =>
 		sessionId: "session",
 		title: "History title",
 	});
+	state.closedChatsByWorkspace.workspace = [];
+	expect(selectTodoChatTarget(state)).toBeNull();
+	state.closedChatsByWorkspace.workspace = [
+		{ sessionId: "session", title: "History title", closedAt: 1 },
+	];
 	state.deletedSessionsByWorkspace.workspace = { session: true };
 	expect(selectTodoChatTarget(state)).toBeNull();
 	state.activeWorkspaceId = null;

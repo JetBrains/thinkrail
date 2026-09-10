@@ -263,6 +263,10 @@ async function diskActivityStatus(info: SessionInfo): Promise<ActivityStatus | n
 	return status;
 }
 
+function sessionCwdMatches(candidate: string, cwd: string): boolean {
+	return candidate !== "" && resolve(candidate) === resolve(cwd);
+}
+
 async function diskActivityRows(workspaceId: string, cwd: string): Promise<WorkspaceActivityRow[]> {
 	const liveFiles = new Set<string>();
 	for (const entry of sessions.values()) {
@@ -273,7 +277,7 @@ async function diskActivityRows(workspaceId: string, cwd: string): Promise<Works
 	const infos = await listSessionInfosStrict(cwd, liveFiles);
 	const rows: WorkspaceActivityRow[] = [];
 	for (const info of infos) {
-		if (info.cwd !== cwd) continue;
+		if (!sessionCwdMatches(info.cwd, cwd)) continue;
 		if (sessions.has(info.id) || isSessionDeleted(info.id, workspaceId)) continue;
 		rows.push({
 			sessionId: info.id,
@@ -763,7 +767,9 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 	const disk: SessionSummary[] = infos
 		.filter(
 			(info) =>
-				info.cwd === cwd && !liveIds.has(info.id) && !isSessionDeleted(info.id, workspaceId),
+				sessionCwdMatches(info.cwd, cwd) &&
+				!liveIds.has(info.id) &&
+				!isSessionDeleted(info.id, workspaceId),
 		)
 		.map((info) => ({
 			sessionId: info.id,
@@ -813,7 +819,7 @@ function persistedSessionModelRef(model: unknown): { provider: string; id: strin
 async function openDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
 	if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 	const info = (await listSessionInfosStrict(cwd)).find(
-		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
+		(candidate) => candidate.id === sessionId && sessionCwdMatches(candidate.cwd, cwd),
 	);
 	if (!info) throw new Error(`Unknown session: ${sessionId}`);
 	if (sessions.has(sessionId)) return;
@@ -863,7 +869,7 @@ async function ensureSessionAttachedInternal(
 		return true;
 	}
 	const known = (await listSessionInfosStrict(cwd)).some(
-		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
+		(candidate) => candidate.id === sessionId && sessionCwdMatches(candidate.cwd, cwd),
 	);
 	if (!known) return false;
 	await attachDiskSession(sessionId, workspaceId, cwd);
@@ -1375,7 +1381,7 @@ async function purgeDiskSessions(cwd: string): Promise<void> {
 		return;
 	}
 	for (const info of infos) {
-		if (info.cwd === cwd) rmSync(info.path, { force: true });
+		if (sessionCwdMatches(info.cwd, cwd)) rmSync(info.path, { force: true });
 	}
 }
 
@@ -1420,7 +1426,7 @@ async function runDeleteTransaction(
 			liveEntry = entry;
 			if (entry.session.isStreaming) await entry.session.abort();
 			const manager = entry.session.sessionManager;
-			if (manager.getSessionId() !== sessionId || manager.getCwd() !== cwd) {
+			if (manager.getSessionId() !== sessionId || !sessionCwdMatches(manager.getCwd(), cwd)) {
 				throw new Error(`Session transcript scope mismatch: ${sessionId}`);
 			}
 			path = manager.getSessionFile();
@@ -1429,7 +1435,7 @@ async function runDeleteTransaction(
 			}
 		} else {
 			path = (await listSessionInfosStrict(cwd)).find(
-				(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
+				(candidate) => candidate.id === sessionId && sessionCwdMatches(candidate.cwd, cwd),
 			)?.path;
 		}
 		if (path && existsSync(path)) await trashFile(path);
