@@ -99,6 +99,25 @@ test("enables only supported packaged production identities and blocks artifact 
 	expect(hasDesktopArtifactTestSeam({})).toBe(false);
 });
 
+test("a chrome probe alone disables production checks and downloads", () => {
+	const artifactTestSeam = hasDesktopArtifactTestSeam({
+		THINKRAIL_DESKTOP_CHROME_PROBE_FILE: "isolated-chrome.json",
+	});
+	expect(artifactTestSeam).toBe(true);
+	for (const channel of ["stable", "canary"]) {
+		expect(
+			nativeUpdatesEnabled({
+				isPackaged: true,
+				channel,
+				baseUrl: "https://updates.example.test/releases",
+				platform: "win32",
+				arch: "x64",
+				artifactTestSeam,
+			}),
+		).toBe(false);
+	}
+});
+
 test("checks after readiness, coalesces prompt requests, downloads, and publishes revisions", async () => {
 	const updater = new FakeUpdater();
 	const pendingCheck = deferred<NativeUpdaterInfo>();

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openAppFresh, openFixtureProject } from "./fixtures/app";
+import { openAppFresh, openFixtureProject, submitWorkspaceViaDialog } from "./fixtures/app";
 import {
 	assertOnlyReviewedArgv,
 	centralInvocations,
@@ -214,7 +214,9 @@ test("disconnect removes Central from new chats while an existing live chat keep
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("settings-dialog")).toBeHidden();
 
-	await createWorkspaceViaDialog(page);
+	await submitWorkspaceViaDialog(page);
+	await page.getByTestId("chat-input").waitFor({ state: "visible" });
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]').first()).toBeVisible();
 	await page.getByTestId("model-selector").click();
 	await page.locator('[data-testid="model-option"][data-model-id="e2e-central-model"]').click();
 	await expect(page.getByTestId("model-selector")).toContainText("Synthetic JetBrains AI model");

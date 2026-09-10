@@ -232,7 +232,14 @@ Windows lane into the real profile (see `module-shared`).
 
 During iteration, run the affected specs and use Playwright's last-failed mode. Flake repairs replace
 irrelevant expensive setup with equivalent fixture state and wait for observable readiness; blanket retries,
-arbitrary sleeps, and assertion weakening are not synchronization policy. Live-provider completion waits on
+arbitrary sleeps, and assertion weakening are not synchronization policy. The workspace dialog's
+submission/persistence action can be awaited separately: the affected Central and markdown scenarios wait
+for their composer and then retain the shared helper's original chat-tab assertion. Seeded chat-scroll setup
+waits for the exact session's local tab before
+its following and geometry assertions. Welcome waits for its own initial provider-check
+marker before choosing the unchanged banner branch; transport connection or instantaneous absence cannot
+stand in for that completion. Line-width saves settle only when the same control shows exact **Save** text and
+is disabled; disabled **Saving…** remains pending. Live-provider completion waits on
 the session's streaming state after response evidence appears; the optional rendered `Done` row is not a
 terminal-state contract. Scenarios whose subject is a client-side send transformation assert the exact
 outgoing `session.prompt` frame rather than treating a

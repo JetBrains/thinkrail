@@ -37,6 +37,7 @@ import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
+import { useNativeWindowChrome } from "./useNativeWindowChrome";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
@@ -61,6 +62,7 @@ export function Shell() {
 	const { review: openReview } = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
 	const nativeUpdates = useNativeUpdates();
+	const headerRef = useNativeWindowChrome();
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
@@ -113,14 +115,23 @@ export function Shell() {
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
-			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-16 py-8">
-				<div className="flex min-w-0 items-center gap-12">
+			<header
+				ref={headerRef}
+				data-testid="topbar"
+				className="window-drag flex h-topbar-row min-w-0 select-none items-center border-b border-border-default bg-container-header-bg px-16"
+			>
+				<div
+					aria-hidden="true"
+					data-testid="window-chrome-inset-left"
+					className="w-window-chrome-inset-left shrink-0"
+				/>
+				<div className="flex min-w-0 items-center gap-12 pr-12">
 					<BrandLogo />
 					{contextProject ? (
 						<div
 							data-testid="scope-context"
 							data-context={activeWorkspace ? "workspace" : "project-home"}
-							className="flex min-w-0 items-center gap-4 leading-tight tr-text-ui"
+							className="flex min-w-0 items-center gap-4 overflow-hidden leading-tight tr-text-ui"
 						>
 							<span className="hidden min-w-0 items-center gap-4 sm:flex">
 								<span
@@ -162,7 +173,10 @@ export function Shell() {
 						</div>
 					) : null}
 				</div>
-				<div className="flex shrink-0 items-center gap-12">
+				<div
+					data-testid="topbar-actions"
+					className="window-no-drag ml-auto flex shrink-0 items-center gap-12"
+				>
 					{nativeUpdates ? (
 						<NativeUpdateReadyButton
 							state={nativeUpdates.state}
@@ -197,6 +211,11 @@ export function Shell() {
 						</button>
 					</IconTooltip>
 				</div>
+				<div
+					aria-hidden="true"
+					data-testid="window-chrome-inset-right"
+					className="w-window-chrome-inset-right shrink-0"
+				/>
 				<SettingsDialog
 					layoutSettings={<LayoutSettings />}
 					updateSettings={

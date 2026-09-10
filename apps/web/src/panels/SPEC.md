@@ -297,7 +297,9 @@ no provider is connected** ("No model provider connected — the agent can't run
 CTA that opens Settings → Providers (`store.openSettings("providers")`). It reads `provider.status` (a
 provider is "connected" iff any `configured`) on mount and re-checks whenever the settings dialog toggles, so
 it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
-provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
+provider"). Its hidden `welcome-provider-ready` marker appears only after that initial nullable check settles,
+so browser coverage never interprets instantaneous absence as provider readiness. All provider **management**
+lives in Settings, not here (the always-on strip is gone).
 
 Beneath it, **`ProjectSkillsNotice`** is the pre-workspace trust surface (so trust is reachable with no
 workspace yet): **presence-gated** — renders nothing unless the selected project ships committed skills —

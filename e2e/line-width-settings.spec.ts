@@ -36,7 +36,7 @@ async function saveWidth(input: Locator, save: Locator, value: number): Promise<
 	await input.fill(String(value));
 	await expect(save).toBeEnabled();
 	await save.click();
-	await expect(save).toBeDisabled();
+	await expect(save.filter({ hasText: /^Save$/ })).toBeDisabled();
 }
 
 async function restoreLineWidthDefaults(page: Page): Promise<void> {
@@ -94,7 +94,7 @@ test("line-width controls validate drafts, converge on broadcasts, and persist",
 		await controls.chatInput.fill("80");
 		await expect(controls.chatSave).toBeEnabled();
 		await controls.chatInput.press("Enter");
-		await expect(controls.chatSave).toBeDisabled();
+		await expect(controls.chatSave.filter({ hasText: /^Save$/ })).toBeDisabled();
 		await saveWidth(controls.fileInput, controls.fileSave, 160);
 
 		const held = channelHold.arm("settings.changed");

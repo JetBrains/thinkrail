@@ -1,4 +1,9 @@
-import type { NativeUpdateBridge, NativeUpdateState } from "@thinkrail/contracts";
+import type {
+	NativeUpdateBridge,
+	NativeUpdateState,
+	NativeWindowAppearance,
+	NativeWindowChromeBridge,
+} from "@thinkrail/contracts";
 import Electrobun, { Electroview } from "electrobun/view";
 import {
 	INITIAL_DESKTOP_PREFERENCES_GLOBAL,
@@ -6,7 +11,10 @@ import {
 	isDesktopPreferenceValue,
 	STABLE_PREFERENCES_GLOBAL,
 } from "./preferenceAdapter";
+import { takePreloadGlobal } from "./preloadGlobals";
 import type { DesktopRpc } from "./rpc";
+import { NATIVE_WINDOW_CHROME_GLOBAL } from "./windowAppearance";
+import { createWindowChromeStyleWriter, INITIAL_WINDOW_CHROME_GLOBAL } from "./windowChrome";
 
 interface DesktopPreferenceAdapter {
 	getItem(key: string): string | null;
@@ -14,12 +22,18 @@ interface DesktopPreferenceAdapter {
 	removeItem(key: string): void;
 }
 
+const chromeStyle = createWindowChromeStyleWriter(() => document.documentElement?.style ?? null);
+document.addEventListener("DOMContentLoaded", chromeStyle.flush, { once: true });
+const initialChrome = takePreloadGlobal(INITIAL_WINDOW_CHROME_GLOBAL);
+chromeStyle.update(initialChrome);
+
 const updateListeners = new Set<(state: NativeUpdateState) => void>();
 const rpc = Electroview.defineRPC<DesktopRpc>({
 	maxRequestTime: 5000,
 	handlers: {
 		requests: {},
 		messages: {
+			windowChromeChanged: chromeStyle.update,
 			updateStateChanged: (state) => {
 				for (const listener of updateListeners) listener(state);
 			},
@@ -27,7 +41,22 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 	},
 });
 const electroview = new Electrobun.Electroview({ rpc });
-const globals = globalThis as typeof globalThis & Record<string, unknown>;
+if (
+	typeof initialChrome === "object" &&
+	initialChrome !== null &&
+	Reflect.get(initialChrome, "nativeAppearance") === true
+) {
+	const chromeBridge: NativeWindowChromeBridge = Object.freeze({
+		setAppearance: (appearance: NativeWindowAppearance) =>
+			rpc.send.windowAppearanceChanged(appearance),
+	});
+	Object.defineProperty(globalThis, NATIVE_WINDOW_CHROME_GLOBAL, {
+		value: chromeBridge,
+		writable: false,
+		configurable: false,
+		enumerable: false,
+	});
+}
 const updateBridge: NativeUpdateBridge = Object.freeze({
 	getState: () => rpc.request.getUpdateState(),
 	checkForUpdates: () => rpc.request.checkForUpdates(),
@@ -37,13 +66,13 @@ const updateBridge: NativeUpdateBridge = Object.freeze({
 		return () => updateListeners.delete(listener);
 	},
 });
-Object.defineProperty(globals, "__THINKRAIL_NATIVE_UPDATES__", {
+Object.defineProperty(globalThis, "__THINKRAIL_NATIVE_UPDATES__", {
 	value: updateBridge,
 	writable: false,
 	configurable: false,
 	enumerable: false,
 });
-const injectedPreferences = Reflect.get(globals, INITIAL_DESKTOP_PREFERENCES_GLOBAL);
+const injectedPreferences = takePreloadGlobal(INITIAL_DESKTOP_PREFERENCES_GLOBAL);
 const preferences = new Map<string, string>();
 if (typeof injectedPreferences === "object" && injectedPreferences !== null) {
 	for (const key of Object.keys(injectedPreferences)) {
@@ -53,7 +82,6 @@ if (typeof injectedPreferences === "object" && injectedPreferences !== null) {
 		}
 	}
 }
-Reflect.deleteProperty(globals, INITIAL_DESKTOP_PREFERENCES_GLOBAL);
 const preferenceAdapter: DesktopPreferenceAdapter = Object.freeze({
 	getItem: (key: string) => (isDesktopPreferenceKey(key) ? (preferences.get(key) ?? null) : null),
 	setItem: (key: string, value: string) => {
@@ -67,7 +95,7 @@ const preferenceAdapter: DesktopPreferenceAdapter = Object.freeze({
 		electroview.rpc?.send.preferenceRemove({ key });
 	},
 });
-Object.defineProperty(globals, STABLE_PREFERENCES_GLOBAL, {
+Object.defineProperty(globalThis, STABLE_PREFERENCES_GLOBAL, {
 	value: preferenceAdapter,
 	writable: false,
 	configurable: false,

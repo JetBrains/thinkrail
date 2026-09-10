@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { openFixtureProject, submitWorkspaceViaDialog } from "./fixtures/app";
 
 test("a parent-relative file link cannot escape into browser navigation", async ({ page }) => {
 	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
+	await submitWorkspaceViaDialog(page);
+	await page.getByTestId("chat-input").waitFor({ state: "visible" });
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]').first()).toBeVisible();
 	await page.getByTestId("tab-files").click();
 
 	await page.getByTestId("file-node").filter({ hasText: "styles" }).click();
@@ -37,7 +39,9 @@ test("relative links, images, and heading anchors work in the rendered markdown 
 	page,
 }) => {
 	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
+	await submitWorkspaceViaDialog(page);
+	await page.getByTestId("chat-input").waitFor({ state: "visible" });
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]').first()).toBeVisible();
 	await page.getByTestId("tab-files").click();
 
 	await page.getByTestId("file-node").filter({ hasText: "LINKS.md" }).dblclick();

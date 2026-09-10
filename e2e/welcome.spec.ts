@@ -33,6 +33,7 @@ test("the Welcome provider warning only shows when no provider is connected, and
 	page,
 }) => {
 	await openAppFresh(page);
+	await page.getByTestId("welcome-provider-ready").waitFor({ state: "attached" });
 
 	const banner = page.getByTestId("welcome-provider-warning");
 	if (await banner.isVisible()) {

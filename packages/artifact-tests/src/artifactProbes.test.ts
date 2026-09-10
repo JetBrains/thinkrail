@@ -36,10 +36,11 @@ test("unsets inherited agent-directory case variants for the default-agent probe
 	).toEqual({ HOME: "isolated-home", USERPROFILE: "isolated-home" });
 });
 
-test("native UI and host modes replace inherited control seams without retaining the other mode", () => {
+test("native UI, chrome and host modes do not inherit another mode's control seams", () => {
 	const inherited = {
 		thinkrail_desktop_e2e_host: "1",
 		thinkrail_desktop_navigation_probe_file: "real-navigation-file",
+		thinkrail_desktop_chrome_probe_file: "real-chrome-file",
 		thinkrail_desktop_ready_file: "real-ready-file",
 		thinkrail_desktop_control_file: "real-control-file",
 		HOME: "isolated-home",
@@ -48,6 +49,7 @@ test("native UI and host modes replace inherited control seams without retaining
 	const modes: Record<string, string>[] = [
 		{ THINKRAIL_DESKTOP_E2E_HOST: "1" },
 		{ THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE: "isolated-navigation-file" },
+		{ THINKRAIL_DESKTOP_CHROME_PROBE_FILE: "isolated-chrome-file" },
 	];
 	for (const mode of modes) {
 		const overrides = {
@@ -58,7 +60,11 @@ test("native UI and host modes replace inherited control seams without retaining
 		expect(
 			hostEnvironment(
 				overrides,
-				["THINKRAIL_DESKTOP_E2E_HOST", "THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE"],
+				[
+					"THINKRAIL_DESKTOP_E2E_HOST",
+					"THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE",
+					"THINKRAIL_DESKTOP_CHROME_PROBE_FILE",
+				],
 				inherited,
 			),
 		).toEqual({ ...overrides, HOME: "isolated-home", USERPROFILE: "isolated-home" });

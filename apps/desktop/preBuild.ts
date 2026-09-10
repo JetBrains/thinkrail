@@ -12,6 +12,7 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import type { BundledExtensions } from "@thinkrail/server";
 import { resolveBuildRuntimeSources } from "@thinkrail/server/build-support";
 import { ptyLibraryName, runtimeTarget } from "./src/runtimeTarget";
+import { WINDOWS_CHROME_SOURCE } from "./src/windowChrome";
 
 const desktopDir = import.meta.dir;
 const repoRoot = resolve(desktopDir, "..", "..");
@@ -60,6 +61,12 @@ for (const extension of sources.extensions) {
 	}
 }
 const target = runtimeTarget(process.platform, process.arch);
+if (target === "win32-x64") {
+	copyFileSync(
+		join(desktopDir, "src", "windowsChrome", WINDOWS_CHROME_SOURCE),
+		join(runtimeDir, WINDOWS_CHROME_SOURCE),
+	);
+}
 copyFileSync(sources.ptyLibraries[target], join(runtimeDir, ptyLibraryName(target)));
 for (const helper of Object.values(sources.trashHelpers)) {
 	copyFileSync(helper, join(runtimeDir, basename(helper)));
