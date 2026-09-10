@@ -930,7 +930,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `todo.review`/`todo.requestFix` remain on the wire, host-side), `planView` (pure derivations over the DTO: `groupProgress`,
   `planSummary`, `planGlance`/`sessionGlance`, `planSections`, `shouldNudgeOnAdd`, and the review-trail
   set — `itemRevisions` (the commit history, 1 TODO = N commits), `reviewableItems`/`reviewProgress`
-  (host-gated by `TodoItem.review` presence — the reviewable rule has ONE home, server-side),
+  (host-gated by `TodoItem.review` presence — the reviewable rule has ONE home, server-side; the set
+  spans the plan's items **and** `TodoPlan.adoptedCommits`, so the Review stage/Review All cover
+  committed-outside-the-plan work, while `planSummary`'s build `done/total` counts planned items only),
   `reviewChangesRequested` + `itemOpenFindings` (the changes_requested warning marking: the flag and
   the count of the reviewer's open comments — matched by the finding's `origin` provenance
   (todoId + optional sessionId) when stamped, falling back to the change-set path join only for

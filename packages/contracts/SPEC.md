@@ -291,6 +291,11 @@ of the host.
   remainder shipped by the same `todo.list` decoration, present only when non-empty: the worktree's
   uncommitted rows attributed to no item of the plan — the changes that would otherwise be invisible in
   the review map (derivation and rationale: [[submodule-server-todos]]).
+  **`TodoPlan.adoptedCommits?: TodoItem[]`** is the committed counterpart, shipped by the same
+  decoration and present only when non-empty: the `base..HEAD` commits owned by no item, surfaced as
+  **wire-only `done` items** (`origin: "adopted"`, `id: "commit:<sha>"`, one `commit` artifact) so a
+  chat that committed without planning still shows — and can review — that work. They are never stored;
+  the **`"adopted"`** member of `TodoOrigin` exists only on the wire (derivation: [[submodule-server-todos]]).
   **`DelegationRunDetails`** + the **`DelegationRunStatus`** union — the subagent Agent-card DTO,
   **mirrored** from `pi-delegation` (never imported): rides `tool_execution_update.partialResult`
   (REPLACE), the final `Agent` tool result, and the `subagent-completion` custom message; the

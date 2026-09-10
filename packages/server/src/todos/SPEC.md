@@ -156,6 +156,32 @@ a git failure degrades to omitting the field. A concurrent chat's work-in-flight
 shows here too — it *is* outside this plan — accepted noise, same family as the shared-window
 limitations above.
 
+**`listTodos` decoration — adopted commits (the committed remainder).** `unattributed` only covers
+*uncommitted* rows; the moment work is committed it leaves the uncommitted set and would vanish from the
+review map entirely (an empty-plan chat whose agent committed via bash, a user's hand commit, the
+host's own todo-commits for a plan that was since cleared). So the same pass also ships
+**`TodoPlan.adoptedCommits`** (present only when non-empty): every `base..HEAD` commit
+(`git.listCommits`) whose sha is owned by **no** item's `commit` artifact, surfaced as a **wire-only
+`done` `TodoItem`** — `id: "commit:<sha>"`, `origin: "adopted"`, `title` = the commit subject, a single
+`commit` artifact decorated with the same per-sha `files` list, and the `review` decoration read from the
+sidecar keyed by that id. These items are **never written to the store** — the agent's plan JSON stays
+the agent's plan (the invariant), and `"adopted"` never reaches `pi-todos`; they are recomputed on every
+read. Lifecycle is free: `commit:<sha>` is stable, a rebased-away commit's id simply vanishes (its
+sidecar record goes inert, as any orphan does), and a loose commit later claimed by a real item drops out
+automatically (now owned). A commit owned by *another* session's plan item appears here too — accepted
+noise, same family as the shared-window limitations. Derived best-effort; a git failure omits the field.
+
+**Adopted commits are reviewable without a store item.** The review ops resolve their target through
+`reviewableItem`, which first reads the `TodoStore` and, on a miss, reconstructs a synthetic `StoredItem`
+from the matching `base..HEAD` commit (id `commit:<sha>`). Every op (`startTodoReview`,
+`approveTodoReview`, `cancelTodoReview`, `requestTodoFix`, `recordAgentChangesRequested`,
+`renderReviewPackage`) therefore drives Start-review / Review All / verdicts over an adopted commit with
+**zero store writes**; review state persists in the existing sidecar keyed by `commit:<sha>`, and the
+reviewer↔worker reverse lookups are keyed by `reviewerSessionId`, independent of item existence. The fix
+package's "re-open this exact item" instruction has no todo to re-open for an adopted commit, so it reads
+as "revise the change in commit `<sha>`"; the worker's follow-up commit surfaces as a new adopted entry
+(or a revision, once appended).
+
 **The review workflow (`reviews.ts` + the ops in `todos.ts`).** A completed item that carries a host
 change set is **reviewable** — the gate is that artifact presence, so research/verification steps never
 demand review and no LLM attribution is involved. The user's decision lives in a second host-owned
@@ -254,7 +280,9 @@ it resolves immediately when nothing is in flight, and never rejects.
   `TodoReviewRecord` type. **Mapping only** — no plan logic; `TodoStore` owns disk.
 - **Allowed deps:** `workspaces` (worktree-path lookup via `getWorkspace`, which throws on unknown);
   `git` (`gitStatus` — the uncommitted changed-path set + the commit-scope DTO decoration;
-  `gitCommitPaths` — the per-done-item delta commit; `gitHeadSha` — the baseline's head);
+  `gitCommitPaths` — the per-done-item delta commit; `gitHeadSha` — the baseline's head;
+  `listCommits` — the `base..HEAD` enumeration behind `adoptedCommits` + the review resolver's
+  synthetic-item reconstruction);
   `contracts` (DTOs + `PiEvent` for `isTodoToolEnd`); `@thinkrail/shared/paths` (`WORKSPACE_INTERNAL_DIR`
   — the app-state prefix filtered out of change sets); **`pi-todos/core`** (the pi-free read/write model — a sanctioned host-side
   value-import of the extension package, the same pattern as `spec` → `pi-spec-graph/core`); `log`.

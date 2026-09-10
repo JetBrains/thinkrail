@@ -656,7 +656,9 @@ a project picker, the prompt hero, and the reused
   merge TARGET (base ← head, the GitHub PR convention: changes flow from the workspace branch into
   its base). `N commits` is the **`PlanCommitsMenu`** (`plan-commits-trigger`) — a dropdown mirroring
   the Changes scope menu's commit list: `git.listCommits` (eager-loaded, reloaded whenever the plan's
-  commit count ticks) is the ONE source for both the count and the list, so they never diverge; each
+  commit count ticks) is the ONE source for both the count and the list, so they never diverge — and,
+  being the `base..HEAD` enumeration, it already spans the adopted commits (branch commits no step
+  owns) alongside the per-step ones; each
   row (`plan-commits-item`, `data-sha`) opens that commit's diff in the Changes panel via the same
   `openChanges({ sha })` the per-step commit chip uses. The chip self-hides while loading and when the
   branch has no commits. The total diff comes from the workspace record's `diffStats`; each piece
@@ -670,7 +672,14 @@ a project picker, the prompt hero, and the reused
   kebab item, which stays) → `ship` (all done + reviewed, no open PR → an inline **Open PR**,
   same `pr.open` flow as the header button) → hidden when nothing demands action. The plan-level
   completion note wears a `Summary` eyebrow so the report reads in labeled sections. After the item
-sections the page renders **`Outside the plan`** (`plan-unattributed`, only when
+sections the page renders **`Committed outside the plan`** (`plan-adopted-commits`, only when
+`TodoPlan.adoptedCommits` is non-empty — including on an otherwise empty plan): the host-derived
+`base..HEAD` commits no item owns (derivation: [[submodule-server-todos]]), each rendered with the same
+**`ItemBlock`** as a planned step so it carries the identical change set, Start-review, and revisions
+affordances — they are reviewable exactly like an item's commit. **Review stage only:** they are
+*excluded* from the build `d/t done` count and never gate `ship`, but `planView.reviewableItems`
+includes them so the Review stepper, the `review` next-action, and Review All cover them. Then the page
+renders **`Outside the plan`** (`plan-unattributed`, only when
 `TodoPlan.unattributed` is non-empty — including on an otherwise empty plan): the host-derived
 uncommitted rows no item claims (derivation: [[submodule-server-todos]]), rendered as `FileRow`s
 opening the **uncommitted-scope** diff — the honesty section that keeps un-planned work visible in
