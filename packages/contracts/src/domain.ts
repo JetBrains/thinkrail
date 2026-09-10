@@ -50,6 +50,8 @@ export interface Workspace {
 export interface OpenBranchReview {
 	kind: "pull-request" | "merge-request";
 	number: number;
+	/** The review's web page, when the provider reported one — what makes the `PR #N` chip a link. */
+	url?: string;
 	/** `workspace.openReview` only: local commits origin/<branch> doesn't have yet. */
 	unpushedCommits?: number;
 }

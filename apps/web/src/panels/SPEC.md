@@ -706,7 +706,10 @@ own section. The kebab menu (`plan-menu`, a
   primary-filled, and the next-action banner grows a `push` arm ("N new commits aren't in PR #N
   yet" + Push updates) so new work after the PR never sits silently local — a successful push
   re-reads the authoritative state and clears both when the remote-tracking branch caught up. Also a **`PR #N` chip**
-  (`plan-pr-chip`) links out when the URL is known. The hook owns the ONE keyed PR state:
+  (`plan-pr-chip`) links out when the URL is known — which is now every read, since `workspace.openReview`
+  carries the review's own `url` ([[submodule-server-branch-review]]); the keyed state prefers it and falls
+  back to a url carried over from an earlier answer for the same review, so a chip never loses its link on
+  a refresh that reports none. The hook owns the ONE keyed PR state:
   `noteOpenReview(review, url?)` seeds it right after `pr.open` (no separate shadow state in the
   page) and supersedes any read already in flight for the same key, so a pre-mutation answer cannot
   overwrite the mutation result. The keyed state and request generation are shared by every mounted
