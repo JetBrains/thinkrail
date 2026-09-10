@@ -55,6 +55,7 @@ import { errorText, getTransport, wsErrorCode } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
 import { openDiffInTab } from "./openTabs";
+import { PlanCommitsMenu } from "./PlanCommitsMenu";
 import { PrComposeDialog, type PrComposeState } from "./PrComposeDialog";
 import { PrSetupDialog, type PrSetupState } from "./PrSetupDialog";
 import { FileRow } from "./planFileRow";
@@ -830,14 +831,14 @@ export default function PlanPane({
 								<span className="flex min-w-0 items-center gap-4">
 									<GitBranch className="size-12 shrink-0" />
 									<span className="truncate">
-										{workspace.branch} ← {workspace.baseBranch}
+										{workspace.baseBranch} ← {workspace.branch}
 									</span>
 								</span>
-								{commitCount > 0 ? (
-									<span className="shrink-0">
-										{commitCount} {commitCount === 1 ? "commit" : "commits"}
-									</span>
-								) : null}
+								<PlanCommitsMenu
+									workspaceId={workspaceId}
+									reloadSignal={commitCount}
+									onOpenCommit={onOpenCommit}
+								/>
 								{workspace.diffStats ? (
 									<DiffStatBadge
 										added={workspace.diffStats.added}
