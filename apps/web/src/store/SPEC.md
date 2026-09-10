@@ -156,8 +156,10 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   by tool call id — indexed by the reducer and hydration, never turned into bubbles; the sibling
   `subagent-completion` custom message is instead **appended as a `subagentCompletion` turn** — a
   detached subagent's terminal report is transcript-positioned, rendered by `chat`'s completion card —
-  both narrowed by the shared contracts guards) /
-  `currentAssistantId` / `attemptAssistantId` (scopes overflow removal to the attempt actually observed) /
+  both narrowed by the shared contracts guards) / **`controlTurnBoundary`** (the rendered-turn boundary of
+  the latest hidden TODO control user message, allowing question supersession to stay truthful without
+  rendering that message; folded by live events and authoritative hydration) / `currentAssistantId` /
+  `attemptAssistantId` (scopes overflow removal to the attempt actually observed) /
   `isStreaming` / **`settlementTick`** (browser-local, monotonically incremented for every
   `agent_settled`, so batched start+settle still exposes the completion edge to chat layout) / `model` /
   `thinkingLevel` / **`eventRevision`** (browser-local, incremented for every

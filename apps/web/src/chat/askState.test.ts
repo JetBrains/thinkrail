@@ -40,6 +40,12 @@ test("a user turn AFTER an unanswered call supersedes it; one before does not", 
 	expect(states.tc2).toEqual({ superseded: false });
 });
 
+test("a hidden control boundary supersedes only earlier unanswered calls", () => {
+	const states = deriveAskStates([askTurn("a1", "tc1"), askTurn("a2", "tc2")], {}, 1);
+	expect(states.tc1).toEqual({ superseded: true });
+	expect(states.tc2).toEqual({ superseded: false });
+});
+
 test("non-ask tool calls derive no state", () => {
 	const turns: ChatTurn[] = [
 		{

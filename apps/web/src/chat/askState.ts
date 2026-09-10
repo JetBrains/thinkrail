@@ -10,6 +10,7 @@ export interface AskState {
 export function deriveAskStates(
 	turns: ChatTurn[],
 	askAnswers: Record<string, AskUserQuestionResult>,
+	controlTurnBoundary = 0,
 ): Record<string, AskState> {
 	const callTurnIndex: Record<string, number> = {};
 	let lastUserIndex = -1;
@@ -30,7 +31,7 @@ export function deriveAskStates(
 		const answer = askAnswers[toolCallId];
 		states[toolCallId] = {
 			...(answer ? { answer } : {}),
-			superseded: !answer && lastUserIndex > turnIndex,
+			superseded: !answer && (lastUserIndex > turnIndex || turnIndex < controlTurnBoundary),
 		};
 	}
 	return states;

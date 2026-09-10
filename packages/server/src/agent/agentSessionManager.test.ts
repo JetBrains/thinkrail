@@ -125,8 +125,21 @@ function tmpCwd(prefix: string): string {
 }
 
 function equivalentCwd(cwd: string): string {
-	const alternate = process.platform === "win32" ? cwd.replaceAll("\\", "/") : `${cwd}/.`;
-	if (alternate === cwd || resolve(alternate) !== resolve(cwd)) {
+	const alternate =
+		process.platform === "win32"
+			? cwd
+					.replace(/^[A-Za-z]/, (drive) =>
+						drive === drive.toLowerCase() ? drive.toUpperCase() : drive.toLowerCase(),
+					)
+					.replaceAll("\\", "/")
+			: `${cwd}/.`;
+	const originalPath = resolve(cwd);
+	const alternatePath = resolve(alternate);
+	const equivalent =
+		process.platform === "win32"
+			? originalPath.toLowerCase() === alternatePath.toLowerCase()
+			: originalPath === alternatePath;
+	if (alternate === cwd || !equivalent) {
 		throw new Error("could not construct an equivalent cwd spelling");
 	}
 	return alternate;
@@ -855,8 +868,9 @@ test("listSessions reports a workspace's live sessions; getSessionMessages retur
 	removeSession(s.sessionId);
 });
 
-test("listSessions ignores a live session's transient physical rewrite but stays strict for detached files", async () => {
+test("listSessions ignores an equivalent-scoped live session's transient rewrite but stays strict once detached", async () => {
 	const cwd = tmpCwd("trpi-live-rewrite-");
+	const listedCwd = equivalentCwd(cwd);
 	const liveManager = SessionManager.create(cwd);
 	setSessionManagerFactory(() => liveManager);
 	try {
@@ -869,12 +883,14 @@ test("listSessions ignores a live session's transient physical rewrite but stays
 		if (!sessionFile) throw new Error("disk-backed live session has no file path");
 		mkdirSync(dirname(sessionFile), { recursive: true });
 		writeFileSync(sessionFile, "");
-		expect((await listSessions("ws-live-rewrite", cwd)).map((row) => row.sessionId)).toContain(
-			s.sessionId,
-		);
+		expect(
+			(await listSessions("ws-live-rewrite", listedCwd)).map((row) => row.sessionId),
+		).toContain(s.sessionId);
 
 		removeSession(s.sessionId);
-		await expect(listSessions("ws-live-rewrite", cwd)).rejects.toThrow("unreadable or malformed");
+		await expect(listSessions("ws-live-rewrite", listedCwd)).rejects.toThrow(
+			"unreadable or malformed",
+		);
 	} finally {
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}

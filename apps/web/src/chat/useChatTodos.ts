@@ -295,7 +295,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 
 type TodoNudgeRuntime = Pick<
 	SessionRuntime,
-	"askAnswers" | "isStreaming" | "syncedConnectionGeneration" | "turns"
+	"askAnswers" | "controlTurnBoundary" | "isStreaming" | "syncedConnectionGeneration" | "turns"
 >;
 
 export interface TodoNudgeState {
@@ -361,6 +361,7 @@ async function readTodoNudgeRuntime(
 	return {
 		turns: hydrated.turns,
 		askAnswers: hydrated.askAnswers,
+		controlTurnBoundary: hydrated.controlTurnBoundary ?? 0,
 		isStreaming: summary.isStreaming,
 		syncedConnectionGeneration: connectionGeneration,
 	};
@@ -383,10 +384,13 @@ export async function nudgeAgent(
 	const text = `${TODO_NUDGE_PREFIX}A TODO was added to the list: "${title}". Read the TODO list with todo_list and work any pending items, marking each done with todo_update as you finish.`;
 	try {
 		const known = initial.sessions[sessionId];
-		const runtime =
+		let runtime =
 			known?.syncedConnectionGeneration === connectionGeneration
 				? known
 				: await readTodoNudgeRuntime(workspaceId, sessionId, connectionGeneration, deps);
+		if (runtime && !shouldNudgeOnAdd(sessionGlance(runtime))) {
+			runtime = await readTodoNudgeRuntime(workspaceId, sessionId, connectionGeneration, deps);
+		}
 		if (
 			!runtime ||
 			!shouldNudgeOnAdd(sessionGlance(runtime)) ||

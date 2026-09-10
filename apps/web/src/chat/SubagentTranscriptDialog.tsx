@@ -71,7 +71,9 @@ export function SubagentTranscriptDialog({
 	const messageActions = useMemo(() => deriveMessageActions(rows, live), [rows, live]);
 	const askContext = useMemo(
 		() => ({
-			states: runtime ? deriveAskStates(runtime.turns, runtime.askAnswers) : {},
+			states: runtime
+				? deriveAskStates(runtime.turns, runtime.askAnswers, runtime.controlTurnBoundary)
+				: {},
 			focusScope: {},
 		}),
 		[runtime],

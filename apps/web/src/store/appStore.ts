@@ -328,6 +328,7 @@ export interface SessionRuntime {
 	turnIdByMessageIndex?: (string | null)[];
 	toolResults: Record<string, ToolResultState>;
 	askAnswers: Record<string, AskUserQuestionResult>;
+	controlTurnBoundary: number;
 	currentAssistantId: string | null;
 	attemptAssistantId: string | null;
 	isStreaming: boolean;
@@ -358,6 +359,7 @@ function newRuntime(
 		turns: [],
 		toolResults: {},
 		askAnswers: {},
+		controlTurnBoundary: 0,
 		currentAssistantId: null,
 		attemptAssistantId: null,
 		isStreaming: false,
@@ -534,7 +536,11 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			if (event.message.role === "user") {
 				const message = event.message as UserMessage;
 				const text = userText(message.content);
-				if (isControlMessage(text)) return rt;
+				if (isControlMessage(text)) {
+					return rt.controlTurnBoundary === rt.turns.length
+						? rt
+						: { ...rt, controlTurnBoundary: rt.turns.length };
+				}
 				const last = rt.turns[rt.turns.length - 1];
 				if (last?.kind === "user") {
 					const optimisticText = userText(last.message.content);
@@ -2873,6 +2879,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				turns: hydrated.turns,
 				toolResults: hydrated.toolResults,
 				askAnswers: hydrated.askAnswers,
+				controlTurnBoundary: hydrated.controlTurnBoundary ?? 0,
 				isStreaming: summary.isStreaming,
 				...(summary.queue ? { queue: summary.queue } : {}),
 				...(hydrated.turnIdByMessageIndex
@@ -2962,6 +2969,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				turns: reconcileCompactionTurns(current.turns, hydrated.turns, summary.isStreaming),
 				toolResults: hydrated.toolResults,
 				askAnswers: hydrated.askAnswers,
+				controlTurnBoundary: hydrated.controlTurnBoundary ?? 0,
 				currentAssistantId: null,
 				attemptAssistantId: null,
 				isStreaming: summary.isStreaming,

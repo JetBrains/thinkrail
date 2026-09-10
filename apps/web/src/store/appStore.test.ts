@@ -352,6 +352,7 @@ test("a host-fired USER message folds into the transcript; the composer's optimi
 
 	store.handlePiEvent(userStart("[thinkrail:todo-nudge] plan changed"), "a");
 	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
+	expect(rt("a").controlTurnBoundary).toBe(2);
 });
 
 test("queue_update folds pi's queue into the runtime; the canonical echo lands the turn at its true position", () => {

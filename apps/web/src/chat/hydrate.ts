@@ -19,6 +19,7 @@ export interface HydratedRuntime {
 	toolResults: Record<string, ToolResultState>;
 	askAnswers: Record<string, AskUserAnswersDetails["result"]>;
 	turnIdByMessageIndex: (string | null)[];
+	controlTurnBoundary?: number;
 }
 
 export interface HydrationOptions {
@@ -45,10 +46,13 @@ export function messagesToRuntime(
 	const toolResults: Record<string, ToolResultState> = {};
 	const askAnswers: HydratedRuntime["askAnswers"] = {};
 	const turnIdByMessageIndex: HydratedRuntime["turnIdByMessageIndex"] = [];
+	let controlTurnBoundary = 0;
 	for (const [index, message] of messages.entries()) {
 		let turnId: string | null = null;
 		if (message.role === "user") {
-			if (options.includeControlMessages || !isControlMessage(userText(message.content))) {
+			const control = isControlMessage(userText(message.content));
+			if (control) controlTurnBoundary = turns.length;
+			if (options.includeControlMessages || !control) {
 				turnId = transcriptTurnId(message, index, options);
 				turns.push({ kind: "user", id: turnId, message });
 			}
@@ -103,5 +107,11 @@ export function messagesToRuntime(
 			recovery: "try-again",
 		});
 
-	return { turns, toolResults, askAnswers, turnIdByMessageIndex };
+	return {
+		turns,
+		toolResults,
+		askAnswers,
+		turnIdByMessageIndex,
+		...(controlTurnBoundary > 0 ? { controlTurnBoundary } : {}),
+	};
 }

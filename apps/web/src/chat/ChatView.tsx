@@ -774,8 +774,8 @@ export default function ChatView({
 	);
 
 	const askStates = useMemo(
-		() => deriveAskStates(runtime.turns, runtime.askAnswers),
-		[runtime.turns, runtime.askAnswers],
+		() => deriveAskStates(runtime.turns, runtime.askAnswers, runtime.controlTurnBoundary),
+		[runtime.turns, runtime.askAnswers, runtime.controlTurnBoundary],
 	);
 	const askContext = useMemo(
 		() => ({ states: askStates, focusScope: askFocusScope }),

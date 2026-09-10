@@ -1029,8 +1029,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   just queues and is picked up on the agent's next natural turn (when the user answers, or a later idle
   nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged. A missing or
   stale-generation runtime is classified from one ephemeral authoritative transcript read without
-  installing a runtime or changing placement/history; a rejected method may trigger one fresh read and
-  method-selecting retry, with connection generation and tombstones fencing every send.
+  installing a runtime or changing placement/history. A current visible runtime that appears to be waiting
+  on a question also confirms that classification with the authoritative transcript before skipping, because
+  a later hidden TODO control message can supersede the question without entering rendered turns. A rejected
+  method may trigger one fresh read and method-selecting retry, with connection generation and tombstones
+  fencing every send.
 
 ## Boundary
 

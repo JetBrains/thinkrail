@@ -181,6 +181,37 @@ test("a later hidden TODO control supersedes an unanswered question for nudge cl
 	expect(methods).toEqual(["session.prompt"]);
 });
 
+test("a current runtime confirms apparent question waiting against hidden control messages", async () => {
+	const askMessage = {
+		role: "assistant",
+		content: [{ type: "toolCall", id: "question-1", name: "ask_user_question", arguments: {} }],
+	} as unknown as AssistantMessage;
+	installNudgeState({
+		...EMPTY_RUNTIME,
+		turns: [{ kind: "assistant", id: "turn-1", message: askMessage, streaming: false }],
+		syncedConnectionGeneration: 5,
+	});
+	const previousNudge = {
+		role: "user",
+		content: `${TODO_NUDGE_PREFIX}Earlier TODO`,
+		timestamp: 2,
+	} as const;
+	const methods: string[] = [];
+	let reads = 0;
+	const deps = nudgeDependencies(sessionSummary(), async (method) => {
+		methods.push(method);
+	});
+	deps.read = async () => {
+		reads += 1;
+		return { summary: sessionSummary(), messages: [askMessage, previousNudge] };
+	};
+
+	await nudgeAgent("workspace-1", "session-1", "Cover checkout", deps);
+
+	expect(reads).toBe(1);
+	expect(methods).toEqual(["session.prompt"]);
+});
+
 test("stale nudge reads are fenced by generation, workspace removal, and session deletion", async () => {
 	const mutations = [
 		() => useAppStore.setState({ connectionGeneration: 6 }),
