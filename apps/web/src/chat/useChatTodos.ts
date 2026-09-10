@@ -48,8 +48,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		},
 		[sessionId, workspaceId],
 	);
-	const reviewerRef = useRef<string | undefined>(undefined);
-
 	useEffect(() => {
 		if (status !== "connected" || connectionGeneration === 0) return;
 		let cancelled = false;
@@ -70,7 +68,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 						isConnectedGeneration(useAppStore.getState(), effectConnectionGeneration) &&
 						live(effectIdentity)
 					) {
-						reviewerRef.current = plan.reviewerSessionId;
 						setData(plan);
 						setFailed(false);
 					}
@@ -97,7 +94,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		};
 		const unsubscribe = getTransport().subscribe(WS_CHANNELS.piEvent, (payload) => {
 			const event = payload as SessionEventPayload;
-			if (event.sessionId !== sessionId && event.sessionId !== reviewerRef.current) return;
+			if (event.sessionId !== sessionId) return;
 			if (shouldRefreshTodos(event.event)) scheduleRefetch();
 		});
 		// A plan review runs as a hidden subagent (no piEvent for this session) and writes its verdict to the
@@ -150,7 +147,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 				return reloadPlan();
 			}
 			if (readGeneration.current !== mine || !live(requestIdentity)) return false;
-			reviewerRef.current = plan.reviewerSessionId;
 			setData(plan);
 			return true;
 		} catch {

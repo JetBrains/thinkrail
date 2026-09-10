@@ -31,7 +31,6 @@ export interface ReviewThreadData {
 	status: string;
 	anchorState: string;
 	stale?: boolean;
-	refuted?: boolean;
 }
 
 export interface ReviewThreadActions {
@@ -272,9 +271,7 @@ export function attachReviewThreads(
 		const dot = document.createElement("span");
 		dot.className = `review-thread-dot rounded-full review-thread-dot-${thread.status === "sent" ? "sent" : "draft"}`;
 		const label = document.createElement("span");
-		let labelTone = "";
-		if (thread.refuted) labelTone = " text-text-subtle";
-		else if (thread.stale) labelTone = " text-feedback-warning";
+		const labelTone = thread.stale ? " text-feedback-warning" : "";
 		label.className = `review-thread-label tr-text-eyebrow${labelTone}`;
 		label.textContent = threadLabel(thread);
 		head.append(dot, label);
@@ -371,15 +368,7 @@ export function attachReviewThreads(
 	const cardSizeObserver = new ResizeObserver(() => relayoutCards());
 
 	const signature = (t: ReviewThreadData): string =>
-		[
-			t.status,
-			t.anchorState,
-			t.stale ?? false,
-			t.refuted ?? false,
-			t.startLine,
-			t.endLine,
-			t.body,
-		].join("\u0000");
+		[t.status, t.anchorState, t.stale ?? false, t.startLine, t.endLine, t.body].join("\u0000");
 
 	const buildZone = (accessor: monaco.editor.IViewZoneChangeAccessor, thread: ReviewThreadData) => {
 		const domNode = document.createElement("div");

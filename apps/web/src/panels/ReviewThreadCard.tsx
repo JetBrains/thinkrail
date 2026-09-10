@@ -52,7 +52,7 @@ export function ReviewThreadCard({
 					className={`review-thread-dot rounded-full review-thread-dot-${thread.status === "sent" ? "sent" : "draft"}`}
 				/>
 				<span
-					className={`review-thread-label tr-text-eyebrow${thread.refuted ? " text-text-subtle" : thread.stale ? " text-feedback-warning" : ""}`}
+					className={`review-thread-label tr-text-eyebrow${thread.stale ? " text-feedback-warning" : ""}`}
 				>
 					{threadLabel(thread)}
 				</span>

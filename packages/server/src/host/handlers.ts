@@ -173,7 +173,8 @@ import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
-import { startPlanReviewInBackground } from "./requestReview";
+import { planReviewRunning } from "./planReviewQueue";
+import { startPlanReview } from "./requestReview";
 import { withReviewLock } from "./reviewLock";
 import {
 	claimItemFix,
@@ -447,8 +448,9 @@ const handlers: Record<string, Handler> = {
 		const ws = getWorkspace(p.workspaceId);
 		if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath)))
 			throw new Error("This plan's chat is no longer on disk — can't review.");
-		startPlanReviewInBackground(p.workspaceId, p.sessionId, p.id);
-		return { reviewerSessionId: "" };
+		if (!startPlanReview(p.workspaceId, p.sessionId, p.id))
+			throw new Error("This step is already being reviewed.");
+		return { ok: true };
 	},
 	"todo.reviewAll": async (params) => {
 		const p = params as { workspaceId: string; sessionId: string };
@@ -465,8 +467,10 @@ const handlers: Record<string, Handler> = {
 				r.reviewing !== true
 			);
 		});
-		for (const it of targets) startPlanReviewInBackground(p.workspaceId, p.sessionId, it.id);
-		return { total: targets.length };
+		const started = targets.filter((it) => startPlanReview(p.workspaceId, p.sessionId, it.id));
+		if (started.length === 0 && planReviewRunning(p.workspaceId, p.sessionId))
+			return { ok: true, total: 0, alreadyRunning: true };
+		return { ok: true, total: started.length };
 	},
 	"todo.requestFix": async (params) => {
 		const p = params as { workspaceId: string; sessionId: string; id: string; feedback: string };

@@ -466,7 +466,7 @@ export interface WsMethodMap {
 	};
 	"todo.startReview": {
 		params: { workspaceId: string; sessionId: string; id: string };
-		result: { ok: true; reviewerSessionId: string };
+		result: { ok: true };
 	};
 	"todo.reviewAll": {
 		params: { workspaceId: string; sessionId: string };

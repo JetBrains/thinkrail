@@ -611,8 +611,9 @@ a project picker, the prompt hero, and the reused
   file rows open Monaco diff tabs at the item's `commit:{sha}` scope (`openDiffInTab`, preview intent; the
   path-list fallback opens at branch scope, no counts because they would drift), **and the review verdict
   ON the item row itself**: the row's right edge is ONE review slot rendering exactly one of, in
-  precedence order, the clickable `Reviewing…` label (`plan-item-reviewing`, off the host-derived
-  `review.reviewing`, opens the reviewer chat), the warning `Changes requested · N` chip, or the
+  precedence order, the non-clickable pulsing `Reviewing…` status (`plan-item-reviewing`, off the
+  host-derived `review.reviewing` — the review runs as a hidden subagent, so there is no chat to open),
+  the warning `Changes requested · N` chip, or the
   primary-filled `Start review` button (`plan-start-review` — the standard **small** action button:
   `h-6`/`tr-text-action`/`control-primary-bg`, the same size as `SendReviewButton`, not an oversized
   `min-h-8` block) for an unsettled reviewable item. The two **status**
@@ -624,9 +625,11 @@ a project picker, the prompt hero, and the reused
   button on the title line (the meta on line 2 frees that right edge, so the title simply shrinks for
   it — no overlap, no empty reserved slot). Still one slot, no duplicates — the change-set disclosure
   row carries NO review affordance.
-  `Start review` fires the AGENT review (`todo.startReview` — the plan's reviewer chat) and STAYS on
+  `Start review` fires the AGENT review (`todo.startReview` — a hidden review subagent) and STAYS on
   the plan page: the row's `Reviewing…` pulse and a toast are the only signals, success AND failure —
-  the detached error notice lands in a reviewer chat nobody has open, so the toast must carry it.
+  the review runs with no chat of its own, so the toast must carry the error. The verdict lands via the
+  `review.changed` broadcast (`useChatTodos` refetches the plan on it), not a `pi.event` for this
+  session — the subagent's events are hidden.
   Row controls (`plan-item-toggle`, the change-set toggle, the sha chip, the review slot, `FileRow`)
   wear `min-h-8` — the dense metadata rows stay tappable on touch. `planView.changeSetCounts` is the
   one count/stat derivation (paths → count only; commit → `changeSetStat`), shared by the row's meta
@@ -678,9 +681,9 @@ the review map instead of reading as "nothing else changed"; `chat/planMarkdown`
 own section. The kebab menu (`plan-menu`, a
   `DropdownMenu`) holding **Copy** (clipboard) / **Save .md** (browser download) — both compiling through
   `chat/planMarkdown` — and, when the plan has reviewable items, **Review All** (`plan-review-all`): fires
-  `todo.reviewAll`, the host-side queue that agent-reviews every *unsettled* reviewable item one at a time
-  (disabled when none are unsettled; a toast reports how many were queued, the per-row `Reviewing…` pulses
-  track progress), plus **Open draft PR** (`plan-open-draft-pr`, hidden once a PR exists). **The header
+  `todo.reviewAll`, which agent-reviews every *unsettled* reviewable item on the plan's serial chain, one
+  at a time (disabled when none are unsettled; a toast reports how many started, the per-row `Reviewing…`
+  pulses track progress), plus **Open draft PR** (`plan-open-draft-pr`, hidden once a PR exists). **The header
   also owns the plan's finish line — Open PR** (`plan-open-pr`, task-open-pr): a deterministic
   host-side flow (push + `gh`, NEVER an agent prompt) that, **for first-time creation only**
   (`openReview` absent), goes through the **compose dialog** (`PrComposeDialog.tsx`,

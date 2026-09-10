@@ -24,7 +24,6 @@ export {
 	reviewSessionKey,
 	rollbackSend,
 	sendableComments,
-	setReflection,
 	setReviewPublisher,
 	updateComment,
 } from "./reviews";

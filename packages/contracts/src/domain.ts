@@ -183,8 +183,6 @@ export interface TodoPlan {
 	 * rewrites it at the next completion.
 	 */
 	summary?: string;
-	/** The plan's dedicated reviewer chat (set once Start review ran) — the Reviewing label opens it. */
-	reviewerSessionId?: string;
 	/**
 	 * Worktree changes attributed to NO item of this plan — **host-derived on `todo.list`, present only
 	 * when non-empty**. The honesty section of the review map: work no item claims (edits before the
@@ -708,12 +706,6 @@ export interface ReviewComment {
 	origin?: { todoId: string; reviewedSha: string; sessionId: string };
 	/** Server-derived for the client, never persisted: the reviewed code was overwritten after review. */
 	stale?: boolean;
-	/** An independent reflector's verdict on an agent finding (refuted findings are held back from auto-fix). */
-	reflection?: {
-		verdict: "kept" | "refuted";
-		confidence: "low" | "medium" | "high";
-		reason: string;
-	};
 	resolvedBy?: "agent" | "user";
 	resolveNote?: string;
 	createdAt: number;
@@ -765,7 +757,7 @@ export type PlanReviewVerdict = "approve" | "request_changes";
 
 /** Result of the worker-invoked request_review tool (Option A): a review subagent's structured verdict on
  * a plan step. Carried as the tool result's `details`, rendered by the request_review card, and written to
- * the item's review record. See task-plan-review-delegation + submodule-server-todos. */
+ * the item's review record. See submodule-server-host-plan-review + submodule-server-todos. */
 export interface PlanReviewResult {
 	itemId: string;
 	itemTitle: string;

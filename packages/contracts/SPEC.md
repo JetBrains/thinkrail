@@ -373,10 +373,11 @@ of the host.
   item `origin:"user"`), plus the review ops **`review`** (approve: record `reviewed` + the sha
   watermark), **`requestFix`** (record `changes_requested` + feedback, then the host fires the fix
   package into the item's own chat — detached, rolled back on a pre-turn rejection) and
-  **`startReview`** (the AGENT review: the plan's pinned reviewer chat gets the item's package; findings
-  arrive as `author: "agent"` review comments, the verdict via the reviewer-only `review_verdict` tool;
+  **`startReview`** / **`reviewAll`** (the AGENT review: a hidden review subagent gets the item's
+  package and returns a structured verdict; findings arrive as `author: "agent"` review comments;
   `TodoItem.review` carries `reviewing` while the verdict is pending and `reviewedBy` on an agent
-  approve) / **`terminal.*`** — **`reserve`** (idempotently establishes a host-catalog tab
+  approve. `reviewAll` reports the count it started, and `alreadyRunning` when the plan's serial chain
+  is still busy) / **`terminal.*`** — **`reserve`** (idempotently establishes a host-catalog tab
   without starting its PTY; `INITIAL_TERMINAL_TAB_KEY` names the one host-seeded tab that every frontend
   may place passively) / **`attach`** (idempotent get-or-create keyed by `(workspaceId, tabKey)`,
   returning `created` + the `replay` to repaint; the only way a PTY is born, and it replaced

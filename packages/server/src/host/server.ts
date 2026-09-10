@@ -89,17 +89,10 @@ import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
-import { installRequestReviewSeam } from "./requestReview";
+import { installRequestReviewSeam, maybeAutoReReview } from "./requestReview";
 import { resolveSubagentsEnabled } from "./subagentPolicy";
 import { terminalDeliveryForSendStatus } from "./terminalSend";
-import {
-	handleReviewerSettled,
-	installTodoReviewSeams,
-	markClientStale,
-	maybeAutoReReview,
-	maybeResumeReflection,
-	reconcilePendingReviewsOnBoot,
-} from "./todoReview";
+import { markClientStale, reconcilePendingReviewsOnBoot } from "./todoReview";
 
 export interface CreateServerOptions {
 	port?: number;
@@ -494,7 +487,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setReviewCommentHandler((sessionId, commentId, note) => ({
 		resolvedBody: resolveCommentFromAgent(sessionId, commentId, note).body,
 	}));
-	installTodoReviewSeams();
 	installRequestReviewSeam();
 	reconcilePendingReviewsOnBoot();
 
@@ -541,8 +533,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		} else if (isSettledTurn(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			if (workspaceId) void maybeAutoRenameWorkspace(payload.sessionId, workspaceId);
-			handleReviewerSettled(payload.sessionId, payload.event);
-			maybeResumeReflection(payload.sessionId);
 		}
 		if (isTodoToolEnd(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
