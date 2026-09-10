@@ -628,9 +628,15 @@ a project picker, the prompt hero, and the reused
   plan is currently at), pending (muted). The PR stage reads the same `useOpenBranchReview` lookup
   as the button and shows `PR #N` once one is open; "merged" is unknowable in V1 (the lookup only
   sees OPEN reviews), so the funnel honestly ends at PR-open. Under the stepper sits the **work
-  CONTEXT line** (`plan-context`): `branch ← baseBranch · N commits · +A −R` — commits summed over
-  `itemRevisions`, the total diff from the workspace record's `diffStats`; each piece hides when
-  unknown. Between header and summary lives the **NEXT-ACTION banner** (`plan-next-action`,
+  CONTEXT line** (`plan-context`): `baseBranch ← branch · N commits · +A −R` — the arrow points at the
+  merge TARGET (base ← head, the GitHub PR convention: changes flow from the workspace branch into
+  its base). `N commits` is the **`PlanCommitsMenu`** (`plan-commits-trigger`) — a dropdown mirroring
+  the Changes scope menu's commit list: `git.listCommits` (eager-loaded, reloaded whenever the plan's
+  commit count ticks) is the ONE source for both the count and the list, so they never diverge; each
+  row (`plan-commits-item`, `data-sha`) opens that commit's diff in the Changes panel via the same
+  `openChanges({ sha })` the per-step commit chip uses. The chip self-hides while loading and when the
+  branch has no commits. The total diff comes from the workspace record's `diffStats`; each piece
+  hides when unknown. Between header and summary lives the **NEXT-ACTION banner** (`plan-next-action`,
   `data-kind`) — the report's one "what now", rendering the FIRST matching state by urgency:
   `fix` (N steps carry changes_requested → **Show step** scrolls to the first flagged item and
   auto-expands it via the `focusRequest` token — `{ id, tick }`, tick bumped per click and consumed
