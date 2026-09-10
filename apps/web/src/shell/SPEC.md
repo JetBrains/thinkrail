@@ -5,6 +5,7 @@ status: active
 title: shell — responsive frame
 parent: module-web
 tags: [v1, ui]
+references: [module-desktop]
 ---
 
 ## Responsibility
@@ -62,7 +63,26 @@ response restoring a superseded state. The host owns health, cache, and deduplic
 interprets Central directly.
 
 With an active workspace, `Shell` mounts the workbench projection of the window's singular frame and that workspace's local view. Switching workspace changes resource contents and attention but never frame topology, Projects/Specs/Files/Changes/Review placement, side/bottom geometry, folds, visibility, or alignment. Shell-owned wrappers around Projects, Files, and Specs use `components/QuietScrollArea`, as does the Project Home navigator; Changes/Review and xterm own their internal quiet-scroll surfaces in `panels`. These primitives never receive or infer placement. `react-resizable-panels` cannot reconcile a panel-count change in place, so switching to a workspace whose default preset has a different shape (e.g. Balanced ↔ Focus) forces the aligned-row and outer `ResizablePanelGroup`s to remount; they carry `motion-safe:animate-fade-in` (an opacity-only twin of `animate-reveal` — no `transform`, since these subtrees can contain ChatView's `position: sticky` breadcrumbs) so the shape change reads as a soft cross-fade rather than a jump. Without an active workspace, Shell mounts Welcome beside the projects navigator using separate local geometry. The Settings dialog, addressed interview invitation, and Toasts each mount once above both branches.
-After `main.tsx`'s synchronous first-paint apply, Shell is the sole mounted theme side-effect owner. While `welcomeGeneration === 0` it retains the versioned preference hint; afterward it projects store's opaque fixed id + fixed/system mode + optional pair through `themes` and writes the reconciled hint. Fixed mode has no media listener. System mode owns exactly one `prefers-color-scheme` listener, reapplies the locally resolved slot on change, and cleans it up on preference/unmount; that local event never mutates store, calls the host, or changes another client. No other component mutates `[data-theme]`.
+After `main.tsx`'s synchronous first-paint apply, Shell is the sole mounted theme side-effect owner. While `welcomeGeneration === 0` it retains the versioned preference hint; afterward it projects store's opaque fixed id + fixed/system mode + optional pair through `themes` and writes the reconciled hint. Fixed theme application has no media listener. System theme application owns exactly one `prefers-color-scheme` listener, reapplies the locally resolved slot on change, and cleans it up on preference/unmount; that local event never mutates store, calls the host, or changes another client. No other component mutates `[data-theme]`.
+
+## Native header composition
+
+The application header is shared across browser and native deployments; platform-specific controls may have
+different appearance, order and placement. The shell reserves host-published CSS safe areas on either side
+without knowing native widget internals. Browser defaults are zero. The header defaults to no-drag; an
+integrated desktop policy explicitly enables its noninteractive drag region, while decorated native windows
+stay neutral. The entire trailing action cluster is always no-drag, including quota Retry, Update ready and
+Settings. Header layout remains usable without a native bridge. Any optional local window-control
+capability stays shell-local and never becomes domain state or a panel dependency. Native behavior and
+geometry lifecycle are owned by [[module-desktop]].
+
+When the native appearance capability is present, Shell reports the header's computed background and color
+scheme on mount and completed theme swaps through `themes.onThemeSwap`; it reuses that observation API
+rather than implementing another observer or interpreting theme ids. Multiple supported CSS schemes (notably `light dark` in forced-colors mode)
+resolve against `themes.readSystemAppearance`. System-appearance and forced-colors changes refresh the
+projection even when the selected application theme is fixed. This optional read-only
+DOM projection owns no theme or window state, adds no host traffic, and is absent in ordinary browsers.
+Native painting and validation remain the launcher's responsibility.
 
 ## Workbench behavior
 

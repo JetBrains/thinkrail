@@ -14,3 +14,12 @@ export interface NativeUpdateBridge {
 	restartToUpdate(): Promise<void>;
 	subscribe(listener: (state: NativeUpdateState) => void): () => void;
 }
+
+export interface NativeWindowAppearance {
+	backgroundColor: string;
+	colorScheme: "light" | "dark";
+}
+
+export interface NativeWindowChromeBridge {
+	setAppearance(appearance: NativeWindowAppearance): void;
+}

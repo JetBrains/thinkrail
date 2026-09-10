@@ -26,8 +26,9 @@ controller keeps only the cross-operation sequencing needed to prevent an overla
 
 Only packaged supported stable/canary builds whose release metadata supplies a nonempty HTTPS updater base URL
 enable the production adapter. Packaged metadata is the sole feed authority; renderer input and a duplicate
-application feed constant are forbidden. Development and ordinary artifact seams remain disabled. Tests inject an
-updater dependency into the controller rather than altering production feed selection.
+application feed constant are forbidden. Development and every artifact seam, including the live-window chrome
+probe even without other control/ready flags, remain disabled. Tests inject an updater dependency into the
+controller rather than altering production feed selection.
 
 Manual checks acknowledge immediately while work continues through state revisions. Checks and downloads are
 coalesced; transient failed polls do not erase a prepared update, and an error discovered while revalidating that

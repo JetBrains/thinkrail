@@ -22,6 +22,15 @@ import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const BASE_TS = 1_700_800_000_000;
+const TALL_QUESTION_DETAIL =
+	"Compare the proposed schedules, service ownership, maintenance window, dependency readiness, " +
+	"monitoring, alerts, and support handover. Account for partially upgraded clients, in-flight " +
+	"jobs, regional traffic, resource headroom, background work, integration health, data consistency, " +
+	"staged configuration changes, and a rollback path that restores the previous behavior without " +
+	"losing work. Choose a plan with explicit validation, ownership, monitoring intervals, and " +
+	"measurable conditions for pausing or completing the rollout.";
+const FIRST_QUESTION = `Which first-page rollout should we use? ${TALL_QUESTION_DETAIL}`;
+const SECOND_QUESTION = `Which second-page rollout should we use? ${TALL_QUESTION_DETAIL}`;
 
 function tallPreview(pageName: string): string {
 	return Array.from(
@@ -56,12 +65,12 @@ function seedTallQuestionnaire(name: string, toolCallId: string) {
 	const args: AskUserQuestionArgs = {
 		questions: [
 			{
-				question: "Which first-page rollout should we use?",
+				question: FIRST_QUESTION,
 				header: "First page",
 				options: optionsFor("First"),
 			},
 			{
-				question: "Which second-page rollout should we use?",
+				question: SECOND_QUESTION,
 				header: "Second page",
 				options: optionsFor("Second"),
 			},
@@ -140,9 +149,7 @@ test("a persisted tall questionnaire reveals page changes and a restored page wi
 		const chatScroll = page.getByTestId("chat-scroll");
 		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
 		await expect(card).toBeVisible();
-		await expect(card.getByTestId("ask-question-text")).toHaveText(
-			"Which first-page rollout should we use?",
-		);
+		await expect(card.getByTestId("ask-question-text")).toHaveText(FIRST_QUESTION);
 
 		const firstOption = card.getByTestId("ask-option").first();
 		await expect(firstOption).toBeFocused();
@@ -157,7 +164,7 @@ test("a persisted tall questionnaire reveals page changes and a restored page wi
 
 		await next.click();
 		const secondHeading = card.getByTestId("ask-question-text");
-		await expect(secondHeading).toHaveText("Which second-page rollout should we use?");
+		await expect(secondHeading).toHaveText(SECOND_QUESTION);
 		const secondFirstOption = card.getByTestId("ask-option").first();
 		await expect(secondFirstOption).toBeFocused();
 		await expect
@@ -180,7 +187,7 @@ test("a persisted tall questionnaire reveals page changes and a restored page wi
 		const reopenedCard = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
 		const reopenedHeading = reopenedCard.getByTestId("ask-question-text");
 		const reopenedFirstOption = reopenedCard.getByTestId("ask-option").first();
-		await expect(reopenedHeading).toHaveText("Which second-page rollout should we use?");
+		await expect(reopenedHeading).toHaveText(SECOND_QUESTION);
 		await expect(reopenedFirstOption).toBeFocused();
 		await expect
 			.poll(async () => ({
@@ -244,14 +251,12 @@ test("a coarse pointer reveals a returning page's text target without focusing i
 		await custom.fill("Use a custom second-stage rollout.");
 		await expect(custom).toBeFocused();
 		await card.getByTestId("ask-tab").first().click();
-		await expect(card.getByTestId("ask-question-text")).toHaveText(
-			"Which first-page rollout should we use?",
-		);
+		await expect(card.getByTestId("ask-question-text")).toHaveText(FIRST_QUESTION);
 		await wheelUntilChatElementIntersects(page, chatScroll, next);
 		await next.click();
 
 		const secondHeading = card.getByTestId("ask-question-text");
-		await expect(secondHeading).toHaveText("Which second-page rollout should we use?");
+		await expect(secondHeading).toHaveText(SECOND_QUESTION);
 		await expect
 			.poll(async () => ({
 				heading: (await readChatViewportIntersection(secondHeading)).intersects,

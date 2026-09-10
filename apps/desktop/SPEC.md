@@ -6,7 +6,7 @@ title: Desktop launcher/client (Electrobun)
 parent: architecture
 depends-on: [module-server, module-contracts, module-shared]
 tags: [desktop, v1, launcher, packaging]
-references: [submodule-web-navigation, module-artifact-tests, module-ci-release]
+references: [submodule-web-navigation, module-artifact-tests, module-ci-release, submodule-web-shell]
 ---
 
 ## Responsibility
@@ -91,6 +91,59 @@ Edit role menu. Linux skips registration because Electrobun 2.0.1 does not suppo
 there; WebKitGTK keeps its renderer-native editing behavior. The policy is platform-pure and the packaged
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
 pins production wiring.
+
+## Integrated window chrome
+
+The native shell's target contract is one integrated application header on every supported desktop platform,
+with full native window behavior rather than identical pixels. Button appearance, side, order, spacing and
+presence follow platform conventions and supported user preferences; Linux decoration layout is not fixed to
+Windows' right-hand arrangement. macOS retains AppKit traffic lights. Moving, resizing at every edge,
+minimize/maximize/restore, fullscreen, drag-from-maximized, configured titlebar gestures, system menus and
+Windows 11 Snap Layout hover remain native operations. Retained native buttons alone do not prove header
+gestures, and invoking maximize from a web button alone does not prove Snap hover.
+
+Desktop owns native input routing, native state and control policy. The shared web shell consumes safe-area
+geometry and may use a narrowly typed optional local action/state capability when a platform's controls need
+it; ordinary browsers have zero native insets and no capability. No window-management state enters the
+server, host WS protocol, panels or persistent domain store. Each new document receives current geometry
+and native state, including reload during fullscreen/maximize; scaling/display transitions invalidate measured
+geometry. Interactive header content, including the whole update/quota/settings cluster, is excluded from
+drag regions. Native close follows the existing asynchronous shutdown coordinator.
+
+This is a platform-specific hybrid, not a requirement to build a universal native-controls renderer. Public
+OS APIs and focused framework fixes are permitted; extensive private framework hooks, a new renderer/runtime,
+or a native-Wayland migration require a separate decision. Electrobun 2.0.1 forces its Linux GTK backend to
+X11, so Wayland-session execution is qualified as XWayland rather than native Wayland. Packaged-native
+acceptance belongs to [[module-artifact-tests]]; browser and synthetic hit-test checks cannot establish parity.
+
+The current platform selection uses macOS `hiddenInset` with a `{x: 0, y: 4}` traffic-light offset and a
+64 CSS-pixel leading safe area for the 40px shared header. Other platforms retain default native decorations;
+the local-host browser-test seam remains neutral. Only an integrated policy enables the web header's native
+drag region, so ordinary browsers and decorated native windows do not acquire partial window gestures.
+Geometry is seeded before the preload and replayed from
+current native fullscreen state on every DOM-ready, independently of the one-time host-ready guard, and on
+resize. The preload keeps only the latest validated geometry while the document root is absent, so a pending
+startup write cannot overwrite a newer native state. Fullscreen clears both safe areas. This presentation
+foundation does not establish configured macOS header-gesture parity.
+
+The entrypoint composes [[submodule-desktop-windows-chrome]] and [[submodule-desktop-updates]] through their
+barrels; neither submodule depends on the other. The Windows adapter consumes the parent's pure geometry
+contract, while the parent policy consumes its measured CSS-pixel safe areas. Native API, child-region and
+lifetime rules belong to that adapter's spec. The normal pre-build stages its C source alongside the physical
+runtime resources; this does not replace Electrobun's build path or enable ordinary Windows policy.
+
+The parent validates the optional appearance bridge's computed sRGB color and effective light/dark scheme,
+never theme ids. Opaque colors become bounded `0xRRGGBB` values; the adapter owns COLORREF conversion.
+Translucent headers retain system backing rather than inventing an unknown backdrop's color.
+
+`THINKRAIL_DESKTOP_CHROME_PROBE_FILE` enables the candidate Windows adapter only in an isolated live-window
+probe, without changing normal platform selection or the neutral browser-host seam. The file receives native
+window/state/geometry observations on document readiness and resize. With the existing control file, fixed
+`chrome:maximize`, `chrome:restore`, `chrome:fullscreen-on`, `chrome:fullscreen-off`, and `chrome:reload`
+commands support state-transition checks; repeated unchanged commands are not replayed. State observations,
+not command acceptance, are the completion signal. Fullscreen can retain the maximized state bit, so those
+native observations are not mutually exclusive. Stop and ordinary close still use the existing quit
+coordinator. This is an artifact-test seam, not a host protocol or a production feature flag.
 
 ## Navigation and window security
 

@@ -28,8 +28,8 @@ of the host.
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
-  (`NativeUpdateState` and `NativeUpdateBridge`, the optional shell-local desktop update capability); the
-  value re-exports
+  (`NativeUpdateState` / `NativeUpdateBridge` and `NativeWindowAppearance` / `NativeWindowChromeBridge`,
+  optional shell-local desktop capabilities); the value re-exports
   `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
@@ -50,8 +50,10 @@ of the host.
   or deployment that supplies it. A feature's wire shape is shared by browser, desktop, and future clients.
   Separate type-only native client capabilities describe an optional shell-local bridge, not host WS
   methods: `NativeUpdateState` and `NativeUpdateBridge` carry update presentation and explicit local
-  actions. The same web bundle discovers that capability without importing a native SDK; an ordinary
-  browser connection acquires no updater authority.
+  actions. `NativeWindowAppearance` / `NativeWindowChromeBridge` let the shared header project its computed
+  background and effective light/dark color scheme to native chrome without giving the launcher theme ids or
+  a second theme engine. These capabilities do not add WS methods or require a protocol-version change. The same web bundle
+  discovers them without importing a native SDK; an ordinary browser connection acquires no native authority.
 - **Forbidden:** any *value* import of a `pi` package; **any** import (even `type`) of
   `@earendil-works/pi-coding-agent` (pulls `node:fs`); the pi-ai **provider / API subpaths**
   (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
