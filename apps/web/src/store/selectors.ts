@@ -331,14 +331,11 @@ export function selectTodoChatTarget(state: {
 		state.sessionMembershipGenerationByWorkspace[workspaceId] === state.connectionGeneration ||
 		state.sessions[sessionId]?.syncedConnectionGeneration === state.connectionGeneration;
 	if (!membershipIsAuthoritative) return null;
-	const open = (state.tabsByWorkspace[workspaceId] ?? []).find(
-		(tab) => tab.kind === "chat" && tab.sessionId === sessionId,
-	);
-	const closed = state.closedChatsByWorkspace[workspaceId]?.find(
-		(chat) => chat.sessionId === sessionId,
-	);
-	const title = open?.name ?? closed?.title;
-	return title === undefined ? null : { workspaceId, sessionId, title: title.trim() || "Chat" };
+	return {
+		workspaceId,
+		sessionId,
+		title: selectChatTitle(state, workspaceId, sessionId),
+	};
 }
 
 export function selectCatalogModel(
@@ -382,13 +379,20 @@ export function specPathMatcher(nodes: SpecGraphNode[]): (path: string) => boole
 }
 
 export function selectChatTitle(
-	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	},
 	workspaceId: string,
 	sessionId: string,
 ): string {
-	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
-	const chatTab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
-	return (chatTab?.name ?? "Chat").trim() || "Chat";
+	const chatTab = (state.tabsByWorkspace[workspaceId] ?? []).find(
+		(tab) => tab.kind === "chat" && tab.sessionId === sessionId,
+	);
+	const closedChat = state.closedChatsByWorkspace[workspaceId]?.find(
+		(chat) => chat.sessionId === sessionId,
+	);
+	return (chatTab?.name ?? closedChat?.title ?? "Chat").trim() || "Chat";
 }
 
 export function selectCompactionTurnIds(

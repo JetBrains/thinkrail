@@ -978,7 +978,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   chip, never a broken diff tab (the degrade contract). Plus the add-row + an **"Open the plan page"**
   button (`todo-open-plan`) — `useChatTodos.openPlan` opens (or focuses) the chat's **live plan page**,
   a center `plan` tab rendered by `panels/PlanPane` (see `panels/SPEC.md`); its heading resolves the
-  chat's name through the store's `selectChatTitle` (one home, shared with the pane). **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
+  chat's name from its open tab or retained history through the store's `selectChatTitle` (one home,
+  shared with the pane and follower). **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
   "work in order" discipline is unaffected), `planMarkdown` (a pure `plan →
   markdown` compiler, `## <group> — n/m` sections — the plan page's **export** (copy / save-as-.md),
   never an interactive surface: a done item's change set renders as its short sha + `N files · +A −R`

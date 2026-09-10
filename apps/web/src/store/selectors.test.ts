@@ -17,6 +17,7 @@ import {
 	selectAttentionCenterResourceReady,
 	selectAttentionCenterTab,
 	selectCatalogModel,
+	selectChatTitle,
 	selectContextProject,
 	selectHistoryTarget,
 	selectKnownChatLocation,
@@ -370,6 +371,21 @@ test("TODO chat target requires a connected current-generation authority", () =>
 	expect(selectTodoChatTarget(state)).toBeNull();
 	state.activeWorkspaceId = null;
 	expect(selectTodoChatTarget(state)).toBeNull();
+});
+
+test("chat titles resolve from open tabs, then history, without duplicating fallback logic", () => {
+	const state = {
+		tabsByWorkspace: { w2: [chat1] },
+		closedChatsByWorkspace: {
+			w2: [
+				{ sessionId: "s1", title: "Stale history title", closedAt: 1 },
+				{ sessionId: "history", title: "History title", closedAt: 2 },
+			],
+		},
+	};
+	expect(selectChatTitle(state, "w2", "s1")).toBe("One");
+	expect(selectChatTitle(state, "w2", "history")).toBe("History title");
+	expect(selectChatTitle(state, "w2", "missing")).toBe("Chat");
 });
 
 test("selectKnownChatLocation resolves open and history chats without guessing unknown sessions", () => {
