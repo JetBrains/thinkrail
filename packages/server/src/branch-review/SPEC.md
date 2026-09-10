@@ -16,6 +16,11 @@ Best-effort lookup of the open code review associated with a workspace branch: G
 ## Boundary
 
 - **Owns:** remote-host detection and bounded, asynchronous CLI lookup returning an `OpenBranchReview` or `null`, plus the short-lived memory of successful lookup answers.
+- **The lookup asks the provider for the review's `url` alongside its number** (`gh … --json number,url`;
+  GitLab's row carries `web_url`) and puts it on the `OpenBranchReview`. It is not decoration: the client's
+  `PR #N` chip is a link only when a url is known, and before this the url existed ONLY in the session that
+  had just run `pr.open` — every reload, second window, and reconnect rendered the number as dead text. A
+  row whose url is absent or not `https:` yields a review with no url rather than a bad link.
 - **Public surface:** `findOpenBranchReview(cwd, branch, { fresh? })`, `forgetOpenBranchReview(cwd)`; plus the read primitives the `pr` action module reuses — `providerFromRemoteUrl`, `reviewNumber`, and `runProviderCommand` (the bounded prompt-disabled CLI runner).
 - **Successful answers are cached per `(worktree, branch)` for 60 seconds from settlement and lookups are
   single-flighted.** A syntactically valid empty provider response is a successful `null` and is cached —

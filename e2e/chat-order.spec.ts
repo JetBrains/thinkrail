@@ -183,6 +183,9 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 			page.getByText("answer 30: the deliberately verbose fixture has been inspected"),
 		).toBeInViewport();
 
+		// A wheel only detaches once the programmatic return has stopped re-pinning the edge — while
+		// `data-scroll-moving` is true the motion undoes it and the notch is swallowed.
+		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 		await page.mouse.wheel(0, 10_000);
 		await expect(latest).toBeVisible();
 		await latest.click();
@@ -200,6 +203,7 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 			})
 			.toEqual({ atPhysicalLatestEdge: true, latestRowIntersectsViewport: true });
 
+		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 		await page.mouse.wheel(0, 10_000);
 		await expect(latest).toBeVisible();
 		await chatScroll.evaluate((root) => {
