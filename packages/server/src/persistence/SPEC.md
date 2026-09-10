@@ -16,12 +16,14 @@ Durable host state—projects, workspaces, cross-frontend app config, terminal c
 
 - **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; and `ensureInstallation` / `saveInstallation` over `installation.json` (`{ id, announced }`, the non-rotating per-install uuid4 plus `app_installed`-sent bit, server-only and never wire-broadcast). JSON remains tab-indented.
 - **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, and installation identity operations.
-- **Allowed deps:** `contracts` (`Project`, `Workspace`, `AppConfig`, `LayoutPreset`, `DEFAULT_CONFIG`); Node `fs`/`os`/`path`.
+- **Allowed deps:** `contracts` (`Project`, `Workspace`, `AppConfig`, `LayoutPreset`, `DEFAULT_CONFIG`,
+  `isTerminalWindowsShell`); Node `fs`/`os`/`path`.
 - **Forbidden:** importing feature siblings or `host`; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys or old schemas; or reading, rewriting, or deleting old host layout snapshots.
 
 Config validation normalizes the closed theme mode plus complete opaque system pair, the closed
-composer-growth preference, chat/file line widths plus their pane-bound switches, and the JetBrains quota
-boolean + whole `1–3600` second cadence over their defaults; it accepts only the current bounded
+composer-growth preference, the closed Windows terminal-shell preference (invalid/absent →
+`DEFAULT_CONFIG.terminalWindowsShell`), chat/file line widths plus their pane-bound switches, and the
+JetBrains quota boolean + whole `1–3600` second cadence over their defaults; it accepts only the current bounded
 `customLayoutPresets` catalog as synchronized layout data. Current/default preset ids, group limits, and
 chat message order are not config fields; retired config shapes are stripped rather than upgraded or
 preserved as extensions. Historical `layouts/` files remain untouched and inert.
