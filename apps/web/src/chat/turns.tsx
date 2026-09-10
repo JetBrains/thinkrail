@@ -10,12 +10,7 @@ import {
 	RiAlertLine as TriangleAlert,
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
-import type {
-	ImageContent,
-	ReviewFixComment,
-	ReviewFixDetails,
-	UserMessage,
-} from "@thinkrail/contracts";
+import type { ImageContent, ReviewFixDetails, UserMessage } from "@thinkrail/contracts";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
 import { CustomIcon } from "@/components/CustomIcon";
 import { Button } from "@/components/ui/button";
@@ -33,7 +28,8 @@ import { CopyButton } from "./CopyButton";
 import { FileChip } from "./FileChip";
 import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
-import { parseReviewPackage, type ReviewPackageItem, reviewPackageLabel } from "./reviewPackage";
+import { ReviewPackageComments } from "./ReviewPackageComments";
+import { parseReviewPackage, reviewFixCommentsToItems, reviewPackageLabel } from "./reviewPackage";
 import type { ChatRow, TurnDividerData } from "./rows";
 import { formatElapsed, formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
@@ -280,11 +276,7 @@ function UserTurn({
 						<span data-testid="review-package-summary" className="block text-text-default">
 							{reviewPackageLabel(review)}
 						</span>
-						<ul className="mt-4 flex flex-col">
-							{keyPackageItems(review.items).map(({ key, item }) => (
-								<PackageCommentRow key={key} foldId={`${id}:${key}`} item={item} />
-							))}
-						</ul>
+						<ReviewPackageComments foldPrefix={id} items={review.items} />
 					</div>
 				</div>
 			</div>
@@ -404,28 +396,8 @@ function SkillInvocationCard({
 	);
 }
 
-function reviewFixLineRef(c: ReviewFixComment): string {
-	const loc =
-		c.startLine === undefined
-			? ""
-			: c.endLine === undefined || c.endLine === c.startLine
-				? `L${c.startLine}`
-				: `L${c.startLine}\u2013${c.endLine}`;
-	if (c.path && loc) return `${c.path} ${loc}`;
-	return c.path ?? loc;
-}
-
-function reviewFixPackageItems(details: ReviewFixDetails): ReviewPackageItem[] {
-	return details.comments.map((c) => ({
-		path: c.path ?? null,
-		lineRef: reviewFixLineRef(c),
-		fragment: null,
-		body: c.body,
-	}));
-}
-
 function ReviewFixCard({ id, details }: { id: string; details: ReviewFixDetails }) {
-	const items = reviewFixPackageItems(details);
+	const items = reviewFixCommentsToItems(details.comments);
 	const noun = details.comments.length === 1 ? "finding" : "findings";
 	const summary =
 		details.comments.length > 0
@@ -447,63 +419,8 @@ function ReviewFixCard({ id, details }: { id: string; details: ReviewFixDetails 
 					{details.note}
 				</p>
 			) : null}
-			{items.length > 0 ? (
-				<ul className="mt-4 flex flex-col">
-					{keyPackageItems(items).map(({ key, item }) => (
-						<PackageCommentRow key={key} foldId={`${id}:${key}`} item={item} />
-					))}
-				</ul>
-			) : null}
+			{items.length > 0 ? <ReviewPackageComments foldPrefix={id} items={items} /> : null}
 		</div>
-	);
-}
-
-function keyPackageItems(items: ReviewPackageItem[]): { key: string; item: ReviewPackageItem }[] {
-	const seen = new Map<string, number>();
-	return items.map((item) => {
-		const base = `${item.lineRef}·${item.body}`;
-		const n = (seen.get(base) ?? 0) + 1;
-		seen.set(base, n);
-		return { key: `${base}·${n}`, item };
-	});
-}
-
-function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPackageItem }) {
-	const [expanded, toggle, toggleRef] = useFold(foldId);
-	return (
-		<li data-testid="review-package-item" data-chat-fold-root data-expanded={expanded}>
-			<button
-				ref={toggleRef}
-				type="button"
-				data-testid="review-package-item-toggle"
-				aria-expanded={expanded}
-				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-start gap-4 rounded-[var(--radius-sm)] px-4 py-4 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
-			>
-				<ChevronRight
-					className={cn(
-						"mt-2 size-16 shrink-0 text-text-subtle transition-transform",
-						expanded && "rotate-90",
-					)}
-				/>
-				{item.lineRef && (
-					<span className="shrink-0 tr-code-text text-text-subtle">{item.lineRef}</span>
-				)}
-				<span
-					className={cn(
-						"min-w-0 flex-1 text-text-default",
-						expanded ? "whitespace-pre-wrap" : "truncate",
-					)}
-				>
-					{item.body}
-				</span>
-			</button>
-			{expanded && item.fragment && (
-				<pre className="mb-4 ml-16 max-h-128 overflow-auto whitespace-pre-wrap rounded-[var(--radius-sm)] border border-border-muted bg-sunken px-8 py-4 tr-code-text text-text-muted">
-					{item.fragment}
-				</pre>
-			)}
-		</li>
 	);
 }
 

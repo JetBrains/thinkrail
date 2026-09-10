@@ -760,3 +760,34 @@ export interface ReviewFixDetails {
 	note?: string;
 	comments: ReviewFixComment[];
 }
+
+export type PlanReviewVerdict = "approve" | "request_changes";
+
+/** Result of the worker-invoked request_review tool (Option A): a review subagent's structured verdict on
+ * a plan step. Carried as the tool result's `details`, rendered by the request_review card, and written to
+ * the item's review record. See task-plan-review-delegation + submodule-server-todos. */
+export interface PlanReviewResult {
+	itemId: string;
+	itemTitle: string;
+	verdict: PlanReviewVerdict;
+	reviewedSha?: string;
+	/** The reviewer's one-paragraph rationale (shown on the card). */
+	summary?: string;
+	findings: ReviewFixComment[];
+}
+
+export const PLAN_REVIEW_VERDICTS: readonly PlanReviewVerdict[] = ["approve", "request_changes"];
+
+/** Validate the review subagent's parsed JSON verdict (untrusted — model output). Findings are shape-
+ * checked leniently: each needs an id + body; path/lines are optional. */
+export function isPlanReviewResult(value: unknown): value is PlanReviewResult {
+	if (!value || typeof value !== "object") return false;
+	const r = value as Partial<PlanReviewResult>;
+	if (typeof r.itemId !== "string" || typeof r.itemTitle !== "string") return false;
+	if (typeof r.verdict !== "string" || !PLAN_REVIEW_VERDICTS.includes(r.verdict)) return false;
+	if (r.summary !== undefined && typeof r.summary !== "string") return false;
+	if (!Array.isArray(r.findings)) return false;
+	return r.findings.every(
+		(f) => !!f && typeof f === "object" && typeof f.id === "string" && typeof f.body === "string",
+	);
+}

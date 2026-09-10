@@ -17,6 +17,7 @@ import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import specGraphExtension from "pi-spec-graph";
 import { askUserQuestionExtension } from "./askUserQuestion";
 import { oversizedImageGuard } from "./imageGuard";
+import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
 import {
@@ -194,6 +195,7 @@ export async function buildResourceLoader(
 		headlessSearchPolicy,
 		askUserQuestionExtension,
 		reviewToolExtension,
+		requestReviewExtension,
 		oversizedImageGuard,
 		...extraFactories,
 	];

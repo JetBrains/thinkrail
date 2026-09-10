@@ -16,6 +16,7 @@ export {
 	getReviewSnapshot,
 	markCommentsSent,
 	markFileDone,
+	publishReview,
 	REVIEW_LEVEL_KEY,
 	reanchorWorkspace,
 	removeWorkspaceReviews,

@@ -173,6 +173,7 @@ import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
+import { startPlanReviewInBackground } from "./requestReview";
 import { withReviewLock } from "./reviewLock";
 import {
 	claimItemFix,
@@ -180,8 +181,6 @@ import {
 	itemFixFindings,
 	markClientStale,
 	releaseItemFix,
-	startReviewAllFlow,
-	startTodoReviewFlow,
 } from "./todoReview";
 
 const log = logger("host");
@@ -443,10 +442,32 @@ const handlers: Record<string, Handler> = {
 	},
 	"todo.review": (params) =>
 		approveTodoReview(params as { workspaceId: string; sessionId: string; id: string }),
-	"todo.startReview": (params) =>
-		startTodoReviewFlow(params as { workspaceId: string; sessionId: string; id: string }),
-	"todo.reviewAll": (params) =>
-		startReviewAllFlow(params as { workspaceId: string; sessionId: string }),
+	"todo.startReview": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string; id: string };
+		const ws = getWorkspace(p.workspaceId);
+		if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath)))
+			throw new Error("This plan's chat is no longer on disk — can't review.");
+		startPlanReviewInBackground(p.workspaceId, p.sessionId, p.id);
+		return { reviewerSessionId: "" };
+	},
+	"todo.reviewAll": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string };
+		const ws = getWorkspace(p.workspaceId);
+		if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath)))
+			throw new Error("This plan's chat is no longer on disk — can't review.");
+		const plan = await listTodos({ workspaceId: p.workspaceId, sessionId: p.sessionId });
+		const items = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+		const targets = items.filter((it) => {
+			const r = it.review;
+			return (
+				r !== undefined &&
+				!(r.state === "reviewed" && (r.unreviewedShas?.length ?? 0) === 0) &&
+				r.reviewing !== true
+			);
+		});
+		for (const it of targets) startPlanReviewInBackground(p.workspaceId, p.sessionId, it.id);
+		return { total: targets.length };
+	},
 	"todo.requestFix": async (params) => {
 		const p = params as { workspaceId: string; sessionId: string; id: string; feedback: string };
 		if (!claimItemFix(p.sessionId, p.id))

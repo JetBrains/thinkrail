@@ -189,16 +189,16 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	await expect(verification).toHaveAttribute("data-status", "claimed");
 
 	// The header kebab holds the export + Review All actions (portaled to the body). Review All is enabled
-	// while an unsettled reviewable item exists.
+	// while an unsettled reviewable item exists (clicking it asks the worker to run request_review).
 	await pane.getByTestId("plan-menu").click();
 	await expect(page.getByTestId("plan-copy-markdown")).toBeVisible();
 	await expect(page.getByTestId("plan-save-markdown")).toBeVisible();
 	await expect(page.getByTestId("plan-review-all")).not.toHaveAttribute("data-disabled", "");
 	await page.keyboard.press("Escape");
 
-	// The unsettled step: the row's review slot holds the primary Start review button (the AGENT
-	// review entry point — clicking it would spawn the reviewer chat, an @agent concern); the
-	// change-set disclosure carries no second one. No manual verdict UI exists beside it.
+	// The unsettled step: the row's review slot holds the primary Start review button (clicking it asks the
+	// worker to run request_review — an @agent concern); the change-set disclosure carries no second one.
+	// No manual verdict UI exists beside it.
 	await expect(openItem).toHaveAttribute("data-reviewed", "false");
 	await openItem.getByTestId("plan-change-set-toggle").click();
 	await expect(openItem.getByTestId("plan-start-review")).toHaveCount(1);

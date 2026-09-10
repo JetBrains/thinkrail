@@ -7,6 +7,7 @@ import {
 	isDelegationRunDetails,
 	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
+	isPlanReviewResult,
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
 	REQUEST_IMAGE_BASE64_BUDGET,
@@ -41,6 +42,29 @@ describe("isRetriedAttempt", () => {
 	test("an intervening toolResult breaks adjacency — pi's _prepareRetry re-runs the turn directly, so anything between the two means this was not a retry", () => {
 		const toolResult = { role: "toolResult" };
 		expect(isRetriedAttempt([userMsg, failed, toolResult, ok], 1)).toBe(false);
+	});
+});
+
+describe("isPlanReviewResult", () => {
+	const ok = {
+		itemId: "t_1",
+		itemTitle: "Wire login",
+		verdict: "request_changes",
+		summary: "one off-by-one",
+		findings: [{ id: "c_1", kind: "inline", body: "off-by-one", path: "a.ts", startLine: 3 }],
+	};
+
+	test("accepts a well-formed verdict with findings", () => {
+		expect(isPlanReviewResult(ok)).toBe(true);
+		expect(isPlanReviewResult({ ...ok, verdict: "approve", findings: [] })).toBe(true);
+	});
+
+	test("rejects bad verdict, missing fields, and malformed findings", () => {
+		expect(isPlanReviewResult({ ...ok, verdict: "maybe" })).toBe(false);
+		expect(isPlanReviewResult({ ...ok, itemId: 1 })).toBe(false);
+		expect(isPlanReviewResult({ ...ok, findings: "nope" })).toBe(false);
+		expect(isPlanReviewResult({ ...ok, findings: [{ id: "c_1" }] })).toBe(false);
+		expect(isPlanReviewResult(null)).toBe(false);
 	});
 });
 

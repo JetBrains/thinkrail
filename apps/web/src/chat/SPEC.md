@@ -180,7 +180,10 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   delivers to the worker chat as **structured `ReviewFixDetails`** (not a synthetic user turn). Rendered as
   a compact `ReviewFixCard` (`turns.tsx`, `data-testid="review-fix-card"`) — a one-line summary
   (`Requested a fix on “<title>” · N findings`), the optional feedback note, and the findings as
-  fold-out `PackageCommentRow`s (reused from the review-package card, path/lines pre-resolved server-side).
+  fold-out comments via the shared `ReviewPackageComments` (`ReviewPackageComments.tsx`, the fold-out
+  row primitive), path/lines pre-resolved server-side. That shared list + the `ReviewFixComment`→
+  `ReviewPackageItem` mapping (`reviewPackage.ts`) are reused by the review-package card and the
+  `request_review` verdict card ([[submodule-chat-tools]]).
   Distinct from the file-chat review-comments card above: that path stays a `<review …>` **user** message
   parsed by `reviewPackage.ts` (own `review-package-*` testids); only the todo-fix path is structured.
   Never folded into activity groups.

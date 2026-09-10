@@ -89,6 +89,7 @@ import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
+import { installRequestReviewSeam } from "./requestReview";
 import { resolveSubagentsEnabled } from "./subagentPolicy";
 import { terminalDeliveryForSendStatus } from "./terminalSend";
 import {
@@ -494,6 +495,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		resolvedBody: resolveCommentFromAgent(sessionId, commentId, note).body,
 	}));
 	installTodoReviewSeams();
+	installRequestReviewSeam();
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config) => {

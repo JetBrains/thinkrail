@@ -1,4 +1,9 @@
-import type { PiEvent, SessionEventPayload, TodoPlan } from "@thinkrail/contracts";
+import type {
+	PiEvent,
+	ReviewChangedPayload,
+	SessionEventPayload,
+	TodoPlan,
+} from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
@@ -95,11 +100,17 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			if (event.sessionId !== sessionId && event.sessionId !== reviewerRef.current) return;
 			if (shouldRefreshTodos(event.event)) scheduleRefetch();
 		});
+		// A plan review runs as a hidden subagent (no piEvent for this session) and writes its verdict to the
+		// review record; the host re-broadcasts reviewChanged when it lands, so refetch the plan to show it.
+		const unsubscribeReview = getTransport().subscribe(WS_CHANNELS.reviewChanged, (payload) => {
+			if ((payload as ReviewChangedPayload).workspaceId === workspaceId) scheduleRefetch();
+		});
 		return () => {
 			cancelled = true;
 			readGeneration.current += 1;
 			if (refetch) clearTimeout(refetch);
 			unsubscribe();
+			unsubscribeReview();
 		};
 	}, [connectionGeneration, identity, live, sessionId, status, workspaceId]);
 

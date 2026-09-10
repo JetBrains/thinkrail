@@ -4,6 +4,7 @@ import { buildSessionContext, SessionManager } from "@earendil-works/pi-coding-a
 import {
 	type DelegationRunStatus,
 	isTranscriptMessageRole,
+	type ThinkingLevel,
 	type TranscriptMessage,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -11,6 +12,7 @@ import {
 	createDelegationService,
 	type DelegationService,
 	deriveChildSessionFile,
+	type RunStatus,
 } from "pi-delegation";
 import { createSubagentsExtension } from "pi-subagents";
 import { dataDir } from "../persistence";
@@ -95,4 +97,50 @@ export function readChildTranscript(
 	) as TranscriptMessage[];
 	const status = services.get(workspaceId)?.findChild(childSessionId)?.snapshot?.status;
 	return { messages, ...(status !== undefined ? { status } : {}) };
+}
+
+export interface ReviewSubagentRun {
+	childSessionId: string;
+	status: RunStatus;
+	finalText?: string;
+}
+
+/**
+ * Spawn the plan-review subagent as a hidden, ephemeral delegation child (V1: hidden + fresh + explicit
+ * session), await its run, and dispose it. The child runs with OUR reviewer role (systemPrompt + tool set)
+ * and returns its final text — the host parses the structured verdict from it. See task-plan-review-delegation.
+ */
+export async function runReviewSubagent(
+	workspaceId: string,
+	parentSessionId: string,
+	task: string,
+	role: {
+		systemPrompt: string;
+		tools: string[];
+		model?: { provider: string; id: string };
+		thinkingLevel?: ThinkingLevel;
+	},
+	signal?: AbortSignal,
+): Promise<ReviewSubagentRun> {
+	const child = await delegationServiceFor(workspaceId).createChild({
+		parent: parentSessionId,
+		info: { createdBy: "tool:request_review", roleName: "plan-reviewer" },
+		visibility: "hidden",
+		session: {
+			systemPrompt: role.systemPrompt,
+			tools: role.tools,
+			...(role.model ? { model: role.model } : {}),
+			...(role.thinkingLevel ? { thinkingLevel: role.thinkingLevel } : {}),
+		},
+	});
+	try {
+		const outcome = await child.runQueued(task, signal ? { signal } : {});
+		return {
+			childSessionId: child.sessionId,
+			status: outcome.status,
+			...(outcome.finalText !== undefined ? { finalText: outcome.finalText } : {}),
+		};
+	} finally {
+		await child.dispose().catch(() => {});
+	}
 }
