@@ -3019,6 +3019,23 @@ test("applyConfig folds and normalizes the server-synced theme preference", () =
 	});
 });
 
+test("applyConfig projects and validates the Windows terminal shell", () => {
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		terminalWindowsShell: "cmd",
+	});
+	expect(useAppStore.getState()).toHaveProperty("terminalWindowsShell", "cmd");
+
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		terminalWindowsShell: "future-shell",
+	} as unknown as AppConfig);
+	expect(useAppStore.getState()).toHaveProperty(
+		"terminalWindowsShell",
+		DEFAULT_CONFIG.terminalWindowsShell,
+	);
+});
+
 test("applyConfig projects the composer growth limit", () => {
 	useAppStore.getState().applyConfig({
 		...DEFAULT_CONFIG,

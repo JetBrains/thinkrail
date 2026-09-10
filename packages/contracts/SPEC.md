@@ -237,12 +237,15 @@ of the host.
   **`SUBAGENT_SETTINGS_PROTOCOL_VERSION`** pins the global/workspace controls to their v57 wire
   introduction so a later web client hides them against an older host without comparing against the moving
   latest protocol; **`JBCENTRAL_QUOTA_PROTOCOL_VERSION`** likewise pins the v59 quota read + settings;
+  **`WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`** pins the v62 Windows-shell setting so a later web client
+  hides it against a host that can preserve but cannot apply that config field;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
-  the wire at protocol v61. `terminalWindowsShell` (`"auto" | "pwsh" | "powershell" | "cmd"`, default
-  `"auto"`) is read only by `server/terminal` on Windows and ignored elsewhere — see
+  the wire at protocol v61 and `terminalWindowsShell` at v62. `terminalWindowsShell`
+  (`"auto" | "pwsh" | "powershell" | "cmd"`, default `"auto"`) is read only by `server/terminal` on
+  Windows and ignored elsewhere — see
   `submodule-server-terminal`'s shell-selection decision for what each value spawns. `themeMode` defaults to `"fixed"` and no pair, preserving both legacy configs
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
   behavior), overridden only by `Workspace.subagentsOverride`; `customLayoutPresets` is the bounded

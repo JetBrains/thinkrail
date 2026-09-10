@@ -366,13 +366,17 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   Defaults remain fixed `DEFAULT_CONFIG.theme` with no pair, but while existing `welcomeGeneration === 0`
   shell retains the pre-React preference hint instead of applying those placeholders over it. Reusing that
   readiness edge avoids a second derived config-hydration flag; after the first welcome, disconnect/reconnect
-  keeps the last authoritative config while a later welcome can replace it. **`composerGrowthLimit: ComposerGrowthLimit`**,
+  keeps the last authoritative config while a later welcome can replace it. **`terminalReplayKb: number`**,
+  **`terminalWindowsShell: TerminalWindowsShell`**, **`composerGrowthLimit: ComposerGrowthLimit`**,
   **`chatLineWidth` / `fileLineWidth`**, their independent **`chatLineWidthBounded` /
   `fileLineWidthBounded`** switches, **`customLayoutPresets: LayoutPreset[]`**,
   **`analyticsEnabled: boolean`**, **`subagentsEnabled: boolean`**, **`jbcentralQuotaEnabled: boolean`**,
   and **`jbcentralQuotaRefreshSeconds: number`** ride the same `applyConfig` fold (host-owned, fieldwise
   defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
-  geometry) — the Line width, Chat, shared Layout catalog, Privacy, provider controls, and shell quota read sides.
+  the store). `terminalWindowsShell` narrows through `isTerminalWindowsShell` and otherwise uses
+  `DEFAULT_CONFIG.terminalWindowsShell`; `TerminalSettings` consumes both terminal fields, while terminal
+  spawning remains server-owned — the Terminal, Line width, Chat, shared Layout catalog, Privacy, provider
+  controls, and shell quota read sides.
   **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
   StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by
   the chat preference seam from host-qualified browser localStorage or the native shell's injected

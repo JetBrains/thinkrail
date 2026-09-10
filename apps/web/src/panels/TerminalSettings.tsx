@@ -1,6 +1,6 @@
 import { RiCheckLine as Check } from "@remixicon/react";
 import type { HostPlatform, TerminalWindowsShell } from "@thinkrail/contracts";
-import { TERMINAL_REPLAY_KB } from "@thinkrail/contracts";
+import { TERMINAL_REPLAY_KB, WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
@@ -48,14 +48,22 @@ const WINDOWS_SHELL_CHOICES: SettingsRadioChoice<TerminalWindowsShell>[] = [
 /** Windows-only; props-driven so it stays testable under `renderToStaticMarkup` (see panels/SPEC.md). */
 export function WindowsShellSettings({
 	platform,
+	protocolVersion,
 	value,
 	onSelect,
 }: {
 	platform: HostPlatform | null;
+	protocolVersion: number | null;
 	value: TerminalWindowsShell;
 	onSelect: (shell: TerminalWindowsShell) => void;
 }) {
-	if (platform !== "win32") return null;
+	if (
+		platform !== "win32" ||
+		protocolVersion === null ||
+		protocolVersion < WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION
+	) {
+		return null;
+	}
 	return (
 		<div className="flex flex-col gap-8 border-border-default border-t pt-16">
 			<div className="flex flex-col gap-4">
@@ -79,6 +87,7 @@ export function TerminalSettings() {
 	const replayKb = useAppStore((s) => s.terminalReplayKb);
 	const windowsShell = useAppStore((s) => s.terminalWindowsShell);
 	const hostPlatform = useAppStore((s) => s.hostPlatform);
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
 
 	const select = (kb: number) => {
 		if (kb === replayKb) return;
@@ -134,6 +143,7 @@ export function TerminalSettings() {
 
 			<WindowsShellSettings
 				platform={hostPlatform}
+				protocolVersion={protocolVersion}
 				value={windowsShell}
 				onSelect={selectWindowsShell}
 			/>

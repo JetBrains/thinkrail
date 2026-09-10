@@ -478,9 +478,11 @@ a project picker, the prompt hero, and the reused
   global nor imports the update capability, while ordinary browsers therefore have no Update row);
   **`TerminalSettings`** — a **Replayed output** size picker (`store.terminalReplayKb`, five presets from
   Off to 1 MB, `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on
-  Windows only (`store.hostPlatform === "win32"`), a **Windows shell** picker (Auto / PowerShell 7 (pwsh) /
-  Windows PowerShell / Command Prompt, `settings.update { terminalWindowsShell }` — see
-  `submodule-server-terminal`'s shell-selection decision for what each choice spawns). The Windows-shell
+  Windows hosts at `protocolVersion >= WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`, a **Windows shell** picker
+  (Auto / PowerShell 7 (pwsh) / Windows PowerShell / Command Prompt,
+  `settings.update { terminalWindowsShell }` — see `submodule-server-terminal`'s shell-selection decision
+  for what each choice spawns). The protocol gate keeps a newer independently shipped client from presenting
+  a setting an older host preserves but does not act on. The Windows-shell
   half is split into a **props-driven** `WindowsShellSettings` component rather than reading the store
   inline like the replay picker: zustand's React binding feeds `renderToStaticMarkup` its frozen
   `getInitialState()` snapshot (`useSyncExternalStore`'s `getServerSnapshot` argument), never a test's

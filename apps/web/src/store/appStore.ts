@@ -40,6 +40,7 @@ import {
 	isControlMessage,
 	isLineWidth,
 	isSubagentCompletionMessage,
+	isTerminalWindowsShell,
 	normalizeThemePreference,
 } from "@thinkrail/contracts";
 import { create } from "zustand";
@@ -1020,7 +1021,9 @@ function configPatch(config: AppConfig) {
 		jbcentralQuotaRefreshSeconds:
 			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 		terminalReplayKb: config.terminalReplayKb,
-		terminalWindowsShell: config.terminalWindowsShell ?? DEFAULT_CONFIG.terminalWindowsShell,
+		terminalWindowsShell: isTerminalWindowsShell(config.terminalWindowsShell)
+			? config.terminalWindowsShell
+			: DEFAULT_CONFIG.terminalWindowsShell,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
 		chatLineWidth: isLineWidth(config.chatLineWidth)
 			? config.chatLineWidth
