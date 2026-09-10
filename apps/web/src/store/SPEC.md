@@ -411,7 +411,7 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   presentation preference, hydrated and persisted by `shell/layoutState` under the same browser
   endpoint/surface or native backend-profile/window identity as the frame. It defaults independently to
   `chat-popover`; only `layoutState`'s atomic mode transition installs a new value together with the required
-  frame hide/restore result, and `applyConfig` can never overwrite it.
+  frame hide/restore and per-workspace initial tool-selection result, and `applyConfig` can never overwrite it.
   **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
   StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by
   the chat preference seam from host-qualified browser localStorage or the native shell's injected

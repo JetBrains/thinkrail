@@ -4,6 +4,7 @@ import {
 	BUILTIN_LAYOUT_PRESETS,
 	closeLayoutTab,
 	collectAllGroups,
+	findTabLocation,
 	resizeBottomRegion,
 	resizeSideRegion,
 	toolTab,
@@ -156,6 +157,18 @@ describe("frontend-local layout state", () => {
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
 		await ensureWorkspaceLayoutState("workspace");
+		await ensureWorkspaceLayoutState("retained");
+		for (const [workspaceId, sessionId] of [
+			["workspace", "session-a"],
+			["retained", "session-b"],
+		] as const) {
+			const attention = useAppStore.getState().layoutAttentionByWorkspace[workspaceId];
+			if (!attention) throw new Error(`missing ${workspaceId} attention`);
+			useAppStore.getState().setLayoutAttention(workspaceId, {
+				...attention,
+				lastFocusedChatSessionId: sessionId,
+			});
+		}
 		let transitions = 0;
 		const unsubscribe = useAppStore.subscribe(() => {
 			transitions += 1;
@@ -171,6 +184,32 @@ describe("frontend-local layout state", () => {
 				group.tabs.filter((tab) => tab.kind === "tool").map((tab) => tab.tool),
 			),
 		).toEqual(["specs", "files", "changes", "todos", "review"]);
+		for (const [workspaceId, sessionId] of [
+			["workspace", "session-a"],
+			["retained", "session-b"],
+		] as const) {
+			const document = state.layoutDocumentsByWorkspace[workspaceId];
+			const attention = state.layoutAttentionByWorkspace[workspaceId];
+			if (!document || !attention) throw new Error(`missing ${workspaceId} layout`);
+			const location = findTabLocation(document, "tool:todos");
+			if (!location || location.area === "center") throw new Error("missing TODO placement");
+			expect(attention.selectedByGroup[location.groupId]).toBe("tool:todos");
+			expect(attention.lastFocusedSideGroupId[location.area]).toBe(location.groupId);
+			expect(attention.lastFocusedChatSessionId).toBe(sessionId);
+		}
+		await ensureWorkspaceLayoutState("future");
+		state = useAppStore.getState();
+		const futureDocument = state.layoutDocumentsByWorkspace.future;
+		const futureAttention = state.layoutAttentionByWorkspace.future;
+		if (!futureDocument || !futureAttention) throw new Error("missing future layout");
+		const futureLocation = findTabLocation(futureDocument, "tool:todos");
+		if (!futureLocation || futureLocation.area === "center") {
+			throw new Error("missing future TODO placement");
+		}
+		expect(futureAttention.selectedByGroup[futureLocation.groupId]).toBe("tool:todos");
+		expect(futureAttention.lastFocusedSideGroupId[futureLocation.area]).toBe(
+			futureLocation.groupId,
+		);
 
 		const placed = state.layoutDocumentsByWorkspace.workspace;
 		if (!placed) throw new Error("missing workspace layout");

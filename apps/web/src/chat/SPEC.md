@@ -987,9 +987,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   scheme would be dead; interactive navigation is the plan page's job), and `ChatPlan`
   (`ChatPlanStripContent` + `ChatPlanContent` — the header receipt and its default popover). The
   client-local `todoViewMode` chooses one compact surface exclusively: `chat-popover` (the compatibility
-  default) composes the existing `Popover` flush below each chat header; `side-tool` omits that popover and
-  makes the same receipt reveal/focus the movable TODO singleton through a `reveal-tool` intent. The receipt
-  keeps its progress + working/waiting/paused status in both modes, but carries disclosure treatment only
+  default) composes the existing `Popover` flush below each chat header; `side-tool` omits that popover while
+  shell activates the movable TODO singleton automatically across workspaces. The same receipt remains a
+  `reveal-tool` path after an explicit close. The receipt keeps its progress + working/waiting/paused status
+  in both modes, but carries disclosure treatment only
   when it actually opens the popover. The setting and follower identity belong to store/shell/panels; the
   compact rows remain props-driven here.
   The plan *page* remains a session-pinned center tab and a document-scale view of the same plan in both

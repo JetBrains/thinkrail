@@ -106,12 +106,13 @@ test("the side TODO tool preserves placement while following chat focus independ
 	const headerReceipt = page.getByTestId("chat-plan-toggle");
 	await expect(headerReceipt).toBeVisible();
 	await expect(headerReceipt.getByTestId("chat-plan-disclosure")).toHaveCount(0);
-	await page.getByTestId("tab-changes").click();
-	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
-	await headerReceipt.click();
 	await expect(page.getByTestId("chat-plan-popover")).toHaveCount(0);
 	await expect(page.getByTestId("tab-todos")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("todo-panel")).toHaveAttribute("data-session-id", chat1Id);
+	await page.getByTestId("tab-changes").click();
+	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
+	await page.getByTestId("tab-todos").click();
+	await expect(page.getByTestId("tab-todos")).toHaveAttribute("data-active", "true");
 
 	const manualGroupId = await moveTodoToOwnGroup(page);
 	await setTodoView(page, "chat-popover");
@@ -120,6 +121,7 @@ test("the side TODO tool preserves placement while following chat focus independ
 
 	await setTodoView(page, "side-tool");
 	await expect(todoGroup(page)).toHaveAttribute("data-group-id", manualGroupId);
+	await expect(page.getByTestId("tab-todos")).toHaveAttribute("data-active", "true");
 	await expect(headerReceipt.getByTestId("chat-plan-disclosure")).toHaveCount(0);
 
 	await page.getByTestId("tab-todos").click({ button: "right" });

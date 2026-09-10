@@ -73,10 +73,12 @@ Resource opens route to that workspace's last-focused surviving center group. Re
 
 Shell owns the exclusive projection of the client-local TODO view preference. `chat-popover` (default)
 keeps TODO out of the auxiliary tool catalog and lets each chat header own its current popover; `side-tool`
-removes those popovers and allows the same header receipt to reveal the movable TODO singleton. A mode change
-uses `layoutState`'s one atomic frame+preference transition, preserving the tool's prior location without
-moving a center resource. Shell injects the controlled mode + transition into panels-owned Chat settings, so
-no panel imports shell or mutates frame state. The TODO renderer resolves the store's validated last-focused-chat target for this workspace; the
+removes those popovers and activates the movable TODO singleton in every retained workspace; a workspace
+first entered in that mode also starts with TODO active when the tool is placed. A mode change uses
+`layoutState`'s one atomic frame+attention+preference transition, preserving the tool's prior location without
+moving a center resource. Later manual tool selection is respected, and an explicit close remains hidden
+across focus, workspace switches, and reload; the header receipt remains its manual reveal path. Shell injects
+the controlled mode + transition into panels-owned Chat settings, so no panel imports shell or mutates frame state. The TODO renderer resolves the store's validated last-focused-chat target for this workspace; the
 shell never invents a workspace-level plan or host-side active chat.
 
 The layout persistence boundary is `layoutState`, not the store. Browsers qualify state by backend endpoint and frontend-surface identity; native windows use the injected stable string adapter's profile/window scope with a fixed key independent of the host's dynamic port. Both paths persist and decode the same bounded document. State is schema-validated on load and restored on reload or supported window-session restoration. Simultaneous windows do not observe each other's storage writes. A surface with no valid local document starts from the Balanced frame; old host snapshots and old browser attention keys are never read.

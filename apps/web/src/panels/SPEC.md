@@ -833,9 +833,11 @@ own section. The kebab menu (`plan-menu`, a
   current location and local selection are supplied by the shell; Review exposes its store-derived
   pending-draft count as tab metadata. TODO is eligible only in the client-local `side-tool` mode; every
   renderer remains the same when its singleton moves to the opposite side or bottom.
-- **`TodoPanel`** is the compact follower view, not a workspace plan. It resolves the store's one
-  last-focused-chat target for the active workspace and reads that exact `{ workspaceId, sessionId }`
-  through `chat/useChatTodos`. Its context row names the chat and `done / total`; beneath it are the shared
+- **`TodoPanel`** is the compact follower view, not a workspace plan. Side-tab mode makes it the initially
+  active auxiliary tab in every workspace while it remains placed, so it reads immediately without a
+  chat-header reveal. It resolves the store's one last-focused-chat target for the active workspace and reads
+  that exact `{ workspaceId, sessionId }` through `chat/useChatTodos`. Its context row names the chat and
+  `done / total`; beneath it are the shared
   add row, status-ordered group-first compact rows, and the action that opens the existing session-pinned
   `PlanPane`. Runtime glance metadata is usable only when its transcript was synchronized in the current
   connected generation; a missing or stale runtime renders the non-working `waiting` glance. A source change

@@ -15,6 +15,7 @@ import {
 	applyTodoViewModeToFrame,
 	applyWorkbenchPreset,
 	BUILTIN_LAYOUT_PRESETS,
+	collectAllGroups,
 	DEFAULT_LAYOUT_PRESET_ID,
 	DEFAULT_TODO_VIEW_MODE,
 	emptyWorkspaceView,
@@ -25,6 +26,7 @@ import {
 	minimumSideGroupLimit,
 	projectWorkspaceLayout,
 	reconcileAttention,
+	selectTab,
 	type TodoViewMode,
 	validateLayoutDocument,
 	type WorkbenchFrame,
@@ -583,6 +585,19 @@ function documentsForViews(
 	);
 }
 
+function activateTodoTool(
+	document: WorkspaceLayoutDocument,
+	attention: LayoutAttention,
+	todoViewMode: TodoViewMode,
+): LayoutAttention {
+	if (todoViewMode !== "side-tool") return attention;
+	for (const group of collectAllGroups(document)) {
+		const todo = group.tabs.find((tab) => tab.kind === "tool" && tab.tool === "todos");
+		if (todo) return selectTab(attention, group.location, todo.id, false);
+	}
+	return attention;
+}
+
 export function initializeLocalLayoutState(): Promise<void> {
 	if (initialization) return initialization;
 	const run = (async () => {
@@ -636,7 +651,11 @@ export function ensureWorkspaceLayoutState(workspaceId: string): Promise<Workspa
 				},
 				attentionByWorkspace: {
 					...state.layoutAttentionByWorkspace,
-					[workspaceId]: reconcileAttention(document, undefined),
+					[workspaceId]: activateTodoTool(
+						document,
+						reconcileAttention(document, undefined),
+						state.todoViewMode,
+					),
 				},
 				preferences: state.localLayoutPreferences,
 				todoViewMode: state.todoViewMode,
@@ -717,10 +736,14 @@ export function transitionTodoViewMode(todoViewMode: TodoViewMode): void {
 	const documentsByWorkspace = documentsForViews(frame, state.workspaceViewsByWorkspace);
 	const attentionByWorkspace: Record<string, LayoutAttention> = {};
 	for (const [workspaceId, document] of Object.entries(documentsByWorkspace)) {
-		attentionByWorkspace[workspaceId] = reconcileAttention(
+		attentionByWorkspace[workspaceId] = activateTodoTool(
 			document,
-			state.layoutAttentionByWorkspace[workspaceId],
-			state.layoutDocumentsByWorkspace[workspaceId],
+			reconcileAttention(
+				document,
+				state.layoutAttentionByWorkspace[workspaceId],
+				state.layoutDocumentsByWorkspace[workspaceId],
+			),
+			todoViewMode,
 		);
 	}
 	const changedWorkspaceIds = Object.keys(documentsByWorkspace);
