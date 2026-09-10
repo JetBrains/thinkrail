@@ -54,14 +54,14 @@ const CHANGES: PlanReviewResult = {
 	],
 };
 
-test("composeText honors reviewAutoFix: on tells the worker to fix, off tells it to wait", () => {
+test("composeText tracks the fix budget: a live cycle tells the worker to fix, a spent one to wait", () => {
 	const on = composeText(CHANGES, true);
 	expect(on).toContain("REQUEST_CHANGES");
 	expect(on).toContain("request_review again");
 	expect(on).toContain("[f1] (a.ts:4-6) off-by-one");
 
 	const off = composeText(CHANGES, false);
-	expect(off).toContain("Auto-fix is off");
+	expect(off).toContain("spent or auto-fix is off");
 	expect(off).toContain("do NOT fix now");
 	expect(off).not.toContain("request_review again");
 });

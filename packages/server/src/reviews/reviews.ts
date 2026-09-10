@@ -388,19 +388,6 @@ export async function updateComment(input: {
 	});
 }
 
-export async function setReflection(
-	workspaceId: string,
-	commentId: string,
-	reflection: NonNullable<ReviewComment["reflection"]>,
-): Promise<ReviewComment> {
-	return mutateSnapshot(workspaceId, (snapshot) => {
-		const comment = mustFind(snapshot, commentId);
-		comment.reflection = reflection;
-		persistAndPublish(workspaceId, snapshot);
-		return comment;
-	});
-}
-
 export async function deleteComment(workspaceId: string, id: string): Promise<void> {
 	return mutateSnapshot(workspaceId, (snapshot) => {
 		const comment = mustFind(snapshot, id);

@@ -108,7 +108,7 @@ export interface ReviewSubagentRun {
 /**
  * Spawn the plan-review subagent as a hidden, ephemeral delegation child (V1: hidden + fresh + explicit
  * session), await its run, and dispose it. The child runs with OUR reviewer role (systemPrompt + tool set)
- * and returns its final text — the host parses the structured verdict from it. See task-plan-review-delegation.
+ * and returns its final text — the host parses the structured verdict from it. See submodule-server-host-plan-review.
  */
 export async function runReviewSubagent(
 	workspaceId: string,
