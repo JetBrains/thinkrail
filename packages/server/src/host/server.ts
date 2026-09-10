@@ -95,6 +95,7 @@ import {
 	setupObservation,
 } from "./productAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
+import { installRequestReviewSeam } from "./requestReview";
 import { runObservation } from "./runAnalytics";
 import { resolveSubagentsEnabled } from "./subagentPolicy";
 import { taskObservation } from "./taskAnalytics";
@@ -514,6 +515,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		resolvedBody: resolveCommentFromAgent(sessionId, commentId, note).body,
 	}));
 	installTodoReviewSeams();
+	installRequestReviewSeam();
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config) => {

@@ -54,7 +54,6 @@ import {
 } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
-import { openChatInTab } from "./openChat";
 import { openDiffInTab } from "./openTabs";
 import { PlanCommitsMenu } from "./PlanCommitsMenu";
 import { PrComposeDialog, type PrComposeState } from "./PrComposeDialog";
@@ -230,7 +229,6 @@ function ItemBlock({
 	onStartReview,
 	onOpenReview,
 	reviewComments,
-	reviewerSessionId,
 	startDisabled,
 	focusRequest,
 }: {
@@ -241,7 +239,6 @@ function ItemBlock({
 	onStartReview: (id: string) => Promise<void>;
 	onOpenReview: () => void;
 	reviewComments: ReviewComment[] | undefined;
-	reviewerSessionId?: string | undefined;
 	startDisabled: boolean;
 	focusRequest: { id: string; tick: number } | null;
 }) {
@@ -324,17 +321,13 @@ function ItemBlock({
 							</span>
 						)}
 						{reviewing ? (
-							<button
-								type="button"
+							<span
 								data-testid="plan-item-reviewing"
-								title="Open the reviewer's chat to watch the process"
-								onClick={() =>
-									reviewerSessionId && void openChatInTab(workspaceId, reviewerSessionId)
-								}
-								className="min-h-8 shrink-0 tr-text-metadata text-primary underline-offset-2 hover:underline"
+								title="A review subagent is reading this step…"
+								className="min-h-8 shrink-0 animate-pulse tr-text-metadata text-primary"
 							>
 								Reviewing…
-							</button>
+							</span>
 						) : changesRequested ? (
 							<button
 								type="button"
@@ -446,7 +439,6 @@ function GroupSection({
 	onStartReview,
 	onOpenReview,
 	reviewComments,
-	reviewerSessionId,
 	startDisabled,
 	focusRequest,
 }: {
@@ -457,7 +449,6 @@ function GroupSection({
 	onStartReview: (id: string) => Promise<void>;
 	onOpenReview: () => void;
 	reviewComments: ReviewComment[] | undefined;
-	reviewerSessionId?: string | undefined;
 	startDisabled: boolean;
 	focusRequest: { id: string; tick: number } | null;
 }) {
@@ -481,7 +472,6 @@ function GroupSection({
 						onStartReview={onStartReview}
 						onOpenReview={onOpenReview}
 						reviewComments={reviewComments}
-						reviewerSessionId={reviewerSessionId}
 						startDisabled={startDisabled}
 						focusRequest={focusRequest}
 					/>
@@ -1048,7 +1038,6 @@ export default function PlanPane({
 								onStartReview={startReview}
 								onOpenReview={onOpenReview}
 								reviewComments={reviewComments}
-								reviewerSessionId={data.reviewerSessionId}
 								startDisabled={reviewingAny}
 								focusRequest={focusRequest}
 							/>
@@ -1071,7 +1060,6 @@ export default function PlanPane({
 											onStartReview={startReview}
 											onOpenReview={onOpenReview}
 											reviewComments={reviewComments}
-											reviewerSessionId={data.reviewerSessionId}
 											startDisabled={reviewingAny}
 											focusRequest={focusRequest}
 										/>
