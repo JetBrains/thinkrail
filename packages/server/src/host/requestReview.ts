@@ -1,40 +1,48 @@
-import type { PlanReviewResult, ReviewFixComment } from "@thinkrail/contracts";
+import type { PlanReviewResult, ReviewComment, ReviewFixComment } from "@thinkrail/contracts";
 import { isPlanReviewResult } from "@thinkrail/contracts";
-import { getSessionWorkspaceId, runReviewSubagent, setRequestReviewHandler } from "../agent";
-import { addComment, anchorProblem, publishReview } from "../reviews";
+import type { Todo } from "pi-todos/core";
+import {
+	getSessionWorkspaceId,
+	notifyExtUi,
+	runReviewSubagent,
+	sendReviewFixToSession,
+	setRequestReviewHandler,
+} from "../agent";
+import {
+	addComment,
+	anchorProblem,
+	buildReviewFixDetails,
+	buildSendPackage,
+	getReviewSnapshot,
+	markCommentsSent,
+	publishReview,
+	rollbackSend,
+} from "../reviews";
 import { getConfig } from "../settings";
 import {
 	approveTodoReview,
 	cancelTodoReview,
 	listTodos,
 	recordAgentChangesRequested,
+	renderFixPackage,
 	startTodoReview,
+	todoReviewAutoCycles,
 } from "../todos";
+import { ackSend } from "./ackSend";
+import {
+	claimItemReview,
+	enqueuePlanReview,
+	itemReviewActive,
+	planReviewRunning,
+	releaseItemReview,
+} from "./planReviewQueue";
+import { REVIEWER_OUTPUT_CONTRACT, REVIEWER_SYSTEM_PROMPT, REVIEWER_TOOLS } from "./reviewerRole";
+import { withReviewLock } from "./reviewLock";
+import { claimItemFix, itemFixFindings, releaseItemFix } from "./todoReview";
 
-const REVIEWER_TOOLS = ["read", "grep", "find", "ls", "bash"];
+const DEFAULT_FIX_NOTE = "Address the reviewer's findings below.";
 
-const REVIEWER_SYSTEM_PROMPT = [
-	"You are an independent, read-only code reviewer for ONE completed plan step.",
-	"You never edit files. Inspect the step's change set (the commits/paths named in the task) with your",
-	"tools — read the actual files, run git as needed — and judge whether the change correctly and safely",
-	"does what the step claims, with no regressions, dead code, or unhandled cases.",
-	"",
-	"Be material: report only real problems (correctness, safety, missing cases, contract/spec violations),",
-	"not style nits. If the change is sound, approve.",
-	"",
-	"End your turn with EXACTLY ONE fenced json block and nothing after it:",
-	"```json",
-	'{ "verdict": "approve" | "request_changes",',
-	'  "summary": "one short paragraph on the overall judgement",',
-	'  "findings": [ { "id": "f1", "path": "src/x.ts", "startLine": 12, "endLine": 14, "body": "what is wrong and what to do" } ] }',
-	"```",
-	"Use verdict `approve` only when there are no blocking findings (findings may then be empty).",
-	"Every finding needs a stable `id` and a `body`; `path`/`startLine`/`endLine` are optional but include",
-	"them when the problem is at a location.",
-].join("\n");
-
-const OUTPUT_CONTRACT =
-	"Review the change set above. Reply with your verdict as the single fenced json block described in your instructions.";
+type ReviewParams = { workspaceId: string; sessionId: string; id: string };
 
 function itemTitleOf(workspaceId: string, sessionId: string, itemId: string): Promise<string> {
 	return listTodos({ workspaceId, sessionId }).then((plan) => {
@@ -71,7 +79,7 @@ export function parseVerdict(
 	return { ...candidate, findings };
 }
 
-export function composeText(result: PlanReviewResult, autoFix: boolean): string {
+export function composeText(result: PlanReviewResult, canAutoFix: boolean): string {
 	const findings =
 		result.findings.length > 0
 			? `\n\n${result.findings
@@ -88,16 +96,14 @@ export function composeText(result: PlanReviewResult, autoFix: boolean): string 
 		return `Review verdict: APPROVE — step "${result.itemTitle}".${rationale}${findings}`;
 	}
 	const head = `Review verdict: REQUEST_CHANGES — step "${result.itemTitle}".`;
-	const next = autoFix
+	const next = canAutoFix
 		? "Address each finding below (re-open the step, fix it, mark it done with a fresh commit), then request_review again."
-		: "Auto-fix is off: do NOT fix now. Report these findings to the user and wait for their direction.";
+		: "The automated fix cycle is spent or auto-fix is off: do NOT fix now. Report these findings to the user and wait for their direction.";
 	return `${head} ${next}${rationale}${findings}`;
 }
 
-type ReviewParams = { workspaceId: string; sessionId: string; id: string };
-
-/** File a reviewer finding into the Review tab (an inline comment when it anchors, else review-level) so
- * the button-triggered path shows findings without a chat card. Best-effort: a bad anchor never fails the review. */
+/** File a reviewer finding into the Review tab (an inline comment when it anchors, else review-level).
+ * Best-effort: a bad anchor never fails the review. */
 async function fileFinding(
 	params: ReviewParams,
 	reviewedSha: string,
@@ -136,18 +142,85 @@ async function fileFinding(
 	}
 }
 
-async function runAndRecordVerdict(
+/** Deliver the reviewer's findings to the worker chat as the structured `todo-review-fix` message, under
+ * the same mark-sent / pre-turn-rollback guarantee every review send has — see host/SPEC.md. */
+async function deliverFixToWorker(params: ReviewParams, item: Todo, note: string): Promise<void> {
+	try {
+		const prepared = await withReviewLock(params.workspaceId, async () => {
+			const snapshot = await getReviewSnapshot(params.workspaceId);
+			const findings: ReviewComment[] = await itemFixFindings(params);
+			const sentIds = findings.map((c) => c.id);
+			const fixPackage =
+				findings.length > 0 ? await buildSendPackage(params.workspaceId, findings) : null;
+			if (sentIds.length > 0) await markCommentsSent(params.workspaceId, sentIds, params.sessionId);
+			return {
+				sentIds,
+				text: fixPackage
+					? `${renderFixPackage(item, note)}\n\n${fixPackage}`
+					: renderFixPackage(item, note),
+				details: buildReviewFixDetails({
+					itemId: item.id,
+					itemTitle: item.title,
+					reviewId: snapshot.review.id,
+					note,
+					comments: findings,
+				}),
+			};
+		});
+		await ackSend(sendReviewFixToSession(params.sessionId, prepared.text, prepared.details)).catch(
+			(err: unknown) => {
+				if (prepared.sentIds.length > 0)
+					rollbackSend(params.workspaceId, prepared.sentIds, params.sessionId);
+				notifyExtUi(
+					params.sessionId,
+					`Fix send failed: ${err instanceof Error ? err.message : String(err)}`,
+					"error",
+				);
+			},
+		);
+	} finally {
+		releaseItemFix(params.sessionId, params.id);
+	}
+}
+
+async function recordVerdict(
+	params: ReviewParams,
+	result: PlanReviewResult,
+	reviewedSha: string,
+	deliverFix: boolean,
+): Promise<{ canAutoFix: boolean }> {
+	if (result.verdict === "approve") {
+		approveTodoReview(params, "agent");
+		return { canAutoFix: false };
+	}
+	for (const f of result.findings) await fileFinding(params, reviewedSha, f);
+	const spent = todoReviewAutoCycles(params) ?? 0;
+	const canAutoFix = getConfig().reviewAutoFix !== false && spent < 1;
+	const claimed = canAutoFix && deliverFix && claimItemFix(params.sessionId, params.id);
+	const { item } = recordAgentChangesRequested({
+		...params,
+		...(result.summary ? { note: result.summary } : {}),
+		autoCycles: canAutoFix ? 1 : 2,
+	});
+	if (claimed) await deliverFixToWorker(params, item, result.summary || DEFAULT_FIX_NOTE);
+	return { canAutoFix };
+}
+
+export type ReviewRunner = typeof runReviewSubagent;
+
+async function runReview(
 	params: ReviewParams,
 	pkg: string,
 	reviewedSha: string,
 	itemTitle: string,
 	signal: AbortSignal | undefined,
+	runSubagent: ReviewRunner,
 ): Promise<PlanReviewResult> {
 	const cfg = getConfig();
-	const run = await runReviewSubagent(
+	const run = await runSubagent(
 		params.workspaceId,
 		params.sessionId,
-		`${pkg}\n\n${OUTPUT_CONTRACT}`,
+		`${pkg}\n\n${REVIEWER_OUTPUT_CONTRACT}`,
 		{
 			systemPrompt: REVIEWER_SYSTEM_PROMPT,
 			tools: REVIEWER_TOOLS,
@@ -163,37 +236,7 @@ async function runAndRecordVerdict(
 	}
 	const parsed = parseVerdict(run.finalText, params.id, itemTitle);
 	if (!parsed) throw new Error("The review subagent did not return a valid verdict.");
-	if (parsed.verdict === "approve") {
-		approveTodoReview(params, "agent");
-	} else {
-		for (const f of parsed.findings) await fileFinding(params, reviewedSha, f);
-		recordAgentChangesRequested({
-			...params,
-			...(parsed.summary ? { note: parsed.summary } : {}),
-			autoCycles: 1,
-		});
-	}
 	return { ...parsed, ...(reviewedSha ? { reviewedSha } : {}) };
-}
-
-/** Run a plan-step review to completion (host-triggered, e.g. the Start review button): spawn the review
- * subagent as a child of the plan session, record the verdict, and file findings into the Review tab. */
-export async function runPlanReviewForItem(
-	sessionId: string,
-	itemId: string,
-	signal?: AbortSignal,
-): Promise<PlanReviewResult> {
-	const workspaceId = getSessionWorkspaceId(sessionId);
-	if (!workspaceId) throw new Error("This chat is not attached to a workspace.");
-	const params = { workspaceId, sessionId, id: itemId };
-	const { pkg, reviewedSha } = startTodoReview(params);
-	const itemTitle = await itemTitleOf(workspaceId, sessionId, itemId);
-	try {
-		return await runAndRecordVerdict(params, pkg, reviewedSha, itemTitle, signal);
-	} catch (err) {
-		cancelTodoReview(params);
-		throw err;
-	}
 }
 
 async function handleRequestReview(
@@ -201,33 +244,69 @@ async function handleRequestReview(
 	itemId: string,
 	signal: AbortSignal | undefined,
 ): Promise<{ result: PlanReviewResult; text: string }> {
-	const result = await runPlanReviewForItem(sessionId, itemId, signal);
-	return { result, text: composeText(result, getConfig().reviewAutoFix !== false) };
+	const workspaceId = getSessionWorkspaceId(sessionId);
+	if (!workspaceId) throw new Error("This chat is not attached to a workspace.");
+	if (!claimItemReview(sessionId, itemId)) throw new Error("This step is already being reviewed.");
+	const params = { workspaceId, sessionId, id: itemId };
+	const { pkg, reviewedSha } = startTodoReview(params);
+	try {
+		const itemTitle = await itemTitleOf(workspaceId, sessionId, itemId);
+		const result = await runReview(params, pkg, reviewedSha, itemTitle, signal, runReviewSubagent);
+		const { canAutoFix } = await recordVerdict(params, result, reviewedSha, false);
+		return { result, text: composeText(result, canAutoFix) };
+	} catch (err) {
+		cancelTodoReview(params);
+		throw err;
+	} finally {
+		releaseItemReview(sessionId, itemId);
+		await publishReview(workspaceId).catch(() => {});
+	}
 }
 
-/**
- * Button-triggered plan review (host-side): mark the item **reviewing synchronously** (so the panel shows
- * the pulse the instant the client re-reads the plan), then run the review subagent in the background and
- * push a review-changed refresh when the verdict lands. Returns immediately — the caller does not wait.
- */
-export function startPlanReviewInBackground(
+/** Button-triggered plan review; returns immediately. The `reviewing` mark MUST stay synchronous —
+ * see planReview.SPEC.md. */
+export function startPlanReview(
 	workspaceId: string,
 	sessionId: string,
 	itemId: string,
-): void {
+	runSubagent: ReviewRunner = runReviewSubagent,
+): boolean {
+	if (itemReviewActive(sessionId, itemId)) return false;
 	const params = { workspaceId, sessionId, id: itemId };
 	const { pkg, reviewedSha } = startTodoReview(params);
-	void (async () => {
+	return enqueuePlanReview(workspaceId, sessionId, itemId, async () => {
 		try {
 			const itemTitle = await itemTitleOf(workspaceId, sessionId, itemId);
-			await runAndRecordVerdict(params, pkg, reviewedSha, itemTitle, undefined);
+			const result = await runReview(params, pkg, reviewedSha, itemTitle, undefined, runSubagent);
+			await recordVerdict(params, result, reviewedSha, true);
 		} catch (err) {
 			cancelTodoReview(params);
-			console.warn(`plan review failed (${itemId}): ${err instanceof Error ? err.message : err}`);
+			throw err;
 		} finally {
 			await publishReview(workspaceId).catch(() => {});
 		}
-	})();
+	});
+}
+
+/** After a fix lands (the worker re-marks the step done), re-review exactly the items still inside their
+ * one auto cycle — see host/SPEC.md ("auto re-review") for why `unreviewed` counts as a fresh delta. */
+export async function maybeAutoReReview(workspaceId: string, sessionId: string): Promise<void> {
+	if (planReviewRunning(workspaceId, sessionId)) return;
+	try {
+		const plan = await listTodos({ workspaceId, sessionId });
+		const items = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+		for (const item of items) {
+			const r = item.review;
+			if (r?.reviewing || item.status !== "done") continue;
+			if (todoReviewAutoCycles({ workspaceId, sessionId, id: item.id }) !== 1) continue;
+			const freshCommitDelta =
+				r?.state === "changes_requested" && (r.unreviewedShas?.length ?? 0) > 0;
+			if (!freshCommitDelta && r?.state !== "unreviewed") continue;
+			startPlanReview(workspaceId, sessionId, item.id);
+		}
+	} catch (err) {
+		console.warn(`auto re-review skipped (${workspaceId}/${sessionId}): ${err}`);
+	}
 }
 
 export function installRequestReviewSeam(): void {

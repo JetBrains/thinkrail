@@ -11,8 +11,8 @@ import { commitFile, gitAs } from "./fixtures/git";
 // behind) wears the circled Verified glyph and no affordance. There is no in-page manual verdict UI
 // (the `manually` toggle + Approve/Ask-to-fix pair was removed) and no separate summary-first "Review
 // mode" page (task-plan-review-kebab): findings live in the right-panel Review tab, header actions are
-// a kebab menu. Actually settling a review (the reviewer chat, verdicts, ask-to-fix's fix cycle,
-// Review All's queue) is @agent territory; the seeded JSON here is exactly the shape those leave behind.
+// a kebab menu. Actually settling a review (the review subagent's verdict, ask-to-fix's fix cycle,
+// Review All's pass) is @agent territory; the seeded JSON here is exactly the shape those leave behind.
 
 test("reviewable steps show the reviewed counter, Start review, and the settled Verified state", async ({
 	page,

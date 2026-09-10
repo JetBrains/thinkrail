@@ -22,7 +22,6 @@ import {
 	clearAutoCycles,
 	clearReviewPending,
 	dropReviewRecord,
-	findWorkerSessionByReviewer,
 	markReviewPending,
 	putReviewRecord,
 	readAutoCycles,
@@ -31,7 +30,6 @@ import {
 	removeSessionReviews,
 	restoreReviewRecord,
 	setAutoCycles,
-	setReviewerSession,
 	type TodoReviewRecord,
 } from "./reviews";
 
@@ -183,8 +181,6 @@ export async function listTodos(params: {
 	if (unattributed.length > 0) wire.unattributed = unattributed;
 	const adoptedCommits = await resolveAdoptedCommits(params.workspaceId, plan, records, pending);
 	if (adoptedCommits.length > 0) wire.adoptedCommits = adoptedCommits;
-	const reviewer = readReviewMeta(root, params.sessionId).reviewerSessionId;
-	if (reviewer) wire.reviewerSessionId = reviewer;
 	return wire;
 }
 
@@ -336,28 +332,6 @@ export function approveTodoReview(
 	return { ok: true } as const;
 }
 
-export function reviewerSessionFor(params: {
-	workspaceId: string;
-	sessionId: string;
-}): string | undefined {
-	return readReviewMeta(getWorkspace(params.workspaceId).worktreePath, params.sessionId)
-		.reviewerSessionId;
-}
-
-export function pinReviewerSession(
-	params: { workspaceId: string; sessionId: string },
-	reviewerId: string,
-): void {
-	setReviewerSession(getWorkspace(params.workspaceId).worktreePath, params.sessionId, reviewerId);
-}
-
-export function workerSessionForReviewer(
-	workspaceId: string,
-	reviewerId: string,
-): string | undefined {
-	return findWorkerSessionByReviewer(getWorkspace(workspaceId).worktreePath, reviewerId);
-}
-
 export function startTodoReview(params: { workspaceId: string; sessionId: string; id: string }): {
 	pkg: string;
 	reviewedSha: string;
@@ -465,11 +439,9 @@ export function renderReviewPackage(
 		`Change set: ${changeSet}`,
 		...(rereview
 			? [
-					`RE-REVIEW: only ${fresh.map((s) => s.slice(0, 12)).join(", ")} is new since your last verdict — review only that delta. Earlier findings the fix addressed are resolved by the worker or excluded as stale; approve is blocked only by what's still open.`,
+					`RE-REVIEW: only ${fresh.map((s) => s.slice(0, 12)).join(", ")} is new since the last verdict — review only that delta. Earlier findings the fix addressed are resolved by the worker or excluded as stale; approve is blocked only by what's still open.`,
 				]
 			: []),
-		"",
-		"FIRST read the reviewing-changes skill and follow it exactly — it defines the review order (intent match, scope drift, verifying the verification claim, hallucinated APIs), how to file findings (add_review_comment, one per problem, severity-prefixed, evidence-cited), and the single review_verdict that ends this review.",
 	];
 	return lines.join("\n");
 }
