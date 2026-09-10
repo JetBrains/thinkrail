@@ -475,7 +475,17 @@ a project picker, the prompt hero, and the reused
   to replace this window's frame and atomically preserve/reflow open resource identities in every retained
   workspace view; no current layout is published); the optional **shell-owned injected Update section**
   (the Settings shell includes its row only when content is provided; `panels` neither discovers a native
-  global nor imports the update capability, while ordinary browsers therefore have no Update row); and
+  global nor imports the update capability, while ordinary browsers therefore have no Update row);
+  **`TerminalSettings`** — a **Replayed output** size picker (`store.terminalReplayKb`, five presets from
+  Off to 1 MB, `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on
+  Windows only (`store.hostPlatform === "win32"`), a **Windows shell** picker (Auto / PowerShell 7 (pwsh) /
+  Windows PowerShell / Command Prompt, `settings.update { terminalWindowsShell }` — see
+  `submodule-server-terminal`'s shell-selection decision for what each choice spawns). The Windows-shell
+  half is split into a **props-driven** `WindowsShellSettings` component rather than reading the store
+  inline like the replay picker: zustand's React binding feeds `renderToStaticMarkup` its frozen
+  `getInitialState()` snapshot (`useSyncExternalStore`'s `getServerSnapshot` argument), never a test's
+  `setState`, so any settings section that must stay assertable under that render path takes its store
+  values as props instead — the same shape `ChatSettings` already uses for `SubagentSettings`; and
   **`TemplatesSettings`** — two groups, **Global** and **This
   project** (the project group renders only with an active workspace), each a header with a **New**
   button plus its rows, fetched via **two independent `template.list` calls** (both refetched whenever the

@@ -13,6 +13,7 @@ export {
 	isLineWidth,
 	isRetriedAttempt,
 	isSystemThemePair,
+	isTerminalWindowsShell,
 	isThemeMode,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
 	LINE_WIDTH_COLUMNS,
@@ -21,6 +22,7 @@ export {
 	normalizeThemePreference,
 	REQUEST_IMAGE_BASE64_BUDGET,
 	TERMINAL_REPLAY_KB,
+	TERMINAL_WINDOWS_SHELLS,
 	THEME_MODES,
 	TODO_NUDGE_PREFIX,
 } from "./domain";

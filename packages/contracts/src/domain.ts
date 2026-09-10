@@ -522,6 +522,8 @@ export interface AppConfig extends ThemePreference {
 	subagentsEnabled: boolean;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
+	/** Which shell new workspace terminals start on Windows; ignored on other platforms. */
+	terminalWindowsShell: TerminalWindowsShell;
 }
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
@@ -533,6 +535,14 @@ export type AppConfigUpdate = Partial<Omit<AppConfig, "reviewModel" | "reviewEff
 export type InterviewResponse = "book" | "postpone" | "never";
 
 export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;
+
+export const TERMINAL_WINDOWS_SHELLS = ["auto", "pwsh", "powershell", "cmd"] as const;
+export type TerminalWindowsShell = (typeof TERMINAL_WINDOWS_SHELLS)[number];
+
+export function isTerminalWindowsShell(value: unknown): value is TerminalWindowsShell {
+	return TERMINAL_WINDOWS_SHELLS.some((shell) => shell === value);
+}
+
 export const JBCENTRAL_QUOTA_REFRESH_SECONDS = { min: 1, max: 3600, default: 30 } as const;
 
 export function isJbcentralQuotaRefreshSeconds(value: unknown): value is number {
@@ -549,6 +559,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	themeMode: "fixed",
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
+	terminalWindowsShell: "auto",
 	composerGrowthLimit: "half-chat",
 	chatLineWidth: LINE_WIDTH_COLUMNS.default,
 	fileLineWidth: LINE_WIDTH_COLUMNS.default,
