@@ -99,9 +99,9 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   advances only when a local transition invalidates an uncontrolled pointer/resize draft.
 
   The store owns values and actions, never persistence. `shell/layoutState` validates and hydrates one
-  endpoint/surface-qualified local document, subscribes to relevant state edges, and persists the normalized
-  frame/views/attention/preferences. `hydrateLocalLayoutState` installs that document once; a missing or invalid
-  document is represented by a Balanced frame with no workspace views. `clearWorkspaceTabs` removes the
+  browser-endpoint/surface- or native-profile/window-qualified local document, subscribes to relevant state
+  edges, and persists the normalized frame/views/attention/preferences. `hydrateLocalLayoutState` installs
+  that document once; a missing or invalid document is represented by a Balanced frame with no workspace views. `clearWorkspaceTabs` removes the
   workspace view, attention, and associated local state when the workspace disappears. A page-lifetime
   `removedWorkspaceIds` tombstone rejects stale catalog/session/cache/workspace arrivals so an in-flight read
   cannot recreate it.
@@ -358,10 +358,12 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`LineWidth`/`Chat`/`Layout`/`Terminal`/`Templates`/`Review`/`Privacy`/`Feedback`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`LineWidth`/`Chat`/`Layout`/`Updates`/`Terminal`/`Templates`/`Review`/`Privacy`/`Feedback`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
-  **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
-  to a section without prop-drilling through the shell. The ephemeral **`interviewPromptOpen`** plus
+  **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider warning, and native-ready
+  shell affordance can deep-link without prop-drilling. The optional Update key is navigation only: native
+  updater snapshots/actions remain in `nativeUpdates`' shell-local hook state and never enter Zustand. The
+  ephemeral **`interviewPromptOpen`** plus
   **`showInterviewPrompt()`** / **`hideInterviewPrompt()`** is the render projection of the host's addressed
   invitation; transport opens it idempotently, clears it before each valid welcome's possible redelivery so
   a host restart cannot leave a stale projection, and the panel hides it after `feedback.respond` is

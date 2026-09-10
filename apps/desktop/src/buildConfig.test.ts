@@ -33,9 +33,9 @@ test("selects real Bun and preserves the physical runtime resources without reti
 		bun: { entrypoint: "src/index.ts" },
 		views: { preload: { entrypoint: "src/preload.ts", format: "iife" } },
 		copy: { "../web/dist": "views/web", ".stage/runtime": "runtime" },
-		mac: { bundleCEF: false },
-		linux: { bundleCEF: false },
-		win: { bundleCEF: false },
+		mac: { bundleCEF: false, icons: "assets/icon.iconset" },
+		linux: { bundleCEF: false, icon: "assets/icon.png" },
+		win: { bundleCEF: false, icon: "assets/icon.ico" },
 	});
 	expect(config.scripts).toEqual({ preBuild: "preBuild.ts", postBuild: "postBuild.ts" });
 	expect(config.build).not.toHaveProperty("bunVersion");

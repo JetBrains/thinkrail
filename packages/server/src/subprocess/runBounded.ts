@@ -78,7 +78,7 @@ export async function runBounded(argv: string[], opts: BoundedRunOptions): Promi
 			stdin: "ignore",
 			stdout: "pipe",
 			stderr: "pipe",
-			detached: true,
+			detached: process.platform !== "win32",
 			windowsHide: process.platform === "win32",
 		});
 	} catch (cause) {

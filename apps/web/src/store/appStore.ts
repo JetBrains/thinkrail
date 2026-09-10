@@ -272,6 +272,7 @@ export const SettingsSection = {
 	LineWidth: "line-width",
 	Chat: "chat",
 	Layout: "layout",
+	Updates: "updates",
 	Terminal: "terminal",
 	Templates: "templates",
 	Review: "review",

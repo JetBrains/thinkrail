@@ -21,6 +21,7 @@ import { RouteStore } from "./routeStore";
 import type { DesktopRpc } from "./rpc";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
 import type { DesktopServerRuntime } from "./serverRuntime";
+import { createElectrobunQuitCoordinator, createElectrobunUpdateController } from "./updates";
 
 type BeforeQuitEvent = ReturnType<typeof Electrobun.events.events.app.beforeQuit>;
 
@@ -55,10 +56,29 @@ async function start(): Promise<void> {
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const initialPreferences = preferences.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const neutral = process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
+	const quitCoordinator = createElectrobunQuitCoordinator(() => host.server.shutdown());
+	const updateController = await createElectrobunUpdateController({
+		isPackaged: Electrobun.app.isPackaged,
+		version,
+		channel,
+		platform: process.platform,
+		arch: process.arch,
+		restartToUpdate: quitCoordinator.restartToUpdate,
+	});
 	const rpc = BrowserView.defineRPC<DesktopRpc>({
 		maxRequestTime: 5000,
 		handlers: {
-			requests: {},
+			requests: {
+				getUpdateState: () => updateController.getState(),
+				checkForUpdates: async () => {
+					await updateController.checkForUpdates();
+					return undefined;
+				},
+				restartToUpdate: async () => {
+					await updateController.restartToUpdate();
+					return undefined;
+				},
+			},
 			messages: {
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);
@@ -113,11 +133,13 @@ async function start(): Promise<void> {
 		},
 	);
 	mainWindow.on("close", removeNavigationListeners);
+	updateController.subscribe((state) => rpc.send.updateStateChanged(state));
 
 	let ready = false;
 	mainWindow.webview.on("dom-ready", () => {
 		if (ready) return;
 		ready = true;
+		updateController.start();
 		const readyPath = process.env.THINKRAIL_DESKTOP_READY_FILE;
 		if (readyPath) {
 			writeReady(readyPath, {
@@ -132,15 +154,8 @@ async function start(): Promise<void> {
 		}
 	});
 
-	let shutdownComplete = false;
-	let shutdownPromise: Promise<void> | undefined;
 	Electrobun.events.on("before-quit", (event: BeforeQuitEvent) => {
-		if (shutdownComplete) return;
-		event.response = { allow: false };
-		shutdownPromise ??= host.server.shutdown().finally(() => {
-			shutdownComplete = true;
-			Utils.quit();
-		});
+		quitCoordinator.handleBeforeQuit(event);
 	});
 	const controlPath = process.env.THINKRAIL_DESKTOP_CONTROL_FILE;
 	if (controlPath) {
@@ -162,7 +177,6 @@ async function start(): Promise<void> {
 		}, 50);
 	}
 	void mainWindow;
-	void shutdownPromise;
 }
 
 try {

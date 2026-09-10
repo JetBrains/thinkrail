@@ -6,7 +6,7 @@ title: Desktop launcher/client (Electrobun)
 parent: architecture
 depends-on: [module-server, module-contracts, module-shared]
 tags: [desktop, v1, launcher, packaging]
-references: [submodule-web-navigation, module-artifact-tests]
+references: [submodule-web-navigation, module-artifact-tests, module-ci-release]
 ---
 
 ## Responsibility
@@ -28,7 +28,9 @@ engine architecture.
 - **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
   for release identity; `contracts` for
   compatibility/native-bridge types; the completed built web
-  artifact; Electrobun `2.0.1` and its generated SDK; Bun/Node.
+  artifact; Electrobun `2.0.1` and its generated SDK; build-only `pe-library`/`resedit` for the
+  Electrobun 2.0.1 Windows-uninstaller icon gap; build-only `@resvg/resvg-js` to rasterize the icon
+  source (below); Bun/Node.
 - **Forbidden:** spawning the CLI or a second engine process; implementing ordinary product feature or
   agent/domain logic; importing web source at runtime; introducing a desktop-only wire or UI state model;
   storing one active location on the backend; or bundling CEF without a new acceptance failure that
@@ -105,8 +107,9 @@ A desktop preload sends typed, one-way route and local-preference messages. It w
 navigation, because Electrobun's native navigation events do not observe History API route changes. The
 main process accepts messages only from the main window. Routes persist as bounded fragment strings in a
 versioned channel-scoped document; unreadable/invalid state falls back to `#/v1`. Preferences persist in a
-separate bounded, versioned generic string map scoped by `{ backendProfileId, windowId }`; the native side
-validates only size/shape and never learns feature meaning. Its frozen preload adapter exposes `getItem`,
+separate bounded, versioned generic string map scoped by `{ backendProfileId, windowId }`; each value is capped
+at 256 Ki characters and the complete document remains capped at 1 MiB. The native side validates only
+size/shape and never learns feature meaning. Its frozen preload adapter exposes `getItem`,
 `setItem`, and `removeItem` only, with writes returning over the typed one-way channel. Malformed messages
 are ignored; a filesystem refusal is logged without changing the in-memory document or terminating the
 client. The web feature still owns each value's validation and default. The web router remains the route
@@ -145,7 +148,24 @@ runtime. The hook runs under Hutch's Cottontail, so it invokes the real Bun CLI 
 staged `.ts` server runtime rather than changing PI's bundler. Its transient factory entry is removed
 even on failure. Staged resources include the workflow SPEC consumed by the bundled skills. A documented
 `postBuild` hook removes staging after the framework has copied it; a failed build's staging is replaced
-at the next pre-build. Builds in one worktree remain sequential.
+at the next pre-build. On Windows that hook also brands the bundled uninstaller after its resource exists
+but before release compression, wrapping, and signing. Builds in one worktree remain sequential.
+
+Electrobun's platform icon configuration points at one ThinkRail mark in the native formats each target
+requires: the macOS iconset, Windows multi-resolution ICO, and Linux PNG. The same Windows ICO is the
+Hutch-owned source for the installed app, setup/extractor executable, shortcuts, and taskbar identity; no
+release action substitutes a second installer icon. Electrobun 2.0.1 does not apply that icon to its
+bundled Windows uninstaller, so the project `postBuild` hook adds the same icon group to
+`Resources/uninstall`.
+
+`assets/icon.svg` is the one hand-authored source; every raster below it (the iconset, the ICO, the
+Linux PNG) is generated, never hand-edited, by `scripts/generate-icons.ts` (`bun run generate-icons`)
+using `@resvg/resvg-js` to rasterize straight from the vector. The Windows ICO carries PNG-compressed
+frames at 16/24/32/48/64/128/256 — Microsoft's documented icon-construction minimum (16/24/32/48/256)
+plus two extra sizes so in-between DPI scales interpolate from a close neighbor — packed through the
+same `resedit` dependency already used for the uninstaller. A prior 4-frame raw-BMP ICO (16/32/48/256,
+pre-dating the generator) had no frame matching the Windows 11 taskbar's 24×24 100%-scale target,
+reading as blurry there; the generated set closes that gap.
 
 Electrobun's `build.views` owns the browser preload bundle; `build.copy` owns physical resource inclusion.
 There is no custom SDK resolver, SDK metadata validator, or Electrobun command runner. App-local Hutch
@@ -176,8 +196,8 @@ Linux ARM64. Electrobun 2.0.1 publishes no macOS x64 core. Nightly maps to Elect
 maps to stable. Standard formats are DMG on macOS, a setup-EXE-plus-payload ZIP on Windows, and a setup
 tar.gz on Linux. The private release pipeline retains the existing `thinkrail-desktop-*` download aliases;
 its collector selects the exact framework artifact for the channel and native target. The macOS app
-archive is transferred privately for SRE finalization, never published as an updater payload. Updater UX
-and publication of updater metadata/patches remain deferred.
+archive is transferred privately for SRE finalization, never published as an updater payload. Runtime
+updating is integrated below; feed publication remains release-owned and gated by the target policy.
 
 ### Signing
 
@@ -196,6 +216,43 @@ Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 pl
 `libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are
 CI-only and are never shipped as user configuration.
 
+## Auto-update policy
+
+Desktop updates check after window readiness and then on a jittered six-hour schedule with bounded retries.
+Checks and full-package downloads run in the background without blocking startup. Manual checks acknowledge
+promptly and state converges asynchronously through monotonic revisions. The one native controller owns the
+SDK's single status callback, coalesces concurrent work, reconciles returned errors as well as thrown ones,
+and retains a prepared newer version across transient poll failures. Electrobun's hash inequality alone is
+not eligibility: same-version and downgrade manifests are not downloaded or offered.
+
+Production checks are enabled only in packaged supported stable/canary applications whose stamped release
+metadata supplies a nonempty HTTPS updater base URL. That packaged metadata is the sole feed authority;
+development and standard artifact-test seams stay disabled and cannot select a feed. Installation requires an
+explicit **Restart to Update** action; **Later** preserves the
+running app, and ordinary quit does not silently install. A cross-platform in-app control exposes manual
+checking, progress, the available version and retry; native menus are supplementary because this SDK has no
+Linux application menu. Installations stay on their packaged channel; CLI and remote-host updates are outside
+this capability. Release scope and manual-first acceptance belong to [[module-ci-release]].
+
+Electrobun calls, updater scheduling and update lifecycle stay behind the bounded desktop `updates` module;
+update controls stay in the web client and graceful host shutdown stays in server. The frozen optional
+`__THINKRAIL_NATIVE_UPDATES__` preload capability carries `getState`, prompt `checkForUpdates` and
+`restartToUpdate` requests, plus state subscription over the typed native RPC. Web imports no desktop SDK,
+and an ordinary browser connection acquires no host-update operation. An update restarts the entire local
+host: active agents may be aborted and PTYs terminate. **Restart to Update** is the sole confirmation and
+uses the existing ordinary-quit shutdown. There is no additional warning dialog, update-specific draft
+saving, or renderer-preparation handshake.
+
+Quit coordination preserves its completion action. Electrobun 2.0.1's first `applyUpdate()` returns on the
+asynchronous `before-quit` veto before arming its replacement helper. The update intent waits for the same
+idempotent host shutdown, waits for that first SDK call to settle, and then resumes `applyUpdate()` under the
+completed guard; ordinary completion still calls only `Utils.quit()`. A failed second handoff reports a
+native error and exits instead of leaving a serverless window. SDK replacement rollback is not
+application-health or user-data rollback. Existing installations without update code/feed identity require
+one manual bootstrap installation.
+
+Reference: [pinned updater handoff](https://github.com/blackboardsh/electrobun/blob/v2.0.1/package/src/sdks/main/core/Updater.ts#L2220-L2330).
+
 ## Verification
 
 [[module-artifact-tests]] owns expanded-app/first-install smoke, shared host probes, native navigation/
@@ -206,5 +263,5 @@ release checks described in [[module-ci-release]].
 
 ## Deferred
 
-Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, and Electrobun
-updater UX.
+Shared/remote backend profiles, profile selection, multi-window/deep-link routing, and CEF. The update feed
+publication described above remains release-owned.

@@ -27,7 +27,9 @@ of the host.
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
-- **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; the value re-exports
+- **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
+  (`NativeUpdateState` and `NativeUpdateBridge`, the optional shell-local desktop update capability); the
+  value re-exports
   `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
@@ -44,8 +46,12 @@ of the host.
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
-- **Deployment obligation:** contracts describe host behavior and compatibility, never the launcher or
-  deployment that supplies it. A feature's wire shape is shared by browser, desktop, and future clients.
+- **Deployment obligation:** wire contracts describe host behavior and compatibility, never the launcher
+  or deployment that supplies it. A feature's wire shape is shared by browser, desktop, and future clients.
+  Separate type-only native client capabilities describe an optional shell-local bridge, not host WS
+  methods: `NativeUpdateState` and `NativeUpdateBridge` carry update presentation and explicit local
+  actions. The same web bundle discovers that capability without importing a native SDK; an ordinary
+  browser connection acquires no updater authority.
 - **Forbidden:** any *value* import of a `pi` package; **any** import (even `type`) of
   `@earendil-works/pi-coding-agent` (pulls `node:fs`); the pi-ai **provider / API subpaths**
   (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
@@ -329,6 +335,9 @@ of the host.
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.
+- **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
+  update bridge exposes a monotonic state snapshot, prompt manual check, explicit restart action, and state
+  subscription without granting updater authority to an ordinary browser connection.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered
