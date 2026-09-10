@@ -837,7 +837,9 @@ own section. The kebab menu (`plan-menu`, a
   last-focused-chat target for the active workspace and reads that exact `{ workspaceId, sessionId }`
   through `chat/useChatTodos`. Its context row names the chat and `done / total`; beneath it are the shared
   add row, status-ordered group-first compact rows, and the action that opens the existing session-pinned
-  `PlanPane`. A source change replaces the old rows with content-shaped loading before the new read; failure
+  `PlanPane`. Runtime glance metadata is usable only when its transcript was synchronized in the current
+  connected generation; a missing or stale runtime renders the non-working `waiting` glance. A source change
+  replaces the old rows with content-shaped loading before the new read; failure
   is retryable and never falls back to stale data or another chat. No remembered chat renders “Focus a chat
   to see its TODO list”; a remembered empty plan renders the existing empty-plan guidance. Opening a plan
   page captures the current session, so later chat focus retargets the side tool without changing that page.

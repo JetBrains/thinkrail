@@ -429,6 +429,8 @@ function tabIcon(tab: LayoutTab, active = false): ReactNode {
 					return active ? <RiFileFill className={cls} /> : <File className={cls} />;
 				case "changes":
 					return <CustomIcon name={active ? "file-diff-fill" : "file-diff-line"} className={cls} />;
+				case "todos":
+					return <ListTodo className={cls} />;
 				case "review":
 					return active ? <RiDiscussFill className={cls} /> : <RiDiscussLine className={cls} />;
 				default:

@@ -141,6 +141,15 @@ describe("frontend-local layout state", () => {
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
 	});
 
+	test("TODO mode changes stay gated until the local layout is ready", () => {
+		expect(() => transitionTodoViewMode("side-tool")).not.toThrow();
+		expect(useAppStore.getState()).toMatchObject({
+			layoutStateReady: false,
+			workbenchFrame: null,
+			todoViewMode: "chat-popover",
+		});
+	});
+
 	test("TODO mode changes atomically hide and intentionally restore the singleton", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();

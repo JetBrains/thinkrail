@@ -706,7 +706,7 @@ export function resetLayoutPresetLocally(preset: LayoutPreset): void {
 
 export function transitionTodoViewMode(todoViewMode: TodoViewMode): void {
 	const state = useAppStore.getState();
-	if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
+	if (!state.layoutStateReady || !state.workbenchFrame) return;
 	const transitionedFrame = applyTodoViewModeToFrame(
 		state.workbenchFrame,
 		todoViewMode,

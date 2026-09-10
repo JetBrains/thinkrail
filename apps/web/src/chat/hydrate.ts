@@ -23,6 +23,7 @@ export interface HydratedRuntime {
 
 export interface HydrationOptions {
 	idScope?: string;
+	includeControlMessages?: boolean;
 }
 
 function transcriptTurnId(
@@ -47,7 +48,7 @@ export function messagesToRuntime(
 	for (const [index, message] of messages.entries()) {
 		let turnId: string | null = null;
 		if (message.role === "user") {
-			if (!isControlMessage(userText(message.content))) {
+			if (options.includeControlMessages || !isControlMessage(userText(message.content))) {
 				turnId = transcriptTurnId(message, index, options);
 				turns.push({ kind: "user", id: turnId, message });
 			}

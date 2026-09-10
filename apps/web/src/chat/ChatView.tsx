@@ -8,7 +8,15 @@ import type {
 	ThinkingLevel,
 	WireModel,
 } from "@thinkrail/contracts";
-import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	type ReactNode,
+	type RefCallback,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib";
@@ -181,6 +189,7 @@ export default function ChatView({
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
 	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
+	const todoViewMode = useAppStore((state) => state.todoViewMode);
 	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
 	const projectId = useAppStore(
 		(s) =>
@@ -290,6 +299,9 @@ export default function ChatView({
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
 	const plan = useChatTodos(workspaceId, sessionId);
 	const [planOpen, setPlanOpen] = useState(false);
+	useEffect(() => {
+		if (todoViewMode !== "chat-popover") setPlanOpen(false);
+	}, [todoViewMode]);
 	const [slashActive, setSlashActive] = useState(false);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [templatesEmpty, setTemplatesEmpty] = useState(false);
@@ -799,6 +811,38 @@ export default function ChatView({
 	};
 
 	const widgetEntries = Object.entries(extUiWidget);
+	const planReceipt = (disclosure: boolean) =>
+		plan.data ? (
+			<button
+				type="button"
+				data-testid="chat-plan-toggle"
+				data-open={disclosure ? planOpen : undefined}
+				onClick={
+					disclosure
+						? undefined
+						: () => useAppStore.getState().requestToolView(workspaceId, "todos")
+				}
+				className="flex min-w-0 max-w-full items-center gap-4 overflow-clip whitespace-nowrap text-text-muted tr-text-metadata hover:text-text-default"
+			>
+				<ChatPlanStripContent
+					plan={plan}
+					open={disclosure && planOpen}
+					glance={planGlanceState}
+					disclosure={disclosure}
+				/>
+			</button>
+		) : null;
+	const chatHeader = (left: ReactNode) => (
+		<div className="shrink-0">
+			<ChatHeader
+				stats={stats}
+				statusEntries={Object.entries(extUiStatus)}
+				left={left}
+				skillsStale={skillsStale}
+				{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
+			/>
+		</div>
+	);
 
 	return (
 		<ChatActionsContext.Provider value={chatActions}>
@@ -810,37 +854,18 @@ export default function ChatView({
 					data-message-order={chatMessageOrder}
 					className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
 				>
-					<Popover open={planOpen} onOpenChange={setPlanOpen}>
-						<PopoverAnchor asChild>
-							<div className="shrink-0">
-								<ChatHeader
-									stats={stats}
-									statusEntries={Object.entries(extUiStatus)}
-									left={
-										plan.data ? (
-											<PopoverTrigger asChild>
-												<button
-													type="button"
-													data-testid="chat-plan-toggle"
-													data-open={planOpen}
-													className="flex min-w-0 max-w-full items-center gap-4 overflow-clip whitespace-nowrap text-text-muted tr-text-metadata hover:text-text-default"
-												>
-													<ChatPlanStripContent
-														plan={plan}
-														open={planOpen}
-														glance={planGlanceState}
-													/>
-												</button>
-											</PopoverTrigger>
-										) : null
-									}
-									skillsStale={skillsStale}
-									{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
-								/>
-							</div>
-						</PopoverAnchor>
-						<ChatPlanContent plan={plan} glance={planGlanceState} />
-					</Popover>
+					{todoViewMode === "chat-popover" ? (
+						<Popover open={planOpen} onOpenChange={setPlanOpen}>
+							<PopoverAnchor asChild>
+								{chatHeader(
+									plan.data ? <PopoverTrigger asChild>{planReceipt(true)}</PopoverTrigger> : null,
+								)}
+							</PopoverAnchor>
+							<ChatPlanContent plan={plan} glance={planGlanceState} />
+						</Popover>
+					) : (
+						chatHeader(planReceipt(false))
+					)}
 					<div
 						data-testid="chat-scroll"
 						data-follow-state={followState}

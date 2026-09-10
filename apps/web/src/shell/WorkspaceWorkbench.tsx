@@ -21,6 +21,7 @@ import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlags } from "../panels/reviewModel";
 import { SpecsPanel } from "../panels/SpecsPanel";
 import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkbench";
+import { TodoPanel } from "../panels/TodoPanel";
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
 import { useWorkspaceSpecs } from "../panels/useWorkspaceSpecs";
 import {
@@ -504,7 +505,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					body = <ChangesPanel workspaceId={workspaceId} />;
 					break;
 				case "todos":
-					body = null;
+					body = <TodoPanel />;
 					break;
 				case "review":
 					body = <ReviewPanel workspaceId={workspaceId} failed={review.failed} />;

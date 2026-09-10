@@ -923,9 +923,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
   `openMarkdown` snapshot action; tool completion refreshes immediately and `agent_settled` supplies the
-  final refresh; overlapping list reads are latest-wins and connection-generation stamped, accepted adds
-  fold by item id, and a failed optimistic removal re-reads authority rather than restoring a stale whole-plan
-  capture over concurrent edits. Successful UI mutations also publish an identity-keyed, same-client
+  final refresh; overlapping list reads are latest-wins and connection-generation stamped, the latest failed
+  read is blocking only while that hook has no loaded plan, accepted adds fold by item id, and a failed
+  optimistic removal re-reads authority rather than restoring a stale whole-plan capture over concurrent edits.
+  Successful UI mutations also publish an identity-keyed, same-client
   invalidation: sibling hook instances re-read `todo.list`, while the signal itself carries no data and never
   becomes a browser-side plan authority. This closes the visible header/tool/page staleness gap without a
   shared TODO cache or a new host push. Plus the agent-review ops `startReview` (`todo.startReview`) and
@@ -1024,7 +1025,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   skip iff the glance is `waiting_question`): waking an agent that stopped on an `ask_user_question`
   would send it off to work the new item and forget to return to its own question, so instead the item
   just queues and is picked up on the agent's next natural turn (when the user answers, or a later idle
-  nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged.
+  nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged. A missing or
+  stale-generation runtime is classified from one ephemeral authoritative transcript read without
+  installing a runtime or changing placement/history; a rejected method may trigger one fresh read and
+  method-selecting retry, with connection generation and tombstones fencing every send.
 
 ## Boundary
 

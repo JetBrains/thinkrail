@@ -216,6 +216,14 @@ function LooseList({
 	);
 }
 
+export function TodoEmptyGuidance() {
+	return (
+		<p className="px-4 py-4 text-text-muted tr-text-metadata">
+			No TODOs yet — the agent adds its plan here, or add one above.
+		</p>
+	);
+}
+
 export function TodoRows({
 	plan,
 	onRemove,

@@ -585,7 +585,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
   through this; callers fall back to the snapshot when the ref has left the catalog);
   `toast` (the fire-from-anywhere helper),
-  `Toast` (type), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
+  `Toast` + `TodoViewMode` (types), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
   (file/diff/virtual-document/plan/chat), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
