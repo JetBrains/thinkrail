@@ -163,9 +163,41 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     fires during streaming never walks messages. The scan runs only at rest, and stops at the latest user
     message.
 
-    The status is **per session and never pre-rolled per workspace** — collapsing several chats into one row
-    is presentation policy owned by the client's selectors (see `apps/web/src/store/SPEC.md`), and a
-    precedence order baked in here would be a UI decision escaping into the host.
+    The per-session **status derivation** (`deriveActivityStatus`) is pure and never pre-rolled — collapsing
+    several chats into one glyph, and the *display* precedence for that (see `apps/web/src/store/SPEC.md`),
+    stay presentation policy on the client. The one workspace-scoped judgement the host **does** own is
+    **failed-supersession**: a `failed` chat is suppressed (published as `null`, i.e. it draws nothing) once
+    the same worktree holds a strictly-newer non-failed session — a running/waiting/queued one, *or a
+    finished-fine idle one*. This is not display precedence (which of several live chats a row speaks for);
+    it is a relevance judgement — "has the user moved past this failure?" — and it is the host's because the
+    client cannot make it: a finished-fine chat is *absent* from the client's activity map (idle draws
+    nothing), so only the host, which enumerates every session with its recency, can see that a newer
+    non-failed chat exists. `supersededFailedSessions` (in `activity.ts`, pure and unit-pinned) decides it
+    from `{sessionId, status, recencyMs}` rows; a **tie does not supersede** (an equal-recency sibling leaves
+    the failure showing) and a failure that is itself the newest work always stands. **Recency is
+    `SessionInfo.modified`**, which pi derives from the transcript's last message-activity timestamp (not the
+    file's mtime), so it is a stable, restart-surviving signal on the same clock as a live entry's
+    `lastActivityMs`. A live entry **seeds** `lastActivityMs` from its transcript (`messagesActivityMs`) at
+    creation and only restamps to `Date.now()` on a genuine raw-status transition — so **re-opening** an old
+    chat cannot make it look like the newest work and resurrect a failure the newer work already superseded.
+    For the same reason an attached entry seeds `rawActivity` from its derived status, so its first sync is a
+    no-op that publishes nothing rather than re-emitting a status the snapshot already reflects.
+
+    Supersession runs through one publish helper, `applyWorkspaceActivity(workspaceId, diskRows)`, which
+    re-derives every live entry, folds the filter over live rows plus any `diskRows` handed in, and pushes
+    only those whose effective (post-supersession) status moved. It is fed from three sites:
+    - The **snapshot** (`listSessionActivity`) groups a workspace's live entries and on-disk sessions —
+      *including idle/null ones, kept only for their recency* — and folds the filter before emitting.
+    - The **attach/create** path (`registerSession` → `reconcileWorkspaceActivity`) reads the workspace's
+      disk rows once and applies with them. This is why **re-opening** a superseded failure keeps it hidden:
+      the newer completed sibling is still on disk, and the reconcile sees it. It is async, but attach/create
+      already is.
+    - The **live delta path** (`syncSessionActivity`) is sync and **live-only** (no `cwd`, no disk read): it
+      early-returns unless *this* entry's raw status changed — recency only advances at a raw transition, so
+      the streaming hot path never triggers a sibling sweep — then applies over live rows alone. Disposal
+      applies too, so a failure a now-gone live sibling was hiding re-surfaces. A disk sibling that should
+      supersede a live failure between attaches settles on the next reconcile or snapshot; the common
+      same-session flow (fail a chat, start a fresh one) is fully live because both remain live entries.
 
     Every row and push carries its **`projectId`**, resolved through the **`setActivityProjectResolver`**
     seam (the host owns the workspace registry; this module stays ignorant of projects, as with

@@ -463,7 +463,12 @@ export function selectAgentReviewCommentCount(
 	).length;
 }
 
-const ACTIVITY_ROLLUP_ORDER: readonly ActivityStatus[] = ["failed", "waiting", "running", "queued"];
+export const ACTIVITY_STATUS_ORDER: readonly ActivityStatus[] = [
+	"waiting",
+	"running",
+	"failed",
+	"queued",
+];
 
 export type ActivityMap = Record<string, WorkspaceActivity>;
 
@@ -477,7 +482,7 @@ function rollUp(records: Iterable<Record<string, ActivityStatus>>): ActivityRoll
 	for (const record of records) {
 		for (const status of Object.values(record)) counts[status] = (counts[status] ?? 0) + 1;
 	}
-	const status = ACTIVITY_ROLLUP_ORDER.find((candidate) => (counts[candidate] ?? 0) > 0);
+	const status = ACTIVITY_STATUS_ORDER.find((candidate) => (counts[candidate] ?? 0) > 0);
 	return status ? { status, counts } : null;
 }
 

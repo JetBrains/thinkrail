@@ -217,10 +217,21 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
     changes nothing does not re-render the rail. Both refuse removed
     workspaces and tombstoned sessions, so a late push cannot resurrect a deleted chat's glyph.
     The rollup is **not** stored: `workspaceActivityRollup`/`projectActivityRollup` derive it on read from
-    the map alone — no workspace list, no second store slice — with a single shared precedence, **`failed` > `waiting` > `running` > `queued`** — a rare fault must never be
-    masked by routine work, and both are "needs you" anyway. Note this is deliberately *not* the host's
+    the map alone — no workspace list, no second store slice — with a single shared precedence, the
+    exported **`ACTIVITY_STATUS_ORDER`** (`waiting` > `running` > `failed` > `queued`) — one constant that
+    both this rollup and the glyph's hover breakdown (`apps/web/src/panels/SPEC.md`) read, so the order can
+    never drift between the two — the row speaks for **live/attention work first**: a
+    chat that needs you, then one actively working. A terminal `failed` deliberately sits *below* live work
+    so it cannot paint a busy worktree red — a running sibling must not be masked by an abandoned failure;
+    the fault recedes to the hover breakdown and still owns the glyph whenever nothing live is happening.
+    (This is why a *finished-fine* sibling does **not** demote a lone failure: idle is absence, so there is
+    nothing left in the map to outrank it — that is the "idle draws nothing" invariant, not a masking bug.)
+    Note this is deliberately *not* the host's
     per-session derivation order (see `packages/server/src/agent/SPEC.md`): there the question is "what is
-    this one chat doing", here it is "which of several chats should this row speak for".
+    this one chat doing", here it is "which of several chats should this row speak for". A `failed` that has
+    been *superseded* by newer non-failed work in its worktree never reaches this rollup at all — the host
+    suppresses it at the source (failed-supersession, same SPEC), so it arrives as a retraction, not a
+    status this precedence has to rank.
   Closed chats are reopenable: the workbench close command atomically removes local placement and invokes
   **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
   **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending

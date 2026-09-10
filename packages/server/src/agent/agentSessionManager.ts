@@ -44,9 +44,12 @@ import { logger } from "../log";
 import {
 	deriveActivityStatus,
 	deriveDiskActivityStatus,
+	messagesActivityMs,
 	parseTranscriptTail,
+	supersededFailedSessions,
 	TRANSCRIPT_TAIL_BYTES,
 	TRANSCRIPT_TAIL_MAX_BYTES,
+	type WorkspaceActivityRow,
 } from "./activity";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import {
@@ -94,6 +97,8 @@ interface Entry {
 	registered: boolean;
 	subagentToolsRefreshPending: boolean;
 	publishedActivity: ActivityStatus | null;
+	rawActivity: ActivityStatus | null;
+	lastActivityMs: number;
 }
 
 const sessions = new Map<string, Entry>();
@@ -148,15 +153,57 @@ function activityOf(entry: Entry): ActivityStatus | null {
 	});
 }
 
+function applyWorkspaceActivity(
+	workspaceId: string,
+	diskRows: readonly WorkspaceActivityRow[] = [],
+): void {
+	const projectId = activityProjectId(workspaceId);
+	if (projectId === null) return;
+	const entries: [string, Entry][] = [];
+	const liveRows: WorkspaceActivityRow[] = [];
+	for (const [id, entry] of sessions) {
+		if (entry.workspaceId !== workspaceId) continue;
+		entries.push([id, entry]);
+		if (isSessionDeleted(id, workspaceId)) continue;
+		liveRows.push({ sessionId: id, status: activityOf(entry), recencyMs: entry.lastActivityMs });
+	}
+	const rawById = new Map(liveRows.map((row) => [row.sessionId, row.status]));
+	const superseded = supersededFailedSessions([...liveRows, ...diskRows]);
+	for (const [id, entry] of entries) {
+		const raw = isSessionDeleted(id, workspaceId) ? null : (rawById.get(id) ?? null);
+		entry.rawActivity = raw;
+		const effective = superseded.has(id) ? null : raw;
+		if (effective === entry.publishedActivity) continue;
+		entry.publishedActivity = effective;
+		publishActivity({ sessionId: id, workspaceId, projectId, status: effective });
+	}
+}
+
 export function syncSessionActivity(sessionId: string): void {
 	const entry = sessions.get(sessionId);
 	if (!entry) return;
-	const status = isSessionDeleted(sessionId, entry.workspaceId) ? null : activityOf(entry);
-	if (status === entry.publishedActivity) return;
-	const projectId = activityProjectId(entry.workspaceId);
-	if (projectId === null) return;
-	entry.publishedActivity = status;
-	publishActivity({ sessionId, workspaceId: entry.workspaceId, projectId, status });
+	const raw = isSessionDeleted(sessionId, entry.workspaceId) ? null : activityOf(entry);
+	if (raw === entry.rawActivity) return;
+	entry.lastActivityMs = Date.now();
+	applyWorkspaceActivity(entry.workspaceId);
+}
+
+async function reconcileWorkspaceActivity(workspaceId: string): Promise<void> {
+	let cwd: string | undefined;
+	for (const entry of sessions.values()) {
+		if (entry.workspaceId !== workspaceId) continue;
+		cwd = entry.session.sessionManager.getCwd();
+		break;
+	}
+	let diskRows: WorkspaceActivityRow[] = [];
+	if (cwd !== undefined) {
+		try {
+			diskRows = await diskActivityRows(workspaceId, cwd);
+		} catch (error) {
+			log.warn(`activity reconcile skipped disk for workspace ${workspaceId}`, error as Error);
+		}
+	}
+	applyWorkspaceActivity(workspaceId, diskRows);
 }
 
 function retractActivity(sessionId: string, workspaceId: string): void {
@@ -209,22 +256,23 @@ async function diskActivityStatus(info: SessionInfo): Promise<ActivityStatus | n
 	return status;
 }
 
-async function diskActivityRows(workspaceId: string, cwd: string): Promise<SessionActivity[]> {
+async function diskActivityRows(workspaceId: string, cwd: string): Promise<WorkspaceActivityRow[]> {
 	const liveFiles = new Set<string>();
 	for (const entry of sessions.values()) {
 		if (entry.workspaceId !== workspaceId) continue;
 		const file = entry.session.sessionManager.getSessionFile();
 		if (file) liveFiles.add(resolve(file));
 	}
-	const projectId = activityProjectId(workspaceId);
-	if (projectId === null) return [];
 	const infos = await listSessionInfosStrict(cwd, liveFiles);
-	const rows: SessionActivity[] = [];
+	const rows: WorkspaceActivityRow[] = [];
 	for (const info of infos) {
 		if (info.cwd !== cwd) continue;
 		if (sessions.has(info.id) || isSessionDeleted(info.id, workspaceId)) continue;
-		const status = await diskActivityStatus(info);
-		if (status) rows.push({ sessionId: info.id, workspaceId, projectId, status });
+		rows.push({
+			sessionId: info.id,
+			status: await diskActivityStatus(info),
+			recencyMs: info.modified.getTime(),
+		});
 	}
 	return rows;
 }
@@ -232,20 +280,38 @@ async function diskActivityRows(workspaceId: string, cwd: string): Promise<Sessi
 export async function listSessionActivity(
 	workspaces: readonly { id: string; cwd: string }[] = [],
 ): Promise<SessionActivity[]> {
-	const rows: SessionActivity[] = [];
+	const byWorkspace = new Map<string, WorkspaceActivityRow[]>();
+	const addRow = (workspaceId: string, row: WorkspaceActivityRow): void => {
+		const list = byWorkspace.get(workspaceId);
+		if (list) list.push(row);
+		else byWorkspace.set(workspaceId, [row]);
+	};
 	for (const [sessionId, entry] of sessions) {
 		if (isSessionDeleted(sessionId, entry.workspaceId)) continue;
-		const status = activityOf(entry);
-		if (!status) continue;
-		const projectId = activityProjectId(entry.workspaceId);
-		if (projectId === null) continue;
-		rows.push({ sessionId, workspaceId: entry.workspaceId, projectId, status });
+		addRow(entry.workspaceId, {
+			sessionId,
+			status: activityOf(entry),
+			recencyMs: entry.lastActivityMs,
+		});
 	}
 	for (const workspace of workspaces) {
+		if (!byWorkspace.has(workspace.id)) byWorkspace.set(workspace.id, []);
 		try {
-			rows.push(...(await diskActivityRows(workspace.id, workspace.cwd)));
+			for (const row of await diskActivityRows(workspace.id, workspace.cwd)) {
+				addRow(workspace.id, row);
+			}
 		} catch (error) {
 			log.warn(`activity snapshot skipped workspace ${workspace.id}`, error as Error);
+		}
+	}
+	const rows: SessionActivity[] = [];
+	for (const [workspaceId, wsRows] of byWorkspace) {
+		const projectId = activityProjectId(workspaceId);
+		if (projectId === null) continue;
+		const superseded = supersededFailedSessions(wsRows);
+		for (const row of wsRows) {
+			if (row.status === null || superseded.has(row.sessionId)) continue;
+			rows.push({ sessionId: row.sessionId, workspaceId, projectId, status: row.status });
 		}
 	}
 	return rows;
@@ -420,7 +486,12 @@ async function prepareSessionEntry(
 		registered: false,
 		subagentToolsRefreshPending: false,
 		publishedActivity: null,
+		rawActivity: null,
+		lastActivityMs: Date.now(),
 	};
+	entry.rawActivity = activityOf(entry);
+	const seededRecencyMs = messagesActivityMs(session.messages);
+	if (seededRecencyMs !== null) entry.lastActivityMs = seededRecencyMs;
 	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "queue_update") {
 			synchronizeQueuedLane(entry, "steering", event.steering);
@@ -507,7 +578,7 @@ async function registerSession(
 	applySubagentTools(prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
-	syncSessionActivity(session.sessionId);
+	await reconcileWorkspaceActivity(workspaceId);
 	return prepared.result;
 }
 
@@ -1155,6 +1226,7 @@ function disposeSession(sessionId: string): Promise<void> {
 	entry.session.dispose();
 	sessions.delete(sessionId);
 	if (entry.publishedActivity !== null) retractActivity(sessionId, entry.workspaceId);
+	applyWorkspaceActivity(entry.workspaceId);
 	log.debug(`session ${sessionId} disposed`);
 	return cascade;
 }

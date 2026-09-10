@@ -103,8 +103,9 @@ treatment.
   - It sits in **its own flex column between the identity button and the kebab**, so the hover-revealed
     kebab never covers it (a trailing overlay would).
   - **Hover explains it**, via `IconTooltip` (`wrapTrigger` — a bare glyph is not focusable). One busy
-    chat shows the plain label; several show a per-state breakdown with counts in rollup order — which is
-    where the counts the row itself refuses to carry actually live. "Several" counts **chats**
+    chat shows the plain label; several show a per-state breakdown with counts in rollup order — the same
+    **`ACTIVITY_STATUS_ORDER`** the store's rollup uses (imported, not re-declared, so the two never drift) —
+    which is where the counts the row itself refuses to carry actually live. "Several" counts **chats**
     (`activityChatCount`), not distinct statuses: two chats both working must read "2 chats working", so a
     threshold on the number of breakdown *lines* would silently drop the count in exactly the
     single-status case. The tooltip is an *enhancement*: the

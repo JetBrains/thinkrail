@@ -20,14 +20,24 @@ function seedFailedChat(worktree: string): void {
 	seedWorkspaceSession(worktree, {
 		name: FAILED_CHAT,
 		messages: [
-			{ role: "user", text: "ship the release", timestamp: BASE_TS },
+			{ role: "user", text: "ship the release", timestamp: BASE_TS + 15_000 },
 			{
 				role: "assistant",
 				text: "I was preparing the release",
-				timestamp: BASE_TS + 1_000,
+				timestamp: BASE_TS + 16_000,
 				stopReason: "error",
 				errorMessage: "provider unreachable",
 			},
+		],
+	});
+}
+
+function seedDoneChat(worktree: string): void {
+	seedWorkspaceSession(worktree, {
+		name: "activity done chat",
+		messages: [
+			{ role: "user", text: "clean things up", timestamp: BASE_TS + 20_000 },
+			{ role: "assistant", text: "all done", timestamp: BASE_TS + 21_000, stopReason: "stop" },
 		],
 	});
 }
@@ -115,7 +125,7 @@ test("an unanswered question marks the row as waiting for you", async ({ page })
 	await shot(page.getByTestId("project-tree"), "activity", "workspace-waiting");
 });
 
-test("failed outranks waiting in one workspace, and the glyph names the whole breakdown", async ({
+test("waiting outranks failed in one workspace, and the glyph names the whole breakdown", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -128,10 +138,10 @@ test("failed outranks waiting in one workspace, and the glyph names the whole br
 	await openPersistedChat(page, FAILED_CHAT);
 
 	const row = defaultWorkspaceRow(page);
-	await expect(row).toHaveAttribute("data-activity", "failed");
+	await expect(row).toHaveAttribute("data-activity", "waiting");
 	await expect(row.getByTestId("activity-glyph")).toHaveAttribute(
 		"aria-label",
-		"1 chat failed, 1 chat waiting for your answer",
+		"1 chat waiting for your answer, 1 chat failed",
 	);
 	await shot(page.getByTestId("project-tree"), "activity", "workspace-rollup");
 });
@@ -197,4 +207,19 @@ test("a never-opened chat's failure reaches the rail from disk, without entering
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
 	await expect(row).not.toHaveAttribute("data-active", "true");
 	await shot(page.getByTestId("project-tree"), "activity", "workspace-from-disk");
+});
+
+test("a newer fine chat supersedes an older failure — the worktree stops reading as failed", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const worktree = realpathSync(E2E_FIXTURE_REPO);
+	seedFailedChat(worktree);
+	seedDoneChat(worktree);
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+	const row = defaultWorkspaceRow(page);
+	await expect(row).not.toHaveAttribute("data-activity", /.+/);
 });

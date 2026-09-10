@@ -1548,7 +1548,7 @@ test("a rolled-back delete republishes activity — a suppressed glyph would out
 	}
 });
 
-test("the activity snapshot finds durable states on disk with no session ever attached", async () => {
+test("the activity snapshot finds a durable failure on disk with no session ever attached", async () => {
 	setActivityProjectResolver(() => "project-disk");
 	const cwd = tmpCwd("trpi-activity-disk-");
 	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
@@ -1560,14 +1560,6 @@ test("the activity snapshot finds durable states on disk with no session ever at
 		messages: [
 			{ role: "user", text: "ship it", timestamp: 1 },
 			{ role: "assistant", text: "tried", timestamp: 2, stopReason: "error" },
-		],
-	});
-	writeFixtureSession(dir, {
-		id: "disk-done",
-		cwd,
-		messages: [
-			{ role: "user", text: "tidy up", timestamp: 3 },
-			{ role: "assistant", text: "done", timestamp: 4, stopReason: "stop" },
 		],
 	});
 
@@ -1603,6 +1595,122 @@ test("the activity snapshot finds durable states on disk with no session ever at
 		expect(after).toEqual([]);
 	} finally {
 		setActivityProjectResolver(() => null);
+	}
+});
+
+test("a newer finished-fine disk chat supersedes an older failure — the rail goes quiet", async () => {
+	setActivityProjectResolver(() => "project-supersede");
+	const cwd = tmpCwd("trpi-activity-supersede-");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	mkdirSync(dir, { recursive: true });
+
+	writeFixtureSession(dir, {
+		id: "disk-old-failed",
+		cwd,
+		messages: [
+			{ role: "user", text: "ship it", timestamp: 1 },
+			{ role: "assistant", text: "tried", timestamp: 2, stopReason: "error" },
+		],
+	});
+	writeFixtureSession(dir, {
+		id: "disk-new-done",
+		cwd,
+		messages: [
+			{ role: "user", text: "start over", timestamp: 3 },
+			{ role: "assistant", text: "all good", timestamp: 4, stopReason: "stop" },
+		],
+	});
+
+	try {
+		const quiet = (await listSessionActivity([{ id: "ws-sup", cwd }])).filter(
+			(row) => row.workspaceId === "ws-sup",
+		);
+		expect(quiet).toEqual([]);
+	} finally {
+		setActivityProjectResolver(() => null);
+	}
+});
+
+test("a failure that is the newest work on disk still shows — it is not superseded", async () => {
+	setActivityProjectResolver(() => "project-supersede-new");
+	const cwd = tmpCwd("trpi-activity-supersede-new-");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	mkdirSync(dir, { recursive: true });
+
+	writeFixtureSession(dir, {
+		id: "disk-old-done",
+		cwd,
+		messages: [
+			{ role: "user", text: "warm up", timestamp: 1 },
+			{ role: "assistant", text: "all good", timestamp: 2, stopReason: "stop" },
+		],
+	});
+	writeFixtureSession(dir, {
+		id: "disk-new-failed",
+		cwd,
+		messages: [
+			{ role: "user", text: "now ship", timestamp: 3 },
+			{ role: "assistant", text: "broke", timestamp: 4, stopReason: "error" },
+		],
+	});
+
+	try {
+		const rows = (await listSessionActivity([{ id: "ws-supnew", cwd }])).filter(
+			(row) => row.workspaceId === "ws-supnew",
+		);
+		expect(rows.map((row) => row.sessionId)).toEqual(["disk-new-failed"]);
+		expect(rows[0]?.status).toBe("failed");
+	} finally {
+		setActivityProjectResolver(() => null);
+	}
+});
+
+test("reopening the superseded failure keeps it hidden — attach must not restamp its recency to now", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const published: { sessionId: string; status: ActivityStatus | null }[] = [];
+	setSessionActivityPublisher((payload) =>
+		published.push({ sessionId: payload.sessionId, status: payload.status }),
+	);
+	setActivityProjectResolver(() => "project-reopen");
+	const cwd = tmpCwd("trpi-activity-reopen-");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	mkdirSync(dir, { recursive: true });
+
+	const failed = writeFixtureSession(dir, {
+		id: "reopen-old-failed",
+		cwd,
+		messages: [
+			{ role: "user", text: "ship it", timestamp: 1 },
+			{ role: "assistant", text: "tried", timestamp: 2, stopReason: "error" },
+		],
+	});
+	writeFixtureSession(dir, {
+		id: "reopen-new-done",
+		cwd,
+		messages: [
+			{ role: "user", text: "start over", timestamp: 3 },
+			{ role: "assistant", text: "all good", timestamp: 4, stopReason: "stop" },
+		],
+	});
+
+	const mine = async () =>
+		(await listSessionActivity([{ id: "ws-reopen", cwd }])).filter(
+			(row) => row.workspaceId === "ws-reopen",
+		);
+	try {
+		expect(await mine()).toEqual([]);
+
+		expect(await ensureSessionAttached(failed.id, "ws-reopen", cwd)).toBe(true);
+
+		expect(await mine()).toEqual([]);
+		expect(published.some((row) => row.sessionId === failed.id && row.status === "failed")).toBe(
+			false,
+		);
+	} finally {
+		if (hasSession(failed.id)) removeSession(failed.id);
+		setSessionActivityPublisher(() => {});
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });
 
