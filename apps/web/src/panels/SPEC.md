@@ -354,12 +354,19 @@ a project picker, the prompt hero, and the reused
   runnable by the held model by asking the host for pi's clamp (**`model.clampThinking`**) rather than
   deciding locally, so an explicit switch and a refresh that shrank a model's set resolve the same way
   pi would. `model.default` needs no adjustment: the host already returns a self-consistent pair.
-  On open and project-picker changes, the dialog reads **`skill.list({projectId})`** and feeds the
-  result to chat's shared slash-completion primitive: a leading `/` autocompletes skills from the selected
-  project's **current checkout** plus personal/bundled sources, selecting one inserts `/skill:<name> `;
-  failure degrades silently to no menu. Up/Down navigate, Enter/Tab select, Escape dismisses. A caption under
-  the prompt marks the preview as **from the current checkout** (the created worktree's session catalog is
-  authoritative if the selected base branch differs). When the selected project is **untrusted AND ships
+  On open and project-picker changes, the dialog reads **`skill.list({projectId})`**; whenever a leading
+  slash token becomes active it also reads **`template.list({projectId})`**. It feeds both into the shared
+  `prompt` module, so Create Workspace and live chat use the same filtering, menu, keyboard navigation,
+  race-safe template pick, and Tab-through placeholder state machine. Skills come from the selected project's
+  **current checkout** plus personal/bundled sources; templates merge global + current-checkout project scope
+  with project precedence. Selecting a skill inserts `/skill:<name> `; selecting a template reads
+  `template.get({projectId, name})`, replaces the complete draft with its body, and activates its placeholders.
+  Up/Down navigate, Enter/Tab select, Escape dismisses the menu; outside an open menu Tab/Shift+Tab cycle active
+  template slots and Escape ends that session. Submission mirrors edited repeated slots and removes untouched
+  markers before the finalized text becomes the first prompt. Listing/get failures preserve the draft and
+  degrade to whichever source remains available. Extension commands and `/compact` stay absent because no live
+  session exists. A caption under the prompt marks the catalog as **from the current checkout** (the created
+  worktree's session is authoritative if the selected base branch differs). When the selected project is **untrusted AND ships
   committed skills** (a count from `project.aliasSkills`, never their names), a **trust notice** shows a
   *Trust project* button — the repo's skills stay withheld until granted (`project.setTrust`, which folds the
   updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
@@ -513,7 +520,7 @@ a project picker, the prompt hero, and the reused
   resolved with zero rows and no error, its empty state swaps the bare "No templates yet." for that same
   hint plus a button (`data-testid="template-starters"`) — clicking it `template.save`s five verbatim
   starter templates (scope `"global"`, body assembled client-side via
-  `chat/templateText.ts`'s `assembleTemplate`, the same helper `TemplateEditorDialog` uses) sequentially,
+  the shared `prompt` module's `assembleTemplate`, the same helper `TemplateEditorDialog` uses) sequentially,
   then bumps `templatesVersion` once, the same invalidation the row list already refetches on — the
   offer disappears on its own next render once the list is non-empty, no dismiss state to track. The five
   (review/explain/tests/commit/rename) are **the same set this repo checks into its own `.pi/prompts/`**:

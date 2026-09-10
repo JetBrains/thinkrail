@@ -480,9 +480,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   must stay readable at any width goes in `meta`, not `label`: the `· W×H` size, and an attach error's
   reason (its filename truncates — the reason is what the user can act on, and a phone has no tooltip
   to fall back to) — and `openHistory` on its
-  imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion
-  primitive** (filter/menu/caret + Up/Down, Enter/Tab, Escape), reused by `panels/NewWorkspaceDialog` so
-  the two inputs cannot drift; `HistoryOverlay` (the history-recall/search overlay `Composer` opens —
+  imperative handle → `onHistoryOpen`) plus the shared `prompt` module's **slash-completion
+  primitive** (filter/menu/caret + Up/Down, Enter/Tab, Escape); `HistoryOverlay` (the history-recall/search overlay `Composer` opens —
   presentational, driven entirely by `useHistorySearch.ts`'s state + callbacks, plus **Save as template**
   and one-click **Trash chat** actions on mapped hits (`ChatView` owns `session.delete` + the idempotent
   store deletion fold; success closes the overlay, failure toasts; `session.deleted` also drives that fold
@@ -667,9 +666,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `:hover`. The save-as-template icon's own shortcut (`SAVE_SHORTCUT_LABEL`, `⌘S`/`Ctrl+S`) gets the
   identical selected-only glyph (`data-testid="history-save-shortcut"`) for the same reason, symmetric
   with the jump icon.
-- **Template slots** (`slotSession.ts`'s parser + `Composer`'s session state + `ChatView`'s menu/pick
-  wiring — the composer's Tab-through placeholder flow, end to end). **Parsing** (`slotSession.ts`, pure,
-  zero deps): `parseTemplateSlots(body, argumentHint)` expands pi's own placeholder grammar (`$1..$n`,
+- **Template slots** (the shared `prompt` module's parser/state machine + `Composer`'s geometry +
+  `ChatView`'s catalog/template-read wiring — the composer's Tab-through placeholder flow, end to end).
+  **Parsing** (`prompt`, pure): `parseTemplateSlots(body, argumentHint)` expands pi's own placeholder grammar (`$1..$n`,
   `$@`/`$ARGUMENTS`, `${N:-default}`, `${@:N}`, `${@:N:L}` — pi's grammar, single owner; see
   `packages/server/src/templates/`) into visible text plus `TemplateSlot` ranges;
   `stripUntouchedSlots`/`shiftSlots` round out the session (strip-on-send, re-track-on-edit) — **parse
@@ -730,18 +729,18 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   composer's `/` menu path is always fresh via `template.list`" claim true, unlike the typed-through
   `/name args` path's frozen create-time snapshot. **Picking a template** (`ChatView`'s `onPickTemplate`, a
   `Composer` prop): instead of the plain `/name ` insert, fetches `template.get`, splits
-  frontmatter client-side (`templateText.ts`'s shared `stripFrontmatter` — pi's own frontmatter parser is
+  frontmatter client-side (the `prompt` module's shared `stripFrontmatter` — pi's own frontmatter parser is
   server-only, never reaches the browser bundle, but the boundary rule is pinned to match it exactly; see
   the Save-as-template bullet below), runs `parseTemplateSlots(body, argumentHint)`, and hands
-  the result to `Composer` via a new **`ComposerHandle.insertTemplate`** method (alongside the existing
+  the result to `Composer` via **`ComposerHandle.insertTemplate`** (alongside the existing
   `insertText`) — replaces the whole draft (like `pickSlash`, not `pickMention`: a slash command occupies
   the entire input) and, if the parse produced any slots, starts a **slot session** selecting slot 0; no
   slots → a plain insert, caret at the end, no session. The async response is applied only while the pick
   is still **current** — newest pick wins AND the draft is byte-identical to pick time — so a slow
   response can never clobber a draft the user typed (or a second template they picked) in the meantime;
-  the rules are `templatePick.ts`'s `shouldApplyTemplatePick` (pure, unit-tested for delayed and
-  out-of-order responses). **The session** (`Composer`, local `useState`:
-  `slots: TemplateSlot[] | null` + `slotIdx`, no store/transport): `Tab`/`Shift+Tab` step to the
+  the rule lives in `prompt`'s shared template-pick controller and is unit-tested for delayed and
+  out-of-order responses. **The session** (shared `prompt` state, held locally by `Composer`, with no
+  store/transport): `Tab`/`Shift+Tab` step to the
   next/previous slot (wrap; `preventDefault`; a no-op while the mention/slash menu is open — checked at
   the top of `onKeyDown`, before the menu's own key handling, so a real
   Tab-to-pick-a-menu-item is unaffected, and symmetrically an `Escape` while the menu is also open lets the
@@ -749,7 +748,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   user actually changed — not an untouched marker, and crucially not an untouched `${N:-default}` either)
   splices its current text into every other slot sharing its `group` whose text differs (group
   mirroring — repeated `$N`/`${...}` occurrences propagate on slot exit, not per keystroke), each splice
-  re-tracked via `shiftSlots` (`mirrorSlotGroup` in `slotSession.ts`). A slot carries two independent
+  re-tracked via the shared prompt slot state machine. A slot carries two independent
   bits: **`filled`** (a parse-time property — has real content: a `${N:-default}`'s default, or a marker
   typed into — drives strip-on-send + the tint) and **`edited`** (session runtime state — the user
   changed it — the sole mirror-*source* gate). If the user collapses an untouched marker selection to
@@ -784,7 +783,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   owns the input border and fill: `bg-clip-padding` keeps the backdrop tint inside the rounded border,
   while `focus-within:border-control-border-active` is the composer's sole focus indicator rather than a
   second accent ring on the textarea. The pure `highlightSegments(value, slots, activeIdx)`
-  (`slotSession.ts`) breaks `value` into ordered
+  (from the shared `prompt` module) breaks `value` into ordered
   plain/unfilled/filled/active runs — a slot range is `"active"` when its `slots` index is `activeIdx`
   (`Composer`'s own `slotIdx`), else `"unfilled"`/`"filled"` per its own `filled` flag; everything else is
   `"plain"` — pure offsets/slices, no empty segment for zero-gap-adjacent slots, and the tests pin
@@ -813,7 +812,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `chat/`, so the one shared implementation has to live where both sides can reach it. `TemplateEditorDialog`
   is therefore promoted to a **third** sanctioned store/transport-touching integration piece (see Boundary
   below), even though it isn't `ChatView` itself.
-  - **`templateText.ts`** is the single shared frontmatter splitter/assembler — `stripFrontmatter`
+  - The `prompt` module's **template-text API** is the single shared frontmatter splitter/assembler — `stripFrontmatter`
     (`ChatView.tsx`'s composer-pick path + this dialog's body field), `assembleTemplate` (this dialog's
     save). It does **no YAML value parsing**: the dialog's description/argument-hint fields are populated
     from the server-parsed `template.get` response (`Template` — pi's real YAML parser over the **full
@@ -837,7 +836,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
     since it's a 4-line pure predicate and the server module is server-only), a scope radio (Global / This
     project; "This project" is disabled with no active workspace), description, argument-hint, and a body
     `Textarea` with a static one-line syntax hint (`$1, $ARGUMENTS, ${1:-default} — pi prompt-template
-    syntax`; the real grammar is parsed by `slotSession.ts` / expanded by pi — this line is documentation
+    syntax`; the real grammar is parsed by the `prompt` module / expanded by pi — this line is documentation
     text only, not itself parsed).
   - **Assembly**: `---\ndescription: …\nargument-hint: …\n---\n\n<body>`, omitting either key when its
     field is empty, and **no frontmatter block at all** when both are empty **and the body doesn't start
@@ -1020,7 +1019,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 ## Boundary
 
 - **Public surface:** the registry API (`toolRegistry`), the shared workspace-file target canonicalizer
-  (`fileTargets`), the props-driven slash-completion primitive, and the renderers (incl. the presentational
+  (`fileTargets`), and the renderers (incl. the presentational
   `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses the compact bubble skin (`tr-prose-chat`),
   `panels/MarkdownPreview` the document skin (`tr-prose-doc`). A skin names exactly one generated
@@ -1037,7 +1036,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `markSkillsSynced` to clear only this chat).
   **No `index.ts` barrel** — chat pulls **shiki**, so per the code-splitting exception imports stay
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
-- **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
+- **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); the lifecycle-neutral
+  `prompt` module; `store` + `transport`
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
   is `ChatView.tsx`, `chatPreferences.ts` (the client-local persistence adapter), plus the hooks and dialogs
   it composes: `useChatTodos.ts`, `useHistorySearch.ts`,

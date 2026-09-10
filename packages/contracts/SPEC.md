@@ -90,8 +90,8 @@ of the host.
   - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
-    command/skill autocomplete catalog, returned by live `session.getCommands` and skill-only pre-session
-    `skill.list`), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
+    command autocomplete rows, returned by live `session.getCommands`, skill-only pre-session `skill.list`,
+    and mapped prompt-template listings), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
     `disabled`) — the workspace Skills manager's `skills.state` rows.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
     distinguishes an in-memory session from a disk-only one. A frontend hydrates locally placed sessions and
@@ -246,7 +246,11 @@ of the host.
   the wire at protocol v61 and `terminalWindowsShell` at v62. `terminalWindowsShell`
   (`"auto" | "pwsh" | "powershell" | "cmd"`, default `"auto"`) is read only by `server/terminal` on
   Windows and ignored elsewhere — see
-  `submodule-server-terminal`'s shell-selection decision for what each value spawns. `themeMode` defaults to `"fixed"` and no pair, preserving both legacy configs
+  `submodule-server-terminal`'s shell-selection decision for what each value spawns.
+  **`PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION`** pins v63's additive project-located `template.list` /
+  `template.get` reads, allowing Create Workspace to preview global plus current-checkout project templates
+  without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
+  and no pair, preserving both legacy configs
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
   behavior), overridden only by `Workspace.subagentsOverride`; `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset
@@ -457,8 +461,9 @@ of the host.
   records, discard drafts, replace the active review, and publish the fresh open snapshot to every client)
   — plus
   **`template.*`** — prompt-template CRUD
-  (**`template.list`**, **`template.get`**
-  — `scope` optional, project wins over global, **`template.save`**, **`template.delete`**) — all
+  (**`template.list`**, **`template.get`** — reads accept one optional location, `workspaceId` or
+  `projectId`, and reject both; no location is global-only, while either located form merges project over
+  global; **`template.save`**, **`template.delete`**) — all
   read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
   (open records) and **`recentProjects`** (all known records, open + closed), plus **`hostPlatform`**

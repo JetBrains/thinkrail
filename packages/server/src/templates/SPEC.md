@@ -12,8 +12,9 @@ tags: [v1, templates, public-surface-checked]
 
 File CRUD over pi's two sanctioned prompt-template directories (global + project-scoped): list / get /
 save / delete `.md` files, surfacing pi's own frontmatter (`description`, `argument-hint`) as metadata.
-Consumed by the `template.*` host handlers (Task B3); this module owns no WS surface itself — `cwd` is
-passed in by the caller (a resolved workspace), never looked up here.
+Consumed by the `template.*` host handlers; this module owns no WS surface itself — an optional `cwd` is
+passed in by the caller after resolving either a live workspace or a pre-session project's current checkout,
+never looked up here.
 
 ## pi facts (pinned against pi v0.84.3 — `@earendil-works/pi-coding-agent`)
 
@@ -189,7 +190,8 @@ assumption; re-verify on a pi version bump.
   `parseFrontmatter` — root exports only), `@thinkrail/contracts` (`TemplateInfo`, `TemplateScope`),
   `node:fs`, `node:path`.
 - **Forbidden:** importing `workspaces` / `projects` — stays registry-free like `history`; the
-  `template.*` handler resolves `workspaceId` → `cwd` and passes `cwd` into `templateDirs` itself.
+  `template.*` handler resolves the read request's one optional `workspaceId` / `projectId` location to `cwd`
+  and passes it into `templateDirs` itself. Both ids together are rejected; no location remains global-only.
   Caching the listing across calls. Writing or reading anything outside `globalDir` / `projectDir`.
 
 ## Get right
