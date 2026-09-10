@@ -91,8 +91,14 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 62;
+export type TemplateReadLocation =
+	| { workspaceId: string; projectId?: never }
+	| { projectId: string; workspaceId?: never }
+	| { workspaceId?: never; projectId?: never };
+
+export const PROTOCOL_VERSION = 63;
 export const WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION = 62;
+export const PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION = 63;
 export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
 export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
 export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;
@@ -585,11 +591,11 @@ export interface WsMethodMap {
 	"review.fileDone": { params: { workspaceId: string; path: string }; result: Ack };
 	"review.close": { params: { workspaceId: string }; result: Ack };
 	"template.list": {
-		params: { workspaceId?: string };
+		params: TemplateReadLocation;
 		result: { templates: TemplateInfo[] };
 	};
 	"template.get": {
-		params: { workspaceId?: string; name: string; scope?: TemplateScope };
+		params: TemplateReadLocation & { name: string; scope?: TemplateScope };
 		result: Template;
 	};
 	"template.save": {

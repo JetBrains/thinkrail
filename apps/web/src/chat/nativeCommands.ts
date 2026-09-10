@@ -1,5 +1,5 @@
 import type { SlashCommandInfo } from "@thinkrail/contracts";
-import type { SlashCommandItem } from "./SlashCommandCompletion";
+import type { SlashCommandItem } from "@/prompt";
 
 const COMPACT_NAME = "compact";
 

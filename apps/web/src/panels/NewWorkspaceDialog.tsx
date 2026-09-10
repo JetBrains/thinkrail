@@ -8,17 +8,19 @@ import {
 	RiSparkling2Line as Sparkles,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
-import type { SlashCommandInfo, ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
+import {
+	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
+	type SlashCommandInfo,
+	type TemplateInfo,
+	type TemplateReadLocation,
+	type ThinkingLevel,
+	type WireModel,
+	type Workspace,
+} from "@thinkrail/contracts";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
-import {
-	SlashCommandMenu,
-	selectedSlashCommandValue,
-	slashCommandCatalogOrEmpty,
-	useSlashCommandCompletion,
-} from "@/chat/SlashCommandCompletion";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
 import { useModelCatalog } from "@/chat/useModelCatalog";
 import { Button } from "@/components/ui/button";
@@ -39,7 +41,24 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib";
+import {
+	applyTemplateSlotEdit,
+	beginTemplateSlotSession,
+	finalizeTemplateSlotSession,
+	isPromptKeyEventComposing,
+	type ParsedTemplate,
+	SlashCommandMenu,
+	selectedSlashCommandValue,
+	slashCommandCatalogOrEmpty,
+	slashCommandQuery,
+	stepTemplateSlotSession,
+	TemplateSlotHint,
+	type TemplateSlotSessionState,
+	templateToSlashCommand,
+	useSlashCommandCompletion,
+	useTemplateCommandPicker,
+} from "@/prompt";
 import { selectCatalogModel, toast, useAppStore } from "@/store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
 import { BranchPicker } from "./BranchPicker";
@@ -77,12 +96,15 @@ export function NewWorkspaceDialog({
 	onCreated: (workspace: Workspace) => void;
 }) {
 	const projects = useAppStore((s) => s.projects);
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
 
 	const [selectedProjectId, setSelectedProjectId] = useState(projectId);
 	const [target, setTarget] = useState<WorkspaceTarget>("worktree");
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [prompt, setPrompt] = useState("");
 	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
+	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
+	const [slotSession, setSlotSession] = useState<TemplateSlotSessionState | null>(null);
 	const [aliasSkills, setAliasSkills] = useState<string[]>([]);
 	const [model, setModel] = useState<WireModel | null>(null);
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
@@ -94,29 +116,69 @@ export function NewWorkspaceDialog({
 	const targetGroupName = useId();
 	const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
 
-	const focusPromptCaret = (position: number) => {
+	const focusPromptSelection = useCallback((start: number, end: number = start) => {
 		requestAnimationFrame(() => {
 			const input = promptRef.current;
 			if (!input) return;
 			input.focus();
-			input.setSelectionRange(position, position);
+			input.setSelectionRange(start, end);
 		});
-	};
+	}, []);
 
+	const supportsProjectTemplatePreview =
+		protocolVersion !== null && protocolVersion >= PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION;
+	const loadTemplate = useCallback(
+		(name: string) => {
+			const location: TemplateReadLocation = supportsProjectTemplatePreview
+				? { projectId: selectedProjectId }
+				: {};
+			return getTransport().request("template.get", { ...location, name });
+		},
+		[selectedProjectId, supportsProjectTemplatePreview],
+	);
+	const applyTemplate = useCallback(
+		(template: ParsedTemplate) => {
+			const transition = beginTemplateSlotSession(template);
+			setPrompt(transition.value);
+			setSlotSession(transition.session);
+			focusPromptSelection(transition.selection.start, transition.selection.end);
+		},
+		[focusPromptSelection],
+	);
+	const pickTemplate = useTemplateCommandPicker({
+		draft: prompt,
+		load: loadTemplate,
+		onApply: applyTemplate,
+	});
 	const slashCompletion = useSlashCommandCompletion({
 		value: prompt,
-		commands: skillCommands,
+		commands: [...skillCommands, ...templates.map(templateToSlashCommand)],
 		onSelect: (command) => {
+			if (command.source === "prompt") {
+				pickTemplate(command.name);
+				return;
+			}
 			const next = selectedSlashCommandValue(command);
 			setPrompt(next);
-			focusPromptCaret(next.length);
+			setSlotSession(null);
+			focusPromptSelection(next.length);
 		},
 	});
+	const slashActive = slashCommandQuery(prompt) !== null;
+
+	const stepPromptSlot = (direction: 1 | -1) => {
+		if (!slotSession) return;
+		const transition = stepTemplateSlotSession(prompt, slotSession, direction);
+		setPrompt(transition.value);
+		setSlotSession(transition.session);
+		focusPromptSelection(transition.selection.start, transition.selection.end);
+	};
 
 	useEffect(() => {
 		if (!open) return;
 		setSelectedProjectId(projectId);
 		setPrompt(initialPrompt ?? "");
+		setSlotSession(null);
 		setTarget("worktree");
 		setCreating(false);
 		hostDefaultAsked.current = false;
@@ -133,6 +195,7 @@ export function NewWorkspaceDialog({
 		if (!open) return;
 		let cancelled = false;
 		setSkillCommands([]);
+		setTemplates([]);
 		void slashCommandCatalogOrEmpty(() =>
 			getTransport().request("skill.list", { projectId: selectedProjectId }),
 		).then((commands) => {
@@ -142,6 +205,25 @@ export function NewWorkspaceDialog({
 			cancelled = true;
 		};
 	}, [open, selectedProjectId]);
+
+	useEffect(() => {
+		if (!open || !slashActive) return;
+		let cancelled = false;
+		const location: TemplateReadLocation = supportsProjectTemplatePreview
+			? { projectId: selectedProjectId }
+			: {};
+		getTransport()
+			.request("template.list", location)
+			.then(({ templates: nextTemplates }) => {
+				if (!cancelled) setTemplates(nextTemplates);
+			})
+			.catch(() => {
+				if (!cancelled) setTemplates([]);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, selectedProjectId, slashActive, supportsProjectTemplatePreview]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -272,7 +354,7 @@ export function NewWorkspaceDialog({
 		}
 		onOpenChange(false);
 
-		const text = prompt.trim();
+		const text = finalizeTemplateSlotSession(prompt, slotSession).trim();
 		store.beginChatStart(workspace.id);
 		try {
 			const { result: session, syncedTick } = await createSessionWithSkillBaseline({
@@ -329,9 +411,14 @@ export function NewWorkspaceDialog({
 				data-testid="new-workspace-dialog"
 				className="max-w-[600px] gap-12 p-12"
 				onEscapeKeyDown={(event) => {
-					if (!slashCompletion.open) return;
+					if (slashCompletion.open) {
+						event.preventDefault();
+						slashCompletion.dismiss();
+						return;
+					}
+					if (!slotSession) return;
 					event.preventDefault();
-					slashCompletion.dismiss();
+					setSlotSession(null);
 				}}
 				onOpenAutoFocus={(e) => {
 					e.preventDefault();
@@ -433,12 +520,35 @@ export function NewWorkspaceDialog({
 						ref={promptRef}
 						data-testid="ws-prompt"
 						value={prompt}
-						onChange={(e) => setPrompt(e.target.value)}
+						onChange={(e) => {
+							const next = e.target.value;
+							if (slotSession) {
+								setSlotSession(
+									applyTemplateSlotEdit(prompt, next, e.target.selectionStart, slotSession),
+								);
+							}
+							setPrompt(next);
+						}}
 						placeholder="What do you want to work on?"
 						spellCheck={false}
 						rows={6}
 						className="min-h-[160px]"
 						onKeyDown={(e) => {
+							if (isPromptKeyEventComposing(e.nativeEvent)) return;
+							if (slotSession && !slashCompletion.open) {
+								if (e.key === "Tab") {
+									e.preventDefault();
+									e.stopPropagation();
+									stepPromptSlot(e.shiftKey ? -1 : 1);
+									return;
+								}
+								if (e.key === "Escape") {
+									e.preventDefault();
+									e.stopPropagation();
+									setSlotSession(null);
+									return;
+								}
+							}
 							if (slashCompletion.handleKeyDown(e)) return;
 							if (e.key === "Enter" && !e.shiftKey) {
 								e.preventDefault();
@@ -453,6 +563,13 @@ export function NewWorkspaceDialog({
 							onSelect={slashCompletion.pick}
 							className="absolute top-full left-8 z-50 mt-4"
 						/>
+					) : slotSession ? (
+						<TemplateSlotHint
+							activeIndex={slotSession.activeIndex}
+							count={slotSession.slots.length}
+							onNext={() => stepPromptSlot(1)}
+							className="absolute top-full left-8 z-50 mt-4"
+						/>
 					) : prompt.trim() && isolated ? (
 						<p
 							data-testid="workspace-naming-hint"
@@ -462,8 +579,8 @@ export function NewWorkspaceDialog({
 						</p>
 					) : (
 						<p className="mt-4 text-text-muted tr-text-metadata">
-							Type <span className="tr-code-text">/</span> for a project skill — previewed from the
-							current checkout; the created workspace's session is authoritative.
+							Type <span className="tr-code-text">/</span> for skills and prompt templates —
+							previewed from the current checkout; the created workspace's session is authoritative.
 						</p>
 					)}
 				</div>

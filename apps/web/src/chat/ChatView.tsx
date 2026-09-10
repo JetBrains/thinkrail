@@ -4,7 +4,6 @@ import type {
 	PromptHit,
 	QueueLane,
 	SessionQueueContent,
-	SlashCommandInfo,
 	TemplateInfo,
 	ThinkingLevel,
 	WireModel,
@@ -13,6 +12,7 @@ import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } f
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib";
+import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
@@ -59,10 +59,7 @@ import {
 	streamStatus,
 } from "./StreamIndicator";
 import { SubagentTranscriptDialog } from "./SubagentTranscriptDialog";
-import { parseTemplateSlots } from "./slotSession";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
-import { shouldApplyTemplatePick } from "./templatePick";
-import { stripFrontmatter } from "./templateText";
 import { useModelCatalog } from "./useModelCatalog";
 import { useSessionStats } from "./useSessionStats";
 import "./tools/register";
@@ -97,20 +94,6 @@ function turnAnchorText(turn: ChatTurn): string {
 			.join("\n");
 	}
 	return "";
-}
-
-function templateToCommand(t: TemplateInfo): SlashCommandInfo {
-	return {
-		name: t.name,
-		...(t.description ? { description: t.description } : {}),
-		source: "prompt",
-		sourceInfo: {
-			path: t.filePath,
-			source: "local",
-			scope: t.scope === "global" ? "user" : "project",
-			origin: "top-level",
-		},
-	};
 }
 
 type ChatListContext = {
@@ -447,7 +430,7 @@ export default function ChatView({
 		() =>
 			mergeNativeChatCommands([
 				...commands.filter((command) => command.source !== "prompt"),
-				...templates.map(templateToCommand),
+				...templates.map(templateToSlashCommand),
 			]),
 		[commands, templates],
 	);
@@ -663,28 +646,19 @@ export default function ChatView({
 		}
 	};
 
-	const pickGeneration = useRef(0);
-	const onPickTemplate = useCallback(
-		(name: string) => {
-			const generation = ++pickGeneration.current;
-			const draftAtPick = useAppStore.getState().sessions[sessionId]?.draft ?? "";
-			getTransport()
-				.request("template.get", { workspaceId, name })
-				.then((t) => {
-					const apply = shouldApplyTemplatePick({
-						generation,
-						latestGeneration: pickGeneration.current,
-						draftAtPick,
-						currentDraft: useAppStore.getState().sessions[sessionId]?.draft ?? "",
-					});
-					if (!apply) return;
-					const parsed = parseTemplateSlots(stripFrontmatter(t.content), t.argumentHint);
-					composerRef.current?.insertTemplate(parsed);
-				})
-				.catch(() => {});
-		},
-		[workspaceId, sessionId],
+	const loadTemplate = useCallback(
+		(name: string) => getTransport().request("template.get", { workspaceId, name }),
+		[workspaceId],
 	);
+	const applyTemplate = useCallback(
+		(template: ParsedTemplate) => composerRef.current?.insertTemplate(template),
+		[],
+	);
+	const onPickTemplate = useTemplateCommandPicker({
+		draft,
+		load: loadTemplate,
+		onApply: applyTemplate,
+	});
 
 	useEffect(() => {
 		if (

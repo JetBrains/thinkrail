@@ -8,11 +8,11 @@ import {
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
 import { TemplateEditorDialog } from "@/chat/TemplateEditorDialog";
-import { assembleTemplate } from "@/chat/templateText";
 import { SkeletonRows } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import { PopoverTrigger } from "@/components/ui/popover";
 import { IconTooltip } from "@/components/ui/tooltip";
+import { assembleTemplate } from "@/prompt";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { ConfirmPopover } from "./ConfirmPopover";

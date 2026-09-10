@@ -11,9 +11,9 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib";
+import { assembleTemplate, stripFrontmatter } from "@/prompt";
 import { useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
-import { assembleTemplate, stripFrontmatter } from "./templateText";
 
 const SYNTAX_HINT = `$1, $ARGUMENTS, \${1:-default} — pi prompt-template syntax`;
 

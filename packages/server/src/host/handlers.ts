@@ -14,6 +14,7 @@ import type {
 	ReviewCommentStatus,
 	ReviewSendResult,
 	SubagentOverride,
+	TemplateReadLocation,
 	TemplateScope,
 	ThinkingLevel,
 	TodoStatus,
@@ -202,6 +203,18 @@ function recordAcceptedSend(mode: SendMode, text: string, clientKey: string): vo
 	if (isControlMessage(text)) return;
 	track({ name: "message_sent", params: { mode } });
 	recordAcceptedMessage(clientKey);
+}
+
+function resolveTemplateReadDirs(params: TemplateReadLocation) {
+	const { workspaceId, projectId } = params;
+	if (workspaceId !== undefined && projectId !== undefined) {
+		throw new Error("Template reads accept either workspaceId or projectId, not both");
+	}
+	if (workspaceId !== undefined) return templateDirs(getWorkspace(workspaceId).worktreePath);
+	if (projectId === undefined) return templateDirs();
+	const project = listProjects().find((candidate) => candidate.id === projectId);
+	if (!project) throw new Error(`Unknown project: ${projectId}`);
+	return templateDirs(project.path);
 }
 
 function fireReviewPrompt(
@@ -868,15 +881,12 @@ const handlers: Record<string, Handler> = {
 			return { sessions };
 		});
 	},
-	"template.list": (params) => {
-		const p = params as { workspaceId?: string };
-		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
-		return { templates: listTemplates(dirs) };
-	},
+	"template.list": (params) => ({
+		templates: listTemplates(resolveTemplateReadDirs(params as TemplateReadLocation)),
+	}),
 	"template.get": (params) => {
-		const p = params as { workspaceId?: string; name: string; scope?: TemplateScope };
-		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
-		return getTemplate(dirs, p.name, p.scope);
+		const p = params as TemplateReadLocation & { name: string; scope?: TemplateScope };
+		return getTemplate(resolveTemplateReadDirs(p), p.name, p.scope);
 	},
 	"template.save": (params) => {
 		const p = params as {

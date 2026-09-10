@@ -28,32 +28,33 @@ import {
 } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib";
+import {
+	applyTemplateSlotEdit,
+	beginTemplateSlotSession,
+	finalizeTemplateSlotSession,
+	highlightSegments,
+	isPromptKeyEventComposing,
+	type ParsedTemplate,
+	type SlashCommandItem,
+	SlashCommandMenu,
+	type SlotHighlightState,
+	type SlotSegment,
+	selectedSlashCommandValue,
+	slashCommandQuery,
+	stepTemplateSlotSession,
+	TemplateSlotHint,
+	type TemplateSlotSessionState,
+	useSlashCommandCompletion,
+} from "@/prompt";
 import { FileChip } from "./FileChip";
 import { type AttachedImage, fileToAttachedImage } from "./imageAttachment";
 import { ModelSelector } from "./ModelSelector";
-import {
-	type SlashCommandItem,
-	SlashCommandMenu,
-	selectedSlashCommandValue,
-	slashCommandQuery,
-	useSlashCommandCompletion,
-} from "./SlashCommandCompletion";
-import type { ParsedTemplate, SlotHighlightState, SlotSegment, TemplateSlot } from "./slotSession";
-import {
-	highlightSegments,
-	mirrorAllGroups,
-	mirrorSlotGroup,
-	shiftSlots,
-	stripUntouchedSlots,
-} from "./slotSession";
 import { ThinkingSelector } from "./ThinkingSelector";
 import type { ChatAttachment } from "./types";
 
 export type SubmitBehavior = "send" | "steer" | "followUp" | "interrupt";
 
 export type ComposerSubmitDisposition = { accepted: true } | { accepted: false; reason: string };
-
-const IME_SENTINEL_KEYCODE = 229;
 
 const COMPOSER_EDITOR_LIMIT_CLASS = {
 	compact: "max-h-[calc(6lh+var(--space-8)+var(--space-8))]",
@@ -107,35 +108,6 @@ function activeToken(value: string, caret: number): { token: string; start: numb
 	const match = /(\S+)$/.exec(value.slice(0, caret));
 	if (!match) return { token: "", start: caret };
 	return { token: match[0], start: caret - match[0].length };
-}
-
-function diffValues(
-	oldVal: string,
-	newVal: string,
-	newCaret: number,
-): { editStart: number; removedLen: number; insertedLen: number } {
-	const maxPrefix = Math.min(newCaret, oldVal.length, newVal.length);
-	let prefix = 0;
-	while (prefix < maxPrefix && oldVal[prefix] === newVal[prefix]) prefix++;
-
-	const maxSuffix = Math.min(oldVal.length - prefix, newVal.length - prefix);
-	let suffix = 0;
-	while (
-		suffix < maxSuffix &&
-		oldVal[oldVal.length - 1 - suffix] === newVal[newVal.length - 1 - suffix]
-	) {
-		suffix++;
-	}
-
-	return {
-		editStart: prefix,
-		removedLen: oldVal.length - prefix - suffix,
-		insertedLen: newVal.length - prefix - suffix,
-	};
-}
-
-function touches(slot: TemplateSlot, editStart: number, editEnd: number): boolean {
-	return editStart < slot.end && editEnd > slot.start;
 }
 
 function withOffsets(segments: SlotSegment[]): (SlotSegment & { start: number })[] {
@@ -241,8 +213,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const [mentionDismissed, setMentionDismissed] = useState(false);
 	const [sendMenuOpen, setSendMenuOpen] = useState(false);
 	const recallIdxRef = useRef<number | null>(null);
-	const [slots, setSlots] = useState<TemplateSlot[] | null>(null);
-	const [slotIdx, setSlotIdx] = useState(0);
+	const [slotSession, setSlotSession] = useState<TemplateSlotSessionState | null>(null);
+	const slots = slotSession?.slots ?? null;
+	const slotIdx = slotSession?.activeIndex ?? 0;
 	const backdropRef = useRef<HTMLDivElement | null>(null);
 	const editorSizerRef = useRef<HTMLDivElement | null>(null);
 	const [draftNeedsExpansion, setDraftNeedsExpansion] = useState(false);
@@ -291,7 +264,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	useEffect(() => onMentionQuery(mentionQuery), [mentionQuery, onMentionQuery]);
 	useEffect(() => onSlashActive(slashQuery !== null), [slashQuery, onSlashActive]);
-	// biome-ignore lint/correctness/useExhaustiveDependencies: reset selection when the query changes
 	useEffect(() => {
 		setMentionActiveIndex(0);
 		setMentionDismissed(false);
@@ -321,7 +293,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const replaceDraft = useCallback(
 		(text: string, caret: number = text.length) => {
 			recallIdxRef.current = null;
-			setSlots(null);
+			setSlotSession(null);
 			setSubmitError(null);
 			onChange(text);
 			focusSelection(caret);
@@ -348,7 +320,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		commitImages([]);
 		setAttachErrors([]);
 		recallIdxRef.current = null;
-		setSlots(null);
+		setSlotSession(null);
 	};
 
 	const pickMention = (c: MentionCandidate) => {
@@ -384,16 +356,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		insertAndSubmit: (text: string, behavior: SubmitBehavior) =>
 			canSubmit(text) ? submitText(text, behavior) : replaceDraft(text),
 		insertTemplate: (parsed: ParsedTemplate) => {
-			const first = parsed.slots[0];
-			if (!first) {
-				replaceDraft(parsed.text);
-				return;
-			}
+			const transition = beginTemplateSlotSession(parsed);
 			recallIdxRef.current = null;
-			onChange(parsed.text);
-			setSlots(parsed.slots);
-			setSlotIdx(0);
-			focusSelection(first.start, first.end);
+			setSubmitError(null);
+			onChange(transition.value);
+			setSlotSession(transition.session);
+			focusSelection(transition.selection.start, transition.selection.end);
 		},
 		restoreAttachments: (attachments: ChatAttachment[]) => {
 			if (attachments.length === 0) return;
@@ -450,34 +418,19 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	};
 
 	const submit = (behavior: SubmitBehavior) => {
-		let text = value;
-		if (slots) {
-			const mirrored = mirrorAllGroups(value, slots);
-			text = stripUntouchedSlots(mirrored.value, mirrored.slots);
-		}
-		submitText(text, behavior);
+		submitText(finalizeTemplateSlotSession(value, slotSession), behavior);
 	};
 
-	const stepSlot = (dir: 1 | -1) => {
-		if (!slots || slots.length === 0) return;
-		const cur = slots[slotIdx];
-		if (!cur) return;
-
-		const { value: nextValue, slots: nextSlots } = cur.edited
-			? mirrorSlotGroup(value, slots, slotIdx)
-			: { value, slots };
-
-		if (nextValue !== value) onChange(nextValue);
-		setSlots(nextSlots);
-		const len = nextSlots.length;
-		const next = (((slotIdx + dir) % len) + len) % len;
-		setSlotIdx(next);
-		const target = nextSlots[next];
-		if (target) focusSelection(target.start, target.end);
+	const stepSlot = (direction: 1 | -1) => {
+		if (!slotSession) return;
+		const transition = stepTemplateSlotSession(value, slotSession, direction);
+		if (transition.value !== value) onChange(transition.value);
+		setSlotSession(transition.session);
+		focusSelection(transition.selection.start, transition.selection.end);
 	};
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-		if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === IME_SENTINEL_KEYCODE) return;
+		if (isPromptKeyEventComposing(e.nativeEvent)) return;
 		if (slots && !menuOpen) {
 			if (e.key === "Tab") {
 				e.preventDefault();
@@ -486,7 +439,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			}
 			if (e.key === "Escape") {
 				e.preventDefault();
-				setSlots(null);
+				setSlotSession(null);
 				return;
 			}
 		}
@@ -518,7 +471,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		const recallAt = recallIdxRef.current;
 		if (e.key === "ArrowUp" && (value === "" || recallAt !== null) && recentPrompts.length > 0) {
 			e.preventDefault();
-			setSlots(null);
+			setSlotSession(null);
 			const next = recallAt === null ? 0 : Math.min(recallAt + 1, recentPrompts.length - 1);
 			const text = recentPrompts[next] ?? "";
 			recallIdxRef.current = next;
@@ -528,7 +481,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		}
 		if (e.key === "ArrowDown" && recallAt !== null) {
 			e.preventDefault();
-			setSlots(null);
+			setSlotSession(null);
 			if (recallAt === 0) {
 				recallIdxRef.current = null;
 				onChange("");
@@ -630,14 +583,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			) : null}
 
 			{slots && !menuOpen ? (
-				<button
-					type="button"
-					data-testid="slot-hint"
-					onClick={() => stepSlot(1)}
-					className="absolute bottom-full left-12 mb-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
-				>
-					slot {slotIdx + 1}/{slots.length} · ⇥ next · esc done
-				</button>
+				<TemplateSlotHint
+					activeIndex={slotIdx}
+					count={slots.length}
+					onNext={() => stepSlot(1)}
+					className="absolute bottom-full left-12 mb-4"
+				/>
 			) : null}
 
 			{images.length > 0 || pendingImages > 0 || attachErrors.length > 0 || submitError ? (
@@ -780,37 +731,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								if (recalled !== null && next !== recentPrompts[recalled]) {
 									recallIdxRef.current = null;
 								}
-								if (slots) {
-									const { editStart, removedLen, insertedLen } = diffValues(value, next, nextCaret);
-									if (editStart === 0 && removedLen === value.length) {
-										setSlots(null);
-									} else {
-										const editEnd = editStart + removedLen;
-										const active = slots[slotIdx];
-										const growing =
-											removedLen === 0 &&
-											insertedLen > 0 &&
-											active !== undefined &&
-											active.end === editStart;
-										const shifted = shiftSlots(slots, editStart, removedLen, insertedLen).map(
-											(slot, i) => {
-												const grown =
-													growing && i === slotIdx
-														? {
-																...slot,
-																end: slot.end + insertedLen,
-																filled: true,
-																edited: true,
-															}
-														: slot;
-												const original = slots[i];
-												return original && touches(original, editStart, editEnd)
-													? { ...grown, filled: true, edited: true }
-													: grown;
-											},
-										);
-										setSlots(shifted);
-									}
+								if (slotSession) {
+									setSlotSession(applyTemplateSlotEdit(value, next, nextCaret, slotSession));
 								}
 								onChange(next);
 								setCaret(nextCaret);

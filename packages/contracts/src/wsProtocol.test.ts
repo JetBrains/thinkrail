@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
 	ACTIVITY_PROTOCOL_VERSION,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
+	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
@@ -36,5 +37,10 @@ test("JetBrains quota advances the protocol and names its read", () => {
 
 test("Windows shell settings advance the protocol", () => {
 	expect(WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION).toBe(62);
-	expect(PROTOCOL_VERSION).toBe(WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION);
+});
+
+test("project template previews advance the additive wire shape to v63", () => {
+	expect(PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION).toBe(63);
+	expect(PROTOCOL_VERSION).toBe(PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION);
 });

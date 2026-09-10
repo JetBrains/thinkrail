@@ -188,3 +188,116 @@ export function mirrorAllGroups(
 	}
 	return { value: nextValue, slots: nextSlots };
 }
+
+export interface TemplateSlotSessionState {
+	slots: TemplateSlot[];
+	activeIndex: number;
+}
+
+export interface TemplateSlotSessionTransition {
+	value: string;
+	session: TemplateSlotSessionState | null;
+	selection: { start: number; end: number };
+}
+
+function diffValues(
+	oldValue: string,
+	newValue: string,
+	newCaret: number,
+): { editStart: number; removedLen: number; insertedLen: number } {
+	const maxPrefix = Math.min(newCaret, oldValue.length, newValue.length);
+	let prefix = 0;
+	while (prefix < maxPrefix && oldValue[prefix] === newValue[prefix]) prefix++;
+
+	const maxSuffix = Math.min(oldValue.length - prefix, newValue.length - prefix);
+	let suffix = 0;
+	while (
+		suffix < maxSuffix &&
+		oldValue[oldValue.length - 1 - suffix] === newValue[newValue.length - 1 - suffix]
+	) {
+		suffix++;
+	}
+
+	return {
+		editStart: prefix,
+		removedLen: oldValue.length - prefix - suffix,
+		insertedLen: newValue.length - prefix - suffix,
+	};
+}
+
+function touches(slot: TemplateSlot, editStart: number, editEnd: number): boolean {
+	return editStart < slot.end && editEnd > slot.start;
+}
+
+export function beginTemplateSlotSession(parsed: ParsedTemplate): TemplateSlotSessionTransition {
+	const first = parsed.slots[0];
+	return {
+		value: parsed.text,
+		session: first ? { slots: parsed.slots, activeIndex: 0 } : null,
+		selection: first
+			? { start: first.start, end: first.end }
+			: { start: parsed.text.length, end: parsed.text.length },
+	};
+}
+
+export function applyTemplateSlotEdit(
+	oldValue: string,
+	newValue: string,
+	newCaret: number,
+	session: TemplateSlotSessionState,
+): TemplateSlotSessionState | null {
+	const { editStart, removedLen, insertedLen } = diffValues(oldValue, newValue, newCaret);
+	if (editStart === 0 && removedLen === oldValue.length) return null;
+
+	const editEnd = editStart + removedLen;
+	const active = session.slots[session.activeIndex];
+	const growing =
+		removedLen === 0 && insertedLen > 0 && active !== undefined && active.end === editStart;
+	const slots = shiftSlots(session.slots, editStart, removedLen, insertedLen).map((slot, index) => {
+		const grown =
+			growing && index === session.activeIndex
+				? {
+						...slot,
+						end: slot.end + insertedLen,
+						filled: true,
+						edited: true,
+					}
+				: slot;
+		const original = session.slots[index];
+		return original && touches(original, editStart, editEnd)
+			? { ...grown, filled: true, edited: true }
+			: grown;
+	});
+	return { ...session, slots };
+}
+
+export function stepTemplateSlotSession(
+	value: string,
+	session: TemplateSlotSessionState,
+	direction: 1 | -1,
+): TemplateSlotSessionTransition {
+	const current = session.slots[session.activeIndex];
+	const mirrored = current?.edited
+		? mirrorSlotGroup(value, session.slots, session.activeIndex)
+		: { value, slots: session.slots };
+	const activeIndex =
+		(((session.activeIndex + direction) % mirrored.slots.length) + mirrored.slots.length) %
+		mirrored.slots.length;
+	const target = mirrored.slots[activeIndex];
+	return {
+		value: mirrored.value,
+		session: { slots: mirrored.slots, activeIndex },
+		selection: target
+			? { start: target.start, end: target.end }
+			: { start: mirrored.value.length, end: mirrored.value.length },
+	};
+}
+
+export function finalizeTemplateSlotSession(
+	value: string,
+	session: TemplateSlotSessionState | null,
+): string {
+	if (!session) return value;
+	const mirrored = mirrorAllGroups(value, session.slots);
+	return stripUntouchedSlots(mirrored.value, mirrored.slots);
+}

@@ -1,12 +1,20 @@
-import type { SlashCommandInfo } from "@thinkrail/contracts";
+import type { SlashCommandInfo, TemplateInfo } from "@thinkrail/contracts";
 import { type ReactNode, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib";
 
 export type SlashCommandItem = Omit<SlashCommandInfo, "source"> & {
 	source: SlashCommandInfo["source"] | "builtin";
 };
 
 const MAX_MATCHES = 8;
+const IME_SENTINEL_KEYCODE = 229;
+
+export function isPromptKeyEventComposing(event: {
+	isComposing: boolean;
+	keyCode: number;
+}): boolean {
+	return event.isComposing || event.keyCode === IME_SENTINEL_KEYCODE;
+}
 
 export async function slashCommandCatalogOrEmpty(
 	load: () => Promise<SlashCommandInfo[]>,
@@ -36,6 +44,20 @@ export function matchSlashCommands<T extends SlashCommandItem>(
 
 export function selectedSlashCommandValue(command: SlashCommandItem): string {
 	return `/${command.name} `;
+}
+
+export function templateToSlashCommand(template: TemplateInfo): SlashCommandInfo {
+	return {
+		name: template.name,
+		...(template.description ? { description: template.description } : {}),
+		source: "prompt",
+		sourceInfo: {
+			path: template.filePath,
+			source: "local",
+			scope: template.scope === "global" ? "user" : "project",
+			origin: "top-level",
+		},
+	};
 }
 
 export type SlashCompletionKeyAction =
@@ -113,6 +135,32 @@ export function useSlashCommandCompletion<T extends SlashCommandItem>({
 	};
 
 	return { activeIndex: visibleActiveIndex, dismiss, handleKeyDown, matches, open, pick };
+}
+
+export function TemplateSlotHint({
+	activeIndex,
+	count,
+	onNext,
+	className,
+}: {
+	activeIndex: number;
+	count: number;
+	onNext: () => void;
+	className?: string;
+}) {
+	return (
+		<button
+			type="button"
+			data-testid="slot-hint"
+			onClick={onNext}
+			className={cn(
+				"rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default",
+				className,
+			)}
+		>
+			slot {activeIndex + 1}/{count} · ⇥ next · esc done
+		</button>
+	);
 }
 
 export function SlashCommandMenu<T extends SlashCommandItem>({
