@@ -23,8 +23,11 @@ test("adds the complete ThinkRail icon group to an executable with no icon", () 
 		groups[0]?.icons.map(({ width, height, bitCount }) => [width || 256, height || 256, bitCount]),
 	).toEqual([
 		[16, 16, 32],
+		[24, 24, 32],
 		[32, 32, 32],
 		[48, 48, 32],
+		[64, 64, 32],
+		[128, 128, 32],
 		[256, 256, 32],
 	]);
 });

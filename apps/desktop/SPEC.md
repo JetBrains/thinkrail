@@ -29,7 +29,8 @@ engine architecture.
   for release identity; `contracts` for
   compatibility/native-bridge types; the completed built web
   artifact; Electrobun `2.0.1` and its generated SDK; build-only `pe-library`/`resedit` for the
-  Electrobun 2.0.1 Windows-uninstaller icon gap; Bun/Node.
+  Electrobun 2.0.1 Windows-uninstaller icon gap; build-only `@resvg/resvg-js` to rasterize the icon
+  source (below); Bun/Node.
 - **Forbidden:** spawning the CLI or a second engine process; implementing ordinary product feature or
   agent/domain logic; importing web source at runtime; introducing a desktop-only wire or UI state model;
   storing one active location on the backend; or bundling CEF without a new acceptance failure that
@@ -156,6 +157,15 @@ Hutch-owned source for the installed app, setup/extractor executable, shortcuts,
 release action substitutes a second installer icon. Electrobun 2.0.1 does not apply that icon to its
 bundled Windows uninstaller, so the project `postBuild` hook adds the same icon group to
 `Resources/uninstall`.
+
+`assets/icon.svg` is the one hand-authored source; every raster below it (the iconset, the ICO, the
+Linux PNG) is generated, never hand-edited, by `scripts/generate-icons.ts` (`bun run generate-icons`)
+using `@resvg/resvg-js` to rasterize straight from the vector. The Windows ICO carries PNG-compressed
+frames at 16/24/32/48/64/128/256 — Microsoft's documented icon-construction minimum (16/24/32/48/256)
+plus two extra sizes so in-between DPI scales interpolate from a close neighbor — packed through the
+same `resedit` dependency already used for the uninstaller. A prior 4-frame raw-BMP ICO (16/32/48/256,
+pre-dating the generator) had no frame matching the Windows 11 taskbar's 24×24 100%-scale target,
+reading as blurry there; the generated set closes that gap.
 
 Electrobun's `build.views` owns the browser preload bundle; `build.copy` owns physical resource inclusion.
 There is no custom SDK resolver, SDK metadata validator, or Electrobun command runner. App-local Hutch
