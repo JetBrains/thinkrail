@@ -76,7 +76,7 @@ export const installPlatforms = [
 		label: "Linux",
 		desktop: {
 			title: "ThinkRail for Linux",
-			detail: "Ubuntu 24.04+ · Extract .tar.gz, then run the installer",
+			detail: "Ubuntu 24.04+ · Extract .tar.gz, then run ./installer",
 			downloads: [
 				{
 					architecture: "x64",

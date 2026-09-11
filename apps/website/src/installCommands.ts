@@ -40,12 +40,12 @@ export const desktopInstallerPlatforms = [
 		downloads: [
 			{
 				label: "Download x64",
-				detail: "Linux x64 · Ubuntu 24.04+ · .tar.gz",
+				detail: "Linux x64 · Ubuntu 24.04+ · extract .tar.gz, then run ./installer",
 				href: desktopDownload("thinkrail-desktop-linux-x64.tar.gz"),
 			},
 			{
 				label: "Download ARM64",
-				detail: "Linux ARM64 · Ubuntu 24.04+ · .tar.gz",
+				detail: "Linux ARM64 · Ubuntu 24.04+ · extract .tar.gz, then run ./installer",
 				href: desktopDownload("thinkrail-desktop-linux-arm64.tar.gz"),
 			},
 		],

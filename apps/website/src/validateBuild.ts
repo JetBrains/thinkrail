@@ -58,10 +58,23 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	const pages = {
 		landing: await Bun.file(`${distDirectory}/index.html`).text(),
 		blog: await Bun.file(`${distDirectory}/blog/index.html`).text(),
+		introducingThinkRail: await Bun.file(
+			`${distDirectory}/blog/introducing-thinkrail/index.html`,
+		).text(),
 		vibecoding: await Bun.file(`${distDirectory}/vibecoding/index.html`).text(),
 		agenticDevelopment: await Bun.file(`${distDirectory}/agentic-development/index.html`).text(),
 	};
 	const islandPages = ["vibecoding", "agenticDevelopment"] as const;
+	const staticPages = ["landing", "blog", "introducingThinkRail"] as const;
+	const installPages = [
+		{ name: "landing", html: pages.landing, expectedDownloads: 2 },
+		{
+			name: "introducingThinkRail",
+			html: pages.introducingThinkRail,
+			expectedDownloads: 1,
+		},
+		...islandPages.map((name) => ({ name, html: pages[name], expectedDownloads: 2 })),
+	] as const;
 
 	for (const name of islandPages) {
 		for (const required of [
@@ -87,26 +100,23 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	}
 
 	for (const url of desktopDownloadUrls) {
-		if (occurrences(pages.landing, url) !== 2) {
-			failures.push(`landing: expected desktop download twice: ${url}`);
-		}
-		for (const name of islandPages) {
-			if (occurrences(pages[name], url) !== 2) {
-				failures.push(`${name}: expected desktop download twice: ${url}`);
+		for (const { name, html, expectedDownloads } of installPages) {
+			if (occurrences(html, url) !== expectedDownloads) {
+				failures.push(`${name}: expected desktop download ${expectedDownloads} time(s): ${url}`);
 			}
 		}
 	}
 	if (!pages.landing.includes('data-file="INSTALL.md"')) {
 		failures.push("landing: install section is not INSTALL.md");
 	}
-	for (const [name, html] of [
-		["landing", pages.landing],
-		...islandPages.map((island) => [island, pages[island]] as const),
-	] as const) {
+	for (const { name, html } of installPages) {
 		const desktopIndex = html.indexOf(desktopDownloadUrls[0]);
 		const cliIndex = html.indexOf("Prefer the command line?");
 		if (desktopIndex < 0 || cliIndex < 0 || desktopIndex > cliIndex) {
 			failures.push(`${name}: desktop download is not presented before the CLI alternative`);
+		}
+		if (!html.includes("./installer")) {
+			failures.push(`${name}: Linux desktop installation cue is missing`);
 		}
 	}
 
@@ -128,7 +138,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		}
 	}
 
-	for (const name of ["landing", "blog"] as const) {
+	for (const name of staticPages) {
 		if (pages[name].includes("<astro-island")) failures.push(`${name}: React island leaked`);
 	}
 	for (const name of islandPages) {

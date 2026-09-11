@@ -1096,7 +1096,7 @@ html.install-tabs-ready .install-panel {
 .desktop-install-kind,
 .desktop-install-detail {
 	margin-top: 3px;
-	color: var(--hint);
+	color: var(--muted);
 	font-family: var(--font-mono);
 	font-size: 10.5px;
 	line-height: 1.4;
@@ -1539,7 +1539,7 @@ html.anim .chat-demo [data-step].on {
 .desktop-download-card-actions span {
 	display: block;
 	margin-top: 3px;
-	color: var(--hint);
+	color: var(--text);
 	font-family: var(--font-mono);
 	font-size: 10px;
 	line-height: 1.4;

@@ -216,7 +216,8 @@ enabled. Its originless proxied `192.0.2.1` record keeps the redirect resolvable
 
 The `/blog` subsite is a typed Astro content collection over Markdown posts in `content/blog/`
 (each post: a folder with `index.md` + optional `images/`), rendered by `src/pages/blog/` through
-`src/layouts/BlogLayout.astro`.
+`src/layouts/BlogLayout.astro`. Published posts that carry live installation guidance follow the
+current desktop-first hierarchy rather than freezing obsolete CLI-only instructions.
 
 - **Schema is the gate** (`src/content.config.ts`, zod): required `title`/`slug`/`date`/`author`,
   optional `excerpt`/`draft`/`tags`. A malformed or reserved slug, a missing field, an unknown
