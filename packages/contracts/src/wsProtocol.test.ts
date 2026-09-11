@@ -5,6 +5,7 @@ import {
 	customMessageText,
 	isTodoReviewFixMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
+	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
@@ -50,8 +51,13 @@ test("project template previews advance the additive wire shape to v63", () => {
 });
 
 test("host update advisories advance the protocol with an immutable notice channel", () => {
-	expect(PROTOCOL_VERSION).toBe(64);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(64);
 	expect(WS_CHANNELS.hostUpdateAvailable).toBe("host.updateAvailable");
+});
+
+test("the plan-review subagent reshapes the review wire and advances the protocol", () => {
+	expect(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION).toBe(65);
+	expect(PROTOCOL_VERSION).toBe(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION);
 });
 
 describe("isTodoReviewFixMessage", () => {
