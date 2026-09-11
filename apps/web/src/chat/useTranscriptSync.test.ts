@@ -15,6 +15,8 @@ function runtime(overrides: Partial<SessionRuntime> = {}): SessionRuntime {
 		currentAssistantId: null,
 		attemptAssistantId: null,
 		isStreaming: false,
+		settlementTick: 0,
+		statsRefreshTick: 0,
 		queue: { steering: [], followUp: [] },
 		model: null,
 		thinkingLevel: "medium",

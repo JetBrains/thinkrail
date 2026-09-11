@@ -6,6 +6,7 @@ import {
 } from "@remixicon/react";
 import type { ActivityStatus } from "@thinkrail/contracts";
 import { IconTooltip } from "@/components/ui/tooltip";
+import { ACTIVITY_STATUS_ORDER } from "@/store";
 
 const PRESENTATION: Record<
 	ActivityStatus,
@@ -37,14 +38,12 @@ const PRESENTATION: Record<
 	},
 };
 
-const BREAKDOWN_ORDER: readonly ActivityStatus[] = ["failed", "waiting", "running", "queued"];
-
 export function activityChatCount(counts: Partial<Record<ActivityStatus, number>>): number {
-	return BREAKDOWN_ORDER.reduce((total, status) => total + (counts[status] ?? 0), 0);
+	return ACTIVITY_STATUS_ORDER.reduce((total, status) => total + (counts[status] ?? 0), 0);
 }
 
 export function activityBreakdown(counts: Partial<Record<ActivityStatus, number>>): string[] {
-	return BREAKDOWN_ORDER.flatMap((status) => {
+	return ACTIVITY_STATUS_ORDER.flatMap((status) => {
 		const count = counts[status] ?? 0;
 		if (count === 0) return [];
 		return [`${count} ${count === 1 ? "chat" : "chats"} ${PRESENTATION[status].plural}`];

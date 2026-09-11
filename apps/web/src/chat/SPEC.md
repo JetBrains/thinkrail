@@ -524,6 +524,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,
   disabled while streaming) or project (`project.skills`, per-project-baseline toggles, no session) — the
   latter reused by `panels` pre-session). All props-driven; behavior detail lives in the components' jsdoc.
+- **Live session telemetry follows Pi's finalized boundaries.** `SessionStatsBar` renders only the host's
+  authoritative `session.getStats` snapshot; the web never derives billed totals or context usage from
+  message content. The mounted chat refreshes on mount/reconnect, after each finalized message, compaction,
+  and settlement, and after Pi accepts a model change. A reconnect read may race a restarted host before
+  transcript sync has reattached the persisted session, so that sync edge retriggers the read. Consecutive
+  Pi events batched into one store commit
+  collapse to one read, and a response superseded by a newer session revision, host generation, or unmount
+  is ignored. Text deltas do not trigger reads because Pi itself cannot finalize new usage until the message
+  boundary; transient read failure keeps the last good snapshot rather than replacing it with guessed state.
 - **Adaptive composer geometry** (`Composer`) — an idle draft that fits one visual line renders as a
   shared two-tier shell: a full-width, one-visual-line message row above a stable action footer. Model and
   effort share a compact visual group on the footer's left while remaining two independently
@@ -1032,8 +1041,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
   is `ChatView.tsx`, `chatPreferences.ts` (the client-local persistence adapter), plus the hooks and dialogs
   it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
-  `useModelCatalog.ts`, **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical
-  transcript reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`,
+  `useModelCatalog.ts`, **`useSessionStats.ts`** (generation/revision-fenced authoritative telemetry reads),
+  **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical transcript
+  reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`,
   `SubagentTranscriptDialog.tsx`. `useModelCatalog` is the shared
   models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
   drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
@@ -1057,7 +1067,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `isSpec` classifier it builds from the store's `specsByWorkspace` snapshot (subscribed as the stored array
   — a stable ref — and memoized into a matcher here, never a fresh Set inside the selector) — together with
   **`useHistorySearch.ts`** (the Ctrl+R history-recall overlay's store/transport edge),
-  **`useTranscriptSync.ts`** (the guarded authoritative read that converges an existing runtime), and
+  **`useSessionStats.ts`** (the guarded read that keeps telemetry live), **`useTranscriptSync.ts`** (the
+  guarded authoritative read that converges an existing runtime), and
   **`TemplateEditorDialog.tsx`** (the shared template save form), the other integration points. A
   **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
   never swallowed and never given the settlement-only Try again affordance; *streaming* faults arrive as pi

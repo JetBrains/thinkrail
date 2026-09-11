@@ -1,11 +1,14 @@
 import { expect, test } from "bun:test";
-import type { AgentMessage, StopReason } from "@thinkrail/contracts";
+import type { ActivityStatus, AgentMessage, StopReason } from "@thinkrail/contracts";
 import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
 import {
 	type ActivityInputs,
 	deriveActivityStatus,
 	deriveDiskActivityStatus,
+	messagesActivityMs,
 	parseTranscriptTail,
+	supersededFailedSessions,
+	type WorkspaceActivityRow,
 } from "./activity";
 import { ASK_ACK_TEXT, awaitingQuestionToolCallId } from "./askUserQuestion";
 
@@ -247,4 +250,61 @@ test("the disk derivation runs the SAME precedence as a live session, not a copy
 	expect(deriveDiskActivityStatus(messages)).toBe(
 		deriveActivityStatus(inputs({ messages, lastSettlement: undefined })),
 	);
+});
+
+const row = (
+	sessionId: string,
+	status: ActivityStatus | null,
+	recencyMs: number,
+): WorkspaceActivityRow => ({ sessionId, status, recencyMs });
+
+test("a failed chat is superseded by a strictly-newer non-failed one — the reported case", () => {
+	const superseded = supersededFailedSessions([
+		row("old", "failed", 10),
+		row("new", "running", 20),
+	]);
+	expect([...superseded]).toEqual(["old"]);
+});
+
+test("a finished-fine idle chat (null) also supersedes an older failure — the fine-idle case", () => {
+	const superseded = supersededFailedSessions([row("old", "failed", 10), row("done", null, 20)]);
+	expect([...superseded]).toEqual(["old"]);
+});
+
+test("a failure that is the newest work is NOT superseded — it is still the latest thing", () => {
+	const superseded = supersededFailedSessions([row("fine", null, 10), row("boom", "failed", 20)]);
+	expect(superseded.size).toBe(0);
+});
+
+test("a tie does not supersede — an equal-recency non-failed chat leaves the failure showing", () => {
+	const superseded = supersededFailedSessions([row("a", "failed", 10), row("b", "running", 10)]);
+	expect(superseded.size).toBe(0);
+});
+
+test("with no non-failed sibling, every failure stands", () => {
+	const superseded = supersededFailedSessions([row("a", "failed", 10), row("b", "failed", 20)]);
+	expect(superseded.size).toBe(0);
+});
+
+test("only the older failures are dropped when several failures and a newer fine chat coexist", () => {
+	const superseded = supersededFailedSessions([
+		row("old1", "failed", 10),
+		row("old2", "failed", 15),
+		row("fine", null, 30),
+		row("newFail", "failed", 40),
+	]);
+	expect([...superseded].sort()).toEqual(["old1", "old2"]);
+});
+
+const stamped = (role: string, timestamp: number) =>
+	({ role, content: [{ type: "text", text: "…" }], timestamp }) as unknown as AgentMessage;
+
+test("messagesActivityMs takes the latest user/assistant timestamp, so a reopened chat keeps its recency", () => {
+	expect(messagesActivityMs([stamped("user", 10), stamped("assistant", 20)])).toBe(20);
+	expect(messagesActivityMs([stamped("assistant", 50), stamped("user", 30)])).toBe(50);
+});
+
+test("messagesActivityMs ignores non-conversation roles and an empty transcript", () => {
+	expect(messagesActivityMs([stamped("toolResult", 99)])).toBeNull();
+	expect(messagesActivityMs([])).toBeNull();
 });

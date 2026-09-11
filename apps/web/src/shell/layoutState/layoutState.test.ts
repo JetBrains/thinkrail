@@ -16,6 +16,7 @@ import {
 	initializeLocalLayoutState,
 	localLayoutStorageKey,
 	resetLayoutStateForTests,
+	setLayoutStateStablePreferencesForTests,
 	setLayoutStateStorageForTests,
 } from "./layoutState";
 
@@ -65,6 +66,7 @@ function resetStore(): void {
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
 		layoutProjectionEpochByWorkspace: {},
+		toasts: [],
 	});
 }
 
@@ -183,6 +185,47 @@ describe("frontend-local layout state", () => {
 
 		const restored = await ensureWorkspaceLayoutState("workspace");
 		expect(restored.left.width).toBe(0.31);
+	});
+
+	test("native stable preferences restore layout after the host port changes", async () => {
+		const stablePreferences = new MemoryStorage();
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		setLayoutStateStorageForTests({ local, session }, "http://127.0.0.1:4311");
+		setLayoutStateStablePreferencesForTests(stablePreferences);
+		const initial = await ensureWorkspaceLayoutState("workspace");
+		await commitWorkspaceLayout("workspace", resizeSideRegion(initial, "left", 0.29));
+
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, "http://127.0.0.1:5099");
+		setLayoutStateStablePreferencesForTests(stablePreferences);
+
+		const restored = await ensureWorkspaceLayoutState("workspace");
+		expect(restored.left.width).toBe(0.29);
+		expect(local.length).toBe(0);
+		expect(session.length).toBe(0);
+	});
+
+	test("oversized native documents fail visibly without a partial preference write", async () => {
+		const stablePreferences = new MemoryStorage();
+		setLayoutStateStorageForTests(
+			{ local: new MemoryStorage(), session: new MemoryStorage() },
+			"http://127.0.0.1:4311",
+		);
+		setLayoutStateStablePreferencesForTests(stablePreferences);
+		await initializeLocalLayoutState();
+
+		const oversizedWorkspaceId = `workspace-${"x".repeat(256 * 1024)}`;
+		useAppStore.setState({
+			workspaceViewsByWorkspace: { [oversizedWorkspaceId]: { groups: {} } },
+		});
+
+		expect(stablePreferences.length).toBe(0);
+		expect(useAppStore.getState().toasts.at(-1)).toMatchObject({
+			title: "Couldn't save the local layout",
+			message: "The local layout is too large to save in this native window",
+		});
 	});
 
 	test("a stale region callback rebases its change without reverting a newer frame region", async () => {

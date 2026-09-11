@@ -992,7 +992,7 @@ function WorkbenchTab({
 					data-kind={tab.kind === "document" ? "plan" : tab.kind}
 					data-session-id={tab.kind === "chat" ? tab.sessionId : undefined}
 					data-dragging={drag.isDragging || undefined}
-					className="group relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
+					className="group relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] has-[[role=tab]:focus-visible]:ring-2 has-[[role=tab]:focus-visible]:ring-inset has-[[role=tab]:focus-visible]:ring-primary data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
 				>
 					<div
 						ref={before.setNodeRef}
@@ -1023,7 +1023,7 @@ function WorkbenchTab({
 						onClick={selectFromClick}
 						onDoubleClick={selectFromDoubleClick}
 						onKeyDown={onKeyDown}
-						className={`flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${tab.kind === "tool" ? "pr-8" : ""}`}
+						className={`flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none ${tab.kind === "tool" ? "pr-8" : ""}`}
 					>
 						{tabIcon(tab, active)}
 						<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>

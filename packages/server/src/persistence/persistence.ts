@@ -8,6 +8,7 @@ import {
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
+	isTerminalWindowsShell,
 	normalizeThemePreference,
 	type Project,
 	type Workspace,
@@ -115,6 +116,9 @@ export function loadConfig(): AppConfig {
 		customLayoutPresets: Array.isArray(value.customLayoutPresets)
 			? value.customLayoutPresets
 			: DEFAULT_CONFIG.customLayoutPresets,
+		terminalWindowsShell: isTerminalWindowsShell(value.terminalWindowsShell)
+			? value.terminalWindowsShell
+			: DEFAULT_CONFIG.terminalWindowsShell,
 	};
 }
 

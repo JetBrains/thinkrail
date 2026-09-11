@@ -91,7 +91,8 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 61;
+export const PROTOCOL_VERSION = 62;
+export const WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION = 62;
 export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
 export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
 export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;

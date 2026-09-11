@@ -11,7 +11,8 @@ tags: [v1]
 ## Responsibility
 
 The server-synchronized app config: opaque fixed-theme selection, fixed/system mode and optional light/dark
-pair, analytics switch, terminal replay budget, chat composer growth preset, chat/file visual line widths
+pair, analytics switch, terminal replay budget and Windows shell preference, chat composer growth preset,
+chat/file visual line widths
 plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota display/cadence, the
 host-wide subagent default, and plan-review policy. `reviewModel` /
 `reviewEffort` select the reviewer/reflector runtime (unset means pi
@@ -31,12 +32,17 @@ interval (`1–3600`, default 30), because those values govern host process cade
 
 - **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (merge → validate known fields → persist → broadcast); line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
 - **Public surface (barrel):** `getConfig`, `updateConfig`, `setSettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
-- **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`).
+- **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`,
+  `isTerminalWindowsShell`).
 - **Forbidden:** host or another feature sibling; current-layout document/snapshot types; workspace ids/resources; current frame validation; owning WS channels; or importing web preset definitions.
 
 ## Get right
 
 - **Converge on broadcast, no client optimism.** `updateConfig` persists before replacing the live cache or publishing; a failed write changes neither runtime reads nor frontends. Every frontend, including the initiator, adopts `settings.changed`. `server.welcome` seeds the same cached value.
+- `terminalWindowsShell` defaults to `"auto"`; persisted values fall back through persistence's shared
+  `isTerminalWindowsShell` guard, while a wire mutation outside the closed shell union rejects the complete
+  update before cache, persistence, or broadcast changes. Settings owns validation and synchronization;
+  `terminal` owns executable resolution and spawning.
 - `chatLineWidth` / `fileLineWidth` independently default to 120 and accept only finite integers from 40 through 240; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field rejects the complete mutation before cache, persistence, or broadcast changes.
 - `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior; a present non-boolean update is rejected before cache, persistence, or broadcast changes. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.
 - JetBrains quota display defaults on and its interval defaults to 30 seconds when either stored field is absent/invalid. Wire updates reject a non-boolean flag or a non-integer/out-of-range interval atomically; they never clamp a caller's value into a different persisted choice.

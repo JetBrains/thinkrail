@@ -4,6 +4,7 @@ import {
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isSystemThemePair,
+	isTerminalWindowsShell,
 	isThemeMode,
 	LINE_WIDTH_COLUMNS,
 } from "@thinkrail/contracts";
@@ -74,6 +75,12 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	}
 	if (jbcentralQuotaEnabled !== undefined && typeof jbcentralQuotaEnabled !== "boolean") {
 		throw new Error("jbcentralQuotaEnabled must be a boolean");
+	}
+	if (
+		runtimeUpdate.terminalWindowsShell !== undefined &&
+		!isTerminalWindowsShell(runtimeUpdate.terminalWindowsShell)
+	) {
+		throw new Error("terminalWindowsShell must be auto, pwsh, powershell, or cmd");
 	}
 	if (
 		jbcentralQuotaRefreshSeconds !== undefined &&

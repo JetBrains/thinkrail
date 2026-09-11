@@ -103,8 +103,9 @@ treatment.
   - It sits in **its own flex column between the identity button and the kebab**, so the hover-revealed
     kebab never covers it (a trailing overlay would).
   - **Hover explains it**, via `IconTooltip` (`wrapTrigger` — a bare glyph is not focusable). One busy
-    chat shows the plain label; several show a per-state breakdown with counts in rollup order — which is
-    where the counts the row itself refuses to carry actually live. "Several" counts **chats**
+    chat shows the plain label; several show a per-state breakdown with counts in rollup order — the same
+    **`ACTIVITY_STATUS_ORDER`** the store's rollup uses (imported, not re-declared, so the two never drift) —
+    which is where the counts the row itself refuses to carry actually live. "Several" counts **chats**
     (`activityChatCount`), not distinct statuses: two chats both working must read "2 chats working", so a
     threshold on the number of breakdown *lines* would silently drop the count in exactly the
     single-status case. The tooltip is an *enhancement*: the
@@ -473,7 +474,21 @@ a project picker, the prompt hero, and the reused
   converges through `settings.changed`; current/default selection and independent side/bottom limits are
   frontend-local. With an active workspace each preset offers confirmable **Apply now…**, which asks shell
   to replace this window's frame and atomically preserve/reflow open resource identities in every retained
-  workspace view; no current layout is published); and
+  workspace view; no current layout is published); the optional **shell-owned injected Update section**
+  (the Settings shell includes its row only when content is provided; `panels` neither discovers a native
+  global nor imports the update capability, while ordinary browsers therefore have no Update row);
+  **`TerminalSettings`** — a **Replayed output** size picker (`store.terminalReplayKb`, five presets from
+  Off to 1 MB, `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on
+  Windows hosts at `protocolVersion >= WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`, a **Windows shell** picker
+  (Auto / PowerShell 7 (pwsh) / Windows PowerShell / Command Prompt,
+  `settings.update { terminalWindowsShell }` — see `submodule-server-terminal`'s shell-selection decision
+  for what each choice spawns). The protocol gate keeps a newer independently shipped client from presenting
+  a setting an older host preserves but does not act on. The Windows-shell
+  half is split into a **props-driven** `WindowsShellSettings` component rather than reading the store
+  inline like the replay picker: zustand's React binding feeds `renderToStaticMarkup` its frozen
+  `getInitialState()` snapshot (`useSyncExternalStore`'s `getServerSnapshot` argument), never a test's
+  `setState`, so any settings section that must stay assertable under that render path takes its store
+  values as props instead — the same shape `ChatSettings` already uses for `SubagentSettings`; and
   **`TemplatesSettings`** — two groups, **Global** and **This
   project** (the project group renders only with an active workspace), each a header with a **New**
   button plus its rows, fetched via **two independent `template.list` calls** (both refetched whenever the
@@ -626,9 +641,15 @@ a project picker, the prompt hero, and the reused
   plan is currently at), pending (muted). The PR stage reads the same `useOpenBranchReview` lookup
   as the button and shows `PR #N` once one is open; "merged" is unknowable in V1 (the lookup only
   sees OPEN reviews), so the funnel honestly ends at PR-open. Under the stepper sits the **work
-  CONTEXT line** (`plan-context`): `branch ← baseBranch · N commits · +A −R` — commits summed over
-  `itemRevisions`, the total diff from the workspace record's `diffStats`; each piece hides when
-  unknown. Between header and summary lives the **NEXT-ACTION banner** (`plan-next-action`,
+  CONTEXT line** (`plan-context`): `baseBranch ← branch · N commits · +A −R` — the arrow points at the
+  merge TARGET (base ← head, the GitHub PR convention: changes flow from the workspace branch into
+  its base). `N commits` is the **`PlanCommitsMenu`** (`plan-commits-trigger`) — a dropdown mirroring
+  the Changes scope menu's commit list: `git.listCommits` (eager-loaded, reloaded whenever the plan's
+  commit count ticks) is the ONE source for both the count and the list, so they never diverge; each
+  row (`plan-commits-item`, `data-sha`) opens that commit's diff in the Changes panel via the same
+  `openChanges({ sha })` the per-step commit chip uses. The chip self-hides while loading and when the
+  branch has no commits. The total diff comes from the workspace record's `diffStats`; each piece
+  hides when unknown. Between header and summary lives the **NEXT-ACTION banner** (`plan-next-action`,
   `data-kind`) — the report's one "what now", rendering the FIRST matching state by urgency:
   `fix` (N steps carry changes_requested → **Show step** scrolls to the first flagged item and
   auto-expands it via the `focusRequest` token — `{ id, tick }`, tick bumped per click and consumed
@@ -650,18 +671,23 @@ own section. The kebab menu (`plan-menu`, a
   (disabled when none are unsettled; a toast reports how many were queued, the per-row `Reviewing…` pulses
   track progress), plus **Open draft PR** (`plan-open-draft-pr`, hidden once a PR exists). **The header
   also owns the plan's finish line — Open PR** (`plan-open-pr`, task-open-pr): a deterministic
-  host-side flow (push + `gh`, NEVER an agent prompt) that goes through the **compose dialog**
-  (`PrComposeDialog.tsx`, `pr-compose-dialog`): the click fetches `pr.preview` and opens editable
+  host-side flow (push + `gh`, NEVER an agent prompt) that, **for first-time creation only**
+  (`openReview` absent), goes through the **compose dialog** (`PrComposeDialog.tsx`,
+  `pr-compose-dialog`): the click fetches `pr.preview` and opens editable
   Title (`pr-compose-title`) + Description (`pr-compose-body`, prefilled from the plan) fields;
-  only the submit (`pr-compose-submit`, label follows the action — Open PR / Open draft PR / Push
-  updates) runs `pr.open` with the edited `title`/`body`. The dialog closes on success, stays open
+  only the submit (`pr-compose-submit`, label follows the action — Open PR / Open draft PR) runs
+  `pr.open` with the edited `title`/`body`. The dialog closes on success, stays open
   on a generic failure (edits survive the toast), and hands off to `PrSetupDialog` on
   `PUSH_AUTH_FAILED` — whose Try again re-submits the LAST edited title/body (kept in a ref), never
   a re-rendered draft. The header button is primary-filled when the plan is
   *ready* (all done + all reviews settled) and quiet otherwise; once an open PR exists (the same
   `workspace.openReview` lookup the shell's scope label uses, via `useOpenBranchReview` — the hook
   lives in `panels` because nothing may import `shell`) the label flips to **Push updates**
-  (same call — the host pushes to the SAME branch/PR and refreshes its body); when the lookup reports
+  and the button **bypasses the compose dialog entirely** — pressing it (or the next-action `push`
+  arm) calls `pr.open` directly with no `title`/`body`, so the host pushes to the SAME branch/PR and
+  silently refreshes its body from the plan (`renderPrBody`) while leaving the PR title untouched
+  (no `titleEdited`). Re-editing a PR's description each push read as "set up the PR again"; the modal
+  is only the creation affordance. When the lookup reports
   **`unpushedCommits`** the label appends the count (`Push updates (N)`), the button turns
   primary-filled, and the next-action banner grows a `push` arm ("N new commits aren't in PR #N
   yet" + Push updates) so new work after the PR never sits silently local — a successful push

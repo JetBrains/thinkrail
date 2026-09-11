@@ -5,6 +5,7 @@ import {
 	PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
+	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
 } from "./wsProtocol";
@@ -33,6 +34,7 @@ test("JetBrains quota advances the protocol and names its read", () => {
 	expect(WS_METHODS.providerJbcentralQuota).toBe("provider.jbcentralQuota");
 });
 
-test("line-width config advances the additive wire shape to v61", () => {
-	expect(PROTOCOL_VERSION).toBe(61);
+test("Windows shell settings advance the protocol", () => {
+	expect(WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION).toBe(62);
+	expect(PROTOCOL_VERSION).toBe(WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION);
 });

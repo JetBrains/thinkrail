@@ -45,6 +45,43 @@ export function deriveActivityStatus(inputs: ActivityInputs): ActivityStatus | n
 	return failed(inputs) ? "failed" : null;
 }
 
+interface TimestampedView {
+	role?: string;
+	timestamp?: number;
+}
+
+export function messagesActivityMs(messages: readonly AgentMessage[]): number | null {
+	let latest: number | null = null;
+	for (const view of messages as readonly TimestampedView[]) {
+		if (view.role !== "user" && view.role !== "assistant") continue;
+		if (typeof view.timestamp === "number" && (latest === null || view.timestamp > latest)) {
+			latest = view.timestamp;
+		}
+	}
+	return latest;
+}
+
+export interface WorkspaceActivityRow {
+	sessionId: string;
+	status: ActivityStatus | null;
+	recencyMs: number;
+}
+
+export function supersededFailedSessions(
+	rows: readonly WorkspaceActivityRow[],
+): ReadonlySet<string> {
+	let newestNonFailedMs = Number.NEGATIVE_INFINITY;
+	for (const row of rows) {
+		if (row.status !== "failed" && row.recencyMs > newestNonFailedMs)
+			newestNonFailedMs = row.recencyMs;
+	}
+	const superseded = new Set<string>();
+	for (const row of rows) {
+		if (row.status === "failed" && row.recencyMs < newestNonFailedMs) superseded.add(row.sessionId);
+	}
+	return superseded;
+}
+
 export const TRANSCRIPT_TAIL_BYTES = 64 * 1024;
 export const TRANSCRIPT_TAIL_MAX_BYTES = 8 * 1024 * 1024;
 

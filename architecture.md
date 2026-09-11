@@ -251,10 +251,11 @@ dependency. This keeps test process drivers outside both launchers and the serve
 - `pi` owns state and emits the truth; the host is a thin bridge — it **exposes** `pi`'s state through read
   methods (it does not recompute it) and forwards `pi`'s events as deltas. Clients **hydrate from the reads,
   then stream the deltas** — they hold only view state of their own.
-- Every background console child process the host or CLI spawns sets **`windowsHide: true`**. Bun 1.4.0
-  maps that option to libuv `UV_PROCESS_WINDOWS_HIDE`; omitting it flashes a transient, focus-stealing
-  console window on Windows. The flash is worst on pollers that fire on **workspace/terminal switch and
-  window focus** (git status, terminal-busy probes, Central quota). Sync + detached cases go through
+- Background console children launched by the host or CLI set **`windowsHide: true`**. Bounded Windows
+  children also remain **non-detached**, so ordinary helpers inherit a nonvisual console rather than
+  opening their own; the platform policy and native regression belong to [[submodule-server-subprocess]].
+  This includes PR revalidation on window focus; terminal-busy checks are close actions and Central quota
+  resumes on visibility changes, not ordinary focus. Sync and fire-and-forget cases use
   `@thinkrail/shared/spawn`; bespoke bounded runners set the option directly. Exempt: spawns that inherit
   an existing terminal's stdio (the `update`/`uninstall` CLI subcommands, the build script) and shell
   probes that are no-ops on win32 (`shellEnv`).

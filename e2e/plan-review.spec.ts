@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
-import { commitFile } from "./fixtures/git";
+import { commitFile, gitAs } from "./fixtures/git";
 
 // The TODO → review workflow's user-visible half, no agent: a seeded plan whose done steps carry
 // completion summaries + real commit artifacts (the host's change-set shape) renders on the plan page
@@ -142,8 +142,22 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	await expect(pane.getByTestId("plan-progress")).toContainText("4/4 done");
 	await expect(pane.getByTestId("plan-review-progress")).toContainText("1/3 reviewed");
 	await expect(pane.getByTestId("plan-pr-stage")).toHaveAttribute("data-state", "pending");
-	// The report's context line: branch ← base and the commit count summed over revisions.
-	await expect(pane.getByTestId("plan-context")).toContainText("4 commits");
+	// The report's context line: the arrow points at the merge TARGET (base ← head), so the workspace
+	// branch renders AFTER the arrow.
+	const branch = gitAs(workspace.worktreePath, "rev-parse", "--abbrev-ref", "HEAD");
+	await expect(pane.getByTestId("plan-context")).toContainText(new RegExp(`\u2190\\s*${branch}`));
+	// N commits is a dropdown of the branch's git commits (git.listCommits, base..HEAD, the ONE source
+	// for both the count and the list); each row opens that commit's diff in the Changes panel.
+	const commitsTrigger = pane.getByTestId("plan-commits-trigger");
+	await expect(commitsTrigger).toContainText("4 commits");
+	await commitsTrigger.click();
+	const commitsMenu = page.getByTestId("plan-commits-menu");
+	await expect(commitsMenu.getByTestId("plan-commits-item")).toHaveCount(4);
+	await commitsMenu
+		.getByTestId("plan-commits-item")
+		.filter({ hasText: "add the retry policy" })
+		.click();
+	await expect(page.getByTestId("changes-scope-label")).toContainText(shaDone.slice(0, 7));
 	// The next-action banner picks the most urgent state — the flagged step wins over Review All —
 	// and its action scrolls to that step and auto-expands it.
 	const nextAction = pane.getByTestId("plan-next-action");

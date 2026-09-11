@@ -10,6 +10,10 @@ export default {
 	runtime: {
 		exitOnLastWindowClosed: true,
 	},
+	release: {
+		baseUrl: "https://github.com/JetBrains/thinkrail/releases/download/desktop-updates",
+		generatePatch: false,
+	},
 	build: {
 		mainProcess: "bun",
 		bun: { entrypoint: "src/index.ts" },

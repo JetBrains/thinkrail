@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Workspace, WS_CHANNELS } from "@thinkrail/contracts";
+import { removeTree } from "@thinkrail/shared/removeTree";
 import { saveTerminalSessions, saveWorkspaces } from "../persistence";
 import {
 	attachTerminal,
@@ -26,6 +27,8 @@ interface PublishedFrame {
 }
 
 const WS = "ws-1";
+// An external, real child process on every platform (PowerShell's `sleep` alias runs in-process; see terminal/SPEC.md).
+const BUSY_LOOP_COMMAND = process.platform === "win32" ? "ping -n 30 127.0.0.1" : "sleep 30";
 const TERMINAL_CONDITION_TIMEOUT_MS = 15_000;
 const TERMINAL_TEST_TIMEOUT_MS = TERMINAL_CONDITION_TIMEOUT_MS * 3 + 5_000;
 let dataDir: string;
@@ -133,7 +136,8 @@ afterEach(() => {
 	resetTerminalState();
 	setTerminalPublisher(() => "unavailable");
 	setTerminalTabsPublisher(() => {});
-	rmSync(dataDir, { recursive: true, force: true });
+	// Windows releases a just-killed pty's cwd handle asynchronously; see shared/SPEC.md's removeTree.
+	removeTree(dataDir);
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
@@ -295,7 +299,7 @@ test("a shell with something running refuses to close until forced", async () =>
 	const attached = attachTerminal(WS, "tab-a", "client-1");
 	expect(attached.created).toBe(true);
 	await Bun.sleep(600);
-	writeTerminal(attached.id, "sleep 30\r", "client-1");
+	writeTerminal(attached.id, `${BUSY_LOOP_COMMAND}\r`, "client-1");
 	await Bun.sleep(800);
 
 	const refused = closeTerminalTab(WS, "tab-a");

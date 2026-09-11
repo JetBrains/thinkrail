@@ -27,15 +27,52 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   `setTerminalPublisher`,
   `setTerminalTabsPublisher`;
   the `TerminalDeliveryResult` type shared with the host publisher adapter.
-- **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`), `bun-pty`, `process.env`.
+- **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`, `TerminalWindowsShell`), `bun-pty`,
+  `Bun.which`, `process.env`.
 - **Forbidden:** `host`; sibling features. No WebSocket type crosses this boundary — clients are opaque keys.
 
 ## Decisions
 
-- **Shell selection is terminal-local.** An explicit `SHELL` always wins. Without one, Windows uses
-  `ComSpec`/`COMSPEC` and finally `cmd.exe`; other platforms retain `/bin/bash`. The host does not invent a
-  global `SHELL` on Windows: it is a Unix login-shell convention, and mutating it would affect the in-process
-  agent and every unrelated child process merely to configure this module's PTY executable.
+- **Shell selection is terminal-local**, and Windows' choice is additionally user-configurable
+  (`AppConfig.terminalWindowsShell`, `apps/web/src/panels/TerminalSettings.tsx`'s Windows-only picker;
+  [[task-windows-default-terminal-shell]]). Precedence, highest first: an explicit `SHELL` env var always
+  wins (unchanged — the host does not invent a global `SHELL` on Windows, since it's a Unix login-shell
+  convention and mutating it would affect the in-process agent and every unrelated child process merely to
+  configure this module's PTY executable); then, on Windows only, `terminalWindowsShell`:
+  - `"auto"` (default): `pwsh.exe` (PowerShell 7+) if `Bun.which` resolves it on PATH, else
+    `powershell.exe`. No further fallback to `cmd.exe` — `powershell.exe` ships on every supported
+    Windows release, so it is already the guaranteed floor. `defaultWhich` passes an explicit
+    `{ PATH: process.env.PATH }` rather than calling `Bun.which` bare, the same trap `editors`'
+    `defaultWhich` guards against: `Bun.which` alone reads the PATH snapshotted at process start, not
+    `resolveShellEnv()`'s later-repaired live `process.env.PATH`.
+  - `"pwsh"` / `"powershell"` / `"cmd"`: literal pins to `pwsh.exe` / `powershell.exe` / `cmd.exe` — no
+    existence check, no silent substitution. A pin that turns out to be missing fails to spawn the same
+    way a stale custom `SHELL` already does; not a new failure class, and the only mode with graceful
+    substitution is `auto`.
+  - Non-Windows platforms are unaffected: `/bin/bash` regardless of `terminalWindowsShell`.
+  `cmd.exe` was the unconditional prior default; `"auto"`'s baseline is `powershell.exe`, a plain
+  fallback swap (ships on every supported Windows release, so no new dependency), because it is more
+  functional than `cmd.exe` (line editing, tab completion, VS Code's own default) with no downside for the
+  default install. **The Windows default deliberately never consults `ComSpec`/`COMSPEC`**: that variable
+  is virtually always the OS's own `cmd.exe` path — it names the interpreter for `cmd /c`/batch-file
+  invocations, not a documented "pick my interactive shell" knob — so honoring it ahead of `powershell.exe`
+  would leave the default unchanged for nearly every install; a user who deliberately swapped their command
+  interpreter already has the `SHELL` override, and a second, weaker override would just be dead code. VS
+  Code's own default Windows terminal profile detection makes the same call.
+- **Known, accepted limitation: PowerShell weakens busy-close detection.** `closeTerminalTab`'s busy check
+  (`shellBusy.ts`) counts the shell's OS child processes. Many PowerShell cmdlets do their work in-process
+  rather than shelling out — `sleep` is a built-in alias for `Start-Sleep`, which blocks inside
+  `powershell.exe` itself and spawns zero children, unlike `cmd.exe`'s external `sleep.exe` — so a
+  PowerShell terminal genuinely busy in a native cmdlet (`Start-Sleep`, `Invoke-WebRequest`, `Copy-Item`,
+  a dot-sourced script) can read as idle and be force-closed without warning. Everyday dev-tool invocations
+  (`git`, `npm`, `bun`, `python`, `docker`, `node`, ...) are still external executables and stay correctly
+  detected — this is a real but narrow gap, same accepted-limitation category as `shellBusy.test.ts`'s
+  "an unanswerable platform reports not busy" case. A user who hits it can pick **Command Prompt (cmd)**
+  and get the exact prior, fully-detectable behavior back.
+- **Not building a `listAvailableShells`-style host probe** to gray out an uninstalled pick in the Settings
+  picker, unlike `editors`' `listAvailableEditors`: `auto` already gets the graceful substitution most users
+  want, and probing purely to decorate three static buttons wasn't asked for — a second detection mechanism
+  earning less than it costs.
 - **macOS PTYs start the user's shell in login mode (`-l`)** to match Terminal.app and the platform's
   terminal convention; other platforms keep a plain interactive shell. The PTY itself supplies
   interactivity, so no explicit `-i` is needed.
@@ -133,7 +170,9 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them).
 - `outputBatcher.test.ts` — batching, backpressure, truncation, `reset`.
 - `shellBusy.test.ts` — child detection, including that an unanswerable platform reports *not* busy.
-- `shellArgs.test.ts` — shell executable precedence across Unix and Windows plus platform-specific arguments.
+- `shellArgs.test.ts` — shell executable precedence across Unix and Windows plus platform-specific
+  arguments; `auto`'s pwsh-then-powershell resolution via an injected `WhichFn`; every explicit preference
+  is a literal pin regardless of what `which` reports; `ComSpec`/`COMSPEC` no longer influence the result.
 - `terminalManager.test.ts` — transactional durable reservation without spawn, catalog bounds, attach
   idempotency (incl. concurrent), takeover, displaced-client rejection, tab-list broadcast, close/busy,
   revive. Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as

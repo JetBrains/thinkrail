@@ -24,6 +24,7 @@ import type {
 	SpecGraphNode,
 	SystemThemePair,
 	TerminalTabInfo,
+	TerminalWindowsShell,
 	ThemeId,
 	ThemeMode,
 	ThinkingLevel,
@@ -39,6 +40,7 @@ import {
 	isControlMessage,
 	isLineWidth,
 	isSubagentCompletionMessage,
+	isTerminalWindowsShell,
 	normalizeThemePreference,
 } from "@thinkrail/contracts";
 import { create } from "zustand";
@@ -272,6 +274,7 @@ export const SettingsSection = {
 	LineWidth: "line-width",
 	Chat: "chat",
 	Layout: "layout",
+	Updates: "updates",
 	Terminal: "terminal",
 	Templates: "templates",
 	Review: "review",
@@ -326,6 +329,7 @@ export interface SessionRuntime {
 	attemptAssistantId: string | null;
 	isStreaming: boolean;
 	settlementTick: number;
+	statsRefreshTick: number;
 	queue: SessionQueueState;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
@@ -355,6 +359,7 @@ function newRuntime(
 		attemptAssistantId: null,
 		isStreaming: false,
 		settlementTick: 0,
+		statsRefreshTick: 0,
 		queue: EMPTY_QUEUE,
 		model,
 		thinkingLevel,
@@ -487,6 +492,14 @@ function clearRetryTurns(rt: SessionRuntime, source: RetrySource): SessionRuntim
 	return rt.turns.some((t) => t.kind === "retry" && t.source === source)
 		? { ...rt, turns: rt.turns.filter((t) => !(t.kind === "retry" && t.source === source)) }
 		: rt;
+}
+
+function invalidatesSessionStats(event: PiEvent): boolean {
+	return (
+		event.type === "message_end" ||
+		event.type === "compaction_end" ||
+		event.type === "agent_settled"
+	);
 }
 
 export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionRuntime {
@@ -795,6 +808,7 @@ interface AppState {
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
 	terminalReplayKb: number;
+	terminalWindowsShell: TerminalWindowsShell;
 	composerGrowthLimit: ComposerGrowthLimit;
 	chatLineWidth: number;
 	fileLineWidth: number;
@@ -1017,6 +1031,9 @@ function configPatch(config: AppConfig) {
 		jbcentralQuotaRefreshSeconds:
 			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 		terminalReplayKb: config.terminalReplayKb,
+		terminalWindowsShell: isTerminalWindowsShell(config.terminalWindowsShell)
+			? config.terminalWindowsShell
+			: DEFAULT_CONFIG.terminalWindowsShell,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
 		chatLineWidth: isLineWidth(config.chatLineWidth)
 			? config.chatLineWidth
@@ -1669,6 +1686,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
+	terminalWindowsShell: DEFAULT_CONFIG.terminalWindowsShell,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	chatLineWidth: DEFAULT_CONFIG.chatLineWidth,
 	fileLineWidth: DEFAULT_CONFIG.fileLineWidth,
@@ -2964,6 +2982,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				sessions[sessionId] = {
 					...next,
 					eventRevision: runtime.eventRevision + 1,
+					statsRefreshTick: runtime.statsRefreshTick + (invalidatesSessionStats(event) ? 1 : 0),
 				};
 			}
 			return sessions === s.sessions ? s : { sessions };

@@ -13,9 +13,9 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 ## Boundary
 
-- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-workspace versus Project Home/Welcome branching; single Settings, interview-invitation, and Toaster mounts; the theme DOM side effect; global keyboard chords; the injected Layout settings section; and integration of the pure workbench engine with Zustand, local persistence, panel renderers, transport-backed domain state, and region error boundaries.
+- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-workspace versus Project Home/Welcome branching; single Settings, interview-invitation, and Toaster mounts; the theme DOM side effect; global keyboard chords; the injected Layout and optional native Update settings sections; and integration of the pure workbench engine with Zustand, local persistence, panel renderers, transport-backed domain state, and region error boundaries.
 - **Public surface:** `Shell`.
-- **Allowed deps:** child layout modules; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, and `themes`.
+- **Allowed deps:** child layout modules; `nativeUpdates`; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, and `themes`.
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
 
 ## Internal modules
@@ -33,8 +33,13 @@ The sibling dependency graph is: `layoutState → layout`; `chatReconciliation �
 
 ## Composition
 
-The topbar keeps ThinkRail identity, connection state, Settings, and compact location context. The identity
-is the icon-only ThinkRail mark—the same vector served as `public/favicon.svg`, inlined at 32×32 and rendered
+The topbar keeps ThinkRail identity, connection state, Settings, and compact location context. When the
+optional native updater reports `ready`, a compact Update ready affordance remains beside the settings and
+connection chrome; it opens the injected Update section and remains after Later until native state changes.
+Ordinary browsers render neither that affordance nor the section. `Shell` mounts `nativeUpdates`' one capability
+hook and passes its state/actions into the props-driven controls; panels receive optional React content, never a
+launcher or native-runtime check. The topbar identity is the icon-only ThinkRail mark—the same vector served as
+`public/favicon.svg`, inlined at 32×32 and rendered
 through semantic `text-primary`—with no divider before location. An active workspace shows one line of
 `project / workspace  branch · from baseBranch` plus optional review metadata on `tr-text-ui`; project and
 workspace use `text-text-default`, while branch/trailing metadata use `text-text-muted`, with progressive
@@ -65,7 +70,7 @@ The durable frame grammar and pure operations belong to [[submodule-web-shell-la
 
 Resource opens route to that workspace's last-focused surviving center group. Reopening a canonical resource selects its local placement rather than duplicating it. Resource close does not remove the frame group when it becomes empty. Explicit split/add/remove/merge commands own topology; group removal deterministically rehomes resources from every locally retained workspace view before one state commit. Applying a preset follows the same all-views rule. Moving a singleton tool or resizing/folding/showing a region changes the one frame; moving a file/chat/diff/document/terminal among existing groups changes only the active workspace view. Pointer/resize drafts stay runtime-local and publish one local transition on completion.
 
-The browser persistence boundary is `layoutState`, not the store. State is qualified by backend endpoint and frontend-surface identity, schema-validated on load, and restored on reload or supported window-session restoration. Simultaneous windows do not observe each other's storage writes. A surface with no valid local document starts from the Balanced frame; old host snapshots and old browser attention keys are never read.
+The layout persistence boundary is `layoutState`, not the store. Browsers qualify state by backend endpoint and frontend-surface identity; native windows use the injected stable string adapter's profile/window scope with a fixed key independent of the host's dynamic port. Both paths persist and decode the same bounded document. State is schema-validated on load and restored on reload or supported window-session restoration. Simultaneous windows do not observe each other's storage writes. A surface with no valid local document starts from the Balanced frame; old host snapshots and old browser attention keys are never read.
 
 Project/file/change/review/chat/terminal views receive only resource identity, visibility, and container bounds. Moving a view cannot change module dependencies or make it inspect the frame. A terminal body mounts only while that terminal is locally selected in a visible, unfolded group; hidden terminal tabs stay unmounted while their host PTYs continue running.
 

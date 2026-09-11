@@ -148,7 +148,7 @@ function spawnForTab(
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
 
-	const shell = terminalShell(process.platform, process.env);
+	const shell = terminalShell(process.platform, process.env, loadConfig().terminalWindowsShell);
 	const grid = {
 		cols: size.cols ?? DEFAULT_PTY_SIZE.cols,
 		rows: size.rows ?? DEFAULT_PTY_SIZE.rows,

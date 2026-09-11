@@ -99,9 +99,9 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   advances only when a local transition invalidates an uncontrolled pointer/resize draft.
 
   The store owns values and actions, never persistence. `shell/layoutState` validates and hydrates one
-  endpoint/surface-qualified local document, subscribes to relevant state edges, and persists the normalized
-  frame/views/attention/preferences. `hydrateLocalLayoutState` installs that document once; a missing or invalid
-  document is represented by a Balanced frame with no workspace views. `clearWorkspaceTabs` removes the
+  browser-endpoint/surface- or native-profile/window-qualified local document, subscribes to relevant state
+  edges, and persists the normalized frame/views/attention/preferences. `hydrateLocalLayoutState` installs
+  that document once; a missing or invalid document is represented by a Balanced frame with no workspace views. `clearWorkspaceTabs` removes the
   workspace view, attention, and associated local state when the workspace disappears. A page-lifetime
   `removedWorkspaceIds` tombstone rejects stale catalog/session/cache/workspace arrivals so an in-flight read
   cannot recreate it.
@@ -152,7 +152,8 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `thinkingLevel` / **`eventRevision`** (browser-local, incremented for every
   received Pi event; the compare-and-install fence for an authoritative transcript read) /
   **`syncedConnectionGeneration`** (which connected host generation the runtime's transcript was last read
-  from) / `stats` / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
+  from) / `stats` / **`statsRefreshTick`** (browser-local invalidation for the mounted chat's authoritative
+  stats read) / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
   promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
@@ -217,10 +218,21 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
     changes nothing does not re-render the rail. Both refuse removed
     workspaces and tombstoned sessions, so a late push cannot resurrect a deleted chat's glyph.
     The rollup is **not** stored: `workspaceActivityRollup`/`projectActivityRollup` derive it on read from
-    the map alone — no workspace list, no second store slice — with a single shared precedence, **`failed` > `waiting` > `running` > `queued`** — a rare fault must never be
-    masked by routine work, and both are "needs you" anyway. Note this is deliberately *not* the host's
+    the map alone — no workspace list, no second store slice — with a single shared precedence, the
+    exported **`ACTIVITY_STATUS_ORDER`** (`waiting` > `running` > `failed` > `queued`) — one constant that
+    both this rollup and the glyph's hover breakdown (`apps/web/src/panels/SPEC.md`) read, so the order can
+    never drift between the two — the row speaks for **live/attention work first**: a
+    chat that needs you, then one actively working. A terminal `failed` deliberately sits *below* live work
+    so it cannot paint a busy worktree red — a running sibling must not be masked by an abandoned failure;
+    the fault recedes to the hover breakdown and still owns the glyph whenever nothing live is happening.
+    (This is why a *finished-fine* sibling does **not** demote a lone failure: idle is absence, so there is
+    nothing left in the map to outrank it — that is the "idle draws nothing" invariant, not a masking bug.)
+    Note this is deliberately *not* the host's
     per-session derivation order (see `packages/server/src/agent/SPEC.md`): there the question is "what is
-    this one chat doing", here it is "which of several chats should this row speak for".
+    this one chat doing", here it is "which of several chats should this row speak for". A `failed` that has
+    been *superseded* by newer non-failed work in its worktree never reaches this rollup at all — the host
+    suppresses it at the source (failed-supersession, same SPEC), so it arrives as a retraction, not a
+    status this precedence has to rank.
   Closed chats are reopenable: the workbench close command atomically removes local placement and invokes
   **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
   **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending
@@ -259,13 +271,16 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   connectionGeneration)`** is the separate authoritative path for an existing runtime after successful
   compaction or reconnect. It compare-and-installs only at the expected Pi-event revision, rejects a removed
   workspace/session or cross-workspace identity, replaces turns/tool results/ask answers/queue/model/thinking
-  + streaming state, and preserves draft/stats/commands/extension UI/placement/history/focus. It marks the
+  + streaming state, and preserves draft/stats/statsRefreshTick/commands/extension UI/placement/history/focus. It marks the
   connected generation and advances the revision so two reads cannot regress one another. When the latest
   live compaction matches the durable record, its id + estimated-after count survive, and `resuming` survives
   only while the returned summary is still streaming. The
-  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvents` folds an ordered batch in
-  one atomic store write while incrementing each affected runtime's revision once per event, even for a
-  UI-ignored event**, because ignored still means it crossed the snapshot ordering boundary. The
+  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime. Every `message_end`, `compaction_end`, and
+  `agent_settled` also advances `statsRefreshTick`, even when that event changes no rendered turn, so a
+  finalized Pi usage/context boundary cannot be lost behind presentation filtering or a batched
+  `isStreaming` false→false endpoint. **`handlePiEvents` folds an ordered batch in one atomic store write
+  while incrementing each affected runtime's revision once per event, even for a UI-ignored event**, because
+  ignored still means it crossed the snapshot ordering boundary. The
   single-event **`handlePiEvent`** delegates to that same path so tests and non-wire callers cannot drift.
   Transport flushes a pending batch before delivering any later response or non-Pi push, preserving the
   revision fence's received-message ordering. **Only idle sends enter the transcript
@@ -347,10 +362,12 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`LineWidth`/`Chat`/`Layout`/`Terminal`/`Templates`/`Review`/`Privacy`/`Feedback`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`LineWidth`/`Chat`/`Layout`/`Updates`/`Terminal`/`Templates`/`Review`/`Privacy`/`Feedback`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
-  **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
-  to a section without prop-drilling through the shell. The ephemeral **`interviewPromptOpen`** plus
+  **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider warning, and native-ready
+  shell affordance can deep-link without prop-drilling. The optional Update key is navigation only: native
+  updater snapshots/actions remain in `nativeUpdates`' shell-local hook state and never enter Zustand. The
+  ephemeral **`interviewPromptOpen`** plus
   **`showInterviewPrompt()`** / **`hideInterviewPrompt()`** is the render projection of the host's addressed
   invitation; transport opens it idempotently, clears it before each valid welcome's possible redelivery so
   a host restart cannot leave a stale projection, and the panel hides it after `feedback.respond` is
@@ -364,13 +381,17 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   Defaults remain fixed `DEFAULT_CONFIG.theme` with no pair, but while existing `welcomeGeneration === 0`
   shell retains the pre-React preference hint instead of applying those placeholders over it. Reusing that
   readiness edge avoids a second derived config-hydration flag; after the first welcome, disconnect/reconnect
-  keeps the last authoritative config while a later welcome can replace it. **`composerGrowthLimit: ComposerGrowthLimit`**,
+  keeps the last authoritative config while a later welcome can replace it. **`terminalReplayKb: number`**,
+  **`terminalWindowsShell: TerminalWindowsShell`**, **`composerGrowthLimit: ComposerGrowthLimit`**,
   **`chatLineWidth` / `fileLineWidth`**, their independent **`chatLineWidthBounded` /
   `fileLineWidthBounded`** switches, **`customLayoutPresets: LayoutPreset[]`**,
   **`analyticsEnabled: boolean`**, **`subagentsEnabled: boolean`**, **`jbcentralQuotaEnabled: boolean`**,
   and **`jbcentralQuotaRefreshSeconds: number`** ride the same `applyConfig` fold (host-owned, fieldwise
   defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
-  geometry) — the Line width, Chat, shared Layout catalog, Privacy, provider controls, and shell quota read sides.
+  the store). `terminalWindowsShell` narrows through `isTerminalWindowsShell` and otherwise uses
+  `DEFAULT_CONFIG.terminalWindowsShell`; `TerminalSettings` consumes both terminal fields, while terminal
+  spawning remains server-owned — the Terminal, Line width, Chat, shared Layout catalog, Privacy, provider
+  controls, and shell quota read sides.
   **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
   StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by
   the chat preference seam from host-qualified browser localStorage or the native shell's injected
