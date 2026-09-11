@@ -485,8 +485,9 @@ a project picker, the prompt hero, and the reused
   frontend-local. With an active workspace each preset offers confirmable **Apply now…**, which asks shell
   to replace this window's frame and atomically preserve/reflow open resource identities in every retained
   workspace view; no current layout is published); the optional **shell-owned injected Update section**
-  (the Settings shell includes its row only when content is provided; `panels` neither discovers a native
-  global nor imports the update capability, while ordinary browsers therefore have no Update row);
+  (the Settings shell includes its row only when content is provided; `panels` neither discovers native nor
+  host update capabilities. If a later welcome removes injected content while Updates is selected, Appearance
+  is rendered and highlighted rather than leaving no active row);
   **`TerminalSettings`** — a **Replayed output** size picker (`store.terminalReplayKb`, five presets from
   Off to 1 MB, `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on
   Windows hosts at `protocolVersion >= WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`, a **Windows shell** picker

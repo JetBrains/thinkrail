@@ -42,5 +42,10 @@ test("Windows shell settings advance the protocol", () => {
 
 test("project template previews advance the additive wire shape to v63", () => {
 	expect(PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION).toBe(63);
-	expect(PROTOCOL_VERSION).toBe(PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION);
+});
+
+test("host update advisories advance the protocol with an immutable notice channel", () => {
+	expect(PROTOCOL_VERSION).toBe(64);
+	expect(WS_CHANNELS.hostUpdateAvailable).toBe("host.updateAvailable");
 });

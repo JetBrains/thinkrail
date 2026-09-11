@@ -50,8 +50,9 @@ of the host.
   or deployment that supplies it. A feature's wire shape is shared by browser, desktop, and future clients.
   Separate type-only native client capabilities describe an optional shell-local bridge, not host WS
   methods: `NativeUpdateState` and `NativeUpdateBridge` carry update presentation and explicit local
-  actions. The same web bundle discovers that capability without importing a native SDK; an ordinary
-  browser connection acquires no updater authority.
+  actions. The same web bundle discovers that capability without importing a native SDK. An optional
+  `HostUpdateNotice` is advisory only: an ordinary browser receives fixed update guidance but acquires no
+  check, download, install, restart, feed-selection, or host-command authority.
 - **Forbidden:** any *value* import of a `pi` package; **any** import (even `type`) of
   `@earendil-works/pi-coding-agent` (pulls `node:fs`); the pi-ai **provider / API subpaths**
   (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
@@ -347,6 +348,9 @@ of the host.
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
   update bridge exposes a monotonic state snapshot, prompt manual check, explicit restart action, and state
   subscription without granting updater authority to an ordinary browser connection.
+- **`HostUpdateNotice`** — the optional immutable host-wire advisory: current version, newer available version,
+  and channel. No status, revision, error, feed URL, artifact, platform path, or shell command crosses the
+  wire. Its optional welcome field plus `host.updateAvailable` change pushes enter at protocol v64.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered
@@ -466,10 +470,13 @@ of the host.
   global; **`template.save`**, **`template.delete`**) — all
   read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
-  (open records) and **`recentProjects`** (all known records, open + closed), plus **`hostPlatform`**
+  (open records) and **`recentProjects`** (all known records, open + closed), plus optional
+  **`hostUpdate: HostUpdateNotice`** and **`hostPlatform`**
   (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
   offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from
-  the browser / **`project.updated`** — the
+  the browser / **`host.updateAvailable`** — an immutable notice published only when a launcher's periodic
+  background lookup first finds a newer release or later finds a different newer release; absent on
+  failure/no-update / **`project.updated`** — the
   full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
   atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
   **`session.created`** (the initial `SessionSummary`, broadcast when a new host-owned session registers so

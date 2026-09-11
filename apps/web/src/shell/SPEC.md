@@ -13,9 +13,9 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 ## Boundary
 
-- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-workspace versus Project Home/Welcome branching; single Settings, interview-invitation, and Toaster mounts; the theme DOM side effect; global keyboard chords; the injected Layout and optional native Update settings sections; and integration of the pure workbench engine with Zustand, local persistence, panel renderers, transport-backed domain state, and region error boundaries.
+- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-workspace versus Project Home/Welcome branching; single Settings, interview-invitation, and Toaster mounts; the theme DOM side effect; global keyboard chords; the injected Layout and optional application Update settings sections; and integration of the pure workbench engine with Zustand, local persistence, panel renderers, transport-backed domain state, and region error boundaries.
 - **Public surface:** `Shell`.
-- **Allowed deps:** child layout modules; `nativeUpdates`; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, and `themes`.
+- **Allowed deps:** child layout modules; `updates`; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, and `themes`.
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
 
 ## Internal modules
@@ -34,11 +34,12 @@ The sibling dependency graph is: `layoutState → layout`; `chatReconciliation �
 ## Composition
 
 The topbar keeps ThinkRail identity, connection state, Settings, and compact location context. When the
-optional native updater reports `ready`, a compact Update ready affordance remains beside the settings and
-connection chrome; it opens the injected Update section and remains after Later until native state changes.
-Ordinary browsers render neither that affordance nor the section. `Shell` mounts `nativeUpdates`' one capability
-hook and passes its state/actions into the props-driven controls; panels receive optional React content, never a
-launcher or native-runtime check. The topbar identity is the icon-only ThinkRail mark—the same vector served as
+optional application updater reports a native `ready` package or CLI-host `available` release, a compact Update
+affordance remains beside the settings and connection chrome; it opens the injected Update section and remains
+after native Later or until capability state changes. Browsers connected to a host without the advisory render
+neither that affordance nor the section. `Shell` mounts `updates`' one capability hook and passes its normalized
+state/actions into the props-driven controls; panels receive optional React content, never a launcher or
+native-runtime check. The topbar identity is the icon-only ThinkRail mark—the same vector served as
 `public/favicon.svg`, inlined at 32×32 and rendered
 through semantic `text-primary`—with no divider before location. An active workspace shows one line of
 `project / workspace  branch · from baseBranch` plus optional review metadata on `tr-text-ui`; project and

@@ -26,7 +26,7 @@ event stream as a chat-centric, multi-session IDE shell.
 
 ## Internal modules
 
-Each is a bounded sub-module; `navigation`/`transport`/`store`/`nativeUpdates`/`prompt`/`lib` expose an `index.ts` **barrel** (their only public
+Each is a bounded sub-module; `navigation`/`transport`/`store`/`updates`/`prompt`/`lib` expose an `index.ts` **barrel** (their only public
 surface). `panels`/`components/ui`/`chat` are imported **per-file by design** — barreling them would pull
 the lazily-loaded Monaco/shiki/xterm chunks into the eager bundle and break the shadcn per-primitive
 convention; their boundary is held by convention + spec. Sibling edges live here, not in the leaves.
@@ -41,7 +41,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `prompt` | lifecycle-neutral slash completion + prompt-template slot editing | yes | [prompt/SPEC.md](src/prompt/SPEC.md) |
 | `auth` | in-app provider login: the presentational OAuth dialog + its client-side state reducer | yes | [auth/SPEC.md](src/auth/SPEC.md) |
 | `shell` | responsive composition + frontend-local workbench ownership (bounded `layout/` and `layoutState/` children) | no | [shell/SPEC.md](src/shell/SPEC.md) |
-| `nativeUpdates` | optional native update shell hook and props-driven controls | yes | [nativeUpdates/SPEC.md](src/nativeUpdates/SPEC.md) |
+| `updates` | optional native/host update shell hook and props-driven controls | yes | [updates/SPEC.md](src/updates/SPEC.md) |
 | `components` | dependency-light shared React primitives: error isolation, custom icons, quiet scroll frames (contains `ui/`) | no | [components/SPEC.md](src/components/SPEC.md) |
 | `components/ui` | shadcn primitives, themed with our tokens | no | [components/ui/SPEC.md](src/components/ui/SPEC.md) |
 | `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
@@ -76,9 +76,9 @@ return to stable.
 ### Dependency graph
 
 - `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration
-- `shell` → children `shell/layout` + `shell/layoutState`, `nativeUpdates` (one optional-capability hook + props-driven Settings content and ready affordance), `panels`, `chat` (app-integration render/hydration only), `store`, `transport` (domain hydration + endpoint identity), `contracts` (type-only), `components/ui`, `components` (`ErrorBoundary` around each mounted region + `QuietScrollArea` around shell-owned tool bodies), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of catalog/media resolution and atomic theme application, driven by the hydrated store preference or pre-hydration hint)
+- `shell` → children `shell/layout` + `shell/layoutState`, `updates` (one optional-capability hook + props-driven Settings content and ready affordance), `panels`, `chat` (app-integration render/hydration only), `store`, `transport` (domain hydration + endpoint identity), `contracts` (type-only), `components/ui`, `components` (`ErrorBoundary` around each mounted region + `QuietScrollArea` around shell-owned tool bodies), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of catalog/media resolution and atomic theme application, driven by the hydrated store preference or pre-hydration hint)
 - `shell/layout` → `contracts` (`LayoutPreset` + `GitDiffScope` types only), `lib` (attention/id primitives), and React / `react-resizable-panels` / `@dnd-kit/core`; `shell/layoutState` → `shell/layout`, `store`, `transport` (browser endpoint identity + error normalization), `clientPreferences` (native-stable persistence), `contracts` (`LayoutPreset` type only), `lib`, and React. The parent injects store state and feature renderers, so the pure layout child has no feature-module runtime edge
-- `nativeUpdates` → `contracts` (bridge/state types only), `components/ui`, React, and Remix Icon; it has no transport/store/runtime dependency
+- `updates` → `contracts` (native bridge + host notice types), `store` (host notice), `components/ui`, React, and Remix Icon; native snapshots remain shell-local
 - `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector`+`useModelCatalog` — these are shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping)
 - `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `prompt` (shared slash/template behavior), `lib`, `clientPreferences`; `store` + `transport`
   (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)

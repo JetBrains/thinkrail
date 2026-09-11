@@ -6,7 +6,7 @@ import { printStartupMark } from "@thinkrail/shared/startupMark";
 import { channel, version } from "@thinkrail/shared/version";
 import { type CliOptions, parseArgs, parseSubcommand, USAGE } from "./args";
 import { runUninstall } from "./uninstall";
-import { runUpdate } from "./update";
+import { createCliHostUpdate, runUpdate } from "./update";
 
 const DEFAULT_STATIC_DIR = resolve(import.meta.dir, "../../web/dist");
 
@@ -52,6 +52,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 		console.warn(`Web app not found at ${staticDir} — run \`bun run build:web\` to build the UI.`);
 	}
 
+	const hostUpdate = createCliHostUpdate(build, channel, version);
 	const { port, requested } = await bootHost({
 		port: options.port,
 		host: options.host,
@@ -64,6 +65,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 			build,
 			mute: options.noAnalytics,
 		},
+		...(hostUpdate ? { hostUpdate } : {}),
 		...(options.projectDir ? { projectPath: resolve(process.cwd(), options.projectDir) } : {}),
 	});
 	if (port !== requested) {

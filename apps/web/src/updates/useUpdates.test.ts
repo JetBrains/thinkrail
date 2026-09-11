@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import type { NativeUpdateBridge, NativeUpdateState } from "@thinkrail/contracts";
+import type { HostUpdateNotice, NativeUpdateBridge, NativeUpdateState } from "@thinkrail/contracts";
 import {
 	getNativeUpdateBridge,
 	runNativeUpdateRequest,
+	selectUpdateSource,
 	subscribeToNativeUpdates,
-} from "./useNativeUpdates";
+} from "./useUpdates";
 
-function state(revision: number, status: NativeUpdateState["status"]): NativeUpdateState {
+function nativeState(revision: number, status: NativeUpdateState["status"]): NativeUpdateState {
 	return {
 		revision,
 		status,
@@ -15,6 +16,14 @@ function state(revision: number, status: NativeUpdateState["status"]): NativeUpd
 		availableVersion: status === "ready" ? "0.1.1" : null,
 		progress: null,
 		error: null,
+	};
+}
+
+function hostNotice(): HostUpdateNotice {
+	return {
+		currentVersion: "0.1.0",
+		channel: "stable",
+		availableVersion: "0.2.0",
 	};
 }
 
@@ -52,11 +61,11 @@ describe("native update shell subscription", () => {
 			() => {},
 		);
 		expect(order).toEqual(["subscribe", "get"]);
-		push?.(state(2, "ready"));
-		initial.resolve(state(1, "idle"));
+		push?.(nativeState(2, "ready"));
+		initial.resolve(nativeState(1, "idle"));
 		await initial.promise;
 		await Promise.resolve();
-		expect(observed).toEqual([state(2, "ready")]);
+		expect(observed).toEqual([nativeState(2, "ready")]);
 		unsubscribe();
 	});
 
@@ -75,5 +84,22 @@ describe("native update shell subscription", () => {
 	test("an ordinary browser or incomplete global has no native capability", () => {
 		expect(getNativeUpdateBridge(undefined)).toBeNull();
 		expect(getNativeUpdateBridge({ getState() {} })).toBeNull();
+	});
+});
+
+describe("unified update capability", () => {
+	test("native authority wins when native and host capabilities are both present", () => {
+		const bridge = getNativeUpdateBridge({
+			getState: async () => nativeState(1, "idle"),
+			checkForUpdates: async () => {},
+			restartToUpdate: async () => {},
+			subscribe: () => () => {},
+		});
+		expect(selectUpdateSource(bridge, hostNotice())).toBe("native");
+	});
+
+	test("host authority exists exactly when an immutable notice is present", () => {
+		expect(selectUpdateSource(null, hostNotice())).toBe("host");
+		expect(selectUpdateSource(null, null)).toBeNull();
 	});
 });

@@ -6,8 +6,95 @@ import { psQuote, runPowerShellScript } from "./powershell";
 
 const DEFAULT_INSTALL_SCRIPT_URL =
 	"https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh";
+const GITHUB_RELEASES_URL = "https://api.github.com/repos/JetBrains/thinkrail/releases";
+const RELEASE_CHECK_TIMEOUT_MS = 5_000;
+const RELEASE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const RELEASE_CHECK_ERROR = "Unable to check for ThinkRail updates.";
+const STABLE_RELEASE_TAG_RE = /^v(\d+\.\d+\.\d+)$/;
+const NIGHTLY_RELEASE_TAG_RE = /^v(\d+\.\d+\.\d+-nightly\.\d+)$/;
+const SEMVER_RE =
+	/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 const VERSION_RE = /^(?:latest|\d+\.\d+\.\d+(?:-nightly\.\d+)?)$/;
 const PREFIX_FORBIDDEN_RE = /[;|&`$<>\n\r"'\\]/;
+
+export type ReleaseChannel = "stable" | "nightly";
+
+export type ReleaseFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
+export interface CliHostUpdateNotice {
+	currentVersion: string;
+	availableVersion: string;
+	channel: ReleaseChannel;
+}
+
+export interface CliHostUpdate {
+	intervalMs: number;
+	check(): Promise<CliHostUpdateNotice | null>;
+}
+
+function tagNameOf(value: unknown): string | undefined {
+	if (typeof value !== "object" || value === null || !("tag_name" in value)) return undefined;
+	return typeof value.tag_name === "string" ? value.tag_name : undefined;
+}
+
+function versionFromTag(tag: string | undefined, pattern: RegExp): string | undefined {
+	return tag?.match(pattern)?.[1];
+}
+
+export async function discoverReleaseVersion(
+	channel: ReleaseChannel,
+	fetchImpl: ReleaseFetch = fetch,
+	timeoutMs = RELEASE_CHECK_TIMEOUT_MS,
+): Promise<string> {
+	const controller = new AbortController();
+	const deadline = setTimeout(() => controller.abort(), timeoutMs);
+	try {
+		const url =
+			channel === "stable" ? `${GITHUB_RELEASES_URL}/latest` : `${GITHUB_RELEASES_URL}?per_page=20`;
+		const response = await fetchImpl(url, {
+			headers: { Accept: "application/vnd.github+json" },
+			signal: controller.signal,
+		});
+		if (!response.ok) throw new Error(RELEASE_CHECK_ERROR);
+		const body: unknown = await response.json();
+		if (channel === "stable") {
+			const candidate = versionFromTag(tagNameOf(body), STABLE_RELEASE_TAG_RE);
+			if (candidate !== undefined) return candidate;
+		} else if (Array.isArray(body)) {
+			for (const release of body) {
+				const candidate = versionFromTag(tagNameOf(release), NIGHTLY_RELEASE_TAG_RE);
+				if (candidate !== undefined) return candidate;
+			}
+		}
+		throw new Error(RELEASE_CHECK_ERROR);
+	} catch {
+		throw new Error(RELEASE_CHECK_ERROR);
+	} finally {
+		clearTimeout(deadline);
+	}
+}
+
+function isStrictlyNewerVersion(currentVersion: string, candidateVersion: string): boolean {
+	if (!SEMVER_RE.test(currentVersion) || !SEMVER_RE.test(candidateVersion)) return false;
+	return Bun.semver.order(currentVersion, candidateVersion) < 0;
+}
+
+export function createCliHostUpdate(
+	build: string,
+	baked: string,
+	installedVersion: string,
+	fetchImpl: ReleaseFetch = fetch,
+): CliHostUpdate | undefined {
+	if (build !== "binary" || (baked !== "stable" && baked !== "nightly")) return undefined;
+	return {
+		intervalMs: RELEASE_CHECK_INTERVAL_MS,
+		check: async () => {
+			const availableVersion = await discoverReleaseVersion(baked, fetchImpl);
+			if (!isStrictlyNewerVersion(installedVersion, availableVersion)) return null;
+			return { currentVersion: installedVersion, availableVersion, channel: baked };
+		},
+	};
+}
 
 export const UPDATE_USAGE = `Usage: thinkrail update [options]
 

@@ -3,6 +3,7 @@ import {
 	type AppConfig,
 	DEFAULT_CONFIG,
 	type ExtUiRequest,
+	type HostUpdateNotice,
 	type PiEvent,
 	type Project,
 	type SessionEventPayload,
@@ -107,12 +108,21 @@ const emptyBottomRegion = (): WorkspaceLayoutDocument["bottom"] => ({
 	groups: [],
 });
 
+function hostNotice(availableVersion = "0.2.0"): HostUpdateNotice {
+	return {
+		currentVersion: "0.1.0",
+		channel: "stable",
+		availableVersion,
+	};
+}
+
 beforeEach(() => {
 	useAppStore.setState({
 		status: "connecting",
 		connectionGeneration: 0,
 		welcomeGeneration: 0,
 		protocolVersion: null,
+		hostUpdate: null,
 		routeChatTarget: null,
 		routeChatTargetGeneration: 0,
 		sessions: {},
@@ -2222,6 +2232,39 @@ test("installWelcomeSnapshot lands one complete snapshot and advances its own ge
 
 	useAppStore.getState().installWelcomeSnapshot(44, [p1], [p1]);
 	expect(useAppStore.getState().welcomeGeneration).toBe(2);
+});
+
+test("welcome replaces and clears the synchronized host update notice", () => {
+	useAppStore.getState().installWelcomeSnapshot(62, [], [], undefined, undefined, hostNotice());
+	expect(useAppStore.getState().hostUpdate).toEqual(hostNotice());
+
+	useAppStore
+		.getState()
+		.installWelcomeSnapshot(62, [], [], undefined, undefined, hostNotice("0.3.0"));
+	expect(useAppStore.getState().hostUpdate).toEqual(hostNotice("0.3.0"));
+
+	useAppStore.getState().installWelcomeSnapshot(62, [], []);
+	expect(useAppStore.getState().hostUpdate).toBeNull();
+});
+
+test("host update pushes simply replace the previous notice", () => {
+	useAppStore.getState().applyHostUpdate(hostNotice());
+	useAppStore.getState().applyHostUpdate(hostNotice("0.3.0"));
+	expect(useAppStore.getState().hostUpdate).toEqual(hostNotice("0.3.0"));
+
+	useAppStore.getState().applyHostUpdate(hostNotice());
+	expect(useAppStore.getState().hostUpdate).toEqual(hostNotice());
+});
+
+test("temporary connection changes retain the host update notice until the next welcome", () => {
+	useAppStore.getState().installWelcomeSnapshot(62, [], [], undefined, undefined, hostNotice());
+	for (const status of ["disconnected", "connecting", "connected"] as const) {
+		useAppStore.getState().setStatus(status);
+		expect(useAppStore.getState().hostUpdate).toEqual(hostNotice());
+	}
+
+	useAppStore.getState().installWelcomeSnapshot(62, [], []);
+	expect(useAppStore.getState().hostUpdate).toBeNull();
 });
 
 test("installWelcomeSnapshot reconciles stale project navigation", () => {
