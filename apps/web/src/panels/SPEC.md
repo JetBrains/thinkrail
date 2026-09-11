@@ -460,15 +460,19 @@ a project picker, the prompt hero, and the reused
   with an accessible range error; Escape restores the host value, Enter saves when valid, and a changed
   authoritative width from `settings.changed` replaces a stale draft. Mutations converge only on that
   broadcast and rejected calls toast without changing geometry); **`ChatSettings`** (the next live section —
-  **Message order** radio cards over `store.chatMessageOrder` (Oldest first, the compatibility default /
-  Newest first, the opt-in), one **Streaming response movement** two-handle range over
+  **TODO view** radio cards over shell-injected `todoViewMode` + `onTodoViewModeChange`: **Chat popover**
+  (“Open the TODO list below each chat header”, the compatibility default) / **Side tab** (“Follow the
+  latest focused chat in a movable TODO tool”), mutually exclusive; panels never import shell or mutate a
+  frame. **Message order** radio cards over `store.chatMessageOrder` (Oldest first,
+  the compatibility default / Newest first, the opt-in); and one **Streaming response movement** two-handle range over
   `store.streamingResponseMovement`, then the three existing composer-growth cards. The movement control's
   copy is “Choose when the chat moves while an answer grows and where its newest edge lands”; one axis runs
   Top → Message box, Settle is 25–90, Trigger is 35–100, both step by 5 with a 10-point minimum gap, and
-  the displayed default is 75%→100%. It exposes no runway/tail/lifecycle controls. Message order and
-  movement both apply immediately and persist only in this client through the chat preference seam:
-  browsers use current-host-qualified keys, while a native shell may inject its stable
-  backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
+  the displayed default is 75%→100%. It exposes no runway/tail/lifecycle controls. TODO view applies
+  immediately and persists with the shell-owned per-surface layout state, so another browser tab or native
+  window keeps its own placement choice. Message order and movement persist through the chat preference
+  seam: browsers use current-host-qualified keys, while a native shell may inject its stable
+  backend-profile/window adapter. Another browser profile/device, native window, or host is unaffected. Composer growth
   remains a top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection.
   Labels use “message box” rather than the internal “composer” name when explaining where the user types.
   The final **Subagents** block pairs the host-wide `subagentsEnabled` switch with a named **This workspace**
@@ -636,7 +640,7 @@ a project picker, the prompt hero, and the reused
   protocol work; agent-authored findings appear in the Review
   panel badged `agent` (`review-comment-agent`), and an agent-settled card reads `Reviewed · agent`;
   a **changes_requested** verdict marks the item loudly: the status glyph flips to the warning
-  `CircleAlert` (`StatusIcon changesRequested`, `data-changes-requested` — popup row and plan page
+  `CircleAlert` (`StatusIcon changesRequested`, `data-changes-requested` — compact row and plan page
   alike), the plan page's title row grows a warning **`Changes requested · N`** chip
   (`plan-item-changes-requested`; N = `planView.itemOpenFindings`, the reviewer's open comments
   matched by `origin` provenance (path-join fallback for provenance-less ones) — the Review tab is
@@ -763,8 +767,8 @@ own section. The kebab menu (`plan-menu`, a
   focus that tab. The header also shows the agent's plan-level completion note
   (`planCompletionSummary`-gated `plan-overall-summary`). `FileRow` (`planFileRow.tsx`, its own module so plan surfaces
   share one row without cycles) is the shared change-set row. Live by
-  construction, it reads through the same `useChatTodos` hook as the plan popup (per-mount fetch +
-  `pi.event` refetch), so it cannot show a stale snapshot.
+  construction, it reads through the same `useChatTodos` hook as the compact TODO surfaces (per-mount fetch
+  + `pi.event` refetch + same-client mutation invalidation), so it cannot show a stale snapshot.
   `TerminalWorkbench` owns one visibility-gated terminal body per semantic terminal identity and
   the host-atomic close flow. A busy close remains one correlated request through confirmation and forced
   retry; dialog auto-close cannot release that request, authoritative catalog removal dismisses stale
@@ -825,9 +829,23 @@ own section. The kebab menu (`plan-menu`, a
   The shared `ToggleSegment` (List|Tree, Split|Inline, Preview|Source) borrows the same
   `control-bg-selected` fill + `text-default` for its active segment (no bottom marker — a slim toggle,
   not a tab), so "selected" reads the same everywhere and never derives a parallel surface token.
-- The singleton side-tool renderers are **Projects | Specs | Files | Changes | Review**. Their current
-  location and local selection are supplied by the shell; Review exposes its store-derived pending-draft
-  count as tab metadata. A renderer remains the same when its singleton moves to the opposite side.
+- The singleton side-tool renderers are **Projects | Specs | Files | Changes | TODO | Review**. Their
+  current location and local selection are supplied by the shell; Review exposes its store-derived
+  pending-draft count as tab metadata. TODO is eligible only in the client-local `side-tool` mode; every
+  renderer remains the same when its singleton moves to the opposite side or bottom.
+- **`TodoPanel`** is the compact follower view, not a workspace plan. Side-tab mode makes it the initially
+  active auxiliary tab in every workspace while it remains placed, so it reads immediately without a
+  chat-header reveal. It resolves the store's one last-focused-chat target for the active workspace and reads
+  that exact `{ workspaceId, sessionId }` through `chat/useChatTodos`. Its context row names the chat and
+  `done / total`; beneath it are the shared
+  add row, status-ordered group-first compact rows, and the action that opens the existing session-pinned
+  `PlanPane`. Runtime glance metadata is usable only when its transcript was synchronized in the current
+  connected generation; a missing or stale runtime renders the non-working `waiting` glance. A source change
+  replaces the old rows with content-shaped loading before the new read; failure
+  is retryable and never falls back to stale data or another chat. No remembered chat renders “Focus a chat
+  to see its TODO list”; a remembered empty plan renders the existing empty-plan guidance. Opening a plan
+  page captures the current session, so later chat focus retargets the side tool without changing that page.
+  The renderer owns no focus history, layout placement, plan cache, or transport contract.
 - **`ReviewPanel`** is the review sidebar (see [[submodule-server-reviews]] +
   [[task-review-comments]] for the model) — **ONE screen, a per-file ACCORDION**: each row a path +
   draft/sent/resolved counts with a fold chevron; **clicking a row unfolds its comments in place AND

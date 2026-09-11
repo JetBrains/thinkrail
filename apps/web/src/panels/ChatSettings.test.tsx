@@ -7,8 +7,42 @@ import {
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatSettings, SubagentSettings } from "./ChatSettings";
 
+function renderChatSettings(
+	todoViewMode: "chat-popover" | "side-tool" = "chat-popover",
+	todoViewModeDisabled = false,
+) {
+	return renderToStaticMarkup(
+		<ChatSettings
+			todoViewMode={todoViewMode}
+			todoViewModeDisabled={todoViewModeDisabled}
+			onTodoViewModeChange={() => {}}
+		/>,
+	);
+}
+
+test("Chat settings renders the controlled TODO view choices with the compatibility default", () => {
+	const markup = renderChatSettings();
+	expect(markup).toContain("TODO view");
+	expect(markup).toContain("Chat popover");
+	expect(markup).toContain("Open the TODO list below each chat header");
+	expect(markup).toContain("Side tab");
+	expect(markup).toContain("Follow the latest focused chat in a movable TODO tool");
+	expect(markup).toContain('data-testid="todo-view-chat-popover" data-active="true"');
+	expect(markup).toContain('data-testid="todo-view-side-tool" data-active="false"');
+
+	const sideMarkup = renderChatSettings("side-tool");
+	expect(sideMarkup).toContain('data-testid="todo-view-chat-popover" data-active="false"');
+	expect(sideMarkup).toContain('data-testid="todo-view-side-tool" data-active="true"');
+});
+
+test("TODO view choices stay controlled and disabled before local layout hydration", () => {
+	const markup = renderChatSettings("chat-popover", true);
+	expect(markup).toContain('data-testid="todo-view-chat-popover" data-active="true"');
+	expect(markup.match(/type="radio"[^>]*disabled=""/g)).toHaveLength(2);
+});
+
 test("Chat settings renders one two-handle streaming movement control", () => {
-	const markup = renderToStaticMarkup(<ChatSettings />);
+	const markup = renderChatSettings();
 	expect(markup).toContain("Streaming response movement");
 	expect(markup).toContain(
 		"Choose when the chat moves while an answer grows and where its newest edge lands.",

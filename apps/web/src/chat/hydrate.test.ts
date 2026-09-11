@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { TranscriptMessage } from "@thinkrail/contracts";
-import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
+import { ASK_USER_ANSWERS_CUSTOM_TYPE, TODO_NUDGE_PREFIX } from "@thinkrail/contracts";
 import { messagesToRuntime } from "./hydrate";
 import { readRunDetails } from "./tools/subagent/runDetails";
 
@@ -363,6 +363,26 @@ test("unknown custom messages are ignored entirely", () => {
 	] as unknown as Message[]);
 	expect(turns).toHaveLength(0);
 	expect(Object.keys(askAnswers)).toHaveLength(0);
+});
+
+test("a hidden TODO control records question supersession without claiming a turn or jump anchor", () => {
+	const { turns, turnIdByMessageIndex, controlTurnBoundary } = messagesToRuntime([
+		{
+			role: "assistant",
+			content: [{ type: "toolCall", id: "question-1", name: "ask_user_question", arguments: {} }],
+			timestamp: 1,
+		},
+		{ role: "user", content: `${TODO_NUDGE_PREFIX}Earlier TODO`, timestamp: 2 },
+		{
+			role: "assistant",
+			content: [{ type: "toolCall", id: "question-2", name: "ask_user_question", arguments: {} }],
+			timestamp: 3,
+		},
+	] as unknown as Message[]);
+
+	expect(turns.map((turn) => turn.kind)).toEqual(["assistant", "assistant"]);
+	expect(controlTurnBoundary).toBe(1);
+	expect(turnIdByMessageIndex).toEqual([turns[0]?.id ?? null, null, turns[1]?.id ?? null]);
 });
 
 test("a compaction summary becomes its own turn without claiming a jump anchor", () => {

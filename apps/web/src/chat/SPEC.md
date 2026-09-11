@@ -918,13 +918,18 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   inside a synchronous handler, and one read stays narrowable where repeated `.current` reads do not. A `History`-icon button (`data-testid="history-open"`, `aria-label="Search history"`,
   always rendered next to send) calls the same `openHistory` the global `Ctrl+R` reaches — the tap path
   on mobile, a discoverability affordance on desktop.
-- **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
-  [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
+- **Chat TODO plan** — the chat's `pi-todos` list, always session-scoped even when its compact view is
+  presented by the follower TODO side tool (engine: [[module-pi-todos]]; host read/write:
+  [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
   `openMarkdown` snapshot action; tool completion refreshes immediately and `agent_settled` supplies the
-  final refresh; overlapping list reads are latest-wins and connection-generation stamped, accepted adds
-  fold by item id, and a failed optimistic removal re-reads authority rather than restoring a stale whole-plan
-  capture over concurrent edits; plus the agent-review ops `startReview` (`todo.startReview`) and
+  final refresh; overlapping list reads are latest-wins and connection-generation stamped, the latest failed
+  read is blocking only while that hook has no loaded plan, accepted adds fold by item id, and a failed
+  optimistic removal re-reads authority rather than restoring a stale whole-plan capture over concurrent edits.
+  Successful UI mutations also publish an identity-keyed, same-client
+  invalidation: sibling hook instances re-read `todo.list`, while the signal itself carries no data and never
+  becomes a browser-side plan authority. This closes the visible header/tool/page staleness gap without a
+  shared TODO cache or a new host push. Plus the agent-review ops `startReview` (`todo.startReview`) and
   `reviewAll` (`todo.reviewAll`) — both re-read the plan, since the review decoration is host-derived
   and never patched locally; the manual-verdict ops were removed with the plan page's manual mode —
   `todo.review`/`todo.requestFix` remain on the wire, host-side), `planView` (pure derivations over the DTO: `groupProgress`,
@@ -960,7 +965,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   focuses the right-panel Review tab (see `panels/SPEC.md`). A row whose review is **settled** (`planView.reviewSettled` — approved and
   nothing landed since) upgrades its done check to the **circled Verified glyph**
   (`StatusIcon reviewed`, hover "Verified", `data-reviewed`) — the at-a-glance "this step was
-  reviewed" state, popup and plan page alike; a **changes_requested** verdict flips the glyph to the
+  reviewed" state, compact surface and plan page alike; a **changes_requested** verdict flips the glyph to the
   warning `CircleAlert` instead (`StatusIcon changesRequested`, hover "Changes requested",
   `data-changes-requested`) — the plan page adds the chip + feedback note (see `panels/SPEC.md`). **A row whose item carries a host
   change set grows a quiet "N files" chip** (`itemChangeSet` in `planView` — the one derivation shared
@@ -973,18 +978,25 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   chip, never a broken diff tab (the degrade contract). Plus the add-row + an **"Open the plan page"**
   button (`todo-open-plan`) — `useChatTodos.openPlan` opens (or focuses) the chat's **live plan page**,
   a center `plan` tab rendered by `panels/PlanPane` (see `panels/SPEC.md`); its heading resolves the
-  chat's name through the store's `selectChatTitle` (one home, shared with the pane). **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
+  chat's name from its open tab or retained history through the store's `selectChatTitle` (one home,
+  shared with the pane and follower). **Status ordering is UI-only** — the agent's `formatPlan` stays plan-order so its
   "work in order" discipline is unaffected), `planMarkdown` (a pure `plan →
   markdown` compiler, `## <group> — n/m` sections — the plan page's **export** (copy / save-as-.md),
   never an interactive surface: a done item's change set renders as its short sha + `N files · +A −R`
   and status-lettered per-file rows, **plain text, no links** — an export leaves the app, where a link
-  scheme would be dead; interactive navigation is the plan page's job), and `ChatPlan` (`ChatPlanStripContent` +
-  `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
-  the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
-  is no right-panel Todo tab — the plan lives in the conversation; the plan *page* is a center tab, a
-  document-scale view of the same plan, not a panel. Frontend-local workspace view state persists that page
-  as a registered `todo-plan` reference (resolver kind + session identity, never plan content); another
-  client may explicitly reopen the same live page from the host-owned TODO plan without inheriting placement. (An earlier design compiled the plan to a
+  scheme would be dead; interactive navigation is the plan page's job), and `ChatPlan`
+  (`ChatPlanStripContent` + `ChatPlanContent` — the header receipt and its default popover). The
+  client-local `todoViewMode` chooses one compact surface exclusively: `chat-popover` (the compatibility
+  default) composes the existing `Popover` flush below each chat header; `side-tool` omits that popover while
+  shell activates the movable TODO singleton automatically across workspaces. The same receipt remains a
+  `reveal-tool` path after an explicit close. The receipt keeps its progress + working/waiting/paused status
+  in both modes, but carries disclosure treatment only
+  when it actually opens the popover. The setting and follower identity belong to store/shell/panels; the
+  compact rows remain props-driven here.
+  The plan *page* remains a session-pinned center tab and a document-scale view of the same plan in both
+  modes, not the follower tool itself. Frontend-local workspace view state persists that page as a
+  registered `todo-plan` reference (resolver kind + session identity, never plan content); another client
+  may explicitly reopen the same live page from the host-owned TODO plan without inheriting placement. (An earlier design compiled the plan to a
   static markdown `doc` tab with a custom `thinkrail-diff:` link scheme — replaced: a snapshot lies the
   moment the agent flips a status, and markdown can't carry the Changes-panel affordances; the page is live
   and markdown is demoted to its export.)
@@ -1015,7 +1027,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   skip iff the glance is `waiting_question`): waking an agent that stopped on an `ask_user_question`
   would send it off to work the new item and forget to return to its own question, so instead the item
   just queues and is picked up on the agent's next natural turn (when the user answers, or a later idle
-  nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged.
+  nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged. A missing or
+  stale-generation runtime is classified from one ephemeral authoritative transcript read without
+  installing a runtime or changing placement/history. A current visible runtime that appears to be waiting
+  on a question also confirms that classification with the authoritative transcript before skipping, because
+  a later hidden TODO control message can supersede the question without entering rendered turns. A rejected
+  method may trigger one fresh read and method-selecting retry, with connection generation and tombstones
+  fencing every send.
 
 ## Boundary
 
