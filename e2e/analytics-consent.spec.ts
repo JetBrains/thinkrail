@@ -61,8 +61,14 @@ for (const enabled of [true, false]) {
 		const toggle = dialog.getByRole("switch", { name: "Share additional usage data" });
 		await expect(dialog).toBeVisible();
 		await expect(toggle).toBeChecked({ checked: enabled });
-		await expect(dialog).toContainText("Basic reporting is always on");
-		await expect(dialog).toContainText("Nothing additional is shared until you confirm");
+		await expect(dialog.getByRole("heading")).toHaveText("Help improve ThinkRail");
+		await expect(dialog).toContainText(
+			"Share feature usage and run outcomes. No prompts, code, or file paths.",
+		);
+		await expect(dialog).toContainText("Change this later in Settings → Privacy.");
+		await expect(dialog).not.toContainText(/always[- ]on|basics|random installation ID/i);
+		await expect(dialog.getByTestId("analytics-consent-dismiss")).toHaveText("No thanks");
+		await expect(dialog.getByTestId("analytics-consent-confirm")).toHaveText("Save choice");
 		await shot(dialog, "analytics-consent", enabled ? "prefilled-on" : "prefilled-off");
 		await toggle.click();
 		await expect(toggle).toBeChecked({ checked: !enabled });

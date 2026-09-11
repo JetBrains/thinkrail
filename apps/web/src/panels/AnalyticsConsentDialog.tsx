@@ -9,7 +9,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { useAppStore } from "@/store";
-import { ANALYTICS_DESCRIPTION, AnalyticsPreferences } from "./AnalyticsPreferences";
+import { AnalyticsSharingSwitch } from "./AnalyticsPreferences";
 import { useAnalyticsConsent } from "./useAnalyticsConsent";
 
 export function AnalyticsConsentDialog() {
@@ -25,13 +25,13 @@ export function AnalyticsConsentDialog() {
 		>
 			<DialogContent data-testid="analytics-consent-dialog">
 				<DialogHeader>
-					<DialogTitle>Your analytics choice</DialogTitle>
-					<DialogDescription>{ANALYTICS_DESCRIPTION}</DialogDescription>
+					<DialogTitle>Help improve ThinkRail</DialogTitle>
+					<DialogDescription>
+						Share feature usage and run outcomes. No prompts, code, or file paths.
+					</DialogDescription>
 				</DialogHeader>
-				<AnalyticsPreferences enabled={draft} disabled={pending} onChange={setDraft} />
-				<p className="tr-text-metadata text-text-muted">
-					Nothing additional is shared until you confirm. Change this later in Settings → Privacy.
-				</p>
+				<AnalyticsSharingSwitch enabled={draft} disabled={pending} onChange={setDraft} />
+				<p className="tr-text-metadata text-text-muted">Change this later in Settings → Privacy.</p>
 				{error && (
 					<p role="alert" className="tr-text-metadata text-feedback-error">
 						{error}
@@ -44,14 +44,14 @@ export function AnalyticsConsentDialog() {
 						data-testid="analytics-consent-dismiss"
 						onClick={() => save(false)}
 					>
-						Use basics only
+						No thanks
 					</Button>
 					<Button
 						disabled={pending}
 						data-testid="analytics-consent-confirm"
 						onClick={() => save(draft)}
 					>
-						{pending ? "Saving…" : "Confirm choice"}
+						{pending ? "Saving…" : "Save choice"}
 					</Button>
 				</DialogFooter>
 			</DialogContent>
