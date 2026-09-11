@@ -40,6 +40,46 @@ test("a workspace opens a terminal automatically, rooted in the worktree, with w
 	await expect(term).toContainText("TR_MARKER_IO");
 });
 
+test("a shell start failure explains recovery and retries the same tab", async ({ page }) => {
+	const failure =
+		"Couldn’t start PowerShell 7 (pwsh.exe). Make sure it is installed and available to ThinkRail.";
+	let failNextAttach = true;
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			try {
+				const frame = JSON.parse(message.toString()) as { id?: string; method?: string };
+				if (failNextAttach && frame.method === "terminal.attach" && frame.id) {
+					failNextAttach = false;
+					ws.send(JSON.stringify({ id: frame.id, ok: false, error: failure }));
+					return;
+				}
+			} catch {}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const terminal = visibleTerminal(page);
+	await expect(terminal).toHaveAttribute("data-failed", "true");
+	await expect(terminal.getByTestId("terminal-start-failure")).toContainText(failure);
+
+	await terminal.getByTestId("terminal-open-settings").click();
+	await expect(page.getByTestId("settings-terminal")).toBeVisible();
+	await expect(page.getByTestId("settings-nav-terminal")).toHaveAttribute("data-active", "true");
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+
+	await terminal.getByTestId("terminal-start-retry").click();
+	await waitTerminalReady(page);
+	await expect(terminal).toHaveAttribute("data-failed", "false");
+	await expect(terminal.getByTestId("terminal-start-failure")).toHaveCount(0);
+	await page.getByTestId("terminal-tab-close").click();
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
+});
+
 test("xterm uses the shared quiet rail and directional curtains", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);

@@ -142,6 +142,24 @@ afterEach(() => {
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
+test("a shell spawn failure is actionable and the reserved tab can retry", () => {
+	const savedShell = process.env.SHELL;
+	reserveTerminal(WS, "tab-a", "Terminal");
+	process.env.SHELL = join(dataDir, "missing-shell");
+	try {
+		expect(() => attachTerminal(WS, "tab-a", "client-1")).toThrow(
+			"Couldn’t start the shell configured by SHELL",
+		);
+		expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Terminal" }]);
+		expect(pushed).toEqual([]);
+	} finally {
+		if (savedShell === undefined) delete process.env.SHELL;
+		else process.env.SHELL = savedShell;
+	}
+
+	expect(attachTerminal(WS, "tab-a", "client-1").created).toBe(true);
+});
+
 test("attaching twice to a tab returns the SAME shell", () => {
 	const first = attachTerminal(WS, "tab-a", "client-1");
 	const second = attachTerminal(WS, "tab-a", "client-1");
