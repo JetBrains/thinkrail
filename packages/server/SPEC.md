@@ -83,7 +83,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `agent` | in-process pi sessions + current/retained runtime generations + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
 | `auth` | provider status/login plus native JetBrains Central lifecycle and quota orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
-| `analytics` | anonymous usage analytics: closed event set → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
+| `analytics` | always-on basic events + explicitly consented product insights → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
 | `feedback` | host-scoped usage count + addressed product-interview invitation lifecycle | [feedback/SPEC.md](src/feedback/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 | `editors` | detect installed editors/IDEs, launch one at a worktree, reveal a worktree in the file manager | [editors/SPEC.md](src/editors/SPEC.md) |
@@ -146,9 +146,10 @@ another for that handshake.
 registry-free too — it takes a plain `cwd`, never a `workspaceId`; the `template.*` handler resolves
 `workspaceId` → `cwd` via `workspaces` before calling into `templates`.
 
-Analytics is host-mediated the same way: **every `track()` call site lives in `host`** (boot,
-session-create, login-success observation), and `host` syncs `setAnalyticsSending` off the settings
-broadcast — `analytics` has no `settings` edge and no feature module knows analytics exists.
+Analytics is host-mediated the same way: **every capture call site lives in `host`**. Host translates
+existing boot, session, setup, task, review and PR observations into the closed event vocabulary and
+syncs additional-data consent from the settings publisher. Correlation stays host-local and clears on
+consent changes. `analytics` has no `settings` edge and no feature module knows analytics exists.
 
 Subagent availability is also host-mediated: `settings` owns the global default, `workspaces` owns the
 optional local override, and `host` injects their effective value into `agent` plus requests live-session

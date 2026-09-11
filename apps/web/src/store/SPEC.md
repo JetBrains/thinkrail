@@ -389,13 +389,17 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   **`terminalWindowsShell: TerminalWindowsShell`**, **`composerGrowthLimit: ComposerGrowthLimit`**,
   **`chatLineWidth` / `fileLineWidth`**, their independent **`chatLineWidthBounded` /
   `fileLineWidthBounded`** switches, **`customLayoutPresets: LayoutPreset[]`**,
-  **`analyticsEnabled: boolean`**, **`subagentsEnabled: boolean`**, **`jbcentralQuotaEnabled: boolean`**,
+  **`analyticsEnabled: boolean`**, **`analyticsConsentConfirmed: boolean`**,
+  **`subagentsEnabled: boolean`**, **`jbcentralQuotaEnabled: boolean`**,
   and **`jbcentralQuotaRefreshSeconds: number`** ride the same `applyConfig` fold (host-owned, fieldwise
   defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
   the store). `terminalWindowsShell` narrows through `isTerminalWindowsShell` and otherwise uses
   `DEFAULT_CONFIG.terminalWindowsShell`; `TerminalSettings` consumes both terminal fields, while terminal
   spawning remains server-owned — the Terminal, Line width, Chat, shared Layout catalog, Privacy, provider
-  controls, and shell quota read sides.
+  controls, and shell quota read sides. Analytics preference and confirmation default independently to false;
+  the store never upgrades a legacy true preference to consent. A selector combines host capability,
+  hydrated configuration, and absent confirmation to drive the one first-launch prompt. Persisted updates
+  converge through `applyConfig`; a draft switch in the prompt is not a store/host write.
   **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
   StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by
   the chat preference seam from host-qualified browser localStorage or the native shell's injected

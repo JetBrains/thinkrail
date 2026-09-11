@@ -80,10 +80,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `stopAllWatches()` in `stop()`), `stopJbcentralRuntime()` and `cancelAllLogins()` in `stop()` before the
   socket close,
   an optional boot-time `openProject(projectPath)` (best-effort — a launcher convenience), the
-  **analytics wiring** (`initializeAnalytics` at boot from the launcher-threaded `analytics` option —
-  keys/channel/mute + the initial `getConfig().analyticsEnabled`; a `setAnalyticsSending` sync teed
-  off the settings publisher; a fire-and-forget `shutdownAnalytics()` in `stop()` — best-effort queue
-  drain; and every `track()` call site: `chat_started` in `session.create`, `message_sent` (via the
+  **analytics wiring** (`initializeAnalytics` at boot from launcher provenance, destination, and per-run
+  additional-data suppression; `analyticsEnabled` plus `analyticsConsentConfirmed` control only the
+  additional tier, synced from the settings publisher. Basic events remain on in human runs. Consent
+  changes clear additional-event correlation so re-enabling cannot reconstruct pre-consent work.
+  `shutdownAnalytics()` remains a best-effort drain in `stop()` and awaited by graceful shutdown;
+  every capture site lives here, including the existing basic events: `chat_started` in `session.create`, `message_sent` (via the
   local `trackSend(mode, text)`) after an **accepted** `session.prompt`/`session.steer`/`session.followUp`
   (`prompt`/`steer`/`follow_up`; skipped when contracts' `isControlMessage(text)` — the client's TODO
   wake-nudge rides the same methods and is not a user message; `session.answerQuestion` is a tool reply,
@@ -94,7 +96,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `provider.loginCancel` clears; an unknown loginId tracks nothing, fails closed) — +
   a successful `provider.jbcentralConnect`→`applied` (failed actions never count) — per
   `submodule-server-analytics`,
-  feature modules never track), and
+  feature modules never track). Additional setup/run/task/review/PR observations use the closed triggers in
+  [[submodule-server-analytics]], with transient consent-scoped correlation and task-artifact reconciliation.
+  Host alone mediates these events; no install-announcement or provider-change capture exists.
   `stop()` → immediate agent-session cleanup, then `persistTerminalSessions()` **before**
   `closeAllTerminals()`, then watcher/socket disposal; `shutdown()` memoizes one asynchronous graceful
   path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` first, then `stop()`). The
