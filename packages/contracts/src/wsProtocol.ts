@@ -97,7 +97,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 66;
+export const PROTOCOL_VERSION = 67;
+export const PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION = 67;
 export const ANALYTICS_CONSENT_PROTOCOL_VERSION = 65;
 export const SESSION_RENAME_PROTOCOL_VERSION = 66;
 export const SESSION_TITLE_MAX_LENGTH = 80;
