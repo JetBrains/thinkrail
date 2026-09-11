@@ -1,7 +1,7 @@
 ---
 import BaseHead from "../components/BaseHead.astro";
 import IdeShell from "../components/IdeShell.astro";
-import { installCommands, windowsShellLabels } from "../installCommands";
+import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "../installCommands";
 ---
 
 <!doctype html>
@@ -47,80 +47,118 @@ import { installCommands, windowsShellLabels } from "../installCommands";
 					</p>
 					<div class="install-picker install-picker-hero" data-install-picker>
 						<div class="install-frame">
-						<div class="install-tabs">
-							<div class="install-os-tabs" role="tablist" aria-label="Choose your operating system">
-								<button type="button" class="install-tab" role="tab" id="hero-install-macos-tab" aria-controls="hero-install-macos" aria-selected="false" tabindex="-1" data-install-platform="macos">macOS</button>
-								<button type="button" class="install-tab" role="tab" id="hero-install-linux-tab" aria-controls="hero-install-linux" aria-selected="true" data-install-platform="linux">Linux</button>
-								<button type="button" class="install-tab" role="tab" id="hero-install-windows-tab" aria-controls="hero-install-windows" aria-selected="false" tabindex="-1" data-install-platform="windows">Windows</button>
-							</div>
-							<div class="windows-shell-tabs" role="tablist" aria-label="Choose your Windows shell" hidden>
-								<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-powershell-tab" aria-controls="hero-shell-powershell" aria-selected="true" data-windows-shell="powershell">{windowsShellLabels.powershell}</button>
-								<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-cmd-tab" aria-controls="hero-shell-cmd" aria-selected="false" tabindex="-1" data-windows-shell="cmd">{windowsShellLabels.cmd}</button>
-								<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-wsl-tab" aria-controls="hero-shell-wsl" aria-selected="false" tabindex="-1" data-windows-shell="wsl">{windowsShellLabels.wsl}</button>
-							</div>
-						</div>
-						<div class="install-panel" id="hero-install-macos" role="tabpanel" aria-labelledby="hero-install-macos-tab" data-install-panel="macos">
-							<p class="install-fallback-heading">macOS</p>
-							<div class="install-line">
-								<code>curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash</code>
-								<button type="button" class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash" aria-label="Copy macOS install command">
-									<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
-									<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
-								</button>
-							</div>
-						</div>
-						<div class="install-panel" id="hero-install-linux" role="tabpanel" aria-labelledby="hero-install-linux-tab" data-install-panel="linux">
-							<p class="install-fallback-heading">Linux</p>
-							<div class="install-line">
-								<code>curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash</code>
-								<button type="button" class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash" aria-label="Copy Linux install command">
-									<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
-									<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
-								</button>
-							</div>
-						</div>
-						<div class="install-panel" id="hero-install-windows" role="tabpanel" aria-labelledby="hero-install-windows-tab" data-install-panel="windows">
-							<p class="install-fallback-heading">Windows</p>
-							<div class="windows-shell-picker">
-								<div class="windows-shell-panel" id="hero-shell-powershell" role="tabpanel" aria-labelledby="hero-shell-powershell-tab" data-windows-shell-panel="powershell">
-									<p class="install-fallback-heading">{windowsShellLabels.powershell}</p>
-									<div class="install-line">
-										<code>{installCommands.windows.powershell}</code>
-										<button type="button" class="copy-btn" data-copy={installCommands.windows.powershell} aria-label="Copy PowerShell install command">
-											<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
-											<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+							<div class="install-tabs">
+								<div class="install-os-tabs" role="tablist" aria-label="Choose your operating system">
+									{desktopInstallerPlatforms.map(({ id, label }) => (
+										<button
+											type="button"
+											class="install-tab"
+											role="tab"
+											id={`hero-install-${id}-tab`}
+											aria-controls={`hero-install-${id}`}
+											aria-selected={id === "linux" ? "true" : "false"}
+											tabindex={id === "linux" ? undefined : "-1"}
+											data-install-platform={id}
+										>
+											{label}
 										</button>
-									</div>
-								</div>
-								<div class="windows-shell-panel" id="hero-shell-cmd" role="tabpanel" aria-labelledby="hero-shell-cmd-tab" data-windows-shell-panel="cmd">
-									<p class="install-fallback-heading">{windowsShellLabels.cmd}</p>
-									<div class="install-line">
-										<code>{installCommands.windows.cmd}</code>
-										<button type="button" class="copy-btn" data-copy={installCommands.windows.cmd} aria-label="Copy Command Prompt (cmd) install command">
-											<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
-											<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
-										</button>
-									</div>
-								</div>
-								<div class="windows-shell-panel" id="hero-shell-wsl" role="tabpanel" aria-labelledby="hero-shell-wsl-tab" data-windows-shell-panel="wsl">
-									<p class="install-fallback-heading">{windowsShellLabels.wsl}</p>
-									<div class="install-line">
-										<code>{installCommands.windows.wsl}</code>
-										<button type="button" class="copy-btn" data-copy={installCommands.windows.wsl} aria-label="Copy WSL install command">
-											<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
-											<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
-										</button>
-									</div>
+									))}
 								</div>
 							</div>
-						</div>
+							{desktopInstallerPlatforms.map(({ id, label, product, downloads }) => (
+								<div
+									class="install-panel"
+									id={`hero-install-${id}`}
+									role="tabpanel"
+									aria-labelledby={`hero-install-${id}-tab`}
+									data-install-panel={id}
+								>
+									<p class="install-fallback-heading">{label}</p>
+									<div class="desktop-install">
+										<div class="desktop-install-product">
+											<svg class="i" aria-hidden="true"><use href="#i-package" /></svg>
+											<div>
+												<strong class="desktop-install-title">{product}</strong>
+												<span class="desktop-install-kind">Native desktop application</span>
+											</div>
+										</div>
+										<div class="desktop-install-actions">
+											{downloads.map((download) => (
+												<div class="desktop-install-action">
+													<a class="btn btn-primary desktop-download-link" href={download.href} aria-label={`${download.label} for ${label}: ${download.detail}`}>
+														{download.label} ↓
+													</a>
+													<span class="desktop-install-detail">{download.detail}</span>
+												</div>
+											))}
+										</div>
+									</div>
+									<div class="cli-alternative">
+										<div class="cli-alternative-header">
+											<div>
+												<strong class="cli-alternative-title">Prefer the command line?</strong>
+												<span class="cli-alternative-note">Installs the CLI-only host</span>
+											</div>
+											{id === "windows" && (
+												<div class="windows-shell-tabs" role="tablist" aria-label="Choose your Windows shell">
+													<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-powershell-tab" aria-controls="hero-shell-powershell" aria-selected="true" data-windows-shell="powershell">{windowsShellLabels.powershell}</button>
+													<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-cmd-tab" aria-controls="hero-shell-cmd" aria-selected="false" tabindex="-1" data-windows-shell="cmd">{windowsShellLabels.cmd}</button>
+													<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-wsl-tab" aria-controls="hero-shell-wsl" aria-selected="false" tabindex="-1" data-windows-shell="wsl">{windowsShellLabels.wsl}</button>
+												</div>
+											)}
+										</div>
+										{id === "windows" ? (
+											<div class="windows-shell-picker">
+												<div class="windows-shell-panel" id="hero-shell-powershell" role="tabpanel" aria-labelledby="hero-shell-powershell-tab" data-windows-shell-panel="powershell">
+													<p class="install-fallback-heading">{windowsShellLabels.powershell}</p>
+													<div class="install-line">
+														<code data-install-command tabindex="0">{installCommands.windows.powershell}</code>
+														<button type="button" class="copy-btn" data-copy={installCommands.windows.powershell} aria-label="Copy PowerShell install command">
+															<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+															<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+														</button>
+													</div>
+												</div>
+												<div class="windows-shell-panel" id="hero-shell-cmd" role="tabpanel" aria-labelledby="hero-shell-cmd-tab" data-windows-shell-panel="cmd">
+													<p class="install-fallback-heading">{windowsShellLabels.cmd}</p>
+													<div class="install-line">
+														<code data-install-command tabindex="0">{installCommands.windows.cmd}</code>
+														<button type="button" class="copy-btn" data-copy={installCommands.windows.cmd} aria-label="Copy Command Prompt (cmd) install command">
+															<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+															<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+														</button>
+													</div>
+												</div>
+												<div class="windows-shell-panel" id="hero-shell-wsl" role="tabpanel" aria-labelledby="hero-shell-wsl-tab" data-windows-shell-panel="wsl">
+													<p class="install-fallback-heading">{windowsShellLabels.wsl}</p>
+													<div class="install-line">
+														<code data-install-command tabindex="0">{installCommands.windows.wsl}</code>
+														<button type="button" class="copy-btn" data-copy={installCommands.windows.wsl} aria-label="Copy WSL install command">
+															<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+															<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+														</button>
+													</div>
+												</div>
+											</div>
+										) : (
+											<div class="install-line">
+												<code data-install-command tabindex="0">{installCommands[id]}</code>
+												<button type="button" class="copy-btn" data-copy={installCommands[id]} aria-label={`Copy ${label} CLI install command`}>
+													<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+													<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+												</button>
+											</div>
+										)}
+									</div>
+								</div>
+							))}
 						</div>
 					</div>
 					<p class="hero-platforms">
-						One self-contained binary. macOS (Apple Silicon) · Linux arm64 / x64 · Windows x64.
+						Native desktop app for macOS (Apple Silicon), Linux ARM64 / x64, and Windows x64. CLI also available.
 					</p>
 					<div class="hero-ctas">
-						<a class="btn btn-primary" href="https://github.com/JetBrains/thinkrail" target="_blank" rel="noopener noreferrer">
+						<a class="btn" href="https://github.com/JetBrains/thinkrail" target="_blank" rel="noopener noreferrer">
 							<svg class="i i-fill" aria-hidden="true"><use href="#i-github" /></svg>
 							Star on GitHub
 						</a>
@@ -318,12 +356,35 @@ import { installCommands, windowsShellLabels } from "../installCommands";
 					</p>
 				</section>
 
-				<!-- ── install.sh ── -->
-				<section class="file-section" id="install" data-file="install.sh">
-					<p class="file-comment"># INSTALL</p>
+				<section class="file-section" id="install" data-file="INSTALL.md">
+					<p class="file-comment">&lt;!-- INSTALL.md --&gt;</p>
 					<h2>Install</h2>
-					<pre class="code-block install-block"><code><span class="sx-cm"># one line: downloads the right build, verifies its SHA-256, puts `thinkrail` on your PATH</span>
-<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash"><span class="sx-fn">curl</span> -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | <span class="sx-fn">bash</span></span>
+					<p>Download the native desktop app for your platform.</p>
+					<div class="desktop-download-grid">
+						{desktopInstallerPlatforms.map((installer) => (
+							<section class="desktop-download-card" aria-label={`${installer.label} desktop downloads`}>
+								<div class="desktop-download-card-title">
+									<svg class="i" aria-hidden="true"><use href="#i-package" /></svg>
+									<div>
+										<h3>{installer.product}</h3>
+										<span>Stable desktop application</span>
+									</div>
+								</div>
+								<div class="desktop-download-card-actions">
+									{installer.downloads.map((download) => (
+										<div>
+											<a class="btn btn-primary" href={download.href} aria-label={`${download.label} for ${installer.label}: ${download.detail}`}>{download.label} ↓</a>
+											<span>{download.detail}</span>
+										</div>
+									))}
+								</div>
+							</section>
+						))}
+					</div>
+					<h3>Prefer the command line?</h3>
+					<p>The CLI-only host remains available for terminal and remote workflows.</p>
+					<pre class="code-block install-block" tabindex="0"><code><span class="sx-cm"># macOS, Linux, or WSL — detects the right build, verifies SHA-256, and updates PATH</span>
+<span class="line-copy" data-copy={installCommands.macos}><span class="sx-fn">curl</span> -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | <span class="sx-fn">bash</span></span>
 
 <span class="sx-cm"># windows — PowerShell</span>
 <span class="line-copy" data-copy={installCommands.windows.powershell}><span class="sx-fn">irm</span> https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | <span class="sx-fn">iex</span></span>
@@ -331,21 +392,17 @@ import { installCommands, windowsShellLabels } from "../installCommands";
 <span class="sx-cm"># windows — Command Prompt (cmd)</span>
 <span class="line-copy" data-copy={installCommands.windows.cmd}><span class="sx-fn">powershell</span> -c <span class="sx-str">"irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"</span></span>
 
-<span class="sx-cm"># nightly channel, or pin a version</span>
+<span class="sx-cm"># nightly channel, or replace VERSION with a release number</span>
 <span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--channel nightly</span></span>
-<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --version 0.2.0"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--version 0.2.0</span></span>
+<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --version VERSION"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--version VERSION</span></span>
 
 <span class="sx-cm"># then</span>
 <span class="line-copy" data-copy="thinkrail"><span class="sx-fn">thinkrail</span>         <span class="sx-cm"># launch — opens the IDE in your browser</span></span>
-<span class="line-copy" data-copy="thinkrail update"><span class="sx-fn">thinkrail</span> update  <span class="sx-cm"># grab the latest build later</span></span></code></pre>
+<span class="line-copy" data-copy="thinkrail update"><span class="sx-fn">thinkrail</span> update  <span class="sx-cm"># grab the latest CLI build later</span></span></code></pre>
 					<ul>
-						<li><strong>Prebuilt:</strong> macOS (Apple Silicon), Linux arm64 + x64, Windows x64.</li>
 						<li><strong>Needs:</strong> <code>git</code> on PATH and an authenticated <code>pi</code> provider — the agent runs against your real credentials.</li>
-						<li>
-							Prefer manual? Grab a binary + <code>SHA256SUMS</code> from the
-							<a href="https://github.com/JetBrains/thinkrail/releases">releases page</a>, verify,
-							<code>chmod +x</code>, done. App state lives under <code>~/.thinkrail</code>.
-						</li>
+						<li><strong>Linux desktop:</strong> Ubuntu 24.04+ or another distribution with glibc 2.38 and the required GTK/WebKitGTK libraries.</li>
+						<li>CLI binaries and <code>SHA256SUMS</code> remain available on the <a href="https://github.com/JetBrains/thinkrail/releases">releases page</a>. App state lives under <code>~/.thinkrail</code>.</li>
 					</ul>
 				</section>
 
@@ -377,7 +434,7 @@ import { installCommands, windowsShellLabels } from "../installCommands";
 				<a class="ft-row file depth-2" href="#editor"><svg class="i" aria-hidden="true"><use href="#i-square-pen" /></svg>editor</a>
 				<a class="ft-row file depth-2" href="#agent-chat"><svg class="i" aria-hidden="true"><use href="#i-message-square" /></svg>agent-chat</a>
 				<a class="ft-row file depth-2" href="#specs"><svg class="i" aria-hidden="true"><use href="#i-file-text" /></svg>specs</a>
-				<a class="ft-row file depth-1" href="#install"><svg class="i" aria-hidden="true"><use href="#i-square-terminal" /></svg>INSTALL</a>
+				<a class="ft-row file depth-1" href="#install"><svg class="i" aria-hidden="true"><use href="#i-package" /></svg>INSTALL.md</a>
 				<a class="ft-row file depth-1" href="#contributing"><svg class="i" aria-hidden="true"><use href="#i-git-pull-request" /></svg>CONTRIBUTING</a>
 			</Fragment>
 		</IdeShell>

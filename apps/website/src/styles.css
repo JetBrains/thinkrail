@@ -899,10 +899,9 @@ p.hero-lede {
 
 .install-line {
 	display: flex;
-	/* Fixed 44px command row; content vertically centred (the copy button stretches for its divider). */
 	height: 44px;
 	align-items: center;
-	margin: 26px 0 10px;
+	margin: 0;
 	max-width: 100%;
 	background: var(--container-workspace-bg);
 	border: 1px solid var(--border2);
@@ -967,20 +966,14 @@ p.hero-lede {
 	display: none;
 }
 
-/* Without JS the tab controls stay hidden and every labelled instruction panel remains visible. */
 html.install-tabs-ready .install-tabs {
 	display: flex;
-	/* Fixed 44px header row; tabs stretch to it and centre their own content. */
 	height: 44px;
 	align-items: stretch;
-	gap: 0;
-	/* No left padding: the first tab sits flush with the frame edge. */
-	padding: 0 4px 0 0;
 	background: var(--container-header-bg);
 	border-bottom: 1px solid var(--border);
 }
 
-/* The OS tabs' own `role="tablist"` — a sibling of the shell switcher, not its parent. */
 html.install-tabs-ready .install-os-tabs {
 	display: flex;
 	align-items: stretch;
@@ -990,10 +983,8 @@ html.install-tabs-ready .install-os-tabs {
 	position: relative;
 	display: inline-flex;
 	align-items: center;
-	gap: 7px;
 	min-height: 34px;
-	padding: 7px 13px 8px;
-	/* -1px so the active tab's surface overlaps the strip divider and merges into the content. */
+	padding: 7px 15px 8px;
 	margin-bottom: -1px;
 	border: 0;
 	border-right: 1px solid var(--border);
@@ -1013,7 +1004,6 @@ html.install-tabs-ready .install-os-tabs {
 	z-index: 1;
 	background: var(--container-workspace-bg);
 	color: var(--text);
-	/* Cover the strip's bottom divider under the active tab so it merges into the command block. */
 	border-bottom: 1px solid var(--container-workspace-bg);
 }
 
@@ -1023,25 +1013,37 @@ html.install-tabs-ready .install-os-tabs {
 	outline-offset: -3px;
 }
 
+.install-panel {
+	margin-bottom: 16px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	overflow: hidden;
+	background: var(--container-workspace-bg);
+}
+
 .install-panel[hidden],
 .windows-shell-panel[hidden] {
 	display: none;
 }
 
 p.install-fallback-heading {
-	margin: 18px 2px 6px;
+	margin: 0;
+	padding: 10px 14px;
+	border-bottom: 1px solid var(--border);
 	color: var(--text);
 	font-family: var(--font-mono);
 	font-size: 12px;
 	font-weight: 600;
 }
 
-html.install-tabs-ready p.install-fallback-heading {
-	display: none;
+.windows-shell-panel p.install-fallback-heading {
+	margin: 12px 0 6px;
+	padding: 0;
+	border: 0;
 }
 
-.install-picker-hero .install-line {
-	margin: 8px 0 16px;
+html.install-tabs-ready p.install-fallback-heading {
+	display: none;
 }
 
 html.install-tabs-ready .install-frame {
@@ -1050,32 +1052,105 @@ html.install-tabs-ready .install-frame {
 	overflow: hidden;
 }
 
-html.install-tabs-ready .install-frame .install-line {
+html.install-tabs-ready .install-panel {
 	margin: 0;
 	border: 0;
 	border-radius: 0;
 }
 
-.install-frame .install-line > code {
-	border-radius: 0;
+.desktop-install {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 22px;
+	padding: 18px;
 }
 
-.windows-shell-picker {
-	overflow: hidden;
-	border: 1px solid var(--border2);
-	border-radius: 4px;
-	background: var(--container-workspace-bg);
+.desktop-install-product {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
 }
 
-html.install-tabs-ready .install-frame .windows-shell-picker {
-	border: 0;
-	border-radius: 0;
+.desktop-install-product > .i {
+	width: 32px;
+	height: 32px;
+	padding: 7px;
+	flex: none;
+	border-radius: 7px;
+	background: var(--accent);
+	color: var(--on-accent);
 }
 
-html.install-tabs-ready .windows-shell-tabs:not([hidden]) {
+.desktop-install-title,
+.desktop-install-kind,
+.desktop-install-detail {
+	display: block;
+}
+
+.desktop-install-title {
+	font-size: 14px;
+}
+
+.desktop-install-kind,
+.desktop-install-detail {
+	margin-top: 3px;
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	line-height: 1.4;
+}
+
+.desktop-install-actions {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+}
+
+.desktop-install-action {
+	display: flex;
+	align-items: flex-end;
+	flex-direction: column;
+}
+
+.desktop-download-link {
+	justify-content: center;
+	white-space: nowrap;
+}
+
+.cli-alternative {
+	padding: 14px 18px 16px;
+	border-top: 1px solid var(--border);
+	background: var(--container-header-bg);
+}
+
+.cli-alternative-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 9px;
+}
+
+.cli-alternative-title,
+.cli-alternative-note {
+	display: block;
+}
+
+.cli-alternative-title {
+	font-size: 12px;
+}
+
+.cli-alternative-note {
+	margin-top: 2px;
+	color: var(--muted);
+	font-size: 10.5px;
+}
+
+html.install-tabs-ready .windows-shell-tabs {
 	display: inline-flex;
-	align-self: center;
-	margin-left: 8px;
+	flex: none;
 	border: 1px solid var(--border);
 	border-radius: 4px;
 	overflow: hidden;
@@ -1109,12 +1184,6 @@ html.install-tabs-ready .windows-shell-tabs:not([hidden]) {
 .windows-shell-tab[aria-selected="true"] {
 	background: var(--hover);
 	color: var(--text);
-}
-
-html.install-tabs-ready .windows-shell-picker .install-line {
-	margin: 0;
-	border: 0;
-	border-radius: 0;
 }
 
 p.hero-platforms {
@@ -1431,7 +1500,61 @@ html.anim .chat-demo [data-step].on {
 	color: var(--accent);
 }
 
-/* ── install.sh ─────────────────────────────────────────────────────────── */
+.desktop-download-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+	gap: 12px;
+	margin: 22px 0 32px;
+}
+
+.desktop-download-card {
+	padding: 16px;
+	border: 1px solid var(--border2);
+	border-radius: 5px;
+	background: var(--elevated);
+}
+
+.desktop-download-card-title {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.desktop-download-card-title > .i {
+	width: 30px;
+	height: 30px;
+	padding: 7px;
+	flex: none;
+	border-radius: 6px;
+	background: var(--accent);
+	color: var(--on-accent);
+}
+
+.desktop-download-card-title h3 {
+	margin: 0;
+	font-size: 13px;
+}
+
+.desktop-download-card-title span,
+.desktop-download-card-actions span {
+	display: block;
+	margin-top: 3px;
+	color: var(--text);
+	font-family: var(--font-mono);
+	font-size: 10px;
+	line-height: 1.4;
+}
+
+.desktop-download-card-actions {
+	display: grid;
+	gap: 12px;
+	margin-top: 14px;
+}
+
+.desktop-download-card-actions .btn {
+	width: 100%;
+	justify-content: center;
+}
 
 .install-block .line-copy {
 	cursor: copy;
@@ -1965,13 +2088,9 @@ html:not(.anim) .term-caret {
 	}
 
 	html.install-tabs-ready .install-tabs {
-		padding-inline: 0;
-		flex-wrap: wrap;
-		height: auto;
-		min-height: 44px;
+		height: 44px;
 	}
 
-	/* The OS-tab group fills row 1 (the switcher wraps below), so its tabs can share the width. */
 	html.install-tabs-ready .install-os-tabs {
 		flex: 1;
 	}
@@ -1982,13 +2101,37 @@ html:not(.anim) .term-caret {
 		padding-inline: 7px;
 	}
 
-	html.install-tabs-ready .windows-shell-tabs:not([hidden]) {
-		flex-basis: 100%;
-		align-self: stretch;
-		margin-left: 0;
-		border: 0;
-		border-top: 1px solid var(--border);
-		border-radius: 0;
+	.desktop-install {
+		align-items: stretch;
+		flex-direction: column;
+		padding: 16px;
+	}
+
+	.desktop-install-actions {
+		display: grid;
+		width: 100%;
+	}
+
+	.desktop-install-action {
+		align-items: stretch;
+	}
+
+	.desktop-download-link {
+		width: 100%;
+	}
+
+	.cli-alternative {
+		padding: 14px;
+	}
+
+	.cli-alternative-header {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	html.install-tabs-ready .windows-shell-tabs {
+		display: flex;
+		width: 100%;
 	}
 
 	.windows-shell-tab {
@@ -2004,12 +2147,6 @@ html:not(.anim) .term-caret {
 	.hero-ctas .btn {
 		flex: 1;
 		justify-content: center;
-	}
-
-	html.install-tabs-ready
-		.install-tabs:has(.windows-shell-tabs:not([hidden]))
-		.install-tab[aria-selected="true"] {
-		border-bottom-color: var(--border);
 	}
 
 	/* Give the depth-0 "main spec" row more room for its label so the badge never wraps. */

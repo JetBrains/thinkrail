@@ -99,9 +99,9 @@ const TERMINAL_LOGO: readonly string[] = [
 ];
 
 const GITHUB_URL = "https://github.com/JetBrains/thinkrail";
-const INSTALL_ARCH: Record<InstallPlatform, string> = {
+const INSTALL_TARGET: Record<InstallPlatform, string> = {
 	macos: "macos-arm64",
-	linux: "linux-x64",
+	linux: "linux",
 	windows: "windows-x64",
 };
 
@@ -171,7 +171,7 @@ if (terminal && termScreen) {
 		if (gen !== generation) return;
 		await drawLines(
 			[
-				`⬇ thinkrail latest (${INSTALL_ARCH[selection.platform]}) · sha256 verified ✓`,
+				`⬇ thinkrail latest (${INSTALL_TARGET[selection.platform]}) · sha256 verified ✓`,
 				"✓ installed — starting ThinkRail …",
 			],
 			"term-out",
@@ -285,25 +285,24 @@ if (installPicker) {
 		userAgent: browserNavigator.userAgent,
 		maxTouchPoints: browserNavigator.maxTouchPoints,
 	});
-	const platformTabs = document.querySelectorAll<HTMLButtonElement>("[data-install-platform]");
-	const platformPanels = document.querySelectorAll<HTMLElement>("[data-install-panel]");
-	const shellTabs = document.querySelectorAll<HTMLButtonElement>("[data-windows-shell]");
-	const shellPanels = document.querySelectorAll<HTMLElement>("[data-windows-shell-panel]");
-	const shellSwitcher = installPicker.querySelector<HTMLElement>(".windows-shell-tabs");
+	const platformTabs = installPicker.querySelectorAll<HTMLButtonElement>("[data-install-platform]");
+	const platformPanels = installPicker.querySelectorAll<HTMLElement>("[data-install-panel]");
+	const shellTabs = installPicker.querySelectorAll<HTMLButtonElement>("[data-windows-shell]");
+	const shellPanels = installPicker.querySelectorAll<HTMLElement>("[data-windows-shell-panel]");
 
 	const syncActiveCommand = () => {
 		const osPanel = Array.from(platformPanels).find((panel) => !panel.hidden);
 		const shellPanel = osPanel?.querySelector<HTMLElement>(
 			"[data-windows-shell-panel]:not([hidden])",
 		);
-		const code = (shellPanel ?? osPanel)?.querySelector(".install-line code");
+		const code = (shellPanel ?? osPanel)?.querySelector("[data-install-command]");
 		const command = code?.textContent?.trim() ?? "";
 		publishInstallSelection({ command, platform: selectedPlatform });
 	};
 	let selectedPlatform: InstallPlatform = detectedPlatform ?? "linux";
 	const initialShell: WindowsShell = "powershell";
 
-	const selectPlatform = (platform: InstallPlatform) => {
+	const selectPlatform = (platform: InstallPlatform, publish = true) => {
 		selectedPlatform = platform;
 		for (const tab of platformTabs) {
 			const selected = platformFrom(tab.dataset.installPlatform) === platform;
@@ -313,11 +312,10 @@ if (installPicker) {
 		for (const panel of platformPanels) {
 			panel.hidden = platformFrom(panel.dataset.installPanel) !== platform;
 		}
-		if (shellSwitcher) shellSwitcher.hidden = platform !== "windows";
-		syncActiveCommand();
+		if (publish) syncActiveCommand();
 	};
 
-	const selectShell = (shell: WindowsShell) => {
+	const selectShell = (shell: WindowsShell, publish = true) => {
 		for (const tab of shellTabs) {
 			const selected = windowsShellFrom(tab.dataset.windowsShell) === shell;
 			tab.setAttribute("aria-selected", String(selected));
@@ -326,7 +324,7 @@ if (installPicker) {
 		for (const panel of shellPanels) {
 			panel.hidden = windowsShellFrom(panel.dataset.windowsShellPanel) !== shell;
 		}
-		syncActiveCommand();
+		if (publish) syncActiveCommand();
 	};
 
 	const nextTab = (
@@ -376,7 +374,7 @@ if (installPicker) {
 		);
 	}
 
-	selectShell(initialShell);
+	selectShell(initialShell, false);
 	selectPlatform(selectedPlatform);
 	document.documentElement.classList.add("install-tabs-ready");
 }

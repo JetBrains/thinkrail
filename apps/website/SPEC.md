@@ -6,6 +6,7 @@ title: Project website (thinkrail.ai)
 parent: architecture
 tags: [website, marketing]
 depends-on: [module-website-analytics]
+references: [module-ci-release]
 ---
 
 ## Responsibility
@@ -16,7 +17,7 @@ to `/vibecoding/`, at `/agentic-development/`). The landing and blog's creative 
 the IDE**: a faithful HTML/CSS recreation of the ThinkRail shell (title bar, project rail, tab strip,
 files rail, terminal, status bar) whose center "editor" is the normally-scrolling page content. Each
 landing section poses as a file of a `website` workspace (`README.md`, `why.md`, `features/*.md`,
-`install.sh`, `CONTRIBUTING.md`). The **file tree is the source of truth for the page's navigation
+`INSTALL.md`, `CONTRIBUTING.md`). The **file tree is the source of truth for the page's navigation
 structure**, and its selection reacts to scroll (scroll-spy) like the editor is switching files. The
 top editor **tab strip is derived from that file-tree navigation** — not a hand-maintained list — and
 is interactive: the active tab **follows the currently visible section via the same scroll-spy**, and
@@ -118,9 +119,10 @@ landing + blog shells                      ──▶ src/components/Analytics.as
   editor tabs are a JS-built navigation affordance over content that is already reachable by scrolling
   and via the file tree), and animations are skipped under `prefers-reduced-motion`.
 - **Enhancement behaviors owned by `main.ts`** (the code carries no rationale — this is it):
-  - *Terminal replay*: the hero install picker is the single source of truth for the visible command;
-    the terminal subscribes and types the command for the selected OS/shell, then the short install
-    transcript. A generation counter invalidates an in-flight sequence on OS change; clicking the
+  - *Terminal replay*: the hero install picker keeps the selected OS/shell's primary desktop action and
+    secondary CLI command together; that visible secondary command is the single source of truth for the
+    terminal, which subscribes and types it before the short install transcript. A generation counter
+    invalidates an in-flight sequence on OS change; clicking the
     *finished* terminal (or its keyboard-reachable `Replay logo` button, revealed only then) replays
     the ASCII logo + a GitHub CTA — never the install. The logo banner's characters are never
     altered; only its font size is fitted to the rail width (re-fitted on resize).
@@ -134,16 +136,21 @@ landing + blog shells                      ──▶ src/components/Analytics.as
     (from `data-mock-label`), `aria-expanded` + `aria-describedby` on open — no `aria-haspopup`
     (a `tooltip` is not an allowed popup value). The `.rail-tabs` callout anchors to the panel's
     live edge; others place beside the trigger, clamped to the viewport and repositioned on resize.
-- The hero's install command has **macOS / Linux / Windows** tabs. Browser hints choose only the
-  initial supported desktop OS; they never hide alternatives or claim to detect an ambiguous mobile
-  platform. Windows adds **PowerShell / Command Prompt (cmd) / WSL** tabs with shell-native commands:
-  PowerShell runs `irm …/install.ps1 | iex` directly in the current session, Command Prompt launches
+- The hero's install experience has **macOS / Windows / Linux** tabs and makes the stable desktop
+  application the primary action in every panel: macOS Apple Silicon DMG, Windows x64 setup ZIP, and
+  distinct Linux x64 / ARM64 setup archives. Versionless GitHub `releases/latest/download` URLs name
+  the public aliases owned by [[module-ci-release]]; the website carries no release version, updater
+  payload name, or private artifact knowledge. Browser hints choose only the initial supported desktop
+  OS; they never hide alternatives, infer Linux CPU architecture, or claim to detect an ambiguous mobile
+  platform. A visibly secondary “Prefer the command line?” region retains the old CLI installer.
+  Windows adds **PowerShell / Command Prompt (cmd) / WSL** tabs within that region: PowerShell runs
+  `irm …/install.ps1 | iex` directly in the current session, Command Prompt launches
   `powershell -c "irm …/install.ps1 | iex"`, and WSL uses `install.sh` to install the Linux build inside
   that distro. ARIA structure: a `tablist` may contain nothing but `tab`s, so the OS tabs form their
-  own tablist and the Windows shell switcher is its *sibling* (its own tablist), shown inline only
-  while Windows is active so the component height never changes. Every hero panel remains in the
-  static DOM; JS turns the complete fallback into the tabbed view. The detailed Install section keeps
-  its complete mixed-platform reference and labels the distinct PowerShell and Command Prompt (cmd) lines.
+  own tablist and the Windows CLI region owns a separate shell tablist, shown only while Windows is
+  active. Every hero panel remains in the static DOM; JS turns the complete fallback into
+  the tabbed view. The detailed `INSTALL.md` section repeats the desktop-first hierarchy before its
+  complete CLI/nightly reference.
 
 ## Analytics and consent
 
@@ -209,7 +216,8 @@ enabled. Its originless proxied `192.0.2.1` record keeps the redirect resolvable
 
 The `/blog` subsite is a typed Astro content collection over Markdown posts in `content/blog/`
 (each post: a folder with `index.md` + optional `images/`), rendered by `src/pages/blog/` through
-`src/layouts/BlogLayout.astro`.
+`src/layouts/BlogLayout.astro`. Published posts that carry live installation guidance follow the
+current desktop-first hierarchy rather than freezing obsolete CLI-only instructions.
 
 - **Schema is the gate** (`src/content.config.ts`, zod): required `title`/`slug`/`date`/`author`,
   optional `excerpt`/`draft`/`tags`. A malformed or reserved slug, a missing field, an unknown

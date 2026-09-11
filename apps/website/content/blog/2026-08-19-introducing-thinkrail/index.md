@@ -17,21 +17,30 @@ We believe ThinkRail can make Pi more accessible without compromising its power.
 
 ## Great, how can I get it?
 
-ThinkRail ships as a single self-contained executable. To install it, open the terminal and use one of the following commands:
+Download the stable desktop application for your platform:
 
-**macOS/Linux** (also works in Git Bash on Windows):
+- [macOS — Apple Silicon (.dmg)](https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-arm64.dmg)
+- [Windows — x64 (.zip)](https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-windows-x64.zip) — unzip it, then run Setup with its adjacent payload
+- [Linux — x64 (.tar.gz)](https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-x64.tar.gz)
+- [Linux — ARM64 (.tar.gz)](https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-arm64.tar.gz)
+
+For either Linux archive, extract it and run `./installer`. Linux desktop builds require Ubuntu 24.04+ or another distribution with glibc 2.38 and the required GTK/WebKitGTK libraries.
+
+Prefer the command line? The CLI-only host remains available for terminal and remote workflows.
+
+**macOS/Linux/WSL:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash
 ```
 
-**Windows** (PowerShell and cmd):
+**Windows — PowerShell:**
 
 ```powershell
 irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex
 ```
 
-Once installed, run `thinkrail`. Your browser will open a new tab with a button prompting you to open your first local project. The project should already be connected to a Git repository. This is a core ThinkRail functionality: every working session operates on a separate Git branch that merges with the original repository only after the work is finished and reviewed.
+Launch the desktop app and choose a Git repository. If you installed the CLI, run `thinkrail`; your browser will open a new tab prompting you to open your first local project. Every working session operates on a separate Git branch that merges with the original repository only after the work is finished and reviewed.
 
 Before opening the project, you can click the gear icon in the top-right corner to access the Settings panel, where you can configure your LLM providers, GUI appearance, and other settings.
 

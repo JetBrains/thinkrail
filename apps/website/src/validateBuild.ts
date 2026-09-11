@@ -12,6 +12,13 @@ const requiredSitemapUrls = [
 	"https://thinkrail.ai/vibecoding/",
 ] as const;
 
+const desktopDownloadUrls = [
+	"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-arm64.dmg",
+	"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-windows-x64.zip",
+	"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-x64.tar.gz",
+	"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-arm64.tar.gz",
+] as const;
+
 function occurrences(content: string, value: string): number {
 	return content.split(value).length - 1;
 }
@@ -51,10 +58,23 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	const pages = {
 		landing: await Bun.file(`${distDirectory}/index.html`).text(),
 		blog: await Bun.file(`${distDirectory}/blog/index.html`).text(),
+		introducingThinkRail: await Bun.file(
+			`${distDirectory}/blog/introducing-thinkrail/index.html`,
+		).text(),
 		vibecoding: await Bun.file(`${distDirectory}/vibecoding/index.html`).text(),
 		agenticDevelopment: await Bun.file(`${distDirectory}/agentic-development/index.html`).text(),
 	};
 	const islandPages = ["vibecoding", "agenticDevelopment"] as const;
+	const staticPages = ["landing", "blog", "introducingThinkRail"] as const;
+	const installPages = [
+		{ name: "landing", html: pages.landing, expectedDownloads: 2 },
+		{
+			name: "introducingThinkRail",
+			html: pages.introducingThinkRail,
+			expectedDownloads: 1,
+		},
+		...islandPages.map((name) => ({ name, html: pages[name], expectedDownloads: 2 })),
+	] as const;
 
 	for (const name of islandPages) {
 		for (const required of [
@@ -79,6 +99,27 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		failures.push("agenticDevelopment: hero title fell back to the vibecoding default");
 	}
 
+	for (const url of desktopDownloadUrls) {
+		for (const { name, html, expectedDownloads } of installPages) {
+			if (occurrences(html, url) !== expectedDownloads) {
+				failures.push(`${name}: expected desktop download ${expectedDownloads} time(s): ${url}`);
+			}
+		}
+	}
+	if (!pages.landing.includes('data-file="INSTALL.md"')) {
+		failures.push("landing: install section is not INSTALL.md");
+	}
+	for (const { name, html } of installPages) {
+		const desktopIndex = html.indexOf(desktopDownloadUrls[0]);
+		const cliIndex = html.indexOf("Prefer the command line?");
+		if (desktopIndex < 0 || cliIndex < 0 || desktopIndex > cliIndex) {
+			failures.push(`${name}: desktop download is not presented before the CLI alternative`);
+		}
+		if (!html.includes("./installer")) {
+			failures.push(`${name}: Linux desktop installation cue is missing`);
+		}
+	}
+
 	for (const [name, html] of Object.entries(pages)) {
 		if (occurrences(html, "data-posthog-project") !== 1) {
 			failures.push(`${name}: expected one PostHog loader`);
@@ -97,7 +138,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		}
 	}
 
-	for (const name of ["landing", "blog"] as const) {
+	for (const name of staticPages) {
 		if (pages[name].includes("<astro-island")) failures.push(`${name}: React island leaked`);
 	}
 	for (const name of islandPages) {
