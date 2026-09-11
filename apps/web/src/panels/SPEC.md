@@ -1360,8 +1360,10 @@ own section. The kebab menu (`plan-menu`, a
   `fontFamily` toggle), so a font that finishes loading late cannot re-lay-out an already-attached terminal.
   This ordering also prevents a fallback-width attach followed by a corrective resize from producing
   post-snapshot shell redraws that can erase replayed rows. Its pre-bind output buffer is a bounded waiting
-  state: successful bind filters it to the adopted PTY, while permanent creation failure
-  clears it and stops accepting page-wide terminal frames. **Historical replay is input-inert:** the PTY id
+  state: successful bind filters it to the adopted PTY, while creation failure clears it and stops accepting
+  page-wide terminal frames. That failure renders the host's stable guidance as escaped DOM text rather than
+  executable terminal output, with Terminal Settings and Retry actions; retry enters a fresh bounded attach
+  attempt after the user corrects the shell choice or installation. **Historical replay is input-inert:** the PTY id
   remains unadopted until xterm's replay callback, which rechecks attach freshness before binding and draining
   genuinely live frames; replies xterm synthesizes for recorded terminal queries can therefore never enter the
   live shell. PTY sizing distinguishes desired, in-flight, and

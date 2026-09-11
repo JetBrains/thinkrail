@@ -47,8 +47,10 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
     `resolveShellEnv()`'s later-repaired live `process.env.PATH`.
   - `"pwsh"` / `"powershell"` / `"cmd"`: literal pins to `pwsh.exe` / `powershell.exe` / `cmd.exe` — no
     existence check, no silent substitution. A pin that turns out to be missing fails to spawn the same
-    way a stale custom `SHELL` already does; not a new failure class, and the only mode with graceful
-    substitution is `auto`.
+    way a stale custom `SHELL` already does, and the only mode with graceful substitution is `auto`.
+    The synchronous PTY spawn is the authoritative availability check: its opaque native failure is wrapped
+    in stable guidance derived from the selected shell source. The client receives no native error text,
+    executable path, or raw `SHELL` value.
   - Non-Windows platforms are unaffected: `/bin/bash` regardless of `terminalWindowsShell`.
   `cmd.exe` was the unconditional prior default; `"auto"`'s baseline is `powershell.exe`, a plain
   fallback swap (ships on every supported Windows release, so no new dependency), because it is more
@@ -71,8 +73,8 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   and get the exact prior, fully-detectable behavior back.
 - **Not building a `listAvailableShells`-style host probe** to gray out an uninstalled pick in the Settings
   picker, unlike `editors`' `listAvailableEditors`: `auto` already gets the graceful substitution most users
-  want, and probing purely to decorate three static buttons wasn't asked for — a second detection mechanism
-  earning less than it costs.
+  want, while a probe cannot prove ConPTY launchability and would duplicate the real spawn check. A failed
+  launch instead stays recoverable through the client's Settings and Retry actions.
 - **macOS PTYs start the user's shell in login mode (`-l`)** to match Terminal.app and the platform's
   terminal convention; other platforms keep a plain interactive shell. The PTY itself supplies
   interactivity, so no explicit `-i` is needed.
