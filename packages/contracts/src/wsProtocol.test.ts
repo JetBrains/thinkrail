@@ -7,6 +7,7 @@ import {
 	isTodoReviewFixMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	normalizeSessionTitle,
+	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
@@ -77,6 +78,11 @@ test("session titles normalize to one bounded non-blank line", () => {
 	expect(normalizeSessionTitle(42)).toBeNull();
 	expect(normalizeSessionTitle("x".repeat(80))).toBe("x".repeat(80));
 	expect(normalizeSessionTitle("x".repeat(81))).toBeNull();
+});
+
+test("the plan-review subagent reshapes the review wire and advances the protocol", () => {
+	expect(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION).toBe(67);
+	expect(PROTOCOL_VERSION).toBe(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION);
 });
 
 describe("isTodoReviewFixMessage", () => {
