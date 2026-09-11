@@ -12,6 +12,13 @@ const requiredSitemapUrls = [
 	"https://thinkrail.ai/vibecoding/",
 ] as const;
 
+const desktopDownloadUrls = [
+	"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-arm64.dmg",
+	"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-windows-x64.zip",
+	"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-x64.tar.gz",
+	"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-arm64.tar.gz",
+] as const;
+
 function occurrences(content: string, value: string): number {
 	return content.split(value).length - 1;
 }
@@ -77,6 +84,30 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	}
 	if (pages.agenticDevelopment.includes("Vibe code without losing control.")) {
 		failures.push("agenticDevelopment: hero title fell back to the vibecoding default");
+	}
+
+	for (const url of desktopDownloadUrls) {
+		if (occurrences(pages.landing, url) !== 2) {
+			failures.push(`landing: expected desktop download twice: ${url}`);
+		}
+		for (const name of islandPages) {
+			if (occurrences(pages[name], url) !== 2) {
+				failures.push(`${name}: expected desktop download twice: ${url}`);
+			}
+		}
+	}
+	if (!pages.landing.includes('data-file="INSTALL.md"')) {
+		failures.push("landing: install section is not INSTALL.md");
+	}
+	for (const [name, html] of [
+		["landing", pages.landing],
+		...islandPages.map((island) => [island, pages[island]] as const),
+	] as const) {
+		const desktopIndex = html.indexOf(desktopDownloadUrls[0]);
+		const cliIndex = html.indexOf("Prefer the command line?");
+		if (desktopIndex < 0 || cliIndex < 0 || desktopIndex > cliIndex) {
+			failures.push(`${name}: desktop download is not presented before the CLI alternative`);
+		}
 	}
 
 	for (const [name, html] of Object.entries(pages)) {

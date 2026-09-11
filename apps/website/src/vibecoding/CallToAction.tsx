@@ -20,7 +20,7 @@ export function CallToAction() {
 					</Subtitle>
 
 					<div className="mx-auto mt-10 max-w-[600px] text-left">
-						<InstallPicker />
+						<InstallPicker context="Next step" />
 					</div>
 				</Reveal>
 			</div>

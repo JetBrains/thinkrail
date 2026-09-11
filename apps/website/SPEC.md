@@ -147,8 +147,8 @@ landing + blog shells                      ──▶ src/components/Analytics.as
   `irm …/install.ps1 | iex` directly in the current session, Command Prompt launches
   `powershell -c "irm …/install.ps1 | iex"`, and WSL uses `install.sh` to install the Linux build inside
   that distro. ARIA structure: a `tablist` may contain nothing but `tab`s, so the OS tabs form their
-  own tablist and the Windows shell switcher is its *sibling* (its own tablist), shown only while
-  Windows is active. Every hero panel remains in the static DOM; JS turns the complete fallback into
+  own tablist and the Windows CLI region owns a separate shell tablist, shown only while Windows is
+  active. Every hero panel remains in the static DOM; JS turns the complete fallback into
   the tabbed view. The detailed `INSTALL.md` section repeats the desktop-first hierarchy before its
   complete CLI/nightly reference.
 
