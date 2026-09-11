@@ -126,7 +126,9 @@ failure after acquiring the host but before the native window or quit listener i
 begins as soon as the host is acquired. It settles/aborts active agent work within its bound, drains
 analytics, disposes server resources and PTYs, and closes sockets.
 Electrobun's synchronous `before-quit` callback cancels quit while that promise is pending and retries
-`Utils.quit()` under a completion guard. Abrupt death relies only on operating-system process cleanup.
+`Utils.quit()` under a completion guard. Startup failure also requests quit directly through that coordinator
+in the error-dialog finalizer, so even missing quit interception or a failed dialog cannot bypass shutdown.
+Abrupt death relies only on operating-system process cleanup.
 
 Artifact tests drive this same entrypoint through opt-in environment/ready/control seams: isolated user
 data, a hidden neutral window for browser-backed tests, host/launcher ids and origin on DOM-ready, and

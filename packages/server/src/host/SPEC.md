@@ -99,6 +99,19 @@ channel fan-out, and the process-boot wrapper both launchers share.
   feature modules never track). Additional setup/run/task/review/PR observations use the closed triggers in
   [[submodule-server-analytics]], with transient consent-scoped correlation and task-artifact reconciliation.
   Host alone mediates these events; no install-announcement or provider-change capture exists.
+  Setup observes existing read results, never triggers provider work; only explicit setup mutations count.
+  Run timing starts at canonical `agent_start`, with local send intent recorded before calling pi (not
+  after `ackSend`); unproven provenance stays unknown and retries remain one cycle until `agent_settled`.
+  Accepted queued origins survive send resolution until canonical cycle observation; rejected sends do not
+  contribute. Consent clearing preserves pre-grant cycle markers, while settlement, queue clearing,
+  session deletion and full host reset release their corresponding transient intent state.
+  Task observation reads reduced group state synchronously through the existing pi-free `TodoStore` /
+  `groupStatus` boundary before a completion-capable mutation, then reads artifacts after reconciliation;
+  wire edits wait for existing artifact work rather than create new Git writes for telemetry.
+  Completion evidence and deduplication wait for the workspace's existing reconciliation queue to converge,
+  including replacement passes after plan drift, and retain the mutation's original consent grant.
+  Empty/newly-hydrated groups and completion by deletion do not count. These memory-only observations
+  retain a grant's capture before asynchronous work and never replay across revocation.
   `stop()` → immediate agent-session cleanup, then `persistTerminalSessions()` **before**
   `closeAllTerminals()`, then watcher/socket disposal; `shutdown()` memoizes one asynchronous graceful
   path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` first, then `stop()`). The
@@ -432,7 +445,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
-  `boot.ts`); `persistence` (`dataDir` — where `crashLog.ts` writes); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
+  `boot.ts`); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
+  task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile` for the `/files` route); Bun/Node.
 - **Forbidden:** being imported by any feature module; importing `web`/`cli`/`desktop`.
 

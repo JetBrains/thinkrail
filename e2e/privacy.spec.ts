@@ -1,8 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { seedAnalyticsConsent } from "./fixtures/analyticsConsent";
 
-test("privacy section toggles analytics off and the choice persists across a reload", async ({
+test("privacy controls additional data without disabling basics and persists across reload", async ({
 	page,
+	baseURL,
 }) => {
+	await seedAnalyticsConsent(baseURL, true, true);
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 
@@ -17,7 +20,8 @@ test("privacy section toggles analytics off and the choice persists across a rel
 
 	await toggle.click();
 	await expect(toggle).toHaveAttribute("data-active", "false");
-	await expect(dialog).toContainText("nothing is sent");
+	await expect(dialog).toContainText("Basic reporting is always on");
+	await expect(dialog).not.toContainText("nothing is sent");
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -27,6 +31,7 @@ test("privacy section toggles analytics off and the choice persists across a rel
 
 	await toggle.click();
 	await expect(toggle).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("analytics-consent-dialog")).toBeHidden();
 
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();

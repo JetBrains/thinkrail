@@ -11,6 +11,7 @@ import {
 	enqueueTodoMutation,
 	maybeAttachChangeArtifacts,
 	reconcileChangeArtifacts,
+	settleChangeArtifacts,
 	unattributedChanges,
 } from "./artifacts";
 import {
@@ -45,6 +46,47 @@ test("the first queued mutation starts synchronously and reserves against re-ent
 	gate.resolve(undefined);
 	await Promise.all([first, second]);
 	expect(order).toEqual(["first", "second"]);
+});
+
+test("the read barrier follows newer queue tails, including work enqueued during a replacement pass", async () => {
+	const firstGate = deferred<void>();
+	const secondGate = deferred<void>();
+	const thirdGate = deferred<void>();
+	const secondStarted = deferred<void>();
+	const thirdStarted = deferred<void>();
+	const workspaceId = "queue-stable-barrier";
+	const order: string[] = [];
+	const first = enqueueTodoMutation(workspaceId, () => firstGate.promise);
+	const barrier = settleChangeArtifacts(workspaceId).then(() => order.push("barrier"));
+	const second = enqueueTodoMutation(workspaceId, async () => {
+		secondStarted.resolve(undefined);
+		await secondGate.promise;
+		void enqueueTodoMutation(workspaceId, async () => {
+			thirdStarted.resolve(undefined);
+			await thirdGate.promise;
+			order.push("third");
+		});
+		order.push("second");
+	});
+	try {
+		firstGate.resolve(undefined);
+		await secondStarted.promise;
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(order).toEqual([]);
+		secondGate.resolve(undefined);
+		await thirdStarted.promise;
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(order).toEqual(["second"]);
+		thirdGate.resolve(undefined);
+		await barrier;
+		expect(order).toEqual(["second", "third", "barrier"]);
+	} finally {
+		firstGate.resolve(undefined);
+		secondGate.resolve(undefined);
+		thirdGate.resolve(undefined);
+		await Promise.all([first, second]);
+		await settleChangeArtifacts(workspaceId);
+	}
 });
 
 test("a newly active window is captured before a held queue or an earlier done item can yield", async () => {

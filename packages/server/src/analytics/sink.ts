@@ -10,13 +10,9 @@ export interface OutgoingEvent {
 
 export interface AnalyticsSink {
 	send(clientId: string, events: OutgoingEvent[]): void;
-	setSending?(enabled: boolean): void;
-	shutdown?(): Promise<void>;
+	setSending(enabled: boolean): void;
+	shutdown(): Promise<void>;
 }
-
-export const noopSink: AnalyticsSink = {
-	send() {},
-};
 
 export interface PostHogSinkOptions {
 	apiKey: string;

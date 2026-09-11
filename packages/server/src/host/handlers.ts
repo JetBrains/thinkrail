@@ -58,7 +58,12 @@ import {
 	setSessionThinkingLevel,
 	steerSession,
 } from "../agent";
-import { bucketProviderModel, type SendMode, track } from "../analytics";
+import {
+	type AdditionalAnalyticsCapture,
+	bucketProviderModel,
+	type SendMode,
+	track,
+} from "../analytics";
 import {
 	cancelLogin,
 	connectJbcentral,
@@ -170,7 +175,18 @@ import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
+import {
+	additionalCapture,
+	captureAdditional,
+	centralConnectOutcome,
+	observePrAction,
+	observeSetupAction,
+	observeSetupRead,
+	providerAvailability,
+} from "./productAnalytics";
 import { withReviewLock } from "./reviewLock";
+import { runObservation } from "./runAnalytics";
+import { taskObservation } from "./taskAnalytics";
 import {
 	claimItemFix,
 	isItemUnderActiveReview,
@@ -224,7 +240,7 @@ function fireReviewPrompt(
 	pkg: string,
 	send: (sessionId: string, text: string) => Promise<void> = promptSession,
 ): void {
-	void ackSend(send(sessionId, pkg))
+	void ackSend(runObservation.send(sessionId, "internal", () => send(sessionId, pkg)))
 		.then(undefined, (err) => {
 			rollbackSend(workspaceId, ids, sessionId);
 			notifyExtUi(
@@ -243,18 +259,29 @@ function fireTodoFixPrompt(
 	pkg: string,
 	previous: TodoReviewRecord | undefined,
 	requested: TodoReviewRecord,
-	findingIds: string[] = [],
+	findingIds: string[],
+	capture: AdditionalAnalyticsCapture | null,
 ): void {
-	void ackSend(followUpSession(p.sessionId, pkg))
-		.then(undefined, (err) => {
-			rollbackTodoFix(p, previous, requested);
-			if (findingIds.length > 0) rollbackSend(p.workspaceId, findingIds, p.sessionId);
-			notifyExtUi(
-				p.sessionId,
-				`Fix request send failed: ${err instanceof Error ? err.message : String(err)}`,
-				"error",
-			);
-		})
+	void ackSend(
+		runObservation.send(p.sessionId, "internal", () => followUpSession(p.sessionId, pkg)),
+	)
+		.then(
+			() => {
+				captureAdditional(capture, {
+					name: "review_decided",
+					params: { actor: "user", verdict: "changes_requested" },
+				});
+			},
+			(err) => {
+				rollbackTodoFix(p, previous, requested);
+				if (findingIds.length > 0) rollbackSend(p.workspaceId, findingIds, p.sessionId);
+				notifyExtUi(
+					p.sessionId,
+					`Fix request send failed: ${err instanceof Error ? err.message : String(err)}`,
+					"error",
+				);
+			},
+		)
 		.catch((err) => {
 			console.warn(`todo fix rollback failed: ${err instanceof Error ? err.message : err}`);
 		})
@@ -306,10 +333,15 @@ async function sendToFileChat(
 }
 
 const handlers: Record<string, Handler> = {
-	"project.open": (params) => openProject((params as { path: string }).path),
+	"project.open": (params) =>
+		observeSetupAction("project_open", () => openProject((params as { path: string }).path)),
 	"project.inspect": (params) => inspectProjectPath((params as { path: string }).path),
-	"project.init": (params) => initProject((params as { path: string }).path),
-	"project.list": () => listProjects(),
+	"project.init": (params) =>
+		observeSetupAction("project_init", () => initProject((params as { path: string }).path)),
+	"project.list": () =>
+		observeSetupRead(listProjects, (projects) => ({
+			project_present: projects.length > 0 ? "yes" : "no",
+		})),
 	"project.hasSpecs": (params) => {
 		const { projectId } = params as { projectId: string };
 		const project = listProjects().find((p) => p.id === projectId);
@@ -328,13 +360,19 @@ const handlers: Record<string, Handler> = {
 	},
 	"workspace.create": async (params) => {
 		const p = params as { projectId: string; name?: string; baseRef?: string };
-		return provisionInitialTerminal(await createWorkspace(p.projectId, p.name, p.baseRef));
+		return provisionInitialTerminal(
+			await observeSetupAction("worktree_create", () =>
+				createWorkspace(p.projectId, p.name, p.baseRef),
+			),
+		);
 	},
 	"workspace.listExisting": (params) =>
 		listExistingWorktrees((params as { projectId: string }).projectId),
 	"workspace.openExisting": async (params) => {
 		const p = params as { projectId: string; path: string };
-		return provisionInitialTerminal(await openExistingWorktree(p.projectId, p.path));
+		return provisionInitialTerminal(
+			await observeSetupAction("worktree_attach", () => openExistingWorktree(p.projectId, p.path)),
+		);
 	},
 	"workspace.rename": (params) => {
 		const p = params as { id: string; name: string };
@@ -393,15 +431,17 @@ const handlers: Record<string, Handler> = {
 	"pr.preview": (params) =>
 		previewPr(params as { workspaceId: string; sessionId: string; title?: string }),
 	"pr.open": (params) =>
-		openPr(
-			params as {
-				workspaceId: string;
-				sessionId: string;
-				title?: string;
-				titleEdited?: boolean;
-				body?: string;
-				draft?: boolean;
-			},
+		observePrAction(() =>
+			openPr(
+				params as {
+					workspaceId: string;
+					sessionId: string;
+					title?: string;
+					titleEdited?: boolean;
+					body?: string;
+					draft?: boolean;
+				},
+			),
 		),
 	"dialog.selectDirectory": () => selectDirectory(),
 	"fs.readDir": (params) => {
@@ -422,28 +462,41 @@ const handlers: Record<string, Handler> = {
 	"todo.list": (params) => listTodos(params as { workspaceId: string; sessionId: string }),
 	"todo.add": (params) =>
 		addTodo(params as { workspaceId: string; sessionId: string; title: string; note?: string }),
-	"todo.update": (params) =>
-		updateTodo(
-			params as {
-				workspaceId: string;
-				sessionId: string;
-				id: string;
-				status?: TodoStatus;
-				title?: string;
-				note?: string;
-			},
-		),
+	"todo.update": async (params) => {
+		const p = params as {
+			workspaceId: string;
+			sessionId: string;
+			id: string;
+			status?: TodoStatus;
+			title?: string;
+			note?: string;
+		};
+		const observeCompletion = taskObservation.begin(p.workspaceId, p.sessionId);
+		const result = await updateTodo(p);
+		if (p.status === "done") await observeCompletion();
+		return result;
+	},
 	"todo.remove": (params) => {
 		const p = params as { workspaceId: string; sessionId: string; id: string };
 		return removeTodo(p, () => isItemUnderActiveReview(p.sessionId, p.id));
 	},
-	"todo.review": (params) =>
-		approveTodoReview(params as { workspaceId: string; sessionId: string; id: string }),
+	"todo.review": (params) => {
+		const capture = additionalCapture();
+		const result = approveTodoReview(
+			params as { workspaceId: string; sessionId: string; id: string },
+		);
+		captureAdditional(capture, {
+			name: "review_decided",
+			params: { actor: "user", verdict: "approved" },
+		});
+		return result;
+	},
 	"todo.startReview": (params) =>
 		startTodoReviewFlow(params as { workspaceId: string; sessionId: string; id: string }),
 	"todo.reviewAll": (params) =>
 		startReviewAllFlow(params as { workspaceId: string; sessionId: string }),
 	"todo.requestFix": async (params) => {
+		const capture = additionalCapture();
 		const p = params as { workspaceId: string; sessionId: string; id: string; feedback: string };
 		if (!claimItemFix(p.sessionId, p.id))
 			throw new Error(`A fix request is already active for ${p.id}.`);
@@ -474,6 +527,7 @@ const handlers: Record<string, Handler> = {
 					prepared.previous,
 					prepared.requested,
 					prepared.findingIds,
+					capture,
 				);
 			} catch (error) {
 				if (prepared.findingIds.length > 0)
@@ -631,33 +685,53 @@ const handlers: Record<string, Handler> = {
 	},
 	"session.prompt": async (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
-		await ackSend(promptSession(p.sessionId, p.text, p.images));
+		await ackSend(
+			runObservation.send(p.sessionId, isControlMessage(p.text) ? "internal" : "user", () =>
+				promptSession(p.sessionId, p.text, p.images),
+			),
+		);
 		recordAcceptedSend("prompt", p.text, ctx.clientKey);
 		return { ok: true } as const;
 	},
 	"session.steer": async (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
-		await ackSend(steerSession(p.sessionId, p.text, p.images));
+		await ackSend(
+			runObservation.send(p.sessionId, isControlMessage(p.text) ? "internal" : "user", () =>
+				steerSession(p.sessionId, p.text, p.images),
+			),
+		);
 		recordAcceptedSend("steer", p.text, ctx.clientKey);
 		return { ok: true } as const;
 	},
 	"session.followUp": async (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
-		await ackSend(followUpSession(p.sessionId, p.text, p.images));
+		await ackSend(
+			runObservation.send(p.sessionId, isControlMessage(p.text) ? "internal" : "user", () =>
+				followUpSession(p.sessionId, p.text, p.images),
+			),
+		);
 		recordAcceptedSend("follow_up", p.text, ctx.clientKey);
 		return { ok: true } as const;
 	},
 	"session.clearQueue": (params) => {
 		const p = params as { sessionId: string; requireTextOnly?: boolean };
-		return clearQueueSession(p.sessionId, p.requireTextOnly);
+		const cleared = clearQueueSession(p.sessionId, p.requireTextOnly);
+		runObservation.clearQueue(p.sessionId);
+		return cleared;
 	},
 	"session.removeQueued": async (params) => {
 		const p = params as { sessionId: string; kind: QueueLane; index: number };
-		return removeQueuedSession(p.sessionId, p.kind, p.index);
+		const result = await removeQueuedSession(p.sessionId, p.kind, p.index);
+		if (result.queue.steering.length === 0 && result.queue.followUp.length === 0) {
+			runObservation.clearQueue(p.sessionId);
+		}
+		return result;
 	},
 	"session.abort": async (params) => {
 		const p = params as { sessionId: string; restoreQueue?: boolean };
-		const restoredQueue = await abortSession(p.sessionId, p.restoreQueue);
+		const stopping = abortSession(p.sessionId, p.restoreQueue);
+		if (p.restoreQueue) runObservation.clearQueue(p.sessionId);
+		const restoredQueue = await stopping;
 		return {
 			ok: true,
 			...(restoredQueue ? { restoredQueue } : {}),
@@ -667,6 +741,8 @@ const handlers: Record<string, Handler> = {
 		const { sessionId } = params as { sessionId: string };
 		if (isSessionStreaming(sessionId)) await abortSession(sessionId).catch(() => {});
 		await removeSession(sessionId);
+		runObservation.forget(sessionId);
+		taskObservation.forget(sessionId);
 		return { ok: true } as const;
 	},
 	"session.delete": async (params) => {
@@ -735,22 +811,35 @@ const handlers: Record<string, Handler> = {
 		await ackSend(answerQuestion(p.sessionId, p.toolCallId, p.result));
 		return { ok: true } as const;
 	},
-	"model.list": () => listAvailableModels(),
+	"model.list": () =>
+		observeSetupRead(listAvailableModels, (models) => ({
+			model_available: models.length > 0 ? "yes" : "no",
+		})),
 	"model.clampThinking": async (params) => {
 		const p = params as { provider: string; id: string; level: ThinkingLevel };
 		return { level: await clampThinkingForModel({ provider: p.provider, id: p.id }, p.level) };
 	},
 	"model.refresh": (params) => {
 		const p = params as { force?: boolean };
-		return refreshAvailableModels(p.force === true);
+		return observeSetupRead(
+			() => refreshAvailableModels(p.force === true),
+			(result) => ({
+				model_available: result.models.length > 0 ? "yes" : result.complete ? "no" : "unknown",
+			}),
+		);
 	},
-	"model.default": () => getDefaultModel(),
-	"provider.status": () => getProviderStatus(),
+	"model.default": () =>
+		observeSetupRead(getDefaultModel, (result) => (result.model ? { model_available: "yes" } : {})),
+	"provider.status": () =>
+		observeSetupRead(getProviderStatus, (report) => ({
+			provider_available: providerAvailability(report),
+		})),
 	"provider.loginStart": (params) => {
 		const p = params as { providerId: string; type?: "oauth" | "api_key" };
 		const type = p.type ?? "oauth";
+		const capture = additionalCapture();
 		const handle = startLogin(p.providerId, type);
-		recordLoginStart(handle.loginId, type);
+		recordLoginStart(handle.loginId, type, capture);
 		return handle;
 	},
 	"provider.loginReply": (params) => {
@@ -759,15 +848,16 @@ const handlers: Record<string, Handler> = {
 	},
 	"provider.loginCancel": (params) => {
 		const { loginId } = params as { loginId: string };
-		cancelLogin(loginId);
 		dropLogin(loginId);
+		cancelLogin(loginId);
 		return { ok: true } as const;
 	},
 	"provider.logout": async (params) => {
 		await logoutProvider((params as { providerId: string }).providerId);
 		return { ok: true } as const;
 	},
-	"provider.jbcentralConnect": () => connectJbcentral(),
+	"provider.jbcentralConnect": () =>
+		observeSetupAction("provider_connect", connectJbcentral, centralConnectOutcome),
 	"provider.jbcentralDisconnect": () => disconnectJbcentral(),
 	"provider.jbcentralStartProxy": () => startProxyJbcentral(),
 	"provider.jbcentralLogin": () => jbcentralLogin(),

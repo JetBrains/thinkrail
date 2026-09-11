@@ -40,6 +40,7 @@ import {
 } from "../todos";
 import { getWorkspace, listWorkspaceRecords } from "../workspaces";
 import { ackSend } from "./ackSend";
+import { additionalCapture, captureAdditional } from "./productAnalytics";
 import {
 	clearReviewerSessionWorkspaceMapping,
 	maybeCleanupStuckReviewSession,
@@ -57,6 +58,7 @@ import {
 	type StartOne,
 	seedReviewQueue,
 } from "./reviewQueue";
+import { runObservation } from "./runAnalytics";
 
 interface ItemRef {
 	workspaceId: string;
@@ -261,7 +263,11 @@ function fireReviewerPrompt(
 	pkg: string,
 	sendReviewPackage: SendReviewPackage,
 ): void {
-	void ackSend(sendReviewPackage(reviewerSessionId, pkg))
+	void ackSend(
+		runObservation.send(reviewerSessionId, "internal", () =>
+			sendReviewPackage(reviewerSessionId, pkg),
+		),
+	)
 		.then(undefined, (err) => {
 			inFlightReview.delete(workerKey(p.workspaceId, p.sessionId));
 			currentReview.delete(reviewerSessionId);
@@ -359,6 +365,7 @@ export function installTodoReviewSeams(): void {
 	});
 
 	setReviewVerdictHandler((reviewerSessionId, params: ReviewVerdictParams) => {
+		const capture = additionalCapture();
 		const ctx = reviewerContext(reviewerSessionId);
 		return withReviewLock(ctx.workspaceId, async () => {
 			const current = currentReview.get(reviewerSessionId);
@@ -374,7 +381,16 @@ export function installTodoReviewSeams(): void {
 				sessionId: current.sessionId,
 				id: current.todoId,
 			};
-			const settleQueue = () => onReviewVerdict(ctx.workspaceId, current.sessionId, current.todoId);
+			const settleQueue = () => {
+				captureAdditional(capture, {
+					name: "review_decided",
+					params: {
+						actor: "agent",
+						verdict: params.verdict === "approve" ? "approved" : "changes_requested",
+					},
+				});
+				onReviewVerdict(ctx.workspaceId, current.sessionId, current.todoId);
+			};
 			if (params.verdict === "approve") {
 				const open = await itemOpenFindings(ref);
 				if (open.length > 0) {
@@ -525,7 +541,11 @@ async function sendReflectedFix(pending: PendingFix): Promise<void> {
 			releaseItemFix(pending.workerSessionId, pending.item.id);
 			return;
 		}
-		void ackSend(followUpSession(pending.workerSessionId, prepared.fixText))
+		void ackSend(
+			runObservation.send(pending.workerSessionId, "internal", () =>
+				followUpSession(pending.workerSessionId, prepared.fixText),
+			),
+		)
 			.then(undefined, (err) => {
 				if (prepared.survivingIds.length > 0)
 					rollbackSend(pending.workspaceId, prepared.survivingIds, pending.workerSessionId);
@@ -556,7 +576,9 @@ function fireReflection(pending: PendingFix, candidates: ReviewComment[]): void 
 		pendingFix.set(reflector.sessionId, pending);
 		try {
 			await ackSend(
-				followUpSession(reflector.sessionId, renderReflectionPackage(pending.item, candidates)),
+				runObservation.send(reflector.sessionId, "internal", () =>
+					followUpSession(reflector.sessionId, renderReflectionPackage(pending.item, candidates)),
+				),
 			);
 		} catch (err) {
 			pendingFix.delete(reflector.sessionId);

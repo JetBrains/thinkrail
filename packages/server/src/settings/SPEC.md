@@ -52,6 +52,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
 - Custom layout presets are a complete top-level catalog replacement, not a nested per-item patch. Each value is bounded, resource-free, uniquely identified, uses only the current preset schema, and contains no workspace/tab/session/terminal identity. A malformed persisted member is isolated during config validation; a wire mutation with any malformed member is rejected as a whole. No alternate config key or old preset schema is read or upgraded.
 - Deleting or editing a custom preset changes only the shared definition. It cannot mutate any frontend's instantiated frame or local default selection.
 - Analytics preference/confirmation are validated booleans and saved atomically when confirming.
-  Confirmation without a supplied preference rejects the update; preference-only writes never infer it.
+  Confirmation without a preference rejects the update; re-enabling after a decision requires both fields.
+  Preference-only writes never infer expanded consent.
   The two-tier contract belongs to [[submodule-server-analytics]].
 - `null` clears optional `reviewModel`/`reviewEffort` overrides; it is a wire-only sentinel and never persists.

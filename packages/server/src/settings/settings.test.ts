@@ -52,6 +52,94 @@ test("getConfig falls back to DEFAULT_CONFIG when no config.json exists", () => 
 	expect(getConfig()).toEqual(DEFAULT_CONFIG);
 });
 
+test.each([
+	true,
+	false,
+])("legacy analytics preference %s seeds selection without consent", (enabled) => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ analyticsEnabled: enabled }));
+	expect(getConfig()).toMatchObject({
+		analyticsEnabled: enabled,
+		analyticsConsentConfirmed: false,
+	});
+	updateConfig({ theme: "light" });
+	resetConfigCache();
+	expect(getConfig()).toMatchObject({
+		analyticsEnabled: enabled,
+		analyticsConsentConfirmed: false,
+	});
+});
+
+test("new and malformed analytics config defaults off and unconfirmed", () => {
+	expect(getConfig()).toMatchObject({ analyticsEnabled: false, analyticsConsentConfirmed: false });
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ analyticsEnabled: "yes", analyticsConsentConfirmed: "true" }),
+	);
+	resetConfigCache();
+	expect(getConfig()).toMatchObject({ analyticsEnabled: false, analyticsConsentConfirmed: false });
+});
+
+test.each([
+	true,
+	false,
+])("explicit analytics choice %s persists and broadcasts atomically", (enabled) => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	updateConfig({ analyticsEnabled: enabled, analyticsConsentConfirmed: true });
+	expect(published).toHaveLength(1);
+	expect(published[0]).toMatchObject({
+		analyticsEnabled: enabled,
+		analyticsConsentConfirmed: true,
+	});
+	resetConfigCache();
+	expect(getConfig()).toMatchObject({ analyticsEnabled: enabled, analyticsConsentConfirmed: true });
+});
+
+test("preference-only updates cannot infer expanded consent", () => {
+	updateConfig({ analyticsEnabled: true });
+	expect(getConfig()).toMatchObject({ analyticsEnabled: true, analyticsConsentConfirmed: false });
+});
+
+test("a legacy preference-only write cannot re-enable additional data after a declined decision", () => {
+	updateConfig({ analyticsEnabled: false, analyticsConsentConfirmed: true });
+	expect(() => updateConfig({ analyticsEnabled: true })).toThrow("explicit confirmation");
+	expect(getConfig()).toMatchObject({ analyticsEnabled: false, analyticsConsentConfirmed: true });
+	updateConfig({ analyticsEnabled: true, analyticsConsentConfirmed: true });
+	updateConfig({ analyticsEnabled: false });
+	expect(() => updateConfig({ analyticsEnabled: true })).toThrow("explicit confirmation");
+});
+
+test("invalid or incomplete consent updates leave disk, cache and broadcasts unchanged", () => {
+	updateConfig({ analyticsEnabled: false, analyticsConsentConfirmed: false });
+	const before = readFileSync(join(dataDir, "config.json"), "utf8");
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const invalidPreference: AppConfigUpdate = { theme: "light" };
+	Reflect.set(invalidPreference, "analyticsEnabled", "yes");
+	const invalidConfirmation: AppConfigUpdate = { analyticsEnabled: true };
+	Reflect.set(invalidConfirmation, "analyticsConsentConfirmed", "yes");
+	for (const update of [
+		invalidPreference,
+		invalidConfirmation,
+		{ analyticsConsentConfirmed: true },
+	]) {
+		expect(() => updateConfig(update)).toThrow();
+	}
+	expect(readFileSync(join(dataDir, "config.json"), "utf8")).toBe(before);
+	expect(getConfig()).toMatchObject({ analyticsEnabled: false, analyticsConsentConfirmed: false });
+	expect(published).toEqual([]);
+});
+
+test("failed consent persistence never updates the cached choice or publishes it", () => {
+	const current = getConfig();
+	mkdirSync(join(dataDir, "config.json"));
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	expect(() => updateConfig({ analyticsEnabled: true, analyticsConsentConfirmed: true })).toThrow();
+	expect(getConfig()).toBe(current);
+	expect(published).toEqual([]);
+});
+
 test("updateConfig merges, persists an opaque theme id, and returns the merged config", () => {
 	const opaqueTheme = "acme.solarized";
 	const next = updateConfig({ theme: opaqueTheme });

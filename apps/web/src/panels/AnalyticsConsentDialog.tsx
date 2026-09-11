@@ -1,0 +1,60 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import { useAppStore } from "@/store";
+import { ANALYTICS_DESCRIPTION, AnalyticsPreferences } from "./AnalyticsPreferences";
+import { useAnalyticsConsent } from "./useAnalyticsConsent";
+
+export function AnalyticsConsentDialog() {
+	const [draft, setDraft] = useState(() => useAppStore.getState().analyticsEnabled);
+	const { pending, error, save } = useAnalyticsConsent();
+
+	return (
+		<Dialog
+			open
+			onOpenChange={(open) => {
+				if (!open) save(false);
+			}}
+		>
+			<DialogContent data-testid="analytics-consent-dialog">
+				<DialogHeader>
+					<DialogTitle>Your analytics choice</DialogTitle>
+					<DialogDescription>{ANALYTICS_DESCRIPTION}</DialogDescription>
+				</DialogHeader>
+				<AnalyticsPreferences enabled={draft} disabled={pending} onChange={setDraft} />
+				<p className="tr-text-metadata text-text-muted">
+					Nothing additional is shared until you confirm. Change this later in Settings → Privacy.
+				</p>
+				{error && (
+					<p role="alert" className="tr-text-metadata text-feedback-error">
+						{error}
+					</p>
+				)}
+				<DialogFooter>
+					<Button
+						variant="outline"
+						disabled={pending}
+						data-testid="analytics-consent-dismiss"
+						onClick={() => save(false)}
+					>
+						Use basics only
+					</Button>
+					<Button
+						disabled={pending}
+						data-testid="analytics-consent-confirm"
+						onClick={() => save(draft)}
+					>
+						{pending ? "Saving…" : "Confirm choice"}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}

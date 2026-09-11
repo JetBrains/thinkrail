@@ -188,6 +188,10 @@ placement, not a layout revision or peer geometry synchronization.
 
 ## Isolation contract
 
+General and private-restart fixtures seed additional analytics off with consent already confirmed, so
+unrelated scenarios stay unblocked. Consent tests reset the choice over the real settings wire and cover
+drafts, persistence failures, reloads, cross-client convergence, prompt priority, and pre-v64 fallback.
+
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,
 desktop cache/state plus ready/control files, Playwright transform cache, restart artifacts,
 picker/editor/provider control files, host/restart/binary/desktop ports, and Central fixture artifacts. The

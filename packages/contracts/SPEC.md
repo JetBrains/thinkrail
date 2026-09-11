@@ -258,7 +258,7 @@ of the host.
   and group limits are web-local); `analyticsEnabled` is the additional-data preference, default `false`, while
   `analyticsConsentConfirmed` defaults `false` and records the explicit decision required before that
   preference can authorize collection. Saved legacy preferences seed the first-launch switch, not consent.
-  `ANALYTICS_CONSENT_PROTOCOL_VERSION` pins this v64 contract so newer clients do not show a consent flow
+  `ANALYTICS_CONSENT_PROTOCOL_VERSION` pins this v65 contract so newer clients do not show a consent flow
   against older hosts that cannot persist it. Preference and confirmation are saved atomically; an older
   client's preference-only write cannot create the new confirmation. The installation id remains entirely
   server-side; basic events are not controlled by either flag, see [[submodule-server-analytics]]) carries

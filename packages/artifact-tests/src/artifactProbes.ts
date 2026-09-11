@@ -267,6 +267,7 @@ export default function syntheticExternalExtension(pi) {
 		GEMINI_CLI_HOME: homeDir,
 		PATH: noPiPath,
 		THINKRAIL_NO_ANALYTICS: "1",
+		CI: "1",
 	};
 	let defaultHost: RunningArtifactHost | undefined;
 	let customHost: RunningArtifactHost | undefined;

@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { IconTooltip } from "../components/ui/tooltip";
+import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
@@ -19,6 +20,7 @@ import {
 	isUserOwnedWorkspace,
 	SettingsSection,
 	selectActiveWorkspace,
+	selectAnalyticsConsentPromptOpen,
 	selectContextProject,
 	useAppStore,
 } from "../store";
@@ -54,6 +56,7 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 export function Shell() {
 	useLocalLayoutState();
 	const status = useAppStore((s) => s.status);
+	const analyticsConsentOpen = useAppStore(selectAnalyticsConsentPromptOpen);
 	const StatusDot = status === "connected" ? RiCircleFill : Circle;
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
@@ -277,7 +280,7 @@ export function Shell() {
 					</ResizablePanelGroup>
 				</div>
 			)}
-			<InterviewPromptDialog />
+			{analyticsConsentOpen ? <AnalyticsConsentDialog /> : <InterviewPromptDialog />}
 			<Toaster />
 		</div>
 	);

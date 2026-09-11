@@ -1,8 +1,47 @@
-import { toast, useAppStore } from "@/store";
+import { selectAnalyticsConsentSupported, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
+import { ANALYTICS_DESCRIPTION, AnalyticsPreferences } from "./AnalyticsPreferences";
 import { SettingsSwitch } from "./SettingsSwitch";
+import { useAnalyticsConsent } from "./useAnalyticsConsent";
 
 export function PrivacySettings() {
+	const supported = useAppStore(selectAnalyticsConsentSupported);
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	if (protocolVersion === null) {
+		return (
+			<section data-testid="settings-privacy" className="flex flex-col gap-4">
+				<h3 className="tr-title-section text-text-default">Usage analytics</h3>
+				<p className="text-text-muted tr-text-metadata">Connect to the host to manage analytics.</p>
+			</section>
+		);
+	}
+	return supported ? <AdditionalAnalyticsSettings /> : <LegacyPrivacySettings />;
+}
+
+function AdditionalAnalyticsSettings() {
+	const enabled = useAppStore((s) => s.analyticsEnabled);
+	const { pending, error, save } = useAnalyticsConsent();
+
+	return (
+		<section data-testid="settings-privacy" className="flex flex-col gap-16">
+			<div className="flex flex-col gap-4">
+				<h3 className="tr-title-section text-text-default">Usage analytics</h3>
+				<p className="text-text-muted tr-text-metadata">{ANALYTICS_DESCRIPTION}</p>
+			</div>
+			<AnalyticsPreferences enabled={enabled} disabled={pending} onChange={save} />
+			<p className="text-text-muted tr-text-metadata">
+				Your choice is saved on this host and shared across devices.
+			</p>
+			{error && (
+				<p role="alert" className="tr-text-metadata text-feedback-error">
+					{error}
+				</p>
+			)}
+		</section>
+	);
+}
+
+function LegacyPrivacySettings() {
 	const enabled = useAppStore((s) => s.analyticsEnabled);
 
 	const setEnabled = (analyticsEnabled: boolean) => {

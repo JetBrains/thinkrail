@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_HOST, DEFAULT_PORT, parseArgs, parseSubcommand } from "./args";
+import { DEFAULT_HOST, DEFAULT_PORT, parseArgs, parseSubcommand, USAGE } from "./args";
 
 describe("parseSubcommand", () => {
 	test("only a leading, exact subcommand counts", () => {
@@ -32,10 +32,11 @@ describe("parseArgs", () => {
 		});
 	});
 
-	test("--no-analytics mutes for the run; the env spelling is the analytics service's job", () => {
+	test("--no-analytics suppresses extras; the host reads the environment spelling", () => {
 		expect(parseArgs(["--no-analytics"], {}).noAnalytics).toBe(true);
 		expect(parseArgs([], { THINKRAIL_NO_ANALYTICS: "1" }).noAnalytics).toBe(false);
 		expect(parseArgs([], {}).noAnalytics).toBe(false);
+		expect(USAGE).toContain("basic events remain on");
 	});
 
 	test("--verbose turns on debug logging; the env spelling is the log module's job", () => {

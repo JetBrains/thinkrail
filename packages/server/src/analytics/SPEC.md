@@ -1,7 +1,7 @@
 ---
 id: submodule-server-analytics
 type: submodule-design
-status: draft
+status: active
 title: analytics — basic events and consented product insights
 parent: module-server
 depends-on: [module-contracts]

@@ -111,6 +111,7 @@ try {
 			HOME: home,
 			USERPROFILE: home,
 			THINKRAIL_NO_ANALYTICS: "1",
+			CI: "1",
 		}),
 		stdout: "pipe",
 		stderr: "inherit",

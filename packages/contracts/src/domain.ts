@@ -508,6 +508,7 @@ export function isLineWidth(value: unknown): value is number {
 
 export interface AppConfig extends ThemePreference {
 	analyticsEnabled: boolean;
+	analyticsConsentConfirmed: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
 	chatLineWidth: number;
@@ -559,7 +560,8 @@ export function isJbcentralQuotaRefreshSeconds(value: unknown): value is number 
 export const DEFAULT_CONFIG: AppConfig = {
 	theme: "dark",
 	themeMode: "fixed",
-	analyticsEnabled: true,
+	analyticsEnabled: false,
+	analyticsConsentConfirmed: false,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	terminalWindowsShell: "auto",
 	composerGrowthLimit: "half-chat",

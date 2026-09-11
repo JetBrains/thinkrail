@@ -1,16 +1,26 @@
-export {
-	type AnalyticsEvent,
-	type BuildKind,
-	bucketProvider,
-	bucketProviderModel,
-	type LoginMethod,
-	type SendMode,
+export type {
+	AdditionalAnalyticsCapture,
+	AdditionalAnalyticsEvent,
+	AnalyticsAvailability,
+	AnalyticsCountBucket,
+	AnalyticsDurationBucket,
+	AnalyticsEvent,
+	AnalyticsFailureReason,
+	AnalyticsRunOutcome,
+	AnalyticsRunProperties,
+	BasicAnalyticsEvent,
+	BuildKind,
+	LoginMethod,
+	SendMode,
+	SetupAction,
 } from "./events";
+export { bucketCount, bucketDuration, bucketProvider, bucketProviderModel } from "./events";
 export {
 	type AnalyticsOptions,
+	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
 	resetAnalyticsForTests,
-	setAnalyticsSending,
+	setAdditionalAnalyticsEnabled,
 	shutdownAnalytics,
 	track,
 } from "./service";
