@@ -176,7 +176,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   (`todoReviewAutoCycles`), and the record is written with `autoCycles: canAutoFix ? 1 : 2` — `1` means
   "the worker was actually asked to fix, this item is mid-cycle", `2` is terminal ("the human decides
   now"). Recording `1` without asking anyone to fix would strand the item: `maybeAutoReReview`'s trigger
-  reads exactly that value, and nothing would ever produce the fresh delta it waits for. On the button
+  reads exactly that value, and nothing would ever produce the fresh delta it waits for. **A cycle is spent only once the worker accepts the fix.** `deliverFixToWorker` reports whether the send
+  was accepted, and a rejection (worker detached, busy, pre-turn refusal) re-records the item terminally
+  (`autoCycles: 2`) on top of the optimistic `1`, alongside the `rollbackSend` that returns the findings to
+  `draft`. Leaving `1` there would strand the step forever: nothing asked the worker to change anything, so
+  no fresh delta can ever reach `maybeAutoReReview`, while a later manual review would read the cycle as
+  spent and refuse to send. A claim the fix latch refuses (a manual Ask-to-fix already in flight) settles
+  the same way. On the button
   path a live budget also **delivers the fix to the worker chat** (`deliverFixToWorker`): the item's
   origin-scoped draft findings (`itemFixFindings` — this item, this worker session, non-stale; an
   unscoped sweep would carry other steps' findings into this worker and strand them as falsely-sent) are

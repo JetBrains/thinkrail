@@ -143,8 +143,13 @@ async function fileFinding(
 }
 
 /** Deliver the reviewer's findings to the worker chat as the structured `todo-review-fix` message, under
- * the same mark-sent / pre-turn-rollback guarantee every review send has — see host/SPEC.md. */
-async function deliverFixToWorker(params: ReviewParams, item: Todo, note: string): Promise<void> {
+ * the same mark-sent / pre-turn-rollback guarantee every review send has. Returns whether the worker
+ * actually accepted it — the caller owes the auto cycle back when it did not; see host/SPEC.md. */
+async function deliverFixToWorker(
+	params: ReviewParams,
+	item: Todo,
+	note: string,
+): Promise<boolean> {
 	try {
 		const prepared = await withReviewLock(params.workspaceId, async () => {
 			const snapshot = await getReviewSnapshot(params.workspaceId);
@@ -167,17 +172,19 @@ async function deliverFixToWorker(params: ReviewParams, item: Todo, note: string
 				}),
 			};
 		});
-		await ackSend(sendReviewFixToSession(params.sessionId, prepared.text, prepared.details)).catch(
-			(err: unknown) => {
-				if (prepared.sentIds.length > 0)
-					rollbackSend(params.workspaceId, prepared.sentIds, params.sessionId);
-				notifyExtUi(
-					params.sessionId,
-					`Fix send failed: ${err instanceof Error ? err.message : String(err)}`,
-					"error",
-				);
-			},
-		);
+		try {
+			await ackSend(sendReviewFixToSession(params.sessionId, prepared.text, prepared.details));
+			return true;
+		} catch (err) {
+			if (prepared.sentIds.length > 0)
+				rollbackSend(params.workspaceId, prepared.sentIds, params.sessionId);
+			notifyExtUi(
+				params.sessionId,
+				`Fix send failed: ${err instanceof Error ? err.message : String(err)} — the findings stay in Review for you.`,
+				"error",
+			);
+			return false;
+		}
 	} finally {
 		releaseItemFix(params.sessionId, params.id);
 	}
@@ -196,14 +203,22 @@ async function recordVerdict(
 	for (const f of result.findings) await fileFinding(params, reviewedSha, f);
 	const spent = todoReviewAutoCycles(params) ?? 0;
 	const canAutoFix = getConfig().reviewAutoFix !== false && spent < 1;
-	const claimed = canAutoFix && deliverFix && claimItemFix(params.sessionId, params.id);
-	const { item } = recordAgentChangesRequested({
-		...params,
-		...(result.summary ? { note: result.summary } : {}),
-		autoCycles: canAutoFix ? 1 : 2,
-	});
-	if (claimed) await deliverFixToWorker(params, item, result.summary || DEFAULT_FIX_NOTE);
-	return { canAutoFix };
+	const note = result.summary || DEFAULT_FIX_NOTE;
+	const record = (autoCycles: number) =>
+		recordAgentChangesRequested({
+			...params,
+			...(result.summary ? { note: result.summary } : {}),
+			autoCycles,
+		});
+	if (!canAutoFix || !deliverFix) {
+		record(canAutoFix ? 1 : 2);
+		return { canAutoFix };
+	}
+	const claimed = claimItemFix(params.sessionId, params.id);
+	const { item } = record(1);
+	if (claimed && (await deliverFixToWorker(params, item, note))) return { canAutoFix };
+	record(2);
+	return { canAutoFix: false };
 }
 
 export type ReviewRunner = typeof runReviewSubagent;

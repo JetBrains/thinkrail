@@ -52,9 +52,11 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   approve: the mark is cleared and the item returns to unreviewed.
 - **The `reviewing` mark is set synchronously** at start/enqueue, so the panel pulses the instant the
   client re-reads the plan — before any await.
-- **`autoCycles` must match what actually happened.** `1` is written only when the worker was really
-  asked to fix; otherwise `2` (terminal). Writing `1` without a request strands the item: the
-  auto-re-review trigger waits for a delta that nothing will produce.
+- **`autoCycles` must match what actually happened.** `1` stands only when the worker really accepted the
+  fix request; a rejected send or a refused fix latch re-records `2` (terminal). Writing `1` without a
+  delivered request strands the item: the auto-re-review trigger waits for a delta that nothing will
+  produce, and a later review reads the cycle as already spent. Pinned by the rejected-send test in
+  `planReview.test.ts`.
 - **Both entry points share the cap.** The worker's `request_review` tool and the Start review button
   compute the same `canAutoFix`; the tool path reports it in the tool result text, the button path acts
   on it by sending the fix. Without a shared cap the tool path loops fix → review → fix forever.
