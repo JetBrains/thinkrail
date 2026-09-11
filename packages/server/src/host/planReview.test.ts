@@ -21,6 +21,7 @@ import { resetConfigCache, updateConfig } from "../settings";
 import { todoReviewAutoCycles, todoReviewRecord } from "../todos";
 import { itemReviewActive } from "./planReviewQueue";
 import { type ReviewRunner, startPlanReview } from "./requestReview";
+import { isItemUnderActiveReview } from "./todoReview";
 
 let dataDir: string;
 let worktree: string;
@@ -238,4 +239,24 @@ test("a subagent that returns no parsable verdict clears the reviewing mark inst
 
 	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })).toBeUndefined();
 	expect(itemReviewActive(sessionId, id)).toBe(false);
+});
+
+test("a fix the worker never accepted gives the auto cycle back instead of stranding the step", async () => {
+	// No session exists for this id, so the structured fix send rejects before the worker's turn.
+	const sessionId = "sess-detached";
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+
+	startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+	await settle(sessionId, id);
+
+	expect(todoReviewRecord(ref)?.state).toBe("changes_requested");
+	// Terminal, not mid-cycle: nothing asked the worker to change anything, so no fresh delta will ever
+	// reach maybeAutoReReview — recording cycle 1 here would strand the step forever.
+	expect(todoReviewAutoCycles(ref)).toBe(2);
+	// The findings are back to draft, so a later manual Ask-to-fix still carries them.
+	const comments = (await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id);
+	expect(comments).toHaveLength(1);
+	expect(comments[0]?.status).toBe("draft");
+	expect(isItemUnderActiveReview(sessionId, id)).toBe(false);
 });
