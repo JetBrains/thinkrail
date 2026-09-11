@@ -13,9 +13,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
 import { cssColorToHex } from "@/lib";
-import { useAppStore } from "../store";
+import { SettingsSection, useAppStore } from "../store";
 import { onThemeSwap } from "../themes";
-import { getTransport } from "../transport";
+import { errorText, getTransport } from "../transport";
 import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
@@ -114,7 +114,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 	const initialCommandRef = useRef(initialCommand);
 	const [ready, setReady] = useState(false);
 	const [exited, setExited] = useState(false);
-	const [failed, setFailed] = useState(false);
+	const [failureMessage, setFailureMessage] = useState<string | null>(null);
 	const [detached, setDetached] = useState(false);
 	const [scrollEdges, setScrollEdges] = useState<QuietScrollEdges>({
 		top: false,
@@ -242,6 +242,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		let disposed = false;
 
 		const attach = (): void => {
+			setFailureMessage(null);
 			const spawnedAt = { cols: term.cols, rows: term.rows };
 			const startedAt = attachGeneration;
 			prebind.stop();
@@ -284,14 +285,14 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 					if (replay) writeOutput(replay, finishAttach);
 					else finishAttach();
 				})
-				.catch(() => {
+				.catch((error) => {
 					if (disposed || attachGeneration !== startedAt || prebind !== attemptPrebind) {
 						attemptPrebind.stop();
 						return;
 					}
 					attemptPrebind.stop();
-					term.write("\r\n[could not start a shell — close this tab and open a new one]\r\n");
-					setFailed(true);
+					setDetached(false);
+					setFailureMessage(errorText(error, "Couldn’t start or attach the shell."));
 				});
 		};
 		reattachRef.current = attach;
@@ -345,7 +346,11 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		return () => cancelAnimationFrame(frame);
 	}, []);
 
-	const takeBack = useCallback(() => reattachRef.current?.(), []);
+	const retry = useCallback(() => reattachRef.current?.(), []);
+	const openTerminalSettings = useCallback(
+		() => useAppStore.getState().openSettings(SettingsSection.Terminal),
+		[],
+	);
 
 	return (
 		<div
@@ -353,7 +358,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			data-tab-key={tabKey}
 			data-ready={ready}
 			data-exited={exited}
-			data-failed={failed}
+			data-failed={failureMessage !== null}
 			data-detached={detached}
 			data-visible="true"
 			className="absolute inset-0 z-0"
@@ -375,11 +380,39 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 					<button
 						type="button"
 						data-testid="terminal-take-back"
-						onClick={takeBack}
+						onClick={retry}
 						className="rounded-[var(--radius-sm)] bg-control-bg px-8 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
 						Take it back
 					</button>
+				</div>
+			) : null}
+			{failureMessage !== null && !detached ? (
+				<div
+					role="alert"
+					data-testid="terminal-start-failure"
+					className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-8 bg-overlay px-24 text-center"
+				>
+					<p className="tr-title-compact text-text-default">Terminal couldn’t start</p>
+					<p className="tr-text-metadata text-text-muted">{failureMessage}</p>
+					<div className="flex items-center gap-8">
+						<button
+							type="button"
+							data-testid="terminal-open-settings"
+							onClick={openTerminalSettings}
+							className="rounded-[var(--radius-sm)] bg-control-bg px-8 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
+						>
+							Terminal settings
+						</button>
+						<button
+							type="button"
+							data-testid="terminal-start-retry"
+							onClick={retry}
+							className="rounded-[var(--radius-sm)] bg-primary px-8 py-4 tr-text-ui text-text-on-primary hover:opacity-90"
+						>
+							Retry
+						</button>
+					</div>
 				</div>
 			) : null}
 		</div>

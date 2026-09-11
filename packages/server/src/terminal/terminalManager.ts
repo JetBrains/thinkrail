@@ -22,7 +22,7 @@ import {
 } from "./outputBatcher";
 import { createOutputRecorder, type OutputRecorder } from "./outputRecorder";
 import { nudgePtyRedraw, type PtyGrid, resizePtyIfChanged } from "./ptyGrid";
-import { terminalShell, terminalShellArgs } from "./shellArgs";
+import { terminalShell, terminalShellArgs, terminalShellStartFailure } from "./shellArgs";
 import { hasChildProcesses } from "./shellBusy";
 
 type PushToClient = (clientKey: string, channel: string, data: unknown) => TerminalDeliveryResult;
@@ -148,17 +148,25 @@ function spawnForTab(
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
 
-	const shell = terminalShell(process.platform, process.env, loadConfig().terminalWindowsShell);
+	const preference = loadConfig().terminalWindowsShell;
+	const shell = terminalShell(process.platform, process.env, preference);
 	const grid = {
 		cols: size.cols ?? DEFAULT_PTY_SIZE.cols,
 		rows: size.rows ?? DEFAULT_PTY_SIZE.rows,
 	};
-	const pty = spawn(shell, terminalShellArgs(process.platform), {
-		name: "xterm-256color",
-		cwd: ws.worktreePath,
-		...grid,
-		env: ptyEnv(),
-	});
+	let pty: IPty;
+	try {
+		pty = spawn(shell, terminalShellArgs(process.platform), {
+			name: "xterm-256color",
+			cwd: ws.worktreePath,
+			...grid,
+			env: ptyEnv(),
+		});
+	} catch (cause) {
+		throw new Error(terminalShellStartFailure(process.platform, process.env, preference), {
+			cause,
+		});
+	}
 
 	const id = randomUUID();
 	const recorder = createOutputRecorder({ maxChars: replayBudgetChars() });
