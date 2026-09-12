@@ -465,6 +465,25 @@ export function setWorkspaceSubagentsOverride(
 	return ws;
 }
 
+export function setWorkspaceModelPreference(
+	id: string,
+	selection: Required<Pick<Workspace, "model" | "thinkingLevel">> | null,
+): Workspace {
+	const all = loadWorkspaces();
+	const ws = all.find((workspace) => workspace.id === id);
+	if (!ws) throw new Error(`Unknown workspace: ${id}`);
+	if (selection) {
+		ws.model = selection.model;
+		ws.thinkingLevel = selection.thinkingLevel;
+	} else {
+		delete ws.model;
+		delete ws.thinkingLevel;
+	}
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
+	return ws;
+}
+
 export function setWorkspaceDiffBase(id: string, ref: string | null): Workspace {
 	const all = loadWorkspaces();
 	const ws = all.find((w) => w.id === id);
