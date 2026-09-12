@@ -35,6 +35,7 @@ import {
 	resolveCommentFromAgent,
 } from "../reviews";
 import { resetConfigCache, updateConfig } from "../settings";
+import { getWorkspace, setWorkspaceModelPreference } from "../workspaces";
 import {
 	readReviewMeta,
 	reviewerSessionFor,
@@ -88,11 +89,12 @@ afterEach(() => {
 
 // --- A real (faux-model) reviewer session, so the add_review_comment tool seam can be driven the same
 // way a live reviewer chat would — see agentSessionManager.test.ts for the same harness pattern.
-function modelDef(id: string) {
+function modelDef(id: string, reasoning = false) {
 	return {
 		id,
 		name: id,
-		reasoning: false,
+		reasoning,
+		...(reasoning ? { thinkingLevelMap: { xhigh: "xhigh" } } : {}),
 		input: ["text"] as ("text" | "image")[],
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		contextWindow: 100_000,
@@ -104,6 +106,13 @@ const fauxReviewer = createFauxCore({
 	provider: "faux-reviewer",
 	api: "faux-reviewer",
 	models: [modelDef("faux-reviewer-model")],
+	tokensPerSecond: 2000,
+});
+
+const fauxWorkspace = createFauxCore({
+	provider: "faux-workspace",
+	api: "faux-workspace",
+	models: [modelDef("faux-workspace-model", true)],
 	tokensPerSecond: 2000,
 });
 
@@ -129,6 +138,13 @@ beforeAll(async () => {
 		streamSimple: fauxReviewer.streamSimple,
 		models: [{ ...modelDef("faux-reviewer-model"), api: fauxReviewer.api }],
 	});
+	runtime.registerProvider("faux-workspace", {
+		api: fauxWorkspace.api,
+		baseUrl: "http://faux-workspace.local",
+		apiKey: "faux",
+		streamSimple: fauxWorkspace.streamSimple,
+		models: [{ ...modelDef("faux-workspace-model", true), api: fauxWorkspace.api }],
+	});
 	configurePiRuntime(runtime);
 	setSessionManagerFactory(() => SessionManager.inMemory());
 	setSessionPublisher(() => {});
@@ -153,6 +169,32 @@ function anchorAt(path: string): ReviewAnchor {
 		selectors: [{ kind: "lineRange", startLine: 1, endLine: 1 }],
 	};
 }
+
+test("dedicated reviewers keep global review settings and do not rewrite workspace preferences", async () => {
+	installTodoReviewSeams();
+	fauxReviewer.setResponses([fauxAssistantMessage("Looks fine.")]);
+	const reviewerModel = toWireModel(fauxReviewer.getModel());
+	const workspaceModel = toWireModel(fauxWorkspace.getModel());
+	updateConfig({ reviewModel: reviewerModel, reviewEffort: "medium" });
+	setWorkspaceModelPreference(WS, { model: workspaceModel, thinkingLevel: "xhigh" });
+	const todo = new TodoStore(worktree, SESSION).add({
+		title: "t",
+		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],
+	});
+
+	const { reviewerSessionId } = await startTodoReviewFlow({
+		workspaceId: WS,
+		sessionId: SESSION,
+		id: todo.id,
+	});
+	const reviewer = (await listSessions(WS, worktree)).find(
+		(session) => session.sessionId === reviewerSessionId,
+	);
+
+	expect(reviewer).toMatchObject({ model: reviewerModel, thinkingLevel: "off" });
+	expect(getWorkspace(WS)).toMatchObject({ model: workspaceModel, thinkingLevel: "xhigh" });
+	handleReviewerSettled(reviewerSessionId, { type: "agent_settled", terminal: null });
+});
 
 test("the per-item fix latch rejects overlap and participates in the removal guard", () => {
 	expect(claimItemFix(SESSION, "t1")).toBe(true);
@@ -584,7 +626,10 @@ test("when reflection refutes every candidate, no empty fix request is sent — 
 		fauxAssistantMessage("This looks wrong."),
 		fauxAssistantMessage("Judging the finding…"),
 	]);
-	updateConfig({ reviewModel: toWireModel(fauxReviewer.getModel()), reviewEffort: "medium" });
+	const reviewerModel = toWireModel(fauxReviewer.getModel());
+	const workspaceModel = toWireModel(fauxWorkspace.getModel());
+	updateConfig({ reviewModel: reviewerModel, reviewEffort: "medium" });
+	setWorkspaceModelPreference(WS, { model: workspaceModel, thinkingLevel: "xhigh" });
 
 	// listSessions(WS, ...) is workspace-scoped only — this file reuses WS across every test and
 	// never disposes a settled test's sessions until afterAll, so a "not the reviewer" filter alone
@@ -659,6 +704,11 @@ test("when reflection refutes every candidate, no empty fix request is sent — 
 		}
 		await new Promise((resolve) => setTimeout(resolve, 20));
 	}
+	const reflector = (await listSessions(WS, worktree)).find(
+		(session) => session.sessionId === reflectorSessionId,
+	);
+	expect(reflector).toMatchObject({ model: reviewerModel, thinkingLevel: "off" });
+	expect(getWorkspace(WS)).toMatchObject({ model: workspaceModel, thinkingLevel: "xhigh" });
 	maybeResumeReflection(reflectorSessionId);
 	while (todoReviewAutoCycles(ref) !== 2) {
 		if (Date.now() > deadline) throw new Error("reflected fix did not settle");

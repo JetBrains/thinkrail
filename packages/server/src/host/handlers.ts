@@ -183,6 +183,7 @@ import {
 	startReviewAllFlow,
 	startTodoReviewFlow,
 } from "./todoReview";
+import { workspaceSessionOptions } from "./workspaceSessionOptions";
 
 const log = logger("host");
 
@@ -206,26 +207,6 @@ function recordAcceptedSend(mode: SendMode, text: string, clientKey: string): vo
 	if (isControlMessage(text)) return;
 	track({ name: "message_sent", params: { mode } });
 	recordAcceptedMessage(clientKey);
-}
-
-function sessionCreationOptions(
-	workspace: Workspace,
-	request: { model?: WireModel; thinkingLevel?: ThinkingLevel },
-): { model?: WireModel; thinkingLevel?: ThinkingLevel; modelOptional?: boolean } {
-	if (request.model) {
-		return {
-			model: request.model,
-			...(request.thinkingLevel ? { thinkingLevel: request.thinkingLevel } : {}),
-		};
-	}
-	if (workspace.model && workspace.thinkingLevel) {
-		return {
-			model: workspace.model,
-			thinkingLevel: workspace.thinkingLevel,
-			modelOptional: true,
-		};
-	}
-	return request.thinkingLevel ? { thinkingLevel: request.thinkingLevel } : {};
 }
 
 function persistEffectiveWorkspaceSelection(
@@ -325,9 +306,9 @@ async function sendToFileChat(
 	const created = await createSession({
 		cwd: ws.worktreePath,
 		workspaceId,
-		...(opts.model ? { model: opts.model } : {}),
-		...(opts.thinkingLevel ? { thinkingLevel: opts.thinkingLevel } : {}),
+		...workspaceSessionOptions(ws, opts),
 	});
+	if (opts.model) persistEffectiveWorkspaceSelection(workspaceId, created);
 	if (created.model) {
 		track({
 			name: "chat_started",
@@ -652,7 +633,7 @@ const handlers: Record<string, Handler> = {
 		const created = await createSession({
 			cwd: ws.worktreePath,
 			workspaceId: p.workspaceId,
-			...sessionCreationOptions(ws, p),
+			...workspaceSessionOptions(ws, p),
 		});
 		if (p.model) persistEffectiveWorkspaceSelection(p.workspaceId, created);
 		if (created.model) {

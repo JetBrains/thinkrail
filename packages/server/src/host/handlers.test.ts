@@ -6,6 +6,7 @@ import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
+	ReviewSendResult,
 	SessionModelSelection,
 	Template,
 	TemplateInfo,
@@ -83,6 +84,10 @@ async function storedWorkspace(id: string): Promise<Workspace> {
 	const workspace = rows.find((row) => row.id === id);
 	if (!workspace) throw new Error(`missing workspace ${id}`);
 	return workspace;
+}
+
+async function addDraftReview(workspaceId: string) {
+	return addComment({ workspaceId, kind: "review", anchor: null, body: "Please revise this." });
 }
 
 beforeEach(async () => {
@@ -418,6 +423,48 @@ test("a failed live model mutation leaves the previous workspace pair unchanged"
 	expect(await storedWorkspace(workspace.id)).toMatchObject({
 		model: reasoner,
 		thinkingLevel: "low",
+	});
+});
+
+test("review comment chats inherit the complete workspace pair", async () => {
+	const workspace = await createManagedWorkspace();
+	const reasoner = (await availableModels()).find((model) => model.id === "handler-reasoner");
+	if (!reasoner) throw new Error("reasoning model missing");
+	setWorkspaceModelPreference(workspace.id, { model: reasoner, thinkingLevel: "xhigh" });
+	const comment = await addDraftReview(workspace.id);
+
+	const sent = (await handleRequest(
+		"review.sendComment",
+		{ workspaceId: workspace.id, id: comment.id },
+		CTX,
+	)) as ReviewSendResult;
+
+	expect(sent).toMatchObject({ model: reasoner, thinkingLevel: "xhigh", reused: false });
+	expect(await storedWorkspace(workspace.id)).toMatchObject({
+		model: reasoner,
+		thinkingLevel: "xhigh",
+	});
+});
+
+test("an explicit review comment model persists its effective pair", async () => {
+	const workspace = await createManagedWorkspace();
+	const models = await availableModels();
+	const reasoner = models.find((model) => model.id === "handler-reasoner");
+	const basic = models.find((model) => model.id === "handler-basic");
+	if (!reasoner || !basic) throw new Error("handler models missing");
+	setWorkspaceModelPreference(workspace.id, { model: reasoner, thinkingLevel: "low" });
+	const comment = await addDraftReview(workspace.id);
+
+	const sent = (await handleRequest(
+		"review.sendComment",
+		{ workspaceId: workspace.id, id: comment.id, model: basic, thinkingLevel: "xhigh" },
+		CTX,
+	)) as ReviewSendResult;
+
+	expect(sent).toMatchObject({ model: basic, thinkingLevel: "off", reused: false });
+	expect(await storedWorkspace(workspace.id)).toMatchObject({
+		model: basic,
+		thinkingLevel: "off",
 	});
 });
 
