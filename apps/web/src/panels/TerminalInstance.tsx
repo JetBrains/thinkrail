@@ -12,10 +12,11 @@ import { type ITheme, Terminal as XTerm } from "@xterm/xterm";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
+import { Button } from "@/components/ui/button";
 import { cssColorToHex } from "@/lib";
-import { useAppStore } from "../store";
+import { SettingsSection, useAppStore } from "../store";
 import { onThemeSwap } from "../themes";
-import { getTransport } from "../transport";
+import { errorText, getTransport } from "../transport";
 import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
@@ -106,6 +107,7 @@ interface Props {
 }
 
 export default function TerminalInstance({ tabKey, workspaceId, initialCommand }: Props) {
+	const rootRef = useRef<HTMLDivElement>(null);
 	const hostRef = useRef<HTMLDivElement>(null);
 	const termRef = useRef<XTerm | null>(null);
 	const serverIdRef = useRef<string | null>(null);
@@ -114,7 +116,8 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 	const initialCommandRef = useRef(initialCommand);
 	const [ready, setReady] = useState(false);
 	const [exited, setExited] = useState(false);
-	const [failed, setFailed] = useState(false);
+	const [failureMessage, setFailureMessage] = useState<string | null>(null);
+	const [retrying, setRetrying] = useState(false);
 	const [detached, setDetached] = useState(false);
 	const [scrollEdges, setScrollEdges] = useState<QuietScrollEdges>({
 		top: false,
@@ -127,6 +130,10 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const host = hostRef.current;
 		if (!host) return;
 
+		const initialFocusTarget = document.activeElement;
+		const focusedTab =
+			initialFocusTarget instanceof Element ? initialFocusTarget.closest('[role="tab"]') : null;
+		const initialFocusRequestsTerminal = focusedTab?.parentElement?.dataset.kind === "terminal";
 		const term = new XTerm({
 			allowProposedApi: true,
 			cursorBlink: true,
@@ -235,13 +242,18 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 				serverIdRef.current = null;
 				attachGeneration += 1;
 				setReady(false);
+				setRetrying(false);
 				setDetached(true);
 			},
 		);
 
 		let disposed = false;
 
-		const attach = (): void => {
+		const focusIsInTerminal = (): boolean =>
+			rootRef.current?.contains(document.activeElement) === true;
+		const attach = (restoreFocus = false): void => {
+			if (restoreFocus) setRetrying(true);
+			else setFailureMessage(null);
 			const spawnedAt = { cols: term.cols, rows: term.rows };
 			const startedAt = attachGeneration;
 			prebind.stop();
@@ -265,9 +277,31 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 						const buffered = attemptPrebind.bind(id);
 						if (buffered.truncated) writeTruncation();
 						for (const ev of buffered.frames) writeFrame(ev);
-						setDetached(false);
+						const restoreTerminalFocus = restoreFocus
+							? focusIsInTerminal()
+							: initialFocusRequestsTerminal && document.activeElement === initialFocusTarget;
 						setExited(false);
 						setReady(true);
+						if (restoreTerminalFocus) {
+							requestAnimationFrame(() => {
+								if (disposed || attachGeneration !== startedAt || prebind !== attemptPrebind) {
+									return;
+								}
+								if (
+									(restoreFocus && focusIsInTerminal()) ||
+									(!restoreFocus && document.activeElement === initialFocusTarget)
+								) {
+									term.focus();
+								}
+								setDetached(false);
+								setFailureMessage(null);
+								setRetrying(false);
+							});
+						} else {
+							setDetached(false);
+							setFailureMessage(null);
+							setRetrying(false);
+						}
 						if (buffered.exit) handleExit(buffered.exit);
 						applyFit();
 						if (created && serverIdRef.current === id && initialCommandRef.current) {
@@ -284,17 +318,18 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 					if (replay) writeOutput(replay, finishAttach);
 					else finishAttach();
 				})
-				.catch(() => {
+				.catch((error) => {
 					if (disposed || attachGeneration !== startedAt || prebind !== attemptPrebind) {
 						attemptPrebind.stop();
 						return;
 					}
 					attemptPrebind.stop();
-					term.write("\r\n[could not start a shell — close this tab and open a new one]\r\n");
-					setFailed(true);
+					setDetached(false);
+					setRetrying(false);
+					setFailureMessage(errorText(error, "Couldn’t start or attach the shell."));
 				});
 		};
-		reattachRef.current = attach;
+		reattachRef.current = () => attach(true);
 		void runAfterTerminalRelayout(
 			() => webFonts.relayout(),
 			() => {
@@ -340,20 +375,24 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const frame = requestAnimationFrame(() => {
 			fitFnRef.current?.();
 			termRef.current?.scrollToBottom();
-			termRef.current?.focus();
 		});
 		return () => cancelAnimationFrame(frame);
 	}, []);
 
-	const takeBack = useCallback(() => reattachRef.current?.(), []);
+	const retry = useCallback(() => reattachRef.current?.(), []);
+	const openTerminalSettings = useCallback(
+		() => useAppStore.getState().openSettings(SettingsSection.Terminal),
+		[],
+	);
 
 	return (
 		<div
+			ref={rootRef}
 			data-testid="terminal-instance"
 			data-tab-key={tabKey}
 			data-ready={ready}
 			data-exited={exited}
-			data-failed={failed}
+			data-failed={failureMessage !== null}
 			data-detached={detached}
 			data-visible="true"
 			className="absolute inset-0 z-0"
@@ -362,6 +401,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 				viewportSelector=".xterm-scrollable-element"
 				surface="terminal"
 				edges={scrollEdges}
+				inert={failureMessage !== null && !ready}
 				className="absolute inset-12"
 			>
 				<div ref={hostRef} className="absolute inset-0" />
@@ -375,11 +415,44 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 					<button
 						type="button"
 						data-testid="terminal-take-back"
-						onClick={takeBack}
+						aria-disabled={retrying}
+						onClick={retrying ? undefined : retry}
 						className="rounded-[var(--radius-sm)] bg-control-bg px-8 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
-						Take it back
+						{retrying ? "Taking it back…" : "Take it back"}
 					</button>
+				</div>
+			) : null}
+			{failureMessage !== null && !detached ? (
+				<div
+					data-testid="terminal-start-failure"
+					className="absolute inset-0 z-30 flex items-center justify-center bg-overlay p-24 text-center"
+				>
+					<div className="flex flex-col items-center gap-8 rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-16 shadow-sm">
+						<div role="alert" className="flex flex-col items-center gap-4">
+							<p className="tr-title-compact text-text-default">Terminal couldn’t start</p>
+							<p className="tr-text-metadata text-text-muted">{failureMessage}</p>
+						</div>
+						<div className="flex items-center gap-8">
+							<Button
+								variant="outline"
+								size="sm"
+								data-testid="terminal-open-settings"
+								disabled={retrying}
+								onClick={openTerminalSettings}
+							>
+								Terminal settings
+							</Button>
+							<Button
+								size="sm"
+								data-testid="terminal-start-retry"
+								aria-disabled={retrying}
+								onClick={retrying ? undefined : retry}
+							>
+								{retrying ? "Retrying…" : "Retry"}
+							</Button>
+						</div>
+					</div>
 				</div>
 			) : null}
 		</div>
