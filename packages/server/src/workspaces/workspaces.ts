@@ -218,6 +218,10 @@ async function diffStats(ws: Workspace): Promise<DiffStats | undefined> {
 	}
 }
 
+export function suggestWorkspaceName(projectId: string): string {
+	return nextAutoBranch(openProjectById(projectId));
+}
+
 export async function createWorkspace(
 	projectId: string,
 	name?: string,

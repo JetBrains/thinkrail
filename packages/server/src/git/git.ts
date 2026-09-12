@@ -123,6 +123,7 @@ export async function listBranches(projectId: string): Promise<BranchList> {
 		remote,
 		remoteGroups: groupRemoteRefs(remote, lines(remoteNames.out)),
 		defaultBranch: resolveDefaultBranch(repo),
+		current: currentBranch(repo),
 	};
 }
 

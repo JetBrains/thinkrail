@@ -2,7 +2,7 @@ import type { BranchList } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getTransport } from "../transport";
 
-const NO_BRANCHES: BranchList = { local: [], remote: [], defaultBranch: "" };
+const NO_BRANCHES: BranchList = { local: [], remote: [], defaultBranch: "", current: "" };
 
 async function listBranchesOrEmpty(projectId: string): Promise<BranchList> {
 	try {
