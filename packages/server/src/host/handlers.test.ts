@@ -21,7 +21,7 @@ import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
 import { todoReviewRecord } from "../todos";
 import { stopAllWatches } from "../watch";
-import { setWorkspaceModelPreference } from "../workspaces";
+import { forgetWorkspace, setWorkspaceModelPreference } from "../workspaces";
 import { handleRequest, requestMethodDiagnostic, shouldRefreshOpenReview } from "./handlers";
 
 const CTX = { clientKey: "test-client" };
@@ -443,6 +443,27 @@ test("a failed live model mutation leaves the previous workspace pair unchanged"
 		model: reasoner,
 		thinkingLevel: "low",
 	});
+});
+
+test("a forgotten workspace cannot fail a mutation Pi already applied", async () => {
+	const workspace = await createManagedWorkspace();
+	const models = await availableModels();
+	const reasoner = models.find((model) => model.id === "handler-reasoner");
+	const basic = models.find((model) => model.id === "handler-basic");
+	if (!reasoner || !basic) throw new Error("handler models missing");
+	const created = (await handleRequest(
+		"session.create",
+		{ workspaceId: workspace.id, model: reasoner, thinkingLevel: "low" },
+		CTX,
+	)) as { sessionId: string };
+	forgetWorkspace(workspace.id);
+
+	const switched = (await handleRequest(
+		"session.setModel",
+		{ sessionId: created.sessionId, model: basic },
+		CTX,
+	)) as SessionModelSelection;
+	expect(switched).toEqual({ model: basic, thinkingLevel: "off" });
 });
 
 test("review comment chats inherit the complete workspace pair", async () => {

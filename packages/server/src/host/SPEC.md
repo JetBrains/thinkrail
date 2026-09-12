@@ -351,6 +351,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   fallback neither clears nor replaces the stored pair; a result with no effective model likewise leaves the
   last complete preference unchanged. Live mutations capture the session's workspace id before awaiting and
   return the same effective pair on the wire that persistence consumes, so host and client have one result.
+  **Persistence is best-effort and never demotes a mutation that already succeeded** (the `track()` rule): the
+  record can be gone by the time it runs, because `workspace.remove` forgets the record synchronously while
+  session teardown is a fire-and-forget `archiveTeardown`, so a stale pane's `setModel` would otherwise report
+  failure for a change pi already applied — and `session.list` would fail the same way, defeating the client's
+  reconciliation.
   Transcript attachment/restoration resolves the saved chat model exactly and never writes workspace
   preference. The user-visible new file-review-chat path uses the same workspace-pair resolution when no
   explicit model is supplied; reused/reattached review chats retain their transcript selection and write

@@ -214,10 +214,14 @@ function persistEffectiveWorkspaceSelection(
 	selection: SessionModelSelection,
 ): void {
 	if (!workspaceId || !selection.model) return;
-	setWorkspaceModelPreference(workspaceId, {
-		model: selection.model,
-		thinkingLevel: selection.thinkingLevel,
-	});
+	try {
+		setWorkspaceModelPreference(workspaceId, {
+			model: selection.model,
+			thinkingLevel: selection.thinkingLevel,
+		});
+	} catch {
+		log.warn(`workspace model preference not persisted for ${workspaceId}`);
+	}
 }
 
 function resolveTemplateReadDirs(params: TemplateReadLocation) {
