@@ -530,7 +530,9 @@ test("setWorkspaceModelPreference persists and clears one complete pair per upda
 
 test("setWorkspaceModelPreference treats managed, Default, and external records identically", async () => {
 	const managed = await createWorkspace("p1");
-	const defaultWorkspace = (await listWorkspaces("p1")).find((workspace) => workspace.kind === "default");
+	const defaultWorkspace = (await listWorkspaces("p1")).find(
+		(workspace) => workspace.kind === "default",
+	);
 	if (!defaultWorkspace) throw new Error("missing Default workspace");
 	const externalPath = join(dataDir, "external-model-worktree");
 	git(repo, "worktree", "add", externalPath, "-b", "feature/external-model", "main");

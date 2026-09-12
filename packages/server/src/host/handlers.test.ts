@@ -15,11 +15,7 @@ import type {
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
-import {
-	configurePiRuntime,
-	disposeAllSessions,
-	setSessionManagerFactory,
-} from "../agent";
+import { configurePiRuntime, disposeAllSessions, setSessionManagerFactory } from "../agent";
 import { recordAcceptedMessage, resetFeedbackForTests, setFeedbackPublisher } from "../feedback";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
@@ -290,11 +286,10 @@ test("session.create uses a complete workspace pair when the request omits a mod
 	if (!reasoner) throw new Error("reasoning model missing");
 	setWorkspaceModelPreference(workspace.id, { model: reasoner, thinkingLevel: "xhigh" });
 
-	const created = (await handleRequest(
-		"session.create",
-		{ workspaceId: workspace.id },
-		CTX,
-	)) as { model: WireModel | null; thinkingLevel: string };
+	const created = (await handleRequest("session.create", { workspaceId: workspace.id }, CTX)) as {
+		model: WireModel | null;
+		thinkingLevel: string;
+	};
 
 	expect(created).toMatchObject({ model: reasoner, thinkingLevel: "xhigh" });
 });
@@ -338,11 +333,10 @@ test("a stale workspace model falls back without rewriting the stored pair", asy
 	const stale = { ...reasoner, provider: "gone", id: "gone" };
 	setWorkspaceModelPreference(workspace.id, { model: stale, thinkingLevel: "xhigh" });
 
-	const created = (await handleRequest(
-		"session.create",
-		{ workspaceId: workspace.id },
-		CTX,
-	)) as { model: WireModel | null; thinkingLevel: string };
+	const created = (await handleRequest("session.create", { workspaceId: workspace.id }, CTX)) as {
+		model: WireModel | null;
+		thinkingLevel: string;
+	};
 
 	expect(created.model).not.toMatchObject({ provider: "gone", id: "gone" });
 	expect(await storedWorkspace(workspace.id)).toMatchObject({

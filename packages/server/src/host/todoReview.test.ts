@@ -35,13 +35,13 @@ import {
 	resolveCommentFromAgent,
 } from "../reviews";
 import { resetConfigCache, updateConfig } from "../settings";
-import { getWorkspace, setWorkspaceModelPreference } from "../workspaces";
 import {
 	readReviewMeta,
 	reviewerSessionFor,
 	startTodoReview,
 	todoReviewAutoCycles,
 } from "../todos";
+import { getWorkspace, setWorkspaceModelPreference } from "../workspaces";
 import {
 	claimItemFix,
 	handleReviewerSettled,
