@@ -60,7 +60,9 @@ import {
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionManagerFactory,
+	setSessionModel,
 	setSessionPublisher,
+	setSessionThinkingLevel,
 	setSubagentsEnabledResolver,
 	steerSession,
 	syncSessionActivity,
@@ -180,6 +182,43 @@ test("session creation publishes a domain summary for other frontends", async ()
 		removeSession(created.sessionId);
 	} finally {
 		setSessionCreatedPublisher(() => {});
+	}
+});
+
+test("session creation returns the effective pair after announced-session mutations", async () => {
+	const provider = "created-selection";
+	runtime.registerProvider(provider, {
+		...cfg(fauxA, provider),
+		models: [
+			{
+				...modelDef(provider),
+				api: fauxA.api,
+				reasoning: true,
+				thinkingLevelMap: { low: "low", high: "high" },
+			},
+		],
+	});
+	const model = (await listAvailableModels()).find((candidate) => candidate.provider === provider);
+	if (!model) throw new Error("created-selection model missing");
+	let announcedSelection: ReturnType<typeof setSessionThinkingLevel> | undefined;
+	setSessionCreatedPublisher((summary) => {
+		announcedSelection = setSessionThinkingLevel(summary.sessionId, "high");
+	});
+	let sessionId: string | undefined;
+	try {
+		const created = await createSession({
+			cwd: tmpCwd("trpi-created-selection-"),
+			workspaceId: "ws-created-selection",
+			model,
+			thinkingLevel: "low",
+		});
+		sessionId = created.sessionId;
+		expect(announcedSelection?.thinkingLevel).toBe("high");
+		expect(created.thinkingLevel).toBe("high");
+	} finally {
+		if (sessionId) removeSession(sessionId);
+		setSessionCreatedPublisher(() => {});
+		runtime.unregisterProvider(provider);
 	}
 });
 
@@ -801,6 +840,63 @@ test("createSession rejects an unknown/unavailable model ref (no arbitrary baseU
 	await expect(
 		createSession({ cwd: tmpCwd("trpi-bad-"), workspaceId: "ws-bad", model: bogus }),
 	).rejects.toThrow(/Unknown or unavailable model/);
+});
+
+test("createSession modelOptional tolerates only an unavailable supplied model", async () => {
+	const ref = (await listAvailableModels()).find((model) => model.id === "fauxa");
+	if (!ref) throw new Error("faux model missing");
+	const created = await createSession({
+		cwd: tmpCwd("trpi-optional-model-"),
+		workspaceId: "ws-optional-model",
+		model: { ...ref, provider: "gone", id: "gone" },
+		modelOptional: true,
+	});
+	try {
+		expect(created.model).not.toBeNull();
+		expect(created.model).not.toMatchObject({ provider: "gone", id: "gone" });
+	} finally {
+		removeSession(created.sessionId);
+	}
+});
+
+test("session model mutations return Pi's effective model and thinking level", async () => {
+	runtime.registerProvider("reasoner", {
+		...cfg(fauxA, "reasoner"),
+		models: [
+			{
+				...modelDef("reasoner"),
+				api: fauxA.api,
+				reasoning: true,
+				thinkingLevelMap: { xhigh: "xhigh" },
+			},
+		],
+	});
+	let sessionId: string | undefined;
+	try {
+		const models = await listAvailableModels();
+		const reasoner = models.find((model) => model.provider === "reasoner");
+		const nonReasoner = models.find((model) => model.provider === "fauxb");
+		if (!reasoner || !nonReasoner) throw new Error("mutation models missing");
+		const created = await createSession({
+			cwd: tmpCwd("trpi-model-mutation-"),
+			workspaceId: "ws-model-mutation",
+			model: reasoner,
+			thinkingLevel: "low",
+		});
+		sessionId = created.sessionId;
+
+		expect(setSessionThinkingLevel(sessionId, "xhigh")).toEqual({
+			model: reasoner,
+			thinkingLevel: "xhigh",
+		});
+		expect(await setSessionModel(sessionId, nonReasoner)).toEqual({
+			model: nonReasoner,
+			thinkingLevel: "off",
+		});
+	} finally {
+		if (sessionId) removeSession(sessionId);
+		runtime.unregisterProvider("reasoner");
+	}
 });
 
 test("getSessionStats + getSessionCommands read live session info (cheap wins #3, #2)", async () => {

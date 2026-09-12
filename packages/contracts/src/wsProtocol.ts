@@ -96,7 +96,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 64;
+export const PROTOCOL_VERSION = 65;
+export const WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION = 65;
 export const WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION = 62;
 export const PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION = 63;
 export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
@@ -328,6 +329,11 @@ export interface Ack {
 	ok: true;
 }
 
+export interface SessionModelSelection {
+	model: WireModel | null;
+	thinkingLevel: ThinkingLevel;
+}
+
 export interface ReviewSendResult {
 	sessionId: string;
 	model: WireModel | null;
@@ -509,8 +515,14 @@ export interface WsMethodMap {
 	};
 	"session.dispose": { params: { sessionId: string }; result: Ack };
 	"session.delete": { params: { workspaceId: string; sessionId: string }; result: Ack };
-	"session.setModel": { params: { sessionId: string; model: WireModel }; result: Ack };
-	"session.setThinkingLevel": { params: { sessionId: string; level: ThinkingLevel }; result: Ack };
+	"session.setModel": {
+		params: { sessionId: string; model: WireModel };
+		result: SessionModelSelection;
+	};
+	"session.setThinkingLevel": {
+		params: { sessionId: string; level: ThinkingLevel };
+		result: SessionModelSelection;
+	};
 	"session.compact": { params: { sessionId: string; instructions?: string }; result: Ack };
 	"session.getStats": { params: { sessionId: string }; result: SessionStats };
 	"session.getCommands": { params: { sessionId: string }; result: SlashCommandInfo[] };

@@ -58,6 +58,13 @@ chords read the page's browser-reported platform through one fixture helper and 
 Control elsewhere; hard-coding the runner host's modifier would exercise the wrong product branch under
 browser/platform emulation.
 
+The source-host no-agent lane's existing `@dev-seam` environment also registers two configured,
+non-streaming model fixtures: one reasoning model and one basic model. They never answer a prompt and exist
+only to drive selector/session creation deterministically; `workspace-model-preference.spec.ts` selects the
+reasoner, proves a later chat inherits its effort, switches to the basic model so Pi clamps effort to `off`,
+and proves that effective pair survives a browser reload into another new chat. Binary and desktop lanes
+exclude `@dev-seam`, so no packaged composition root depends on these fixtures.
+
 Provider-backed browser tests (`e2e:agent`) use a dedicated serial real-Central mode; the separate
 headless workflow suite keeps its local PI-auth mode. Concurrent provider turns would alter rate limits,
 cost, and determinism, so neither is sharded. The agent runner builds the web artifact under the caller's

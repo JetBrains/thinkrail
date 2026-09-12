@@ -14,7 +14,11 @@ import type {
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
 } from "@thinkrail/contracts";
-import { ACTIVITY_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import {
+	ACTIVITY_PROTOCOL_VERSION,
+	WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION,
+	WS_CHANNELS,
+} from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { createActivityHydration } from "./activityHydration";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
@@ -24,6 +28,10 @@ let transport: WsTransport | null = null;
 
 export function supportsSessionActivity(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= ACTIVITY_PROTOCOL_VERSION;
+}
+
+export function supportsWorkspaceModelPreferences(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION;
 }
 
 const activityHydration = createActivityHydration({

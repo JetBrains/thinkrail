@@ -26,6 +26,7 @@ import {
 	removeWorkspace,
 	renameWorkspace,
 	setWorkspaceDiffBase,
+	setWorkspaceModelPreference,
 	setWorkspacePublisher,
 	setWorkspaceSubagentsOverride,
 	type WorkspaceLifecycleEvent,
@@ -48,6 +49,15 @@ function git(cwd: string, ...args: string[]): void {
 async function worktrees(projectId = "p1") {
 	return (await listWorkspaces(projectId)).filter((w) => w.kind !== "default");
 }
+
+const MODEL: NonNullable<Workspace["model"]> = {
+	id: "sticky-model",
+	name: "Sticky model",
+	provider: "test-provider",
+	contextWindow: 100_000,
+	reasoning: false,
+	thinkingLevels: ["off"],
+};
 
 beforeEach(() => {
 	dataDir = realpathSync(mkdtempSync(join(tmpdir(), "trpi-ws-test-")));
@@ -490,6 +500,79 @@ test("setWorkspaceSubagentsOverride rejects unknown workspaces and values outsid
 	expect(() => setWorkspaceSubagentsOverride(ws.id, "sometimes" as "on")).toThrow(
 		"Invalid subagent override",
 	);
+});
+
+test("setWorkspaceModelPreference persists and clears one complete pair per update", async () => {
+	const ws = await createWorkspace("p1");
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+
+	const selected = setWorkspaceModelPreference(ws.id, {
+		model: MODEL,
+		thinkingLevel: "off",
+	});
+	expect(selected).toMatchObject({ model: MODEL, thinkingLevel: "off" });
+	expect(listWorkspaceRecords("p1").find((row) => row.id === ws.id)).toMatchObject({
+		model: MODEL,
+		thinkingLevel: "off",
+	});
+	expect(events).toEqual([{ kind: "updated", workspace: selected }]);
+
+	const cleared = setWorkspaceModelPreference(ws.id, null);
+	expect(cleared.model).toBeUndefined();
+	expect(cleared.thinkingLevel).toBeUndefined();
+	expect(listWorkspaceRecords("p1").find((row) => row.id === ws.id)).not.toHaveProperty("model");
+	expect(events).toEqual([
+		{ kind: "updated", workspace: selected },
+		{ kind: "updated", workspace: cleared },
+	]);
+});
+
+test("setWorkspaceModelPreference treats managed, Default, and external records identically", async () => {
+	const managed = await createWorkspace("p1");
+	const defaultWorkspace = (await listWorkspaces("p1")).find(
+		(workspace) => workspace.kind === "default",
+	);
+	if (!defaultWorkspace) throw new Error("missing Default workspace");
+	const externalPath = join(dataDir, "external-model-worktree");
+	git(repo, "worktree", "add", externalPath, "-b", "feature/external-model", "main");
+	const external = await openExistingWorktree("p1", externalPath);
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+
+	for (const workspace of [managed, defaultWorkspace, external]) {
+		setWorkspaceModelPreference(workspace.id, { model: MODEL, thinkingLevel: "off" });
+	}
+	for (const workspace of listWorkspaceRecords("p1")) {
+		expect(workspace).toMatchObject({ model: MODEL, thinkingLevel: "off" });
+	}
+	for (const workspace of [managed, defaultWorkspace, external]) {
+		setWorkspaceModelPreference(workspace.id, null);
+	}
+	for (const workspace of listWorkspaceRecords("p1")) {
+		expect(workspace.model).toBeUndefined();
+		expect(workspace.thinkingLevel).toBeUndefined();
+	}
+	expect(events).toHaveLength(6);
+	expect(events.every((event) => event.kind === "updated")).toBe(true);
+});
+
+test("setWorkspaceModelPreference rejects an unknown workspace without publishing", () => {
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+	expect(() =>
+		setWorkspaceModelPreference("missing", { model: MODEL, thinkingLevel: "off" }),
+	).toThrow("Unknown workspace: missing");
+	expect(events).toEqual([]);
+});
+
+test("legacy workspace records without a model pair remain unchanged on read", async () => {
+	await createWorkspace("p1");
+	const path = join(dataDir, "workspaces.json");
+	const before = readFileSync(path, "utf8");
+	const records = listWorkspaceRecords("p1");
+	expect(records.every((workspace) => !workspace.model && !workspace.thinkingLevel)).toBe(true);
+	expect(readFileSync(path, "utf8")).toBe(before);
 });
 
 test("setWorkspaceDiffBase re-points the diff target, leaving creation provenance alone", async () => {

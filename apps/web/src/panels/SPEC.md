@@ -332,28 +332,28 @@ empty by default); while the prompt is non-empty (worktree mode), a secondary hi
 and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
 a project picker, the prompt hero, and the reused
-  `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's **pinned**
-  default via `model.default` so the exact model shows when there is one (values held in dialog state,
-  applied at create time). With **no pinned default the host answers `model: null`** and the dialog holds
-  none: the picker reads **Default model**, the effort control is disabled (no model, no supported set), and
-  create sends neither — so pi resolves both exactly as it does for a new chat tab. The dialog must not
-  substitute a model of its own choosing here; one resolver, pi's, see `submodule-agent`. The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
-  lock). Their catalog is the shared one — `chat/useModelCatalog`, so the dialog and the chat composer
-  cannot drift — which means it is **live**: the picker's Refresh row can replace the list underneath a
-  held selection. The dialog therefore reconciles the held model against it on every change via the pure
-  **`reconcileModel`** (model only — effort is decided by the host's clamp, below): re-point to the same
-  `{provider,id}` (the refreshed object, whose `thinkingLevels` may differ). What it does when the catalog
-  has no such model turns on **`catalogFresh`** — the store's `modelsFresh`, true only for the installed
-  result of an awaited forced refresh the host reported **`complete`** (a capped wait can answer with a
-  current-but-unsettled list, which is no basis for a verdict), dropped by the next `model.list` install from any consumer (whose
-  handler answers from before the detached refresh it starts) *and* dropped up front by any consumer
-  activating. On a fresh catalog it returns **`"unavailable"`** — a verdict, not a replacement: the dialog
-  then asks **`model.default`** (the host's pinned default or none, plus a consistent effort) exactly as it
-  does for the preselect, through **one** `applyHostDefault` — so no client-side copy of the host's default
-  policy exists here. Asked at most once per opening, so a still-missing model can't spin the effect. Effort is a separate concern: one effect keeps the held level
-  runnable by the held model by asking the host for pi's clamp (**`model.clampThinking`**) rather than
-  deciding locally, so an explicit switch and a refresh that shrank a model's set resolve the same way
-  pi would. `model.default` needs no adjustment: the host already returns a self-consistent pair.
+  `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode. Each opening starts with **no explicit
+  model**: the picker reads **Default model**, the effort control is disabled (no model, no supported set),
+  and creation sends neither field so the host applies its workspace/default precedence. The dialog does
+  not fetch `model.default` or substitute a client-selected fallback. Choosing a model makes that pair
+  explicit; after successful session creation a v65+ host seeds the workspace from Pi's effective result, and
+  that row reaches the dialog's client as `workspace.updated` — the dialog never writes it, so an older host
+  simply persists nothing and needs no branch here. The session opens with its returned effective pair either
+  way. The pickers' popovers portal into the dialog node (so their lists
+  scroll under the Dialog scroll lock). Their catalog is the shared one — `chat/useModelCatalog`, so the
+  dialog and the chat composer cannot drift — which means it is **live**: the picker's Refresh row can
+  replace the list underneath a held selection. The dialog therefore reconciles the held model against it
+  on every change via the pure **`reconcileModel`** (model only — effort is decided by the host's clamp,
+  below): re-point to the same `{provider,id}` (the refreshed object, whose `thinkingLevels` may differ).
+  What it does when the catalog has no such model turns on **`catalogFresh`** — the store's `modelsFresh`,
+  true only for the installed result of an awaited forced refresh the host reported **`complete`** (a capped
+  wait can answer with a current-but-unsettled list, which is no basis for a verdict), dropped by the next
+  `model.list` install from any consumer (whose handler answers from before the detached refresh it starts)
+  *and* dropped up front by any consumer activating. On a fresh catalog it returns **`"unavailable"`** and
+  the dialog clears the explicit choice back to **Default model** without naming a replacement. Effort is a
+  separate concern: one effect keeps an explicit held level runnable by its held model by asking the host
+  for pi's clamp (**`model.clampThinking`**) rather than deciding locally, so an explicit switch and a
+  refresh that shrank a model's set resolve the same way pi would.
   On open and project-picker changes, the dialog reads **`skill.list({projectId})`**; whenever a leading
   slash token becomes active it also reads **`template.list({projectId})`**. It feeds both into the shared
   `prompt` module, so Create Workspace and live chat use the same filtering, menu, keyboard navigation,

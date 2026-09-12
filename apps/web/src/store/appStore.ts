@@ -18,6 +18,7 @@ import type {
 	SessionActivity,
 	SessionActivityPayload,
 	SessionEventPayload,
+	SessionModelSelection,
 	SessionQueueState,
 	SessionStats,
 	SessionSummary,
@@ -334,6 +335,8 @@ export interface SessionRuntime {
 	queue: SessionQueueState;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
+	modelSelectionPending: boolean;
+	pendingModelSelectionThinkingLevel: ThinkingLevel | null;
 	eventRevision: number;
 	syncedConnectionGeneration: number;
 	stats: SessionStats | null;
@@ -364,6 +367,8 @@ function newRuntime(
 		queue: EMPTY_QUEUE,
 		model,
 		thinkingLevel,
+		modelSelectionPending: false,
+		pendingModelSelectionThinkingLevel: null,
 		eventRevision: 0,
 		syncedConnectionGeneration,
 		stats: null,
@@ -688,7 +693,9 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		case "summarization_retry_finished":
 			return clearRetryTurns(rt, "summarization");
 		case "thinking_level_changed":
-			return { ...rt, thinkingLevel: event.level };
+			return rt.modelSelectionPending
+				? { ...rt, pendingModelSelectionThinkingLevel: event.level }
+				: { ...rt, thinkingLevel: event.level };
 		default:
 			return rt;
 	}
@@ -982,8 +989,9 @@ interface AppState {
 	beginModelsRefresh: () => number;
 	finishModelsRefresh: (providerVersion: number, result: RefreshedModels | null) => void;
 	dropModelsFreshness: () => void;
-	setCurrentModel: (sessionId: string, model: WireModel) => void;
-	setThinkingLevel: (sessionId: string, level: ThinkingLevel) => void;
+	beginSessionModelSelection: (sessionId: string) => boolean;
+	finishSessionModelSelection: (sessionId: string) => void;
+	applySessionModelSelection: (sessionId: string, selection: SessionModelSelection) => void;
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
@@ -3027,10 +3035,43 @@ export const useAppStore = create<AppState>((set, get) => ({
 					}
 				: s,
 		),
-	setCurrentModel: (sessionId, model) =>
-		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),
-	setThinkingLevel: (sessionId, level) =>
-		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, thinkingLevel: level }))),
+	beginSessionModelSelection: (sessionId) => {
+		let began = false;
+		set((s) =>
+			withRuntime(s, sessionId, (runtime) => {
+				if (runtime.modelSelectionPending) return runtime;
+				began = true;
+				return {
+					...runtime,
+					modelSelectionPending: true,
+					pendingModelSelectionThinkingLevel: null,
+				};
+			}),
+		);
+		return began;
+	},
+	finishSessionModelSelection: (sessionId) =>
+		set((s) =>
+			withRuntime(s, sessionId, (runtime) => {
+				if (!runtime.modelSelectionPending) return runtime;
+				return {
+					...runtime,
+					modelSelectionPending: false,
+					pendingModelSelectionThinkingLevel: null,
+				};
+			}),
+		),
+	applySessionModelSelection: (sessionId, selection) =>
+		set((s) =>
+			withRuntime(s, sessionId, (runtime) => ({
+				...runtime,
+				model: selection.model,
+				thinkingLevel: selection.thinkingLevel,
+				eventRevision: runtime.eventRevision + 1,
+				modelSelectionPending: false,
+				pendingModelSelectionThinkingLevel: null,
+			})),
+		),
 	setStats: (sessionId, stats) => set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, stats }))),
 	setCommands: (sessionId, commands) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),

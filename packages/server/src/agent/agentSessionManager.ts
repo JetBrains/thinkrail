@@ -29,6 +29,7 @@ import type {
 	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
+	SessionModelSelection,
 	SessionQueueContent,
 	SessionQueueState,
 	SessionStats,
@@ -457,6 +458,13 @@ export function toWireModel(model: Model<string>): WireModel {
 	};
 }
 
+function sessionModelSelection(session: AgentSession): SessionModelSelection {
+	return {
+		model: session.model ? toWireModel(session.model as unknown as Model<string>) : null,
+		thinkingLevel: session.thinkingLevel,
+	};
+}
+
 function resolveWireModel(
 	runtime: PiRuntimeGeneration["runtime"],
 	ref: Pick<WireModel, "provider" | "id">,
@@ -469,7 +477,6 @@ function resolveWireModel(
 
 interface PreparedSessionEntry {
 	entry: Entry;
-	result: CreateSessionResult;
 }
 
 async function prepareSessionEntry(
@@ -578,14 +585,7 @@ async function prepareSessionEntry(
 		throw error;
 	}
 
-	return {
-		entry,
-		result: {
-			sessionId,
-			model: session.model ? toWireModel(session.model as unknown as Model<string>) : null,
-			thinkingLevel: session.thinkingLevel,
-		},
-	};
+	return { entry };
 }
 
 async function registerSession(
@@ -601,7 +601,7 @@ async function registerSession(
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
 	await reconcileWorkspaceActivity(workspaceId);
-	return prepared.result;
+	return { sessionId: session.sessionId, ...sessionModelSelection(session) };
 }
 
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
@@ -639,8 +639,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		sessionId,
 		workspaceId: entry.workspaceId,
 		title: session.sessionName ?? "Chat",
-		model: session.model ? toWireModel(session.model as unknown as Model<string>) : null,
-		thinkingLevel: session.thinkingLevel,
+		...sessionModelSelection(session),
 		isStreaming: session.isStreaming,
 		messageCount: session.messages.length,
 		updatedAt: Date.now(),
@@ -1166,13 +1165,22 @@ export async function abortSession(
 	return restoredQueue;
 }
 
-export async function setSessionModel(sessionId: string, model: WireModel): Promise<void> {
+export async function setSessionModel(
+	sessionId: string,
+	model: WireModel,
+): Promise<SessionModelSelection> {
 	const entry = mustGetEntry(sessionId);
 	await entry.session.setModel(resolveWireModel(entry.generation.runtime, model));
+	return sessionModelSelection(entry.session);
 }
 
-export function setSessionThinkingLevel(sessionId: string, level: ThinkingLevel): void {
-	mustGet(sessionId).setThinkingLevel(level);
+export function setSessionThinkingLevel(
+	sessionId: string,
+	level: ThinkingLevel,
+): SessionModelSelection {
+	const session = mustGet(sessionId);
+	session.setThinkingLevel(level);
+	return sessionModelSelection(session);
 }
 
 export function getSessionStats(sessionId: string): SessionStats {
