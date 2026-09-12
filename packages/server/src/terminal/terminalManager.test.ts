@@ -142,9 +142,12 @@ afterEach(() => {
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
-test("a shell spawn failure is actionable and the reserved tab can retry", () => {
+test("a shell spawn failure is actionable and preserves replay for retry", () => {
 	const savedShell = process.env.SHELL;
-	reserveTerminal(WS, "tab-a", "Terminal");
+	saveTerminalSessions({
+		[WS]: [{ tabKey: "tab-a", title: "Terminal", recorded: "remembered output" }],
+	});
+	reviveTerminalSessions();
 	process.env.SHELL = join(dataDir, "missing-shell");
 	try {
 		expect(() => attachTerminal(WS, "tab-a", "client-1")).toThrow(
@@ -157,7 +160,9 @@ test("a shell spawn failure is actionable and the reserved tab can retry", () =>
 		else process.env.SHELL = savedShell;
 	}
 
-	expect(attachTerminal(WS, "tab-a", "client-1").created).toBe(true);
+	const retried = attachTerminal(WS, "tab-a", "client-1");
+	expect(retried.created).toBe(true);
+	expect(retried.replay).toContain("remembered output");
 });
 
 test("attaching twice to a tab returns the SAME shell", () => {

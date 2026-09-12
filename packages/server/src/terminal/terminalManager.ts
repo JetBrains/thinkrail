@@ -289,8 +289,8 @@ export function attachTerminal(
 	}
 
 	const revived = pendingReplay.get(index);
-	pendingReplay.delete(index);
 	const { id, entry } = spawnForTab(workspaceId, tabKey, clientKey, options, revived);
+	pendingReplay.delete(index);
 	if (isNewTab) membershipChanged(workspaceId);
 	const replay = entry.recorder.snapshot();
 	return { id, created: true, ...(replay ? { replay } : {}) };

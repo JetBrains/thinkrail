@@ -142,8 +142,10 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   every change** (open / close / archive), not only at `stop()` — the host has no crash isolation, so an
   ungraceful exit is an ordinary path and a shutdown-only file would resurrect a closed tab and spawn a shell
   for it. `stop()` additionally captures a full set of recordings before `closeAllTerminals()`;
-  `reviveTerminalSessions()` restores tabs whose first attach spawns a fresh shell showing the old picture.
-  Recordings are best-effort, so an unclean exit gives back the right tabs with blank screens.
+  `reviveTerminalSessions()` restores tabs whose first successful attach spawns a fresh shell showing the old
+  picture. A failed spawn does not consume the pending recording, so correcting the shell and retrying the
+  same tab still restores it. Recordings are best-effort, so an unclean exit gives back the right tabs with
+  blank screens.
 - **Not tmux.** Would buy restart survival at the cost of a dep we can't assume on Windows, a competing tab
   model, env-propagation breakage, and `capture-pane` polling. We already accept no crash isolation.
 

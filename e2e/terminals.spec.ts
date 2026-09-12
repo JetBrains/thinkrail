@@ -1,4 +1,5 @@
 import { expect, test, type WebSocketRoute } from "@playwright/test";
+import { INITIAL_TERMINAL_TAB_KEY } from "@thinkrail/contracts";
 import {
 	activeWorktreeRow,
 	createWorkspaceViaDialog,
@@ -43,39 +44,103 @@ test("a workspace opens a terminal automatically, rooted in the worktree, with w
 test("a shell start failure explains recovery and retries the same tab", async ({ page }) => {
 	const failure =
 		"Couldn’t start PowerShell 7 (pwsh.exe). Make sure it is installed and available to ThinkRail.";
-	let failNextAttach = true;
+	let attachFailuresRemaining = 0;
+	let holdNextSuccess = false;
+	let heldSuccessId: string | undefined;
+	let browserSocket: WebSocketRoute | undefined;
+	let releaseFailure: (() => void) | undefined;
+	let releaseRetryFailure: (() => void) | undefined;
+	let releaseSuccess: (() => void) | undefined;
 	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		browserSocket = ws;
 		const server = ws.connectToServer();
 		ws.onMessage((message) => {
 			try {
 				const frame = JSON.parse(message.toString()) as { id?: string; method?: string };
-				if (failNextAttach && frame.method === "terminal.attach" && frame.id) {
-					failNextAttach = false;
-					ws.send(JSON.stringify({ id: frame.id, ok: false, error: failure }));
+				if (attachFailuresRemaining > 0 && frame.method === "terminal.attach" && frame.id) {
+					const response = JSON.stringify({ id: frame.id, ok: false, error: failure });
+					if (attachFailuresRemaining === 2) releaseFailure = () => ws.send(response);
+					else releaseRetryFailure = () => ws.send(response);
+					attachFailuresRemaining -= 1;
 					return;
+				}
+				if (holdNextSuccess && frame.method === "terminal.attach" && frame.id) {
+					holdNextSuccess = false;
+					heldSuccessId = frame.id;
 				}
 			} catch {}
 			server.send(message);
 		});
-		server.onMessage((message) => ws.send(message));
+		server.onMessage((message) => {
+			try {
+				const frame = JSON.parse(message.toString()) as { id?: string };
+				if (frame.id && frame.id === heldSuccessId) {
+					releaseSuccess = () => ws.send(message);
+					return;
+				}
+			} catch {}
+			ws.send(message);
+		});
 	});
 
 	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	attachFailuresRemaining = 2;
+	await page.getByTestId("project-item").first().click();
+	await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
+	await worktreeRows(page).first().getByRole("button").first().click();
+	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]').getByRole("tab");
+	await expect(chatTab).toBeVisible();
+	await chatTab.focus();
+	await expect(chatTab).toBeFocused();
+	await expect.poll(() => releaseFailure !== undefined).toBe(true);
+	releaseFailure?.();
 	const terminal = visibleTerminal(page);
 	await expect(terminal).toHaveAttribute("data-failed", "true");
 	await expect(terminal.getByTestId("terminal-start-failure")).toContainText(failure);
-
+	await expect(terminal.locator('[data-quiet-scroll-surface="terminal"]')).toHaveAttribute(
+		"inert",
+		"",
+	);
+	await expect(chatTab).toBeFocused();
 	await terminal.getByTestId("terminal-open-settings").click();
 	await expect(page.getByTestId("settings-terminal")).toBeVisible();
 	await expect(page.getByTestId("settings-nav-terminal")).toHaveAttribute("data-active", "true");
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
 
-	await terminal.getByTestId("terminal-start-retry").click();
+	const retryButton = terminal.getByTestId("terminal-start-retry");
+	await retryButton.click();
+	await expect(retryButton).toHaveAttribute("aria-disabled", "true");
+	await expect.poll(() => releaseRetryFailure !== undefined).toBe(true);
+	releaseRetryFailure?.();
+	await expect(retryButton).toHaveAttribute("aria-disabled", "false");
+	await expect(retryButton).toBeFocused();
+
+	holdNextSuccess = true;
+	await retryButton.click();
+	await expect(retryButton).toHaveAttribute("aria-disabled", "true");
+	await expect.poll(() => releaseSuccess !== undefined).toBe(true);
+	browserSocket?.send(
+		JSON.stringify({
+			channel: "terminal.detached",
+			data: { workspaceId: workspace.id, tabKey: INITIAL_TERMINAL_TAB_KEY },
+		}),
+	);
+	await expect(terminal).toHaveAttribute("data-detached", "true");
+	const takeBack = terminal.getByTestId("terminal-take-back");
+	await expect(takeBack).toHaveAttribute("aria-disabled", "false");
+	releaseSuccess?.();
+	await takeBack.click();
 	await waitTerminalReady(page);
 	await expect(terminal).toHaveAttribute("data-failed", "false");
 	await expect(terminal.getByTestId("terminal-start-failure")).toHaveCount(0);
+	await expect(terminal.locator('[data-quiet-scroll-surface="terminal"]')).not.toHaveAttribute(
+		"inert",
+		"",
+	);
+	await expect(terminal.locator(".xterm-helper-textarea")).toBeFocused();
 	await page.getByTestId("terminal-tab-close").click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
 });
