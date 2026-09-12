@@ -505,10 +505,16 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   yet) disables the trigger. It holds **no effort policy of its own**: when a held level isn't one the
   held model can run, the consumer asks the host for pi's `clampThinkingLevel` answer
   (`model.clampThinking`) — `model.default` clamps the same way. In a live chat, both selectors await the
-  host mutation and close only after success; the web then atomically applies its returned model/thinking
-  pair to the live session and workspace mirror. Pi's effective clamp is authoritative, with no optimistic
-  intermediate state, and a rejection is surfaced while the selector stays open. The same successful
-  mutation also sets that workspace's future-chat starting pair on the host. No separate workspace setting
+  host mutation and close only after success; while either mutation is pending both selectors stay disabled.
+  The per-session lock lives in `store`, surviving a chat-tab unmount/remount, and fences Pi's early
+  `thinking_level_changed` until settlement, so provider auth or extension latency cannot reorder choices or
+  expose an old-model/new-effort pair. The web then atomically applies its returned model/thinking pair to the
+  live session and workspace mirror. Pi's effective
+  clamp is authoritative, with no optimistic intermediate state. A rejection is surfaced while the selector
+  stays open and triggers an authoritative `session.list` pair reconciliation before the lock releases; if
+  that read also fails, the prior pair remains intact. A v64 host's legacy ack instead reconciles the requested session choice without
+  mirroring unsupported workspace persistence. The same successful v65+ mutation also sets that workspace's
+  future-chat starting pair on the host. No separate workspace setting
   or selector mode is introduced. Its rows follow the **live catalog** — `ChatView` resolves the
   session's model through `store`'s `selectCatalogModel` before passing it down, rather than reading the
   session's own snapshot, so a `model.refresh` that changes what a model supports changes the offered

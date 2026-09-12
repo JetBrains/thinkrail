@@ -60,7 +60,12 @@ import {
 	useTemplateCommandPicker,
 } from "@/prompt";
 import { selectCatalogModel, toast, useAppStore } from "@/store";
-import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
+import {
+	createSessionWithSkillBaseline,
+	errorText,
+	getTransport,
+	supportsWorkspaceModelPreferences,
+} from "@/transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
@@ -361,7 +366,9 @@ export function NewWorkspaceDialog({
 				session.thinkingLevel,
 				syncedTick,
 			);
-			if (model) store.applySessionModelSelection(session.sessionId, workspace.id, session);
+			if (model && supportsWorkspaceModelPreferences(useAppStore.getState().protocolVersion)) {
+				store.applySessionModelSelection(session.sessionId, workspace.id, session);
+			}
 			if (!text) return;
 			store.appendUserMessage(session.sessionId, text);
 			getTransport()

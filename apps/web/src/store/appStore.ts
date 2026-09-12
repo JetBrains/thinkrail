@@ -335,6 +335,8 @@ export interface SessionRuntime {
 	queue: SessionQueueState;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
+	modelSelectionPending: boolean;
+	pendingModelSelectionThinkingLevel: ThinkingLevel | null;
 	eventRevision: number;
 	syncedConnectionGeneration: number;
 	stats: SessionStats | null;
@@ -365,6 +367,8 @@ function newRuntime(
 		queue: EMPTY_QUEUE,
 		model,
 		thinkingLevel,
+		modelSelectionPending: false,
+		pendingModelSelectionThinkingLevel: null,
 		eventRevision: 0,
 		syncedConnectionGeneration,
 		stats: null,
@@ -689,7 +693,9 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		case "summarization_retry_finished":
 			return clearRetryTurns(rt, "summarization");
 		case "thinking_level_changed":
-			return { ...rt, thinkingLevel: event.level };
+			return rt.modelSelectionPending
+				? { ...rt, pendingModelSelectionThinkingLevel: event.level }
+				: { ...rt, thinkingLevel: event.level };
 		default:
 			return rt;
 	}
@@ -983,10 +989,13 @@ interface AppState {
 	beginModelsRefresh: () => number;
 	finishModelsRefresh: (providerVersion: number, result: RefreshedModels | null) => void;
 	dropModelsFreshness: () => void;
+	beginSessionModelSelection: (sessionId: string) => boolean;
+	finishSessionModelSelection: (sessionId: string) => void;
 	applySessionModelSelection: (
 		sessionId: string,
 		workspaceId: string,
 		selection: SessionModelSelection,
+		mirrorWorkspace?: boolean,
 	) => void;
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
@@ -3031,7 +3040,33 @@ export const useAppStore = create<AppState>((set, get) => ({
 					}
 				: s,
 		),
-	applySessionModelSelection: (sessionId, workspaceId, selection) =>
+	beginSessionModelSelection: (sessionId) => {
+		let began = false;
+		set((s) =>
+			withRuntime(s, sessionId, (runtime) => {
+				if (runtime.modelSelectionPending) return runtime;
+				began = true;
+				return {
+					...runtime,
+					modelSelectionPending: true,
+					pendingModelSelectionThinkingLevel: null,
+				};
+			}),
+		);
+		return began;
+	},
+	finishSessionModelSelection: (sessionId) =>
+		set((s) =>
+			withRuntime(s, sessionId, (runtime) => {
+				if (!runtime.modelSelectionPending) return runtime;
+				return {
+					...runtime,
+					modelSelectionPending: false,
+					pendingModelSelectionThinkingLevel: null,
+				};
+			}),
+		),
+	applySessionModelSelection: (sessionId, workspaceId, selection, mirrorWorkspace = true) =>
 		set((s) => {
 			const runtime = s.sessions[sessionId];
 			if (!runtime) return {};
@@ -3041,10 +3076,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...runtime,
 					model: selection.model,
 					thinkingLevel: selection.thinkingLevel,
+					modelSelectionPending: false,
+					pendingModelSelectionThinkingLevel: null,
 				},
 			};
 			const model = selection.model;
-			if (!model) return { sessions };
+			if (!model || !mirrorWorkspace) return { sessions };
 			const workspace = selectWorkspaceById(s, workspaceId);
 			const list = workspace ? s.workspaces[workspace.projectId] : undefined;
 			if (!workspace || !list) return { sessions };

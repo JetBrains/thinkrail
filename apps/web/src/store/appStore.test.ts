@@ -266,6 +266,36 @@ test("effective session selections update runtime and workspace atomically witho
 		model: nextModel,
 		thinkingLevel: "off",
 	});
+
+	useAppStore
+		.getState()
+		.applySessionModelSelection("s1", "ws1", { model: oldModel, thinkingLevel: "high" }, false);
+	expect(rt("s1")).toMatchObject({ model: oldModel, thinkingLevel: "high" });
+	expect(useAppStore.getState().workspaces.p1?.[0]).toMatchObject({
+		model: nextModel,
+		thinkingLevel: "off",
+	});
+});
+
+test("model selection locks survive view remounts and fence thinking events until settlement", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "s1", null, "high");
+
+	expect(store.beginSessionModelSelection("s1")).toBe(true);
+	expect(useAppStore.getState().beginSessionModelSelection("s1")).toBe(false);
+	useAppStore.getState().handlePiEvent({ type: "thinking_level_changed", level: "off" }, "s1");
+	expect(rt("s1")).toMatchObject({
+		thinkingLevel: "high",
+		modelSelectionPending: true,
+		pendingModelSelectionThinkingLevel: "off",
+	});
+
+	useAppStore.getState().finishSessionModelSelection("s1");
+	expect(rt("s1")).toMatchObject({
+		thinkingLevel: "high",
+		modelSelectionPending: false,
+		pendingModelSelectionThinkingLevel: null,
+	});
 });
 
 test("pi events route to the right session runtime; chats stay independent", () => {

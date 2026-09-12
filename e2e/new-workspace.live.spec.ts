@@ -17,7 +17,7 @@ async function kickOff(page: import("@playwright/test").Page, prompt: string): P
 	await expect(dialog).toBeHidden();
 }
 
-test("the dialog shows the exact default model and its picker scrolls inside the dialog", {
+test("the dialog defers to the host default and its picker scrolls inside the dialog", {
 	tag: "@agent",
 }, async ({ page }) => {
 	await openFixtureProject(page);
@@ -38,7 +38,9 @@ test("the dialog shows the exact default model and its picker scrolls inside the
 
 	const model = dialog.getByTestId("model-selector");
 	await expect(model).toBeEnabled();
-	await expect(model).toContainText(selected.model.name);
+	await expect(model).toContainText("Default model");
+	const effort = dialog.getByTestId("thinking-selector");
+	await expect(effort).toBeDisabled();
 
 	await model.click();
 	const list = page.locator("[cmdk-list]");
@@ -49,9 +51,8 @@ test("the dialog shows the exact default model and its picker scrolls inside the
 	await list.hover();
 	await page.mouse.wheel(0, 600);
 	await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
-	await page.keyboard.press("Escape");
+	await exactOption.click();
 
-	const effort = dialog.getByTestId("thinking-selector");
 	await expect(effort).toBeEnabled();
 	await effort.click();
 	const options = page.getByTestId("thinking-option");

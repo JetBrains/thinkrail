@@ -294,6 +294,31 @@ test("session.create uses a complete workspace pair when the request omits a mod
 	expect(created).toMatchObject({ model: reasoner, thinkingLevel: "xhigh" });
 });
 
+test("a thinking-only request remains session-local instead of inheriting a stored pair", async () => {
+	const baselineWorkspace = await createManagedWorkspace();
+	const workspace = await createManagedWorkspace();
+	const basic = (await availableModels()).find((model) => model.id === "handler-basic");
+	if (!basic) throw new Error("basic model missing");
+	const baseline = (await handleRequest(
+		"session.create",
+		{ workspaceId: baselineWorkspace.id, thinkingLevel: "xhigh" },
+		CTX,
+	)) as SessionModelSelection;
+	setWorkspaceModelPreference(workspace.id, { model: basic, thinkingLevel: "off" });
+
+	const created = (await handleRequest(
+		"session.create",
+		{ workspaceId: workspace.id, thinkingLevel: "xhigh" },
+		CTX,
+	)) as SessionModelSelection;
+
+	expect(created).toMatchObject({ model: baseline.model, thinkingLevel: "xhigh" });
+	expect(await storedWorkspace(workspace.id)).toMatchObject({
+		model: basic,
+		thinkingLevel: "off",
+	});
+});
+
 test("a partial persisted workspace pair is ignored in favor of the host default", async () => {
 	const baselineWorkspace = await createManagedWorkspace();
 	const partialWorkspace = await createManagedWorkspace();

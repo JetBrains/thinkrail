@@ -477,7 +477,6 @@ function resolveWireModel(
 
 interface PreparedSessionEntry {
 	entry: Entry;
-	result: CreateSessionResult;
 }
 
 async function prepareSessionEntry(
@@ -586,10 +585,7 @@ async function prepareSessionEntry(
 		throw error;
 	}
 
-	return {
-		entry,
-		result: { sessionId, ...sessionModelSelection(session) },
-	};
+	return { entry };
 }
 
 async function registerSession(
@@ -605,7 +601,7 @@ async function registerSession(
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
 	await reconcileWorkspaceActivity(workspaceId);
-	return prepared.result;
+	return { sessionId: session.sessionId, ...sessionModelSelection(session) };
 }
 
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {

@@ -24,7 +24,7 @@ import {
 	toast,
 	useAppStore,
 } from "@/store";
-import { errorText, getTransport } from "@/transport";
+import { errorText, getTransport, supportsWorkspaceModelPreferences } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
@@ -220,6 +220,7 @@ export default function ChatView({
 		extUiWidget,
 		model: sessionModel,
 		thinkingLevel,
+		modelSelectionPending,
 	} = runtime;
 
 	const currentModel = selectCatalogModel(models, sessionModel) ?? sessionModel;
@@ -468,27 +469,76 @@ export default function ChatView({
 
 	const onMentionQuery = useCallback((q: string | null) => setMentionQuery(q), []);
 
+	const beginModelSelection = (): boolean =>
+		useAppStore.getState().beginSessionModelSelection(sessionId);
+
+	const finishModelSelection = () => {
+		useAppStore.getState().finishSessionModelSelection(sessionId);
+	};
+
+	const reconcileFailedModelSelection = async () => {
+		try {
+			const sessions = await getTransport().request("session.list", { workspaceId });
+			const session = sessions.find((candidate) => candidate.sessionId === sessionId);
+			if (session) {
+				useAppStore.getState().applySessionModelSelection(sessionId, workspaceId, session, false);
+			}
+		} catch {
+			return;
+		}
+	};
+
 	const onSelectModel = async (model: WireModel) => {
+		if (!beginModelSelection()) return;
 		try {
 			const selection = await getTransport().request("session.setModel", { sessionId, model });
-			useAppStore.getState().applySessionModelSelection(sessionId, workspaceId, selection);
+			const state = useAppStore.getState();
+			const supported = supportsWorkspaceModelPreferences(state.protocolVersion);
+			const session = state.sessions[sessionId];
+			const effective = supported
+				? selection
+				: {
+						model,
+						thinkingLevel:
+							session?.pendingModelSelectionThinkingLevel ??
+							session?.thinkingLevel ??
+							runtime.thinkingLevel,
+					};
+			state.applySessionModelSelection(sessionId, workspaceId, effective, supported);
 			refreshStats();
 		} catch (error) {
 			toast.error(errorText(error), "Couldn't change model");
+			await reconcileFailedModelSelection();
 			throw error;
+		} finally {
+			finishModelSelection();
 		}
 	};
 
 	const onSelectThinking = async (level: ThinkingLevel) => {
+		if (!beginModelSelection()) return;
 		try {
 			const selection = await getTransport().request("session.setThinkingLevel", {
 				sessionId,
 				level,
 			});
-			useAppStore.getState().applySessionModelSelection(sessionId, workspaceId, selection);
+			const state = useAppStore.getState();
+			const supported = supportsWorkspaceModelPreferences(state.protocolVersion);
+			const session = state.sessions[sessionId];
+			const effective = supported
+				? selection
+				: {
+						model: session?.model ?? null,
+						thinkingLevel:
+							session?.pendingModelSelectionThinkingLevel ?? session?.thinkingLevel ?? level,
+					};
+			state.applySessionModelSelection(sessionId, workspaceId, effective, supported);
 		} catch (error) {
 			toast.error(errorText(error), "Couldn't change effort");
+			await reconcileFailedModelSelection();
 			throw error;
+		} finally {
+			finishModelSelection();
 		}
 	};
 
@@ -1006,6 +1056,7 @@ export default function ChatView({
 							onRefreshModels={onRefreshModels}
 							currentModel={currentModel}
 							thinkingLevel={thinkingLevel}
+							modelSelectionPending={modelSelectionPending}
 							onMentionQuery={onMentionQuery}
 							onSlashActive={setSlashActive}
 							onSelectModel={onSelectModel}

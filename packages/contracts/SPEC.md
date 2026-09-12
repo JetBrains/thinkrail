@@ -358,8 +358,9 @@ of the host.
 - Protocol v65 adds the workspace model/thinking preference fields and changes successful
   `session.setModel` / `session.setThinkingLevel` results to Pi's effective post-mutation
   `{ model, thinkingLevel }` pair. The changes share one protocol advance: older clients ignore the
-  additive workspace fields, while independently shipped clients must not assume the richer mutation result
-  against a v64 host. No feature-version constant is needed because there is no capability-gated control.
+  additive workspace fields, while independently shipped clients gate richer mutation reconciliation and
+  workspace mirroring with `WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION` so a v64 `{ ok: true }` result
+  remains safe.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered

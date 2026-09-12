@@ -153,16 +153,24 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `thinkingLevel` / **`eventRevision`** (browser-local, incremented for every
   received Pi event; the compare-and-install fence for an authoritative transcript read) /
   **`syncedConnectionGeneration`** (which connected host generation the runtime's transcript was last read
-  from) / `stats` / **`statsRefreshTick`** (browser-local invalidation for the mounted chat's authoritative
+  from) / **`modelSelectionPending` + `pendingModelSelectionThinkingLevel`** (per-session mutation lock and
+  hidden Pi-event fence that survive a `ChatView` tab remount) / `stats` / **`statsRefreshTick`**
+  (browser-local invalidation for the mounted chat's authoritative
   stats read) / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
   promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
-  `setChatDraft` / `clearPendingExtUi`) take a `sessionId`. **`applySessionModelSelection(sessionId,
-  workspaceId, effectivePair)`** is the one model-selection writer: in one store commit it replaces both live
-  session fields and, when Pi names an effective model, mirrors the complete pair onto the matching workspace
-  row. A null effective model still updates the live session but leaves the persisted workspace mirror alone,
-  so a one-session fallback cannot silently self-heal a stale preference.
+  `setChatDraft` / `clearPendingExtUi`) take a `sessionId`. `beginSessionModelSelection` atomically admits only
+  one model/effort mutation for that runtime; while held, `thinking_level_changed` records a hidden effective
+  level instead of exposing a mixed pair. On rejection `ChatView` reconciles the complete session pair through
+  `session.list`; if that read also fails, `finishSessionModelSelection` discards the hidden level and preserves
+  the previous visible pair rather than manufacturing an old-model/new-effort state.
+  **`applySessionModelSelection(sessionId,
+  workspaceId, effectivePair, mirrorWorkspace?)`** is the one model-selection writer: in one store commit it
+  replaces both live session fields and, for a v65 host when Pi names an effective model, mirrors the complete
+  pair onto the matching workspace row. A pre-v65 reconciliation passes `false` because that host did not
+  persist the pair. A null effective model still updates the live session but leaves the persisted workspace
+  mirror alone, so a one-session fallback cannot silently self-heal a stale preference.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
   (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
   so a failed send lands in the chat instead of being swallowed; it carries no recovery action because Pi

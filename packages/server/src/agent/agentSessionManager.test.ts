@@ -185,6 +185,43 @@ test("session creation publishes a domain summary for other frontends", async ()
 	}
 });
 
+test("session creation returns the effective pair after announced-session mutations", async () => {
+	const provider = "created-selection";
+	runtime.registerProvider(provider, {
+		...cfg(fauxA, provider),
+		models: [
+			{
+				...modelDef(provider),
+				api: fauxA.api,
+				reasoning: true,
+				thinkingLevelMap: { low: "low", high: "high" },
+			},
+		],
+	});
+	const model = (await listAvailableModels()).find((candidate) => candidate.provider === provider);
+	if (!model) throw new Error("created-selection model missing");
+	let announcedSelection: ReturnType<typeof setSessionThinkingLevel> | undefined;
+	setSessionCreatedPublisher((summary) => {
+		announcedSelection = setSessionThinkingLevel(summary.sessionId, "high");
+	});
+	let sessionId: string | undefined;
+	try {
+		const created = await createSession({
+			cwd: tmpCwd("trpi-created-selection-"),
+			workspaceId: "ws-created-selection",
+			model,
+			thinkingLevel: "low",
+		});
+		sessionId = created.sessionId;
+		expect(announcedSelection?.thinkingLevel).toBe("high");
+		expect(created.thinkingLevel).toBe("high");
+	} finally {
+		if (sessionId) removeSession(sessionId);
+		setSessionCreatedPublisher(() => {});
+		runtime.unregisterProvider(provider);
+	}
+});
+
 test("two sessions in two worktrees stream independently; disposing one leaves the other working", async () => {
 	fauxA.setResponses([fauxAssistantMessage("ALPHA_REPLY")]);
 	fauxB.setResponses([fauxAssistantMessage("BRAVO_REPLY")]);

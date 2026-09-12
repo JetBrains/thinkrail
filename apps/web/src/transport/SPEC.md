@@ -123,14 +123,17 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   workspace and session, making that untrusted-response identity check one shared installation boundary rather
   than a caller convention).
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
-  skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
-  `TransportOptions`. `supportsSessionActivity` stays module-internal (its own tests import the file
-  directly) — no sibling decides the activity capability, this module does.
+  skill-load-safe session request wrappers, `supportsWorkspaceModelPreferences`, `errorText`, `RequestError`,
+  `wsErrorCode`, `ConnectionStatus`, `TransportOptions`. `supportsWorkspaceModelPreferences` is the shared
+  `WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION` gate for mutation-result reconciliation and workspace
+  mirroring. `supportsSessionActivity` stays module-internal (its own tests import the file directly) — no
+  sibling decides the activity capability, this module does.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
   `SessionDeletedPayload` for `session.deleted`, `SessionActivityPayload` +
-  `ACTIVITY_PROTOCOL_VERSION` for `session.activity` and its snapshot gate, `provider.changed`, the empty addressed
+  `ACTIVITY_PROTOCOL_VERSION` for `session.activity` and its snapshot gate,
+  `WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION` for model-preference reconciliation, `provider.changed`, the empty addressed
   `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` + `host.updateAvailable`,
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +
   `settings.changed`); `store`

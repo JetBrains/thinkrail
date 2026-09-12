@@ -10,6 +10,7 @@ export function workspaceSessionOptions(
 			...(request.thinkingLevel ? { thinkingLevel: request.thinkingLevel } : {}),
 		};
 	}
+	if (request.thinkingLevel) return { thinkingLevel: request.thinkingLevel };
 	if (workspace.model && workspace.thinkingLevel) {
 		return {
 			model: workspace.model,
@@ -17,5 +18,5 @@ export function workspaceSessionOptions(
 			modelOptional: true,
 		};
 	}
-	return request.thinkingLevel ? { thinkingLevel: request.thinkingLevel } : {};
+	return {};
 }

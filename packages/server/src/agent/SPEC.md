@@ -288,7 +288,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `defaultProvider`/`defaultModel` when that model is available, else `model: null` — plus the effort that
     pairs with it). **The host never guesses a pre-session model:** pi's own resolver (settings pin →
     provider default → first available) runs inside `createAgentSession`, so a caller without a pinned
-    default omits `model` and lets pi choose, and every creation path agrees by construction. The earlier
+    default omits `model` and lets pi choose, and every creation path agrees by construction. Creation
+    snapshots its returned effective pair only after registration, creation publication, and activity
+    reconciliation, so a mutation accepted through the announced session cannot be overwritten by stale
+    creation-time persistence. The earlier
     `pinned ?? available[0]` was a *second* resolver: with nothing pinned it answered `available[0]` while a
     fresh session got pi's provider default, so the New-Workspace dialog pre-pinned a model no other path
     would have picked — landing on `anthropic/claude-fable-5`, whose `compat.allowedFallbackModels` makes pi
