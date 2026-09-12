@@ -18,6 +18,7 @@ import type {
 	SessionActivity,
 	SessionActivityPayload,
 	SessionEventPayload,
+	SessionModelSelection,
 	SessionQueueState,
 	SessionStats,
 	SessionSummary,
@@ -982,8 +983,11 @@ interface AppState {
 	beginModelsRefresh: () => number;
 	finishModelsRefresh: (providerVersion: number, result: RefreshedModels | null) => void;
 	dropModelsFreshness: () => void;
-	setCurrentModel: (sessionId: string, model: WireModel) => void;
-	setThinkingLevel: (sessionId: string, level: ThinkingLevel) => void;
+	applySessionModelSelection: (
+		sessionId: string,
+		workspaceId: string,
+		selection: SessionModelSelection,
+	) => void;
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
@@ -3027,10 +3031,39 @@ export const useAppStore = create<AppState>((set, get) => ({
 					}
 				: s,
 		),
-	setCurrentModel: (sessionId, model) =>
-		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),
-	setThinkingLevel: (sessionId, level) =>
-		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, thinkingLevel: level }))),
+	applySessionModelSelection: (sessionId, workspaceId, selection) =>
+		set((s) => {
+			const runtime = s.sessions[sessionId];
+			if (!runtime) return {};
+			const sessions = {
+				...s.sessions,
+				[sessionId]: {
+					...runtime,
+					model: selection.model,
+					thinkingLevel: selection.thinkingLevel,
+				},
+			};
+			const model = selection.model;
+			if (!model) return { sessions };
+			const workspace = selectWorkspaceById(s, workspaceId);
+			const list = workspace ? s.workspaces[workspace.projectId] : undefined;
+			if (!workspace || !list) return { sessions };
+			return {
+				sessions,
+				workspaces: {
+					...s.workspaces,
+					[workspace.projectId]: list.map((candidate) =>
+						candidate.id === workspaceId
+							? {
+									...candidate,
+									model,
+									thinkingLevel: selection.thinkingLevel,
+								}
+							: candidate,
+					),
+				},
+			};
+		}),
 	setStats: (sessionId, stats) => set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, stats }))),
 	setCommands: (sessionId, commands) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),

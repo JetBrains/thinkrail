@@ -215,6 +215,59 @@ test("selectLastOpenChatSession: active chat tab first, then the most recent cha
 	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
 });
 
+test("effective session selections update runtime and workspace atomically without self-healing null", () => {
+	const oldModel = {
+		id: "old",
+		name: "Old",
+		provider: "faux",
+		contextWindow: 1000,
+		reasoning: true,
+		thinkingLevels: ["off", "high"],
+	} as WireModel;
+	const nextModel = { ...oldModel, id: "next", name: "Next", reasoning: false };
+	const workspace = {
+		id: "ws1",
+		projectId: "p1",
+		name: "Workspace",
+		branch: "main",
+		baseBranch: "main",
+		worktreePath: "/tmp/ws1",
+		createdAt: 1,
+		model: oldModel,
+		thinkingLevel: "high",
+	} as Workspace;
+	const store = useAppStore.getState();
+	store.setWorkspaces("p1", [workspace]);
+	store.openChatSession("ws1", "s1", oldModel, "high");
+	let commits = 0;
+	const unsubscribe = useAppStore.subscribe(() => {
+		commits += 1;
+	});
+
+	store.applySessionModelSelection("s1", "ws1", {
+		model: nextModel,
+		thinkingLevel: "off",
+	});
+	unsubscribe();
+
+	expect(commits).toBe(1);
+	expect(rt("s1")).toMatchObject({ model: nextModel, thinkingLevel: "off" });
+	expect(useAppStore.getState().workspaces.p1?.[0]).toMatchObject({
+		model: nextModel,
+		thinkingLevel: "off",
+	});
+
+	useAppStore.getState().applySessionModelSelection("s1", "ws1", {
+		model: null,
+		thinkingLevel: "medium",
+	});
+	expect(rt("s1")).toMatchObject({ model: null, thinkingLevel: "medium" });
+	expect(useAppStore.getState().workspaces.p1?.[0]).toMatchObject({
+		model: nextModel,
+		thinkingLevel: "off",
+	});
+});
+
 test("pi events route to the right session runtime; chats stay independent", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");

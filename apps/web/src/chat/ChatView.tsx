@@ -468,19 +468,28 @@ export default function ChatView({
 
 	const onMentionQuery = useCallback((q: string | null) => setMentionQuery(q), []);
 
-	const onSelectModel = (model: WireModel) => {
-		useAppStore.getState().setCurrentModel(sessionId, model);
-		getTransport()
-			.request("session.setModel", { sessionId, model })
-			.then(() => refreshStats())
-			.catch(() => {});
+	const onSelectModel = async (model: WireModel) => {
+		try {
+			const selection = await getTransport().request("session.setModel", { sessionId, model });
+			useAppStore.getState().applySessionModelSelection(sessionId, workspaceId, selection);
+			refreshStats();
+		} catch (error) {
+			toast.error(errorText(error), "Couldn't change model");
+			throw error;
+		}
 	};
 
-	const onSelectThinking = (level: ThinkingLevel) => {
-		useAppStore.getState().setThinkingLevel(sessionId, level);
-		getTransport()
-			.request("session.setThinkingLevel", { sessionId, level })
-			.catch(() => {});
+	const onSelectThinking = async (level: ThinkingLevel) => {
+		try {
+			const selection = await getTransport().request("session.setThinkingLevel", {
+				sessionId,
+				level,
+			});
+			useAppStore.getState().applySessionModelSelection(sessionId, workspaceId, selection);
+		} catch (error) {
+			toast.error(errorText(error), "Couldn't change effort");
+			throw error;
+		}
 	};
 
 	const restoreTextToDraft = (text: string) => {

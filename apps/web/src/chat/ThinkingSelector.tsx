@@ -14,12 +14,20 @@ export function ThinkingSelector({
 }: {
 	level: ThinkingLevel;
 	levels: readonly ThinkingLevel[];
-	onSelect: (level: ThinkingLevel) => void;
+	onSelect: (level: ThinkingLevel) => void | Promise<void>;
 	container?: HTMLElement | null;
 	className?: string;
 	showLabel?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
+	const select = async (next: ThinkingLevel) => {
+		try {
+			await onSelect(next);
+			setOpen(false);
+		} catch {
+			return;
+		}
+	};
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger
@@ -43,10 +51,7 @@ export function ThinkingSelector({
 						data-testid="thinking-option"
 						data-level={l}
 						aria-pressed={l === level}
-						onClick={() => {
-							onSelect(l);
-							setOpen(false);
-						}}
+						onClick={() => void select(l)}
 						className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] px-8 py-4 text-left tr-text-ui text-text-default capitalize outline-none transition-colors hover:bg-control-bg-hovered"
 					>
 						<span className="flex w-14 shrink-0 justify-center">

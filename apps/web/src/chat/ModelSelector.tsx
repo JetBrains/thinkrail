@@ -42,7 +42,7 @@ export function ModelSelector({
 }: {
 	models: WireModel[];
 	current: WireModel | null;
-	onSelect: (model: WireModel) => void;
+	onSelect: (model: WireModel) => void | Promise<void>;
 	refreshing: boolean;
 	onRefresh: (force: boolean) => void;
 	container?: HTMLElement | null;
@@ -54,9 +54,13 @@ export function ModelSelector({
 	const [open, setOpen] = useState(false);
 	const providers = [...new Set(models.map((m) => m.provider))];
 
-	const select = (model: WireModel) => {
-		onSelect(model);
-		setOpen(false);
+	const select = async (model: WireModel) => {
+		try {
+			await onSelect(model);
+			setOpen(false);
+		} catch {
+			return;
+		}
 	};
 
 	return (
@@ -114,7 +118,7 @@ export function ModelSelector({
 												value={`${m.provider} ${m.name} ${m.id}`}
 												data-testid="model-option"
 												data-model-id={m.id}
-												onSelect={() => select(m)}
+												onSelect={() => void select(m)}
 											>
 												<span className="flex w-14 shrink-0 justify-center">
 													{isCurrent ? <Check className="size-14 text-primary" /> : null}

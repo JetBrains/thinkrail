@@ -158,7 +158,11 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
   promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
-  `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
+  `setChatDraft` / `clearPendingExtUi`) take a `sessionId`. **`applySessionModelSelection(sessionId,
+  workspaceId, effectivePair)`** is the one model-selection writer: in one store commit it replaces both live
+  session fields and, when Pi names an effective model, mirrors the complete pair onto the matching workspace
+  row. A null effective model still updates the live session but leaves the persisted workspace mirror alone,
+  so a one-session fallback cannot silently self-heal a stale preference.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
   (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
   so a failed send lands in the chat instead of being swallowed; it carries no recovery action because Pi
@@ -333,7 +337,7 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   becomes real. The host-wide **`models`** list stays global (not per session), plus
   **`modelsRefreshing`** — the awaited `model.refresh` in-flight flag — and **`modelsFresh`**, the
   *provenance* of that list: true only while it holds the installed result of an awaited forced refresh,
-  which `NewWorkspaceDialog` needs before it may substitute a model the catalog lacks. It lives here,
+  which `NewWorkspaceDialog` needs before it may clear an explicit held model the catalog lacks. It lives here,
   beside the list, precisely **because `models` is app-wide**: `setModelsForProviderVersion` (a guarded
   `model.list` snapshot, whose handler answers from before the detached refresh it starts) **drops** it in the same write, so authority
   falls with the list any consumer replaced — held as one consumer's local flag it would outlive its
