@@ -333,8 +333,10 @@ and branch from the request. The rest stays compact: the base-branch combobox (`
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
 a project picker, the prompt hero, and the reused
   `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's **pinned**
-  default via `model.default` so the exact model shows when there is one (values held in dialog state,
-  applied at create time). With **no pinned default the host answers `model: null`** and the dialog holds
+  default via `model.default` so the exact model shows when there is one. The dialog still holds and sends
+  the explicit model/thinking pair at create time; after successful session creation the host also seeds that
+  workspace's future-chat pair from Pi's effective result. With **no pinned default the host answers
+  `model: null`** and the dialog holds
   none: the picker reads **Default model**, the effort control is disabled (no model, no supported set), and
   create sends neither — so pi resolves both exactly as it does for a new chat tab. The dialog must not
   substitute a model of its own choosing here; one resolver, pi's, see `submodule-agent`. The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll

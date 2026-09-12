@@ -113,6 +113,11 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   or delete `Workspace.subagentsOverride` for `null` (inherit), then emit the authoritative full
   `workspace.updated` snapshot. It validates the closed value but never reads the global default or
   resolves effective agent policy; the host composes that across sibling boundaries;
+  **`setWorkspaceModelPreference(id, selection | null)`** — atomically persists or clears both
+  `Workspace.model` and `Workspace.thinkingLevel`; a non-null selection requires the complete pair. It
+  performs one registry save, then emits one authoritative full-snapshot `updated` event, and returns that
+  record. Managed, Default, and external records follow the identical rule; this module stores the pair but
+  never resolves model availability or defaults;
   **`setWorkspaceDiffBase(id, ref | null)`** — re-point the ref this workspace's diff is
   measured against (`Workspace.diffBase`), `null` (or the creation base itself, which would be a redundant
   override) clearing it; persists + **broadcasts the updated record** so every client converges on the push,
@@ -211,7 +216,7 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
-  `setWorkspaceSubagentsOverride`.
+  `setWorkspaceSubagentsOverride`, `setWorkspaceModelPreference`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

@@ -277,7 +277,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     through the same idle-delivery fallback as `followUpSession` — the first becomes a `prompt`, the rest
     steer into the run it starts; delivery timing may degrade across that race window, content is never lost
     (pinned by the idle-fallback unit test) —
-    `setModel` / `setThinkingLevel` / **manual `compact` guarded per session** (a second overlapping request
+    `setModel` / `setThinkingLevel` (each returns the live session's effective post-mutation
+    `{ model, thinkingLevel }` pair; request values are never echoed because Pi may clamp effort after
+    either mutation) / **manual `compact` guarded per session** (a second overlapping request
     is rejected before Pi can overwrite its one compaction controller; an active Pi compaction also blocks
     entry) / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
     `listAvailableModels` / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
@@ -314,7 +316,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     not live, first resolving any model named by the transcript exactly in the active process runtime and
     rejecting with a closed error when that named model is unavailable—never accepting PI's silent fallback
     for an existing model reference; legacy transcripts with no persisted model reference may use the
-    configured default—then returns `{ summary, messages }` —
+    configured default. Attachment reconstructs only that chat and exposes no workspace-preference
+    mutation—then returns `{ summary, messages }` —
     `TranscriptMessage[]`: the pi-canonical subset **plus
     `custom` messages**, which carry the `ask-user-answers` replies the questionnaire card pairs by tool
     call id, **plus `compactionSummary`**, pi's durable marker for the messages compaction summarized away —
@@ -732,6 +735,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   one `readAvailableWireModels` read so the projection can't be bypassed by adding a caller; every inbound
   model ref (`session.create` /
   `session.setModel`) is **re-resolved** host-side by `{provider,id}` (`resolveWireModel`), never trusted.
+  `createSession.modelOptional` relaxes only failure to resolve the supplied model reference;
+  authentication, resource loading, extension binding, and session creation failures still surface. The
+  host uses that narrow fallback only for a stored potentially-stale workspace preference, never an
+  explicit user selection.
   The wire type `WireModel = Pick<Model, id|name|provider|contextWindow|reasoning> + thinkingLevels` is an
   **allowlist** — it fails closed, so a future `Model` field can't leak by default (a unit test pins the
   exact key set). `thinkingLevels` is the one computed field: pi-ai's `getSupportedThinkingLevels(model)`

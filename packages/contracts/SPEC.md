@@ -153,6 +153,10 @@ of the host.
   **`Workspace.skillOverrides`** (per-skill on/off) over that baseline;
   **`SubagentOverride`** (`"on" | "off"`) + optional **`Workspace.subagentsOverride`** let a workspace
   force subagents on/off, while absence inherits the host's `AppConfig.subagentsEnabled` default;
+  optional **`Workspace.model`** (`WireModel`) + **`Workspace.thinkingLevel`** persist one logical
+  workspace preference pair: only a complete pair is usable, while absence or a partial legacy/out-of-band
+  record means “use the host default.” The additive fields are backward-compatible on disk and wire and
+  require no migration;
   "does it have specs?" is **not** a field — it's the lazy `project.hasSpecs` query, since it's a full-tree
   walk), **`ProjectPathStatus`** (a
   candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a
@@ -351,6 +355,11 @@ of the host.
 - **`HostUpdateNotice`** — the optional immutable host-wire advisory: current version, newer available version,
   and channel. No status, revision, error, feed URL, artifact, platform path, or shell command crosses the
   wire. Its optional welcome field plus `host.updateAvailable` change pushes enter at protocol v64.
+- Protocol v65 adds the workspace model/thinking preference fields and changes successful
+  `session.setModel` / `session.setThinkingLevel` results to Pi's effective post-mutation
+  `{ model, thinkingLevel }` pair. The changes share one protocol advance: older clients ignore the
+  additive workspace fields, while independently shipped clients must not assume the richer mutation result
+  against a v64 host. No feature-version constant is needed because there is no capability-gated control.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered
@@ -437,7 +446,9 @@ of the host.
   session reaches idle, which is Stop's lossless path)/`dispose`/**`delete`**/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
-  read side) / **`settings.update`** (merge + validate + persist a top-level partial `AppConfig`; when present,
+  read side; successful `setModel` / `setThinkingLevel` return the effective model/thinking pair rather
+  than an ack, so a client can reconcile Pi's clamp instead of trusting its optimistic request) /
+  **`settings.update`** (merge + validate + persist a top-level partial `AppConfig`; when present,
   `customLayoutPresets` and `systemThemePair` are complete replacements; entering system mode requires a
   complete existing-or-incoming pair. A legacy `{ theme }` mutation without explicit `themeMode` means a
   fixed-theme selection and exits system mode; returns the merged config) /

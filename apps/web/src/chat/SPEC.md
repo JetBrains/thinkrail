@@ -504,8 +504,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   vocabulary: pi owns it, the host projects the per-model slice, and an empty list (no model resolved
   yet) disables the trigger. It holds **no effort policy of its own**: when a held level isn't one the
   held model can run, the consumer asks the host for pi's `clampThinkingLevel` answer
-  (`model.clampThinking`) — `model.default` clamps the same way, and a live session gets pi's answer
-  directly via `thinking_level_changed`. Its rows follow the **live catalog** — `ChatView` resolves the
+  (`model.clampThinking`) — `model.default` clamps the same way. In a live chat, both selectors remain
+  responsive through an optimistic session-store write, then reconcile both model and thinking level from
+  the successful host mutation result; Pi's effective clamp is authoritative and a rejection is surfaced
+  rather than silently discarded. The same successful mutation also sets that workspace's future-chat
+  starting pair on the host. No separate workspace setting or selector mode is introduced. Its rows follow the **live catalog** — `ChatView` resolves the
   session's model through `store`'s `selectCatalogModel` before passing it down, rather than reading the
   session's own snapshot, so a `model.refresh` that changes what a model supports changes the offered
   levels with it), `SessionStatsBar`, `ChatHeader` (the fixed, single-line **panel-header row** —
