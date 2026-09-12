@@ -45,7 +45,10 @@ test("project template previews advance the additive wire shape to v63", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION);
 });
 
-test("host update advisories advance the protocol with an immutable notice channel", () => {
-	expect(PROTOCOL_VERSION).toBe(64);
+test("host update advisories name their immutable notice channel", () => {
 	expect(WS_CHANNELS.hostUpdateAvailable).toBe("host.updateAvailable");
+});
+
+test("sticky workspace model preferences advance the additive wire shape to v65", () => {
+	expect(PROTOCOL_VERSION).toBe(65);
 });
