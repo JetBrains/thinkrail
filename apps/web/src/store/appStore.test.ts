@@ -215,7 +215,7 @@ test("selectLastOpenChatSession: active chat tab first, then the most recent cha
 	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
 });
 
-test("effective session selections update runtime and workspace atomically without self-healing null", () => {
+test("effective session selections apply in one commit and fence a stale transcript resync", () => {
 	const oldModel = {
 		id: "old",
 		name: "Old",
@@ -239,45 +239,28 @@ test("effective session selections update runtime and workspace atomically witho
 	const store = useAppStore.getState();
 	store.setWorkspaces("p1", [workspace]);
 	store.openChatSession("ws1", "s1", oldModel, "high");
+	const revisionBefore = rt("s1").eventRevision;
 	let commits = 0;
 	const unsubscribe = useAppStore.subscribe(() => {
 		commits += 1;
 	});
 
-	store.applySessionModelSelection("s1", "ws1", {
-		model: nextModel,
-		thinkingLevel: "off",
-	});
+	store.applySessionModelSelection("s1", { model: nextModel, thinkingLevel: "off" });
 	unsubscribe();
 
 	expect(commits).toBe(1);
 	expect(rt("s1")).toMatchObject({ model: nextModel, thinkingLevel: "off" });
+	expect(rt("s1").eventRevision).toBe(revisionBefore + 1);
 	expect(useAppStore.getState().workspaces.p1?.[0]).toMatchObject({
-		model: nextModel,
-		thinkingLevel: "off",
+		model: oldModel,
+		thinkingLevel: "high",
 	});
 
-	useAppStore.getState().applySessionModelSelection("s1", "ws1", {
-		model: null,
-		thinkingLevel: "medium",
-	});
+	useAppStore.getState().applySessionModelSelection("s1", { model: null, thinkingLevel: "medium" });
 	expect(rt("s1")).toMatchObject({ model: null, thinkingLevel: "medium" });
-	expect(useAppStore.getState().workspaces.p1?.[0]).toMatchObject({
-		model: nextModel,
-		thinkingLevel: "off",
-	});
-
-	useAppStore
-		.getState()
-		.applySessionModelSelection("s1", "ws1", { model: oldModel, thinkingLevel: "high" }, false);
-	expect(rt("s1")).toMatchObject({ model: oldModel, thinkingLevel: "high" });
-	expect(useAppStore.getState().workspaces.p1?.[0]).toMatchObject({
-		model: nextModel,
-		thinkingLevel: "off",
-	});
 });
 
-test("model selection locks survive view remounts and fence thinking events until settlement", () => {
+test("model selection locks survive a chat-tab close/reopen and fence thinking events until settlement", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "s1", null, "high");
 
@@ -289,6 +272,14 @@ test("model selection locks survive view remounts and fence thinking events unti
 		modelSelectionPending: true,
 		pendingModelSelectionThinkingLevel: "off",
 	});
+
+	useAppStore.getState().closeChatToHistory("s1", false, "ws1");
+	useAppStore.getState().openChatSession("ws1", "s1", null, "high");
+	expect(rt("s1")).toMatchObject({
+		modelSelectionPending: true,
+		pendingModelSelectionThinkingLevel: "off",
+	});
+	expect(useAppStore.getState().beginSessionModelSelection("s1")).toBe(false);
 
 	useAppStore.getState().finishSessionModelSelection("s1");
 	expect(rt("s1")).toMatchObject({

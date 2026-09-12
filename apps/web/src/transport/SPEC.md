@@ -125,8 +125,9 @@ batches high-frequency Pi events without allowing later wire messages to overtak
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `supportsWorkspaceModelPreferences`, `errorText`, `RequestError`,
   `wsErrorCode`, `ConnectionStatus`, `TransportOptions`. `supportsWorkspaceModelPreferences` is the shared
-  `WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION` gate for mutation-result reconciliation and workspace
-  mirroring. `supportsSessionActivity` stays module-internal (its own tests import the file directly) — no
+  `WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION` gate for mutation-result reconciliation: it decides whether a
+  result carries Pi's effective pair or is a v64 ack the caller must reconstruct the pair around.
+  `supportsSessionActivity` stays module-internal (its own tests import the file directly) — no
   sibling decides the activity capability, this module does.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,

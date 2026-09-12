@@ -481,7 +481,7 @@ export default function ChatView({
 			const sessions = await getTransport().request("session.list", { workspaceId });
 			const session = sessions.find((candidate) => candidate.sessionId === sessionId);
 			if (session) {
-				useAppStore.getState().applySessionModelSelection(sessionId, workspaceId, session, false);
+				useAppStore.getState().applySessionModelSelection(sessionId, session);
 			}
 		} catch {
 			return;
@@ -504,7 +504,7 @@ export default function ChatView({
 							session?.thinkingLevel ??
 							runtime.thinkingLevel,
 					};
-			state.applySessionModelSelection(sessionId, workspaceId, effective, supported);
+			state.applySessionModelSelection(sessionId, effective);
 			refreshStats();
 		} catch (error) {
 			toast.error(errorText(error), "Couldn't change model");
@@ -532,7 +532,7 @@ export default function ChatView({
 						thinkingLevel:
 							session?.pendingModelSelectionThinkingLevel ?? session?.thinkingLevel ?? level,
 					};
-			state.applySessionModelSelection(sessionId, workspaceId, effective, supported);
+			state.applySessionModelSelection(sessionId, effective);
 		} catch (error) {
 			toast.error(errorText(error), "Couldn't change effort");
 			await reconcileFailedModelSelection();

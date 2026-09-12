@@ -991,12 +991,7 @@ interface AppState {
 	dropModelsFreshness: () => void;
 	beginSessionModelSelection: (sessionId: string) => boolean;
 	finishSessionModelSelection: (sessionId: string) => void;
-	applySessionModelSelection: (
-		sessionId: string,
-		workspaceId: string,
-		selection: SessionModelSelection,
-		mirrorWorkspace?: boolean,
-	) => void;
+	applySessionModelSelection: (sessionId: string, selection: SessionModelSelection) => void;
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
@@ -3066,41 +3061,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 				};
 			}),
 		),
-	applySessionModelSelection: (sessionId, workspaceId, selection, mirrorWorkspace = true) =>
-		set((s) => {
-			const runtime = s.sessions[sessionId];
-			if (!runtime) return {};
-			const sessions = {
-				...s.sessions,
-				[sessionId]: {
-					...runtime,
-					model: selection.model,
-					thinkingLevel: selection.thinkingLevel,
-					modelSelectionPending: false,
-					pendingModelSelectionThinkingLevel: null,
-				},
-			};
-			const model = selection.model;
-			if (!model || !mirrorWorkspace) return { sessions };
-			const workspace = selectWorkspaceById(s, workspaceId);
-			const list = workspace ? s.workspaces[workspace.projectId] : undefined;
-			if (!workspace || !list) return { sessions };
-			return {
-				sessions,
-				workspaces: {
-					...s.workspaces,
-					[workspace.projectId]: list.map((candidate) =>
-						candidate.id === workspaceId
-							? {
-									...candidate,
-									model,
-									thinkingLevel: selection.thinkingLevel,
-								}
-							: candidate,
-					),
-				},
-			};
-		}),
+	applySessionModelSelection: (sessionId, selection) =>
+		set((s) =>
+			withRuntime(s, sessionId, (runtime) => ({
+				...runtime,
+				model: selection.model,
+				thinkingLevel: selection.thinkingLevel,
+				eventRevision: runtime.eventRevision + 1,
+				modelSelectionPending: false,
+				pendingModelSelectionThinkingLevel: null,
+			})),
+		),
 	setStats: (sessionId, stats) => set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, stats }))),
 	setCommands: (sessionId, commands) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),

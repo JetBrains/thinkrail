@@ -165,12 +165,12 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   level instead of exposing a mixed pair. On rejection `ChatView` reconciles the complete session pair through
   `session.list`; if that read also fails, `finishSessionModelSelection` discards the hidden level and preserves
   the previous visible pair rather than manufacturing an old-model/new-effort state.
-  **`applySessionModelSelection(sessionId,
-  workspaceId, effectivePair, mirrorWorkspace?)`** is the one model-selection writer: in one store commit it
-  replaces both live session fields and, for a v65 host when Pi names an effective model, mirrors the complete
-  pair onto the matching workspace row. A pre-v65 reconciliation passes `false` because that host did not
-  persist the pair. A null effective model still updates the live session but leaves the persisted workspace
-  mirror alone, so a one-session fallback cannot silently self-heal a stale preference.
+  **`applySessionModelSelection(sessionId, effectivePair)`** is the one model-selection writer: in one store
+  commit it replaces both live session fields, releases the lock, and **advances `eventRevision`** so a
+  transcript read already in flight loses `reconcileSession`'s compare-and-install fence instead of reverting
+  the pair the user just applied. It never writes the workspace row: the host persists the preference and
+  publishes `workspace.updated` before it answers the mutation, so a client-side mirror would be a second
+  writer for state that has already arrived.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
   (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
   so a failed send lands in the chat instead of being swallowed; it carries no recovery action because Pi

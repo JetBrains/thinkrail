@@ -336,9 +336,10 @@ a project picker, the prompt hero, and the reused
   model**: the picker reads **Default model**, the effort control is disabled (no model, no supported set),
   and creation sends neither field so the host applies its workspace/default precedence. The dialog does
   not fetch `model.default` or substitute a client-selected fallback. Choosing a model makes that pair
-  explicit; after successful session creation a v65+ host seeds the workspace from Pi's effective result and
-  the web mirrors that returned pair. Against an older host the session still opens with its returned effective
-  pair, but the web does not pretend that unsupported workspace persistence occurred. The pickers' popovers portal into the dialog node (so their lists
+  explicit; after successful session creation a v65+ host seeds the workspace from Pi's effective result, and
+  that row reaches the dialog's client as `workspace.updated` — the dialog never writes it, so an older host
+  simply persists nothing and needs no branch here. The session opens with its returned effective pair either
+  way. The pickers' popovers portal into the dialog node (so their lists
   scroll under the Dialog scroll lock). Their catalog is the shared one — `chat/useModelCatalog`, so the
   dialog and the chat composer cannot drift — which means it is **live**: the picker's Refresh row can
   replace the list underneath a held selection. The dialog therefore reconciles the held model against it
