@@ -171,9 +171,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     - **A dialog outranks streaming** because pi is technically mid-turn while blocked on it, yet the person
       is the blocker. Reporting `running` would hide a prompt waiting for an answer.
     - **`queued` outranks `failed`** (you already sent the follow-up, so the failure is handled and nagging
-      would be wrong) **and outranks `waiting`** — a queued message supersedes a pending questionnaire, but
-      it is still in pi's queue and *not yet in the transcript*, so `assessAnswerability` cannot see it.
-      This is why supersession is not modelled as mutable "awaiting" state on the entry: `waiting` is
+      would be wrong) **and outranks `waiting`** — but the two never co-occur, because a pending
+      questionnaire **holds the queue** (see `askUserQuestion` below): while a question is unanswered every
+      queued or newly-sent message is parked in `entry.heldWhileAsking`, *out* of pi's queue, so
+      `pendingMessageCount` is 0 and the status derives `waiting`, not `queued`. `waiting` itself is
       **derived from the transcript** via `awaitingQuestionToolCallId`, which reuses `assessAnswerability`
       rather than duplicating its already-answered/superseded rules. One authority, nothing to keep in sync.
     - **`aborted` is idle, not `failed`** — cancelling is a choice, not a fault, and a red row for every
@@ -445,13 +446,47 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     only from pi's own CLI entrypoints, never when pi is embedded via `createAgentSession`. Every
     embedder of pi-as-a-library hits this; an upstream fix would not reach us until a deliberate pi bump.
   - `askUserQuestion` — the host-owned **`ask_user_question`** pi custom tool (`createAskUserQuestionTool`,
-    registered on every session via the `askUserQuestionExtension` factory in `extensions`), designed
+    registered on every host chat session via the `askUserQuestionExtensionFor(hold?)` factory in
+    `extensions`), designed
     **ack + terminate** so a questionnaire survives host restarts: `execute` renders nothing and **awaits
     nothing** — it guards on `ctx.hasUI`, runs the pure `validateQuestionnaire`, then immediately returns
     the ack (`details {kind:"ack"}`) with **`terminate: true`**, ending the turn at the tool batch with no
     further LLM call. Nothing pends in memory, the transcript is complete and provider-valid the moment
     the ack lands, and the session is genuinely **idle** while the user thinks — restarts need no
-    question-specific handling at all. The reply arrives over `session.answerQuestion` → the manager's
+    question-specific handling at all.
+
+    **A pending question holds the queue.** `terminate: true` ends the turn, and pi's generic behaviour is
+    to drain its follow-up queue at that boundary — so a message the user queued while the agent was
+    working would start a new turn and *supersede* the unanswered question. That is the cost of our ack +
+    terminate choice (pi's own blocking `ctx.ui.*` dialogs never end the turn, so pi never drains; our
+    tool trades that for restart-survivability), so the host closes it, not pi. The seam is a per-session
+    **`QuestionHold`** wired through `buildResourceLoader(..., questionHold?)` and bound to the entry in
+    `prepareSessionEntry`. Two paths are held into `entry.heldWhileAsking` (a host-owned park buffer,
+    *not* pi's queue): **(a)** inside `execute`, before the ack, if `ctx.hasPendingMessages()` the tool
+    synchronously drains pi's lanes (complete-content snapshot + `clearQueue`) into the buffer — running
+    *inside the tool tick* means pi meets an empty queue at the boundary and settles into `waiting`,
+    race-free; **(b)** while a question is pending (derived from the transcript via
+    `awaitingQuestionToolCallId`, the single authority), `promptSession`/`steerSession`/`followUpSession`
+    park into the same buffer instead of touching pi. The buffer is unioned into every queue projection
+    (`queueContentOf`/`queueStateOf`/`hasQueuedImages`/`queueUpdateEventOf` and the `summaryOf` queue
+    field) so held messages still render as queued chips; it is **not** counted in `pendingMessageCount`
+    (nor `effectivePendingCount`), which is why the status stays `waiting` rather than `queued`. Capture
+    also **resets `stuckEmptyDeliveries`** since it empties pi's lanes (the same invariant
+    `clearQueueSession` holds), and it always clears — even when only stuck-empty placeholders are queued —
+    so no phantom entry drains past the boundary. `clearQueueSession` empties the buffer too, so
+    `removeQueuedSession` (re-queued keepers re-park while the question is still pending) and
+    Stop/`abortSession(..., true)` stay lossless. Pinned by `agentSessionManager.test.ts`.
+
+    **The buffer is in-memory, deliberately** — like pi's own queue, which is also lost on a host
+    restart. A restart while a question is pending is still safe: the transcript stays provider-valid,
+    the question re-derives as `waiting`, and answering runs normally; only the user's *typed-ahead*
+    follow-ups are dropped (the pending window is long, so the exposure is larger than for a normally
+    draining queue). Persisting them would need a store pi does not offer and is deferred. The pending
+    ask is the transcript **tail**, so it survives compaction and `questionPending` stays true until
+    answered — the buffer never orphans (supersession by a later user message cannot happen either, since
+    such a message is itself parked).
+
+    The reply arrives over `session.answerQuestion` → the manager's
     `answerQuestion(sessionId, toolCallId, result)`: it vets the reply against the transcript with the
     pure **`assessAnswerability`** (unknown call / already answered / `not_awaiting` legacy-final results /
     **superseded** — a later free-form user message replaced the answer, so the card is terminal and a
@@ -460,8 +495,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     text = the same `buildQuestionnaireResponse` envelope the blocking design fed the model; a partial
     submission lists its unanswered questions explicitly as declined) — via pi's public
     `AgentSession.sendCustomMessage({triggerTurn: true})`, which starts a new turn when idle and steers
-    the current one when streaming. **Answering live and answering after a restart are the same code
-    path.** The questionnaire is rendered **inline** in chat by `apps/web`'s `AskUserQuestionCard`
+    the current one when streaming, **then flushes `entry.heldWhileAsking` in order** through the same
+    idle-delivery fallback as `followUpSession` (answer first, the user's held follow-ups after). An
+    answer and a Skip/decline flush identically. **Answering live and answering after a restart are the
+    same code path.** The questionnaire is rendered **inline** in chat by `apps/web`'s `AskUserQuestionCard`
     (joined by tool name; lifecycle derived from the transcript — see the chat tools SPEC).
     **Rejected alternatives** (the one place these decisions are recorded): (1) the original **blocking
     design** — `execute` parked on an in-memory promise until the browser replied. A host restart
@@ -572,7 +609,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     raw third-party `.ts` must stay out of the strict tsc graph.
   - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
-    `buildResourceLoader(cwd, settingsManager, getAdmission, excludedPaths, extraFactories?)` then resolves
+    `buildResourceLoader(cwd, settingsManager, getAdmission, excludedPaths, extraFactories?, questionHold?)` then resolves
     Pi's normal settings/package +
     `.pi` / `.agents` extension set, removes that exact opaque identity **before loading**, and explicitly loads
     the remaining paths: sessions use the provider objects already owned by their retained generation, so
@@ -663,7 +700,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
-    `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool),
+    `rpc` host can't render), `askUserQuestionExtensionFor(hold?)` (registers the `ask_user_question` tool),
     `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), **and the
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
     value-imported so dev and the compiled binary take the same path.

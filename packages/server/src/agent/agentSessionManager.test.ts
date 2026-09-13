@@ -18,6 +18,7 @@ import {
 import {
 	createFauxCore,
 	fauxAssistantMessage,
+	fauxText,
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
@@ -31,6 +32,7 @@ import type {
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import {
 	abortSession,
+	answerQuestion,
 	buildSessionSettings,
 	clampThinkingForModel,
 	clearQueueSession,
@@ -1226,6 +1228,150 @@ test("followUpSession on an IDLE session runs the turn — pi's follow-up queue 
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });
+
+test("a message sent while a question is already pending is held (idle send), stays waiting, and flushes on answer", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-hold-idle");
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-idle-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-hold-idle-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-hold-idle",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		const statusOf = async () =>
+			(await listSessionActivity()).find((row) => row.sessionId === s.sessionId)?.status;
+		expect(await statusOf()).toBe("waiting");
+
+		await followUpSession(s.sessionId, "later task");
+		expect(
+			(await listSessions("ws-hold-idle", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual({ steering: [], followUp: ["later task"] });
+		expect(await statusOf()).toBe("waiting");
+		expect(seen(s.sessionId)).not.toContain("LATER_DONE");
+
+		fauxA.appendResponses([fauxAssistantMessage("ANSWERED"), fauxAssistantMessage("LATER_DONE")]);
+		await answerQuestion(s.sessionId, "ask-idle-1", {
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+			cancelled: false,
+		});
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("LATER_DONE")) {
+			if (Date.now() > ranBy) throw new Error("held follow-up never ran after the answer");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		expect(seen(s.sessionId)).toContain("ANSWERED");
+		expect(
+			(await listSessions("ws-hold-idle", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toBeUndefined();
+		removeSession(s.sessionId);
+	} finally {
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("a pending ask_user_question holds the queue — a mid-turn follow-up does not supersede the question (status stays waiting) and flushes in order on answer", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const slow = createFauxCore({
+		provider: "fauxask",
+		api: "fauxask",
+		models: [modelDef("fauxask")],
+		tokensPerSecond: 40,
+	});
+	runtime.registerProvider("fauxask", cfg(slow, "fauxask"));
+	setActivityProjectResolver(() => "project-hold");
+	try {
+		slow.setResponses([
+			fauxAssistantMessage([
+				fauxText(`ASKING ${"word ".repeat(60)}`),
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Which one?",
+								header: "Pick",
+								options: [
+									{ label: "A", description: "first" },
+									{ label: "B", description: "second" },
+								],
+							},
+						],
+					},
+					{ id: "ask-hold-1" },
+				),
+			]),
+		]);
+		const cwd = tmpCwd("trpi-hold-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-hold",
+			model: toWireModel(slow.getModel()),
+		});
+		const turn = promptSession(s.sessionId, "work on the first thing");
+		turn.catch(() => {});
+		const streamedBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("message_update")) {
+			if (Date.now() > streamedBy) throw new Error("first turn never started streaming");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		await followUpSession(s.sessionId, "then do the second thing");
+		await turn;
+
+		const status = (await listSessionActivity()).find(
+			(row) => row.sessionId === s.sessionId,
+		)?.status;
+		expect(status).toBe("waiting");
+		const held = (await listSessions("ws-hold", cwd)).find((row) => row.sessionId === s.sessionId);
+		expect(held?.queue).toEqual({ steering: [], followUp: ["then do the second thing"] });
+		expect(seen(s.sessionId)).not.toContain("SECOND_TURN");
+
+		slow.appendResponses([
+			fauxAssistantMessage("ANSWER_TURN"),
+			fauxAssistantMessage("SECOND_TURN"),
+		]);
+		await answerQuestion(s.sessionId, "ask-hold-1", {
+			answers: [{ questionIndex: 0, question: "Which one?", kind: "option", answer: "A" }],
+			cancelled: false,
+		});
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("SECOND_TURN")) {
+			if (Date.now() > ranBy) throw new Error("held follow-up never ran after the answer");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		expect(seen(s.sessionId)).toContain("ANSWER_TURN");
+		expect(
+			(await listSessions("ws-hold", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toBeUndefined();
+		removeSession(s.sessionId);
+	} finally {
+		runtime.unregisterProvider("fauxask");
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+}, 20000);
 
 test("stop losslessly restores an image-bearing queue before aborting", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
