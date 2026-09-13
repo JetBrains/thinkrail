@@ -22,7 +22,12 @@ export function readPlanReview(raw: unknown): PlanReviewResult | null {
 export function requestReviewSummary({ result }: ToolRenderProps): string {
 	const review = readPlanReview(result);
 	if (!review) return "";
-	if (review.verdict === "approve") return `Approved “${review.itemTitle}”`;
+	if (review.verdict === "approve") {
+		const open = review.blockedByOpenFindings ?? 0;
+		return open > 0
+			? `Approved “${review.itemTitle}” · ${open} still open`
+			: `Approved “${review.itemTitle}”`;
+	}
 	const n = review.findings.length;
 	return `Changes requested on “${review.itemTitle}” · ${n} ${n === 1 ? "finding" : "findings"}`;
 }
@@ -36,7 +41,8 @@ export function RequestReviewCard({ toolCallId, result, status }: ToolRenderProp
 			</span>
 		);
 	}
-	const approved = review.verdict === "approve";
+	const blocked = review.blockedByOpenFindings ?? 0;
+	const approved = review.verdict === "approve" && blocked === 0;
 	const items = reviewFixCommentsToItems(review.findings);
 	return (
 		<div data-testid="request-review-card" data-verdict={review.verdict} className="tr-text-ui">
@@ -48,8 +54,14 @@ export function RequestReviewCard({ toolCallId, result, status }: ToolRenderProp
 				)}
 				<div className="min-w-0 flex-1">
 					<span data-testid="request-review-verdict" className="block text-text-default">
-						{approved ? "Approved" : "Changes requested"}
+						{review.verdict === "approve" ? "Approved" : "Changes requested"}
 						<span className="text-text-muted"> — “{review.itemTitle}”</span>
+						{blocked > 0 ? (
+							<span data-testid="request-review-blocked" className="text-feedback-warning">
+								{" "}
+								· not settled, {blocked} finding{blocked === 1 ? "" : "s"} still open
+							</span>
+						) : null}
 					</span>
 					{review.summary ? (
 						<p className="mt-4 whitespace-pre-wrap text-text-muted">{review.summary}</p>

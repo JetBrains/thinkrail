@@ -205,10 +205,18 @@ channel fan-out, and the process-boot wrapper both launchers share.
   fresh commit delta on a `changes_requested` record OR a record reset to `unreviewed` — the latter is
   the path-list fallback (`todos/artifacts.ts` drops the record when the redo can't be committed), where
   a surviving spent cycle is itself the "a fix landed" signal, there being no sha to watermark against.
-  **`approve` is rejected while the item has open findings** is now structural rather than a tool gate:
-  the reviewer cannot approve and file findings in the same verdict, and `resolve_comment` stays the
-  WORKER'S tool — `reviews.applyAgentResolution` only resolves a `sent` comment, and only when the
-  calling session equals the chat `markCommentsSent` recorded it as delivered to;
+  **An `approve` never settles an item that still has open findings.** The two rounds of a fix cycle are
+  independent runs, so nothing structural connects round 2's approve to round 1's findings: the gate is
+  explicit, `itemOpenFindings` checked before `approveTodoReview`. Its set is deliberately WIDER than the
+  fix candidates — `itemFixFindings` is `draft`-only (a `sent` finding must not ride a second fix
+  request), while the review model counts **both `draft` and `sent`** as unresolved, since a worker that
+  fixed the code without calling `resolve_comment` left the finding open. Without the gate the plan reads
+  ready-to-ship and Open PR lights up over a comment the Review panel still shows as blocking. A blocked
+  approve clears the `reviewing` mark, leaves the record alone, tells the worker to `resolve_comment`
+  what it addressed (`composeText`'s third shape) and rides the wire as
+  `PlanReviewResult.blockedByOpenFindings` so the card cannot claim the step is done. `resolve_comment`
+  stays the WORKER'S tool — `reviews.applyAgentResolution` only resolves a `sent` comment, and only when
+  the calling session equals the chat `markCommentsSent` recorded it as delivered to;
   `project.setTrust`
   acknowledges the aliases present at grant via agent's
   `listProjectAliasSkillNames`; `project.acknowledgeSkills` / `project.setSkillEnabled` /

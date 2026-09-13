@@ -768,6 +768,9 @@ export interface PlanReviewResult {
 	/** The reviewer's one-paragraph rationale (shown on the card). */
 	summary?: string;
 	findings: ReviewFixComment[];
+	/** Host-set on an `approve` it refused to settle: findings from an earlier round are still open, so
+	 * the step stays unreviewed until the worker resolves them. */
+	blockedByOpenFindings?: number;
 }
 
 export const PLAN_REVIEW_VERDICTS: readonly PlanReviewVerdict[] = ["approve", "request_changes"];
@@ -780,6 +783,8 @@ export function isPlanReviewResult(value: unknown): value is PlanReviewResult {
 	if (typeof r.itemId !== "string" || typeof r.itemTitle !== "string") return false;
 	if (typeof r.verdict !== "string" || !PLAN_REVIEW_VERDICTS.includes(r.verdict)) return false;
 	if (r.summary !== undefined && typeof r.summary !== "string") return false;
+	if (r.blockedByOpenFindings !== undefined && typeof r.blockedByOpenFindings !== "number")
+		return false;
 	if (!Array.isArray(r.findings)) return false;
 	return r.findings.every(
 		(f) => !!f && typeof f === "object" && typeof f.id === "string" && typeof f.body === "string",
