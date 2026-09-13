@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
-import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+	type ExtensionContext,
+	ModelRuntime,
+	SessionManager,
+} from "@earendil-works/pi-coding-agent";
 import type { Workspace } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import {
@@ -15,12 +19,13 @@ import {
 	setSessionPublisher,
 	toWireModel,
 } from "../agent";
+import { createRequestReviewTool } from "../agent/requestReviewTool";
 import { saveWorkspaces } from "../persistence";
 import { getReviewSnapshot } from "../reviews";
 import { resetConfigCache, updateConfig } from "../settings";
 import { todoReviewAutoCycles, todoReviewRecord } from "../todos";
 import { itemReviewActive } from "./planReviewQueue";
-import { type ReviewRunner, startPlanReview } from "./requestReview";
+import { installRequestReviewSeam, type ReviewRunner, startPlanReview } from "./requestReview";
 import { isItemUnderActiveReview } from "./todoReview";
 
 let dataDir: string;
@@ -259,4 +264,48 @@ test("a fix the worker never accepted gives the auto cycle back instead of stran
 	expect(comments).toHaveLength(1);
 	expect(comments[0]?.status).toBe("draft");
 	expect(isItemUnderActiveReview(sessionId, id)).toBe(false);
+});
+
+test("a re-review approve does NOT settle the step while an earlier finding is still open", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+
+	// Round 1: a finding is filed and delivered to the worker (status `sent`).
+	startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+	await settle(sessionId, id);
+	const sent = (await getReviewSnapshot(WS)).comments.find((c) => c.origin?.todoId === id);
+	expect(sent?.status).toBe("sent");
+
+	// Round 2: the worker changed the code but never resolved the finding, and the reviewer approves.
+	startPlanReview(WS, sessionId, id, verdictRunner(approve));
+	await settle(sessionId, id);
+
+	// The plan must not read ready-to-ship over a finding the Review panel still shows as open.
+	expect(todoReviewRecord(ref)?.state).not.toBe("reviewed");
+	expect((await getReviewSnapshot(WS)).comments.find((c) => c.id === sent?.id)?.status).toBe(
+		"sent",
+	);
+	// The spinner is cleared either way — an unsettled approve is not an in-flight review.
+	expect(itemReviewActive(sessionId, id)).toBe(false);
+});
+
+test("a request_review that fails before the review starts releases its claim, so the retry runs", async () => {
+	installRequestReviewSeam(verdictRunner(approve));
+	const sessionId = await workerSession();
+	// No change set yet: startTodoReview throws, and the claim must not outlive the failed call.
+	const id = new TodoStore(worktree, sessionId).add({ title: "not yet committed" }).id;
+	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+	const run = () =>
+		createRequestReviewTool().execute("tc", { itemId: id } as never, undefined, undefined, ctx);
+
+	await expect(run()).rejects.toThrow(/no change set/);
+	expect(itemReviewActive(sessionId, id)).toBe(false);
+
+	// The step becomes reviewable; the retry must reach the reviewer, not "already being reviewed".
+	new TodoStore(worktree, sessionId).update(id, {
+		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],
+	});
+	await expect(run()).resolves.toBeDefined();
+	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })?.state).toBe("reviewed");
 });

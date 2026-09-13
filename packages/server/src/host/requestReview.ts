@@ -38,7 +38,7 @@ import {
 } from "./planReviewQueue";
 import { REVIEWER_OUTPUT_CONTRACT, REVIEWER_SYSTEM_PROMPT, REVIEWER_TOOLS } from "./reviewerRole";
 import { withReviewLock } from "./reviewLock";
-import { claimItemFix, itemFixFindings, releaseItemFix } from "./todoReview";
+import { claimItemFix, itemFixFindings, itemOpenFindings, releaseItemFix } from "./todoReview";
 
 const DEFAULT_FIX_NOTE = "Address the reviewer's findings below.";
 
@@ -79,7 +79,12 @@ export function parseVerdict(
 	return { ...candidate, findings };
 }
 
-export function composeText(result: PlanReviewResult, canAutoFix: boolean): string {
+export type VerdictOutcome =
+	| { kind: "approved" }
+	| { kind: "approve-blocked"; openFindings: number }
+	| { kind: "changes"; canAutoFix: boolean };
+
+export function composeText(result: PlanReviewResult, outcome: VerdictOutcome): string {
 	const findings =
 		result.findings.length > 0
 			? `\n\n${result.findings
@@ -92,11 +97,19 @@ export function composeText(result: PlanReviewResult, canAutoFix: boolean): stri
 					.join("\n")}`
 			: "";
 	const rationale = result.summary ? `\n\n${result.summary}` : "";
-	if (result.verdict === "approve") {
+	if (outcome.kind === "approved") {
 		return `Review verdict: APPROVE — step "${result.itemTitle}".${rationale}${findings}`;
 	}
+	if (outcome.kind === "approve-blocked") {
+		const n = outcome.openFindings;
+		return (
+			`Review verdict: APPROVE — step "${result.itemTitle}" — but it is NOT settled: ` +
+			`${n} earlier finding${n === 1 ? "" : "s"} on this step ${n === 1 ? "is" : "are"} still open in Review. ` +
+			`Resolve each one you actually addressed with resolve_comment, then request_review again.${rationale}${findings}`
+		);
+	}
 	const head = `Review verdict: REQUEST_CHANGES — step "${result.itemTitle}".`;
-	const next = canAutoFix
+	const next = outcome.canAutoFix
 		? "Address each finding below (re-open the step, fix it, mark it done with a fresh commit), then request_review again."
 		: "The automated fix cycle is spent or auto-fix is off: do NOT fix now. Report these findings to the user and wait for their direction.";
 	return `${head} ${next}${rationale}${findings}`;
@@ -195,10 +208,21 @@ async function recordVerdict(
 	result: PlanReviewResult,
 	reviewedSha: string,
 	deliverFix: boolean,
-): Promise<{ canAutoFix: boolean }> {
+): Promise<VerdictOutcome> {
 	if (result.verdict === "approve") {
-		approveTodoReview(params, "agent");
-		return { canAutoFix: false };
+		const open = await itemOpenFindings(params);
+		if (open.length === 0) {
+			approveTodoReview(params, "agent");
+			return { kind: "approved" };
+		}
+		cancelTodoReview(params);
+		if (deliverFix)
+			notifyExtUi(
+				params.sessionId,
+				`The reviewer approved "${result.itemTitle}", but ${open.length} finding(s) on it are still open in Review — the step stays unreviewed until they are resolved.`,
+				"warning",
+			);
+		return { kind: "approve-blocked", openFindings: open.length };
 	}
 	for (const f of result.findings) await fileFinding(params, reviewedSha, f);
 	const spent = todoReviewAutoCycles(params) ?? 0;
@@ -212,13 +236,14 @@ async function recordVerdict(
 		});
 	if (!canAutoFix || !deliverFix) {
 		record(canAutoFix ? 1 : 2);
-		return { canAutoFix };
+		return { kind: "changes", canAutoFix };
 	}
 	const claimed = claimItemFix(params.sessionId, params.id);
 	const { item } = record(1);
-	if (claimed && (await deliverFixToWorker(params, item, note))) return { canAutoFix };
+	if (claimed && (await deliverFixToWorker(params, item, note)))
+		return { kind: "changes", canAutoFix };
 	record(2);
-	return { canAutoFix: false };
+	return { kind: "changes", canAutoFix: false };
 }
 
 export type ReviewRunner = typeof runReviewSubagent;
@@ -258,17 +283,21 @@ async function handleRequestReview(
 	sessionId: string,
 	itemId: string,
 	signal: AbortSignal | undefined,
+	runSubagent: ReviewRunner,
 ): Promise<{ result: PlanReviewResult; text: string }> {
 	const workspaceId = getSessionWorkspaceId(sessionId);
 	if (!workspaceId) throw new Error("This chat is not attached to a workspace.");
 	if (!claimItemReview(sessionId, itemId)) throw new Error("This step is already being reviewed.");
 	const params = { workspaceId, sessionId, id: itemId };
-	const { pkg, reviewedSha } = startTodoReview(params);
 	try {
+		// Inside the guard: an item with no change set throws here, and the claim must not outlive it.
+		const { pkg, reviewedSha } = startTodoReview(params);
 		const itemTitle = await itemTitleOf(workspaceId, sessionId, itemId);
-		const result = await runReview(params, pkg, reviewedSha, itemTitle, signal, runReviewSubagent);
-		const { canAutoFix } = await recordVerdict(params, result, reviewedSha, false);
-		return { result, text: composeText(result, canAutoFix) };
+		const result = await runReview(params, pkg, reviewedSha, itemTitle, signal, runSubagent);
+		const outcome = await recordVerdict(params, result, reviewedSha, false);
+		const blocked =
+			outcome.kind === "approve-blocked" ? { blockedByOpenFindings: outcome.openFindings } : {};
+		return { result: { ...result, ...blocked }, text: composeText(result, outcome) };
 	} catch (err) {
 		cancelTodoReview(params);
 		throw err;
@@ -324,6 +353,8 @@ export async function maybeAutoReReview(workspaceId: string, sessionId: string):
 	}
 }
 
-export function installRequestReviewSeam(): void {
-	setRequestReviewHandler(handleRequestReview);
+export function installRequestReviewSeam(runSubagent: ReviewRunner = runReviewSubagent): void {
+	setRequestReviewHandler((sessionId, itemId, signal) =>
+		handleRequestReview(sessionId, itemId, signal, runSubagent),
+	);
 }

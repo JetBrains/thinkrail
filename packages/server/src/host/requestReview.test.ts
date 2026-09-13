@@ -55,19 +55,32 @@ const CHANGES: PlanReviewResult = {
 };
 
 test("composeText tracks the fix budget: a live cycle tells the worker to fix, a spent one to wait", () => {
-	const on = composeText(CHANGES, true);
+	const on = composeText(CHANGES, { kind: "changes", canAutoFix: true });
 	expect(on).toContain("REQUEST_CHANGES");
 	expect(on).toContain("request_review again");
 	expect(on).toContain("[f1] (a.ts:4-6) off-by-one");
 
-	const off = composeText(CHANGES, false);
+	const off = composeText(CHANGES, { kind: "changes", canAutoFix: false });
 	expect(off).toContain("spent or auto-fix is off");
 	expect(off).toContain("do NOT fix now");
 	expect(off).not.toContain("request_review again");
 });
 
+test("an approve the host refused to settle tells the worker to resolve, not that it is done", () => {
+	const text = composeText(
+		{ ...CHANGES, verdict: "approve", findings: [] },
+		{
+			kind: "approve-blocked",
+			openFindings: 2,
+		},
+	);
+	expect(text).toContain("NOT settled");
+	expect(text).toContain("2 earlier findings");
+	expect(text).toContain("resolve_comment");
+});
+
 test("composeText for approve names the step and never asks for a fix", () => {
-	const text = composeText({ ...CHANGES, verdict: "approve", findings: [] }, true);
+	const text = composeText({ ...CHANGES, verdict: "approve", findings: [] }, { kind: "approved" });
 	expect(text).toContain("APPROVE");
 	expect(text).not.toContain("REQUEST_CHANGES");
 });
