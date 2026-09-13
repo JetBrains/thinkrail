@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { terminalShell, terminalShellArgs } from "./shellArgs";
+import { terminalShell, terminalShellArgs, terminalShellStartFailure } from "./shellArgs";
 
 const noPwsh = () => null;
 const withPwsh = (bin: string) => (bin === "pwsh.exe" ? "C:\\pwsh\\pwsh.exe" : null);
@@ -24,6 +24,32 @@ test("an explicit preference is a literal pin, never probed or substituted", () 
 	expect(terminalShell("win32", {}, "pwsh", noPwsh)).toBe("pwsh.exe");
 	expect(terminalShell("win32", {}, "powershell", noPwsh)).toBe("powershell.exe");
 	expect(terminalShell("win32", {}, "cmd", withPwsh)).toBe("cmd.exe");
+});
+
+test("shell start failures identify the selected Windows shell without substituting it", () => {
+	expect(terminalShellStartFailure("win32", {}, "pwsh")).toContain(
+		"Couldn’t start PowerShell 7 (pwsh.exe)",
+	);
+	expect(terminalShellStartFailure("win32", {}, "powershell")).toContain(
+		"Couldn’t start Windows PowerShell (powershell.exe)",
+	);
+	expect(terminalShellStartFailure("win32", {}, "cmd")).toContain(
+		"Couldn’t start Command Prompt (cmd.exe)",
+	);
+});
+
+test("shell start failure guidance follows the executable source", () => {
+	const fromOverride = terminalShellStartFailure(
+		"win32",
+		{ SHELL: "C:\\private\\broken.exe" },
+		"pwsh",
+	);
+	expect(fromOverride).toContain("configured by SHELL");
+	expect(fromOverride).not.toContain("C:\\private\\broken.exe");
+	expect(terminalShellStartFailure("win32", {}, "auto")).toContain(
+		"automatically selected Windows shell",
+	);
+	expect(terminalShellStartFailure("linux", {})).toContain("configured shell");
 });
 
 test("ComSpec/COMSPEC no longer influence the Windows default", () => {
