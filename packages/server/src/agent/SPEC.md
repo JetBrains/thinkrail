@@ -172,9 +172,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       is the blocker. Reporting `running` would hide a prompt waiting for an answer.
     - **`queued` outranks `failed`** (you already sent the follow-up, so the failure is handled and nagging
       would be wrong) **and outranks `waiting`** — but the two never co-occur, because a pending
-      questionnaire **holds the queue** (see `askUserQuestion` below): while a question is unanswered every
-      queued or newly-sent message is parked in `entry.heldWhileAsking`, *out* of pi's queue, so
-      `pendingMessageCount` is 0 and the status derives `waiting`, not `queued`. `waiting` itself is
+      questionnaire **holds the queue** (see `askUserQuestion` below): while a question is unanswered any
+      *queued* message (an explicit `steer`/`followUp`, or one captured at the ask boundary) is parked in
+      `entry.heldWhileAsking`, *out* of pi's queue, so `pendingMessageCount` is 0 and the status derives
+      `waiting`, not `queued`. (A free-form `prompt` reply is not parked — it supersedes the card.)
+      `waiting` itself is
       **derived from the transcript** via `awaitingQuestionToolCallId`, which reuses `assessAnswerability`
       rather than duplicating its already-answered/superseded rules. One authority, nothing to keep in sync.
     - **`aborted` is idle, not `failed`** — cancelling is a choice, not a fault, and a red row for every
@@ -466,8 +468,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     synchronously drains pi's lanes (complete-content snapshot + `clearQueue`) into the buffer — running
     *inside the tool tick* means pi meets an empty queue at the boundary and settles into `waiting`,
     race-free; **(b)** while a question is pending (derived from the transcript via
-    `awaitingQuestionToolCallId`, the single authority), `promptSession`/`steerSession`/`followUpSession`
-    park into the same buffer instead of touching pi. The buffer is unioned into every queue projection
+    `awaitingQuestionToolCallId`, the single authority), the **explicit queue sends**
+    `steerSession`/`followUpSession` park into the same buffer instead of touching pi. A normal
+    `promptSession` is **not** parked: a free-form message is the user's reply per the
+    `ask_user_question` contract, so it supersedes the card (its user message makes `assessAnswerability`
+    return `superseded`) and then **flushes the held buffer in order** — the typed reply runs first, the
+    previously-held queued work after. The buffer is unioned into every queue projection
     (`queueContentOf`/`queueStateOf`/`hasQueuedImages`/`queueUpdateEventOf` and the `summaryOf` queue
     field) so held messages still render as queued chips; it is **not** counted in `pendingMessageCount`
     (nor `effectivePendingCount`), which is why the status stays `waiting` rather than `queued`. Capture
@@ -483,8 +489,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     follow-ups are dropped (the pending window is long, so the exposure is larger than for a normally
     draining queue). Persisting them would need a store pi does not offer and is deferred. The pending
     ask is the transcript **tail**, so it survives compaction and `questionPending` stays true until
-    answered — the buffer never orphans (supersession by a later user message cannot happen either, since
-    such a message is itself parked).
+    answered — or until a free-form `promptSession` reply supersedes it, the only way a later user message
+    reaches the transcript while a question is pending (explicit `steer`/`followUp` sends park instead).
 
     The reply arrives over `session.answerQuestion` → the manager's
     `answerQuestion(sessionId, toolCallId, result)`: it vets the reply against the transcript with the

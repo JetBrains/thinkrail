@@ -1129,10 +1129,6 @@ export async function promptSession(
 	images?: ImageContent[],
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
-	if (questionPending(entry)) {
-		parkHeld(entry, text, images);
-		return;
-	}
 	if (entry.session.isStreaming) {
 		await queueSessionMessage(entry, "steering", text, images, () =>
 			entry.session.steer(text, images),
@@ -1140,6 +1136,7 @@ export async function promptSession(
 		return;
 	}
 	await entry.session.prompt(text, images ? { images } : undefined);
+	await flushHeldQueue(entry);
 }
 
 export async function steerSession(

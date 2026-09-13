@@ -1292,6 +1292,72 @@ test("a message sent while a question is already pending is held (idle send), st
 	}
 });
 
+test("a free-form prompt while a question is pending supersedes the card and then flushes previously held work in order", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-supersede");
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-sup-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-sup-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-sup",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		const statusOf = async () =>
+			(await listSessionActivity()).find((row) => row.sessionId === s.sessionId)?.status;
+		expect(await statusOf()).toBe("waiting");
+
+		await followUpSession(s.sessionId, "held task");
+		expect(
+			(await listSessions("ws-sup", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual({ steering: [], followUp: ["held task"] });
+
+		fauxA.appendResponses([fauxAssistantMessage("REPLY_TURN"), fauxAssistantMessage("HELD_TURN")]);
+		await promptSession(s.sessionId, "reply instead");
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("HELD_TURN")) {
+			if (Date.now() > ranBy)
+				throw new Error("held work never flushed after the superseding prompt");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		expect(seen(s.sessionId)).toContain("REPLY_TURN");
+		expect(
+			(await listSessions("ws-sup", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toBeUndefined();
+		const transcript = await getSessionMessages(s.sessionId, "ws-sup", cwd);
+		expect(
+			transcript.messages.some(
+				(message) =>
+					message.role === "user" && JSON.stringify(message.content).includes("reply instead"),
+			),
+		).toBe(true);
+		removeSession(s.sessionId);
+	} finally {
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("a pending ask_user_question holds the queue — a mid-turn follow-up does not supersede the question (status stays waiting) and flushes in order on answer", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	const slow = createFauxCore({
