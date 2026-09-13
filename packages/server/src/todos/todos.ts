@@ -124,17 +124,15 @@ async function resolveUnattributed(
 
 async function resolveAdoptedCommits(
 	workspaceId: string,
-	sessionId: string,
-	root: string,
 	plan: StoredPlan,
+	records: Record<string, TodoReviewRecord>,
+	pending: Record<string, { at: string; shas?: string[] }>,
 ): Promise<TodoItem[]> {
 	try {
 		const owned = new Set(flatItems(plan).flatMap(commitShas));
 		const { commits } = await listCommits(workspaceId);
 		const adopted = commits.filter((c) => !owned.has(c.sha));
 		if (adopted.length === 0) return [];
-		const records = readReviewRecords(root, sessionId);
-		const pending = readReviewMeta(root, sessionId).pending;
 		return await Promise.all(
 			adopted.map(async (c): Promise<TodoItem> => {
 				const id = `commit:${c.sha}`;
@@ -183,7 +181,7 @@ export async function listTodos(params: {
 	if (plan.summary) wire.summary = plan.summary;
 	const unattributed = await resolveUnattributed(params.workspaceId, root, params.sessionId, plan);
 	if (unattributed.length > 0) wire.unattributed = unattributed;
-	const adoptedCommits = await resolveAdoptedCommits(params.workspaceId, params.sessionId, root, plan);
+	const adoptedCommits = await resolveAdoptedCommits(params.workspaceId, plan, records, pending);
 	if (adoptedCommits.length > 0) wire.adoptedCommits = adoptedCommits;
 	const reviewer = readReviewMeta(root, params.sessionId).reviewerSessionId;
 	if (reviewer) wire.reviewerSessionId = reviewer;
@@ -277,9 +275,7 @@ function adoptedCommitSha(id: string): string | undefined {
 	return ADOPTED_COMMIT_ID.exec(id)?.[1];
 }
 
-// A branch commit no plan item owns, reconstructed as a synthetic store-shaped item so the review ops
-// resolve it by id without ever writing it to the store. origin stays "agent" (StoredItem's type has no
-// "adopted"; the wire item gets origin "adopted" in the listTodos derivation). See todos/SPEC.md.
+// origin is "agent": StoredItem has no "adopted"; the wire item gets "adopted" in listTodos. see todos/SPEC.md
 function adoptedStoredItem(workspaceId: string, id: string): StoredItem | null {
 	const sha = adoptedCommitSha(id);
 	if (!sha) return null;

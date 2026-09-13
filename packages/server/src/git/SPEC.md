@@ -219,9 +219,12 @@ ref off the workspace-create critical path.
   **writes** the user's branch; the caller serializes it per workspace.
   **`gitHeadSha(workspaceId)`** → `string | null` — `rev-parse HEAD` (`null` on an unborn HEAD), recorded
   into the todos baseline sidecar at `in_progress`.
+  **`readCommitSubject(workspaceId, sha)`** → `string | null` — a commit's subject line (`null` when the
+  sha is malformed or unresolvable), the sync read behind the todos module's adopted-commit review
+  resolver (`base..HEAD` commits owned by no plan item).
 - **Public surface (barrel):** `git`, `gitAsync`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,
-  `readBlobAt`,
+  `readBlobAt`, `readCommitSubject`,
   `gitCommitPaths`, `gitHeadSha`, `listCommits`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,

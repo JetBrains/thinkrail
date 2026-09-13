@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { AssistantMessage, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import type { AskState } from "./askState";
 import {
+	adoptedCommits,
 	flatItems,
 	groupProgress,
 	itemChangeSet,
@@ -233,6 +234,25 @@ test("itemRevisions lists the commit history in order; review derivations follow
 	const plan = { todos: [reviewable, research, approved], groups: [] };
 	expect(reviewableItems(plan).map((t) => t.id)).toEqual([reviewable.id, approved.id]);
 	expect(reviewProgress(plan)).toEqual({ reviewed: 1, total: 2 });
+});
+
+test("reviewableItems spans adoptedCommits, but planSummary's build count counts planned items only", () => {
+	const planned: TodoItem = {
+		...item("planned", "done"),
+		artifacts: [{ kind: "commit", sha: "abc" }],
+		review: { state: "unreviewed", revision: 1 },
+	};
+	const adopted: TodoItem = {
+		...item("loose", "done"),
+		id: "commit:def456",
+		origin: "adopted",
+		artifacts: [{ kind: "commit", sha: "def456" }],
+		review: { state: "unreviewed", revision: 1 },
+	};
+	const plan = { todos: [planned], groups: [], adoptedCommits: [adopted] };
+	expect(adoptedCommits(plan).map((t) => t.id)).toEqual(["commit:def456"]);
+	expect(reviewableItems(plan).map((t) => t.id)).toEqual([planned.id, "commit:def456"]);
+	expect(planSummary(plan)).toEqual({ done: 1, total: 1, current: undefined });
 });
 
 test("itemOpenFindings: counts open agent comments anchored in the item's change set; reviewChangesRequested reads the verdict", () => {

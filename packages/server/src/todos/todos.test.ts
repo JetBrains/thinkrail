@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import type { TodoItem, TodoPlan } from "@thinkrail/contracts";
+import type { Todo, TodoPlan } from "pi-todos/core";
 import { openTodoCount } from "./todos";
 
 let n = 0;
-function item(status: TodoItem["status"]): TodoItem {
+function item(status: Todo["status"]): Todo {
 	n += 1;
 	return {
 		id: `t-${n}`,
@@ -15,7 +15,7 @@ function item(status: TodoItem["status"]): TodoItem {
 	};
 }
 
-function plan(todos: TodoItem[], groups: TodoPlan["groups"] = []): TodoPlan {
+function plan(todos: Todo[], groups: TodoPlan["groups"] = []): TodoPlan {
 	return { todos, groups };
 }
 
@@ -34,10 +34,9 @@ test("grouped items count alongside loose ones", () => {
 			{
 				id: "g-a",
 				title: "task A",
-				status: "pending",
 				todos: [item("pending"), item("done")],
 			},
-			{ id: "g-b", title: "task B", status: "active", todos: [item("in_progress")] },
+			{ id: "g-b", title: "task B", todos: [item("in_progress")] },
 		],
 	);
 	expect(openTodoCount(p)).toBe(2);
@@ -45,8 +44,6 @@ test("grouped items count alongside loose ones", () => {
 
 test("an all-done plan counts 0", () => {
 	expect(
-		openTodoCount(
-			plan([item("done")], [{ id: "g", title: "task", status: "done", todos: [item("done")] }]),
-		),
+		openTodoCount(plan([item("done")], [{ id: "g", title: "task", todos: [item("done")] }])),
 	).toBe(0);
 });
