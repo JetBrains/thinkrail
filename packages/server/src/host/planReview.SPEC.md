@@ -57,6 +57,15 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   delivered request strands the item: the auto-re-review trigger waits for a delta that nothing will
   produce, and a later review reads the cycle as already spent. Pinned by the rejected-send test in
   `planReview.test.ts`.
+- **An approve is a verdict, not a settlement.** `recordVerdict` settles `reviewed` only when
+  `itemOpenFindings` is empty; otherwise it clears the mark, leaves the record, and reports
+  `approve-blocked` so the worker is told to resolve what it fixed. Round 2 of a fix cycle is a separate
+  run from round 1, so nothing structural stops an approve from landing over an unresolved `sent`
+  finding — only this check does.
+- **A claim must not outlive the call that took it.** `handleRequestReview` claims the item, so every
+  post-claim exit — including `startTodoReview` throwing on a step with no change set — has to run the
+  release. Leaking it wedges that step as "already being reviewed" until the host restarts. Both are
+  pinned in `planReview.test.ts`.
 - **Both entry points share the cap.** The worker's `request_review` tool and the Start review button
   compute the same `canAutoFix`; the tool path reports it in the tool result text, the button path acts
   on it by sending the fix. Without a shared cap the tool path loops fix → review → fix forever.

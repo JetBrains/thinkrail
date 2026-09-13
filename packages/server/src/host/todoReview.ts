@@ -66,6 +66,12 @@ export async function itemFixFindings(p: ItemRef): Promise<ReviewComment[]> {
 	return (await itemFindings(p)).filter((c) => c.status === "draft");
 }
 
+/** The approve gate's set — WIDER than the fix candidates: a `sent` finding the worker fixed without
+ * resolving is still unresolved, and only `resolve_comment`/dismiss closes one. See host/SPEC.md. */
+export async function itemOpenFindings(p: ItemRef): Promise<ReviewComment[]> {
+	return (await itemFindings(p)).filter((c) => c.status === "draft" || c.status === "sent");
+}
+
 /** Boot-time host-restart reconciliation — see host/SPEC.md ("reconcilePendingReviewsOnBoot"). */
 export function reconcilePendingReviewsOnBoot(): void {
 	for (const project of getProjects()) {
