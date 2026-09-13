@@ -98,7 +98,7 @@ test("queries an open GitHub PR for the explicit branch", async () => {
 		"--state",
 		"open",
 		"--json",
-		"number",
+		"number,url",
 		"--limit",
 		"1",
 	]);
@@ -315,4 +315,40 @@ test("a superseded lookup joins the newer in-flight generation", async () => {
 	releases[1]?.({ ok: true, out: '[{"number":2}]' });
 	expect(await stale).toEqual({ kind: "pull-request", number: 2 });
 	expect(await fresh).toEqual({ kind: "pull-request", number: 2 });
+});
+
+test("the provider's review url rides the lookup, so a fresh client can link the PR chip out", async () => {
+	const cwd = repo("git@github.com:acme/app.git");
+	let asked: string[] = [];
+	const run = async (_cwd: string, command: string[]) => {
+		asked = command;
+		return { ok: true, out: '[{"number":464,"url":"https://github.com/acme/app/pull/464"}]' };
+	};
+	expect(await findOpenBranchReviewWithRunner(cwd, "feature", run)).toEqual({
+		kind: "pull-request",
+		number: 464,
+		url: "https://github.com/acme/app/pull/464",
+	});
+	// The url has to be REQUESTED — `--json number` alone is what left the chip unclickable.
+	expect(asked.join(" ")).toContain("number,url");
+});
+
+test("a GitLab row's web_url is the same url, and a row with none stays a plain number", async () => {
+	const cwd = repo("git@gitlab.com:acme/app.git");
+	const withUrl = async () => ({
+		ok: true,
+		out: '[{"iid":12,"web_url":"https://gitlab.com/acme/app/-/merge_requests/12"}]',
+	});
+	expect(await findOpenBranchReviewWithRunner(cwd, "feature", withUrl)).toEqual({
+		kind: "merge-request",
+		number: 12,
+		url: "https://gitlab.com/acme/app/-/merge_requests/12",
+	});
+
+	const other = repo("git@github.com:acme/other.git");
+	const noUrl = async () => ({ ok: true, out: '[{"number":7,"url":"javascript:alert(1)"}]' });
+	expect(await findOpenBranchReviewWithRunner(other, "feature", noUrl)).toEqual({
+		kind: "pull-request",
+		number: 7,
+	});
 });

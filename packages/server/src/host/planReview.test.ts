@@ -1,0 +1,311 @@
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
+import {
+	type ExtensionContext,
+	ModelRuntime,
+	SessionManager,
+} from "@earendil-works/pi-coding-agent";
+import type { Workspace } from "@thinkrail/contracts";
+import { TodoStore } from "pi-todos/core";
+import {
+	configurePiRuntime,
+	createSession,
+	disposeAllSessions,
+	setSessionManagerFactory,
+	setSessionPublisher,
+	toWireModel,
+} from "../agent";
+import { createRequestReviewTool } from "../agent/requestReviewTool";
+import { saveWorkspaces } from "../persistence";
+import { getReviewSnapshot } from "../reviews";
+import { resetConfigCache, updateConfig } from "../settings";
+import { todoReviewAutoCycles, todoReviewRecord } from "../todos";
+import { itemReviewActive } from "./planReviewQueue";
+import { installRequestReviewSeam, type ReviewRunner, startPlanReview } from "./requestReview";
+import { isItemUnderActiveReview } from "./todoReview";
+
+let dataDir: string;
+let worktree: string;
+const WS = "ws-planreview";
+
+function modelDef(id: string) {
+	return {
+		id,
+		name: id,
+		reasoning: false,
+		input: ["text"] as ("text" | "image")[],
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		contextWindow: 100_000,
+		maxTokens: 4096,
+	};
+}
+
+const faux = createFauxCore({
+	provider: "faux-worker",
+	api: "faux-worker",
+	models: [modelDef("faux-worker-model")],
+	tokensPerSecond: 2000,
+});
+
+let priorAgentDir: string | undefined;
+let priorOffline: string | undefined;
+
+beforeAll(async () => {
+	priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	process.env.PI_CODING_AGENT_DIR = mkdtempSync(join(tmpdir(), "trpi-planreview-agentdir-"));
+	priorOffline = process.env.PI_OFFLINE;
+	process.env.PI_OFFLINE = "1";
+	const runtime = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	runtime.registerProvider("faux-worker", {
+		api: faux.api,
+		baseUrl: "http://faux-worker.local",
+		apiKey: "faux",
+		streamSimple: faux.streamSimple,
+		models: [{ ...modelDef("faux-worker-model"), api: faux.api }],
+	});
+	configurePiRuntime(runtime);
+	setSessionManagerFactory(() => SessionManager.inMemory());
+	setSessionPublisher(() => {});
+});
+
+afterAll(() => {
+	disposeAllSessions();
+	if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+	else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+	if (priorOffline === undefined) delete process.env.PI_OFFLINE;
+	else process.env.PI_OFFLINE = priorOffline;
+});
+
+beforeEach(() => {
+	dataDir = mkdtempSync(join(tmpdir(), "planreview-data-"));
+	worktree = mkdtempSync(join(tmpdir(), "planreview-wt-"));
+	process.env.THINKRAIL_DATA_DIR = dataDir;
+	resetConfigCache();
+	writeFileSync(join(worktree, "a.ts"), "const a = 1;\nconst b = 2;\n");
+	saveWorkspaces([
+		{
+			id: WS,
+			projectId: "p1",
+			name: "w",
+			branch: "main",
+			baseBranch: "main",
+			worktreePath: worktree,
+			createdAt: 0,
+		} as Workspace,
+	]);
+});
+
+afterEach(() => {
+	delete process.env.THINKRAIL_DATA_DIR;
+	resetConfigCache();
+	rmSync(dataDir, { recursive: true, force: true });
+	rmSync(worktree, { recursive: true, force: true });
+});
+
+const verdictRunner =
+	(finalText: string, onRun?: () => void): ReviewRunner =>
+	async () => {
+		onRun?.();
+		return { childSessionId: "child", status: "completed" as const, finalText };
+	};
+
+const approve = '```json\n{ "verdict": "approve", "findings": [] }\n```';
+const requestChanges = [
+	"```json",
+	'{ "verdict": "request_changes", "summary": "off-by-one",',
+	'  "findings": [ { "id": "f1", "path": "a.ts", "startLine": 1, "body": "loop bound is wrong" } ] }',
+	"```",
+].join("\n");
+
+/** A real (faux-model) worker chat: the fix message can only land on a session that actually exists. */
+async function workerSession(): Promise<string> {
+	const created = await createSession({
+		cwd: worktree,
+		workspaceId: WS,
+		model: toWireModel(faux.getModel()),
+		modelOptional: true,
+	});
+	return created.sessionId;
+}
+
+function committedItem(sessionId: string, title = "step"): string {
+	return new TodoStore(worktree, sessionId).add({
+		title,
+		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],
+	}).id;
+}
+
+async function settle(sessionId: string, itemId: string): Promise<void> {
+	const deadline = Date.now() + 10_000;
+	while (itemReviewActive(sessionId, itemId)) {
+		if (Date.now() > deadline) throw new Error("plan review never settled");
+		await new Promise((resolve) => setTimeout(resolve, 10));
+	}
+}
+
+test("an approve verdict settles the step as reviewed by the agent", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+
+	expect(startPlanReview(WS, sessionId, id, verdictRunner(approve))).toBe(true);
+	await settle(sessionId, id);
+
+	const record = todoReviewRecord({ workspaceId: WS, sessionId, id });
+	expect(record?.state).toBe("reviewed");
+	expect(record?.reviewedBy).toBe("agent");
+});
+
+test("request_changes with auto-fix on files the findings AND delivers the fix to the worker chat", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+
+	startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+	await settle(sessionId, id);
+
+	const ref = { workspaceId: WS, sessionId, id };
+	expect(todoReviewRecord(ref)?.state).toBe("changes_requested");
+	// One cycle spent, not two: the worker was actually asked to fix, so the item is mid-auto-cycle.
+	expect(todoReviewAutoCycles(ref)).toBe(1);
+	const comments = (await getReviewSnapshot(WS)).comments.filter(
+		(c) => c.origin?.todoId === id && c.author === "agent",
+	);
+	expect(comments).toHaveLength(1);
+	// `sent` is the delivery proof: a rejected send rolls the finding back to `draft`.
+	expect(comments[0]?.status).toBe("sent");
+	expect(comments[0]?.body).toContain("loop bound is wrong");
+});
+
+test("request_changes with auto-fix OFF files the findings but sends nothing — the user decides", async () => {
+	updateConfig({ reviewAutoFix: false });
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+
+	startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+	await settle(sessionId, id);
+
+	const ref = { workspaceId: WS, sessionId, id };
+	expect(todoReviewAutoCycles(ref)).toBe(2);
+	const comments = (await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id);
+	expect(comments[0]?.status).toBe("draft");
+});
+
+test("a second request_changes on the same step is terminal — the 1-cycle cap stops the fix loop", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+
+	startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+	await settle(sessionId, id);
+	expect(todoReviewAutoCycles(ref)).toBe(1);
+
+	startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+	await settle(sessionId, id);
+	expect(todoReviewAutoCycles(ref)).toBe(2);
+});
+
+test("reviews of one plan run one at a time, and a step already under review is rejected", async () => {
+	const sessionId = await workerSession();
+	const first = committedItem(sessionId, "one");
+	const second = committedItem(sessionId, "two");
+
+	let running = 0;
+	let overlapped = false;
+	const serialRunner: ReviewRunner = async () => {
+		running += 1;
+		if (running > 1) overlapped = true;
+		await new Promise((resolve) => setTimeout(resolve, 30));
+		running -= 1;
+		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+	};
+
+	expect(startPlanReview(WS, sessionId, first, serialRunner)).toBe(true);
+	expect(startPlanReview(WS, sessionId, second, serialRunner)).toBe(true);
+	expect(startPlanReview(WS, sessionId, first, serialRunner)).toBe(false);
+
+	await settle(sessionId, first);
+	await settle(sessionId, second);
+	expect(overlapped).toBe(false);
+});
+
+test("a subagent that returns no parsable verdict clears the reviewing mark instead of stranding it", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+
+	startPlanReview(WS, sessionId, id, verdictRunner("I could not decide."));
+	await settle(sessionId, id);
+
+	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })).toBeUndefined();
+	expect(itemReviewActive(sessionId, id)).toBe(false);
+});
+
+test("a fix the worker never accepted gives the auto cycle back instead of stranding the step", async () => {
+	// No session exists for this id, so the structured fix send rejects before the worker's turn.
+	const sessionId = "sess-detached";
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+
+	startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+	await settle(sessionId, id);
+
+	expect(todoReviewRecord(ref)?.state).toBe("changes_requested");
+	// Terminal, not mid-cycle: nothing asked the worker to change anything, so no fresh delta will ever
+	// reach maybeAutoReReview — recording cycle 1 here would strand the step forever.
+	expect(todoReviewAutoCycles(ref)).toBe(2);
+	// The findings are back to draft, so a later manual Ask-to-fix still carries them.
+	const comments = (await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id);
+	expect(comments).toHaveLength(1);
+	expect(comments[0]?.status).toBe("draft");
+	expect(isItemUnderActiveReview(sessionId, id)).toBe(false);
+});
+
+test("a re-review approve does NOT settle the step while an earlier finding is still open", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+
+	// Round 1: a finding is filed and delivered to the worker (status `sent`).
+	startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+	await settle(sessionId, id);
+	const sent = (await getReviewSnapshot(WS)).comments.find((c) => c.origin?.todoId === id);
+	expect(sent?.status).toBe("sent");
+
+	// Round 2: the worker changed the code but never resolved the finding, and the reviewer approves.
+	startPlanReview(WS, sessionId, id, verdictRunner(approve));
+	await settle(sessionId, id);
+
+	// The plan must not read ready-to-ship over a finding the Review panel still shows as open.
+	expect(todoReviewRecord(ref)?.state).not.toBe("reviewed");
+	expect((await getReviewSnapshot(WS)).comments.find((c) => c.id === sent?.id)?.status).toBe(
+		"sent",
+	);
+	// The spinner is cleared either way — an unsettled approve is not an in-flight review.
+	expect(itemReviewActive(sessionId, id)).toBe(false);
+});
+
+test("a request_review that fails before the review starts releases its claim, so the retry runs", async () => {
+	installRequestReviewSeam(verdictRunner(approve));
+	const sessionId = await workerSession();
+	// No change set yet: startTodoReview throws, and the claim must not outlive the failed call.
+	const id = new TodoStore(worktree, sessionId).add({ title: "not yet committed" }).id;
+	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+	const run = () =>
+		createRequestReviewTool().execute("tc", { itemId: id } as never, undefined, undefined, ctx);
+
+	await expect(run()).rejects.toThrow(/no change set/);
+	expect(itemReviewActive(sessionId, id)).toBe(false);
+
+	// The step becomes reviewable; the retry must reach the reviewer, not "already being reviewed".
+	new TodoStore(worktree, sessionId).update(id, {
+		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],
+	});
+	await expect(run()).resolves.toBeDefined();
+	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })?.state).toBe("reviewed");
+});

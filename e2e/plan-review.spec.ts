@@ -11,8 +11,8 @@ import { commitFile, gitAs } from "./fixtures/git";
 // behind) wears the circled Verified glyph and no affordance. There is no in-page manual verdict UI
 // (the `manually` toggle + Approve/Ask-to-fix pair was removed) and no separate summary-first "Review
 // mode" page (task-plan-review-kebab): findings live in the right-panel Review tab, header actions are
-// a kebab menu. Actually settling a review (the reviewer chat, verdicts, ask-to-fix's fix cycle,
-// Review All's queue) is @agent territory; the seeded JSON here is exactly the shape those leave behind.
+// a kebab menu. Actually settling a review (the review subagent's verdict, ask-to-fix's fix cycle,
+// Review All's pass) is @agent territory; the seeded JSON here is exactly the shape those leave behind.
 
 test("reviewable steps show the reviewed counter, Start review, and the settled Verified state", async ({
 	page,
@@ -189,16 +189,16 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	await expect(verification).toHaveAttribute("data-status", "claimed");
 
 	// The header kebab holds the export + Review All actions (portaled to the body). Review All is enabled
-	// while an unsettled reviewable item exists.
+	// while an unsettled reviewable item exists (clicking it asks the worker to run request_review).
 	await pane.getByTestId("plan-menu").click();
 	await expect(page.getByTestId("plan-copy-markdown")).toBeVisible();
 	await expect(page.getByTestId("plan-save-markdown")).toBeVisible();
 	await expect(page.getByTestId("plan-review-all")).not.toHaveAttribute("data-disabled", "");
 	await page.keyboard.press("Escape");
 
-	// The unsettled step: the row's review slot holds the primary Start review button (the AGENT
-	// review entry point — clicking it would spawn the reviewer chat, an @agent concern); the
-	// change-set disclosure carries no second one. No manual verdict UI exists beside it.
+	// The unsettled step: the row's review slot holds the primary Start review button (clicking it asks the
+	// worker to run request_review — an @agent concern); the change-set disclosure carries no second one.
+	// No manual verdict UI exists beside it.
 	await expect(openItem).toHaveAttribute("data-reviewed", "false");
 	await openItem.getByTestId("plan-change-set-toggle").click();
 	await expect(openItem.getByTestId("plan-start-review")).toHaveCount(1);

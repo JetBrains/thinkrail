@@ -1,4 +1,4 @@
-import type { DelegationRunDetails, UserMessage } from "@thinkrail/contracts";
+import type { DelegationRunDetails, ReviewFixDetails, UserMessage } from "@thinkrail/contracts";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { resolveProminence } from "./toolRegistry";
 import { strArg } from "./tools/toolHelpers";
@@ -40,6 +40,7 @@ export type ChatRow =
 	  }
 	| { kind: "markdown"; id: string; text: string }
 	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
+	| { kind: "reviewFix"; id: string; details: ReviewFixDetails; text: string }
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
 			kind: "activity";
@@ -187,6 +188,9 @@ export function deriveRows(
 						details: turn.details,
 						text: turn.text,
 					});
+					break;
+				case "reviewFix":
+					rows.push({ kind: "reviewFix", id: turn.id, details: turn.details, text: turn.text });
 					break;
 			}
 		}

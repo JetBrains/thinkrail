@@ -144,6 +144,15 @@ of the host.
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the chat renders the questionnaire **inline** and replies via `session.answerQuestion`
     (correlated by the tool call id; rejected loud when the call is unknown/answered/superseded).
+  - the **todo plan-review fix** wire types — the **`TODO_REVIEW_FIX_CUSTOM_TYPE`** constant,
+    **`TodoReviewFixMessage`** (the tag↔details shape) + its **`isTodoReviewFixMessage`** guard (in
+    `wsProtocol`), and **`ReviewFixDetails`** / **`ReviewFixComment`** (in `domain`): a plan-review
+    verdict's fix request reaches the worker as a **structured custom message** (customType
+    `todo-review-fix`) instead of a synthetic user turn (#363). The message `content` stays the rendered
+    package text the agent reads; `details` (the item id/title, optional note, and slim path/line-resolved
+    findings) is what the chat card renders — the host resolves each finding's `path`/lines from its
+    anchor at send time so the client re-parses nothing. See [[submodule-server-todos]] +
+    [[submodule-web-chat]].
 - **domain.ts** — app entities: `Project` (git repo + unique `slug` + optional **`closed: true`** — the
   persisted open-rail membership bit; absence means open for backward compatibility, and closing never
   changes the project's id or deletes its workspace associations — plus the skill-trust fields **`trusted`**
@@ -240,6 +249,11 @@ of the host.
   latest protocol; **`JBCENTRAL_QUOTA_PROTOCOL_VERSION`** likewise pins the v59 quota read + settings;
   **`WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`** pins the v62 Windows-shell setting so a later web client
   hides it against a host that can preserve but cannot apply that config field;
+  **`PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION`** pins the v65 review reshape — the reviewer chat is gone, so
+  `TodoPlan.reviewerSessionId` and `ReviewComment.reflection` left the wire and `todo.startReview` returns
+  a bare ack, while `OpenBranchReview` gained `url`. Each half degrades on its own (an older client reads
+  the dropped fields as absent, a newer one falls back to an unlinked PR chip), so the pin is what lets a
+  client tell "this host has no reviewer chat" from "this host is older" rather than inferring it;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled,
@@ -364,10 +378,11 @@ of the host.
   item `origin:"user"`), plus the review ops **`review`** (approve: record `reviewed` + the sha
   watermark), **`requestFix`** (record `changes_requested` + feedback, then the host fires the fix
   package into the item's own chat — detached, rolled back on a pre-turn rejection) and
-  **`startReview`** (the AGENT review: the plan's pinned reviewer chat gets the item's package; findings
-  arrive as `author: "agent"` review comments, the verdict via the reviewer-only `review_verdict` tool;
+  **`startReview`** / **`reviewAll`** (the AGENT review: a hidden review subagent gets the item's
+  package and returns a structured verdict; findings arrive as `author: "agent"` review comments;
   `TodoItem.review` carries `reviewing` while the verdict is pending and `reviewedBy` on an agent
-  approve) / **`terminal.*`** — **`reserve`** (idempotently establishes a host-catalog tab
+  approve. `reviewAll` reports the count it started, and `alreadyRunning` when the plan's serial chain
+  is still busy) / **`terminal.*`** — **`reserve`** (idempotently establishes a host-catalog tab
   without starting its PTY; `INITIAL_TERMINAL_TAB_KEY` names the one host-seeded tab that every frontend
   may place passively) / **`attach`** (idempotent get-or-create keyed by `(workspaceId, tabKey)`,
   returning `created` + the `replay` to repaint; the only way a PTY is born, and it replaced

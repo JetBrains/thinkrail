@@ -28,6 +28,7 @@ const INTENTIONAL_TOOLS = [
 	"spec_validate",
 	"ask_user_question",
 	"resolve_comment",
+	"request_review",
 ] as const;
 
 function props(

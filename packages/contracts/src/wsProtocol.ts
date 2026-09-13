@@ -31,6 +31,7 @@ import type {
 	ReviewComment,
 	ReviewCommentKind,
 	ReviewCommentStatus,
+	ReviewFixDetails,
 	ReviewSnapshot,
 	SessionActivity,
 	SpecGraphSnapshot,
@@ -96,7 +97,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 64;
+export const PROTOCOL_VERSION = 65;
+export const PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION = 65;
 export const WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION = 62;
 export const PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION = 63;
 export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
@@ -316,6 +318,25 @@ export function isSubagentCompletionMessage(
 	return isDelegationRunDetails(m.details);
 }
 
+export const TODO_REVIEW_FIX_CUSTOM_TYPE = "todo-review-fix";
+
+export interface TodoReviewFixMessage extends WireCustomMessage<ReviewFixDetails> {
+	customType: typeof TODO_REVIEW_FIX_CUSTOM_TYPE;
+	details: ReviewFixDetails;
+}
+
+export function isTodoReviewFixMessage(message: unknown): message is TodoReviewFixMessage {
+	if (!message || typeof message !== "object") return false;
+	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
+	if (m.role !== "custom" || m.customType !== TODO_REVIEW_FIX_CUSTOM_TYPE) return false;
+	const details = m.details as Partial<ReviewFixDetails> | undefined;
+	return (
+		typeof details?.itemId === "string" &&
+		typeof details.itemTitle === "string" &&
+		Array.isArray(details.comments)
+	);
+}
+
 export function customMessageText(content: WireCustomMessage["content"]): string {
 	if (typeof content === "string") return content;
 	return content
@@ -446,7 +467,7 @@ export interface WsMethodMap {
 	};
 	"todo.startReview": {
 		params: { workspaceId: string; sessionId: string; id: string };
-		result: { ok: true; reviewerSessionId: string };
+		result: { ok: true };
 	};
 	"todo.reviewAll": {
 		params: { workspaceId: string; sessionId: string };

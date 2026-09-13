@@ -24,6 +24,7 @@ import type {
 	QueueLane,
 	RefreshedModels,
 	RemovedQueuedMessage,
+	ReviewFixDetails,
 	SessionActivity,
 	SessionActivityPayload,
 	SessionCreatedPayload,
@@ -38,7 +39,7 @@ import type {
 	TranscriptMessage,
 	WireModel,
 } from "@thinkrail/contracts";
-import { isTranscriptMessageRole } from "@thinkrail/contracts";
+import { isTranscriptMessageRole, TODO_REVIEW_FIX_CUSTOM_TYPE } from "@thinkrail/contracts";
 import type { ParentContext } from "pi-delegation";
 import { RECURSION_GUARD_TOOLS } from "pi-subagents";
 import { logger } from "../log";
@@ -1085,6 +1086,19 @@ export async function followUpSession(
 		return;
 	}
 	await entry.session.prompt(text, images ? { images } : undefined);
+}
+
+// Callers MUST `ackSend`-wrap this: a pre-turn rejection has to roll the review record back — see submodule-server-todos.
+export async function sendReviewFixToSession(
+	sessionId: string,
+	content: string,
+	details: ReviewFixDetails,
+): Promise<void> {
+	const entry = mustGetEntry(sessionId);
+	await entry.session.sendCustomMessage(
+		{ customType: TODO_REVIEW_FIX_CUSTOM_TYPE, content, display: true, details },
+		{ deliverAs: "followUp", triggerTurn: true },
+	);
 }
 
 export async function compactSession(sessionId: string, instructions?: string): Promise<void> {

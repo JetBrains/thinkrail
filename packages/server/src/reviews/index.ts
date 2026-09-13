@@ -5,7 +5,7 @@ export {
 	reanchor,
 	textQuoteOf,
 } from "./anchoring";
-export { renderPackage } from "./packageRender";
+export { buildReviewFixDetails, renderPackage, toReviewFixComment } from "./packageRender";
 export {
 	addComment,
 	anchorProblem,
@@ -16,6 +16,7 @@ export {
 	getReviewSnapshot,
 	markCommentsSent,
 	markFileDone,
+	publishReview,
 	REVIEW_LEVEL_KEY,
 	reanchorWorkspace,
 	removeWorkspaceReviews,
@@ -23,7 +24,6 @@ export {
 	reviewSessionKey,
 	rollbackSend,
 	sendableComments,
-	setReflection,
 	setReviewPublisher,
 	updateComment,
 } from "./reviews";

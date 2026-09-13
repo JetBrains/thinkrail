@@ -32,6 +32,12 @@ export function setReviewPublisher(fn: (payload: ReviewChangedPayload) => void):
 	publish = fn;
 }
 
+/** Re-broadcast the current review snapshot so clients refresh (e.g. after a background plan review
+ * writes a verdict that isn't itself a comment change). See submodule-server-todos. */
+export async function publishReview(workspaceId: string): Promise<void> {
+	publish({ workspaceId, ...(await getReviewSnapshot(workspaceId)) });
+}
+
 function reviewsDir(): string {
 	return join(dataDir(), "reviews");
 }
@@ -378,19 +384,6 @@ export async function updateComment(input: {
 			}
 		}
 		persistAndPublish(input.workspaceId, snapshot);
-		return comment;
-	});
-}
-
-export async function setReflection(
-	workspaceId: string,
-	commentId: string,
-	reflection: NonNullable<ReviewComment["reflection"]>,
-): Promise<ReviewComment> {
-	return mutateSnapshot(workspaceId, (snapshot) => {
-		const comment = mustFind(snapshot, commentId);
-		comment.reflection = reflection;
-		persistAndPublish(workspaceId, snapshot);
 		return comment;
 	});
 }

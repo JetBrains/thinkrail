@@ -29,6 +29,14 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   (capability: the server's `agent` module + `reviews` seam; see [[submodule-server-reviews]]): a ✓ +
   the resolved comment id/note. **Routine** — the review sidebar is where resolution state lives; the
   card is just the in-transcript trace.
+- **`RequestReviewCard`** — the verdict card for the host-owned `request_review` tool (capability: the
+  server's `agent`/`host` request-review seam, which spawns a read-only review subagent). Reads the
+  structured `PlanReviewResult` from the tool result's `details` (defensively, via
+  `isPlanReviewResult`), shows an approve/request-changes indicator + the reviewer's one-paragraph
+  summary, and renders findings as the shared fold-out `ReviewPackageComments` (comment→item mapping
+  and the row primitive both live in `reviewPackage.ts` + `ReviewPackageComments.tsx`, reused by the
+  `reviewFix`/review-package renderers). Registered `primary` + `defaultExpanded`; `data-verdict` +
+  `data-testid="request-review-card"` are the test hooks.
 - **`AskUserQuestionCard`** — the inline questionnaire for the host-owned `ask_user_question` tool
   (capability + rationale: the server's `agent/askUserQuestion` SPEC). Registered `"bare"`: it owns its
   full-width frame, never folds, and answers through the `ChatActions` context (correlated by

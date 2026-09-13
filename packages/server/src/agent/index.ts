@@ -1,7 +1,7 @@
 export { type ActivityInputs, deriveActivityStatus } from "./activity";
 export * from "./agentSessionManager";
 export * from "./askUserQuestion";
-export { readChildTranscript } from "./delegation";
+export { type ReviewSubagentRun, readChildTranscript, runReviewSubagent } from "./delegation";
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
@@ -25,15 +25,15 @@ export {
 	settledAvailableModels,
 } from "./piRuntime";
 export {
-	type AddReviewCommentParams,
+	REQUEST_REVIEW_TOOL_NAME,
+	type RequestReviewHandler,
+	requestReviewExtension,
+	setRequestReviewHandler,
+} from "./requestReviewTool";
+export {
 	RESOLVE_COMMENT_TOOL_NAME,
-	type ReflectFindingParams,
 	type ResolveCommentOutcome,
-	type ReviewVerdictParams,
-	setAddReviewCommentHandler,
-	setReflectFindingHandler,
 	setReviewCommentHandler,
-	setReviewVerdictHandler,
 } from "./reviewTool";
 export * from "./sessionRepair";
 export type { SkillAdmissionContext, SkillDecision, SkillFacts } from "./skillAdmission";

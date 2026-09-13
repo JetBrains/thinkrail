@@ -50,6 +50,8 @@ export interface Workspace {
 export interface OpenBranchReview {
 	kind: "pull-request" | "merge-request";
 	number: number;
+	/** The review's web page, when the provider reported one — what makes the `PR #N` chip a link. */
+	url?: string;
 	/** `workspace.openReview` only: local commits origin/<branch> doesn't have yet. */
 	unpushedCommits?: number;
 }
@@ -183,8 +185,6 @@ export interface TodoPlan {
 	 * rewrites it at the next completion.
 	 */
 	summary?: string;
-	/** The plan's dedicated reviewer chat (set once Start review ran) — the Reviewing label opens it. */
-	reviewerSessionId?: string;
 	/**
 	 * Worktree changes attributed to NO item of this plan — **host-derived on `todo.list`, present only
 	 * when non-empty**. The honesty section of the review map: work no item claims (edits before the
@@ -708,12 +708,6 @@ export interface ReviewComment {
 	origin?: { todoId: string; reviewedSha: string; sessionId: string };
 	/** Server-derived for the client, never persisted: the reviewed code was overwritten after review. */
 	stale?: boolean;
-	/** An independent reflector's verdict on an agent finding (refuted findings are held back from auto-fix). */
-	reflection?: {
-		verdict: "kept" | "refuted";
-		confidence: "low" | "medium" | "high";
-		reason: string;
-	};
 	resolvedBy?: "agent" | "user";
 	resolveNote?: string;
 	createdAt: number;
@@ -739,4 +733,60 @@ export interface ReviewSnapshot {
 
 export interface ReviewChangedPayload extends ReviewSnapshot {
 	workspaceId: string;
+}
+
+/** Slim view of a sent review finding on a todo-review-fix message (path/lines pre-resolved host-side). */
+export interface ReviewFixComment {
+	id: string;
+	kind: ReviewCommentKind;
+	body: string;
+	path?: string;
+	startLine?: number;
+	endLine?: number;
+}
+
+/** Structured payload of a todo-review-fix custom message; the message `content` stays the agent-read text. */
+export interface ReviewFixDetails {
+	itemId: string;
+	itemTitle: string;
+	reviewId?: string;
+	/** The reviewer's/user's feedback prose (renderFixPackage note), when present. */
+	note?: string;
+	comments: ReviewFixComment[];
+}
+
+export type PlanReviewVerdict = "approve" | "request_changes";
+
+/** Result of the worker-invoked request_review tool (Option A): a review subagent's structured verdict on
+ * a plan step. Carried as the tool result's `details`, rendered by the request_review card, and written to
+ * the item's review record. See submodule-server-host-plan-review + submodule-server-todos. */
+export interface PlanReviewResult {
+	itemId: string;
+	itemTitle: string;
+	verdict: PlanReviewVerdict;
+	reviewedSha?: string;
+	/** The reviewer's one-paragraph rationale (shown on the card). */
+	summary?: string;
+	findings: ReviewFixComment[];
+	/** Host-set on an `approve` it refused to settle: findings from an earlier round are still open, so
+	 * the step stays unreviewed until the worker resolves them. */
+	blockedByOpenFindings?: number;
+}
+
+export const PLAN_REVIEW_VERDICTS: readonly PlanReviewVerdict[] = ["approve", "request_changes"];
+
+/** Validate the review subagent's parsed JSON verdict (untrusted — model output). Findings are shape-
+ * checked leniently: each needs an id + body; path/lines are optional. */
+export function isPlanReviewResult(value: unknown): value is PlanReviewResult {
+	if (!value || typeof value !== "object") return false;
+	const r = value as Partial<PlanReviewResult>;
+	if (typeof r.itemId !== "string" || typeof r.itemTitle !== "string") return false;
+	if (typeof r.verdict !== "string" || !PLAN_REVIEW_VERDICTS.includes(r.verdict)) return false;
+	if (r.summary !== undefined && typeof r.summary !== "string") return false;
+	if (r.blockedByOpenFindings !== undefined && typeof r.blockedByOpenFindings !== "number")
+		return false;
+	if (!Array.isArray(r.findings)) return false;
+	return r.findings.every(
+		(f) => !!f && typeof f === "object" && typeof f.id === "string" && typeof f.body === "string",
+	);
 }

@@ -12,6 +12,7 @@ import type {
 	ReviewComment,
 	ReviewCommentKind,
 	ReviewCommentStatus,
+	ReviewFixDetails,
 	ReviewSendResult,
 	SubagentOverride,
 	TemplateReadLocation,
@@ -54,6 +55,7 @@ import {
 	removeSession,
 	removeWorkspaceSessions,
 	resolveExtUi,
+	sendReviewFixToSession,
 	setSessionModel,
 	setSessionThinkingLevel,
 	steerSession,
@@ -102,6 +104,7 @@ import {
 } from "../projects";
 import {
 	addComment,
+	buildReviewFixDetails,
 	buildSendPackage,
 	clearReview,
 	deleteComment,
@@ -170,6 +173,8 @@ import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
+import { planReviewRunning } from "./planReviewQueue";
+import { startPlanReview } from "./requestReview";
 import { withReviewLock } from "./reviewLock";
 import {
 	claimItemFix,
@@ -177,8 +182,6 @@ import {
 	itemFixFindings,
 	markClientStale,
 	releaseItemFix,
-	startReviewAllFlow,
-	startTodoReviewFlow,
 } from "./todoReview";
 
 const log = logger("host");
@@ -241,11 +244,12 @@ function fireReviewPrompt(
 function fireTodoFixPrompt(
 	p: { workspaceId: string; sessionId: string; id: string },
 	pkg: string,
+	details: ReviewFixDetails,
 	previous: TodoReviewRecord | undefined,
 	requested: TodoReviewRecord,
 	findingIds: string[] = [],
 ): void {
-	void ackSend(followUpSession(p.sessionId, pkg))
+	void ackSend(sendReviewFixToSession(p.sessionId, pkg, details))
 		.then(undefined, (err) => {
 			rollbackTodoFix(p, previous, requested);
 			if (findingIds.length > 0) rollbackSend(p.workspaceId, findingIds, p.sessionId);
@@ -439,10 +443,35 @@ const handlers: Record<string, Handler> = {
 	},
 	"todo.review": (params) =>
 		approveTodoReview(params as { workspaceId: string; sessionId: string; id: string }),
-	"todo.startReview": (params) =>
-		startTodoReviewFlow(params as { workspaceId: string; sessionId: string; id: string }),
-	"todo.reviewAll": (params) =>
-		startReviewAllFlow(params as { workspaceId: string; sessionId: string }),
+	"todo.startReview": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string; id: string };
+		const ws = getWorkspace(p.workspaceId);
+		if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath)))
+			throw new Error("This plan's chat is no longer on disk — can't review.");
+		if (!startPlanReview(p.workspaceId, p.sessionId, p.id))
+			throw new Error("This step is already being reviewed.");
+		return { ok: true };
+	},
+	"todo.reviewAll": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string };
+		const ws = getWorkspace(p.workspaceId);
+		if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath)))
+			throw new Error("This plan's chat is no longer on disk — can't review.");
+		const plan = await listTodos({ workspaceId: p.workspaceId, sessionId: p.sessionId });
+		const items = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+		const targets = items.filter((it) => {
+			const r = it.review;
+			return (
+				r !== undefined &&
+				!(r.state === "reviewed" && (r.unreviewedShas?.length ?? 0) === 0) &&
+				r.reviewing !== true
+			);
+		});
+		const started = targets.filter((it) => startPlanReview(p.workspaceId, p.sessionId, it.id));
+		if (started.length === 0 && planReviewRunning(p.workspaceId, p.sessionId))
+			return { ok: true, total: 0, alreadyRunning: true };
+		return { ok: true, total: started.length };
+	},
 	"todo.requestFix": async (params) => {
 		const p = params as { workspaceId: string; sessionId: string; id: string; feedback: string };
 		if (!claimItemFix(p.sessionId, p.id))
@@ -455,13 +484,21 @@ const handlers: Record<string, Handler> = {
 			const prepared = await withReviewLock(p.workspaceId, async () => {
 				const request = requestTodoFix(p);
 				try {
+					const reviewId = (await getReviewSnapshot(p.workspaceId)).review.id;
 					const findings = await itemFixFindings(p);
+					const details = buildReviewFixDetails({
+						itemId: p.id,
+						itemTitle: request.itemTitle,
+						reviewId,
+						note: p.feedback.trim(),
+						comments: findings,
+					});
 					if (findings.length === 0)
-						return { ...request, fixText: request.pkg, findingIds: [] as string[] };
+						return { ...request, fixText: request.pkg, details, findingIds: [] as string[] };
 					const fixText = `${request.pkg}\n\n${await buildSendPackage(p.workspaceId, findings)}`;
 					const findingIds = findings.map((c) => c.id);
 					await markCommentsSent(p.workspaceId, findingIds, p.sessionId);
-					return { ...request, fixText, findingIds };
+					return { ...request, fixText, details, findingIds };
 				} catch (error) {
 					rollbackTodoFix(p, request.previous, request.requested);
 					throw error;
@@ -471,6 +508,7 @@ const handlers: Record<string, Handler> = {
 				fireTodoFixPrompt(
 					p,
 					prepared.fixText,
+					prepared.details,
 					prepared.previous,
 					prepared.requested,
 					prepared.findingIds,

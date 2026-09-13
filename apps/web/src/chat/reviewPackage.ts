@@ -1,3 +1,5 @@
+import type { ReviewFixComment } from "@thinkrail/contracts";
+
 export interface ReviewPackageItem {
 	path: string | null;
 	lineRef: string;
@@ -41,6 +43,26 @@ export function parseReviewPackage(text: string): ReviewPackageSummary | null {
 		});
 	}
 	return { count: comments.length, files, items };
+}
+
+function reviewFixLineRef(c: ReviewFixComment): string {
+	const loc =
+		c.startLine === undefined
+			? ""
+			: c.endLine === undefined || c.endLine === c.startLine
+				? `L${c.startLine}`
+				: `L${c.startLine}–${c.endLine}`;
+	if (c.path && loc) return `${c.path} ${loc}`;
+	return c.path ?? loc;
+}
+
+export function reviewFixCommentsToItems(comments: ReviewFixComment[]): ReviewPackageItem[] {
+	return comments.map((c) => ({
+		path: c.path ?? null,
+		lineRef: reviewFixLineRef(c),
+		fragment: null,
+		body: c.body,
+	}));
 }
 
 export function reviewPackageLabel(summary: Pick<ReviewPackageSummary, "count" | "files">): string {

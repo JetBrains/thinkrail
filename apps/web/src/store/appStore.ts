@@ -42,6 +42,7 @@ import {
 	isLineWidth,
 	isSubagentCompletionMessage,
 	isTerminalWindowsShell,
+	isTodoReviewFixMessage,
 	normalizeThemePreference,
 } from "@thinkrail/contracts";
 import { create } from "zustand";
@@ -587,6 +588,20 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "subagentCompletion",
+							id: crypto.randomUUID(),
+							details: event.message.details,
+							text: customMessageText(event.message.content),
+						},
+					],
+				};
+			}
+			if (isTodoReviewFixMessage(event.message)) {
+				return {
+					...rt,
+					turns: [
+						...rt.turns,
+						{
+							kind: "reviewFix",
 							id: crypto.randomUUID(),
 							details: event.message.details,
 							text: customMessageText(event.message.content),
