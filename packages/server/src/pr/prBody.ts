@@ -25,6 +25,7 @@ function itemLines(item: TodoItem): string[] {
 
 export function renderPrBody(plan: TodoPlan): string {
 	const items = flatItems(plan);
+	const adopted = plan.adoptedCommits ?? [];
 	const lines: string[] = [];
 	if (plan.summary) lines.push(plan.summary, "");
 	if (items.length > 0) {
@@ -37,11 +38,15 @@ export function renderPrBody(plan: TodoPlan): string {
 			if (plan.groups.length > 0) lines.push("### Other");
 			for (const item of plan.todos) lines.push(...itemLines(item));
 		}
-		const reviewable = items.filter((t) => t.review !== undefined);
-		if (reviewable.length > 0) {
-			const settled = reviewable.filter(reviewSettled).length;
-			lines.push("", `Review: ${settled}/${reviewable.length} steps reviewed in ThinkRail.`);
-		}
+	}
+	if (adopted.length > 0) {
+		lines.push("## Committed outside the plan");
+		for (const item of adopted) lines.push(...itemLines(item));
+	}
+	const reviewable = [...items, ...adopted].filter((t) => t.review !== undefined);
+	if (reviewable.length > 0) {
+		const settled = reviewable.filter(reviewSettled).length;
+		lines.push("", `Review: ${settled}/${reviewable.length} steps reviewed in ThinkRail.`);
 	}
 	return lines.join("\n").trim();
 }

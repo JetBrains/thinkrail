@@ -106,6 +106,34 @@ test("a commit artifact without decorated files (unresolvable sha) degrades to a
 	);
 });
 
+test("adopted commits compile as their own section; an all-adopted plan drops the placeholder", () => {
+	const adopted: TodoItem = {
+		...item("chore: unplanned commit", "done"),
+		id: "commit:abc1234def567",
+		origin: "adopted",
+		artifacts: [
+			{
+				kind: "commit",
+				sha: "abc1234def567",
+				label: "chore: unplanned commit",
+				files: [{ path: "loose.ts", status: "added", added: 1 }],
+			},
+		],
+	};
+	expect(planToMarkdown({ todos: [], groups: [], adoptedCommits: [adopted] }, "c")).toBe(
+		[
+			"# TODO — c",
+			"",
+			"Progress: 0/0",
+			"",
+			"## Committed outside the plan",
+			"- [x] chore: unplanned commit — `abc1234` · 1 file · +1",
+			"    - `A` loose.ts · +1",
+			"",
+		].join("\n"),
+	);
+});
+
 test("unattributed changes compile as their own section, after the items", () => {
 	const plan: TodoPlan = {
 		todos: [item("Fix bar", "done")],
