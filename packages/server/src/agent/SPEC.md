@@ -468,10 +468,23 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     race-free; **(b)** while a question is pending (derived from the transcript via
     `awaitingQuestionToolCallId`, the single authority), `promptSession`/`steerSession`/`followUpSession`
     park into the same buffer instead of touching pi. The buffer is unioned into every queue projection
-    (`queueContentOf`/`queueStateOf`/`hasQueuedImages`/the `queue_update` fan-out and the `summaryOf`
-    queue field) so held messages still render as queued chips; it is **not** counted in
-    `pendingMessageCount`, which is why the status stays `waiting` rather than `queued`. `clearQueue`
-    empties it too, so Stop/`abortSession(..., true)` stay lossless. Pinned by `agentSessionManager.test.ts`.
+    (`queueContentOf`/`queueStateOf`/`hasQueuedImages`/`queueUpdateEventOf` and the `summaryOf` queue
+    field) so held messages still render as queued chips; it is **not** counted in `pendingMessageCount`
+    (nor `effectivePendingCount`), which is why the status stays `waiting` rather than `queued`. Capture
+    also **resets `stuckEmptyDeliveries`** since it empties pi's lanes (the same invariant
+    `clearQueueSession` holds), and it always clears — even when only stuck-empty placeholders are queued —
+    so no phantom entry drains past the boundary. `clearQueueSession` empties the buffer too, so
+    `removeQueuedSession` (re-queued keepers re-park while the question is still pending) and
+    Stop/`abortSession(..., true)` stay lossless. Pinned by `agentSessionManager.test.ts`.
+
+    **The buffer is in-memory, deliberately** — like pi's own queue, which is also lost on a host
+    restart. A restart while a question is pending is still safe: the transcript stays provider-valid,
+    the question re-derives as `waiting`, and answering runs normally; only the user's *typed-ahead*
+    follow-ups are dropped (the pending window is long, so the exposure is larger than for a normally
+    draining queue). Persisting them would need a store pi does not offer and is deferred. The pending
+    ask is the transcript **tail**, so it survives compaction and `questionPending` stays true until
+    answered — the buffer never orphans (supersession by a later user message cannot happen either, since
+    such a message is itself parked).
 
     The reply arrives over `session.answerQuestion` → the manager's
     `answerQuestion(sessionId, toolCallId, result)`: it vets the reply against the transcript with the

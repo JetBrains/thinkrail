@@ -1229,6 +1229,69 @@ test("followUpSession on an IDLE session runs the turn — pi's follow-up queue 
 	}
 });
 
+test("a message sent while a question is already pending is held (idle send), stays waiting, and flushes on answer", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-hold-idle");
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-idle-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-hold-idle-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-hold-idle",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		const statusOf = async () =>
+			(await listSessionActivity()).find((row) => row.sessionId === s.sessionId)?.status;
+		expect(await statusOf()).toBe("waiting");
+
+		await followUpSession(s.sessionId, "later task");
+		expect(
+			(await listSessions("ws-hold-idle", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual({ steering: [], followUp: ["later task"] });
+		expect(await statusOf()).toBe("waiting");
+		expect(seen(s.sessionId)).not.toContain("LATER_DONE");
+
+		fauxA.appendResponses([fauxAssistantMessage("ANSWERED"), fauxAssistantMessage("LATER_DONE")]);
+		await answerQuestion(s.sessionId, "ask-idle-1", {
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+			cancelled: false,
+		});
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("LATER_DONE")) {
+			if (Date.now() > ranBy) throw new Error("held follow-up never ran after the answer");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		expect(seen(s.sessionId)).toContain("ANSWERED");
+		expect(
+			(await listSessions("ws-hold-idle", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toBeUndefined();
+		removeSession(s.sessionId);
+	} finally {
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("a pending ask_user_question holds the queue — a mid-turn follow-up does not supersede the question (status stays waiting) and flushes in order on answer", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	const slow = createFauxCore({

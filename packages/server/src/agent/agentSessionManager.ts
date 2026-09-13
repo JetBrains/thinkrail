@@ -1047,13 +1047,12 @@ function publishHeldQueueUpdate(entry: Entry): void {
 
 function captureHeldQueue(entry: Entry): void {
 	synchronizeQueueFromSession(entry);
-	const captured = [
+	entry.heldWhileAsking.push(
 		...entry.queuedMessages.steering.map((message) => cloneTracked(entry, message)),
 		...entry.queuedMessages.followUp.map((message) => cloneTracked(entry, message)),
-	];
-	if (captured.length === 0) return;
-	entry.heldWhileAsking.push(...captured);
+	);
 	entry.session.clearQueue();
+	entry.stuckEmptyDeliveries = { steering: 0, followUp: 0 };
 }
 
 function parkHeld(entry: Entry, text: string, images?: ImageContent[]): void {
