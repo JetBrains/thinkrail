@@ -980,7 +980,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   markdown` compiler, `## <group> — n/m` sections — the plan page's **export** (copy / save-as-.md),
   never an interactive surface: a done item's change set renders as its short sha + `N files · +A −R`
   and status-lettered per-file rows, **plain text, no links** — an export leaves the app, where a link
-  scheme would be dead; interactive navigation is the plan page's job), and `ChatPlan` (`ChatPlanStripContent` +
+  scheme would be dead; interactive navigation is the plan page's job. It also emits a
+  **`## Committed outside the plan`** section for `TodoPlan.adoptedCommits` (mirroring `## Outside the
+  plan` for `unattributed`), so the export covers branch commits no step owns; the `No items yet`
+  placeholder is suppressed when either section is present), and `ChatPlan` (`ChatPlanStripContent` +
   `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
   the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
   is no right-panel Todo tab — the plan lives in the conversation; the plan *page* is a center tab, a

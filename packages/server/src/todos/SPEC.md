@@ -182,6 +182,18 @@ package's "re-open this exact item" instruction has no todo to re-open for an ad
 as "revise the change in commit `<sha>`"; the worker's follow-up commit surfaces as a new adopted entry
 (or a revision, once appended).
 
+**Adopted-commit limitations (accepted).** (1) The `base..HEAD` enumeration is capped at `git`'s
+`COMMIT_LIST_MAX` (200) — a branch with more commits drops the oldest from `adoptedCommits`, the same cap
+the Changes/commits menus live under. (2) A commit is immutable, so the auto-fix cycle cannot self-heal
+one: an agent `changes_requested` verdict on an adopted commit leaves it permanently flagged and the
+worker's fix lands as a *new* adopted entry rather than a revision of the original (and `maybeAutoReReview`
+intentionally excludes `adoptedCommits` — a new sha is a new id, so there is no fresh delta on the flagged
+one to re-review). (3) A commit owned by *another* session's plan item shows as adopted here (the `owned`
+set is this session's plan only), and each session may hold its own review record for the same sha —
+accepted noise, same family as the shared-window limitations. (4) A path committed in an adopted commit
+that is then re-edited uncommitted appears in both `adoptedCommits` (the commit's files) and
+`unattributed` (the newer uncommitted row) — they are genuinely two different artifacts.
+
 **The review workflow (`reviews.ts` + the ops in `todos.ts`).** A completed item that carries a host
 change set is **reviewable** — the gate is that artifact presence, so research/verification steps never
 demand review and no LLM attribution is involved. The user's decision lives in a second host-owned
