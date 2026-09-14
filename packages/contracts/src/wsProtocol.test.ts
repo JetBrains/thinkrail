@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import {
 	ACTIVITY_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	CHAT_RESOURCES_PROTOCOL_VERSION,
+	isBackgroundCommandCompletionMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	normalizeSessionTitle,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
@@ -73,4 +75,59 @@ test("session titles normalize to one bounded non-blank line", () => {
 	expect(normalizeSessionTitle(42)).toBeNull();
 	expect(normalizeSessionTitle("x".repeat(80))).toBe("x".repeat(80));
 	expect(normalizeSessionTitle("x".repeat(81))).toBeNull();
+});
+
+test("command completion guards accept displayed terminal notices, not malformed or hidden details", () => {
+	const details = {
+		id: "command",
+		sessionId: "parent",
+		name: "build",
+		status: "completed",
+		startedAt: 1,
+		finishedAt: 2,
+		exitCode: 0,
+		output: { text: "<script>plain output</script>", truncated: false },
+	};
+	const message = {
+		role: "custom",
+		customType: "background-command-completion",
+		display: true,
+		content: "Finished",
+		details,
+	};
+	expect(isBackgroundCommandCompletionMessage(message)).toBe(true);
+	for (const status of ["stopped", "error"]) {
+		expect(
+			isBackgroundCommandCompletionMessage({
+				...message,
+				details: { ...details, status, exitCode: null, errorMessage: "diagnostic" },
+			}),
+		).toBe(true);
+	}
+	for (const invalid of [
+		{ ...message, display: false },
+		{ ...message, customType: "unrelated" },
+		{ ...message, details: { ...details, status: "running" } },
+		{ ...message, details: { ...details, finishedAt: undefined } },
+		{ ...message, details: { ...details, startedAt: Number.NaN } },
+		{ ...message, details: { ...details, name: {} } },
+		{ ...message, details: { ...details, exitCode: "0" } },
+		{ ...message, details: { ...details, errorMessage: [] } },
+		{ ...message, details: { ...details, output: { text: "log", truncated: "false" } } },
+		{ ...message, details: { ...details, output: { text: [] } } },
+		null,
+	])
+		expect(isBackgroundCommandCompletionMessage(invalid)).toBe(false);
+});
+
+test("chat resources introduce scoped reads and cancellation, never browser command execution", () => {
+	expect(CHAT_RESOURCES_PROTOCOL_VERSION).toBe(67);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CHAT_RESOURCES_PROTOCOL_VERSION);
+	expect(WS_CHANNELS.sessionResourcesChanged).toBe("session.resourcesChanged");
+	expect(WS_METHODS.sessionResources).toBe("session.resources");
+	expect(WS_METHODS.backgroundCommandOutput).toBe("backgroundCommand.output");
+	expect(WS_METHODS.backgroundCommandStop).toBe("backgroundCommand.stop");
+	expect(WS_METHODS.subagentStop).toBe("subagent.stop");
+	expect(WS_METHODS.subagentStopAll).toBe("subagent.stopAll");
+	expect(Object.values(WS_METHODS)).not.toContain("backgroundCommand.start");
 });

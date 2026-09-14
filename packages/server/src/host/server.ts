@@ -29,6 +29,7 @@ import {
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionPublisher,
+	setSessionResourcesPublisher,
 	setSkillAdmissionResolver,
 	setSubagentsEnabledResolver,
 	settleSessionsForShutdown,
@@ -236,6 +237,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.sessionCreated);
 				ws.subscribe(WS_CHANNELS.sessionDeleted);
 				ws.subscribe(WS_CHANNELS.sessionActivity);
+				ws.subscribe(WS_CHANNELS.sessionResourcesChanged);
 				ws.subscribe(WS_CHANNELS.providerLogin);
 				ws.subscribe(WS_CHANNELS.providerChanged);
 				ws.subscribe(WS_CHANNELS.projectUpdated);
@@ -545,6 +547,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		server.publish(
 			WS_CHANNELS.sessionDeleted,
 			JSON.stringify({ channel: WS_CHANNELS.sessionDeleted, data: payload }),
+		);
+	});
+
+	setSessionResourcesPublisher((payload) => {
+		server.publish(
+			WS_CHANNELS.sessionResourcesChanged,
+			JSON.stringify({ channel: WS_CHANNELS.sessionResourcesChanged, data: payload }),
 		);
 	});
 

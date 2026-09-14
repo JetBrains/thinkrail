@@ -151,7 +151,7 @@ existing boot, session, setup, task, review and PR observations into the closed 
 syncs additional-data consent from the settings publisher. Correlation stays host-local and clears on
 consent changes. `analytics` has no `settings` edge and no feature module knows analytics exists.
 
-The draft Chat Resources integration adds `agent` → `pi-background-commands` as an external
+The Chat Resources integration adds `agent` → `pi-background-commands` as an external
 package edge, alongside its existing delegation packages. `host` continues to compose the wire
 through the `agent` barrel; there is no new resource-manager sibling or `agent` → `terminal` /
 `subprocess` / `settings` edge. Command lifecycle and bounded output belong to the portable package,

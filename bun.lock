@@ -265,6 +265,7 @@
         "@thinkrail/contracts": "workspace:*",
         "@thinkrail/shared": "workspace:*",
         "bun-pty": "0.4.10",
+        "pi-background-commands": "workspace:*",
         "pi-delegation": "workspace:*",
         "pi-spec-graph": "workspace:*",
         "pi-subagents": "workspace:*",

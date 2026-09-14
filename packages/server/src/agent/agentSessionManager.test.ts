@@ -1148,7 +1148,7 @@ test("Stop claims an expected question before a late answer can win", async () =
 	}
 });
 
-test("direct session disposal rejects an accepted answer that cannot persist", async () => {
+test("emergency session disposal rejects an accepted answer that cannot persist", async () => {
 	const gate = installAskToolGate("ask-dispose-gate");
 	const toolCallId = "dispose-after-answer";
 	fauxA.setResponses([gatedQuestionMessage(toolCallId)]);
@@ -1165,7 +1165,7 @@ test("direct session disposal rejects an accepted answer that cannot persist", a
 			answers: [],
 			cancelled: true,
 		});
-		await removeSession(session.sessionId);
+		disposeAllSessions();
 		await expect(answering).rejects.toThrow("Session disposed while waiting for a question");
 	} finally {
 		gate.release();

@@ -5,6 +5,7 @@ import { createInterface } from "node:readline";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
+	type CreateAgentSessionOptions,
 	createAgentSession,
 	type ExtensionError,
 	getAgentDir,
@@ -43,8 +44,14 @@ import {
 	isTranscriptMessageRole,
 	normalizeSessionTitle,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
+import {
+	type BackgroundCommands,
+	createBackgroundCommands,
+	createBackgroundCommandsExtension,
+} from "pi-background-commands";
 import type { ParentContext } from "pi-delegation";
-import { RECURSION_GUARD_TOOLS } from "pi-subagents";
+import { RECURSION_GUARD_TOOLS, type Subagents } from "pi-subagents";
 import { logger } from "../log";
 import {
 	deriveActivityStatus,
@@ -65,11 +72,8 @@ import {
 	createAskUserQuestionWaiters,
 	hasQuestionAck,
 } from "./askUserQuestion";
-import {
-	disposeSessionChildren,
-	removeWorkspaceDelegation,
-	subagentsExtensionFor,
-} from "./delegation";
+import { publishSessionResourcesChanged } from "./chatResources";
+import { disposeSessionChildren, removeWorkspaceDelegation, subagentsFor } from "./delegation";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
 import {
 	getPiRuntime,
@@ -98,6 +102,11 @@ interface TrackedQueuedMessage {
 }
 
 interface Entry {
+	subagents: Subagents;
+	commands: BackgroundCommands;
+	unsubscribeCommands: () => void;
+	resourceCascade?: Promise<void>;
+	resourcesClosing: boolean;
 	session: AgentSession;
 	generation: PiRuntimeGeneration;
 	unsubscribe: () => void;
@@ -448,13 +457,16 @@ export function getSessionMessagesSnapshot(sessionId: string): TranscriptMessage
 }
 
 export async function reloadSessionResources(sessionId: string): Promise<void> {
-	const session = mustGet(sessionId);
+	const entry = mustGetEntry(sessionId);
+	const { session } = entry;
 	if (session.isStreaming) {
 		throw new Error(
 			"Can't reload skills while the session is streaming — try again after the turn.",
 		);
 	}
 	await session.reload();
+	entry.commands.flushCompletions();
+	entry.subagents.flushCompletions();
 }
 
 export function buildSessionSettings(cwd: string): SettingsManager {
@@ -508,12 +520,18 @@ async function prepareSessionEntry(
 	session: AgentSession,
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
+	commands: BackgroundCommands,
+	subagents: Subagents,
 	askUserQuestionWaiters: AskUserQuestionWaiters,
 	lastSettlement: AgentSettlement | null | undefined = undefined,
 ): Promise<PreparedSessionEntry> {
 	const { sessionId } = session;
 	let terminal: AgentSettlement | null = null;
 	const entry: Entry = {
+		commands,
+		subagents,
+		resourcesClosing: false,
+		unsubscribeCommands: () => {},
 		session,
 		generation,
 		unsubscribe: () => {},
@@ -531,6 +549,10 @@ async function prepareSessionEntry(
 		lastActivityMs: Date.now(),
 		askUserQuestionWaiters,
 	};
+	entry.unsubscribeCommands = commands.onChange(() => {
+		if (canUseSessionResources(sessionId, workspaceId))
+			publishSessionResourcesChanged(workspaceId, sessionId);
+	});
 	entry.rawActivity = activityOf(entry);
 	const seededRecencyMs = messagesActivityMs(session.messages);
 	if (seededRecencyMs !== null) entry.lastActivityMs = seededRecencyMs;
@@ -545,7 +567,11 @@ async function prepareSessionEntry(
 					entry.askUserQuestionWaiters.expect(block.id);
 			}
 		}
-		if (event.type === "turn_end") entry.askUserQuestionWaiters.persistTurn(event.toolResults);
+		if (event.type === "turn_end") {
+			entry.askUserQuestionWaiters.persistTurn(event.toolResults);
+			entry.commands.flushCompletions();
+			entry.subagents.flushCompletions();
+		}
 		if (event.type === "message_start" && event.message.role === "user") {
 			const lane = deliveredStuckEmptyLane(entry, event.message.content);
 			if (lane) {
@@ -618,7 +644,10 @@ async function prepareSessionEntry(
 		if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 	} catch (error) {
 		cancelExtUiForSession(sessionId);
+		entry.askUserQuestionWaiters.abandon();
 		entry.unsubscribe();
+		entry.unsubscribeCommands();
+		void closeSessionResources(entry);
 		session.dispose();
 		throw error;
 	}
@@ -637,6 +666,8 @@ async function registerSession(
 	session: AgentSession,
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
+	commands: BackgroundCommands,
+	subagents: Subagents,
 	askUserQuestionWaiters: AskUserQuestionWaiters,
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
@@ -644,11 +675,15 @@ async function registerSession(
 		session,
 		workspaceId,
 		generation,
+		commands,
+		subagents,
 		askUserQuestionWaiters,
 	);
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	applySubagentTools(prepared.entry);
+	commands.flushCompletions();
+	subagents.flushCompletions();
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
 	await reconcileWorkspaceActivity(workspaceId);
@@ -658,7 +693,6 @@ async function registerSession(
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
 	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(input.cwd);
-	const askUserQuestionWaiters = createAskUserQuestionWaiters();
 	let model: Model<string> | undefined;
 	if (input.model) {
 		try {
@@ -667,23 +701,131 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 			if (!input.modelOptional) throw err;
 		}
 	}
-	const { session } = await createAgentSession({
-		cwd: input.cwd,
-		modelRuntime: generation.runtime,
-		sessionManager: sessionManagerFactory(input.cwd),
-		settingsManager,
-		resourceLoader: await buildResourceLoader(
-			input.cwd,
+	return createParentSession(
+		{
+			cwd: input.cwd,
+			sessionManager: sessionManagerFactory(input.cwd),
 			settingsManager,
-			() => skillAdmissionResolver(input.workspaceId),
-			generation.excludedSessionExtensionPaths,
-			[subagentsExtensionFor(input.workspaceId, () => subagentsEnabled(input.workspaceId))],
-			askUserQuestionWaiters,
-		),
-		...(model ? { model } : {}),
-		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
+			...(model ? { model } : {}),
+			...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
+		},
+		input.workspaceId,
+		generation,
+		true,
+	);
+}
+
+async function createParentSession(
+	options: CreateAgentSessionOptions & {
+		cwd: string;
+		sessionManager: SessionManager;
+		settingsManager: SettingsManager;
+	},
+	workspaceId: string,
+	generation: PiRuntimeGeneration,
+	announceCreation = false,
+): Promise<CreateSessionResult> {
+	const { sessionManager, settingsManager, cwd } = options;
+	const sessionId = sessionManager.getSessionId();
+	const askUserQuestionWaiters = createAskUserQuestionWaiters();
+	const canDeliverCompletion = () =>
+		canUseSessionResources(sessionId, workspaceId) && !askUserQuestionWaiters.hasRecoverableCall();
+	let session: AgentSession | undefined;
+	const subagents = subagentsFor(
+		workspaceId,
+		() => subagentsEnabled(workspaceId),
+		() => sessions.get(sessionId)?.subagents === subagents && canDeliverCompletion(),
+	);
+	const commands = createBackgroundCommands({
+		sessionId,
+		getContext: () => {
+			if (!session || hasDeletionTombstone(sessionId))
+				throw new Error("Session resources unavailable");
+			return {
+				cwd: session.sessionManager.getCwd(),
+				sessionFile: session.sessionManager.getSessionFile(),
+				model: session.model,
+				thinkingLevel: session.thinkingLevel,
+				shellPath: settingsManager.getShellPath(),
+				commandPrefix: settingsManager.getShellCommandPrefix(),
+			};
+		},
+		canDeliverCompletion: () =>
+			sessions.get(sessionId)?.commands === commands && canDeliverCompletion(),
 	});
-	return registerSession(session, input.workspaceId, generation, askUserQuestionWaiters, true);
+	try {
+		const result = await createAgentSession({
+			...options,
+			modelRuntime: generation.runtime,
+			resourceLoader: await buildResourceLoader(
+				cwd,
+				settingsManager,
+				() => skillAdmissionResolver(workspaceId),
+				generation.excludedSessionExtensionPaths,
+				[subagents.extension, createBackgroundCommandsExtension({ service: commands })],
+				askUserQuestionWaiters,
+			),
+		});
+		session = result.session;
+		return await registerSession(
+			session,
+			workspaceId,
+			generation,
+			commands,
+			subagents,
+			askUserQuestionWaiters,
+			announceCreation,
+		);
+	} catch (error) {
+		if (sessions.get(sessionId)?.commands === commands) {
+			try {
+				await disposeSession(sessionId);
+			} catch {}
+		} else {
+			subagents.dispose();
+			void trackCascade(
+				workspaceId,
+				commands.dispose().catch(() => {}),
+			);
+			askUserQuestionWaiters.abandon();
+			session?.dispose();
+		}
+		throw error;
+	}
+}
+
+export function canUseSessionResources(sessionId: string, workspaceId: string): boolean {
+	const entry = sessions.get(sessionId);
+	return (
+		!!entry &&
+		entry.registered &&
+		!entry.resourcesClosing &&
+		entry.workspaceId === workspaceId &&
+		!hasDeletionTombstone(sessionId)
+	);
+}
+
+export async function withSessionResources<T>(
+	workspaceId: string,
+	sessionId: string,
+	cwd: string,
+	operation: (commands: BackgroundCommands) => T | Promise<T>,
+): Promise<T> {
+	if (!sessions.has(sessionId) && !hasDeletionTombstone(sessionId)) {
+		try {
+			await ensureSessionAttached(sessionId, workspaceId, cwd);
+		} catch {
+			throw new CodedError("RESOURCE_UNAVAILABLE", "Session resources unavailable");
+		}
+	}
+	const entry = sessions.get(sessionId);
+	if (
+		!entry ||
+		!canUseSessionResources(sessionId, workspaceId) ||
+		entry.session.sessionManager.getCwd() !== cwd
+	)
+		throw new CodedError("RESOURCE_UNAVAILABLE", "Session resources unavailable");
+	return operation(entry.commands);
 }
 
 function summaryOf(sessionId: string, entry: Entry): SessionSummary {
@@ -930,7 +1072,6 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(cwd);
 	const sessionManager = SessionManager.open(info.path);
-	const askUserQuestionWaiters = createAskUserQuestionWaiters();
 	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
 	let exactModel: Model<string> | undefined;
 	if (persistedModel) {
@@ -941,26 +1082,16 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		}
 	}
 	repairDanglingToolCalls(sessionManager);
-	const { session } = await createAgentSession({
-		cwd,
-		modelRuntime: generation.runtime,
-		sessionManager,
-		settingsManager,
-		resourceLoader: await buildResourceLoader(
+	await createParentSession(
+		{
 			cwd,
+			sessionManager,
 			settingsManager,
-			() => skillAdmissionResolver(workspaceId),
-			generation.excludedSessionExtensionPaths,
-			[subagentsExtensionFor(workspaceId, () => subagentsEnabled(workspaceId))],
-			askUserQuestionWaiters,
-		),
-		...(exactModel ? { model: exactModel } : {}),
-	});
-	if (sessions.has(sessionId)) {
-		session.dispose();
-		return;
-	}
-	await registerSession(session, workspaceId, generation, askUserQuestionWaiters);
+			...(exactModel ? { model: exactModel } : {}),
+		},
+		workspaceId,
+		generation,
+	);
 }
 
 async function ensureSessionAttachedInternal(
@@ -1414,7 +1545,7 @@ export function isSessionStreaming(sessionId: string): boolean {
 
 export function liveParentContext(sessionId: string): ParentContext | undefined {
 	const entry = sessions.get(sessionId);
-	if (!entry) return undefined;
+	if (!entry || !canUseSessionResources(sessionId, entry.workspaceId)) return undefined;
 	const { session } = entry;
 	return {
 		cwd: session.sessionManager.getCwd(),
@@ -1443,38 +1574,55 @@ function trackCascade(workspaceId: string, cascade: Promise<void>): Promise<void
 	return tracked;
 }
 
+function closeSessionResources(entry: Entry, timeoutMs?: number): Promise<void> {
+	if (entry.resourceCascade) return entry.resourceCascade;
+	entry.resourcesClosing = true;
+	entry.subagents.dispose();
+	const closing = entry.commands.dispose(timeoutMs === undefined ? undefined : { timeoutMs });
+	const children = disposeSessionChildren(entry.workspaceId, entry.session.sessionId);
+	entry.resourceCascade = trackCascade(
+		entry.workspaceId,
+		Promise.allSettled([closing, children]).then(() => {}),
+	);
+	return entry.resourceCascade;
+}
+
 function disposeSession(sessionId: string): Promise<void> {
 	const entry = sessions.get(sessionId);
 	if (!entry) return Promise.resolve();
-	const cascade = trackCascade(
-		entry.workspaceId,
-		disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
-	);
+	const cascade = closeSessionResources(entry);
 	cancelExtUiForSession(sessionId);
 	entry.askUserQuestionWaiters.abandon();
 	entry.unsubscribe();
+	entry.unsubscribeCommands();
 	entry.session.dispose();
 	sessions.delete(sessionId);
 	if (entry.publishedActivity !== null) retractActivity(sessionId, entry.workspaceId);
 	applyWorkspaceActivity(entry.workspaceId);
+	publishSessionResourcesChanged(entry.workspaceId, sessionId);
 	log.debug(`session ${sessionId} disposed`);
 	return cascade;
 }
 
 export function removeSession(sessionId: string): Promise<void> {
 	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
+	const entry = sessions.get(sessionId);
+	if (!entry) return Promise.resolve();
+	closeSessionResources(entry);
+	if (entry.session.isStreaming)
+		return abortSession(sessionId)
+			.catch(() => {})
+			.then(() => disposeSession(sessionId));
 	return disposeSession(sessionId);
 }
 
 export function disposeAllSessions(): void {
+	for (const entry of sessions.values()) void closeSessionResources(entry);
 	for (const [sessionId, entry] of sessions) {
-		void trackCascade(
-			entry.workspaceId,
-			disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
-		);
 		cancelExtUiForSession(sessionId);
 		entry.askUserQuestionWaiters.abandon();
 		entry.unsubscribe();
+		entry.unsubscribeCommands();
 		entry.session.dispose();
 	}
 	sessions.clear();
@@ -1483,6 +1631,7 @@ export function disposeAllSessions(): void {
 
 export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void> {
 	const settling = new Set<Promise<unknown>>();
+	for (const entry of sessions.values()) settling.add(closeSessionResources(entry, timeoutMs));
 	for (const [sessionId, entry] of sessions) {
 		const acceptedResult = entry.askUserQuestionWaiters.prepareShutdown();
 		if (acceptedResult) {
@@ -1499,33 +1648,33 @@ export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void>
 		if (entry.session.isStreaming && !entry.askUserQuestionWaiters.hasRecoverableCall()) {
 			settling.add(entry.session.abort());
 		}
-		settling.add(
-			trackCascade(
-				entry.workspaceId,
-				disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
-			),
-		);
 	}
 	for (const pending of pendingCascades.values()) {
 		for (const cascade of pending) settling.add(cascade);
 	}
 	if (settling.size === 0) return;
-	await Promise.race([
-		Promise.allSettled(settling),
-		new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
-	]);
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		await Promise.race([
+			Promise.allSettled(settling),
+			new Promise<void>((resolve) => {
+				timer = setTimeout(resolve, timeoutMs);
+			}),
+		]);
+	} finally {
+		clearTimeout(timer);
+	}
 }
 
 async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string): Promise<void> {
-	const ids = [...sessions]
-		.filter(([, entry]) => entry.workspaceId === workspaceId)
-		.map(([sessionId]) => sessionId);
-	for (const sessionId of ids) {
-		const entry = sessions.get(sessionId);
-		if (!entry) continue;
-		if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
-		await disposeSession(sessionId);
-	}
+	const entries = [...sessions].filter(([, entry]) => entry.workspaceId === workspaceId);
+	for (const [, entry] of entries) void closeSessionResources(entry);
+	await Promise.all(
+		entries.map(async ([sessionId, entry]) => {
+			if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
+			await disposeSession(sessionId);
+		}),
+	);
 	await Promise.all([...(pendingCascades.get(workspaceId) ?? [])]);
 	removeWorkspaceDelegation(workspaceId);
 	if (cwd) await purgeDiskSessions(cwd);
@@ -1605,6 +1754,9 @@ async function runDeleteTransaction(
 		if (installedTombstone) {
 			deletedSessions.delete(sessionId);
 			syncSessionActivity(sessionId);
+			sessions.get(sessionId)?.commands.flushCompletions();
+			sessions.get(sessionId)?.subagents.flushCompletions();
+			publishSessionResourcesChanged(workspaceId, sessionId);
 		}
 		throw error;
 	}

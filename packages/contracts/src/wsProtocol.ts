@@ -2,6 +2,8 @@ import type {
 	ActivityStatus,
 	AppConfig,
 	AppConfigUpdate,
+	BackgroundCommandCompletionDetails,
+	BackgroundCommandOutputResult,
 	BranchList,
 	DelegationRunDetails,
 	DelegationRunStatus,
@@ -33,6 +35,7 @@ import type {
 	ReviewCommentStatus,
 	ReviewSnapshot,
 	SessionActivity,
+	SessionResources,
 	SpecGraphSnapshot,
 	SubagentOverride,
 	Template,
@@ -96,7 +99,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 66;
+export const PROTOCOL_VERSION = 67;
+export const CHAT_RESOURCES_PROTOCOL_VERSION = 67;
 export const ANALYTICS_CONSENT_PROTOCOL_VERSION = 65;
 export const SESSION_RENAME_PROTOCOL_VERSION = 66;
 export const SESSION_TITLE_MAX_LENGTH = 80;
@@ -232,6 +236,11 @@ export const WS_METHODS = {
 	sessionActivityList: "session.activityList",
 	sessionGetMessages: "session.getMessages",
 	subagentGetTranscript: "subagent.getTranscript",
+	sessionResources: "session.resources",
+	backgroundCommandOutput: "backgroundCommand.output",
+	backgroundCommandStop: "backgroundCommand.stop",
+	subagentStop: "subagent.stop",
+	subagentStopAll: "subagent.stopAll",
 	modelList: "model.list",
 	modelRefresh: "model.refresh",
 	modelDefault: "model.default",
@@ -272,6 +281,7 @@ export const WS_CHANNELS = {
 	sessionCreated: "session.created",
 	sessionDeleted: "session.deleted",
 	sessionActivity: "session.activity",
+	sessionResourcesChanged: "session.resourcesChanged",
 	providerLogin: "provider.login",
 	providerChanged: "provider.changed",
 	terminalData: "terminal.data",
@@ -325,6 +335,52 @@ export function isSubagentCompletionMessage(
 	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
 	if (m.role !== "custom" || m.customType !== SUBAGENT_COMPLETION_CUSTOM_TYPE) return false;
 	return isDelegationRunDetails(m.details);
+}
+
+export const BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE = "background-command-completion";
+
+export interface BackgroundCommandCompletionMessage
+	extends WireCustomMessage<BackgroundCommandCompletionDetails> {
+	customType: typeof BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE;
+	display: true;
+	details: BackgroundCommandCompletionDetails;
+}
+
+export function isBackgroundCommandCompletionMessage(
+	message: unknown,
+): message is BackgroundCommandCompletionMessage {
+	if (!message || typeof message !== "object") return false;
+	const m = message as {
+		role?: unknown;
+		customType?: unknown;
+		display?: unknown;
+		details?: unknown;
+	};
+	if (
+		m.role !== "custom" ||
+		m.customType !== BACKGROUND_COMMAND_COMPLETION_CUSTOM_TYPE ||
+		m.display !== true
+	)
+		return false;
+	if (!m.details || typeof m.details !== "object") return false;
+	const d = m.details as Partial<BackgroundCommandCompletionDetails>;
+	if ([d.id, d.sessionId, d.name].some((field) => typeof field !== "string")) return false;
+	if (d.status !== "completed" && d.status !== "error" && d.status !== "stopped") return false;
+	if (
+		typeof d.startedAt !== "number" ||
+		!Number.isFinite(d.startedAt) ||
+		typeof d.finishedAt !== "number" ||
+		!Number.isFinite(d.finishedAt)
+	)
+		return false;
+	if (
+		d.exitCode !== undefined &&
+		d.exitCode !== null &&
+		(typeof d.exitCode !== "number" || !Number.isFinite(d.exitCode))
+	)
+		return false;
+	if (d.errorMessage !== undefined && typeof d.errorMessage !== "string") return false;
+	return !!d.output && typeof d.output.text === "string" && typeof d.output.truncated === "boolean";
 }
 
 export function customMessageText(content: WireCustomMessage["content"]): string {
@@ -541,6 +597,26 @@ export interface WsMethodMap {
 		params: { sessionId: string; workspaceId: string };
 		result: { summary: SessionSummary; messages: TranscriptMessage[] };
 	};
+	"session.resources": {
+		params: { workspaceId: string; sessionId: string };
+		result: SessionResources;
+	};
+	"backgroundCommand.output": {
+		params: { workspaceId: string; sessionId: string; commandId: string };
+		result: BackgroundCommandOutputResult;
+	};
+	"backgroundCommand.stop": {
+		params: { workspaceId: string; sessionId: string; commandId: string };
+		result: Ack;
+	};
+	"subagent.stop": {
+		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
+		result: Ack;
+	};
+	"subagent.stopAll": {
+		params: { workspaceId: string; parentSessionId: string };
+		result: Ack & { targeted: number };
+	};
 	"subagent.getTranscript": {
 		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
 		result: { messages: TranscriptMessage[]; status?: DelegationRunStatus };
@@ -657,7 +733,11 @@ export interface WsResume {
 
 export type WsClientMessage = WsRequest | WsAck | WsResume;
 
-export type WsErrorCode = "UNKNOWN_COMMIT" | "PUSH_AUTH_FAILED" | "SUBAGENT_TRANSCRIPT_NOT_FOUND";
+export type WsErrorCode =
+	| "UNKNOWN_COMMIT"
+	| "PUSH_AUTH_FAILED"
+	| "SUBAGENT_TRANSCRIPT_NOT_FOUND"
+	| "RESOURCE_UNAVAILABLE";
 
 export interface WsResponse {
 	id: string;

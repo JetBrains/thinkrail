@@ -223,20 +223,23 @@ consumer, the ThinkRail worktree provider. Report-back from a subsession to its 
 subsessions land) is pi-native (`sendMessage`/`followUp`) — no core provision needed beyond
 lineage.
 
-## User cancellation — draft contract extension
+## User cancellation
 
-The Resources control path needs to distinguish an explicit user cancellation from an ordinary
-abort without teaching this core about UI or completion-message delivery. `ChildHandle.abort`
-accepts an optional plain-string reason, and `DelegationRunDetails.abortReason` records that reason
-for the active run's eventual snapshot/outcome. The first accepted cancellation cause wins; an
-already terminal handle is unchanged. Reasons are metadata, not new lifecycle statuses, and
-non-user abort paths retain their current semantics.
+`ChildHandle.abort(reason?: string)` records its optional plain-string reason in the active run's
+`DelegationRunDetails.abortReason`, preserved in snapshots, outcomes and terminal events. The first
+accepted cancellation wins, including one with no reason; caller signals, disposal and turn caps
+participate in that ordering without adding a reason. Terminal runs are unchanged, and each new run
+resets both the cancellation latch and reason. Reasons are metadata, not lifecycle statuses.
 
-The host uses `"user"` for its explicit control path; [[module-pi-subagents]] alone decides what that
-means for completion delivery. This field lives with the run, not in a host-side set or second
-resource registry. A queued user cancellation still releases immediately without provider work;
-running cancellation still uses the existing run-scoped signal. Tests must pin both paths and
-idempotent/natural-completion races before this draft contract is activated.
+Child creation revalidates parent liveness after asynchronous session/extension preparation, before
+registering the handle. If the embedder closed that parent during preparation, the unregistered child
+is disposed and creation fails with `unknown-parent`. This prevents an in-flight birth from escaping
+a parent's already-captured teardown list without introducing a second pending-child registry.
+
+The host uses `"user"` for explicit user cancellation; [[module-pi-subagents]] owns its completion
+policy. No UI dependency or second registry is involved. Queued cancellation settles immediately,
+returns any eventual slot grant and starts no provider work; running cancellation uses the existing
+run-scoped signal. Non-user paths retain their behavior.
 
 ## Decision log (how the contract got its shape)
 
