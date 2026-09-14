@@ -52,7 +52,7 @@ import {
 	selectWorkspaceById,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport, wsErrorCode } from "../transport";
+import { errorText, getTransport, supportsPlanReview, wsErrorCode } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openDiffInTab } from "./openTabs";
 import { PlanCommitsMenu } from "./PlanCommitsMenu";
@@ -505,6 +505,7 @@ export default function PlanPane({
 	const workspace = useAppStore((s) => selectWorkspaceById(s, workspaceId));
 	const connection = useAppStore((s) => s.status);
 	const hostPlatform = useAppStore((s) => s.hostPlatform);
+	const canReview = supportsPlanReview(useAppStore((s) => s.protocolVersion));
 	const {
 		review: openReview,
 		url: openReviewUrl,
@@ -543,7 +544,8 @@ export default function PlanPane({
 	const hasUnattributed = (data.unattributed?.length ?? 0) > 0;
 	const empty = groups.length === 0 && loose.length === 0;
 	const nothingToShow = empty && adopted.length === 0 && !hasUnattributed;
-	const reviewables = reviewableItems(data);
+	// Host-version gate: an older host serves no plan-review methods, so offer none of its affordances.
+	const reviewables = canReview ? reviewableItems(data) : [];
 	const unsettledReviewables = reviewables.filter((t) => !reviewSettled(t));
 	const reviewedCount = reviewables.length - unsettledReviewables.length;
 	const overallSummary = planCompletionSummary(data);
@@ -1038,7 +1040,7 @@ export default function PlanPane({
 								onStartReview={startReview}
 								onOpenReview={onOpenReview}
 								reviewComments={reviewComments}
-								startDisabled={reviewingAny}
+								startDisabled={reviewingAny || !canReview}
 								focusRequest={focusRequest}
 							/>
 						))}
@@ -1060,7 +1062,7 @@ export default function PlanPane({
 											onStartReview={startReview}
 											onOpenReview={onOpenReview}
 											reviewComments={reviewComments}
-											startDisabled={reviewingAny}
+											startDisabled={reviewingAny || !canReview}
 											focusRequest={focusRequest}
 										/>
 									))}
