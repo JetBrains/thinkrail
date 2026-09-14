@@ -13,6 +13,8 @@ test("the chat plan opens as a popup from the header strip and takes a user item
 
 	const toggle = page.getByTestId("chat-plan-toggle");
 	await expect(toggle).toBeVisible();
+	await expect(page.getByTestId("tab-todos")).toHaveCount(0);
+	await expect(toggle.getByTestId("chat-plan-disclosure")).toBeVisible();
 	await expect(page.getByTestId("chat-plan-popover")).toHaveCount(0);
 
 	await toggle.click();

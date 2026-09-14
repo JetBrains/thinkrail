@@ -17,7 +17,7 @@ import {
 import type { ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib";
-import { SettingsSection, useAppStore } from "@/store";
+import { SettingsSection, type TodoViewMode, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
@@ -57,9 +57,15 @@ const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: S
 
 export function SettingsDialog({
 	layoutSettings,
+	todoViewMode,
+	todoViewModeDisabled,
+	onTodoViewModeChange,
 	updateSettings,
 }: {
 	layoutSettings: ReactNode;
+	todoViewMode: TodoViewMode;
+	todoViewModeDisabled: boolean;
+	onTodoViewModeChange: (mode: TodoViewMode) => void;
 	updateSettings?: ReactNode;
 }) {
 	const open = useAppStore((s) => s.settingsOpen);
@@ -142,7 +148,11 @@ export function SettingsDialog({
 						) : selectedSection === SettingsSection.LineWidth ? (
 							<LineWidthSettings />
 						) : selectedSection === SettingsSection.Chat ? (
-							<ChatSettings />
+							<ChatSettings
+								todoViewMode={todoViewMode}
+								todoViewModeDisabled={todoViewModeDisabled}
+								onTodoViewModeChange={onTodoViewModeChange}
+							/>
 						) : selectedSection === SettingsSection.Layout ? (
 							layoutSettings
 						) : selectedSection === SettingsSection.Updates && updateSettings !== undefined ? (

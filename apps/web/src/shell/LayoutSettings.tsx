@@ -20,7 +20,7 @@ import {
 	minimumSideGroupLimit,
 	resolveLayoutPreset,
 } from "./layout";
-import { applyLayoutPresetLocally } from "./layoutState";
+import { applyLayoutPresetLocally, resetLayoutPresetLocally } from "./layoutState";
 
 const BUILTIN_PRESET_IDS = new Set(BUILTIN_LAYOUT_PRESETS.map((preset) => preset.id));
 const MAX_CUSTOM_PRESETS = 32;
@@ -45,7 +45,10 @@ export function LayoutSettings() {
 	const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
 	const [sideLimit, setSideLimit] = useState(String(preferences.maxSideGroups));
 	const [bottomLimit, setBottomLimit] = useState(String(preferences.maxBottomGroups));
-	const [applying, setApplying] = useState<LayoutPreset | null>(null);
+	const [applying, setApplying] = useState<{
+		preset: LayoutPreset;
+		reset: boolean;
+	} | null>(null);
 	const [saving, setSaving] = useState(false);
 	useEffect(() => setSideLimit(String(preferences.maxSideGroups)), [preferences.maxSideGroups]);
 	useEffect(
@@ -75,10 +78,11 @@ export function LayoutSettings() {
 		}
 	};
 
-	const apply = (preset: LayoutPreset) => {
+	const apply = (preset: LayoutPreset, reset: boolean) => {
 		if (!activeWorkspaceId || !frame) return;
 		try {
-			applyLayoutPresetLocally(preset);
+			if (reset) resetLayoutPresetLocally(preset);
+			else applyLayoutPresetLocally(preset);
 			toast.success(`${preset.name} layout applied`);
 		} catch (error) {
 			toast.error(errorText(error), "Couldn't apply the layout");
@@ -120,7 +124,7 @@ export function LayoutSettings() {
 						type="button"
 						data-testid="layout-reset-default"
 						disabled={!activeWorkspaceId || !frame}
-						onClick={() => setApplying(selected)}
+						onClick={() => setApplying({ preset: selected, reset: true })}
 						className="rounded-[var(--radius-sm)] border border-border-default px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-control-disabled-text"
 					>
 						Reset frame…
@@ -198,7 +202,7 @@ export function LayoutSettings() {
 									<button
 										type="button"
 										disabled={saving || !activeWorkspaceId || !frame}
-										onClick={() => setApplying(preset)}
+										onClick={() => setApplying({ preset, reset: false })}
 										className="rounded-[var(--radius-sm)] bg-control-primary-bg px-8 py-4 tr-text-metadata text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 									>
 										Apply now…
@@ -397,7 +401,7 @@ export function LayoutSettings() {
 				confirmLabel="Apply layout"
 				confirmTestId="layout-apply-confirm"
 				onConfirm={() => {
-					if (applying) apply(applying);
+					if (applying) apply(applying.preset, applying.reset);
 					setApplying(null);
 				}}
 			/>

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { LayoutAttention } from "../../lib";
 import {
 	type EditorTab,
+	type LayoutIntent,
 	layoutOpenOptionsForNavigation,
 	shouldAdvanceAcceptedNavigation,
 	toast,
@@ -31,6 +32,7 @@ import {
 	openCenterTab,
 	primaryCenterGroupId,
 	reconcileAttention,
+	rememberFocusedChat,
 	removeSessionLayoutTabs,
 	revealTool,
 	selectTab,
@@ -135,6 +137,13 @@ export function placeTerminalForIntent(
 	};
 }
 
+export function shouldSuppressGenericChatFocus(intent: {
+	kind: LayoutIntent["kind"];
+	countNavigation?: boolean;
+}): boolean {
+	return intent.kind !== "open" || intent.countNavigation === false;
+}
+
 export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 	switch (tab.kind) {
 		case "file":
@@ -184,6 +193,7 @@ export function useLayoutIntentProcessing(
 	);
 	const maxSideGroups = useAppStore((state) => state.localLayoutPreferences.maxSideGroups);
 	const maxBottomGroups = useAppStore((state) => state.localLayoutPreferences.maxBottomGroups);
+	const todoViewMode = useAppStore((state) => state.todoViewMode);
 	const terminalReservationPending = useAppStore((state) => {
 		if (layoutIntent?.kind !== "place-terminal") return false;
 		return (
@@ -297,12 +307,15 @@ export function useLayoutIntentProcessing(
 					const kept = keepPreview(document, location.groupId, selectedTabId);
 					if (!isLayoutUnavailable(kept)) nextDocument = kept.document;
 				}
-				const nextAttention = selectTab(
-					attention,
-					location,
-					selectedTabId,
-					layoutIntent.countNavigation ??
-						shouldAdvanceAcceptedNavigation(attention, requestNavigation),
+				const nextAttention = rememberFocusedChat(
+					selectTab(
+						attention,
+						location,
+						selectedTabId,
+						layoutIntent.countNavigation ??
+							shouldAdvanceAcceptedNavigation(attention, requestNavigation),
+					),
+					placed,
 				);
 				changeAttention(nextAttention);
 				if (layoutIntent.focus !== false) {
@@ -365,7 +378,13 @@ export function useLayoutIntentProcessing(
 				break;
 			}
 			case "reveal-tool": {
-				const revealed = revealTool(document, layoutIntent.tool, maxSideGroups, maxBottomGroups);
+				const revealed = revealTool(
+					document,
+					layoutIntent.tool,
+					maxSideGroups,
+					maxBottomGroups,
+					todoViewMode,
+				);
 				if (!isLayoutUnavailable(revealed)) result = revealed;
 				break;
 			}
@@ -430,7 +449,13 @@ export function useLayoutIntentProcessing(
 				if (document[layoutIntent.side].visible) {
 					result = hideSide(document, layoutIntent.side, attention);
 				} else {
-					const shown = showSide(document, layoutIntent.side, maxSideGroups, attention);
+					const shown = showSide(
+						document,
+						layoutIntent.side,
+						maxSideGroups,
+						attention,
+						todoViewMode,
+					);
 					if (!isLayoutUnavailable(shown)) result = shown;
 				}
 				break;
@@ -438,7 +463,13 @@ export function useLayoutIntentProcessing(
 				if (document.bottom.visible) {
 					result = hideBottom(document, attention);
 				} else {
-					const shown = showBottom(document, maxSideGroups, maxBottomGroups, attention);
+					const shown = showBottom(
+						document,
+						maxSideGroups,
+						maxBottomGroups,
+						attention,
+						todoViewMode,
+					);
 					if (!isLayoutUnavailable(shown)) {
 						result = shown;
 						if (shown.document.bottom.groups.every((group) => group.tabs.length === 0)) {
@@ -457,6 +488,7 @@ export function useLayoutIntentProcessing(
 					? currentRouting?.activate !== false
 					: true;
 		if (activateResult && result.focusGroupId) {
+			const suppressChatFocus = shouldSuppressGenericChatFocus(layoutIntent);
 			const focusGroupId = result.focusGroupId;
 			const location = result.focusTabId
 				? findTabLocation(result.document, result.focusTabId)
@@ -480,11 +512,18 @@ export function useLayoutIntentProcessing(
 							? layoutIntent.countNavigation
 							: shouldAdvanceAcceptedNavigation(attention, requestNavigation),
 					);
+					if (!suppressChatFocus) {
+						nextAttention = rememberFocusedChat(
+							nextAttention,
+							findLayoutTab(result.document, result.focusTabId),
+						);
+					}
 				}
 				requestFocus({
 					key: layoutIntent.id,
 					location,
 					...(result.focusTabId ? { tabId: result.focusTabId } : {}),
+					...(suppressChatFocus ? { suppressChatFocus: true } : {}),
 				});
 			}
 		}
@@ -505,6 +544,7 @@ export function useLayoutIntentProcessing(
 		maxSideGroups,
 		requestFocus,
 		terminalReservationPending,
+		todoViewMode,
 		workspaceId,
 	]);
 }

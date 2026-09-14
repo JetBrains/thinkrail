@@ -1,7 +1,15 @@
 import type { GitDiffScope, LayoutPreset } from "@thinkrail/contracts";
 
 export type LayoutBottomAlignment = LayoutPreset["bottom"]["alignment"];
-export type LayoutToolId = LayoutPreset["left"]["groups"][number]["tools"][number];
+export type SynchronizedLayoutToolId = LayoutPreset["left"]["groups"][number]["tools"][number];
+export type LayoutToolId = SynchronizedLayoutToolId | "todos";
+export type TodoViewMode = "chat-popover" | "side-tool";
+
+export const DEFAULT_TODO_VIEW_MODE: TodoViewMode = "chat-popover";
+
+export function isSynchronizedLayoutToolId(tool: LayoutToolId): tool is SynchronizedLayoutToolId {
+	return tool !== "todos";
+}
 
 export interface LayoutFileTab {
 	kind: "file";

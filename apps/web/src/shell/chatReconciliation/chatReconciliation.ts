@@ -21,6 +21,7 @@ import {
 	findPlacedResource,
 	findTabLocation,
 	type LayoutCenterTab,
+	rememberFocusedChat,
 	removeSessionLayoutTabs,
 	selectTab,
 	type WorkspaceLayoutDocument,
@@ -250,6 +251,7 @@ export function useWorkspaceChatCatalogReconciliation(
 					workspaceId,
 					baselineSessionIds,
 					summaries.map((summary) => summary.sessionId),
+					connectionGeneration,
 				);
 				let latestDocument = useAppStore.getState().layoutDocumentsByWorkspace[workspaceId];
 				const authoritativeSessionIds = new Set(summaries.map((summary) => summary.sessionId));
@@ -518,11 +520,14 @@ export function useChatLocationReconciliation(
 			const routed = layoutOpenOptionsForNavigation(currentState, workspaceId, navigation);
 			if (location && currentAttention && routed.activate !== false) {
 				changeAttention(
-					selectTab(
-						currentAttention,
-						location,
-						placed.id,
-						shouldAdvanceAcceptedNavigation(currentAttention, navigation),
+					rememberFocusedChat(
+						selectTab(
+							currentAttention,
+							location,
+							placed.id,
+							shouldAdvanceAcceptedNavigation(currentAttention, navigation),
+						),
+						placed,
 					),
 				);
 			}

@@ -34,7 +34,7 @@ import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
-import { useLocalLayoutState } from "./layoutState";
+import { transitionTodoViewMode, useLocalLayoutState } from "./layoutState";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
@@ -57,6 +57,8 @@ export function Shell() {
 	const StatusDot = status === "connected" ? RiCircleFill : Circle;
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
+	const layoutStateReady = useAppStore((s) => s.layoutStateReady);
+	const todoViewMode = useAppStore((s) => s.todoViewMode);
 	const contextProject = useAppStore(selectContextProject);
 	const { review: openReview } = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
@@ -199,6 +201,9 @@ export function Shell() {
 				</div>
 				<SettingsDialog
 					layoutSettings={<LayoutSettings />}
+					todoViewMode={todoViewMode}
+					todoViewModeDisabled={!layoutStateReady}
+					onTodoViewModeChange={transitionTodoViewMode}
 					updateSettings={
 						updates ? (
 							<UpdateSettings

@@ -5,17 +5,19 @@ import {
 import { PopoverContent } from "@/components/ui/popover";
 import { cn } from "../lib";
 import { type PlanGlance, planSummary, stripStatus } from "./planView";
-import { glanceIcon, TodoAddRow, TodoRows } from "./TodoList";
+import { glanceIcon, TodoAddRow, TodoEmptyGuidance, TodoRows } from "./TodoList";
 import type { ChatTodos } from "./useChatTodos";
 
 export function ChatPlanStripContent({
 	plan,
 	open,
 	glance,
+	disclosure = true,
 }: {
 	plan: ChatTodos;
 	open: boolean;
 	glance: PlanGlance;
+	disclosure?: boolean;
 }) {
 	if (plan.data === null) return null;
 	const summary = planSummary(plan.data);
@@ -25,7 +27,9 @@ export function ChatPlanStripContent({
 	const { Icon, label, className } = glanceIcon(glance);
 	return (
 		<>
-			<Chevron className="size-16 shrink-0" />
+			{disclosure ? (
+				<Chevron data-testid="chat-plan-disclosure" className="size-16 shrink-0" />
+			) : null}
 			<span className="tr-text-emphasis shrink-0">TODO list</span>
 			<span className="shrink-0">
 				{done}/{total}
@@ -67,9 +71,7 @@ export function ChatPlanContent({ plan, glance }: { plan: ChatTodos; glance: Pla
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto p-4">
 				{empty ? (
-					<p className="px-4 py-4 text-text-muted tr-text-metadata">
-						No TODOs yet — the agent adds its plan here, or add one above.
-					</p>
+					<TodoEmptyGuidance />
 				) : (
 					<TodoRows
 						plan={plan.data}

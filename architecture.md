@@ -76,13 +76,16 @@ dependency. This keeps test process drivers outside both launchers and the serve
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
    is keyed by backend profile so ids from one host are never interpreted against another.
 5. **UI = panels + shell.** Layout-agnostic, store-driven panels (project→workspace nav, file tree,
-   Monaco editor, changes/diff, workspace-local review, terminal, chat, composer) never know their
+   Monaco editor, changes/diff, workspace-local review, chat-scoped TODO, terminal, chat, composer) never know their
    arrangement. Each desktop frontend window owns one locally persisted, resource-free workbench frame: a
    recursively split center plus auxiliary groups in vertical left/right stacks and a horizontally grouped
    bottom region. The frame's topology, singleton-tool placement, visibility, folds, geometry, and alignment
    remain unchanged when that window switches workspace; workspace-scoped resources and attention project
    into it from separate local views. Terminals may occupy center or auxiliary groups, with new workspaces
-   defaulting one terminal to bottom. Another window never rearranges this one. A future mobile shell may
+   defaulting one terminal to bottom. The TODO compact view is client-selectable: the compatibility default
+   stays in each chat header; its alternative is a movable singleton tool whose source is that workspace's
+   last-focused chat, remembered as frontend-local attention rather than host state. Another window never
+   rearranges this one. A future mobile shell may
    project the same panels differently; desktop docking does not define that projection. Detail:
    [[submodule-web-shell-layout]].
 6. **Workspaces are git worktrees (V1).** project (git repo) → workspace (`git worktree` on its own

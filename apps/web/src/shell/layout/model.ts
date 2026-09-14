@@ -19,6 +19,7 @@ import type {
 	LayoutTab,
 	LayoutToolId,
 	LayoutToolTab,
+	TodoViewMode,
 	WorkspaceLayoutDocument,
 } from "./types";
 
@@ -72,6 +73,7 @@ export const LAYOUT_TOOLS: readonly LayoutToolId[] = [
 	"specs",
 	"files",
 	"changes",
+	"todos",
 	"review",
 ];
 
@@ -80,6 +82,7 @@ export const LAYOUT_TOOL_DEFAULT_SIDES: Record<LayoutToolId, LayoutSide> = {
 	specs: "right",
 	files: "right",
 	changes: "right",
+	todos: "right",
 	review: "right",
 };
 
@@ -88,8 +91,13 @@ const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
 	specs: "Specs",
 	files: "Files",
 	changes: "Changes",
+	todos: "TODO",
 	review: "Review",
 };
+
+export function isLayoutToolEligible(tool: LayoutToolId, todoViewMode: TodoViewMode): boolean {
+	return tool !== "todos" || todoViewMode === "side-tool";
+}
 
 export function layoutTabName(tab: LayoutTab): string {
 	return tab.kind === "tool" ? LAYOUT_TOOL_NAMES[tab.tool] : tab.name;
@@ -419,15 +427,23 @@ export function findPlacedResource(
 	);
 }
 
-export function unplacedTools(document: WorkspaceLayoutDocument): readonly LayoutToolId[] {
-	return LAYOUT_TOOLS.filter((tool) => findPlacedResource(document, toolTab(tool)) === null);
+export function unplacedTools(
+	document: WorkspaceLayoutDocument,
+	todoViewMode: TodoViewMode = "chat-popover",
+): readonly LayoutToolId[] {
+	return LAYOUT_TOOLS.filter(
+		(tool) =>
+			isLayoutToolEligible(tool, todoViewMode) &&
+			findPlacedResource(document, toolTab(tool)) === null,
+	);
 }
 
 export function unplacedToolsForSide(
 	document: WorkspaceLayoutDocument,
 	side: LayoutSide,
+	todoViewMode: TodoViewMode = "chat-popover",
 ): readonly LayoutToolId[] {
-	return unplacedTools(document).filter(
+	return unplacedTools(document, todoViewMode).filter(
 		(tool) =>
 			(document.toolRestoreTargets[tool]?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool]) === side,
 	);
@@ -858,8 +874,15 @@ export function hideBottom(
 	};
 }
 
-export function canShowSide(document: WorkspaceLayoutDocument, side: LayoutSide): boolean {
-	return document[side].groups.length > 0 || unplacedToolsForSide(document, side).length > 0;
+export function canShowSide(
+	document: WorkspaceLayoutDocument,
+	side: LayoutSide,
+	todoViewMode: TodoViewMode = "chat-popover",
+): boolean {
+	return (
+		document[side].groups.length > 0 ||
+		unplacedToolsForSide(document, side, todoViewMode).length > 0
+	);
 }
 
 export function showBottom(
@@ -867,6 +890,7 @@ export function showBottom(
 	maxSideGroups: number,
 	maxBottomGroups: number,
 	attention?: LayoutAttention,
+	todoViewMode: TodoViewMode = "chat-popover",
 ): LayoutOperationResult {
 	const populated = document.bottom.groups.some((group) => group.tabs.length > 0);
 	if (populated) {
@@ -887,10 +911,13 @@ export function showBottom(
 	}
 	const tool = TOOL_RESTORE_ORDER.find(
 		(candidate) =>
+			isLayoutToolEligible(candidate, todoViewMode) &&
 			document.toolRestoreTargets[candidate]?.region === "bottom" &&
 			!findPlacedResource(document, toolTab(candidate)),
 	);
-	if (tool) return revealTool(document, tool, maxSideGroups, maxBottomGroups);
+	if (tool) {
+		return revealTool(document, tool, maxSideGroups, maxBottomGroups, todoViewMode);
+	}
 	if (document.bottom.groups.length > 0) {
 		const shown = setBottomVisibility(document, true);
 		const preferredId = attention?.lastFocusedSideGroupId.bottom;
@@ -919,6 +946,7 @@ export function showSide(
 	side: LayoutSide,
 	maxSideGroups: number,
 	attention?: LayoutAttention,
+	todoViewMode: TodoViewMode = "chat-popover",
 ): LayoutOperationResult {
 	if (document[side].groups.length > 0) {
 		const shown = setSideVisibility(document, side, true);
@@ -932,15 +960,19 @@ export function showSide(
 			const restore =
 				TOOL_RESTORE_ORDER.find(
 					(candidate) =>
+						isLayoutToolEligible(candidate, todoViewMode) &&
 						document.toolRestoreTargets[candidate]?.region === side &&
 						!findPlacedResource(document, toolTab(candidate)),
 				) ??
 				TOOL_RESTORE_ORDER.find(
 					(candidate) =>
+						isLayoutToolEligible(candidate, todoViewMode) &&
 						LAYOUT_TOOL_DEFAULT_SIDES[candidate] === side &&
 						!findPlacedResource(document, toolTab(candidate)),
 				);
-			if (restore) return revealTool(shown, restore, maxSideGroups);
+			if (restore) {
+				return revealTool(shown, restore, maxSideGroups, 3, todoViewMode);
+			}
 		}
 		return {
 			document: shown,
@@ -950,15 +982,17 @@ export function showSide(
 	const tool =
 		TOOL_RESTORE_ORDER.find(
 			(candidate) =>
+				isLayoutToolEligible(candidate, todoViewMode) &&
 				document.toolRestoreTargets[candidate]?.region === side &&
 				!findPlacedResource(document, toolTab(candidate)),
 		) ??
 		TOOL_RESTORE_ORDER.find(
 			(candidate) =>
+				isLayoutToolEligible(candidate, todoViewMode) &&
 				LAYOUT_TOOL_DEFAULT_SIDES[candidate] === side &&
 				!findPlacedResource(document, toolTab(candidate)),
 		);
-	return tool ? revealTool(document, tool, maxSideGroups) : { document };
+	return tool ? revealTool(document, tool, maxSideGroups, 3, todoViewMode) : { document };
 }
 
 export function revealTool(
@@ -966,7 +1000,11 @@ export function revealTool(
 	tool: LayoutToolId,
 	maxSideGroups: number,
 	maxBottomGroups = 3,
+	todoViewMode: TodoViewMode = "chat-popover",
 ): LayoutOperationResult {
+	if (!isLayoutToolEligible(tool, todoViewMode)) {
+		return { reason: "That tool is unavailable in the current TODO view mode." };
+	}
 	const requestedTab = withAvailablePlacementId(document, toolTab(tool));
 	const placedTab = resolvePlacedResource(document, requestedTab).placed;
 	const existing = placedTab ? findTabLocation(document, placedTab.id) : null;
@@ -994,12 +1032,43 @@ export function revealTool(
 	const restore = document.toolRestoreTargets[tool];
 	const region: LayoutAuxiliaryRegion = restore?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool];
 	const groups = document[region].groups;
+	const defaultOrder = LAYOUT_TOOLS.filter(
+		(candidate) => LAYOUT_TOOL_DEFAULT_SIDES[candidate] === region,
+	);
+	const toolOrder = defaultOrder.indexOf(tool);
+	const neighboringTool = [...defaultOrder]
+		.sort(
+			(first, second) =>
+				Math.abs(defaultOrder.indexOf(first) - toolOrder) -
+				Math.abs(defaultOrder.indexOf(second) - toolOrder),
+		)
+		.find(
+			(candidate) =>
+				candidate !== tool &&
+				groups.some((group) =>
+					group.tabs.some((tab) => tab.kind === "tool" && tab.tool === candidate),
+				),
+		);
+	const defaultGroup =
+		tool === "todos" && neighboringTool
+			? groups.find((group) =>
+					group.tabs.some((tab) => tab.kind === "tool" && tab.tool === neighboringTool),
+				)
+			: undefined;
 	const restoreGroup = restore?.groupId
 		? groups.find((group) => group.id === restore.groupId)
-		: undefined;
+		: defaultGroup;
 	if (restoreGroup) {
 		const tabs = [...restoreGroup.tabs];
-		tabs.splice(Math.max(0, Math.min(restore?.index ?? tabs.length, tabs.length)), 0, requestedTab);
+		const orderedIndex = tabs.findIndex(
+			(tab) => tab.kind === "tool" && defaultOrder.indexOf(tab.tool) > toolOrder,
+		);
+		const index = restore?.groupId
+			? Math.max(0, Math.min(restore.index, tabs.length))
+			: orderedIndex < 0
+				? tabs.length
+				: orderedIndex;
+		tabs.splice(index, 0, requestedTab);
 		return {
 			document: {
 				...document,
@@ -1223,7 +1292,20 @@ export function reconcileAttention(
 		lastFocusedCenterGroupId: center?.location.groupId ?? primaryCenterGroupId(document),
 		lastFocusedSideGroupId,
 		navigationClockByGroup,
+		...(previous?.lastFocusedChatSessionId
+			? { lastFocusedChatSessionId: previous.lastFocusedChatSessionId }
+			: {}),
 	};
+}
+
+export function rememberFocusedChat(
+	attention: LayoutAttention,
+	tab: LayoutTab | null | undefined,
+): LayoutAttention {
+	if (tab?.kind !== "chat" || attention.lastFocusedChatSessionId === tab.sessionId) {
+		return attention;
+	}
+	return { ...attention, lastFocusedChatSessionId: tab.sessionId };
 }
 
 export function selectTab(

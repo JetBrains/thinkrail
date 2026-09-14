@@ -341,8 +341,10 @@ of the host.
   `template.get`/`template.save` shape);
   **layout preset DTO** — portable **`LayoutPreset`**, the bounded resource-free frame grammar synchronized
   in `AppConfig.customLayoutPresets`: center topology, left/right/bottom group geometry, visibility/folds,
-  bottom alignment, and singleton tools, but no workspace, file, diff, chat, document, terminal, preview,
-  attention, or current/default-selection identity. Every current-layout type—including the projected
+  bottom alignment, and singleton tools. Its closed tool vocabulary remains `projects | specs | files |
+  changes | review`; the client-local TODO tool and `TodoViewMode` are intentionally not serializable or
+  host-visible. The preset carries no workspace, file, diff, chat, document, terminal, preview, attention,
+  or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop

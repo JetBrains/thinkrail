@@ -4,6 +4,7 @@ import {
 	BUILTIN_LAYOUT_PRESETS,
 	closeLayoutTab,
 	collectAllGroups,
+	findTabLocation,
 	resizeBottomRegion,
 	resizeSideRegion,
 	toolTab,
@@ -18,6 +19,7 @@ import {
 	resetLayoutStateForTests,
 	setLayoutStateStablePreferencesForTests,
 	setLayoutStateStorageForTests,
+	transitionTodoViewMode,
 } from "./layoutState";
 
 class MemoryStorage implements Storage {
@@ -55,6 +57,7 @@ function resetStore(): void {
 		status: "connected",
 		connectionGeneration: 1,
 		removedWorkspaceIds: {},
+		sessionMembershipGenerationByWorkspace: {},
 		workbenchFrame: null,
 		workspaceViewsByWorkspace: {},
 		layoutStateReady: false,
@@ -63,6 +66,7 @@ function resetStore(): void {
 			maxSideGroups: 6,
 			maxBottomGroups: 3,
 		},
+		todoViewMode: "chat-popover",
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
 		layoutProjectionEpochByWorkspace: {},
@@ -138,6 +142,131 @@ describe("frontend-local layout state", () => {
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
 	});
 
+	test("TODO mode changes stay gated until the local layout is ready", () => {
+		expect(() => transitionTodoViewMode("side-tool")).not.toThrow();
+		expect(useAppStore.getState()).toMatchObject({
+			layoutStateReady: false,
+			workbenchFrame: null,
+			todoViewMode: "chat-popover",
+		});
+	});
+
+	test("TODO mode changes atomically hide and intentionally restore the singleton", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await ensureWorkspaceLayoutState("workspace");
+		await ensureWorkspaceLayoutState("retained");
+		for (const [workspaceId, sessionId] of [
+			["workspace", "session-a"],
+			["retained", "session-b"],
+		] as const) {
+			const attention = useAppStore.getState().layoutAttentionByWorkspace[workspaceId];
+			if (!attention) throw new Error(`missing ${workspaceId} attention`);
+			useAppStore.getState().setLayoutAttention(workspaceId, {
+				...attention,
+				lastFocusedChatSessionId: sessionId,
+			});
+		}
+		let transitions = 0;
+		const unsubscribe = useAppStore.subscribe(() => {
+			transitions += 1;
+		});
+
+		transitionTodoViewMode("side-tool");
+		unsubscribe();
+		expect(transitions).toBe(1);
+		let state = useAppStore.getState();
+		expect(state.todoViewMode).toBe("side-tool");
+		expect(
+			state.layoutDocumentsByWorkspace.workspace?.right.groups.flatMap((group) =>
+				group.tabs.filter((tab) => tab.kind === "tool").map((tab) => tab.tool),
+			),
+		).toEqual(["specs", "files", "changes", "todos", "review"]);
+		for (const [workspaceId, sessionId] of [
+			["workspace", "session-a"],
+			["retained", "session-b"],
+		] as const) {
+			const document = state.layoutDocumentsByWorkspace[workspaceId];
+			const attention = state.layoutAttentionByWorkspace[workspaceId];
+			if (!document || !attention) throw new Error(`missing ${workspaceId} layout`);
+			const location = findTabLocation(document, "tool:todos");
+			if (!location || location.area === "center") throw new Error("missing TODO placement");
+			expect(attention.selectedByGroup[location.groupId]).toBe("tool:todos");
+			expect(attention.lastFocusedSideGroupId[location.area]).toBe(location.groupId);
+			expect(attention.lastFocusedChatSessionId).toBe(sessionId);
+		}
+		await ensureWorkspaceLayoutState("future");
+		state = useAppStore.getState();
+		const futureDocument = state.layoutDocumentsByWorkspace.future;
+		const futureAttention = state.layoutAttentionByWorkspace.future;
+		if (!futureDocument || !futureAttention) throw new Error("missing future layout");
+		const futureLocation = findTabLocation(futureDocument, "tool:todos");
+		if (!futureLocation || futureLocation.area === "center") {
+			throw new Error("missing future TODO placement");
+		}
+		expect(futureAttention.selectedByGroup[futureLocation.groupId]).toBe("tool:todos");
+		expect(futureAttention.lastFocusedSideGroupId[futureLocation.area]).toBe(
+			futureLocation.groupId,
+		);
+
+		const placed = state.layoutDocumentsByWorkspace.workspace;
+		if (!placed) throw new Error("missing workspace layout");
+		await commitWorkspaceLayout("workspace", closeLayoutTab(placed, "tool:todos").document);
+		const hidden = useAppStore.getState().layoutDocumentsByWorkspace.workspace;
+		if (!hidden) throw new Error("missing hidden workspace layout");
+		expect(
+			collectAllGroups(hidden).some((group) =>
+				group.tabs.some((tab) => tab.kind === "tool" && tab.tool === "todos"),
+			),
+		).toBe(false);
+		transitionTodoViewMode("side-tool");
+		state = useAppStore.getState();
+		expect(
+			state.layoutDocumentsByWorkspace.workspace?.right.groups.flatMap((group) =>
+				group.tabs.filter((tab) => tab.kind === "tool").map((tab) => tab.tool),
+			),
+		).toEqual(["specs", "files", "changes", "todos", "review"]);
+		transitionTodoViewMode("chat-popover");
+		state = useAppStore.getState();
+		expect(state.todoViewMode).toBe("chat-popover");
+		expect(state.workbenchFrame?.toolRestoreTargets.todos).toMatchObject({ region: "right" });
+	});
+
+	test("TODO mode claims its placement id against hidden workspace resources", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await ensureWorkspaceLayoutState("active");
+		const hidden = structuredClone(await ensureWorkspaceLayoutState("hidden"));
+		if (hidden.center.kind !== "group") throw new Error("missing hidden center group");
+		hidden.center.tabs = [
+			{
+				kind: "terminal",
+				id: "tool:todos",
+				name: "Collision",
+				tabKey: "collision",
+			},
+		];
+		await commitWorkspaceLayout("hidden", hidden);
+
+		transitionTodoViewMode("side-tool");
+
+		const state = useAppStore.getState();
+		const todo = state.workbenchFrame?.right.groups
+			.flatMap((group) => group.tools)
+			.find((tool) => tool.tool === "todos");
+		expect(todo?.id).toBeDefined();
+		expect(todo?.id).not.toBe("tool:todos");
+		const hiddenAfter = state.layoutDocumentsByWorkspace.hidden;
+		const ids = hiddenAfter
+			? collectAllGroups(hiddenAfter).flatMap((group) => group.tabs.map((tab) => tab.id))
+			: [];
+		expect(new Set(ids).size).toBe(ids.length);
+	});
+
 	test("an invalid local frame falls back directly to Balanced", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();
@@ -185,6 +314,69 @@ describe("frontend-local layout state", () => {
 
 		const restored = await ensureWorkspaceLayoutState("workspace");
 		expect(restored.left.width).toBe(0.31);
+	});
+
+	test("side mode hydration preserves a manual TODO hide and remembered chat focus", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await ensureWorkspaceLayoutState("workspace");
+		transitionTodoViewMode("side-tool");
+		const withTodo = useAppStore.getState().layoutDocumentsByWorkspace.workspace;
+		if (!withTodo) throw new Error("missing TODO layout");
+		await commitWorkspaceLayout("workspace", closeLayoutTab(withTodo, "tool:todos").document);
+		const attention = useAppStore.getState().layoutAttentionByWorkspace.workspace;
+		if (!attention) throw new Error("missing layout attention");
+		useAppStore.getState().setLayoutAttention("workspace", {
+			...attention,
+			lastFocusedChatSessionId: "session",
+		});
+
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const restored = await ensureWorkspaceLayoutState("workspace");
+		expect(useAppStore.getState().todoViewMode).toBe("side-tool");
+		expect(
+			collectAllGroups(restored).some((group) =>
+				group.tabs.some((tab) => tab.kind === "tool" && tab.tool === "todos"),
+			),
+		).toBe(false);
+		expect(
+			useAppStore.getState().layoutAttentionByWorkspace.workspace?.lastFocusedChatSessionId,
+		).toBe("session");
+	});
+
+	test("missing or invalid TODO modes default fieldwise without discarding the frame", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const initial = await ensureWorkspaceLayoutState("workspace");
+		await commitWorkspaceLayout("workspace", resizeSideRegion(initial, "left", 0.34));
+		transitionTodoViewMode("side-tool");
+		const key = localLayoutStorageKey(endpoint, "surface-a");
+		const base = local.getItem(key);
+		if (!base) throw new Error("missing persisted layout");
+		const variants = [
+			base.replace(',"todoViewMode":"side-tool"', ""),
+			base.replace('"todoViewMode":"side-tool"', '"todoViewMode":"invalid"'),
+		];
+		for (const variant of variants) {
+			resetLayoutStateForTests();
+			resetStore();
+			local.setItem(key, variant);
+			setLayoutStateStorageForTests({ local, session }, endpoint);
+			const restored = await ensureWorkspaceLayoutState("workspace");
+			expect(useAppStore.getState().todoViewMode).toBe("chat-popover");
+			expect(restored.left.width).toBe(0.34);
+			expect(
+				collectAllGroups(restored).some((group) =>
+					group.tabs.some((tab) => tab.kind === "tool" && tab.tool === "todos"),
+				),
+			).toBe(false);
+		}
 	});
 
 	test("native stable preferences restore layout after the host port changes", async () => {

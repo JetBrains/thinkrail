@@ -205,8 +205,12 @@ export function sessionGlance(rt: {
 	isStreaming: boolean;
 	turns: ChatTurn[];
 	askAnswers: Record<string, AskUserQuestionResult>;
+	controlTurnBoundary?: number;
 }): PlanGlance {
-	return planGlance(rt.isStreaming, deriveAskStates(rt.turns, rt.askAnswers));
+	return planGlance(
+		rt.isStreaming,
+		deriveAskStates(rt.turns, rt.askAnswers, rt.controlTurnBoundary),
+	);
 }
 
 export function shouldNudgeOnAdd(glance: PlanGlance): boolean {

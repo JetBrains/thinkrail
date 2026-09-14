@@ -12,11 +12,13 @@ import {
 	hideBottom,
 	hideSide,
 	isLayoutUnavailable,
+	LAYOUT_TOOLS,
 	type LayoutOperationResult,
 	layoutTabName,
 	moveTabToGroup,
 	openCenterTab,
 	reconcileAttention,
+	rememberFocusedChat,
 	removeLayoutGroup,
 	removeSessionLayoutTabs,
 	resizeAuxiliaryGroups,
@@ -73,11 +75,16 @@ function mutation<T extends { document: WorkspaceLayoutDocument } | { reason: st
 }
 
 describe("workspace layout model", () => {
-	test("canonical tool labels override stale persisted display copy", () => {
+	test("canonical tool labels and web-local TODO eligibility stay layout-owned", () => {
 		const legacyFiles = { ...toolTab("files"), name: "All files" };
 		expect(toolTab("files").name).toBe("Files");
+		expect(toolTab("todos").name).toBe("TODO");
 		expect(layoutTabName(legacyFiles)).toBe("Files");
 		expect(layoutTabName(file("one"))).toBe("one.ts");
+		expect(LAYOUT_TOOLS).toEqual(["projects", "specs", "files", "changes", "todos", "review"]);
+		expect(unplacedTools(baseDocument())).not.toContain("todos");
+		expect(unplacedTools(baseDocument(), "side-tool")).toContain("todos");
+		expect(isLayoutUnavailable(revealTool(baseDocument(), "todos", 6))).toBe(true);
 	});
 
 	test("opens one canonical tab and keeps preview promotion one-way", () => {
@@ -411,6 +418,24 @@ describe("workspace layout model", () => {
 		expect(unplacedToolsForSide(placedAgain, "right")).not.toContain("files");
 	});
 
+	test("side restore and toggle paths cannot resurrect TODO in popover mode", () => {
+		const document = baseDocument();
+		document.left.groups[0] = {
+			...document.left.groups[0],
+			tabs: (["projects", "specs", "files", "changes", "review"] as const).map((tool) =>
+				toolTab(tool),
+			),
+		};
+		document.right = { ...document.right, visible: false, groups: [] };
+		document.toolRestoreTargets.todos = { region: "right", index: 3 };
+
+		expect(canShowSide(document, "right")).toBe(false);
+		expect(showSide(document, "right", 6)).toEqual({ document });
+		expect(canShowSide(document, "right", "side-tool")).toBe(true);
+		const revealed = mutation(showSide(document, "right", 6, undefined, "side-tool"));
+		expect(findTabLocation(revealed.document, "tool:todos")?.area).toBe("right");
+	});
+
 	test("records singleton restore targets and reveals closed tools unfolded in place", () => {
 		let document = baseDocument();
 		document = mutation(setSideGroupFolded(document, "right", "right-a", true)).document;
@@ -589,6 +614,24 @@ describe("workspace layout model", () => {
 		);
 		expect(passivelySelected.selectedByGroup["center-a"]).toBe("one");
 		expect(passivelySelected.navigationClockByGroup["center-a"]).toBe(7);
+	});
+
+	test("chat focus memory changes only for an explicit chat focus and survives reconciliation", () => {
+		const chat: LayoutCenterTab = {
+			kind: "chat",
+			id: "chat",
+			name: "Remembered chat",
+			sessionId: "session",
+		};
+		const document = baseDocument([file("one"), chat]);
+		const initial = reconcileAttention(document, undefined);
+		const remembered = rememberFocusedChat(initial, chat);
+		expect(remembered.lastFocusedChatSessionId).toBe("session");
+		expect(rememberFocusedChat(remembered, file("one"))).toBe(remembered);
+		const closed = closeLayoutTab(document, chat.id).document;
+		expect(reconcileAttention(closed, remembered, document).lastFocusedChatSessionId).toBe(
+			"session",
+		);
 	});
 
 	test("attention tracks bottom selection and last focus without affecting center navigation", () => {

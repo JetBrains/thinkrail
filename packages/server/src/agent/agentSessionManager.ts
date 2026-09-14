@@ -263,17 +263,26 @@ async function diskActivityStatus(info: SessionInfo): Promise<ActivityStatus | n
 	return status;
 }
 
+function resolvedPathKey(path: string): string {
+	const resolvedPath = resolve(path);
+	return process.platform === "win32" ? resolvedPath.toLowerCase() : resolvedPath;
+}
+
+function sessionCwdMatches(candidate: string, cwd: string): boolean {
+	return candidate !== "" && resolvedPathKey(candidate) === resolvedPathKey(cwd);
+}
+
 async function diskActivityRows(workspaceId: string, cwd: string): Promise<WorkspaceActivityRow[]> {
 	const liveFiles = new Set<string>();
 	for (const entry of sessions.values()) {
 		if (entry.workspaceId !== workspaceId) continue;
 		const file = entry.session.sessionManager.getSessionFile();
-		if (file) liveFiles.add(resolve(file));
+		if (file) liveFiles.add(resolvedPathKey(file));
 	}
 	const infos = await listSessionInfosStrict(cwd, liveFiles);
 	const rows: WorkspaceActivityRow[] = [];
 	for (const info of infos) {
-		if (info.cwd !== cwd) continue;
+		if (!sessionCwdMatches(info.cwd, cwd)) continue;
 		if (sessions.has(info.id) || isSessionDeleted(info.id, workspaceId)) continue;
 		rows.push({
 			sessionId: info.id,
@@ -716,7 +725,7 @@ async function scanSessionFiles(
 	for (const name of names) {
 		if (!name.endsWith(".jsonl")) continue;
 		const path = join(dir, name);
-		if (excludedPaths.has(resolve(path))) continue;
+		if (excludedPaths.has(resolvedPathKey(path))) continue;
 		try {
 			scanned.push({ path, ok: true, identity: await readSessionFileIdentity(path) });
 		} catch (error) {
@@ -738,10 +747,10 @@ async function listSessionInfosStrict(
 	const broken = scanned.find((file) => !file.ok);
 	if (broken && !broken.ok) throw broken.error;
 	const infos = await SessionManager.list(cwd);
-	const listedByPath = new Map(infos.map((info) => [resolve(info.path), info]));
+	const listedByPath = new Map(infos.map((info) => [resolvedPathKey(info.path), info]));
 	const omitted = scanned.find((file) => {
 		if (!file.ok) return false;
-		const listed = listedByPath.get(resolve(file.path));
+		const listed = listedByPath.get(resolvedPathKey(file.path));
 		return !listed || listed.id !== file.identity.id || listed.cwd !== file.identity.cwd;
 	});
 	if (omitted) throw new Error(`Session transcript could not be listed: ${omitted.path}`);
@@ -757,13 +766,15 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 		live.push(summaryOf(sessionId, entry));
 		liveIds.add(sessionId);
 		const sessionFile = entry.session.sessionManager.getSessionFile();
-		if (sessionFile) liveFiles.add(resolve(sessionFile));
+		if (sessionFile) liveFiles.add(resolvedPathKey(sessionFile));
 	}
 	const infos = await listSessionInfosStrict(cwd, liveFiles);
 	const disk: SessionSummary[] = infos
 		.filter(
 			(info) =>
-				info.cwd === cwd && !liveIds.has(info.id) && !isSessionDeleted(info.id, workspaceId),
+				sessionCwdMatches(info.cwd, cwd) &&
+				!liveIds.has(info.id) &&
+				!isSessionDeleted(info.id, workspaceId),
 		)
 		.map((info) => ({
 			sessionId: info.id,
@@ -813,7 +824,7 @@ function persistedSessionModelRef(model: unknown): { provider: string; id: strin
 async function openDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
 	if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 	const info = (await listSessionInfosStrict(cwd)).find(
-		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
+		(candidate) => candidate.id === sessionId && sessionCwdMatches(candidate.cwd, cwd),
 	);
 	if (!info) throw new Error(`Unknown session: ${sessionId}`);
 	if (sessions.has(sessionId)) return;
@@ -863,7 +874,7 @@ async function ensureSessionAttachedInternal(
 		return true;
 	}
 	const known = (await listSessionInfosStrict(cwd)).some(
-		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
+		(candidate) => candidate.id === sessionId && sessionCwdMatches(candidate.cwd, cwd),
 	);
 	if (!known) return false;
 	await attachDiskSession(sessionId, workspaceId, cwd);
@@ -1375,7 +1386,7 @@ async function purgeDiskSessions(cwd: string): Promise<void> {
 		return;
 	}
 	for (const info of infos) {
-		if (info.cwd === cwd) rmSync(info.path, { force: true });
+		if (sessionCwdMatches(info.cwd, cwd)) rmSync(info.path, { force: true });
 	}
 }
 
@@ -1420,7 +1431,7 @@ async function runDeleteTransaction(
 			liveEntry = entry;
 			if (entry.session.isStreaming) await entry.session.abort();
 			const manager = entry.session.sessionManager;
-			if (manager.getSessionId() !== sessionId || manager.getCwd() !== cwd) {
+			if (manager.getSessionId() !== sessionId || !sessionCwdMatches(manager.getCwd(), cwd)) {
 				throw new Error(`Session transcript scope mismatch: ${sessionId}`);
 			}
 			path = manager.getSessionFile();
@@ -1429,7 +1440,7 @@ async function runDeleteTransaction(
 			}
 		} else {
 			path = (await listSessionInfosStrict(cwd)).find(
-				(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
+				(candidate) => candidate.id === sessionId && sessionCwdMatches(candidate.cwd, cwd),
 			)?.path;
 		}
 		if (path && existsSync(path)) await trashFile(path);

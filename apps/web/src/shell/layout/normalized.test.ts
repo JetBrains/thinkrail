@@ -8,6 +8,7 @@ import {
 	workspaceViewFromDocument,
 } from "./normalized";
 import {
+	applyTodoViewModeToFrame,
 	applyWorkbenchPreset,
 	BUILTIN_LAYOUT_PRESETS,
 	captureWorkbenchPreset,
@@ -165,6 +166,38 @@ describe("normalized workbench layout", () => {
 		expect(second.center.id).not.toBe(first.center.id);
 		expect(captureWorkbenchPreset(first, "custom", "Custom").bottom.groups).toHaveLength(1);
 		expect(captureWorkbenchPreset(first, "custom", "Custom").bottom.groups[0]?.tools).toEqual([]);
+	});
+
+	test("TODO stays web-local across pristine, capture, ordinary apply, and reset", () => {
+		const balanced = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "balanced");
+		const focus = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "focus");
+		if (!balanced || !focus) throw new Error("missing built-in preset");
+		const sideFrame = instantiateWorkbenchFrame(balanced, undefined, [], "side-tool");
+		const workflow = sideFrame.right.groups.flatMap((group) =>
+			group.tools.map((tool) => tool.tool),
+		);
+		expect(workflow).toEqual(["specs", "files", "changes", "todos", "review"]);
+		const custom = captureWorkbenchPreset(instantiateWorkbenchFrame(focus), "custom", "Custom");
+		expect(JSON.stringify(custom)).not.toContain("todos");
+
+		const applied = applyWorkbenchPreset({ frame: sideFrame, viewsByWorkspace: {} }, custom);
+		expect(
+			applied.frame.right.groups.flatMap((group) => group.tools.map((tool) => tool.tool)),
+		).toContain("todos");
+		const hidden = applyTodoViewModeToFrame(sideFrame, "chat-popover");
+		const hiddenApplied = applyWorkbenchPreset({ frame: hidden, viewsByWorkspace: {} }, custom);
+		expect(
+			hiddenApplied.frame.right.groups.flatMap((group) => group.tools.map((tool) => tool.tool)),
+		).not.toContain("todos");
+		expect(hiddenApplied.frame.toolRestoreTargets.todos).toBeDefined();
+		const reset = applyWorkbenchPreset(
+			{ frame: hiddenApplied.frame, viewsByWorkspace: {} },
+			balanced,
+			"side-tool",
+		);
+		expect(
+			reset.frame.right.groups.flatMap((group) => group.tools.map((tool) => tool.tool)),
+		).toEqual(["specs", "files", "changes", "todos", "review"]);
 	});
 
 	test("preset tools are reminted when any workspace resource owns their placement id", () => {

@@ -12,10 +12,26 @@ import {
 	type StreamingResponseMovement,
 } from "@/chat/chatPreferences";
 import { cn } from "@/lib";
-import { selectActiveWorkspace, toast, useAppStore } from "@/store";
+import { selectActiveWorkspace, type TodoViewMode, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
 import { SettingsSwitch } from "./SettingsSwitch";
+
+const TODO_VIEW_CHOICES: SettingsRadioChoice<TodoViewMode>[] = [
+	{
+		id: "chat-popover",
+		label: "Chat popover",
+		hint: "Default",
+		description: "Open the TODO list below each chat header",
+		testId: "todo-view-chat-popover",
+	},
+	{
+		id: "side-tool",
+		label: "Side tab",
+		description: "Follow the latest focused chat in a movable TODO tool",
+		testId: "todo-view-side-tool",
+	},
+];
 
 const MESSAGE_ORDER_CHOICES: SettingsRadioChoice<ChatMessageOrder>[] = [
 	{
@@ -245,7 +261,15 @@ export function SubagentSettings({
 	);
 }
 
-export function ChatSettings() {
+export function ChatSettings({
+	todoViewMode,
+	todoViewModeDisabled = false,
+	onTodoViewModeChange,
+}: {
+	todoViewMode: TodoViewMode;
+	todoViewModeDisabled?: boolean;
+	onTodoViewModeChange: (mode: TodoViewMode) => void;
+}) {
 	const messageOrder = useAppStore((state) => state.chatMessageOrder);
 	const growthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
@@ -280,6 +304,26 @@ export function ChatSettings() {
 	return (
 		<section data-testid="settings-chat" className="flex flex-col gap-16">
 			<div className="flex flex-col gap-8">
+				<div className="flex flex-col gap-4">
+					<h3 className="tr-title-section text-text-default">TODO view</h3>
+					<p className="text-text-muted tr-text-metadata">
+						Choose where the current chat&apos;s TODO list appears. Your choice is saved in this
+						client.
+					</p>
+				</div>
+				<SettingsRadioCards
+					name="todo-view-mode"
+					label="TODO view"
+					choices={TODO_VIEW_CHOICES}
+					value={todoViewMode}
+					disabled={todoViewModeDisabled}
+					onSelect={(mode) => {
+						if (mode !== todoViewMode) onTodoViewModeChange(mode);
+					}}
+				/>
+			</div>
+
+			<div className="flex flex-col gap-8 border-border-default border-t pt-16">
 				<div className="flex flex-col gap-4">
 					<h3 className="tr-title-section text-text-default">Message order</h3>
 					<p className="text-text-muted tr-text-metadata">

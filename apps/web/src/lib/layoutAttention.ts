@@ -6,6 +6,7 @@ export interface LayoutAttention {
 	lastFocusedCenterGroupId: string;
 	lastFocusedSideGroupId: Partial<Record<WorkbenchAuxiliaryRegion, string>>;
 	navigationClockByGroup: Record<string, number>;
+	lastFocusedChatSessionId?: string;
 }
 
 export function readLayoutSelection(

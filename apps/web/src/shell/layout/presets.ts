@@ -3,18 +3,23 @@ import type {
 	LayoutPresetBottomRegion,
 	LayoutPresetCenterNode,
 	LayoutPresetSideRegion,
-	LayoutToolId,
+	LayoutToolId as SynchronizedLayoutToolId,
 } from "@thinkrail/contracts";
 import {
+	closeLayoutTab,
 	collectAllGroups,
 	collectCenterGroups,
 	createLayoutId,
+	findPlacedResource,
+	isLayoutUnavailable,
 	LAYOUT_TOOL_DEFAULT_SIDES,
 	LAYOUT_TOOLS,
+	revealTool,
 	toolTab,
 } from "./model";
 import {
 	collectWorkbenchCenterGroups,
+	emptyWorkspaceView,
 	type NormalizedLayoutState,
 	projectWorkspaceLayout,
 	type WorkbenchAuxiliaryGroup,
@@ -22,8 +27,16 @@ import {
 	type WorkbenchFrame,
 	type WorkspaceGroupView,
 	type WorkspaceViewState,
+	workbenchFrameFromDocument,
 } from "./normalized";
-import type { LayoutCenterTab, LayoutTerminalTab, LayoutToolTab } from "./types";
+import {
+	isSynchronizedLayoutToolId,
+	type LayoutCenterTab,
+	type LayoutTerminalTab,
+	type LayoutToolId,
+	type LayoutToolTab,
+	type TodoViewMode,
+} from "./types";
 
 const group = (id: string): LayoutPresetCenterNode => ({ kind: "group", id });
 const split = (
@@ -40,7 +53,12 @@ const split = (
 });
 
 const weightedGroups = (
-	groups: Array<{ id: string; tools: LayoutToolId[]; weight?: number; folded?: boolean }>,
+	groups: Array<{
+		id: string;
+		tools: SynchronizedLayoutToolId[];
+		weight?: number;
+		folded?: boolean;
+	}>,
 ) => {
 	const total = groups.reduce((sum, candidate) => sum + (candidate.weight ?? 1), 0);
 	return groups.map((candidate) => ({
@@ -54,12 +72,22 @@ const weightedGroups = (
 const side = (
 	visible: boolean,
 	width: number,
-	groups: Array<{ id: string; tools: LayoutToolId[]; weight?: number; folded?: boolean }>,
+	groups: Array<{
+		id: string;
+		tools: SynchronizedLayoutToolId[];
+		weight?: number;
+		folded?: boolean;
+	}>,
 ): LayoutPresetSideRegion => ({ visible, width, groups: weightedGroups(groups) });
 
 const bottom = (
 	visible: boolean,
-	groups: Array<{ id: string; tools: LayoutToolId[]; weight?: number; folded?: boolean }>,
+	groups: Array<{
+		id: string;
+		tools: SynchronizedLayoutToolId[];
+		weight?: number;
+		folded?: boolean;
+	}>,
 ): LayoutPresetBottomRegion => ({
 	visible,
 	height: 0.3,
@@ -135,7 +163,7 @@ function defaultRestoreTarget(tool: LayoutToolId) {
 }
 
 function restoreTargetsForPreset(preset: LayoutPreset): WorkbenchFrame["toolRestoreTargets"] {
-	const placed = new Set(
+	const placed = new Set<LayoutToolId>(
 		[...preset.left.groups, ...preset.right.groups, ...preset.bottom.groups].flatMap(
 			(group) => group.tools,
 		),
@@ -171,7 +199,11 @@ function claimToolPlacementId(tool: LayoutToolTab, claimedIds: Set<string>): Lay
 }
 
 function instantiateFrameGroups(
-	groups: readonly { weight: number; folded: boolean; tools: LayoutToolId[] }[],
+	groups: readonly {
+		weight: number;
+		folded: boolean;
+		tools: SynchronizedLayoutToolId[];
+	}[],
 	prefix: string,
 	resolveTool: (tool: LayoutToolId) => LayoutToolTab,
 ): WorkbenchAuxiliaryGroup[] {
@@ -184,10 +216,41 @@ function instantiateFrameGroups(
 	}));
 }
 
+function placeTodoInDefaultRightGroup(
+	groups: WorkbenchAuxiliaryGroup[],
+	resolveTool: (tool: LayoutToolId) => LayoutToolTab,
+): WorkbenchAuxiliaryGroup[] {
+	const targetIndex = Math.max(
+		0,
+		groups.findIndex((group) =>
+			group.tools.some((tool) => tool.tool === "changes" || tool.tool === "review"),
+		),
+	);
+	const target = groups[targetIndex];
+	if (!target) {
+		return [
+			{
+				id: createLayoutId("right-group"),
+				weight: 1,
+				folded: false,
+				tools: [resolveTool("todos")],
+			},
+		];
+	}
+	const reviewIndex = target.tools.findIndex((tool) => tool.tool === "review");
+	const changesIndex = target.tools.findIndex((tool) => tool.tool === "changes");
+	const insertionIndex =
+		reviewIndex >= 0 ? reviewIndex : changesIndex >= 0 ? changesIndex + 1 : target.tools.length;
+	const tools = [...target.tools];
+	tools.splice(insertionIndex, 0, resolveTool("todos"));
+	return groups.map((group, index) => (index === targetIndex ? { ...group, tools } : group));
+}
+
 export function instantiateWorkbenchFrame(
 	preset: LayoutPreset,
 	existing?: WorkbenchFrame,
 	claimedResourceIds: readonly string[] = [],
+	todoViewMode: TodoViewMode = "chat-popover",
 ): WorkbenchFrame {
 	const existingTools = new Map<LayoutToolId, LayoutToolTab>();
 	if (existing) {
@@ -201,9 +264,14 @@ export function instantiateWorkbenchFrame(
 	const resolveTool = (tool: LayoutToolId): LayoutToolTab =>
 		claimToolPlacementId(existingTools.get(tool) ?? toolTab(tool), claimedIds);
 	const leftGroups = instantiateFrameGroups(preset.left.groups, "left-group", resolveTool);
-	const rightGroups = instantiateFrameGroups(preset.right.groups, "right-group", resolveTool);
+	const presetRightGroups = instantiateFrameGroups(preset.right.groups, "right-group", resolveTool);
+	const rightGroups =
+		todoViewMode === "side-tool"
+			? placeTodoInDefaultRightGroup(presetRightGroups, resolveTool)
+			: presetRightGroups;
 	const bottomGroups = instantiateFrameGroups(preset.bottom.groups, "bottom-group", resolveTool);
 	const restoreTargets = restoreTargetsForPreset(preset);
+	if (todoViewMode === "side-tool") delete restoreTargets.todos;
 	return {
 		version: 1,
 		center: instantiateFrameCenter(preset.center),
@@ -240,6 +308,23 @@ function appendWorkspaceTab(
 			? { previewTabId: current.previewTabId ?? tab.id }
 			: {}),
 	};
+}
+
+export function applyTodoViewModeToFrame(
+	frame: WorkbenchFrame,
+	todoViewMode: TodoViewMode,
+	maxSideGroups = 6,
+	maxBottomGroups = 3,
+): WorkbenchFrame {
+	const document = projectWorkspaceLayout(frame, emptyWorkspaceView());
+	if (todoViewMode === "chat-popover") {
+		const placed = findPlacedResource(document, toolTab("todos"));
+		return placed
+			? workbenchFrameFromDocument(closeLayoutTab(document, placed.id).document)
+			: frame;
+	}
+	const revealed = revealTool(document, "todos", maxSideGroups, maxBottomGroups, todoViewMode);
+	return isLayoutUnavailable(revealed) ? frame : workbenchFrameFromDocument(revealed.document);
 }
 
 export function reflowWorkspaceViewForFrame(
@@ -314,15 +399,89 @@ export function ensureWorkbenchToolPlacementIds(
 		: frame;
 }
 
+function findTodoPlacement(frame: WorkbenchFrame): {
+	region: "left" | "right" | "bottom";
+	groupIndex: number;
+	toolIndex: number;
+	tab: LayoutToolTab;
+} | null {
+	for (const region of ["left", "right", "bottom"] as const) {
+		for (let groupIndex = 0; groupIndex < frame[region].groups.length; groupIndex += 1) {
+			const group = frame[region].groups[groupIndex];
+			const toolIndex = group?.tools.findIndex((tool) => tool.tool === "todos") ?? -1;
+			const tab = toolIndex >= 0 ? group?.tools[toolIndex] : undefined;
+			if (tab) return { region, groupIndex, toolIndex, tab };
+		}
+	}
+	return null;
+}
+
+function preserveTodoIntent(previous: WorkbenchFrame, candidate: WorkbenchFrame): WorkbenchFrame {
+	const placement = findTodoPlacement(previous);
+	if (!placement) {
+		const restore = previous.toolRestoreTargets.todos;
+		if (!restore) return candidate;
+		const previousGroupIndex = restore.groupId
+			? previous[restore.region].groups.findIndex((group) => group.id === restore.groupId)
+			: -1;
+		const targetGroups = candidate[restore.region].groups;
+		const target =
+			previousGroupIndex >= 0
+				? targetGroups[Math.min(previousGroupIndex, targetGroups.length - 1)]
+				: undefined;
+		return {
+			...candidate,
+			toolRestoreTargets: {
+				...candidate.toolRestoreTargets,
+				todos: {
+					region: restore.region,
+					...(target ? { groupId: target.id } : {}),
+					index: restore.index,
+				},
+			},
+		};
+	}
+	const existingGroups = candidate[placement.region].groups;
+	const groups =
+		existingGroups.length > 0
+			? existingGroups
+			: [
+					{
+						id: createLayoutId(`${placement.region}-group`),
+						weight: 1,
+						folded: false,
+						tools: [],
+					},
+				];
+	const targetIndex = Math.min(placement.groupIndex, groups.length - 1);
+	const target = groups[targetIndex];
+	if (!target) return candidate;
+	const tools = [...target.tools];
+	tools.splice(Math.min(placement.toolIndex, tools.length), 0, placement.tab);
+	return {
+		...candidate,
+		[placement.region]: {
+			...candidate[placement.region],
+			groups: groups.map((group, index) => (index === targetIndex ? { ...group, tools } : group)),
+		},
+		toolRestoreTargets: Object.fromEntries(
+			Object.entries(candidate.toolRestoreTargets).filter(([tool]) => tool !== "todos"),
+		),
+	};
+}
+
 export function applyWorkbenchPreset(
 	state: NormalizedLayoutState,
 	preset: LayoutPreset,
+	resetTodoViewMode?: TodoViewMode,
 ): NormalizedLayoutState {
-	const frame = instantiateWorkbenchFrame(
+	const instantiated = instantiateWorkbenchFrame(
 		preset,
 		state.frame,
 		workspaceResourcePlacementIds(state.viewsByWorkspace),
+		resetTodoViewMode,
 	);
+	const frame = resetTodoViewMode ? instantiated : preserveTodoIntent(state.frame, instantiated);
 	return {
 		frame,
 		viewsByWorkspace: Object.fromEntries(
@@ -354,7 +513,7 @@ export function captureWorkbenchPreset(
 			id: group.id,
 			weight: group.weight,
 			folded: group.folded,
-			tools: group.tools.map((tool) => tool.tool),
+			tools: group.tools.map((tool) => tool.tool).filter(isSynchronizedLayoutToolId),
 		}));
 	return {
 		id,
