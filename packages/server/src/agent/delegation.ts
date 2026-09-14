@@ -12,10 +12,11 @@ import {
 	type DelegationService,
 	deriveChildSessionFile,
 } from "pi-delegation";
-import { createSubagentsExtension } from "pi-subagents";
+import { createSubagents, type Subagents } from "pi-subagents";
 import { dataDir } from "../persistence";
-import { liveParentContext } from "./agentSessionManager";
-import { type BundledExtensionFactory, childExtensionFactories } from "./extensions";
+import { canUseSessionResources, liveParentContext } from "./agentSessionManager";
+import { publishSessionResourcesChanged } from "./chatResources";
+import { childExtensionFactories } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
 
 export function delegationRootDir(): string {
@@ -28,26 +29,35 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 	let service = services.get(workspaceId);
 	if (!service) {
 		service = createDelegationService({
-			resolveParent: liveParentContext,
+			resolveParent: (sessionId) =>
+				canUseSessionResources(sessionId, workspaceId) ? liveParentContext(sessionId) : undefined,
 			delegationRoot: delegationRootDir(),
 			scope: workspaceId,
 			modelRuntime: getPiRuntime,
 			childExtensionFactories: childExtensionFactories(),
+		});
+		service.onLifecycle((event) => {
+			const parentSessionId =
+				event.type === "child-created" ? event.record.parentSessionId : event.parentSessionId;
+			if (canUseSessionResources(parentSessionId, workspaceId))
+				publishSessionResourcesChanged(workspaceId, parentSessionId);
 		});
 		services.set(workspaceId, service);
 	}
 	return service;
 }
 
-export function subagentsExtensionFor(
+export function subagentsFor(
 	workspaceId: string,
 	isEnabled: () => boolean,
-): BundledExtensionFactory {
-	return createSubagentsExtension({
+	canDeliverCompletion: () => boolean,
+): Subagents {
+	return createSubagents({
 		service: delegationServiceFor(workspaceId),
 		delegationRoot: delegationRootDir(),
 		scope: workspaceId,
 		isEnabled,
+		canDeliverCompletion,
 	});
 }
 

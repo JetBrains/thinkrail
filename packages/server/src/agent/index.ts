@@ -1,6 +1,14 @@
 export { type ActivityInputs, deriveActivityStatus } from "./activity";
 export * from "./agentSessionManager";
 export * from "./askUserQuestion";
+export {
+	getSessionResources,
+	readBackgroundCommandOutput,
+	setSessionResourcesPublisher,
+	stopAllSubagents,
+	stopBackgroundCommand,
+	stopSubagent,
+} from "./chatResources";
 export { readChildTranscript } from "./delegation";
 export {
 	type BundledExtensionFactory,

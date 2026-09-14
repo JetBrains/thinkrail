@@ -1,7 +1,11 @@
 import { realpathSync, rmSync, utimesSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
 import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
-import { readChatScrollGeometry, readChatViewportIntersection } from "./fixtures/chatScroll";
+import {
+	moveMouseToChatViewport,
+	readChatScrollGeometry,
+	readChatViewportIntersection,
+} from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -200,6 +204,7 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 			})
 			.toEqual({ atPhysicalLatestEdge: true, latestRowIntersectsViewport: true });
 
+		await moveMouseToChatViewport(page, chatScroll);
 		await page.mouse.wheel(0, 10_000);
 		await expect(latest).toBeVisible();
 		await chatScroll.evaluate((root) => {

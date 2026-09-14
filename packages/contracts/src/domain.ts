@@ -212,7 +212,7 @@ export function isDelegationRunDetails(value: unknown): value is DelegationRunDe
 	if (typeof d.childSessionId !== "string" || typeof d.task !== "string") return false;
 	if (typeof d.status !== "string" || !DELEGATION_RUN_STATUSES.includes(d.status)) return false;
 	if (typeof d.durationMs !== "number") return false;
-	for (const field of [d.roleName, d.roleSource, d.model, d.activity]) {
+	for (const field of [d.roleName, d.roleSource, d.model, d.activity, d.abortReason]) {
 		if (field !== undefined && typeof field !== "string") return false;
 	}
 	const u = d.usage as Partial<DelegationRunDetails["usage"]> | undefined;
@@ -247,7 +247,54 @@ export interface DelegationRunDetails {
 	};
 	durationMs: number;
 	activity?: string;
+	abortReason?: string;
 }
+
+export type BackgroundCommandStatus = "running" | "stopping" | "completed" | "error" | "stopped";
+
+export interface BackgroundCommandSummary {
+	id: string;
+	sessionId: string;
+	name: string;
+	command: string;
+	status: BackgroundCommandStatus;
+	startedAt: number;
+	finishedAt?: number;
+	exitCode?: number | null;
+	errorMessage?: string;
+}
+
+export interface BackgroundCommandCompletionDetails
+	extends Omit<BackgroundCommandSummary, "command"> {
+	status: "completed" | "error" | "stopped";
+	finishedAt: number;
+	output: { text: string; truncated: boolean };
+}
+
+export interface SubagentResourceSummary {
+	childSessionId: string;
+	parentSessionId: string;
+	roleName?: string;
+	task: string;
+	status: DelegationRunStatus;
+	createdAt: string;
+	abortReason?: string;
+}
+
+export interface SessionResources {
+	workspaceId: string;
+	sessionId: string;
+	commands: BackgroundCommandSummary[];
+	subagents: SubagentResourceSummary[];
+}
+
+export type BackgroundCommandOutputResult =
+	| {
+			available: true;
+			command: BackgroundCommandSummary;
+			output: { text: string; truncated: boolean };
+	  }
+	| { available: false };
 
 export type GitFileStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
 

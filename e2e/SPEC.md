@@ -75,6 +75,19 @@ any artifact run and `e2e:serial` still run sequentially in the same worktree. A
 deployment adds another host adapter for this same suite, never copied feature specs; shared behavior is
 therefore proven through every composition root.
 
+## Chat resource controls
+
+Resource wire coverage opens persisted chat fixtures through the real UI and checks the authoritative
+catalog's session/workspace scope, missing-output result, unavailable controls and empty stop-all.
+Historical fixtures are seeded before entering their workspace, so discovery does not race a just-created
+placement's persistence during browser reload. It never seeds a running resource or turns transcript
+text into execution authority. Real managed
+commands and child agents belong in tagged provider-backed coverage; SDK faux-provider unit tests
+are not evidence of browser agent execution.
+
+Native wheel probes target the actual transcript viewport again after clicking a floating Latest
+button; a pointer left at a removed overlay is not evidence of a gesture delivered to the scroller.
+
 ## Desktop-backed mode
 
 `bun run e2e:desktop` runs the complete no-agent suite against the host embedded in the packaged

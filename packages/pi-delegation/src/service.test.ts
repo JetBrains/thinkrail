@@ -17,9 +17,13 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { createDelegationService } from "./service";
-import { deriveChildSessionFile } from "./storage";
-import { DelegationError, type DelegationService, type LifecycleEvent } from "./types";
+import {
+	createDelegationService,
+	DelegationError,
+	type DelegationService,
+	deriveChildSessionFile,
+	type LifecycleEvent,
+} from "../index";
 
 const faux = createFauxCore({
 	provider: "faux",
@@ -563,13 +567,27 @@ test("one run at a time per child: a second runQueued rejects already-running", 
 	}
 });
 
-test("an already-aborted signal resolves an aborted outcome without prompting", async () => {
+test.each([
+	true,
+	false,
+])("a signal-aborted queued start wins over a later user reason (pre-aborted: %s)", async (preAborted) => {
 	const child = await service.createChild(subagentSpec());
+	const callsBefore = faux.state.callCount;
 	try {
 		const controller = new AbortController();
-		controller.abort();
-		const outcome = await child.runQueued("Never runs.", { signal: controller.signal });
+		if (preAborted) controller.abort();
+		else {
+			child.onEvent((event) => {
+				if (event.type === "run-queued") controller.abort();
+			});
+		}
+		const run = child.runQueued("Never runs.", { signal: controller.signal });
+		await child.abort("user");
+		const outcome = await run;
 		expect(outcome.status).toBe("aborted");
+		expect(outcome.details.abortReason).toBeUndefined();
+		expect(child.snapshot?.details).toEqual(outcome.details);
+		expect(faux.state.callCount).toBe(callsBefore);
 	} finally {
 		await child.dispose();
 	}
@@ -594,8 +612,18 @@ test("a run that completes naturally AT the cap keeps its real answer (no spurio
 });
 
 test("the turn cap steers a wrap-up, then aborts a run that keeps going", async () => {
+	let lateAbort: Promise<void> | undefined;
 	faux.setResponses([
-		fauxAssistantMessage(fauxToolCall("ls", {})),
+		(_context, options) => {
+			options?.signal?.addEventListener(
+				"abort",
+				() => {
+					lateAbort = child.abort("user");
+				},
+				{ once: true },
+			);
+			return fauxAssistantMessage(fauxToolCall("ls", {}));
+		},
 		fauxAssistantMessage(fauxToolCall("ls", {})),
 		fauxAssistantMessage(fauxToolCall("ls", {})),
 		fauxAssistantMessage("NEVER_REACHED"),
@@ -605,7 +633,10 @@ test("the turn cap steers a wrap-up, then aborts a run that keeps going", async 
 	);
 	try {
 		const outcome = await child.runQueued("Loop until stopped.", { maxTurns: 1 });
+		await lateAbort;
+		expect(lateAbort).toBeDefined();
 		expect(outcome.status).toBe("aborted");
+		expect(outcome.details.abortReason).toBeUndefined();
 		expect(outcome.details.usage.turns).toBeGreaterThanOrEqual(1);
 	} finally {
 		await child.dispose();
@@ -675,8 +706,10 @@ test("an abort while QUEUED releases immediately — not after a slot frees", as
 		const runB = childB.runQueued("Queued, then aborted.", { signal: controller.signal });
 		await Bun.sleep(20);
 		controller.abort();
+		await childB.abort("user");
 		const outcomeB = await runB;
 		expect(outcomeB.status).toBe("aborted");
+		expect(outcomeB.details.abortReason).toBeUndefined();
 		expect(childA.snapshot?.status).toBe("running");
 		expect((await runA).status).toBe("completed");
 	} finally {
@@ -684,7 +717,63 @@ test("an abort while QUEUED releases immediately — not after a slot frees", as
 	}
 });
 
-test("ChildHandle.abort cancels a queued run before it can start provider work", async () => {
+function gate() {
+	let open = () => {};
+	const opened = new Promise<void>((resolve) => {
+		open = resolve;
+	});
+	return { opened, open };
+}
+
+test("a child prepared across parent teardown never registers after the cleanup snapshot", async () => {
+	const entered = gate();
+	const finish = gate();
+	let live = true;
+	const scoped = createDelegationService({
+		resolveParent: () =>
+			live
+				? {
+						cwd: parentCwd,
+						model: parent.model,
+						thinkingLevel: parent.thinkingLevel,
+						modelRuntime: runtime,
+					}
+				: undefined,
+		delegationRoot,
+		scope: "late-child",
+		childExtensionFactories: [
+			(pi) => {
+				pi.on("session_start", async () => {
+					entered.open();
+					await finish.opened;
+				});
+			},
+		],
+	});
+	const lifecycle: LifecycleEvent[] = [];
+	scoped.onLifecycle((event) => lifecycle.push(event));
+	const creating = scoped.createChild(subagentSpec({ session: { extensions: true } }));
+	try {
+		await entered.opened;
+		live = false;
+		await scoped.disposeChildrenOf(parent.sessionId);
+		finish.open();
+		await expect(creating).rejects.toMatchObject({ code: "unknown-parent" });
+		expect(scoped.childrenOf(parent.sessionId)).toEqual([]);
+		expect(lifecycle).toEqual([]);
+	} finally {
+		finish.open();
+		await creating.catch(() => undefined);
+		await scoped.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test.each([
+	undefined,
+	"user",
+	"engine",
+	"",
+])("queued handle cancellation keeps its first reason (%s), settles immediately and skips provider work", async (reason) => {
 	const paced = createDelegationService({
 		resolveParent: (id) =>
 			id === parent.sessionId
@@ -695,27 +784,150 @@ test("ChildHandle.abort cancels a queued run before it can start provider work",
 		modelRuntime: runtime,
 		maxConcurrentPerParent: 1,
 	});
+	const started = gate();
+	const finish = gate();
+	const callsBefore = faux.state.callCount;
 	faux.setResponses([
 		async () => {
-			await Bun.sleep(300);
-			return fauxAssistantMessage("SLOW_DONE");
+			started.open();
+			await finish.opened;
+			return fauxAssistantMessage("A_DONE");
 		},
+		fauxAssistantMessage("C_DONE"),
 	]);
 	const childA = await paced.createChild(subagentSpec());
 	const childB = await paced.createChild(subagentSpec());
+	const childC = await paced.createChild(subagentSpec());
+	const events: LifecycleEvent[] = [];
+	childB.onEvent((event) => events.push(event));
 	try {
 		const runA = childA.runQueued("Slow.");
+		await started.opened;
 		const runB = childB.runQueued("Queued, then handle-aborted.");
-		await Bun.sleep(20);
+		const runC = childC.runQueued("Next surviving sibling.");
 		expect(childB.snapshot?.status).toBe("queued");
 
-		await childB.abort();
+		await Promise.all([childB.abort(reason), childB.abort("later")]);
 		const outcomeB = await runB;
 		expect(outcomeB.status).toBe("aborted");
+		expect(outcomeB.details.abortReason).toBe(reason);
+		expect(childB.collectResult()?.details).toEqual(outcomeB.details);
+		expect(events.map((event) => event.type)).toEqual(["run-queued", "run-terminal"]);
+		expect(events.at(-1)).toMatchObject({ outcome: outcomeB });
 		expect(childA.snapshot?.status).toBe("running");
-		expect((await runA).status).toBe("completed");
+		expect(childC.snapshot?.status).toBe("queued");
+		expect(faux.state.callCount).toBe(callsBefore + 1);
+
+		finish.open();
+		expect((await runA).finalText).toBe("A_DONE");
+		expect((await runC).finalText).toBe("C_DONE");
+		expect(faux.state.callCount).toBe(callsBefore + 2);
 	} finally {
+		finish.open();
 		await paced.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test.each([
+	undefined,
+	"user",
+	"engine",
+	"",
+])("running handle cancellation keeps its first reason (%s) and resets it on reuse", async (reason) => {
+	const started = gate();
+	const finish = gate();
+	faux.setResponses([
+		async () => {
+			started.open();
+			await finish.opened;
+			return fauxAssistantMessage("INTERRUPTED");
+		},
+		fauxAssistantMessage("NEXT_RUN"),
+	]);
+	const child = await service.createChild(subagentSpec());
+	try {
+		const run = child.runQueued("Reusable task.");
+		await started.opened;
+		expect(child.snapshot?.status).toBe("running");
+		const aborting = Promise.all([child.abort(reason), child.abort("later")]);
+		finish.open();
+		await aborting;
+		const outcome = await run;
+		expect(outcome.status).toBe("aborted");
+		expect(outcome.details.abortReason).toBe(reason);
+		expect(child.collectResult()?.details).toEqual(outcome.details);
+
+		const terminal = structuredClone(child.snapshot);
+		await child.abort("user");
+		expect(child.snapshot).toEqual(terminal);
+		const nextRun = child.runQueued("Reusable task.");
+		expect(child.snapshot?.details.abortReason).toBeUndefined();
+		const next = await nextRun;
+		expect(next.status).toBe("completed");
+		expect(next.finalText).toBe("NEXT_RUN");
+		expect(next.details.abortReason).toBeUndefined();
+	} finally {
+		finish.open();
+		await child.dispose();
+	}
+});
+
+test.each([
+	true,
+	false,
+])("running caller cancellation and handle cancellation keep the first cause (caller first: %s)", async (callerFirst) => {
+	const started = gate();
+	const finish = gate();
+	faux.setResponses([
+		async () => {
+			started.open();
+			await finish.opened;
+			return fauxAssistantMessage("INTERRUPTED");
+		},
+	]);
+	const child = await service.createChild(subagentSpec());
+	const controller = new AbortController();
+	try {
+		const run = child.runQueued("Cancellable task.", { signal: controller.signal });
+		await started.opened;
+		if (callerFirst) controller.abort();
+		const aborting = child.abort("user");
+		controller.abort();
+		finish.open();
+		await aborting;
+		const outcome = await run;
+		expect(outcome.status).toBe("aborted");
+		expect(outcome.details.abortReason).toBe(callerFirst ? undefined : "user");
+		expect(child.snapshot?.details).toEqual(outcome.details);
+	} finally {
+		finish.open();
+		await child.dispose();
+	}
+});
+
+test.each([
+	"stop",
+	"error",
+	"aborted",
+] as const)("a terminal %s outcome is unchanged by user cancellation, including in its lifecycle callback", async (stopReason) => {
+	faux.setResponses([fauxAssistantMessage("FINAL", { stopReason })]);
+	const child = await service.createChild(subagentSpec());
+	let terminalAbort: Promise<void> | undefined;
+	child.onEvent((event) => {
+		if (event.type === "run-terminal") terminalAbort = child.abort("user");
+	});
+	try {
+		await child.abort("user");
+		const outcome = await child.runQueued("Finish naturally.");
+		await terminalAbort;
+		expect(outcome.status).toBe(stopReason === "stop" ? "completed" : stopReason);
+		expect(outcome.details.abortReason).toBeUndefined();
+		const terminal = structuredClone(child.snapshot);
+		await child.abort("user");
+		expect(child.snapshot).toEqual(terminal);
+		expect(child.snapshot?.details).toEqual(outcome.details);
+	} finally {
+		await child.dispose();
 	}
 });
 
