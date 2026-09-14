@@ -285,8 +285,9 @@ follows is only the rationale the skill bodies don't state:
   with PR work): the recurring asks — verify-then-PR, self-review first, rebase on fresh main,
   screenshots for UI changes, "make PR up-to-date", "look at the checks", "do not fix review
   comments blindly" — became its gates and phase docs. One skill rather than five (rule 1): every
-  lifecycle ask enters through the same trigger; the phases are internal forks as sibling docs. Its
-  done bar (every existing check green + user told, never "PR opened"; a no-CI repo terminates as
+  lifecycle ask enters through the same trigger; the phases are internal forks as sibling docs. At
+  creation time the repository's PR template owns body sections, order, and checklist; the generic
+  Summary/Changes/Testing shape is only the no-template fallback. Its done bar (every existing check green + user told, never "PR opened"; a no-CI repo terminates as
   an explicit "no checks configured", never a silent green) and the review-only assets-ref screenshot
   default were explicit user decisions (task-spec `task-shipping-a-pr-skill`). Its review hardening
   (PR #284) converged on one shared discipline instead of per-finding patches — **observed, never
