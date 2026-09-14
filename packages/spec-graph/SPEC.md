@@ -68,8 +68,10 @@ with pi's normal `read`/`write`/`edit`.
 ## Knowledge delivery
 
 Concept, schema, and workflow live in the **skill** (auto-discovered via the `pi.skills` manifest /
-`additionalSkillPaths`). The always-on rule — treat specs as ground truth, read them before code,
-reconcile changes against them, keep them honest — is injected once per agent run via `before_agent_start`.
+`additionalSkillPaths`). The always-on rule keeps specs authoritative while making lookup contextual:
+consult the relevant spec when work is governed by or may alter a documented boundary, contract,
+invariant, behavior, or architecture decision; localized work need not read unrelated specs. The rule is injected once per agent
+run via `before_agent_start`.
 Each tool carries a `description` (its constraints) and a one-line `promptSnippet` (its entry in the system
 prompt's Available-tools list, matching the bundled `pi-web-access` / `pi-visualize` tools). This is
 pi-native prompt influence through an extension, not host prompt assembly.

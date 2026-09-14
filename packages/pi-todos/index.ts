@@ -3,7 +3,7 @@ import { registerTodoTools } from "./tools/index.ts";
 
 const TODO_RULE = [
 	"This chat has a shared TODO list — your live plan for the conversation, which the user edits too.",
-	"For any multi-step request, the FIRST thing you do is todo_write your PROPOSED plan — before asking clarifying questions and before doing the work — so the plan is visible while you form it, not backfilled after it's approved. Then keep it current (refine it, flip items) as you clarify, get feedback, and execute. Read the todos skill for how.",
+	"When the user asks for a plan or the task needs at least three substantive execution steps, read the todos skill, create a concise plan once the task is understood enough to plan, and keep it current at material milestones.",
 ].join("\n");
 
 const factory: ExtensionFactory = (pi: ExtensionAPI) => {

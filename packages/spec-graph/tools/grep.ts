@@ -31,7 +31,7 @@ export function registerSpecGrep(pi: ExtensionAPI): void {
 		description:
 			"Search the project's spec-graph: regex or substring match within spec files (files whose frontmatter carries `id` + `type`), optionally narrowed by metadata (type / tag / parent / depends-on). Returns path:line matches with a snippet. Read a matched file's body with the normal read tool.",
 		promptSnippet:
-			"spec_grep — search the project's spec-graph by content (narrowable by metadata); reach for it before grep/read when exploring or planning.",
+			"spec_grep — search specs by content when documented decisions, contracts, or boundaries may govern the work.",
 		parameters,
 		async execute(_callId, params, _signal, _onUpdate, ctx) {
 			const index = getIndex(ctx.cwd);
