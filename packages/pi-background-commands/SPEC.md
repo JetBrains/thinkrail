@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: pi-background-commands — explicit, session-owned background commands
 parent: architecture
-tags: [pi-extension, background-commands]
+tags: [pi-extension, background-commands, public-surface-checked]
 ---
 
 ## Responsibility
@@ -19,11 +19,13 @@ restart/rerun, daemon discovery, or arbitrary-process management.
 - **Owns:** one session-bound command service, its opaque command identities, admission, runtime
   snapshots, bounded output, cancellation and completion-delivery bookkeeping; the
   `background_command` Pi tool and a default vanilla-Pi extension entry.
-- **Public surface:** `createBackgroundCommands`, `createBackgroundCommandsExtension`, their
-  service/handle/binding/snapshot/output types, and the default extension. A service exposes
-  start/list/find/change-subscription/dispose, plus completion binding and replay; a command handle
-  exposes its snapshot, output and idempotent stop. Controllers and subprocess details stay private.
-  The root `index.ts` is the only import surface; `src/` is private implementation.
+- **Public surface:** `BACKGROUND_COMMAND_COMPLETION_MESSAGE`, `BackgroundCommandInput`,
+  `BackgroundCommandsExtensionOptions`, `createBackgroundCommandsExtension`,
+  `createBackgroundCommands`, `default`, `BackgroundCommandCompletion`,
+  `BackgroundCommandCompletionBinding`, `BackgroundCommandContext`, `BackgroundCommandHandle`,
+  `BackgroundCommandOutput`, `BackgroundCommandSnapshot`, `BackgroundCommandStart`,
+  `BackgroundCommandStatus`, `BackgroundCommands`, `BackgroundCommandsBinding`,
+  `BackgroundCommandsOptions`.
 - **Allowed deps:** public package-root Pi SDK APIs and `typebox` as peers; Node standard libraries.
   Execution delegates to Pi's exported `createLocalBashOperations`, not a copied spawn runner.
 - **Forbidden:** ThinkRail packages, web/TUI widget ownership, Pi private imports, delegation
@@ -31,6 +33,10 @@ restart/rerun, daemon discovery, or arbitrary-process management.
   in contracts, never imported from or re-exported through this package.
 
 ## Session binding and execution
+
+The root `index.ts` is the only import surface; `src/` is private implementation. A service exposes
+start/list/find/change-subscription/dispose, plus completion binding and replay; a command handle
+exposes its snapshot, output and idempotent stop. Controllers and subprocess details stay private.
 
 The embedder binds one service to one immutable session identity and supplies current session
 context plus effective shell settings. The standalone extension supplies the equivalent binding from

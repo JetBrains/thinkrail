@@ -5,7 +5,7 @@ status: active
 title: Chat Resources — command and subagent inspection and controls
 parent: submodule-web-chat
 depends-on: [module-contracts]
-tags: [chat, resources]
+tags: [chat, resources, public-surface-checked]
 ---
 
 ## Responsibility
@@ -21,6 +21,7 @@ or workbench tab.
 
 - **Owns:** props-driven `ResourcesButton`, `ResourcesContent`, and `CommandLogView`, exported through
   `index.ts`. The content has concrete Commands/Subagents sections, not a resource renderer registry.
+- **Public surface:** `ResourcesButton`, `ResourcesContent`, `CommandLogView`.
 - **Allowed external deps:** contracts, React, Remix icons, shared UI primitives and theme utilities.
 - **Forbidden:** store/transport, server/portable extension packages, Pi value imports, process
   execution, log persistence, subagent transcript fetching, and workbench placement. Parent-chat
