@@ -173,7 +173,12 @@ noise, same family as the shared-window limitations. Derived best-effort; a git 
 
 **Adopted commits are reviewable without a store item.** The review ops resolve their target through
 `reviewableItem`, which first reads the `TodoStore` and, on a miss, reconstructs a synthetic `StoredItem`
-from the matching `base..HEAD` commit (id `commit:<sha>`). Every op (`startTodoReview`,
+for an adopted `commit:<sha>` id — but **only after re-validating the same predicate the derivation uses**:
+the sha is still a member of `base..HEAD` (`git.commitInBranchRange`, two `merge-base --is-ancestor`
+checks against the resolved base + HEAD) **and** is owned by no plan item. An id that fell out of the set
+— rebased into the base, GC'd, or since claimed by a step — is rejected (`No TODO with id`), so a stale
+Plan action can never start/approve/fix review state against a commit that vanishes on the next reload.
+Every op (`startTodoReview`,
 `approveTodoReview`, `cancelTodoReview`, `requestTodoFix`, `recordAgentChangesRequested`,
 `renderReviewPackage`) therefore drives Start-review / Review All / verdicts over an adopted commit with
 **zero store writes**; review state persists in the existing sidecar keyed by `commit:<sha>`, and the

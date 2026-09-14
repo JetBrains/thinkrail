@@ -83,7 +83,6 @@ describe("renderPrBody", () => {
 		});
 		expect(body).toContain("## Committed outside the plan");
 		expect(body).toContain("- [x] **chore: unplanned commit** (`beef123`)");
-		// 1 of 3 reviewables settled (the reviewed planned step; the adopted one is unreviewed).
 		expect(body).toContain("Review: 1/3 steps reviewed in ThinkRail.");
 	});
 

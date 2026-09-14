@@ -12,7 +12,13 @@ import type {
 } from "@thinkrail/contracts";
 import { logger } from "../log";
 import { loadProjects, loadWorkspaces } from "../persistence";
-import { changedFileArgs, type DiffRange, diffBaseRef, resolveDiffRange } from "./diffScope";
+import {
+	changedFileArgs,
+	type DiffRange,
+	diffBaseRef,
+	resolveCommitOid,
+	resolveDiffRange,
+} from "./diffScope";
 import { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";
 import { isSafeRef, remoteNameOf } from "./refs";
 
@@ -70,6 +76,17 @@ export function readCommitSubject(workspaceId: string, sha: string): string | nu
 	const cwd = workspace(workspaceId).worktreePath;
 	const out = git(cwd, ["log", "-1", "--format=%s", "--end-of-options", `${sha}^{commit}`, "--"]);
 	return out.ok ? plainText(out.out) : null;
+}
+
+export function commitInBranchRange(workspaceId: string, sha: string): boolean {
+	if (!/^[0-9a-f]{4,64}$/.test(sha)) return false;
+	const ws = workspace(workspaceId);
+	const cwd = ws.worktreePath;
+	const base = diffBaseRef(ws);
+	if (!resolveCommitOid(cwd, sha) || !resolveCommitOid(cwd, base)) return false;
+	const isAncestor = (ancestor: string, of: string): boolean =>
+		git(cwd, ["merge-base", "--is-ancestor", "--end-of-options", ancestor, of]).ok;
+	return isAncestor(sha, "HEAD") && !isAncestor(sha, base);
 }
 
 function lines(out: string): string[] {

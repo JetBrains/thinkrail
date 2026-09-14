@@ -192,12 +192,7 @@ export interface TodoPlan {
 	 * of silently absent.
 	 */
 	unattributed?: GitFileChange[];
-	/**
-	 * Branch commits (`base..HEAD`) owned by NO item of this plan — **host-derived on `todo.list`,
-	 * present only when non-empty**. The committed counterpart of `unattributed`: each is a wire-only
-	 * `done` item (`origin: "adopted"`, `id: "commit:<sha>"`, one `commit` artifact) so a chat that
-	 * committed without planning still shows — and can review — that work. Never stored.
-	 */
+	/** Committed counterpart of `unattributed`: `base..HEAD` commits no item owns, as wire-only `done` items (`origin: "adopted"`) — host-derived, never stored. See submodule-server-todos. */
 	adoptedCommits?: TodoItem[];
 }
 

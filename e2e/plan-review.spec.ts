@@ -248,7 +248,6 @@ test("a branch commit no step owns shows under 'Committed outside the plan' and 
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 
-	// A commit made outside any plan step (agent bash-commit / user hand commit). The plan stays empty.
 	commitFile(
 		workspace.worktreePath,
 		"loose.ts",
@@ -261,16 +260,13 @@ test("a branch commit no step owns shows under 'Committed outside the plan' and 
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 
-	// The empty-plan 'No items yet' text is suppressed once loose commits exist.
 	await expect(pane).not.toContainText("No items yet");
 	const section = pane.getByTestId("plan-adopted-commits");
 	await expect(section).toBeVisible();
 	await expect(section).toContainText("Committed outside the plan");
 	const adopted = section.getByTestId("plan-item").filter({ hasText: "chore: unplanned commit" });
 	await expect(adopted).toBeVisible();
-	// It is reviewable exactly like an item's commit — the Start review affordance renders.
 	await expect(adopted.getByTestId("plan-start-review")).toHaveCount(1);
-	// It counts in the Review stage, never the build count.
 	await expect(pane.getByTestId("plan-progress")).toContainText("0/0 done");
 	await expect(pane.getByTestId("plan-review-progress")).toContainText("0/1 reviewed");
 });

@@ -14,7 +14,7 @@ import {
 	type TodoPlan as StoredPlan,
 	TodoStore,
 } from "pi-todos/core";
-import { gitStatus, listCommits, readCommitSubject } from "../git";
+import { commitInBranchRange, gitStatus, listCommits, readCommitSubject } from "../git";
 import { getWorkspace } from "../workspaces";
 import { enqueueTodoMutation, settleChangeArtifacts, unattributedChanges } from "./artifacts";
 import { dropItemBaseline, readBaselines, removeSessionBaselines } from "./baselines";
@@ -276,9 +276,11 @@ function adoptedCommitSha(id: string): string | undefined {
 }
 
 // origin is "agent": StoredItem has no "adopted"; the wire item gets "adopted" in listTodos. see todos/SPEC.md
-function adoptedStoredItem(workspaceId: string, id: string): StoredItem | null {
+function adoptedStoredItem(workspaceId: string, id: string, plan: StoredPlan): StoredItem | null {
 	const sha = adoptedCommitSha(id);
 	if (!sha) return null;
+	if (new Set(flatItems(plan).flatMap(commitShas)).has(sha)) return null;
+	if (!commitInBranchRange(workspaceId, sha)) return null;
 	const subject = readCommitSubject(workspaceId, sha);
 	if (subject === null) return null;
 	const now = new Date().toISOString();
@@ -298,9 +300,9 @@ function reviewableItem(params: { workspaceId: string; sessionId: string; id: st
 	item: StoredItem;
 } {
 	const root = getWorkspace(params.workspaceId).worktreePath;
+	const store = new TodoStore(root, params.sessionId);
 	const item =
-		new TodoStore(root, params.sessionId).get(params.id) ??
-		adoptedStoredItem(params.workspaceId, params.id);
+		store.get(params.id) ?? adoptedStoredItem(params.workspaceId, params.id, store.read());
 	if (!item) throw new Error(`No TODO with id "${params.id}".`);
 	if (!isReviewable(item)) throw new Error(`TODO "${params.id}" has no change set to review.`);
 	return { root, item };
