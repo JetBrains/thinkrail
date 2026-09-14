@@ -7,7 +7,6 @@ export {
 } from "./diffScope";
 export {
 	canonicalPath,
-	commitInBranchRange,
 	countUnpushedCommits,
 	currentBranch,
 	gitCommitPaths,
@@ -23,6 +22,7 @@ export {
 	readCommitSubject,
 	remoteRefOid,
 	resolveDefaultBranch,
+	resolveInBranchRange,
 	tryCurrentBranch,
 } from "./git";
 export { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";

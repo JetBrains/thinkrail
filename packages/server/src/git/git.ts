@@ -78,15 +78,16 @@ export function readCommitSubject(workspaceId: string, sha: string): string | nu
 	return out.ok ? plainText(out.out) : null;
 }
 
-export function commitInBranchRange(workspaceId: string, sha: string): boolean {
-	if (!/^[0-9a-f]{4,64}$/.test(sha)) return false;
+export function resolveInBranchRange(workspaceId: string, sha: string): string | null {
+	if (!/^[0-9a-f]{4,64}$/.test(sha)) return null;
 	const ws = workspace(workspaceId);
 	const cwd = ws.worktreePath;
 	const base = diffBaseRef(ws);
-	if (!resolveCommitOid(cwd, sha) || !resolveCommitOid(cwd, base)) return false;
+	const canonical = resolveCommitOid(cwd, sha);
+	if (!canonical || !resolveCommitOid(cwd, base)) return null;
 	const isAncestor = (ancestor: string, of: string): boolean =>
 		git(cwd, ["merge-base", "--is-ancestor", "--end-of-options", ancestor, of]).ok;
-	return isAncestor(sha, "HEAD") && !isAncestor(sha, base);
+	return isAncestor(canonical, "HEAD") && !isAncestor(canonical, base) ? canonical : null;
 }
 
 function lines(out: string): string[] {

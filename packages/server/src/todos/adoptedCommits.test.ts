@@ -120,13 +120,11 @@ test("an adopted commit is reviewable by its commit:<sha> id and settles like an
 });
 
 test("review resolution rejects a commit:<sha> outside base..HEAD or owned by an item", () => {
-	// A commit that lives on the base (not in base..HEAD) is not reviewable as an adopted commit.
 	const baseSha = headSha(repo);
 	expect(() =>
 		startTodoReview({ workspaceId: "w1", sessionId: SESSION, id: `commit:${baseSha}` }),
 	).toThrow(/No TODO with id/);
 
-	// A branch commit a plan item owns is excluded from the adopted set, so its commit:<sha> id is rejected.
 	const store = new TodoStore(repo, SESSION);
 	writeFileSync(join(repo, "owned.ts"), "export const b = 2;\n");
 	const owned = gitCommitPaths("w1", "feat: owned step", ["owned.ts"]);
@@ -138,4 +136,14 @@ test("review resolution rejects a commit:<sha> outside base..HEAD or owned by an
 	expect(() =>
 		startTodoReview({ workspaceId: "w1", sessionId: SESSION, id: `commit:${owned.sha}` }),
 	).toThrow(/No TODO with id/);
+});
+
+test("review resolution rejects an abbreviated commit:<short-sha> id", () => {
+	const sha = commitFile("loose.ts", "export const a = 1;\n", "feat: loose work");
+	expect(() =>
+		startTodoReview({ workspaceId: "w1", sessionId: SESSION, id: `commit:${sha.slice(0, 10)}` }),
+	).toThrow(/No TODO with id/);
+	expect(() =>
+		startTodoReview({ workspaceId: "w1", sessionId: SESSION, id: `commit:${sha}` }),
+	).not.toThrow();
 });

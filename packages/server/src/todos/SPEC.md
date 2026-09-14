@@ -174,10 +174,13 @@ noise, same family as the shared-window limitations. Derived best-effort; a git 
 **Adopted commits are reviewable without a store item.** The review ops resolve their target through
 `reviewableItem`, which first reads the `TodoStore` and, on a miss, reconstructs a synthetic `StoredItem`
 for an adopted `commit:<sha>` id — but **only after re-validating the same predicate the derivation uses**:
-the sha is still a member of `base..HEAD` (`git.commitInBranchRange`, two `merge-base --is-ancestor`
-checks against the resolved base + HEAD) **and** is owned by no plan item. An id that fell out of the set
-— rebased into the base, GC'd, or since claimed by a step — is rejected (`No TODO with id`), so a stale
-Plan action can never start/approve/fix review state against a commit that vanishes on the next reload.
+`git.resolveInBranchRange` resolves the sha to its **canonical OID** and confirms membership in
+`base..HEAD` (two `merge-base --is-ancestor` checks against the resolved base + HEAD), the requested id
+must equal `commit:<canonical-oid>` (the exact form `listTodos` emits — an abbreviated or non-canonical
+id is rejected, so review state can never be written under an id no adopted item will ever carry), **and**
+the canonical sha must be owned by no plan item. An id that fell out of the set — rebased into the base,
+GC'd, abbreviated, or since claimed by a step — is rejected (`No TODO with id`), so a stale Plan action can
+never start/approve/fix review state against a commit that vanishes on the next reload.
 Every op (`startTodoReview`,
 `approveTodoReview`, `cancelTodoReview`, `requestTodoFix`, `recordAgentChangesRequested`,
 `renderReviewPackage`) therefore drives Start-review / Review All / verdicts over an adopted commit with

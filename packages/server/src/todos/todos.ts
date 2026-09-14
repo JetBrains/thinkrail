@@ -14,7 +14,7 @@ import {
 	type TodoPlan as StoredPlan,
 	TodoStore,
 } from "pi-todos/core";
-import { commitInBranchRange, gitStatus, listCommits, readCommitSubject } from "../git";
+import { gitStatus, listCommits, readCommitSubject, resolveInBranchRange } from "../git";
 import { getWorkspace } from "../workspaces";
 import { enqueueTodoMutation, settleChangeArtifacts, unattributedChanges } from "./artifacts";
 import { dropItemBaseline, readBaselines, removeSessionBaselines } from "./baselines";
@@ -277,10 +277,11 @@ function adoptedCommitSha(id: string): string | undefined {
 
 // origin is "agent": StoredItem has no "adopted"; the wire item gets "adopted" in listTodos. see todos/SPEC.md
 function adoptedStoredItem(workspaceId: string, id: string, plan: StoredPlan): StoredItem | null {
-	const sha = adoptedCommitSha(id);
-	if (!sha) return null;
+	const raw = adoptedCommitSha(id);
+	if (!raw) return null;
+	const sha = resolveInBranchRange(workspaceId, raw);
+	if (!sha || id !== `commit:${sha}`) return null;
 	if (new Set(flatItems(plan).flatMap(commitShas)).has(sha)) return null;
-	if (!commitInBranchRange(workspaceId, sha)) return null;
 	const subject = readCommitSubject(workspaceId, sha);
 	if (subject === null) return null;
 	const now = new Date().toISOString();
