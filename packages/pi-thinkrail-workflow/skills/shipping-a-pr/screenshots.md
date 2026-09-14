@@ -49,5 +49,6 @@ assets ref is the default.
 Clean up this phase's throwaways once the body edit lands: delete `.thinkrail/context/pr-shots/`
 (unless the user is uploading by hand — then leave it until they confirm) and every capture
 scaffold (specs, throwaway builds). If any scaffolding was committed, the commit that removes it
-is pushed too — a deletion left in the working tree ships nothing. Read and follow `checks.md` in
-wait mode when inherited from creation or explicitly requested; otherwise use snapshot mode.
+is pushed too — a deletion left in the working tree ships nothing — and that PR-head push upgrades
+this phase to wait mode. Read and follow `checks.md` in wait mode when inherited from creation,
+explicitly requested, or upgraded by a head push; otherwise use snapshot mode.

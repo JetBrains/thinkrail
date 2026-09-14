@@ -288,9 +288,10 @@ follows is only the rationale the skill bodies don't state:
   lifecycle ask enters through the same trigger; the phases are internal forks as sibling docs. At
   creation time the repository's PR template owns body sections, order, and checklist; the generic
   Summary/Changes/Testing shape is only the no-template fallback. Completion has two deliberate modes:
-  creating, syncing, code-affecting review fixes, and explicit watch/ship/merge-ready asks wait for every
-  existing check to turn green and verify the base; standalone screenshot/body/comment-only work and
-  one-time status requests take one fresh checks + merge-state snapshot and report it without polling or
+  creating, syncing, any phase that pushes the PR head (including screenshot-scaffold cleanup), and
+  explicit watch/ship/merge-ready asks wait for every existing check to turn green and verify the base;
+  standalone screenshot/body/comment-only work that leaves the head unchanged, plus one-time status
+  requests, take one fresh checks + merge-state snapshot and report it without polling or
   fixing unrelated state. A no-CI
   repo is always reported explicitly, never silently green. This avoids turning metadata maintenance into
   an unrequested CI watch while preserving the merge-ready bar where the ask promises it. The review-only

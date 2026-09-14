@@ -5,8 +5,8 @@ workflow in one of the two terminal states below.
 
 ## Snapshot mode — metadata-only work
 
-Use after standalone screenshot, body, or comment-only maintenance that changed no code, or for a
-one-time checks/merge-state request, when the ask does not promise a merge-ready result.
+Use after standalone screenshot, body, or comment-only maintenance that left the PR head unchanged,
+or for a one-time checks/merge-state request, when the ask does not promise a merge-ready result.
 
 1. Run `gh pr checks <n>` once. Preserve `no checks reported` as the explicit state “no checks
    configured”; report pending or failing checks as observed.

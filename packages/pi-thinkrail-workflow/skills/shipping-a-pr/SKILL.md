@@ -10,12 +10,12 @@ when requested. One workflow, six phases as sibling docs — enter at the phase 
 
 ## Completion modes
 
-- **Wait mode** applies to creating a PR, syncing its branch, any review fix that changes code, and an
-  explicit request to watch checks, ship, or make the PR merge-ready. Done means every configured
+- **Wait mode** applies to creating a PR, syncing its branch, any phase that pushes the PR head, and
+  an explicit request to watch checks, ship, or make the PR merge-ready. Done means every configured
   check is green, the head is current with its base, and the user has the link plus that observed
   state. A repo with no CI is reported as exactly that, never silently green.
 - **Snapshot mode** applies to standalone screenshot, body, or comment-only maintenance that changes
-  no code, and to one-time status requests, unless the user also asked for wait mode. Take one fresh
+  no PR-head change, and to one-time status requests, unless the user also asked for wait mode. Take one fresh
   checks and merge-state snapshot,
   report pending/failing/indeterminate state as observed, and stop without polling or fixing unrelated
   state.
@@ -50,9 +50,9 @@ step of every phase:
 | Address review comments | `review-comments.md` | wait if the branch changes; otherwise snapshot |
 
 **Read and follow the selected phase doc** — the gates and mechanics live only there; never run a
-phase from this spine's summary. Carry the table's mode into that doc; an explicit watch, ship, or
-merge-ready request overrides a snapshot default with wait mode, and creation carries wait mode
-through a screenshot phase. A compound ask ("rebase, verify, and create a PR") is one flow: start at
+phase from this spine's summary. Carry the table's mode into that doc; any PR-head push or explicit
+watch, ship, or merge-ready request overrides a snapshot default with wait mode, and creation carries
+wait mode through a screenshot phase. A compound ask ("rebase, verify, and create a PR") is one flow: start at
 the earliest phase named; the docs chain forward on their own. If the work itself isn't finished — the ask bundles new design or
 implementation before the ship — that part is not this workflow's; route it per
 choosing-a-workflow first and come back here when it lands.
@@ -69,6 +69,6 @@ uploading by hand — see `screenshots.md`).
 
 ## Ending
 
-Creating, syncing, code-affecting review fixes, and explicit watch/ship/merge-ready asks end through
-`checks.md` in wait mode. Standalone metadata-only phases and one-time status requests end through
+Creating, syncing, any phase that pushes the PR head, and explicit watch/ship/merge-ready asks end
+through `checks.md` in wait mode. Standalone metadata-only phases and one-time status requests end through
 `checks.md` in snapshot mode.
