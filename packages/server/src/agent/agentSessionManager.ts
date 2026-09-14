@@ -1143,9 +1143,14 @@ async function flushHeldQueue(entry: Entry): Promise<void> {
 			entry.heldInFlight = next;
 			try {
 				await deliverHeldMessage(entry, next.text, next.images ? [...next.images] : undefined);
-			} finally {
+			} catch (error) {
 				entry.heldInFlight = null;
+				entry.heldWhileAsking.unshift(next);
+				persistHeldQueueIfChanged(entry);
+				publishHeldQueueUpdate(entry);
+				throw error;
 			}
+			entry.heldInFlight = null;
 			persistHeldQueueIfChanged(entry);
 		}
 	} finally {

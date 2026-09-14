@@ -1457,6 +1457,63 @@ test("removing a queued chip while a held task is running keeps the remaining he
 	}
 });
 
+test("a rejected held delivery restores the item to the live queue, not only after a restart", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-reject");
+	const realPrompt = AgentSession.prototype.prompt;
+	const promptSpy = jest.spyOn(AgentSession.prototype, "prompt").mockImplementation(function (
+		this: AgentSession,
+		text: string,
+		options?: unknown,
+	) {
+		if (text === "task A") return Promise.reject(new Error("provider auth expired"));
+		return realPrompt.call(this, text, options as never);
+	});
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-rej-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-reject-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-reject",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		await followUpSession(s.sessionId, "task A");
+		fauxA.appendResponses([fauxAssistantMessage("ANSWER_OK")]);
+		await answerQuestion(s.sessionId, "ask-rej-1", {
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+			cancelled: false,
+		}).catch(() => {});
+		expect(
+			(await listSessions("ws-reject", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual({ steering: [], followUp: ["task A"] });
+		removeSession(s.sessionId);
+	} finally {
+		promptSpy.mockRestore();
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("a message accepted while the held suffix is still draining stays behind it (FIFO order preserved)", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	setActivityProjectResolver(() => "project-fifo");

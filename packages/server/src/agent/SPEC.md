@@ -514,9 +514,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     still restores the in-flight message (re-run at worst, never lost), while the queue *projections* and
     queue-edit ops read `heldWhileAsking` alone — the in-flight item is running, not queued, so it is
     neither re-parked by `removeQueuedSession` nor shown as a chip. The item is cleared from
-    `heldInFlight` and the shrunk remainder persisted only after its turn settles; the drain re-checks
-    `questionPending` each turn, so a flushed task that itself asks a question stops the drain and leaves
-    the rest parked. The snapshot shrinks `[A,B] → [B] → []`, pinned by the order test. On attach, `restoreHeldQueue`
+    `heldInFlight` and the shrunk remainder persisted only after its turn settles; **if the delivery
+    rejects** (e.g. auth expired before that turn, so `prompt()` throws at preflight) the item is
+    **unshifted back to the front of `heldWhileAsking`**, persisted and published, and the error
+    rethrown — so a rejected task stays live-queued for the next attempt rather than vanishing until a
+    restart. The drain re-checks `questionPending` each turn, so a flushed task that itself asks a
+    question stops the drain and leaves the rest parked. The snapshot shrinks `[A,B] → [B] → []`, pinned by the order test. On attach, `restoreHeldQueue`
     scans `getEntries()` for the last snapshot and rebuilds the buffer with fresh ids (a leftover suffix
     flushes on the user's next `promptSession`); a session that answered before the crash persisted an
     empty snapshot, so it restores nothing. The pending ask is the transcript **tail**, so it survives compaction and
