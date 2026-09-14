@@ -66,6 +66,32 @@ describe("isPlanReviewResult", () => {
 		expect(isPlanReviewResult({ ...ok, findings: [{ id: "c_1" }] })).toBe(false);
 		expect(isPlanReviewResult(null)).toBe(false);
 	});
+
+	const finding = (extra: Record<string, unknown>) => ({
+		...ok,
+		findings: [{ id: "c_1", body: "b", ...extra }],
+	});
+
+	test("rejects a finding with an empty id/body or an unknown kind", () => {
+		expect(isPlanReviewResult({ ...ok, findings: [{ id: "", body: "b" }] })).toBe(false);
+		expect(isPlanReviewResult({ ...ok, findings: [{ id: "c_1", body: "" }] })).toBe(false);
+		expect(isPlanReviewResult(finding({ kind: "nope" }))).toBe(false);
+		expect(isPlanReviewResult(finding({ kind: "inline", path: "a.ts" }))).toBe(true);
+	});
+
+	test("rejects an incoherent or non-positive line range, and a line without a path", () => {
+		expect(isPlanReviewResult(finding({ path: "a.ts", startLine: 0 }))).toBe(false);
+		expect(isPlanReviewResult(finding({ path: "a.ts", startLine: 1.5 }))).toBe(false);
+		expect(isPlanReviewResult(finding({ startLine: 3 }))).toBe(false); // line with no path
+		expect(isPlanReviewResult(finding({ path: "a.ts", endLine: 3 }))).toBe(false); // endLine, no startLine
+		expect(isPlanReviewResult(finding({ path: "a.ts", startLine: 5, endLine: 3 }))).toBe(false);
+		expect(isPlanReviewResult(finding({ path: "a.ts", startLine: 3, endLine: 5 }))).toBe(true);
+	});
+
+	test("enforces cardinality: request_changes needs a finding, approve may have none", () => {
+		expect(isPlanReviewResult({ ...ok, verdict: "request_changes", findings: [] })).toBe(false);
+		expect(isPlanReviewResult({ ...ok, verdict: "approve", findings: [] })).toBe(true);
+	});
 });
 
 describe("config defaults", () => {
