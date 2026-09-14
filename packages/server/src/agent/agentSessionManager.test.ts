@@ -1377,6 +1377,82 @@ test("held work flushes one message at a time, in order, on answer (per-message 
 	}
 });
 
+test("a message accepted while the held suffix is still draining stays behind it (FIFO order preserved)", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-fifo");
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-fifo-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-fifo-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-fifo",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		await followUpSession(s.sessionId, "task A");
+		await followUpSession(s.sessionId, "task C");
+		expect(
+			(await listSessions("ws-fifo", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual({ steering: [], followUp: ["task A", "task C"] });
+
+		let injected = false;
+		fauxA.appendResponses([
+			fauxAssistantMessage("ANSWER_OK"),
+			() => {
+				if (!injected) {
+					injected = true;
+					void followUpSession(s.sessionId, "task B");
+				}
+				return fauxAssistantMessage("A_RAN");
+			},
+			fauxAssistantMessage("C_RAN"),
+			fauxAssistantMessage("B_RAN"),
+		]);
+		await answerQuestion(s.sessionId, "ask-fifo-1", {
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+			cancelled: false,
+		});
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("B_RAN")) {
+			if (Date.now() > ranBy) throw new Error("drain never completed");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		const transcript = await getSessionMessages(s.sessionId, "ws-fifo", cwd);
+		const userTexts = transcript.messages
+			.filter((message) => message.role === "user")
+			.map((message) => JSON.stringify(message.content));
+		const idxA = userTexts.findIndex((t) => t.includes("task A"));
+		const idxC = userTexts.findIndex((t) => t.includes("task C"));
+		const idxB = userTexts.findIndex((t) => t.includes("task B"));
+		expect(idxA).toBeGreaterThanOrEqual(0);
+		expect(idxC).toBeGreaterThan(idxA);
+		expect(idxB).toBeGreaterThan(idxC);
+		removeSession(s.sessionId);
+	} finally {
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("held work survives a host restart — reattaching a session restores the queue behind a pending question and flushes it on answer", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	setActivityProjectResolver(() => "project-restart");

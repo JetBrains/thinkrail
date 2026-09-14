@@ -468,12 +468,19 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     synchronously drains pi's lanes (complete-content snapshot + `clearQueue`) into the buffer — running
     *inside the tool tick* means pi meets an empty queue at the boundary and settles into `waiting`,
     race-free; **(b)** while a question is pending (derived from the transcript via
-    `awaitingQuestionToolCallId`, the single authority), the **explicit queue sends**
-    `steerSession`/`followUpSession` park into the same buffer instead of touching pi. A normal
-    `promptSession` is **not** parked: a free-form message is the user's reply per the
-    `ask_user_question` contract, so it supersedes the card (its user message makes `assessAnswerability`
-    return `superseded`) and then **flushes the held buffer in order** — the typed reply runs first, the
-    previously-held queued work after. The buffer is unioned into every queue projection
+    `awaitingQuestionToolCallId`, the single authority) **or while a held flush is in progress**
+    (`entry.flushingHeld`), the **explicit queue sends** `steerSession`/`followUpSession` park into the
+    same buffer instead of touching pi, and `promptSession` parks too while a flush is in progress. A
+    normal `promptSession` against a *pending* question is **not** parked: a free-form message is the
+    user's reply per the `ask_user_question` contract, so it supersedes the card (its user message makes
+    `assessAnswerability` return `superseded`) and then **flushes the held buffer in order** — the typed
+    reply runs first, the previously-held queued work after. **The `flushingHeld` gate preserves FIFO
+    order:** once the answer lands `questionPending` is already false, so without it a message accepted
+    while the older suffix is still draining would race into pi's live queue ahead of the not-yet-sent
+    held items (answer + queue B while A runs → A, B, C instead of the accepted A, C, B). Parking such a
+    send appends it to the tail of the one buffer the flush drains, so it stays behind the existing
+    suffix. The flush itself delivers through the ungated `deliverHeldMessage`, so it is never blocked by
+    its own gate. The buffer is unioned into every queue projection
     (`queueContentOf`/`queueStateOf`/`hasQueuedImages`/`queueUpdateEventOf` and the `summaryOf` queue
     field) so held messages still render as queued chips; it is **not** counted in `pendingMessageCount`
     (nor `effectivePendingCount`), which is why the status stays `waiting` rather than `queued`. Capture

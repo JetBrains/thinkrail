@@ -101,6 +101,7 @@ interface Entry {
 	stuckEmptyDeliveries: Record<QueueLane, number>;
 	heldWhileAsking: TrackedQueuedMessage[];
 	lastPersistedHeldSig: string;
+	flushingHeld: boolean;
 	nextQueuedMessageId: number;
 	manualCompactionInProgress: boolean;
 	piCompactionInProgress: boolean;
@@ -507,6 +508,7 @@ async function prepareSessionEntry(
 		stuckEmptyDeliveries: { steering: 0, followUp: 0 },
 		heldWhileAsking: [],
 		lastPersistedHeldSig: "",
+		flushingHeld: false,
 		nextQueuedMessageId: 1,
 		manualCompactionInProgress: false,
 		piCompactionInProgress: false,
@@ -1111,17 +1113,33 @@ function parkHeld(entry: Entry, text: string, images?: ImageContent[]): void {
 	publishHeldQueueUpdate(entry);
 }
 
-async function flushHeldQueue(entry: Entry): Promise<void> {
-	while (entry.heldWhileAsking.length > 0 && !questionPending(entry)) {
-		const next = entry.heldWhileAsking[0];
-		if (!next) break;
-		await followUpSession(
-			entry.session.sessionId,
-			next.text,
-			next.images ? [...next.images] : undefined,
+async function deliverHeldMessage(
+	entry: Entry,
+	text: string,
+	images?: ImageContent[],
+): Promise<void> {
+	if (entry.session.isStreaming) {
+		await queueSessionMessage(entry, "followUp", text, images, () =>
+			entry.session.followUp(text, images),
 		);
-		entry.heldWhileAsking.shift();
-		persistHeldQueueIfChanged(entry);
+		return;
+	}
+	await entry.session.prompt(text, images ? { images } : undefined);
+}
+
+async function flushHeldQueue(entry: Entry): Promise<void> {
+	if (entry.flushingHeld) return;
+	entry.flushingHeld = true;
+	try {
+		while (entry.heldWhileAsking.length > 0 && !questionPending(entry)) {
+			const next = entry.heldWhileAsking[0];
+			if (!next) break;
+			await deliverHeldMessage(entry, next.text, next.images ? [...next.images] : undefined);
+			entry.heldWhileAsking.shift();
+			persistHeldQueueIfChanged(entry);
+		}
+	} finally {
+		entry.flushingHeld = false;
 	}
 }
 
@@ -1177,6 +1195,10 @@ export async function promptSession(
 	images?: ImageContent[],
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
+	if (entry.flushingHeld) {
+		parkHeld(entry, text, images);
+		return;
+	}
 	if (entry.session.isStreaming) {
 		await queueSessionMessage(entry, "steering", text, images, () =>
 			entry.session.steer(text, images),
@@ -1193,7 +1215,7 @@ export async function steerSession(
 	images?: ImageContent[],
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
-	if (questionPending(entry)) {
+	if (questionPending(entry) || entry.flushingHeld) {
 		parkHeld(entry, text, images);
 		return;
 	}
@@ -1208,17 +1230,11 @@ export async function followUpSession(
 	images?: ImageContent[],
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
-	if (questionPending(entry)) {
+	if (questionPending(entry) || entry.flushingHeld) {
 		parkHeld(entry, text, images);
 		return;
 	}
-	if (entry.session.isStreaming) {
-		await queueSessionMessage(entry, "followUp", text, images, () =>
-			entry.session.followUp(text, images),
-		);
-		return;
-	}
-	await entry.session.prompt(text, images ? { images } : undefined);
+	await deliverHeldMessage(entry, text, images);
 }
 
 export async function compactSession(sessionId: string, instructions?: string): Promise<void> {
