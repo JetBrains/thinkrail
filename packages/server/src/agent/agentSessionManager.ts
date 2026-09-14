@@ -1096,6 +1096,7 @@ function captureHeldQueue(entry: Entry): void {
 		...entry.queuedMessages.steering.map((message) => cloneTracked(entry, message)),
 		...entry.queuedMessages.followUp.map((message) => cloneTracked(entry, message)),
 	);
+	persistHeldQueueIfChanged(entry);
 	entry.session.clearQueue();
 	entry.stuckEmptyDeliveries = { steering: 0, followUp: 0 };
 }
@@ -1111,16 +1112,16 @@ function parkHeld(entry: Entry, text: string, images?: ImageContent[]): void {
 }
 
 async function flushHeldQueue(entry: Entry): Promise<void> {
-	if (entry.heldWhileAsking.length === 0) return;
-	const held = entry.heldWhileAsking;
-	entry.heldWhileAsking = [];
-	persistHeldQueueIfChanged(entry);
-	for (const message of held) {
+	while (entry.heldWhileAsking.length > 0) {
+		const [next] = entry.heldWhileAsking;
+		if (!next) break;
 		await followUpSession(
 			entry.session.sessionId,
-			message.text,
-			message.images ? [...message.images] : undefined,
+			next.text,
+			next.images ? [...next.images] : undefined,
 		);
+		entry.heldWhileAsking.shift();
+		persistHeldQueueIfChanged(entry);
 	}
 }
 
