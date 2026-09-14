@@ -104,6 +104,20 @@ extensions that set holds is the **embedder's** choice, never this package's.
 - The web card / transcript view are the *presentation* side, joined by tool name
   (`registerToolRenderer("Agent", …)`) — they live in `apps/web` (`chat/tools/subagent`), never here.
 
+## User stop — draft completion policy
+
+The chat Resources control path uses the delegation run's `abortReason: "user"` to distinguish
+intentional user cancellation. Its detached completion is still a displayed, persisted
+`subagent-completion` message, but it does not trigger a new turn in an idle parent. A parent already
+working may receive the report through its normal queue; stopping a child neither aborts that parent
+nor disables later delegation. Natural completion, failure and non-user abort retain the current
+follow-up/trigger behavior. Session shutdown continues to suppress delivery entirely.
+
+This is the approved policy extension to the existing implementation. The reason
+comes from the run owner in [[module-pi-delegation]]; no second stopped-child registry or conditional
+UI-generated completion message exists. Standalone Pi behavior remains unchanged unless its caller
+explicitly supplies that cancellation reason.
+
 ## Verification
 
 Unit suites in-package (`bun test`), including a two-extension regression where one extension

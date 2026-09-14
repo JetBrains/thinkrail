@@ -1022,6 +1022,26 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   just queues and is picked up on the agent's next natural turn (when the user answers, or a later idle
   nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged.
 
+## Chat Resources — draft integration
+
+[[submodule-web-chat-resources]] owns the selected header-popover presentation. `ChatView` composes
+its barrel with a `useChatResources` integration hook and the existing `SubagentTranscriptDialog`;
+no new shell pane, workbench resource kind or terminal attachment is involved. Tool/command
+completion rendering remains in the conversation primitives, joined through tool/custom-message
+names rather than imports of the capability packages.
+
+The dependency edges are `ChatView`/`useChatResources` → `resources`, `store`, `transport`, and
+`ChatView` → the existing transcript dialog. The `resources` child stays props-only and imports no
+sibling tool implementation. Command logs are fetched by the integration hook and passed into its
+read-only view; the module never loads xterm.
+
+The hook hydrates on mount/current welcome, subscribes to `session.resourcesChanged`, and coalesces
+invalidations behind one in-flight read. An invalidation during a read requires a fresh pass; session
+and connection generations fence late responses. Metadata remains current while the popover is
+closed. Log snapshots refresh only while that command's detail is open and nonterminal, with one
+read in flight; terminal/unavailable results stop refresh and transient failures stay visibly retryable.
+No per-token subagent progress or tool-result rewriting is needed for the header count.
+
 ## Boundary
 
 - **Public surface:** the registry API (`toolRegistry`), the shared workspace-file target canonicalizer
@@ -1047,7 +1067,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
   is `ChatView.tsx`, `chatPreferences.ts` (the client-local persistence adapter), plus the hooks and dialogs
   it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
-  `useModelCatalog.ts`, **`useSessionStats.ts`** (generation/revision-fenced authoritative telemetry reads),
+  `useModelCatalog.ts`, **`useChatResources.ts`** (the draft Resources hydration/control/log-read seam),
+  **`useSessionStats.ts`** (generation/revision-fenced authoritative telemetry reads),
   **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical transcript
   reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`,
   `SubagentTranscriptDialog.tsx`. `useModelCatalog` is the shared
