@@ -95,7 +95,10 @@ export function readChildTranscript(
 		parentSessionId,
 		childSessionId,
 	);
+	const child = services.get(workspaceId)?.findChild(childSessionId);
+	const ownedChild = child?.record.parentSessionId === parentSessionId ? child : undefined;
 	if (!path) {
+		if (ownedChild) return { messages: [], status: ownedChild.snapshot?.status ?? "queued" };
 		throw new CodedError(
 			"SUBAGENT_TRANSCRIPT_NOT_FOUND",
 			`No transcript found for subagent session ${childSessionId}`,
@@ -105,7 +108,7 @@ export function readChildTranscript(
 	const messages = buildSessionContext(sessionManager.getEntries()).messages.filter((message) =>
 		isTranscriptMessageRole(message.role),
 	) as TranscriptMessage[];
-	const status = services.get(workspaceId)?.findChild(childSessionId)?.snapshot?.status;
+	const status = ownedChild?.snapshot?.status;
 	return { messages, ...(status !== undefined ? { status } : {}) };
 }
 

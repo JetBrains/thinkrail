@@ -1,10 +1,14 @@
 import {
 	type ActivityStatus,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	type BackgroundCommandSummary,
+	CHAT_RESOURCES_PROTOCOL_VERSION,
 	type GitDiffScope,
 	type Project,
 	SESSION_RENAME_PROTOCOL_VERSION,
+	type SessionResources,
 	type SpecGraphNode,
+	type SubagentResourceSummary,
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
@@ -29,6 +33,7 @@ import type {
 	TerminalTab,
 	WorkspaceActivity,
 } from "./appStore";
+import type { ChatResourceRead, ChatResourceScope, ChatResourceState } from "./chatResources";
 
 interface AnalyticsConsentState {
 	protocolVersion: number | null;
@@ -70,6 +75,126 @@ interface ProtocolState {
 
 export function selectCanRenameChat(state: ProtocolState): boolean {
 	return state.protocolVersion !== null && state.protocolVersion >= SESSION_RENAME_PROTOCOL_VERSION;
+}
+
+export function supportsChatResources(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= CHAT_RESOURCES_PROTOCOL_VERSION;
+}
+
+export function isChatResourceScopeAlive(
+	state: ChatResourceState,
+	scope: ChatResourceScope,
+): boolean {
+	return (
+		!state.removedWorkspaceIds[scope.workspaceId] &&
+		!state.deletedSessionsByWorkspace[scope.workspaceId]?.[scope.sessionId]
+	);
+}
+
+export function selectChatResourceProjection(state: ChatResourceState, scope: ChatResourceScope) {
+	return state.resourceSnapshots[scope.workspaceId]?.[scope.sessionId];
+}
+
+export function isChatResourceConnectionCurrent(
+	state: ChatResourceState,
+	read: ChatResourceScope & { connectionGeneration: number },
+): boolean {
+	return (
+		isChatResourceScopeAlive(state, read) &&
+		state.status === "connected" &&
+		supportsChatResources(state.protocolVersion) &&
+		state.connectionGeneration === read.connectionGeneration
+	);
+}
+
+export function isChatResourceReadCurrent(
+	state: ChatResourceState,
+	read: ChatResourceRead,
+): boolean {
+	return (
+		isChatResourceConnectionCurrent(state, read) &&
+		selectChatResourceProjection(state, read)?.revision === read.revision
+	);
+}
+
+export function selectChatResourceAuthority(
+	state: ChatResourceState,
+	scope: ChatResourceScope,
+): boolean {
+	const projection = selectChatResourceProjection(state, scope);
+	return (
+		!!projection?.fresh &&
+		projection.connectionGeneration === state.connectionGeneration &&
+		state.status === "connected" &&
+		supportsChatResources(state.protocolVersion) &&
+		isChatResourceScopeAlive(state, scope)
+	);
+}
+
+export function selectChatResourcesVisible(
+	state: ChatResourceState,
+	scope: ChatResourceScope,
+): boolean {
+	return (
+		isChatResourceScopeAlive(state, scope) &&
+		(supportsChatResources(state.protocolVersion) ||
+			(state.protocolVersion === null && !!selectChatResourceProjection(state, scope)))
+	);
+}
+
+export function selectChatResourcesLoading(
+	state: ChatResourceState,
+	scope: ChatResourceScope,
+): boolean {
+	const projection = selectChatResourceProjection(state, scope);
+	return (
+		!projection?.snapshot &&
+		!projection?.error &&
+		state.status === "connected" &&
+		supportsChatResources(state.protocolVersion)
+	);
+}
+
+export function selectChatResourcesStale(
+	state: ChatResourceState,
+	scope: ChatResourceScope,
+): boolean {
+	const projection = selectChatResourceProjection(state, scope);
+	return (
+		!selectChatResourceAuthority(state, scope) &&
+		(!!projection?.snapshot ||
+			!!projection?.error ||
+			state.status !== "connected" ||
+			!supportsChatResources(state.protocolVersion))
+	);
+}
+
+export function isActiveBackgroundCommand(command: BackgroundCommandSummary): boolean {
+	return command.status === "running" || command.status === "stopping";
+}
+
+export function isActiveSubagent(child: SubagentResourceSummary): boolean {
+	return child.status === "queued" || child.status === "running";
+}
+
+export function selectChatResourceGroups(snapshot: SessionResources | null | undefined) {
+	const commands: BackgroundCommandSummary[] = [];
+	const subagents: SubagentResourceSummary[] = [];
+	const finishedCommands: BackgroundCommandSummary[] = [];
+	const finishedSubagents: SubagentResourceSummary[] = [];
+	for (const command of snapshot?.commands ?? []) {
+		(isActiveBackgroundCommand(command) ? commands : finishedCommands).push(command);
+	}
+	for (const child of snapshot?.subagents ?? []) {
+		(isActiveSubagent(child) ? subagents : finishedSubagents).push(child);
+	}
+	return {
+		commands,
+		subagents,
+		finishedCommands,
+		finishedSubagents,
+		activeCount: commands.length + subagents.length,
+	};
 }
 
 interface ActiveWorkspaceState {
