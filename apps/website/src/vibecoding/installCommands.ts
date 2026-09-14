@@ -3,7 +3,6 @@ export type WindowsShell = "powershell" | "cmd" | "wsl";
 
 type DesktopDownload = {
 	architecture: string;
-	format: string;
 	label: string;
 	href: string;
 };
@@ -12,7 +11,6 @@ type InstallPlatformOption = {
 	id: InstallPlatform;
 	label: string;
 	desktop: {
-		title: string;
 		detail: string;
 		downloads: ReadonlyArray<DesktopDownload>;
 	};
@@ -38,62 +36,70 @@ export const installCommands = {
 	},
 } as const;
 
-export const installPlatforms = [
-	{
+const installPlatformOptions = {
+	macos: {
 		id: "macos",
 		label: "macOS",
 		desktop: {
-			title: "ThinkRail for macOS",
-			detail: "Apple Silicon · Stable signed .dmg",
+			detail: "Apple Silicon",
 			downloads: [
 				{
 					architecture: "Apple Silicon",
-					format: ".dmg",
-					label: "Download Apple Silicon",
+					label: "Download .dmg",
 					href: `${stableDesktopReleaseUrl}/thinkrail-desktop-darwin-arm64.dmg`,
 				},
 			],
 		},
 	},
-	{
+	windows: {
 		id: "windows",
 		label: "Windows",
 		desktop: {
-			title: "ThinkRail for Windows",
-			detail: "x64 · Stable .zip with Setup and its payload",
+			detail: "Windows x64",
 			downloads: [
 				{
 					architecture: "x64",
-					format: ".zip",
-					label: "Download x64",
+					label: "Download .zip",
 					href: `${stableDesktopReleaseUrl}/thinkrail-desktop-windows-x64.zip`,
 				},
 			],
 		},
 	},
-	{
+	linux: {
 		id: "linux",
 		label: "Linux",
 		desktop: {
-			title: "ThinkRail for Linux",
-			detail: "Ubuntu 24.04+ · Extract .tar.gz, then run ./installer",
+			detail: "Ubuntu 24.04+ · run ./installer",
 			downloads: [
 				{
 					architecture: "x64",
-					format: ".tar.gz",
-					label: "Download x64",
+					label: "x64 .tar.gz",
 					href: `${stableDesktopReleaseUrl}/thinkrail-desktop-linux-x64.tar.gz`,
 				},
 				{
 					architecture: "ARM64",
-					format: ".tar.gz",
-					label: "Download ARM64",
+					label: "ARM64 .tar.gz",
 					href: `${stableDesktopReleaseUrl}/thinkrail-desktop-linux-arm64.tar.gz`,
 				},
 			],
 		},
 	},
+} as const satisfies Record<InstallPlatform, InstallPlatformOption>;
+
+export const installPlatforms = [
+	installPlatformOptions.macos,
+	installPlatformOptions.windows,
+	installPlatformOptions.linux,
 ] as const satisfies ReadonlyArray<InstallPlatformOption>;
+
+export function getInstallPlatform(platform: InstallPlatform): InstallPlatformOption {
+	return installPlatformOptions[platform];
+}
+
+export function directDesktopDownload(platform: InstallPlatform): DesktopDownload | undefined {
+	const downloads = getInstallPlatform(platform).desktop.downloads;
+	return downloads.length === 1 ? downloads[0] : undefined;
+}
 
 export const windowsShells: ReadonlyArray<{
 	id: WindowsShell;

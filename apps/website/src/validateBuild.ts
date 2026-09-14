@@ -73,7 +73,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 			html: pages.introducingThinkRail,
 			expectedDownloads: 1,
 		},
-		...islandPages.map((name) => ({ name, html: pages[name], expectedDownloads: 2 })),
+		...islandPages.map((name) => ({ name, html: pages[name], expectedDownloads: 1 })),
 	] as const;
 
 	for (const name of islandPages) {
@@ -109,9 +109,22 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	if (!pages.landing.includes('data-file="INSTALL.md"')) {
 		failures.push("landing: install section is not INSTALL.md");
 	}
+	for (const name of ["landing", ...islandPages] as const) {
+		for (const redundantCopy of [
+			"Native desktop application",
+			"Installs the CLI-only host",
+			"Prefer the command line?",
+		]) {
+			if (pages[name].includes(redundantCopy)) {
+				failures.push(`${name}: retained redundant install copy: ${redundantCopy}`);
+			}
+		}
+	}
 	for (const { name, html } of installPages) {
 		const desktopIndex = html.indexOf(desktopDownloadUrls[0]);
-		const cliIndex = html.indexOf("Prefer the command line?");
+		const cliLabel =
+			name === "introducingThinkRail" ? "Prefer the command line?" : "Install via CLI";
+		const cliIndex = html.indexOf(cliLabel);
 		if (desktopIndex < 0 || cliIndex < 0 || desktopIndex > cliIndex) {
 			failures.push(`${name}: desktop download is not presented before the CLI alternative`);
 		}
