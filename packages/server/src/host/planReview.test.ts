@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,6 +21,7 @@ import {
 } from "../agent";
 import { createRequestReviewTool } from "../agent/requestReviewTool";
 import { saveWorkspaces } from "../persistence";
+import * as reviews from "../reviews";
 import { getReviewSnapshot } from "../reviews";
 import { resetConfigCache, updateConfig } from "../settings";
 import { todoReviewAutoCycles, todoReviewRecord } from "../todos";
@@ -260,6 +261,68 @@ test("a fix the worker never accepted gives the auto cycle back instead of stran
 	// reach maybeAutoReReview — recording cycle 1 here would strand the step forever.
 	expect(todoReviewAutoCycles(ref)).toBe(2);
 	// The findings are back to draft, so a later manual Ask-to-fix still carries them.
+	const comments = (await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id);
+	expect(comments).toHaveLength(1);
+	expect(comments[0]?.status).toBe("draft");
+	expect(isItemUnderActiveReview(sessionId, id)).toBe(false);
+});
+
+test("a tool request_review queues behind a button review of another step on the same plan", async () => {
+	const sessionId = await workerSession();
+	const first = committedItem(sessionId, "one");
+	const second = committedItem(sessionId, "two");
+
+	let running = 0;
+	let overlapped = false;
+	const serialRunner: ReviewRunner = async () => {
+		running += 1;
+		if (running > 1) overlapped = true;
+		await new Promise((resolve) => setTimeout(resolve, 30));
+		running -= 1;
+		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+	};
+
+	installRequestReviewSeam(serialRunner);
+	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+
+	// Button review on `first` and the worker's request_review tool on `second`, kicked off together:
+	// without the shared plan chain both hidden children would stream at once.
+	expect(startPlanReview(WS, sessionId, first, serialRunner)).toBe(true);
+	await createRequestReviewTool().execute(
+		"tc",
+		{ itemId: second } as never,
+		undefined,
+		undefined,
+		ctx,
+	);
+	await settle(sessionId, first);
+	await settle(sessionId, second);
+
+	expect(overlapped).toBe(false);
+});
+
+test("a fix whose preparation fails gives the auto cycle back instead of stranding the step", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+
+	// The reviewer requests changes and the fix reaches delivery, but building the send package throws
+	// (a disk/render fault) BEFORE the send — the failure must not escape as a throw and strand cycle 1.
+	const spy = spyOn(reviews, "buildSendPackage").mockImplementation(async () => {
+		throw new Error("package render failed");
+	});
+	try {
+		startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+		await settle(sessionId, id);
+	} finally {
+		spy.mockRestore();
+	}
+
+	expect(todoReviewRecord(ref)?.state).toBe("changes_requested");
+	// Terminal, not mid-cycle: no fix reached the worker, so nothing will ever produce the delta
+	// maybeAutoReReview waits for — recording cycle 1 here would strand the step forever.
+	expect(todoReviewAutoCycles(ref)).toBe(2);
+	// A marked finding was rolled back to draft (here none had been marked yet, but the invariant holds).
 	const comments = (await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id);
 	expect(comments).toHaveLength(1);
 	expect(comments[0]?.status).toBe("draft");

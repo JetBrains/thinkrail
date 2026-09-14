@@ -166,8 +166,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   **Two entry points, one recording path.** The worker's own `request_review` tool (`handleRequestReview`)
   awaits the verdict and returns it as the tool result — the worker reads `composeText` and fixes inline.
   The Start review / Review All buttons (`startPlanReview`) mark the item `reviewing` **synchronously**
-  (so the panel shows the pulse the instant the client re-reads the plan), run the review on the plan's
-  serial chain, and deliver the outcome through the record + the Review tab. Both funnel into
+  (so the panel shows the pulse the instant the client re-reads the plan) and deliver the outcome through
+  the record + the Review tab. **Both** run the review body on the plan's serial chain
+  (`planReviewQueue.onPlanChain` — the button path fire-and-forget, the tool path awaited), so a tool
+  request never overlaps a button review of another step on the same plan. Both funnel into
   `recordVerdict`: `approve` settles the item (`approveTodoReview(…, "agent")`); `request_changes` files
   every finding into the Review tab (`fileFinding` — an inline comment when `reviews.anchorProblem`
   accepts the position, else review-level, best-effort so a bad anchor never fails the review) and then
@@ -176,10 +178,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   (`todoReviewAutoCycles`), and the record is written with `autoCycles: canAutoFix ? 1 : 2` — `1` means
   "the worker was actually asked to fix, this item is mid-cycle", `2` is terminal ("the human decides
   now"). Recording `1` without asking anyone to fix would strand the item: `maybeAutoReReview`'s trigger
-  reads exactly that value, and nothing would ever produce the fresh delta it waits for. **A cycle is spent only once the worker accepts the fix.** `deliverFixToWorker` reports whether the send
-  was accepted, and a rejection (worker detached, busy, pre-turn refusal) re-records the item terminally
-  (`autoCycles: 2`) on top of the optimistic `1`, alongside the `rollbackSend` that returns the findings to
-  `draft`. Leaving `1` there would strand the step forever: nothing asked the worker to change anything, so
+  reads exactly that value, and nothing would ever produce the fresh delta it waits for. **A cycle is spent only once the worker accepts the fix.** `deliverFixToWorker` reports whether the fix
+  was delivered, wrapping prepare+send in one catch: a rejection (worker detached, busy, pre-turn refusal)
+  **or any preparation failure** (snapshot/package/mark) re-records the item terminally (`autoCycles: 2`)
+  on top of the optimistic `1`, alongside the `rollbackSend` that returns any marked findings to `draft`.
+  A preparation failure escaping as a throw would strand the item at `autoCycles: 1` — the whole point of
+  the unified catch. Leaving `1` there would strand the step forever: nothing asked the worker to change anything, so
   no fresh delta can ever reach `maybeAutoReReview`, while a later manual review would read the cycle as
   spent and refuse to send. A claim the fix latch refuses (a manual Ask-to-fix already in flight) settles
   the same way. On the button
@@ -191,11 +195,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   tool path never sends — the worker already has the verdict in its tool result, and a second copy as a
   message would double the instruction. With the budget spent or auto-fix off, both paths leave the
   findings in the Review tab for the user and say so (`composeText`).
-  **One review at a time per plan** (`host/planReviewQueue.ts`): `enqueuePlanReview` chains each run onto
-  the plan's promise, so Review All starts N steps but runs them serially — N concurrent provider streams
-  is what the chain exists to prevent. The same module holds the per-item claim both entry points check,
-  so a step already under review is refused rather than reviewed twice with two verdicts racing onto one
-  record. `todo.reviewAll` reports `{ total }` — the count it actually started — and `alreadyRunning`
+  **One review at a time per plan** (`host/planReviewQueue.ts`): `onPlanChain` chains each run onto the
+  plan's promise — `enqueuePlanReview` uses it for the detached button path, `handleRequestReview` awaits
+  it for the tool path — so Review All starts N steps but runs them serially and a tool request queues
+  behind an in-flight button review of a different step. N concurrent provider streams is what the chain
+  exists to prevent. The same module holds the per-item claim both entry points check, so a step already
+  under review is refused rather than reviewed twice with two verdicts racing onto one record. `todo.reviewAll` reports `{ total }` — the count it actually started — and `alreadyRunning`
   only when it started nothing while the plan's chain is still busy. The module is pure mechanics with an
   injected runner (no agent dep), which is also how `planReview.test.ts` drives the whole verdict →
   record → deliver path without a provider.

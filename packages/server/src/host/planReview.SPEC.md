@@ -53,9 +53,12 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
 - **The `reviewing` mark is set synchronously** at start/enqueue, so the panel pulses the instant the
   client re-reads the plan — before any await.
 - **`autoCycles` must match what actually happened.** `1` stands only when the worker really accepted the
-  fix request; a rejected send or a refused fix latch re-records `2` (terminal). Writing `1` without a
-  delivered request strands the item: the auto-re-review trigger waits for a delta that nothing will
-  produce, and a later review reads the cycle as already spent. Pinned by the rejected-send test in
+  fix request; a rejected fix — the send OR any of its preparation steps (snapshot/package/mark) failing —
+  or a refused fix latch re-records `2` (terminal), always after rolling the marked findings back to
+  `draft`. `deliverFixToWorker` wraps prepare+send in one catch precisely so a preparation failure cannot
+  slip out as a throw and leave the optimistic `1` standing. Writing `1` without a delivered request
+  strands the item: the auto-re-review trigger waits for a delta that nothing will produce, and a later
+  review reads the cycle as already spent. Pinned by the rejected-send and rejected-preparation tests in
   `planReview.test.ts`.
 - **An approve is a verdict, not a settlement.** `recordVerdict` settles `reviewed` only when
   `itemOpenFindings` is empty; otherwise it clears the mark, leaves the record, and reports
@@ -69,14 +72,17 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
 - **Both entry points share the cap.** The worker's `request_review` tool and the Start review button
   compute the same `canAutoFix`; the tool path reports it in the tool result text, the button path acts
   on it by sending the fix. Without a shared cap the tool path loops fix → review → fix forever.
-- **One review per plan at a time, one per step ever.** The serial chain keeps Review All from opening N
-  provider streams; the per-item claim keeps two verdicts from racing onto one record.
+- **One review per plan at a time, one per step ever.** Both entry points serialize on the plan's chain
+  (`planReviewQueue.onPlanChain`): the button path via `enqueuePlanReview` (fire-and-forget), the worker's
+  `request_review` tool by awaiting `onPlanChain` for its result. The chain keeps Review All — and a tool
+  request racing a button review of a different step — from opening two provider streams at once; the
+  per-item claim keeps two verdicts from racing onto one record.
 
 ## Boundary
 
 - **Owns / public surface:** `startPlanReview(workspaceId, sessionId, itemId, runSubagent?)`,
   `maybeAutoReReview(workspaceId, sessionId)`, `installRequestReviewSeam()`, and the pure
-  `parseVerdict` / `composeText`; `planReviewQueue`'s `enqueuePlanReview` / `claimItemReview` /
+  `parseVerdict` / `composeText`; `planReviewQueue`'s `enqueuePlanReview` / `onPlanChain` / `claimItemReview` /
   `releaseItemReview` / `itemReviewActive` / `planReviewRunning`.
 - **Allowed deps:** `agent` (`runReviewSubagent`, `sendReviewFixToSession`, `getSessionWorkspaceId`,
   `notifyExtUi`), `todos`, `reviews`, `settings`, and host siblings `ackSend` / `reviewLock` /

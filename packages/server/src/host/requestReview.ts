@@ -292,8 +292,7 @@ async function handleRequestReview(
 	if (!claimItemReview(sessionId, itemId)) throw new Error("This step is already being reviewed.");
 	const params = { workspaceId, sessionId, id: itemId };
 	try {
-		// startTodoReview throws synchronously on a no-change-set item, so the claim must not outlive it; the
-		// review then runs on the plan's serial chain (never overlapping a button review). See planReview.SPEC.md.
+		// startTodoReview stays synchronous, the review runs on the plan's serial chain; see planReview.SPEC.md.
 		const { pkg, reviewedSha } = startTodoReview(params);
 		return await onPlanChain(workspaceId, sessionId, async () => {
 			const itemTitle = await itemTitleOf(workspaceId, sessionId, itemId);
