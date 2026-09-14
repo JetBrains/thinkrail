@@ -100,6 +100,7 @@ interface Entry {
 	queuedMessages: Record<QueueLane, TrackedQueuedMessage[]>;
 	stuckEmptyDeliveries: Record<QueueLane, number>;
 	heldWhileAsking: TrackedQueuedMessage[];
+	lastPersistedHeldSig: string;
 	nextQueuedMessageId: number;
 	manualCompactionInProgress: boolean;
 	piCompactionInProgress: boolean;
@@ -505,6 +506,7 @@ async function prepareSessionEntry(
 		queuedMessages: { steering: [], followUp: [] },
 		stuckEmptyDeliveries: { steering: 0, followUp: 0 },
 		heldWhileAsking: [],
+		lastPersistedHeldSig: "",
 		nextQueuedMessageId: 1,
 		manualCompactionInProgress: false,
 		piCompactionInProgress: false,
@@ -518,6 +520,7 @@ async function prepareSessionEntry(
 	const seededRecencyMs = messagesActivityMs(session.messages);
 	if (seededRecencyMs !== null) entry.lastActivityMs = seededRecencyMs;
 	if (hold) hold.capture = () => captureHeldQueue(entry);
+	restoreHeldQueue(entry);
 	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "message_start" && event.message.role === "user") {
 			const lane = deliveredStuckEmptyLane(entry, event.message.content);
@@ -555,6 +558,7 @@ async function prepareSessionEntry(
 		if (event.type === "agent_settled") {
 			entry.lastSettlement = terminal;
 			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
+			persistHeldQueueIfChanged(entry);
 		}
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
@@ -1030,6 +1034,47 @@ function questionPending(entry: Entry): boolean {
 	return awaitingQuestionToolCallId(entry.session.messages) !== null;
 }
 
+const HELD_QUEUE_CUSTOM_TYPE = "thinkrail.heldQueue";
+
+interface PersistedHeldQueue {
+	messages: { text: string; images?: ImageContent[] }[];
+}
+
+function heldQueueSignature(entry: Entry): string {
+	return JSON.stringify(
+		entry.heldWhileAsking.map((message) => [message.text, message.images ?? []]),
+	);
+}
+
+function persistHeldQueueIfChanged(entry: Entry): void {
+	const signature = heldQueueSignature(entry);
+	if (signature === entry.lastPersistedHeldSig) return;
+	entry.lastPersistedHeldSig = signature;
+	const data: PersistedHeldQueue = {
+		messages: entry.heldWhileAsking.map((message) => ({
+			text: message.text,
+			...(message.images && message.images.length > 0 ? { images: message.images } : {}),
+		})),
+	};
+	entry.session.sessionManager.appendCustomEntry(HELD_QUEUE_CUSTOM_TYPE, data);
+}
+
+function restoreHeldQueue(entry: Entry): void {
+	let latest: PersistedHeldQueue | undefined;
+	for (const record of entry.session.sessionManager.getEntries()) {
+		if (record.type === "custom" && record.customType === HELD_QUEUE_CUSTOM_TYPE)
+			latest = record.data as PersistedHeldQueue;
+	}
+	if (latest) {
+		entry.heldWhileAsking = latest.messages.map((message) => ({
+			id: entry.nextQueuedMessageId++,
+			text: message.text,
+			...(message.images && message.images.length > 0 ? { images: [...message.images] } : {}),
+		}));
+	}
+	entry.lastPersistedHeldSig = heldQueueSignature(entry);
+}
+
 function cloneTracked(entry: Entry, message: TrackedQueuedMessage): TrackedQueuedMessage {
 	return {
 		id: entry.nextQueuedMessageId++,
@@ -1061,6 +1106,7 @@ function parkHeld(entry: Entry, text: string, images?: ImageContent[]): void {
 		text,
 		...(images && images.length > 0 ? { images: [...images] } : {}),
 	});
+	persistHeldQueueIfChanged(entry);
 	publishHeldQueueUpdate(entry);
 }
 
@@ -1068,6 +1114,7 @@ async function flushHeldQueue(entry: Entry): Promise<void> {
 	if (entry.heldWhileAsking.length === 0) return;
 	const held = entry.heldWhileAsking;
 	entry.heldWhileAsking = [];
+	persistHeldQueueIfChanged(entry);
 	for (const message of held) {
 		await followUpSession(
 			entry.session.sessionId,
@@ -1205,6 +1252,7 @@ export function clearQueueSession(sessionId: string, requireTextOnly = false): S
 		throw new Error("Cannot restore queued image messages as text");
 	}
 	entry.heldWhileAsking = [];
+	persistHeldQueueIfChanged(entry);
 	entry.session.clearQueue();
 	entry.stuckEmptyDeliveries = { steering: 0, followUp: 0 };
 	syncSessionActivity(sessionId);

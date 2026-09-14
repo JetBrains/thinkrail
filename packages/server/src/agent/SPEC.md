@@ -483,14 +483,21 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `removeQueuedSession` (re-queued keepers re-park while the question is still pending) and
     Stop/`abortSession(..., true)` stay lossless. Pinned by `agentSessionManager.test.ts`.
 
-    **The buffer is in-memory, deliberately** — like pi's own queue, which is also lost on a host
-    restart. A restart while a question is pending is still safe: the transcript stays provider-valid,
-    the question re-derives as `waiting`, and answering runs normally; only the user's *typed-ahead*
-    follow-ups are dropped (the pending window is long, so the exposure is larger than for a normally
-    draining queue). Persisting them would need a store pi does not offer and is deferred. The pending
-    ask is the transcript **tail**, so it survives compaction and `questionPending` stays true until
-    answered — or until a free-form `promptSession` reply supersedes it, the only way a later user message
-    reaches the transcript while a question is pending (explicit `steer`/`followUp` sends park instead).
+    **The buffer is persisted, so it survives a host restart** — the pending window is long (human
+    timescale), and restart-safe session recovery is a supported workflow, so dropping accepted messages
+    would be a silent loss. Each mutation writes a last-wins snapshot via pi's own
+    `sessionManager.appendCustomEntry("thinkrail.heldQueue", { messages })` — a plain `custom` **state**
+    entry that lives in the session file, never enters `session.messages`, and is ignored by
+    `buildSessionContext` (so it neither reaches the LLM nor renders in the transcript). Capture happens
+    mid-tool, so it does **not** write inline; the immediately-following `agent_settled` persists the
+    post-capture buffer (idle mutations — `parkHeld`, flush, `clearQueueSession` — persist inline, where no
+    settle will follow). `persistHeldQueueIfChanged` dedupes by a content signature so unchanged settles
+    append nothing. On attach, `restoreHeldQueue` scans `getEntries()` for the last snapshot and rebuilds
+    the buffer with fresh ids; a session that answered before the crash persisted an empty snapshot, so it
+    restores nothing. The pending ask is the transcript **tail**, so it survives compaction and
+    `questionPending` stays true until answered — or until a free-form `promptSession` reply supersedes it,
+    the only way a later user message reaches the transcript while a question is pending (explicit
+    `steer`/`followUp` sends park instead). Pinned by `agentSessionManager.test.ts`.
 
     The reply arrives over `session.answerQuestion` → the manager's
     `answerQuestion(sessionId, toolCallId, result)`: it vets the reply against the transcript with the

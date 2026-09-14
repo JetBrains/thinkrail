@@ -1292,6 +1292,70 @@ test("a message sent while a question is already pending is held (idle send), st
 	}
 });
 
+test("held work survives a host restart — reattaching a session restores the queue behind a pending question and flushes it on answer", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-restart");
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-r-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-hold-restart-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-restart",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		await followUpSession(s.sessionId, "queued behind the question");
+
+		removeSession(s.sessionId);
+		expect(await ensureSessionAttached(s.sessionId, "ws-restart", cwd)).toBe(true);
+
+		expect(
+			(await listSessions("ws-restart", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual({ steering: [], followUp: ["queued behind the question"] });
+		expect((await listSessionActivity()).find((row) => row.sessionId === s.sessionId)?.status).toBe(
+			"waiting",
+		);
+
+		fauxA.appendResponses([fauxAssistantMessage("ANSWERED"), fauxAssistantMessage("RESTORED_RAN")]);
+		await answerQuestion(s.sessionId, "ask-r-1", {
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+			cancelled: false,
+		});
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("RESTORED_RAN")) {
+			if (Date.now() > ranBy) throw new Error("restored held work never ran after the answer");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		expect(seen(s.sessionId)).toContain("ANSWERED");
+		expect(
+			(await listSessions("ws-restart", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toBeUndefined();
+		removeSession(s.sessionId);
+	} finally {
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("a free-form prompt while a question is pending supersedes the card and then flushes previously held work in order", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	setActivityProjectResolver(() => "project-supersede");
