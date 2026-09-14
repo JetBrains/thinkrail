@@ -100,6 +100,7 @@ interface Entry {
 	queuedMessages: Record<QueueLane, TrackedQueuedMessage[]>;
 	stuckEmptyDeliveries: Record<QueueLane, number>;
 	heldWhileAsking: TrackedQueuedMessage[];
+	heldInFlight: TrackedQueuedMessage | null;
 	lastPersistedHeldSig: string;
 	flushingHeld: boolean;
 	nextQueuedMessageId: number;
@@ -507,6 +508,7 @@ async function prepareSessionEntry(
 		queuedMessages: { steering: [], followUp: [] },
 		stuckEmptyDeliveries: { steering: 0, followUp: 0 },
 		heldWhileAsking: [],
+		heldInFlight: null,
 		lastPersistedHeldSig: "",
 		flushingHeld: false,
 		nextQueuedMessageId: 1,
@@ -1042,10 +1044,14 @@ interface PersistedHeldQueue {
 	messages: { text: string; images?: ImageContent[] }[];
 }
 
+function durableHeld(entry: Entry): TrackedQueuedMessage[] {
+	return entry.heldInFlight
+		? [entry.heldInFlight, ...entry.heldWhileAsking]
+		: entry.heldWhileAsking;
+}
+
 function heldQueueSignature(entry: Entry): string {
-	return JSON.stringify(
-		entry.heldWhileAsking.map((message) => [message.text, message.images ?? []]),
-	);
+	return JSON.stringify(durableHeld(entry).map((message) => [message.text, message.images ?? []]));
 }
 
 function persistHeldQueueIfChanged(entry: Entry): void {
@@ -1053,7 +1059,7 @@ function persistHeldQueueIfChanged(entry: Entry): void {
 	if (signature === entry.lastPersistedHeldSig) return;
 	entry.lastPersistedHeldSig = signature;
 	const data: PersistedHeldQueue = {
-		messages: entry.heldWhileAsking.map((message) => ({
+		messages: durableHeld(entry).map((message) => ({
 			text: message.text,
 			...(message.images && message.images.length > 0 ? { images: message.images } : {}),
 		})),
@@ -1132,14 +1138,19 @@ async function flushHeldQueue(entry: Entry): Promise<void> {
 	entry.flushingHeld = true;
 	try {
 		while (entry.heldWhileAsking.length > 0 && !questionPending(entry)) {
-			const next = entry.heldWhileAsking[0];
+			const next = entry.heldWhileAsking.shift();
 			if (!next) break;
-			await deliverHeldMessage(entry, next.text, next.images ? [...next.images] : undefined);
-			entry.heldWhileAsking.shift();
+			entry.heldInFlight = next;
+			try {
+				await deliverHeldMessage(entry, next.text, next.images ? [...next.images] : undefined);
+			} finally {
+				entry.heldInFlight = null;
+			}
 			persistHeldQueueIfChanged(entry);
 		}
 	} finally {
 		entry.flushingHeld = false;
+		entry.heldInFlight = null;
 	}
 }
 

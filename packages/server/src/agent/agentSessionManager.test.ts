@@ -1377,6 +1377,86 @@ test("held work flushes one message at a time, in order, on answer (per-message 
 	}
 });
 
+test("removing a queued chip while a held task is running keeps the remaining held work (in-flight item is separate)", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-remove-inflight");
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-ri-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-remove-inflight-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-remove-inflight",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		await followUpSession(s.sessionId, "task A");
+		await followUpSession(s.sessionId, "task C");
+		await followUpSession(s.sessionId, "task D");
+		expect(
+			(await listSessions("ws-remove-inflight", cwd)).find((row) => row.sessionId === s.sessionId)
+				?.queue,
+		).toEqual({ steering: [], followUp: ["task A", "task C", "task D"] });
+
+		let removed = false;
+		fauxA.appendResponses([
+			fauxAssistantMessage("ANSWER_OK"),
+			async () => {
+				if (!removed) {
+					removed = true;
+					await removeQueuedSession(s.sessionId, "followUp", 0);
+				}
+				return fauxAssistantMessage("A_RAN");
+			},
+			fauxAssistantMessage("D_RAN"),
+		]);
+		await answerQuestion(s.sessionId, "ask-ri-1", {
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+			cancelled: false,
+		});
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("D_RAN")) {
+			if (Date.now() > ranBy) throw new Error("remaining held work never ran");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		const transcript = await getSessionMessages(s.sessionId, "ws-remove-inflight", cwd);
+		const userTexts = transcript.messages
+			.filter((message) => message.role === "user")
+			.map((message) => JSON.stringify(message.content));
+		const idxA = userTexts.findIndex((t) => t.includes("task A"));
+		const idxD = userTexts.findIndex((t) => t.includes("task D"));
+		expect(idxA).toBeGreaterThanOrEqual(0);
+		expect(idxD).toBeGreaterThan(idxA);
+		expect(userTexts.some((t) => t.includes("task C"))).toBe(false);
+		expect(
+			(await listSessions("ws-remove-inflight", cwd)).find((row) => row.sessionId === s.sessionId)
+				?.queue,
+		).toBeUndefined();
+		removeSession(s.sessionId);
+	} finally {
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("a message accepted while the held suffix is still draining stays behind it (FIFO order preserved)", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	setActivityProjectResolver(() => "project-fifo");
