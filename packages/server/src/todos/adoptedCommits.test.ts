@@ -147,3 +147,20 @@ test("review resolution rejects an abbreviated commit:<short-sha> id", () => {
 		startTodoReview({ workspaceId: "w1", sessionId: SESSION, id: `commit:${sha}` }),
 	).not.toThrow();
 });
+
+test("review resolution rejects a commit past the newest-200 listCommits cap", () => {
+	const oldest = commitFile("first.ts", "export const f = 0;\n", "feat: first");
+	const loop = Bun.spawnSync([
+		"bash",
+		"-c",
+		`for i in $(seq 1 200); do git -C "${repo}" commit --allow-empty -m e$i -q; done`,
+	]);
+	if (!loop.success) throw new Error("bulk commits failed");
+	const newest = headSha(repo);
+	expect(() =>
+		startTodoReview({ workspaceId: "w1", sessionId: SESSION, id: `commit:${oldest}` }),
+	).toThrow(/No TODO with id/);
+	expect(() =>
+		startTodoReview({ workspaceId: "w1", sessionId: SESSION, id: `commit:${newest}` }),
+	).not.toThrow();
+});

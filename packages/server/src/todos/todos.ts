@@ -14,7 +14,7 @@ import {
 	type TodoPlan as StoredPlan,
 	TodoStore,
 } from "pi-todos/core";
-import { gitStatus, listCommits, readCommitSubject, resolveInBranchRange } from "../git";
+import { gitStatus, listCommits, readCommitSubject, resolveListedCommit } from "../git";
 import { getWorkspace } from "../workspaces";
 import { enqueueTodoMutation, settleChangeArtifacts, unattributedChanges } from "./artifacts";
 import { dropItemBaseline, readBaselines, removeSessionBaselines } from "./baselines";
@@ -279,7 +279,7 @@ function adoptedCommitSha(id: string): string | undefined {
 function adoptedStoredItem(workspaceId: string, id: string, plan: StoredPlan): StoredItem | null {
 	const raw = adoptedCommitSha(id);
 	if (!raw) return null;
-	const sha = resolveInBranchRange(workspaceId, raw);
+	const sha = resolveListedCommit(workspaceId, raw);
 	if (!sha || id !== `commit:${sha}`) return null;
 	if (new Set(flatItems(plan).flatMap(commitShas)).has(sha)) return null;
 	const subject = readCommitSubject(workspaceId, sha);

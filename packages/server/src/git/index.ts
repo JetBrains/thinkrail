@@ -22,7 +22,7 @@ export {
 	readCommitSubject,
 	remoteRefOid,
 	resolveDefaultBranch,
-	resolveInBranchRange,
+	resolveListedCommit,
 	tryCurrentBranch,
 } from "./git";
 export { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";

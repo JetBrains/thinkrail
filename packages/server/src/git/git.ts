@@ -78,16 +78,22 @@ export function readCommitSubject(workspaceId: string, sha: string): string | nu
 	return out.ok ? plainText(out.out) : null;
 }
 
-export function resolveInBranchRange(workspaceId: string, sha: string): string | null {
+// MUST stay in lock-step with listCommits' capped base..HEAD set (same COMMIT_LIST_MAX + range). see submodule-server-todos
+export function resolveListedCommit(workspaceId: string, sha: string): string | null {
 	if (!/^[0-9a-f]{4,64}$/.test(sha)) return null;
 	const ws = workspace(workspaceId);
 	const cwd = ws.worktreePath;
-	const base = diffBaseRef(ws);
 	const canonical = resolveCommitOid(cwd, sha);
-	if (!canonical || !resolveCommitOid(cwd, base)) return null;
-	const isAncestor = (ancestor: string, of: string): boolean =>
-		git(cwd, ["merge-base", "--is-ancestor", "--end-of-options", ancestor, of]).ok;
-	return isAncestor(canonical, "HEAD") && !isAncestor(canonical, base) ? canonical : null;
+	if (!canonical) return null;
+	const listed = git(cwd, [
+		"rev-list",
+		`--max-count=${COMMIT_LIST_MAX}`,
+		"--end-of-options",
+		`${diffBaseRef(ws)}..HEAD`,
+		"--",
+	]);
+	if (!listed.ok) return null;
+	return listed.out.split("\n").includes(canonical) ? canonical : null;
 }
 
 function lines(out: string): string[] {
