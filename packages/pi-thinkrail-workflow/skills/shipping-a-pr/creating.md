@@ -1,8 +1,8 @@
 # creating.md — gates, then the PR
 
 Entry: finished work on a branch, no PR yet. Saves the body draft at
-`.thinkrail/context/pr-body.md`. Control continues at `screenshots.md` (UI-visible change) or
-`checks.md`.
+`.thinkrail/context/pr-body.md`. Creating owns wait mode; control continues with that mode at
+`screenshots.md` (UI-visible change) or `checks.md`.
 
 ## Gates — all five pass before `gh pr create`, in this order
 
@@ -53,5 +53,5 @@ Red flags — stop, a gate is being rationalized away:
 ## Next
 
 - The change is UI-visible → offer screenshots proactively (don't wait to be asked), then read and
-  follow `screenshots.md`.
-- Otherwise → read and follow `checks.md`.
+  follow `screenshots.md`, carrying wait mode from creation.
+- Otherwise → read and follow `checks.md` in wait mode.

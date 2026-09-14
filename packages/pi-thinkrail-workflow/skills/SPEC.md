@@ -199,7 +199,7 @@ flowchart LR
 | `writing-specs` | concept — the spec quality bar (short / honest / on-rails) for every spec-producing flow | — (reached by name, rule 4) | active; observed by use (2026-07 manual: self-triggered for a spec revision and applied) |
 | `choosing-a-workflow` | router (root) — classification + routing for workflow-eligible work | — (conditional pointer from the always-on rule, rule 4) | active; revised narrow-entry behavior unverified by use; previous onboarding, PR/change, and direct-work classifications were observed |
 | `writing-workflow-skills` | worker — authoring checklist for adding workflows | — (self-trigger only, rule 4) | active |
-| `shipping-a-pr` | worker — PR lifecycle (create with gates / screenshots / up-to-date sync / checks watch / review comments — phases as sibling docs) | `choosing-a-workflow` (root) + narrow self-trigger | active; unverified by use (rule 14 suspended) |
+| `shipping-a-pr` | worker — PR lifecycle (create with gates / body or screenshot maintenance / up-to-date sync / checks / review comments — phases as sibling docs) | `choosing-a-workflow` (root) + narrow self-trigger | active; revised phase-completion semantics unverified by use (rule 14 suspended) |
 
 The family is open and grows from real use; candidates (research/spike, refactor, bug-fix, a composing
 skill in the composer pattern with its stage workers, and **extending an existing spec graph** — the
@@ -287,9 +287,15 @@ follows is only the rationale the skill bodies don't state:
   comments blindly" — became its gates and phase docs. One skill rather than five (rule 1): every
   lifecycle ask enters through the same trigger; the phases are internal forks as sibling docs. At
   creation time the repository's PR template owns body sections, order, and checklist; the generic
-  Summary/Changes/Testing shape is only the no-template fallback. Its done bar (every existing check green + user told, never "PR opened"; a no-CI repo terminates as
-  an explicit "no checks configured", never a silent green) and the review-only assets-ref screenshot
-  default were explicit user decisions (task-spec `task-shipping-a-pr-skill`). Its review hardening
+  Summary/Changes/Testing shape is only the no-template fallback. Completion has two deliberate modes:
+  creating, syncing, code-affecting review fixes, and explicit watch/ship/merge-ready asks wait for every
+  existing check to turn green and verify the base; standalone screenshot/body/comment-only work and
+  one-time status requests take one fresh checks + merge-state snapshot and report it without polling or
+  fixing unrelated state. A no-CI
+  repo is always reported explicitly, never silently green. This avoids turning metadata maintenance into
+  an unrequested CI watch while preserving the merge-ready bar where the ask promises it. The review-only
+  assets-ref screenshot default was an explicit user decision (task-spec `task-shipping-a-pr-skill`). Its
+  review hardening
   (PR #284) converged on one shared discipline instead of per-finding patches — **observed, never
   assumed**: every finding across three review rounds was the same defect (acting on, or declaring,
   state not observed at the moment of the action), so the rule lives once in the spine — verify at

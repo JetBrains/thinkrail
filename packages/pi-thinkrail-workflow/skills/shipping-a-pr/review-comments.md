@@ -1,6 +1,8 @@
 # review-comments.md — address comments, never blindly
 
-Entry: an open PR has review comments to address. Saves nothing. Control continues at `checks.md`.
+Entry: an open PR has review comments to address. Saves nothing. A pushed fix uses wait mode;
+comment-only replies or clarification use snapshot mode unless the user explicitly asked to
+ship/watch/make the PR merge-ready.
 
 1. **Whole-PR read first.** Fetch every comment thread and the full diff (`gh pr view <n>
    --comments`, `gh api repos/<owner>/<repo>/pulls/<n>/comments --paginate`), then re-read the PR's changes
@@ -23,4 +25,6 @@ Red flags:
 
 ## Next
 
-Read and follow `checks.md`.
+If addressing accepted comments changed the branch, read and follow `checks.md` in wait mode. If the
+phase only replied, pushed back, or requested clarification, use snapshot mode. An explicit
+ship/watch/merge-ready ask always selects wait mode.
