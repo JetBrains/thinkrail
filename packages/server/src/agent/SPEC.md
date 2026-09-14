@@ -496,14 +496,18 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     leave pi; writing mid-tool is safe because pi appends the tool result to the *current leaf*
     (`appendMessage`→`parentId: leafId`), so the custom entry just chains
     `assistant(toolCall) → custom → toolResult(ack)` — no branch, pairing is by id. `parkHeld` and
-    `clearQueueSession` persist inline (both run idle). **`flushHeldQueue` never writes an empty snapshot
-    up front:** it hands each message to pi from a local copy (restoring the un-sent remainder to the
-    buffer if a send throws) and leaves the pre-flush snapshot on disk untouched; only the following
-    `agent_settled` — which fires after every flushed message has run — persists the emptied buffer. So a
-    crash mid-flush restores every message that had not yet run (at worst an already-run one re-runs; none
-    are lost). On attach, `restoreHeldQueue` scans `getEntries()` for the last snapshot and rebuilds the
-    buffer with fresh ids (a leftover suffix flushes on the user's next `promptSession`); a session that
-    answered before the crash persisted an empty snapshot, so it restores nothing. The pending ask is the transcript **tail**, so it survives compaction and
+    `clearQueueSession` persist inline (both run idle). **`flushHeldQueue` drains the buffer in place,
+    one item at a time, and only while no question is pending** — it runs at settle-time (`answerQuestion`
+    and the superseding `promptSession` both `await` their turn first), so each delivery of
+    `heldWhileAsking[0]` awaits *that message's* turn to settle; only then does it pop the item and persist
+    the shrinking remainder. It re-checks `questionPending` each turn, so a flushed task that itself asks a
+    question stops the drain and leaves the rest parked. The pop-after-settle order is the load-bearing
+    part: at **every** point the durable snapshot still lists every not-yet-run message, so a restart
+    between two held tasks (task one done, task two not yet sent) restores task two rather than dropping
+    it — the snapshot shrinks `[A,B] → [B] → []`, pinned by the order test. On attach, `restoreHeldQueue`
+    scans `getEntries()` for the last snapshot and rebuilds the buffer with fresh ids (a leftover suffix
+    flushes on the user's next `promptSession`); a session that answered before the crash persisted an
+    empty snapshot, so it restores nothing. The pending ask is the transcript **tail**, so it survives compaction and
     `questionPending` stays true until answered — or until a free-form `promptSession` reply supersedes it,
     the only way a later user message reaches the transcript while a question is pending (explicit
     `steer`/`followUp` sends park instead). Pinned by `agentSessionManager.test.ts`.

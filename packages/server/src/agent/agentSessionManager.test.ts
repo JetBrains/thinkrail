@@ -4,6 +4,7 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	rmSync,
 	writeFileSync,
@@ -113,6 +114,23 @@ const cfg = (faux: typeof fauxA, id: string) => ({
 
 const events = new Map<string, unknown[]>();
 const seen = (id: string) => JSON.stringify(events.get(id) ?? []);
+
+function heldSnapshots(cwd: string, sessionId: string): string[][] {
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	for (const file of readdirSync(dir).filter((f) => f.endsWith(".jsonl"))) {
+		const lines = readFileSync(join(dir, file), "utf8").split("\n").filter(Boolean);
+		const header = JSON.parse(lines[0] ?? "{}");
+		if (header.id !== sessionId) continue;
+		const snapshots: string[][] = [];
+		for (const line of lines) {
+			const entry = JSON.parse(line);
+			if (entry.type === "custom" && entry.customType === "thinkrail.heldQueue")
+				snapshots.push((entry.data?.messages ?? []).map((m: { text: string }) => m.text));
+		}
+		return snapshots;
+	}
+	return [];
+}
 
 function subagentToolState(context: { tools?: ReadonlyArray<{ name: string }> }): string {
 	const names = new Set((context.tools ?? []).map((tool) => tool.name));
@@ -1349,6 +1367,9 @@ test("held work flushes one message at a time, in order, on answer (per-message 
 		expect(
 			(await listSessions("ws-order", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
 		).toBeUndefined();
+		const snapshots = heldSnapshots(cwd, s.sessionId);
+		expect(snapshots).toContainEqual(["task two"]);
+		expect(snapshots.at(-1)).toEqual([]);
 		removeSession(s.sessionId);
 	} finally {
 		setActivityProjectResolver(() => null);
