@@ -24,12 +24,16 @@ modules remain analytics-free. Sibling dependency edges belong to [[module-serve
 
 ## Events
 
-Basic events retain their existing payloads and are always on in human runs:
-`app_started`, `chat_started { provider, model }`, `message_sent { mode }`, and
-`provider_login { provider, method }`. First observed launch defines first use; there is no install
+Basic events are always on in human runs: `app_started`,
+`chat_started { provider, model, auth_method }`, `message_sent { mode, provider, auth_method }`, and
+`provider_login { provider, method, auth_method }`. First observed launch defines first use; there is no install
 announcement/marker or provider-change event. Launch means host boot, not UI readiness. Chats can be empty;
 sends count after `ackSend`, exclude TODO-control nudges, and do not prove successful execution. Login
-requires correlated success, or the existing applied Central connection action.
+requires correlated success, or the existing applied Central connection action. `auth_method` is a closed
+`api_key | subscription | oauth | central | other | unknown` category, never credentials or account/plan
+identities. It describes the observed authentication path, not billing entitlement. Host captures send
+metadata before dispatch, uses each session/login's retained runtime, and leaves ambiguous modes
+other/unknown. Central provenance uses loader registration metadata without inspecting opaque auth.
 
 Additional events require explicit consent. Their exact property unions and payload tests are the schema;
 all properties are fixed enums or bounded buckets, never resource identities or free-form strings.

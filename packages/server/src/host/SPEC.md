@@ -96,7 +96,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `provider.loginCancel` clears; an unknown loginId tracks nothing, fails closed) — +
   a successful `provider.jbcentralConnect`→`applied` (failed actions never count) — per
   `submodule-server-analytics`,
-  feature modules never track). Additional setup/run/task/review/PR observations use the closed triggers in
+  feature modules never track). Basic login/chat/send events add the closed auth category from their own
+  session/login generation, never from a later global runtime; sends snapshot provider/auth before dispatch.
+  Opaque-loader provider membership identifies Central without opening its auth/configuration surface.
+  Additional setup/run/task/review/PR observations use the closed triggers in
   [[submodule-server-analytics]], with transient consent-scoped correlation and task-artifact reconciliation.
   Host alone mediates these events; no install-announcement or provider-change capture exists.
   Setup observes existing read results, never triggers provider work; only explicit setup mutations count.

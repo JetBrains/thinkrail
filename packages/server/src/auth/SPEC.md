@@ -80,7 +80,9 @@ ourselves and never surface a credential value over the wire.
     - `logoutProvider(id)` — `runtime.logout` (refreshes internally). (The old `setProviderApiKey` — a
       canned interaction answering exactly one secret prompt — is gone with `provider.setApiKey`: the
       dialog flow subsumes it and also serves multi-prompt providers.)
-    - `setLoginPublisher(fn)` — the server→client push seam (defaults to a no-op).
+    - `setLoginPublisher(fn)` — the push seam (defaults to a no-op). Successful completion also supplies
+      the generation that performed the login as separate host-only context; it is never part of `LoginPush`
+      or serialized onto the wire.
   - `jbcentral` — the in-app **JetBrains AI** native flow. It composes `shared/jbcentral`'s host-local adapter
     and artifact watcher with `agent`'s candidate-generation seam; it never reaches manager internals. Host boot
     starts the watcher and requests one initial generation before model work. A reviewed configured artifact is
