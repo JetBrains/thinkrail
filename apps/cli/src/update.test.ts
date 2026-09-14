@@ -1,12 +1,169 @@
 import { describe, expect, test } from "bun:test";
 import {
+	createCliHostUpdate,
+	discoverReleaseVersion,
 	parseUpdateArgs,
+	type ReleaseFetch,
 	resolveUpdatePlan,
 	resolveWindowsInstallPrefix,
 	resolveWindowsPrefix,
 	resolveWindowsUpdatePlan,
 	windowsManualUpdateMessage,
 } from "./update";
+
+const RELEASE_ERROR_RE = /^Unable to check for ThinkRail updates\.$/;
+
+function githubJson(body: unknown): Response {
+	return new Response(JSON.stringify(body), {
+		status: 200,
+		headers: { "Content-Type": "application/json" },
+	});
+}
+
+describe("discoverReleaseVersion", () => {
+	test("stable reads releases/latest and returns the unprefixed candidate", async () => {
+		let requestedUrl = "";
+		let requestSignal: AbortSignal | null | undefined;
+		const candidate = await discoverReleaseVersion("stable", async (input, init) => {
+			requestedUrl = String(input);
+			requestSignal = init?.signal;
+			return githubJson({ tag_name: "v1.2.3" });
+		});
+
+		expect(requestedUrl).toBe("https://api.github.com/repos/JetBrains/thinkrail/releases/latest");
+		expect(requestSignal).toBeInstanceOf(AbortSignal);
+		expect(candidate).toBe("1.2.3");
+	});
+
+	test("nightly reads the bounded listing and returns the first exact nightly tag", async () => {
+		let requestedUrl = "";
+		const candidate = await discoverReleaseVersion("nightly", async (input) => {
+			requestedUrl = String(input);
+			return githubJson([
+				{ tag_name: "v2.0.0" },
+				{ tag_name: "v2.0.0-nightly.9-extra" },
+				{ tag_name: "v1.4.0-nightly.17" },
+				{ tag_name: "v1.4.0-nightly.16" },
+			]);
+		});
+
+		expect(requestedUrl).toBe(
+			"https://api.github.com/repos/JetBrains/thinkrail/releases?per_page=20",
+		);
+		expect(candidate).toBe("1.4.0-nightly.17");
+	});
+
+	test("closes network, HTTP, and malformed-response errors", async () => {
+		await expect(
+			discoverReleaseVersion("stable", async () => {
+				throw new Error("private network diagnostic");
+			}),
+		).rejects.toThrow(RELEASE_ERROR_RE);
+		await expect(
+			discoverReleaseVersion(
+				"stable",
+				async () => new Response("private response diagnostic", { status: 503 }),
+			),
+		).rejects.toThrow(RELEASE_ERROR_RE);
+		await expect(
+			discoverReleaseVersion("stable", async () => new Response("not json", { status: 200 })),
+		).rejects.toThrow(RELEASE_ERROR_RE);
+		await expect(
+			discoverReleaseVersion("stable", async () => githubJson({ tag_name: "v1.2.3-rc.1" })),
+		).rejects.toThrow(RELEASE_ERROR_RE);
+		await expect(
+			discoverReleaseVersion("nightly", async () =>
+				githubJson([{ tag_name: "v1.2.3" }, { tag_name: "nightly.12" }]),
+			),
+		).rejects.toThrow(RELEASE_ERROR_RE);
+	});
+
+	test("aborts a request at its deadline without leaking its diagnostic", async () => {
+		let aborted = false;
+		const waitingFetch: ReleaseFetch = (_input, init) =>
+			new Promise<Response>((_resolve, reject) => {
+				const signal = init?.signal;
+				if (!signal) {
+					reject(new Error("missing signal"));
+					return;
+				}
+				signal.addEventListener(
+					"abort",
+					() => {
+						aborted = true;
+						reject(new Error("private abort diagnostic"));
+					},
+					{ once: true },
+				);
+			});
+
+		await expect(discoverReleaseVersion("stable", waitingFetch, 5)).rejects.toThrow(
+			RELEASE_ERROR_RE,
+		);
+		expect(aborted).toBe(true);
+	});
+});
+
+describe("createCliHostUpdate", () => {
+	test("creates the minimal six-hour source and returns a newer stable notice", async () => {
+		let requests = 0;
+		const fetchImpl: ReleaseFetch = async () => {
+			requests += 1;
+			return githubJson({ tag_name: "v1.2.4" });
+		};
+		const updates = createCliHostUpdate("binary", "stable", "1.2.3", fetchImpl);
+		if (!updates) throw new Error("expected host updates");
+
+		expect(Object.keys(updates).sort()).toEqual(["check", "intervalMs"]);
+		expect(updates.intervalMs).toBe(6 * 60 * 60 * 1000);
+		expect(requests).toBe(0);
+		expect(await updates.check()).toEqual({
+			currentVersion: "1.2.3",
+			availableVersion: "1.2.4",
+			channel: "stable",
+		});
+		expect(requests).toBe(1);
+	});
+
+	test("returns a notice only for a strictly newer same-channel version", async () => {
+		const stable = (currentVersion: string, availableVersion: string) =>
+			createCliHostUpdate("binary", "stable", currentVersion, async () =>
+				githubJson({ tag_name: `v${availableVersion}` }),
+			);
+		const nightly = (currentVersion: string, availableVersion: string) =>
+			createCliHostUpdate("binary", "nightly", currentVersion, async () =>
+				githubJson([{ tag_name: `v${availableVersion}` }]),
+			);
+
+		expect(await stable("1.2.3", "1.2.3")?.check()).toBeNull();
+		expect(await stable("1.2.3", "1.2.2")?.check()).toBeNull();
+		expect(await stable("1.2.3", "01.2.4")?.check()).toBeNull();
+		expect(await stable("invalid", "2.0.0")?.check()).toBeNull();
+		expect(await nightly("1.2.3-nightly.9", "1.2.3-nightly.10")?.check()).toEqual({
+			currentVersion: "1.2.3-nightly.9",
+			availableVersion: "1.2.3-nightly.10",
+			channel: "nightly",
+		});
+		expect(await nightly("1.3.0-nightly.1", "1.2.9-nightly.99")?.check()).toBeNull();
+	});
+
+	test("keeps discovery failures closed for the host", async () => {
+		const updates = createCliHostUpdate("binary", "stable", "1.2.3", async () => {
+			throw new Error("private network diagnostic");
+		});
+		if (!updates) throw new Error("expected host updates");
+
+		await expect(updates.check()).rejects.toThrow(RELEASE_ERROR_RE);
+	});
+
+	test("disables discovery for source, desktop, and dev or unsupported channels", () => {
+		expect(createCliHostUpdate("source", "stable", "1.2.3")).toBeUndefined();
+		expect(createCliHostUpdate("desktop", "stable", "1.2.3")).toBeUndefined();
+		expect(createCliHostUpdate("binary", "dev", "0.0.0-dev")).toBeUndefined();
+		expect(createCliHostUpdate("binary", "beta", "1.2.3-beta.1")).toBeUndefined();
+		expect(createCliHostUpdate("binary", "nightly", "1.2.3-nightly.1")).toBeDefined();
+	});
+});
 
 describe("parseUpdateArgs", () => {
 	test("defaults to latest, no channel override", () => {

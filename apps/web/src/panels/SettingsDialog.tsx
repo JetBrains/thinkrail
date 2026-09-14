@@ -67,6 +67,9 @@ export function SettingsDialog({
 	const sections = SECTIONS.filter(
 		(candidate) => !candidate.requiresInjectedContent || updateSettings !== undefined,
 	);
+	const selectedSection = sections.some((candidate) => candidate.id === section)
+		? section
+		: SettingsSection.Appearance;
 
 	return (
 		<Dialog
@@ -97,7 +100,7 @@ export function SettingsDialog({
 						className="flex shrink-0 gap-4 overflow-x-auto border-border-default border-b p-8 md:w-[192px] md:flex-col md:gap-2 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-elevated-bg md:p-12"
 					>
 						{sections.map(({ id, label, icon: Icon }) => {
-							const active = section === id;
+							const active = selectedSection === id;
 							return (
 								<button
 									key={id}
@@ -132,27 +135,27 @@ export function SettingsDialog({
 					</nav>
 
 					<div className="min-h-0 flex-1 overflow-y-auto p-16">
-						{section === SettingsSection.Providers ? (
+						{selectedSection === SettingsSection.Providers ? (
 							<ProvidersSettings />
-						) : section === SettingsSection.Github ? (
+						) : selectedSection === SettingsSection.Github ? (
 							<GithubSettings />
-						) : section === SettingsSection.LineWidth ? (
+						) : selectedSection === SettingsSection.LineWidth ? (
 							<LineWidthSettings />
-						) : section === SettingsSection.Chat ? (
+						) : selectedSection === SettingsSection.Chat ? (
 							<ChatSettings />
-						) : section === SettingsSection.Layout ? (
+						) : selectedSection === SettingsSection.Layout ? (
 							layoutSettings
-						) : section === SettingsSection.Updates && updateSettings !== undefined ? (
+						) : selectedSection === SettingsSection.Updates && updateSettings !== undefined ? (
 							updateSettings
-						) : section === SettingsSection.Terminal ? (
+						) : selectedSection === SettingsSection.Terminal ? (
 							<TerminalSettings />
-						) : section === SettingsSection.Templates ? (
+						) : selectedSection === SettingsSection.Templates ? (
 							<TemplatesSettings />
-						) : section === SettingsSection.Review ? (
+						) : selectedSection === SettingsSection.Review ? (
 							<ReviewSettings />
-						) : section === SettingsSection.Privacy ? (
+						) : selectedSection === SettingsSection.Privacy ? (
 							<PrivacySettings />
-						) : section === SettingsSection.Feedback ? (
+						) : selectedSection === SettingsSection.Feedback ? (
 							<FeedbackSettings />
 						) : (
 							<AppearanceSettings />

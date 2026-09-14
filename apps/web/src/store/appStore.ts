@@ -6,6 +6,7 @@ import type {
 	ExtUiRequest,
 	GitDiffScope,
 	HostPlatform,
+	HostUpdateNotice,
 	LayoutPreset,
 	LoginFrame,
 	LoginPush,
@@ -741,6 +742,7 @@ interface AppState {
 	welcomeGeneration: number;
 	protocolVersion: number | null;
 	hostPlatform: HostPlatform | null;
+	hostUpdate: HostUpdateNotice | null;
 	projects: Project[];
 	recentProjects: Project[];
 	workspaces: Record<string, Workspace[]>;
@@ -828,7 +830,9 @@ interface AppState {
 		recentProjects: Project[],
 		config?: AppConfig,
 		hostPlatform?: HostPlatform,
+		hostUpdate?: HostUpdateNotice,
 	) => void;
+	applyHostUpdate: (hostUpdate: HostUpdateNotice) => void;
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
 	applyProjectUpdated: (project: Project) => void;
 	setWorkspaces: (projectId: string, workspaces: Workspace[]) => void;
@@ -1626,6 +1630,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	welcomeGeneration: 0,
 	protocolVersion: null,
 	hostPlatform: null,
+	hostUpdate: null,
 	projects: [],
 	recentProjects: [],
 	workspaces: {},
@@ -1706,7 +1711,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 			connectionGeneration:
 				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
 		})),
-	installWelcomeSnapshot: (protocolVersion, projects, recentProjects, config, hostPlatform) =>
+	installWelcomeSnapshot: (
+		protocolVersion,
+		projects,
+		recentProjects,
+		config,
+		hostPlatform,
+		hostUpdate,
+	) =>
 		set((state) => {
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
 			return {
@@ -1714,12 +1726,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 				projects: openProjects,
 				recentProjects: sortProjects(recentProjects),
 				hostPlatform: hostPlatform ?? null,
+				hostUpdate: hostUpdate ?? null,
 				...(config ? configPatch(config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),
 				welcomeGeneration: state.welcomeGeneration + 1,
 			};
 		}),
+	applyHostUpdate: (hostUpdate) => set({ hostUpdate }),
 	installProjectSnapshot: (projects, recentProjects) =>
 		set((state) => {
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));

@@ -96,7 +96,7 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 63;
+export const PROTOCOL_VERSION = 64;
 export const WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION = 62;
 export const PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION = 63;
 export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
@@ -108,10 +108,17 @@ export const ACTIVITY_PROTOCOL_VERSION = 60;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
+export interface HostUpdateNotice {
+	currentVersion: string;
+	availableVersion: string;
+	channel: string;
+}
+
 export interface ServerWelcome {
 	protocolVersion: number;
 	appVersion?: string;
 	hostPlatform?: HostPlatform;
+	hostUpdate?: HostUpdateNotice;
 	projects: Project[];
 	recentProjects: Project[];
 	config: AppConfig;
@@ -265,6 +272,7 @@ export const WS_CHANNELS = {
 	workspaceRemoved: "workspace.removed",
 	workspaceFsChanged: "workspace.fsChanged",
 	settingsChanged: "settings.changed",
+	hostUpdateAvailable: "host.updateAvailable",
 	feedbackInterview: "feedback.interview",
 	reviewChanged: "review.changed",
 } as const;

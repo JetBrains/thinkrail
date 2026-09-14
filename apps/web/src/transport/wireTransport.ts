@@ -1,6 +1,7 @@
 import type {
 	AppConfig,
 	ExtUiRequest,
+	HostUpdateNotice,
 	LoginPush,
 	Project,
 	ReviewChangedPayload,
@@ -105,9 +106,14 @@ export function initTransport(): WsTransport {
 					welcome.hostPlatform === "win32"
 					? welcome.hostPlatform
 					: undefined,
+				welcome.hostUpdate,
 			);
 		refreshLoadedWorkspaceLists(useAppStore.getState().connectionGeneration);
 		refreshSessionActivity(useAppStore.getState().connectionGeneration);
+	});
+
+	transport.subscribe(WS_CHANNELS.hostUpdateAvailable, (data) => {
+		useAppStore.getState().applyHostUpdate(data as HostUpdateNotice);
 	});
 
 	transport.subscribe(WS_CHANNELS.projectUpdated, (data) => {

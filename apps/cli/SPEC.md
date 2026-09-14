@@ -51,6 +51,20 @@ git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PO
 `THINKRAIL_STATIC_DIR` (flag > env > default). `THINKRAIL_NO_ANALYTICS` is documented in `--help` but
 deliberately **not** parsed here — the host's analytics module is its single reader (see below).
 
+## Update advisory
+
+A compiled `stable`/`nightly` binary supplies `bootHost` with one optional periodic update-notice producer;
+source and `dev` identities do not expose the capability. After the host is ready it performs a bounded lookup
+immediately and every six hours on the baked channel with the same GitHub rules as the installers: stable reads
+`releases/latest`, while nightly selects the first `vX.Y.Z-nightly.N` tag from `releases?per_page=20`. Only a
+strictly newer version produces an immutable `{ currentVersion, availableVersion, channel }` notice; failure
+and no-update are silent, while a later still-newer release replaces the retained notice.
+
+The shared update surface tells the user to run the fixed `thinkrail update` command on the host machine and
+then restart ThinkRail. This advisory never fetches an installer, downloads an artifact, blocks readiness,
+retries, jitters, or runs for `update`/`uninstall`/help/version exits. The host carries only the latest notice
+to current and later clients.
+
 ## Self-update (`thinkrail update`)
 
 `src/update.ts` ports the old repo's `thinkrail upgrade` (renamed): it re-invokes the **published
@@ -277,7 +291,8 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   `src/compiled-entry.ts`, `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`,
   `src/runtime-assets.generated.*`),
   `src/update.ts` (the `update`
-  subcommand), `src/uninstall.ts` (the `uninstall` subcommand), `src/paths.ts` (the installed layout:
+  subcommand plus same-channel GitHub release discovery for the host advisory), `src/uninstall.ts` (the
+  `uninstall` subcommand), `src/paths.ts` (the installed layout:
   `install.json` + the staging cache root), and `src/powershell.ts` (the Windows PowerShell seam). Central
   integration remains a server/auth feature; the launcher has no Central subcommand or protocol implementation.
 - **Allowed deps:** `@thinkrail/server` (`bootHost`, `registerBundledRuntime`, build-support, `dataDir` — the

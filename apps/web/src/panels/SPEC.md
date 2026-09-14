@@ -485,8 +485,9 @@ a project picker, the prompt hero, and the reused
   frontend-local. With an active workspace each preset offers confirmable **Apply now…**, which asks shell
   to replace this window's frame and atomically preserve/reflow open resource identities in every retained
   workspace view; no current layout is published); the optional **shell-owned injected Update section**
-  (the Settings shell includes its row only when content is provided; `panels` neither discovers a native
-  global nor imports the update capability, while ordinary browsers therefore have no Update row);
+  (the Settings shell includes its row only when content is provided; `panels` neither discovers native nor
+  host update capabilities. If a later welcome removes injected content while Updates is selected, Appearance
+  is rendered and highlighted rather than leaving no active row);
   **`TerminalSettings`** — a **Replayed output** size picker (`store.terminalReplayKb`, five presets from
   Off to 1 MB, `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on
   Windows hosts at `protocolVersion >= WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`, a **Windows shell** picker
@@ -1359,8 +1360,16 @@ own section. The kebab menu (`plan-menu`, a
   `fontFamily` toggle), so a font that finishes loading late cannot re-lay-out an already-attached terminal.
   This ordering also prevents a fallback-width attach followed by a corrective resize from producing
   post-snapshot shell redraws that can erase replayed rows. Its pre-bind output buffer is a bounded waiting
-  state: successful bind filters it to the adopted PTY, while permanent creation failure
-  clears it and stops accepting page-wide terminal frames. **Historical replay is input-inert:** the PTY id
+  state: successful bind filters it to the adopted PTY, while creation failure clears it and stops accepting
+  page-wide terminal frames. That failure renders the host's stable guidance as escaped DOM text rather than
+  executable terminal output, with Terminal Settings and Retry actions. The failed xterm subtree is inert;
+  an explicit retry keeps that recovery surface mounted and its actions disabled until the request settles,
+  preserving focus without stealing unrelated workbench focus. Initial xterm focus is deferred until a
+  successful attach and applies only while the terminal tab that requested it still owns focus; Retry keeps
+  its overlay mounted through the successful handoff and restores xterm focus only while focus remains in that
+  terminal region. A competing detach invalidates that handoff and clears its retry state before exposing Take
+  Back again.
+  **Historical replay is input-inert:** the PTY id
   remains unadopted until xterm's replay callback, which rechecks attach freshness before binding and draining
   genuinely live frames; replies xterm synthesizes for recorded terminal queries can therefore never enter the
   live shell. PTY sizing distinguishes desired, in-flight, and

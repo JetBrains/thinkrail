@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type {
 	HostPlatform,
+	HostUpdateNotice,
 	ServerWelcome,
 	SessionActivityPayload,
 	SessionCreatedPayload,
@@ -109,6 +110,10 @@ export interface CreateServerOptions {
 		AnalyticsOptions,
 		"channel" | "build" | "posthogApiKey" | "posthogHost" | "mute"
 	>;
+	hostUpdate?: {
+		intervalMs: number;
+		check(): Promise<HostUpdateNotice | null>;
+	};
 }
 
 export interface RunningServer {
@@ -133,6 +138,18 @@ function clientProtocolVersion(value: string | null): number {
 	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
+function sameHostUpdateNotice(
+	current: HostUpdateNotice | undefined,
+	next: HostUpdateNotice,
+): boolean {
+	return (
+		current !== undefined &&
+		current.currentVersion === next.currentVersion &&
+		current.availableVersion === next.availableVersion &&
+		current.channel === next.channel
+	);
+}
+
 export async function createServer(options: CreateServerOptions = {}): Promise<RunningServer> {
 	await initializeJbcentralRuntime();
 	getConfig();
@@ -143,12 +160,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		projectPath,
 		appVersion,
 		analytics,
+		hostUpdate,
 	} = options;
 
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
 	const terminalBackpressured = new Set<string>();
+	let hostUpdateNotice: HostUpdateNotice | undefined;
+	let hostUpdateTimer: ReturnType<typeof setInterval> | undefined;
+	let hostUpdateActive = hostUpdate !== undefined;
+	let hostUpdateChecking = false;
 	let stopping = false;
 	let shutdownPromise: Promise<void> | undefined;
 
@@ -215,6 +237,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
+				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
@@ -227,6 +250,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					recentProjects: listRecentProjects(),
 					config: getConfig(),
 					...(appVersion ? { appVersion } : {}),
+					...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
 				};
 				const welcomeStatus = ws.send(
 					JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: welcome }),
@@ -323,6 +347,38 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			},
 		},
 	});
+
+	const checkForHostUpdate = async (): Promise<void> => {
+		if (!hostUpdate || !hostUpdateActive || hostUpdateChecking) return;
+		hostUpdateChecking = true;
+		try {
+			const result = await hostUpdate.check();
+			if (!hostUpdateActive) return;
+			if (result && !sameHostUpdateNotice(hostUpdateNotice, result)) {
+				hostUpdateNotice = {
+					currentVersion: result.currentVersion,
+					availableVersion: result.availableVersion,
+					channel: result.channel,
+				};
+				server.publish(
+					WS_CHANNELS.hostUpdateAvailable,
+					JSON.stringify({
+						channel: WS_CHANNELS.hostUpdateAvailable,
+						data: hostUpdateNotice,
+					}),
+				);
+			}
+		} catch {
+		} finally {
+			hostUpdateChecking = false;
+		}
+	};
+
+	const stopHostUpdateChecks = (): void => {
+		hostUpdateActive = false;
+		if (hostUpdateTimer !== undefined) clearInterval(hostUpdateTimer);
+		hostUpdateTimer = undefined;
+	};
 
 	setTerminalPublisher((clientKey, channel, data) => {
 		if (terminalBackpressured.has(clientKey)) return "unavailable";
@@ -540,6 +596,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (stopping) return;
 		stopping = true;
 		void shutdownAnalytics();
+		stopHostUpdateChecks();
 		cancelAllLogins();
 		stopJbcentralRuntime();
 		stopAllWatches();
@@ -559,11 +616,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	};
 	const shutdown = (): Promise<void> => {
 		shutdownPromise ??= (async () => {
+			stopHostUpdateChecks();
 			await Promise.allSettled([settleSessionsForShutdown(), shutdownAnalytics()]);
 			stop();
 		})();
 		return shutdownPromise;
 	};
+
+	if (hostUpdate) {
+		void checkForHostUpdate();
+		hostUpdateTimer = setInterval(() => void checkForHostUpdate(), hostUpdate.intervalMs);
+	}
 
 	return {
 		get port() {

@@ -42,7 +42,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   (the browser-side bounded queue for consecutive `pi.event` frames: exact arrival order, no dropped events,
   one atomic delivery at roughly 30 Hz, a 128-event forced-flush ceiling, and `flush`/`dispose` lifecycle);
   `wireTransport.ts` (`initTransport`/
-  `getTransport` singleton; routes `server.welcome`, **`project.updated`**, `pi.event`, `pi.extensionUi`,
+  `getTransport` singleton; routes `server.welcome`, **`host.updateAvailable`**, **`project.updated`**, `pi.event`, `pi.extensionUi`,
   **`session.created`**, **`session.deleted`**, **`provider.changed`**, addressed **`feedback.interview`**, **the
   `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store — and
   folds every connection transition through
@@ -53,7 +53,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `includeDiffStats: false`, generation-fencing the result and folding only already-known rows through
   `updateWorkspace`, so a pushed full workspace snapshot missed while disconnected (including a rename)
   cannot stay stale without misrepresenting this metadata repair as membership reconciliation;
-  project snapshots via `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
+  the immutable host-update notice via `applyHostUpdate`, project snapshots via
+  `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
   `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,
   `workspace.created` via `addWorkspace(workspace)`, `workspace.updated` via `updateWorkspace(workspace)`,
   `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `session.created` via `noteClosedChats`
@@ -130,8 +131,9 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
   `SessionDeletedPayload` for `session.deleted`, `SessionActivityPayload` +
   `ACTIVITY_PROTOCOL_VERSION` for `session.activity` and its snapshot gate, `provider.changed`, the empty addressed
-  `feedback.interview` invitation, `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for
-  `server.welcome`'s config + `settings.changed`); `store`
+  `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` + `host.updateAvailable`,
+  `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +
+  `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page
   identity); the browser `WebSocket`.
 - **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`; or requesting, subscribing to, or folding current-layout state. Browser layout persistence uses only `httpBase()` as part of its frontend-local storage identity; native stable persistence has no transport edge.

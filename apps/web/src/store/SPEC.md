@@ -22,9 +22,10 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `server.welcome` snapshot lands. Every connection-status transition clears `protocolVersion`, so UI
   capabilities remain unavailable between sockets and until the current socket's welcome is installed.
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
-  config?)`** installs protocol + both sorted project views + optional config + navigation repair and then
-  advances that readiness edge in one Zustand write; route validation never observes a protocol-only or
-  project-only intermediate state. `installProjectSnapshot` remains the project-only primitive for focused
+  config?, hostPlatform?, hostUpdate?)`** installs protocol + both sorted project views + optional config,
+  host platform, optional immutable host-update notice + navigation repair and then advances that readiness
+  edge in one Zustand write; route validation and capability reads never observe a partial welcome.
+  `installProjectSnapshot` remains the project-only primitive for focused
   callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
   known open + closed project. **`applyProjectUpdated(project)`** is the one full-snapshot updater for
   `project.updated` pushes and authoritative project-mutation responses: it upserts/sorts Recents and either
@@ -364,9 +365,12 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
   **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`LineWidth`/`Chat`/`Layout`/`Updates`/`Terminal`/`Templates`/`Review`/`Privacy`/`Feedback`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
-  **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider warning, and native-ready
-  shell affordance can deep-link without prop-drilling. The optional Update key is navigation only: native
-  updater snapshots/actions remain in `nativeUpdates`' shell-local hook state and never enter Zustand. The
+  **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider warning, and update-ready
+  shell affordance can deep-link without prop-drilling. The optional Update key is navigation only. Native
+  updater snapshots/actions remain in `updates`' shell-local hook state; the optional **`hostUpdate`** notice
+  is host domain state, installed atomically from `server.welcome` or replaced by the one
+  `host.updateAvailable` push. It remains visible through a temporary disconnect; a later welcome replaces or
+  clears it. The
   ephemeral **`interviewPromptOpen`** plus
   **`showInterviewPrompt()`** / **`hideInterviewPrompt()`** is the render projection of the host's addressed
   invitation; transport opens it idempotently, clears it before each valid welcome's possible redelivery so
