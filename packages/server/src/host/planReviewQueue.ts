@@ -24,6 +24,28 @@ export function releaseItemReview(sessionId: string, itemId: string): void {
 	active.delete(itemKey(sessionId, itemId));
 }
 
+/** Serialize `run` onto the plan's chain and resolve with its result — the one-review-per-plan ordering
+ * both entry points share. The caller owns the item claim; errors propagate to the caller (unlike
+ * `enqueuePlanReview`, which swallows them for the detached button path). See planReview.SPEC.md. */
+export function onPlanChain<T>(
+	workspaceId: string,
+	sessionId: string,
+	run: () => Promise<T>,
+): Promise<T> {
+	const plan = planKey(workspaceId, sessionId);
+	const result = (chains.get(plan) ?? Promise.resolve()).then(run);
+	const next = result
+		.then(
+			() => {},
+			() => {},
+		)
+		.finally(() => {
+			if (chains.get(plan) === next) chains.delete(plan);
+		});
+	chains.set(plan, next);
+	return result;
+}
+
 export function enqueuePlanReview(
 	workspaceId: string,
 	sessionId: string,
@@ -32,16 +54,12 @@ export function enqueuePlanReview(
 ): boolean {
 	const item = itemKey(sessionId, itemId);
 	if (!claimItemReview(sessionId, itemId)) return false;
-	const plan = planKey(workspaceId, sessionId);
-	const next = (chains.get(plan) ?? Promise.resolve())
-		.then(run)
+	onPlanChain(workspaceId, sessionId, run)
 		.catch((err) => {
 			console.warn(`plan review failed (${itemId}): ${err instanceof Error ? err.message : err}`);
 		})
 		.finally(() => {
 			active.delete(item);
-			if (chains.get(plan) === next) chains.delete(plan);
 		});
-	chains.set(plan, next);
 	return true;
 }

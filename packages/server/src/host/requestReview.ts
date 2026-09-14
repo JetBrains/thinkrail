@@ -33,6 +33,7 @@ import {
 	claimItemReview,
 	enqueuePlanReview,
 	itemReviewActive,
+	onPlanChain,
 	planReviewRunning,
 	releaseItemReview,
 } from "./planReviewQueue";
@@ -156,13 +157,15 @@ async function fileFinding(
 }
 
 /** Deliver the reviewer's findings to the worker chat as the structured `todo-review-fix` message, under
- * the same mark-sent / pre-turn-rollback guarantee every review send has. Returns whether the worker
- * actually accepted it — the caller owes the auto cycle back when it did not; see host/SPEC.md. */
+ * the same mark-sent / pre-turn-rollback guarantee every review send has. Any failure — preparation or the
+ * send itself — rolls the marked findings back to draft and returns false; the caller owes the auto cycle
+ * back when it did not accept. See host/SPEC.md. */
 async function deliverFixToWorker(
 	params: ReviewParams,
 	item: Todo,
 	note: string,
 ): Promise<boolean> {
+	let marked: string[] = [];
 	try {
 		const prepared = await withReviewLock(params.workspaceId, async () => {
 			const snapshot = await getReviewSnapshot(params.workspaceId);
@@ -170,9 +173,11 @@ async function deliverFixToWorker(
 			const sentIds = findings.map((c) => c.id);
 			const fixPackage =
 				findings.length > 0 ? await buildSendPackage(params.workspaceId, findings) : null;
-			if (sentIds.length > 0) await markCommentsSent(params.workspaceId, sentIds, params.sessionId);
+			if (sentIds.length > 0) {
+				await markCommentsSent(params.workspaceId, sentIds, params.sessionId);
+				marked = sentIds;
+			}
 			return {
-				sentIds,
 				text: fixPackage
 					? `${renderFixPackage(item, note)}\n\n${fixPackage}`
 					: renderFixPackage(item, note),
@@ -185,19 +190,16 @@ async function deliverFixToWorker(
 				}),
 			};
 		});
-		try {
-			await ackSend(sendReviewFixToSession(params.sessionId, prepared.text, prepared.details));
-			return true;
-		} catch (err) {
-			if (prepared.sentIds.length > 0)
-				rollbackSend(params.workspaceId, prepared.sentIds, params.sessionId);
-			notifyExtUi(
-				params.sessionId,
-				`Fix send failed: ${err instanceof Error ? err.message : String(err)} — the findings stay in Review for you.`,
-				"error",
-			);
-			return false;
-		}
+		await ackSend(sendReviewFixToSession(params.sessionId, prepared.text, prepared.details));
+		return true;
+	} catch (err) {
+		if (marked.length > 0) rollbackSend(params.workspaceId, marked, params.sessionId);
+		notifyExtUi(
+			params.sessionId,
+			`Fix send failed: ${err instanceof Error ? err.message : String(err)} — the findings stay in Review for you.`,
+			"error",
+		);
+		return false;
 	} finally {
 		releaseItemFix(params.sessionId, params.id);
 	}
@@ -290,14 +292,17 @@ async function handleRequestReview(
 	if (!claimItemReview(sessionId, itemId)) throw new Error("This step is already being reviewed.");
 	const params = { workspaceId, sessionId, id: itemId };
 	try {
-		// Inside the guard: an item with no change set throws here, and the claim must not outlive it.
+		// startTodoReview throws synchronously on a no-change-set item, so the claim must not outlive it; the
+		// review then runs on the plan's serial chain (never overlapping a button review). See planReview.SPEC.md.
 		const { pkg, reviewedSha } = startTodoReview(params);
-		const itemTitle = await itemTitleOf(workspaceId, sessionId, itemId);
-		const result = await runReview(params, pkg, reviewedSha, itemTitle, signal, runSubagent);
-		const outcome = await recordVerdict(params, result, reviewedSha, false);
-		const blocked =
-			outcome.kind === "approve-blocked" ? { blockedByOpenFindings: outcome.openFindings } : {};
-		return { result: { ...result, ...blocked }, text: composeText(result, outcome) };
+		return await onPlanChain(workspaceId, sessionId, async () => {
+			const itemTitle = await itemTitleOf(workspaceId, sessionId, itemId);
+			const result = await runReview(params, pkg, reviewedSha, itemTitle, signal, runSubagent);
+			const outcome = await recordVerdict(params, result, reviewedSha, false);
+			const blocked =
+				outcome.kind === "approve-blocked" ? { blockedByOpenFindings: outcome.openFindings } : {};
+			return { result: { ...result, ...blocked }, text: composeText(result, outcome) };
+		});
 	} catch (err) {
 		cancelTodoReview(params);
 		throw err;
