@@ -12,6 +12,7 @@ import { initializeAnalytics, resetAnalyticsForTests } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
 import { resetConfigCache, updateConfig } from "../settings";
 import { type BootedHost, bootHost } from "./boot";
+import { handleRequest } from "./handlers";
 
 process.setMaxListeners(50);
 
@@ -199,6 +200,45 @@ test("confirming consent observes current setup without another client read or p
 		expect(refresh).not.toHaveBeenCalled();
 	} finally {
 		refresh.mockRestore();
+	}
+});
+
+test("the host forwards successful login generation metadata into the basic event", async () => {
+	await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
+	const events: { event: string; properties: Record<string, unknown> }[] = [];
+	initializeAnalytics({
+		additionalEnabled: false,
+		env: {},
+		fetchImpl: (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+			events.push(...JSON.parse(String(init?.body)).batch);
+			return new Response("{}");
+		}) as typeof fetch,
+	});
+	const login = spyOn(testRuntime, "login").mockResolvedValue({
+		type: "oauth",
+		access: "private-token",
+		refresh: "private-refresh",
+		expires: Date.now() + 60_000,
+	});
+	try {
+		await handleRequest(
+			"provider.loginStart",
+			{ providerId: "anthropic", type: "oauth" },
+			{ clientKey: "client" },
+		);
+		const deadline = Date.now() + 2_000;
+		while (!events.some((event) => event.event === "provider_login") && Date.now() < deadline)
+			await Bun.sleep(5);
+		const logins = events.filter((event) => event.event === "provider_login");
+		expect(logins).toHaveLength(1);
+		expect(logins[0]?.properties).toMatchObject({
+			provider: "anthropic",
+			method: "oauth",
+			auth_method: "subscription",
+		});
+		expect(JSON.stringify(events)).not.toContain("private");
+	} finally {
+		login.mockRestore();
 	}
 });
 

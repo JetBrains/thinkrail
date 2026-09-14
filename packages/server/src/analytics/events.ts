@@ -3,14 +3,26 @@ import { getBuiltinModels, getBuiltinProviders } from "@earendil-works/pi-ai/pro
 export type BuildKind = "source" | "binary" | "desktop";
 
 export type LoginMethod = "oauth" | "api-key" | "central";
+export type AnalyticsAuthMethod =
+	| "api_key"
+	| "subscription"
+	| "oauth"
+	| "central"
+	| "other"
+	| "unknown";
+
+export interface ProviderAnalyticsProperties {
+	provider: string;
+	auth_method: AnalyticsAuthMethod;
+}
 
 export type SendMode = "prompt" | "steer" | "follow_up";
 
 export type BasicAnalyticsEvent =
 	| { name: "app_started" }
-	| { name: "chat_started"; params: { provider: string; model: string } }
-	| { name: "message_sent"; params: { mode: SendMode } }
-	| { name: "provider_login"; params: { provider: string; method: LoginMethod } };
+	| { name: "chat_started"; params: ProviderAnalyticsProperties & { model: string } }
+	| { name: "message_sent"; params: ProviderAnalyticsProperties & { mode: SendMode } }
+	| { name: "provider_login"; params: ProviderAnalyticsProperties & { method: LoginMethod } };
 
 export type AnalyticsAvailability = "yes" | "no" | "unknown";
 export type AnalyticsFailureReason =

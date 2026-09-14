@@ -415,6 +415,10 @@ export function getSessionWorkspaceId(sessionId: string): string | undefined {
 	return sessions.get(sessionId)?.workspaceId;
 }
 
+export function getSessionRuntimeGeneration(sessionId: string): PiRuntimeGeneration | undefined {
+	return hasSession(sessionId) ? sessions.get(sessionId)?.generation : undefined;
+}
+
 export async function reloadSessionResources(sessionId: string): Promise<void> {
 	const session = mustGet(sessionId);
 	if (session.isStreaming) {

@@ -79,9 +79,18 @@ function boot(
 
 const BASIC_EVENTS = {
 	app_started: { name: "app_started" },
-	chat_started: { name: "chat_started", params: { provider: "anthropic", model: "some-model" } },
-	message_sent: { name: "message_sent", params: { mode: "prompt" } },
-	provider_login: { name: "provider_login", params: { provider: "openai", method: "oauth" } },
+	chat_started: {
+		name: "chat_started",
+		params: { provider: "anthropic", model: "some-model", auth_method: "subscription" },
+	},
+	message_sent: {
+		name: "message_sent",
+		params: { mode: "prompt", provider: "openai", auth_method: "api_key" },
+	},
+	provider_login: {
+		name: "provider_login",
+		params: { provider: "openai-codex", method: "oauth", auth_method: "subscription" },
+	},
 } as const satisfies {
 	[K in BasicAnalyticsEvent["name"]]: Extract<BasicAnalyticsEvent, { name: K }>;
 };
@@ -129,9 +138,9 @@ const ENV_KEYS = ["app_version", "channel", "os", "arch", "build"];
 const RUN_KEYS = ["origin", "workspace_kind", "provider", "model"];
 const EXPECTED_KEYS: Record<AnalyticsEvent["name"], string[]> = {
 	app_started: ENV_KEYS,
-	chat_started: [...ENV_KEYS, "provider", "model"],
-	message_sent: [...ENV_KEYS, "mode"],
-	provider_login: [...ENV_KEYS, "provider", "method"],
+	chat_started: [...ENV_KEYS, "provider", "model", "auth_method"],
+	message_sent: [...ENV_KEYS, "mode", "provider", "auth_method"],
+	provider_login: [...ENV_KEYS, "provider", "method", "auth_method"],
 	setup_state_observed: [...ENV_KEYS, "provider_available", "model_available", "project_present"],
 	setup_action_finished: [...ENV_KEYS, "action", "outcome", "reason"],
 	agent_run_started: [...ENV_KEYS, ...RUN_KEYS],
@@ -183,6 +192,28 @@ test.each([
 		"app_started",
 		...Object.keys(BASIC_EVENTS),
 	]);
+});
+
+test.each([
+	"api_key",
+	"subscription",
+	"oauth",
+	"central",
+	"other",
+	"unknown",
+] as const)("auth_method=%s remains basic metadata without additional consent", async (auth_method) => {
+	const sent: SentPayload[] = [];
+	boot(sent, { additionalEnabled: false });
+	track({ name: "chat_started", params: { provider: "anthropic", model: "custom", auth_method } });
+	track({ name: "message_sent", params: { mode: "prompt", provider: "anthropic", auth_method } });
+	track({
+		name: "provider_login",
+		params: { provider: "anthropic", method: "oauth", auth_method },
+	});
+	await shutdownAnalytics();
+	const entries = allEntries(sent).filter((entry) => entry.event !== "app_started");
+	expect(entries).toHaveLength(3);
+	expect(entries.every((entry) => entry.properties.auth_method === auth_method)).toBe(true);
 });
 
 test("there is no additional capture before consent and no replay when enabled", async () => {

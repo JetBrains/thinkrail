@@ -37,7 +37,8 @@ export function AnalyticsPreferences(props: AnalyticsPreferenceProps) {
 		<div className="flex flex-col gap-16 tr-text-metadata text-text-muted">
 			<p>
 				<span className="tr-text-emphasis text-text-default">Always-on basics:</span> app launches,
-				chat starts (provider and model), message sends (mode), and provider connections.
+				chat starts (provider and model), message sends (mode and provider), and provider
+				connections, including their authentication category.
 			</p>
 			<AnalyticsSharingSwitch
 				{...props}

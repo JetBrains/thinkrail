@@ -58,12 +58,7 @@ import {
 	setSessionThinkingLevel,
 	steerSession,
 } from "../agent";
-import {
-	type AdditionalAnalyticsCapture,
-	bucketProviderModel,
-	type SendMode,
-	track,
-} from "../analytics";
+import { type AdditionalAnalyticsCapture, type SendMode, track } from "../analytics";
 import {
 	cancelLogin,
 	connectJbcentral,
@@ -171,6 +166,7 @@ import {
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
+import { sessionProviderAnalytics, trackChatStarted } from "./authAnalytics";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -215,10 +211,24 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 	}
 }
 
-function recordAcceptedSend(mode: SendMode, text: string, clientKey: string): void {
-	if (isControlMessage(text)) return;
-	track({ name: "message_sent", params: { mode } });
-	recordAcceptedMessage(clientKey);
+async function sendUserMessage(
+	mode: SendMode,
+	sessionId: string,
+	text: string,
+	clientKey: string,
+	operation: () => Promise<void>,
+): Promise<{ ok: true }> {
+	const control = isControlMessage(text);
+	const provider = control ? undefined : sessionProviderAnalytics(sessionId);
+	await ackSend(runObservation.send(sessionId, control ? "internal" : "user", operation));
+	if (provider) {
+		track({
+			name: "message_sent",
+			params: { mode, provider: provider.provider, auth_method: provider.auth_method },
+		});
+		recordAcceptedMessage(clientKey);
+	}
+	return { ok: true };
 }
 
 function resolveTemplateReadDirs(params: TemplateReadLocation) {
@@ -321,12 +331,7 @@ async function sendToFileChat(
 		...(opts.model ? { model: opts.model } : {}),
 		...(opts.thinkingLevel ? { thinkingLevel: opts.thinkingLevel } : {}),
 	});
-	if (created.model) {
-		track({
-			name: "chat_started",
-			params: bucketProviderModel(created.model.provider, created.model.id),
-		});
-	}
+	trackChatStarted(created);
 	await markCommentsSent(workspaceId, ids, created.sessionId);
 	fireReviewPrompt(workspaceId, ids, created.sessionId, pkg);
 	return { ...created, reused: false };
@@ -675,43 +680,26 @@ const handlers: Record<string, Handler> = {
 			...(p.model ? { model: p.model } : {}),
 			...(p.thinkingLevel ? { thinkingLevel: p.thinkingLevel } : {}),
 		});
-		if (created.model) {
-			track({
-				name: "chat_started",
-				params: bucketProviderModel(created.model.provider, created.model.id),
-			});
-		}
+		trackChatStarted(created);
 		return created;
 	},
-	"session.prompt": async (params, ctx) => {
+	"session.prompt": (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
-		await ackSend(
-			runObservation.send(p.sessionId, isControlMessage(p.text) ? "internal" : "user", () =>
-				promptSession(p.sessionId, p.text, p.images),
-			),
+		return sendUserMessage("prompt", p.sessionId, p.text, ctx.clientKey, () =>
+			promptSession(p.sessionId, p.text, p.images),
 		);
-		recordAcceptedSend("prompt", p.text, ctx.clientKey);
-		return { ok: true } as const;
 	},
-	"session.steer": async (params, ctx) => {
+	"session.steer": (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
-		await ackSend(
-			runObservation.send(p.sessionId, isControlMessage(p.text) ? "internal" : "user", () =>
-				steerSession(p.sessionId, p.text, p.images),
-			),
+		return sendUserMessage("steer", p.sessionId, p.text, ctx.clientKey, () =>
+			steerSession(p.sessionId, p.text, p.images),
 		);
-		recordAcceptedSend("steer", p.text, ctx.clientKey);
-		return { ok: true } as const;
 	},
-	"session.followUp": async (params, ctx) => {
+	"session.followUp": (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
-		await ackSend(
-			runObservation.send(p.sessionId, isControlMessage(p.text) ? "internal" : "user", () =>
-				followUpSession(p.sessionId, p.text, p.images),
-			),
+		return sendUserMessage("follow_up", p.sessionId, p.text, ctx.clientKey, () =>
+			followUpSession(p.sessionId, p.text, p.images),
 		);
-		recordAcceptedSend("follow_up", p.text, ctx.clientKey);
-		return { ok: true } as const;
 	},
 	"session.clearQueue": (params) => {
 		const p = params as { sessionId: string; requireTextOnly?: boolean };

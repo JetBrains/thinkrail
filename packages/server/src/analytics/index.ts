@@ -1,6 +1,7 @@
 export type {
 	AdditionalAnalyticsCapture,
 	AdditionalAnalyticsEvent,
+	AnalyticsAuthMethod,
 	AnalyticsAvailability,
 	AnalyticsCountBucket,
 	AnalyticsDurationBucket,
@@ -11,6 +12,7 @@ export type {
 	BasicAnalyticsEvent,
 	BuildKind,
 	LoginMethod,
+	ProviderAnalyticsProperties,
 	SendMode,
 	SetupAction,
 } from "./events";

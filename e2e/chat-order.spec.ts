@@ -199,6 +199,7 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 				};
 			})
 			.toEqual({ atPhysicalLatestEdge: true, latestRowIntersectsViewport: true });
+		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 
 		await page.mouse.wheel(0, 10_000);
 		await expect(latest).toBeVisible();

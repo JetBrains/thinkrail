@@ -594,15 +594,18 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	});
 
-	setLoginPublisher((push) => {
+	setLoginPublisher((push, generation) => {
 		server.publish(
 			WS_CHANNELS.providerLogin,
 			JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }),
 		);
-		trackLoginOutcome(push);
+		trackLoginOutcome(push, generation);
 	});
 	setJbcentralAppliedPublisher(() => {
-		track({ name: "provider_login", params: { provider: "jbcentral", method: "central" } });
+		track({
+			name: "provider_login",
+			params: { provider: "jbcentral", method: "central", auth_method: "central" },
+		});
 	});
 	setJbcentralChangedPublisher(() => {
 		server.publish(

@@ -1,13 +1,13 @@
 import type { PiEvent } from "@thinkrail/contracts";
-import { getSessionWorkspaceId, liveParentContext } from "../agent";
+import { getSessionWorkspaceId } from "../agent";
 import {
 	type AdditionalAnalyticsCapture,
 	type AdditionalAnalyticsEvent,
 	bucketCount,
 	bucketDuration,
-	bucketProviderModel,
 } from "../analytics";
 import { getWorkspace } from "../workspaces";
+import { sessionProviderAnalytics } from "./authAnalytics";
 import { additionalCapture, captureAdditional } from "./productAnalytics";
 
 type RunProperties = Extract<AdditionalAnalyticsEvent, { name: "agent_run_started" }>["params"];
@@ -58,8 +58,7 @@ function describeRun(sessionId: string): Omit<RunProperties, "origin"> | null {
 	const workspaceId = getSessionWorkspaceId(sessionId);
 	if (!workspaceId) return null;
 	const workspace = getWorkspace(workspaceId);
-	const model = liveParentContext(sessionId)?.model;
-	const bucket = bucketProviderModel(model?.provider ?? "", model?.id ?? "");
+	const bucket = sessionProviderAnalytics(sessionId);
 	return {
 		workspace_kind:
 			workspace.kind === "default" || workspace.kind === "external" ? workspace.kind : "managed",

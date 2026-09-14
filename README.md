@@ -198,8 +198,9 @@ spec in the same change. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
 ThinkRail sends basic usage events to [PostHog EU](https://posthog.com): launches, chat creation,
 accepted message sends, and provider connections. These are always on in desktop, CLI, and source runs;
 CI and automated tests are silent. Events include a random installation ID, version/channel, build kind,
-OS/architecture, send mode, and catalog-bucketed provider/model names. First observed launch measures
-first use, not a completed OS installation.
+OS/architecture, send mode, catalog-bucketed provider/model names, and the observed authentication
+category (API key, subscription sign-in, OAuth, Central, or other/unknown)—never credential values or
+account/plan details. First observed launch measures first use, not a completed OS installation.
 
 Additional setup, run-outcome, task, review, and PR statistics require explicit consent in the first-launch
 window. Its switch starts from your saved analytics preference; confirming records your choice. Change it
