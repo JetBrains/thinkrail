@@ -278,8 +278,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
     [[module-pi-background-commands]] supplies explicit, session-owned log-only commands over Pi's
     public executor; normal Bash and workspace PTYs stay unchanged. `packages/server` embeds that
     portable package through `agent` and projects it beside direct [[module-pi-delegation]] children
-    into the current-chat Resources view. Parent sessions own both capabilities across extension reload;
-    scoped inspection and cancellation stay host-side. Detailed integration belongs to
+    into the current-chat Resources view. Parent session entries own injected command services and
+    retained subagent completion delivery across extension reload; scoped reads, controls, and
+    invalidations are composed through the agent barrel. Detailed integration belongs to
     [[submodule-server-agent]], and command lifetime/retention to [[module-pi-background-commands]].
 
 ## Invariants

@@ -54,6 +54,7 @@ interface ActiveRun {
 	readonly controller: AbortController;
 	readonly settled: Promise<void>;
 	readonly resolveSettled: () => void;
+	abortReason?: string;
 	sessionAbort?: Promise<void>;
 }
 
@@ -113,10 +114,15 @@ function repairResourceTranscript(manager: SessionManager): void {
 		throw new DelegationError("invalid-child-transcript", replay.issues.join("; "));
 }
 
-function abortActiveRun(entry: ChildEntry): Promise<void> {
+function abortActiveRun(entry: ChildEntry, reason?: string): Promise<void> {
 	const activeRun = entry.activeRun;
-	if (!activeRun) return Promise.resolve();
-	activeRun.controller.abort();
+	if (!activeRun || (entry.snapshot?.status !== "queued" && entry.snapshot?.status !== "running")) {
+		return Promise.resolve();
+	}
+	if (!activeRun.controller.signal.aborted) {
+		if (reason !== undefined) activeRun.abortReason = reason;
+		activeRun.controller.abort();
+	}
 	if (entry.resource) {
 		entry.session.clearQueue();
 		entry.session.abortCompaction();
@@ -393,6 +399,9 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			},
 			durationMs: Date.now() - startedAt,
 			...(activity !== undefined ? { activity } : {}),
+			...(entry.activeRun?.abortReason !== undefined
+				? { abortReason: entry.activeRun.abortReason }
+				: {}),
 		};
 	}
 
@@ -446,7 +455,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			} else if (event.type === "turn_start") {
 				if (cap !== undefined && turns > cap) {
 					abortRequested = true;
-					void (entry.resource ? abortActiveRun(entry) : session.abort()).catch(() => {});
+					void abortActiveRun(entry).catch(() => {});
 				}
 			}
 		});
@@ -666,9 +675,9 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				}
 				await entry.session.steer(text);
 			},
-			abort: async () => {
+			abort: async (reason) => {
 				if (entry.disposed) return;
-				await abortActiveRun(entry);
+				await abortActiveRun(entry, reason);
 			},
 			dispose: () => disposeChild(entry),
 			onEvent: (listener) => {
@@ -824,6 +833,13 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			bindings.childExtensionFactories ?? [],
 			manager,
 		);
+		if (!bindings.resolveParent?.(parentSessionId)) {
+			session.dispose();
+			throw new DelegationError(
+				"unknown-parent",
+				`Parent session ${parentSessionId} closed during child preparation`,
+			);
+		}
 		const record: SpawnRecord = Object.freeze({
 			...birthFields(spec, session),
 			parentSessionId,
