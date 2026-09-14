@@ -1112,16 +1112,22 @@ function parkHeld(entry: Entry, text: string, images?: ImageContent[]): void {
 }
 
 async function flushHeldQueue(entry: Entry): Promise<void> {
-	while (entry.heldWhileAsking.length > 0) {
-		const [next] = entry.heldWhileAsking;
-		if (!next) break;
-		await followUpSession(
-			entry.session.sessionId,
-			next.text,
-			next.images ? [...next.images] : undefined,
-		);
-		entry.heldWhileAsking.shift();
-		persistHeldQueueIfChanged(entry);
+	if (entry.heldWhileAsking.length === 0) return;
+	const pending = [...entry.heldWhileAsking];
+	entry.heldWhileAsking = [];
+	try {
+		while (pending.length > 0) {
+			const next = pending[0];
+			if (!next) break;
+			await followUpSession(
+				entry.session.sessionId,
+				next.text,
+				next.images ? [...next.images] : undefined,
+			);
+			pending.shift();
+		}
+	} finally {
+		if (pending.length > 0) entry.heldWhileAsking.unshift(...pending);
 	}
 }
 

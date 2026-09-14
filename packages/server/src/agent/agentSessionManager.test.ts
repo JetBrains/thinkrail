@@ -1292,6 +1292,70 @@ test("a message sent while a question is already pending is held (idle send), st
 	}
 });
 
+test("held work flushes one message at a time, in order, on answer (per-message hand-off)", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-order");
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-o-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-flush-order-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-order",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		await followUpSession(s.sessionId, "task one");
+		await followUpSession(s.sessionId, "task two");
+		expect(
+			(await listSessions("ws-order", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual({ steering: [], followUp: ["task one", "task two"] });
+
+		fauxA.appendResponses([
+			fauxAssistantMessage("ANSWER_OK"),
+			fauxAssistantMessage("ONE_OK"),
+			fauxAssistantMessage("TWO_OK"),
+		]);
+		await answerQuestion(s.sessionId, "ask-o-1", {
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+			cancelled: false,
+		});
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("TWO_OK")) {
+			if (Date.now() > ranBy) throw new Error("held work never fully flushed");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		const events = seen(s.sessionId);
+		expect(events).toContain("ANSWER_OK");
+		expect(events.indexOf("ONE_OK")).toBeLessThan(events.indexOf("TWO_OK"));
+		expect(
+			(await listSessions("ws-order", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toBeUndefined();
+		removeSession(s.sessionId);
+	} finally {
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("held work survives a host restart — reattaching a session restores the queue behind a pending question and flushes it on answer", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	setActivityProjectResolver(() => "project-restart");

@@ -488,13 +488,22 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     would be a silent loss. Each mutation writes a last-wins snapshot via pi's own
     `sessionManager.appendCustomEntry("thinkrail.heldQueue", { messages })` — a plain `custom` **state**
     entry that lives in the session file, never enters `session.messages`, and is ignored by
-    `buildSessionContext` (so it neither reaches the LLM nor renders in the transcript). Capture happens
-    mid-tool, so it does **not** write inline; the immediately-following `agent_settled` persists the
-    post-capture buffer (idle mutations — `parkHeld`, flush, `clearQueueSession` — persist inline, where no
-    settle will follow). `persistHeldQueueIfChanged` dedupes by a content signature so unchanged settles
-    append nothing. On attach, `restoreHeldQueue` scans `getEntries()` for the last snapshot and rebuilds
-    the buffer with fresh ids; a session that answered before the crash persisted an empty snapshot, so it
-    restores nothing. The pending ask is the transcript **tail**, so it survives compaction and
+    `buildSessionContext` (so it neither reaches the LLM nor renders in the transcript).
+    `persistHeldQueueIfChanged` dedupes by a content signature. **The durable rule: a message stays in the
+    snapshot until it is in the transcript** — pi's own queue is in-memory (lost on restart), so a message
+    is only dropped from disk once it has actually *run*. That decides every persist point. **Capture
+    persists before `clearQueue()`** empties pi's lanes, so the messages are durable the instant they
+    leave pi; writing mid-tool is safe because pi appends the tool result to the *current leaf*
+    (`appendMessage`→`parentId: leafId`), so the custom entry just chains
+    `assistant(toolCall) → custom → toolResult(ack)` — no branch, pairing is by id. `parkHeld` and
+    `clearQueueSession` persist inline (both run idle). **`flushHeldQueue` never writes an empty snapshot
+    up front:** it hands each message to pi from a local copy (restoring the un-sent remainder to the
+    buffer if a send throws) and leaves the pre-flush snapshot on disk untouched; only the following
+    `agent_settled` — which fires after every flushed message has run — persists the emptied buffer. So a
+    crash mid-flush restores every message that had not yet run (at worst an already-run one re-runs; none
+    are lost). On attach, `restoreHeldQueue` scans `getEntries()` for the last snapshot and rebuilds the
+    buffer with fresh ids (a leftover suffix flushes on the user's next `promptSession`); a session that
+    answered before the crash persisted an empty snapshot, so it restores nothing. The pending ask is the transcript **tail**, so it survives compaction and
     `questionPending` stays true until answered — or until a free-form `promptSession` reply supersedes it,
     the only way a later user message reaches the transcript while a question is pending (explicit
     `steer`/`followUp` sends park instead). Pinned by `agentSessionManager.test.ts`.
