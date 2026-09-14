@@ -251,6 +251,13 @@ dependency. This keeps test process drivers outside both launchers and the serve
     depends on ThinkRail. Contract, semantics, and the full decision log:
     [[module-pi-delegation]], [[module-pi-subagents]], and [[submodule-server-agent]].
 
+    **Draft Chat Resources extension:** [[module-pi-background-commands]] supplies explicit,
+    session-owned log-only commands over Pi's public executor; normal Bash and workspace PTYs stay
+    unchanged. The `server` → portable-command-package edge is embedded through `agent`, just as
+    delegation is. The current-chat view projects both owners rather than introducing a general
+    resource runtime. Detailed draft integration belongs to [[submodule-server-agent]], and command
+    lifetime/retention to [[module-pi-background-commands]].
+
 ## Invariants
 
 - Never **value**-import `pi` in browser-bundled code; import types only, from the `pi-ai` /

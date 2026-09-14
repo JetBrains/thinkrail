@@ -14,6 +14,20 @@ The single Zustand store: connection status, projects/workspaces, one frontend-l
 per-workspace views/attention, terminal catalogs, and one **per-session chat runtime** for every live
 `AgentSession` (so several chats stream concurrently).
 
+## Chat Resources — draft state boundary
+
+The Resources view keeps host snapshots separately from the Pi conversation runtime, keyed by chat
+identity and current connection authority. Installing/invalidation/clearing a resource snapshot is
+one atomic store action. Selectors own active counts and active/finished grouping; the host already
+bounds recent records. Components do not derive these independently. A parent settling does not
+clear its still-running resources or change the Projects rail's existing activity contract.
+
+Resource snapshots are not browser-persisted. Reconnect or an unsupported host removes control
+authority until a fresh read succeeds; failed reads preserve visibly stale data, never fabricate an
+empty catalog. Chat deletion/workspace removal clears the corresponding projections. Popover and
+selected-log state belong to chat integration, not domain persistence. See
+[[submodule-web-chat-resources]] for presentation and [[module-contracts]] for the draft wire.
+
 ## Boundary
 
 - **Owns:** `appStore.ts` — connection/projects/workspaces state + setters. Connection state has two

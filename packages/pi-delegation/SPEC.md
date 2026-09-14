@@ -223,6 +223,21 @@ consumer, the ThinkRail worktree provider. Report-back from a subsession to its 
 subsessions land) is pi-native (`sendMessage`/`followUp`) — no core provision needed beyond
 lineage.
 
+## User cancellation — draft contract extension
+
+The Resources control path needs to distinguish an explicit user cancellation from an ordinary
+abort without teaching this core about UI or completion-message delivery. `ChildHandle.abort`
+accepts an optional plain-string reason, and `DelegationRunDetails.abortReason` records that reason
+for the active run's eventual snapshot/outcome. The first accepted cancellation cause wins; an
+already terminal handle is unchanged. Reasons are metadata, not new lifecycle statuses, and
+non-user abort paths retain their current semantics.
+
+The host uses `"user"` for its explicit control path; [[module-pi-subagents]] alone decides what that
+means for completion delivery. This field lives with the run, not in a host-side set or second
+resource registry. A queued user cancellation still releases immediately without provider work;
+running cancellation still uses the existing run-scoped signal. Tests must pin both paths and
+idempotent/natural-completion races before this draft contract is activated.
+
 ## Decision log (how the contract got its shape)
 
 1. **Two-phase surface** (`createChild` → `runQueued`/`runNow`) chosen over one mega-`spawnSession`

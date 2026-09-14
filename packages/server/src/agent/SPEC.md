@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: agent — in-process pi sessions
 parent: module-server
-depends-on: [module-contracts, module-pi-delegation, module-pi-subagents]
+depends-on: [module-contracts, module-pi-delegation, module-pi-subagents, module-pi-background-commands]
 references: [module-spec-graph, central-integration]
 tags: [v1, pi]
 ---
@@ -714,7 +714,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   still goes through the shared `ModelRuntime`, never pi-ai's stream/complete — plus the `/bun-oauth` + `/bedrock-provider`
   + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports);
   `pi-delegation` + `pi-subagents` (the portable delegation runtime and Agent-tool composition,
-  value-imported by the host embedding); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
+  value-imported by the host embedding); `pi-background-commands` (the draft session-bound command
+  capability, likewise value-imported by its host embedding); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
   `pi-thinkrail-workflow` + `pi-todos` (the bundled extension set — parent sessions load the set through
   resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph` and receive
   the named `pi-web-access` factory through the bundled runtime seam, with source-mode Bun `require` as the
@@ -751,6 +752,43 @@ async helper cannot overwrite a durable name that landed while it was running. N
 or title sidecar belongs here—the absent-vs-present pi name plus the durable transcript are sufficient because
 automatic naming gets one opportunity. The architecture's accepted no-cross-process coordination rule still
 applies.
+
+## Chat Resources — draft integration
+
+The manager retains one [[module-pi-background-commands]] service per parent chat alongside its Pi
+session and injects its extension through the normal resource-loader path. The same binding supplies
+live session context, effective shell settings and lifecycle in source and packaged hosts. The
+first version loads this capability into parent chats only, not the curated hidden-child extension
+set; ordinary child Bash remains visible in its transcript.
+
+A small agent-barrel facade serves the resource snapshot, command output/stop and subagent
+stop/stop-all operations defined in [[module-contracts]]. It projects command services plus
+`DelegationService.childrenOf(parent)`; no aggregate registry owns copies of their lifecycles.
+Subagent summaries include direct foreground and background children and omit handles with no run
+snapshot yet. Bound recent terminal presentation without disposing delegation's older records or
+transcripts. Lifecycle subscriptions publish scoped invalidations through a host-injected publisher;
+no per-token/output broadcast is added for the header.
+
+Each operation validates its workspace/session/child ownership and the manager's deletion gate
+before touching a handle. Resource control never depends on the UI having seen a tool event or on
+starting/restarting a provider turn. Natural completion and requested cancellation remain source
+outcomes; stopped state is not synthesized from an acknowledged RPC.
+
+User subagent controls supply the `"user"` cancellation reason defined by [[module-pi-delegation]];
+completion delivery belongs to [[module-pi-subagents]], not a host suppression set. Stop-all signals
+its captured active children before awaiting any settlement and never uses `disposeChildrenOf` as
+a substitute.
+
+Command services outlive view placement and parent-turn cancellation. Actual session disposal and
+workspace archive close command admission and signal command/child work before awaiting teardown
+under the existing host shutdown budget. Command completion delivery respects pending session
+deletion and its rollback; nothing may append behind a transcript being moved to trash. Resource
+reload retains the injected service and rebinds its completion listener. A restarted host has no
+control handles or retained command output to reconstruct from history.
+
+The draft facade and resource publisher are public only through this module's barrel. Its only new
+external dependency is `pi-background-commands`; there is no `agent` → `terminal`, `subprocess`,
+settings or workspaces edge. The owning parent graph records this package dependency.
 
 ## Get right
 
