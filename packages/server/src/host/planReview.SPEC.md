@@ -47,9 +47,14 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   system prompt (review order, what counts as a finding, the JSON contract); `todos.renderReviewPackage`
   renders a change-set *reference* and the worker's claims, and names no tool. A package that instructs
   tools the reviewer does not have is a prompt that contradicts itself — the bug this split prevents.
-- **Model output is untrusted.** `parseVerdict` is strict on the verdict word and lenient on findings
-  (each needs `id` + `body`; location optional). Unparsable output is a failed review, not a silent
-  approve: the mark is cleared and the item returns to unreviewed.
+- **Model output is untrusted.** `parseVerdict` is strict on the verdict word and validates every finding
+  through contracts' `isPlanReviewResult`: each needs a non-empty `id` + `body`, a `kind` (if present) from
+  the known enum, and a coherent positive line range (a line requires a path, an `endLine` requires a
+  `startLine`, `endLine >= startLine`) — a malformed location would otherwise throw in `fileFinding`'s
+  anchor resolution and drop the finding silently. Cardinality is enforced too: a `request_changes` with no
+  finding is rejected (it would strand the worker with nothing to fix), while an `approve` may carry none.
+  Any invalid output is a failed review, not a silent approve: the mark is cleared and the item returns to
+  unreviewed.
 - **The `reviewing` mark is set synchronously** at start/enqueue, so the panel pulses the instant the
   client re-reads the plan — before any await.
 - **`autoCycles` must match what actually happened.** `1` stands only when the worker really accepted the
