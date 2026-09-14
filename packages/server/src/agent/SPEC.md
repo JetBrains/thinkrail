@@ -559,7 +559,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     (a private message-entry loop here once drifted: compaction is an entry *type*, not a message
     role, so a compacted child's transcript lost its `compactionSummary` marker — PR #303 review
     finding, test-pinned; absent after restart/dispose; wire meaning: [[module-contracts]]).
-    A missing transcript throws `CodedError("SUBAGENT_TRANSCRIPT_NOT_FOUND")` — the **permanent**
+    Pi writes the first transcript file lazily. A registered child belonging to the requested parent
+    therefore returns an empty message list with its authoritative status until that file exists;
+    queued/running remains pollable, including before the first provider reply. This is not a
+    reconstruction from task text. A missing file without that owned handle throws
+    `CodedError("SUBAGENT_TRANSCRIPT_NOT_FOUND")` — the **permanent**
     miss the web dialog stops polling on, named on the wire instead of pattern-matched from the
     message ([[module-contracts]] owns the code set; this uses the agent module's narrow
     `@thinkrail/shared/codedError` edge, shared with Chat Resources and mirroring `git`'s use).

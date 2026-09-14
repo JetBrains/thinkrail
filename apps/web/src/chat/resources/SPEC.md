@@ -1,7 +1,7 @@
 ---
 id: submodule-web-chat-resources
 type: submodule-design
-status: draft
+status: active
 title: Chat Resources — command and subagent inspection and controls
 parent: submodule-web-chat
 depends-on: [module-contracts]
@@ -14,8 +14,8 @@ The current chat's **Resources** header affordance, compact resource list and re
 presentation. It makes agent-created work inspectable and stoppable without scrolling to old tool
 calls or confusing that work with user-owned workspace terminals.
 
-The user selected a header popover, not a permanent pane or workbench tab. This is a draft design;
-the module is not implemented yet.
+The header popover stays within the existing compact, utilitarian chat chrome, not a permanent pane
+or workbench tab.
 
 ## Boundary
 
@@ -58,7 +58,7 @@ controls until it has current authority, and an old-host connection hides the un
 rather than displaying an empty list as proof nothing is running.
 
 Closing the popover, log dialog or chat placement never stops work. Keyboard focus returns to the
-invoking resource row or header control as appropriate. Use existing Radix primitives, token-only
+header trigger after details close, since the invoking row unmounts with the popover. Use existing Radix primitives, token-only
 styling and visible text alongside status icons; color and animation are not the sole status signals.
 
 ## Verification obligations
