@@ -1,5 +1,4 @@
 export type InstallPlatform = "macos" | "windows" | "linux";
-export type WindowsShell = "powershell" | "cmd" | "wsl";
 
 type DesktopDownload = {
 	architecture: string;
@@ -16,25 +15,7 @@ type InstallPlatformOption = {
 	};
 };
 
-const installScriptUrls = {
-	sh: "https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh",
-	powershell: "https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1",
-} as const;
-
 const stableDesktopReleaseUrl = "https://github.com/JetBrains/thinkrail/releases/latest/download";
-
-const unix = `curl -fsSL ${installScriptUrls.sh} | bash`;
-const powershell = `irm ${installScriptUrls.powershell} | iex`;
-
-export const installCommands = {
-	macos: unix,
-	linux: unix,
-	windows: {
-		powershell,
-		cmd: `powershell -c "${powershell}"`,
-		wsl: unix,
-	},
-} as const;
 
 const installPlatformOptions = {
 	macos: {
@@ -101,16 +82,6 @@ export function directDesktopDownload(platform: InstallPlatform): DesktopDownloa
 	return downloads.length === 1 ? downloads[0] : undefined;
 }
 
-export const windowsShells: ReadonlyArray<{
-	id: WindowsShell;
-	label: string;
-	accessibleLabel: string;
-}> = [
-	{ id: "powershell", label: "PowerShell", accessibleLabel: "PowerShell" },
-	{ id: "cmd", label: "CMD", accessibleLabel: "Command Prompt (cmd)" },
-	{ id: "wsl", label: "WSL", accessibleLabel: "Windows Subsystem for Linux" },
-];
-
 type PlatformNavigator = {
 	platform: string;
 	userAgent?: string;
@@ -127,9 +98,4 @@ export function detectInstallPlatform(nav: PlatformNavigator): InstallPlatform |
 	if (/mac/.test(platform)) return "macos";
 	if (/linux|x11/.test(platform)) return "linux";
 	return undefined;
-}
-
-export function installCommand(platform: InstallPlatform, shell: WindowsShell): string {
-	if (platform !== "windows") return installCommands[platform];
-	return installCommands.windows[shell];
 }

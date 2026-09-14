@@ -85,8 +85,9 @@ import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "
 										</div>
 									</div>
 									<details class="cli-disclosure">
-										<summary>Install via CLI</summary>
+										<summary>Browser UI via command line</summary>
 										<div class="cli-disclosure-body">
+											<p class="browser-ui-note">Install the local launcher; run <code>thinkrail</code> to open the browser UI.</p>
 											{id === "windows" && (
 												<div class="windows-shell-tabs" role="tablist" aria-label="Choose your Windows shell">
 													<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-powershell-tab" aria-controls="hero-shell-powershell" aria-selected="true" data-windows-shell="powershell">{windowsShellLabels.powershell}</button>
@@ -362,8 +363,9 @@ import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "
 					</div>
 					<p class="install-linux-note">Linux: extract the archive, run <code>./installer</code>, and check the <a href="https://github.com/JetBrains/thinkrail#install">native library requirements</a>.</p>
 					<details class="install-reference">
-						<summary>Install via CLI</summary>
+						<summary>Browser UI via command line</summary>
 						<div class="install-reference-body">
+							<p class="browser-ui-note">Install the local launcher, then run <code>thinkrail</code> to open the browser UI.</p>
 							<div class="install-cli-row">
 								<span>macOS, Linux, WSL</span>
 								<div class="install-line">

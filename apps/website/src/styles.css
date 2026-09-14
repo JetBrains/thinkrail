@@ -1128,6 +1128,13 @@ html.install-tabs-ready .install-panel {
 	padding: 2px 12px 12px;
 }
 
+p.browser-ui-note {
+	margin: 0 0 8px;
+	color: var(--muted);
+	font-size: 11.5px;
+	line-height: 1.45;
+}
+
 .cli-disclosure-body .windows-shell-tabs {
 	margin-bottom: 8px;
 }

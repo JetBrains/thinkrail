@@ -120,7 +120,7 @@ landing + blog shells                      ──▶ src/components/Analytics.as
   and via the file tree), and animations are skipped under `prefers-reduced-motion`.
 - **Enhancement behaviors owned by `main.ts`** (the code carries no rationale — this is it):
   - *Terminal replay*: the hero install picker keeps the selected OS/shell's primary desktop action and
-    CLI disclosure together; the command inside static markup is the single source of truth for the terminal,
+    **Browser UI via command line** disclosure together; the launcher command inside static markup is the single source of truth for the terminal,
     which subscribes and types it before the short install transcript. A generation counter invalidates an
     in-flight sequence on OS change; clicking the
     *finished* terminal (or its keyboard-reachable `Replay logo` button, revealed only then) replays
@@ -140,7 +140,8 @@ landing + blog shells                      ──▶ src/components/Analytics.as
   desktop application the only expanded action in each panel: macOS Apple Silicon DMG, Windows x64
   setup ZIP, and distinct Linux x64 / ARM64 setup archives. Each panel carries one compatibility line;
   it does not repeat product name, desktop/stability prose, or format outside the action label. A native
-  **Install via CLI** disclosure retains the old installer without competing for initial height. Windows
+  **Browser UI via command line** disclosure retains the local launcher and explains that `thinkrail` opens
+  the browser UI, without presenting a second terminal-only interface. Windows
   adds **PowerShell / Command Prompt (cmd) / WSL** tabs only inside that disclosure: PowerShell runs
   `irm …/install.ps1 | iex`, Command Prompt launches `powershell -c "irm …/install.ps1 | iex"`, and
   WSL uses `install.sh`. The closed picker stays under 150px on desktop and 190px on mobile. Versionless
@@ -149,7 +150,8 @@ landing + blog shells                      ──▶ src/components/Analytics.as
   choose only the initial supported desktop OS; they never hide alternatives, infer Linux CPU architecture,
   or claim to detect an ambiguous mobile platform. Every panel remains in the static DOM; JS turns the
   complete fallback into tabs, while `<details>` owns keyboard/no-JS disclosure semantics. The detailed
-  `INSTALL.md` section is one compact platform-row matrix plus one CLI disclosure; nightly/version examples
+  `INSTALL.md` section is one compact platform-row matrix plus one browser-UI-via-command-line disclosure;
+  nightly/version examples
   live in release documentation rather than the marketing page.
 
 ## Analytics and consent

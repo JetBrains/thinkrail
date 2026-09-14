@@ -1,13 +1,6 @@
-import { Check, Copy, Download } from "lucide-react";
-import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
-import {
-	detectInstallPlatform,
-	type InstallPlatform,
-	installCommand,
-	installPlatforms,
-	type WindowsShell,
-	windowsShells,
-} from "./installCommands";
+import { Download } from "lucide-react";
+import { type KeyboardEvent, type ReactNode, useEffect, useId, useState } from "react";
+import { detectInstallPlatform, type InstallPlatform, installPlatforms } from "./desktopDownloads";
 
 export function useDetectedInstallPlatform(): InstallPlatform | null | undefined {
 	const [platform, setPlatform] = useState<InstallPlatform | null>();
@@ -59,94 +52,14 @@ export function CompactDownloadAction({
 	);
 }
 
-export function InstallPicker({ context }: { context: string }) {
+export function InstallPicker() {
 	const pickerId = useId();
 	const detectedPlatform = useDetectedInstallPlatform();
 	const [platform, setPlatform] = useState<InstallPlatform>();
-	const [shell, setShell] = useState<WindowsShell>();
-	const [copiedCommand, setCopiedCommand] = useState<string>();
-	const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 	const activePlatform = platform ?? detectedPlatform ?? "macos";
-	const activeShell = shell ?? "powershell";
-
-	useEffect(() => {
-		setShell("powershell");
-		return () => {
-			if (copiedTimer.current) clearTimeout(copiedTimer.current);
-		};
-	}, []);
-
-	const copy = async (command: string) => {
-		try {
-			await navigator.clipboard.writeText(command);
-			setCopiedCommand(command);
-			if (copiedTimer.current) clearTimeout(copiedTimer.current);
-			copiedTimer.current = setTimeout(() => setCopiedCommand(undefined), 1400);
-		} catch {
-			setCopiedCommand(undefined);
-		}
-	};
 
 	const platformTabId = (value: InstallPlatform) => `${pickerId}-platform-${value}-tab`;
 	const platformPanelId = (value: InstallPlatform) => `${pickerId}-platform-${value}-panel`;
-	const shellTabId = (value: WindowsShell) => `${pickerId}-shell-${value}-tab`;
-	const shellPanelId = (value: WindowsShell) => `${pickerId}-shell-${value}-panel`;
-
-	const shellTabs = () => (
-		<div
-			role="tablist"
-			aria-label="Choose your Windows shell"
-			className="mt-1 flex flex-wrap items-stretch gap-1 rounded-sm"
-		>
-			{windowsShells.map((option) => {
-				const selected = option.id === activeShell;
-				return (
-					<button
-						key={option.id}
-						id={shellTabId(option.id)}
-						type="button"
-						role="tab"
-						aria-controls={shellPanelId(option.id)}
-						aria-label={option.accessibleLabel}
-						aria-selected={selected}
-						tabIndex={selected ? 0 : -1}
-						onClick={() => setShell(option.id)}
-						onKeyDown={(event) => moveTab(event, windowsShells, activeShell, setShell)}
-						className={`min-h-8 rounded-sm px-2 py-1 text-[12px] leading-none transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ${
-							selected
-								? "bg-control-bg-hovered text-text-default"
-								: "text-text-muted hover:bg-control-bg hover:text-text-strong"
-						}`}
-					>
-						{option.label}
-					</button>
-				);
-			})}
-		</div>
-	);
-
-	const commandLine = (command: string) => {
-		const copied = copiedCommand === command;
-		return (
-			<div className="group flex min-h-10 items-stretch overflow-hidden rounded-sm border border-border bg-container-terminal-bg">
-				<code className="font-mono flex min-w-0 flex-1 items-center px-3 py-2 text-[12px] leading-relaxed break-all text-primary">
-					{command}
-				</code>
-				<button
-					type="button"
-					onClick={() => copy(command)}
-					aria-label={copied ? "Install command copied" : "Copy install command"}
-					className="flex w-10 flex-none items-center justify-center border-l border-border text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
-				>
-					{copied ? (
-						<Check size={16} className="text-primary" aria-hidden="true" />
-					) : (
-						<Copy size={16} aria-hidden="true" />
-					)}
-				</button>
-			</div>
-		);
-	};
 
 	return (
 		<div className="max-w-4xl">
@@ -191,7 +104,7 @@ export function InstallPicker({ context }: { context: string }) {
 						key={option.id}
 						id={platformPanelId(option.id)}
 						role="tabpanel"
-						aria-label={`${context}: ${option.label} install options`}
+						aria-label={`${option.label} desktop downloads`}
 						hidden={
 							(detectedPlatform !== undefined || platform !== undefined) &&
 							option.id !== activePlatform
@@ -219,37 +132,6 @@ export function InstallPicker({ context }: { context: string }) {
 								))}
 							</div>
 						</div>
-
-						<details className="border-t border-border">
-							<summary className="min-h-9 cursor-pointer px-3 py-2 text-[12px] font-semibold text-text-default marker:text-text-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
-								Install via CLI
-							</summary>
-							<div className="px-3 pb-3">
-								{option.id === "windows" ? shellTabs() : null}
-
-								<div className="mt-2">
-									{option.id === "windows"
-										? windowsShells.map((shellOption) => (
-												<div
-													key={shellOption.id}
-													id={shellPanelId(shellOption.id)}
-													role="tabpanel"
-													aria-label={`${context}: ${shellOption.accessibleLabel} CLI command`}
-													hidden={shell !== undefined && shellOption.id !== shell}
-													data-install-shell-panel
-													data-selected={shellOption.id === activeShell}
-													className="mt-2 first:mt-0"
-												>
-													<p className="mb-1 text-[11px] text-text-muted">
-														{shellOption.accessibleLabel}
-													</p>
-													{commandLine(installCommand("windows", shellOption.id))}
-												</div>
-											))
-										: commandLine(installCommand(option.id, activeShell))}
-								</div>
-							</div>
-						</details>
 					</section>
 				))}
 			</div>

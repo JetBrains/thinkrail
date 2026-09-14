@@ -2,21 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CallToAction, desktopCtaAction } from "./CallToAction";
+import { detectInstallPlatform, directDesktopDownload, installPlatforms } from "./desktopDownloads";
 import { HeroQuickStart } from "./HeroQuickStart";
-import {
-	detectInstallPlatform,
-	directDesktopDownload,
-	installCommand,
-	installCommands,
-	installPlatforms,
-} from "./installCommands";
 
 function occurrences(source: string, value: string): number {
 	return source.split(value).length - 1;
-}
-
-function renderedText(value: string): string {
-	return renderToStaticMarkup(createElement("span", null, value)).slice(6, -7);
 }
 
 describe("desktop install model", () => {
@@ -88,22 +78,8 @@ describe("desktop CTA", () => {
 	});
 });
 
-describe("install commands", () => {
-	test("uses the shell-native command for each target", () => {
-		expect(installCommand("macos", "powershell")).toBe(installCommands.macos);
-		expect(installCommand("linux", "cmd")).toBe(installCommands.linux);
-		expect(installCommand("windows", "powershell")).toBe(
-			"irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex",
-		);
-		expect(installCommand("windows", "cmd")).toBe(
-			'powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"',
-		);
-		expect(installCommand("windows", "wsl")).toBe(installCommands.linux);
-	});
-});
-
 describe("server-rendered install controls", () => {
-	test("keeps every desktop link and CLI command discoverable without a second picker", () => {
+	test("keeps every desktop link discoverable without command-line controls or a second picker", () => {
 		const markup = renderToStaticMarkup(
 			createElement("div", null, createElement(HeroQuickStart), createElement(CallToAction)),
 		);
@@ -114,23 +90,11 @@ describe("server-rendered install controls", () => {
 			}
 		}
 
-		const commands = new Set([
-			installCommands.macos,
-			installCommands.linux,
-			installCommands.windows.powershell,
-			installCommands.windows.cmd,
-			installCommands.windows.wsl,
-		]);
-		for (const command of commands) {
-			expect(markup).toContain(renderedText(command));
-		}
-
 		expect(occurrences(markup, 'aria-label="Choose your operating system"')).toBe(1);
-		expect(markup).toContain('aria-label="Quick start: macOS install options"');
-		expect(occurrences(markup, "<details")).toBe(3);
-		expect(markup).not.toContain("<details open");
-		expect(markup).toContain('aria-label="Choose your Windows shell"');
-		expect(markup).toContain("Install via CLI");
+		expect(markup).toContain('aria-label="macOS desktop downloads"');
+		expect(markup).not.toContain("<details");
+		expect(markup).not.toContain("Browser UI via command line");
+		expect(markup).not.toContain("raw.githubusercontent.com/JetBrains/thinkrail");
 		expect(markup).toContain('href="#quick-start"');
 		expect(markup).toContain("View desktop downloads");
 		expect(markup).not.toContain("All platforms");

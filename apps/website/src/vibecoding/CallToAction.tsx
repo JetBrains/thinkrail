@@ -1,5 +1,9 @@
+import {
+	directDesktopDownload,
+	getInstallPlatform,
+	type InstallPlatform,
+} from "./desktopDownloads";
 import { CompactDownloadAction, useDetectedInstallPlatform } from "./InstallPicker";
-import { directDesktopDownload, getInstallPlatform, type InstallPlatform } from "./installCommands";
 import { Reveal } from "./Reveal";
 import { Subtitle } from "./Subtitle";
 
