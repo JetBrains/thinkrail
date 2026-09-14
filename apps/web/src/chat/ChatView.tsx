@@ -10,7 +10,15 @@ import type {
 } from "@thinkrail/contracts";
 import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
@@ -51,12 +59,14 @@ import {
 } from "./nativeCommands";
 import { planGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
+import { CommandLogView, ResourcesButton, ResourcesContent } from "./resources";
 import { estimateChatRowHeights, type RowHeightEstimateCache } from "./rowHeightEstimates";
 import { type ChatRow, deriveRows, projectRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
 import { SubagentTranscriptDialog } from "./SubagentTranscriptDialog";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
+import { useChatResources, useCommandLog } from "./useChatResources";
 import { useModelCatalog } from "./useModelCatalog";
 import { useSessionStats } from "./useSessionStats";
 import "./tools/register";
@@ -292,7 +302,42 @@ export default function ChatView({
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [templatesEmpty, setTemplatesEmpty] = useState(false);
 	const [saveAsTemplateHit, setSaveAsTemplateHit] = useState<PromptHit | null>(null);
-	const [transcriptChildId, setTranscriptChildId] = useState<string | null>(null);
+	const [transcriptSelection, setTranscriptSelection] = useState<{
+		workspaceId: string;
+		sessionId: string;
+		childSessionId: string;
+	} | null>(null);
+	const transcriptChildId =
+		transcriptSelection?.workspaceId === workspaceId && transcriptSelection.sessionId === sessionId
+			? transcriptSelection.childSessionId
+			: null;
+	const setTranscriptChildId = useCallback(
+		(childSessionId: string | null) =>
+			setTranscriptSelection(childSessionId ? { workspaceId, sessionId, childSessionId } : null),
+		[workspaceId, sessionId],
+	);
+	const resources = useChatResources(workspaceId, sessionId);
+	const resourcesTrigger = useRef<HTMLButtonElement>(null);
+	const resourceDetailOpening = useRef(false);
+	const resourceTranscript = useRef(false);
+	const [resourcesOpen, setResourcesOpen] = useState(false);
+	const [stopAllOpen, setStopAllOpen] = useState(false);
+	const [commandDetail, setCommandDetail] = useState<{
+		workspaceId: string;
+		sessionId: string;
+		id: string;
+		name: string;
+	} | null>(null);
+	const selectedCommand =
+		commandDetail?.workspaceId === workspaceId && commandDetail.sessionId === sessionId
+			? commandDetail
+			: null;
+	const commandLog = useCommandLog(workspaceId, sessionId, selectedCommand?.id ?? null);
+	const returnToResources = (event: Event) => {
+		event.preventDefault();
+		resourceDetailOpening.current = false;
+		resourcesTrigger.current?.focus();
+	};
 
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const latestUserRow = useMemo(() => {
@@ -827,6 +872,60 @@ export default function ChatView({
 						<PopoverAnchor asChild>
 							<div className="shrink-0">
 								<ChatHeader
+									resources={
+										resources.visible ? (
+											<Popover open={resourcesOpen} onOpenChange={setResourcesOpen}>
+												<PopoverTrigger asChild>
+													<ResourcesButton
+														ref={resourcesTrigger}
+														activeCount={resources.groups.activeCount}
+														open={resourcesOpen}
+													/>
+												</PopoverTrigger>
+												<PopoverContent
+													data-testid="resources-popover"
+													align="end"
+													className="max-h-[min(70vh,var(--radix-popover-content-available-height))] w-[360px] max-w-[calc(100vw-24px)] overflow-y-auto"
+													onCloseAutoFocus={(event) => {
+														if (resourceDetailOpening.current) event.preventDefault();
+													}}
+												>
+													<ResourcesContent
+														{...resources.groups}
+														authoritative={resources.authoritative}
+														loading={resources.loading}
+														stale={resources.stale}
+														error={resources.projection?.error ?? null}
+														actions={resources.actions}
+														onRetry={resources.retry}
+														onStopCommand={resources.stopCommand}
+														onStopSubagent={resources.stopSubagent}
+														onLogs={(command) => {
+															resourceDetailOpening.current = true;
+															setResourcesOpen(false);
+															setCommandDetail({
+																workspaceId,
+																sessionId,
+																id: command.id,
+																name: command.name,
+															});
+														}}
+														onTranscript={(childId) => {
+															resourceDetailOpening.current = true;
+															resourceTranscript.current = true;
+															setResourcesOpen(false);
+															setTranscriptChildId(childId);
+														}}
+														onStopAll={() => {
+															resourceDetailOpening.current = true;
+															setResourcesOpen(false);
+															setStopAllOpen(true);
+														}}
+													/>
+												</PopoverContent>
+											</Popover>
+										) : null
+									}
 									stats={stats}
 									statusEntries={Object.entries(extUiStatus)}
 									left={
@@ -1033,11 +1132,69 @@ export default function ChatView({
 					{pendingExtUi ? (
 						<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
 					) : null}
+					{selectedCommand ? (
+						<Dialog
+							open
+							onOpenChange={(open) => {
+								if (!open) setCommandDetail(null);
+							}}
+						>
+							<DialogContent
+								data-testid="command-log-dialog"
+								className="h-[75vh] max-h-[720px] max-w-3xl"
+								onCloseAutoFocus={returnToResources}
+							>
+								<DialogTitle className="pr-24">{selectedCommand.name} — Logs</DialogTitle>
+								<DialogDescription>
+									Read-only command output. Closing this view does not stop the command.
+								</DialogDescription>
+								<CommandLogView {...commandLog} onRetry={commandLog.retry} />
+							</DialogContent>
+						</Dialog>
+					) : null}
+					<Dialog open={stopAllOpen} onOpenChange={setStopAllOpen}>
+						<DialogContent onCloseAutoFocus={returnToResources}>
+							<DialogTitle>Stop all subagents?</DialogTitle>
+							<DialogDescription>
+								Stop {resources.groups.subagents.length} active subagents in this chat? The main
+								chat and future delegation are unaffected.
+							</DialogDescription>
+							<DialogFooter>
+								<Button variant="ghost" onClick={() => setStopAllOpen(false)}>
+									Cancel
+								</Button>
+								<Button
+									data-testid="resources-stop-all-confirm"
+									disabled={
+										!resources.authoritative ||
+										resources.groups.subagents.length === 0 ||
+										resources.actions.all?.pending
+									}
+									onClick={() => {
+										resources.stopAll();
+										setStopAllOpen(false);
+										setResourcesOpen(true);
+									}}
+								>
+									Stop {resources.groups.subagents.length} subagents
+								</Button>
+							</DialogFooter>
+						</DialogContent>
+					</Dialog>
 					{transcriptChildId ? (
 						<SubagentTranscriptDialog
+							key={`${workspaceId}:${sessionId}:${transcriptChildId}`}
 							workspaceId={workspaceId}
 							parentSessionId={sessionId}
 							childSessionId={transcriptChildId}
+							{...(resourceTranscript.current
+								? {
+										onCloseAutoFocus: (event: Event) => {
+											returnToResources(event);
+											resourceTranscript.current = false;
+										},
+									}
+								: {})}
 							onOpenChange={(open) => {
 								if (!open) setTranscriptChildId(null);
 							}}

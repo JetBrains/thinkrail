@@ -81,9 +81,13 @@ Resource wire coverage opens persisted chat fixtures through the real UI and che
 catalog's session/workspace scope, missing-output result, unavailable controls and empty stop-all.
 Historical fixtures are seeded before entering their workspace, so discovery does not race a just-created
 placement's persistence during browser reload. It never seeds a running resource or turns transcript
-text into execution authority. Real managed
-commands and child agents belong in tagged provider-backed coverage; SDK faux-provider unit tests
-are not evidence of browser agent execution.
+text into execution authority. The empty-catalog UI probes cover keyboard focus, narrow layouts,
+welcome/reconnect hydration and old-host capability hiding using real responses; the old-host probe
+changes only the advertised protocol version. Tagged provider-backed probes launch real commands and
+children through agent tools, inspect bounded plain-text logs/transcripts, verify chat isolation,
+reload and closed-popover completion, and exercise individual Stop and confirmed Stop all. They never
+select a model or seed a running-resource catalog. SDK faux-provider unit tests are not evidence of
+browser agent execution.
 
 Native wheel probes target the actual transcript viewport again after clicking a floating Latest
 button; a pointer left at a removed overlay is not evidence of a gesture delivered to the scroller.

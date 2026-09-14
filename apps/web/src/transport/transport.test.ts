@@ -80,6 +80,20 @@ test("advertises the client protocol version in the WebSocket handshake", () => 
 });
 
 describe("WsTransport channel replay", () => {
+	test("resource invalidations deliver live but are not replayed on remount", () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const socket = TestWebSocket.instances[0];
+		socket?.open();
+		const received: unknown[] = [];
+		transport.subscribe(WS_CHANNELS.sessionResourcesChanged, (payload) => received.push(payload));
+		const data = { workspaceId: "workspace", sessionId: "session" };
+		socket?.message(JSON.stringify({ channel: WS_CHANNELS.sessionResourcesChanged, data }));
+		expect(received).toEqual([data]);
+		const replay: unknown[] = [];
+		transport.subscribe(WS_CHANNELS.sessionResourcesChanged, (payload) => replay.push(payload));
+		expect(replay).toEqual([]);
+	});
 	test("does not replay a stale terminal takeover to a late terminal body", () => {
 		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
 		transport.connect();

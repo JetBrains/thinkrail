@@ -145,6 +145,8 @@ export function estimateChatRowHeight(row: ChatRow): number {
 			return clampHeight(20 + wrappedLines(row.text) * PROSE_LINE_HEIGHT);
 		case "error":
 			return clampHeight(28 + wrappedLines(row.text) * PROSE_LINE_HEIGHT);
+		case "backgroundCommandCompletion":
+			return 160;
 		case "subagentCompletion":
 			return 64;
 		case "tool":
