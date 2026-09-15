@@ -26,6 +26,7 @@ import {
 	selectSkillsStale,
 	specPathMatcher,
 	workspaceActivityRollup,
+	workspaceKnownChatCount,
 } from "./selectors";
 
 const projects: Project[] = [
@@ -168,6 +169,54 @@ test("layout placement lookup traverses recursive center and every auxiliary reg
 	expect(selectAttentionCenterResourceCacheKey(state, "ws")).toBe("file:a");
 	state.tabsByWorkspace.ws[0] = { ...cachedResource, id: "legacy-file-placement" };
 	expect(selectAttentionCenterResourceCacheKey(state, "ws")).toBe("legacy-file-placement");
+});
+
+test("known chat count includes persisted layout placements before their render caches hydrate", () => {
+	const layout: WorkspaceLayoutDocument = {
+		version: 2,
+		center: {
+			kind: "split",
+			id: "split",
+			direction: "horizontal",
+			weights: [0.5, 0.5],
+			children: [
+				{
+					kind: "group",
+					id: "a",
+					tabs: [{ kind: "chat", id: "chat-a", name: "A", sessionId: "session-a" }],
+				},
+				{
+					kind: "group",
+					id: "b",
+					tabs: [
+						{ kind: "chat", id: "chat-b", name: "B", sessionId: "session-b" },
+						{
+							kind: "document",
+							id: "plan-b",
+							name: "Plan",
+							documentKind: "todo-plan",
+							sourceId: "session-plan",
+							docPath: ".pi/todos/session-plan.json",
+						},
+					],
+				},
+			],
+		},
+		left: { visible: false, width: 0.2, groups: [] },
+		right: { visible: false, width: 0.2, groups: [] },
+		bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+		toolRestoreTargets: {},
+	};
+	expect(
+		workspaceKnownChatCount(
+			{
+				layoutDocumentsByWorkspace: { ws: layout },
+				tabsByWorkspace: { ws: [] },
+				closedChatsByWorkspace: { ws: [{ sessionId: "session-a", title: "A", closedAt: 1 }] },
+			},
+			"ws",
+		),
+	).toBe(2);
 });
 
 test("registered documents participate in legacy selection readiness", () => {

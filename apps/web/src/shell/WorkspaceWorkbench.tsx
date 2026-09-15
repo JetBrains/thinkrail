@@ -5,6 +5,7 @@ import {
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { AttentionDot } from "../components/AttentionDot";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
@@ -36,8 +37,10 @@ import {
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	selectWorkspaceTick,
+	sessionNeedsAttention,
 	toast,
 	useAppStore,
+	workspaceKnownChatCount,
 } from "../store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "../transport";
 import {
@@ -210,6 +213,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
+	const attentionByWorkspace = useAppStore((state) => state.attentionByWorkspace);
+	const knownChatCount = useAppStore((state) => workspaceKnownChatCount(state, workspaceId));
 	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
 	const terminalClose = useTerminalClose();
@@ -570,6 +575,13 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				{...(focusRequest ? { focusRequest } : {})}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={(tab) => {
+					if (
+						tab.kind === "chat" &&
+						knownChatCount > 1 &&
+						sessionNeedsAttention(attentionByWorkspace, workspaceId, tab.sessionId)
+					) {
+						return <AttentionDot />;
+					}
 					if (tab.kind === "tool" && tab.tool === "review" && reviewDraftCount > 0) {
 						return (
 							<span

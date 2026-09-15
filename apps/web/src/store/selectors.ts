@@ -568,6 +568,7 @@ export function workspaceKnownChatCount(
 	state: {
 		tabsByWorkspace: Record<string, EditorTab[]>;
 		closedChatsByWorkspace: Record<string, ClosedChat[]>;
+		layoutDocumentsByWorkspace?: Record<string, WorkspaceLayoutDocument>;
 	},
 	workspaceId: string,
 ): number {
@@ -575,6 +576,18 @@ export function workspaceKnownChatCount(
 	for (const tab of state.tabsByWorkspace[workspaceId] ?? []) {
 		if (tab.kind === "chat") ids.add(tab.sessionId);
 	}
+	const collectPlacedChats = (node: WorkspaceLayoutDocument["center"]): void => {
+		if (node.kind === "split") {
+			collectPlacedChats(node.children[0]);
+			collectPlacedChats(node.children[1]);
+			return;
+		}
+		for (const tab of node.tabs) {
+			if (tab.kind === "chat") ids.add(tab.sessionId);
+		}
+	};
+	const document = state.layoutDocumentsByWorkspace?.[workspaceId];
+	if (document) collectPlacedChats(document.center);
 	return ids.size;
 }
 
