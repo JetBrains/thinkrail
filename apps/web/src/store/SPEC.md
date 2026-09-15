@@ -127,7 +127,7 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   resolves them against that workspace's last focus and commits local placement. Reopening an existing
   canonical resource changes attention only unless non-identity metadata changed. A late chat-title event may
   repair cache/history labels or a still-queued open, but cannot recreate a locally closed placement or steal
-  focus. **The approved durable-title fold (implementation pending)** routes
+  focus. **The durable-title fold** routes
   `session_info_changed` through the same one-home chat-label mutation already used by extension-UI
   `setTitle`: normalize an absent name to the `Chat` fallback; update the cached `ChatTab`, its existing local
   placement, any queued open, or its `closedChatsByWorkspace` row; and change no recency, runtime, placement,
