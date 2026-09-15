@@ -13,8 +13,6 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type {
-	ActivityStatus,
-	AgentMessage,
 	AgentSettlement,
 	AskUserQuestionResult,
 	ImageContent,
@@ -24,8 +22,6 @@ import type {
 	QueueLane,
 	RefreshedModels,
 	RemovedQueuedMessage,
-	SessionActivity,
-	SessionActivityPayload,
 	SessionAttention,
 	SessionAttentionPayload,
 	SessionCreatedPayload,
@@ -52,16 +48,6 @@ import {
 	restoreQuarantinedAttentionLedger,
 	saveAttentionLedger,
 } from "../persistence";
-import {
-	deriveActivityStatus,
-	deriveDiskActivityStatus,
-	messagesActivityMs,
-	parseTranscriptTail,
-	supersededFailedSessions,
-	TRANSCRIPT_TAIL_BYTES,
-	TRANSCRIPT_TAIL_MAX_BYTES,
-	type WorkspaceActivityRow,
-} from "./activity";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import {
 	type AttentionCandidate,
@@ -69,6 +55,8 @@ import {
 	deriveAttentionCandidate,
 	deriveDiskAttentionCandidate,
 	parseAttentionEntries,
+	TRANSCRIPT_TAIL_BYTES,
+	TRANSCRIPT_TAIL_MAX_BYTES,
 } from "./attention";
 import {
 	disposeSessionChildren,
@@ -90,7 +78,6 @@ import { trashFile } from "./trash";
 import {
 	cancelExtUiForSession,
 	createWebUiContext,
-	hasPendingExtUiDialog,
 	notifyExtensionError,
 	pendingExtUiDialogId,
 } from "./webUiContext";
@@ -116,9 +103,6 @@ interface Entry {
 	piCompactionInProgress: boolean;
 	registered: boolean;
 	subagentToolsRefreshPending: boolean;
-	publishedActivity: ActivityStatus | null;
-	rawActivity: ActivityStatus | null;
-	lastActivityMs: number;
 	publishedAttentionId: string | null;
 	abortAttentionTurnId: string | null | undefined;
 	abortHeldAttentionCandidate: AttentionCandidate | null;
@@ -169,11 +153,6 @@ export function setSessionDeletedPublisher(fn: (payload: SessionDeletedPayload) 
 	publishDeleted = fn;
 }
 
-let publishActivity: (payload: SessionActivityPayload) => void = () => {};
-export function setSessionActivityPublisher(fn: (payload: SessionActivityPayload) => void): void {
-	publishActivity = fn;
-}
-
 let publishAttention: (payload: SessionAttentionPayload) => void = () => {};
 export function setSessionAttentionPublisher(fn: (payload: SessionAttentionPayload) => void): void {
 	publishAttention = fn;
@@ -183,82 +162,6 @@ function effectivePendingCount(entry: Entry): number {
 	const stuck = entry.stuckEmptyDeliveries.steering + entry.stuckEmptyDeliveries.followUp;
 	return Math.max(0, entry.session.pendingMessageCount - stuck);
 }
-
-function activityOf(entry: Entry): ActivityStatus | null {
-	return deriveActivityStatus({
-		isStreaming: entry.session.isStreaming,
-		pendingMessageCount: effectivePendingCount(entry),
-		messages: entry.session.messages,
-		lastSettlement: entry.lastSettlement,
-		hasPendingDialog: hasPendingExtUiDialog(entry.session.sessionId),
-	});
-}
-
-function applyWorkspaceActivity(
-	workspaceId: string,
-	diskRows: readonly WorkspaceActivityRow[] = [],
-): void {
-	const projectId = activityProjectId(workspaceId);
-	if (projectId === null) return;
-	const entries: [string, Entry][] = [];
-	const liveRows: WorkspaceActivityRow[] = [];
-	for (const [id, entry] of sessions) {
-		if (entry.workspaceId !== workspaceId) continue;
-		entries.push([id, entry]);
-		if (isSessionDeleted(id, workspaceId)) continue;
-		liveRows.push({ sessionId: id, status: activityOf(entry), recencyMs: entry.lastActivityMs });
-	}
-	const rawById = new Map(liveRows.map((row) => [row.sessionId, row.status]));
-	const superseded = supersededFailedSessions([...liveRows, ...diskRows]);
-	for (const [id, entry] of entries) {
-		const raw = isSessionDeleted(id, workspaceId) ? null : (rawById.get(id) ?? null);
-		entry.rawActivity = raw;
-		const effective = superseded.has(id) ? null : raw;
-		if (effective === entry.publishedActivity) continue;
-		entry.publishedActivity = effective;
-		publishActivity({ sessionId: id, workspaceId, projectId, status: effective });
-	}
-}
-
-export function syncSessionActivity(sessionId: string): void {
-	const entry = sessions.get(sessionId);
-	if (!entry) return;
-	const raw = isSessionDeleted(sessionId, entry.workspaceId) ? null : activityOf(entry);
-	if (raw === entry.rawActivity) return;
-	entry.lastActivityMs = Date.now();
-	applyWorkspaceActivity(entry.workspaceId);
-}
-
-async function reconcileWorkspaceActivity(workspaceId: string): Promise<void> {
-	let cwd: string | undefined;
-	for (const entry of sessions.values()) {
-		if (entry.workspaceId !== workspaceId) continue;
-		cwd = entry.session.sessionManager.getCwd();
-		break;
-	}
-	let diskRows: WorkspaceActivityRow[] = [];
-	if (cwd !== undefined) {
-		try {
-			diskRows = await diskActivityRows(workspaceId, cwd);
-		} catch (error) {
-			log.warn(`activity reconcile skipped disk for workspace ${workspaceId}`, error as Error);
-		}
-	}
-	applyWorkspaceActivity(workspaceId, diskRows);
-}
-
-function retractActivity(sessionId: string, workspaceId: string): void {
-	const projectId = activityProjectId(workspaceId);
-	if (projectId === null) return;
-	publishActivity({ sessionId, workspaceId, projectId, status: null });
-}
-
-interface DiskActivityMemo {
-	modifiedMs: number;
-	messageCount: number;
-	status: ActivityStatus | null;
-}
-const diskActivityMemo = new Map<string, DiskActivityMemo>();
 
 const NEWLINE = 0x0a;
 
@@ -298,11 +201,6 @@ async function readTranscriptTailSource(path: string): Promise<TranscriptTailSou
 	}
 }
 
-async function readTranscriptTail(path: string): Promise<AgentMessage[]> {
-	const source = await readTranscriptTailSource(path);
-	return parseTranscriptTail(source.text, source.partialFirstLine);
-}
-
 async function readAttentionTranscriptTail(
 	path: string,
 ): Promise<{ entries: SessionEntry[]; truncated: boolean }> {
@@ -311,78 +209,6 @@ async function readAttentionTranscriptTail(
 		entries: parseAttentionEntries(source.text, source.partialFirstLine),
 		truncated: source.truncated,
 	};
-}
-
-async function diskActivityStatus(info: SessionInfo): Promise<ActivityStatus | null> {
-	const modifiedMs = info.modified.getTime();
-	const cached = diskActivityMemo.get(info.path);
-	if (cached && cached.modifiedMs === modifiedMs && cached.messageCount === info.messageCount) {
-		return cached.status;
-	}
-	const status = deriveDiskActivityStatus(await readTranscriptTail(info.path));
-	diskActivityMemo.set(info.path, { modifiedMs, messageCount: info.messageCount, status });
-	return status;
-}
-
-async function diskActivityRows(workspaceId: string, cwd: string): Promise<WorkspaceActivityRow[]> {
-	const liveFiles = new Set<string>();
-	for (const entry of sessions.values()) {
-		if (entry.workspaceId !== workspaceId) continue;
-		const file = entry.session.sessionManager.getSessionFile();
-		if (file) liveFiles.add(resolve(file));
-	}
-	const infos = await listSessionInfosStrict(cwd, liveFiles);
-	const rows: WorkspaceActivityRow[] = [];
-	for (const info of infos) {
-		if (info.cwd !== cwd) continue;
-		if (sessions.has(info.id) || isSessionDeleted(info.id, workspaceId)) continue;
-		rows.push({
-			sessionId: info.id,
-			status: await diskActivityStatus(info),
-			recencyMs: info.modified.getTime(),
-		});
-	}
-	return rows;
-}
-
-export async function listSessionActivity(
-	workspaces: readonly { id: string; cwd: string }[] = [],
-): Promise<SessionActivity[]> {
-	const byWorkspace = new Map<string, WorkspaceActivityRow[]>();
-	const addRow = (workspaceId: string, row: WorkspaceActivityRow): void => {
-		const list = byWorkspace.get(workspaceId);
-		if (list) list.push(row);
-		else byWorkspace.set(workspaceId, [row]);
-	};
-	for (const [sessionId, entry] of sessions) {
-		if (isSessionDeleted(sessionId, entry.workspaceId)) continue;
-		addRow(entry.workspaceId, {
-			sessionId,
-			status: activityOf(entry),
-			recencyMs: entry.lastActivityMs,
-		});
-	}
-	for (const workspace of workspaces) {
-		if (!byWorkspace.has(workspace.id)) byWorkspace.set(workspace.id, []);
-		try {
-			for (const row of await diskActivityRows(workspace.id, workspace.cwd)) {
-				addRow(workspace.id, row);
-			}
-		} catch (error) {
-			log.warn(`activity snapshot skipped workspace ${workspace.id}`, error as Error);
-		}
-	}
-	const rows: SessionActivity[] = [];
-	for (const [workspaceId, wsRows] of byWorkspace) {
-		const projectId = activityProjectId(workspaceId);
-		if (projectId === null) continue;
-		const superseded = supersededFailedSessions(wsRows);
-		for (const row of wsRows) {
-			if (row.status === null || superseded.has(row.sessionId)) continue;
-			rows.push({ sessionId: row.sessionId, workspaceId, projectId, status: row.status });
-		}
-	}
-	return rows;
 }
 
 interface DiskAttentionMemo {
@@ -767,19 +593,6 @@ export function setSkillAdmissionResolver(
 	skillAdmissionResolver = resolver;
 }
 
-let activityProjectResolver: (workspaceId: string) => string | null = () => null;
-export function setActivityProjectResolver(resolver: (workspaceId: string) => string | null): void {
-	activityProjectResolver = resolver;
-}
-
-function activityProjectId(workspaceId: string): string | null {
-	try {
-		return activityProjectResolver(workspaceId);
-	} catch {
-		return null;
-	}
-}
-
 let attentionProjectResolver: (workspaceId: string) => string | null = () => null;
 export function setAttentionProjectResolver(
 	resolver: (workspaceId: string) => string | null,
@@ -937,17 +750,10 @@ async function prepareSessionEntry(
 		piCompactionInProgress: false,
 		registered: false,
 		subagentToolsRefreshPending: false,
-		publishedActivity: null,
-		rawActivity: null,
-		lastActivityMs: Date.now(),
 		publishedAttentionId: null,
 		abortAttentionTurnId: undefined,
 		abortHeldAttentionCandidate: null,
 	};
-	entry.rawActivity = activityOf(entry);
-	entry.publishedAttentionId = effectiveAttentionOf(entry)?.id ?? null;
-	const seededRecencyMs = messagesActivityMs(session.messages);
-	if (seededRecencyMs !== null) entry.lastActivityMs = seededRecencyMs;
 	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "message_start" && event.message.role === "user") {
 			const lane = deliveredStuckEmptyLane(entry, event.message.content);
@@ -997,7 +803,6 @@ async function prepareSessionEntry(
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
 		if (sessions.get(sessionId) === entry) {
-			syncSessionActivity(sessionId);
 			if (
 				event.type === "agent_start" ||
 				event.type === "agent_settled" ||
@@ -1059,10 +864,10 @@ async function registerSession(
 	const prepared = await prepareSessionEntry(session, workspaceId, generation);
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
+	syncSessionAttention(session.sessionId);
 	applySubagentTools(prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
-	await reconcileWorkspaceActivity(workspaceId);
 	return prepared.result;
 }
 
@@ -1399,7 +1204,6 @@ export async function answerQuestion(
 	await session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
 		triggerTurn: true,
 	});
-	syncSessionActivity(sessionId);
 	syncSessionAttention(sessionId);
 }
 
@@ -1598,7 +1402,6 @@ export function clearQueueSession(sessionId: string, requireTextOnly = false): S
 	}
 	entry.session.clearQueue();
 	entry.stuckEmptyDeliveries = { steering: 0, followUp: 0 };
-	syncSessionActivity(sessionId);
 	syncSessionAttention(sessionId);
 	return content;
 }
@@ -1634,7 +1437,6 @@ export async function removeQueuedSession(
 			);
 		}
 	}
-	syncSessionActivity(sessionId);
 	syncSessionAttention(sessionId);
 	return { removed, queue: queueStateOf(entry) };
 }
@@ -1836,8 +1638,6 @@ function disposeSession(sessionId: string): Promise<void> {
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
-	if (entry.publishedActivity !== null) retractActivity(sessionId, entry.workspaceId);
-	applyWorkspaceActivity(entry.workspaceId);
 	log.debug(`session ${sessionId} disposed`);
 	return cascade;
 }
@@ -2004,13 +1804,11 @@ async function runDeleteTransaction(
 		if (path && existsSync(path)) {
 			await trashFile(path);
 			diskAttentionMemo.delete(path);
-			diskActivityMemo.delete(path);
 		}
 	} catch (error) {
 		pendingDeletionAttention.delete(sessionId);
 		if (installedTombstone) {
 			deletedSessions.delete(sessionId);
-			syncSessionActivity(sessionId);
 			syncSessionAttention(sessionId);
 		}
 		throw error;

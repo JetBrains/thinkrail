@@ -1,5 +1,4 @@
 import type {
-	ActivityStatus,
 	AppConfig,
 	AppConfigUpdate,
 	BranchList,
@@ -32,7 +31,6 @@ import type {
 	ReviewCommentKind,
 	ReviewCommentStatus,
 	ReviewSnapshot,
-	SessionActivity,
 	SessionAttention,
 	SpecGraphSnapshot,
 	SubagentOverride,
@@ -106,7 +104,6 @@ export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
 export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;
 export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
 export const FEEDBACK_INTERVIEW_PROTOCOL_VERSION = 56;
-export const ACTIVITY_PROTOCOL_VERSION = 60;
 export const ATTENTION_PROTOCOL_VERSION = 65;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
@@ -137,13 +134,6 @@ export type SessionCreatedPayload = SessionSummary;
 export interface SessionDeletedPayload {
 	workspaceId: string;
 	sessionId: string;
-}
-
-export interface SessionActivityPayload {
-	workspaceId: string;
-	projectId: string;
-	sessionId: string;
-	status: ActivityStatus | null;
 }
 
 export interface SessionAttentionPayload {
@@ -272,7 +262,6 @@ export const WS_CHANNELS = {
 	piExtensionUi: "pi.extensionUi",
 	sessionCreated: "session.created",
 	sessionDeleted: "session.deleted",
-	sessionActivity: "session.activity",
 	sessionAttention: "session.attention",
 	providerLogin: "provider.login",
 	providerChanged: "provider.changed",
@@ -534,7 +523,7 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"session.list": { params: { workspaceId: string }; result: SessionSummary[] };
-	"session.activityList": { params: Record<string, never>; result: SessionActivity[] };
+	"session.activityList": { params: Record<string, never>; result: [] };
 	"session.attentionList": { params: Record<string, never>; result: SessionAttention[] };
 	"session.acknowledgeAttention": {
 		params: { workspaceId: string; sessionId: string; attentionId: string };

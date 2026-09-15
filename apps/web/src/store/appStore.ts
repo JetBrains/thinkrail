@@ -1,5 +1,4 @@
 import type {
-	ActivityStatus,
 	AppConfig,
 	AskUserQuestionResult,
 	ComposerGrowthLimit,
@@ -15,8 +14,6 @@ import type {
 	RefreshedModels,
 	ReviewChangedPayload,
 	ReviewSnapshot,
-	SessionActivity,
-	SessionActivityPayload,
 	SessionAttentionPayload,
 	SessionAttention as SessionAttentionRow,
 	SessionEventPayload,
@@ -285,11 +282,6 @@ export const SettingsSection = {
 	Feedback: "feedback",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
-
-export interface WorkspaceActivity {
-	projectId: string;
-	sessions: Record<string, ActivityStatus>;
-}
 
 export interface SessionAttentionState {
 	attentionId: string;
@@ -785,7 +777,6 @@ interface AppState {
 	chatStartsByWorkspace: Record<string, number>;
 	worktreeCreationsByProject: Record<string, number>;
 	deletedSessionsByWorkspace: Record<string, Record<string, true>>;
-	activityByWorkspace: Record<string, WorkspaceActivity>;
 	attentionByWorkspace: Record<string, WorkspaceAttention>;
 	attentionHydrationEpoch: number;
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
@@ -971,8 +962,6 @@ interface AppState {
 		title: string,
 	) => void;
 	noteClosedChats: (workspaceId: string, entries: ClosedChat[]) => void;
-	hydrateSessionActivity: (rows: SessionActivity[]) => void;
-	applySessionActivity: (payload: SessionActivityPayload) => void;
 	hydrateSessionAttention: (rows: SessionAttentionRow[]) => void;
 	applySessionAttention: (payload: SessionAttentionPayload) => void;
 	hydrateSession: (
@@ -1152,40 +1141,6 @@ function reconcileProjectNavigation(
 function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 	const { [key]: _dropped, ...rest } = record;
 	return rest;
-}
-
-function sameActivityMap(
-	prev: Record<string, WorkspaceActivity>,
-	next: Record<string, WorkspaceActivity>,
-): boolean {
-	const prevKeys = Object.keys(prev);
-	if (prevKeys.length !== Object.keys(next).length) return false;
-	return prevKeys.every((workspaceId) => {
-		const before = prev[workspaceId];
-		const after = next[workspaceId];
-		if (!before || !after || before.projectId !== after.projectId) return false;
-		const sessionIds = Object.keys(before.sessions);
-		return (
-			sessionIds.length === Object.keys(after.sessions).length &&
-			sessionIds.every((sessionId) => before.sessions[sessionId] === after.sessions[sessionId])
-		);
-	});
-}
-
-function withoutSessionActivity(
-	s: AppState,
-	workspaceId: string,
-	sessionId: string,
-): Pick<AppState, "activityByWorkspace"> {
-	const current = s.activityByWorkspace[workspaceId];
-	if (!current) return { activityByWorkspace: s.activityByWorkspace };
-	const sessions = omitKey(current.sessions, sessionId);
-	return {
-		activityByWorkspace:
-			Object.keys(sessions).length === 0
-				? omitKey(s.activityByWorkspace, workspaceId)
-				: { ...s.activityByWorkspace, [workspaceId]: { ...current, sessions } },
-	};
 }
 
 function sameSessionAttention(
@@ -1439,7 +1394,6 @@ function withoutChat(
 	const inHistory = closed.some((chat) => chat.sessionId === sessionId);
 	const hasRuntime = s.sessions[sessionId] !== undefined;
 	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
-	const hasActivity = s.activityByWorkspace[workspaceId]?.sessions[sessionId] !== undefined;
 	const hasAttention = s.attentionByWorkspace[workspaceId]?.sessions[sessionId] !== undefined;
 	const targetsLocation =
 		s.chatLocationRequest?.workspaceId === workspaceId &&
@@ -1453,7 +1407,6 @@ function withoutChat(
 	if (
 		alreadyDeleted &&
 		sessionTabs.length === 0 &&
-		!hasActivity &&
 		!hasAttention &&
 		!inHistory &&
 		!hasRuntime &&
@@ -1522,7 +1475,6 @@ function withoutChat(
 				}
 			: {}),
 		...(hasRuntime ? { sessions: omitKey(s.sessions, sessionId) } : {}),
-		...(hasActivity ? withoutSessionActivity(s, workspaceId, sessionId) : {}),
 		...(hasAttention ? withoutSessionAttention(s, workspaceId, sessionId) : {}),
 		...(hasSkillBaseline
 			? { skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId) }
@@ -1719,7 +1671,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	recentProjects: [],
 	workspaces: {},
 	removedWorkspaceIds: Object.create(null) as Record<string, true>,
-	activityByWorkspace: Object.create(null) as Record<string, WorkspaceActivity>,
 	attentionByWorkspace: Object.create(null) as Record<string, WorkspaceAttention>,
 	attentionHydrationEpoch: 0,
 	expandedProjectIds: Object.create(null) as Record<string, true>,
@@ -1903,7 +1854,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 					(id) => id !== workspaceId,
 				),
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
-				activityByWorkspace: omitKey(state.activityByWorkspace, workspaceId),
 				attentionByWorkspace: omitKey(state.attentionByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
@@ -2823,39 +2773,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 					retargeted && s.previewTabByWorkspace[workspaceId] === placed?.id
 						? { ...s.previewTabByWorkspace, [workspaceId]: id }
 						: s.previewTabByWorkspace,
-			};
-		}),
-	hydrateSessionActivity: (rows) =>
-		set((s) => {
-			const next: Record<string, WorkspaceActivity> = Object.create(null);
-			for (const row of rows) {
-				if (s.removedWorkspaceIds[row.workspaceId]) continue;
-				if (isSessionDeleted(s, row.workspaceId, row.sessionId)) continue;
-				const forWorkspace =
-					next[row.workspaceId] ??
-					({ projectId: row.projectId, sessions: Object.create(null) } as WorkspaceActivity);
-				forWorkspace.sessions[row.sessionId] = row.status;
-				next[row.workspaceId] = forWorkspace;
-			}
-			return sameActivityMap(s.activityByWorkspace, next) ? {} : { activityByWorkspace: next };
-		}),
-	applySessionActivity: ({ workspaceId, projectId, sessionId, status }) =>
-		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
-			const current = s.activityByWorkspace[workspaceId];
-			if (status === null || isSessionDeleted(s, workspaceId, sessionId)) {
-				if (current?.sessions[sessionId] === undefined) return {};
-				return withoutSessionActivity(s, workspaceId, sessionId);
-			}
-			if (current?.sessions[sessionId] === status && current.projectId === projectId) return {};
-			return {
-				activityByWorkspace: {
-					...s.activityByWorkspace,
-					[workspaceId]: {
-						projectId,
-						sessions: { ...current?.sessions, [sessionId]: status },
-					},
-				},
 			};
 		}),
 	hydrateSessionAttention: (rows) =>

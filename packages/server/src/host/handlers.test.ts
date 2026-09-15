@@ -68,6 +68,10 @@ test("open-review cache reuse is opt-in so older clients remain fresh", () => {
 	expect(shouldRefreshOpenReview(true)).toBe(false);
 });
 
+test("the legacy activity snapshot retires old-client markers with an empty result", async () => {
+	expect(await handleRequest("session.activityList", {}, CTX)).toEqual([]);
+});
+
 test("request diagnostics expose only registered method names", async () => {
 	expect(requestMethodDiagnostic("workspace.list")).toBe("workspace.list");
 	expect(requestMethodDiagnostic("secret prompt value")).toBe("unknown method");

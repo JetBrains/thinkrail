@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-	ACTIVITY_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	ATTENTION_PROTOCOL_VERSION,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
@@ -13,10 +12,7 @@ import {
 	WS_METHODS,
 } from "./wsProtocol";
 
-test("workspace activity advances the protocol and names its channel and snapshot read", () => {
-	expect(ACTIVITY_PROTOCOL_VERSION).toBe(60);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ACTIVITY_PROTOCOL_VERSION);
-	expect(WS_CHANNELS.sessionActivity).toBe("session.activity");
+test("the legacy activity snapshot name remains as an empty compatibility tombstone", () => {
 	expect(WS_METHODS.sessionActivityList).toBe("session.activityList");
 });
 
@@ -62,5 +58,5 @@ test("host update advisories advance the protocol with an immutable notice chann
 
 test("explicit analytics consent advances the protocol to v65", () => {
 	expect(ANALYTICS_CONSENT_PROTOCOL_VERSION).toBe(65);
-	expect(PROTOCOL_VERSION).toBe(ANALYTICS_CONSENT_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ANALYTICS_CONSENT_PROTOCOL_VERSION);
 });

@@ -22,6 +22,9 @@ export interface AttentionInputs {
 
 const REVIEW_STOP_REASONS: ReadonlySet<string> = new Set(["stop", "error", "length"]);
 
+export const TRANSCRIPT_TAIL_BYTES = 64 * 1024;
+export const TRANSCRIPT_TAIL_MAX_BYTES = 8 * 1024 * 1024;
+
 interface MessageView {
 	role?: string;
 	stopReason?: string;
