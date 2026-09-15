@@ -11,25 +11,26 @@ describe("desktop installers", () => {
 			"Windows",
 			"Linux",
 		]);
+		expect(desktopInstallerPlatforms.map((platform) => platform.detail)).toEqual([
+			"Apple Silicon",
+			"Windows x64",
+			"Ubuntu 24.04+",
+		]);
 		expect(desktopInstallerPlatforms.flatMap((platform) => platform.downloads)).toEqual([
 			{
 				label: "Download .dmg",
-				detail: "Apple Silicon · .dmg · Stable",
 				href: `${RELEASE_DOWNLOAD_URL}/thinkrail-desktop-darwin-arm64.dmg`,
 			},
 			{
 				label: "Download .zip",
-				detail: "Windows x64 · unzip and run Setup",
 				href: `${RELEASE_DOWNLOAD_URL}/thinkrail-desktop-windows-x64.zip`,
 			},
 			{
-				label: "Download x64",
-				detail: "Linux x64 · Ubuntu 24.04+ · extract .tar.gz, then run ./installer",
+				label: "x64 .tar.gz",
 				href: `${RELEASE_DOWNLOAD_URL}/thinkrail-desktop-linux-x64.tar.gz`,
 			},
 			{
-				label: "Download ARM64",
-				detail: "Linux ARM64 · Ubuntu 24.04+ · extract .tar.gz, then run ./installer",
+				label: "ARM64 .tar.gz",
 				href: `${RELEASE_DOWNLOAD_URL}/thinkrail-desktop-linux-arm64.tar.gz`,
 			},
 		]);

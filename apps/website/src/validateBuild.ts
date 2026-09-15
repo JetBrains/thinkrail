@@ -73,7 +73,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 			html: pages.introducingThinkRail,
 			expectedDownloads: 1,
 		},
-		...islandPages.map((name) => ({ name, html: pages[name], expectedDownloads: 2 })),
+		...islandPages.map((name) => ({ name, html: pages[name], expectedDownloads: 1 })),
 	] as const;
 
 	for (const name of islandPages) {
@@ -109,11 +109,43 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	if (!pages.landing.includes('data-file="INSTALL.md"')) {
 		failures.push("landing: install section is not INSTALL.md");
 	}
+	for (const name of ["landing", ...islandPages] as const) {
+		for (const redundantCopy of [
+			"Native desktop application",
+			"Installs the CLI-only host",
+			"Prefer the command line?",
+			"Install via CLI",
+		]) {
+			if (pages[name].includes(redundantCopy)) {
+				failures.push(`${name}: retained redundant install copy: ${redundantCopy}`);
+			}
+		}
+	}
+	if (!pages.landing.includes("Browser UI via command line")) {
+		failures.push("landing: browser UI command-line option is missing");
+	}
+	for (const name of islandPages) {
+		for (const forbiddenCommandLineCopy of [
+			"Browser UI via command line",
+			"raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh",
+			"raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1",
+		]) {
+			if (pages[name].includes(forbiddenCommandLineCopy)) {
+				failures.push(`${name}: command-line option leaked: ${forbiddenCommandLineCopy}`);
+			}
+		}
+	}
 	for (const { name, html } of installPages) {
 		const desktopIndex = html.indexOf(desktopDownloadUrls[0]);
-		const cliIndex = html.indexOf("Prefer the command line?");
-		if (desktopIndex < 0 || cliIndex < 0 || desktopIndex > cliIndex) {
-			failures.push(`${name}: desktop download is not presented before the CLI alternative`);
+		const secondaryLabel =
+			name === "landing"
+				? "Browser UI via command line"
+				: name === "introducingThinkRail"
+					? "Prefer the command line?"
+					: null;
+		const secondaryIndex = secondaryLabel ? html.indexOf(secondaryLabel) : -1;
+		if (desktopIndex < 0 || (secondaryLabel && secondaryIndex < desktopIndex)) {
+			failures.push(`${name}: desktop download is not presented before the secondary option`);
 		}
 		if (!html.includes("./installer")) {
 			failures.push(`${name}: Linux desktop installation cue is missing`);

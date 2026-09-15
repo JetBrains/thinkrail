@@ -65,7 +65,7 @@ import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "
 									))}
 								</div>
 							</div>
-							{desktopInstallerPlatforms.map(({ id, label, product, downloads }) => (
+							{desktopInstallerPlatforms.map(({ id, label, detail, downloads }) => (
 								<div
 									class="install-panel"
 									id={`hero-install-${id}`}
@@ -75,30 +75,19 @@ import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "
 								>
 									<p class="install-fallback-heading">{label}</p>
 									<div class="desktop-install">
-										<div class="desktop-install-product">
-											<svg class="i" aria-hidden="true"><use href="#i-package" /></svg>
-											<div>
-												<strong class="desktop-install-title">{product}</strong>
-												<span class="desktop-install-kind">Native desktop application</span>
-											</div>
-										</div>
+										<span class="desktop-install-detail">{detail}</span>
 										<div class="desktop-install-actions">
 											{downloads.map((download) => (
-												<div class="desktop-install-action">
-													<a class="btn btn-primary desktop-download-link" href={download.href} aria-label={`${download.label} for ${label}: ${download.detail}`}>
-														{download.label} ↓
-													</a>
-													<span class="desktop-install-detail">{download.detail}</span>
-												</div>
+												<a class="btn btn-primary desktop-download-link" href={download.href} aria-label={`${download.label} for ${label}: ${detail}`}>
+													{download.label} ↓
+												</a>
 											))}
 										</div>
 									</div>
-									<div class="cli-alternative">
-										<div class="cli-alternative-header">
-											<div>
-												<strong class="cli-alternative-title">Prefer the command line?</strong>
-												<span class="cli-alternative-note">Installs the CLI-only host</span>
-											</div>
+									<details class="cli-disclosure">
+										<summary>Browser UI via command line</summary>
+										<div class="cli-disclosure-body">
+											<p class="browser-ui-note">Install the local launcher; run <code>thinkrail</code> to open the browser UI.</p>
 											{id === "windows" && (
 												<div class="windows-shell-tabs" role="tablist" aria-label="Choose your Windows shell">
 													<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-powershell-tab" aria-controls="hero-shell-powershell" aria-selected="true" data-windows-shell="powershell">{windowsShellLabels.powershell}</button>
@@ -106,7 +95,6 @@ import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "
 													<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-wsl-tab" aria-controls="hero-shell-wsl" aria-selected="false" tabindex="-1" data-windows-shell="wsl">{windowsShellLabels.wsl}</button>
 												</div>
 											)}
-										</div>
 										{id === "windows" ? (
 											<div class="windows-shell-picker">
 												<div class="windows-shell-panel" id="hero-shell-powershell" role="tabpanel" aria-labelledby="hero-shell-powershell-tab" data-windows-shell-panel="powershell">
@@ -148,15 +136,13 @@ import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "
 													<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
 												</button>
 											</div>
-										)}
-									</div>
+											)}
+										</div>
+									</details>
 								</div>
 							))}
 						</div>
 					</div>
-					<p class="hero-platforms">
-						Native desktop app for macOS (Apple Silicon), Linux ARM64 / x64, and Windows x64. CLI also available.
-					</p>
 					<div class="hero-ctas">
 						<a class="btn" href="https://github.com/JetBrains/thinkrail" target="_blank" rel="noopener noreferrer">
 							<svg class="i i-fill" aria-hidden="true"><use href="#i-github" /></svg>
@@ -359,51 +345,51 @@ import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "
 				<section class="file-section" id="install" data-file="INSTALL.md">
 					<p class="file-comment">&lt;!-- INSTALL.md --&gt;</p>
 					<h2>Install</h2>
-					<p>Download the native desktop app for your platform.</p>
-					<div class="desktop-download-grid">
+					<p>Choose your platform and start working.</p>
+					<div class="desktop-download-list">
 						{desktopInstallerPlatforms.map((installer) => (
-							<section class="desktop-download-card" aria-label={`${installer.label} desktop downloads`}>
-								<div class="desktop-download-card-title">
-									<svg class="i" aria-hidden="true"><use href="#i-package" /></svg>
-									<div>
-										<h3>{installer.product}</h3>
-										<span>Stable desktop application</span>
-									</div>
+							<div class="desktop-download-row">
+								<div class="desktop-download-row-label">
+									<strong class="desktop-download-platform">{installer.label}</strong>
+									<span class="desktop-download-compatibility">{installer.detail}</span>
 								</div>
-								<div class="desktop-download-card-actions">
+								<div class="desktop-download-row-actions">
 									{installer.downloads.map((download) => (
-										<div>
-											<a class="btn btn-primary" href={download.href} aria-label={`${download.label} for ${installer.label}: ${download.detail}`}>{download.label} ↓</a>
-											<span>{download.detail}</span>
-										</div>
+										<a class="btn btn-primary" href={download.href} aria-label={`${download.label} for ${installer.label}: ${installer.detail}`}>{download.label} ↓</a>
 									))}
 								</div>
-							</section>
+							</div>
 						))}
 					</div>
-					<h3>Prefer the command line?</h3>
-					<p>The CLI-only host remains available for terminal and remote workflows.</p>
-					<pre class="code-block install-block" tabindex="0"><code><span class="sx-cm"># macOS, Linux, or WSL — detects the right build, verifies SHA-256, and updates PATH</span>
-<span class="line-copy" data-copy={installCommands.macos}><span class="sx-fn">curl</span> -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | <span class="sx-fn">bash</span></span>
-
-<span class="sx-cm"># windows — PowerShell</span>
-<span class="line-copy" data-copy={installCommands.windows.powershell}><span class="sx-fn">irm</span> https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | <span class="sx-fn">iex</span></span>
-
-<span class="sx-cm"># windows — Command Prompt (cmd)</span>
-<span class="line-copy" data-copy={installCommands.windows.cmd}><span class="sx-fn">powershell</span> -c <span class="sx-str">"irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"</span></span>
-
-<span class="sx-cm"># nightly channel, or replace VERSION with a release number</span>
-<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--channel nightly</span></span>
-<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --version VERSION"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--version VERSION</span></span>
-
-<span class="sx-cm"># then</span>
-<span class="line-copy" data-copy="thinkrail"><span class="sx-fn">thinkrail</span>         <span class="sx-cm"># launch — opens the IDE in your browser</span></span>
-<span class="line-copy" data-copy="thinkrail update"><span class="sx-fn">thinkrail</span> update  <span class="sx-cm"># grab the latest CLI build later</span></span></code></pre>
-					<ul>
-						<li><strong>Needs:</strong> <code>git</code> on PATH and an authenticated <code>pi</code> provider — the agent runs against your real credentials.</li>
-						<li><strong>Linux desktop:</strong> Ubuntu 24.04+ or another distribution with glibc 2.38 and the required GTK/WebKitGTK libraries.</li>
-						<li>CLI binaries and <code>SHA256SUMS</code> remain available on the <a href="https://github.com/JetBrains/thinkrail/releases">releases page</a>. App state lives under <code>~/.thinkrail</code>.</li>
-					</ul>
+					<p class="install-linux-note">Linux: extract the archive, run <code>./installer</code>, and check the <a href="https://github.com/JetBrains/thinkrail#install">native library requirements</a>.</p>
+					<details class="install-reference">
+						<summary>Browser UI via command line</summary>
+						<div class="install-reference-body">
+							<p class="browser-ui-note">Install the local launcher, then run <code>thinkrail</code> to open the browser UI.</p>
+							<div class="install-cli-row">
+								<span>macOS, Linux, WSL</span>
+								<div class="install-line">
+									<code tabindex="0">{installCommands.macos}</code>
+									<button type="button" class="copy-btn" data-copy={installCommands.macos} aria-label="Copy macOS, Linux, and WSL install command"><svg class="i" aria-hidden="true"><use href="#i-copy" /></svg><svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg></button>
+								</div>
+							</div>
+							<div class="install-cli-row">
+								<span>Windows PowerShell</span>
+								<div class="install-line">
+									<code tabindex="0">{installCommands.windows.powershell}</code>
+									<button type="button" class="copy-btn" data-copy={installCommands.windows.powershell} aria-label="Copy Windows PowerShell install command"><svg class="i" aria-hidden="true"><use href="#i-copy" /></svg><svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg></button>
+								</div>
+							</div>
+							<div class="install-cli-row">
+								<span>Command Prompt</span>
+								<div class="install-line">
+									<code tabindex="0">{installCommands.windows.cmd}</code>
+									<button type="button" class="copy-btn" data-copy={installCommands.windows.cmd} aria-label="Copy Command Prompt install command"><svg class="i" aria-hidden="true"><use href="#i-copy" /></svg><svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg></button>
+								</div>
+							</div>
+						</div>
+					</details>
+					<p class="install-fineprint">Requires <code>git</code> and an authenticated <code>pi</code> provider. See <a href="https://github.com/JetBrains/thinkrail/releases">all releases</a> and <a href="https://github.com/JetBrains/thinkrail#install">advanced CLI options</a>.</p>
 				</section>
 
 				<!-- ── CONTRIBUTING.md ─ footer ── -->

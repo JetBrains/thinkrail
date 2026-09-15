@@ -899,7 +899,7 @@ p.hero-lede {
 
 .install-line {
 	display: flex;
-	height: 44px;
+	height: 38px;
 	align-items: center;
 	margin: 0;
 	max-width: 100%;
@@ -925,7 +925,7 @@ p.hero-lede {
 	align-items: center;
 	justify-content: center;
 	align-self: stretch;
-	width: 44px;
+	width: 38px;
 	flex: none;
 	border: none;
 	border-left: 1px solid var(--border2);
@@ -958,7 +958,7 @@ p.hero-lede {
 }
 
 .install-picker-hero {
-	margin: 26px 0 10px;
+	margin: 22px 0 8px;
 }
 
 .install-tabs,
@@ -968,7 +968,7 @@ p.hero-lede {
 
 html.install-tabs-ready .install-tabs {
 	display: flex;
-	height: 44px;
+	height: 36px;
 	align-items: stretch;
 	background: var(--container-header-bg);
 	border-bottom: 1px solid var(--border);
@@ -983,15 +983,15 @@ html.install-tabs-ready .install-os-tabs {
 	position: relative;
 	display: inline-flex;
 	align-items: center;
-	min-height: 34px;
-	padding: 7px 15px 8px;
+	min-height: 36px;
+	padding: 0 13px;
 	margin-bottom: -1px;
 	border: 0;
 	border-right: 1px solid var(--border);
 	background: transparent;
 	color: var(--muted);
 	font-family: var(--font-mono);
-	font-size: 12.5px;
+	font-size: 11.5px;
 	cursor: pointer;
 }
 
@@ -1014,7 +1014,7 @@ html.install-tabs-ready .install-os-tabs {
 }
 
 .install-panel {
-	margin-bottom: 16px;
+	margin-bottom: 12px;
 	border: 1px solid var(--border);
 	border-radius: 4px;
 	overflow: hidden;
@@ -1028,16 +1028,16 @@ html.install-tabs-ready .install-os-tabs {
 
 p.install-fallback-heading {
 	margin: 0;
-	padding: 10px 14px;
+	padding: 8px 12px;
 	border-bottom: 1px solid var(--border);
 	color: var(--text);
 	font-family: var(--font-mono);
-	font-size: 12px;
+	font-size: 11.5px;
 	font-weight: 600;
 }
 
 .windows-shell-panel p.install-fallback-heading {
-	margin: 12px 0 6px;
+	margin: 10px 0 5px;
 	padding: 0;
 	border: 0;
 }
@@ -1060,92 +1060,83 @@ html.install-tabs-ready .install-panel {
 
 .desktop-install {
 	display: flex;
+	min-height: 52px;
 	align-items: center;
 	justify-content: space-between;
-	gap: 22px;
-	padding: 18px;
-}
-
-.desktop-install-product {
-	display: flex;
-	align-items: center;
 	gap: 12px;
-	min-width: 0;
+	padding: 8px 10px 8px 12px;
 }
 
-.desktop-install-product > .i {
-	width: 32px;
-	height: 32px;
-	padding: 7px;
-	flex: none;
-	border-radius: 7px;
-	background: var(--accent);
-	color: var(--on-accent);
-}
-
-.desktop-install-title,
-.desktop-install-kind,
 .desktop-install-detail {
 	display: block;
-}
-
-.desktop-install-title {
-	font-size: 14px;
-}
-
-.desktop-install-kind,
-.desktop-install-detail {
-	margin-top: 3px;
 	color: var(--muted);
 	font-family: var(--font-mono);
-	font-size: 10.5px;
+	font-size: 12px;
 	line-height: 1.4;
 }
 
 .desktop-install-actions {
 	display: flex;
-	align-items: flex-start;
-	gap: 10px;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 7px;
 }
 
-.desktop-install-action {
-	display: flex;
-	align-items: flex-end;
-	flex-direction: column;
-}
-
-.desktop-download-link {
-	justify-content: center;
-	white-space: nowrap;
-}
-
-.cli-alternative {
-	padding: 14px 18px 16px;
+.cli-disclosure {
 	border-top: 1px solid var(--border);
 	background: var(--container-header-bg);
 }
 
-.cli-alternative-header {
+.cli-disclosure > summary,
+.install-reference > summary {
 	display: flex;
+	min-height: 34px;
 	align-items: center;
 	justify-content: space-between;
-	gap: 12px;
-	margin-bottom: 9px;
-}
-
-.cli-alternative-title,
-.cli-alternative-note {
-	display: block;
-}
-
-.cli-alternative-title {
-	font-size: 12px;
-}
-
-.cli-alternative-note {
-	margin-top: 2px;
+	gap: 10px;
+	padding: 7px 12px;
 	color: var(--muted);
-	font-size: 10.5px;
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	cursor: pointer;
+	list-style: none;
+}
+
+.cli-disclosure > summary::-webkit-details-marker,
+.install-reference > summary::-webkit-details-marker {
+	display: none;
+}
+
+.cli-disclosure > summary:hover,
+.install-reference > summary:hover {
+	color: var(--text);
+	background: var(--hover);
+}
+
+.cli-disclosure > summary::after,
+.install-reference > summary::after {
+	content: "⌄";
+	transition: transform 150ms ease;
+}
+
+.cli-disclosure[open] > summary::after,
+.install-reference[open] > summary::after {
+	transform: rotate(180deg);
+}
+
+.cli-disclosure-body {
+	padding: 2px 12px 12px;
+}
+
+p.browser-ui-note {
+	margin: 0 0 8px;
+	color: var(--muted);
+	font-size: 11.5px;
+	line-height: 1.45;
+}
+
+.cli-disclosure-body .windows-shell-tabs {
+	margin-bottom: 8px;
 }
 
 html.install-tabs-ready .windows-shell-tabs {
@@ -1186,13 +1177,6 @@ html.install-tabs-ready .windows-shell-tabs {
 	color: var(--text);
 }
 
-p.hero-platforms {
-	font-size: 12.5px;
-	color: var(--hint);
-	font-family: var(--font-mono);
-	max-width: 100%;
-}
-
 .hero-ctas {
 	display: flex;
 	flex-wrap: wrap;
@@ -1229,6 +1213,17 @@ p.hero-platforms {
 	background: var(--control-primary-bg-hovered);
 	border-color: var(--control-primary-bg-hovered);
 	color: var(--control-primary-text);
+}
+
+.desktop-install .desktop-download-link,
+.desktop-download-row-actions .btn {
+	min-height: 34px;
+	justify-content: center;
+	padding: 6px 11px;
+	gap: 6px;
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
 }
 
 /* ── why.md ─────────────────────────────────────────────────────────────── */
@@ -1500,75 +1495,83 @@ html.anim .chat-demo [data-step].on {
 	color: var(--accent);
 }
 
-.desktop-download-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-	gap: 12px;
-	margin: 22px 0 32px;
+.desktop-download-list {
+	margin: 18px 0 10px;
+	border-top: 1px solid var(--border2);
+	border-bottom: 1px solid var(--border2);
 }
 
-.desktop-download-card {
-	padding: 16px;
-	border: 1px solid var(--border2);
-	border-radius: 5px;
-	background: var(--elevated);
-}
-
-.desktop-download-card-title {
+.desktop-download-row {
 	display: flex;
+	min-height: 60px;
 	align-items: center;
-	gap: 10px;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 10px 2px;
 }
 
-.desktop-download-card-title > .i {
-	width: 30px;
-	height: 30px;
-	padding: 7px;
-	flex: none;
-	border-radius: 6px;
-	background: var(--accent);
-	color: var(--on-accent);
+.desktop-download-row + .desktop-download-row {
+	border-top: 1px solid var(--border);
 }
 
-.desktop-download-card-title h3 {
-	margin: 0;
+.desktop-download-platform,
+.desktop-download-compatibility {
+	display: block;
+}
+
+.desktop-download-platform {
 	font-size: 13px;
 }
 
-.desktop-download-card-title span,
-.desktop-download-card-actions span {
-	display: block;
-	margin-top: 3px;
-	color: var(--text);
+.desktop-download-compatibility {
+	margin-top: 2px;
+	color: var(--muted);
 	font-family: var(--font-mono);
-	font-size: 10px;
-	line-height: 1.4;
+	font-size: 11px;
 }
 
-.desktop-download-card-actions {
-	display: grid;
-	gap: 12px;
-	margin-top: 14px;
+.desktop-download-row-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 7px;
 }
 
-.desktop-download-card-actions .btn {
-	width: 100%;
-	justify-content: center;
+p.install-linux-note,
+p.install-fineprint {
+	margin: 10px 0 0;
+	color: var(--muted);
+	font-size: 12px;
+	line-height: 1.55;
 }
 
-.install-block .line-copy {
-	cursor: copy;
+p.install-linux-note a,
+p.install-fineprint a {
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
+.install-reference {
+	margin-top: 18px;
+	border: 1px solid var(--border2);
 	border-radius: 4px;
-	margin: 0 -4px;
-	padding: 1px 4px;
+	overflow: hidden;
+	background: var(--container-header-bg);
 }
 
-.install-block .line-copy:hover {
-	background: var(--hover);
+.install-reference-body {
+	display: grid;
+	gap: 10px;
+	padding: 12px;
+	border-top: 1px solid var(--border);
 }
 
-.install-block .line-copy.copied {
-	background: color-mix(in srgb, var(--green) 18%, transparent);
+.install-cli-row > span {
+	display: block;
+	margin-bottom: 5px;
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 10.5px;
 }
 
 /* ── Footer section ─────────────────────────────────────────────────────── */
@@ -2088,7 +2091,7 @@ html:not(.anim) .term-caret {
 	}
 
 	html.install-tabs-ready .install-tabs {
-		height: 44px;
+		height: 36px;
 	}
 
 	html.install-tabs-ready .install-os-tabs {
@@ -2102,31 +2105,15 @@ html:not(.anim) .term-caret {
 	}
 
 	.desktop-install {
-		align-items: stretch;
+		align-items: flex-start;
 		flex-direction: column;
-		padding: 16px;
+		gap: 7px;
+		padding: 8px 10px;
 	}
 
 	.desktop-install-actions {
-		display: grid;
-		width: 100%;
-	}
-
-	.desktop-install-action {
-		align-items: stretch;
-	}
-
-	.desktop-download-link {
-		width: 100%;
-	}
-
-	.cli-alternative {
-		padding: 14px;
-	}
-
-	.cli-alternative-header {
-		align-items: flex-start;
-		flex-direction: column;
+		justify-content: flex-start;
+		flex-wrap: wrap;
 	}
 
 	html.install-tabs-ready .windows-shell-tabs {
@@ -2140,8 +2127,20 @@ html:not(.anim) .term-caret {
 		font-size: 9.5px;
 	}
 
-	.install-picker-hero .install-line > code {
-		font-size: 11.5px;
+	.cli-disclosure-body .install-line > code {
+		font-size: 10.5px;
+	}
+
+	.desktop-download-row {
+		align-items: flex-start;
+		flex-direction: column;
+		gap: 8px;
+		padding: 12px 0;
+	}
+
+	.desktop-download-row-actions {
+		justify-content: flex-start;
+		flex-wrap: wrap;
 	}
 
 	.hero-ctas .btn {
