@@ -63,11 +63,11 @@ for (const enabled of [true, false]) {
 		await expect(toggle).toBeChecked({ checked: enabled });
 		await expect(dialog.getByRole("heading")).toHaveText("Help improve ThinkRail");
 		await expect(dialog).toContainText(
-			"Share feature usage and run outcomes. No prompts, code, or file paths.",
+			"Only anonymous feature usage and run outcomes are shared. No personal data, prompts, code, or file paths.",
 		);
 		await expect(dialog).toContainText("Change this later in Settings → Privacy.");
 		await expect(dialog).not.toContainText(/always[- ]on|basics|random installation ID/i);
-		await expect(dialog.getByTestId("analytics-consent-dismiss")).toHaveText("No thanks");
+		await expect(dialog.getByRole("button")).toHaveCount(2);
 		await expect(dialog.getByTestId("analytics-consent-confirm")).toHaveText("Save choice");
 		await shot(dialog, "analytics-consent", enabled ? "prefilled-on" : "prefilled-off");
 		await toggle.click();
@@ -91,7 +91,7 @@ for (const enabled of [true, false]) {
 	});
 }
 
-for (const dismissal of ["button", "close", "escape", "backdrop"] as const) {
+for (const dismissal of ["close", "escape", "backdrop"] as const) {
 	test(`first-launch ${dismissal} dismissal saves basics only and never repeats on reload`, async ({
 		page,
 		baseURL,
@@ -101,8 +101,7 @@ for (const dismissal of ["button", "close", "escape", "backdrop"] as const) {
 		await page.goto("/");
 		const dialog = page.getByTestId("analytics-consent-dialog");
 		await expect(dialog).toBeVisible();
-		if (dismissal === "button") await dialog.getByTestId("analytics-consent-dismiss").click();
-		else if (dismissal === "close") await dialog.getByRole("button", { name: "Close" }).click();
+		if (dismissal === "close") await dialog.getByRole("button", { name: "Close" }).click();
 		else if (dismissal === "escape") await page.keyboard.press("Escape");
 		else await page.getByTestId("dialog-overlay").click({ position: { x: 4, y: 4 } });
 		await expect(dialog).toBeHidden();
@@ -130,16 +129,20 @@ for (const action of ["confirm", "dismiss"] as const) {
 		const original = readFileSync(configPath, "utf8");
 		rmSync(configPath);
 		mkdirSync(configPath);
+		const actionControl =
+			action === "confirm"
+				? dialog.getByTestId("analytics-consent-confirm")
+				: dialog.getByRole("button", { name: "Close" });
 		try {
-			await dialog.getByTestId(`analytics-consent-${action}`).click();
+			await actionControl.click();
 			await expect(dialog.getByRole("alert")).toContainText("Couldn't save your choice");
 			await expect(dialog.getByRole("switch")).toBeChecked();
-			await expect(dialog.getByTestId(`analytics-consent-${action}`)).toBeEnabled();
+			await expect(actionControl).toBeEnabled();
 		} finally {
 			rmSync(configPath, { recursive: true, force: true });
 			writeFileSync(configPath, original);
 		}
-		await dialog.getByTestId(`analytics-consent-${action}`).click();
+		await actionControl.click();
 		await expect(dialog).toBeHidden();
 		expect(savedConfig()).toMatchObject({
 			analyticsEnabled: action === "confirm",

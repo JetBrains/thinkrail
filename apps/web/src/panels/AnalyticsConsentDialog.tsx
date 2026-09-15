@@ -27,7 +27,8 @@ export function AnalyticsConsentDialog() {
 				<DialogHeader>
 					<DialogTitle>Help improve ThinkRail</DialogTitle>
 					<DialogDescription>
-						Share feature usage and run outcomes. No prompts, code, or file paths.
+						Only anonymous feature usage and run outcomes are shared. No personal data, prompts,
+						code, or file paths.
 					</DialogDescription>
 				</DialogHeader>
 				<AnalyticsSharingSwitch enabled={draft} disabled={pending} onChange={setDraft} />
@@ -38,14 +39,6 @@ export function AnalyticsConsentDialog() {
 					</p>
 				)}
 				<DialogFooter>
-					<Button
-						variant="outline"
-						disabled={pending}
-						data-testid="analytics-consent-dismiss"
-						onClick={() => save(false)}
-					>
-						No thanks
-					</Button>
 					<Button
 						disabled={pending}
 						data-testid="analytics-consent-confirm"

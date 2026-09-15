@@ -540,8 +540,9 @@ a project picker, the prompt hero, and the reused
   `analyticsConsentConfirmed`, while dismissal saves off/confirmed. A preselection never grants consent.
   Failed persistence leaves the choice available with an error; broadcast closes it across clients.
   Saved decisions survive restarts and change later through Settings. The startup window focuses on optional
-  sharing with brief copy and the shared switch; full reporting details stay in Settings. Older hosts retain
-  their legacy privacy control without the new consent dialog.
+  sharing with brief anonymous/no-personal-data copy and the shared switch; its footer has only **Save choice**,
+  while Close, Escape, and backdrop remain dismissals. Full reporting details stay in Settings. Older hosts
+  retain their legacy privacy control without the new consent dialog.
   **`FeedbackSettings`** is the final
   live section after Privacy: the same interview copy as the automatic prompt, stating that joining a user
   interview to discuss the participant's ThinkRail experience earns 100 bonus credits in Central
