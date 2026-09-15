@@ -1,6 +1,7 @@
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import type * as React from "react";
 import { cn } from "@/lib";
+import { ObscuringOverlayMarker } from "./overlayRegistry";
 
 const Popover = PopoverPrimitive.Root;
 const PopoverTrigger = PopoverPrimitive.Trigger;
@@ -11,6 +12,7 @@ function PopoverContent({
 	align = "center",
 	sideOffset = 6,
 	container,
+	children,
 	...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
 	container?: HTMLElement | null | undefined;
@@ -25,7 +27,10 @@ function PopoverContent({
 					className,
 				)}
 				{...props}
-			/>
+			>
+				<ObscuringOverlayMarker />
+				{children}
+			</PopoverPrimitive.Content>
 		</PopoverPrimitive.Portal>
 	);
 }

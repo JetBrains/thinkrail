@@ -1804,6 +1804,42 @@ test("a rolled-back delete preserves attention throughout the transaction", asyn
 	}
 });
 
+test("a failed abort acknowledgement keeps its exact candidate visible until persistence recovers", async () => {
+	const workspaceId = "ws-attention-abort-write";
+	setAttentionProjectResolver(() => "project-attention-abort-write");
+	let sessionId: string | undefined;
+	const ledgerPath = join(process.env.THINKRAIL_DATA_DIR ?? "", "attention.json");
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage("failed", { stopReason: "error", errorMessage: "provider down" }),
+		]);
+		const session = await createSession({
+			cwd: tmpCwd("trpi-attention-abort-write-"),
+			workspaceId,
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		await promptSession(sessionId, "fail once");
+		const before = (await listSessionAttention([])).find((row) => row.sessionId === sessionId);
+		if (!before) throw new Error("Missing attention candidate");
+
+		rmSync(ledgerPath, { force: true });
+		mkdirSync(ledgerPath);
+		await abortSession(sessionId);
+		expect(
+			(await listSessionAttention([])).find((row) => row.sessionId === sessionId)?.attentionId,
+		).toBe(before.attentionId);
+
+		rmSync(ledgerPath, { recursive: true, force: true });
+		await acknowledgeSessionAttention(workspaceId, sessionId, before.attentionId);
+		expect((await listSessionAttention([])).some((row) => row.sessionId === sessionId)).toBe(false);
+	} finally {
+		rmSync(ledgerPath, { recursive: true, force: true });
+		setAttentionProjectResolver(() => null);
+		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+	}
+});
+
 test("attention migration baselines exact review ids but keeps blockers and later results", async () => {
 	disposeAllSessions();
 	const cwd = tmpCwd("trpi-attention-migration-");

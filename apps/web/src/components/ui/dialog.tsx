@@ -1,31 +1,8 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { RiCloseLine as X } from "@remixicon/react";
 import type * as React from "react";
-import { useLayoutEffect, useSyncExternalStore } from "react";
 import { cn } from "@/lib";
-
-let overlayCount = 0;
-const overlayListeners = new Set<() => void>();
-
-function publishOverlayCount(next: number): void {
-	overlayCount = next;
-	for (const listener of overlayListeners) listener();
-}
-
-function subscribeOverlayCount(listener: () => void): () => void {
-	overlayListeners.add(listener);
-	return () => {
-		overlayListeners.delete(listener);
-	};
-}
-
-export function dialogOverlayIsOpen(): boolean {
-	return overlayCount > 0;
-}
-
-export function useDialogOverlayOpen(): boolean {
-	return useSyncExternalStore(subscribeOverlayCount, dialogOverlayIsOpen, () => false);
-}
+import { ObscuringOverlayMarker } from "./overlayRegistry";
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -35,16 +12,15 @@ function DialogOverlay({
 	className,
 	...props
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
-	useLayoutEffect(() => {
-		publishOverlayCount(overlayCount + 1);
-		return () => publishOverlayCount(Math.max(0, overlayCount - 1));
-	}, []);
 	return (
-		<DialogPrimitive.Overlay
-			data-testid="dialog-overlay"
-			className={cn("fixed inset-0 z-50 bg-overlay", className)}
-			{...props}
-		/>
+		<>
+			<ObscuringOverlayMarker />
+			<DialogPrimitive.Overlay
+				data-testid="dialog-overlay"
+				className={cn("fixed inset-0 z-50 bg-overlay", className)}
+				{...props}
+			/>
+		</>
 	);
 }
 

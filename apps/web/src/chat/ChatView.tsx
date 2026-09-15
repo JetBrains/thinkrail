@@ -10,7 +10,7 @@ import type {
 } from "@thinkrail/contracts";
 import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { dialogOverlayIsOpen, useDialogOverlayOpen } from "@/components/ui/dialog";
+import { obscuringOverlayIsOpen, useObscuringOverlayOpen } from "@/components/ui/overlayRegistry";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
@@ -202,7 +202,7 @@ export default function ChatView({
 	const settingsOpen = useAppStore((s) => s.settingsOpen);
 	const interviewPromptOpen = useAppStore((s) => s.interviewPromptOpen);
 	const pageFocused = usePageFocus();
-	const dialogOverlayOpen = useDialogOverlayOpen();
+	const obscuringOverlayOpen = useObscuringOverlayOpen();
 	useTranscriptSync({
 		workspaceId,
 		sessionId,
@@ -434,7 +434,7 @@ export default function ChatView({
 
 	const conversationExposed =
 		pageFocused &&
-		!dialogOverlayOpen &&
+		!obscuringOverlayOpen &&
 		!settingsOpen &&
 		!interviewPromptOpen &&
 		!historyState.open &&
@@ -454,7 +454,7 @@ export default function ChatView({
 		if (attentionAttempt.current === readyAttentionId) return;
 		if (
 			!pageIsFocused() ||
-			dialogOverlayIsOpen() ||
+			obscuringOverlayIsOpen() ||
 			useAppStore.getState().historyOpenRequest?.sessionId === sessionId ||
 			chatViewElementRef.current?.querySelector(
 				'[data-testid="chat-composer"][data-obscured="true"]',

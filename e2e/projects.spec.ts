@@ -427,7 +427,7 @@ test("project context actions stay compact and close/reopen is lossless across c
 	await expect(confirm).toHaveAttribute("role", "alertdialog");
 	await expect(confirm).toContainText("Close second-project?");
 	await expect(confirm).toContainText(
-		"Removes this project from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it from Add project → Recents.",
+		"Removes this project from the open projects list. Its repository, workspaces, chats, and attention state are kept. Reopen it from Add project → Recents.",
 	);
 	const cancel = confirm.getByRole("button", { name: "Cancel" });
 	await expect(cancel).toBeFocused();

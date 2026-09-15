@@ -1,6 +1,6 @@
 import { realpathSync, rmSync, utimesSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { readChatScrollGeometry, readChatViewportIntersection } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -139,6 +139,7 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 		await selectMessageOrder(page, "newest-first");
 		await enterDefaultWorkspace(page);
 		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+		await expect(defaultWorkspaceRow(page)).not.toHaveAttribute("data-attention", /.+/);
 		const chatScroll = page.getByTestId("chat-scroll");
 		const latestAnswer = page.getByText(
 			"answer 30: the deliberately verbose fixture has been inspected",
@@ -154,9 +155,12 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 		expect(scrollPoint).not.toBeNull();
 		if (!scrollPoint) return;
 		await page.mouse.move(scrollPoint.x, scrollPoint.y);
-		await page.mouse.wheel(0, 10_000);
 
 		const latest = page.getByTestId("scroll-to-top");
+		for (let attempt = 0; attempt < 3 && !(await latest.isVisible()); attempt += 1) {
+			await page.mouse.wheel(0, 10_000);
+			await page.waitForTimeout(150);
+		}
 		await expect(latest).toBeVisible();
 		await expect(latest).toContainText("Latest");
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");

@@ -3,6 +3,7 @@ import { RiArrowRightSLine as ChevronRight } from "@remixicon/react";
 import type * as React from "react";
 import { cn } from "@/lib";
 import { menuContentClass, menuItemClass, menuSeparatorClass } from "./menu-styles";
+import { ObscuringOverlayMarker } from "./overlayRegistry";
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
@@ -13,6 +14,7 @@ const DropdownMenuSub = DropdownMenuPrimitive.Sub;
 function DropdownMenuContent({
 	className,
 	sideOffset = 4,
+	children,
 	...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
 	return (
@@ -25,7 +27,10 @@ function DropdownMenuContent({
 					className,
 				)}
 				{...props}
-			/>
+			>
+				<ObscuringOverlayMarker />
+				{children}
+			</DropdownMenuPrimitive.Content>
 		</DropdownMenuPrimitive.Portal>
 	);
 }
@@ -62,6 +67,7 @@ function DropdownMenuSubTrigger({
 
 function DropdownMenuSubContent({
 	className,
+	children,
 	...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
 	return (
@@ -72,7 +78,10 @@ function DropdownMenuSubContent({
 					className,
 				)}
 				{...props}
-			/>
+			>
+				<ObscuringOverlayMarker />
+				{children}
+			</DropdownMenuPrimitive.SubContent>
 		</DropdownMenuPrimitive.Portal>
 	);
 }

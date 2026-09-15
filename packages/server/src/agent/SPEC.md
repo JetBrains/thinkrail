@@ -166,8 +166,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     turn, sets a turn-scoped in-memory intent so that exact outcome is not published mid-call, invokes the
     existing pi abort path, then re-derives the terminal candidate for that same turn. Any such candidate is
     durably recorded as handled before the intent is released; an `aborted` terminal with no review candidate
-    writes nothing. If persistence fails, abort behavior is unchanged but the candidate is conservatively
-    published. A result pi produces later with a distinct entry id is **not** suppressed—it is new work the
+    writes nothing. If persistence fails, abort behavior is unchanged but that exact candidate remains an
+    in-memory effective fallback—published, snapshot-visible, and acknowledgeable—until persistence recovers
+    or a newer turn/result supersedes it. A result pi produces later with a distinct entry id is **not** suppressed—it is new work the
     person should inspect. This keeps the retry error or pre-compaction result the person explicitly stopped
     from resurrecting after a later restart without expanding this feature into a second cancellation
     controller. A host crash before the abort call settles remains part of the interrupted-run limit below.

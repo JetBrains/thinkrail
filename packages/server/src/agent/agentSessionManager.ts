@@ -106,6 +106,7 @@ interface Entry {
 	publishedAttentionId: string | null;
 	abortAttentionTurnId: string | null | undefined;
 	abortHeldAttentionCandidate: AttentionCandidate | null;
+	unpersistedAttentionCandidate: AttentionCandidate | null;
 }
 
 const sessions = new Map<string, Entry>();
@@ -263,6 +264,14 @@ function effectiveAttentionOf(entry: Entry): AttentionCandidate | null {
 		!isHandledAttention(entry.session.sessionId, entry.abortHeldAttentionCandidate)
 	) {
 		return entry.abortHeldAttentionCandidate;
+	}
+	const fallback = entry.unpersistedAttentionCandidate;
+	if (fallback && !isHandledAttention(entry.session.sessionId, fallback)) {
+		const currentTurnId = attentionTurnId(entry.session.sessionManager.getBranch());
+		if (currentTurnId === fallback.turnId && (!candidate || candidate.id === fallback.id)) {
+			return fallback;
+		}
+		entry.unpersistedAttentionCandidate = null;
 	}
 	if (!candidate) return null;
 	if (
@@ -566,12 +575,14 @@ export async function acknowledgeSessionAttention(
 	if (!entry || entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) {
 		throw new Error(`Unknown session: ${sessionId}`);
 	}
-	const candidate = rawAttentionOf(entry);
+	const candidate = effectiveAttentionOf(entry);
 	const matches =
 		candidate?.id === attentionId || candidate?.aliases?.includes(attentionId) === true;
 	if (!candidate || !matches || candidate.kind === "blocking") return;
 	await markAttentionHandled(sessionId, candidate.id);
-	if (rawAttentionOf(entry)?.id !== candidate.id) return;
+	if (entry.unpersistedAttentionCandidate?.id === candidate.id) {
+		entry.unpersistedAttentionCandidate = null;
+	}
 	syncSessionAttention(sessionId);
 }
 
@@ -753,6 +764,7 @@ async function prepareSessionEntry(
 		publishedAttentionId: null,
 		abortAttentionTurnId: undefined,
 		abortHeldAttentionCandidate: null,
+		unpersistedAttentionCandidate: null,
 	};
 	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "message_start" && event.message.role === "user") {
@@ -1453,7 +1465,7 @@ export async function abortSession(
 	entry.abortHeldAttentionCandidate = held?.kind === "review" ? held : null;
 	entry.abortAttentionTurnId = turnId;
 	let restoredQueue: SessionQueueContent | undefined;
-	let persistenceFailed = false;
+	let persistenceFailureCandidate: AttentionCandidate | null = null;
 	try {
 		restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
 		await entry.session.abort();
@@ -1468,7 +1480,7 @@ export async function abortSession(
 			try {
 				await markAttentionHandled(sessionId, candidate.id);
 			} catch (error) {
-				persistenceFailed = true;
+				persistenceFailureCandidate = candidate;
 				log.warn(
 					`attention acknowledgement failed for aborted session ${sessionId}`,
 					error as Error,
@@ -1478,21 +1490,10 @@ export async function abortSession(
 	} finally {
 		entry.abortAttentionTurnId = undefined;
 		entry.abortHeldAttentionCandidate = null;
-		if (persistenceFailed) {
-			const current = persistedAttentionOf(entry);
-			const payload =
-				current?.kind === "review"
-					? attentionPayload(sessionId, entry.workspaceId, current.id)
-					: null;
-			if (payload && payload.attentionId !== entry.publishedAttentionId) {
-				entry.publishedAttentionId = payload.attentionId;
-				publishAttention(payload);
-			} else if (!payload) {
-				syncSessionAttention(sessionId);
-			}
-		} else {
-			syncSessionAttention(sessionId);
+		if (persistenceFailureCandidate) {
+			entry.unpersistedAttentionCandidate = persistenceFailureCandidate;
 		}
+		syncSessionAttention(sessionId);
 	}
 	return restoredQueue;
 }
