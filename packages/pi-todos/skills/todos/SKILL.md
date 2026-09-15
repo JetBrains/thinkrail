@@ -1,6 +1,6 @@
 ---
 name: todos
-description: "This chat has a shared, live TODO plan — your tasks for the conversation, which the user also edits. Read this skill and reach for the todo_* tools whenever a request takes more than a couple of steps. It covers the plan model (group = task, items = its steps; loose items are the user's lane), how to work it: propose the plan FIRST (todo_write before you ask questions or start work), work tasks strictly in order with one step in_progress, keep statuses current, re-read the list (source of truth) to catch the user's edits, respect removals, and never delete done items."
+description: "Use when the user asks for a shared plan, a task needs at least three substantive execution steps, or a user-origin TODO is pending. Without an explicit plan request, not for one-shot answers or checks, or one- to two-step work that is not already in the list."
 ---
 
 # Chat TODO plan
@@ -18,8 +18,9 @@ description: "This chat has a shared, live TODO plan — your tasks for the conv
   them **last**, after every group, on purpose: a request the user adds mid-task queues *after* your
   current work. So **finish (or resume) the task you're on before you pick up a loose item** — don't
   jump to a freshly-added user item and abandon a step you had in progress. You don't author loose
-  items (the tools require a `group` or an `after` anchor); a tiny ask is a small group (1–2 steps is
-  fine), or no list at all.
+  items (the tools require a `group` or an `after` anchor). An ordinary 1–2-step chat ask gets a group
+  only when the user explicitly requested a plan; a pending loose item is already in the plan, so work
+  and complete that exact item with `todo_update` regardless of its size.
 - It is **shared and live**: you maintain it, and the **user edits it while you work** — adding tasks,
   removing ones they've dropped. The stored list is the **source of truth**; what you remember is only
   a snapshot. **Re-read it (`todo_list`)** to stay in sync, don't trust your memory of it.
@@ -30,37 +31,39 @@ description: "This chat has a shared, live TODO plan — your tasks for the conv
 
 | Size of the ask | Shape in the plan |
 | --- | --- |
-| Trivial (an answer, one edit) | no list at all |
-| 1–7 steps | one group (a small ask = a 1–2-step group, that's fine) |
-| more than ~10 steps | those aren't steps, they're tasks — split into several groups |
+| 1–2 execution steps, including a one-shot answer, check, or edit | no list unless the user asks for one |
+| 3–7 substantive steps | one group |
+| more than ~10 steps | those are tasks, not steps — split into several groups |
 
 Steps are **verifiable** and ≈ commit-sized: "easy to check off as you go", not "phase 1".
 
 ## Working with it
 
-1. **Propose the plan first — it's the point of the list.** The moment you understand a request that
-   takes more than a couple of steps, your first action is **`todo_write`** with your proposed plan —
-   one group per task, steps inside — **before** you ask clarifying questions and **before** you start
-   the work. Then refine it in place as you learn more. (A one-shot answer needs no list.)
+1. **Publish a useful plan, not a speculative one.** Once the task is understood enough to identify
+   at least three substantive execution steps, or to satisfy the user's explicit request for a plan,
+   use `todo_write` with one group per task. Clarifying questions may come first when their answers
+   change the plan. Publish the plan before execution, then refine it only when the work materially
+   changes.
 2. **Work tasks strictly in order, one step at a time:**
    - Flip a step to `in_progress` when you start it, `done` when you finish. Starting a new step
      auto-returns any other `in_progress` step to `pending` — so finish (mark `done`) before moving on,
      or the previous step visibly falls back to open.
    - Don't start the next group while the current one has open steps. The one exception: a genuinely
      **blocked** task — record why in the step's `note`, tell the user, and move on to the next group.
-   - **Before each next step, `todo_list` again.** The user may have edited mid-work: note anything
-     new (it's appended in the user's lane at the **end** — take it up *after* the step you're on, don't
-     preempt in-progress work), and if an item you planned is gone, they dropped it — **skip it, don't
-     re-add it**.
+   - Re-read with `todo_list` before choosing each next item, after user input, and before completion.
+     New user items are appended to the lane at the end — take them up after the in-progress step. If
+     an item you planned is gone, the user dropped it: skip it and do not re-add it.
    - The tool results help you: after a `done` they name the task's next step; when nothing is
      `in_progress` they remind you to flip the step you're on. Act on those nudges.
-3. **A new ask mid-session = a new group appended** (`todo_add` with `group:`, one per step — or lay
-   out the new task's steps with several `todo_add` calls). Never mix a new ask's steps into the
-   current group. **A step you discover mid-task** slots in with `todo_add after: <current step id>` (anchor to one of *your* steps — anchoring to one of the user's own items is rejected, since your items never live in their lane) —
-   don't rebuild the plan with `todo_write` for that.
-4. **Reconcile before you finish.** At the end of a turn, `todo_list` once more. If open steps remain
-   (including items the user just added), either do them or clearly say what's left and why — don't go
-   idle silently leaving fresh items untouched.
+3. **A qualifying new ask mid-session gets a new group** (`todo_add` with `group:`, one per step, or
+   several calls for several steps). An ordinary 1–2-step chat ask gets that group only when the user
+   explicitly requested a plan; otherwise finish the in-progress task, then handle it directly. When
+   that short ask is already a pending user-origin loose item, instead progress that exact item with
+   `todo_update` until done. Never mix a new ask's steps into the current group. **A step discovered
+   inside the current task** slots in with `todo_add after: <current step id>`; an anchor in the user's
+   loose lane is rejected. Do not rebuild the plan with `todo_write` for that.
+4. **Reconcile before completion.** Read `todo_list` once more before the final handoff. If open
+   steps remain, either do them or clearly say what is left and why.
 
 ## Completion summaries (the review trail)
 

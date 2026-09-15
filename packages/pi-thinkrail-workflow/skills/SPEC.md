@@ -54,7 +54,9 @@ them.
 | **Worker** | one workflow's steps — in its body and its sibling docs | a handoff — fixed successor, back to its caller, or a terminal state (declared in the doc where the flow ends, rule 6) |
 | **Concept** | one topic's reusable rules, conventions, or mental model — no steps, no routing | nothing — no ending section at all; control simply returns to its reader |
 
-The **root router** is the single always-on entry; branch skills may route further (fractal routing).
+The **root router** is the single entry for new workflow-eligible work; one always-on rule names those
+classes and points them at it. Work already routed resumes its active workflow instead of re-entering the
+router. Branch skills may route further (fractal routing).
 A **concept** is not a process building block — routers and workers name it at the exact step that
 needs it, and it is never a route: the router classifies *work*, and a concept is not work.
 
@@ -114,12 +116,17 @@ flowchart LR
    one doc pointed at by the others.
 
 **Discovery & entry**
-4. One always-on entry: the `before_agent_start` rule points at the root router. Skills are otherwise
-   reached by routing/handoff, or — when the trigger is unmistakable — by a narrow self-trigger
-   `description`: alongside a route (as `setting-up-a-project` does) or, for skills outside the router's work
-   classification (meta/authoring skills), self-trigger alone (as `writing-workflow-skills` does).
-   Concept skills are reached by name from the skill step that needs them and may add a narrow
-   self-trigger; they never take a routing line (see the roles table — a concept is not work).
+4. At the start of a new piece of work, one always-on entry rule names the workflow-eligible classes —
+   project onboarding and PR lifecycle work take precedence regardless of whether they edit code; other
+   changes enter only when they require product or design decisions. The rule points only those classes
+   at the root router. Work already routed resumes its active workflow; all other work proceeds directly
+   without loading or announcing one.
+   Skills are otherwise reached by routing/handoff, or — when the trigger is unmistakable — by a narrow
+   self-trigger `description`: alongside a route (as `setting-up-a-project` does) or, for skills outside
+   the router's work classification (meta/authoring skills), self-trigger alone (as
+   `writing-workflow-skills` does). Concept skills are reached by name from the skill step that needs
+   them and may add a narrow self-trigger; they never take a routing line (see the roles table — a
+   concept is not work).
 5. `description` = triggering conditions only ("Use when …"), never a summary of the workflow's steps
    — a step-summary tempts the agent to follow the description and skip the body.
 
@@ -147,9 +154,10 @@ flowchart LR
    — delete when the work lands, by default; a temp doc never becomes the record.
 
 **Scaling**
-10. Scale by route and composition, not by prose: the router sends simple work down short paths;
-    optional phases carry explicit "when to use / when to skip" criteria; complex work composes a
-    per-task pipeline of stage workers. Depth lives in the route taken.
+10. Scale by route and composition, not by prose: work that needs no workflow decision bypasses the
+    router; the router sends eligible simple work down short paths; optional phases carry explicit
+    "when to use / when to skip" criteria; complex work composes a per-task pipeline of stage workers.
+    Depth lives in the route taken.
 11. Gates where discipline matters, matching the form to the failure: prohibitions + red-flags for
     discipline violations; positive recipes for output shape.
 
@@ -183,13 +191,13 @@ flowchart LR
 
 | Skill | Role — purpose | Routed from | Status |
 |---|---|---|---|
-| `brainstorming` | worker — design workflow (feature/change → validated task-spec) | `choosing-a-workflow` (root) | active; routed as-is — needs rework (see Current limitations & gaps); route-in observed by the routing suite, a mid-flow round-trip by the harness smokes, a full run manually (2026-07: request → task-spec → round → promotion → retired) |
-| `setting-up-a-project` | router (sub) — dispatcher: detect the workspace's state (specs present / empty / code-only) and route | `choosing-a-workflow` (root) + self-trigger + the app's `/skill:setting-up-a-project` seed | active; all three dispatcher routes observed green by the routing suite (empty → starting, code → importing, specced → offer + no worker) |
+| `brainstorming` | worker — decision-bearing change → validated task-spec | `choosing-a-workflow` (root) | active; revised trigger and single-review flow unverified by use; the previous route-in, a mid-flow round-trip, and a full run were observed (2026-07) |
+| `setting-up-a-project` | router (sub) — dispatcher: detect the workspace's state (specs present / empty / code-only) and route | `choosing-a-workflow` (root) + self-trigger + the app's `/skill:setting-up-a-project` seed | active; empty → starting and code → importing were observed green; the revised specced → review/extend offer is unverified by use |
 | `starting-a-new-project` | worker — inception interview (empty repo → goal-and-requirements) | `setting-up-a-project` + narrow self-trigger | active; route-in observed by the routing suite; the interview itself unverified by use (rule 14 suspended — a slice-3 candidate via the user simulator) |
 | `importing-a-codebase` | worker — existing codebase → first spec graph (derive + adopt existing docs + minimal interview) | `setting-up-a-project` + narrow self-trigger | active; covered by a tagged `@agent` e2e; route-in also observed by the routing suite; the doc-adoption offer observed green by the harness's importing suite (2026-07: adoption + no-candidates regression scenarios; the pre-change skill run red against the same scenario as the before/after control) |
 | `asking-user-questions` | concept — `ask_user_question` rounds, options, inference confirmation, degradation | — (reached by name, rule 4) | active; observed by use (2026-07 manual: loaded through brainstorming's reference, a round composed + resolved) |
 | `writing-specs` | concept — the spec quality bar (short / honest / on-rails) for every spec-producing flow | — (reached by name, rule 4) | active; observed by use (2026-07 manual: self-triggered for a spec revision and applied) |
-| `choosing-a-workflow` | router (root) — classification + routing | — (always-on entry, rule 4) | active; all three classifications observed by the routing suite — feature → brainstorming and onboarding → setup family green; the "anything else" row has an observed gap (see Current limitations & gaps) |
+| `choosing-a-workflow` | router (root) — classification + routing for workflow-eligible work | — (conditional pointer from the always-on rule, rule 4) | active; revised narrow-entry behavior unverified by use; previous onboarding, PR/change, and direct-work classifications were observed |
 | `writing-workflow-skills` | worker — authoring checklist for adding workflows | — (self-trigger only, rule 4) | active |
 | `shipping-a-pr` | worker — PR lifecycle (create with gates / screenshots / up-to-date sync / checks watch / review comments — phases as sibling docs) | `choosing-a-workflow` (root) + narrow self-trigger | active; unverified by use (rule 14 suspended) |
 
@@ -200,9 +208,10 @@ task-spec when they earn their place. The concept role has two instances: `askin
 extracted per rules 3/7 when brainstorming and the setup trio carried drifting copies of the tool
 norms, and `writing-specs`, extracted the same way when the setup trio carried three drifting copies
 of the spec quality bar.
-Meta-rule 4's entry model is in effect: the parent module's `before_agent_start` rule points at
-`choosing-a-workflow`, which routes to today's family; `writing-workflow-skills` (self-trigger only)
-and the concept skills (reached by name) sit outside the routing table.
+Meta-rule 4's entry model is in effect: at the start of new work the parent module's
+`before_agent_start` rule points workflow-eligible work at `choosing-a-workflow`, which routes to today's
+family; already-routed work resumes, and direct work bypasses the router. `writing-workflow-skills` (self-trigger only) and the concept skills (reached by name) sit outside
+the routing table.
 
 ## Current limitations & gaps
 
@@ -211,43 +220,26 @@ fix:
 
 - **Rule 14 (verify-by-use) is suspended** — not currently a done-gate. The rule above carries the
   full rationale (observation is now cheap; the missing half is a durable run record); the family
-  table carries per-skill `unverified by use` debt — after the 2026-07 manual observations, only
-  `starting-a-new-project`'s interview still carries it. Slice 3 — worker flows via the user
-  simulator ([[module-thinkrail-workflow]] § Testing) — would burn down the rest.
-- **Questions bypass the root router — observed by the routing suite (advisory judge finding).** For
-  a pure question the agent answers directly without reading `choosing-a-workflow`, so the router's
-  "anything else" one-line declaration ("No workflow skill covers this; proceeding directly.") never
-  happens. Root cause: the always-on `WORKFLOW_RULE` names "a request, feature, change, fix, or
-  fresh project idea" — **questions are not listed** — while this router's own description does claim
-  them. The bypass is question-specific, not a broken row: for a non-question "anything else"
-  request the full path — router read, declaration, proceed — was observed working manually (2026-07:
-  a review request). The binding outcome is still correct either way (no worker skill loads), so the
-  routing scenario passes deterministically and the judge re-flags the missing declaration on every
-  run — keeping the drift visible until it's resolved. Resolving it (extend the rule's wording vs.
-  narrow the router's claim) is a behavior change to the always-on rule and needs its own
-  brainstormed task, not a test-slice side effect.
-- **`brainstorming` needs rework.** It predates the family's concept extractions: it does not name
-  `writing-specs` at the step that promotes a validated design into module SPECs — an observed
-  defect, not a hypothetical (2026-07: a full manual run promoted design into a module SPEC without
-  the bar being loaded) — and its scope — the "too small" judgment it owns, its relationship to a
-  future composer pipeline — is under review. It routes and runs as-is until that rework lands.
+  table carries the current per-skill `unverified by use` debt. Slice 3 — worker flows via the user
+  simulator ([[module-thinkrail-workflow]] § Testing) — would burn down the worker-flow debt; changed
+  routing behavior remains unverified until a matching scenario is observed.
 - **Extending an existing spec graph has no worker.** Partial graph → complete graph (a missing
   `architecture.md`, un-specced modules, stale nodes) falls between the two setup workers:
   `importing-a-codebase` refuses specced repos, `brainstorming` designs new work rather than
   documenting existing reality, and the dispatcher — a router — must not do the work itself. The
-  dispatcher carries only the operational instruction (its "Graph extension" section): announce in
-  one line that no skill covers it, then align to the user's request on judgment, holding the
-  `writing-specs` bar — the rationale lives here, not in the skill — until the
-  `extending-a-spec-graph` candidate earns its place.
+  dispatcher carries only the operational instruction (its "Graph extension" section): align to the
+  user's request on judgment without a routing announcement, holding the `writing-specs` bar — the
+  rationale lives here, not in the skill — until the `extending-a-spec-graph` candidate earns its
+  place.
 - **`writing-specs` overlaps the spec-graph skill** ([[module-spec-graph]]): both carry lean/honest
   spec guidance today. The declared split — this family owns the quality bar, spec-graph owns graph
   mechanics (frontmatter, links, tools) — is convention only, enforced by nothing. As `writing-specs`
   grows into the home for the family's spec and spec-graph rules, the spec-graph skill's guidance
   should slim to mechanics — or the drift the extraction fixed returns one package up.
 - **Most of the family's candidates are unbuilt** (the candidates list above) — deliberate, since
-  each earns its place through real use; but until then, complex work (research/spikes, refactors,
-  bug-fixes, multi-stage pipelines) has no dedicated route and falls to the root router's "no
-  matching workflow" ending.
+  each earns its place through real use. Until then, work outside an existing route proceeds directly
+  on agent judgment; complex decision-bearing work still enters `brainstorming`, while a future
+  composer may own multi-stage pipelines.
 
 ## Per-skill design notes
 
@@ -256,13 +248,15 @@ also carries its own degradation behavior (headless host with no `ask_user_quest
 declined answers, a workspace with no pre-existing spec graph); nothing is configured here. What
 follows is only the rationale the skill bodies don't state:
 
-- **`brainstorming`** mirrors the discipline this repo applies to itself ("the spec leads the code"):
-  request → validated design in a spec-graph `task-spec` → promotion into module SPECs → implement
-  directly against the finalized spec — there is deliberately no separate plan artifact; the spec is
-  the plan. Clarification is *batched* through `ask_user_question`'s own constraints (rounds of up to
-  4 questions, never chained back-to-back) — a deliberate deviation from the one-question-at-a-time
-  style common in interactive brainstorming skills; those tool norms now live once in
-  `asking-user-questions`.
+- **`brainstorming`** mirrors the discipline this repo applies to itself ("the spec leads the code")
+  only when a change requires choosing scope, user-visible behavior, or architecture: request →
+  validated design in a spec-graph `task-spec` → promotion into module SPECs → implementation. A
+  fully specified fix, mechanical refactor, documentation edit, or configuration-only change bypasses
+  the workflow. One cohesive review settles the design; acceptance criteria or an explicit design in
+  the request already count as approval, and alternatives are compared only when more than one viable
+  approach remains. There is deliberately no separate plan artifact; the spec is the plan. Before
+  promotion the workflow loads `writing-specs`, closing the earlier observed quality-bar gap.
+  Clarification is batched through `asking-user-questions` only when a real user decision remains.
 - **the setting-up-a-project trio** arrived with the Welcome-screen work (as `project-setup` /
   `project-new` / `project-import`; renamed under rule 15) and was adapted to this system in place.
   `setting-up-a-project` is a **sub-router** (dispatcher): it inspects the workspace to classify

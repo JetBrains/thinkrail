@@ -107,13 +107,14 @@ Dependency direction is one-way: `scenario` → everything; `dialog`/`signals`/`
 
 - `harness.unit.spec.ts` — the pure parts (parsers, predicates, checks, budget tripwires) against
   synthetic logs; no live agent, no auth needed.
-- `routing.live.spec.ts` — the routing suite (slice 2): one scenario per row of the two routers'
-  classification tables — the root router reached naturally via the always-on rule; the dispatcher
-  force-loaded via the app's exact `/skill:` seed (which injects the skill content, so no read of
-  its own SKILL.md is expected). Pass = the routed worker's skill-load signal (or, for the
-  no-work rows, no worker load + a grounded outcome). The pure-question row's missing declaration
-  is a recorded gap — [[submodule-workflow-skills]] § Current limitations & gaps.
-- `smoke.live.spec.ts` — the infra-proving live scenarios: a mid-flow `brainstorming` round-trip
+- `routing.live.spec.ts` — the routing suite (slice 2): one scenario per route of the two routers'
+  classification tables — workflow-eligible root routes are reached through the always-on rule; the
+  dispatcher is force-loaded via the app's exact `/skill:` seed (which injects the skill content, so
+  no read of its own SKILL.md is expected). Pass = the routed worker's skill-load signal; direct-work
+  rows bypass worker skills and produce a grounded outcome. Direct-edit assertions pin the resulting
+  worktree, not incidental report vocabulary or which valid mutation tool the agent chose.
+- `smoke.live.spec.ts` — the infra-proving live scenarios: a mid-flow `brainstorming` round-trip that
+  must resume without re-entering the root router
   (artifact preset + persona answer + user simulator + on-disk decision), and transcript continuation
   (reopened fixture recalls mid-flow state).
 - `importing.live.spec.ts` — the first slice-3 worker coverage: `importing-a-codebase` end-to-end on a

@@ -1,6 +1,6 @@
 ---
 name: importing-a-codebase
-description: "Use when the repo holds real source code but no specs: the existing-codebase branch of setting-up-a-project, normally reached via that dispatcher, directly only when the situation is unmistakable. Not for empty workspaces (starting-a-new-project) or feature work in a specced project (brainstorming)."
+description: "Use when asked to create the initial spec graph for an existing codebase that has source code but no specs. Normally reached via setting-up-a-project."
 ---
 
 # Importing a codebase
@@ -100,4 +100,5 @@ with a one-line note — don't guess elaborately.
 - Tell the user the specs are drafted on this workspace's branch — **review them in Changes; nothing merges
   until they approve** — and summarize what you inferred vs. what they confirmed, which docs were
   adopted vs. left as input, and any drift corrections made.
-- Point at `brainstorming` for feature work from here on — **this workflow ends here**.
+- Point at `brainstorming` only for later work that requires choosing product scope, user-visible
+  behavior, or architecture; fully specified work proceeds directly. **This workflow ends here**.

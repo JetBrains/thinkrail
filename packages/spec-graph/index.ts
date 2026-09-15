@@ -3,9 +3,9 @@ import { registerSpecTools } from "./tools/index.ts";
 
 const SPEC_RULE = [
 	"Specs are this project's ground truth.",
-	"- Before you explore the codebase, plan, start a task, or add/change a feature, FIRST read the spec-graph skill, then use spec_grep/spec_get/spec_graph to find and read the relevant specs — specs before code.",
-	"- Treat their decisions and contracts as authoritative; reconcile every change against them and surface any contradiction instead of diverging.",
-	"- When a change alters a boundary, contract, or decision, update the spec as part of that change.",
+	"- Consult the relevant spec when work is governed by or may alter a documented boundary, contract, invariant, behavior, or architecture decision; localized work need not read unrelated specs.",
+	"- Treat applicable decisions and contracts as authoritative; reconcile contradictions instead of diverging.",
+	"- When a change alters a boundary, contract, invariant, or decision, update the owning spec as part of that change.",
 ].join("\n");
 
 const factory: ExtensionFactory = (pi: ExtensionAPI) => {

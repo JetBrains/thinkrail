@@ -1,6 +1,6 @@
 ---
 name: spec-graph
-description: "The project's specs are its ground truth: durable documents describing the architecture, decisions, contracts, and boundaries behind the code, organized as a connected graph. Read this skill and reach for the spec tools FIRST — before reading code — whenever you explore the project, plan or start a task, add or change a feature, implement anything, investigate an area, check work against recorded decisions and contracts, or otherwise work with specs. Also use it to create or maintain specs."
+description: "Use when locating, reading, creating, updating, or validating project specs, or when work is governed by or may alter a documented boundary, contract, invariant, behavior, or architecture decision."
 ---
 
 # Spec graph
@@ -9,16 +9,13 @@ description: "The project's specs are its ground truth: durable documents descri
 
 - Specs describe the architecture, decisions, contracts, and boundaries behind the code — the intent
   that the code alone does not reveal. Treat them as authoritative.
-- **Reach for the spec tools first.** Whenever you set out to explore the project, plan a change,
-  investigate an area, or work with specs in any way, your *first* move is the spec tools
-  (`spec_grep` / `spec_get` / `spec_graph`) — before `grep`, `find`, or reading source. The specs are
-  the map; the code is the territory you confirm against it.
-- **Start from the specs, not the code.** To understand an area or plan a change, read the relevant
-  specs first and use them as the map; read code second, to confirm details.
-- **Check work against them.** Before introducing a decision, a contract, or a boundary change, find
-  what the specs already say and align with it. If a change contradicts a recorded decision, surface the
-  contradiction and reconcile it — update the spec or change the approach — rather than silently
-  diverging.
+- **Consult the owning spec when it governs the work.** When work depends on, checks, explains, or
+  may alter a documented boundary, contract, invariant, behavior, or architecture decision, use
+  `spec_grep` / `spec_get` / `spec_graph` to find the applicable record and align with it. If a change contradicts a recorded
+  decision, surface and reconcile the contradiction rather than silently diverging.
+- **Keep lookup proportional.** Specs are the map for decisions and boundaries; code confirms the
+  implementation. A localized fix, explanation, or check that changes no documented decision may
+  inspect only the files it needs without reading unrelated specs.
 - **Keep them honest.** A change that moves or blurs a boundary, or overturns a decision, updates the
   spec as part of the same change. Specs that drift from the code stop being ground truth.
 
@@ -87,8 +84,9 @@ structure.
 
 ## Working with specs
 
-1. **Orient.** From a known root or the module you are touching, use `spec_graph` for the neighborhood,
-   `spec_get` for a node's metadata, and `read` for its body. Use `spec_grep` to find specs by content.
+1. **Orient when specs govern the work.** From a known root or the module you are touching, use
+   `spec_graph` for the neighborhood, `spec_get` for a node's metadata, and `read` for its body. Use
+   `spec_grep` to find specs by content.
 2. **Align.** Reconcile the change with the decisions and contracts the specs record; surface
    contradictions before diverging.
 3. **Update.** When the change alters a boundary, contract, or decision, update the spec — frontmatter

@@ -17,18 +17,24 @@ plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-gr
 
 - **`index.ts`** — an `ExtensionFactory` registering the six tools and one always-on `before_agent_start`
   rule. The rule is deliberately **short and byte-stable** — awareness that a shared list + `todo_*` tools
-  exist, plus a pointer to the todos skill. The lever is *understanding*, not prompt volume: **how to work
-  with the list lives in the skill; each tool's invariants live in its own description.** (We tried
-  injecting the live list into every prompt and pulled it back — the tools + skill carry it instead.)
+  exist, plus the threshold for loading the todos skill: an explicit user request or at least three
+  substantive execution steps, once the task is understood enough to plan. That threshold governs
+  creating a plan, not honoring one: a pending user-origin item already in the shared list is always
+  progressed through its exact item regardless of size. The lever is *understanding*, not prompt volume:
+  **how to work with the list lives in the skill; each tool's invariants live in its own description.**
+  (We tried injecting the live list into every prompt and pulled it back — the tools + skill carry it
+  instead.)
 - **`core/`** — the pi-free model ([[submodule-pi-todos-core]]): the `Todo` types and the per-session
   `TodoStore` (read-modify-write `.thinkrail/context/todos/<sessionId>.json`). No `@earendil-works/*` imports, so
   the host can value-import `pi-todos/core` to power the plan viewer — reading the plan and writing the
   user's own edits (the `spec/` → `spec.graph` pattern).
 - **`tools/`** — the six `todo_*` custom tools ([[submodule-pi-todos-tools]]), thin wrappers over `core/`.
 - **`skills/todos/SKILL.md`** — the bundled skill: the chat-plan discipline — group = task (one user
-  ask, outcome-titled; 1–7 verifiable, ≈commit-sized steps), work tasks strictly in order with one step
-  `in_progress` (blocked task = note why, tell the user, move on), fold in the user's mid-conversation
-  additions.
+  ask, outcome-titled; ordinarily 3–7 substantive, verifiable steps), work tasks strictly in order with one
+  step `in_progress` (blocked task = note why, tell the user, move on), and reconcile the user's live edits
+  before choosing each next item, after user input, and before completion. A pending user-origin loose item
+  is progressed in place regardless of size; the no-plan rule for smaller tasks applies only to ordinary
+  chat asks that are not already represented in the shared list.
 
 ## The tools
 
@@ -38,7 +44,7 @@ plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-gr
 | `todo_add` | Add one item — into a `group`, or `after` an existing item (**one of the two is required**: the agent can't author loose items). |
 | `todo_update` | Change an item's status / title / note / artifacts — how the agent flips `pending → in_progress → done`. Reports auto-demoted (`paused`) items; a `done` flip suggests the group's next open step. |
 | `todo_remove` | Drop an item. |
-| `todo_write` | **Reconcile** the agent's plan from fresh **groups only** — one group per task, steps inside (the plan-first pattern). Identity-preserving, not a destructive replace: see below. |
+| `todo_write` | **Reconcile** the agent's plan from fresh **groups only** — one group per task, steps inside, written once the task is understood enough to plan. Identity-preserving, not a destructive replace: see below. |
 | `todo_plan_summary` | Set/clear the plan-level completion summary (`TodoFile.summary`) — the overall handoff note written when the whole plan is done. |
 
 **Group = task.** The plan's model is two-level: a group is one user ask (title = the outcome), its
@@ -62,8 +68,9 @@ The list is **scoped to a chat session**, not the worktree: one JSON file per se
 `.thinkrail/context/todos/<sessionId>.json` under the worktree root — inside the ephemeral `context/`
 scratch dir the host seeds and git ignores, so the plans live alongside the other per-conversation
 working files. It is the agent's working plan for that conversation; the user can add items to it (from
-the UI), and the agent picks them up on its next turn (`todo_list`). The file is the source of truth —
-`TodoStore` re-reads it on every op — so the agent's in-session writes and the user's UI edits converge
+the UI), and the agent picks them up on its next turn (`todo_list`) and progresses those exact items via
+`todo_update`. The file is the source of truth — `TodoStore` re-reads it on every op — so the agent's
+in-session writes and the user's UI edits converge
 with no staleness window; a missing or corrupt file reads as an empty list. Ephemeral per chat
 (gitignored), not committed with the repo.
 

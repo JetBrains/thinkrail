@@ -45,10 +45,14 @@ only hydrated client. The live-window ready/control seam remains in the launcher
 of this package.
 
 Every host owns isolated home, data, agent and cache directories; environment overrides respect Windows'
-case-insensitive keys. Temporary installation roots use shared retrying removal. First-install smoke
-runs the actual DMG app, Windows ZIP setup, or Linux tarball installer, observes the installer's automatic
-app launch, checks health and normal control-file shutdown, and waits for installer/host/launcher exit.
-The harness-only installer UI autoclose flag dismisses completion dialogs, not errors or assertions.
+case-insensitive keys. Readiness polling owns a finite deadline and observes early root exit. When a live
+launched root or validated ready-document app/launcher PIDs need failure cleanup, teardown is bounded and
+awaited before shared retrying removal of the temporary installation root. A setup root may exit successfully
+before its app handoff is ready; after that exit, the harness does not infer or discover descendants from the
+setup process. First-install smoke runs the actual DMG app, Windows ZIP setup, or Linux tarball installer,
+observes the installer's automatic app launch, checks health and normal control-file shutdown, and waits for
+installer/host/launcher exit. The harness-only installer UI autoclose flag dismisses completion dialogs, not
+errors or assertions.
 
 Windows installer smoke is permitted only on disposable GitHub-hosted Actions runners: v2 installation
 writes real known-folder shortcuts and HKCU registration beyond HOME isolation. The guard runs before

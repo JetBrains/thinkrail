@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
 import { removeTree } from "@thinkrail/shared/removeTree";
+import { within } from "./lifecycle";
 
 export interface ArtifactResources {
 	readonly skillsDir: string;
@@ -25,15 +26,6 @@ export interface ArtifactHostAdapter {
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
-}
-
-function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
-	return Promise.race([
-		promise,
-		new Promise<never>((_, reject) =>
-			setTimeout(() => reject(new Error(`timed out after ${ms}ms: ${what}`)), ms),
-		),
-	]);
 }
 
 async function connectRpc(baseUrl: string): Promise<WebSocket> {
@@ -288,11 +280,7 @@ export default function syntheticExternalExtension(pi) {
 			},
 			["PI_CODING_AGENT_DIR"],
 		);
-		defaultHost = await within(
-			adapter.launch(defaultEnv, "default-agent"),
-			30_000,
-			"default host launch",
-		);
+		defaultHost = await adapter.launch(defaultEnv, "default-agent");
 		socket = await within(connectRpc(defaultHost.origin), 10_000, "default host WebSocket");
 		assertExternalModel(await within(rpc(socket, "model.list", {}), 20_000, "default model.list"));
 		await assertCentralConfigured(socket, "default-agent");
@@ -307,11 +295,7 @@ export default function syntheticExternalExtension(pi) {
 			PI_CODING_AGENT_DIR: agentDir,
 			XDG_CACHE_HOME: join(root, "cache"),
 		});
-		customHost = await within(
-			adapter.launch(customEnv, "custom-agent"),
-			30_000,
-			"custom host launch",
-		);
+		customHost = await adapter.launch(customEnv, "custom-agent");
 		const health = await within(fetch(`${customHost.origin}/health`), 10_000, "GET /health");
 		assert(health.ok && (await health.text()) === "ok", `/health answered ${health.status}`);
 		const index = await within(fetch(customHost.origin), 10_000, "GET /");
