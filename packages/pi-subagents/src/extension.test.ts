@@ -779,50 +779,6 @@ test("get_subagent_result rejects another parent's child — lineage is enforced
 	}
 });
 
-test.each([
-	false,
-	true,
-])("session_shutdown suppresses detached completion (user stop: %s)", async (userStop) => {
-	const session = await makeSession();
-	try {
-		fauxA.setResponses([
-			fauxAssistantMessage(
-				fauxToolCall("Agent", {
-					subagent_type: "bg-runner",
-					task: "Outlive the session.",
-					run_in_background: true,
-				}),
-			),
-			fauxAssistantMessage("SHUTDOWN_ACK"),
-			fauxAssistantMessage("COMPLETION_TURN_MUST_NOT_HAPPEN"),
-		]);
-		fauxB.setResponses([
-			async () => {
-				await Bun.sleep(200);
-				return fauxAssistantMessage("LATE_RESULT");
-			},
-		]);
-
-		await session.prompt("Run it, then shut the session down.");
-		expect(JSON.stringify(session.messages)).toContain("in the background:");
-
-		await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
-
-		const child = service.childrenOf(session.sessionId).at(-1);
-		if (!child) throw new Error("no child spawned");
-		if (userStop) await child.abort("user");
-		await waitFor(() => child.snapshot?.status === (userStop ? "aborted" : "completed"));
-		await Bun.sleep(100);
-		expect(JSON.stringify(session.messages)).not.toContain(SUBAGENT_COMPLETION_MESSAGE);
-		expect(
-			session.sessionManager.getEntries().some((entry) => entry.type === "custom_message"),
-		).toBe(false);
-	} finally {
-		session.dispose();
-		await service.disposeChildrenOf(session.sessionId);
-	}
-});
-
 test("get_subagent_result on an unknown id explains the restart-loss case", async () => {
 	fauxA.setResponses([
 		fauxAssistantMessage(fauxToolCall("get_subagent_result", { session_id: "bogus" })),
@@ -1047,26 +1003,38 @@ test.each([
 });
 
 test.each([
-	"default",
-	"legacy",
-])("one %s factory keeps independent runner lifetimes", async (kind) => {
+	["default factory shutdown", "default", false],
+	["legacy injected-service factory natural completion", "legacy", false],
+	["legacy injected-service factory explicit user abort after shutdown", "legacy", true],
+] as const)("one %s keeps independent runner lifetimes", async (_name, kind, userStop) => {
 	const factory = kind === "default" ? defaultSubagents : createSubagentsExtension({ service });
 	const first = await makeSession(undefined, service, factory);
 	const second = await makeSession(undefined, service, factory);
+	const firstFinish = await launchDetached(first);
 	try {
-		const firstFinish = await launchDetached(first);
+		const child = service.childrenOf(first.sessionId)[0];
 		const closing = first.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+		let aborting: Promise<void> | undefined;
+		if (kind === "legacy") {
+			await closing;
+			if (!child) throw new Error("no child spawned");
+			if (userStop) aborting = child.abort("user");
+		}
 		firstFinish.resolve();
-		await closing;
+		await Promise.all([closing, aborting]);
 		if (kind === "legacy")
-			await waitFor(() => service.childrenOf(first.sessionId)[0]?.snapshot?.status === "completed");
+			await waitFor(() => child?.snapshot?.status === (userStop ? "aborted" : "completed"));
 		expect(completions(first)).toHaveLength(0);
 		const finish = await launchDetached(second);
 		finish.resolve();
 		await waitFor(() => !second.isStreaming && completions(second).length === 1);
 		expect(completions(first)).toHaveLength(0);
+		expect(first.sessionManager.getEntries().some((entry) => entry.type === "custom_message")).toBe(
+			false,
+		);
 		expect(JSON.stringify(completions(second))).toContain("RETAINED_RESULT");
 	} finally {
+		firstFinish.resolve();
 		await second.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
 		await service.disposeChildrenOf(first.sessionId);
 		await service.disposeChildrenOf(second.sessionId);
