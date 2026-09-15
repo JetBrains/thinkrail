@@ -54,7 +54,7 @@ test("empty Resources popover preserves keyboard focus and stays usable at phone
 	await openResourceChat(page);
 	const trigger = page.getByTestId("resources-trigger");
 	await expect(trigger).toHaveAttribute("data-active-count", "0");
-	await expect(trigger).toHaveAccessibleName(/Resources/i);
+	await expect(trigger).toHaveAccessibleName("Resources, 0 active");
 	await shot(page.getByTestId("chat-toolbar"), "chat-resources", "after-header");
 	await trigger.focus();
 	await page.keyboard.press("Enter");
@@ -62,6 +62,11 @@ test("empty Resources popover preserves keyboard focus and stays usable at phone
 	await expect(popover).toBeVisible();
 	await expect(popover.getByTestId("resources-commands")).toBeVisible();
 	await expect(popover.getByTestId("resources-subagents")).toBeVisible();
+	await expect(popover.getByText("No active commands.", { exact: true })).toBeVisible();
+	await expect(popover.getByText("No active subagents.", { exact: true })).toBeVisible();
+	const finished = popover.getByTestId("resources-finished-toggle");
+	await expect(finished).toHaveText("Finished · 0");
+	await expect(finished).toHaveAttribute("aria-expanded", "false");
 	await expect(popover.getByTestId("resource-stop")).toHaveCount(0);
 	await expect(popover.getByTestId("resources-stop-all")).toHaveCount(0);
 	await shot(popover, "chat-resources", "empty-popover");

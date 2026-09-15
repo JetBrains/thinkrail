@@ -80,59 +80,39 @@ test("advertises the client protocol version in the WebSocket handshake", () => 
 });
 
 describe("WsTransport channel replay", () => {
-	test("resource invalidations deliver live but are not replayed on remount", () => {
+	test.each([
+		[
+			"resource invalidations deliver live but are not replayed on remount",
+			WS_CHANNELS.sessionResourcesChanged,
+			{ workspaceId: "workspace", sessionId: "session" },
+		],
+		[
+			"does not replay a stale terminal takeover to a late terminal body",
+			WS_CHANNELS.terminalDetached,
+			{ workspaceId: "w1", tabKey: "terminal-1" },
+		],
+		[
+			"does not replay a provider invalidation to a late settings pane",
+			WS_CHANNELS.providerChanged,
+			{},
+		],
+		[
+			"does not replay an addressed interview invitation to a late subscriber",
+			WS_CHANNELS.feedbackInterview,
+			{},
+		],
+	])("%s", (_name, channel, data) => {
 		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
 		transport.connect();
 		const socket = TestWebSocket.instances[0];
 		socket?.open();
 		const received: unknown[] = [];
-		transport.subscribe(WS_CHANNELS.sessionResourcesChanged, (payload) => received.push(payload));
-		const data = { workspaceId: "workspace", sessionId: "session" };
-		socket?.message(JSON.stringify({ channel: WS_CHANNELS.sessionResourcesChanged, data }));
+		transport.subscribe(channel, (payload) => received.push(payload));
+		socket?.message(JSON.stringify({ channel, data }));
 		expect(received).toEqual([data]);
 		const replay: unknown[] = [];
-		transport.subscribe(WS_CHANNELS.sessionResourcesChanged, (payload) => replay.push(payload));
+		transport.subscribe(channel, (payload) => replay.push(payload));
 		expect(replay).toEqual([]);
-	});
-	test("does not replay a stale terminal takeover to a late terminal body", () => {
-		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
-		transport.connect();
-		const socket = TestWebSocket.instances[0];
-		socket?.open();
-		socket?.message(
-			JSON.stringify({
-				channel: WS_CHANNELS.terminalDetached,
-				data: { workspaceId: "w1", tabKey: "terminal-1" },
-			}),
-		);
-
-		const received: unknown[] = [];
-		transport.subscribe(WS_CHANNELS.terminalDetached, (payload) => received.push(payload));
-		expect(received).toEqual([]);
-	});
-
-	test("does not replay a provider invalidation to a late settings pane", () => {
-		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
-		transport.connect();
-		const socket = TestWebSocket.instances[0];
-		socket?.open();
-		socket?.message(JSON.stringify({ channel: WS_CHANNELS.providerChanged, data: {} }));
-
-		const received: unknown[] = [];
-		transport.subscribe(WS_CHANNELS.providerChanged, (payload) => received.push(payload));
-		expect(received).toEqual([]);
-	});
-
-	test("does not replay an addressed interview invitation to a late subscriber", () => {
-		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
-		transport.connect();
-		const socket = TestWebSocket.instances[0];
-		socket?.open();
-		socket?.message(JSON.stringify({ channel: WS_CHANNELS.feedbackInterview, data: {} }));
-
-		const received: unknown[] = [];
-		transport.subscribe(WS_CHANNELS.feedbackInterview, (payload) => received.push(payload));
-		expect(received).toEqual([]);
 	});
 });
 

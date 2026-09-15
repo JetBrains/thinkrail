@@ -1055,16 +1055,15 @@ sibling tool implementation. Command logs are fetched by the integration hook an
 read-only view; the module never loads xterm.
 
 The hook hydrates on mount/current welcome, subscribes to `session.resourcesChanged`, and coalesces
-invalidations behind one in-flight read. An invalidation during a read requires a fresh pass; workspace/session identity, deletion tombstones,
-connection generation and invalidation revision fence late responses and failures. Metadata remains current while the popover is
-closed. Log snapshots refresh only while that command's detail is open and nonterminal, with one
-read in flight; terminal/unavailable results stop refresh and transient failures stay visibly retryable.
-The integration reuses `detailPolling` (formerly `subagentTranscriptPolling`) for command output and
-subagent transcript reads: one read at a time, replacement snapshots, terminal/permanent stop and
-capped transient backoff. Resource controls keep pending/error state scoped to their action and current
-connection, never synthesize terminal state from acknowledgements. Detail-close focus explicitly returns
-to the header trigger rather than the unmounted row. No per-token subagent progress or tool-result
-rewriting is needed for the header count.
+invalidations behind one in-flight read. An invalidation during a read requires a fresh pass;
+[[submodule-web-store]] owns generation/revision-fenced snapshot installation and failure handling.
+Metadata remains current while the popover is closed. Command logs refresh only while that command's
+detail is open. The shared `detailPolling` loop handles command output and subagent transcript reads:
+single-flight replacement snapshots, stopping on terminal/permanently unavailable results, and capped
+transient backoff with visibly retryable failures. Resource controls keep pending/error state scoped
+to their action and current connection; acknowledgement and detail-close focus semantics belong to
+[[submodule-web-chat-resources]]. No per-token subagent progress or tool-result rewriting is needed
+for the header count.
 
 `backgroundCommandCompletion` is a fold-breaking historical row, recognized by the contracts guard
 in both live reduction and hydration. `BackgroundCommandCompletion` is props-only and renders the

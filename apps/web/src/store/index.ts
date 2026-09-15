@@ -1,3 +1,3 @@
 export * from "./appStore";
-export * from "./chatResources";
+export type { ChatResourceScope } from "./chatResources";
 export * from "./selectors";
