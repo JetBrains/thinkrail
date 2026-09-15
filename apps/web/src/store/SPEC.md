@@ -127,7 +127,14 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   resolves them against that workspace's last focus and commits local placement. Reopening an existing
   canonical resource changes attention only unless non-identity metadata changed. A late chat-title event may
   repair cache/history labels or a still-queued open, but cannot recreate a locally closed placement or steal
-  focus. `syncLegacySelection` mirrors the selected resource into temporary editor/terminal compatibility
+  focus. **The approved durable-title fold (implementation pending)** routes
+  `session_info_changed` through the same one-home chat-label mutation already used by extension-UI
+  `setTitle`: normalize an absent name to the `Chat` fallback; update the cached `ChatTab`, its existing local
+  placement, any queued open, or its `closedChatsByWorkspace` row; and change no recency, runtime, placement,
+  navigation clock, or attention. The durable Pi event may supersede an extension's presentation-only title.
+  An event for a session this surface has never listed remains a no-op—`session.list`/`session.getMessages`
+  supply reconnect and later-hydration truth, so there is no title-specific event buffer.
+  `syncLegacySelection` mirrors the selected resource into temporary editor/terminal compatibility
   state without becoming placement authority; its selector includes the matched cache/catalog key so identity
   repair retriggers the mirror.
 
