@@ -546,6 +546,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
 - **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`, `selectWorkspaceById` (the
   one lookup for "the workspace with this id" — `selectActiveWorkspace` is it applied to the active id, and
   `openFileInTab`/`ChatView` read the worktree root through it),
+  `selectCanRenameChat` (the one protocol-capability derivation shared by ChatView and shell controls),
   `selectWorkspaceTerminals` (the host-owned terminal catalog; the layout visibility gate derives mounted
   identities from its supplied document + local attention, while host attachment remains exclusive per terminal),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing

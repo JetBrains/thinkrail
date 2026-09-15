@@ -129,8 +129,8 @@ of the host.
   - **Chat titles** — `SessionSummary.title` remains the non-empty read
     projection (`Chat` while pi has no durable name). The additive `session.rename` mutation takes
     `{ workspaceId, sessionId, title }`, rejects a title whose trimmed single-line form is blank or exceeds
-    `SESSION_TITLE_MAX_LENGTH` (80), and returns an ack; a dedicated feature-introduction protocol constant
-    gates newer rename controls against older hosts. The existing Pi event
+    `SESSION_TITLE_MAX_LENGTH` (80), and returns an ack; `SESSION_RENAME_PROTOCOL_VERSION` pins the
+    mutation and controls to v65 so a newer client hides them against older hosts. The existing Pi event
     `session_info_changed { name?: string }` is the one live domain update for manual and automatic changes,
     and `session.list`/`session.getMessages` repair a missed event. No title source/provenance, uniqueness,
     workspace coupling, or new push channel crosses the wire; session ids remain canonical.

@@ -241,7 +241,9 @@ scroll to the latest row, and legitimately virtualize the preceding user row. Ch
 multi-round transcripts and asserts both latest edges, their physical **Latest** destinations, host-qualified
 browser-local persistence, and cross-browser isolation without involving a provider. Hydrated-history
 coverage seeds one canonical giant Markdown block and drives real coarse wheel input so initial virtual
-geometry cannot clamp before the row mounts. Questionnaire paging uses a canonical persisted tool-call/ack
+geometry cannot clamp before the row mounts. Chat-title coverage uses persisted Pi transcripts to prove the
+native `/name` path, open-tab and closed-history dialog paths, reload durability, and the post-menu pointer
+unlock without involving a provider. Questionnaire paging uses a canonical persisted tool-call/ack
 fixture to pin tall-page reveal, fresh-chat restored-page reveal, visible review focus, and coarse-pointer
 focus without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains

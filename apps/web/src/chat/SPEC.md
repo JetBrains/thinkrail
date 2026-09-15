@@ -803,7 +803,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   offsets in state and applied a `translate(...)` inline style, which both violated the invariant and
   re-rendered the composer on every scrolled frame). The backdrop's **ref callback** seeds the offsets at
   mount, so a session starting in an already-scrolled composer never paints even one frame misaligned.
-- **Native `/name` (approved; implementation pending)** — the browser-native command catalog gains
+- **Native `/name`** — the browser-native command catalog gains
   `/name <title>` beside `/compact`, labelled `Pi/built-in` and reserved over an exact-name extension or
   prompt-template collision to match pi's own command. The parser reserves both bare `/name` and
   `/name <title>`; a valid argument bypasses the user-message echo and agent send, calls `session.rename`,

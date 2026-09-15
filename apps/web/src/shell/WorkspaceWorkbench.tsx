@@ -30,6 +30,7 @@ import {
 	isExternalWorkspace,
 	type LayoutIntent,
 	layoutOpenOptionsForNavigation,
+	selectCanRenameChat,
 	selectContextProject,
 	selectDiffTabTargetRef,
 	selectReviewDraftCount,
@@ -61,6 +62,7 @@ import {
 import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
 import { commitWorkspaceLayout, useWorkspaceLayoutState } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
+import { RenameChatDialog, type RenameChatTarget } from "./RenameChatDialog";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 
@@ -201,6 +203,7 @@ function useTerminalReservation(workspaceId: string): void {
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
+	const canRenameChat = useAppStore(selectCanRenameChat);
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
 	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
 	const projectionEpoch = useAppStore(
@@ -219,6 +222,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
 	const reviewFlagByPath = useMemo(() => reviewFlags(reviewComments), [reviewComments]);
 	const [focusRequest, setFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
+	const [renameChatTarget, setRenameChatTarget] = useState<RenameChatTarget | null>(null);
+	const requestRenameChat = useCallback(
+		(sessionId: string, title: string) => setRenameChatTarget({ workspaceId, sessionId, title }),
+		[workspaceId],
+	);
 	const activeReviewedPath = useAppStore((state) => selectActiveReviewedPath(state, workspaceId));
 	const readActiveReviewedPath = useCallback(
 		() => selectActiveReviewedPath(useAppStore.getState(), workspaceId),
@@ -657,7 +665,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				)}
 				renderCenterActions={(groupId) => (
 					<>
-						<WorkspaceChatHistory workspaceId={workspaceId} targetGroupId={groupId} />
+						<WorkspaceChatHistory
+							workspaceId={workspaceId}
+							targetGroupId={groupId}
+							{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
+						/>
 						<IconTooltip label="New terminal in this group">
 							<button
 								type="button"
@@ -687,6 +699,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				onAttentionChange={changeAttention}
 				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}
 				readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
+				{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
 				onRequestClose={(tab, prepare) => {
 					if (tab.kind === "terminal") {
 						const close = () => {
@@ -739,6 +752,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				onGestureCanceled={() => toast.info("The layout changed. Your drag was canceled.")}
 			/>
 			{terminalClose.confirmation}
+			<RenameChatDialog target={renameChatTarget} onClose={() => setRenameChatTarget(null)} />
 		</div>
 	);
 }
