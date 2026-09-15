@@ -607,6 +607,55 @@ test("a subagent-completion custom message_end appends a subagentCompletion turn
 	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
 });
 
+test("a todo-review-fix custom message_end appends a reviewFix turn", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	const details = {
+		itemId: "t_1",
+		itemTitle: "Wire the login redirect",
+		reviewId: "rev_1",
+		note: "Two findings below.",
+		comments: [{ id: "c_1", kind: "inline", body: "off-by-one", path: "src/a.ts", startLine: 4 }],
+	};
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "todo-review-fix",
+				content: "Address each review comment above.",
+				display: true,
+				details,
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	const turn = rt("a").turns.at(-1);
+	expect(turn?.kind).toBe("reviewFix");
+	expect(turn?.kind === "reviewFix" && turn.details.itemId).toBe("t_1");
+	expect(turn?.kind === "reviewFix" && turn.details.comments[0]?.id).toBe("c_1");
+	expect(turn?.kind === "reviewFix" && turn.text).toContain("Address each review comment");
+
+	const reviewBefore = rt("a");
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "todo-review-fix",
+				content: "x",
+				display: true,
+				details: { itemId: "t_1" },
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	const reviewIgnored = rt("a");
+	expect(reviewIgnored.turns).toBe(reviewBefore.turns);
+	expect(reviewIgnored.eventRevision).toBe(reviewBefore.eventRevision + 1);
+});
+
 test("the tool lifecycle folds into toolResults (the status + raw the renderers read)", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");

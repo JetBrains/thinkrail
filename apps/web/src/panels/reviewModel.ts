@@ -55,20 +55,16 @@ export function lineRef(comment: ReviewComment): string {
 }
 
 export function statusLabel(
-	comment: Pick<ReviewComment, "status" | "anchorState" | "stale" | "reflection">,
+	comment: Pick<ReviewComment, "status" | "anchorState" | "stale">,
 ): string {
 	if (comment.status !== "resolved" && comment.status !== "dismissed") {
-		if (comment.reflection?.verdict === "refuted") return `${comment.status} · refuted`;
 		if (comment.stale) return `${comment.status} · stale`;
 		if (comment.anchorState === "outdated") return `${comment.status} · outdated`;
 	}
 	return comment.status;
 }
 
-export function threadLabel(
-	t: Pick<ReviewThreadData, "status" | "anchorState" | "stale" | "refuted">,
-): string {
-	if (t.refuted) return `${t.status} · refuted`;
+export function threadLabel(t: Pick<ReviewThreadData, "status" | "anchorState" | "stale">): string {
 	if (t.stale) return `${t.status} · stale`;
 	if (t.anchorState === "outdated") return `${t.status} · outdated`;
 	return t.status;
@@ -124,7 +120,6 @@ export function fileThreads(
 			status: comment.status,
 			anchorState: comment.anchorState,
 			...(comment.stale ? { stale: true } : {}),
-			...(comment.reflection?.verdict === "refuted" ? { refuted: true } : {}),
 		});
 	}
 	return threads.sort((a, b) => a.endLine - b.endLine);

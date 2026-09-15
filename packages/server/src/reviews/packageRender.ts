@@ -1,5 +1,37 @@
-import type { Review, ReviewComment } from "@thinkrail/contracts";
+import type {
+	Review,
+	ReviewComment,
+	ReviewFixComment,
+	ReviewFixDetails,
+} from "@thinkrail/contracts";
 import { lineRangeOf, textQuoteOf } from "./anchoring";
+
+export function toReviewFixComment(comment: ReviewComment): ReviewFixComment {
+	const range = comment.anchor ? lineRangeOf(comment.anchor) : undefined;
+	return {
+		id: comment.id,
+		kind: comment.kind,
+		body: comment.body,
+		...(comment.anchor?.path ? { path: comment.anchor.path } : {}),
+		...(range ? { startLine: range.startLine, endLine: range.endLine } : {}),
+	};
+}
+
+export function buildReviewFixDetails(input: {
+	itemId: string;
+	itemTitle: string;
+	reviewId?: string;
+	note?: string;
+	comments: ReviewComment[];
+}): ReviewFixDetails {
+	return {
+		itemId: input.itemId,
+		itemTitle: input.itemTitle,
+		...(input.reviewId ? { reviewId: input.reviewId } : {}),
+		...(input.note ? { note: input.note } : {}),
+		comments: input.comments.map(toReviewFixComment),
+	};
+}
 
 export const CONTEXT_LINES = 10;
 

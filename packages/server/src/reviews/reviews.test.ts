@@ -32,7 +32,6 @@ import {
 	reviewSessionKey,
 	rollbackSend,
 	sendableComments,
-	setReflection,
 	setReviewPublisher,
 	updateComment,
 } from "./reviews";
@@ -132,23 +131,6 @@ test("anchorProblem: real path + in-range line passes, hallucinated path and pas
 	expect(anchorProblem(WS_ID, "a.ts", 3)).toBeNull();
 	expect(anchorProblem(WS_ID, "nope.ts", 1)).toContain("No file");
 	expect(anchorProblem(WS_ID, "a.ts", 99)).toContain("past the end");
-});
-
-test("setReflection records the verdict on a finding and publishes it", async () => {
-	const comment = await addInline();
-	const updated = await setReflection(WS_ID, comment.id, {
-		verdict: "refuted",
-		confidence: "high",
-		reason: "the cited API does exist",
-	});
-	expect(updated.reflection).toEqual({
-		verdict: "refuted",
-		confidence: "high",
-		reason: "the cited API does exist",
-	});
-	expect(pushes.at(-1)?.comments.find((c) => c.id === comment.id)?.reflection?.verdict).toBe(
-		"refuted",
-	);
 });
 
 test("add fills contentHash + textQuote, publishes a full snapshot", async () => {

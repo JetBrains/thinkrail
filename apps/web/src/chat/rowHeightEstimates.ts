@@ -142,6 +142,12 @@ export function estimateChatRowHeight(row: ChatRow): number {
 			return clampHeight(28 + wrappedLines(row.text) * PROSE_LINE_HEIGHT);
 		case "subagentCompletion":
 			return 64;
+		case "reviewFix":
+			return clampHeight(
+				40 +
+					(row.details.note ? wrappedLines(row.details.note) * PROSE_LINE_HEIGHT : 0) +
+					row.details.comments.length * 28,
+			);
 		case "tool":
 			return estimateToolHeight(row);
 		case "activity":

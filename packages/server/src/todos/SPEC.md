@@ -182,43 +182,44 @@ completion note, agent-authored via `todo_plan_summary`; item `summary` rides th
   change-set *reference* (short shas / paths — never the full diff; the agent reads content with its own
   tools), the feedback verbatim, and the instruction to re-open **this exact item** — the revision must
   attach to the step it revises (the todos skill mirrors this from the agent's side). The **send is
-  composed in `host`** (this module never imports `agent`): `followUpSession` into the item's **own chat**
-  (per-session plan/windows force it), fired detached with the review-send pattern — a pre-turn rejection
+  composed in `host`** (this module never imports `agent`): the host delivers it as a structured
+  `todo-review-fix` custom message (`sendReviewFixToSession`) into the item's **own chat** (per-session
+  plan/windows force it) — the rendered package is the message `content` the agent reads, and
+  `ReviewFixDetails` (`buildReviewFixDetails`, exported from `reviews/`) rides as `details` for the chat
+  card; fired detached with the review-send pattern — a pre-turn rejection
   calls **`rollbackTodoFix`** (restores the record the request replaced) and surfaces in the chat, so an
   undelivered fix request never strands as `changes_requested`. Manual requests carry an opaque
   `requestId`; compensation restores the previous record only while that exact request is still current,
   so a delayed send failure cannot erase a newer verdict or retry.
 
-**The agent reviewer ([[submodule-server-reviews]] is the findings' home).** `todo.startReview` puts a
-reviewable item in front of the plan's **dedicated reviewer chat** — one per worker session, pinned as
-`reviewerSessionId` in the same sidecar (created on first use by `host`, re-attached from disk). This
-module owns the state + packages: `startTodoReview` (marks the item's in-flight `pending` mark — the
-DTO's `reviewing` — and renders `renderReviewPackage`: refs + the worker's summary/verification claims
-to VERIFY, a re-review names only the unreviewed delta), `cancelTodoReview` (pre-turn rejection),
-`approveTodoReview(…, "agent")` (labeled `reviewedBy`), `recordAgentChangesRequested` (verdict note as
-feedback + `autoCycles` — the host's **1-auto-cycle cap**: cycle 0's verdict auto-sends the reviewer's
-comments to the worker (autoCycles 1), the fixed revision auto-re-reviews once (trigger requires
-autoCycles === 1 + a fresh delta — a sha appended past the watermark, OR the state reading `unreviewed`
-because the path-list fallback reset it, itself the delta signal a path-list item has no sha to carry —
-see the fallback's autoCycles durability above), and that verdict records autoCycles 2 — terminal, the human decides;
-the whole cap is **short-circuited when the `reviewAutoFix` setting is off** — `host/todoReview` then
-records the verdict terminally (autoCycles 2) with no send, so findings just wait for the human),
-and `workerSessionForReviewer` (the verdict seam's reverse lookup, enumerating sidecars). The reviewer's
+**The agent reviewer ([[submodule-server-reviews]] is the findings' home).** `todo.startReview` and the
+worker's own `request_review` tool put a reviewable item in front of a **hidden, ephemeral review
+subagent** — a delegation child of the plan session carrying the host's reviewer role
+([[submodule-server-host]] owns the prompt + output contract). There is no reviewer chat and no pinned
+reviewer session: nothing here stores a `reviewerSessionId`, and the reviewer holds no tools of this
+module's. This module owns the state + packages: `startTodoReview` (marks the item's in-flight `pending`
+mark — the DTO's `reviewing` — and renders `renderReviewPackage`: a change-set **reference** plus the
+worker's summary/verification claims to VERIFY, a re-review naming only the unreviewed delta; it names
+no tools, because the reviewer's role and output contract are the host's, not the package's),
+`cancelTodoReview` (the review failed or returned no parsable verdict), `approveTodoReview(…, "agent")`
+(labeled `reviewedBy`), and `recordAgentChangesRequested` (verdict note as feedback + `autoCycles` — the
+host's **1-auto-cycle cap**: cycle 0's verdict auto-sends the reviewer's findings to the worker
+(autoCycles 1), the fixed revision auto-re-reviews once (trigger requires autoCycles === 1 + a fresh
+delta — a sha appended past the watermark, OR the state reading `unreviewed` because the path-list
+fallback reset it, itself the delta signal a path-list item has no sha to carry — see the fallback's
+autoCycles durability above), and that verdict records autoCycles 2 — terminal, the human decides; the
+cap is **short-circuited when the `reviewAutoFix` setting is off** — `host/requestReview` then records
+the verdict terminally (autoCycles 2) with no send, so findings just wait for the human). The reviewer's
 findings are **agent-authored review comments** in the reviews module (`author: "agent"`), never a
-parallel store; orchestration/sends live in `host/todoReview.ts`. **Reviewer session crash safety:**
-when a reviewer session crashes/times out without sending a verdict, `host/reviewerSessionMonitor`
-detects the crash (terminal errors, unexpected stop reasons) and immediately clears the item's
-`pending` mark (the `reviewing` flag), allowing Review All to resume instead of deadlocking. The
-monitor tracks reviewer→worker session mappings (set by `startTodoReview`, checked on every settled
-turn in the session publisher hook). **Host-restart safety:** that crash-safety net is itself
-memory-only (the mappings reset on process restart), so a `pending` mark from a review still in flight
-when the host last stopped would otherwise never clear — `clearAllPendingReviews(root)` sweeps every
-session's sidecar under a workspace and drops every `pending` entry unconditionally; `host/todoReview`'s
+parallel store; orchestration/sends live in `host/requestReview.ts`. **Host-restart safety:** the
+in-flight bookkeeping is memory-only, so a `pending` mark from a review still running when the host last
+stopped would otherwise never clear — `clearAllPendingReviews(root)` sweeps every session's sidecar under
+a workspace and drops every `pending` entry unconditionally; `host/todoReview`'s
 `reconcilePendingReviewsOnBoot` calls it for every workspace once, at boot, before any client can observe
 the stale spinner (see host/SPEC.md). Only the spinner is cleared — the underlying review record, if any,
-is untouched. **Review All** (`todo.reviewAll`) is pure host orchestration over
-this same flow: `host/reviewQueue.ts` drives a per-(workspace, session) FIFO of the unsettled
-reviewable items one at a time, so it adds no state here (see host/SPEC.md).
+is untouched. **Review All** (`todo.reviewAll`) is pure host orchestration over this same flow: it starts
+every unsettled reviewable item on the plan's serial chain (`host/planReviewQueue.ts`), so it adds no
+state here (see host/SPEC.md).
 
 **The read barrier.** `listTodos` first awaits the workspace's in-flight reconciles
 (`settleChangeArtifacts` — the same per-workspace chain). A client's only refresh signal is the `pi.event`
@@ -241,14 +242,13 @@ it resolves immediately when nothing is in flight, and never rejects.
   `removeTodo(...) → Promise<{ ok:true }>` (idempotent; enqueued on the per-workspace reconcile chain —
   see the sidecar-writer serialization above — as is `removeSessionTodoWindows`;
   **throws while the item is `pending` an agent review** —
-  a removal mid-review would strand `host`'s in-flight registration (`currentReview`, the per-plan
-  latch — both memory-only, cleared only by the reviewer session's settle) and let a stray
-  `add_review_comment` file a finding against an id that no longer exists; the client disables Remove
-  on a `reviewing` row the same way it already disables Start review). This durable check alone only
-  covers start→verdict: `review_verdict` clears `pending` mid-turn, before the reviewer session
-  settles, so `host/todoReview.ts`'s `todo.remove` handler layers `isItemUnderActiveReview` (reads
-  `currentReview` directly) in front of this call — closing the verdict→settle tail the durable mark
-  can't see. See host/SPEC.md.),
+  a removal mid-review would strand `host`'s in-flight bookkeeping (the per-item review claim and the
+  fix latch, both memory-only) and let the verdict file findings against an id that no longer exists;
+  the client disables Remove on a `reviewing` row the same way it already disables Start review). This
+  durable check alone only covers start→verdict: the verdict clears `pending` while the fix delivery it
+  triggers is still in flight, so `host/todoReview.ts`'s `todo.remove` handler layers
+  `isItemUnderActiveReview` (the in-memory latches) in front of this call — closing the verdict→delivery
+  tail the durable mark can't see. See host/SPEC.md.),
   `approveTodoReview(...)` / `requestTodoFix(...) → { pkg, previous }` / `rollbackTodoFix(...)` + the
   pure `renderFixPackage` (the review ops; the send itself is `host`'s composition), and the
   `TodoReviewRecord` type. **Mapping only** — no plan logic; `TodoStore` owns disk.

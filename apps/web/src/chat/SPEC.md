@@ -176,6 +176,17 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   self-framed card (`tools/subagent/SubagentCompletionCard`) — **the** terminal signal for a background
   run, whose `Agent` tool card froze at its ack (why + card anatomy:
   [tools/subagent/SPEC.md](tools/subagent/SPEC.md)). Never folded into activity groups.
+- `reviewFix` — a `todo-review-fix` custom message (#363): a plan-review verdict's fix request the host
+  delivers to the worker chat as **structured `ReviewFixDetails`** (not a synthetic user turn). Rendered as
+  a compact `ReviewFixCard` (`turns.tsx`, `data-testid="review-fix-card"`) — a one-line summary
+  (`Requested a fix on “<title>” · N findings`), the optional feedback note, and the findings as
+  fold-out comments via the shared `ReviewPackageComments` (`ReviewPackageComments.tsx`, the fold-out
+  row primitive), path/lines pre-resolved server-side. That shared list + the `ReviewFixComment`→
+  `ReviewPackageItem` mapping (`reviewPackage.ts`) are reused by the review-package card and the
+  `request_review` verdict card ([[submodule-chat-tools]]).
+  Distinct from the file-chat review-comments card above: that path stays a `<review …>` **user** message
+  parsed by `reviewPackage.ts` (own `review-package-*` testids); only the todo-fix path is structured.
+  Never folded into activity groups.
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
   round ends: elapsed time, tool-call count, and the round's written files as **two chips split by owning
   tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on exactly
@@ -342,7 +353,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error turn's.
   `custom` messages: `ask-user-answers` indexes into `askAnswers` (never a turn — the questionnaire card
   is its rendering); `subagent-completion` **becomes its own `subagentCompletion` turn** (the completion
-  card is transcript-positioned, so it maps its message index too); unknown customTypes are ignored. No
+  card is transcript-positioned, so it maps its message index too); `todo-review-fix` **becomes its own
+  `reviewFix` turn** (same positioning); unknown customTypes are ignored. No
   store/transport/shiki.
 - **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
   a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
