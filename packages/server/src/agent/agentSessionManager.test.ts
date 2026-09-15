@@ -26,11 +26,13 @@ import type {
 	AgentSettlement,
 	ExtUiRequest,
 	ImageContent,
+	SessionAttentionPayload,
 	SessionSummary,
 } from "@thinkrail/contracts";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import {
 	abortSession,
+	acknowledgeSessionAttention,
 	buildSessionSettings,
 	clampThinkingForModel,
 	clearQueueSession,
@@ -45,8 +47,10 @@ import {
 	getSessionMessages,
 	getSessionStats,
 	hasSession,
+	initializeSessionAttention,
 	listAvailableModels,
 	listSessionActivity,
+	listSessionAttention,
 	listSessions,
 	promptSession,
 	refreshAvailableModels,
@@ -56,7 +60,9 @@ import {
 	removeSession,
 	removeWorkspaceSessions,
 	setActivityProjectResolver,
+	setAttentionProjectResolver,
 	setSessionActivityPublisher,
+	setSessionAttentionPublisher,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionManagerFactory,
@@ -125,12 +131,15 @@ function tmpCwd(prefix: string): string {
 }
 
 let priorAgentDir: string | undefined;
+let priorDataDir: string | undefined;
 let priorOffline: string | undefined;
 let runtime: ModelRuntime;
 
 beforeAll(async () => {
 	priorAgentDir = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = tmpCwd("trpi-agentdir-");
+	priorDataDir = process.env.THINKRAIL_DATA_DIR;
+	process.env.THINKRAIL_DATA_DIR = tmpCwd("trpi-datadir-");
 
 	priorOffline = process.env.PI_OFFLINE;
 	process.env.PI_OFFLINE = "1";
@@ -144,6 +153,7 @@ beforeAll(async () => {
 	runtime.registerProvider("fauxb", cfg(fauxB, "fauxb"));
 
 	configurePiRuntime(runtime);
+	await initializeSessionAttention([]);
 	setSessionManagerFactory(() => SessionManager.inMemory());
 	setSessionPublisher(({ sessionId, event }) => {
 		const list = events.get(sessionId) ?? [];
@@ -157,6 +167,8 @@ afterAll(() => {
 	for (const dir of tmpDirs) rmSync(dir, { recursive: true, force: true });
 	if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 	else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+	if (priorDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+	else process.env.THINKRAIL_DATA_DIR = priorDataDir;
 	if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 	else process.env.PI_OFFLINE = priorOffline;
 });
@@ -251,6 +263,54 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 	});
 	const hydrated = await getSessionMessages(session.sessionId, "ws-settled", cwd);
 	expect(hydrated.summary.lastSettlement).toEqual(settled?.terminal);
+});
+
+test("a settled result requests attention until its exact candidate is acknowledged", async () => {
+	const workspaceId = "ws-attention-live";
+	const published: SessionAttentionPayload[] = [];
+	setAttentionProjectResolver((id) => (id === workspaceId ? "project-attention" : null));
+	setSessionAttentionPublisher((payload) => published.push(payload));
+	let sessionId: string | undefined;
+	try {
+		fauxA.setResponses([fauxAssistantMessage("ATTENTION_REPLY")]);
+		const session = await createSession({
+			cwd: tmpCwd("trpi-attention-live-"),
+			workspaceId,
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		await promptSession(sessionId, "finish this");
+
+		const candidate = published.find((payload) => payload.attentionId !== null);
+		expect(candidate).toMatchObject({
+			workspaceId,
+			projectId: "project-attention",
+			sessionId,
+		});
+		expect(candidate?.attentionId).toStartWith("review:");
+		if (!candidate?.attentionId) throw new Error("Missing attention candidate");
+		expect(await listSessionAttention([])).toEqual([
+			{
+				workspaceId,
+				projectId: "project-attention",
+				sessionId,
+				attentionId: candidate.attentionId,
+			},
+		]);
+
+		await acknowledgeSessionAttention(workspaceId, sessionId, candidate.attentionId);
+		expect(published.at(-1)).toEqual({
+			workspaceId,
+			projectId: "project-attention",
+			sessionId,
+			attentionId: null,
+		});
+		expect(await listSessionAttention([])).toEqual([]);
+	} finally {
+		setSessionAttentionPublisher(() => {});
+		setAttentionProjectResolver(() => null);
+		if (sessionId) removeSession(sessionId);
+	}
 });
 
 test("a disabled workspace creates chats without active subagent tools", async () => {
@@ -1701,11 +1761,14 @@ test("an extension failing in session_start reaches the client, named, before th
 	}
 });
 
-test("a rolled-back delete republishes activity — a suppressed glyph would outlive the failed deletion", async () => {
+test("a rolled-back delete preserves attention while legacy activity repairs", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	const published: (ActivityStatus | null)[] = [];
+	const publishedAttention: SessionAttentionPayload[] = [];
 	setSessionActivityPublisher((payload) => published.push(payload.status));
+	setSessionAttentionPublisher((payload) => publishedAttention.push(payload));
 	setActivityProjectResolver(() => "project-1");
+	setAttentionProjectResolver(() => "project-1");
 	let reportTrashStarted: () => void = () => {};
 	const trashStarted = new Promise<void>((resolve) => {
 		reportTrashStarted = resolve;
@@ -1736,13 +1799,17 @@ test("a rolled-back delete republishes activity — a suppressed glyph would out
 
 		const mine = async () =>
 			(await listSessionActivity()).filter((row) => row.sessionId === sessionId);
+		const mineAttention = async () =>
+			(await listSessionAttention()).filter((row) => row.sessionId === sessionId);
 		expect(published.at(-1)).toBe("failed");
 		expect((await mine()).map((row) => row.status)).toEqual(["failed"]);
 		expect((await mine())[0]?.projectId).toBe("project-1");
+		expect((await mineAttention())[0]?.attentionId).toStartWith("review:");
 
 		deleting = deleteSession(session.sessionId, "ws-delete-activity", cwd);
 		await trashStarted;
 		expect(await mine()).toEqual([]);
+		expect((await mineAttention())[0]?.attentionId).toStartWith("review:");
 
 		syncSessionActivity(session.sessionId);
 		expect(published.at(-1)).toBeNull();
@@ -1753,13 +1820,17 @@ test("a rolled-back delete republishes activity — a suppressed glyph would out
 		expect(hasSession(session.sessionId)).toBe(true);
 		expect(published.at(-1)).toBe("failed");
 		expect((await mine()).map((row) => row.status)).toEqual(["failed"]);
+		expect((await mineAttention())[0]?.attentionId).toStartWith("review:");
+		expect(publishedAttention.some((payload) => payload.attentionId === null)).toBe(false);
 	} finally {
 		failTrash();
 		await deleting?.catch(() => {});
 		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
 		setTrashImplementationForTests(undefined);
 		setSessionActivityPublisher(() => {});
+		setSessionAttentionPublisher(() => {});
 		setActivityProjectResolver(() => null);
+		setAttentionProjectResolver(() => null);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });
@@ -2026,5 +2097,181 @@ test("an oversized questionnaire record followed by its small ack still reads as
 		]);
 	} finally {
 		setActivityProjectResolver(() => null);
+	}
+});
+
+test("attention migration baselines exact review ids but keeps blockers and later results", async () => {
+	disposeAllSessions();
+	const cwd = tmpCwd("trpi-attention-migration-");
+	const sessionDir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	writeFixtureSession(sessionDir, {
+		id: "attention-old-done",
+		cwd,
+		messages: [
+			{ role: "user", text: "old work", timestamp: 1_700_900_000_000 },
+			{ role: "assistant", text: "done", timestamp: 1_700_900_001_000, stopReason: "stop" },
+		],
+	});
+	const legacyPath = join(sessionDir, "1700900001500_attention-legacy.jsonl");
+	writeFileSync(
+		legacyPath,
+		`${[
+			{
+				type: "session",
+				id: "attention-legacy",
+				timestamp: new Date(1_700_900_001_500).toISOString(),
+				cwd,
+			},
+			{
+				type: "message",
+				timestamp: new Date(1_700_900_001_500).toISOString(),
+				message: { role: "user", content: "legacy work", timestamp: 1_700_900_001_500 },
+			},
+			{
+				type: "message",
+				timestamp: new Date(1_700_900_001_600).toISOString(),
+				message: {
+					role: "assistant",
+					content: [{ type: "text", text: "legacy done" }],
+					stopReason: "stop",
+					timestamp: 1_700_900_001_600,
+				},
+			},
+		]
+			.map((entry) => JSON.stringify(entry))
+			.join("\n")}\n`,
+	);
+	const waiting = writeFixtureSession(sessionDir, {
+		id: "attention-waiting",
+		cwd,
+		messages: [
+			{ role: "user", text: "pick one", timestamp: 1_700_900_002_000 },
+			{
+				role: "assistant",
+				timestamp: 1_700_900_003_000,
+				stopReason: "toolUse",
+				content: [
+					{
+						type: "toolCall",
+						id: "attention-question",
+						name: "ask_user_question",
+						arguments: { questions: [] },
+					},
+				],
+			},
+			{
+				role: "toolResult",
+				timestamp: 1_700_900_004_000,
+				toolCallId: "attention-question",
+				toolName: "ask_user_question",
+				content: [{ type: "text", text: "Questions shown to the user." }],
+				details: { kind: "ack" },
+				isError: false,
+			},
+		],
+	});
+	setAttentionProjectResolver(() => "attention-project");
+	try {
+		rmSync(join(process.env.THINKRAIL_DATA_DIR ?? "", "attention.json"), { force: true });
+		await initializeSessionAttention([{ id: "attention-workspace", cwd }]);
+		const legacyRecords = readFileSync(legacyPath, "utf8")
+			.trim()
+			.split("\n")
+			.map((line) => JSON.parse(line));
+		expect(legacyRecords[0]?.version).toBeUndefined();
+		const ledger = JSON.parse(
+			readFileSync(join(process.env.THINKRAIL_DATA_DIR ?? "", "attention.json"), "utf8"),
+		);
+		expect(ledger.handledCandidateBySession["attention-legacy"]).toStartWith("legacy-review:");
+		expect(await listSessionAttention([{ id: "attention-workspace", cwd }])).toEqual([
+			{
+				sessionId: "attention-waiting",
+				workspaceId: "attention-workspace",
+				projectId: "attention-project",
+				attentionId: "question:attention-question",
+			},
+		]);
+		SessionManager.open(legacyPath);
+		expect(await listSessionAttention([{ id: "attention-workspace", cwd }])).toEqual([
+			{
+				sessionId: "attention-waiting",
+				workspaceId: "attention-workspace",
+				projectId: "attention-project",
+				attentionId: "question:attention-question",
+			},
+		]);
+
+		appendFileSync(
+			waiting.path,
+			`${JSON.stringify({
+				type: "custom_message",
+				id: "attention-answer",
+				parentId: "attention-waiting-m2",
+				timestamp: new Date(1_700_900_004_500).toISOString(),
+				customType: "ask-user-answers",
+				content: "User answered",
+				display: true,
+				details: {
+					toolCallId: "attention-question",
+					result: { answers: [], cancelled: false },
+				},
+			})}\n`,
+		);
+		expect(await listSessionAttention([{ id: "attention-workspace", cwd }])).toEqual([]);
+
+		writeFixtureSession(sessionDir, {
+			id: "attention-new-done",
+			cwd,
+			messages: [
+				{ role: "user", text: "new work", timestamp: 1_700_900_005_000 },
+				{
+					role: "assistant",
+					text: "done",
+					timestamp: 1_700_900_006_000,
+					stopReason: "stop",
+				},
+			],
+		});
+		const lateLegacyPath = join(sessionDir, "1700900007000_attention-late-legacy.jsonl");
+		writeFileSync(
+			lateLegacyPath,
+			`${[
+				{
+					type: "session",
+					id: "attention-late-legacy",
+					timestamp: new Date(1_700_900_007_000).toISOString(),
+					cwd,
+				},
+				{
+					type: "message",
+					timestamp: new Date(1_700_900_007_000).toISOString(),
+					message: { role: "user", content: "late legacy", timestamp: 1_700_900_007_000 },
+				},
+				{
+					type: "message",
+					timestamp: new Date(1_700_900_008_000).toISOString(),
+					message: {
+						role: "assistant",
+						content: [{ type: "text", text: "late done" }],
+						stopReason: "stop",
+						timestamp: 1_700_900_008_000,
+					},
+				},
+			]
+				.map((entry) => JSON.stringify(entry))
+				.join("\n")}\n`,
+		);
+		const afterMigration = await listSessionAttention([{ id: "attention-workspace", cwd }]);
+		expect(
+			afterMigration.find((row) => row.sessionId === "attention-new-done")?.attentionId,
+		).toStartWith("review:");
+		expect(
+			afterMigration.find((row) => row.sessionId === "attention-late-legacy")?.attentionId,
+		).toStartWith("legacy-review:");
+		expect(
+			JSON.parse(readFileSync(lateLegacyPath, "utf8").split("\n")[0] ?? "{}").version,
+		).toBeUndefined();
+	} finally {
+		setAttentionProjectResolver(() => null);
 	}
 });

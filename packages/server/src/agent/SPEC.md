@@ -150,7 +150,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 
     Review candidates are created only at `agent_settled`, never attempt-level `agent_end`, so provider retry
     and compaction recovery cannot claim the person is needed early. Each candidate id is stable across live
-    and disk derivation and tied to the decisive persisted session entry. The manager
+    and disk derivation and tied to the decisive persisted session entry. Current transcripts use that entry's
+    id; legacy linear transcripts use a content-plus-branch-ordinal fingerprint carried as an alias after pi
+    later migrates them, so attention never rewrites a transcript merely to mint identity. The manager
     keeps only publish-on-change bookkeeping per live entry. Exact-candidate acknowledgement clears a review
     candidate globally; a stale acknowledgement of A cannot clear newer B, and a blocking candidate is a
     no-op. Handled-ledger mutations are serialized copy-on-write operations. The host updates its published
@@ -198,11 +200,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     of losing unseen work. Thereafter a successful/error/length terminal outcome recovered from disk is
     attention-worthy until its exact id is durably handled.
 
-    Disk derivation reads only the transcript tail and retains the bounded record-safe reader: start at a
-    JSONL boundary, grow ×8 up to `TRANSCRIPT_TAIL_MAX_BYTES` when the decisive unbounded record crosses the
-    initial window, then degrade only for one record beyond the cap. Reads are memoized in memory by
-    `(mtime, messageCount)`; unreadable workspaces are logged and skipped rather than making the global
-    snapshot fail. Unexpected process death mid-run is represented only if pi left a durable terminal
+    Disk derivation uses a 64 KiB bounded header probe plus the transcript tail: start at a JSONL boundary,
+    grow ×8 but clamp at `TRANSCRIPT_TAIL_MAX_BYTES`, then degrade only for one record beyond the cap. Modern
+    tails follow the retained parent chain without loading omitted history; truncated legacy files alone need
+    a full read because they have no persisted parent ids. Discovery is per-file and never routes the global
+    snapshot through pi's full-text `SessionManager.list`. Candidate reads are memoized by actual file
+    `(mtime, size)`; unreadable transcripts are logged and skipped individually. Unexpected process death mid-run is represented only if pi left a durable terminal
     outcome; a second in-flight crash journal is deliberately not introduced.
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.

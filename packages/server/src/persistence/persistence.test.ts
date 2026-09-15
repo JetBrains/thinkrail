@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	ATTENTION_LEDGER_VERSION,
 	loadAttentionLedger,
 	quarantineAttentionLedger,
+	restoreQuarantinedAttentionLedger,
 	saveAttentionLedger,
 } from "./persistence";
 
@@ -55,6 +56,9 @@ test("attention ledger reports malformed state and preserves it when quarantined
 	const quarantined = quarantineAttentionLedger();
 	expect(existsSync(file)).toBe(false);
 	expect(readFileSync(quarantined, "utf8")).toBe("{ not json");
+	expect(loadAttentionLedger()).toMatchObject({ status: "invalid", quarantined });
+	restoreQuarantinedAttentionLedger(quarantined);
+	expect(readFileSync(file, "utf8")).toBe("{ not json");
 });
 
 test("attention ledger rejects invalid writes without replacing valid state", () => {

@@ -24,6 +24,8 @@ import type {
 import { isControlMessage } from "@thinkrail/contracts";
 import {
 	abortSession,
+	abortSessionForDisposal,
+	acknowledgeSessionAttention,
 	answerQuestion,
 	clampThinkingForModel,
 	clearQueueSession,
@@ -40,7 +42,7 @@ import {
 	isSessionStreaming,
 	listAvailableModels,
 	listProjectAliasSkillNames,
-	listSessionActivity,
+	listSessionAttention,
 	listSessions,
 	listSkillCatalog,
 	listSkillCommands,
@@ -727,7 +729,7 @@ const handlers: Record<string, Handler> = {
 	},
 	"session.dispose": async (params) => {
 		const { sessionId } = params as { sessionId: string };
-		if (isSessionStreaming(sessionId)) await abortSession(sessionId).catch(() => {});
+		if (isSessionStreaming(sessionId)) await abortSessionForDisposal(sessionId).catch(() => {});
 		await removeSession(sessionId);
 		runObservation.forget(sessionId);
 		taskObservation.forget(sessionId);
@@ -771,13 +773,20 @@ const handlers: Record<string, Handler> = {
 			}
 		});
 	},
-	"session.activityList": () =>
-		listSessionActivity(
+	"session.activityList": () => [],
+	"session.attentionList": () =>
+		listSessionAttention(
 			listAllWorkspaceRecords().map((workspace) => ({
 				id: workspace.id,
 				cwd: workspace.worktreePath,
 			})),
 		),
+	"session.acknowledgeAttention": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string; attentionId: string };
+		getWorkspace(p.workspaceId);
+		await acknowledgeSessionAttention(p.workspaceId, p.sessionId, p.attentionId);
+		return { ok: true } as const;
+	},
 	"session.getMessages": (params) => {
 		const p = params as { sessionId: string; workspaceId: string };
 		return getSessionMessages(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);

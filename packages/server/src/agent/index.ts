@@ -1,6 +1,11 @@
 export { type ActivityInputs, deriveActivityStatus } from "./activity";
 export * from "./agentSessionManager";
 export * from "./askUserQuestion";
+export {
+	type AttentionCandidate,
+	type AttentionInputs,
+	deriveAttentionCandidate,
+} from "./attention";
 export { readChildTranscript } from "./delegation";
 export {
 	type BundledExtensionFactory,

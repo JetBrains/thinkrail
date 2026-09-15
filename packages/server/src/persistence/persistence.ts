@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -42,7 +42,7 @@ export interface AttentionLedger {
 export type AttentionLedgerLoadResult =
 	| { status: "missing" }
 	| { status: "ready"; ledger: AttentionLedger }
-	| { status: "invalid"; error: Error };
+	| { status: "invalid"; error: Error; quarantined?: string };
 
 const ATTENTION_LEDGER_FILE = "attention.json";
 
@@ -75,7 +75,23 @@ export function loadAttentionLedger(): AttentionLedgerLoadResult {
 	try {
 		source = readFileSync(attentionLedgerPath(), "utf8");
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code === "ENOENT") return { status: "missing" };
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			let quarantined: string | undefined;
+			try {
+				const name = readdirSync(dataDir())
+					.filter((candidate) => candidate.startsWith(`${ATTENTION_LEDGER_FILE}.invalid-`))
+					.sort()
+					.at(-1);
+				if (name) quarantined = join(dataDir(), name);
+			} catch {}
+			return quarantined
+				? {
+						status: "invalid",
+						error: new Error("Attention ledger replacement was interrupted"),
+						quarantined,
+					}
+				: { status: "missing" };
+		}
 		return { status: "invalid", error: errorValue(error) };
 	}
 	try {
@@ -112,6 +128,10 @@ export function quarantineAttentionLedger(): string {
 	const quarantined = `${file}.invalid-${Date.now()}-${randomUUID()}`;
 	renameSync(file, quarantined);
 	return quarantined;
+}
+
+export function restoreQuarantinedAttentionLedger(quarantined: string): void {
+	renameSync(quarantined, attentionLedgerPath());
 }
 
 export function loadProjects(): Project[] {

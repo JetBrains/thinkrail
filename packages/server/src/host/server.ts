@@ -4,7 +4,7 @@ import type {
 	HostPlatform,
 	HostUpdateNotice,
 	ServerWelcome,
-	SessionActivityPayload,
+	SessionAttentionPayload,
 	SessionCreatedPayload,
 	SessionDeletedPayload,
 	TerminalTabsPush,
@@ -19,20 +19,21 @@ import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
+	initializeSessionAttention,
 	isProjectSkillPath,
 	refreshSubagentTools,
-	setActivityProjectResolver,
+	setAttentionProjectResolver,
 	setExtUiPendingObserver,
 	setExtUiPublisher,
 	setReviewCommentHandler,
-	setSessionActivityPublisher,
+	setSessionAttentionPublisher,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionPublisher,
 	setSkillAdmissionResolver,
 	setSubagentsEnabledResolver,
 	settleSessionsForShutdown,
-	syncSessionActivity,
+	syncSessionAttention,
 } from "../agent";
 import {
 	type AnalyticsOptions,
@@ -77,7 +78,12 @@ import {
 	setWatchPublisher,
 	stopAllWatches,
 } from "../watch";
-import { getWorkspace, refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
+import {
+	getWorkspace,
+	listAllWorkspaceRecords,
+	refreshUserOwnedWorkspace,
+	setWorkspacePublisher,
+} from "../workspaces";
 import {
 	isPromptCommitted,
 	isSettledTurn,
@@ -171,6 +177,20 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		hostUpdate,
 	} = options;
 
+	setAttentionProjectResolver((workspaceId) => {
+		try {
+			return getWorkspace(workspaceId).projectId;
+		} catch {
+			return null;
+		}
+	});
+	await initializeSessionAttention(
+		listAllWorkspaceRecords().map((workspace) => ({
+			id: workspace.id,
+			cwd: workspace.worktreePath,
+		})),
+	);
+
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
@@ -235,7 +255,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
 				ws.subscribe(WS_CHANNELS.sessionCreated);
 				ws.subscribe(WS_CHANNELS.sessionDeleted);
-				ws.subscribe(WS_CHANNELS.sessionActivity);
+				ws.subscribe(WS_CHANNELS.sessionAttention);
 				ws.subscribe(WS_CHANNELS.providerLogin);
 				ws.subscribe(WS_CHANNELS.providerChanged);
 				ws.subscribe(WS_CHANNELS.projectUpdated);
@@ -418,14 +438,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 
-	setActivityProjectResolver((workspaceId) => {
-		try {
-			return getWorkspace(workspaceId).projectId;
-		} catch {
-			return null;
-		}
-	});
-
 	setSkillAdmissionResolver((workspaceId) => {
 		try {
 			const { projectId, skillOverrides } = getWorkspace(workspaceId);
@@ -548,14 +560,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	});
 
-	setSessionActivityPublisher((payload: SessionActivityPayload) => {
+	setSessionAttentionPublisher((payload: SessionAttentionPayload) => {
 		server.publish(
-			WS_CHANNELS.sessionActivity,
-			JSON.stringify({ channel: WS_CHANNELS.sessionActivity, data: payload }),
+			WS_CHANNELS.sessionAttention,
+			JSON.stringify({ channel: WS_CHANNELS.sessionAttention, data: payload }),
 		);
 	});
 
-	setExtUiPendingObserver(syncSessionActivity);
+	setExtUiPendingObserver(syncSessionAttention);
 
 	setSessionPublisher((payload) => {
 		runObservation.observe(payload.sessionId, payload.event);

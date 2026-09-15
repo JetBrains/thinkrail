@@ -36,11 +36,15 @@ export function cancelExtUiForSession(sessionId: string): void {
 	}
 }
 
-export function hasPendingExtUiDialog(sessionId: string): boolean {
-	for (const entry of pending.values()) {
-		if (entry.sessionId === sessionId) return true;
+export function pendingExtUiDialogId(sessionId: string): string | null {
+	for (const [id, entry] of pending) {
+		if (entry.sessionId === sessionId) return id;
 	}
-	return false;
+	return null;
+}
+
+export function hasPendingExtUiDialog(sessionId: string): boolean {
+	return pendingExtUiDialogId(sessionId) !== null;
 }
 
 export function notifyExtUi(

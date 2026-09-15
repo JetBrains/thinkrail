@@ -24,10 +24,11 @@ A handled candidate is either a review result exposed to the owner or the otherw
 explicit Stop; the ledger does not distinguish why it was handled. Attention-ledger reads distinguish missing
 from malformed/unreadable. Initialization and every mutation write a complete copy to a sibling temporary
 file and atomically replace the target; concurrent serialization and publish timing belong to `agent`. A
-missing file may receive one exact-candidate baseline assembled by the agent before serving. A malformed
-existing file is quarantined and replaced with an initialized empty ledger, so corruption can resurrect a
-dot but never silently mark unseen work as read. Failure is returned to the caller—never degraded to an
-in-memory acknowledgement.
+missing file may receive one exact-candidate baseline assembled by the agent before serving. A malformed or
+unreadable existing file is renamed aside and replaced with an initialized empty ledger; failed replacement
+restores it, and a later boot recognizes an orphaned quarantine as interrupted recovery rather than genuine
+first run. Corruption can therefore resurrect a dot but never silently mark unseen work as read. Failure is
+returned to the caller—never degraded to an in-memory acknowledgement.
 
 Analytics config preserves a saved boolean preference and a valid explicit `analyticsConsentConfirmed`
 boolean independently; absent/malformed values default false. A legacy true preference never implies
