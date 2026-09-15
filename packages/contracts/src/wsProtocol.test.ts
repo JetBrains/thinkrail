@@ -7,6 +7,7 @@ import {
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
+	WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
 } from "./wsProtocol";
@@ -45,7 +46,11 @@ test("project template previews advance the additive wire shape to v63", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION);
 });
 
-test("host update advisories advance the protocol with an immutable notice channel", () => {
-	expect(PROTOCOL_VERSION).toBe(64);
+test("host update advisories name their immutable notice channel", () => {
 	expect(WS_CHANNELS.hostUpdateAvailable).toBe("host.updateAvailable");
+});
+
+test("sticky workspace model preferences advance the additive wire shape to v65", () => {
+	expect(WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION).toBe(65);
+	expect(PROTOCOL_VERSION).toBe(WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION);
 });

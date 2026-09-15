@@ -92,7 +92,9 @@ internals**. The edges between them are owned here (see the dependency graph), n
 
 `src/index.ts` re-exports `host` + the `agent` barrel's `registerBundledRuntime` seam; explicit package
 subpaths expose build support and sanctioned history fixtures without widening the runtime barrel. `src/dev.ts` boots
-the host from env via `bootHost` for dev/e2e.
+the host from env via `bootHost` for dev/e2e. Only under `THINKRAIL_E2E_FAKE_OAUTH=1`, that source-host
+entrypoint registers the test-owned login providers plus two configured non-streaming model fixtures used to
+prove workspace model/thinking persistence; packaged entrypoints never receive those seams.
 
 ## Internal dependency graph
 

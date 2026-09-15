@@ -16,6 +16,7 @@ import {
 	moveMouseToChatViewport,
 	nestedVerticalScrollSurfaces,
 	readChatScrollGeometry,
+	readChatViewportCenterOffsets,
 	readChatViewportIntersection,
 } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -106,21 +107,16 @@ async function wheelUntilChatElementIntersects(
 	target: Locator,
 ): Promise<void> {
 	await moveMouseToChatViewport(page, chatScroll);
-	for (let attempt = 0; attempt < 16; attempt += 1) {
-		if ((await readChatViewportIntersection(target)).intersects) return;
-		const before = await readChatScrollGeometry(chatScroll);
-		await page.mouse.wheel(0, before.clientHeight * 0.75);
-		await expect
-			.poll(async () => {
-				const after = await readChatScrollGeometry(chatScroll);
-				return (
-					(await readChatViewportIntersection(target)).intersects ||
-					after.distanceFromStart > before.distanceFromStart
-				);
-			})
-			.toBe(true);
-	}
-	await expect.poll(async () => (await readChatViewportIntersection(target)).intersects).toBe(true);
+	await expect
+		.poll(async () => {
+			if ((await readChatViewportIntersection(target)).intersects) return true;
+			const { clientHeight } = await readChatScrollGeometry(chatScroll);
+			const [offset = 0] = await readChatViewportCenterOffsets(target, 1);
+			const delta = Math.sign(offset) * Math.min(Math.abs(offset), clientHeight * 0.75);
+			await page.mouse.wheel(0, delta);
+			return false;
+		})
+		.toBe(true);
 }
 
 test("a persisted tall questionnaire reveals page changes and a restored page without hidden review focus", async ({

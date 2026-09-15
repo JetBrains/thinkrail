@@ -341,6 +341,26 @@ channel fan-out, and the process-boot wrapper both launchers share.
     a failed background teardown is warn-logged, never thrown into the void (nothing awaits it), like
     the auto-rename tee. **Archive keeps the branch but not the chat:** the git branch stays (code is
     recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
+- **Workspace model preference is host composition, not agent policy.** New-session precedence is:
+  (1) an explicit request model, resolved strictly and paired with its supplied thinking level when present;
+  (2) a complete stored workspace pair, passed with `modelOptional: true` so an unavailable stale model lets
+  Pi choose its host default; then (3) no model, preserving Pi's ordinary host-default resolution. A
+  thinking-only legacy request remains session-local and does not form a stored pair. Only a successful
+  explicit creation and successful live `session.setModel` / `session.setThinkingLevel` mutation persist a
+  preference, and they persist Pi's effective returned pair rather than request values. A stale stored-model
+  fallback neither clears nor replaces the stored pair; a result with no effective model likewise leaves the
+  last complete preference unchanged. Live mutations capture the session's workspace id before awaiting and
+  return the same effective pair on the wire that persistence consumes, so host and client have one result.
+  **Persistence is best-effort and never demotes a mutation that already succeeded** (the `track()` rule): the
+  record can be gone by the time it runs, because `workspace.remove` forgets the record synchronously while
+  session teardown is a fire-and-forget `archiveTeardown`, so a stale pane's `setModel` would otherwise report
+  failure for a change pi already applied — and `session.list` would fail the same way, defeating the client's
+  reconciliation.
+  Transcript attachment/restoration resolves the saved chat model exactly and never writes workspace
+  preference. The user-visible new file-review-chat path uses the same workspace-pair resolution when no
+  explicit model is supplied; reused/reattached review chats retain their transcript selection and write
+  nothing. Dedicated TODO reviewer and reflector creation remains on the separate `reviewModel` /
+  `reviewEffort` policy and never inherits or updates workspace preference.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
   `reviews` (drafts + package) plus `agent` (session) plus `reviews` again (mark sent + link) — a
   check-then-mark straddling an `await createSession(…)`, the review layer's only non-atomic gap.

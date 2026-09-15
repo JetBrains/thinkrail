@@ -504,8 +504,19 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   vocabulary: pi owns it, the host projects the per-model slice, and an empty list (no model resolved
   yet) disables the trigger. It holds **no effort policy of its own**: when a held level isn't one the
   held model can run, the consumer asks the host for pi's `clampThinkingLevel` answer
-  (`model.clampThinking`) — `model.default` clamps the same way, and a live session gets pi's answer
-  directly via `thinking_level_changed`. Its rows follow the **live catalog** — `ChatView` resolves the
+  (`model.clampThinking`) — `model.default` clamps the same way. In a live chat, both selectors await the
+  host mutation and close only after success; while either mutation is pending both selectors stay disabled.
+  The per-session lock lives in `store`, surviving a chat-tab unmount/remount, and fences Pi's early
+  `thinking_level_changed` until settlement, so provider auth or extension latency cannot reorder choices or
+  expose an old-model/new-effort pair. The web then atomically applies its returned model/thinking pair to the
+  live session. Pi's effective
+  clamp is authoritative, with no optimistic intermediate state. A rejection is surfaced while the selector
+  stays open and triggers an authoritative `session.list` pair reconciliation before the lock releases; if
+  that read also fails, the prior pair remains intact. A v64 host's legacy ack instead reconciles the
+  requested session choice. The same successful v65+ mutation also sets that workspace's future-chat starting
+  pair on the host, which reaches the client as its own `workspace.updated` push rather than a local mirror
+  write. No separate workspace setting
+  or selector mode is introduced. Its rows follow the **live catalog** — `ChatView` resolves the
   session's model through `store`'s `selectCatalogModel` before passing it down, rather than reading the
   session's own snapshot, so a `model.refresh` that changes what a model supports changes the offered
   levels with it), `SessionStatsBar`, `ChatHeader` (the fixed, single-line **panel-header row** —

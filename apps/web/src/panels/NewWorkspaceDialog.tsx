@@ -116,7 +116,6 @@ export function NewWorkspaceDialog({
 		start: number;
 		end: number;
 	} | null>(null);
-	const hostDefaultAsked = useRef(false);
 	const targetGroupName = useId();
 	const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
 	const updatePromptDraft = useCallback(
@@ -193,8 +192,9 @@ export function NewWorkspaceDialog({
 		setSelectedProjectId(projectId);
 		updatePromptDraft(initialPrompt ?? "", null);
 		setTarget("worktree");
+		setModel(null);
+		setThinkingLevel("medium");
 		setCreating(false);
-		hostDefaultAsked.current = false;
 	}, [open, projectId, initialPrompt, updatePromptDraft]);
 
 	useEffect(() => {
@@ -260,26 +260,6 @@ export function NewWorkspaceDialog({
 		fresh: catalogFresh,
 	} = useModelCatalog(open);
 
-	const applyHostDefault = useCallback(() => {
-		let cancelled = false;
-		getTransport()
-			.request("model.default", {})
-			.then((d) => {
-				if (cancelled) return;
-				setModel(d.model);
-				setThinkingLevel(d.thinkingLevel);
-			})
-			.catch(() => {});
-		return () => {
-			cancelled = true;
-		};
-	}, []);
-
-	useEffect(() => {
-		if (!open) return;
-		return applyHostDefault();
-	}, [open, applyHostDefault]);
-
 	useEffect(() => {
 		if (!open || !model) return;
 		const next = reconcileModel(models, model, catalogFresh);
@@ -288,10 +268,9 @@ export function NewWorkspaceDialog({
 			if (next !== model) setModel(next);
 			return;
 		}
-		if (hostDefaultAsked.current) return;
-		hostDefaultAsked.current = true;
-		return applyHostDefault();
-	}, [open, models, model, catalogFresh, applyHostDefault]);
+		setModel(null);
+		setThinkingLevel("medium");
+	}, [open, models, model, catalogFresh]);
 
 	useEffect(() => {
 		if (!open || !model) return;

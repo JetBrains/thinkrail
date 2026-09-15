@@ -131,7 +131,10 @@ describe("PI runtime generations", () => {
 		const model = toWireModel(faux.getModel());
 		await activateRuntime(await runtimeWithFaux(false));
 
-		await expect(setSessionModel(session.sessionId, model)).resolves.toBeUndefined();
+		await expect(setSessionModel(session.sessionId, model)).resolves.toEqual({
+			model,
+			thinkingLevel: "off",
+		});
 		await expect(createSession({ cwd, workspaceId: "workspace-new", model })).rejects.toThrow(
 			"Unknown or unavailable model",
 		);

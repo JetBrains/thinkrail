@@ -146,6 +146,7 @@ interface ComposerProps {
 	onRefreshModels: (force: boolean) => void;
 	currentModel: WireModel | null;
 	thinkingLevel: ThinkingLevel;
+	modelSelectionPending: boolean;
 	onMentionQuery: (query: string | null) => void;
 	onSlashActive: (active: boolean) => void;
 	onSelectModel: (model: WireModel) => void;
@@ -186,6 +187,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onRefreshModels,
 		currentModel,
 		thinkingLevel,
+		modelSelectionPending,
 		onMentionQuery,
 		onSlashActive,
 		onSelectModel,
@@ -676,12 +678,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							refreshing={modelsRefreshing}
 							onRefresh={onRefreshModels}
 							onSelect={onSelectModel}
+							disabled={modelSelectionPending}
 							className="max-w-80 gap-4 px-4 sm:max-w-144"
 						/>
 						<ThinkingSelector
 							level={thinkingLevel}
 							levels={currentModel?.thinkingLevels ?? []}
 							onSelect={onSelectThinking}
+							disabled={modelSelectionPending}
 							showLabel={false}
 							className="gap-4 px-4"
 						/>
