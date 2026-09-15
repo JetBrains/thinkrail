@@ -10,7 +10,8 @@ wait mode.
 2. For a body edit, write the complete candidate to `.thinkrail/context/pr-body.md`. Immediately before
    `gh pr edit`, fetch the current body again; if it changed, merge the requested mutation into that
    fresh body instead of overwriting concurrent edits. Use `gh pr edit <n> --body-file ...`, never an
-   inline body. For a title-only edit, re-fetch the current title before `gh pr edit <n> --title ...`.
+   inline body. For a title edit, immediately re-fetch the current title too; if it changed, reapply
+   only the requested mutation to that fresh title before `gh pr edit <n> --title ...`.
 3. Fetch the resulting title/body once to verify the requested mutation landed, then delete the body
    file.
 

@@ -48,4 +48,11 @@ describe("pi-thinkrail-workflow extension", () => {
 		expect(checks).toContain("reviewDecision");
 		expect(checks).not.toContain("Any other computed state");
 	});
+
+	test("reapplies title edits after a concurrent GitHub change", () => {
+		const body = readFileSync(new URL("./skills/shipping-a-pr/body.md", import.meta.url), "utf8");
+		expect(body).toContain("immediately re-fetch the current title");
+		expect(body).toContain("reapply");
+		expect(body).toContain("requested mutation to that fresh title");
+	});
 });

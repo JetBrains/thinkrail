@@ -304,8 +304,8 @@ follows is only the rationale the skill bodies don't state:
   state not observed at the moment of the action), so the rule lives once in the spine — verify at
   the point of action, fetch remote state fresh and completely, poll indeterminate answers — and
   each phase doc instantiates it at its own action points (pre-push re-assertions after
-  tree-mutating steps, body fetched before edit, `UNKNOWN` merge state polled, throwaway cleanup
-  owned by the phase that made the throwaway).
+  tree-mutating steps, title/body re-fetched and the requested mutation reapplied to the fresh value,
+  `UNKNOWN` merge state polled, throwaway cleanup owned by the phase that made the throwaway).
 - **`writing-specs`** carries the family's spec quality bar once — short / honest / on-rails — and is
   the accruing home for the family's rules about specs and the spec graph as they grow. Graph
   *mechanics* (frontmatter, link kinds, the `spec_*` tools) stay with the spec-graph skill
