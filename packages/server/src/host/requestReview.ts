@@ -34,7 +34,6 @@ import {
 	enqueuePlanReview,
 	itemReviewActive,
 	onPlanChain,
-	planReviewRunning,
 	releaseItemReview,
 } from "./planReviewQueue";
 import { REVIEWER_OUTPUT_CONTRACT, REVIEWER_SYSTEM_PROMPT, REVIEWER_TOOLS } from "./reviewerRole";
@@ -337,9 +336,10 @@ export function startPlanReview(
 }
 
 /** After a fix lands (the worker re-marks the step done), re-review exactly the items still inside their
- * one auto cycle — see host/SPEC.md ("auto re-review") for why `unreviewed` counts as a fresh delta. */
+ * one auto cycle — see host/SPEC.md ("auto re-review") for why `unreviewed` counts as a fresh delta.
+ * Eligible items are enqueued onto the plan's serial chain even while another review runs; the per-item
+ * claim dedupes, so a fix landing mid-review is not dropped. */
 export async function maybeAutoReReview(workspaceId: string, sessionId: string): Promise<void> {
-	if (planReviewRunning(workspaceId, sessionId)) return;
 	try {
 		const plan = await listTodos({ workspaceId, sessionId });
 		const items = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
