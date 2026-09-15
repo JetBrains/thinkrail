@@ -57,7 +57,7 @@ The catalog will add `suggestChatTitle(firstPrompt)` plus a deterministic `naive
 fallback. The agentic task receives only the bounded first raw text prompt—not the assistant answer, project
 files, or later transcript—and runs through the existing tool-free `completeOnce` cheap-model path in
 parallel with the real session. Its instruction treats the prompt as untrusted input and asks for only a
-3–6-word durable subject/outcome, normally within 40–50 characters: omit project/workspace names already
+3–6-word durable subject/outcome targeting at most 48 characters: omit project/workspace names already
 visible in the shell, incidental workflow/model/tool/test/commit wording, status claims, quotes, and prose.
 Timeout, missing auth, runner failure, or unusable output still resolves `null`.
 
