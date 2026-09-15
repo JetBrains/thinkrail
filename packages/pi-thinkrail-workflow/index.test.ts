@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import factory, { WORKFLOW_RULE } from "./index.ts";
 
 type BeforeAgentStartHandler = (event: { systemPrompt: string }) => { systemPrompt: string };
@@ -25,5 +26,26 @@ describe("pi-thinkrail-workflow extension", () => {
 		const original = "Some existing system prompt.\nWith multiple lines.";
 		const result = loadHandler()({ systemPrompt: original });
 		expect(result.systemPrompt.startsWith(original)).toBe(true);
+	});
+
+	test("classifies every GitHub merge state before declaring a PR ready", () => {
+		const checks = readFileSync(
+			new URL("./skills/shipping-a-pr/checks.md", import.meta.url),
+			"utf8",
+		);
+		for (const state of [
+			"UNKNOWN",
+			"BEHIND",
+			"DIRTY",
+			"UNSTABLE",
+			"BLOCKED",
+			"CLEAN",
+			"HAS_HOOKS",
+		]) {
+			expect(checks).toContain(`\`${state}\``);
+		}
+		expect(checks).toContain("isDraft");
+		expect(checks).toContain("reviewDecision");
+		expect(checks).not.toContain("Any other computed state");
 	});
 });

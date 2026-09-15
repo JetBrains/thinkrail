@@ -291,12 +291,14 @@ follows is only the rationale the skill bodies don't state:
   creating, syncing, any phase that pushes the PR head (including screenshot-scaffold cleanup), and
   explicit watch/ship/merge-ready asks wait for every existing check to turn green and verify the base;
   standalone screenshot/body/comment-only work that leaves the head unchanged, plus one-time status
-  requests, take one fresh checks + merge-state snapshot and report it without polling or
-  fixing unrelated state. A no-CI
-  repo is always reported explicitly, never silently green. This avoids turning metadata maintenance into
-  an unrequested CI watch while preserving the merge-ready bar where the ask promises it. The review-only
-  assets-ref screenshot default was an explicit user decision (task-spec `task-shipping-a-pr-skill`). Its
-  review hardening
+  requests, take one fresh checks + merge-state snapshot and report it without polling or fixing unrelated
+  state. Wait-mode merge readiness is explicit: `CLEAN` succeeds; `HAS_HOOKS` succeeds with a pre-receive
+  hooks caveat; `UNKNOWN` is polled; `BEHIND`/`DIRTY` sync; and `BLOCKED`/`UNSTABLE` remain
+  non-affirmative with `reviewDecision` reported. Draft state is read separately and never called
+  merge-ready. A no-CI repo is always reported explicitly, never silently green. This avoids turning
+  metadata maintenance into an unrequested CI watch while preserving the merge-ready bar where the ask
+  promises it. The review-only assets-ref screenshot default was an explicit user decision (task-spec
+  `task-shipping-a-pr-skill`). Its review hardening
   (PR #284) converged on one shared discipline instead of per-finding patches — **observed, never
   assumed**: every finding across three review rounds was the same defect (acting on, or declaring,
   state not observed at the moment of the action), so the rule lives once in the spine — verify at
