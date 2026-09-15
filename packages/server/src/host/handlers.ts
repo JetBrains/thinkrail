@@ -21,7 +21,7 @@ import type {
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
-import { isControlMessage, normalizeSessionTitle } from "@thinkrail/contracts";
+import { isControlMessage } from "@thinkrail/contracts";
 import {
 	abortSession,
 	answerQuestion,
@@ -687,13 +687,11 @@ const handlers: Record<string, Handler> = {
 	},
 	"session.rename": async (params) => {
 		const p = params as { workspaceId: string; sessionId: string; title: string };
-		const title = normalizeSessionTitle(p.title);
-		if (!title) throw new Error("Invalid session title");
 		await renameSession(
 			p.sessionId,
 			p.workspaceId,
 			getWorkspace(p.workspaceId).worktreePath,
-			title,
+			p.title,
 		);
 		return { ok: true } as const;
 	},
