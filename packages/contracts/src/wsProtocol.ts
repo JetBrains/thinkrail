@@ -100,7 +100,8 @@ export const PROTOCOL_VERSION = 65;
 export const SESSION_RENAME_PROTOCOL_VERSION = 65;
 export const SESSION_TITLE_MAX_LENGTH = 80;
 
-export function normalizeSessionTitle(value: string): string | null {
+export function normalizeSessionTitle(value: unknown): string | null {
+	if (typeof value !== "string") return null;
 	const title = value.replace(/[\r\n]+/g, " ").trim();
 	return title.length > 0 && title.length <= SESSION_TITLE_MAX_LENGTH ? title : null;
 }

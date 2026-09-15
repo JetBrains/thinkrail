@@ -1,6 +1,12 @@
 import type { PiEvent, TranscriptMessage, Workspace } from "@thinkrail/contracts";
-import { getSessionMessages } from "../agent";
-import { extractFirstTurn, naiveWorkspaceName, suggestWorkspaceName } from "../assist";
+import { getSessionMessages, renameSession } from "../agent";
+import {
+	extractFirstTurn,
+	naiveChatTitle,
+	naiveWorkspaceName,
+	suggestChatTitle,
+	suggestWorkspaceName,
+} from "../assist";
 import { logger } from "../log";
 import { getWorkspace, renameWorkspace } from "../workspaces";
 
@@ -20,7 +26,32 @@ const inFlight = new Set<string>();
 
 const naiveInFlight = new Set<string>();
 
+const chatTitleInFlight = new Set<string>();
+
 export type TranscriptReader = () => Promise<TranscriptMessage[]>;
+
+export type ChatTitleWriter = typeof renameSession;
+
+export async function maybeAutoNameChat(
+	sessionId: string,
+	workspaceId: string,
+	firstPrompt: string,
+	writeTitle: ChatTitleWriter = renameSession,
+): Promise<boolean> {
+	const fallback = naiveChatTitle(firstPrompt);
+	if (!fallback || chatTitleInFlight.has(sessionId)) return false;
+	chatTitleInFlight.add(sessionId);
+	try {
+		const title = (await suggestChatTitle(firstPrompt)) ?? fallback;
+		const cwd = getWorkspace(workspaceId).worktreePath;
+		return await writeTitle(sessionId, workspaceId, cwd, title, { onlyIfUnnamed: true });
+	} catch {
+		log.warn(`chat auto-name skipped (${sessionId})`);
+		return false;
+	} finally {
+		chatTitleInFlight.delete(sessionId);
+	}
+}
 
 export async function maybeNaiveNameWorkspace(
 	sessionId: string,

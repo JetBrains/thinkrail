@@ -6,8 +6,10 @@ import type { Message, PiEvent } from "@thinkrail/contracts";
 import { setOneShotRunner } from "../assist";
 import { createWorkspace, listWorkspaces, removeWorkspace, renameWorkspace } from "../workspaces";
 import {
+	type ChatTitleWriter,
 	isPromptCommitted,
 	isSettledTurn,
+	maybeAutoNameChat,
 	maybeAutoRenameWorkspace,
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
@@ -317,4 +319,83 @@ test("concurrent settling turns dedupe to one attempt", async () => {
 	expect(a?.name).toBe("Slow Name");
 	expect(b).toBeNull();
 	expect(calls).toBe(1);
+});
+
+test("chat auto-name writes one generated title through the unnamed-only guard", async () => {
+	const ws = await createWorkspace("p1");
+	fakeRunner("Fix OAuth Callback");
+	const writes: Parameters<ChatTitleWriter>[] = [];
+	const writeTitle: ChatTitleWriter = async (...args) => {
+		writes.push(args);
+		return true;
+	};
+
+	expect(
+		await maybeAutoNameChat("s-chat", ws.id, "please investigate the oauth callback", writeTitle),
+	).toBe(true);
+	expect(writes).toEqual([
+		["s-chat", ws.id, ws.worktreePath, "Fix OAuth Callback", { onlyIfUnnamed: true }],
+	]);
+});
+
+test("chat auto-name persists a deterministic fallback when generation fails", async () => {
+	const ws = await createWorkspace("p1");
+	setOneShotRunner(async () => {
+		throw new Error("no model");
+	});
+	let written: string | undefined;
+
+	expect(
+		await maybeAutoNameChat(
+			"s-fallback",
+			ws.id,
+			"Fix OAuth 2.0 / PKCE redirect handling today",
+			async (_sessionId, _workspaceId, _cwd, title) => {
+				written = title;
+				return true;
+			},
+		),
+	).toBe(true);
+	expect(written).toBe("Fix OAuth 2.0 / PKCE redirect");
+});
+
+test("chat auto-name leaves blank or image-only prompts eligible for later text", async () => {
+	const ws = await createWorkspace("p1");
+	const runner = fakeRunner("Should Not Run");
+	let writes = 0;
+	const writeTitle: ChatTitleWriter = async () => {
+		writes += 1;
+		return true;
+	};
+
+	expect(await maybeAutoNameChat("s-blank", ws.id, " \n ", writeTitle)).toBe(false);
+	expect(await maybeAutoNameChat("s-punct", ws.id, "!!! ???", writeTitle)).toBe(false);
+	expect(runner.calls()).toBe(0);
+	expect(writes).toBe(0);
+});
+
+test("chat auto-name dedupes concurrent prompts and lets a manual title win", async () => {
+	const ws = await createWorkspace("p1");
+	let release = (): void => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let modelCalls = 0;
+	setOneShotRunner(async () => {
+		modelCalls += 1;
+		await gate;
+		return { text: "Generated Title", model: { provider: "test", id: "fake" } };
+	});
+	let writes = 0;
+	const writeTitle: ChatTitleWriter = async () => {
+		writes += 1;
+		return false;
+	};
+
+	const first = maybeAutoNameChat("s-race", ws.id, "first prompt", writeTitle);
+	const second = maybeAutoNameChat("s-race", ws.id, "second prompt", writeTitle);
+	release();
+	expect(await Promise.all([first, second])).toEqual([false, false]);
+	expect(modelCalls).toBe(1);
+	expect(writes).toBe(1);
 });
