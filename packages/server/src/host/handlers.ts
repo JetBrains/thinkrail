@@ -18,6 +18,7 @@ import type {
 	TemplateScope,
 	ThinkingLevel,
 	TodoStatus,
+	TranscriptMessage,
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
@@ -35,6 +36,8 @@ import {
 	getDefaultModel,
 	getSessionCommands,
 	getSessionMessages,
+	getSessionMessagesSnapshot,
+	getSessionName,
 	getSessionStats,
 	getSessionWorkspaceId,
 	hasSession,
@@ -202,17 +205,29 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 	}
 }
 
+function captureChatAutoNameHistory(sessionId: string): readonly TranscriptMessage[] | null {
+	if (getSessionName(sessionId) !== undefined) return null;
+	try {
+		return getSessionMessagesSnapshot(sessionId);
+	} catch {
+		return null;
+	}
+}
+
 function recordAcceptedSend(
 	mode: SendMode,
 	text: string,
 	clientKey: string,
 	sessionId: string,
+	priorMessages: readonly TranscriptMessage[] | null,
 ): void {
 	if (isControlMessage(text)) return;
 	track({ name: "message_sent", params: { mode } });
 	recordAcceptedMessage(clientKey);
 	const workspaceId = getSessionWorkspaceId(sessionId);
-	if (workspaceId) void maybeAutoNameChat(sessionId, workspaceId, text);
+	if (workspaceId && priorMessages) {
+		void maybeAutoNameChat(sessionId, workspaceId, text, { priorMessages });
+	}
 }
 
 function resolveTemplateReadDirs(params: TemplateReadLocation) {
@@ -641,20 +656,23 @@ const handlers: Record<string, Handler> = {
 	},
 	"session.prompt": async (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
+		const priorMessages = captureChatAutoNameHistory(p.sessionId);
 		await ackSend(promptSession(p.sessionId, p.text, p.images));
-		recordAcceptedSend("prompt", p.text, ctx.clientKey, p.sessionId);
+		recordAcceptedSend("prompt", p.text, ctx.clientKey, p.sessionId, priorMessages);
 		return { ok: true } as const;
 	},
 	"session.steer": async (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
+		const priorMessages = captureChatAutoNameHistory(p.sessionId);
 		await ackSend(steerSession(p.sessionId, p.text, p.images));
-		recordAcceptedSend("steer", p.text, ctx.clientKey, p.sessionId);
+		recordAcceptedSend("steer", p.text, ctx.clientKey, p.sessionId, priorMessages);
 		return { ok: true } as const;
 	},
 	"session.followUp": async (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
+		const priorMessages = captureChatAutoNameHistory(p.sessionId);
 		await ackSend(followUpSession(p.sessionId, p.text, p.images));
-		recordAcceptedSend("follow_up", p.text, ctx.clientKey, p.sessionId);
+		recordAcceptedSend("follow_up", p.text, ctx.clientKey, p.sessionId, priorMessages);
 		return { ok: true } as const;
 	},
 	"session.clearQueue": (params) => {

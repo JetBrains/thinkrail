@@ -1,5 +1,6 @@
 import {
 	type AssistantMessage,
+	isControlMessage,
 	normalizeSessionTitle,
 	SESSION_TITLE_MAX_LENGTH,
 	type TextContent,
@@ -89,6 +90,14 @@ export function naiveChatTitle(firstPrompt: string): string | null {
 		title = candidate;
 	}
 	return toChatTitle(title);
+}
+
+export function hasEligibleChatTitlePrompt(messages: readonly TranscriptMessage[]): boolean {
+	return messages.some((message) => {
+		if (message.role !== "user") return false;
+		const prompt = userText(message as UserMessage);
+		return !isControlMessage(prompt) && naiveChatTitle(prompt) !== null;
+	});
 }
 
 export async function suggestChatTitle(firstPrompt: string): Promise<string | null> {

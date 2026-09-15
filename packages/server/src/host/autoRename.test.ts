@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Message, PiEvent } from "@thinkrail/contracts";
+import { type Message, type PiEvent, TODO_NUDGE_PREFIX } from "@thinkrail/contracts";
 import { setOneShotRunner } from "../assist";
 import { createWorkspace, listWorkspaces, removeWorkspace, renameWorkspace } from "../workspaces";
 import {
@@ -331,7 +331,10 @@ test("chat auto-name writes one generated title through the unnamed-only guard",
 	};
 
 	expect(
-		await maybeAutoNameChat("s-chat", ws.id, "please investigate the oauth callback", writeTitle),
+		await maybeAutoNameChat("s-chat", ws.id, "please investigate the oauth callback", {
+			priorMessages: [],
+			writeTitle,
+		}),
 	).toBe(true);
 	expect(writes).toEqual([
 		["s-chat", ws.id, ws.worktreePath, "Fix OAuth Callback", { onlyIfUnnamed: true }],
@@ -344,19 +347,65 @@ test("chat auto-name skips model work when Pi already has a durable title", asyn
 	let writes = 0;
 
 	expect(
-		await maybeAutoNameChat(
-			"s-named",
-			ws.id,
-			"later prompt",
-			async () => {
+		await maybeAutoNameChat("s-named", ws.id, "later prompt", {
+			priorMessages: [],
+			writeTitle: async () => {
 				writes += 1;
 				return false;
 			},
-			() => "Manual title",
-		),
+			readTitle: () => "Manual title",
+		}),
 	).toBe(false);
 	expect(runner.calls()).toBe(0);
 	expect(writes).toBe(0);
+});
+
+test("chat auto-name never retries from a later prompt after restart", async () => {
+	const ws = await createWorkspace("p1");
+	const runner = fakeRunner("Later Prompt Title");
+	let writes = 0;
+
+	expect(
+		await maybeAutoNameChat("s-restarted", ws.id, "later prompt after restart", {
+			priorMessages: [user("first durable prompt")],
+			writeTitle: async () => {
+				writes += 1;
+				return true;
+			},
+			readTitle: () => undefined,
+		}),
+	).toBe(false);
+	expect(runner.calls()).toBe(0);
+	expect(writes).toBe(0);
+});
+
+test("blank, punctuation, image-only, and control history leaves the first text prompt eligible", async () => {
+	const ws = await createWorkspace("p1");
+	const runner = fakeRunner("First Eligible Title");
+	let writes = 0;
+	const priorMessages = [
+		user(""),
+		user("!!! ???"),
+		{
+			role: "user",
+			content: [{ type: "image", data: "image-data", mimeType: "image/png" }],
+			timestamp: 0,
+		} as Message,
+		user(`${TODO_NUDGE_PREFIX}refresh the plan`),
+	];
+
+	expect(
+		await maybeAutoNameChat("s-first-text", ws.id, "first eligible text prompt", {
+			priorMessages,
+			writeTitle: async () => {
+				writes += 1;
+				return true;
+			},
+			readTitle: () => undefined,
+		}),
+	).toBe(true);
+	expect(runner.calls()).toBe(1);
+	expect(writes).toBe(1);
 });
 
 test("chat auto-name persists a deterministic fallback when generation fails", async () => {
@@ -367,15 +416,13 @@ test("chat auto-name persists a deterministic fallback when generation fails", a
 	let written: string | undefined;
 
 	expect(
-		await maybeAutoNameChat(
-			"s-fallback",
-			ws.id,
-			"Fix OAuth 2.0 / PKCE redirect handling today",
-			async (_sessionId, _workspaceId, _cwd, title) => {
+		await maybeAutoNameChat("s-fallback", ws.id, "Fix OAuth 2.0 / PKCE redirect handling today", {
+			priorMessages: [],
+			writeTitle: async (_sessionId, _workspaceId, _cwd, title) => {
 				written = title;
 				return true;
 			},
-		),
+		}),
 	).toBe(true);
 	expect(written).toBe("Fix OAuth 2.0 / PKCE redirect");
 });
@@ -389,8 +436,12 @@ test("chat auto-name leaves blank or image-only prompts eligible for later text"
 		return true;
 	};
 
-	expect(await maybeAutoNameChat("s-blank", ws.id, " \n ", writeTitle)).toBe(false);
-	expect(await maybeAutoNameChat("s-punct", ws.id, "!!! ???", writeTitle)).toBe(false);
+	expect(await maybeAutoNameChat("s-blank", ws.id, " \n ", { priorMessages: [], writeTitle })).toBe(
+		false,
+	);
+	expect(
+		await maybeAutoNameChat("s-punct", ws.id, "!!! ???", { priorMessages: [], writeTitle }),
+	).toBe(false);
 	expect(runner.calls()).toBe(0);
 	expect(writes).toBe(0);
 });
@@ -412,9 +463,10 @@ test("chat auto-name dedupes concurrent prompts and lets a manual title win", as
 		writes += 1;
 		return false;
 	};
+	const options = { priorMessages: [], writeTitle };
 
-	const first = maybeAutoNameChat("s-race", ws.id, "first prompt", writeTitle);
-	const second = maybeAutoNameChat("s-race", ws.id, "second prompt", writeTitle);
+	const first = maybeAutoNameChat("s-race", ws.id, "first prompt", options);
+	const second = maybeAutoNameChat("s-race", ws.id, "second prompt", options);
 	release();
 	expect(await Promise.all([first, second])).toEqual([false, false]);
 	expect(modelCalls).toBe(1);
