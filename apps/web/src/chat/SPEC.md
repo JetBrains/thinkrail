@@ -375,8 +375,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   for oldest-first, top for newest-first. A freshly shown idle transcript mounts there; an already-working
   transcript reconstructs directly at Settle with only the room its active response needs. Switching order
   remounts at that order's current target because preserving a pixel position across total reversal has no
-  stable meaning. A pending jump-to-message then overrides the mount with its centered controller reveal.
-  There is no intermediate wrong-edge paint or cross-order animation. Initial virtual geometry is
+  stable meaning. Newest-first mounts at the browser's native zero scroll origin rather than arming a
+  redundant delayed Virtuoso correction that could overwrite immediate reader input; oldest-first needs
+  Virtuoso's explicit final-row placement. A pending jump-to-message then overrides the mount with its
+  centered controller reveal. There is no intermediate wrong-edge paint or cross-order animation. Initial virtual geometry is
   **row-aware**: each projected row receives a conservative estimate derived from prose wrapping, block
   breaks, and physical fenced-code lines without splitting one canonical Markdown block. Bounded pixel and
   item overscan lets nearby outliers replace estimates before coarse input exhausts a false range. Native
