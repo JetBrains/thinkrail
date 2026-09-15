@@ -11,18 +11,10 @@ import {
 	type RunningArtifactHost,
 	runArtifactHostProbes,
 } from "./src/artifactProbes";
+import { pollUntil, terminateProcess, within } from "./src/lifecycle";
 
 const root = mkdtempSync(join(tmpdir(), "thinkrail-desktop-smoke-"));
 let sequence = 0;
-
-function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
-	return Promise.race([
-		promise,
-		new Promise<never>((_, reject) =>
-			setTimeout(() => reject(new Error(`timed out after ${ms}ms: ${what}`)), ms),
-		),
-	]);
-}
 
 function copyApplication(launcher: string): string {
 	const bundleRoot =
@@ -93,18 +85,14 @@ async function launchDesktop(
 		stderr: "inherit",
 	});
 	try {
-		await within(
-			Promise.race([
-				(async () => {
-					while (!existsSync(readyPath)) await Bun.sleep(50);
-				})(),
-				proc.exited.then((code) => {
-					throw new Error(`${label} desktop host exited early with ${code}`);
-				}),
-			]),
-			30_000,
-			`${label} desktop ready`,
-		);
+		const exitedEarly = (code: number) =>
+			new Error(`${label} desktop host exited early with ${code}`);
+		await pollUntil(() => existsSync(readyPath), {
+			timeoutMs: 30_000,
+			what: `${label} desktop ready`,
+			exited: proc.exited,
+			exitError: exitedEarly,
+		});
 		const ready = JSON.parse(readFileSync(readyPath, "utf8")) as {
 			origin: string;
 			runtimeDir: string;
@@ -113,30 +101,31 @@ async function launchDesktop(
 			applicationMenuInstalled: boolean;
 		};
 		if (mode === "ui") {
-			await within(
-				(async () => {
-					const routePath = join(userDataPath, "routes.json");
-					while (JSON.parse(readFileSync(routePath, "utf8")).routes["local:main"] !== "#/v1") {
-						await Bun.sleep(50);
-					}
-				})(),
-				15_000,
-				"native route preload/RPC round-trip",
+			await pollUntil(
+				() =>
+					JSON.parse(readFileSync(join(userDataPath, "routes.json"), "utf8")).routes[
+						"local:main"
+					] === "#/v1",
+				{
+					timeoutMs: 15_000,
+					what: "native route preload/RPC round-trip",
+					exited: proc.exited,
+					exitError: exitedEarly,
+				},
 			);
 			writeFileSync(controlPath, "navigate");
-			await within(
-				(async () => {
-					while (!existsSync(navigationProbePath)) await Bun.sleep(50);
-				})(),
-				15_000,
-				"native external navigation",
-			);
+			await pollUntil(() => existsSync(navigationProbePath), {
+				timeoutMs: 15_000,
+				what: "native external navigation",
+				exited: proc.exited,
+				exitError: exitedEarly,
+			});
 			const navigation = JSON.parse(readFileSync(navigationProbePath, "utf8"));
 			if (navigation.url !== "https://example.invalid/thinkrail-navigation-probe") {
 				throw new Error(`native external navigation reported an unexpected URL: ${navigation.url}`);
 			}
 		}
-		let stopped = false;
+		let stopPromise: Promise<void> | undefined;
 		return {
 			origin: ready.origin,
 			windowUrl: ready.windowUrl,
@@ -149,16 +138,21 @@ async function launchDesktop(
 					windows: join(ready.runtimeDir, "windows-trash.exe"),
 				},
 			},
-			async stop() {
-				if (stopped) return;
-				stopped = true;
-				writeFileSync(controlPath, "stop");
-				const code = await within(proc.exited, 15_000, `${label} desktop shutdown`);
-				if (code !== 0) throw new Error(`${label} desktop shutdown exited ${code}`);
+			stop() {
+				stopPromise ??= (async () => {
+					try {
+						writeFileSync(controlPath, "stop");
+						const code = await within(proc.exited, 15_000, `${label} desktop shutdown`);
+						if (code !== 0) throw new Error(`${label} desktop shutdown exited ${code}`);
+					} catch (error) {
+						await terminateProcess(proc, error);
+					}
+				})();
+				return stopPromise;
 			},
 		};
 	} catch (error) {
-		proc.kill("SIGKILL");
+		await terminateProcess(proc, error);
 		throw error;
 	}
 }

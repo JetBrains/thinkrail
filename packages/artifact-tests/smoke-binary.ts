@@ -11,20 +11,12 @@ import {
 	type RunningArtifactHost,
 	runArtifactHostProbes,
 } from "./src/artifactProbes";
+import { terminateProcess, within } from "./src/lifecycle";
 
 const binary = binaryArtifactPath(process.argv[2]);
 if (!existsSync(binary)) {
 	console.error(`binary not found at ${binary} — run \`bun run build:binary\` first.`);
 	process.exit(1);
-}
-
-function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
-	return Promise.race([
-		promise,
-		new Promise<never>((_, reject) =>
-			setTimeout(() => reject(new Error(`timed out after ${ms}ms: ${what}`)), ms),
-		),
-	]);
 }
 
 async function readServingUrl(stdout: ReadableStream<Uint8Array>): Promise<string> {
@@ -48,45 +40,55 @@ const adapter: ArtifactHostAdapter = {
 			stdout: "pipe",
 			stderr: "inherit",
 		});
-		const origin = await within(
-			Promise.race([
-				readServingUrl(proc.stdout),
-				proc.exited.then((code) => {
-					throw new Error(`${label} CLI host exited early with ${code}`);
-				}),
-			]),
-			30_000,
-			`${label} CLI ready`,
-		);
-		const cache = env.XDG_CACHE_HOME;
-		if (!cache) throw new Error("XDG_CACHE_HOME is missing");
-		const skillsDir = globSync(join(cache, "thinkrail", "skills", "*")).find((path) =>
-			existsSync(join(path, "brainstorming", "SKILL.md")),
-		);
-		const runtimeDir = globSync(join(cache, "thinkrail", "runtime", "*")).find((path) =>
-			existsSync(join(path, "macos-trash")),
-		);
-		if (!skillsDir || !runtimeDir) throw new Error("CLI staged resources were not found");
-		let stopped = false;
-		return {
-			origin,
-			resources: {
-				skillsDir,
-				trashHelpers: {
-					macos: join(runtimeDir, "macos-trash"),
-					windows: join(runtimeDir, "windows-trash.exe"),
+		try {
+			const origin = await within(
+				Promise.race([
+					readServingUrl(proc.stdout),
+					proc.exited.then((code) => {
+						throw new Error(`${label} CLI host exited early with ${code}`);
+					}),
+				]),
+				30_000,
+				`${label} CLI ready`,
+			);
+			const cache = env.XDG_CACHE_HOME;
+			if (!cache) throw new Error("XDG_CACHE_HOME is missing");
+			const skillsDir = globSync(join(cache, "thinkrail", "skills", "*")).find((path) =>
+				existsSync(join(path, "brainstorming", "SKILL.md")),
+			);
+			const runtimeDir = globSync(join(cache, "thinkrail", "runtime", "*")).find((path) =>
+				existsSync(join(path, "macos-trash")),
+			);
+			if (!skillsDir || !runtimeDir) throw new Error("CLI staged resources were not found");
+			let stopPromise: Promise<void> | undefined;
+			return {
+				origin,
+				resources: {
+					skillsDir,
+					trashHelpers: {
+						macos: join(runtimeDir, "macos-trash"),
+						windows: join(runtimeDir, "windows-trash.exe"),
+					},
 				},
-			},
-			async stop() {
-				if (stopped) return;
-				stopped = true;
-				proc.kill("SIGTERM");
-				const code = await within(proc.exited, 15_000, `${label} CLI shutdown`);
-				if (process.platform !== "win32" && code !== 0) {
-					throw new Error(`${label} CLI shutdown exited ${code}`);
-				}
-			},
-		};
+				stop() {
+					stopPromise ??= (async () => {
+						try {
+							proc.kill("SIGTERM");
+							const code = await within(proc.exited, 15_000, `${label} CLI shutdown`);
+							if (process.platform !== "win32" && code !== 0) {
+								throw new Error(`${label} CLI shutdown exited ${code}`);
+							}
+						} catch (error) {
+							await terminateProcess(proc, error);
+						}
+					})();
+					return stopPromise;
+				},
+			};
+		} catch (error) {
+			await terminateProcess(proc, error);
+			throw error;
+		}
 	},
 };
 
