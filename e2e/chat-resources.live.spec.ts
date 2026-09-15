@@ -55,6 +55,7 @@ test("command logs and Stop stay scoped through parent Stop, view closure, reloa
 	);
 	const trigger = page.getByTestId("resources-trigger");
 	await expect(trigger).toHaveAttribute("data-active-count", "1", { timeout: 180_000 });
+	await expect(trigger).toHaveAccessibleName("Resources, 1 active");
 	await expect(page.locator('[data-testid="activity-step"][data-tool="bash"]')).toHaveAttribute(
 		"data-status",
 		"running",
@@ -95,10 +96,9 @@ test("command logs and Stop stay scoped through parent Stop, view closure, reloa
 	await page.getByTestId("new-chat").first().click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(2);
 	await expect(parentTab).toHaveAttribute("data-active", "false");
-	await send(page, "Reply with exactly SECOND_CHAT. Do not use any tools.");
-	await waitForAgentSettled(page, 120_000);
 	await expect(trigger).toHaveAttribute("data-active-count", "0");
-	await openResources(page);
+	const newChatResources = await openResources(page);
+	await expect(newChatResources.getByText("No active commands.", { exact: true })).toBeVisible();
 	await expect(page.locator(commandRows)).toHaveCount(0);
 	await page.keyboard.press("Escape");
 	await parentTab.locator("button").first().click();
@@ -170,6 +170,7 @@ test("individual subagent Stop and confirmed Stop all retain transcripts without
 	);
 	const trigger = page.getByTestId("resources-trigger");
 	await expect(trigger).toHaveAttribute("data-active-count", "2", { timeout: 180_000 });
+	await expect(trigger).toHaveAccessibleName("Resources, 2 active");
 	await waitForAgentSettled(page, 120_000);
 	const parentId = await currentParentId(page);
 	const turnsBeforeStop = starts(parentId);

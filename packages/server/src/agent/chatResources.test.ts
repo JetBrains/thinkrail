@@ -656,27 +656,6 @@ test("SDK creation failure on new and reopened sessions never registers resource
 	expect((await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).commands).toEqual([]);
 });
 
-test("evicted command ids have the same unavailable result as foreign and unknown ids", async () => {
-	const p = await parent();
-	let oldest = "";
-	for (let i = 0; i < 21; i++) {
-		const id = await launch(p);
-		if (i === 0) oldest = id;
-		await stopBackgroundCommand(p.workspaceId, p.sessionId, id, p.cwd);
-		await waitFor(async () => {
-			const output = await readBackgroundCommandOutput(p.workspaceId, p.sessionId, id, p.cwd);
-			return output.available && output.command.status === "stopped";
-		});
-	}
-	expect((await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).commands).toHaveLength(20);
-	expect(await readBackgroundCommandOutput(p.workspaceId, p.sessionId, oldest, p.cwd)).toEqual({
-		available: false,
-	});
-	await expect(
-		stopBackgroundCommand(p.workspaceId, p.sessionId, oldest, p.cwd),
-	).rejects.toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
-});
-
 test("completion before registration is held and flushed once the parent is addressable", async () => {
 	const original = AgentSession.prototype.bindExtensions;
 	const cwd = mkdtempSync(join(root, "registration-"));

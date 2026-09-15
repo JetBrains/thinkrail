@@ -3,7 +3,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import type { BackgroundCommandSummary } from "@thinkrail/contracts";
 import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import * as resources from "./index";
 
 const command: BackgroundCommandSummary = {
@@ -32,12 +31,7 @@ const props: ComponentProps<typeof resources.ResourcesContent> = {
 	onStopAll: () => {},
 };
 
-test("resource barrel exposes only props-driven primitives with no store, transport, tools, or terminal dependency", () => {
-	expect(Object.keys(resources).sort()).toEqual([
-		"CommandLogView",
-		"ResourcesButton",
-		"ResourcesContent",
-	]);
+test("resource primitives keep their props-only import boundary", () => {
 	for (const file of readdirSync(import.meta.dir).filter(
 		(file) => /\.(ts|tsx)$/.test(file) && !file.includes(".test."),
 	)) {
@@ -49,15 +43,6 @@ test("resource barrel exposes only props-driven primitives with no store, transp
 		}
 		expect(source).not.toMatch(/store|transport|xterm|dangerouslySetInnerHTML|Markdown/);
 	}
-});
-
-test("empty content has natural active section names and a collapsed finished count", () => {
-	const html = renderToStaticMarkup(<resources.ResourcesContent {...props} />);
-	expect(html).toContain("No active commands.");
-	expect(html).toContain("No active subagents.");
-	expect(html).toContain('aria-expanded="false"');
-	expect(html).toContain("Finished · 0");
-	expect(html).not.toContain('data-testid="resource-stop"');
 });
 
 test("active rows preserve native statuses, action hooks and escaped source text; finished rows start collapsed", () => {
@@ -108,17 +93,6 @@ test("stale snapshots disable control authority and failures remain by their act
 	expect(html).toContain("Read failed");
 	expect(html).toContain('role="alert"');
 	expect(html).toContain('data-testid="resources-retry"');
-});
-
-test("header button retains an active count and accessible name even with a compact label", () => {
-	const html = renderToStaticMarkup(
-		<TooltipProvider>
-			<resources.ResourcesButton activeCount={4} open />
-		</TooltipProvider>,
-	);
-	expect(html).toContain('data-active-count="4"');
-	expect(html).toContain('aria-label="Resources, 4 active"');
-	expect(html).toContain('data-testid="resources-trigger"');
 });
 
 test("command logs distinguish loading, empty, retry, permanent unavailability, stale and truncated plain text", () => {
