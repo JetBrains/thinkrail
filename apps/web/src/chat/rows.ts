@@ -1,4 +1,8 @@
-import type { DelegationRunDetails, UserMessage } from "@thinkrail/contracts";
+import type {
+	BackgroundCommandCompletionDetails,
+	DelegationRunDetails,
+	UserMessage,
+} from "@thinkrail/contracts";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { resolveProminence } from "./toolRegistry";
 import { strArg } from "./tools/toolHelpers";
@@ -39,6 +43,7 @@ export type ChatRow =
 			delayMs: number;
 	  }
 	| { kind: "markdown"; id: string; text: string }
+	| { kind: "backgroundCommandCompletion"; id: string; details: BackgroundCommandCompletionDetails }
 	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
@@ -179,6 +184,9 @@ export function deriveRows(
 						maxAttempts: turn.maxAttempts,
 						delayMs: turn.delayMs,
 					});
+					break;
+				case "backgroundCommandCompletion":
+					rows.push(turn);
 					break;
 				case "subagentCompletion":
 					rows.push({

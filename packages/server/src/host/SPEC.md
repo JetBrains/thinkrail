@@ -399,6 +399,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   subscribes every client so permanent domain deletion converges beyond the initiating page. It remains a
   low-latency event, not a durable queue: a reconnecting client's active-workspace `session.list` is the
   authoritative read-side repair for an event missed while its socket was down.
+- **Chat Resources:** the scoped resource read, command output/stop and direct-child stop/stop-all
+  handlers resolve workspace membership and pass only validated opaque ids plus the registry-owned cwd
+  to the agent barrel. Missing parents/resources use `RESOURCE_UNAVAILABLE`; output's missing-command
+  result is `available:false` only after validating its parent. No client path/PID is accepted.
+  The agent's resource publisher maps to `session.resourcesChanged`, subscribed in the WS open handler;
+  this is a catalog invalidation, never an output broadcast. Resource ownership and teardown stay in agent.
 - **Activity fan-out:** `createServer` installs the agent module's activity publisher and broadcasts each
   `SessionActivityPayload` on `session.activity`, which the WS `open` handler subscribes for every client
   alongside the other session channels; `session.activityList` serves the cross-workspace snapshot, since

@@ -1,5 +1,6 @@
 import type {
 	AssistantMessage,
+	BackgroundCommandCompletionDetails,
 	DelegationRunDetails,
 	ExtUiRequest,
 	ImageContent,
@@ -24,6 +25,7 @@ export type ChatTurn =
 	| { kind: "system"; id: string; text: string; endedAt?: number }
 	| ({ kind: "compaction"; id: string } & CompactionState)
 	| { kind: "error"; id: string; text: string; recovery?: FailureRecovery }
+	| { kind: "backgroundCommandCompletion"; id: string; details: BackgroundCommandCompletionDetails }
 	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
 	| {
 			kind: "retry";

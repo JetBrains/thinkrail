@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: agent — in-process pi sessions
 parent: module-server
-depends-on: [module-contracts, module-pi-delegation, module-pi-subagents]
+depends-on: [module-contracts, module-pi-delegation, module-pi-subagents, module-pi-background-commands]
 references: [module-spec-graph, central-integration]
 tags: [v1, pi]
 ---
@@ -343,7 +343,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     cancelled:true}`), so its card hydrates as the normal skipped record;
     **`answerQuestion(sessionId, toolCallId, result)`** — the `ask_user_question` reply path (see the
     `askUserQuestion` bullet); **`settleSessionsForShutdown(timeoutMs)`** — the polite half of shutdown:
-    abort every streaming parent, dispose every hidden child (including background children whose parent is
+    close every command service and subagent completion owner, then signal every hidden child before aborting streaming parents,
+    dispose every hidden child (including background children whose parent is
     idle), include cascades already pending from concurrent removal, and wait for all of them under the one
     bound so pi can persist their "Operation aborted" tool results before `process.exit` (the launcher's
     SIGINT/SIGTERM handler awaits it; whatever misses the window is healed by the restart repair).
@@ -519,8 +520,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     while parents created afterward project the new generation. The host-wide `getPiRuntime` resolver
     is passed as the core's dynamic fallback rather than captured at service creation. One
     `DelegationService` per workspace is cached (`delegationServiceFor`, synchronous — nothing awaits
-    at bind time); `subagentsExtensionFor(workspaceId, isEnabled)` hands the bound service and live
-    availability callback to the extension factory each session loads. A host-injected
+    at bind time); `subagentsFor(workspaceId, isEnabled, canDeliverCompletion)` creates one retained portable
+    `Subagents` owner per parent; its extension is injected on every resource load. A host-injected
     `setSubagentsEnabledResolver` maps that
     workspace id to its current effective policy without creating an `agent` → settings/workspaces edge.
     The predicate reaches the extension's launch-time guard and initial/reload activation. For live
@@ -528,9 +529,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `get_subagent_result` through pi's active-tool API: idle sessions update synchronously, streaming
     sessions retain only a pending reevaluation applied at `agent_settled`, and repeated changes resolve
     the latest policy then. Session registration re-resolves once after async extension binding and before
-    creation is published, so a policy mutation cannot fall into the bind-before-registry gap. The extension
-    instance is never replaced, so already-running detached children
-    finish and retain completion delivery; a disabled launch is still rejected immediately by the live
+    creation is published, so a policy mutation cannot fall into the bind-before-registry gap. Policy changes never replace the retained
+    owner, so already-running detached children finish and retain completion delivery; a disabled launch is still rejected immediately by the live
     predicate even before a streaming parent's tool set can be refreshed.
     Cascades: `removeSession`/`disposeAllSessions` fire
     `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
@@ -559,10 +559,14 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     (a private message-entry loop here once drifted: compaction is an entry *type*, not a message
     role, so a compacted child's transcript lost its `compactionSummary` marker — PR #303 review
     finding, test-pinned; absent after restart/dispose; wire meaning: [[module-contracts]]).
-    A missing transcript throws `CodedError("SUBAGENT_TRANSCRIPT_NOT_FOUND")` — the **permanent**
+    Pi writes the first transcript file lazily. A registered child belonging to the requested parent
+    therefore returns an empty message list with its authoritative status until that file exists;
+    queued/running remains pollable, including before the first provider reply. This is not a
+    reconstruction from task text. A missing file without that owned handle throws
+    `CodedError("SUBAGENT_TRANSCRIPT_NOT_FOUND")` — the **permanent**
     miss the web dialog stops polling on, named on the wire instead of pattern-matched from the
-    message ([[module-contracts]] owns the code set; this is the agent module's one
-    `@thinkrail/shared` import, mirroring `git`'s `CodedError` use).
+    message ([[module-contracts]] owns the code set; this uses the agent module's narrow
+    `@thinkrail/shared/codedError` edge, shared with Chat Resources and mirroring `git`'s use).
     Children opting into extensions
     (`extensions: true` in their definition) get the **curated child set**
     (`childExtensionFactories` in `extensions`): the headless-search policy + `pi-web-access` +
@@ -696,7 +700,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   still goes through the shared `ModelRuntime`, never pi-ai's stream/complete — plus the `/bun-oauth` + `/bedrock-provider`
   + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports);
   `pi-delegation` + `pi-subagents` (the portable delegation runtime and Agent-tool composition,
-  value-imported by the host embedding); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
+  value-imported by the host embedding); `pi-background-commands` (the session-bound command
+  capability, likewise value-imported by its host embedding); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
   `pi-thinkrail-workflow` + `pi-todos` (the bundled extension set — parent sessions load the set through
   resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph` and receive
   the named `pi-web-access` factory through the bundled runtime seam, with source-mode Bun `require` as the
@@ -710,6 +715,61 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 - **Forbidden:** `host`; sibling features other than `log` and the narrow `persistence.dataDir` edge (session
   worktree `cwd` remains an input, never a persistence lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
+
+## Chat Resources integration
+
+The manager retains one [[module-pi-background-commands]] service per parent chat alongside its Pi
+session and injects its extension through the normal resource-loader path. The same binding supplies
+live session context, effective shell settings and lifecycle in source and packaged hosts. The
+first version loads this capability into parent chats only, not the curated hidden-child extension
+set; ordinary child Bash remains visible in its transcript.
+
+A small agent-barrel facade serves the resource snapshot, command output/stop and subagent
+stop/stop-all operations defined in [[module-contracts]]. It projects command services plus
+`DelegationService.childrenOf(parent)`; no aggregate registry owns copies of their lifecycles.
+Subagent summaries include direct foreground and background children and omit handles with no run
+snapshot yet. Keep all active children and the latest twenty terminal children by record creation order,
+without disposing older handles or transcripts. Task and role summaries are capped at 2,000 and 200
+characters. One lifecycle subscription per workspace service and each command service's change subscription
+publish scoped invalidations through a host-injected publisher; no per-token/output broadcast is added.
+
+Each operation validates actual workspace/session membership, child lineage and the manager's deletion
+gate before touching a handle. Persisted parents use the existing single-flighted attachment path;
+unknown parents never masquerade as empty catalogs. Missing/foreign/evicted resources share the
+`RESOURCE_UNAVAILABLE` path (command output alone returns `available:false` after parent validation).
+Resource control never depends on the UI having seen a tool event or on starting/restarting a provider turn. Natural completion and requested cancellation remain source
+outcomes; stopped state is not synthesized from an acknowledged RPC.
+
+User subagent controls supply the `"user"` cancellation reason defined by [[module-pi-delegation]];
+completion delivery belongs to [[module-pi-subagents]], not a host suppression set. Stop-all signals
+its captured active children before awaiting any settlement and never uses `disposeChildrenOf` as
+a substitute.
+
+Command services outlive view placement and parent-turn cancellation. Actual session disposal and
+workspace archive close command admission and signal command/child work before awaiting teardown
+under the existing host shutdown budget. Resource closure runs for every captured workspace parent before
+any parent abort is awaited; individual removal likewise signals resources before waiting for the main turn.
+Command and detached-subagent completion delivery respect pending session deletion and its rollback;
+no notice may append or wake the parent behind a transcript being moved to trash. The tombstone is
+temporary and does not dispose either owner. Resource reload retains the command service and portable
+`Subagents` owner and rebinds their completion senders. The manager stores no completion queue. The
+SessionManager exists before SDK session creation, giving the service its immutable identity. Its
+context reads the current session's
+cwd/model/thinking/session file and effective SettingsManager shell path/prefix at launch. Completion
+requires that exact registered owner, no deletion tombstone and no resource closure; registration,
+resource reload and deletion rollback flush both owners. `closeSessionResources` synchronously disposes
+the subagent owner before child cancellation or any await, including preparation failures. Permanent
+closure survives shutdown-budget expiry and suppresses late outcomes even though Pi disposal does not
+emit extension shutdown. The existing cached resource cascade remains the sole teardown owner. Both
+SDK creation and entry preparation failures close the owners. A failure after registration also
+removes that exact entry through the normal teardown path, rather than leaving a disposed session
+advertised as live.
+A restarted host has no control handles or retained command output to reconstruct from history.
+
+`getSessionResources`, `readBackgroundCommandOutput`, `stopBackgroundCommand`, `stopSubagent`,
+`stopAllSubagents` and `setSessionResourcesPublisher` are public only through this module's barrel.
+Its only new external dependency is `pi-background-commands`; there is no `agent` → `terminal`, `subprocess`,
+settings or workspaces edge. The owning parent graph records this package dependency.
 
 ## Get right
 

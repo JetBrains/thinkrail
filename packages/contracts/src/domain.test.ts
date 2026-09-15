@@ -162,6 +162,11 @@ describe("isDelegationRunDetails", () => {
 		).toBe(true);
 	});
 
+	test("accepts historical outcomes and optional user cancellation metadata", () => {
+		expect(isDelegationRunDetails(valid)).toBe(true);
+		expect(isDelegationRunDetails({ ...valid, status: "aborted", abortReason: "user" })).toBe(true);
+	});
+
 	test("rejects a status outside the closed union", () => {
 		expect(isDelegationRunDetails({ ...valid, status: "done" })).toBe(false);
 	});
@@ -177,7 +182,7 @@ describe("isDelegationRunDetails", () => {
 	});
 
 	test("rejects every optional display field when present with a non-string value", () => {
-		for (const field of ["roleName", "roleSource", "model", "activity"]) {
+		for (const field of ["roleName", "roleSource", "model", "activity", "abortReason"]) {
 			expect(isDelegationRunDetails({ ...valid, [field]: { malformed: true } })).toBe(false);
 		}
 	});
