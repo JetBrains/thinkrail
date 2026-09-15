@@ -10,15 +10,24 @@ tags: [v1]
 
 ## Responsibility
 
-Durable host state—projects, workspaces, cross-frontend app config, terminal catalogs, and installation identity—as JSON under the data dir. Current workbench frame and workspace placement are frontend-local and have no host persistence.
+Durable host state—projects, workspaces, cross-frontend app config, terminal catalogs, the owner's handled-attention watermarks, and installation identity—as JSON under the data dir. Current workbench frame and workspace placement are frontend-local and have no host persistence.
 
 ## Boundary
 
-- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; and installation identity in `installation.json` (`{ id }`, the non-rotating per-install UUID, server-only and never wire-broadcast). The former announcement marker is ignored: first observed launch defines first use, not a stored event-sent bit. JSON remains tab-indented.
-- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, and installation identity operations.
+- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; the versioned attention ledger containing a migration-complete marker plus session→handled-candidate ids (never message content or derivable status); and installation identity in `installation.json` (`{ id }`, the non-rotating per-install UUID, server-only and never wire-broadcast). The former announcement marker is ignored: first observed launch defines first use, not a stored event-sent bit. JSON remains tab-indented.
+- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, attention-ledger load/save operations, and installation identity operations.
 - **Allowed deps:** `contracts` (`Project`, `Workspace`, `AppConfig`, `LayoutPreset`, `DEFAULT_CONFIG`,
   `isTerminalWindowsShell`); Node `fs`/`os`/`path`.
-- **Forbidden:** importing feature siblings or `host`; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys or old schemas; or reading, rewriting, or deleting old host layout snapshots.
+- **Forbidden:** importing feature siblings or `host`; deriving whether a session needs attention; storing message content or running/queued/failure state in the attention ledger; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys or old schemas; or reading, rewriting, or deleting old host layout snapshots.
+
+A handled candidate is either a review result exposed to the owner or the otherwise-reviewable result of an
+explicit Stop; the ledger does not distinguish why it was handled. Attention-ledger reads distinguish missing
+from malformed/unreadable. Initialization and every mutation write a complete copy to a sibling temporary
+file and atomically replace the target; concurrent serialization and publish timing belong to `agent`. A
+missing file may receive one exact-candidate baseline assembled by the agent before serving. A malformed
+existing file is quarantined and replaced with an initialized empty ledger, so corruption can resurrect a
+dot but never silently mark unseen work as read. Failure is returned to the caller—never degraded to an
+in-memory acknowledgement.
 
 Analytics config preserves a saved boolean preference and a valid explicit `analyticsConsentConfirmed`
 boolean independently; absent/malformed values default false. A legacy true preference never implies

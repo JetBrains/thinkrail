@@ -75,6 +75,22 @@ The layout persistence boundary is `layoutState`, not the store. Browsers qualif
 
 Project/file/change/review/chat/terminal views receive only resource identity, visibility, and container bounds. Moving a view cannot change module dependencies or make it inspect the frame. A terminal body mounts only while that terminal is locally selected in a visible, unfolded group; hidden terminal tabs stay unmounted while their host PTYs continue running.
 
+Domain **session attention is separate from workbench `LayoutAttention`**. `WorkspaceWorkbench` reads the
+normalized host candidate map plus the store's all-known-chat count. When that count exceeds one it injects
+the shared `AttentionDot` as an adornment for each attentive chat tab; `WorkspaceChatHistory` applies the
+same candidate to closed rows and its trigger rollup.
+
+Chat exposure, not tab selection itself, asks the host to acknowledge the exact candidate. One shared
+`conversationExposed` predicate requires the body to be mounted in a focused foreground page and not covered
+by any app dialog or chat overlay that obscures the transcript; tooltips and context menus do not hide the
+conversation. A live candidate may be acknowledged after its stamped Pi-event revision renders only when
+that runtime is reconciled to the current connection generation; missing or older-generation runtimes take
+the fresh-reconciliation path. A reconnect/snapshot candidate additionally waits for a successful transcript
+read started after its attention-hydration epoch and the resulting React commit. Buffered replay of the same
+candidate preserves whichever requirement is stricter—an already-mounted stale runtime must never clear a
+result no client has rendered. The host no-ops blocking candidates, so shell never
+learns or duplicates the review-versus-blocking reason.
+
 Every async resource/session/catalog hydration checks connection generation, workspace lifetime, and the current local frame/view identity before installing data or a follow-up placement. A peer-created chat remains discoverable through host history but does not open a local tab. Host terminal catalog membership is shared: reconciliation removes dead local references and places a newly discovered catalog tab into a compatible local terminal slot without changing frame geometry or stealing attention. Explicit terminal close remains host-domain lifetime and converges removal in every surface.
 
 Default-terminal creation no longer depends on a host layout revision. The workspace-creation flow carries a host-owned pending marker; the host reserves the deterministic process-free terminal catalog entry and clears the marker only after durable success. Each frontend then places the catalog tab locally, normally into its bottom slot; PTY attach still waits for the visibility gate.

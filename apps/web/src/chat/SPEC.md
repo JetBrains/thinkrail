@@ -319,6 +319,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   a diff, another chat — is a new scope and re-claims attention for a question still waiting. That is the
   intended read (you returned to the chat that needs you), not just a side effect. It carries no store or
   transport state.
+  This questionnaire focus attention is distinct from the app's binary **session-attention dot**. The
+  app-integration `ChatView` combines the shell's foreground/dialog exposure input with its own obscuring
+  overlays and acknowledges only after the candidate's transcript state has rendered; reconnect snapshots
+  must first complete a candidate-newer reconciliation (see [[submodule-web-shell]]). It does not inspect the
+  reason: blockers ignore acknowledgements host-side, while review clears globally. Scroll position is
+  deliberately not a message-read receipt.
 - **Hydration** (`hydrate.ts`) — the pure
   `messagesToRuntime(TranscriptMessage[], lastSettlement?, { idScope? })` converter (read-side counterpart
   of the event reducer): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a
@@ -1003,12 +1009,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   your answer" **even when every item is done** (the earlier strip hid it whenever there was no
   in-progress step, so an agent blocked on a question read as "finished"); "working" while it runs;
   "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
-  idle). The glance stays **chat-local and is not the Projects rail's authority**, even though the rail's
-  host-derived `ActivityStatus` overlaps it: `askStates` exists here for a job status cannot do —
-  `useAskState(toolCallId)` renders *which* questionnaire is awaiting — so `planGlance` is a one-line
-  reduction over a map this view already holds, and routing it through the wire would add a dependency to
-  remove nothing. They also answer different questions: "paused" (stopped with open steps) is a plan
-  concept the rail calls idle, and the glance has no `queued`/`failed`. What *is* shared is the meaning of
+  idle). The glance stays **chat-local and is not the Projects rail's authority**. The host's binary
+  session-attention candidate answers only whether to visit the chat; `askStates` exists here because the
+  renderer still needs to identify and present the exact questionnaire. Routing the plan glance through the
+  wire would add a dependency while removing nothing. “Paused” remains a plan concept and does not itself
+  create cross-chat attention. What *is* shared is the meaning of
   awaiting (unanswered, not superseded), single-sourced per process — `deriveAskStates` here,
   `assessAnswerability` on the host; `contracts` is types-only, so no implementation can span both.
   `TodoList` stays props-driven — it receives the resolved glance, never reads the transport.

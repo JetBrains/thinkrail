@@ -158,19 +158,21 @@ used when the variable is absent). A missing artifact, failed generation, or una
 before any provider turn; PI's ordinary first-available fallback is never accepted as test configuration.
 The same copy and hermetic environment seed the private restart host.
 
-**Workspace activity** (`workspace-activity.spec.ts`) covers the Projects rail's agent-state glyphs without
-an agent, and is the reason the host's `failed`/`waiting` derivations read the transcript: a seeded fixture
-transcript (an assistant with `stopReason: "error"`, or an `ask_user_question` call plus its `ack` tool
-result) becomes real activity, so the whole chain — host derivation, `session.activity` push, store fold,
-rollup, render — runs for real on the no-agent lane. It asserts the row's `data-activity` and the glyph's
-`aria-label` (never the tooltip, which needs hover), the rollup breakdown when one workspace holds both
-states, and the collapsed-project rollup.
+**Session attention** (`workspace-attention.spec.ts`) covers the one-dot Projects/workbench/history signal
+without an agent. Seeded successful, error/length, and questionnaire transcripts exercise host candidate
+derivation, `session.attention` push/snapshot, store folds, and project/workspace/chat presentation. The
+suite asserts accessible “Needs attention” labels, `data-attention`, no marker for running/queued/explicit
+abort, the all-known-chat threshold, and closed-history discoverability.
 
-Two entry paths are covered on purpose. Opening the chat attaches the session and exercises the **live**
-path; a **reload after seeding** exercises the **disk** path — the snapshot union — by asserting the glyph
-appears while the workspace is never activated and no chat tab exists, which is the reviewer scenario a
-host restart produces. Note that **seeding must happen after `openFixtureProject`**: `openAppFresh` calls
-`resetState`, which deletes the isolated agent dir's `sessions` tree, so anything seeded earlier is wiped.
+Both live and disk paths are required. A mounted foreground chat acknowledges a new review candidate and
+clears it across a second client; a background/obscured or closed chat retains it. Reload without opening the
+workspace exercises snapshot reconstruction after restart. Settle-during-reconnect and strict same-id replay
+ordering, exact-candidate races, push-during-snapshot buffering, atomic exact-id first-ledger migration,
+malformed/write-failed ledger behavior, old-client empty-list retirement, blocker acknowledgement
+no-op/resolution, exact-candidate handling around explicit abort (including retry/compaction state, without
+suppressing a later distinct result), and deletion-without-optimistic-retraction cleanup are pinned at the
+owning unit/integration layers. Seeding remains after `openFixtureProject`: `openAppFresh`
+deletes the isolated session tree during reset.
 
 Workbench scenarios exercise the normalized frontend-local frame rather than only the pure model: frame
 geometry/tool placement survives workspace switches while resource tabs and attention differ; closing a final

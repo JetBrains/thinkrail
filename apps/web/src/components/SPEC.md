@@ -10,9 +10,9 @@ tags: [v1, ui, resilience]
 ## Responsibility
 
 The app's dependency-light shared React primitives: the error boundary that keeps one failed region from
-unmounting the root, project-custom icons, the quiet-scroll frame used by shell and feature panels, and
-the shared loading-skeleton primitive. Also houses the `ui/` sub-module (shadcn primitives), which has
-its own spec.
+unmounting the root, project-custom icons, the binary attention dot shared by shell and feature panels, the
+quiet-scroll frame, and the shared loading-skeleton primitive. Also houses the `ui/` sub-module (shadcn
+primitives), which has its own spec.
 
 ## Boundary
 
@@ -43,13 +43,17 @@ its own spec.
   and removes the cosmetic curtains; reduced motion removes both optical and third-party controller opacity
   transitions. Surface colour is an explicit semantic prop (`sidebar` or `terminal`), never inferred from
   arrangement.
+- **`AttentionDot.tsx`** — the store-free, static accent dot whose sole accessible label is “Needs
+  attention.” It carries no reason, count, tooltip, motion, or clearing behavior; callers decide only
+  whether it is present.
 - **Also owns:** `Skeleton.tsx` — `SkeletonRows`, the one pulsing-rows placeholder every loading surface
   uses, and `LoadingRegion`, the sized-wrapper shape around it that most call sites actually want (a
   `className` for the region's own padding/sizing, an optional `label` threaded to `SkeletonRows`'
   `role="status"` region rather than opening a second one, and an optional `testId`). The full loading
   vocabulary and its rules are below.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `SkeletonRows`, `LoadingRegion` — imported
-  directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `CustomIcon`,
+  directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `AttentionDot` via
+  `@/components/AttentionDot`; `CustomIcon`,
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
   `QuietScrollEdges` type via `@/components/QuietScrollArea`. The `ui/` primitives are their own sub-module
   ([components/ui/SPEC.md](ui/SPEC.md)).

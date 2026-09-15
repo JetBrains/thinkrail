@@ -136,127 +136,74 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     adjustment. The removal gate is the installed code, not the PR state: on every pi bump grep the installed
     `agent-session.js` for the `if (messageText)` guard around `this._steeringMessages.indexOf` — while that
     guard is present the workaround is still required; when it is gone the fix has shipped.
-  - **Activity projection** (`activity.ts`) answers "what is happening in a workspace nobody has open?" —
-    the signal the Projects rail draws. `deriveActivityStatus` is a **pure function** of one session's
-    observable state; the manager owns only the publish-on-change bookkeeping (`publishedActivity` per
-    entry, so a status that did not move emits nothing), the `session.activityList` snapshot, and retraction
-    on disposal. A delete that **fails and rolls its tombstone back** re-syncs, because the retraction
-    published while the tombstone stood has already set `publishedActivity` to null: without that
-    republish the change-detector would suppress the session's real status until its next event, leaving a
-    live failed chat with no glyph.
+  - **Attention projection** (`attention.ts`) answers one binary question for every user-facing session:
+    "should the person inspect or answer this chat?" It replaces the Projects rail's running/waiting/
+    failed/queued activity vocabulary; live progress remains inside the chat.
 
-    | # | condition | status |
-    |---|---|---|
-    | 1 | a pending blocking extension dialog | `waiting` |
-    | 2 | `session.isStreaming` | `running` |
-    | 3 | `session.pendingMessageCount > 0` | `queued` |
-    | 4 | an unanswered `ask_user_question` | `waiting` |
-    | 5 | the run failed (see below) | `failed` |
-    | — | otherwise | idle, i.e. `null` |
+    A pure derivation returns either no candidate or one opaque candidate with an internal kind:
+    **blocking** for an unresolved `ask_user_question` or another host-known session-scoped blocking dialog,
+    and **review** for the final successful, error, or length settlement. Blocking outranks every live state
+    and ignores view acknowledgements. Streaming and queued work otherwise produce no candidate. A newer
+    user prompt/steer/follow-up supersedes an older review result, handled tool failures never count alone,
+    and an explicit user abort stays quiet. Ordinary assistant prose is never parsed to guess whether it
+    contains a question.
 
-    **A failure is `stopReason` `error` *or* `length`.** Both are actionable faults the chat already renders
-    as such (`apps/web/src/store/SPEC.md`: a length stop "becomes an actionable truncation error — neither
-    may become '✓ Done'"), so the rail must not disagree with the transcript by calling a truncated run
-    idle. The set is one constant consulted by both the settlement and transcript paths, so the two can
-    never classify differently.
+    Review candidates are created only at `agent_settled`, never attempt-level `agent_end`, so provider retry
+    and compaction recovery cannot claim the person is needed early. Each candidate id is stable across live
+    and disk derivation and tied to the decisive persisted session entry. The manager
+    keeps only publish-on-change bookkeeping per live entry. Exact-candidate acknowledgement clears a review
+    candidate globally; a stale acknowledgement of A cannot clear newer B, and a blocking candidate is a
+    no-op. Handled-ledger mutations are serialized copy-on-write operations. The host updates its published
+    state and emits the retraction only after atomic persistence succeeds; it then rechecks that the same
+    candidate is still current before publishing, so B arriving during A's save is never retracted. Failure
+    rejects the acknowledgement and leaves the candidate visible. Resolution of the underlying blocker
+    retracts it without writing a handled watermark.
 
-    **`failed` reads the settlement when there is one and the transcript otherwise**, mirroring exactly what
-    `lastSettlement`'s three states already mean: a value decides it outright; explicit **`null`** (run
-    active, or settled with no assistant) means *not failed* and must **not** consult the transcript, or a
-    new `agent_start` would let an older persisted failure reappear mid-run; **`undefined`** means this host
-    process observed nothing, so the persisted transcript is authoritative and the trailing assistant's
-    `stopReason` decides. "Trailing" stops at the next user message and takes the last assistant, so a
-    retried failure followed by a successful attempt is not failed — the same rule `chat/hydrate.ts` uses to
-    hide retried attempts, and the reason a re-attached session keeps its glyph across a host restart
-    instead of silently reading idle while the chat itself shows the failure.
+    Explicit abort contributes only an attention acknowledgement; it does not replace pi's abort, queue, or
+    extension-dialog lifecycle. `abortSession` derives any already-persisted review candidate for the current
+    turn, sets a turn-scoped in-memory intent so that exact outcome is not published mid-call, invokes the
+    existing pi abort path, then re-derives the terminal candidate for that same turn. Any such candidate is
+    durably recorded as handled before the intent is released; an `aborted` terminal with no review candidate
+    writes nothing. If persistence fails, abort behavior is unchanged but the candidate is conservatively
+    published. A result pi produces later with a distinct entry id is **not** suppressed—it is new work the
+    person should inspect. This keeps the retry error or pre-compaction result the person explicitly stopped
+    from resurrecting after a later restart without expanding this feature into a second cancellation
+    controller. A host crash before the abort call settles remains part of the interrupted-run limit below.
 
-    Every rung of that order is load-bearing and pinned by `activity.test.ts`:
-    - **A dialog outranks streaming** because pi is technically mid-turn while blocked on it, yet the person
-      is the blocker. Reporting `running` would hide a prompt waiting for an answer.
-    - **`queued` outranks `failed`** (you already sent the follow-up, so the failure is handled and nagging
-      would be wrong) **and outranks `waiting`** — a queued message supersedes a pending questionnaire, but
-      it is still in pi's queue and *not yet in the transcript*, so `assessAnswerability` cannot see it.
-      This is why supersession is not modelled as mutable "awaiting" state on the entry: `waiting` is
-      **derived from the transcript** via `awaitingQuestionToolCallId`, which reuses `assessAnswerability`
-      rather than duplicating its already-answered/superseded rules. One authority, nothing to keep in sync.
-    - **`aborted` is idle, not `failed`** — cancelling is a choice, not a fault, and a red row for every
-      Escape would teach the user to ignore the signal.
+    Session deletion does not publish an optimistic attention retraction. The candidate remains unchanged
+    while trash/disposal is pending; only successful deletion retracts it and removes its handled watermark.
+    A failed deletion therefore needs no same-id republish and cannot lose client reconciliation metadata.
 
-    The hot path costs nothing: rungs 1–2 return before the transcript scan, so the per-event sync that
-    fires during streaming never walks messages. The scan runs only at rest, and stops at the latest user
-    message.
+    `listSessionAttention` unions live entries with on-disk sessions for every `{id, cwd}` supplied by the
+    host, applies the owner-global handled ledger, and returns only current candidates. This reconstructs
+    completed results and unresolved questionnaires after reconnect or host restart even when no client has
+    opened the workspace. Every row/push carries `projectId` through `setAttentionProjectResolver`; the
+    agent remains ignorant of the workspace registry. The client owns project/workspace rollup and the
+    all-known-chat presentation threshold—there is no server precedence or count.
 
-    The per-session **status derivation** (`deriveActivityStatus`) is pure and never pre-rolled — collapsing
-    several chats into one glyph, and the *display* precedence for that (see `apps/web/src/store/SPEC.md`),
-    stay presentation policy on the client. The one workspace-scoped judgement the host **does** own is
-    **failed-supersession**: a `failed` chat is suppressed (published as `null`, i.e. it draws nothing) once
-    the same worktree holds a strictly-newer non-failed session — a running/waiting/queued one, *or a
-    finished-fine idle one*. This is not display precedence (which of several live chats a row speaks for);
-    it is a relevance judgement — "has the user moved past this failure?" — and it is the host's because the
-    client cannot make it: a finished-fine chat is *absent* from the client's activity map (idle draws
-    nothing), so only the host, which enumerates every session with its recency, can see that a newer
-    non-failed chat exists. `supersededFailedSessions` (in `activity.ts`, pure and unit-pinned) decides it
-    from `{sessionId, status, recencyMs}` rows; a **tie does not supersede** (an equal-recency sibling leaves
-    the failure showing) and a failure that is itself the newest work always stands. **Recency is
-    `SessionInfo.modified`**, which pi derives from the transcript's last message-activity timestamp (not the
-    file's mtime), so it is a stable, restart-surviving signal on the same clock as a live entry's
-    `lastActivityMs`. A live entry **seeds** `lastActivityMs` from its transcript (`messagesActivityMs`) at
-    creation and only restamps to `Date.now()` on a genuine raw-status transition — so **re-opening** an old
-    chat cannot make it look like the newest work and resurrect a failure the newer work already superseded.
-    For the same reason an attached entry seeds `rawActivity` from its derived status, so its first sync is a
-    no-op that publishes nothing rather than re-emitting a status the snapshot already reflects.
+    The pi transcript remains the sole durable source for **what happened**. The separate versioned ledger
+    stores only genuinely new knowledge—session→last-handled review candidate, whether viewed or explicitly
+    aborted—not message content or a cached status. Plain pi can therefore answer/supersede a blocker without leaving a stale sidecar claim.
 
-    Supersession runs through one publish helper, `applyWorkspaceActivity(workspaceId, diskRows)`, which
-    re-derives every live entry, folds the filter over live rows plus any `diskRows` handed in, and pushes
-    only those whose effective (post-supersession) status moved. It is fed from three sites:
-    - The **snapshot** (`listSessionActivity`) groups a workspace's live entries and on-disk sessions —
-      *including idle/null ones, kept only for their recency* — and folds the filter before emitting.
-    - The **attach/create** path (`registerSession` → `reconcileWorkspaceActivity`) reads the workspace's
-      disk rows once and applies with them. This is why **re-opening** a superseded failure keeps it hidden:
-      the newer completed sibling is still on disk, and the reconcile sees it. It is async, but attach/create
-      already is.
-    - The **live delta path** (`syncSessionActivity`) is sync and **live-only** (no `cwd`, no disk read): it
-      early-returns unless *this* entry's raw status changed — recency only advances at a raw transition, so
-      the streaming hot path never triggers a sibling sweep — then applies over live rows alone. Disposal
-      applies too, so a failure a now-gone live sibling was hiding re-surfaces. A disk sibling that should
-      supersede a live failure between attaches settles on the next reconcile or snapshot; the common
-      same-session flow (fail a chat, start a fresh one) is fully live because both remain live entries.
+    `initializeSessionAttention(workspaces)` is a host-start barrier before session work is admitted. For a
+    genuinely missing ledger it scans the supplied workspace transcripts and atomically records the exact ids
+    of review candidates that exist in that baseline; blocking candidates are excluded. No host session can
+    settle concurrently because serving has not begun, and any distinct entry appended after its scan is not
+    in the exact-id set and remains attention-worthy regardless of timestamps or clock changes. An unreadable
+    transcript is logged and omitted, conservatively allowing its candidate to surface when it becomes
+    readable. Failure to commit the completed baseline fails startup rather than serving ambiguously.
 
-    Every row and push carries its **`projectId`**, resolved through the **`setActivityProjectResolver`**
-    seam (the host owns the workspace registry; this module stays ignorant of projects, as with
-    `setSkillAdmissionResolver`). An unresolvable workspace — one being torn down — publishes nothing, since
-    the client's own workspace-removal fold has already dropped its activity. See `packages/contracts/SPEC.md`
-    for why attribution travels on the wire instead of being derived client-side.
+    A malformed/unreadable existing ledger is never mistaken for first run: it is quarantined, logged, and
+    replaced atomically by an initialized empty ledger, conservatively resurfacing review candidates instead
+    of losing unseen work. Thereafter a successful/error/length terminal outcome recovered from disk is
+    attention-worthy until its exact id is durably handled.
 
-    **Lifetime:** entries are never idle-evicted, so every status survives client reconnects, and
-    `listSessionActivity` **unions live entries with on-disk sessions** for each workspace the host passes
-    in (`cwd` stays an input, never a persistence lookup) — so a chat this process never loaded still
-    reports its durable state. That mirrors `session.list`, which already unions the two, and honours
-    architecture decision #8: a host restart rebuilds the same state.
-
-    A disk row runs the **same** `deriveActivityStatus` through `deriveDiskActivityStatus`, which pins
-    `isStreaming: false`, `pendingMessageCount: 0`, `hasPendingDialog: false` and an `undefined`
-    settlement. `running` and `queued` are therefore *structurally unreachable* from disk rather than
-    filtered out afterwards — both describe a live process, and a persisted one would be a permanent lie
-    after a crash.
-
-    **The transcript is the only durable store, deliberately.** Both durable states are already functions
-    of it, so a status file would cache a derivation rather than record new knowledge — and it would have a
-    second writer, since sessions live in pi's own cwd-keyed directory and plain `pi` reads and writes the
-    same files. A sidecar would then claim "waiting for your answer" after the user answered in the
-    terminal: a *wrong* signal, which is worse than a missing one. Only signals at the transcript's **tail**
-    are needed (a trailing assistant's `stopReason`; an `ask_user_question` plus its `ack`), so a bounded
-    `TRANSCRIPT_TAIL_BYTES` window suffices — but the window must **start at a record boundary**, not merely
-    drop its partial first line. Pi writes each message as one unbounded `JSON.stringify` line, so a
-    decisive record can exceed the window: dropping the fragment would then discard the very assistant that
-    failed, and — subtler — a huge questionnaire record followed by its small `ack` yields a *non-empty*
-    parse that is still missing the tool call, so "retry when empty" would not catch it either. The reader
-    therefore probes the byte before the window and grows (×8, to `TRANSCRIPT_TAIL_MAX_BYTES`) until that
-    byte is a newline; only a single record beyond that cap degrades to the best-effort fragment drop.
-    Repeat reads are
-    memoized per file on `(mtime, messageCount)` — **in memory only**, so a fresh process re-derives and no
-    stale verdict can outlive a crash. An unreadable workspace is logged and skipped, never fatal to the
-    snapshot.
+    Disk derivation reads only the transcript tail and retains the bounded record-safe reader: start at a
+    JSONL boundary, grow ×8 up to `TRANSCRIPT_TAIL_MAX_BYTES` when the decisive unbounded record crosses the
+    initial window, then degrade only for one record beyond the cap. Reads are memoized in memory by
+    `(mtime, messageCount)`; unreadable workspaces are logged and skipped rather than making the global
+    snapshot fail. Unexpected process death mid-run is represented only if pi left a durable terminal
+    outcome; a second in-flight crash journal is deliberately not introduced.
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.
     `prompt`/`steer`/`followUp` (with images) /
@@ -680,9 +627,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
-  `buildAnswersMessage`/`awaitingQuestionToolCallId`); the activity layer
-  (`deriveActivityStatus`/`ActivityInputs` + `listSessionActivity`/`syncSessionActivity`/
-  `setSessionActivityPublisher`/`setActivityProjectResolver`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
+  `buildAnswersMessage`/`awaitingQuestionToolCallId`); the attention layer
+  (`deriveAttentionCandidate`/`AttentionInputs` + `initializeSessionAttention`/`listSessionAttention`/
+  `acknowledgeSessionAttention`/`syncSessionAttention`/`setSessionAttentionPublisher`/
+  `setAttentionProjectResolver`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
   (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
@@ -708,10 +656,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `unlink`); `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SessionSummary`/
   `Session*Payload`/`SlashCommandInfo`/`ExtUi*`/`AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics +
-  session-lifecycle debug traces); `persistence` (`dataDir` only, to root the host-owned delegation
-  transcript store); Node.
-- **Forbidden:** `host`; sibling features other than `log` and the narrow `persistence.dataDir` edge (session
-  worktree `cwd` remains an input, never a persistence lookup); Central process/filesystem knowledge—the
+  session-lifecycle debug traces); `persistence` (`dataDir` to root the host-owned delegation transcript
+  store plus attention-ledger initialize/load/save/quarantine operations); Node.
+- **Forbidden:** `host`; sibling features other than `log` and the narrow persistence surfaces above (session
+  worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
 
 ## Get right

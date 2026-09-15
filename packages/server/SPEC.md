@@ -120,15 +120,16 @@ the host from env via `bootHost` for dev/e2e.
   `host` installs (`agent.setReviewCommentHandler` → `reviews.resolveCommentFromAgent`)
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (the current runtime/auth facade plus candidate prepare/activate; one-way, `agent` never imports `auth`)
-- `agent` → `log`, `persistence` (`dataDir` — the static state-root resolver; the delegation store lives at
-  `<dataDir>/delegation`, bound in the agent's delegation embedding) — otherwise the pi runtime alone; auth
+- `agent` → `log`, `persistence` (`dataDir` for the delegation store plus the owner's versioned
+  handled-attention ledger load/save operations) — otherwise the pi runtime alone; auth
   passes desired opaque Central paths through its public generation seam
 - `persistence`, `dialog`, `history`, `templates`, `subprocess` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
 `agent`'s WS surface (`session.*` + `pi.event` forwarding) attaches to `host`. Features that push on their
 own never import `host` either: they expose a **publisher-injection seam** (`setTerminalPublisher`,
-`setSessionPublisher` + `setSessionCreatedPublisher` + `setSessionDeletedPublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
+`setSessionPublisher` + `setSessionCreatedPublisher` + `setSessionDeletedPublisher` +
+`setSessionAttentionPublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
 `project.updated` lifecycle, `workspaces`' `setWorkspacePublisher` for the
 `workspace.created`/`updated`/`removed` lifecycle trio, `settings`' `setSettingsPublisher` for
 `settings.changed`, `feedback`'s addressed invitation publisher, and auth's Central action analytics +

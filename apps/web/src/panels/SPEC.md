@@ -43,7 +43,7 @@ treatment.
   detached-HEAD rows stay visible but disabled); choosing one calls `workspace.openExisting`, then expands
   the project and activates the attached row without starting a chat. Close
   opens a centered, neutral `ConfirmDialog` titled **“Close {name}?”**, description **“Removes this project
-  from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it
+  from the open projects list. Its repository, workspaces, chats, and attention state are kept. Reopen it
   from Add project → Recents.”**, Cancel initially focused, and **Close project**; Cancel, backdrop, and
   Escape dismiss. Confirm fires `project.close` and waits for the full `project.updated` push—no optimistic
   removal; success is the
@@ -78,41 +78,18 @@ treatment.
 
   **One decoration class, and only one.** Workspace rows deliberately show **no `+N −M` change badge**:
   the Projects view is for navigation and identity, and change detail stays in the dedicated Changes
-  views. The single admitted exception is the **activity glyph** — live agent state — because it is the
-  answer to a question the rail is the *only* place to ask: "what is happening in the workspaces I do not
-  have open?" Without it the user must open every workspace to find out, which is navigation, not detail.
-  A `+N −M` badge fails that test (the Changes view answers it better and the rail cannot show it
-  truthfully without watching every worktree), so the rule stands for everything else.
+  views. The single admitted exception is the binary **attention dot** because it answers the one question
+  the rail uniquely owns: "is there anything in a workspace I should look at or answer?" Without it the
+  user must open every workspace to find out. A `+N −M` badge fails that test, so the rule stands for
+  everything else.
 
-  **`ActivityGlyph`** renders it: a `size-14` Remix line icon in a `size-20` box, keyed by
-  `ActivityStatus` — `RiRecordCircleLine`/`text-feedback-info` (running),
-  `RiQuestionnaireLine`/`text-feedback-warning` (waiting), `RiErrorWarningLine`/`text-feedback-error`
-  (failed), `RiTimeLine`/`text-text-subtle` (queued). Presentational and props-driven; the rollup arrives
-  as an `ActivityRollup` from the store's pure `workspaceActivityRollup`/`projectActivityRollup`, which
-  `ProjectTree` calls against its one stable `activityByWorkspace` subscription — a rollup returned *from*
-  a Zustand selector would be a fresh object every store change and re-render the whole rail.
-  - **Icons, not coloured dots** (`.review-thread-dot`'s 6px circle was the alternative): five states
-    encoded purely in hue fail colour-blind users and the shipped high-contrast themes. Shape carries the
-    meaning; colour reinforces it.
-  - **`running` is `feedback-info`, never the accent.** The active workspace's icon and name already
-    render `text-primary` on these very rows, so an accent-green glyph would read as selection.
-  - **No motion.** The rail is permanently in peripheral vision, and several concurrent runs pulsing out
-    of phase read as flicker. The chat plan pane keeps its pulse — that surface is actively read.
-  - **Idle draws nothing at all** (`ActivityRollup` is `null`), so a quiet rail is byte-identical to the
-    pre-feature one; twenty idle workspaces wearing twenty glyphs would destroy the signal.
-  - It sits in **its own flex column between the identity button and the kebab**, so the hover-revealed
-    kebab never covers it (a trailing overlay would).
-  - **Hover explains it**, via `IconTooltip` (`wrapTrigger` — a bare glyph is not focusable). One busy
-    chat shows the plain label; several show a per-state breakdown with counts in rollup order — the same
-    **`ACTIVITY_STATUS_ORDER`** the store's rollup uses (imported, not re-declared, so the two never drift) —
-    which is where the counts the row itself refuses to carry actually live. "Several" counts **chats**
-    (`activityChatCount`), not distinct statuses: two chats both working must read "2 chats working", so a
-    threshold on the number of breakdown *lines* would silently drop the count in exactly the
-    single-status case. The tooltip is an *enhancement*: the
-    same text is always the glyph's `aria-label`, because Radix tooltips are hover/focus-only and a phone
-    has neither.
-  - **Both** row kinds carry **`data-activity`** (absent when idle) as the e2e hook — workspace rows and
-    collapsed project rows alike, on the row rather than the glyph, so the status has one home in the DOM.
+  `ProjectTree` renders the shared dependency-light `AttentionDot` from the store's single
+  `attentionByWorkspace` map through pure `workspaceNeedsAttention` / `projectNeedsAttention` selectors.
+  The dot is static accent colour, carries no count or status-specific glyph/tooltip, and has the accessible
+  label “Needs attention.” Presence/absence has one meaning, so colour does not encode competing states.
+  Running and queued work draw nothing. It occupies its own flex column between the identity button and the
+  hover-revealed kebab. Workspace and collapsed-project rows expose `data-attention` only while positive for
+  end-to-end tests.
 
   **Project rows carry the rollup only while collapsed**, matching the collapsed-only workspace count;
   expanded, their workspace rows already say it. The **Default workspace**
@@ -798,8 +775,8 @@ own section. The kebab menu (`plan-menu`, a
   from the authoritative result goes through the normal tombstone and local-placement prune while a chat
   created during the read survives. Chats referenced by this surface's local workspace view hydrate through
   `session.getMessages` → `messagesToRuntime` → `store.hydrateSession`. Every remaining session enters local
-  history without opening or selecting a tab: another frontend creating or using a chat is domain activity,
-  not a placement instruction. A failed transcript read raises an error toast and leaves that summary
+  history without opening or selecting a tab: another frontend creating or using a chat is shared domain
+  state, not a placement instruction. A failed transcript read raises an error toast and leaves that summary
   retryable in history; a failed `session.list` also raises an error instead of presenting an unexplained
   empty workspace. Both toasts fall silent once reconciliation is cancelled, disconnected, or archived.
   Live hydration deliberately carries no current-disk skill baseline; only disk-only attachment receives its
