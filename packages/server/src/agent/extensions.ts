@@ -15,7 +15,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import specGraphExtension from "pi-spec-graph";
-import { askUserQuestionExtension } from "./askUserQuestion";
+import { askUserQuestionExtensionFor, type QuestionHold } from "./askUserQuestion";
 import { oversizedImageGuard } from "./imageGuard";
 import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
@@ -189,10 +189,11 @@ export async function buildResourceLoader(
 	getAdmission: () => SkillAdmissionContext,
 	excludedExtensionPaths: readonly string[] = [],
 	extraFactories: ExtensionFactory[] = [],
+	questionHold?: QuestionHold,
 ): Promise<ResourceLoader> {
 	const sharedFactories = [
 		headlessSearchPolicy,
-		askUserQuestionExtension,
+		askUserQuestionExtensionFor(questionHold),
 		reviewToolExtension,
 		oversizedImageGuard,
 		...extraFactories,
