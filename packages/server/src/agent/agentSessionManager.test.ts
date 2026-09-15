@@ -55,6 +55,7 @@ import {
 	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
+	renameSession,
 	setActivityProjectResolver,
 	setSessionActivityPublisher,
 	setSessionCreatedPublisher,
@@ -845,6 +846,110 @@ test("listSessions reports a workspace's live sessions; getSessionMessages retur
 	expect(messages.some((m) => m.role === "assistant")).toBe(true);
 	expect(messages.every((m) => ["user", "assistant", "toolResult"].includes(m.role))).toBe(true);
 	removeSession(s.sessionId);
+});
+
+test("renameSession persists a normalized live title and emits one durable title event", async () => {
+	const cwd = tmpCwd("trpi-rename-live-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-rename-live",
+		model: toWireModel(fauxA.getModel()),
+	});
+	events.set(session.sessionId, []);
+
+	expect(
+		await renameSession(session.sessionId, "ws-rename-live", cwd, "  Fix auth\r\nredirect  "),
+	).toBe(true);
+	expect(
+		(await listSessions("ws-rename-live", cwd)).find(
+			(candidate) => candidate.sessionId === session.sessionId,
+		)?.title,
+	).toBe("Fix auth redirect");
+	expect(events.get(session.sessionId)).toContainEqual({
+		type: "session_info_changed",
+		name: "Fix auth redirect",
+	});
+
+	const eventCount = events.get(session.sessionId)?.length;
+	expect(await renameSession(session.sessionId, "ws-rename-live", cwd, "Fix auth redirect")).toBe(
+		false,
+	);
+	expect(events.get(session.sessionId)).toHaveLength(eventCount ?? 0);
+	removeSession(session.sessionId);
+});
+
+test("renameSession's conditional write never replaces a durable title", async () => {
+	const cwd = tmpCwd("trpi-rename-guard-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-rename-guard",
+		model: toWireModel(fauxA.getModel()),
+	});
+	expect(await renameSession(session.sessionId, "ws-rename-guard", cwd, "Manual title")).toBe(true);
+	expect(
+		await renameSession(session.sessionId, "ws-rename-guard", cwd, "Generated title", {
+			onlyIfUnnamed: true,
+		}),
+	).toBe(false);
+	expect(
+		(await listSessions("ws-rename-guard", cwd)).find(
+			(candidate) => candidate.sessionId === session.sessionId,
+		)?.title,
+	).toBe("Manual title");
+	await expect(renameSession(session.sessionId, "ws-rename-guard", cwd, " \n ")).rejects.toThrow(
+		"Invalid session title",
+	);
+	await expect(
+		renameSession(session.sessionId, "ws-rename-guard", cwd, "x".repeat(81)),
+	).rejects.toThrow("Invalid session title");
+	await expect(
+		renameSession(session.sessionId, "ws-other", cwd, "Wrong workspace"),
+	).rejects.toThrow(`Unknown session: ${session.sessionId}`);
+	removeSession(session.sessionId);
+});
+
+test("renameSession updates a disk-only transcript without attaching an agent", async () => {
+	const cwd = tmpCwd("trpi-rename-disk-");
+	const { id, path } = writeFixtureSession(
+		defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd),
+		{
+			cwd,
+			name: "Old title",
+			messages: [{ role: "user", text: "persisted prompt", timestamp: Date.now() }],
+		},
+	);
+	events.set(id, []);
+
+	expect(await renameSession(id, "ws-rename-disk", cwd, "New disk title")).toBe(true);
+	expect(hasSession(id)).toBe(false);
+	expect(SessionManager.open(path).getSessionName()).toBe("New disk title");
+	expect(
+		(await listSessions("ws-rename-disk", cwd)).find((row) => row.sessionId === id)?.title,
+	).toBe("New disk title");
+	expect(events.get(id)).toEqual([{ type: "session_info_changed", name: "New disk title" }]);
+});
+
+test("renameSession serializes with a concurrent disk attach", async () => {
+	const cwd = tmpCwd("trpi-rename-attach-");
+	const { id } = writeFixtureSession(
+		defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd),
+		{
+			cwd,
+			name: "Before attach",
+			messages: [{ role: "user", text: "persisted prompt", timestamp: Date.now() }],
+		},
+	);
+
+	const [loaded, renamed] = await Promise.all([
+		getSessionMessages(id, "ws-rename-attach", cwd),
+		renameSession(id, "ws-rename-attach", cwd, "After attach"),
+	]);
+	expect(renamed).toBe(true);
+	expect(loaded.summary.sessionId).toBe(id);
+	expect(
+		(await listSessions("ws-rename-attach", cwd)).find((row) => row.sessionId === id)?.title,
+	).toBe("After attach");
+	removeSession(id);
 });
 
 test("listSessions ignores a live session's transient physical rewrite but stays strict for detached files", async () => {
