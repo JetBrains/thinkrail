@@ -803,6 +803,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   offsets in state and applied a `translate(...)` inline style, which both violated the invariant and
   re-rendered the composer on every scrolled frame). The backdrop's **ref callback** seeds the offsets at
   mount, so a session starting in an already-scrolled composer never paints even one frame misaligned.
+- **Native `/name` (approved; implementation pending)** — the browser-native command catalog gains
+  `/name <title>` beside `/compact`, labelled `Pi/built-in` and reserved over an exact-name extension or
+  prompt-template collision to match pi's own command. The parser reserves both bare `/name` and
+  `/name <title>`; a valid argument bypasses the user-message echo and agent send, calls `session.rename`,
+  then clears the composer. Blank/over-limit input stays in the composer with an actionable validation error; transport rejection keeps
+  the durable title unchanged and surfaces as an in-chat error. The command is hidden against a host older
+  than the session-rename feature constant. It is the keyboard path to the same domain mutation as the shell's
+  tab/history controls—never a separate title source—and automatic generation has no ChatView spinner or
+  transcript row.
 - **Save-as-template + template management** (`TemplateEditorDialog.tsx`; `HistoryOverlay`'s save action;
   `panels/TemplatesSettings.tsx`) — one shared create/edit surface for prompt-template files, reused by two
   entry points that never talk to each other: the Settings → Templates panel (list + New/Edit/Delete, see

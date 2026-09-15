@@ -445,6 +445,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
   reconnect retains and re-delivers it after `server.welcome`. A host restart has no claim to re-deliver, and
   the welcome clears the frontend's stale popup projection. Popup `feedback.respond` actions are ordinary
   replay-safe requests and never alter the Settings link.
+- **Chat titles (approved; implementation pending):** `session.rename` resolves `workspaceId` to its cwd,
+  validates the requested title against contracts, and delegates the unconditional durable write to `agent`;
+  it never patches one client directly. The user-send acceptance path also tees each non-control text prompt
+  into one detached, per-session-single-flighted auto-title attempt while the pi name is absent. `assist`
+  produces a bounded cheap-model candidate or deterministic fallback, and `agent` applies it with
+  `onlyIfUnnamed` after the await. Naming begins only after the real prompt is accepted, never delays its ack
+  or turn, and failures stay best-effort (warn-log an unexpected write failure; no user-facing send failure).
+  Image-only/blank sends do not consume the opportunity; a later accepted text prompt may. There is no
+  settled-turn or per-turn retitle hook. Both manual and automatic writes converge every client through the
+  existing `pi.event`/`session_info_changed` channel and `session.list` repair; no new push channel exists.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for

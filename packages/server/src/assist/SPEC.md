@@ -51,6 +51,22 @@ tasks land here next. The tasks are a **library surface** — no wire method; co
 - **Forbidden:** `host`; **`@earendil-works/pi-ai` / `pi-coding-agent` directly** (model access + dispatch
   belong to `agent`); reaching into another feature's internals.
 
+## Approved chat-title task (implementation pending)
+
+The catalog will add `suggestChatTitle(firstPrompt)` plus a deterministic `naiveChatTitle(firstPrompt)`
+fallback. The agentic task receives only the bounded first raw text prompt—not the assistant answer, project
+files, or later transcript—and runs through the existing tool-free `completeOnce` cheap-model path in
+parallel with the real session. Its instruction treats the prompt as untrusted input and asks for only a
+3–6-word durable subject/outcome, normally within 40–50 characters: omit project/workspace names already
+visible in the shell, incidental workflow/model/tool/test/commit wording, status claims, quotes, and prose.
+Timeout, missing auth, runner failure, or unusable output still resolves `null`.
+
+Chat-title normalization strips wrappers, folds line breaks/whitespace, preserves useful user-facing casing
+and punctuation, and clamps defensively to the shared session-title maximum. The deterministic fallback takes
+the first useful prompt words at a word boundary under the same safety rules. A blank/image-only message has
+no title input and leaves the session eligible for the next accepted text prompt. Assist remains stateless and
+never reads or writes a session; host owns triggering and agent owns the conditional durable write.
+
 ## Get right
 
 - Every task **degrades to `null`** — a naming failure must never block workspace creation or surface as

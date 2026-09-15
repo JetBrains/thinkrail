@@ -714,6 +714,22 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   worktree `cwd` remains an input, never a persistence lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
 
+## Approved chat-title change (implementation pending)
+
+`agentSessionManager` is the only durable chat-title writer. Its planned `renameSession(sessionId,
+workspaceId, cwd, title, { onlyIfUnnamed? })` validates one non-blank, single-line title within contracts'
+length limit, resolves the session strictly inside the supplied workspace/cwd, and avoids an append when the
+normalized title is already current. A live session writes through `AgentSession.setSessionName`; a disk-only
+session opens its exact transcript with `SessionManager.open(...).appendSessionInfo(...)` without attaching an
+agent or resolving a model. Both paths publish the same `session_info_changed` Pi event, while
+`SessionSummary.title` remains the hydration projection.
+
+`onlyIfUnnamed` performs the check immediately beside the append and is the auto-title compare-and-set; the
+manual wire mutation is unconditional. Thus an async helper cannot overwrite a durable name that landed while
+it was running. No generated/manual provenance or title sidecar belongs here—the absent-vs-present pi name is
+sufficient because automatic naming gets one opportunity. The architecture's accepted no-cross-process
+coordination rule still applies.
+
 ## Get right
 
 - `prompt()` throws while a session is streaming → `promptSession` falls back to `steer()`.

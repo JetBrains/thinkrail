@@ -125,6 +125,14 @@ of the host.
     the server's transcript filter and history index, whose alignment keeps a history hit's `messageIndex`
     valid against the client's `turnIdByMessageIndex` — a role added to one side but not the other would
     silently shift every later jump anchor.
+  - **Chat titles (approved; implementation pending)** — `SessionSummary.title` remains the non-empty read
+    projection (`Chat` while pi has no durable name). The additive `session.rename` mutation takes
+    `{ workspaceId, sessionId, title }`, rejects a title whose trimmed single-line form is blank or exceeds
+    `SESSION_TITLE_MAX_LENGTH` (80), and returns an ack; a dedicated feature-introduction protocol constant
+    gates newer rename controls against older hosts. The existing Pi event
+    `session_info_changed { name?: string }` is the one live domain update for manual and automatic changes,
+    and `session.list`/`session.getMessages` repair a missed event. No title source/provenance, uniqueness,
+    workspace coupling, or new push channel crosses the wire; session ids remain canonical.
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
     `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel.
