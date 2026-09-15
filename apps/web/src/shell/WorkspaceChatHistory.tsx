@@ -1,6 +1,7 @@
 import {
 	RiHistoryLine as History,
 	RiLoader4Line as Loader2,
+	RiPencilLine as Pencil,
 	RiArrowGoBackLine as RotateCcw,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
@@ -21,9 +22,11 @@ import { errorText, getTransport } from "../transport";
 export function WorkspaceChatHistory({
 	workspaceId,
 	targetGroupId,
+	onRenameChat,
 }: {
 	workspaceId: string;
 	targetGroupId: string;
+	onRenameChat?: (sessionId: string, title: string) => void;
 }) {
 	const closed = useAppStore((state) => state.closedChatsByWorkspace[workspaceId] ?? EMPTY_CHATS);
 	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
@@ -68,6 +71,20 @@ export function WorkspaceChatHistory({
 							</span>
 							<RotateCcw className="size-14 shrink-0 text-text-muted" />
 						</DropdownMenuItem>
+						{onRenameChat ? (
+							<IconTooltip label="Rename chat">
+								<DropdownMenuItem
+									data-testid="closed-chat-rename"
+									aria-label={`Rename ${chat.title}`}
+									onSelect={() =>
+										requestAnimationFrame(() => onRenameChat(chat.sessionId, chat.title))
+									}
+									className="shrink-0 px-4 text-text-muted"
+								>
+									<Pencil className="size-14" />
+								</DropdownMenuItem>
+							</IconTooltip>
+						) : null}
 						<IconTooltip label="Move chat to trash">
 							<DropdownMenuItem
 								data-testid="closed-chat-delete"

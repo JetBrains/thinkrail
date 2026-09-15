@@ -18,6 +18,7 @@ import type {
 	TemplateScope,
 	ThinkingLevel,
 	TodoStatus,
+	TranscriptMessage,
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
@@ -35,7 +36,10 @@ import {
 	getDefaultModel,
 	getSessionCommands,
 	getSessionMessages,
+	getSessionMessagesSnapshot,
+	getSessionName,
 	getSessionStats,
+	getSessionWorkspaceId,
 	hasSession,
 	isSessionStreaming,
 	listAvailableModels,
@@ -53,6 +57,7 @@ import {
 	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
+	renameSession,
 	resolveExtUi,
 	setSessionModel,
 	setSessionThinkingLevel,
@@ -166,6 +171,7 @@ import {
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
+import { maybeAutoNameChat } from "./autoRename";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -199,10 +205,29 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 	}
 }
 
-function recordAcceptedSend(mode: SendMode, text: string, clientKey: string): void {
+function captureChatAutoNameHistory(sessionId: string): readonly TranscriptMessage[] | null {
+	if (getSessionName(sessionId) !== undefined) return null;
+	try {
+		return getSessionMessagesSnapshot(sessionId);
+	} catch {
+		return null;
+	}
+}
+
+function recordAcceptedSend(
+	mode: SendMode,
+	text: string,
+	clientKey: string,
+	sessionId: string,
+	priorMessages: readonly TranscriptMessage[] | null,
+): void {
 	if (isControlMessage(text)) return;
 	track({ name: "message_sent", params: { mode } });
 	recordAcceptedMessage(clientKey);
+	const workspaceId = getSessionWorkspaceId(sessionId);
+	if (workspaceId && priorMessages) {
+		void maybeAutoNameChat(sessionId, workspaceId, text, { priorMessages });
+	}
 }
 
 function resolveTemplateReadDirs(params: TemplateReadLocation) {
@@ -631,20 +656,23 @@ const handlers: Record<string, Handler> = {
 	},
 	"session.prompt": async (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
+		const priorMessages = captureChatAutoNameHistory(p.sessionId);
 		await ackSend(promptSession(p.sessionId, p.text, p.images));
-		recordAcceptedSend("prompt", p.text, ctx.clientKey);
+		recordAcceptedSend("prompt", p.text, ctx.clientKey, p.sessionId, priorMessages);
 		return { ok: true } as const;
 	},
 	"session.steer": async (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
+		const priorMessages = captureChatAutoNameHistory(p.sessionId);
 		await ackSend(steerSession(p.sessionId, p.text, p.images));
-		recordAcceptedSend("steer", p.text, ctx.clientKey);
+		recordAcceptedSend("steer", p.text, ctx.clientKey, p.sessionId, priorMessages);
 		return { ok: true } as const;
 	},
 	"session.followUp": async (params, ctx) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
+		const priorMessages = captureChatAutoNameHistory(p.sessionId);
 		await ackSend(followUpSession(p.sessionId, p.text, p.images));
-		recordAcceptedSend("follow_up", p.text, ctx.clientKey);
+		recordAcceptedSend("follow_up", p.text, ctx.clientKey, p.sessionId, priorMessages);
 		return { ok: true } as const;
 	},
 	"session.clearQueue": (params) => {
@@ -673,6 +701,16 @@ const handlers: Record<string, Handler> = {
 		const p = params as { workspaceId: string; sessionId: string };
 		await deleteSession(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
 		await removeSessionTodoWindows(p);
+		return { ok: true } as const;
+	},
+	"session.rename": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string; title: string };
+		await renameSession(
+			p.sessionId,
+			p.workspaceId,
+			getWorkspace(p.workspaceId).worktreePath,
+			p.title,
+		);
 		return { ok: true } as const;
 	},
 	"session.setModel": async (params) => {

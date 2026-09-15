@@ -16,6 +16,7 @@ import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker }
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
+	selectCanRenameChat,
 	selectCatalogModel,
 	selectCompactionTurnIds,
 	selectSkillsStale,
@@ -46,18 +47,14 @@ import {
 	compactSubmissionError,
 	mergeNativeChatCommands,
 	parseNativeChatCommand,
+	prepareNameChatCommand,
 } from "./nativeCommands";
 import { planGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
 import { estimateChatRowHeights, type RowHeightEstimateCache } from "./rowHeightEstimates";
 import { type ChatRow, deriveRows, projectRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
-import {
-	CHAT_STATUS_SLOT_HEIGHT,
-	type StreamStatus,
-	StreamStatusSlot,
-	streamStatus,
-} from "./StreamIndicator";
+import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
 import { SubagentTranscriptDialog } from "./SubagentTranscriptDialog";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { useModelCatalog } from "./useModelCatalog";
@@ -168,6 +165,7 @@ export default function ChatView({
 	const runtime = sessionRuntime ?? EMPTY_RUNTIME;
 	const status = useAppStore((s) => s.status);
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
+	const canRenameChat = useAppStore(selectCanRenameChat);
 	useTranscriptSync({
 		workspaceId,
 		sessionId,
@@ -428,11 +426,14 @@ export default function ChatView({
 
 	const mergedCommands = useMemo(
 		() =>
-			mergeNativeChatCommands([
-				...commands.filter((command) => command.source !== "prompt"),
-				...templates.map(templateToSlashCommand),
-			]),
-		[commands, templates],
+			mergeNativeChatCommands(
+				[
+					...commands.filter((command) => command.source !== "prompt"),
+					...templates.map(templateToSlashCommand),
+				],
+				canRenameChat,
+			),
+		[canRenameChat, commands, templates],
 	);
 
 	useEffect(() => {
@@ -527,6 +528,12 @@ export default function ChatView({
 			);
 	};
 
+	const performRename = (title: string) => {
+		void getTransport()
+			.request("session.rename", { workspaceId, sessionId, title })
+			.catch((err) => useAppStore.getState().appendErrorTurn(sessionId, errorText(err)));
+	};
+
 	const performSend = (
 		text: string,
 		attachments: ChatAttachment[],
@@ -562,14 +569,20 @@ export default function ChatView({
 		attachments: ChatAttachment[],
 		behavior: SubmitBehavior,
 	): ComposerSubmitDisposition => {
-		const nativeCommand = parseNativeChatCommand(text);
-		if (nativeCommand) {
+		const nativeCommand = parseNativeChatCommand(text, canRenameChat);
+		if (nativeCommand?.kind === "compact") {
 			const submissionError = compactSubmissionError(
 				attachments.length > 0,
 				queue.hasImages === true,
 			);
 			if (submissionError) return { accepted: false, reason: submissionError };
 			performCompact(nativeCommand.instructions);
+			return { accepted: true };
+		}
+		if (nativeCommand?.kind === "name") {
+			const prepared = prepareNameChatCommand(nativeCommand.title, attachments.length > 0);
+			if ("reason" in prepared) return { accepted: false, reason: prepared.reason };
+			performRename(prepared.title);
 			return { accepted: true };
 		}
 		if (behavior !== "interrupt") {
@@ -874,15 +887,15 @@ export default function ChatView({
 										? "w-full"
 										: "w-[var(--chat-transcript-width)] min-w-full max-w-none",
 								)}
-								initialTopMostItemIndex={
-									chatMessageOrder === "newest-first"
-										? { index: 0, align: "start", offset: -CHAT_STATUS_SLOT_HEIGHT }
-										: {
+								{...(chatMessageOrder === "oldest-first"
+									? {
+											initialTopMostItemIndex: {
 												index: Math.max(rows.length - 1, 0),
-												align: "end",
+												align: "end" as const,
 												offset: CHAT_LATEST_EDGE_MARGIN,
-											}
-								}
+											},
+										}
+									: {})}
 								followOutput={followOutput}
 								rangeChanged={({ startIndex }) => {
 									const localIndex = startIndex - firstItemIndex;

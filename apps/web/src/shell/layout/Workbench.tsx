@@ -173,6 +173,7 @@ export interface WorkbenchProps {
 		tab: LayoutTab,
 		prepare: (latestDocument?: WorkspaceLayoutDocument) => PreparedLayoutClose,
 	) => void;
+	onRenameChat?: (sessionId: string, title: string) => void;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (groupId: string, area: "center" | LayoutAuxiliaryRegion) => void;
 	onGestureCanceled?: () => void;
@@ -592,6 +593,7 @@ interface TabStripProps {
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
 	onRevealTool: (tool: LayoutToolId) => void;
+	onRenameChat: WorkbenchProps["onRenameChat"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
@@ -615,6 +617,7 @@ function TabStrip({
 	onFocusAdjacentGroup,
 	onHideSide,
 	onRevealTool,
+	onRenameChat,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
 	splitGeometry,
@@ -715,6 +718,7 @@ function TabStrip({
 							onFocusAdjacentGroup={onFocusAdjacentGroup}
 							onHideSide={onHideSide}
 							onRevealTool={onRevealTool}
+							onRenameChat={onRenameChat}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
 							draggingTab={draggingTab}
@@ -850,6 +854,7 @@ interface WorkbenchTabProps {
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
 	onRevealTool: (tool: LayoutToolId) => void;
+	onRenameChat: WorkbenchProps["onRenameChat"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	draggingTab: LayoutTab | null;
@@ -876,6 +881,7 @@ function WorkbenchTab({
 	onFocusAdjacentGroup,
 	onHideSide,
 	onRevealTool,
+	onRenameChat,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
 	draggingTab,
@@ -1045,6 +1051,13 @@ function WorkbenchTab({
 			</ContextMenuTrigger>
 			<ContextMenuContent>
 				<ContextMenuItem onSelect={() => focusTab()}>Focus tab</ContextMenuItem>
+				{tab.kind === "chat" && onRenameChat ? (
+					<ContextMenuItem
+						onSelect={() => requestAnimationFrame(() => onRenameChat(tab.sessionId, name))}
+					>
+						Rename chat…
+					</ContextMenuItem>
+				) : null}
 				<ContextMenuItem
 					disabled={!canFocusAdjacentGroup}
 					onSelect={() => onFocusAdjacentGroup(-1, location.groupId)}
@@ -1264,6 +1277,7 @@ interface SharedGroupProps {
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
 	onRevealTool: (tool: LayoutToolId) => void;
+	onRenameChat: WorkbenchProps["onRenameChat"];
 	canFocusAdjacentGroup: boolean;
 }
 
@@ -1332,6 +1346,7 @@ function CenterGroupView({
 				onFocusAdjacentGroup={shared.onFocusAdjacentGroup}
 				onHideSide={shared.onHideSide}
 				onRevealTool={shared.onRevealTool}
+				onRenameChat={shared.onRenameChat}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
 				trailing={
@@ -1631,6 +1646,7 @@ function SideGroupView({
 						onFocusAdjacentGroup={shared.onFocusAdjacentGroup}
 						onHideSide={shared.onHideSide}
 						onRevealTool={shared.onRevealTool}
+						onRenameChat={shared.onRenameChat}
 						canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 						renderTabAdornment={shared.renderTabAdornment}
 						trailing={
@@ -2028,6 +2044,7 @@ function BottomGroupView({
 						onFocusAdjacentGroup={shared.onFocusAdjacentGroup}
 						onHideSide={shared.onHideSide}
 						onRevealTool={shared.onRevealTool}
+						onRenameChat={shared.onRenameChat}
 						canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 						renderTabAdornment={shared.renderTabAdornment}
 						trailing={
@@ -2462,6 +2479,7 @@ export function Workbench({
 	onUserNavigation,
 	readNavigationTick,
 	onRequestClose,
+	onRenameChat,
 	onNewChat,
 	onNewTerminal,
 	onGestureCanceled,
@@ -3007,6 +3025,7 @@ export function Workbench({
 		onFocusAdjacentGroup: focusAdjacentGroup,
 		onHideSide: hideSideRegion,
 		onRevealTool: revealMissingTool,
+		onRenameChat,
 		canFocusAdjacentGroup,
 	};
 	const alignedWidth = Math.max(Number.EPSILON, projectedAlignedWidth);

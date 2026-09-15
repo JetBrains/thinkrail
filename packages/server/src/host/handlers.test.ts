@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
 	Template,
 	TemplateInfo,
@@ -10,6 +11,7 @@ import type {
 } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import { recordAcceptedMessage, resetFeedbackForTests, setFeedbackPublisher } from "../feedback";
+import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
 import { todoReviewRecord } from "../todos";
@@ -156,6 +158,48 @@ test("workspace.rename locks the display name without changing Git or the worktr
 	expect(gitText(created.worktreePath, "symbolic-ref", "--short", "HEAD")).toBe(created.branch);
 	const listed = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
 	expect(listed.find((workspace) => workspace.id === created.id)).toMatchObject(renamed);
+});
+
+test("session.rename persists a bounded title into a closed Pi transcript", async () => {
+	const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
+	const agentDir = join(dataDir, "rename-agent");
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	try {
+		const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+		const workspace = rows[0];
+		if (!workspace) throw new Error("expected a workspace");
+		const fixture = writeFixtureSession(defaultSessionDirFor(agentDir, workspace.worktreePath), {
+			cwd: workspace.worktreePath,
+			name: "Before rename",
+			messages: [{ role: "user", text: "hello", timestamp: Date.now() }],
+		});
+
+		expect(
+			await handleRequest(
+				"session.rename",
+				{ workspaceId: workspace.id, sessionId: fixture.id, title: "  After\r\nrename  " },
+				CTX,
+			),
+		).toEqual({ ok: true });
+		expect(SessionManager.open(fixture.path).getSessionName()).toBe("After rename");
+		await expect(
+			handleRequest(
+				"session.rename",
+				{ workspaceId: workspace.id, sessionId: fixture.id, title: " \n " },
+				CTX,
+			),
+		).rejects.toThrow("Invalid session title");
+		await expect(
+			handleRequest(
+				"session.rename",
+				{ workspaceId: workspace.id, sessionId: fixture.id, title: "x".repeat(81) },
+				CTX,
+			),
+		).rejects.toThrow("Invalid session title");
+	} finally {
+		if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+	}
 });
 
 test("workspace.setSubagentsOverride persists on/off and null restores the global default", async () => {
