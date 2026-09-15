@@ -54,12 +54,7 @@ import { QueueStrip } from "./QueueStrip";
 import { estimateChatRowHeights, type RowHeightEstimateCache } from "./rowHeightEstimates";
 import { type ChatRow, deriveRows, projectRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
-import {
-	CHAT_STATUS_SLOT_HEIGHT,
-	type StreamStatus,
-	StreamStatusSlot,
-	streamStatus,
-} from "./StreamIndicator";
+import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
 import { SubagentTranscriptDialog } from "./SubagentTranscriptDialog";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { useModelCatalog } from "./useModelCatalog";
@@ -892,15 +887,15 @@ export default function ChatView({
 										? "w-full"
 										: "w-[var(--chat-transcript-width)] min-w-full max-w-none",
 								)}
-								initialTopMostItemIndex={
-									chatMessageOrder === "newest-first"
-										? { index: 0, align: "start", offset: -CHAT_STATUS_SLOT_HEIGHT }
-										: {
+								{...(chatMessageOrder === "oldest-first"
+									? {
+											initialTopMostItemIndex: {
 												index: Math.max(rows.length - 1, 0),
-												align: "end",
+												align: "end" as const,
 												offset: CHAT_LATEST_EDGE_MARGIN,
-											}
-								}
+											},
+										}
+									: {})}
 								followOutput={followOutput}
 								rangeChanged={({ startIndex }) => {
 									const localIndex = startIndex - firstItemIndex;
