@@ -2,6 +2,7 @@ import type { PiEvent, TranscriptMessage, Workspace } from "@thinkrail/contracts
 import { getSessionMessages, getSessionName, renameSession } from "../agent";
 import {
 	extractFirstTurn,
+	hasEligibleChatTitlePrompt,
 	naiveChatTitle,
 	naiveWorkspaceName,
 	suggestChatTitle,
@@ -33,14 +34,19 @@ export type TranscriptReader = () => Promise<TranscriptMessage[]>;
 export type ChatTitleWriter = typeof renameSession;
 export type ChatTitleReader = (sessionId: string) => string | undefined;
 
+export interface ChatAutoNameOptions {
+	priorMessages: readonly TranscriptMessage[];
+	writeTitle?: ChatTitleWriter;
+	readTitle?: ChatTitleReader;
+}
+
 export async function maybeAutoNameChat(
 	sessionId: string,
 	workspaceId: string,
 	firstPrompt: string,
-	writeTitle: ChatTitleWriter = renameSession,
-	readTitle: ChatTitleReader = getSessionName,
+	{ priorMessages, writeTitle = renameSession, readTitle = getSessionName }: ChatAutoNameOptions,
 ): Promise<boolean> {
-	if (readTitle(sessionId) !== undefined) return false;
+	if (readTitle(sessionId) !== undefined || hasEligibleChatTitlePrompt(priorMessages)) return false;
 	const fallback = naiveChatTitle(firstPrompt);
 	if (!fallback || chatTitleInFlight.has(sessionId)) return false;
 	chatTitleInFlight.add(sessionId);

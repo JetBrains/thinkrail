@@ -32,7 +32,9 @@ no wire method; consumers are host-side flows.
     commit, and status wording. Output normalization strips wrappers, folds whitespace, preserves useful
     casing/punctuation, and clamps to contracts' session-title maximum. `naiveChatTitle(firstPrompt)` is the
     pure word-boundary fallback (up to six words / 48 characters); blank or punctuation/image-only input
-    returns `null`, leaving the caller free to try a later text prompt.
+    returns `null`, leaving the caller free to try a later text prompt. `hasEligibleChatTitlePrompt(messages)`
+    applies that same eligibility rule to canonical user-message text while excluding internal control
+    prompts, so the host can tell whether a durable earlier turn already consumed the one automatic attempt.
   - `toWorkspaceName(raw)` — pure model-output → safe display-name normalization (strip wrapping
     quotes/backticks, drop other punctuation to spaces, collapse whitespace, clamp words + length) that
     **preserves the model's casing** (so `Add OAuth login` survives).
@@ -50,10 +52,12 @@ no wire method; consumers are host-side flows.
     caller's job.
   - `setOneShotRunner(fn)` — a test seam swapping the one-shot runner (default = `agent.completeOnce`) so
     tasks unit-test against a fake with no pi/auth/network.
-- **Public surface (barrel):** `extractFirstTurn`, `naiveChatTitle`, `naiveWorkspaceName`, `setOneShotRunner`,
-  `suggestChatTitle`, `suggestWorkspaceName`, `toWorkspaceName`, `OneShotRunner`, `WorkspaceNameTurn`.
+- **Public surface (barrel):** `extractFirstTurn`, `hasEligibleChatTitlePrompt`, `naiveChatTitle`,
+  `naiveWorkspaceName`, `setOneShotRunner`, `suggestChatTitle`, `suggestWorkspaceName`, `toWorkspaceName`,
+  `OneShotRunner`, `WorkspaceNameTurn`.
 - **Allowed deps:** `agent` (the `completeOnce`/`OneShotRequest`/`OneShotResult` primitive, via its
-  barrel); `contracts` (`Message`/`UserMessage`/`AssistantMessage`/`TextContent`); Node.
+  barrel); `contracts` (`Message`/`UserMessage`/`AssistantMessage`/`TextContent`, session-title normalization,
+  and `isControlMessage`); Node.
 - **Forbidden:** `host`; **`@earendil-works/pi-ai` / `pi-coding-agent` directly** (model access + dispatch
   belong to `agent`); reaching into another feature's internals.
 

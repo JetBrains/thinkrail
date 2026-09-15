@@ -725,12 +725,17 @@ agent or resolving a model. Both paths publish the same `session_info_changed` P
 `SessionSummary.title` remains the hydration projection.
 
 `getSessionName(sessionId)` exposes only a live session's current Pi name so the host can skip title-model
-work once one exists; the guarded write remains authoritative across the async race. `onlyIfUnnamed` performs
-the check immediately beside the append and is the auto-title compare-and-set; the manual wire mutation is
-unconditional. Thus an async helper cannot overwrite a durable name that landed while
-it was running. No generated/manual provenance or title sidecar belongs here—the absent-vs-present pi name is
-sufficient because automatic naming gets one opportunity. The architecture's accepted no-cross-process
-coordination rule still applies.
+work once one exists. `getSessionMessagesSnapshot(sessionId)` returns a copied, renderable-role view of that
+same live Pi transcript without attaching or awaiting; the host captures it before dispatch solely to decide,
+after acceptance, whether an earlier title-eligible prompt already consumed automatic naming. A reattached
+session therefore carries that decision through a host restart without title provenance or a sidecar.
+
+The guarded write remains authoritative across the async race. `onlyIfUnnamed` performs the check immediately
+beside the append and is the auto-title compare-and-set; the manual wire mutation is unconditional. Thus an
+async helper cannot overwrite a durable name that landed while it was running. No generated/manual provenance
+or title sidecar belongs here—the absent-vs-present pi name plus the durable transcript are sufficient because
+automatic naming gets one opportunity. The architecture's accepted no-cross-process coordination rule still
+applies.
 
 ## Get right
 

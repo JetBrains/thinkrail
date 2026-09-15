@@ -423,6 +423,16 @@ export function getSessionName(sessionId: string): string | undefined {
 	return sessions.get(sessionId)?.session.sessionName;
 }
 
+function transcriptMessages(session: AgentSession): TranscriptMessage[] {
+	return session.messages.filter((message) =>
+		isTranscriptMessageRole(message.role),
+	) as TranscriptMessage[];
+}
+
+export function getSessionMessagesSnapshot(sessionId: string): TranscriptMessage[] {
+	return transcriptMessages(mustGet(sessionId));
+}
+
 export async function reloadSessionResources(sessionId: string): Promise<void> {
 	const session = mustGet(sessionId);
 	if (session.isStreaming) {
@@ -959,10 +969,7 @@ async function getSessionMessagesInternal(
 		entry = sessions.get(sessionId);
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
-	const messages = entry.session.messages.filter((m) =>
-		isTranscriptMessageRole(m.role),
-	) as TranscriptMessage[];
-	return { summary: summaryOf(sessionId, entry), messages };
+	return { summary: summaryOf(sessionId, entry), messages: transcriptMessages(entry.session) };
 }
 
 export function getSessionMessages(
