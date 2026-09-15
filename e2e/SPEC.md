@@ -79,6 +79,8 @@ therefore proven through every composition root.
 
 Resource wire coverage opens persisted chat fixtures through the real UI and checks the authoritative
 catalog's session/workspace scope, missing-output result, unavailable controls and empty stop-all.
+Its wire connection uses the launched page's port, not the source host's fixed port: binary and
+packaged-desktop adapters launch different endpoints for the same test.
 Historical fixtures are seeded before entering their workspace, so discovery does not race a just-created
 placement's persistence during browser reload. It never seeds a running resource or turns transcript
 text into execution authority. The empty-catalog UI probes cover keyboard focus, narrow layouts,
