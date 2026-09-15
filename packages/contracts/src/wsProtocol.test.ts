@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
-import * as protocol from "./wsProtocol";
 import {
 	ACTIVITY_PROTOCOL_VERSION,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
+	normalizeSessionTitle,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	SESSION_RENAME_PROTOCOL_VERSION,
+	SESSION_TITLE_MAX_LENGTH,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
@@ -52,23 +54,17 @@ test("host update advisories advance the protocol with an immutable notice chann
 });
 
 test("session rename is versioned and bounded", () => {
-	const sessionRenameVersion = Reflect.get(protocol, "SESSION_RENAME_PROTOCOL_VERSION");
-	expect(sessionRenameVersion).toBe(65);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(sessionRenameVersion);
-	expect(Reflect.get(protocol, "SESSION_TITLE_MAX_LENGTH")).toBe(80);
-	expect(Reflect.get(WS_METHODS, "sessionRename")).toBe("session.rename");
+	expect(SESSION_RENAME_PROTOCOL_VERSION).toBe(65);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SESSION_RENAME_PROTOCOL_VERSION);
+	expect(SESSION_TITLE_MAX_LENGTH).toBe(80);
+	expect(WS_METHODS.sessionRename).toBe("session.rename");
 });
 
 test("session titles normalize to one bounded non-blank line", () => {
-	const normalize = Reflect.get(protocol, "normalizeSessionTitle") as
-		| ((value: unknown) => string | null)
-		| undefined;
-	expect(typeof normalize).toBe("function");
-	expect(normalize?.("  Fix auth\r\nredirect  ")).toBe("Fix auth redirect");
-	expect(normalize?.(" \n ")).toBeNull();
-	expect(() => normalize?.(null)).not.toThrow();
-	expect(normalize?.(null)).toBeNull();
-	expect(normalize?.(42)).toBeNull();
-	expect(normalize?.("x".repeat(80))).toBe("x".repeat(80));
-	expect(normalize?.("x".repeat(81))).toBeNull();
+	expect(normalizeSessionTitle("  Fix auth\r\nredirect  ")).toBe("Fix auth redirect");
+	expect(normalizeSessionTitle(" \n ")).toBeNull();
+	expect(normalizeSessionTitle(null)).toBeNull();
+	expect(normalizeSessionTitle(42)).toBeNull();
+	expect(normalizeSessionTitle("x".repeat(80))).toBe("x".repeat(80));
+	expect(normalizeSessionTitle("x".repeat(81))).toBeNull();
 });
