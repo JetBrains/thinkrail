@@ -205,7 +205,6 @@ export function useChatScroll(
 	const previousTouchScrollTop = useRef(0);
 	const programmaticScrollTop = useRef<number | null>(null);
 	const touchSettleTimer = useRef<number | null>(null);
-	const nativeInterruptionGeneration = useRef(0);
 	const nativeResume = useRef<(() => void) | null>(null);
 	const pendingImmediateTurn = useRef(false);
 	const observedLifecycle = useRef({ isStreaming, settlementTick });
@@ -313,16 +312,18 @@ export function useChatScroll(
 		resume?.();
 	}, []);
 
-	const pauseForNativeInput = useCallback(() => {
-		resumeNativeMotion();
-		const resume = controller.interruptForNativeInput();
-		nativeResume.current = resume;
-		return resume;
-	}, [controller, resumeNativeMotion]);
+	const pauseForNativeInput = useCallback(
+		(pauseState: "stationary" | "pending" = "stationary") => {
+			resumeNativeMotion();
+			const resume = controller.interruptForNativeInput(pauseState);
+			nativeResume.current = resume;
+			return resume;
+		},
+		[controller, resumeNativeMotion],
+	);
 
 	const clearReturnIntent = useCallback(() => {
 		resumeNativeMotion();
-		nativeInterruptionGeneration.current += 1;
 		returnIntentUntil.current = 0;
 		pointerIntentUntil.current = 0;
 		keyboardIntentUntil.current = 0;
@@ -378,25 +379,6 @@ export function useChatScroll(
 		cancelRowReveal();
 		controller.readerLeft();
 	}, [cancelRowReveal, clearReturnIntent, controller]);
-
-	const interruptForNativeInput = useCallback(
-		(scroller: HTMLElement) => {
-			const generation = nativeInterruptionGeneration.current + 1;
-			nativeInterruptionGeneration.current = generation;
-			const scrollTopBeforeInput = boundedScrollTop(scroller);
-			const resume = pauseForNativeInput();
-			requestAnimationFrame(() => {
-				if (
-					nativeInterruptionGeneration.current !== generation ||
-					Math.abs(boundedScrollTop(scroller) - scrollTopBeforeInput) > 1
-				)
-					return;
-				nativeResume.current = null;
-				resume();
-			});
-		},
-		[pauseForNativeInput],
-	);
 
 	const prepareFoldChange = useCallback(
 		(resolveTarget: FoldAnchorResolver) => {
@@ -675,6 +657,12 @@ export function useChatScroll(
 		};
 		const onScrollEnd = () => {
 			if (activePointerId.current !== null) return;
+			const now = performance.now();
+			if (
+				nativeResume.current !== null &&
+				(wheelIntentUntil.current > now || keyboardIntentUntil.current > now)
+			)
+				return;
 			if (touchMomentum.current) {
 				if (touchMovingTowardLatest.current === true || reachedLatestEdge(scrollerElement, edge)) {
 					settleTouch();
@@ -1035,12 +1023,12 @@ export function useChatScroll(
 			const intentUntil = performance.now() + 1_000;
 			wheelIntentUntil.current = intentUntil;
 			returnIntentUntil.current = movesTowardLatest ? intentUntil : 0;
-			interruptForNativeInput(scrollerElement);
+			pauseForNativeInput("pending");
 			scheduleTouchSettle(1_000);
 		};
 		scrollerElement.addEventListener("wheel", onWheel, { capture: true, passive: false });
 		return () => scrollerElement.removeEventListener("wheel", onWheel, { capture: true });
-	}, [edge, interruptForNativeInput, scheduleTouchSettle, scrollerElement]);
+	}, [edge, pauseForNativeInput, scheduleTouchSettle, scrollerElement]);
 
 	const onKeyDown = useCallback(
 		(event: KeyboardEvent) => {
@@ -1051,8 +1039,7 @@ export function useChatScroll(
 				wheelIntentUntil.current = 0;
 				returnIntentUntil.current = 0;
 				keyboardIntentUntil.current = performance.now() + NATIVE_SCROLL_INTENT_MS;
-				const scroller = scrollerRef.current;
-				if (scroller) interruptForNativeInput(scroller);
+				if (scrollerRef.current) pauseForNativeInput("pending");
 				scheduleTouchSettle(NATIVE_SCROLL_INTENT_MS);
 				return;
 			}
@@ -1086,10 +1073,10 @@ export function useChatScroll(
 			programmaticScrollTop.current = null;
 			keyboardIntentUntil.current = performance.now() + NATIVE_SCROLL_INTENT_MS;
 			returnIntentUntil.current = movesTowardHistory ? 0 : keyboardIntentUntil.current;
-			interruptForNativeInput(scroller);
+			pauseForNativeInput("pending");
 			scheduleTouchSettle(NATIVE_SCROLL_INTENT_MS);
 		},
-		[edge, interruptForNativeInput, scheduleTouchSettle, scrollToLatest],
+		[edge, pauseForNativeInput, scheduleTouchSettle, scrollToLatest],
 	);
 
 	useEffect(() => {

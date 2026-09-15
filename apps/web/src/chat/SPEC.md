@@ -394,11 +394,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Reader intent and exact-edge rearm** — wheel, trackpad, touch, scrollbar, and navigation-key input
   detaches only when it can cause or has caused real viewport movement; pushing outward against the current
   physical edge is a no-op. Potential native input pauses competing controller motion without changing
-  alignment; if no movement follows, alignment resumes on the next frame. Movement into history detaches
-  once; native movement that interrupts an active alignment also detaches even when directed toward latest,
-  unless that movement itself reaches the exact edge. Explicit text selection and user-invoked
-  message/history, breadcrumb, or tool-page navigation also
-  detach. Pointer provenance survives release long enough for native scrollbar-track animation, keyboard
+  alignment. An interrupted return remains logically moving while awaiting a wheel or navigation-key default
+  action; an explicit pointer hold is stationary. If no movement follows, alignment resumes after the bounded
+  input-intent window rather than on the next frame, because an embedded webview may apply default wheel
+  scrolling after that frame. Movement into history detaches once; native movement that interrupts an active
+  alignment also detaches even when directed toward latest, unless that movement itself reaches the exact edge.
+  Explicit text selection and user-invoked message/history, breadcrumb, or tool-page navigation also detach.
+  Pointer provenance survives release long enough for native scrollbar-track animation, keyboard
   provenance covers focus-induced scrolling from interactive transcript controls, and both expire on
   scroll-end or a bounded timeout so later geometry cannot inherit them. A return gesture rearms once only
   when it reaches the physical latest edge within the shared 1px geometry tolerance; directions invert with
