@@ -338,6 +338,27 @@ test("chat auto-name writes one generated title through the unnamed-only guard",
 	]);
 });
 
+test("chat auto-name skips model work when Pi already has a durable title", async () => {
+	const ws = await createWorkspace("p1");
+	const runner = fakeRunner("Should Not Run");
+	let writes = 0;
+
+	expect(
+		await maybeAutoNameChat(
+			"s-named",
+			ws.id,
+			"later prompt",
+			async () => {
+				writes += 1;
+				return false;
+			},
+			() => "Manual title",
+		),
+	).toBe(false);
+	expect(runner.calls()).toBe(0);
+	expect(writes).toBe(0);
+});
+
 test("chat auto-name persists a deterministic fallback when generation fails", async () => {
 	const ws = await createWorkspace("p1");
 	setOneShotRunner(async () => {

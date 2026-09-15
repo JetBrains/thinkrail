@@ -419,6 +419,10 @@ export function getSessionRuntimeGeneration(sessionId: string): PiRuntimeGenerat
 	return hasSession(sessionId) ? sessions.get(sessionId)?.generation : undefined;
 }
 
+export function getSessionName(sessionId: string): string | undefined {
+	return sessions.get(sessionId)?.session.sessionName;
+}
+
 export async function reloadSessionResources(sessionId: string): Promise<void> {
 	const session = mustGet(sessionId);
 	if (session.isStreaming) {

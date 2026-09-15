@@ -724,8 +724,10 @@ session opens its exact transcript with `SessionManager.open(...).appendSessionI
 agent or resolving a model. Both paths publish the same `session_info_changed` Pi event, while
 `SessionSummary.title` remains the hydration projection.
 
-`onlyIfUnnamed` performs the check immediately beside the append and is the auto-title compare-and-set; the
-manual wire mutation is unconditional. Thus an async helper cannot overwrite a durable name that landed while
+`getSessionName(sessionId)` exposes only a live session's current Pi name so the host can skip title-model
+work once one exists; the guarded write remains authoritative across the async race. `onlyIfUnnamed` performs
+the check immediately beside the append and is the auto-title compare-and-set; the manual wire mutation is
+unconditional. Thus an async helper cannot overwrite a durable name that landed while
 it was running. No generated/manual provenance or title sidecar belongs here—the absent-vs-present pi name is
 sufficient because automatic naming gets one opportunity. The architecture's accepted no-cross-process
 coordination rule still applies.
