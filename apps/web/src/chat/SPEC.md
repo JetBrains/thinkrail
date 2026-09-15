@@ -807,11 +807,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `/name <title>` beside `/compact`, labelled `Pi/built-in` and reserved over an exact-name extension or
   prompt-template collision to match pi's own command. The parser reserves both bare `/name` and
   `/name <title>`; a valid argument bypasses the user-message echo and agent send, calls `session.rename`,
-  then clears the composer. Blank/over-limit input stays in the composer with an actionable validation error; transport rejection keeps
-  the durable title unchanged and surfaces as an in-chat error. The command is hidden against a host older
-  than the session-rename feature constant. It is the keyboard path to the same domain mutation as the shell's
-  tab/history controls—never a separate title source—and automatic generation has no ChatView spinner or
-  transcript row.
+  then clears the composer. Blank/over-limit input stays in the composer with an actionable validation error;
+  transport rejection keeps the durable title unchanged and surfaces as an in-chat error. The command is
+  hidden against a host older than the session-rename feature constant. It is the keyboard path to the same
+  domain mutation as the shell's tab/history controls—never a separate title source—and automatic generation
+  has no ChatView spinner or transcript row.
 - **Save-as-template + template management** (`TemplateEditorDialog.tsx`; `HistoryOverlay`'s save action;
   `panels/TemplatesSettings.tsx`) — one shared create/edit surface for prompt-template files, reused by two
   entry points that never talk to each other: the Settings → Templates panel (list + New/Edit/Delete, see
