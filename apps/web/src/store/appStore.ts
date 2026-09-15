@@ -17,6 +17,8 @@ import type {
 	ReviewSnapshot,
 	SessionActivity,
 	SessionActivityPayload,
+	SessionAttentionPayload,
+	SessionAttention as SessionAttentionRow,
 	SessionEventPayload,
 	SessionQueueState,
 	SessionStats,
@@ -289,6 +291,18 @@ export interface WorkspaceActivity {
 	sessions: Record<string, ActivityStatus>;
 }
 
+export interface SessionAttentionState {
+	attentionId: string;
+	requiredConnectionGeneration: number;
+	requiredHydrationEpoch: number;
+	requiredEventRevision: number | null;
+}
+
+export interface WorkspaceAttention {
+	projectId: string;
+	sessions: Record<string, SessionAttentionState>;
+}
+
 export interface Toast {
 	id: string;
 	variant: "error" | "success" | "info";
@@ -336,6 +350,7 @@ export interface SessionRuntime {
 	thinkingLevel: ThinkingLevel;
 	eventRevision: number;
 	syncedConnectionGeneration: number;
+	attentionReconciledEpoch: number;
 	stats: SessionStats | null;
 	commands: SlashCommandInfo[];
 	draft: string;
@@ -366,6 +381,7 @@ function newRuntime(
 		thinkingLevel,
 		eventRevision: 0,
 		syncedConnectionGeneration,
+		attentionReconciledEpoch: 0,
 		stats: null,
 		commands: [],
 		draft: "",
@@ -770,6 +786,8 @@ interface AppState {
 	worktreeCreationsByProject: Record<string, number>;
 	deletedSessionsByWorkspace: Record<string, Record<string, true>>;
 	activityByWorkspace: Record<string, WorkspaceActivity>;
+	attentionByWorkspace: Record<string, WorkspaceAttention>;
+	attentionHydrationEpoch: number;
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
 	sessions: Record<string, SessionRuntime>;
@@ -955,6 +973,8 @@ interface AppState {
 	noteClosedChats: (workspaceId: string, entries: ClosedChat[]) => void;
 	hydrateSessionActivity: (rows: SessionActivity[]) => void;
 	applySessionActivity: (payload: SessionActivityPayload) => void;
+	hydrateSessionAttention: (rows: SessionAttentionRow[]) => void;
+	applySessionAttention: (payload: SessionAttentionPayload) => void;
 	hydrateSession: (
 		summary: SessionSummary,
 		hydrated: HydratedRuntime,
@@ -967,6 +987,7 @@ interface AppState {
 		hydrated: HydratedRuntime,
 		expectedEventRevision: number,
 		connectionGeneration: number,
+		attentionHydrationEpoch?: number,
 	) => boolean;
 	appendUserMessage: (sessionId: string, text: string, attachments?: ChatAttachment[]) => void;
 	appendErrorTurn: (sessionId: string, text: string) => void;
@@ -1164,6 +1185,58 @@ function withoutSessionActivity(
 			Object.keys(sessions).length === 0
 				? omitKey(s.activityByWorkspace, workspaceId)
 				: { ...s.activityByWorkspace, [workspaceId]: { ...current, sessions } },
+	};
+}
+
+function sameSessionAttention(
+	before: SessionAttentionState,
+	after: SessionAttentionState,
+): boolean {
+	return (
+		before.attentionId === after.attentionId &&
+		before.requiredConnectionGeneration === after.requiredConnectionGeneration &&
+		before.requiredHydrationEpoch === after.requiredHydrationEpoch &&
+		before.requiredEventRevision === after.requiredEventRevision
+	);
+}
+
+function sameAttentionMap(
+	prev: Record<string, WorkspaceAttention>,
+	next: Record<string, WorkspaceAttention>,
+): boolean {
+	const workspaceIds = Object.keys(prev);
+	if (workspaceIds.length !== Object.keys(next).length) return false;
+	return workspaceIds.every((workspaceId) => {
+		const before = prev[workspaceId];
+		const after = next[workspaceId];
+		if (!before || !after || before.projectId !== after.projectId) return false;
+		const sessionIds = Object.keys(before.sessions);
+		return (
+			sessionIds.length === Object.keys(after.sessions).length &&
+			sessionIds.every((sessionId) => {
+				const beforeSession = before.sessions[sessionId];
+				const afterSession = after.sessions[sessionId];
+				return (
+					!!beforeSession && !!afterSession && sameSessionAttention(beforeSession, afterSession)
+				);
+			})
+		);
+	});
+}
+
+function withoutSessionAttention(
+	s: AppState,
+	workspaceId: string,
+	sessionId: string,
+): Pick<AppState, "attentionByWorkspace"> {
+	const current = s.attentionByWorkspace[workspaceId];
+	if (!current) return { attentionByWorkspace: s.attentionByWorkspace };
+	const sessions = omitKey(current.sessions, sessionId);
+	return {
+		attentionByWorkspace:
+			Object.keys(sessions).length === 0
+				? omitKey(s.attentionByWorkspace, workspaceId)
+				: { ...s.attentionByWorkspace, [workspaceId]: { ...current, sessions } },
 	};
 }
 
@@ -1367,6 +1440,7 @@ function withoutChat(
 	const hasRuntime = s.sessions[sessionId] !== undefined;
 	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
 	const hasActivity = s.activityByWorkspace[workspaceId]?.sessions[sessionId] !== undefined;
+	const hasAttention = s.attentionByWorkspace[workspaceId]?.sessions[sessionId] !== undefined;
 	const targetsLocation =
 		s.chatLocationRequest?.workspaceId === workspaceId &&
 		s.chatLocationRequest.sessionId === sessionId;
@@ -1380,6 +1454,7 @@ function withoutChat(
 		alreadyDeleted &&
 		sessionTabs.length === 0 &&
 		!hasActivity &&
+		!hasAttention &&
 		!inHistory &&
 		!hasRuntime &&
 		!hasSkillBaseline &&
@@ -1448,6 +1523,7 @@ function withoutChat(
 			: {}),
 		...(hasRuntime ? { sessions: omitKey(s.sessions, sessionId) } : {}),
 		...(hasActivity ? withoutSessionActivity(s, workspaceId, sessionId) : {}),
+		...(hasAttention ? withoutSessionAttention(s, workspaceId, sessionId) : {}),
 		...(hasSkillBaseline
 			? { skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId) }
 			: {}),
@@ -1644,6 +1720,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workspaces: {},
 	removedWorkspaceIds: Object.create(null) as Record<string, true>,
 	activityByWorkspace: Object.create(null) as Record<string, WorkspaceActivity>,
+	attentionByWorkspace: Object.create(null) as Record<string, WorkspaceAttention>,
+	attentionHydrationEpoch: 0,
 	expandedProjectIds: Object.create(null) as Record<string, true>,
 	selectedProjectId: null,
 	activeWorkspaceId: null,
@@ -1826,6 +1904,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				),
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
 				activityByWorkspace: omitKey(state.activityByWorkspace, workspaceId),
+				attentionByWorkspace: omitKey(state.attentionByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
@@ -2779,6 +2858,89 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
+	hydrateSessionAttention: (rows) =>
+		set((s) => {
+			const epoch = s.attentionHydrationEpoch + 1;
+			const next: Record<string, WorkspaceAttention> = Object.create(null);
+			for (const row of rows) {
+				if (s.removedWorkspaceIds[row.workspaceId]) continue;
+				if (isSessionDeleted(s, row.workspaceId, row.sessionId)) continue;
+				const forWorkspace =
+					next[row.workspaceId] ??
+					({ projectId: row.projectId, sessions: Object.create(null) } as WorkspaceAttention);
+				forWorkspace.sessions[row.sessionId] = {
+					attentionId: row.attentionId,
+					requiredConnectionGeneration: s.connectionGeneration,
+					requiredHydrationEpoch: epoch,
+					requiredEventRevision: null,
+				};
+				next[row.workspaceId] = forWorkspace;
+			}
+			return {
+				attentionHydrationEpoch: epoch,
+				...(sameAttentionMap(s.attentionByWorkspace, next) ? {} : { attentionByWorkspace: next }),
+			};
+		}),
+	applySessionAttention: ({ workspaceId, projectId, sessionId, attentionId }) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const currentWorkspace = s.attentionByWorkspace[workspaceId];
+			const current = currentWorkspace?.sessions[sessionId];
+			if (attentionId === null || isSessionDeleted(s, workspaceId, sessionId)) {
+				if (!current) return {};
+				return withoutSessionAttention(s, workspaceId, sessionId);
+			}
+			const runtime = s.sessions[sessionId];
+			const runtimeReady =
+				runtime !== undefined && runtime.syncedConnectionGeneration >= s.connectionGeneration;
+			const requiresReconcile = !runtimeReady;
+			const epoch = requiresReconcile ? s.attentionHydrationEpoch + 1 : s.attentionHydrationEpoch;
+			const incoming: SessionAttentionState = {
+				attentionId,
+				requiredConnectionGeneration: s.connectionGeneration,
+				requiredHydrationEpoch: requiresReconcile ? epoch : 0,
+				requiredEventRevision: runtimeReady ? runtime.eventRevision : null,
+			};
+			const next =
+				current?.attentionId === attentionId
+					? {
+							attentionId,
+							requiredConnectionGeneration: Math.max(
+								current.requiredConnectionGeneration,
+								incoming.requiredConnectionGeneration,
+							),
+							requiredHydrationEpoch: Math.max(
+								current.requiredHydrationEpoch,
+								incoming.requiredHydrationEpoch,
+							),
+							requiredEventRevision:
+								current.requiredEventRevision === null
+									? incoming.requiredEventRevision
+									: incoming.requiredEventRevision === null
+										? current.requiredEventRevision
+										: Math.max(current.requiredEventRevision, incoming.requiredEventRevision),
+						}
+					: incoming;
+			if (
+				current &&
+				sameSessionAttention(current, next) &&
+				currentWorkspace?.projectId === projectId
+			) {
+				return requiresReconcile && epoch !== s.attentionHydrationEpoch
+					? { attentionHydrationEpoch: epoch }
+					: {};
+			}
+			return {
+				...(epoch !== s.attentionHydrationEpoch ? { attentionHydrationEpoch: epoch } : {}),
+				attentionByWorkspace: {
+					...s.attentionByWorkspace,
+					[workspaceId]: {
+						projectId,
+						sessions: { ...currentWorkspace?.sessions, [sessionId]: next },
+					},
+				},
+			};
+		}),
 	noteClosedChats: (workspaceId, entries) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
@@ -2902,7 +3064,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 		});
 		replayExtUiOrphans(summary.sessionId, set, get);
 	},
-	reconcileSession: (summary, hydrated, expectedEventRevision, connectionGeneration) => {
+	reconcileSession: (
+		summary,
+		hydrated,
+		expectedEventRevision,
+		connectionGeneration,
+		attentionHydrationEpoch = 0,
+	) => {
 		let applied = false;
 		set((s) => {
 			const current = s.sessions[summary.sessionId];
@@ -2932,6 +3100,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				syncedConnectionGeneration: Math.max(
 					current.syncedConnectionGeneration,
 					connectionGeneration,
+				),
+				attentionReconciledEpoch: Math.max(
+					current.attentionReconciledEpoch,
+					attentionHydrationEpoch,
 				),
 				...(hydrated.turnIdByMessageIndex
 					? { turnIdByMessageIndex: hydrated.turnIdByMessageIndex }

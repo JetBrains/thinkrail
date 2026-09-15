@@ -7,6 +7,7 @@ import type {
 	ReviewChangedPayload,
 	ServerWelcome,
 	SessionActivityPayload,
+	SessionAttentionPayload,
 	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
@@ -14,9 +15,14 @@ import type {
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
 } from "@thinkrail/contracts";
-import { ACTIVITY_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import {
+	ACTIVITY_PROTOCOL_VERSION,
+	ATTENTION_PROTOCOL_VERSION,
+	WS_CHANNELS,
+} from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { createActivityHydration } from "./activityHydration";
+import { createAttentionHydration } from "./attentionHydration";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
@@ -26,10 +32,41 @@ export function supportsSessionActivity(protocolVersion: number | null): boolean
 	return protocolVersion !== null && protocolVersion >= ACTIVITY_PROTOCOL_VERSION;
 }
 
+export function supportsSessionAttention(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= ATTENTION_PROTOCOL_VERSION;
+}
+
 const activityHydration = createActivityHydration({
 	apply: (payload) => useAppStore.getState().applySessionActivity(payload),
 	hydrate: (rows) => useAppStore.getState().hydrateSessionActivity(rows),
 });
+
+const attentionHydration = createAttentionHydration({
+	apply: (payload) => useAppStore.getState().applySessionAttention(payload),
+	hydrate: (rows) => useAppStore.getState().hydrateSessionAttention(rows),
+});
+
+function refreshSessionAttention(connectionGeneration: number): void {
+	const state = useAppStore.getState();
+	if (!supportsSessionAttention(state.protocolVersion)) {
+		attentionHydration.abandon();
+		state.hydrateSessionAttention([]);
+		return;
+	}
+	const token = attentionHydration.begin();
+	const current = (): boolean =>
+		isConnectedGeneration(useAppStore.getState(), connectionGeneration);
+	void getTransport()
+		.request("session.attentionList", {})
+		.then((rows) => {
+			if (current()) attentionHydration.settle(token, rows);
+			else attentionHydration.discard(token);
+		})
+		.catch(() => {
+			if (current()) attentionHydration.fail(token);
+			else attentionHydration.discard(token);
+		});
+}
 
 function refreshSessionActivity(connectionGeneration: number): void {
 	const state = useAppStore.getState();
@@ -110,6 +147,7 @@ export function initTransport(): WsTransport {
 			);
 		refreshLoadedWorkspaceLists(useAppStore.getState().connectionGeneration);
 		refreshSessionActivity(useAppStore.getState().connectionGeneration);
+		refreshSessionAttention(useAppStore.getState().connectionGeneration);
 	});
 
 	transport.subscribe(WS_CHANNELS.hostUpdateAvailable, (data) => {
@@ -144,6 +182,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.sessionActivity, (data) => {
 		activityHydration.push(data as SessionActivityPayload);
+	});
+
+	transport.subscribe(WS_CHANNELS.sessionAttention, (data) => {
+		attentionHydration.push(data as SessionAttentionPayload);
 	});
 
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {

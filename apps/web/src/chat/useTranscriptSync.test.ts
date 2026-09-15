@@ -22,6 +22,7 @@ function runtime(overrides: Partial<SessionRuntime> = {}): SessionRuntime {
 		thinkingLevel: "medium",
 		eventRevision: 0,
 		syncedConnectionGeneration: 4,
+		attentionReconciledEpoch: 0,
 		stats: null,
 		commands: [],
 		draft: "",
@@ -52,9 +53,26 @@ test("transcriptSyncNeed requests an authoritative read for an older connection 
 	expect(transcriptSyncNeed(runtime(), 4)).toBeNull();
 	expect(transcriptSyncNeed(runtime(), 5)).toEqual({
 		connectionGeneration: 5,
+		attentionHydrationEpoch: 0,
 		compactionTurnId: null,
 		reason: "reconnect",
 	});
+});
+
+test("transcriptSyncNeed requires a read started after the attention snapshot epoch", () => {
+	const attention = {
+		attentionId: "candidate-1",
+		requiredConnectionGeneration: 4,
+		requiredHydrationEpoch: 7,
+		requiredEventRevision: null,
+	};
+	expect(transcriptSyncNeed(runtime(), 4, attention)).toEqual({
+		connectionGeneration: null,
+		attentionHydrationEpoch: 7,
+		compactionTurnId: null,
+		reason: "attention",
+	});
+	expect(transcriptSyncNeed(runtime({ attentionReconciledEpoch: 7 }), 4, attention)).toBeNull();
 });
 
 test("transcriptSyncNeed recognizes only successful live compactions without a durable summary", () => {
@@ -66,6 +84,7 @@ test("transcriptSyncNeed recognizes only successful live compactions without a d
 	};
 	expect(transcriptSyncNeed(runtime({ turns: [liveDone] }), 4)).toEqual({
 		connectionGeneration: null,
+		attentionHydrationEpoch: 0,
 		compactionTurnId: "live-done",
 		reason: "compaction",
 	});
@@ -106,7 +125,7 @@ test("synchronizeTranscript compare-and-installs one canonical snapshot", async 
 	);
 
 	expect(outcome).toBe("applied");
-	expect(installed).toEqual([hostSummary, hydrated, 9, 6]);
+	expect(installed).toEqual([hostSummary, hydrated, 9, 6, 0]);
 });
 
 test("synchronizeTranscript defers a reconnect-only streaming snapshot without hydrating it", async () => {
@@ -246,6 +265,7 @@ test("transcriptSyncNeed combines reconnect and compaction into one read", () =>
 		),
 	).toEqual({
 		connectionGeneration: 8,
+		attentionHydrationEpoch: 0,
 		compactionTurnId: "compact-1",
 		reason: "reconnect",
 	});

@@ -34,6 +34,7 @@ import {
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectLastOpenChatSession,
+	selectReadySessionAttentionId,
 	selectSkillsStale,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
@@ -143,6 +144,8 @@ beforeEach(() => {
 		closedChatsByWorkspace: {},
 		deletedSessionsByWorkspace: {},
 		activityByWorkspace: {},
+		attentionByWorkspace: {},
+		attentionHydrationEpoch: 0,
 		fsChangesByWorkspace: {},
 		skillChangeTickByWorkspace: {},
 		skillsSyncedTickBySession: {},
@@ -3434,6 +3437,64 @@ const summaryFor = (sessionId: string, live: boolean): SessionSummary => ({
 	messageCount: 0,
 	updatedAt: 0,
 	live,
+});
+
+test("attention snapshots require a post-epoch transcript while live pushes preserve strict readiness", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({ status: "connected", connectionGeneration: 2 });
+	s().openChatSession("ws1", "attention-1", null, "medium");
+	s().hydrateSessionAttention([
+		{
+			workspaceId: "ws1",
+			projectId: "project-1",
+			sessionId: "attention-1",
+			attentionId: "candidate-1",
+		},
+	]);
+	const snapshot = s().attentionByWorkspace.ws1?.sessions["attention-1"];
+	expect(snapshot?.requiredHydrationEpoch).toBe(1);
+	expect(selectReadySessionAttentionId(s(), "ws1", "attention-1")).toBeNull();
+
+	s().applySessionAttention({
+		workspaceId: "ws1",
+		projectId: "project-1",
+		sessionId: "attention-1",
+		attentionId: "candidate-1",
+	});
+	expect(s().attentionByWorkspace.ws1?.sessions["attention-1"]?.requiredHydrationEpoch).toBe(1);
+
+	const runtime = rt("attention-1");
+	expect(
+		s().reconcileSession(
+			summaryFor("attention-1", true),
+			{ turns: [], toolResults: {}, askAnswers: {} },
+			runtime.eventRevision,
+			2,
+			1,
+		),
+	).toBe(true);
+	expect(selectReadySessionAttentionId(s(), "ws1", "attention-1")).toBe("candidate-1");
+
+	s().hydrateSessionAttention([]);
+	s().applySessionAttention({
+		workspaceId: "ws1",
+		projectId: "project-1",
+		sessionId: "attention-1",
+		attentionId: "candidate-live",
+	});
+	expect(selectReadySessionAttentionId(s(), "ws1", "attention-1")).toBe("candidate-live");
+
+	useAppStore.setState({ connectionGeneration: 3 });
+	s().applySessionAttention({
+		workspaceId: "ws1",
+		projectId: "project-1",
+		sessionId: "attention-1",
+		attentionId: "candidate-reconnect",
+	});
+	expect(selectReadySessionAttentionId(s(), "ws1", "attention-1")).toBeNull();
+	expect(s().attentionByWorkspace.ws1?.sessions["attention-1"]?.requiredConnectionGeneration).toBe(
+		3,
+	);
 });
 
 test("skills badge: a LIVE restore stays conservatively stale; a disk attach anchors to its load tick", () => {

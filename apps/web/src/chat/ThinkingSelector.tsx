@@ -11,6 +11,7 @@ export function ThinkingSelector({
 	container,
 	className,
 	showLabel = true,
+	onOpenChange,
 }: {
 	level: ThinkingLevel;
 	levels: readonly ThinkingLevel[];
@@ -18,10 +19,15 @@ export function ThinkingSelector({
 	container?: HTMLElement | null;
 	className?: string;
 	showLabel?: boolean;
+	onOpenChange?: (open: boolean) => void;
 }) {
 	const [open, setOpen] = useState(false);
+	const changeOpen = (next: boolean) => {
+		setOpen(next);
+		onOpenChange?.(next);
+	};
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
+		<Popover open={open} onOpenChange={changeOpen}>
 			<PopoverTrigger
 				data-testid="thinking-selector"
 				data-open={open}
@@ -45,7 +51,7 @@ export function ThinkingSelector({
 						aria-pressed={l === level}
 						onClick={() => {
 							onSelect(l);
-							setOpen(false);
+							changeOpen(false);
 						}}
 						className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] px-8 py-4 text-left tr-text-ui text-text-default capitalize outline-none transition-colors hover:bg-control-bg-hovered"
 					>

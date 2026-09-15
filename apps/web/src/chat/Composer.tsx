@@ -148,6 +148,7 @@ interface ComposerProps {
 	thinkingLevel: ThinkingLevel;
 	onMentionQuery: (query: string | null) => void;
 	onSlashActive: (active: boolean) => void;
+	onObscuredChange: (obscured: boolean) => void;
 	onSelectModel: (model: WireModel) => void;
 	onSelectThinking: (level: ThinkingLevel) => void;
 	onSubmit: (
@@ -188,6 +189,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		thinkingLevel,
 		onMentionQuery,
 		onSlashActive,
+		onObscuredChange,
 		onSelectModel,
 		onSelectThinking,
 		onSubmit,
@@ -214,6 +216,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
 	const [mentionDismissed, setMentionDismissed] = useState(false);
 	const [sendMenuOpen, setSendMenuOpen] = useState(false);
+	const [modelMenuOpen, setModelMenuOpen] = useState(false);
+	const [thinkingMenuOpen, setThinkingMenuOpen] = useState(false);
+	useEffect(() => {
+		if (!isStreaming) setSendMenuOpen(false);
+	}, [isStreaming]);
 	const recallIdxRef = useRef<number | null>(null);
 	const [slotSession, setSlotSession] = useState<TemplateSlotSessionState | null>(null);
 	const slots = slotSession?.slots ?? null;
@@ -347,6 +354,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	});
 
 	const menuOpen = mentionOpen || slashCompletion.open;
+	const slotHintOpen = slots !== null && !menuOpen;
+	const obscured =
+		menuOpen || slotHintOpen || (isStreaming && sendMenuOpen) || modelMenuOpen || thinkingMenuOpen;
+	useEffect(() => onObscuredChange(obscured), [obscured, onObscuredChange]);
+	useEffect(() => () => onObscuredChange(false), [onObscuredChange]);
 
 	const openHistory = () => {
 		setMentionDismissed(true);
@@ -533,6 +545,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		<div
 			data-testid="chat-composer"
 			data-expanded={expanded}
+			data-obscured={obscured || undefined}
 			data-streaming={isStreaming}
 			className="relative flex shrink-0 flex-col border-border-muted border-t bg-container-workspace-bg"
 		>
@@ -585,10 +598,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				/>
 			) : null}
 
-			{slots && !menuOpen ? (
+			{slotHintOpen ? (
 				<TemplateSlotHint
 					activeIndex={slotIdx}
-					count={slots.length}
+					count={slots?.length ?? 0}
 					onNext={() => stepSlot(1)}
 					className="absolute bottom-full left-12 mb-4"
 				/>
@@ -676,12 +689,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							refreshing={modelsRefreshing}
 							onRefresh={onRefreshModels}
 							onSelect={onSelectModel}
+							onOpenChange={setModelMenuOpen}
 							className="max-w-80 gap-4 px-4 sm:max-w-144"
 						/>
 						<ThinkingSelector
 							level={thinkingLevel}
 							levels={currentModel?.thinkingLevels ?? []}
 							onSelect={onSelectThinking}
+							onOpenChange={setThinkingMenuOpen}
 							showLabel={false}
 							className="gap-4 px-4"
 						/>

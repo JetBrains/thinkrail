@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { type SessionRuntime, toast, useAppStore } from "../store";
+import { type SessionAttentionState, type SessionRuntime, toast, useAppStore } from "../store";
 import {
 	type ConnectionStatus,
 	errorText,
@@ -9,8 +9,9 @@ import { messagesToRuntime } from "./hydrate";
 
 export interface TranscriptSyncNeed {
 	connectionGeneration: number | null;
+	attentionHydrationEpoch: number;
 	compactionTurnId: string | null;
-	reason: "compaction" | "reconnect";
+	reason: "attention" | "compaction" | "reconnect";
 }
 
 interface TranscriptSyncInput {
@@ -18,7 +19,8 @@ interface TranscriptSyncInput {
 	sessionId: string;
 	expectedEventRevision: number;
 	connectionGeneration: number;
-	reason: "compaction" | "reconnect";
+	attentionHydrationEpoch?: number;
+	reason: "attention" | "compaction" | "reconnect";
 }
 
 interface TranscriptSyncDependencies {
@@ -54,6 +56,7 @@ export async function synchronizeTranscript(
 		deps.hydrate(result.messages, result.summary.lastSettlement),
 		input.expectedEventRevision,
 		input.connectionGeneration,
+		input.attentionHydrationEpoch ?? 0,
 	);
 	if (applied) return "applied";
 	return result.summary.isStreaming ? "crossed-streaming" : "crossed-idle";
@@ -68,17 +71,25 @@ export function transcriptSyncRetryDelay(failureCount: number): number | null {
 export function transcriptSyncNeed(
 	runtime: SessionRuntime,
 	connectionGeneration: number,
+	attention: SessionAttentionState | null = null,
 ): TranscriptSyncNeed | null {
 	const compaction = runtime.turns.findLast(
 		(turn) => turn.kind === "compaction" && turn.status === "done" && turn.summary === undefined,
 	);
 	const generation =
 		runtime.syncedConnectionGeneration < connectionGeneration ? connectionGeneration : null;
-	if (generation === null && compaction === undefined) return null;
+	const attentionHydrationEpoch =
+		attention?.requiredConnectionGeneration === connectionGeneration &&
+		runtime.attentionReconciledEpoch < attention.requiredHydrationEpoch
+			? attention.requiredHydrationEpoch
+			: 0;
+	if (generation === null && attentionHydrationEpoch === 0 && compaction === undefined) return null;
 	return {
 		connectionGeneration: generation,
+		attentionHydrationEpoch,
 		compactionTurnId: compaction?.id ?? null,
-		reason: generation !== null ? "reconnect" : "compaction",
+		reason:
+			generation !== null ? "reconnect" : attentionHydrationEpoch > 0 ? "attention" : "compaction",
 	};
 }
 
@@ -88,6 +99,7 @@ export function useTranscriptSync({
 	runtime,
 	status,
 	connectionGeneration,
+	attention = null,
 	enabled = true,
 }: {
 	workspaceId: string;
@@ -95,13 +107,16 @@ export function useTranscriptSync({
 	runtime: SessionRuntime;
 	status: ConnectionStatus;
 	connectionGeneration: number;
+	attention?: SessionAttentionState | null;
 	enabled?: boolean;
 }): void {
 	const [retry, setRetry] = useState(0);
 	const waitingForIdle = useRef<{ key: string; eventRevision: number } | null>(null);
 	const failure = useRef<{ key: string; count: number } | null>(null);
-	const need = transcriptSyncNeed(runtime, connectionGeneration);
-	const needKey = need ? `${connectionGeneration}:${need.compactionTurnId ?? "generation"}` : null;
+	const need = transcriptSyncNeed(runtime, connectionGeneration, attention);
+	const needKey = need
+		? `${connectionGeneration}:${need.attentionHydrationEpoch}:${need.compactionTurnId ?? "generation"}`
+		: null;
 	const failureCount = failure.current?.key === needKey ? failure.current.count : 0;
 	const exhausted = failureCount > 0 && transcriptSyncRetryDelay(failureCount) === null;
 
@@ -122,6 +137,7 @@ export function useTranscriptSync({
 			sessionId,
 			expectedEventRevision,
 			connectionGeneration,
+			attentionHydrationEpoch: need?.attentionHydrationEpoch ?? 0,
 			reason: need?.reason ?? "reconnect",
 		})
 			.then((outcome) => {

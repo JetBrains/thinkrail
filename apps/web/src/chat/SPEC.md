@@ -320,8 +320,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   intended read (you returned to the chat that needs you), not just a side effect. It carries no store or
   transport state.
   This questionnaire focus attention is distinct from the app's binary **session-attention dot**. The
-  app-integration `ChatView` combines the shell's foreground/dialog exposure input with its own obscuring
-  overlays and acknowledges only after the candidate's transcript state has rendered; reconnect snapshots
+  app-integration `ChatView` combines foreground focus, the shared dialog-overlay registry, and its own
+  history/plan/composer popups into one exposure predicate, synchronously rechecked immediately before it
+  acknowledges a candidate whose transcript state has rendered; reconnect snapshots
   must first complete a candidate-newer reconciliation (see [[submodule-web-shell]]). It does not inspect the
   reason: blockers ignore acknowledgements host-side, while review clears globally. Scroll position is
   deliberately not a message-read receipt.

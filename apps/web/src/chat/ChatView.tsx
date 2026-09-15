@@ -10,6 +10,7 @@ import type {
 } from "@thinkrail/contracts";
 import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { dialogOverlayIsOpen, useDialogOverlayOpen } from "@/components/ui/dialog";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
@@ -18,8 +19,10 @@ import {
 	SettingsSection,
 	selectCatalogModel,
 	selectCompactionTurnIds,
+	selectReadySessionAttentionId,
 	selectSkillsStale,
 	selectWorkspaceById,
+	sessionAttention,
 	specPathMatcher,
 	toast,
 	useAppStore,
@@ -76,6 +79,28 @@ const CHAT_VIEWPORT_INCREASE = 800;
 const CHAT_MIN_OVERSCAN_ITEMS = 2;
 const CHAT_LATEST_EDGE_MARGIN = 8;
 const chatLocationRevealClaims = new WeakMap<object, object>();
+
+function pageIsFocused(): boolean {
+	return (
+		typeof document !== "undefined" && document.visibilityState === "visible" && document.hasFocus()
+	);
+}
+
+function usePageFocus(): boolean {
+	const [focused, setFocused] = useState(pageIsFocused);
+	useEffect(() => {
+		const update = () => setFocused(pageIsFocused());
+		window.addEventListener("focus", update);
+		window.addEventListener("blur", update);
+		document.addEventListener("visibilitychange", update);
+		return () => {
+			window.removeEventListener("focus", update);
+			window.removeEventListener("blur", update);
+			document.removeEventListener("visibilitychange", update);
+		};
+	}, []);
+	return focused;
+}
 
 function turnAnchorText(turn: ChatTurn): string {
 	if (turn.kind === "user") {
@@ -168,12 +193,23 @@ export default function ChatView({
 	const runtime = sessionRuntime ?? EMPTY_RUNTIME;
 	const status = useAppStore((s) => s.status);
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
+	const attention = useAppStore((s) =>
+		sessionAttention(s.attentionByWorkspace, workspaceId, sessionId),
+	);
+	const readyAttentionId = useAppStore((s) =>
+		selectReadySessionAttentionId(s, workspaceId, sessionId),
+	);
+	const settingsOpen = useAppStore((s) => s.settingsOpen);
+	const interviewPromptOpen = useAppStore((s) => s.interviewPromptOpen);
+	const pageFocused = usePageFocus();
+	const dialogOverlayOpen = useDialogOverlayOpen();
 	useTranscriptSync({
 		workspaceId,
 		sessionId,
 		runtime,
 		status,
 		connectionGeneration,
+		attention,
 		enabled: sessionRuntime !== undefined,
 	});
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
@@ -290,6 +326,7 @@ export default function ChatView({
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
 	const plan = useChatTodos(workspaceId, sessionId);
 	const [planOpen, setPlanOpen] = useState(false);
+	const [composerObscured, setComposerObscured] = useState(false);
 	const [slashActive, setSlashActive] = useState(false);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [templatesEmpty, setTemplatesEmpty] = useState(false);
@@ -346,8 +383,10 @@ export default function ChatView({
 		streamingResponseMovement,
 	);
 	const measureClassName = transcriptMeasureClassName(chatLineWidthBounded);
+	const chatViewElementRef = useRef<HTMLDivElement | null>(null);
 	const chatViewRef = useCallback(
 		(element: HTMLDivElement | null) => {
+			chatViewElementRef.current = element;
 			if (element) {
 				element.style.setProperty(
 					"--chat-transcript-width",
@@ -391,6 +430,49 @@ export default function ChatView({
 		moveSelection,
 		openMessage,
 	} = useHistorySearch(sessionId, workspaceId, projectId);
+	const historyOpenRequest = useAppStore((s) => s.historyOpenRequest);
+
+	const conversationExposed =
+		pageFocused &&
+		!dialogOverlayOpen &&
+		!settingsOpen &&
+		!interviewPromptOpen &&
+		!historyState.open &&
+		historyOpenRequest?.sessionId !== sessionId &&
+		!planOpen &&
+		!composerObscured &&
+		saveAsTemplateHit === null &&
+		transcriptChildId === null &&
+		!skillsOpen &&
+		pendingExtUi === null;
+	const attentionAttempt = useRef<string | null>(null);
+	useEffect(() => {
+		if (!conversationExposed || status !== "connected" || !readyAttentionId) {
+			if (!conversationExposed || !readyAttentionId) attentionAttempt.current = null;
+			return;
+		}
+		if (attentionAttempt.current === readyAttentionId) return;
+		if (
+			!pageIsFocused() ||
+			dialogOverlayIsOpen() ||
+			useAppStore.getState().historyOpenRequest?.sessionId === sessionId ||
+			chatViewElementRef.current?.querySelector(
+				'[data-testid="chat-composer"][data-obscured="true"]',
+			)
+		) {
+			return;
+		}
+		attentionAttempt.current = readyAttentionId;
+		void getTransport()
+			.request("session.acknowledgeAttention", {
+				workspaceId,
+				sessionId,
+				attentionId: readyAttentionId,
+			})
+			.catch(() => {
+				if (attentionAttempt.current === readyAttentionId) attentionAttempt.current = null;
+			});
+	}, [conversationExposed, readyAttentionId, sessionId, status, workspaceId]);
 
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const activeChatLocationReveal = useRef<typeof chatLocationRequest>(null);
@@ -724,7 +806,6 @@ export default function ChatView({
 		};
 	}, [chatLocationRequest, locationRowsReady, revealRow, sessionId, workspaceId]);
 
-	const historyOpenRequest = useAppStore((s) => s.historyOpenRequest);
 	const historyOverlayOpen = historyState.open;
 	useEffect(() => {
 		if (historyOpenRequest?.sessionId !== sessionId) return;
@@ -999,6 +1080,7 @@ export default function ChatView({
 							thinkingLevel={thinkingLevel}
 							onMentionQuery={onMentionQuery}
 							onSlashActive={setSlashActive}
+							onObscuredChange={setComposerObscured}
 							onSelectModel={onSelectModel}
 							onSelectThinking={onSelectThinking}
 							onSubmit={onSubmit}

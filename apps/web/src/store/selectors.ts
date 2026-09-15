@@ -24,9 +24,11 @@ import type {
 	ClosedChat,
 	EditorTab,
 	RouteChatTarget,
+	SessionAttentionState,
 	SessionRuntime,
 	TerminalTab,
 	WorkspaceActivity,
+	WorkspaceAttention,
 } from "./appStore";
 
 interface AnalyticsConsentState {
@@ -526,4 +528,76 @@ export function projectActivityRollup(
 		if (entry.projectId === projectId) records.push(entry.sessions);
 	}
 	return rollUp(records);
+}
+
+export type AttentionMap = Record<string, WorkspaceAttention>;
+
+export function sessionAttention(
+	attentionByWorkspace: AttentionMap,
+	workspaceId: string,
+	sessionId: string,
+): SessionAttentionState | null {
+	return attentionByWorkspace[workspaceId]?.sessions[sessionId] ?? null;
+}
+
+export function sessionNeedsAttention(
+	attentionByWorkspace: AttentionMap,
+	workspaceId: string,
+	sessionId: string,
+): boolean {
+	return sessionAttention(attentionByWorkspace, workspaceId, sessionId) !== null;
+}
+
+export function workspaceNeedsAttention(
+	attentionByWorkspace: AttentionMap,
+	workspaceId: string,
+): boolean {
+	return Object.keys(attentionByWorkspace[workspaceId]?.sessions ?? {}).length > 0;
+}
+
+export function projectNeedsAttention(
+	attentionByWorkspace: AttentionMap,
+	projectId: string,
+): boolean {
+	return Object.values(attentionByWorkspace).some(
+		(entry) => entry.projectId === projectId && Object.keys(entry.sessions).length > 0,
+	);
+}
+
+export function workspaceKnownChatCount(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	},
+	workspaceId: string,
+): number {
+	const ids = new Set(state.closedChatsByWorkspace[workspaceId]?.map((chat) => chat.sessionId));
+	for (const tab of state.tabsByWorkspace[workspaceId] ?? []) {
+		if (tab.kind === "chat") ids.add(tab.sessionId);
+	}
+	return ids.size;
+}
+
+export function selectReadySessionAttentionId(
+	state: {
+		attentionByWorkspace: AttentionMap;
+		connectionGeneration: number;
+		sessions: Record<string, SessionRuntime>;
+	},
+	workspaceId: string,
+	sessionId: string,
+): string | null {
+	const candidate = sessionAttention(state.attentionByWorkspace, workspaceId, sessionId);
+	const runtime = state.sessions[sessionId];
+	if (!candidate || !runtime) return null;
+	if (candidate.requiredConnectionGeneration !== state.connectionGeneration) return null;
+	if (runtime.syncedConnectionGeneration < state.connectionGeneration) return null;
+	if (runtime.attentionReconciledEpoch < candidate.requiredHydrationEpoch) return null;
+	if (
+		candidate.requiredEventRevision !== null &&
+		runtime.eventRevision < candidate.requiredEventRevision
+	) {
+		return null;
+	}
+	return candidate.attentionId;
 }

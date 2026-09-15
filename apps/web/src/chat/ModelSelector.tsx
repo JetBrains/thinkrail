@@ -39,6 +39,7 @@ export function ModelSelector({
 	placeholder,
 	defaultOption,
 	onSelectDefault,
+	onOpenChange,
 }: {
 	models: WireModel[];
 	current: WireModel | null;
@@ -50,20 +51,25 @@ export function ModelSelector({
 	placeholder?: string;
 	defaultOption?: string;
 	onSelectDefault?: () => void;
+	onOpenChange?: (open: boolean) => void;
 }) {
 	const [open, setOpen] = useState(false);
+	const changeOpen = (next: boolean) => {
+		setOpen(next);
+		onOpenChange?.(next);
+	};
 	const providers = [...new Set(models.map((m) => m.provider))];
 
 	const select = (model: WireModel) => {
 		onSelect(model);
-		setOpen(false);
+		changeOpen(false);
 	};
 
 	return (
 		<Popover
 			open={open}
 			onOpenChange={(next) => {
-				setOpen(next);
+				changeOpen(next);
 				if (next) onRefresh(false);
 			}}
 		>
@@ -92,7 +98,7 @@ export function ModelSelector({
 									data-testid="model-option-default"
 									onSelect={() => {
 										onSelectDefault();
-										setOpen(false);
+										changeOpen(false);
 									}}
 								>
 									<span className="flex w-14 shrink-0 justify-center">

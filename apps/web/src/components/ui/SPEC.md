@@ -15,7 +15,8 @@ The shadcn/ui primitives (Radix), copied in and owned here, themed with our desi
 
 - **Owns:** `button` (React-19 ref pass-through; `default`/`destructive`/`outline`/`ghost` variants —
   `destructive` is the red confirm for irreversible actions), `dialog` (with an optional `hideClose` for
-  chromeless dialogs), `dropdown-menu`, `context-menu` (sharing private `menu-styles` geometry/token
+  chromeless dialogs, plus a dependency-free overlay registry exposed by `useDialogOverlayOpen` and the
+  synchronous `dialogOverlayIsOpen` guard so transcript exposure cannot race any app dialog), `dropdown-menu`, `context-menu` (sharing private `menu-styles` geometry/token
   classes), `popover` (with an optional `container` portal target — pass the host Dialog node so a popover
   inside a
   Dialog stays wheel-scrollable under its scroll lock), `command` (cmdk combobox body), `textarea`,
