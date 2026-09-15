@@ -63,7 +63,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 		analytics: {
 			channel,
 			build,
-			muteAdditional: options.noAnalytics,
+			mute: options.noAnalytics,
 		},
 		...(hostUpdate ? { hostUpdate } : {}),
 		...(options.projectDir ? { projectPath: resolve(process.cwd(), options.projectDir) } : {}),

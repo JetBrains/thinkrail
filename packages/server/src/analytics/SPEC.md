@@ -61,8 +61,8 @@ default off. Settings owns atomic persistence and host applies the gate. Window 
 [[submodule-web-panels]]. Later launches use the saved decision.
 
 CI and `NODE_ENV=test` create no vendor clients. `--no-analytics` / `THINKRAIL_NO_ANALYTICS` suppress only
-additional events without changing consent; help text states basic reporting remains on. Host-side
-analytics is the sole environment-policy reader across launchers.
+additional events without changing consent. Host-side analytics is the sole environment-policy reader
+across launchers.
 
 Additional revocation drops queued/retrying requests at the transport boundary without stopping basics;
 an already-sent request cannot be recalled. Revoked queues never revive. Capture/boot never block product

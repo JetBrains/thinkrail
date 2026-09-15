@@ -116,7 +116,7 @@ export interface CreateServerOptions {
 	appVersion?: string;
 	analytics?: Pick<
 		AnalyticsOptions,
-		"channel" | "build" | "posthogApiKey" | "posthogHost" | "muteAdditional"
+		"channel" | "build" | "posthogApiKey" | "posthogHost" | "mute"
 	>;
 	hostUpdate?: {
 		intervalMs: number;

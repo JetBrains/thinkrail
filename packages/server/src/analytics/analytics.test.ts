@@ -395,7 +395,7 @@ test.each([
 });
 
 test.each([
-	{ muteAdditional: true },
+	{ mute: true },
 	{ env: { THINKRAIL_NO_ANALYTICS: "1" } },
 ])("per-run suppression %j leaves basic reporting on", async (options) => {
 	const sent: SentPayload[] = [];

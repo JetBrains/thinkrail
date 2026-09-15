@@ -22,7 +22,7 @@ export interface AnalyticsOptions {
 	build?: BuildKind;
 	posthogApiKey?: string;
 	posthogHost?: string;
-	muteAdditional?: boolean;
+	mute?: boolean;
 	additionalEnabled: boolean;
 	env?: AnalyticsEnv;
 	fetchImpl?: typeof fetch;
@@ -67,8 +67,7 @@ export function initializeAnalytics(options: AnalyticsOptions): void {
 		state = {
 			basic: createSink(),
 			additional: null,
-			createAdditionalSink:
-				options.muteAdditional || env.THINKRAIL_NO_ANALYTICS ? null : createSink,
+			createAdditionalSink: options.mute || env.THINKRAIL_NO_ANALYTICS ? null : createSink,
 			clientId: record.id,
 			drains: new Set(),
 			env: {
