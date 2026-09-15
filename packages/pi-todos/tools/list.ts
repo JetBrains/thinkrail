@@ -25,7 +25,7 @@ export function registerTodoList(pi: ExtensionAPI): void {
 		name: "todo_list",
 		label: "Todo List",
 		description:
-			"Read this chat's TODO plan — loose items plus named groups (optionally filtered by status). The plan is the source of truth and the user may edit it at any time, so re-read after user input, at material phase boundaries, and before completion.",
+			"Read this chat's TODO plan — loose items plus named groups (optionally filtered by status). The plan is the source of truth and the user may edit it at any time, so re-read before choosing each next item, after user input, and before completion.",
 		promptSnippet:
 			"todo_list — read this chat's TODO plan (source of truth; re-read to catch the user's edits).",
 		parameters,

@@ -3,7 +3,8 @@ import { registerTodoTools } from "./tools/index.ts";
 
 const TODO_RULE = [
 	"This chat has a shared TODO list — your live plan for the conversation, which the user edits too.",
-	"When the user asks for a plan or the task needs at least three substantive execution steps, read the todos skill, create a concise plan once the task is understood enough to plan, and keep it current at material milestones.",
+	"A pending user-origin item already in that list is worked through its exact item with todo_update, regardless of size.",
+	"When the user asks for a plan or new work needs at least three substantive execution steps, read the todos skill, create a concise plan once the task is understood enough to plan, and keep it current.",
 ].join("\n");
 
 const factory: ExtensionFactory = (pi: ExtensionAPI) => {

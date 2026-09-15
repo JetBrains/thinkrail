@@ -1,9 +1,9 @@
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 
 export const WORKFLOW_RULE = [
-	"For project onboarding or any PR lifecycle work, read the choosing-a-workflow skill before beginning that work.",
-	"For other changes, read it only when product scope, user-visible behavior, or architecture remains to decide.",
-	"Otherwise proceed directly without loading or announcing a workflow.",
+	"At the start of a new piece of work, read the choosing-a-workflow skill for project onboarding or any PR lifecycle work.",
+	"For other new changes, read it only when product scope, user-visible behavior, or architecture remains to decide.",
+	"Continue work already routed to a workflow without routing it again; otherwise proceed directly without loading or announcing one.",
 ].join("\n");
 
 const factory: ExtensionFactory = (pi: ExtensionAPI) => {

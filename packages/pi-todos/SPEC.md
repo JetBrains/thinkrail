@@ -18,10 +18,12 @@ plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-gr
 - **`index.ts`** — an `ExtensionFactory` registering the six tools and one always-on `before_agent_start`
   rule. The rule is deliberately **short and byte-stable** — awareness that a shared list + `todo_*` tools
   exist, plus the threshold for loading the todos skill: an explicit user request or at least three
-  substantive execution steps, once the task is understood enough to plan. The lever is *understanding*,
-  not prompt volume: **how to work with the list lives in the skill; each tool's invariants live in its own
-  description.** (We tried injecting the live list into every prompt and pulled it back — the tools + skill
-  carry it instead.)
+  substantive execution steps, once the task is understood enough to plan. That threshold governs
+  creating a plan, not honoring one: a pending user-origin item already in the shared list is always
+  progressed through its exact item regardless of size. The lever is *understanding*, not prompt volume:
+  **how to work with the list lives in the skill; each tool's invariants live in its own description.**
+  (We tried injecting the live list into every prompt and pulled it back — the tools + skill carry it
+  instead.)
 - **`core/`** — the pi-free model ([[submodule-pi-todos-core]]): the `Todo` types and the per-session
   `TodoStore` (read-modify-write `.thinkrail/context/todos/<sessionId>.json`). No `@earendil-works/*` imports, so
   the host can value-import `pi-todos/core` to power the plan viewer — reading the plan and writing the
@@ -30,8 +32,9 @@ plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-gr
 - **`skills/todos/SKILL.md`** — the bundled skill: the chat-plan discipline — group = task (one user
   ask, outcome-titled; ordinarily 3–7 substantive, verifiable steps), work tasks strictly in order with one
   step `in_progress` (blocked task = note why, tell the user, move on), and reconcile the user's live edits
-  after user input, at material phase boundaries, and before completion. Smaller tasks use no plan unless
-  the user asks for one.
+  before choosing each next item, after user input, and before completion. A pending user-origin loose item
+  is progressed in place regardless of size; the no-plan rule for smaller tasks applies only to ordinary
+  chat asks that are not already represented in the shared list.
 
 ## The tools
 
@@ -65,8 +68,9 @@ The list is **scoped to a chat session**, not the worktree: one JSON file per se
 `.thinkrail/context/todos/<sessionId>.json` under the worktree root — inside the ephemeral `context/`
 scratch dir the host seeds and git ignores, so the plans live alongside the other per-conversation
 working files. It is the agent's working plan for that conversation; the user can add items to it (from
-the UI), and the agent picks them up on its next turn (`todo_list`). The file is the source of truth —
-`TodoStore` re-reads it on every op — so the agent's in-session writes and the user's UI edits converge
+the UI), and the agent picks them up on its next turn (`todo_list`) and progresses those exact items via
+`todo_update`. The file is the source of truth — `TodoStore` re-reads it on every op — so the agent's
+in-session writes and the user's UI edits converge
 with no staleness window; a missing or corrupt file reads as an empty list. Ephemeral per chat
 (gitignored), not committed with the repo.
 

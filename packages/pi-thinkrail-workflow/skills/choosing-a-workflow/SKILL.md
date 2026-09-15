@@ -1,17 +1,18 @@
 ---
 name: choosing-a-workflow
-description: "Use for project onboarding, any PR lifecycle work including PR checks, or changes that require choosing product scope, user-visible behavior, or architecture. Not for non-PR questions, checks, explanations, or localized fully specified work."
+description: "Use at the start of new project onboarding, PR lifecycle work including PR checks, or changes that require choosing product scope, user-visible behavior, or architecture. Not for continuing work already routed to a workflow, non-PR questions, checks, explanations, or localized fully specified work."
 ---
 
 # Choosing a Workflow
 
-The root router of the workflow family in `packages/pi-thinkrail-workflow`. It classifies
-workflow-eligible work and names the workflow skill that governs it — nothing more. A routed skill's
-steps live in that skill alone; read it, don't run it from memory.
+The root router of the workflow family in `packages/pi-thinkrail-workflow`. It classifies new
+workflow-eligible work and names the workflow skill that governs it — nothing more. Work already routed
+resumes its active workflow instead. A routed skill's steps live in that skill alone; read it, don't run
+it from memory.
 
 ## Classify
 
-Read the request and use what is already known to answer three questions:
+For a new piece of work, read the request and use what is already known to answer three questions:
 
 1. **Is this project onboarding?** No spec graph yet — an empty or effectively empty workspace where
    the user brings a raw idea, or an existing codebase being set up or specced for the first time.
@@ -45,6 +46,7 @@ implementation first and return to **shipping-a-pr** only after it lands.
 - You started implementation while a required product or architecture choice is still unresolved.
 - You loaded **brainstorming** for work whose observable result and implementation constraints are
   already specified.
+- You re-entered this router while continuing work already assigned to a workflow.
 - You are following a routed skill's steps from memory instead of reading that skill.
 
 ## Handoff

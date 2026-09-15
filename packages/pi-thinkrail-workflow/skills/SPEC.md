@@ -54,8 +54,9 @@ them.
 | **Worker** | one workflow's steps — in its body and its sibling docs | a handoff — fixed successor, back to its caller, or a terminal state (declared in the doc where the flow ends, rule 6) |
 | **Concept** | one topic's reusable rules, conventions, or mental model — no steps, no routing | nothing — no ending section at all; control simply returns to its reader |
 
-The **root router** is the single entry for workflow-eligible work; one always-on rule names those
-classes and points them at it. Branch skills may route further (fractal routing).
+The **root router** is the single entry for new workflow-eligible work; one always-on rule names those
+classes and points them at it. Work already routed resumes its active workflow instead of re-entering the
+router. Branch skills may route further (fractal routing).
 A **concept** is not a process building block — routers and workers name it at the exact step that
 needs it, and it is never a route: the router classifies *work*, and a concept is not work.
 
@@ -115,10 +116,11 @@ flowchart LR
    one doc pointed at by the others.
 
 **Discovery & entry**
-4. One always-on entry rule names the workflow-eligible classes — project onboarding and PR
-   lifecycle work take precedence regardless of whether they edit code; other changes enter only when
-   they require product or design decisions. The rule points only those classes at the root router.
-   All other work proceeds directly without loading or announcing a workflow.
+4. At the start of a new piece of work, one always-on entry rule names the workflow-eligible classes —
+   project onboarding and PR lifecycle work take precedence regardless of whether they edit code; other
+   changes enter only when they require product or design decisions. The rule points only those classes
+   at the root router. Work already routed resumes its active workflow; all other work proceeds directly
+   without loading or announcing one.
    Skills are otherwise reached by routing/handoff, or — when the trigger is unmistakable — by a narrow
    self-trigger `description`: alongside a route (as `setting-up-a-project` does) or, for skills outside
    the router's work classification (meta/authoring skills), self-trigger alone (as
@@ -206,9 +208,9 @@ task-spec when they earn their place. The concept role has two instances: `askin
 extracted per rules 3/7 when brainstorming and the setup trio carried drifting copies of the tool
 norms, and `writing-specs`, extracted the same way when the setup trio carried three drifting copies
 of the spec quality bar.
-Meta-rule 4's entry model is in effect: the parent module's `before_agent_start` rule points
-workflow-eligible work at `choosing-a-workflow`, which routes to today's family; direct work bypasses
-it. `writing-workflow-skills` (self-trigger only) and the concept skills (reached by name) sit outside
+Meta-rule 4's entry model is in effect: at the start of new work the parent module's
+`before_agent_start` rule points workflow-eligible work at `choosing-a-workflow`, which routes to today's
+family; already-routed work resumes, and direct work bypasses the router. `writing-workflow-skills` (self-trigger only) and the concept skills (reached by name) sit outside
 the routing table.
 
 ## Current limitations & gaps

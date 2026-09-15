@@ -16,10 +16,10 @@ codify how the agent should *run a piece of work*. (Contrast: `pi-spec-graph` de
 model *is*; `pi-visualize` is a rendering tool.) It contributes exactly two things, wired by the
 `package.json` pi manifest (`pi: { extensions: ["./index.ts"], skills: ["./skills"] }`):
 
-- **`index.ts`** — an `ExtensionFactory` registering one always-on `before_agent_start` rule that
-  sends project onboarding and PR lifecycle work, plus other changes with unresolved product/design
-  decisions, to the root router skill (`choosing-a-workflow`). All other work proceeds directly
-  without loading or announcing a workflow.
+- **`index.ts`** — an `ExtensionFactory` registering one always-on `before_agent_start` rule that,
+  at the start of a new piece of work, sends project onboarding and PR lifecycle work, plus other changes
+  with unresolved product/design decisions, to the root router skill (`choosing-a-workflow`). Work already
+  routed resumes its active workflow; all other work proceeds directly without loading or announcing one.
 - **`skills/`** — the workflow skill family: the root router that classifies workflow-eligible
   work, plus the worker and concept skills reached from it. The **authoritative roster is the
   family table in [[submodule-workflow-skills]]**, alongside the system's design — concept model,
@@ -37,7 +37,8 @@ the next skill (meta-rule 12 in [[submodule-workflow-skills]]).
 Same mechanism as `pi-spec-graph` ([[module-spec-graph]]): each workflow lives in its own skill,
 auto-discovered via the `pi.skills` manifest / `additionalSkillPaths`. The `before_agent_start` rule
 mirrors `pi-spec-graph`'s `SPEC_RULE`: short and byte-stable so it rides every run without churning
-provider prompt-caching, and a pointer, not a restatement — routing rules live once in the router
+provider prompt-caching, and a pointer, not a restatement — it applies only at the start of new work,
+while an already-routed continuation resumes its active workflow. Routing rules live once in the router
 skill; each workflow's steps live once in its own skill. The setting-up-a-project family carries no
 rule of its own — the root router routes onboarding to the dispatcher (whose `description` also
 self-triggers), and in-app the Welcome screen's "Set up project" card seeds the
