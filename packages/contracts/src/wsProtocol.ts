@@ -33,6 +33,7 @@ import type {
 	ReviewCommentStatus,
 	ReviewSnapshot,
 	SessionActivity,
+	SessionAttention,
 	SpecGraphSnapshot,
 	SubagentOverride,
 	Template,
@@ -106,6 +107,7 @@ export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;
 export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
 export const FEEDBACK_INTERVIEW_PROTOCOL_VERSION = 56;
 export const ACTIVITY_PROTOCOL_VERSION = 60;
+export const ATTENTION_PROTOCOL_VERSION = 65;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
@@ -142,6 +144,13 @@ export interface SessionActivityPayload {
 	projectId: string;
 	sessionId: string;
 	status: ActivityStatus | null;
+}
+
+export interface SessionAttentionPayload {
+	workspaceId: string;
+	projectId: string;
+	sessionId: string;
+	attentionId: string | null;
 }
 
 export const WS_METHODS = {
@@ -220,6 +229,8 @@ export const WS_METHODS = {
 	sessionAnswerQuestion: "session.answerQuestion",
 	sessionList: "session.list",
 	sessionActivityList: "session.activityList",
+	sessionAttentionList: "session.attentionList",
+	sessionAcknowledgeAttention: "session.acknowledgeAttention",
 	sessionGetMessages: "session.getMessages",
 	subagentGetTranscript: "subagent.getTranscript",
 	modelList: "model.list",
@@ -262,6 +273,7 @@ export const WS_CHANNELS = {
 	sessionCreated: "session.created",
 	sessionDeleted: "session.deleted",
 	sessionActivity: "session.activity",
+	sessionAttention: "session.attention",
 	providerLogin: "provider.login",
 	providerChanged: "provider.changed",
 	terminalData: "terminal.data",
@@ -523,6 +535,11 @@ export interface WsMethodMap {
 	};
 	"session.list": { params: { workspaceId: string }; result: SessionSummary[] };
 	"session.activityList": { params: Record<string, never>; result: SessionActivity[] };
+	"session.attentionList": { params: Record<string, never>; result: SessionAttention[] };
+	"session.acknowledgeAttention": {
+		params: { workspaceId: string; sessionId: string; attentionId: string };
+		result: Ack;
+	};
 	"session.getMessages": {
 		params: { sessionId: string; workspaceId: string };
 		result: { summary: SessionSummary; messages: TranscriptMessage[] };

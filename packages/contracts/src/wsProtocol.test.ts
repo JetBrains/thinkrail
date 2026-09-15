@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
 	ACTIVITY_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ATTENTION_PROTOCOL_VERSION,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
@@ -17,6 +18,14 @@ test("workspace activity advances the protocol and names its channel and snapsho
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ACTIVITY_PROTOCOL_VERSION);
 	expect(WS_CHANNELS.sessionActivity).toBe("session.activity");
 	expect(WS_METHODS.sessionActivityList).toBe("session.activityList");
+});
+
+test("session attention advances the protocol and names its wire surface", () => {
+	expect(ATTENTION_PROTOCOL_VERSION).toBe(65);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ATTENTION_PROTOCOL_VERSION);
+	expect(WS_CHANNELS.sessionAttention).toBe("session.attention");
+	expect(WS_METHODS.sessionAttentionList).toBe("session.attentionList");
+	expect(WS_METHODS.sessionAcknowledgeAttention).toBe("session.acknowledgeAttention");
 });
 
 test("system theme settings advance the protocol", () => {

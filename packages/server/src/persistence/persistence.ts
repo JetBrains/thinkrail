@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -29,6 +29,89 @@ function readJson<T>(file: string, fallback: T): T {
 function writeJson(file: string, value: unknown): void {
 	mkdirSync(dataDir(), { recursive: true });
 	writeFileSync(join(dataDir(), file), `${JSON.stringify(value, null, "\t")}\n`);
+}
+
+export const ATTENTION_LEDGER_VERSION = 1 as const;
+
+export interface AttentionLedger {
+	version: typeof ATTENTION_LEDGER_VERSION;
+	migrationComplete: true;
+	handledCandidateBySession: Record<string, string>;
+}
+
+export type AttentionLedgerLoadResult =
+	| { status: "missing" }
+	| { status: "ready"; ledger: AttentionLedger }
+	| { status: "invalid"; error: Error };
+
+const ATTENTION_LEDGER_FILE = "attention.json";
+
+function attentionLedgerPath(): string {
+	return join(dataDir(), ATTENTION_LEDGER_FILE);
+}
+
+function errorValue(error: unknown): Error {
+	return error instanceof Error ? error : new Error(String(error));
+}
+
+function parseAttentionLedger(value: unknown): AttentionLedger | null {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	if (Reflect.get(value, "version") !== ATTENTION_LEDGER_VERSION) return null;
+	if (Reflect.get(value, "migrationComplete") !== true) return null;
+	const rawHandled = Reflect.get(value, "handledCandidateBySession");
+	if (!rawHandled || typeof rawHandled !== "object" || Array.isArray(rawHandled)) return null;
+	const entries = Object.entries(rawHandled);
+	if (entries.some(([sessionId, candidateId]) => !sessionId || !candidateId)) return null;
+	if (entries.some(([, candidateId]) => typeof candidateId !== "string")) return null;
+	return {
+		version: ATTENTION_LEDGER_VERSION,
+		migrationComplete: true,
+		handledCandidateBySession: Object.fromEntries(entries) as Record<string, string>,
+	};
+}
+
+export function loadAttentionLedger(): AttentionLedgerLoadResult {
+	let source: string;
+	try {
+		source = readFileSync(attentionLedgerPath(), "utf8");
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return { status: "missing" };
+		return { status: "invalid", error: errorValue(error) };
+	}
+	try {
+		const ledger = parseAttentionLedger(JSON.parse(source));
+		return ledger
+			? { status: "ready", ledger }
+			: { status: "invalid", error: new Error("Invalid attention ledger") };
+	} catch (error) {
+		return { status: "invalid", error: errorValue(error) };
+	}
+}
+
+export function saveAttentionLedger(ledger: AttentionLedger): void {
+	const normalized = parseAttentionLedger(ledger);
+	if (!normalized) throw new Error("Invalid attention ledger");
+	const directory = dataDir();
+	const file = attentionLedgerPath();
+	const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
+	mkdirSync(directory, { recursive: true });
+	try {
+		writeFileSync(temporary, `${JSON.stringify(normalized, null, "\t")}\n`, {
+			encoding: "utf8",
+			mode: 0o600,
+		});
+		renameSync(temporary, file);
+	} catch (error) {
+		rmSync(temporary, { force: true });
+		throw error;
+	}
+}
+
+export function quarantineAttentionLedger(): string {
+	const file = attentionLedgerPath();
+	const quarantined = `${file}.invalid-${Date.now()}-${randomUUID()}`;
+	renameSync(file, quarantined);
+	return quarantined;
 }
 
 export function loadProjects(): Project[] {

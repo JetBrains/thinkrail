@@ -9,6 +9,13 @@ export interface SessionActivity {
 	status: ActivityStatus;
 }
 
+export interface SessionAttention {
+	sessionId: string;
+	workspaceId: string;
+	projectId: string;
+	attentionId: string;
+}
+
 export interface Project {
 	id: string;
 	name: string;
