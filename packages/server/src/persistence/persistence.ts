@@ -79,6 +79,7 @@ export function loadConfig(): AppConfig {
 			typeof value.analyticsEnabled === "boolean"
 				? value.analyticsEnabled
 				: DEFAULT_CONFIG.analyticsEnabled,
+		analyticsConsentConfirmed: value.analyticsConsentConfirmed === true,
 		terminalReplayKb:
 			typeof value.terminalReplayKb === "number" && Number.isFinite(value.terminalReplayKb)
 				? value.terminalReplayKb
@@ -128,19 +129,12 @@ export function saveConfig(config: AppConfig): void {
 
 export interface InstallationRecord {
 	id: string;
-	announced: boolean;
 }
 
 export function ensureInstallation(): InstallationRecord {
 	const raw = readJson<Partial<InstallationRecord>>("installation.json", {});
-	if (typeof raw.id === "string" && raw.id.length > 0) {
-		return { id: raw.id, announced: raw.announced === true };
-	}
-	const record: InstallationRecord = { id: randomUUID(), announced: false };
-	saveInstallation(record);
-	return record;
-}
-
-export function saveInstallation(record: InstallationRecord): void {
+	if (typeof raw?.id === "string" && raw.id.length > 0) return { id: raw.id };
+	const record: InstallationRecord = { id: randomUUID() };
 	writeJson("installation.json", record);
+	return record;
 }

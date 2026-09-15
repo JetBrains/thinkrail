@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,8 +8,11 @@ import type { HostUpdateNotice, ServerWelcome } from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { isPortFree } from "@thinkrail/shared/freePort";
 import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
+import { initializeAnalytics, resetAnalyticsForTests } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
+import { resetConfigCache, updateConfig } from "../settings";
 import { type BootedHost, bootHost } from "./boot";
+import { handleRequest } from "./handlers";
 
 process.setMaxListeners(50);
 
@@ -123,6 +126,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+	resetConfigCache();
 	await resetJbcentralStateForTests();
 	configurePiRuntime(null);
 	configurePiRuntimeFactory(async () => testRuntime);
@@ -133,6 +137,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
 	while (booted.length) await booted.pop()?.server.shutdown();
+	resetAnalyticsForTests();
+	resetConfigCache();
 	while (tmpDirs.length) rmSync(tmpDirs.pop() as string, { recursive: true, force: true });
 	if (originalDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = originalDataDir;
@@ -154,6 +160,87 @@ async function boot(options: Parameters<typeof bootHost>[0]): Promise<BootedHost
 	booted.push(b);
 	return b;
 }
+
+test("confirming consent observes current setup without another client read or provider refresh", async () => {
+	const dir = process.env.THINKRAIL_DATA_DIR;
+	if (!dir) throw new Error("missing fixture data directory");
+	writeFileSync(join(dir, "config.json"), JSON.stringify({ analyticsEnabled: true }));
+	writeFileSync(
+		join(dir, "projects.json"),
+		JSON.stringify([
+			{ id: "existing", name: "private", path: dir, slug: "existing", lastOpened: 1 },
+		]),
+	);
+	await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
+	const events: { event: string; properties: Record<string, unknown> }[] = [];
+	initializeAnalytics({
+		additionalEnabled: false,
+		env: {},
+		fetchImpl: (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+			events.push(...JSON.parse(String(init?.body)).batch);
+			return new Response("{}");
+		}) as typeof fetch,
+	});
+	const refresh = spyOn(testRuntime, "refresh");
+	try {
+		updateConfig({ analyticsEnabled: true, analyticsConsentConfirmed: true });
+		const snapshots = () => events.filter((event) => event.event === "setup_state_observed");
+		const deadline = Date.now() + 2_000;
+		while (snapshots().length === 0 && Date.now() < deadline) await Bun.sleep(5);
+		expect(snapshots()).toHaveLength(1);
+		expect(snapshots()[0]?.properties).toMatchObject({
+			project_present: "yes",
+			provider_available: "no",
+			model_available: "no",
+		});
+		expect(JSON.stringify(events)).not.toContain("private");
+		updateConfig({ theme: "light" });
+		await Bun.sleep(20);
+		expect(snapshots()).toHaveLength(1);
+		expect(refresh).not.toHaveBeenCalled();
+	} finally {
+		refresh.mockRestore();
+	}
+});
+
+test("the host forwards successful login generation metadata into the basic event", async () => {
+	await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
+	const events: { event: string; properties: Record<string, unknown> }[] = [];
+	initializeAnalytics({
+		additionalEnabled: false,
+		env: {},
+		fetchImpl: (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+			events.push(...JSON.parse(String(init?.body)).batch);
+			return new Response("{}");
+		}) as typeof fetch,
+	});
+	const login = spyOn(testRuntime, "login").mockResolvedValue({
+		type: "oauth",
+		access: "private-token",
+		refresh: "private-refresh",
+		expires: Date.now() + 60_000,
+	});
+	try {
+		await handleRequest(
+			"provider.loginStart",
+			{ providerId: "anthropic", type: "oauth" },
+			{ clientKey: "client" },
+		);
+		const deadline = Date.now() + 2_000;
+		while (!events.some((event) => event.event === "provider_login") && Date.now() < deadline)
+			await Bun.sleep(5);
+		const logins = events.filter((event) => event.event === "provider_login");
+		expect(logins).toHaveLength(1);
+		expect(logins[0]?.properties).toMatchObject({
+			provider: "anthropic",
+			method: "oauth",
+			auth_method: "subscription",
+		});
+		expect(JSON.stringify(events)).not.toContain("private");
+	} finally {
+		login.mockRestore();
+	}
+});
 
 test('portMode "exact" binds the requested port', async () => {
 	const requested = grabFreePort();

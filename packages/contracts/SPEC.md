@@ -240,7 +240,7 @@ of the host.
   latest protocol; **`JBCENTRAL_QUOTA_PROTOCOL_VERSION`** likewise pins the v59 quota read + settings;
   **`WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`** pins the v62 Windows-shell setting so a later web client
   hides it against a host that can preserve but cannot apply that config field;
-  **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, terminalReplayKb,
+  **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
@@ -255,9 +255,14 @@ of the host.
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
   behavior), overridden only by `Workspace.subagentsOverride`; `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset
-  and group limits are web-local); `analyticsEnabled` is the anonymous usage-analytics switch, default
-  `true` — it is the **only** analytics fact on the wire: the installation id stays server-side by design,
-  see `submodule-server-analytics`) carries it with the **`DEFAULT_CONFIG`** fallback (persisted host-side
+  and group limits are web-local); `analyticsEnabled` is the additional-data preference, default `false`, while
+  `analyticsConsentConfirmed` defaults `false` and records the explicit decision required before that
+  preference can authorize collection. Saved legacy preferences seed the first-launch switch, not consent.
+  `ANALYTICS_CONSENT_PROTOCOL_VERSION` pins this v65 contract so newer clients do not show a consent flow
+  against older hosts that cannot persist it. Preference and confirmation are saved atomically; an older
+  client's preference-only write cannot create the new confirmation. The installation id remains entirely
+  server-side; basic events are not controlled by either flag, see [[submodule-server-analytics]]) carries
+  it with the **`DEFAULT_CONFIG`** fallback (persisted host-side
   as `config.json`, delivered in
   `server.welcome`, mutated via `settings.update`).
   **`InterviewResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic

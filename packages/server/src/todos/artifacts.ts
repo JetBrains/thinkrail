@@ -93,8 +93,14 @@ export function maybeAttachChangeArtifacts(workspaceId: string, sessionId: strin
 	return enqueueTodoMutation(workspaceId, () => runReconcile(workspaceId, sessionId));
 }
 
-export function settleChangeArtifacts(workspaceId: string): Promise<void> {
-	return (commitQueues.get(workspaceId) ?? Promise.resolve()).catch(() => {});
+export async function settleChangeArtifacts(workspaceId: string): Promise<void> {
+	let current = commitQueues.get(workspaceId);
+	while (current) {
+		await current;
+		const next = commitQueues.get(workspaceId);
+		if (next === current) return;
+		current = next;
+	}
 }
 
 async function runReconcile(workspaceId: string, sessionId: string): Promise<void> {

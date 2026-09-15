@@ -273,7 +273,9 @@ a `todo_*` tool end publishes, and the reconcile is enqueued *synchronously with
 later (it commits) — so without the barrier a commit slower than the client's refetch debounce would hand
 back a `done` item with no change set, leaving an open plan page promising an affordance it doesn't show
 until some unrelated event. Awaiting makes the read **causally after** the write it was triggered by;
-it resolves immediately when nothing is in flight, and never rejects.
+it resolves immediately when nothing is in flight, and never rejects. The barrier follows any newer
+workspace queue tail installed while it waits, so a stale pass aborted by plan drift cannot release readers
+before the already-enqueued replacement pass has reconciled the current plan.
 
 ## Boundary
 

@@ -36,8 +36,8 @@ Options:
   --port <n>     Listen port (default ${DEFAULT_PORT}; falls back to a free port if taken).
   --host <h>     Bind host (default ${DEFAULT_HOST}).
   --no-open      Don't open the browser (e.g. headless / remote host).
-  --no-analytics Don't send anonymous usage analytics this run (the durable switch
-                 lives in the app: Settings → Privacy).
+  --no-analytics Disable additional usage analytics this run.
+                 The saved sharing preference lives in Settings → Privacy.
   --verbose      Debug-level logging (terminal + the rotated log files under
                  ~/.thinkrail/logs).
   -v, --version  Print the version and exit.

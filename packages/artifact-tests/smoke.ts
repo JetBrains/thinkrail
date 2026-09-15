@@ -4,6 +4,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { removeTree } from "@thinkrail/shared/removeTree";
+import { runDesktopAnalyticsProbe } from "./src/analyticsProbe";
 import { locateDesktopLauncher, repoRoot } from "./src/artifact";
 import {
 	type ArtifactHostAdapter,
@@ -34,7 +35,13 @@ function copyApplication(launcher: string): string {
 	return join(copiedRoot, relative(bundleRoot, launcher));
 }
 
-const launcher = copyApplication(locateDesktopLauncher(undefined, process.argv[2]));
+const analyticsOnly = process.argv.includes("--analytics");
+const launcher = copyApplication(
+	locateDesktopLauncher(
+		undefined,
+		process.argv.slice(2).find((arg) => arg !== "--analytics"),
+	),
+);
 
 async function launchDesktop(
 	env: Record<string, string>,
@@ -162,7 +169,7 @@ const adapter: ArtifactHostAdapter = {
 	launch: (env, label) => launchDesktop(env, label, "host"),
 };
 
-try {
+async function runMutedSmoke(): Promise<void> {
 	const isolated = join(root, "ui");
 	mkdirSync(isolated, { recursive: true });
 	let ui: Awaited<ReturnType<typeof launchDesktop>> | undefined;
@@ -175,6 +182,7 @@ try {
 				PI_CODING_AGENT_DIR: join(isolated, "agent"),
 				XDG_CACHE_HOME: join(isolated, "cache"),
 				THINKRAIL_NO_ANALYTICS: "1",
+				CI: "1",
 				PI_OFFLINE: "1",
 			}),
 			"native-ui",
@@ -194,6 +202,11 @@ try {
 	}
 	await runArtifactHostProbes(adapter);
 	console.log(`smoke OK: ${launcher} passed native-window and shared artifact probes.`);
+}
+
+try {
+	if (analyticsOnly) await runDesktopAnalyticsProbe(adapter);
+	else await runMutedSmoke();
 } catch (error) {
 	console.error(`desktop smoke FAILED: ${error instanceof Error ? error.message : error}`);
 	process.exitCode = 1;

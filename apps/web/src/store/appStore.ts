@@ -806,6 +806,7 @@ interface AppState {
 	themeMode: ThemeMode;
 	systemThemePair: SystemThemePair | undefined;
 	analyticsEnabled: boolean;
+	analyticsConsentConfirmed: boolean;
 	subagentsEnabled: boolean;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
@@ -1029,7 +1030,14 @@ function configPatch(config: AppConfig) {
 	return {
 		...themePreference,
 		systemThemePair: themePreference.systemThemePair,
-		analyticsEnabled: config.analyticsEnabled,
+		analyticsEnabled:
+			typeof config.analyticsEnabled === "boolean"
+				? config.analyticsEnabled
+				: DEFAULT_CONFIG.analyticsEnabled,
+		analyticsConsentConfirmed:
+			typeof config.analyticsConsentConfirmed === "boolean"
+				? config.analyticsConsentConfirmed
+				: DEFAULT_CONFIG.analyticsConsentConfirmed,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
 		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled ?? DEFAULT_CONFIG.jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds:
@@ -1687,6 +1695,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	themeMode: DEFAULT_CONFIG.themeMode,
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
+	analyticsConsentConfirmed: DEFAULT_CONFIG.analyticsConsentConfirmed,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,

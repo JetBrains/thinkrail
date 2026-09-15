@@ -27,6 +27,7 @@ import {
 	createReflectFindingTool,
 	createReviewVerdictTool,
 } from "../agent/reviewTool";
+import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
 import { saveProjects, saveWorkspaces } from "../persistence";
 import {
 	addComment,
@@ -720,4 +721,54 @@ test("request_changes with no inline findings (a whole-change note only) still s
 	expect(todoReviewAutoCycles(ref)).toBe(1);
 
 	handleReviewerSettled(reviewerSessionId, { type: "agent_settled", terminal: null });
+});
+
+test("only actual agent verdicts emit review decisions, never aborted or missing-verdict cleanup", async () => {
+	const events: { event: string; properties: Record<string, unknown> }[] = [];
+	initializeAnalytics({
+		additionalEnabled: true,
+		env: {},
+		fetchImpl: (async (_url: string | URL | Request, init?: RequestInit) => {
+			events.push(...JSON.parse(String(init?.body)).batch);
+			return new Response("{}", { status: 200 });
+		}) as typeof fetch,
+	});
+	try {
+		installTodoReviewSeams();
+		updateConfig({ reviewModel: toWireModel(fauxReviewer.getModel()), reviewAutoFix: false });
+		for (const verdict of ["approve", "request_changes", null] as const) {
+			const todo = new TodoStore(worktree, SESSION).add({
+				title: "private task",
+				artifacts: [{ kind: "commit", sha: "private-sha" }],
+			});
+			const ref = { workspaceId: WS, sessionId: SESSION, id: todo.id };
+			const { reviewerSessionId } = await startTodoReviewFlow(ref, async () => {});
+			if (verdict) {
+				await createReviewVerdictTool().execute(
+					"private-call",
+					{ todoId: todo.id, verdict },
+					undefined,
+					undefined,
+					reviewerCtx(reviewerSessionId),
+				);
+			}
+			handleReviewerSettled(reviewerSessionId, {
+				type: "agent_settled",
+				terminal: { stopReason: "aborted" },
+			});
+		}
+		await shutdownAnalytics();
+		expect(
+			events
+				.filter((event) => event.event === "review_decided")
+				.map((event) => [event.properties.actor, event.properties.verdict]),
+		).toEqual([
+			["agent", "approved"],
+			["agent", "changes_requested"],
+		]);
+		expect(JSON.stringify(events)).not.toContain("private");
+	} finally {
+		await shutdownAnalytics();
+		resetAnalyticsForTests();
+	}
 });

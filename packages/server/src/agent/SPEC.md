@@ -67,7 +67,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     Candidate preparation takes only the reviewed opaque Central path set, builds a fresh runtime, applies the
     composition root's invariant generation initializer (the source-mode e2e host uses it for its gated fake
     providers), records that pre-opaque provider-id allowlist for `provider.status`, and then applies the opaque
-    extensions once through PI's public headless loader. Thus auth never inspects or emits Central's provider
+    extensions once through PI's public headless loader. The generation records ids introduced or replaced
+    by that loader through opaque registration-identity comparison, never configuration values; those ids
+    stay outside ordinary auth reads. Thus auth never inspects or emits Central's provider
     configuration, while an add/remove/replace can never drop process-local provider registrations. The
     initializer must be configured before the first generation and runs for every candidate. The path is the
     only artifact fact this module receives;
@@ -76,8 +78,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     never reach `pi.extensionUi`, the wire, logs, analytics, persistence, or snapshots. Auth owns file watching,
     coalescing, and stale-candidate rejection; agent only prepares and activates a generation.
 
-    Activation changes the current pointer for pre-session reads and future session creation; it never mutates,
-    drains, or recreates existing sessions. A live session keeps its original runtime generation. A disk session
+    `getSessionRuntimeGeneration` exposes a live session's retained generation for synchronous host metadata
+    reads. Activation changes the current pointer for pre-session reads and future session creation; it never
+    mutates, drains, or recreates existing sessions. A live session keeps its original runtime generation. A disk session
     attached after activation resolves its persisted `{provider,id}` exactly against the new current runtime—
     missing is an error, and PI's `createAgentSession` fallback is never allowed to choose a different model.
 

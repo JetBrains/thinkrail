@@ -1,10 +1,11 @@
-import type {
-	ActivityStatus,
-	GitDiffScope,
-	Project,
-	SpecGraphNode,
-	WireModel,
-	Workspace,
+import {
+	type ActivityStatus,
+	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	type GitDiffScope,
+	type Project,
+	type SpecGraphNode,
+	type WireModel,
+	type Workspace,
 } from "@thinkrail/contracts";
 import {
 	isAbsolutePath,
@@ -27,6 +28,28 @@ import type {
 	TerminalTab,
 	WorkspaceActivity,
 } from "./appStore";
+
+interface AnalyticsConsentState {
+	protocolVersion: number | null;
+	welcomeGeneration: number;
+	analyticsConsentConfirmed: boolean;
+}
+
+export function selectAnalyticsConsentSupported(
+	state: Pick<AnalyticsConsentState, "protocolVersion">,
+): boolean {
+	return (
+		state.protocolVersion !== null && state.protocolVersion >= ANALYTICS_CONSENT_PROTOCOL_VERSION
+	);
+}
+
+export function selectAnalyticsConsentPromptOpen(state: AnalyticsConsentState): boolean {
+	return (
+		selectAnalyticsConsentSupported(state) &&
+		state.welcomeGeneration > 0 &&
+		!state.analyticsConsentConfirmed
+	);
+}
 
 interface ConnectionGenerationState {
 	status: string;

@@ -1,11 +1,15 @@
 import { logger } from "../log";
-import { ensureInstallation, saveInstallation } from "../persistence";
-import type { AnalyticsEvent, BuildKind } from "./events";
+import { ensureInstallation } from "../persistence";
+import type {
+	AdditionalAnalyticsCapture,
+	AnalyticsEvent,
+	BasicAnalyticsEvent,
+	BuildKind,
+} from "./events";
 import { type AnalyticsEnv, environmentMute } from "./mute";
 import {
 	type AnalyticsSink,
 	createPostHogSink,
-	noopSink,
 	type OutgoingEvent,
 	POSTHOG_PROJECT_KEY,
 } from "./sink";
@@ -19,17 +23,22 @@ export interface AnalyticsOptions {
 	posthogApiKey?: string;
 	posthogHost?: string;
 	mute?: boolean;
-	enabled: boolean;
+	additionalEnabled: boolean;
 	env?: AnalyticsEnv;
 	fetchImpl?: typeof fetch;
 }
 
-interface AnalyticsState {
+interface AnalyticsGrant {
 	sink: AnalyticsSink;
+	capture: AdditionalAnalyticsCapture;
+}
+
+interface AnalyticsState {
+	basic: AnalyticsSink;
+	additional: AnalyticsGrant | null;
+	createAdditionalSink: (() => AnalyticsSink) | null;
 	clientId: string;
-	sending: boolean;
-	realSink: boolean;
-	announced: boolean;
+	drains: Set<Promise<void>>;
 	shutdownPromise?: Promise<void>;
 	env: { app_version: string; channel: string; os: string; arch: string; build: BuildKind };
 }
@@ -43,27 +52,24 @@ function detectOs(): string {
 }
 
 export function initializeAnalytics(options: AnalyticsOptions): void {
+	resetAnalyticsForTests();
 	try {
-		const record = ensureInstallation();
 		const env = options.env ?? process.env;
+		if (environmentMute(env)) return;
+		const record = ensureInstallation();
 		const host = env.THINKRAIL_POSTHOG_HOST ?? options.posthogHost;
-		const muted = options.mute === true || environmentMute(env) !== null;
-		const sink: AnalyticsSink = muted
-			? noopSink
-			: createPostHogSink({
-					apiKey: options.posthogApiKey ?? POSTHOG_PROJECT_KEY,
-					...(host ? { host } : {}),
-					...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-				});
-
-		const realSink = sink !== noopSink;
-		sink.setSending?.(options.enabled);
+		const createSink = () =>
+			createPostHogSink({
+				apiKey: options.posthogApiKey ?? POSTHOG_PROJECT_KEY,
+				...(host ? { host } : {}),
+				...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+			});
 		state = {
-			sink,
+			basic: createSink(),
+			additional: null,
+			createAdditionalSink: options.mute || env.THINKRAIL_NO_ANALYTICS ? null : createSink,
 			clientId: record.id,
-			realSink,
-			sending: options.enabled && realSink,
-			announced: record.announced,
+			drains: new Set(),
 			env: {
 				app_version: options.appVersion ?? "0.0.0-dev",
 				channel: options.channel ?? "dev",
@@ -72,75 +78,87 @@ export function initializeAnalytics(options: AnalyticsOptions): void {
 				build: options.build ?? "source",
 			},
 		};
-
-		if (state.sending) {
-			if (!state.announced) announceInstall(state);
-			track({ name: "app_started" });
-		}
-	} catch (error) {
-		debugLog(error);
+		track({ name: "app_started" });
+		setAdditionalAnalyticsEnabled(options.additionalEnabled);
+	} catch {
+		log.debug("analytics initialization failed");
 	}
 }
 
-export function track(event: AnalyticsEvent): void {
+export function track(event: BasicAnalyticsEvent): void {
 	const s = state;
-	if (!s?.sending) return;
-	try {
-		s.sink.send(s.clientId, [toOutgoingEvent(event, s)]);
-	} catch (error) {
-		debugLog(error);
-	}
+	if (s && !s.shutdownPromise) send(s, s.basic, event);
 }
 
-export function setAnalyticsSending(enabled: boolean): void {
+export function getAdditionalAnalyticsCapture(): AdditionalAnalyticsCapture | null {
+	return state?.shutdownPromise ? null : (state?.additional?.capture ?? null);
+}
+
+export function setAdditionalAnalyticsEnabled(enabled: boolean): void {
 	const s = state;
 	if (!s) return;
 	try {
-		s.sending = enabled && s.realSink;
-		s.sink.setSending?.(s.sending);
-		if (s.sending) {
-			if (!s.announced) announceInstall(s);
+		if (!enabled) {
+			const grant = s.additional;
+			s.additional = null;
+			if (grant) retire(s, grant.sink);
+		} else if (!s.shutdownPromise && !s.additional && s.createAdditionalSink) {
+			const sink = s.createAdditionalSink();
+			const capture: AdditionalAnalyticsCapture = (event) => {
+				if (state === s && s.additional?.capture === capture && !s.shutdownPromise) {
+					send(s, sink, event);
+				}
+			};
+			s.additional = { sink, capture };
 		}
-	} catch (error) {
-		debugLog(error);
+	} catch {
+		log.debug("analytics preference update failed");
 	}
 }
 
 export function shutdownAnalytics(): Promise<void> {
 	const s = state;
-	if (!s?.realSink) return Promise.resolve();
-	s.shutdownPromise ??= (async () => {
-		try {
-			await s.sink.shutdown?.();
-		} catch (error) {
-			debugLog(error);
-		}
-	})();
+	if (!s) return Promise.resolve();
+	s.shutdownPromise ??= Promise.all([
+		...s.drains,
+		drain(s.basic),
+		...(s.additional ? [drain(s.additional.sink)] : []),
+	]).then(() => {});
 	return s.shutdownPromise;
 }
 
 export function resetAnalyticsForTests(): void {
 	const s = state;
 	state = null;
-	if (s?.realSink) void s.sink.shutdown?.();
+	if (!s) return;
+	retire(s, s.basic);
+	if (s.additional) retire(s, s.additional.sink);
 }
 
-function announceInstall(s: AnalyticsState): void {
-	s.announced = true;
-	saveInstallation({ id: s.clientId, announced: true });
-	console.log(
-		"ThinkRail sends anonymous usage analytics (no personal data — see the README's Analytics & Privacy section). Disable in Settings → Privacy, or launch with --no-analytics.",
-	);
-	track({ name: "app_installed" });
+function retire(s: AnalyticsState, sink: AnalyticsSink): void {
+	sink.setSending(false);
+	if (s.shutdownPromise) return;
+	const pending = drain(sink);
+	s.drains.add(pending);
+	void pending.then(() => s.drains.delete(pending));
 }
 
-function toOutgoingEvent(event: AnalyticsEvent, s: AnalyticsState): OutgoingEvent {
-	return {
-		name: event.name,
-		params: { ...s.env, ...("params" in event ? event.params : {}) },
-	};
+async function drain(sink: AnalyticsSink): Promise<void> {
+	try {
+		await sink.shutdown();
+	} catch {
+		log.debug("analytics shutdown failed");
+	}
 }
 
-function debugLog(_error: unknown): void {
-	log.debug("analytics operation failed");
+function send(s: AnalyticsState, sink: AnalyticsSink, event: AnalyticsEvent): void {
+	try {
+		const outgoing: OutgoingEvent = {
+			name: event.name,
+			params: { ...s.env, ...("params" in event ? event.params : {}) },
+		};
+		sink.send(s.clientId, [outgoing]);
+	} catch {
+		log.debug("analytics capture failed");
+	}
 }

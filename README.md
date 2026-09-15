@@ -195,41 +195,21 @@ spec in the same change. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
 
 ## Analytics & Privacy
 
-ThinkRail sends **anonymous usage analytics** to [PostHog](https://posthog.com) (EU cloud; on by default;
-a notice is printed the first time anything is sent). The data answers product questions — how many
-installs are active, on which versions/platforms, which models and providers get used, and which features
-matter — and nothing more.
+ThinkRail sends basic usage events to [PostHog EU](https://posthog.com): launches, chat creation,
+accepted message sends, and provider connections. These are always on in desktop, CLI, and source runs;
+CI and automated tests are silent. Events include a random installation ID, version/channel, build kind,
+OS/architecture, send mode, catalog-bucketed provider/model names, and the observed authentication
+category (API key, subscription sign-in, OAuth, Central, or other/unknown)—never credential values or
+account/plan details. First observed launch measures first use, not a completed OS installation.
 
-This applies to **every way of running ThinkRail**, including a build you compiled yourself and a run
-straight from a source checkout — each is reported as what it is (see `channel` and `build` below) rather
-than kept silent. **Automated runs never send:** anything under CI, `bun test`, and the e2e suites are all
-muted, so test traffic can't be mistaken for a person.
+Additional setup, run-outcome, task, review, and PR statistics require explicit consent in the first-launch
+window. Its switch starts from your saved analytics preference; confirming records your choice. Change it
+later in **Settings → Privacy**. `--no-analytics` or `THINKRAIL_NO_ANALYTICS=1` suppresses additional events
+for that run only; basic reporting remains on.
 
-**The only stable identifier** is a random per-install id (a `uuid4`) minted on your machine and
-stored in `~/.thinkrail/installation.json`; it never leaves the host except as the anonymous
-`distinct_id` on events. Events additionally carry only low-cardinality, non-personal metadata: app
-version, release channel (`stable`/`nightly`/`dev`), how the code was built (`desktop`, `binary` for a
-compiled CLI, or `source` for a repo checkout), OS (`macos`/`linux`/`windows`), architecture
-(`x64`/`arm64`), and — on chat/login events — the model/provider name **only if it is a pi built-in**
-(anything user-configured is reported as `custom`). Message activity is counted as a bare send event
-carrying only *how* it was sent (`prompt`/`steer`/`follow_up`) — never the message itself. Events are sent **personless** (no person
-profiles are ever built) and with **GeoIP lookup disabled**.
-
-**Never collected:** file paths or names, prompts, code, chat transcripts, API keys, token counts,
-hostnames, usernames, or IP-derived fields.
-
-**Contributors:** running `bun run dev` or the CLI from a checkout reports too, tagged `channel=dev` /
-`build=source`. Your test and CI runs don't (they're muted, as above), and if you'd rather not report at
-all, either switch it off in-app or export `THINKRAIL_NO_ANALYTICS=1` in your shell.
-
-Turn it off any time:
-
-- **In-app:** Settings → **Privacy** → toggle off (saved on the host, synced to every client).
-- **Per run:** `thinkrail --no-analytics` (or `THINKRAIL_NO_ANALYTICS=1`) — mutes that run without
-  touching the saved setting.
-
-Turning analytics off stops all sending immediately; the install id is kept (never rotated) and simply
-goes unused until you turn it back on.
+Neither tier collects prompts, code, transcripts, file/repository names or paths, credentials, or token/cost
+counts. The installation ID links usage over time, but no person profiles are created and GeoIP enrichment
+is disabled. The [analytics spec](packages/server/src/analytics/SPEC.md) defines the event boundaries.
 
 ## Contributing
 

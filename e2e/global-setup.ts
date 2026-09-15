@@ -1,8 +1,10 @@
 import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { FullConfig } from "@playwright/test";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { seedAgentDefinitionFixtures } from "./fixtures/agents";
+import { CONFIRMED_ANALYTICS_CONFIG, seedAnalyticsConsent } from "./fixtures/analyticsConsent";
 import {
 	CentralSetupError,
 	findGlobalCentralArtifact,
@@ -51,12 +53,13 @@ function seedLocalAgentConfiguration(): void {
 	writeE2eAgentSettings();
 }
 
-export default function globalSetup(): void | Promise<void> {
+export default function globalSetup(config?: FullConfig): void | Promise<void> {
 	const centralMode = isRealCentralE2e();
 	try {
 		const globalCentralArtifact = centralMode ? findGlobalCentralArtifact() : undefined;
 		rmSync(E2E_DATA_DIR, { recursive: true, force: true });
 		mkdirSync(E2E_DATA_DIR, { recursive: true });
+		writeFileSync(join(E2E_DATA_DIR, "config.json"), JSON.stringify(CONFIRMED_ANALYTICS_CONFIG));
 		mkdirSync(E2E_HOME_DIR, { recursive: true });
 		writeFileSync(join(E2E_HOME_DIR, ".zshrc"), "# ThinkRail e2e isolated shell\n");
 
@@ -98,10 +101,14 @@ export default function globalSetup(): void | Promise<void> {
 		throw centralSetupFailure(error);
 	}
 
-	if (!centralMode) return;
+	const baseURL = config?.projects[0]?.use.baseURL;
+	if (!centralMode) {
+		return baseURL ? seedAnalyticsConsent(baseURL, false, true).then(() => undefined) : undefined;
+	}
 	return E2eWire.connect()
 		.then(async (wire) => {
 			try {
+				await wire.request("settings.update", { config: CONFIRMED_ANALYTICS_CONFIG });
 				await waitForCentralTarget(wire);
 				removeCentralModeLocalSeeds();
 			} finally {

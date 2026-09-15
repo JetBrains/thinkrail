@@ -53,10 +53,18 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	for (const [name, value] of [
 		["chatLineWidthBounded", runtimeUpdate.chatLineWidthBounded],
 		["fileLineWidthBounded", runtimeUpdate.fileLineWidthBounded],
+		["analyticsEnabled", runtimeUpdate.analyticsEnabled],
+		["analyticsConsentConfirmed", runtimeUpdate.analyticsConsentConfirmed],
 	] as const) {
 		if (value !== undefined && typeof value !== "boolean") {
 			throw new Error(`${name} must be a boolean`);
 		}
+	}
+	if (
+		runtimeUpdate.analyticsConsentConfirmed !== undefined &&
+		runtimeUpdate.analyticsEnabled === undefined
+	) {
+		throw new Error("analytics consent must include the sharing preference");
 	}
 	const {
 		reviewModel,
@@ -95,6 +103,14 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		throw new Error("systemThemePair must contain light and dark theme ids");
 	}
 	const current = getConfig();
+	if (
+		runtimeUpdate.analyticsEnabled === true &&
+		!current.analyticsEnabled &&
+		current.analyticsConsentConfirmed &&
+		runtimeUpdate.analyticsConsentConfirmed === undefined
+	) {
+		throw new Error("enabling additional analytics requires an explicit confirmation");
+	}
 	const nextThemeMode = themeMode ?? (theme !== undefined ? "fixed" : current.themeMode);
 	const nextSystemThemePair =
 		systemThemePair === undefined

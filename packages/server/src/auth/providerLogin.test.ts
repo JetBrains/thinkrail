@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import type { AuthInteraction, AuthType } from "@earendil-works/pi-ai";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { LoginPush } from "@thinkrail/contracts";
-import { configurePiRuntime } from "../agent";
+import { activatePiRuntimeGeneration, configurePiRuntime, getPiRuntimeGeneration } from "../agent";
 import {
 	cancelAllLogins,
 	cancelLogin,
@@ -18,6 +18,7 @@ type LoginImpl = (providerId: string, interaction: AuthInteraction) => Promise<u
 
 interface Harness {
 	frames: LoginPush[];
+	publications: Parameters<Parameters<typeof setLoginPublisher>[0]>[];
 	loginCalls: () => [string, AuthType][];
 	logoutCalls: () => string[];
 	lastSignal: () => AbortSignal | undefined;
@@ -26,7 +27,11 @@ interface Harness {
 
 function install(loginImpl: LoginImpl): Harness {
 	const frames: LoginPush[] = [];
-	setLoginPublisher((push) => frames.push(push));
+	const publications: Harness["publications"] = [];
+	setLoginPublisher((...args) => {
+		publications.push(args);
+		frames.push(args[0]);
+	});
 
 	const logins: [string, AuthType][] = [];
 	const logout: string[] = [];
@@ -48,6 +53,7 @@ function install(loginImpl: LoginImpl): Harness {
 	configurePiRuntime(runtime);
 	return {
 		frames,
+		publications,
 		loginCalls: () => logins,
 		logoutCalls: () => logout,
 		lastSignal: () => signal,
@@ -67,6 +73,41 @@ describe("startLogin", () => {
 		const { loginId } = startLogin("anthropic");
 		expect(loginId).toMatch(/^login_\d+$/);
 		expect(frames).toEqual([]);
+	});
+
+	test.each([
+		"configure",
+		"activate",
+	])("delayed success retains its login generation after %s", async (cutover) => {
+		const replacement = install(async () => {});
+		const replacementGeneration = await getPiRuntimeGeneration();
+		const completion = Promise.withResolvers<void>();
+		const h = install(async (_id, i) => {
+			i.notify({ type: "progress", message: "Waiting" });
+			await completion.promise;
+			i.notify({ type: "progress", message: "Done" });
+		});
+		const originalGeneration = await getPiRuntimeGeneration();
+		const { loginId } = startLogin("anthropic");
+		await tick();
+		expect(h.loginCalls()).toEqual([["anthropic", "oauth"]]);
+
+		if (cutover === "configure") configurePiRuntime(replacementGeneration.runtime);
+		else activatePiRuntimeGeneration(replacementGeneration);
+		const currentGeneration = await getPiRuntimeGeneration();
+		expect(currentGeneration).not.toBe(originalGeneration);
+		expect(currentGeneration.runtime).toBe(replacementGeneration.runtime);
+
+		completion.resolve();
+		await tick();
+		expect(h.frames).toEqual([
+			{ loginId, providerId: "anthropic", frame: { kind: "progress", message: "Waiting" } },
+			{ loginId, providerId: "anthropic", frame: { kind: "progress", message: "Done" } },
+			{ loginId, providerId: "anthropic", frame: { kind: "success" } },
+		]);
+		expect(h.publications.slice(0, 2)).toEqual(h.frames.slice(0, 2).map((push) => [push]));
+		expect(h.publications.at(-1)?.[1]).toBe(originalGeneration);
+		expect(replacement.loginCalls()).toEqual([]);
 	});
 
 	test("device-code flow: pushes deviceCode, then success (as an oauth login)", async () => {
@@ -177,6 +218,7 @@ describe("startLogin", () => {
 		await tick();
 		expect(pasted).toBe("the-code");
 		expect(h.frames.at(-1)?.frame.kind).toBe("success");
+		expect(JSON.stringify(h.frames)).not.toContain("the-code");
 	});
 
 	test("pi aborting a prompt's signal (race lost) settles the parked input; a late reply is a no-op", async () => {
@@ -210,6 +252,7 @@ describe("startLogin", () => {
 				frame: { kind: "error", message: "provider said no" },
 			},
 		]);
+		expect(h.publications).toEqual(h.frames.map((push) => [push]));
 	});
 });
 
@@ -226,6 +269,25 @@ describe("cancelLogin", () => {
 		await tick();
 		expect(h.frames.map((f) => f.frame.kind)).toEqual(["prompt"]);
 		expect(h.lastSignal()?.aborted).toBe(true);
+		expect(h.publications).toEqual(h.frames.map((push) => [push]));
+	});
+
+	test("a login resolving after cancellation publishes neither success nor generation context", async () => {
+		const completion = Promise.withResolvers<void>();
+		const h = install(async (_id, i) => {
+			i.notify({ type: "progress", message: "Waiting" });
+			await completion.promise;
+		});
+		const { loginId } = startLogin("anthropic");
+		await tick();
+
+		cancelLogin(loginId);
+		completion.resolve();
+		await tick();
+		expect(h.lastSignal()?.aborted).toBe(true);
+		expect(h.publications).toEqual([
+			[{ loginId, providerId: "anthropic", frame: { kind: "progress", message: "Waiting" } }],
+		]);
 	});
 
 	test("an interaction firing after cancel pushes no stray frame (push guards on settled)", async () => {
@@ -275,7 +337,9 @@ describe("api-key login / logoutProvider", () => {
 		let stored: string | undefined;
 		const h = install(async (_id, i) => {
 			stored = await i.prompt({ type: "secret", message: "Enter your OpenAI API key" });
+			return { type: "api_key", key: stored };
 		});
+		const generation = await getPiRuntimeGeneration();
 		const { loginId } = startLogin("openai", "api_key");
 		await tick();
 		expect(h.loginCalls()).toEqual([["openai", "api_key"]]);
@@ -285,6 +349,18 @@ describe("api-key login / logoutProvider", () => {
 		await tick();
 		expect(stored).toBe("sk-abc");
 		expect(h.frames.at(-1)?.frame.kind).toBe("success");
+		expect(h.publications.at(-1)?.[1]).toBe(generation);
+		expect(JSON.stringify(h.frames)).toBe(
+			JSON.stringify([
+				{
+					loginId,
+					providerId: "openai",
+					frame: { kind: "prompt", message: "Enter your OpenAI API key", secret: true },
+				},
+				{ loginId, providerId: "openai", frame: { kind: "success" } },
+			]),
+		);
+		expect(JSON.stringify(h.frames)).not.toContain("sk-abc");
 	});
 
 	test("startLogin defaults to the oauth flow when no type is given", async () => {

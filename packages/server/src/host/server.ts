@@ -37,7 +37,7 @@ import {
 import {
 	type AnalyticsOptions,
 	initializeAnalytics,
-	setAnalyticsSending,
+	setAdditionalAnalyticsEnabled,
 	shutdownAnalytics,
 	track,
 } from "../analytics";
@@ -88,8 +88,16 @@ import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
+import {
+	additionalAnalyticsEnabled,
+	additionalCapture,
+	observeCurrentSetup,
+	setupObservation,
+} from "./productAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
+import { runObservation } from "./runAnalytics";
 import { resolveSubagentsEnabled } from "./subagentPolicy";
+import { taskObservation } from "./taskAnalytics";
 import { terminalDeliveryForSendStatus } from "./terminalSend";
 import {
 	handleReviewerSettled,
@@ -243,6 +251,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
 						: "linux";
+				const setupCapture = additionalCapture();
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
 					hostPlatform,
@@ -252,6 +261,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					...(appVersion ? { appVersion } : {}),
 					...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
 				};
+				setupObservation.observe(setupCapture, {
+					project_present: welcome.projects.length > 0 ? "yes" : "no",
+				});
 				const welcomeStatus = ws.send(
 					JSON.stringify({ channel: WS_CHANNELS.serverWelcome, data: welcome }),
 				);
@@ -439,6 +451,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setProjectPublisher((project) => {
+		const capture = additionalCapture();
+		if (capture) {
+			try {
+				setupObservation.observe(capture, {
+					project_present: listProjects().length > 0 ? "yes" : "no",
+				});
+			} catch {}
+		}
 		server.publish(
 			WS_CHANNELS.projectUpdated,
 			JSON.stringify({ channel: WS_CHANNELS.projectUpdated, data: project }),
@@ -501,7 +521,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			WS_CHANNELS.settingsChanged,
 			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
 		);
-		setAnalyticsSending(config.analyticsEnabled);
+		const previousGrant = additionalCapture();
+		setAdditionalAnalyticsEnabled(additionalAnalyticsEnabled(config));
+		if (additionalCapture() !== previousGrant) {
+			setupObservation.clear();
+			runObservation.clear();
+			taskObservation.clear();
+			void observeCurrentSetup();
+		}
 		refreshSubagentTools();
 	});
 
@@ -513,6 +540,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
+		runObservation.forget(payload.sessionId);
+		taskObservation.forget(payload.sessionId);
 		server.publish(
 			WS_CHANNELS.sessionDeleted,
 			JSON.stringify({ channel: WS_CHANNELS.sessionDeleted, data: payload }),
@@ -529,6 +558,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setExtUiPendingObserver(syncSessionActivity);
 
 	setSessionPublisher((payload) => {
+		runObservation.observe(payload.sessionId, payload.event);
+		if (payload.event.type === "tool_execution_start") {
+			const workspaceId = getSessionWorkspaceId(payload.sessionId);
+			if (workspaceId) taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);
+		}
 		server.publish(
 			WS_CHANNELS.piEvent,
 			JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload }),
@@ -544,10 +578,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 		if (isTodoToolEnd(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
+			const observeCompletion = taskObservation.toolFinished(payload.sessionId, payload.event);
 			if (workspaceId)
-				void maybeAttachChangeArtifacts(workspaceId, payload.sessionId).then(() =>
-					maybeAutoReReview(workspaceId, payload.sessionId),
-				);
+				void maybeAttachChangeArtifacts(workspaceId, payload.sessionId).then(async () => {
+					await observeCompletion();
+					maybeAutoReReview(workspaceId, payload.sessionId);
+				});
 		}
 	});
 
@@ -558,15 +594,18 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	});
 
-	setLoginPublisher((push) => {
+	setLoginPublisher((push, generation) => {
 		server.publish(
 			WS_CHANNELS.providerLogin,
 			JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }),
 		);
-		trackLoginOutcome(push);
+		trackLoginOutcome(push, generation);
 	});
 	setJbcentralAppliedPublisher(() => {
-		track({ name: "provider_login", params: { provider: "jbcentral", method: "central" } });
+		track({
+			name: "provider_login",
+			params: { provider: "jbcentral", method: "central", auth_method: "central" },
+		});
 	});
 	setJbcentralChangedPublisher(() => {
 		server.publish(
@@ -578,7 +617,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	initializeAnalytics({
 		...(appVersion ? { appVersion } : {}),
 		...(analytics ?? {}),
-		enabled: getConfig().analyticsEnabled,
+		additionalEnabled: additionalAnalyticsEnabled(getConfig()),
 	});
 
 	reviveTerminalSessions();
@@ -592,9 +631,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	}
 
+	void observeCurrentSetup();
+
 	const stop = (): void => {
 		if (stopping) return;
 		stopping = true;
+		setupObservation.clear();
+		runObservation.reset();
+		taskObservation.clear();
 		void shutdownAnalytics();
 		stopHostUpdateChecks();
 		cancelAllLogins();

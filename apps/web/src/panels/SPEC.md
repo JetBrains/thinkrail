@@ -533,10 +533,17 @@ a project picker, the prompt hero, and the reused
   carries the discoverability half (`chat/SPEC.md`: a `slash-templates-empty` footer nudge deep-linking
   here when no template exists anywhere), since this offer is otherwise two clicks deep in a dialog. **This
   project**'s empty state is unchanged (still the bare text) — the offer is Global-only, since it only
-  ever seeds global files. No server change. **`PrivacySettings`** is the **anonymous-usage-analytics
-  toggle** — a switch over `store.analyticsEnabled`, fired via `settings.update { analyticsEnabled }`
-  with the same converge-on-broadcast pattern as the theme, plus the what-is/isn't-collected copy; only
-  the boolean ever crosses the wire, see `submodule-server-analytics`. **`FeedbackSettings`** is the final
+  ever seeds global files. No server change. **`PrivacySettings`** manages additional-data consent and briefly
+  distinguishes it from always-on basics; the event contract belongs to [[submodule-server-analytics]].
+  **`AnalyticsConsentDialog`** mounts once through shell after a capable host's config hydrates. Its draft
+  switch uses the saved preference (absent → off); confirmation atomically saves preference plus
+  `analyticsConsentConfirmed`, while dismissal saves off/confirmed. A preselection never grants consent.
+  Failed persistence leaves the choice available with an error; broadcast closes it across clients.
+  Saved decisions survive restarts and change later through Settings. The startup window focuses on optional
+  sharing with brief anonymous/no-personal-data copy and the shared switch; its footer has only **Save choice**,
+  while Close, Escape, and backdrop remain dismissals. Full reporting details stay in Settings. Older hosts
+  retain their legacy privacy control without the new consent dialog.
+  **`FeedbackSettings`** is the final
   live section after Privacy: the same interview copy as the automatic prompt, stating that joining a user
   interview to discuss the participant's ThinkRail experience earns 100 bonus credits in Central
   (JetBrains AI), plus a real external anchor to the fixed Google Calendar booking page, opened in a new

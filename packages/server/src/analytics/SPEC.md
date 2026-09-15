@@ -2,119 +2,81 @@
 id: submodule-server-analytics
 type: submodule-design
 status: active
-title: analytics — anonymous usage analytics (PostHog sink)
+title: analytics — basic events and consented product insights
 parent: module-server
 depends-on: [module-contracts]
 tags: [v1, analytics, privacy]
 ---
 
-## Responsibility
+## Responsibility and boundary
 
-Anonymous, no-personal-data usage analytics, emitted **host-side only**. Answers product questions —
-unique users, version/platform, model preference, provider auth — via a **closed event set** delivered
-to **PostHog (EU cloud)** through the official `posthog-node` SDK. **Every channel reports** (a release
-binary, a packaged desktop app, a locally compiled artifact, and a run from source alike); what a run is gets *reported*, via
-`channel` + `build`, not gated on. What never reports is an **automated** run — CI, `bun test`, e2e. The SDK is an implementation detail
-**inside** the sink: the delivery backend hides behind the `AnalyticsSink` interface — swapping vendors
-is implementing a new sink, nothing else moves (exercised for real twice: GA4's Measurement Protocol →
-a hand-rolled PostHog capture POST → `posthog-node`, each swap contained to `sink.ts` + the key seam;
-PostHog won on free tier, EU residency, and a self-host path).
+Host-only product analytics shared by CLI/source/desktop, delivered personless to PostHog EU.
+The module owns the closed event vocabulary, catalog bucketing, installation identity usage, delivery,
+consent gates and bounded shutdown. Host alone observes feature outcomes and captures events; feature
+modules remain analytics-free. Sibling dependency edges belong to [[module-server]].
 
-## Boundary
+- **Public surface:** initialization, basic capture, consent-scoped additional capture, additional-data
+  enablement, shutdown/test reset, event types, bucket helpers and `BuildKind`.
+- **Allowed deps:** persistence, log, contracts types, pi-ai's built-in catalog, Node, and `posthog-node`
+  inside the sink only.
+- **Forbidden:** importing host/feature siblings; being imported outside host; exposing the installation
+  UUID on the wire; copying rich feature payloads into telemetry; browser autocapture or a native-only sink.
 
-- **Owns:**
-  - `events.ts` — the closed `AnalyticsEvent` union (`app_installed` / `app_started` /
-    `chat_started {provider, model}` / `message_sent {mode}` / `provider_login {provider, method}`) and
-    `bucketProvider()` / `bucketProviderModel()`: identity passes raw **only** when it matches pi's
-    built-in catalog (`getBuiltinProviders()` / `getBuiltinModels()`); a custom provider — or a custom
-    model id on a known provider — becomes `"custom"`. Fails closed. The machine-checked privacy pin is
-    the **unit tests**: they assert every event variant's exact outgoing properties — there is
-    deliberately no runtime allowlist filter (the union is closed and we control every call site; a
-    content-leaking field fails CI, and runtime filtering was judged over-engineering).
-  - `sink.ts` — `AnalyticsSink { send(clientId, events); setSending?(enabled); shutdown?() }`;
-    `createPostHogSink({ apiKey, host?, fetchImpl? })` wraps `posthog-node` (EU cloud by default):
-    `flushAt: 1` (a handful of events per run — dispatch each capture immediately; the SDK still
-    retries failed sends), `disableGeoip: true` (explicit even though it is the SDK default — the "no
-    IP-derived fields" invariant enforced sender-side), `disableCompression: true` (tiny payloads;
-    keeps the wire inspectable for the test seam and debugging), a custom `fetch` as the injected test
-    seam, SDK errors swallowed to the debug log (`on("error")` — never a user-facing warn). Every
-    outgoing event is **personless** (`$process_person_profile: false` — no person profiles
-    server-side; unique users still count by `distinct_id` = the install id). **`setSending(false)` is
-    a transport-level gate on the very `fetch` the SDK is handed** — every subsequent SDK request
-    (queued flushes AND the retry loop of an already-failed send) dies at the gate with a synthetic
-    200, zero network; this is deliberately NOT the SDK's `disable()`, which only stops new enqueues
-    (`optedOut` is never checked in its flush/retry paths). `shutdown()` drains the queue (bounded,
-    2s) for graceful stops. Plus `noopSink` (disabled/dev: events vanish).
-  - `mute.ts` — the **environment mute policy**: `environmentMute(env)` → `MuteReason | null`, the ONE
-    place that decides whether *this process* may send at all, whichever entrypoint booted the host.
-    `THINKRAIL_NO_ANALYTICS` (the documented per-run opt-out) beats `CI` (every automated run) beats
-    `NODE_ENV=test` (which `bun test` sets, so a unit test that boots a host stays silent). Every reason
-    fails **closed**. `AnalyticsEnv` is the injected env slice — injected precisely because this module's
-    own tests must exercise the *sending* path under `bun test`, which would otherwise mute them.
-    Centralizing here (rather than per-launcher) is what makes **"no entrypoint can forget to mute"**
-    true: `dev.ts` parses no argv, and unit tests boot hosts with no options at all.
-  - `service.ts` — the facade: `initializeAnalytics(opts)` (installation record via `persistence`,
-    sink selection, env stamping, first-run notice + `app_installed` announce, `app_started`),
-    `track(event)`, `setAnalyticsSending(enabled)`, `shutdownAnalytics()` (best-effort flush — the
-    host's `stop()` fires it without awaiting), `resetAnalyticsForTests()`.
-- **Engagement (`message_sent`):** one event per user-authored send, `mode` from the closed vocabulary
-  `prompt` | `steer` | `follow_up` (pi's three send methods) — never anything about the message (no
-  text, no length, no image count) and no identity params (model preference is `chat_started`'s job).
-  New-chat and existing-chat sends are the same event; `chat_started` stays the new-chat signal. Fired
-  by `host` from `session.prompt`/`steer`/`followUp` **after the send is accepted** (`ackSend`), so a
-  rejected send never counts — and **only for user-authored** sends: the same wire methods also carry
-  internal control traffic (the client's TODO wake-nudge), which `isControlMessage` filters out, so the
-  count stays "messages the user sent" and never inflates with the app's own prompts.
-- **Public surface (barrel):** `initializeAnalytics`, `track`, `setAnalyticsSending`,
-  `shutdownAnalytics`, `resetAnalyticsForTests`, the event types + bucket helpers, and `BuildKind` — which
-  `host/index.ts` re-exports so a launcher can name its own provenance without importing this module
-  (the forbidden edge below stays intact).
-- **Allowed deps:** `persistence` (installation record + data dir), `log` (send failures surface at
-  debug level through the shared logger), `contracts` (types),
-  `@earendil-works/pi-ai` (the built-in catalog — server-side value import), `posthog-node` (the
-  delivery SDK — value-imported **only** in `sink.ts`), Node `crypto`/`process`.
-- **Forbidden:** importing `host` or any other sibling; being imported by anything but `host` (all
-  `track()` call sites live in `host` — feature modules stay analytics-free; `provider_login` method
-  attribution is host's `loginAnalytics` correlation, see `submodule-server-host`); putting the
-  installation id on the wire in any form.
+## Events
 
-## Get right (the privacy contract)
+Basic events are always on in human runs: `app_started`,
+`chat_started { provider, model, auth_method }`, `message_sent { mode, provider, auth_method }`, and
+`provider_login { provider, method, auth_method }`. First observed launch defines first use; there is no install
+announcement/marker or provider-change event. Launch means host boot, not UI readiness. Chats can be empty;
+sends count after `ackSend`, exclude TODO-control nudges, and do not prove successful execution. Login
+requires correlated success, or the existing applied Central connection action. `auth_method` is a closed
+`api_key | subscription | oauth | central | other | unknown` category, never credentials or account/plan
+identities. It describes the observed authentication path, not billing entitlement. Host captures send
+metadata before dispatch, uses each session/login's retained runtime, and leaves ambiguous modes
+other/unknown. Central provenance uses loader registration metadata without inspecting opaque auth.
 
-- **The only stable identifier** is the per-install uuid4 in `persistence`'s server-only
-  `installation.json` — minted once, **never rotated** (id continuity across opt-out/opt-in is the
-  chosen posture: a returning opt-in is the same install, not a fresh cohort), never crossing the wire
-  (deliberately not in the broadcast `config.json`).
-- **The flag only gates sending:** `AppConfig.analyticsEnabled` (host-mediated — `host` syncs
-  `setAnalyticsSending` on every settings change; this module has no `settings` edge). Disabled ⇒ zero
-  network **from that instant**: the service stops emitting AND propagates the flip into the sink's
-  transport gate, so events already queued inside the SDK — and retries of an already-failed send —
-  are dropped client-side (an HTTP request already on the wire cannot be recalled; everything after it
-  can, and is). `app_installed` fires at most once per install (the `announced` bit), on the first
-  sending-enabled boot, together with the first-run notice.
-- **An automated run never sends; every human run does.** `channel` gates nothing — it is a reported
-  property. The sink is real unless the run is muted, and muting folds the launcher's `--no-analytics`
-  with the three environmental reasons in `mute.ts`. A muted boot installs `noopSink` **outright** rather
-  than constructing a client and closing its transport gate: no vendor client exists, so there is nothing
-  to leak and nothing to drain. Because muted ⇒ no real sink, `sending` is just `enabled && realSink` —
-  there is deliberately no separate `mute` bit in the state to drift out of sync.
-- **One committed project key.** `POSTHOG_PROJECT_KEY` (in `sink.ts`) is the destination for every
-  build — the same project `apps/website` reports to, so app usage and landing-page traffic answer
-  questions in one place. It is committed on purpose: a run-from-source host has no release pipeline to
-  bake a key into, and a PostHog project API key is write-only and public by design (it appends events; it
-  can never read them). Consequences accepted: rotating it is a commit, not a secret edit; and a fork that
-  runs from source reports too (anonymously — the first-run notice and both opt-outs still apply).
-  `AnalyticsOptions.posthogApiKey` overrides it (tests, self-hosting), as `THINKRAIL_POSTHOG_HOST` does
-  the endpoint.
-- **Never sent:** paths, file/spec names, prompts, code, transcripts, token counts, hostnames,
-  usernames, IP-derived fields, or any free-form user string. Params on every event: `app_version`,
-  `channel`, `os`, `arch`, `build` (`source` | `binary` | `desktop` — declared by the launching entry,
-  see `module-cli` / `module-desktop`, so `channel = dev` still separates local artifact kinds)
-  — plus only the closed per-event params above; the unit tests pin each
-  variant's exact non-`$` properties (transport framing — the SDK's `$lib*` fields, `$geoip_disable`,
-  and the personless flag — is the sink's, never an event param).
-- **Fire-and-forget:** `track`/`initializeAnalytics` never throw into callers and never block boot.
-  `shutdownAnalytics` is **idempotent** (one drain, memoized) and awaited where awaiting is possible:
-  `bootHost`'s SIGINT/SIGTERM handler drains it (bounded, concurrent with session settling) before
-  `process.exit`; the sync `server.stop()` fires the same memoized drain best-effort. An abrupt kill
-  may still drop the final instants' events — accepted (with `flushAt: 1` anything older than the
-  last moment is already dispatched).
+Additional events require explicit consent. Their exact property unions and payload tests are the schema;
+all properties are fixed enums or bounded buckets, never resource identities or free-form strings.
+
+| Event | Signal |
+| --- | --- |
+| `setup_state_observed` | Provider/model/project readiness (`yes/no/unknown`); first current observation and changes, not every poll. |
+| `setup_action_finished` | Explicit setup operation, outcome and fixed failure category; automatic Default provisioning is excluded. |
+| `agent_run_started` | Work-cycle origin, workspace kind and catalog-bucketed provider/model. |
+| `agent_run_settled` | Final outcome, elapsed-time/retry/compaction buckets; only `agent_settled`, never attempt-level `agent_end`. |
+| `task_completed` | Nonempty task-group completion transition after artifact reconciliation, change evidence and whether verification was recorded. |
+| `review_decided` | Actual user/agent approval or changes-requested decision, not aborted-review cleanup. |
+| `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs. |
+
+Correlation is transient and scoped to one consent grant. No history replay or reconstruction of work
+started before consent; asynchronous results from a revoked grant remain discarded after re-enabling.
+Internal/unknown work never inflates user activation. A normal stop or agent-declared task/verification
+status is not proof of value, correctness or a passed test. Arrival order is not execution order.
+
+## Consent and delivery
+
+`analyticsEnabled` is the additional-data preference; `analyticsConsentConfirmed` records an explicit
+choice. Both must be true. Legacy preferences seed the first-launch window, not consent; absent preferences
+default off. Settings owns atomic persistence and host applies the gate. Window behavior belongs to
+[[submodule-web-panels]]. Later launches use the saved decision.
+
+CI and `NODE_ENV=test` create no vendor clients. `--no-analytics` / `THINKRAIL_NO_ANALYTICS` suppress only
+additional events without changing consent. Host-side analytics is the sole environment-policy reader
+across launchers.
+
+Additional revocation drops queued/retrying requests at the transport boundary without stopping basics;
+an already-sent request cannot be recalled. Revoked queues never revive. Capture/boot never block product
+flows or throw into callers; graceful shutdown awaits an idempotent two-second SDK drain.
+
+## Data boundary
+
+The stable UUID stays in server-only `installation.json`; shared data directories share it. Counts describe
+installations, not people. Every event carries `app_version`, `channel`, `os`, `arch`, `build` plus its
+closed properties. Only built-in provider/model names pass raw; custom values become `custom`, preserving
+the existing explicit `jbcentral` login name. No content, paths/names, resource IDs, credentials, arbitrary
+errors, token/cost counts or recordings are collected.
+
+The sink uses the committed public key, EU endpoint, disabled GeoIP enrichment and
+`$process_person_profile: false`; key/endpoint/fetch injection supports tests and self-hosting. Personless
+processing does not remove UUID linkage; vendor IP-discard/retention policy is separate. Automated/schema,
+consent-revocation, migration, host-trigger and packaged loopback-delivery tests pin these boundaries.
