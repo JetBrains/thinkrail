@@ -230,6 +230,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   fresh commit delta on a `changes_requested` record OR a record reset to `unreviewed` — the latter is
   the path-list fallback (`todos/artifacts.ts` drops the record when the redo can't be committed), where
   a surviving spent cycle is itself the "a fix landed" signal, there being no sha to watermark against.
+  An eligible item is **enqueued onto the plan's serial chain even when another review is already running**
+  (a fix landing while Review All reviews a different step), and the per-item claim dedupes — it must not be
+  dropped when the chain is busy, or a step fixed mid-review would stay `changes_requested` at
+  `autoCycles: 1` forever, since nothing retries once the chain drains.
   **An `approve` never settles an item that still has open findings.** The two rounds of a fix cycle are
   independent runs, so nothing structural connects round 2's approve to round 1's findings: the gate is
   explicit, `itemOpenFindings` checked before `approveTodoReview`. Its set is deliberately WIDER than the

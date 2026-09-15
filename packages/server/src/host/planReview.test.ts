@@ -26,7 +26,12 @@ import { getReviewSnapshot } from "../reviews";
 import { resetConfigCache, updateConfig } from "../settings";
 import { todoReviewAutoCycles, todoReviewRecord } from "../todos";
 import { itemReviewActive } from "./planReviewQueue";
-import { installRequestReviewSeam, type ReviewRunner, startPlanReview } from "./requestReview";
+import {
+	installRequestReviewSeam,
+	maybeAutoReReview,
+	type ReviewRunner,
+	startPlanReview,
+} from "./requestReview";
 import { isItemUnderActiveReview } from "./todoReview";
 
 let dataDir: string;
@@ -265,6 +270,54 @@ test("a fix the worker never accepted gives the auto cycle back instead of stran
 	expect(comments).toHaveLength(1);
 	expect(comments[0]?.status).toBe("draft");
 	expect(isItemUnderActiveReview(sessionId, id)).toBe(false);
+});
+
+test("a fix landing during another step's review is re-reviewed, not dropped", async () => {
+	const sessionId = await workerSession();
+	const a = committedItem(sessionId, "A");
+	const b = committedItem(sessionId, "B");
+	const refA = { workspaceId: WS, sessionId, id: a };
+
+	// Round 1 on A: request_changes with auto-fix on → changes_requested, autoCycles 1, finding sent.
+	startPlanReview(WS, sessionId, a, verdictRunner(requestChanges));
+	await settle(sessionId, a);
+	expect(todoReviewAutoCycles(refA)).toBe(1);
+
+	// The worker "fixes" A: a fresh commit lands (unreviewed delta) and A is marked done.
+	new TodoStore(worktree, sessionId).update(a, {
+		status: "done",
+		artifacts: [
+			{ kind: "commit", sha: "sha1", label: "a" },
+			{ kind: "commit", sha: "sha2", label: "fix" },
+		],
+	});
+
+	// A slow review of B occupies the plan's serial chain.
+	let releaseB!: () => void;
+	const bGate = new Promise<void>((resolve) => {
+		releaseB = resolve;
+	});
+	const slowRunner: ReviewRunner = async () => {
+		await bGate;
+		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+	};
+	expect(startPlanReview(WS, sessionId, b, slowRunner)).toBe(true);
+
+	// The fix's tool-end fires while B is mid-review — A must be enqueued onto the busy chain, not dropped.
+	let reviewedA = false;
+	await maybeAutoReReview(
+		WS,
+		sessionId,
+		verdictRunner(approve, () => {
+			reviewedA = true;
+		}),
+	);
+	expect(itemReviewActive(sessionId, a)).toBe(true);
+
+	releaseB();
+	await settle(sessionId, b);
+	await settle(sessionId, a);
+	expect(reviewedA).toBe(true);
 });
 
 test("a tool request_review queues behind a button review of another step on the same plan", async () => {
