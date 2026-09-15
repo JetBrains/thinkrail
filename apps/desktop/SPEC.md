@@ -152,7 +152,10 @@ at the next pre-build. On Windows that hook also brands the bundled uninstaller 
 but before release compression, wrapping, and signing. Builds in one worktree remain sequential.
 
 Electrobun's platform icon configuration points at one ThinkRail mark in the native formats each target
-requires: the macOS iconset, Windows multi-resolution ICO, and Linux PNG. The same Windows ICO is the
+requires: the macOS iconset, Windows multi-resolution ICO, and Linux PNG. The native mark preserves its
+rounded-square silhouette with the ThinkRail glyph in the dark-family brand green (`#8dff4f`) on a solid
+black tile; translucent glass, highlights, and decorative edging are excluded so small taskbar frames stay
+crisp. The browser favicon and in-app shell mark are separate web-owned surfaces. The same Windows ICO is the
 Hutch-owned source for the installed app, setup/extractor executable, shortcuts, and taskbar identity; no
 release action substitutes a second installer icon. Electrobun 2.0.1 does not apply that icon to its
 bundled Windows uninstaller, so the project `postBuild` hook adds the same icon group to
