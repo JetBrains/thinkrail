@@ -120,7 +120,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
    remains active through retries, compaction, and queued continuations: pi's `agent_end` is only an
    attempt boundary and may precede more work; `agent_settled` is the authoritative transition to idle.
 
-   **Approved chat-title contract (implementation pending).** A workspace display name, its Git branch/cwd,
+   **Chat-title contract.** A workspace display name, its Git branch/cwd,
    and each chat title are independent identities; no rename cascades between them. A chat title is pi's
    durable session name (`session_info`), never browser view state or a host sidecar. An unnamed chat gets
    one best-effort title from its first accepted text prompt through a bounded, tool-free one-shot completion

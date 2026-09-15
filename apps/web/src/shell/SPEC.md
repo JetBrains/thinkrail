@@ -109,7 +109,7 @@ second or two, and a retry button shown immediately reads as "this failed" for w
 stalled past a short grace window (`CHAT_RETRY_DELAY_MS`), so the retry affordance surfaces solely for the
 genuinely-stuck case it exists for.
 
-## Chat title controls (approved; implementation pending)
+## Chat title controls
 
 A chat tab's existing context menu gains **Rename chat…**, and every row in the workspace's **Recently
 closed** chat menu gains a visible pencil action. Both open one shell-owned rename dialog prefilled with the
@@ -120,7 +120,9 @@ host mutation while the action is disabled, then the existing `session_info_chan
 tabs and closed history everywhere; rejection retains the current label and raises the standard error toast.
 
 The shell injects the chat-only action into the otherwise domain-neutral Workbench tab menu rather than
-teaching the pure layout engine how sessions are persisted. Renaming a closed chat does not open or select it;
+teaching the pure layout engine how sessions are persisted. Each menu action lets its source menu close and
+opens the dialog on the next animation frame: overlapping Radix modal scopes otherwise restore the body's
+pointer lock to `none` after the dialog closes. Renaming a closed chat does not open or select it;
 renaming an open chat does not change placement or focus. Automatic title arrival uses this same label fold
 but opens no dialog, notification, or focus transition. ChatView's `/name` command is the independent keyboard
 entry point to the same wire mutation.

@@ -16,6 +16,7 @@ import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker }
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
+	selectCanRenameChat,
 	selectCatalogModel,
 	selectCompactionTurnIds,
 	selectSkillsStale,
@@ -46,6 +47,7 @@ import {
 	compactSubmissionError,
 	mergeNativeChatCommands,
 	parseNativeChatCommand,
+	prepareNameChatCommand,
 } from "./nativeCommands";
 import { planGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
@@ -168,6 +170,7 @@ export default function ChatView({
 	const runtime = sessionRuntime ?? EMPTY_RUNTIME;
 	const status = useAppStore((s) => s.status);
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
+	const canRenameChat = useAppStore(selectCanRenameChat);
 	useTranscriptSync({
 		workspaceId,
 		sessionId,
@@ -428,11 +431,14 @@ export default function ChatView({
 
 	const mergedCommands = useMemo(
 		() =>
-			mergeNativeChatCommands([
-				...commands.filter((command) => command.source !== "prompt"),
-				...templates.map(templateToSlashCommand),
-			]),
-		[commands, templates],
+			mergeNativeChatCommands(
+				[
+					...commands.filter((command) => command.source !== "prompt"),
+					...templates.map(templateToSlashCommand),
+				],
+				canRenameChat,
+			),
+		[canRenameChat, commands, templates],
 	);
 
 	useEffect(() => {
@@ -527,6 +533,12 @@ export default function ChatView({
 			);
 	};
 
+	const performRename = (title: string) => {
+		void getTransport()
+			.request("session.rename", { workspaceId, sessionId, title })
+			.catch((err) => useAppStore.getState().appendErrorTurn(sessionId, errorText(err)));
+	};
+
 	const performSend = (
 		text: string,
 		attachments: ChatAttachment[],
@@ -562,14 +574,20 @@ export default function ChatView({
 		attachments: ChatAttachment[],
 		behavior: SubmitBehavior,
 	): ComposerSubmitDisposition => {
-		const nativeCommand = parseNativeChatCommand(text);
-		if (nativeCommand) {
+		const nativeCommand = parseNativeChatCommand(text, canRenameChat);
+		if (nativeCommand?.kind === "compact") {
 			const submissionError = compactSubmissionError(
 				attachments.length > 0,
 				queue.hasImages === true,
 			);
 			if (submissionError) return { accepted: false, reason: submissionError };
 			performCompact(nativeCommand.instructions);
+			return { accepted: true };
+		}
+		if (nativeCommand?.kind === "name") {
+			const prepared = prepareNameChatCommand(nativeCommand.title, attachments.length > 0);
+			if ("reason" in prepared) return { accepted: false, reason: prepared.reason };
+			performRename(prepared.title);
 			return { accepted: true };
 		}
 		if (behavior !== "interrupt") {

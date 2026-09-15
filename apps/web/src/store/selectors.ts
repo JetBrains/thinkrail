@@ -3,6 +3,7 @@ import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	type GitDiffScope,
 	type Project,
+	SESSION_RENAME_PROTOCOL_VERSION,
 	type SpecGraphNode,
 	type WireModel,
 	type Workspace,
@@ -61,6 +62,14 @@ export function isConnectedGeneration(
 	connectionGeneration: number,
 ): boolean {
 	return state.status === "connected" && state.connectionGeneration === connectionGeneration;
+}
+
+interface ProtocolState {
+	protocolVersion: number | null;
+}
+
+export function selectCanRenameChat(state: ProtocolState): boolean {
+	return state.protocolVersion !== null && state.protocolVersion >= SESSION_RENAME_PROTOCOL_VERSION;
 }
 
 interface ActiveWorkspaceState {
