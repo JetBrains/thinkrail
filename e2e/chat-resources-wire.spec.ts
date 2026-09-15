@@ -8,7 +8,7 @@ test("resource reads require the current chat's workspace and never recover hand
 	page,
 }) => {
 	await openFixtureProject(page);
-	const wire = await E2eWire.connect();
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
 	try {
 		const project = (await wire.request("project.list", {}))[0];
 		if (!project) throw new Error("Missing fixture project");
