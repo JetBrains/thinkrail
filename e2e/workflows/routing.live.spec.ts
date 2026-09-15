@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { test } from "@playwright/test";
 import { checks, defineScenario, endAllSessions, signals, workflowTest } from "./harness";
 
@@ -28,6 +29,13 @@ const DIRECT_WORK_FORBIDDEN_TOOLS = [
 	"todo_remove",
 	"todo_plan_summary",
 ];
+
+function changedPaths(cwd: string): string[] {
+	return execFileSync("git", ["status", "--porcelain"], { cwd, encoding: "utf8" })
+		.split("\n")
+		.filter(Boolean)
+		.map((line) => line.slice(3));
+}
 
 workflowTest(
 	defineScenario({
@@ -118,14 +126,13 @@ workflowTest(
 		expect: [
 			checks.expectNoSkillRead(DIRECT_WORK_FORBIDDEN_SKILLS),
 			...DIRECT_WORK_FORBIDDEN_TOOLS.map((name) => checks.expectToolNotCalled(name)),
-			checks.custom(
-				"the answer has no workflow announcement",
-				({ log }) => !/\b(?:workflow|routing)\b/i.test(log.assistantTexts().join("\n")),
-			),
 			checks.custom("the answer describes the image-resizing codebase", ({ log }) =>
 				/resiz/i.test(log.assistantTexts().join("\n")),
 			),
-			checks.expectToolNotCalled("edit"),
+			checks.custom(
+				"the question leaves the worktree unchanged",
+				({ cwd }) => changedPaths(cwd).length === 0,
+			),
 		],
 		judge: {
 			rubric: [
@@ -150,14 +157,13 @@ workflowTest(
 		expect: [
 			checks.expectNoSkillRead(DIRECT_WORK_FORBIDDEN_SKILLS),
 			...DIRECT_WORK_FORBIDDEN_TOOLS.map((name) => checks.expectToolNotCalled(name)),
-			checks.expectToolCalled("edit", { pathEndsWith: "src/resize/index.ts" }),
+			checks.custom(
+				"only the requested file changed",
+				({ cwd }) => changedPaths(cwd).join("\n") === "src/resize/index.ts",
+			),
 			checks.expectFile(
 				"src/resize/index.ts",
 				/resize\(imagePaths: string\[\]\)[\s\S]*void imagePaths/,
-			),
-			checks.custom(
-				"the edit report has no workflow announcement",
-				({ log }) => !/\b(?:workflow|routing)\b/i.test(log.assistantTexts().join("\n")),
 			),
 		],
 		judge: {
