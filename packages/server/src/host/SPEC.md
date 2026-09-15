@@ -445,7 +445,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   reconnect retains and re-delivers it after `server.welcome`. A host restart has no claim to re-deliver, and
   the welcome clears the frontend's stale popup projection. Popup `feedback.respond` actions are ordinary
   replay-safe requests and never alter the Settings link.
-- **Chat titles (approved; implementation pending):** `session.rename` resolves `workspaceId` to its cwd,
+- **Chat titles:** `session.rename` resolves `workspaceId` to its cwd,
   validates the requested title against contracts, and delegates the unconditional durable write to `agent`;
   it never patches one client directly. The user-send acceptance path also tees each non-control text prompt
   into one detached, per-session-single-flighted auto-title attempt while the pi name is absent. `assist`

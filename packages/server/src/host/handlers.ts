@@ -21,7 +21,7 @@ import type {
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
-import { isControlMessage } from "@thinkrail/contracts";
+import { isControlMessage, normalizeSessionTitle } from "@thinkrail/contracts";
 import {
 	abortSession,
 	answerQuestion,
@@ -36,6 +36,7 @@ import {
 	getSessionCommands,
 	getSessionMessages,
 	getSessionStats,
+	getSessionWorkspaceId,
 	hasSession,
 	isSessionStreaming,
 	listAvailableModels,
@@ -53,6 +54,7 @@ import {
 	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
+	renameSession,
 	resolveExtUi,
 	setSessionModel,
 	setSessionThinkingLevel,
@@ -167,6 +169,7 @@ import {
 } from "../workspaces";
 import { ackSend } from "./ackSend";
 import { sessionProviderAnalytics, trackChatStarted } from "./authAnalytics";
+import { maybeAutoNameChat } from "./autoRename";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -221,6 +224,10 @@ async function sendUserMessage(
 	const control = isControlMessage(text);
 	const provider = control ? undefined : sessionProviderAnalytics(sessionId);
 	await ackSend(runObservation.send(sessionId, control ? "internal" : "user", operation));
+	if (!control) {
+		const workspaceId = getSessionWorkspaceId(sessionId);
+		if (workspaceId) void maybeAutoNameChat(sessionId, workspaceId, text);
+	}
 	if (provider) {
 		track({
 			name: "message_sent",
@@ -737,6 +744,18 @@ const handlers: Record<string, Handler> = {
 		const p = params as { workspaceId: string; sessionId: string };
 		await deleteSession(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
 		await removeSessionTodoWindows(p);
+		return { ok: true } as const;
+	},
+	"session.rename": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string; title: string };
+		const title = normalizeSessionTitle(p.title);
+		if (!title) throw new Error("Invalid session title");
+		await renameSession(
+			p.sessionId,
+			p.workspaceId,
+			getWorkspace(p.workspaceId).worktreePath,
+			title,
+		);
 		return { ok: true } as const;
 	},
 	"session.setModel": async (params) => {

@@ -67,11 +67,14 @@ test("session rename is versioned and bounded", () => {
 
 test("session titles normalize to one bounded non-blank line", () => {
 	const normalize = Reflect.get(protocol, "normalizeSessionTitle") as
-		| ((value: string) => string | null)
+		| ((value: unknown) => string | null)
 		| undefined;
 	expect(typeof normalize).toBe("function");
 	expect(normalize?.("  Fix auth\r\nredirect  ")).toBe("Fix auth redirect");
 	expect(normalize?.(" \n ")).toBeNull();
+	expect(() => normalize?.(null)).not.toThrow();
+	expect(normalize?.(null)).toBeNull();
+	expect(normalize?.(42)).toBeNull();
 	expect(normalize?.("x".repeat(80))).toBe("x".repeat(80));
 	expect(normalize?.("x".repeat(81))).toBeNull();
 });
