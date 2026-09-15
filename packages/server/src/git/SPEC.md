@@ -160,9 +160,11 @@ ref off the workspace-create critical path.
   it) so the plan page can flag commits the PR doesn't have yet — the `origin/` here is the second
   deliberate survivor of the all-remotes sweep, because it asks where *this* workspace's own branch was
   pushed, not which remote a base was branched from; `listBranches(projectId)` → `{ local, remote,
-  remoteGroups?, defaultBranch }` (local `refs/heads`; canonical `remote` = every direct full ref under
-  `refs/remotes` with symbolic aliases omitted; additive `remoteGroups` = host-owned remote/branch metadata
-  for presentation; default = origin's `HEAD`→another remote's `HEAD`→`origin/main`→repo `HEAD`; any ref-list
+  remoteGroups?, defaultBranch, current }` (local `refs/heads`; canonical `remote` = every direct full ref
+  under `refs/remotes` with symbolic aliases omitted; additive `remoteGroups` = host-owned remote/branch
+  metadata for presentation; `current` = the repo's checked-out branch, so a caller that offers no base —
+  the New Workspace dialog in folder mode — can still name where the work will land; default = origin's
+  `HEAD`→another remote's `HEAD`→`origin/main`→repo `HEAD`; any ref-list
   or ownership-list failure throws, never a successful partial catalog),
   **`resolveDefaultBranch(repoPath)`** — that default-branch
   resolution factored out (named once), shared by `listBranches` and the `workspaces` module's

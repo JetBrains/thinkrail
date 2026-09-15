@@ -46,6 +46,11 @@ test("project template previews advance the additive wire shape to v63", () => {
 });
 
 test("host update advisories advance the protocol with an immutable notice channel", () => {
-	expect(PROTOCOL_VERSION).toBe(64);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(64);
 	expect(WS_CHANNELS.hostUpdateAvailable).toBe("host.updateAvailable");
+});
+
+test("the workspace-name suggestion advances the additive wire shape to v65", () => {
+	expect(PROTOCOL_VERSION).toBe(65);
+	expect(WS_METHODS.workspaceSuggestName).toBe("workspace.suggestName");
 });

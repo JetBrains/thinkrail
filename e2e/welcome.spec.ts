@@ -175,13 +175,12 @@ test("a project without specs suggests setting it up", async ({ page }) => {
 		await expect(dialog.getByTestId("ws-prompt")).toHaveValue("/skill:setting-up-a-project ");
 		await expect(dialog.getByTestId("slash-menu")).toHaveCount(0);
 		await expect(dialog.getByTestId("ws-target-worktree")).toHaveAttribute("data-active", "true");
-		await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
+		await expect(dialog.getByRole("heading", { name: "Start work" })).toBeVisible();
 		await expect(dialog.getByTestId("ws-branch-picker")).toBeVisible();
 		await expect(dialog.getByTestId("ws-prompt-note")).toContainText("setting-up-a-project skill");
 
 		await dialog.getByTestId("ws-target-default").click();
-		await expect(dialog.getByRole("heading", { name: "Work in project folder" })).toBeVisible();
-		await expect(dialog).toContainText("no isolation");
+		await expect(dialog).toContainText("No isolation");
 		await expect(dialog.getByTestId("ws-branch-picker")).toHaveCount(0);
 
 		await dialog.getByTestId("ws-prompt").fill("");
