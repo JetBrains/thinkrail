@@ -9,14 +9,16 @@ depends-on: [module-cli, module-desktop, module-shared, module-repo-scripts, mod
 
 ## Responsibility
 
-Public PR gates and reusable native build recipes. Release orchestration, signing/notary credentials,
+Public PR gates, contribution templates, and reusable native build recipes. Release orchestration,
+signing/notary credentials,
 source authorization, tags, checksums, and publication belong to `JetBrains/thinkrail-signing`.
 This module owns the public action inputs/outputs and artifact/version contract consumed by that private
 pipeline.
 
 ## Boundary
 
-- **Owns:** public CI/site workflows, native build recipes, version calculation, and the artifact
+- **Owns:** public CI/site workflows, contribution templates, native build recipes, version calculation,
+  and the artifact
   interface consumed by the private release controller.
 - **Consumes:** CLI and desktop build commands, [[module-artifact-tests]] smoke entrypoints, shared
   version stamping, root conformance/unit/browser commands, git, and native platform tools.
