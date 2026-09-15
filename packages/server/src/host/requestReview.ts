@@ -339,7 +339,11 @@ export function startPlanReview(
  * one auto cycle — see host/SPEC.md ("auto re-review") for why `unreviewed` counts as a fresh delta.
  * Eligible items are enqueued onto the plan's serial chain even while another review runs; the per-item
  * claim dedupes, so a fix landing mid-review is not dropped. */
-export async function maybeAutoReReview(workspaceId: string, sessionId: string): Promise<void> {
+export async function maybeAutoReReview(
+	workspaceId: string,
+	sessionId: string,
+	runSubagent: ReviewRunner = runReviewSubagent,
+): Promise<void> {
 	try {
 		const plan = await listTodos({ workspaceId, sessionId });
 		const items = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
@@ -350,7 +354,7 @@ export async function maybeAutoReReview(workspaceId: string, sessionId: string):
 			const freshCommitDelta =
 				r?.state === "changes_requested" && (r.unreviewedShas?.length ?? 0) > 0;
 			if (!freshCommitDelta && r?.state !== "unreviewed") continue;
-			startPlanReview(workspaceId, sessionId, item.id);
+			startPlanReview(workspaceId, sessionId, item.id, runSubagent);
 		}
 	} catch (err) {
 		console.warn(`auto re-review skipped (${workspaceId}/${sessionId}): ${err}`);
