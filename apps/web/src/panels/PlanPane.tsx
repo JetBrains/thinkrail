@@ -1093,8 +1093,7 @@ export default function PlanPane({
 									onStartReview={startReview}
 									onOpenReview={onOpenReview}
 									reviewComments={reviewComments}
-									reviewerSessionId={data.reviewerSessionId}
-									startDisabled={reviewingAny}
+									startDisabled={reviewingAny || !canReview}
 									focusRequest={focusRequest}
 								/>
 							))}
