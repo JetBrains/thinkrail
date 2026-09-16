@@ -120,9 +120,9 @@ landing + blog shells                      ──▶ src/components/Analytics.as
   and via the file tree), and animations are skipped under `prefers-reduced-motion`.
 - **Enhancement behaviors owned by `main.ts`** (the code carries no rationale — this is it):
   - *Terminal replay*: the hero install picker keeps the selected OS/shell's primary desktop action and
-    secondary CLI command together; that visible secondary command is the single source of truth for the
-    terminal, which subscribes and types it before the short install transcript. A generation counter
-    invalidates an in-flight sequence on OS change; clicking the
+    **Browser UI via command line** disclosure together; the launcher command inside static markup is the single source of truth for the terminal,
+    which subscribes and types it before the short install transcript. A generation counter invalidates an
+    in-flight sequence on OS change; clicking the
     *finished* terminal (or its keyboard-reachable `Replay logo` button, revealed only then) replays
     the ASCII logo + a GitHub CTA — never the install. The logo banner's characters are never
     altered; only its font size is fitted to the rail width (re-fitted on resize).
@@ -136,21 +136,23 @@ landing + blog shells                      ──▶ src/components/Analytics.as
     (from `data-mock-label`), `aria-expanded` + `aria-describedby` on open — no `aria-haspopup`
     (a `tooltip` is not an allowed popup value). The `.rail-tabs` callout anchors to the panel's
     live edge; others place beside the trigger, clamped to the viewport and repositioned on resize.
-- The hero's install experience has **macOS / Windows / Linux** tabs and makes the stable desktop
-  application the primary action in every panel: macOS Apple Silicon DMG, Windows x64 setup ZIP, and
-  distinct Linux x64 / ARM64 setup archives. Versionless GitHub `releases/latest/download` URLs name
-  the public aliases owned by [[module-ci-release]]; the website carries no release version, updater
-  payload name, or private artifact knowledge. Browser hints choose only the initial supported desktop
-  OS; they never hide alternatives, infer Linux CPU architecture, or claim to detect an ambiguous mobile
-  platform. A visibly secondary “Prefer the command line?” region retains the old CLI installer.
-  Windows adds **PowerShell / Command Prompt (cmd) / WSL** tabs within that region: PowerShell runs
-  `irm …/install.ps1 | iex` directly in the current session, Command Prompt launches
-  `powershell -c "irm …/install.ps1 | iex"`, and WSL uses `install.sh` to install the Linux build inside
-  that distro. ARIA structure: a `tablist` may contain nothing but `tab`s, so the OS tabs form their
-  own tablist and the Windows CLI region owns a separate shell tablist, shown only while Windows is
-  active. Every hero panel remains in the static DOM; JS turns the complete fallback into
-  the tabbed view. The detailed `INSTALL.md` section repeats the desktop-first hierarchy before its
-  complete CLI/nightly reference.
+- The hero's install experience has compact **macOS / Windows / Linux** tabs and makes the stable
+  desktop application the only expanded action in each panel: macOS Apple Silicon DMG, Windows x64
+  setup ZIP, and distinct Linux x64 / ARM64 setup archives. Each panel carries one compatibility line;
+  it does not repeat product name, desktop/stability prose, or format outside the action label. A native
+  **Browser UI via command line** disclosure retains the local launcher and explains that `thinkrail` opens
+  the browser UI, without presenting a second terminal-only interface. Windows
+  adds **PowerShell / Command Prompt (cmd) / WSL** tabs only inside that disclosure: PowerShell runs
+  `irm …/install.ps1 | iex`, Command Prompt launches `powershell -c "irm …/install.ps1 | iex"`, and
+  WSL uses `install.sh`. The closed picker stays under 150px on desktop and 190px on mobile. Versionless
+  GitHub `releases/latest/download` URLs name the public aliases owned by [[module-ci-release]]; the
+  website carries no release version, updater payload name, or private artifact knowledge. Browser hints
+  choose only the initial supported desktop OS; they never hide alternatives, infer Linux CPU architecture,
+  or claim to detect an ambiguous mobile platform. Every panel remains in the static DOM; JS turns the
+  complete fallback into tabs, while `<details>` owns keyboard/no-JS disclosure semantics. The detailed
+  `INSTALL.md` section is one compact platform-row matrix plus one browser-UI-via-command-line disclosure;
+  nightly/version examples
+  live in release documentation rather than the marketing page.
 
 ## Analytics and consent
 
