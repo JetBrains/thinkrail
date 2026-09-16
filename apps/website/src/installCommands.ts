@@ -12,11 +12,10 @@ export const desktopInstallerPlatforms = [
 	{
 		id: "macos",
 		label: "macOS",
-		product: "ThinkRail for macOS",
+		detail: "Apple Silicon",
 		downloads: [
 			{
 				label: "Download .dmg",
-				detail: "Apple Silicon · .dmg · Stable",
 				href: desktopDownload("thinkrail-desktop-darwin-arm64.dmg"),
 			},
 		],
@@ -24,11 +23,10 @@ export const desktopInstallerPlatforms = [
 	{
 		id: "windows",
 		label: "Windows",
-		product: "ThinkRail for Windows",
+		detail: "Windows x64",
 		downloads: [
 			{
 				label: "Download .zip",
-				detail: "Windows x64 · unzip and run Setup",
 				href: desktopDownload("thinkrail-desktop-windows-x64.zip"),
 			},
 		],
@@ -36,16 +34,14 @@ export const desktopInstallerPlatforms = [
 	{
 		id: "linux",
 		label: "Linux",
-		product: "ThinkRail for Linux",
+		detail: "Ubuntu 24.04+",
 		downloads: [
 			{
-				label: "Download x64",
-				detail: "Linux x64 · Ubuntu 24.04+ · extract .tar.gz, then run ./installer",
+				label: "x64 .tar.gz",
 				href: desktopDownload("thinkrail-desktop-linux-x64.tar.gz"),
 			},
 			{
-				label: "Download ARM64",
-				detail: "Linux ARM64 · Ubuntu 24.04+ · extract .tar.gz, then run ./installer",
+				label: "ARM64 .tar.gz",
 				href: desktopDownload("thinkrail-desktop-linux-arm64.tar.gz"),
 			},
 		],

@@ -27,23 +27,14 @@ export function HeroQuickStart() {
 		<div className="flex flex-col gap-3">
 			<p className="label-mono">Quick start</p>
 
-			<StepCard
-				title="Install ThinkRail"
-				description="Download the desktop app, or install the CLI-only host from the command line."
-			>
-				<InstallPicker context="Quick start" />
+			<StepCard title="Install ThinkRail">
+				<InstallPicker />
 			</StepCard>
 
 			<StepCard
 				title="Open your project"
-				description="Launch the desktop app and choose a repository. Using the CLI? Open one directly:"
-			>
-				<pre className="overflow-x-auto rounded-md border border-border bg-container-workspace-bg px-4 py-2.5">
-					<code className="font-mono text-xs whitespace-nowrap text-primary">
-						thinkrail ~/code/my-repo
-					</code>
-				</pre>
-			</StepCard>
+				description="Launch ThinkRail and choose a Git repository."
+			/>
 
 			<StepCard
 				title="Start working"
