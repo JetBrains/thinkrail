@@ -516,9 +516,9 @@ export interface AppConfig extends ThemePreference {
 	chatLineWidthBounded: boolean;
 	fileLineWidthBounded: boolean;
 	customLayoutPresets: LayoutPreset[];
-	/** The model the plan reviewer + reflector run on; unset ⇒ the pi default. */
+	/** The model the plan reviewer runs on; unset ⇒ the pi default. */
 	reviewModel?: WireModel;
-	/** Reviewer + reflector thinking level; unset ⇒ the model's default. */
+	/** Reviewer thinking level; unset ⇒ the model's default. */
 	reviewEffort?: ThinkingLevel;
 	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
 	reviewAutoFix: boolean;
