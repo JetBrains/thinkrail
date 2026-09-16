@@ -50,8 +50,8 @@ export function ReviewSettings() {
 			<div className="flex flex-col gap-4">
 				<h3 className="tr-title-section text-text-default">Reviewer model</h3>
 				<p className="text-text-muted tr-text-metadata">
-					The model the plan reviewer (and its reflector) runs on. Leave unset to use your default
-					model. Your choice is saved on the host and follows you across devices.
+					The model the plan reviewer runs on. Leave unset to use your default model. Your choice is
+					saved on the host and follows you across devices.
 				</p>
 			</div>
 			<div className="flex flex-wrap items-center gap-8">
