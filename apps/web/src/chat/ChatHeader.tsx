@@ -7,12 +7,14 @@ export function ChatHeader({
 	stats,
 	statusEntries,
 	left,
+	resources,
 	onOpenSkills,
 	skillsStale,
 }: {
 	stats: SessionStats | null;
 	statusEntries: [string, string][];
 	left?: ReactNode;
+	resources?: ReactNode;
 	onOpenSkills?: () => void;
 	skillsStale?: boolean;
 }) {
@@ -24,12 +26,13 @@ export function ChatHeader({
 			<div className="flex min-w-0 flex-1 items-center overflow-clip">{left}</div>
 			<div className="flex min-w-0 items-center justify-end gap-12 overflow-clip">
 				{statusEntries.map(([key, text]) => (
-					<span key={key} className="shrink-0 whitespace-nowrap text-text-muted tr-text-metadata">
+					<span key={key} className="min-w-0 truncate text-text-muted tr-text-metadata">
 						{text}
 					</span>
 				))}
 				<SessionStatsBar stats={stats} />
 			</div>
+			{resources}
 			{onOpenSkills ? (
 				<SkillsButton onOpen={onOpenSkills} testId="open-skills" stale={skillsStale ?? false} />
 			) : null}

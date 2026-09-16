@@ -24,6 +24,7 @@ import {
 } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
 import { AssistantMarkdown } from "./assistantLinks";
+import { BackgroundCommandCompletion } from "./BackgroundCommandCompletion";
 import { CopyButton } from "./CopyButton";
 import { FileChip } from "./FileChip";
 import { useFold, useSelection } from "./foldState";
@@ -122,6 +123,8 @@ export function ChatTurnView({
 					/>
 				</div>
 			);
+		case "backgroundCommandCompletion":
+			return <BackgroundCommandCompletion details={row.details} />;
 		case "subagentCompletion":
 			return <SubagentCompletionCard id={row.id} details={row.details} text={row.text} />;
 		case "tool":

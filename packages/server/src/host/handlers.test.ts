@@ -2,6 +2,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
 	Template,
 	TemplateInfo,
@@ -9,6 +11,12 @@ import type {
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
+import {
+	type CreateSessionResult,
+	configurePiRuntime,
+	disposeAllSessions,
+	setSessionManagerFactory,
+} from "../agent";
 import { recordAcceptedMessage, resetFeedbackForTests, setFeedbackPublisher } from "../feedback";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
@@ -255,4 +263,97 @@ test("workspace mutation handlers reject the Default before any side effect", as
 	const after = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
 	expect(after.filter((w) => w.kind === "default")).toHaveLength(1);
 	expect(after[0]?.id).toBe(def.id);
+});
+
+test("resource handlers scope every read/control to a registered workspace and actual parent", async () => {
+	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	const priorOffline = process.env.PI_OFFLINE;
+	process.env.PI_CODING_AGENT_DIR = join(dataDir, "agent");
+	process.env.PI_OFFLINE = "1";
+	configurePiRuntime(
+		await ModelRuntime.create({
+			credentials: new InMemoryCredentialStore(),
+			modelsPath: null,
+			allowModelNetwork: false,
+		}),
+	);
+	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd));
+	try {
+		const workspace = (await handleRequest(
+			"workspace.create",
+			{ projectId: "p1" },
+			CTX,
+		)) as Workspace;
+		const other = (await handleRequest("workspace.create", { projectId: "p1" }, CTX)) as Workspace;
+		const parent = (await handleRequest(
+			"session.create",
+			{ workspaceId: workspace.id },
+			CTX,
+		)) as CreateSessionResult;
+		const scope = { workspaceId: workspace.id, sessionId: parent.sessionId };
+		expect(await handleRequest("session.resources", scope, CTX)).toEqual({
+			...scope,
+			commands: [],
+			subagents: [],
+		});
+		expect(
+			await handleRequest("backgroundCommand.output", { ...scope, commandId: "missing" }, CTX),
+		).toEqual({ available: false });
+		await expect(
+			handleRequest("backgroundCommand.stop", { ...scope, commandId: "missing" }, CTX),
+		).rejects.toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
+		const children = { workspaceId: workspace.id, parentSessionId: parent.sessionId };
+		expect(await handleRequest("subagent.stopAll", children, CTX)).toEqual({
+			ok: true,
+			targeted: 0,
+		});
+		await expect(
+			handleRequest("subagent.stop", { ...children, childSessionId: "missing" }, CTX),
+		).rejects.toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
+		for (const workspaceId of [other.id, "missing-workspace"]) {
+			const calls = [
+				["session.resources", { ...scope, workspaceId }],
+				["backgroundCommand.output", { ...scope, workspaceId, commandId: "missing" }],
+				["backgroundCommand.stop", { ...scope, workspaceId, commandId: "missing" }],
+				["subagent.stop", { ...children, workspaceId, childSessionId: "missing" }],
+				["subagent.stopAll", { ...children, workspaceId }],
+			] as const;
+			for (const [method, params] of calls)
+				await expect(handleRequest(method, params, CTX)).rejects.toMatchObject({
+					code: "RESOURCE_UNAVAILABLE",
+				});
+		}
+		await expect(
+			handleRequest("session.resources", { ...scope, sessionId: "unknown-parent" }, CTX),
+		).rejects.toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
+		for (const params of [
+			undefined,
+			null,
+			{},
+			{ ...scope, sessionId: "../secret" },
+			{ ...scope, sessionId: 123 },
+			{ ...scope, path: "/tmp/secret" },
+			{ ...scope, pid: 123 },
+		]) {
+			await expect(handleRequest("session.resources", params, CTX)).rejects.toThrow(
+				"Invalid resource ids",
+			);
+		}
+		for (const commandId of ["/tmp/output", "..", "C:\\output", "bad\u0000id"]) {
+			await expect(
+				handleRequest("backgroundCommand.output", { ...scope, commandId }, CTX),
+			).rejects.toThrow("Invalid resource ids");
+			await expect(
+				handleRequest("backgroundCommand.stop", { ...scope, commandId }, CTX),
+			).rejects.toThrow("Invalid resource ids");
+		}
+	} finally {
+		disposeAllSessions();
+		configurePiRuntime(null);
+		setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+		if (priorOffline === undefined) delete process.env.PI_OFFLINE;
+		else process.env.PI_OFFLINE = priorOffline;
+	}
 });

@@ -12,6 +12,7 @@ import {
 	type AgentSession,
 	createAgentSession,
 	DefaultResourceLoader,
+	type ExtensionFactory,
 	getAgentDir,
 	ModelRuntime,
 	type ProviderConfig,
@@ -19,7 +20,12 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { createDelegationService, type DelegationService } from "pi-delegation";
-import { boundedText, createSubagentsExtension, SUBAGENT_COMPLETION_MESSAGE } from "./extension";
+import defaultSubagents, {
+	createSubagents,
+	createSubagentsExtension,
+	SUBAGENT_COMPLETION_MESSAGE,
+} from "../index";
+import { boundedText } from "./extension";
 
 function fauxCore(provider: string) {
 	return createFauxCore({
@@ -184,6 +190,8 @@ function lastToolResultText(session: AgentSession = parent): string {
 async function makeSession(
 	isEnabled?: () => boolean,
 	boundService: DelegationService = service,
+	factory?: ExtensionFactory,
+	sessionManager?: SessionManager,
 ): Promise<AgentSession> {
 	const settingsManager = SettingsManager.inMemory({});
 	const resourceLoader = new DefaultResourceLoader({
@@ -191,10 +199,11 @@ async function makeSession(
 		agentDir: getAgentDir(),
 		settingsManager,
 		extensionFactories: [
-			createSubagentsExtension({
-				service: boundService,
-				...(isEnabled ? { isEnabled } : {}),
-			}),
+			factory ??
+				createSubagentsExtension({
+					service: boundService,
+					...(isEnabled ? { isEnabled } : {}),
+				}),
 		],
 		noPromptTemplates: true,
 		noThemes: true,
@@ -206,14 +215,25 @@ async function makeSession(
 	const created = await createAgentSession({
 		cwd: parentCwd,
 		modelRuntime: runtime,
-		sessionManager: SessionManager.inMemory(parentCwd),
+		sessionManager: sessionManager ?? SessionManager.inMemory(parentCwd),
 		settingsManager,
 		resourceLoader,
 		model,
 	});
 	liveParents.set(created.session.sessionId, created.session);
-	await created.session.bindExtensions({ mode: "print" });
-	return created.session;
+	try {
+		await created.session.bindExtensions({
+			mode: "print",
+			onError: (error) => {
+				throw new Error(error.error);
+			},
+		});
+		return created.session;
+	} catch (error) {
+		liveParents.delete(created.session.sessionId);
+		created.session.dispose();
+		throw error;
+	}
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 10_000): Promise<void> {
@@ -508,6 +528,106 @@ test("background: run_in_background returns immediately, completion arrives as a
 	await service.disposeChildrenOf(parent.sessionId);
 });
 
+function gate() {
+	let open = () => {};
+	const opened = new Promise<void>((resolve) => {
+		open = resolve;
+	});
+	return { opened, open };
+}
+
+test.each([
+	"user",
+	undefined,
+	"engine",
+	"",
+])("detached cancellation (%s) persists a displayed completion and only user cancellation avoids a parent turn", async (reason) => {
+	const session = await makeSession();
+	const started = gate();
+	const finish = gate();
+	const delivered = gate();
+	const unsubscribe = session.subscribe((event) => {
+		if (
+			event.type === "message_end" &&
+			event.message.role === "custom" &&
+			event.message.customType === SUBAGENT_COMPLETION_MESSAGE
+		) {
+			delivered.open();
+		}
+	});
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "Wait for cancellation.",
+					run_in_background: true,
+				}),
+			),
+			fauxAssistantMessage("ACK_STARTED"),
+			fauxAssistantMessage("FOLLOW_UP"),
+		]);
+		fauxB.setResponses([
+			async () => {
+				started.open();
+				await finish.opened;
+				return fauxAssistantMessage("INTERRUPTED");
+			},
+		]);
+		await session.prompt("Delegate, then wait.");
+		await started.opened;
+		const child = service.childrenOf(session.sessionId).at(-1);
+		if (!child) throw new Error("no child spawned");
+		expect(child.snapshot?.status).toBe("running");
+		expect(session.isStreaming).toBe(false);
+		const callsBeforeStop = fauxA.state.callCount;
+
+		const aborting = Promise.all([child.abort(reason), child.abort("user")]);
+		finish.open();
+		await aborting;
+		await delivered.opened;
+		if (reason !== "user") {
+			await waitFor(() => JSON.stringify(session.messages).includes("FOLLOW_UP"));
+		}
+		await Bun.sleep(20);
+		expect(fauxA.state.callCount).toBe(callsBeforeStop + (reason === "user" ? 0 : 1));
+		expect(session.isStreaming).toBe(false);
+		expect(child.snapshot?.details.abortReason).toBe(reason);
+		const completions = session.sessionManager
+			.getEntries()
+			.filter(
+				(entry) =>
+					entry.type === "custom_message" && entry.customType === SUBAGENT_COMPLETION_MESSAGE,
+			);
+		expect(completions).toHaveLength(1);
+		expect(completions[0]).toMatchObject({
+			display: true,
+			content: expect.stringContaining("aborted:"),
+			details: child.snapshot?.details,
+		});
+
+		if (reason === "user") {
+			expect(fauxA.getPendingResponseCount()).toBe(1);
+			fauxA.setResponses([
+				fauxAssistantMessage(
+					fauxToolCall("Agent", { subagent_type: "bg-runner", task: "Delegate again." }),
+				),
+				fauxAssistantMessage("PARENT_CONTINUES"),
+			]);
+			fauxB.setResponses([fauxAssistantMessage("NEXT_CHILD")]);
+			await session.prompt("Keep working.");
+			expect(lastToolResultText(session)).toBe("NEXT_CHILD");
+			expect(service.childrenOf(session.sessionId)).toHaveLength(2);
+		}
+	} finally {
+		finish.open();
+		unsubscribe();
+		await service.disposeChildrenOf(session.sessionId);
+		liveParents.delete(session.sessionId);
+		session.dispose();
+	}
+});
+
 test("a foreground error outcome surfaces as a tool error carrying the reason", async () => {
 	fauxA.setResponses([
 		fauxAssistantMessage(fauxToolCall("Agent", { subagent_type: "scout", task: "Fail." })),
@@ -659,43 +779,6 @@ test("get_subagent_result rejects another parent's child — lineage is enforced
 	}
 });
 
-test("session_shutdown suppresses a detached run's completion delivery into the dying session", async () => {
-	const session = await makeSession();
-	try {
-		fauxA.setResponses([
-			fauxAssistantMessage(
-				fauxToolCall("Agent", {
-					subagent_type: "bg-runner",
-					task: "Outlive the session.",
-					run_in_background: true,
-				}),
-			),
-			fauxAssistantMessage("SHUTDOWN_ACK"),
-			fauxAssistantMessage("COMPLETION_TURN_MUST_NOT_HAPPEN"),
-		]);
-		fauxB.setResponses([
-			async () => {
-				await Bun.sleep(200);
-				return fauxAssistantMessage("LATE_RESULT");
-			},
-		]);
-
-		await session.prompt("Run it, then shut the session down.");
-		expect(JSON.stringify(session.messages)).toContain("in the background:");
-
-		await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
-
-		const child = service.childrenOf(session.sessionId).at(-1);
-		if (!child) throw new Error("no child spawned");
-		await waitFor(() => child.snapshot?.status === "completed");
-		await Bun.sleep(100);
-		expect(JSON.stringify(session.messages)).not.toContain(SUBAGENT_COMPLETION_MESSAGE);
-	} finally {
-		session.dispose();
-		await service.disposeChildrenOf(session.sessionId);
-	}
-});
-
 test("get_subagent_result on an unknown id explains the restart-loss case", async () => {
 	fauxA.setResponses([
 		fauxAssistantMessage(fauxToolCall("get_subagent_result", { session_id: "bogus" })),
@@ -705,4 +788,295 @@ test("get_subagent_result on an unknown id explains the restart-loss case", asyn
 	await parent.prompt("Collect bogus.");
 
 	expect(lastToolResultText()).toContain("Unknown subagent session bogus");
+});
+
+function deferred() {
+	let resolve = () => {};
+	const promise = new Promise<void>((done) => {
+		resolve = done;
+	});
+	return { promise, resolve };
+}
+
+function completions(session: AgentSession) {
+	return session.messages.filter(
+		(message) => message.role === "custom" && message.customType === SUBAGENT_COMPLETION_MESSAGE,
+	);
+}
+
+async function launchDetached(session: AgentSession) {
+	const finish = deferred();
+	const entered = deferred();
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", {
+				subagent_type: "bg-runner",
+				task: "Retained completion",
+				run_in_background: true,
+			}),
+		),
+		fauxAssistantMessage("DETACHED_ACK"),
+		fauxAssistantMessage("DELIVERED_COMPLETION"),
+	]);
+	fauxB.setResponses([
+		async () => {
+			entered.resolve();
+			await finish.promise;
+			return fauxAssistantMessage("RETAINED_RESULT");
+		},
+	]);
+	await session.prompt("Delegate in the background.");
+	await entered.promise;
+	return finish;
+}
+
+test("retained completion waits behind a closed gate, then repeated flush accepts exactly once", async () => {
+	let allowed = false;
+	let enabled = true;
+	const owner = createSubagents({
+		service,
+		canDeliverCompletion: () => allowed,
+		isEnabled: () => enabled,
+	});
+	expect(Object.keys(owner).sort()).toEqual(["dispose", "extension", "flushCompletions"]);
+	const session = await makeSession(undefined, service, owner.extension);
+	let starts = 0;
+	session.subscribe((event) => {
+		if (event.type === "agent_start") starts++;
+	});
+	const finish = await launchDetached(session);
+	try {
+		finish.resolve();
+		await waitFor(() => service.childrenOf(session.sessionId)[0]?.snapshot?.status === "completed");
+		owner.flushCompletions();
+		expect(completions(session)).toHaveLength(0);
+		expect(
+			session.sessionManager.getEntries().filter((entry) => entry.type === "custom_message"),
+		).toHaveLength(0);
+		expect(starts).toBe(1);
+		enabled = false;
+		allowed = true;
+		owner.flushCompletions();
+		owner.flushCompletions();
+		await waitFor(() => !session.isStreaming && completions(session).length === 1);
+		expect(starts).toBe(2);
+		expect(JSON.stringify(completions(session))).toContain("RETAINED_RESULT");
+	} finally {
+		finish.resolve();
+		owner.dispose();
+		await service.disposeChildrenOf(session.sessionId);
+		session.dispose();
+	}
+});
+
+test.each([
+	"gap",
+	"rebound",
+])("real Pi reload retains completion settling %s and ignores stale unbind", async (timing) => {
+	const owner = createSubagents({ service });
+	const inGap = deferred();
+	const resume = deferred();
+	let bindings = 0;
+	const sends: number[] = [];
+	const session = await makeSession(undefined, service, (pi) => {
+		const binding = ++bindings;
+		owner.extension({
+			...pi,
+			sendMessage: (message, options) => {
+				sends.push(binding);
+				pi.sendMessage(message, options);
+			},
+		});
+		pi.on("session_shutdown", async (event) => {
+			if (event.reason !== "reload") return;
+			inGap.resolve();
+			await resume.promise;
+		});
+	});
+	const oldRunner = session.extensionRunner;
+	const finish = await launchDetached(session);
+	const reloading = session.reload();
+	try {
+		await inGap.promise;
+		if (timing === "gap") {
+			finish.resolve();
+			await waitFor(
+				() => service.childrenOf(session.sessionId)[0]?.snapshot?.status === "completed",
+			);
+			owner.flushCompletions();
+			expect(completions(session)).toHaveLength(0);
+			expect(sends).toEqual([]);
+		}
+		resume.resolve();
+		await reloading;
+		await oldRunner.emit({ type: "session_shutdown", reason: "reload" });
+		finish.resolve();
+		await waitFor(() => !session.isStreaming && completions(session).length === 1);
+		owner.flushCompletions();
+		expect(sends).toEqual([2]);
+		expect(service.childrenOf(session.sessionId)).toHaveLength(1);
+		expect(session.getAllTools().filter((tool) => tool.name === "Agent")).toHaveLength(1);
+	} finally {
+		resume.resolve();
+		finish.resolve();
+		await reloading;
+		owner.dispose();
+		await service.disposeChildrenOf(session.sessionId);
+		session.dispose();
+	}
+});
+
+test.each([
+	"dispose",
+	"quit",
+])("permanent %s clears pending and future outcomes and cannot rebind open", async (close) => {
+	let allowed = false;
+	const owner = createSubagents({ service, canDeliverCompletion: () => allowed });
+	const session = await makeSession(undefined, service, owner.extension);
+	const first = await launchDetached(session);
+	first.resolve();
+	await waitFor(() => service.childrenOf(session.sessionId)[0]?.snapshot?.status === "completed");
+	const second = await launchDetached(session);
+	try {
+		if (close === "dispose") owner.dispose();
+		else await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+		allowed = true;
+		await session.reload();
+		second.resolve();
+		await waitFor(() =>
+			service
+				.childrenOf(session.sessionId)
+				.every((child) => child.snapshot?.status === "completed"),
+		);
+		owner.flushCompletions();
+		expect(completions(session)).toHaveLength(0);
+		expect(session.isStreaming).toBe(false);
+	} finally {
+		second.resolve();
+		owner.dispose();
+		await service.disposeChildrenOf(session.sessionId);
+		session.dispose();
+	}
+});
+
+test.each([
+	false,
+	true,
+])("sync send failure restores its claim unless disposed (dispose: %s), reentrance never duplicates", async (disposeOnFailure) => {
+	let allowed = false;
+	let attempts = 0;
+	const owner = createSubagents({ service, canDeliverCompletion: () => allowed });
+	const session = await makeSession(undefined, service, (pi) =>
+		owner.extension({
+			...pi,
+			sendMessage(message, options) {
+				attempts++;
+				owner.flushCompletions();
+				if (attempts === 1) {
+					if (disposeOnFailure) owner.dispose();
+					throw new Error("synchronous rejection");
+				}
+				pi.sendMessage(message, options);
+				owner.flushCompletions();
+			},
+		}),
+	);
+	const finish = await launchDetached(session);
+	try {
+		finish.resolve();
+		await waitFor(() => service.childrenOf(session.sessionId)[0]?.snapshot?.status === "completed");
+		allowed = true;
+		owner.flushCompletions();
+		expect(attempts).toBe(1);
+		expect(completions(session)).toHaveLength(0);
+		owner.flushCompletions();
+		owner.flushCompletions();
+		await waitFor(() => !session.isStreaming);
+		expect(attempts).toBe(disposeOnFailure ? 1 : 2);
+		expect(completions(session)).toHaveLength(disposeOnFailure ? 0 : 1);
+	} finally {
+		finish.resolve();
+		owner.dispose();
+		await service.disposeChildrenOf(session.sessionId);
+		session.dispose();
+	}
+});
+
+test.each([
+	["default factory shutdown", "default", false],
+	["legacy injected-service factory natural completion", "legacy", false],
+	["legacy injected-service factory explicit user abort after shutdown", "legacy", true],
+] as const)("one %s keeps independent runner lifetimes", async (_name, kind, userStop) => {
+	const factory = kind === "default" ? defaultSubagents : createSubagentsExtension({ service });
+	const first = await makeSession(undefined, service, factory);
+	const second = await makeSession(undefined, service, factory);
+	const firstFinish = await launchDetached(first);
+	try {
+		const child = service.childrenOf(first.sessionId)[0];
+		const closing = first.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+		let aborting: Promise<void> | undefined;
+		if (kind === "legacy") {
+			await closing;
+			if (!child) throw new Error("no child spawned");
+			if (userStop) aborting = child.abort("user");
+		}
+		firstFinish.resolve();
+		await Promise.all([closing, aborting]);
+		if (kind === "legacy")
+			await waitFor(() => child?.snapshot?.status === (userStop ? "aborted" : "completed"));
+		expect(completions(first)).toHaveLength(0);
+		const finish = await launchDetached(second);
+		finish.resolve();
+		await waitFor(() => !second.isStreaming && completions(second).length === 1);
+		expect(completions(first)).toHaveLength(0);
+		expect(first.sessionManager.getEntries().some((entry) => entry.type === "custom_message")).toBe(
+			false,
+		);
+		expect(JSON.stringify(completions(second))).toContain("RETAINED_RESULT");
+	} finally {
+		firstFinish.resolve();
+		await second.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+		await service.disposeChildrenOf(first.sessionId);
+		await service.disposeChildrenOf(second.sessionId);
+		first.dispose();
+		second.dispose();
+	}
+});
+
+test("a retained owner rejects another parent without replacing the original sender", async () => {
+	const owner = createSubagents({ service });
+	const session = await makeSession(undefined, service, owner.extension);
+	try {
+		await expect(makeSession(undefined, service, owner.extension)).rejects.toThrow(
+			"Subagents belong to a different session",
+		);
+		const finish = await launchDetached(session);
+		finish.resolve();
+		await waitFor(() => !session.isStreaming && completions(session).length === 1);
+	} finally {
+		owner.dispose();
+		await service.disposeChildrenOf(session.sessionId);
+		session.dispose();
+	}
+});
+
+test("a previous live runner's reload shutdown cannot unbind a newer sender for the same parent", async () => {
+	const owner = createSubagents({ service });
+	const first = await makeSession(undefined, service, owner.extension);
+	const finish = await launchDetached(first);
+	const rebound = await makeSession(undefined, service, owner.extension, first.sessionManager);
+	try {
+		await first.extensionRunner.emit({ type: "session_shutdown", reason: "reload" });
+		finish.resolve();
+		await waitFor(() => !rebound.isStreaming && completions(rebound).length === 1);
+		expect(completions(first)).toHaveLength(0);
+		owner.flushCompletions();
+		expect(completions(rebound)).toHaveLength(1);
+	} finally {
+		finish.resolve();
+		owner.dispose();
+		await service.disposeChildrenOf(first.sessionId);
+		first.dispose();
+		rebound.dispose();
+	}
 });

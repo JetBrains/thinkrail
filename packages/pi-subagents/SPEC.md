@@ -29,23 +29,26 @@ choice was settled: the decision log below.
   vanilla-pi background child never outlives its parent session burning tokens with an
   undeliverable completion (PR #302 review finding). An embedder-injected service is deliberately
   untouched — its lifecycle belongs to the embedder (ThinkRail cascades in `removeSession`).
-  `session_shutdown` also flips a closure-level `shuttingDown` flag that **suppresses background
-  completion delivery**: without it each detached run's continuation still sends its (now aborted)
-  completion with `triggerTurn: true` into the dying session — in pi 0.84.1 an idle parent answers
-  that with a provider turn racing teardown (second PR #302 review finding). The flag is set before
-  the dispose await so completions arriving *during* teardown are already suppressed, and it
-  applies to embedder-injected services too — a completion aimed at a session being shut down is
-  undeliverable regardless of who owns the service. A parent-turn *abort* never sets the flag: a
-  detached run survives it and still delivers (both sides test-pinned — the suppression via
-  `session_shutdown` emitted through pi's public extension runner in the package suite). The
-  detached run's late `onUpdate` calls need no such guard: pi-agent-core drops updates after the
-  tool call resolves (`acceptingUpdates`), so they are a no-op by construction.
-- `createSubagentsExtension({ service?, delegationRoot?, scope?, isEnabled? })` — the embedder entry:
-  ThinkRail passes its host-bound service, matching storage bindings (used for restart-loss error
-  messages), and a live availability predicate. The predicate defaults to enabled for vanilla pi; it
-  removes both tools from the active set at `session_start` when false and is rechecked before child
-  assembly and again after its asynchronous setup, immediately before `runQueued`. A late disable disposes
-  that unstarted child before rejecting, closing both launch races without unloading the extension.
+  Default and legacy factories own their completion lifetime per factory invocation: reload ends that
+  lifetime, while parent-turn abort does not. Late tool updates are dropped by Pi after the tool returns.
+- `createSubagentsExtension(options?)` — the compatible runner-scoped extension factory. Options include
+  `service?`, `delegationRoot?`, `scope?`, `isEnabled?`, and `canDeliverCompletion?`.
+- `createSubagents(options: SubagentsExtensionOptions & { service: DelegationService })` — an explicitly
+  retained, portable parent owner exposing only `extension`, `flushCompletions()` and synchronous
+  `dispose()`. Its injected service remains embedder-owned. One immutable parent identity is established
+  at first `session_start`; reusing the owner for another parent rejects. The current sender, pending
+  completion claims, flush guard and permanent closed flag live outside reinvoked extension callbacks.
+  Reload shutdown only identity-safely unbinds the old sender; the next `session_start` binds the new
+  sender and flushes retained outcomes. Other shutdown reasons and explicit disposal permanently close
+  delivery, clear pending claims and ignore future outcomes; rebinding cannot reopen it. Embedders must
+  explicitly dispose the owner because Pi's `AgentSession.dispose()` emits no extension shutdown event.
+  The foreground error-details stash remains runner-local.
+- `isEnabled` controls tool availability and launch, independently of completion delivery. It defaults
+  to enabled, removes both tools from the active set at `session_start` when false and is rechecked before
+  child assembly and after asynchronous setup, immediately before `runQueued`. A late disable disposes
+  that unstarted child before rejecting. `canDeliverCompletion` defaults to true and temporarily gates
+  both transcript append and automatic wake-up, without closing the owner or losing pending outcomes.
+  An embedder flushes after a provisional deletion rolls back or registration becomes addressable.
 - `SUBAGENT_COMPLETION_MESSAGE` — the custom-message type the web's completion card keys on.
 - Definitions: `AgentDefinition`, `discoverAgentDefinitions`, `parseAgentDefinition`,
   `BUILTIN_AGENTS`.
@@ -55,7 +58,7 @@ choice was settled: the decision log below.
 
 | Tool | Behavior |
 | --- | --- |
-| `Agent({ subagent_type, task, model?, run_in_background? })` | Snapshots definitions before each parent model turn (editable mid-session), then maps the named one plus the optional invocation model to `SessionOptions` and spawns via `createChild` + `runQueued`; the description and execution closure use that same snapshot, so a mid-session edit cannot make advertised model policy disagree with execution. Model precedence is definition pin → invocation model → live parent; a definition pin silently wins over a supplied invocation value, and the available-agent description advertises each definition's pin or call/parent selection before use. Foreground: awaits the outcome and rides the tool signal; `error` outcomes throw (tool error, reason-first) — and the error tool result **still carries the run's final `details`**: pi replaces a thrown tool error's result with `{content, details: {}}`, so the extension stashes the outcome details by `toolCallId` before throwing and re-injects them via a `tool_result` hook override (the stash is swept on `turn_end` — after finalization — and on `session_shutdown`, so a turn aborted before tool finalization cannot strand entries); a failed run's card keeps its child session id and the transcript stays openable (PR #304 review finding). Background: **never rides the parent turn's abort signal** (a detached run survives a parent abort — core-spec semantics, test-pinned); returns `{childSessionId}` text immediately; the terminal event injects a `subagent-completion` custom message (`deliverAs: "followUp", triggerTurn: true`). Live `onUpdate` details flow to `partialResult` (REPLACE). Results bounded to 50k chars — the full text stays in the child transcript. |
+| `Agent({ subagent_type, task, model?, run_in_background? })` | Snapshots definitions before each parent model turn (editable mid-session), then maps the named one plus the optional invocation model to `SessionOptions` and spawns via `createChild` + `runQueued`; the description and execution closure use that same snapshot, so a mid-session edit cannot make advertised model policy disagree with execution. Model precedence is definition pin → invocation model → live parent; a definition pin silently wins over a supplied invocation value, and the available-agent description advertises each definition's pin or call/parent selection before use. Foreground: awaits the outcome and rides the tool signal; `error` outcomes throw (tool error, reason-first) — and the error tool result **still carries the run's final `details`**: pi replaces a thrown tool error's result with `{content, details: {}}`, so the extension stashes the outcome details by `toolCallId` before throwing and re-injects them via a `tool_result` hook override (the stash is swept on `turn_end` — after finalization — and on `session_shutdown`, so a turn aborted before tool finalization cannot strand entries); a failed run's card keeps its child session id and the transcript stays openable (PR #304 review finding). Background: **never rides the parent turn's abort signal** (a detached run survives a parent abort — core-spec semantics, test-pinned); returns `{childSessionId}` text immediately; the terminal outcome injects a `subagent-completion` custom message (`deliverAs: "followUp"`; turn triggering follows the User stop policy below). Live `onUpdate` details flow to `partialResult` (REPLACE). Results bounded to 50k chars — the full text stays in the child transcript. |
 | `get_subagent_result({ session_id })` | **Lineage-checked**: a child whose `record.parentSessionId` is not the calling session takes the unknown-id error path — with a shared (workspace-scoped) service, one tab must not read or mark-collected another parent's child (PR #302 review finding). Reads the core registry via `findChild` + `collectResult`: terminal → final text + details through the **same reason-first, 50k-bounded shaping** as a foreground result (marks collected; an errored run reports its `errorMessage` first — core decision #24); running → status snapshot; unknown id → error naming the restart-loss case + the derived transcript path. |
 
 Both tools register inside `session_start` (emitted by `bindExtensions`). `Agent` additionally
@@ -64,6 +67,14 @@ one; pi replaces the same-name tool immediately, so each turn receives one defin
 both its description and execution while edits remain live without `/reload`. Registration remains
 intact while an embedder deactivates the tools: same-session re-enable and detached completion delivery
 do not require extension reload or replacement.
+
+Only the existing detached `run.then` continuation adds pending outcomes. The owner never scans
+children or infers detachment, and pending entries retain references to outcomes solely for delivery,
+not a second transcript, output store or lifecycle registry. A flush uses only the current sender and
+claims each outcome before synchronous Pi send; reentrant flush cannot duplicate it. A synchronous
+send failure restores the claim unless disposal occurred. Exactly-once means synchronous acceptance
+by Pi's fire-and-forget API, not an eventual provider response. Message shaping remains reason-first
+and 50k-bounded, with the same abort-reason policy; no host completion queue is involved.
 
 ## Definitions: discovery, precedence, trust
 
@@ -104,11 +115,21 @@ extensions that set holds is the **embedder's** choice, never this package's.
 - The web card / transcript view are the *presentation* side, joined by tool name
   (`registerToolRenderer("Agent", …)`) — they live in `apps/web` (`chat/tools/subagent`), never here.
 
+## User stop
+
+Detached completion uses the final outcome's `details.abortReason` from [[module-pi-delegation]], not
+a second stopped-child registry or UI-generated message. When it is `"user"`, the displayed,
+persisted `subagent-completion` uses `deliverAs: "followUp", triggerTurn: false`: it neither wakes an
+idle parent, aborts a working parent nor disables later delegation. Natural completion, failure and
+non-user abort keep `triggerTurn: true`. Permanent session shutdown suppresses delivery entirely; retained-owner reload only pauses delivery. Standalone
+Pi behavior is unchanged unless its caller explicitly supplies the user reason.
+
 ## Verification
 
 Unit suites in-package (`bun test`), including a two-extension regression where one extension
-registers a synthetic provider and the zero-config subagents extension delegates through it. End to
-end: `e2e/subagents.live.spec.ts` (`@agent` — the real host driving real children: foreground
+registers a synthetic provider and the zero-config subagents extension delegates through it. Public Pi
+session tests pin gated replay, real reload gaps, permanent closure, synchronous send failures,
+reentrant flushing and default/legacy runner isolation. End to end: `e2e/subagents.live.spec.ts` (`@agent` — the real host driving real children: foreground
 fan-out, background completion, transcript reads). The core SPEC's pure-pi bar: **`bun run
 smoke:subagents`** — this extension with default bindings under the repo-pinned vanilla pi CLI, in
 an isolated throwaway agent dir; on-demand only (needs pi auth, spends real tokens), never a
@@ -135,8 +156,8 @@ commit/CI gate.
    paces them) — no `tasks[]`/chain DSL, the model sequences chains itself.
 4. **Transcripts persisted, openable anytime** — children are hidden pi sessions on disk; the web
    card links a read-only transcript view that works during the run, after completion, and after a
-   host restart. Background completion delivery (`sendMessage` with `deliverAs: "followUp",
-   triggerTurn: true`) is lost on host restart and suppressed once its session is shutting down —
+   host restart. Background completion delivery (`sendMessage`, under the User stop policy above)
+   is lost on host restart and suppressed once its session is shutting down —
    accepted, same class as other followUp messages; the transcript survives regardless.
 5. **Built-in agents: a small curated set** tuned to ThinkRail's spec-first workflow (roster +
    TS-constant form: Definitions above); personal + worktree definitions add more.
