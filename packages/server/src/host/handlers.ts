@@ -539,7 +539,11 @@ const handlers: Record<string, Handler> = {
 		if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath)))
 			throw new Error("This plan's chat is no longer on disk — can't review.");
 		const plan = await listTodos({ workspaceId: p.workspaceId, sessionId: p.sessionId });
-		const items = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+		const items = [
+			...plan.todos,
+			...plan.groups.flatMap((g) => g.todos),
+			...(plan.adoptedCommits ?? []),
+		];
 		const targets = items.filter((it) => {
 			const r = it.review;
 			return (

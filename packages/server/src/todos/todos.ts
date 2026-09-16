@@ -424,10 +424,11 @@ export function renderReviewPackage(
 			? `commit${shas.length === 1 ? "" : "s"} ${shas.map((s) => s.slice(0, 12)).join(", ")}${paths.length > 0 ? `; uncommitted paths: ${paths.join(", ")}` : ""}`
 			: `changed paths: ${paths.join(", ")}`;
 	const rereview = prior && fresh.length > 0 && fresh.length < shas.length;
+	// Facts-only reference — the reviewer role and output contract live in host/reviewerRole; see planReview.SPEC.
 	const adopted = adoptedCommitSha(item.id);
 	const subject = adopted
-		? `You are the REVIEWER for commit ${adopted.slice(0, 12)} ("${item.title}") of chat ${workerSessionId} — a branch commit that belongs to no plan step. Review the change set — you did not write this code.`
-		: `You are the REVIEWER for plan step ${item.id} ("${item.title}") of chat ${workerSessionId}. Review the change set — you did not write this code.`;
+		? `Commit ${adopted.slice(0, 12)} ("${item.title}") of chat ${workerSessionId} belongs to no plan step and awaits review.`
+		: `Plan step ${item.id} ("${item.title}") of chat ${workerSessionId} is done and awaits review.`;
 	const lines = [
 		subject,
 		"",
