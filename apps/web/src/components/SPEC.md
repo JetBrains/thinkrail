@@ -46,6 +46,10 @@ primitives), which has its own spec.
 - **`AttentionDot.tsx`** — the store-free, static accent dot whose sole accessible label is “Needs
   attention.” It carries no reason, count, tooltip, motion, or clearing behavior; callers decide only
   whether it is present.
+- **`RunningIcon.tsx`** — a store-free wrapper for an identity icon whose existing colour must not change.
+  While active it applies the shared soft pulse and the accessible label “Agent working”; reduced-motion
+  removes animation and uses the same-hue static treatment. It never renders a dot, spinner, count, or
+  tooltip. Feature callers decide whether a top-level chat or rollup is running.
 - **Also owns:** `Skeleton.tsx` — `SkeletonRows`, the one pulsing-rows placeholder every loading surface
   uses, and `LoadingRegion`, the sized-wrapper shape around it that most call sites actually want (a
   `className` for the region's own padding/sizing, an optional `label` threaded to `SkeletonRows`'
@@ -53,7 +57,7 @@ primitives), which has its own spec.
   vocabulary and its rules are below.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `SkeletonRows`, `LoadingRegion` — imported
   directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `AttentionDot` via
-  `@/components/AttentionDot`; `CustomIcon`,
+  `@/components/AttentionDot`; `RunningIcon` via `@/components/RunningIcon`; `CustomIcon`,
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
   `QuietScrollEdges` type via `@/components/QuietScrollArea`. The `ui/` primitives are their own sub-module
   ([components/ui/SPEC.md](ui/SPEC.md)).

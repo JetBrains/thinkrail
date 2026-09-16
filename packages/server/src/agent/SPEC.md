@@ -137,35 +137,38 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `agent-session.js` for the `if (messageText)` guard around `this._steeringMessages.indexOf` — while that
     guard is present the workaround is still required; when it is gone the fix has shipped.
   - **Attention projection** (`attention.ts`) answers one binary question for every user-facing session:
-    "should the person inspect or answer this chat?" It replaces the Projects rail's running/waiting/
-    failed/queued activity vocabulary; live progress remains inside the chat.
+    "should the person inspect or answer this chat?" It replaces the Projects rail's waiting/failed/queued
+    status vocabulary and remains independent from the ephemeral existing-icon pulse for live work.
 
     A pure derivation returns either no candidate or one opaque candidate with an internal kind:
-    **blocking** for an unresolved `ask_user_question` or another host-known session-scoped blocking dialog,
-    and **review** for the final successful, error, or length settlement. Blocking outranks every live state
-    and ignores view acknowledgements. Streaming and queued work otherwise produce no candidate. A newer
-    user prompt/steer/follow-up supersedes an older review result, handled tool failures never count alone,
-    and an explicit user abort stays quiet. Ordinary assistant prose is never parsed to guess whether it
+    **blocking** for an unresolved `ask_user_question` or another host-known session-scoped blocking dialog;
+    **review** for the final successful, error, or length settlement; and **interrupted** for an idle latest
+    turn whose branch has no such terminal result, including Pi's aborted terminal after graceful host
+    shutdown. Blocking outranks every live state and ignores view acknowledgements. A genuinely streaming
+    session and queued work otherwise produce no candidate. A newer user prompt/steer/follow-up supersedes an
+    older result, handled tool failures never count alone, and an explicit user abort stays quiet by recording
+    its exact interrupted candidate as handled. Ordinary assistant prose is never parsed to guess whether it
     contains a question.
 
     Review candidates are created only at `agent_settled`, never attempt-level `agent_end`, so provider retry
     and compaction recovery cannot claim the person is needed early. Each candidate id is stable across live
-    and disk derivation and tied to the decisive persisted session entry. Current transcripts use that entry's
-    id; legacy linear transcripts use a content-plus-branch-ordinal fingerprint carried as an alias after pi
-    later migrates them, so attention never rewrites a transcript merely to mint identity. The manager
+    and disk derivation: review keys to the decisive assistant entry, interrupted keys to the latest user turn,
+    and blockers key to their interaction. Current transcripts use that entry id; legacy linear transcripts
+    use a content-plus-branch-ordinal fingerprint carried as an alias after pi later migrates them, so
+    attention never rewrites a transcript merely to mint identity. The manager
     keeps only publish-on-change bookkeeping per live entry. Exact-candidate acknowledgement clears a review
-    candidate globally; a stale acknowledgement of A cannot clear newer B, and a blocking candidate is a
-    no-op. Handled-ledger mutations are serialized copy-on-write operations. The host updates its published
+    or interrupted candidate globally; a stale acknowledgement of A cannot clear newer B, and a blocking
+    candidate is a no-op. Handled-ledger mutations are serialized copy-on-write operations. The host updates its published
     state and emits the retraction only after atomic persistence succeeds; it then rechecks that the same
     candidate is still current before publishing, so B arriving during A's save is never retracted. Failure
     rejects the acknowledgement and leaves the candidate visible. Resolution of the underlying blocker
     retracts it without writing a handled watermark.
 
     Explicit abort contributes only an attention acknowledgement; it does not replace pi's abort, queue, or
-    extension-dialog lifecycle. `abortSession` derives any already-persisted review candidate for the current
-    turn, sets a turn-scoped in-memory intent so that exact outcome is not published mid-call, invokes the
-    existing pi abort path, then re-derives the terminal candidate for that same turn. Any such candidate is
-    durably recorded as handled before the intent is released; an `aborted` terminal with no review candidate
+    extension-dialog lifecycle. `abortSession` derives any already-persisted non-blocking candidate for the
+    current turn, sets a turn-scoped in-memory intent so that exact outcome is not published mid-call, invokes
+    the existing pi abort path, then re-derives the review or interrupted candidate for that same turn. Any
+    such candidate is durably recorded as handled before the intent is released; a call with no turn candidate
     writes nothing. If persistence fails, abort behavior is unchanged but that exact candidate remains an
     in-memory effective fallback—published, snapshot-visible, and acknowledgeable—until persistence recovers
     or a newer turn/result supersedes it. A result pi produces later with a distinct entry id is **not** suppressed—it is new work the
@@ -180,8 +183,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `listSessionAttention` unions live entries with on-disk sessions for every `{id, cwd}` supplied by the
     host, applies the owner-global handled ledger, and returns only current candidates. This reconstructs
     completed results and unresolved questionnaires after reconnect or host restart even when no client has
-    opened the workspace. Every row/push carries `projectId` through `setAttentionProjectResolver`; the
-    agent remains ignorant of the workspace registry. The client owns project/workspace rollup and the
+    opened the workspace. Every row/push carries `projectId` through `setSessionProjectResolver`; the agent
+    remains ignorant of the workspace registry. The client owns project/workspace rollup and the
     all-known-chat presentation threshold—there is no server precedence or count.
 
     The pi transcript remains the sole durable source for **what happened**. The separate versioned ledger
@@ -190,7 +193,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 
     `initializeSessionAttention(workspaces)` is a host-start barrier before session work is admitted. For a
     genuinely missing ledger it scans the supplied workspace transcripts and atomically records the exact ids
-    of review candidates that exist in that baseline; blocking candidates are excluded. No host session can
+    of review and interrupted candidates that exist in that baseline; blocking candidates are excluded. No host session can
     settle concurrently because serving has not begun, and any distinct entry appended after its scan is not
     in the exact-id set and remains attention-worthy regardless of timestamps or clock changes. An unreadable
     transcript is logged and omitted, conservatively allowing its candidate to surface when it becomes
@@ -206,8 +209,17 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     tails follow the retained parent chain without loading omitted history; truncated legacy files alone need
     a full read because they have no persisted parent ids. Discovery is per-file and never routes the global
     snapshot through pi's full-text `SessionManager.list`. Candidate reads are memoized by actual file
-    `(mtime, size)`; unreadable transcripts are logged and skipped individually. Unexpected process death mid-run is represented only if pi left a durable terminal
-    outcome; a second in-flight crash journal is deliberately not introduced.
+    `(mtime, size)`; unreadable transcripts are logged and skipped individually. Unexpected process death
+    mid-run leaves an unfinished latest turn and therefore derives the same turn-keyed interrupted candidate
+    as a graceful shutdown's aborted terminal; no second in-flight crash journal is introduced.
+
+  - **Live-running projection** is deliberately smaller than attention. `listRunningSessions()` reads only
+    registered, non-deleted top-level entries whose canonical `AgentSession.isStreaming` is true; no transcript
+    scan or persistence is involved. Per-entry publish-on-change state emits `SessionRunningPayload` true at
+    `agent_start` and false at `agent_settled` (or teardown), using the same workspace→project resolver as
+    attention. Queued messages and delegated child registries are outside this projection. The client owns
+    exact-chat and workspace/project rollups; the agent owns only truthful live membership.
+
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.
     `prompt`/`steer`/`followUp` (with images) /
@@ -633,8 +645,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
   `buildAnswersMessage`/`awaitingQuestionToolCallId`); the attention layer
   (`deriveAttentionCandidate`/`AttentionInputs` + `initializeSessionAttention`/`listSessionAttention`/
-  `acknowledgeSessionAttention`/`syncSessionAttention`/`setSessionAttentionPublisher`/
-  `setAttentionProjectResolver`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
+  `acknowledgeSessionAttention`/`syncSessionAttention`/`setSessionAttentionPublisher`), the live-running
+  projection (`listRunningSessions`/`syncSessionRunning`/`setSessionRunningPublisher`), and their shared
+  `setSessionProjectResolver`; `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
   (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /

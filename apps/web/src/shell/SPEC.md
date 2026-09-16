@@ -75,10 +75,17 @@ The layout persistence boundary is `layoutState`, not the store. Browsers qualif
 
 Project/file/change/review/chat/terminal views receive only resource identity, visibility, and container bounds. Moving a view cannot change module dependencies or make it inspect the frame. A terminal body mounts only while that terminal is locally selected in a visible, unfolded group; hidden terminal tabs stay unmounted while their host PTYs continue running.
 
-Domain **session attention is separate from workbench `LayoutAttention`**. `WorkspaceWorkbench` reads the
-normalized host candidate map plus the store's all-known-chat count. When that count exceeds one it injects
-the shared `AttentionDot` as an adornment for each attentive chat tab; `WorkspaceChatHistory` applies the
-same candidate to closed rows and its trigger rollup.
+Domain **session attention and live running are separate from workbench `LayoutAttention`**.
+`WorkspaceWorkbench` reads the normalized host candidate map plus the store's all-known-chat count. When that
+count exceeds one it injects the shared `AttentionDot` as an adornment for each attentive chat tab;
+`WorkspaceChatHistory` applies the same candidate to closed rows and its trigger rollup.
+
+For an exact top-level chat in the ephemeral running map, `WorkspaceWorkbench` uses the layout child's
+injected default-icon decorator to wrap that chat tab's existing line/fill icon in the shared `RunningIcon`.
+No feature state enters `shell/layout`, and the icon keeps its active/inactive colour. A locally closed
+running chat has no invented history icon; its workspace and collapsed-project pulse still locate it until
+reopened. Running has no known-chat threshold and does not affect tab selection, body mounting, or attention
+acknowledgement.
 
 Chat exposure, not tab selection itself, asks the host to acknowledge the exact candidate. One shared
 `conversationExposed` predicate requires the body to be mounted in a focused foreground page and not covered

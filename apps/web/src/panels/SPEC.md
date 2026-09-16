@@ -76,22 +76,27 @@ treatment.
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
   name is decoupled from the git branch (see [[submodule-server-workspaces]]).
 
-  **One decoration class, and only one.** Workspace rows deliberately show **no `+N −M` change badge**:
-  the Projects view is for navigation and identity, and change detail stays in the dedicated Changes
-  views. The single admitted exception is the binary **attention dot** because it answers the one question
-  the rail uniquely owns: "is there anything in a workspace I should look at or answer?" Without it the
-  user must open every workspace to find out. A `+N −M` badge fails that test, so the rule stands for
-  everything else.
+  **One added marker, one ambient identity treatment.** Workspace rows deliberately show **no `+N −M`
+  change badge**: the Projects view is for navigation and identity, and change detail stays in the dedicated
+  Changes views. The single added marker is the binary **attention dot** because it answers the one question
+  the rail uniquely owns: "is there anything in a workspace I should look at or answer?" Without it the user
+  must open every workspace to find out. A `+N −M` badge fails that test, so the rule stands for everything
+  else. Live work adds no marker: it pulses the workspace icon already present in the identity button.
 
   `ProjectTree` renders the shared dependency-light `AttentionDot` from the store's single
   `attentionByWorkspace` map through pure `workspaceNeedsAttention` / `projectNeedsAttention` selectors.
   The dot is static accent colour, carries no count or status-specific glyph/tooltip, and has the accessible
-  label “Needs attention.” Presence/absence has one meaning, so colour does not encode competing states.
-  Running and queued work draw nothing. It occupies its own flex column between the identity button and the
-  hover-revealed kebab. Workspace and collapsed-project rows expose `data-attention` only while positive for
-  end-to-end tests.
+  label “Needs attention.” Presence/absence has one meaning, so colour does not encode competing states. It
+  occupies its own flex column between the identity button and the hover-revealed kebab. Workspace and
+  collapsed-project rows expose `data-attention` only while positive for end-to-end tests.
 
-  **Project rows carry the rollup only while collapsed**, matching the collapsed-only workspace count;
+  Separately, `workspaceIsRunning` / `projectIsRunning` read the host's ephemeral top-level-chat running map.
+  A running workspace softly pulses its existing icon without changing that icon's active or inactive colour,
+  and exposes “Agent working” accessibly; queued messages and hidden/background agents stay quiet. Reduced
+  motion removes animation and retains a quiet same-hue static icon treatment. The same running and attention
+  states may coexist. Rows expose `data-running` only while positive for tests.
+
+  **Project rows carry either rollup only while collapsed**, matching the collapsed-only workspace count;
   expanded, their workspace rows already say it. The **Default workspace**
   (`kind === "default"` — the project folder itself) renders **pinned first** (the server pins it in
   `workspace.list`; `addWorkspace` appends created worktree rows after it), with a **`House` icon** in

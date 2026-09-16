@@ -20,11 +20,11 @@ Durable host state—projects, workspaces, cross-frontend app config, terminal c
   `isTerminalWindowsShell`); Node `fs`/`os`/`path`.
 - **Forbidden:** importing feature siblings or `host`; deriving whether a session needs attention; storing message content or running/queued/failure state in the attention ledger; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys or old schemas; or reading, rewriting, or deleting old host layout snapshots.
 
-A handled candidate is either a review result exposed to the owner or the otherwise-reviewable result of an
-explicit Stop; the ledger does not distinguish why it was handled. Attention-ledger reads distinguish missing
+A handled candidate is either a review/interrupted result exposed to the owner or the otherwise-attentionable
+candidate of an explicit Stop; the ledger does not distinguish why it was handled. Attention-ledger reads distinguish missing
 from malformed/unreadable. Initialization and every mutation write a complete copy to a sibling temporary
 file and atomically replace the target; concurrent serialization and publish timing belong to `agent`. A
-missing file may receive one exact-candidate baseline assembled by the agent before serving. A malformed or
+missing file may receive one exact-candidate baseline of old review and interrupted turns assembled by the agent before serving. A malformed or
 unreadable existing file is renamed aside and replaced with an initialized empty ledger; failed replacement
 restores it, and a later boot recognizes an orphaned quarantine as interrupted recovery rather than genuine
 first run. Corruption can therefore resurrect a dot but never silently mark unseen work as read. Failure is

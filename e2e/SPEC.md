@@ -161,8 +161,11 @@ The same copy and hermetic environment seed the private restart host.
 **Session attention** (`workspace-attention.spec.ts`) covers the one-dot Projects/workbench/history signal
 without an agent. Seeded successful, error/length, and questionnaire transcripts exercise host candidate
 derivation, `session.attention` push/snapshot, store folds, and project/workspace/chat presentation. The
-suite asserts accessible “Needs attention” labels, `data-attention`, no marker for running/queued/explicit
-abort, the all-known-chat threshold, and closed-history discoverability.
+suite asserts accessible “Needs attention” labels, `data-attention`, no attention marker for
+running/queued/explicit abort, the all-known-chat threshold, and closed-history discoverability. Live-running
+coverage separately pins the unchanged-colour pulse on the exact chat icon plus workspace and collapsed-project
+rollups, coexistence with an attention dot, reconnect snapshot repair, prompt/settlement transitions, and no
+pulse for queued work; `data-running` is the stable test hook and reduced-motion removes animation.
 
 Both live and disk paths are required. A mounted foreground chat acknowledges a new review candidate and
 clears it across a second client; a background/obscured or closed chat retains it. Reload without opening the
@@ -170,7 +173,8 @@ workspace exercises snapshot reconstruction after restart. Settle-during-reconne
 ordering, exact-candidate races, push-during-snapshot buffering, atomic exact-id first-ledger migration,
 malformed/write-failed ledger behavior, old-client empty-list retirement, blocker acknowledgement
 no-op/resolution, exact-candidate handling around explicit abort (including retry/compaction state, without
-suppressing a later distinct result), and deletion-without-optimistic-retraction cleanup are pinned at the
+suppressing a later distinct result), durable interrupted-turn attention across abrupt and graceful host
+restart without leaving user Stop noisy, and deletion-without-optimistic-retraction cleanup are pinned at the
 owning unit/integration layers. Seeding remains after `openFixtureProject`: `openAppFresh`
 deletes the isolated session tree during reset.
 

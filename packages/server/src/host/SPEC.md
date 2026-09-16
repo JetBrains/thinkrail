@@ -427,11 +427,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
   replayed; its handler passes every workspace `{id, cwd}` from `listAllWorkspaceRecords`, letting the agent
   union disk sessions without learning the registry. `session.acknowledgeAttention` routes the exact
   candidate id to the agent; an accepted review acknowledgement publishes the same global retraction to all
-  clients. The host also satisfies `setAttentionProjectResolver` from the workspace registry
+  clients. The host satisfies the shared `setSessionProjectResolver` from the workspace registry
   (unresolvable → `null`). The deprecated `session.activityList` handler remains as an unconditional empty
   result so a reconnecting old client can retire markers; no legacy activity derivation or publisher stays.
   Candidate derivation, handled-ledger policy, and lifetime belong to [[submodule-server-agent]]; the wire and
   attribution contract are in [[module-contracts]].
+- **Live-running fan-out:** `createServer` installs the agent module's running publisher and broadcasts each
+  `SessionRunningPayload` on `session.running`, subscribed by every client. `session.runningList` reads the
+  authoritative currently-streaming top-level entries from the live agent registry; unlike attention it
+  needs neither workspace records nor disk reconstruction. Pushes are not replayed, so welcome hydration is
+  the read-side repair. Running uses the same workspace→project resolver as attention and clears on teardown.
 - **CLI update notice:** a launcher may supply one optional asynchronous notice producer and fixed interval.
   `createServer` starts it after listening without awaiting it, repeats it without overlap, retains the latest
   successful immutable notice for later `server.welcome` snapshots, and publishes `host.updateAvailable` only

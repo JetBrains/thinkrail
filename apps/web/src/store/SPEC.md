@@ -11,7 +11,7 @@ tags: [v1]
 ## Responsibility
 
 The single Zustand store: connection status, projects/workspaces, one frontend-local workbench frame plus
-per-workspace views/attention, terminal catalogs, and one **per-session chat runtime** for every live
+per-workspace views/attention/ephemeral running membership, terminal catalogs, and one **per-session chat runtime** for every live
 `AgentSession` (so several chats stream concurrently).
 
 ## Boundary
@@ -223,6 +223,14 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
     `projectNeedsAttention` selectors read the same map. The all-known-chat selector deduplicates open chat
     resources plus closed/history membership for the chat-dot threshold; plan documents and hidden child
     sessions do not count. There is no status precedence, count, or second unread slice.
+  - **Live running** (`runningByWorkspace`) is a separate ephemeral normalized map of workspace/project/
+    top-level-session membership. `applySessionRunning` folds one live true/false transition;
+    `hydrateSessionRunning` authoritatively replaces the map from the reconnect snapshot while refusing
+    removed workspaces and tombstoned sessions. `clearSessionRunning` drops all membership on disconnect or
+    an unsupported host, because stale liveness is not useful state. Pure `sessionIsRunning`,
+    `workspaceIsRunning`, and `projectIsRunning` selectors derive exact and rollup booleans; there is no
+    count, precedence, persistence, queue state, or coupling to `SessionRuntime.isStreaming`. Session and
+    workspace deletion prune both maps in the same existing atomic transitions.
   Closed chats are reopenable: the workbench close command atomically removes local placement and invokes
   **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
   **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending
@@ -547,7 +555,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (deduplicated local chat
   placement + history membership used as a reconnect-reconciliation baseline),
   **`sessionNeedsAttention` / `workspaceNeedsAttention` / `projectNeedsAttention`** plus the all-known-chat
-  count (pure functions over the normalized slice, shared by Projects, workbench tabs, and chat history);
+  count (pure functions over the normalized attention slice, shared by Projects, workbench tabs, and chat
+  history); **`sessionIsRunning` / `workspaceIsRunning` / `projectIsRunning`** (pure functions over the
+  ephemeral live-running slice, shared by Projects and chat-tab presentation);
   `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
   only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to

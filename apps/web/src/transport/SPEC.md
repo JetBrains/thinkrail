@@ -62,7 +62,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `deleteChat(workspaceId, sessionId)` tombstone fold (an online fast path; because this event channel is
   deliberately not replayed, workbench hydration repairs any deletion missed while disconnected from the next
   authoritative `session.list`), **`session.attention`** via `applySessionAttention(payload)`,
-  `provider.changed` via the atomic store invalidation
+  **`session.running`** via `applySessionRunning(payload)`, `provider.changed` via the atomic store invalidation
   `noteProviderChanged()` plus a `model.list` re-read installed through the store's monotonic provider-version
   guard (the model-catalog hook uses the same guarded write for every list/refresh, so an older reply cannot
   restore a removed generation's models; provider settings observes the same version and re-reads
@@ -91,6 +91,14 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   hydrate `[]`, never preserve stale state. Store semantics live in [[submodule-web-store]] and the wire in
   [[module-contracts]]. Before `WsTransport` dispatches any response or non-Pi
   push, `wireTransport` flushes queued Pi events synchronously; connection-status transitions do the same.
+
+  **Live-running hydrates separately on welcome and clears on disconnect.** Supported hosts run
+  `session.runningList` → `hydrateSessionRunning(rows)` under the connection-generation fence. The same
+  generic tokenized snapshot hydrator buffers concurrent `session.running` pushes until install; failed
+  reads replay live pushes, while a superseded generation discards them. Running needs no transcript epoch
+  because it is ephemeral presentation, not an acknowledgement gate. Unsupported hosts and every disconnect
+  abandon the hydration and clear the map so stale work never keeps pulsing. Attention hydration retains its
+  independent durable semantics and readiness ordering.
   This dispatch barrier preserves cross-message order and the store's transcript-revision fence while still
   collapsing consecutive stream frames. All subscriptions happen once at init, never in component effects);
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
@@ -116,13 +124,14 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   than a caller convention).
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
-  `TransportOptions`. `supportsSessionAttention` stays module-internal (its own tests import the file
-  directly) — no sibling decides the attention capability, this module does.
+  `TransportOptions`. `supportsSessionAttention` and `supportsSessionRunning` stay module-internal (their
+  tests import the file directly) — no sibling decides either capability, this module does.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
   `SessionDeletedPayload` for `session.deleted`, `SessionAttentionPayload` +
-  `ATTENTION_PROTOCOL_VERSION` for `session.attention` and its snapshot gate, `provider.changed`, the empty addressed
+  `ATTENTION_PROTOCOL_VERSION` for `session.attention` and its snapshot gate, `SessionRunningPayload` +
+  `SESSION_RUNNING_PROTOCOL_VERSION` for the additive live-running channel/snapshot gate, `provider.changed`, the empty addressed
   `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` + `host.updateAvailable`,
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +
   `settings.changed`); `store`

@@ -496,7 +496,7 @@ of the host.
   other frontends can list it in history without opening local placement) / **`session.deleted`** (workspace +
   session id; a non-replayable domain event broadcast after permanent deletion so every client removes the chat
   and blocks stale hydration) / **`session.attention`** (see the attention layer below) /
-  **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
+  **`session.running`** (see the live-running layer below) / **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
   client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to the host-claimed
   frontend; not broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
@@ -542,9 +542,9 @@ of the host.
 ## The attention layer
 
 Session attention answers one binary question the per-workspace hydration reads cannot: *is there a chat I
-should inspect or answer?* It deliberately does not expose running, queued, failed, or waiting presentation
-states. Absence means no attention everywhere; only a push needs `attentionId: null` to transmit a
-retraction.
+should inspect or answer?* It deliberately does not overload that signal with running, queued, failed, or
+waiting presentation states. Absence means no attention everywhere; only a push needs `attentionId: null` to
+transmit a retraction.
 
 - **`SessionAttention`** = `{ sessionId, workspaceId, projectId, attentionId }` — one current candidate.
   `attentionId` is an opaque stable identity for the decisive transcript/settlement or blocking interaction.
@@ -559,10 +559,13 @@ retraction.
   candidate. A successful acknowledgement publishes the ordinary retraction to every client, making seen
   state owner-global.
 
-The internal review-versus-blocking reason remains host policy, not a wire or UI state. The client stores
-only current candidate identities and derives session/workspace/project booleans; it never pre-rolls counts
-or precedence. Pushes are not replayed, so every welcome performs the snapshot read while buffering
-concurrent pushes.
+The internal review-versus-blocking-versus-interrupted reason remains host policy, not a wire or UI state.
+An interrupted candidate represents an idle latest turn with no successful/error/length terminal result; a
+full host restart therefore replaces a truthful running pulse with the same durable attention dot used for
+review. Explicit user Stop records that exact candidate as handled and stays quiet. The client stores only
+current candidate identities and derives session/workspace/project booleans; it never pre-rolls counts or
+precedence. Pushes are not replayed, so every welcome performs the snapshot read while buffering concurrent
+pushes.
 
 The request registry retains deprecated **`session.activityList` → `[]`** as a compatibility tombstone, with
 no activity types, derivation, or push channel. An already-loaded old client treats the newer protocol as
@@ -571,6 +574,28 @@ markers instead of stranding them forever.
 
 `ATTENTION_PROTOCOL_VERSION` pins the coordinated replacement. A new client connected to an older host
 clears its attention map and renders no dot rather than reviving the old multi-state language.
+
+## The live-running layer
+
+Live running answers a separate ephemeral question: *where is a user-facing chat doing work now?* It exists
+only to pulse existing chat/workspace/project identity icons. It carries no attention candidate, queue state,
+outcome, count, label text, colour, or persistence.
+
+- **`SessionRunning`** = `{ sessionId, workspaceId, projectId }` for one currently streaming top-level chat.
+- **`session.running`** push carries that attribution plus `running: boolean` on the exact `agent_start` /
+  `agent_settled` transition. Every client receives it after preceding Pi events are flushed.
+- **`session.runningList`** (no params) returns the authoritative set of currently streaming live top-level
+  sessions. Pushes are not replayed, so the client snapshots on welcome and buffers concurrent pushes until
+  install.
+- `projectId` rides every row/push for the same collapsed-project reason as attention. Running is never read
+  from disk: a host restart has no surviving runs, while reconnect to a live host reconstructs them from the
+  in-process session registry.
+- Queued messages, terminal processes, hidden child sessions, and host review/reflection infrastructure are
+  outside this contract. Disconnect clears the client's ephemeral map rather than pretending stale work is
+  still running.
+
+`SESSION_RUNNING_PROTOCOL_VERSION` gates the additive channel and request. An older host simply produces no
+pulse; it does not affect the independently versioned durable attention layer.
 
 ## Get right
 
