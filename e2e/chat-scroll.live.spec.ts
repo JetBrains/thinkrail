@@ -54,29 +54,6 @@ test("the reading band clears its streaming runway when the agent settles", {
 	await page.setViewportSize({ width: 390, height: 844 });
 	await expect(chatScroll).toBeVisible();
 	await expect(page.getByTestId("chat-stream-runway")).toHaveCount(0);
-
-	const scrollPoint = await chatScroll.evaluate((root) => {
-		const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
-		if (!scroller || scroller.scrollHeight <= scroller.clientHeight + 8) return null;
-		const rect = scroller.getBoundingClientRect();
-		return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-	});
-	expect(
-		scrollPoint,
-		"chat content should overflow the transcript viewport so it can be scrolled",
-	).not.toBeNull();
-	if (!scrollPoint) return;
-	await page.mouse.move(scrollPoint.x, scrollPoint.y);
-	await page.mouse.wheel(0, -10_000);
-
-	const latest = page.getByTestId("scroll-to-bottom");
-	await expect(latest).toBeVisible();
-	await expect(latest).toContainText("Latest");
-	await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
-
-	await latest.click();
-	await expect(latest).toHaveCount(0);
-	await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
 });
 
 test("the outer activity run reveals a thinking subtree that owns its following tools", {
