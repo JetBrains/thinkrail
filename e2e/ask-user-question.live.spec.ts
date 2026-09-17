@@ -381,23 +381,28 @@ test("multi-question: page arrows, Tab-to-note, and Enter reach review before su
 	await expect(record).toContainText("second line");
 });
 
-test("typing a message instead of answering supersedes the questionnaire", {
+test("typing while a live question waits queues steering instead of superseding it", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(150_000);
 	await ask(
 		page,
-		`Call the ask_user_question tool with one single-select question and 2 options. ${ONLY_TOOL} If I answer in chat instead, reply with one short sentence.`,
+		`Call the ask_user_question tool with one single-select question and 2 options. ${ONLY_TOOL} After I answer, follow any queued steering and reply briefly.`,
 	);
-	await expect(activeCard(page)).toBeVisible({ timeout: 90_000 });
+	const card = activeCard(page);
+	await expect(card).toBeVisible({ timeout: 90_000 });
 
-	await page.getByTestId("chat-input").fill("Just pick whichever option you prefer — go ahead.");
+	await page.getByTestId("chat-input").fill("Apply this after I answer the question.");
 	await page.getByTestId("chat-send").click();
 
-	await expect(
-		page.locator('[data-testid="ask-user-question"][data-tone="superseded"]').first(),
-	).toBeVisible({ timeout: 30_000 });
-	await expect(activeCard(page)).toHaveCount(0);
+	await expect(card).toBeVisible();
+	await expect(page.getByTestId("queue-item").first()).toContainText(
+		"Apply this after I answer the question.",
+	);
+	await card.getByTestId("ask-option").first().click();
+	await card.getByTestId("ask-submit").click();
+	await expect(answeredRecord(page)).toBeVisible({ timeout: 60_000 });
+	await expect(page.getByTestId("queue-item")).toHaveCount(0, { timeout: 60_000 });
 });
 
 test("the awaiting card survives closing and reopening the chat", { tag: "@agent" }, async ({
