@@ -15,6 +15,7 @@ import {
 	abortSession,
 	configurePiRuntime,
 	disposeAllSessions,
+	initializeSessionAttention,
 	isSessionStreaming,
 	listSessions,
 	removeSession,
@@ -61,7 +62,7 @@ let worktree: string;
 const WS = "ws-fixfindings";
 const SESSION = "sess-fixfindings";
 
-beforeEach(() => {
+beforeEach(async () => {
 	dataDir = mkdtempSync(join(tmpdir(), "fixfind-data-"));
 	worktree = mkdtempSync(join(tmpdir(), "fixfind-wt-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
@@ -78,9 +79,11 @@ beforeEach(() => {
 			createdAt: 0,
 		} as Workspace,
 	]);
+	await initializeSessionAttention([]);
 });
 
 afterEach(() => {
+	disposeAllSessions();
 	delete process.env.THINKRAIL_DATA_DIR;
 	resetConfigCache();
 	rmSync(dataDir, { recursive: true, force: true });
