@@ -25,6 +25,7 @@ import {
 	listTodos,
 	recordAgentChangesRequested,
 	renderFixPackage,
+	settleChangeArtifacts,
 	startTodoReview,
 	todoReviewAutoCycles,
 } from "../todos";
@@ -309,7 +310,9 @@ async function handleRequestReview(
 	if (!claimItemReview(sessionId, itemId)) throw new Error("This step is already being reviewed.");
 	const params = { workspaceId, sessionId, id: itemId };
 	try {
-		// startTodoReview stays synchronous, the review runs on the plan's serial chain; see planReview.SPEC.md.
+		// request_review fires right after todo_update: await the artifact-reconciliation barrier so the
+		// snapshot sees the just-committed change set before startTodoReview takes it. See planReview.SPEC.md.
+		await settleChangeArtifacts(workspaceId);
 		const { pkg, reviewedSha } = startTodoReview(params);
 		return await onPlanChain(workspaceId, sessionId, async () => {
 			const itemTitle = await itemTitleOf(workspaceId, sessionId, itemId);

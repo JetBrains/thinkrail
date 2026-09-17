@@ -25,6 +25,7 @@ import { saveWorkspaces } from "../persistence";
 import * as reviews from "../reviews";
 import { getReviewSnapshot } from "../reviews";
 import { resetConfigCache, updateConfig } from "../settings";
+import * as todos from "../todos";
 import { todoReviewAutoCycles, todoReviewRecord } from "../todos";
 import { itemReviewActive } from "./planReviewQueue";
 import {
@@ -431,6 +432,41 @@ test("a re-review approve does NOT settle the step while an earlier finding is s
 	);
 	// The spinner is cleared either way — an unsettled approve is not an in-flight review.
 	expect(itemReviewActive(sessionId, id)).toBe(false);
+});
+
+test("the tool path awaits artifact reconciliation before it snapshots the change set", async () => {
+	installRequestReviewSeam(verdictRunner(approve));
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+
+	// The reviewing snapshot must be taken only after the reconciliation barrier settles — request_review
+	// fires right after todo_update, so a snapshot before the barrier can miss the just-committed change set.
+	const order: string[] = [];
+	const realStart = todos.startTodoReview;
+	const settleSpy = spyOn(todos, "settleChangeArtifacts").mockImplementation(async () => {
+		order.push("settle");
+	});
+	const startSpy = spyOn(todos, "startTodoReview").mockImplementation((p) => {
+		order.push("start");
+		return realStart(p);
+	});
+	try {
+		await createRequestReviewTool().execute(
+			"tc",
+			{ itemId: id } as never,
+			undefined,
+			undefined,
+			ctx,
+		);
+	} finally {
+		settleSpy.mockRestore();
+		startSpy.mockRestore();
+	}
+
+	expect(order[0]).toBe("settle");
+	expect(order.indexOf("settle")).toBeLessThan(order.indexOf("start"));
+	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })?.state).toBe("reviewed");
 });
 
 test("the tool path marks findings sent to the worker so resolve_comment can close them", async () => {
