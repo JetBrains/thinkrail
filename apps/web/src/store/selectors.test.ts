@@ -50,8 +50,8 @@ test("connection generations reject stale or disconnected read settlements", () 
 });
 
 test("chat rename capability follows the host protocol snapshot", () => {
-	expect(selectCanRenameChat({ protocolVersion: 65 })).toBe(true);
-	expect(selectCanRenameChat({ protocolVersion: 64 })).toBe(false);
+	expect(selectCanRenameChat({ protocolVersion: 66 })).toBe(true);
+	expect(selectCanRenameChat({ protocolVersion: 65 })).toBe(false);
 	expect(selectCanRenameChat({ protocolVersion: null })).toBe(false);
 });
 
