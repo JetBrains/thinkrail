@@ -1176,6 +1176,41 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 	}
 });
 
+test("an internal disk reattach is hidden before its first attention publication", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const workspaceId = "ws-hidden-reattach";
+	const projectId = "project-hidden-reattach";
+	const published: SessionAttentionPayload[] = [];
+	setSessionProjectResolver((id) => (id === workspaceId ? projectId : null));
+	setSessionAttentionPublisher((payload) => published.push(payload));
+	let sessionId: string | undefined;
+	try {
+		fauxA.setResponses([fauxAssistantMessage("INTERNAL_REVIEW_DONE")]);
+		const cwd = tmpCwd("trpi-hidden-reattach-");
+		const session = await createSession({
+			cwd,
+			workspaceId,
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		await promptSession(sessionId, "persist an internal review result");
+		removeSession(sessionId);
+		published.length = 0;
+
+		expect(await ensureSessionAttached(sessionId, workspaceId, cwd, { userVisible: false })).toBe(
+			true,
+		);
+		expect(published.some((payload) => payload.attentionId !== null)).toBe(false);
+		removeSession(sessionId);
+		expect(await listSessionAttention([{ id: workspaceId, cwd }])).toEqual([]);
+	} finally {
+		setSessionAttentionPublisher(() => {});
+		setSessionProjectResolver(() => null);
+		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("deleteSession removes an empty live chat whose reserved transcript path is not materialized", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	let trashCalls = 0;

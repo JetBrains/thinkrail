@@ -1188,17 +1188,29 @@ export function listSessions(workspaceId: string, cwd: string): Promise<SessionS
 }
 
 const attaching = new Map<string, Promise<void>>();
+const attachingUserVisible = new Map<string, boolean | undefined>();
 
-function attachDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
+function attachDiskSession(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+	userVisible?: boolean,
+): Promise<void> {
 	if (isSessionDeleted(sessionId, workspaceId))
 		return Promise.reject(new Error(`Unknown session: ${sessionId}`));
 	if (sessions.has(sessionId)) return Promise.resolve();
 	let pending = attaching.get(sessionId);
 	if (!pending) {
-		pending = openDiskSession(sessionId, workspaceId, cwd).finally(() =>
-			attaching.delete(sessionId),
-		);
+		attachingUserVisible.set(sessionId, userVisible);
+		pending = openDiskSession(sessionId, workspaceId, cwd).finally(() => {
+			attaching.delete(sessionId);
+			attachingUserVisible.delete(sessionId);
+		});
 		attaching.set(sessionId, pending);
+	} else if (userVisible === false) {
+		attachingUserVisible.set(sessionId, false);
+	} else if (userVisible === true && attachingUserVisible.get(sessionId) !== false) {
+		attachingUserVisible.set(sessionId, true);
 	}
 	return pending;
 }
@@ -1252,7 +1264,10 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		session.dispose();
 		return;
 	}
-	await registerSession(session, workspaceId, generation);
+	const userVisible = attachingUserVisible.get(sessionId);
+	await registerSession(session, workspaceId, generation, {
+		...(userVisible !== undefined ? { userVisible } : {}),
+	});
 }
 
 async function ensureSessionAttachedInternal(
@@ -1272,7 +1287,7 @@ async function ensureSessionAttachedInternal(
 		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
 	);
 	if (!known) return false;
-	await attachDiskSession(sessionId, workspaceId, cwd);
+	await attachDiskSession(sessionId, workspaceId, cwd, userVisible);
 	const attached = sessions.get(sessionId);
 	if (!attached) throw new Error(`Session ${sessionId} was re-opened but did not register.`);
 	if (userVisible !== undefined) setSessionUserVisible(sessionId, attached, userVisible);
