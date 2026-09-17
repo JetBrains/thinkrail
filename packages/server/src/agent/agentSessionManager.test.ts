@@ -24,13 +24,16 @@ import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-c
 import type {
 	ActivityStatus,
 	AgentSettlement,
+	AskUserQuestionResult,
 	ExtUiRequest,
 	ImageContent,
 	SessionSummary,
 } from "@thinkrail/contracts";
+import { isAskUserAnswersMessage } from "@thinkrail/contracts";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import {
 	abortSession,
+	answerQuestion,
 	buildSessionSettings,
 	clampThinkingForModel,
 	clearQueueSession,
@@ -822,6 +825,164 @@ test("getSessionStats + getSessionCommands read live session info (cheap wins #3
 
 	expect(Array.isArray(getSessionCommands(s.sessionId))).toBe(true);
 	removeSession(s.sessionId);
+});
+
+test("a live question blocks continuation, preserves queue order, and acknowledges after its native result persists", async () => {
+	const toolCallId = "live-question";
+	const question = {
+		questions: [
+			{
+				question: "Which library?",
+				header: "Library",
+				options: [
+					{ label: "date-fns", description: "small" },
+					{ label: "luxon", description: "time zones" },
+				],
+			},
+		],
+	};
+	let continuationCalls = 0;
+	let continuationContext = "";
+	let releaseContinuation = (): void => {};
+	const continuationGate = new Promise<void>((resolve) => {
+		releaseContinuation = resolve;
+	});
+	let markContinuationStarted = (): void => {};
+	const continuationStarted = new Promise<void>((resolve) => {
+		markContinuationStarted = resolve;
+	});
+	fauxA.setResponses([
+		fauxAssistantMessage(fauxToolCall("ask_user_question", question, { id: toolCallId })),
+		async (context) => {
+			continuationCalls++;
+			continuationContext = JSON.stringify(context.messages);
+			markContinuationStarted();
+			await continuationGate;
+			return fauxAssistantMessage("QUESTION_CONTINUED");
+		},
+	]);
+	const cwd = tmpCwd("trpi-live-question-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-live-question",
+		model: toWireModel(fauxA.getModel()),
+	});
+	try {
+		const prompting = promptSession(session.sessionId, "Choose a library.");
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		expect(seen(session.sessionId)).toContain('"toolName":"ask_user_question"');
+		await steerSession(session.sessionId, "QUEUED_WHILE_ASKING");
+		await Promise.resolve();
+		expect(continuationCalls).toBe(0);
+
+		const result: AskUserQuestionResult = {
+			cancelled: false,
+			answers: [
+				{
+					questionIndex: 0,
+					question: "Which library?",
+					kind: "option",
+					answer: "luxon",
+				},
+			],
+		};
+		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		await continuationStarted;
+		await answering;
+
+		const { messages } = await getSessionMessages(session.sessionId, "ws-live-question", cwd);
+		const persistedResult = messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		expect(persistedResult).toBeDefined();
+		if (persistedResult?.role !== "toolResult") throw new Error("native result was not persisted");
+		expect(persistedResult.details).toEqual(result);
+		expect(messages.some((message) => message.role === "custom")).toBe(false);
+		expect(continuationContext.indexOf('"role":"toolResult"')).toBeLessThan(
+			continuationContext.indexOf("QUEUED_WHILE_ASKING"),
+		);
+
+		releaseContinuation();
+		await prompting;
+	} finally {
+		releaseContinuation();
+		removeSession(session.sessionId);
+	}
+});
+
+test("restart repair leaves a dangling question answerable through the custom-message path", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const cwd = tmpCwd("trpi-restart-question-");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const toolCallId = "restart-question";
+	const question = {
+		questions: [
+			{
+				question: "Which runtime?",
+				header: "Runtime",
+				options: [
+					{ label: "Bun", description: "fast" },
+					{ label: "Node", description: "compatible" },
+				],
+			},
+		],
+	};
+	const fixture = writeFixtureSession(dir, {
+		id: "restart-question-session",
+		cwd,
+		messages: [
+			{ role: "user", text: "Pick a runtime.", timestamp: 1 },
+			{
+				role: "assistant",
+				timestamp: 2,
+				stopReason: "toolUse",
+				content: [
+					{
+						type: "toolCall",
+						id: toolCallId,
+						name: "ask_user_question",
+						arguments: question,
+					},
+				],
+			},
+		],
+	});
+	try {
+		fauxA.setResponses([fauxAssistantMessage("RESTART_QUESTION_CONTINUED")]);
+		expect(await ensureSessionAttached(fixture.id, "ws-restart-question", cwd)).toBe(true);
+		const repaired = await getSessionMessages(fixture.id, "ws-restart-question", cwd);
+		const ack = repaired.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (ack?.role !== "toolResult") throw new Error("repair ack was not persisted");
+		expect(ack.details).toEqual({ kind: "ack" });
+		expect(ack.isError).toBe(false);
+
+		await answerQuestion(fixture.id, toolCallId, {
+			cancelled: false,
+			answers: [
+				{
+					questionIndex: 0,
+					question: "Which runtime?",
+					kind: "option",
+					answer: "Bun",
+				},
+			],
+		});
+		const answered = await getSessionMessages(fixture.id, "ws-restart-question", cwd);
+		expect(
+			answered.messages.some(
+				(message) => isAskUserAnswersMessage(message) && message.details.toolCallId === toolCallId,
+			),
+		).toBe(true);
+		expect(seen(fixture.id)).toContain("RESTART_QUESTION_CONTINUED");
+	} finally {
+		if (hasSession(fixture.id)) removeSession(fixture.id);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
 });
 
 test("listSessions reports a workspace's live sessions; getSessionMessages returns its transcript", async () => {

@@ -9,12 +9,13 @@ import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
 import { Value } from "typebox/value";
 import {
 	ASK_ACK_TEXT,
+	ASK_STOPPED_ERROR,
 	AskUserQuestionSchema,
 	assessAnswerability,
 	buildAnswersMessage,
 	buildQuestionnaireResponse,
 	createAskUserQuestionTool,
-	isAckDetails,
+	createAskUserQuestionWaiters,
 	validateQuestionnaire,
 } from "./askUserQuestion";
 
@@ -38,7 +39,13 @@ const textOf = (r: { content: { type: string; text?: string }[] }): string =>
 const ctx = (hasUI = true): ExtensionContext => ({ hasUI }) as unknown as ExtensionContext;
 
 const run = (hasUI = true, params: AskUserQuestionArgs = args()) =>
-	createAskUserQuestionTool().execute("tc-1", params as never, undefined, undefined, ctx(hasUI));
+	createAskUserQuestionTool(createAskUserQuestionWaiters()).execute(
+		"tc-1",
+		params as never,
+		undefined,
+		undefined,
+		ctx(hasUI),
+	);
 
 const askCall = (toolCallId: string, a: AskUserQuestionArgs = args()) =>
 	({
@@ -206,11 +213,68 @@ test("buildQuestionnaireResponse: a multi answer's typed free text is marked as 
 	expect(r.content[0]?.text).toContain('user\'s own answer: "some-other-lib"');
 });
 
-test("execute returns the ack immediately and ends the turn (terminate: true) — it never blocks", async () => {
-	const r = await run();
-	expect(textOf(r)).toBe(ASK_ACK_TEXT);
-	expect(isAckDetails(r.details)).toBe(true);
-	expect((r as { terminate?: boolean }).terminate).toBe(true);
+test("a valid live execution is sequential, blocks for its answer, and returns the real result", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	const tool = createAskUserQuestionTool(waiters);
+	expect(tool.executionMode).toBe("sequential");
+	let settled = false;
+	const pending = tool
+		.execute("tc-1", args() as never, undefined, undefined, ctx())
+		.then((result) => {
+			settled = true;
+			return result;
+		});
+	await Promise.resolve();
+	expect(settled).toBe(false);
+
+	const result: AskUserQuestionResult = {
+		cancelled: false,
+		answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" }],
+	};
+	const answered = waiters.answer("tc-1", result);
+	expect(answered.handled).toBe(true);
+	const response = await pending;
+	expect(textOf(response)).toContain('"Which library?"="luxon"');
+	expect(response.details).toEqual(result);
+	expect((response as { terminate?: boolean }).terminate).toBeUndefined();
+	waiters.persistTurn([{ toolCallId: "tc-1", toolName: "ask_user_question" }]);
+	if (answered.handled) await answered.persisted;
+});
+
+test("an answer arriving after tool_execution_start but before execute is retained", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	waiters.expect("tc-early");
+	const result: AskUserQuestionResult = {
+		cancelled: false,
+		answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" }],
+	};
+	const answered = waiters.answer("tc-early", result);
+	expect(answered.handled).toBe(true);
+	const response = await createAskUserQuestionTool(waiters).execute(
+		"tc-early",
+		args() as never,
+		undefined,
+		undefined,
+		ctx(),
+	);
+	expect(response.details).toEqual(result);
+	waiters.persistTurn([{ toolCallId: "tc-early", toolName: "ask_user_question" }]);
+	if (answered.handled) await answered.persisted;
+});
+
+test("a live waiter rejects with the stable stopped result when Pi aborts", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	const controller = new AbortController();
+	const pending = createAskUserQuestionTool(waiters).execute(
+		"tc-abort",
+		args() as never,
+		controller.signal,
+		undefined,
+		ctx(),
+	);
+	await Promise.resolve();
+	controller.abort(new Error("provider-specific abort text"));
+	await expect(pending).rejects.toThrow(ASK_STOPPED_ERROR);
 });
 
 test("execute returns the no-UI error (non-terminating) when hasUI is false", async () => {

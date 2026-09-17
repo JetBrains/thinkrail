@@ -81,7 +81,7 @@ const DESCRIPTION = `Ask the user one or more structured, multiple-choice questi
 1. The request is underspecified and you cannot proceed without a concrete decision.
 2. You need a user preference, requirement, or a direction/implementation choice.
 
-Calling this tool ENDS YOUR TURN: the questions render inline in the chat as an interactive card (tabs when there are several), and the user's answers arrive as the NEXT USER MESSAGE (a structured "User has answered your questions:" message). Do not continue working on the blocked task after calling it, and do not assume an answer until that message arrives. If the user replies with a free-form message instead of using the card, treat that message as their reply and re-ask only what is still genuinely undecided. Notes:
+Calling this tool PAUSES EXECUTION until the user answers: the questions render inline in the chat as an interactive card (tabs when there are several), and the user's answers arrive as this tool's result. Do not continue working on the blocked task or assume an answer while the tool is pending. If the user replies with a free-form message instead of using the card, treat that message as their reply and re-ask only what is still genuinely undecided. Notes:
 - Every question also gets an "Other" option with a free-text field, and the user can always Skip the whole questionnaire (you are told they declined) — do NOT author "Other"-style, free-text, or escape options yourself (reserved labels are rejected).
 - Set multiSelect: true when several answers are valid; the user may combine checked options with their own typed answer.
 - If you recommend one option, make it FIRST, append "(Recommended)" to its label, and set its recommendedReason to one short sentence on why you recommend it over the alternatives (shown inline under the option).
@@ -90,7 +90,7 @@ Calling this tool ENDS YOUR TURN: the questions render inline in the chat as an 
 - The user may answer only some questions; unanswered ones are reported as declined.`;
 
 const PROMPT_GUIDELINES = [
-	`Call ask_user_question whenever the request is ambiguous and a concrete decision is needed — include every question needed in one call, with ${MIN_OPTIONS}-${MAX_OPTIONS} options each. The call ends your turn; the answers arrive as the next user message.`,
+	`Call ask_user_question whenever the request is ambiguous and a concrete decision is needed — include every question needed in one call, with ${MIN_OPTIONS}-${MAX_OPTIONS} options each. The call blocks until its result contains the user's answers.`,
 	"Every option needs a concise label (1-5 words) and a description of what it means / its trade-off.",
 	'Recommend by putting the option first with "(Recommended)" appended and setting its recommendedReason to one short sentence (shown inline under the option) on why you recommend it over the alternatives; the user can always type a custom answer or skip the questionnaire.',
 ];
@@ -283,32 +283,150 @@ export function buildAnswersMessage(
 
 export const ASK_USER_QUESTION_TOOL_NAME = "ask_user_question";
 
-export function createAskUserQuestionTool(): ToolDefinition<
-	typeof AskUserQuestionSchema,
-	AskUserQuestionAckDetails | AskUserQuestionResult
-> {
+export const ASK_STOPPED_ERROR = "Question cancelled because the run was stopped";
+
+interface LiveQuestionWaiter {
+	waitStarted: boolean;
+	answer: AskUserQuestionResult | undefined;
+	answerPromise: Promise<AskUserQuestionResult>;
+	resolveAnswer: (result: AskUserQuestionResult) => void;
+	rejectAnswer: (error: Error) => void;
+	persisted: Promise<void>;
+	resolvePersisted: () => void;
+	rejectPersisted: (error: Error) => void;
+	cleanupAbort: () => void;
+}
+
+function createLiveQuestionWaiter(): LiveQuestionWaiter {
+	let resolveAnswer: (result: AskUserQuestionResult) => void = () => {};
+	let rejectAnswer: (error: Error) => void = () => {};
+	const answerPromise = new Promise<AskUserQuestionResult>((resolve, reject) => {
+		resolveAnswer = resolve;
+		rejectAnswer = reject;
+	});
+	let resolvePersisted: () => void = () => {};
+	let rejectPersisted: (error: Error) => void = () => {};
+	const persisted = new Promise<void>((resolve, reject) => {
+		resolvePersisted = resolve;
+		rejectPersisted = reject;
+	});
+	return {
+		waitStarted: false,
+		answer: undefined,
+		answerPromise,
+		resolveAnswer,
+		rejectAnswer,
+		persisted,
+		resolvePersisted,
+		rejectPersisted,
+		cleanupAbort: () => {},
+	};
+}
+
+export interface AskUserQuestionWaiters {
+	expect(toolCallId: string): void;
+	wait(toolCallId: string, signal: AbortSignal | undefined): Promise<AskUserQuestionResult>;
+	answer(
+		toolCallId: string,
+		result: AskUserQuestionResult,
+	): { handled: false } | { handled: true; persisted: Promise<void> };
+	persistTurn(toolResults: readonly { toolCallId: string; toolName: string }[]): void;
+	hasPending(): boolean;
+}
+
+export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
+	const waiting = new Map<string, LiveQuestionWaiter>();
+	const waiterFor = (toolCallId: string): LiveQuestionWaiter => {
+		let waiter = waiting.get(toolCallId);
+		if (!waiter) {
+			waiter = createLiveQuestionWaiter();
+			waiting.set(toolCallId, waiter);
+		}
+		return waiter;
+	};
+	return {
+		expect(toolCallId) {
+			waiterFor(toolCallId);
+		},
+		wait(toolCallId, signal) {
+			const waiter = waiterFor(toolCallId);
+			if (waiter.waitStarted) {
+				return Promise.reject(new Error(`Duplicate ask_user_question tool call: ${toolCallId}`));
+			}
+			waiter.waitStarted = true;
+			if (signal?.aborted) {
+				waiting.delete(toolCallId);
+				const error = new Error(ASK_STOPPED_ERROR);
+				waiter.rejectAnswer(error);
+				if (waiter.answer !== undefined) waiter.rejectPersisted(error);
+				return waiter.answerPromise;
+			}
+			const abort = (): void => {
+				if (waiting.get(toolCallId) !== waiter) return;
+				waiting.delete(toolCallId);
+				const error = new Error(ASK_STOPPED_ERROR);
+				waiter.rejectAnswer(error);
+				if (waiter.answer !== undefined) waiter.rejectPersisted(error);
+			};
+			signal?.addEventListener("abort", abort, { once: true });
+			waiter.cleanupAbort = () => signal?.removeEventListener("abort", abort);
+			return waiter.answerPromise;
+		},
+		answer(toolCallId, result) {
+			const waiter = waiting.get(toolCallId);
+			if (!waiter) return { handled: false };
+			if (waiter.answer !== undefined) {
+				throw new Error(`This questionnaire was already answered: ${toolCallId}`);
+			}
+			waiter.answer = result;
+			waiter.resolveAnswer(result);
+			return { handled: true, persisted: waiter.persisted };
+		},
+		persistTurn(toolResults) {
+			for (const result of toolResults) {
+				if (result.toolName !== ASK_USER_QUESTION_TOOL_NAME) continue;
+				const waiter = waiting.get(result.toolCallId);
+				if (!waiter) continue;
+				waiting.delete(result.toolCallId);
+				waiter.cleanupAbort();
+				if (waiter.answer === undefined) continue;
+				if (waiter.waitStarted) waiter.resolvePersisted();
+				else
+					waiter.rejectPersisted(
+						new Error(`This questionnaire is not awaiting an answer: ${result.toolCallId}`),
+					);
+			}
+		},
+		hasPending() {
+			return [...waiting.values()].some((waiter) => waiter.waitStarted);
+		},
+	};
+}
+
+export function createAskUserQuestionTool(
+	waiters: AskUserQuestionWaiters,
+): ToolDefinition<typeof AskUserQuestionSchema, AskUserQuestionResult> {
 	return {
 		name: ASK_USER_QUESTION_TOOL_NAME,
 		label: "Ask User Question",
 		description: DESCRIPTION,
 		promptGuidelines: PROMPT_GUIDELINES,
 		parameters: AskUserQuestionSchema,
-		async execute(_toolCallId, params, _signal, _onUpdate, ctx: ExtensionContext) {
-			const args = params as AskUserQuestionArgs;
+		executionMode: "sequential",
+		async execute(toolCallId, params, signal, _onUpdate, ctx: ExtensionContext) {
+			const args: AskUserQuestionArgs = params;
 			if (!ctx.hasUI) return toolResult(ERROR_NO_UI, { answers: [], cancelled: true });
 
 			const validation = validateQuestionnaire(args);
 			if (!validation.ok) return toolResult(validation.message, { answers: [], cancelled: true });
 
-			return {
-				content: [{ type: "text", text: ASK_ACK_TEXT }],
-				details: { kind: "ack" } satisfies AskUserQuestionAckDetails,
-				terminate: true,
-			};
+			return buildQuestionnaireResponse(await waiters.wait(toolCallId, signal), args);
 		},
 	};
 }
 
-export function askUserQuestionExtension(pi: ExtensionAPI): void {
-	pi.registerTool(createAskUserQuestionTool());
+export function askUserQuestionExtension(
+	waiters: AskUserQuestionWaiters,
+): (pi: ExtensionAPI) => void {
+	return (pi) => pi.registerTool(createAskUserQuestionTool(waiters));
 }

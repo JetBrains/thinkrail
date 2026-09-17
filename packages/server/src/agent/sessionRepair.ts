@@ -1,12 +1,11 @@
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
-import { ASK_USER_QUESTION_TOOL_NAME, DECLINE_MESSAGE } from "./askUserQuestion";
+import { ASK_ACK_TEXT, ASK_USER_QUESTION_TOOL_NAME } from "./askUserQuestion";
 
 export interface RepairedToolCall {
 	toolCallId: string;
 	toolName: string;
 }
 
-const ASK_REPAIR_TEXT = `${DECLINE_MESSAGE} (the host restarted before the user answered — ask again if still relevant)`;
 const GENERIC_REPAIR_TEXT =
 	"Operation aborted (the host restarted before this tool call completed)";
 
@@ -48,9 +47,9 @@ export function repairDanglingToolCalls(sessionManager: SessionManager): Repaire
 			role: "toolResult",
 			toolCallId: toolCall.toolCallId,
 			toolName: toolCall.toolName,
-			content: [{ type: "text", text: isAsk ? ASK_REPAIR_TEXT : GENERIC_REPAIR_TEXT }],
+			content: [{ type: "text", text: isAsk ? ASK_ACK_TEXT : GENERIC_REPAIR_TEXT }],
 			isError: !isAsk,
-			...(isAsk ? { details: { answers: [], cancelled: true } } : {}),
+			...(isAsk ? { details: { kind: "ack" } } : {}),
 			timestamp: Date.now(),
 		});
 	}

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { Message } from "@thinkrail/contracts";
+import { ASK_ACK_TEXT } from "./askUserQuestion";
 import { repairDanglingToolCalls } from "./sessionRepair";
 
 const assistantWithCalls = (
@@ -73,7 +74,7 @@ test("a dangling generic tool call gets an error 'Operation aborted' result", ()
 	expect(repairDanglingToolCalls(sm)).toEqual([]);
 });
 
-test("a dangling ask_user_question (old blocking format) resolves as the canonical decline", () => {
+test("a dangling ask_user_question is repaired to the canonical answerable ack", () => {
 	const sm = SessionManager.inMemory("/tmp/repair-test");
 	sm.appendMessage(user("decide"));
 	sm.appendMessage(assistantWithCalls([{ id: "q1", name: "ask_user_question" }]));
@@ -83,10 +84,9 @@ test("a dangling ask_user_question (old blocking format) resolves as the canonic
 	const repaired = sm.buildSessionContext().messages.find((m) => m.role === "toolResult");
 	if (repaired?.role !== "toolResult") throw new Error("unreachable");
 	expect(repaired.isError).toBe(false);
-	expect(repaired.details).toEqual({ answers: [], cancelled: true });
+	expect(repaired.details).toEqual({ kind: "ack" });
 	const text = (repaired.content[0] as { text?: string }).text ?? "";
-	expect(text).toContain("User declined to answer questions");
-	expect(text).toContain("ask again if still relevant");
+	expect(text).toBe(ASK_ACK_TEXT);
 });
 
 test("several orphans in one batch are all paired (mixed ask + generic)", () => {
