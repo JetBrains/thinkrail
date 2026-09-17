@@ -36,6 +36,7 @@ import {
 	onPlanChain,
 	releaseItemReview,
 } from "./planReviewQueue";
+import { additionalCapture, captureAdditional } from "./productAnalytics";
 import { REVIEWER_OUTPUT_CONTRACT, REVIEWER_SYSTEM_PROMPT, REVIEWER_TOOLS } from "./reviewerRole";
 import { withReviewLock } from "./reviewLock";
 import { claimItemFix, itemFixFindings, itemOpenFindings, releaseItemFix } from "./todoReview";
@@ -210,10 +211,14 @@ async function recordVerdict(
 	reviewedSha: string,
 	deliverFix: boolean,
 ): Promise<VerdictOutcome> {
+	const capture = additionalCapture();
+	const decided = (verdict: "approved" | "changes_requested") =>
+		captureAdditional(capture, { name: "review_decided", params: { actor: "agent", verdict } });
 	if (result.verdict === "approve") {
 		const open = await itemOpenFindings(params);
 		if (open.length === 0) {
 			approveTodoReview(params, "agent");
+			decided("approved");
 			return { kind: "approved" };
 		}
 		cancelTodoReview(params);
@@ -226,6 +231,7 @@ async function recordVerdict(
 		return { kind: "approve-blocked", openFindings: open.length };
 	}
 	for (const f of result.findings) await fileFinding(params, reviewedSha, f);
+	decided("changes_requested");
 	const spent = todoReviewAutoCycles(params) ?? 0;
 	const canAutoFix = getConfig().reviewAutoFix !== false && spent < 1;
 	const note = result.summary || DEFAULT_FIX_NOTE;

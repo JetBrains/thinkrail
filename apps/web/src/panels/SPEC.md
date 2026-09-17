@@ -642,7 +642,7 @@ a project picker, the prompt hero, and the reused
   the review runs with no chat of its own, so the toast must carry the error. The verdict lands via the
   `review.changed` broadcast (`useChatTodos` refetches the plan on it), not a `pi.event` for this
   session — the subagent's events are hidden.
-  **Every plan-review affordance is host-version-gated on `transport.supportsPlanReview` (v65).** Against an
+  **Every plan-review affordance is host-version-gated on `transport.supportsPlanReview` (v66).** Against an
   older host that serves no `todo.startReview`/`reviewAll`, `PlanPane` treats the plan as having no reviewable
   items (no Review All, no review funnel stage, no next-action) and disables the per-row `Start review`, so an
   independently-shipped newer client never offers a capability the host cannot honour.

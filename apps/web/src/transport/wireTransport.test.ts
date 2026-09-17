@@ -15,7 +15,7 @@ test("an older host and a pre-welcome connection do not, so the client clears ra
 	expect(supportsSessionActivity(null)).toBe(false);
 });
 
-test("plan review is offered only by a host at or beyond the v65 capability", () => {
+test("plan review is offered only by a host at or beyond the v66 capability", () => {
 	expect(supportsPlanReview(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION)).toBe(true);
 	expect(supportsPlanReview(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION + 1)).toBe(true);
 	expect(supportsPlanReview(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION - 1)).toBe(false);
