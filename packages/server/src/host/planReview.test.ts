@@ -486,6 +486,7 @@ test("a post-ack review failure publishes an actionable UI error, not just a war
 	}
 	expect(failures).toHaveLength(1);
 	expect(failures[0]?.workspaceId).toBe(WS);
+	expect(failures[0]?.sessionId).toBe(sessionId);
 	expect(failures[0]?.itemId).toBe(id);
 	expect(failures[0]?.itemTitle).toBe("flaky step");
 	expect(failures[0]?.message).toMatch(/valid verdict/);

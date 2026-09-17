@@ -364,6 +364,7 @@ export function startPlanReview(
 			// The detached path has no chat to carry the error; publish it so the plan page can toast. See planReview.SPEC.md.
 			reviewFailedPublisher({
 				workspaceId,
+				sessionId,
 				itemId,
 				itemTitle,
 				message: err instanceof Error ? err.message : String(err),

@@ -68,8 +68,10 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   the review is enqueued; the run then fails on a detached path (provider error, invalid output, abort) with
   no chat of its own to show it. `startPlanReview` clears the `reviewing` mark and calls
   `reviewFailedPublisher` (`ReviewFailedPayload`, broadcast on `review.failed`) so the plan page can raise a
-  toast — the panel spec's requirement that the toast carry failure. The awaited tool path needs no publish:
-  it rejects to the worker. Pinned by the post-ack failure test in `planReview.test.ts`.
+  toast — the panel spec's requirement that the toast carry failure. The payload carries the owning
+  `sessionId` so only that plan's view toasts (not every plan in the workspace); split views of one session
+  dedupe on the toast body. The awaited tool path needs no publish: it rejects to the worker. Pinned by the
+  post-ack failure test in `planReview.test.ts`.
 - **`autoCycles` must match what actually happened.** `1` stands only when the worker really accepted the
   fix request; a rejected fix — the send OR any of its preparation steps (snapshot/package/mark) failing —
   or a refused fix latch re-records `2` (terminal), always after rolling the marked findings back to
