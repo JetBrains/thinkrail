@@ -43,6 +43,7 @@ export async function openChatInTab(
 		store.reopenChat(workspaceId, sessionId, options);
 		return;
 	}
+	const attentionReconciledEpoch = store.attentionHydrationEpoch;
 	store.beginChatStart(workspaceId);
 	try {
 		const {
@@ -67,7 +68,7 @@ export async function openChatInTab(
 			messagesToRuntime(messages, summary.lastSettlement),
 			true,
 			summary.live ? undefined : syncedTick,
-			effectiveOptions,
+			{ ...effectiveOptions, attentionReconciledEpoch },
 		);
 		const settled = useAppStore.getState();
 		const installed =

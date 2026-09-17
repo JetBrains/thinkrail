@@ -238,6 +238,7 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 		});
 	} catch {
 		try {
+			const attentionReconciledEpoch = useAppStore.getState().attentionHydrationEpoch;
 			const {
 				result: { summary, messages },
 				syncedTick,
@@ -254,7 +255,7 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 				messagesToRuntime(messages, summary.lastSettlement),
 				false,
 				summary.live ? undefined : syncedTick,
-				{ activate: false },
+				{ activate: false, attentionReconciledEpoch },
 			);
 			const hydrated = useAppStore.getState();
 			const recovered = hydrated.sessions[sessionId];

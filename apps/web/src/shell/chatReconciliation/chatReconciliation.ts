@@ -52,6 +52,7 @@ export function hydrateChatResource(workspaceId: string, sessionId: string): Pro
 		return Promise.resolve(false);
 	}
 	const connectionGeneration = state.connectionGeneration;
+	const attentionReconciledEpoch = state.attentionHydrationEpoch;
 	const key = tupleKey("chat-hydration", workspaceId, sessionId, String(connectionGeneration));
 	const existing = sessionHydration.get(key);
 	if (existing) return existing;
@@ -80,7 +81,7 @@ export function hydrateChatResource(workspaceId: string, sessionId: string): Pro
 				messagesToRuntime(messages, summary.lastSettlement),
 				false,
 				summary.live ? undefined : syncedTick,
-				{ activate: false },
+				{ activate: false, attentionReconciledEpoch },
 			);
 			const installed = useAppStore.getState();
 			const installedDocument = installed.layoutDocumentsByWorkspace[workspaceId];
@@ -234,11 +235,15 @@ export function useWorkspaceChatCatalogReconciliation(
 				!state.removedWorkspaceIds[workspaceId]
 			);
 		};
-		const fetchMessages = (sessionId: string) =>
-			getSessionMessagesWithSkillBaseline({ sessionId, workspaceId }).catch((error: unknown) => {
-				if (live()) toast.error(errorText(error), "Couldn't load this chat");
-				return null;
-			});
+		const fetchMessages = (sessionId: string) => {
+			const attentionReconciledEpoch = useAppStore.getState().attentionHydrationEpoch;
+			return getSessionMessagesWithSkillBaseline({ sessionId, workspaceId })
+				.then((loaded) => ({ ...loaded, attentionReconciledEpoch }))
+				.catch((error: unknown) => {
+					if (live()) toast.error(errorText(error), "Couldn't load this chat");
+					return null;
+				});
+		};
 		void getTransport()
 			.request("session.list", { workspaceId })
 			.then(async (summaries) => {
@@ -316,7 +321,10 @@ export function useWorkspaceChatCatalogReconciliation(
 										messagesToRuntime(messages, summary.lastSettlement),
 										true,
 										summary.live ? undefined : loaded.syncedTick,
-										targetOptions,
+										{
+											...targetOptions,
+											attentionReconciledEpoch: loaded.attentionReconciledEpoch,
+										},
 									);
 							}
 						}
@@ -392,7 +400,10 @@ export function useWorkspaceChatCatalogReconciliation(
 								messagesToRuntime(messages, summary.lastSettlement),
 								false,
 								summary.live ? undefined : loaded.syncedTick,
-								{ activate: false },
+								{
+									activate: false,
+									attentionReconciledEpoch: loaded.attentionReconciledEpoch,
+								},
 							);
 						const state = useAppStore.getState();
 						cache = state.tabsByWorkspace[workspaceId]?.find(
@@ -586,6 +597,7 @@ export function useChatLocationReconciliation(
 			return;
 		}
 		if (status !== "connected" || !isConnectedGeneration(state, connectionGeneration)) return;
+		const attentionReconciledEpoch = state.attentionHydrationEpoch;
 		let current = true;
 		void getSessionMessagesWithSkillBaseline({ workspaceId, sessionId })
 			.then(({ result: { summary, messages }, syncedTick }) => {
@@ -603,7 +615,10 @@ export function useChatLocationReconciliation(
 					messagesToRuntime(messages, summary.lastSettlement),
 					true,
 					summary.live ? undefined : syncedTick,
-					layoutOpenOptionsForNavigation(currentState, workspaceId, navigation),
+					{
+						...layoutOpenOptionsForNavigation(currentState, workspaceId, navigation),
+						attentionReconciledEpoch,
+					},
 				);
 				const settled = useAppStore.getState();
 				const installed =

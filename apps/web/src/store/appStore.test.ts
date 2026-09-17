@@ -29,6 +29,7 @@ import {
 	useAppStore,
 } from "./appStore";
 import {
+	projectNeedsAttention,
 	selectCompactionTurnIds,
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
@@ -38,6 +39,8 @@ import {
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
 	selectWorkspaceTick,
+	sessionNeedsAttention,
+	workspaceNeedsAttention,
 } from "./selectors";
 
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
@@ -3519,6 +3522,65 @@ test("attention snapshots require a post-epoch transcript while live pushes pres
 	expect(s().attentionByWorkspace.ws1?.sessions["attention-1"]?.requiredConnectionGeneration).toBe(
 		3,
 	);
+});
+
+test("a fresh transcript install credits the attention epoch captured at read start", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({ status: "connected", connectionGeneration: 2 });
+	s().hydrateSessionAttention([
+		{
+			workspaceId: "ws1",
+			projectId: "project-1",
+			sessionId: "attention-fresh",
+			attentionId: "candidate-fresh",
+		},
+	]);
+	const epoch = s().attentionHydrationEpoch;
+	s().hydrateSession(
+		summaryFor("attention-fresh", true),
+		{ turns: [], toolResults: {}, askAnswers: {} },
+		false,
+		undefined,
+		{ activate: false, attentionReconciledEpoch: epoch },
+	);
+
+	expect(selectReadySessionAttentionId(s(), "ws1", "attention-fresh")).toBe("candidate-fresh");
+});
+
+test("local acknowledgement suppresses only the exact candidate until failure or retraction", () => {
+	const s = () => useAppStore.getState();
+	s().applySessionAttention({
+		workspaceId: "ws1",
+		projectId: "project-1",
+		sessionId: "attention-local",
+		attentionId: "candidate-1",
+	});
+	s().setSessionAttentionAcknowledging("ws1", "attention-local", "candidate-1", true);
+
+	expect(sessionNeedsAttention(s().attentionByWorkspace, "ws1", "attention-local")).toBe(false);
+	expect(workspaceNeedsAttention(s().attentionByWorkspace, "ws1")).toBe(false);
+	expect(projectNeedsAttention(s().attentionByWorkspace, "project-1")).toBe(false);
+	expect(s().attentionByWorkspace.ws1?.sessions["attention-local"]?.acknowledging).toBe(true);
+
+	s().applySessionAttention({
+		workspaceId: "ws1",
+		projectId: "project-1",
+		sessionId: "attention-local",
+		attentionId: "candidate-1",
+	});
+	expect(s().attentionByWorkspace.ws1?.sessions["attention-local"]?.acknowledging).toBe(true);
+
+	s().setSessionAttentionAcknowledging("ws1", "attention-local", "candidate-1", false);
+	expect(sessionNeedsAttention(s().attentionByWorkspace, "ws1", "attention-local")).toBe(true);
+
+	s().applySessionAttention({
+		workspaceId: "ws1",
+		projectId: "project-1",
+		sessionId: "attention-local",
+		attentionId: "candidate-2",
+	});
+	s().setSessionAttentionAcknowledging("ws1", "attention-local", "candidate-1", true);
+	expect(sessionNeedsAttention(s().attentionByWorkspace, "ws1", "attention-local")).toBe(true);
 });
 
 test("running snapshots replace membership, skip tombstones, and preserve identity on no-op", () => {

@@ -219,6 +219,10 @@ export interface LayoutOpenOptions {
 	claimPreview?: boolean;
 }
 
+export interface SessionHydrationOptions extends LayoutOpenOptions {
+	attentionReconciledEpoch?: number;
+}
+
 export type LayoutIntent =
 	| {
 			id: string;
@@ -290,6 +294,7 @@ export interface SessionAttentionState {
 	requiredConnectionGeneration: number;
 	requiredHydrationEpoch: number;
 	requiredEventRevision: number | null;
+	acknowledging?: true;
 }
 
 export interface WorkspaceAttention {
@@ -972,6 +977,12 @@ interface AppState {
 	noteClosedChats: (workspaceId: string, entries: ClosedChat[]) => void;
 	hydrateSessionAttention: (rows: SessionAttentionRow[]) => void;
 	applySessionAttention: (payload: SessionAttentionPayload) => void;
+	setSessionAttentionAcknowledging: (
+		workspaceId: string,
+		sessionId: string,
+		attentionId: string,
+		acknowledging: boolean,
+	) => void;
 	hydrateSessionRunning: (rows: SessionRunningRow[]) => void;
 	applySessionRunning: (payload: SessionRunningPayload) => void;
 	clearSessionRunning: () => void;
@@ -980,7 +991,7 @@ interface AppState {
 		hydrated: HydratedRuntime,
 		activate?: boolean,
 		syncedTick?: number,
-		options?: LayoutOpenOptions,
+		options?: SessionHydrationOptions,
 	) => void;
 	reconcileSession: (
 		summary: SessionSummary,
@@ -1162,7 +1173,8 @@ function sameSessionAttention(
 		before.attentionId === after.attentionId &&
 		before.requiredConnectionGeneration === after.requiredConnectionGeneration &&
 		before.requiredHydrationEpoch === after.requiredHydrationEpoch &&
-		before.requiredEventRevision === after.requiredEventRevision
+		before.requiredEventRevision === after.requiredEventRevision &&
+		before.acknowledging === after.acknowledging
 	);
 }
 
@@ -2892,6 +2904,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 									: incoming.requiredEventRevision === null
 										? current.requiredEventRevision
 										: Math.max(current.requiredEventRevision, incoming.requiredEventRevision),
+							...(current.acknowledging ? { acknowledging: true as const } : {}),
 						}
 					: incoming;
 			if (
@@ -2910,6 +2923,30 @@ export const useAppStore = create<AppState>((set, get) => ({
 					[workspaceId]: {
 						projectId,
 						sessions: { ...currentWorkspace?.sessions, [sessionId]: next },
+					},
+				},
+			};
+		}),
+	setSessionAttentionAcknowledging: (workspaceId, sessionId, attentionId, acknowledging) =>
+		set((s) => {
+			const workspace = s.attentionByWorkspace[workspaceId];
+			const current = workspace?.sessions[sessionId];
+			if (!workspace || !current || current.attentionId !== attentionId) return {};
+			if (current.acknowledging === (acknowledging ? true : undefined)) return {};
+			let next: SessionAttentionState;
+			if (acknowledging) {
+				next = { ...current, acknowledging: true };
+			} else {
+				const { acknowledging: _acknowledging, ...rest } = current;
+				void _acknowledging;
+				next = rest;
+			}
+			return {
+				attentionByWorkspace: {
+					...s.attentionByWorkspace,
+					[workspaceId]: {
+						...workspace,
+						sessions: { ...workspace.sessions, [sessionId]: next },
 					},
 				},
 			};
@@ -3014,6 +3051,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				toolResults: hydrated.toolResults,
 				askAnswers: hydrated.askAnswers,
 				isStreaming: summary.isStreaming,
+				attentionReconciledEpoch: options.attentionReconciledEpoch ?? 0,
 				...(summary.queue ? { queue: summary.queue } : {}),
 				...(hydrated.turnIdByMessageIndex
 					? { turnIdByMessageIndex: hydrated.turnIdByMessageIndex }

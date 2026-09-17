@@ -215,10 +215,19 @@ per-workspace views/attention/ephemeral running membership, terminal catalogs, a
     live-arrival metadata weaken snapshot safety.
 
     A session runtime records its reconciled connection generation plus the newest attention epoch whose
-    transcript read started after that epoch. The exposed-chat acknowledgement selector requires those
-    watermarks and the causative live revision before it can return a candidate. This is ordering metadata,
-    not another unread boolean. Folds refuse removed workspaces and tombstoned sessions, and preserve object
-    identity when candidate plus readiness did not change.
+    transcript read started after that epoch. Every fresh transcript install receives the epoch captured at
+    request start, so a read begun after snapshot installation satisfies the fence without a redundant second
+    fetch; a read already in flight when the snapshot lands correctly remains stale. The exposed-chat
+    acknowledgement selector requires those watermarks and the causative live revision before it can return a
+    candidate. This is ordering metadata, not another unread boolean. Folds refuse removed workspaces and
+    tombstoned sessions, and preserve object identity when candidate plus readiness did not change.
+
+    Immediately before an exposed chat sends its acknowledgement, one exact-candidate store action marks that
+    row locally acknowledging. Attention selectors omit it from session/workspace/project presentation before
+    paint, preventing a foreground result from flashing a dot during the wire round trip while retaining the
+    authoritative candidate and readiness metadata. The host retraction removes a review candidate normally;
+    request settlement clears only the same candidate's local flag, so a successful blocking no-op or failure
+    restores its dot while a newer candidate is untouched.
     Rollups are never stored: pure `sessionNeedsAttention`, `workspaceNeedsAttention`, and
     `projectNeedsAttention` selectors read the same map. The all-known-chat selector deduplicates open chat
     resources plus closed/history membership for the chat-dot threshold; plan documents and hidden child

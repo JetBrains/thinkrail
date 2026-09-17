@@ -494,7 +494,8 @@ export function sessionAttention(
 	workspaceId: string,
 	sessionId: string,
 ): SessionAttentionState | null {
-	return attentionByWorkspace[workspaceId]?.sessions[sessionId] ?? null;
+	const candidate = attentionByWorkspace[workspaceId]?.sessions[sessionId];
+	return candidate?.acknowledging ? null : (candidate ?? null);
 }
 
 export function sessionNeedsAttention(
@@ -530,14 +531,20 @@ export function workspaceNeedsAttention(
 	attentionByWorkspace: AttentionMap,
 	workspaceId: string,
 ): boolean {
-	return workspaceHasSessions(attentionByWorkspace, workspaceId);
+	return Object.values(attentionByWorkspace[workspaceId]?.sessions ?? {}).some(
+		(candidate) => !candidate.acknowledging,
+	);
 }
 
 export function projectNeedsAttention(
 	attentionByWorkspace: AttentionMap,
 	projectId: string,
 ): boolean {
-	return projectHasSessions(attentionByWorkspace, projectId);
+	return Object.values(attentionByWorkspace).some(
+		(entry) =>
+			entry.projectId === projectId &&
+			Object.values(entry.sessions).some((candidate) => !candidate.acknowledging),
+	);
 }
 
 export type RunningMap = Record<string, WorkspaceRunning>;

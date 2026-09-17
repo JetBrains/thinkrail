@@ -8,7 +8,15 @@ import type {
 	ThinkingLevel,
 	WireModel,
 } from "@thinkrail/contracts";
-import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	type RefCallback,
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { obscuringOverlayIsOpen, useObscuringOverlayOpen } from "@/components/ui/overlayRegistry";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
@@ -446,9 +454,9 @@ export default function ChatView({
 		!skillsOpen &&
 		pendingExtUi === null;
 	const attentionAttempt = useRef<string | null>(null);
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (!conversationExposed || status !== "connected" || !readyAttentionId) {
-			if (!conversationExposed || !readyAttentionId) attentionAttempt.current = null;
+			if (!conversationExposed || status !== "connected") attentionAttempt.current = null;
 			return;
 		}
 		if (attentionAttempt.current === readyAttentionId) return;
@@ -463,15 +471,20 @@ export default function ChatView({
 			return;
 		}
 		attentionAttempt.current = readyAttentionId;
+		useAppStore
+			.getState()
+			.setSessionAttentionAcknowledging(workspaceId, sessionId, readyAttentionId, true);
+		const finishAcknowledgement = () =>
+			useAppStore
+				.getState()
+				.setSessionAttentionAcknowledging(workspaceId, sessionId, readyAttentionId, false);
 		void getTransport()
 			.request("session.acknowledgeAttention", {
 				workspaceId,
 				sessionId,
 				attentionId: readyAttentionId,
 			})
-			.catch(() => {
-				if (attentionAttempt.current === readyAttentionId) attentionAttempt.current = null;
-			});
+			.then(finishAcknowledgement, finishAcknowledgement);
 	}, [conversationExposed, readyAttentionId, sessionId, status, workspaceId]);
 
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
