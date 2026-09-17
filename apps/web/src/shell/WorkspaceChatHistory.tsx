@@ -47,7 +47,11 @@ export function WorkspaceChatHistory({
 				<DropdownMenuTrigger
 					data-testid="chat-history"
 					data-attention={historyNeedsAttention || undefined}
-					aria-label="Reopen a closed chat"
+					aria-label={
+						historyNeedsAttention
+							? "Reopen a closed chat — Needs attention"
+							: "Reopen a closed chat"
+					}
 					className="relative flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					{chatStarting ? (

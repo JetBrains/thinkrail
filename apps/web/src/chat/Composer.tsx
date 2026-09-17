@@ -170,6 +170,7 @@ export interface ComposerHandle {
 	restoreAttachments: (attachments: ChatAttachment[]) => void;
 	openHistory: () => void;
 	refocus: () => void;
+	isObscured: () => boolean;
 }
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
@@ -368,6 +369,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	useImperativeHandle(handleRef, () => ({
 		insertText: (text: string) => replaceDraft(text),
+		isObscured: () => obscured,
 		insertAndSubmit: (text: string, behavior: SubmitBehavior) =>
 			canSubmit(text) ? submitText(text, behavior) : replaceDraft(text),
 		insertTemplate: (parsed: ParsedTemplate) => {

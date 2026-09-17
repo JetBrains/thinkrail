@@ -167,6 +167,7 @@ test("a question survives viewing and is located on its tab and closed-history r
 
 	const history = page.getByTestId("chat-history").first();
 	await expect(history).toHaveAttribute("data-attention", "true");
+	await expect(history).toHaveAttribute("aria-label", "Reopen a closed chat — Needs attention");
 	await history.click();
 	const waitingHistoryRow = page.getByTestId("closed-chat-row").filter({ hasText: WAITING_CHAT });
 	await expect(waitingHistoryRow).toHaveAttribute("data-attention", "true");

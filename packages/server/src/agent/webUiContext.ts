@@ -43,10 +43,6 @@ export function pendingExtUiDialogId(sessionId: string): string | null {
 	return null;
 }
 
-export function hasPendingExtUiDialog(sessionId: string): boolean {
-	return pendingExtUiDialogId(sessionId) !== null;
-}
-
 export function notifyExtUi(
 	sessionId: string,
 	message: string,

@@ -78,7 +78,9 @@ Project/file/change/review/chat/terminal views receive only resource identity, v
 Domain **session attention and live running are separate from workbench `LayoutAttention`**.
 `WorkspaceWorkbench` reads the normalized host candidate map plus the store's all-known-chat count. When that
 count exceeds one it injects the shared `AttentionDot` as an adornment for each attentive chat tab;
-`WorkspaceChatHistory` applies the same candidate to closed rows and its trigger rollup.
+`WorkspaceChatHistory` applies the same candidate to closed rows and its trigger rollup; while positive, the
+trigger's accessible name explicitly includes “Needs attention” rather than relying on a labelled descendant
+hidden by the trigger's own `aria-label`.
 
 For an exact top-level chat in the ephemeral running map, `WorkspaceWorkbench` uses the layout child's
 injected default-icon decorator to wrap that chat tab's existing line/fill icon in the shared `RunningIcon`.
@@ -87,10 +89,10 @@ running chat has no invented history icon; its workspace and collapsed-project p
 reopened. Running has no known-chat threshold and does not affect tab selection, body mounting, or attention
 acknowledgement.
 
-Chat exposure, not tab selection itself, asks the host to acknowledge the exact candidate. One shared
+Chat exposure, not tab selection itself, asks the host to acknowledge the exact candidate. The chat-owned
 `conversationExposed` predicate requires the body to be mounted in a focused foreground page and not covered
-by any app dialog or chat overlay that obscures the transcript; tooltips and context menus do not hide the
-conversation. A live candidate may be acknowledged after its stamped Pi-event revision renders only when
+by any app dialog or chat overlay that obscures the transcript; shell contributes only the selected body's
+mount lifecycle. Tooltips and context menus do not hide the conversation. A live candidate may be acknowledged after its stamped Pi-event revision renders only when
 that runtime is reconciled to the current connection generation; missing or older-generation runtimes take
 the fresh-reconciliation path. A reconnect/snapshot candidate additionally waits for a successful transcript
 read started after its attention-hydration epoch and the resulting React commit. Buffered replay of the same

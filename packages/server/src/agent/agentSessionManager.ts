@@ -13,6 +13,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type {
+	AgentMessage,
 	AgentSettlement,
 	AskUserQuestionResult,
 	ImageContent,
@@ -38,7 +39,7 @@ import type {
 	TranscriptMessage,
 	WireModel,
 } from "@thinkrail/contracts";
-import { isTranscriptMessageRole } from "@thinkrail/contracts";
+import { isAskUserAnswersMessage, isTranscriptMessageRole } from "@thinkrail/contracts";
 import type { ParentContext } from "pi-delegation";
 import { RECURSION_GUARD_TOOLS } from "pi-subagents";
 import { logger } from "../log";
@@ -50,7 +51,12 @@ import {
 	restoreQuarantinedAttentionLedger,
 	saveAttentionLedger,
 } from "../persistence";
-import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
+import {
+	ANSWERABILITY_ERRORS,
+	ASK_USER_QUESTION_TOOL_NAME,
+	assessAnswerability,
+	buildAnswersMessage,
+} from "./askUserQuestion";
 import {
 	type AttentionCandidate,
 	attentionTurnId,
@@ -246,6 +252,17 @@ function emptyAttentionLedger(): AttentionLedger {
 	};
 }
 
+function messageMayChangeBlockingAttention(message: AgentMessage): boolean {
+	if (message.role === "user" || isAskUserAnswersMessage(message)) return true;
+	if (message.role === "toolResult") return message.toolName === ASK_USER_QUESTION_TOOL_NAME;
+	return (
+		message.role === "assistant" &&
+		message.content.some(
+			(block) => block.type === "toolCall" && block.name === ASK_USER_QUESTION_TOOL_NAME,
+		)
+	);
+}
+
 function rawAttentionOf(entry: Entry): AttentionCandidate | null {
 	if (!entry.userVisible) return null;
 	const manager = entry.session.sessionManager;
@@ -340,9 +357,10 @@ async function diskAttentionCandidate(
 	return candidate;
 }
 
-async function diskAttentionRows(
+async function workspaceDiskAttentionRows(
 	workspaceId: string,
 	cwd: string,
+	mode: "snapshot" | "migration",
 ): Promise<WorkspaceAttentionRow[]> {
 	const liveFiles = new Set<string>();
 	for (const entry of sessions.values()) {
@@ -353,55 +371,24 @@ async function diskAttentionRows(
 	const rows: WorkspaceAttentionRow[] = [];
 	for (const file of await scanSessionFiles(cwd, liveFiles)) {
 		if (!file.ok) {
-			log.warn(`attention snapshot skipped transcript ${file.path}`, file.error);
+			log.warn(`attention ${mode} skipped transcript ${file.path}`, file.error);
 			continue;
 		}
 		const { id: sessionId, version } = file.identity;
 		if (isInternalSession(sessionId) || file.identity.cwd !== cwd || sessions.has(sessionId))
 			continue;
-		if (isAttentionDeleted(sessionId, workspaceId)) continue;
+		if (mode === "snapshot" && isAttentionDeleted(sessionId, workspaceId)) continue;
 		try {
 			rows.push({
 				sessionId,
 				candidate: await diskAttentionCandidate(
 					file.path,
 					version,
-					attentionLedger?.handledCandidateBySession[sessionId],
+					mode === "snapshot" ? attentionLedger?.handledCandidateBySession[sessionId] : undefined,
 				),
 			});
 		} catch (error) {
-			log.warn(`attention snapshot skipped transcript ${file.path}`, error as Error);
-		}
-	}
-	return rows;
-}
-
-async function migrationAttentionRows(
-	workspaceId: string,
-	cwd: string,
-): Promise<WorkspaceAttentionRow[]> {
-	const liveFiles = new Set<string>();
-	for (const entry of sessions.values()) {
-		if (entry.workspaceId !== workspaceId) continue;
-		const file = entry.session.sessionManager.getSessionFile();
-		if (file) liveFiles.add(resolve(file));
-	}
-	const rows: WorkspaceAttentionRow[] = [];
-	for (const file of await scanSessionFiles(cwd, liveFiles)) {
-		if (!file.ok) {
-			log.warn(`attention migration skipped transcript ${file.path}`, file.error);
-			continue;
-		}
-		try {
-			const { id: sessionId, version } = file.identity;
-			if (isInternalSession(sessionId) || file.identity.cwd !== cwd || sessions.has(sessionId))
-				continue;
-			rows.push({
-				sessionId,
-				candidate: await diskAttentionCandidate(file.path, version),
-			});
-		} catch (error) {
-			log.warn(`attention migration skipped transcript ${file.path}`, error as Error);
+			log.warn(`attention ${mode} skipped transcript ${file.path}`, error as Error);
 		}
 	}
 	return rows;
@@ -584,7 +571,11 @@ export async function initializeSessionAttention(
 	}
 	for (const workspace of workspaces) {
 		try {
-			for (const row of await migrationAttentionRows(workspace.id, workspace.cwd)) {
+			for (const row of await workspaceDiskAttentionRows(
+				workspace.id,
+				workspace.cwd,
+				"migration",
+			)) {
 				if (row.candidate && isNonBlockingCandidate(row.candidate)) {
 					handledCandidateBySession[row.sessionId] = row.candidate.id;
 				}
@@ -628,7 +619,7 @@ export async function listSessionAttention(
 		const projectId = sessionProjectId(workspace.id);
 		if (projectId === null) continue;
 		try {
-			for (const row of await diskAttentionRows(workspace.id, workspace.cwd)) {
+			for (const row of await workspaceDiskAttentionRows(workspace.id, workspace.cwd, "snapshot")) {
 				const candidate = row.candidate;
 				if (!candidate || isHandledAttention(row.sessionId, candidate)) continue;
 				rows.set(keyOf(workspace.id, row.sessionId), {
@@ -925,7 +916,7 @@ async function prepareSessionEntry(
 				syncSessionAttention(sessionId);
 			}
 		}
-		if (event.type === "message_end") {
+		if (event.type === "message_end" && messageMayChangeBlockingAttention(event.message)) {
 			queueMicrotask(() => {
 				if (sessions.get(sessionId) === entry) syncSessionAttention(sessionId);
 			});

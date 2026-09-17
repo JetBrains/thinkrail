@@ -391,10 +391,8 @@ export default function ChatView({
 		streamingResponseMovement,
 	);
 	const measureClassName = transcriptMeasureClassName(chatLineWidthBounded);
-	const chatViewElementRef = useRef<HTMLDivElement | null>(null);
 	const chatViewRef = useCallback(
 		(element: HTMLDivElement | null) => {
-			chatViewElementRef.current = element;
 			if (element) {
 				element.style.setProperty(
 					"--chat-transcript-width",
@@ -464,9 +462,7 @@ export default function ChatView({
 			!pageIsFocused() ||
 			obscuringOverlayIsOpen() ||
 			useAppStore.getState().historyOpenRequest?.sessionId === sessionId ||
-			chatViewElementRef.current?.querySelector(
-				'[data-testid="chat-composer"][data-obscured="true"]',
-			)
+			composerRef.current?.isObscured()
 		) {
 			return;
 		}
