@@ -434,6 +434,30 @@ test("a re-review approve does NOT settle the step while an earlier finding is s
 	expect(itemReviewActive(sessionId, id)).toBe(false);
 });
 
+test("an unset reviewer model resolves the user's default, not the worker's inherited model", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const settingsPath = join(agentDir, "settings.json");
+	writeFileSync(
+		settingsPath,
+		`${JSON.stringify({ defaultProvider: "faux-worker", defaultModel: "faux-worker-model" })}\n`,
+	);
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	let captured: { provider: string; id: string } | undefined;
+	const capturingRunner: ReviewRunner = async (_ws, _sess, _task, role) => {
+		captured = role.model;
+		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+	};
+	try {
+		startPlanReview(WS, sessionId, id, capturingRunner);
+		await settle(sessionId, id);
+	} finally {
+		rmSync(settingsPath, { force: true });
+	}
+	expect(captured).toEqual({ provider: "faux-worker", id: "faux-worker-model" });
+});
+
 test("the tool path awaits artifact reconciliation before it snapshots the change set", async () => {
 	installRequestReviewSeam(verdictRunner(approve));
 	const sessionId = await workerSession();
