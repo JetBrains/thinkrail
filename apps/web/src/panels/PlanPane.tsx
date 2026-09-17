@@ -32,6 +32,7 @@ import {
 	changeSetStat,
 	flatItems,
 	groupProgress,
+	isPlanReady,
 	itemChangeSet,
 	itemOpenFindings,
 	itemRevisions,
@@ -544,15 +545,16 @@ export default function PlanPane({
 	const hasUnattributed = (data.unattributed?.length ?? 0) > 0;
 	const empty = groups.length === 0 && loose.length === 0;
 	const nothingToShow = empty && adopted.length === 0 && !hasUnattributed;
-	// Host-version gate: an older host serves no plan-review methods, so offer none of its affordances.
-	const reviewables = canReview ? reviewableItems(data) : [];
+	// Review STATE is always derived from the plan (so planReady never reads ship-ready over an unreviewed
+	// step); only the review ACTIONS below are gated on canReview when the host serves no plan-review methods.
+	const reviewables = reviewableItems(data);
 	const unsettledReviewables = reviewables.filter((t) => !reviewSettled(t));
 	const reviewedCount = reviewables.length - unsettledReviewables.length;
 	const overallSummary = planCompletionSummary(data);
 	const onOpenCommit = (sha: string) => plan.openChanges({ sha });
 	const onOpenReview = () => requestToolView(workspaceId, "review");
 	const reviewingAny = reviewables.some((t) => t.review?.reviewing === true);
-	const planReady = total > 0 && done === total && unsettledReviewables.length === 0;
+	const planReady = isPlanReady(data);
 	const sameBranch = Boolean(
 		workspace && workspace.branch === workspace.baseBranch.replace(/^origin\//, ""),
 	);
@@ -942,7 +944,7 @@ export default function PlanPane({
 									<DropdownMenuSeparator />
 									<DropdownMenuItem
 										data-testid="plan-review-all"
-										disabled={unsettledReviewables.length === 0 || reviewingAny}
+										disabled={unsettledReviewables.length === 0 || reviewingAny || !canReview}
 										onSelect={() => void reviewAll()}
 									>
 										<ListChecks />
@@ -982,7 +984,7 @@ export default function PlanPane({
 						<button
 							type="button"
 							data-testid="plan-next-action-go"
-							disabled={reviewingAny}
+							disabled={reviewingAny || !canReview}
 							onClick={() => void reviewAll()}
 							className={NEXT_ACTION_BUTTON_CLASS}
 						>

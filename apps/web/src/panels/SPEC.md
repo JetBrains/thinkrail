@@ -643,10 +643,13 @@ a project picker, the prompt hero, and the reused
   `review.changed` broadcast (`useChatTodos` refetches the plan on it), not a `pi.event` for this
   session — the subagent's events are hidden; a post-ack failure lands via the `review.failed` broadcast
   (`useChatTodos` raises it as an error toast).
-  **Every plan-review affordance is host-version-gated on `transport.supportsPlanReview` (v66).** Against an
-  older host that serves no `todo.startReview`/`reviewAll`, `PlanPane` treats the plan as having no reviewable
-  items (no Review All, no review funnel stage, no next-action) and disables the per-row `Start review`, so an
-  independently-shipped newer client never offers a capability the host cannot honour.
+  **Plan-review STATE is always derived from the plan; only the ACTIONS are host-version-gated on
+  `transport.supportsPlanReview` (v66).** `reviewables`/`unsettledReviewables`/`planReady` come from
+  `TodoItem.review` regardless of host version — gating them to empty would let `planReady` read ship-ready
+  over an unreviewed step. Against an older host that serves no `todo.startReview`/`reviewAll`, `PlanPane`
+  only disables the mutating affordances (per-row `Start review`, both `Review All` triggers), so an
+  independently-shipped newer client never *calls* a capability the host cannot honour while still reflecting
+  the review state the host does report.
   Row controls (`plan-item-toggle`, the change-set toggle, the sha chip, the review slot, `FileRow`)
   wear `min-h-8` — the dense metadata rows stay tappable on touch. `planView.changeSetCounts` is the
   one count/stat derivation (paths → count only; commit → `changeSetStat`), shared by the row's meta
