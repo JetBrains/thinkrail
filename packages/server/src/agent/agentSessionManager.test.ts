@@ -830,6 +830,7 @@ test("getSessionStats + getSessionCommands read live session info (cheap wins #3
 });
 
 test("a live question blocks continuation, preserves queue order, and acknowledges after its native result persists", async () => {
+	setActivityProjectResolver(() => "project-live-question");
 	const toolCallId = "live-question";
 	const question = {
 		questions: [
@@ -879,6 +880,9 @@ test("a live question blocks continuation, preserves queue order, and acknowledg
 		await steerSession(session.sessionId, "QUEUED_WHILE_ASKING");
 		await Promise.resolve();
 		expect(continuationCalls).toBe(0);
+		expect(
+			(await listSessionActivity()).find((row) => row.sessionId === session.sessionId)?.status,
+		).toBe("waiting");
 
 		const result: AskUserQuestionResult = {
 			cancelled: false,
@@ -912,6 +916,7 @@ test("a live question blocks continuation, preserves queue order, and acknowledg
 	} finally {
 		releaseContinuation();
 		removeSession(session.sessionId);
+		setActivityProjectResolver(() => null);
 	}
 });
 

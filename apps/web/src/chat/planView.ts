@@ -200,9 +200,9 @@ export function planSections(plan: TodoPlan): PlanSections {
 export type PlanGlance = "working" | "waiting_question" | "waiting";
 
 export function planGlance(isStreaming: boolean, askStates: Record<string, AskState>): PlanGlance {
-	if (isStreaming) return "working";
 	const awaiting = Object.values(askStates).some((s) => !s.answer && !s.superseded);
-	return awaiting ? "waiting_question" : "waiting";
+	if (awaiting) return "waiting_question";
+	return isStreaming ? "working" : "waiting";
 }
 
 export function sessionGlance(rt: {

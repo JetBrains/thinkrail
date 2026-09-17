@@ -1009,13 +1009,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **The glance state** keeps the plan honest as the user's status window: `planGlance(isStreaming,
   askStates)` — derived from session state in `ChatView`, **never stored**, so the agent can't make it
   lie — renders the `in_progress` step as working (dot), **waiting for your answer**
-  (`MessageCircleQuestion` — the same glyph as the `ask_user_question` card, when the agent stopped with
-  an awaiting question), or **paused** (`CirclePause`, any other stop: turn ended, error). A stop with no
+  (`MessageCircleQuestion` — the same glyph as the `ask_user_question` card, while a live tool blocks or a
+  restart-repaired session awaits), or **paused** (`CirclePause`, any other stop: turn ended, error). A stop with no
   pending question never claims the user owes an answer. **The header strip reflects the agent's state,
   not the checkboxes** (`stripStatus`, decoupled from the `in_progress` step): it shows "waiting for
   your answer" **even when every item is done** (the earlier strip hid it whenever there was no
-  in-progress step, so an agent blocked on a question read as "finished"); "working" while it runs;
-  "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
+  in-progress step, so an agent blocked on a question read as "finished"); waiting outranks the raw live
+  run flag; "working" covers other runs; "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
   idle). The glance stays **chat-local and is not the Projects rail's authority**, even though the rail's
   host-derived `ActivityStatus` overlaps it: `askStates` exists here for a job status cannot do —
   `useAskState(toolCallId)` renders *which* questionnaire is awaiting — so `planGlance` is a one-line

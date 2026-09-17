@@ -161,6 +161,7 @@ function effectivePendingCount(entry: Entry): number {
 function activityOf(entry: Entry): ActivityStatus | null {
 	return deriveActivityStatus({
 		isStreaming: entry.session.isStreaming,
+		hasPendingQuestion: entry.askUserQuestionWaiters.hasPending(),
 		pendingMessageCount: effectivePendingCount(entry),
 		messages: entry.session.messages,
 		lastSettlement: entry.lastSettlement,

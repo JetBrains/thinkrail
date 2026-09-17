@@ -399,7 +399,7 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 			}
 		},
 		hasPending() {
-			return [...waiting.values()].some((waiter) => waiter.waitStarted);
+			return waiting.size > 0;
 		},
 		abandon() {
 			for (const waiter of waiting.values()) waiter.cleanupAbort();

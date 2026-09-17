@@ -49,6 +49,7 @@ const awaiting = [askCall("tc-1"), ackResult("tc-1")];
 
 const inputs = (over: Partial<ActivityInputs> = {}): ActivityInputs => ({
 	isStreaming: false,
+	hasPendingQuestion: false,
 	pendingMessageCount: 0,
 	messages: [],
 	lastSettlement: undefined,
@@ -72,6 +73,14 @@ test("a blocking extension dialog outranks streaming — the user is the blocker
 
 test("an unanswered ask_user_question is waiting", () => {
 	expect(deriveActivityStatus(inputs({ messages: awaiting }))).toBe("waiting");
+});
+
+test("a live question waiter outranks streaming and queued input", () => {
+	expect(
+		deriveActivityStatus(
+			inputs({ isStreaming: true, hasPendingQuestion: true, pendingMessageCount: 2 }),
+		),
+	).toBe("waiting");
 });
 
 test("an answered questionnaire is no longer waiting", () => {
@@ -100,7 +109,7 @@ test("queued outranks failed: a follow-up you already sent means the failure is 
 	).toBe("queued");
 });
 
-test("queued outranks waiting: a queued message supersedes the question before it lands in the transcript", () => {
+test("queued outranks a restart-repaired idle question (live Pi queues do not survive restart)", () => {
 	expect(deriveActivityStatus(inputs({ pendingMessageCount: 1, messages: awaiting }))).toBe(
 		"queued",
 	);

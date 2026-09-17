@@ -1320,8 +1320,8 @@ function ResolvedRecord({
 		return (
 			<div
 				data-testid="ask-user-question"
-				data-tone="pending"
-				className="text-text-muted tr-text-metadata"
+				data-tone="error"
+				className="text-feedback-error tr-text-metadata"
 			>
 				{rawText || "Question closed."}
 			</div>
