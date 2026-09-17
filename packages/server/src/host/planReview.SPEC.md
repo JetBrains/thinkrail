@@ -96,6 +96,11 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
 - **Both entry points share the cap.** The worker's `request_review` tool and the Start review button
   compute the same `canAutoFix`; the tool path reports it in the tool result text, the button path acts
   on it by sending the fix. Without a shared cap the tool path loops fix → review → fix forever.
+- **The static tool guidance is policy-neutral; the tool result carries the next action.** `composeText`
+  can say either “fix and request_review again” or “do NOT fix now — report to the user” depending on
+  `canAutoFix`. So `requestReviewTool`'s description/promptGuidelines must NOT hardcode “always fix and
+  re-review” — they tell the worker to follow the tool result's stated next action, so a stronger
+  system-level prompt can't override the configured stop.
 - **The worker-facing finding identity is the persisted comment, not the model's id.** `fileFinding`
   persists each finding as a new `rc_*` comment; the model's own ids (`f1`…) are transient. On the tool
   path the tool result *is* the delivery, so when the worker is asked to fix (`canAutoFix`), `recordVerdict`

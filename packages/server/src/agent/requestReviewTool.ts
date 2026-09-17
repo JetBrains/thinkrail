@@ -12,11 +12,11 @@ export const RequestReviewSchema = Type.Object({
 
 export type RequestReviewParams = Static<typeof RequestReviewSchema>;
 
-const DESCRIPTION = `Request an independent review of a completed plan step's change set. Spawns a review subagent that inspects the step's commits/files and returns a structured verdict — "approve" or "request_changes" with inline findings. Call this right after you mark a step done. On request_changes, address every finding (re-open the step, fix, re-done with a fresh commit), then you may request_review again. The reviewer is read-only; it never edits your files.`;
+const DESCRIPTION = `Request an independent review of a completed plan step's change set. Spawns a review subagent that inspects the step's commits/files and returns a structured verdict — "approve" or "request_changes" with inline findings. Call this right after you mark a step done. Then do exactly what the tool result's next action says — it encodes the current review policy: it may tell you to fix the findings and request_review again, or to stop and report them to the user. The reviewer is read-only; it never edits your files.`;
 
 const PROMPT_GUIDELINES = [
 	"After you mark a plan step done, call request_review with that step's id: an independent review subagent inspects its change set and returns a verdict.",
-	'On "request_changes", address every finding (re-open the step, fix it, mark it done again with a fresh commit), then request_review again before moving to the next step; on "approve", continue.',
+	"Then follow the next action stated in the tool result verbatim — it encodes the configured review policy: fix the findings and request_review again, or stop and report them to the user. Do not assume you should always re-review.",
 	"This is how plan steps get reviewed — the user does not trigger review manually.",
 ];
 
