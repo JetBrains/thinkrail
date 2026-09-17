@@ -193,8 +193,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   request never overlaps a button review of another step on the same plan. Both funnel into
   `recordVerdict`: `approve` settles the item (`approveTodoReview(…, "agent")`); `request_changes` files
   every finding into the Review tab (`fileFinding` — an inline comment when `reviews.anchorProblem`
-  accepts the position, else review-level, best-effort so a bad anchor never fails the review) and then
-  spends the fix budget.
+  accepts the position, else review-level; anchor resolution is best-effort so a bad anchor falls back to
+  a review-level comment, but a store-write failure propagates and cancels the review rather than silently
+  dropping the finding while still spending the cycle) and then spends the fix budget.
   **The 1-cycle cap is the same on both paths.** `canAutoFix = reviewAutoFix !== false && spent < 1`
   (`todoReviewAutoCycles`), and the record is written with `autoCycles: canAutoFix ? 1 : 2` — `1` means
   "the worker was actually asked to fix, this item is mid-cycle", `2` is terminal ("the human decides

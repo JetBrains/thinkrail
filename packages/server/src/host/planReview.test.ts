@@ -383,6 +383,32 @@ test("a fix whose preparation fails gives the auto cycle back instead of strandi
 	expect(isItemUnderActiveReview(sessionId, id)).toBe(false);
 });
 
+test("a finding whose store write fails cancels the review instead of spending the cycle", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+
+	// The reviewer requests changes, but persisting the finding throws (the review store is unwritable).
+	// A persistence failure must not be swallowed as a bad anchor: no finding, no consumed cycle, no
+	// stranded step — the review is cancelled so the reviewing mark clears.
+	const spy = spyOn(reviews, "addComment").mockImplementation(async () => {
+		throw new Error("review store unwritable");
+	});
+	try {
+		startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+		await settle(sessionId, id);
+	} finally {
+		spy.mockRestore();
+	}
+
+	expect(todoReviewRecord(ref)).toBeUndefined();
+	expect(todoReviewAutoCycles(ref)).toBeUndefined();
+	expect(
+		(await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id),
+	).toHaveLength(0);
+	expect(itemReviewActive(sessionId, id)).toBe(false);
+});
+
 test("a re-review approve does NOT settle the step while an earlier finding is still open", async () => {
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
