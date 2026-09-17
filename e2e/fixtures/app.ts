@@ -96,8 +96,8 @@ function resetState(): void {
 	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 }
 
-export async function stagePlainFolder(): Promise<string> {
-	await disposeLiveSessions();
+export async function stagePlainFolder(page: Page): Promise<string> {
+	await disposeLiveSessions(page);
 	resetState();
 	rmSync(E2E_PLAIN_DIR, { recursive: true, force: true });
 	mkdirSync(E2E_PLAIN_DIR, { recursive: true });
@@ -114,10 +114,14 @@ function loadPersistedWorkspaces(): Workspace[] {
 	}
 }
 
-async function disposeLiveSessions(): Promise<void> {
+async function disposeLiveSessions(page: Page): Promise<void> {
 	const workspaces = loadPersistedWorkspaces();
 	if (workspaces.length === 0) return;
-	const wire = await E2eWire.connect();
+	const health = await page.request.get("/health");
+	const hostUrl = new URL(health.url());
+	health.dispose();
+	const port = Number(hostUrl.port) || (hostUrl.protocol === "https:" ? 443 : 80);
+	const wire = await E2eWire.connect(port);
 	try {
 		for (const workspace of workspaces) {
 			const sessions: SessionSummary[] = await wire.request(
@@ -152,7 +156,7 @@ export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
 }
 
 export async function openAppFresh(page: Page): Promise<void> {
-	await disposeLiveSessions();
+	await disposeLiveSessions(page);
 	resetState();
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
