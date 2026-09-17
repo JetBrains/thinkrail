@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
+import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import {
 	type ExtensionContext,
 	ModelRuntime,
@@ -433,6 +433,44 @@ test("a re-review approve does NOT settle the step while an earlier finding is s
 	);
 	// The spinner is cleared either way — an unsettled approve is not an in-flight review.
 	expect(itemReviewActive(sessionId, id)).toBe(false);
+});
+
+test("integration: a real reviewer child requests changes, the fix resolves, and re-review approves", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const settingsPath = join(agentDir, "settings.json");
+	writeFileSync(
+		settingsPath,
+		`${JSON.stringify({ defaultProvider: "faux-worker", defaultModel: "faux-worker-model" })}\n`,
+	);
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId, "real-child step");
+	const ref = { workspaceId: WS, sessionId, id };
+	try {
+		// Round 1: the REAL delegated reviewer (default runner → runReviewSubagent, faux model) requests changes.
+		faux.setResponses([fauxAssistantMessage(requestChanges)]);
+		expect(startPlanReview(WS, sessionId, id)).toBe(true);
+		await settle(sessionId, id);
+
+		expect(todoReviewRecord(ref)?.state).toBe("changes_requested");
+		const finding = (await getReviewSnapshot(WS)).comments.find((c) => c.origin?.todoId === id);
+		expect(finding?.status).toBe("sent");
+		expect(finding?.sessionId).toBe(sessionId);
+		expect(finding?.body).toContain("loop bound is wrong");
+
+		// The worker resolves the delivered finding by its canonical id.
+		reviews.resolveCommentFromAgent(sessionId, finding?.id ?? "");
+
+		// Round 2: the real reviewer approves; with the finding resolved, the step settles reviewed.
+		faux.setResponses([fauxAssistantMessage(approve)]);
+		expect(startPlanReview(WS, sessionId, id)).toBe(true);
+		await settle(sessionId, id);
+
+		expect(todoReviewRecord(ref)?.state).toBe("reviewed");
+		expect(todoReviewRecord(ref)?.reviewedBy).toBe("agent");
+	} finally {
+		rmSync(settingsPath, { force: true });
+	}
 });
 
 test("a post-ack review failure publishes an actionable UI error, not just a warning", async () => {
