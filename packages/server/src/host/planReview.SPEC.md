@@ -43,6 +43,13 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
 
 ## Invariants
 
+- **The reviewer runs the user's model with the repository's reviewer profile.** `runReview` resolves the
+  child's model as the pinned `reviewModel`, else `getDefaultModel()` (what Review Settings shows as
+  “your default model”) — never the worker's silently inherited model. `runReviewSubagent` spawns the child
+  with `contextFiles: true` and `extensions: true`, and `REVIEWER_TOOLS` carries `spec_grep`/`spec_get`/
+  `spec_graph` alongside `read`/`grep`/`find`/`ls`/`bash`, reproducing the built-in `reviewer` agent's
+  context/tool policy so plan review follows repository guidance and can audit invariants. Only the
+  system prompt + JSON output contract differ (the host parses the verdict).
 - **The host owns the reviewer's role, the package owns only facts.** `reviewerRole.ts` holds the
   system prompt (review order, what counts as a finding, the JSON contract); `todos.renderReviewPackage`
   renders a change-set *reference* and the worker's claims, and names no tool. A package that instructs

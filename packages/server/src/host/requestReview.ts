@@ -2,6 +2,7 @@ import type { PlanReviewResult, ReviewComment, ReviewFixComment } from "@thinkra
 import { isPlanReviewResult } from "@thinkrail/contracts";
 import type { Todo } from "pi-todos/core";
 import {
+	getDefaultModel,
 	getSessionWorkspaceId,
 	notifyExtUi,
 	runReviewSubagent,
@@ -277,6 +278,8 @@ async function runReview(
 	runSubagent: ReviewRunner,
 ): Promise<PlanReviewResult> {
 	const cfg = getConfig();
+	// Pinned reviewer model, else the user's default — never the worker's inherited model. See planReview.SPEC.md.
+	const model = cfg.reviewModel ?? (await getDefaultModel()).model;
 	const run = await runSubagent(
 		params.workspaceId,
 		params.sessionId,
@@ -284,9 +287,7 @@ async function runReview(
 		{
 			systemPrompt: REVIEWER_SYSTEM_PROMPT,
 			tools: REVIEWER_TOOLS,
-			...(cfg.reviewModel
-				? { model: { provider: cfg.reviewModel.provider, id: cfg.reviewModel.id } }
-				: {}),
+			...(model ? { model: { provider: model.provider, id: model.id } } : {}),
 			...(cfg.reviewEffort ? { thinkingLevel: cfg.reviewEffort } : {}),
 		},
 		signal,

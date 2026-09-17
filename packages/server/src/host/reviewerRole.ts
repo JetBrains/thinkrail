@@ -1,4 +1,13 @@
-export const REVIEWER_TOOLS = ["read", "grep", "find", "ls", "bash"];
+export const REVIEWER_TOOLS = [
+	"read",
+	"grep",
+	"find",
+	"ls",
+	"bash",
+	"spec_grep",
+	"spec_get",
+	"spec_graph",
+];
 
 export const REVIEWER_SYSTEM_PROMPT = [
 	"You are an independent, read-only code reviewer for ONE completed plan step. You never edit files.",
