@@ -85,6 +85,17 @@ test("composeText for approve names the step and never asks for a fix", () => {
 	expect(text).not.toContain("REQUEST_CHANGES");
 });
 
+test("parseVerdict strips a model-supplied host-only field (blockedByOpenFindings)", () => {
+	const result = parseVerdict(
+		'{ "verdict": "approve", "findings": [], "blockedByOpenFindings": 5 }',
+		ID,
+		TITLE,
+	);
+	expect(result?.verdict).toBe("approve");
+	// The host owns this field; a hallucinated value must not survive an approve and mislead the card.
+	expect(result?.blockedByOpenFindings).toBeUndefined();
+});
+
 test("parseVerdict defaults a finding's kind and drops absent location fields", () => {
 	const result = parseVerdict(
 		'{ "verdict": "request_changes", "findings": [ { "id": "f1", "body": "no location" } ] }',

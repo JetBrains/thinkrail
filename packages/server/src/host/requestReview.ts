@@ -89,7 +89,15 @@ export function parseVerdict(
 		...(f.startLine !== undefined ? { startLine: f.startLine } : {}),
 		...(f.endLine !== undefined ? { endLine: f.endLine } : {}),
 	}));
-	return { ...candidate, findings };
+	// Construct explicitly, never spread the model object: `blockedByOpenFindings` is host-set only, so a
+	// hallucinated value must not survive an approve. See planReview.SPEC.md.
+	return {
+		verdict: candidate.verdict,
+		itemId,
+		itemTitle,
+		...(candidate.summary !== undefined ? { summary: candidate.summary } : {}),
+		findings,
+	};
 }
 
 export type VerdictOutcome =
