@@ -148,10 +148,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     | # | condition | status |
     |---|---|---|
     | 1 | a pending blocking extension dialog | `waiting` |
-    | 2 | `session.isStreaming` | `running` |
-    | 3 | `session.pendingMessageCount > 0` | `queued` |
-    | 4 | an unanswered `ask_user_question` | `waiting` |
-    | 5 | the run failed (see below) | `failed` |
+    | 2 | a live blocking `ask_user_question` waiter | `waiting` |
+    | 3 | `session.isStreaming` | `running` |
+    | 4 | `session.pendingMessageCount > 0` | `queued` |
+    | 5 | an unanswered restart-repaired `ask_user_question` | `waiting` |
+    | 6 | the run failed (see below) | `failed` |
     | — | otherwise | idle, i.e. `null` |
 
     **A failure is `stopReason` `error` *or* `length`.** Both are actionable faults the chat already renders
@@ -171,20 +172,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     instead of silently reading idle while the chat itself shows the failure.
 
     Every rung of that order is load-bearing and pinned by `activity.test.ts`:
-    - **A dialog outranks streaming** because pi is technically mid-turn while blocked on it, yet the person
-      is the blocker. Reporting `running` would hide a prompt waiting for an answer.
-    - **`queued` outranks `failed`** (you already sent the follow-up, so the failure is handled and nagging
-      would be wrong) **and outranks `waiting`** — a queued message supersedes a pending questionnaire, but
-      it is still in pi's queue and *not yet in the transcript*, so `assessAnswerability` cannot see it.
-      This is why supersession is not modelled as mutable "awaiting" state on the entry: `waiting` is
-      **derived from the transcript** via `awaitingQuestionToolCallId`, which reuses `assessAnswerability`
-      rather than duplicating its already-answered/superseded rules. One authority, nothing to keep in sync.
+    - **Human blockers outrank streaming.** Pi is technically mid-turn while a live ask waiter is blocked,
+      but reporting `running` would hide the action the person must take. The manager supplies that live
+      waiter signal directly, so streaming deltas do not rescan the transcript.
+    - **Queued input does not supersede a live ask.** It stays in Pi's ordinary queues until the blocking
+      tool returns the person's real result. A restart-repaired ask is idle and remains transcript-derived
+      through `awaitingQuestionToolCallId` / `assessAnswerability`.
+    - **`queued` outranks `failed`** because a follow-up means the failure is already being handled.
     - **`aborted` is idle, not `failed`** — cancelling is a choice, not a fault, and a red row for every
       Escape would teach the user to ignore the signal.
-
-    The hot path costs nothing: rungs 1–2 return before the transcript scan, so the per-event sync that
-    fires during streaming never walks messages. The scan runs only at rest, and stops at the latest user
-    message.
 
     The per-session **status derivation** (`deriveActivityStatus`) is pure and never pre-rolled — collapsing
     several chats into one glyph, and the *display* precedence for that (see `apps/web/src/store/SPEC.md`),
@@ -341,15 +337,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     results whose call id **and tool name** match the final candidate batch may follow it, and parallel
     calls already carrying valid results are left alone. This prevents a late result from surviving
     without its omitted call and permanently poisoning OpenAI replay. Generic
-    missing calls get pi's abort convention (`isError` "Operation aborted (host restarted…)"); an
-    old-format dangling ask gets the canonical decline + a re-ask hint (`details {answers:[],
-    cancelled:true}`), so its card hydrates as the normal skipped record;
+    missing calls get pi's abort convention (`isError` "Operation aborted (host restarted…)"); a dangling
+    ask gets the canonical ack (`details {kind:"ack"}`), so its card remains answerable while the transcript
+    is provider-valid;
     **`answerQuestion(sessionId, toolCallId, result)`** — the `ask_user_question` reply path (see the
     `askUserQuestion` bullet); **`settleSessionsForShutdown(timeoutMs)`** — the polite half of shutdown:
-    abort every streaming parent, dispose every hidden child (including background children whose parent is
-    idle), include cascades already pending from concurrent removal, and wait for all of them under the one
-    bound so pi can persist their "Operation aborted" tool results before `process.exit` (the launcher's
-    SIGINT/SIGTERM handler awaits it; whatever misses the window is healed by the restart repair).
+    abort every streaming parent except one blocked on a live ask waiter, dispose every hidden child
+    (including background children whose parent is idle), include cascades already pending from concurrent
+    removal, and wait for all of them under the one bound. A waiting ask is deliberately left dangling for
+    ack repair on the next attach; explicit user Stop is the path that persists its terminal abort result.
     `disposeAllSessions` remains the synchronous emergency stop, but registers its best-effort child cascades
     in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
@@ -447,43 +443,27 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     is a `Proxy` that throws `Theme not initialized` until `initTheme()` runs, and `initTheme` is called
     only from pi's own CLI entrypoints, never when pi is embedded via `createAgentSession`. Every
     embedder of pi-as-a-library hits this; an upstream fix would not reach us until a deliberate pi bump.
-  - `askUserQuestion` — the host-owned **`ask_user_question`** pi custom tool (`createAskUserQuestionTool`,
-    registered on every session via the `askUserQuestionExtension` factory in `extensions`), designed
-    **ack + terminate** so a questionnaire survives host restarts: `execute` renders nothing and **awaits
-    nothing** — it guards on `ctx.hasUI`, runs the pure `validateQuestionnaire`, then immediately returns
-    the ack (`details {kind:"ack"}`) with **`terminate: true`**, ending the turn at the tool batch with no
-    further LLM call. Nothing pends in memory, the transcript is complete and provider-valid the moment
-    the ack lands, and the session is genuinely **idle** while the user thinks — restarts need no
-    question-specific handling at all. The reply arrives over `session.answerQuestion` → the manager's
-    `answerQuestion(sessionId, toolCallId, result)`: it vets the reply against the transcript with the
-    pure **`assessAnswerability`** (unknown call / already answered / `not_awaiting` legacy-final results /
-    **superseded** — a later free-form user message replaced the answer, so the card is terminal and a
-    stale answer **fails loud**, never parks), then injects **`buildAnswersMessage`** — an
-    **`ask-user-answers` custom message** (`ASK_USER_ANSWERS_CUSTOM_TYPE`, `details {toolCallId, result}`,
-    text = the same `buildQuestionnaireResponse` envelope the blocking design fed the model; a partial
-    submission lists its unanswered questions explicitly as declined) — via pi's public
-    `AgentSession.sendCustomMessage({triggerTurn: true})`, which starts a new turn when idle and steers
-    the current one when streaming. The question array has **no tool-level maximum**: one round carries
+  - `askUserQuestion` — the host-owned **`ask_user_question`** pi custom tool, registered per session with
+    a session-bound waiter registry. A valid live call is **sequential and blocking**: after validation its
+    `execute` waits for `session.answerQuestion`, then returns the person's real
+    `AskUserQuestionResult`/`buildQuestionnaireResponse` as the native tool result. Pi therefore retains
+    ordinary steering/follow-up queues and cannot cross the tool boundary before the answer. The answer RPC
+    resolves the waiter and acknowledges only after the matching result reaches the persisted `turn_end`
+    boundary. Explicit Stop drains the queue, aborts the waiter with a stable stopped error, and leaves a
+    terminal provider-valid result. The question array has **no tool-level maximum**: one round carries
     every question needed for the current decision, while each question retains the 2–4 option bound.
-    **Answering live and answering after a restart are the same code path.** The questionnaire is rendered
-    **inline** in chat by `apps/web`'s `AskUserQuestionCard` (joined by tool name; lifecycle derived from
-    the transcript — see the chat tools SPEC).
-    **Rejected alternatives** (the one place these decisions are recorded): (1) the original **blocking
-    design** — `execute` parked on an in-memory promise until the browser replied. A host restart
-    destroyed the pending promise and left a dangling `toolCall` in the transcript; providers reject
-    unpaired `tool_use`, so the chat **bricked** on every later prompt, and post-restart answers rotted in
-    a held-answers map. The shutdown handler's synchronous `process.exit` made this deterministic, and
-    questions block on human timescales — restarts during the window are the common case, not the edge.
-    (2) A **suspended-session** variant (write the real result at answer time; tolerate the dangle while
-    waiting) — needs two different answer mechanisms (resolve-blocked-promise live vs
-    heal-file-then-attach post-restart), keeps a deliberately-invalid on-disk state every consumer must
-    tiptoe around, and pi exposes no public turn-resume from a bare tool result anyway. (3) Bundling the
-    community `@juicesharp/rpiv-ask-user-question` extension — its questionnaire UI is a live pi-tui
-    component handed to the host via `ctx.ui.custom(factory)` (*code, not data*), unserializable over the
-    WS bridge; and like every blocking ask-extension it inherits the restart hole. The LLM-facing contract
-    (TypeBox schema, validation, envelope) stays re-implemented here so we own its question-count policy
-    and avoid the package's pi-tui/i18n peer deps; its option shape and answer envelope still mirror rpiv
-    where useful.
+
+    A process restart deliberately changes only the continuation mechanism: the attach-time dangling-call
+    repair writes the canonical ack (`details {kind:"ack"}`) before `createAgentSession`, leaving the card
+    answerable but the session idle. With no live waiter, `answerQuestion` injects the existing
+    `ask-user-answers` custom message through `sendCustomMessage({triggerTurn:true})`. Thus the question
+    survives without restoring a JavaScript promise or calling low-level `Agent.continue`; an uncommitted
+    Submit simply appears again. Queue entries remain Pi-owned and live-only by explicit scope. The card
+    derives both forms from the transcript (native live result versus repaired ack + custom answer).
+
+    Rejected alternatives: immediate ack on every live call lets Pi drain queued input and supersede the
+    unanswered card; restoring a dangling invocation exactly requires a lifecycle-safe resume API Pi does
+    not expose; a durable host queue/SQLite outbox is unnecessary when only the question must survive.
   - `sessionRepair` — `repairDanglingToolCalls(sessionManager)`: the restart safety net (rationale under
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends only missing results from the active tail batch) —
@@ -747,10 +727,9 @@ applies.
 - **A re-opened disk session is repaired before it is seeded** (`repairDanglingToolCalls` between
   `SessionManager.open` and `createAgentSession`) — never append to a session file behind a live
   `AgentSession`, its in-memory context would desync.
-- **The ask tool never blocks and never holds state** — anything "pending" about a questionnaire must be
-  derivable from the transcript alone (that's what makes restarts free); reply validity is
-  `assessAnswerability`'s verdict, computed from `session.messages`, and rejections fail the WS request
-  loud.
+- **A live ask blocks only in its session-bound waiter; restart state stays transcript-derived.** The waiter
+  is forgotten on disposal and never restored. A dangling ask is repaired to ack before attach, then
+  `assessAnswerability` remains the one reply-validity authority; rejections fail the WS request loud.
 - Share one **current** `ModelRuntime` for pre-session reads and new sessions. Every session receives and
   retains its generation as `createAgentSession`'s `modelRuntime`; give each its own `SessionManager` and
   `dispose()` it on removal. Old runtimes remain reachable only through old live sessions and become

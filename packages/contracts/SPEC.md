@@ -141,12 +141,13 @@ of the host.
     — the latter carries an optional `recommendedReason` the card renders inline as a `Why:` line under the
     option: the questions the agent authors, what the tool card reads from the `toolCall` block),
     **`AskUserQuestionResult`** (`AskUserQuestionAnswer[]` + `cancelled`: the browser's reply),
-    **`AskUserQuestionAckDetails`** (the tool result's `details` under the **ack + terminate** design —
-    the call resolves instantly; the turn ends) and **`AskUserAnswersDetails`** + the
+    **`AskUserQuestionAckDetails`** (the tool result's `details` used only when restart repair closes a
+    dangling live-blocking call before attach) and **`AskUserAnswersDetails`** + the
     **`ASK_USER_ANSWERS_CUSTOM_TYPE`** constant, **`AskUserAnswersMessage`** (the correctly-paired
     tag↔details shape the host's builder is compile-held to) and the shared **`isAskUserAnswersMessage`**
-    guard (all in `wsProtocol`, the value-bearing half): the reply travels as an `ask-user-answers`
-    custom message the card pairs by `details.toolCallId`. `WireCustomMessage.customType` itself stays
+    guard (all in `wsProtocol`, the value-bearing half): a live reply becomes the native tool result;
+    after restart, the reply travels as an `ask-user-answers` custom message paired by
+    `details.toolCallId`. `WireCustomMessage.customType` itself stays
     `string` — the namespace is open (any pi extension can mint custom messages and they all cross the
     wire), so strictness lives at the producer + the guard, which validates the details *shape* (wire
     data is untrusted — another process, possibly another protocol version). The capability

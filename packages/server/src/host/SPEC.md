@@ -132,8 +132,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   runtime bootstrap for low-level embedders), and write the `listening on` info line (see
   `submodule-server-log`). Its
   SIGINT/SIGTERM handlers await that same shutdown before process exit. Settling aborts streaming sessions
-  and waits bounded so pi persists their "Operation aborted" tool results and transcripts land paired; an
-  immediate exit would strand mid-tool transcripts on restart repair); `handlers.ts` (the WS method→handler
+  and waits bounded so pi persists their "Operation aborted" tool results and transcripts land paired,
+  except a session blocked on `ask_user_question`: shutdown deliberately leaves that call dangling and the
+  next attach repairs it to an answerable ack; explicit user Stop remains the terminal-abort path); `handlers.ts` (the WS method→handler
   registry, including `workspace.rename` as the direct manual door into
   `renameWorkspace(id, name, { lock: true, renameBranch: false })` — the workspaces module changes only the
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
