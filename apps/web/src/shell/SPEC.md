@@ -115,8 +115,10 @@ A chat tab's existing context menu gains **Rename chat**, and every row in the w
 closed** chat menu gains a visible pencil action. Like workspace rename, each action replaces its own label
 in place with a chrome-less single-line input carrying the same typography and geometry; the field is
 prefilled, focused, and selected. Enter or blur commits, Escape cancels, and blank, over-80-character, and
-unchanged values never issue a request. The history menu remains open while its row is edited. The controls
-render only when the welcome protocol supports `session.rename`.
+unchanged values never issue a request. Keyboard commit/cancel restores the replacement tab or history-row
+control; pointer blur preserves the user's new focus target. The named, viewport-bounded interactive history
+popover remains open and scrollable while its row is edited. The controls render only when the welcome
+protocol supports `session.rename`.
 
 The shell injects the chat-only mutation callback into the otherwise domain-neutral Workbench tab menu rather
 than teaching the pure layout engine how sessions are persisted. A commit has no optimistic domain write: the

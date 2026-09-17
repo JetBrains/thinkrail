@@ -5,6 +5,7 @@ import {
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { prepareChatTitle } from "../chat/chatTitle";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
@@ -222,9 +223,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const reviewFlagByPath = useMemo(() => reviewFlags(reviewComments), [reviewComments]);
 	const [focusRequest, setFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
 	const requestRenameChat = useCallback(
-		(sessionId: string, title: string) => {
+		(sessionId: string, titleInput: string, currentTitle: string) => {
+			const prepared = prepareChatTitle(titleInput);
+			if ("reason" in prepared || prepared.title === currentTitle) return;
 			void getTransport()
-				.request("session.rename", { workspaceId, sessionId, title })
+				.request("session.rename", { workspaceId, sessionId, title: prepared.title })
 				.catch((error) => toast.error(errorText(error), "Couldn't rename the chat"));
 		},
 		[workspaceId],

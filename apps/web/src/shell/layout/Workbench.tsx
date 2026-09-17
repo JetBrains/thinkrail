@@ -1,4 +1,3 @@
-import { normalizeSessionTitle, SESSION_TITLE_MAX_LENGTH } from "@thinkrail/contracts";
 import {
 	type CollisionDetection,
 	DndContext,
@@ -174,7 +173,7 @@ export interface WorkbenchProps {
 		tab: LayoutTab,
 		prepare: (latestDocument?: WorkspaceLayoutDocument) => PreparedLayoutClose,
 	) => void;
-	onRenameChat?: (sessionId: string, title: string) => void;
+	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (groupId: string, area: "center" | LayoutAuxiliaryRegion) => void;
 	onGestureCanceled?: () => void;
@@ -898,6 +897,7 @@ function WorkbenchTab({
 	const editStartNameRef = useRef("");
 	const cancelNextBlurRef = useRef(false);
 	const enterRenameRef = useRef(false);
+	const restoreTabFocusRef = useRef(false);
 	const [editingName, setEditingName] = useState(false);
 	useEffect(
 		() => () => {
@@ -913,26 +913,36 @@ function WorkbenchTab({
 		});
 		return () => cancelAnimationFrame(frame);
 	}, [editingName]);
+	const closeNameEditor = () => {
+		setEditingName(false);
+		if (!restoreTabFocusRef.current) return;
+		restoreTabFocusRef.current = false;
+		requestAnimationFrame(() =>
+			globalThis.document.getElementById(tabDomId(location, tab.id))?.focus(),
+		);
+	};
 	const commitRename = () => {
 		if (cancelNextBlurRef.current) {
 			cancelNextBlurRef.current = false;
-			setEditingName(false);
+			closeNameEditor();
 			return;
 		}
-		const title = normalizeSessionTitle(nameInputRef.current?.value);
-		setEditingName(false);
-		if (!title || title === editStartNameRef.current || tab.kind !== "chat") return;
-		onRenameChat?.(tab.sessionId, title);
+		const titleInput = nameInputRef.current?.value ?? "";
+		closeNameEditor();
+		if (tab.kind !== "chat") return;
+		onRenameChat?.(tab.sessionId, titleInput, editStartNameRef.current);
 	};
 	const onNameKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
 		event.stopPropagation();
 		if (event.key === "Enter") {
 			event.preventDefault();
+			restoreTabFocusRef.current = true;
 			nameInputRef.current?.blur();
 			return;
 		}
 		if (event.key === "Escape") {
 			event.preventDefault();
+			restoreTabFocusRef.current = true;
 			cancelNextBlurRef.current = true;
 			nameInputRef.current?.blur();
 		}
@@ -1053,10 +1063,7 @@ function WorkbenchTab({
 						className="pointer-events-none absolute inset-y-0 right-0 z-10 w-1/2 border-primary data-[drop-active]:border-r-2"
 					/>
 					{editingName && tab.kind === "chat" ? (
-						<div
-							ref={register}
-							className="flex min-w-0 flex-1 items-center gap-4 py-4 pl-8"
-						>
+						<div ref={register} className="flex min-w-0 flex-1 items-center gap-4 py-4 pl-8">
 							{tabIcon(tab, active)}
 							<input
 								ref={nameInputRef}
@@ -1065,7 +1072,6 @@ function WorkbenchTab({
 								spellCheck={false}
 								aria-label="Chat name"
 								defaultValue={name}
-								maxLength={SESSION_TITLE_MAX_LENGTH}
 								onKeyDown={onNameKeyDown}
 								onBlur={commitRename}
 								className="min-w-0 flex-1 border-0 bg-transparent p-0 tr-text-ui text-text-default outline-none"
@@ -1121,6 +1127,7 @@ function WorkbenchTab({
 						onSelect={() => {
 							editStartNameRef.current = name;
 							cancelNextBlurRef.current = false;
+							restoreTabFocusRef.current = false;
 							enterRenameRef.current = true;
 							setEditingName(true);
 						}}
