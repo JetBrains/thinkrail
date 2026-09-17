@@ -103,8 +103,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		const unsubscribeReview = getTransport().subscribe(WS_CHANNELS.reviewChanged, (payload) => {
 			if ((payload as ReviewChangedPayload).workspaceId === workspaceId) scheduleRefetch();
 		});
-		// A detached review (Start review / Review All / auto re-review) has no chat to carry a failure, so the
-		// host publishes it here and the plan page raises it as a toast. See apps/web/src/panels/SPEC.md.
+		// A detached review has no chat to carry a failure; the plan page raises it as a toast. See panels/SPEC.md.
 		const unsubscribeReviewFailed = getTransport().subscribe(
 			WS_CHANNELS.reviewFailed,
 			(payload) => {
