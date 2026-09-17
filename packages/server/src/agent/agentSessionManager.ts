@@ -53,12 +53,10 @@ import {
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import {
 	type AttentionCandidate,
-	attentionSessionVisible,
 	attentionTurnId,
 	deriveAttentionCandidate,
 	deriveDiskAttentionCandidate,
 	parseAttentionEntries,
-	SESSION_VISIBILITY_CUSTOM_TYPE,
 	TRANSCRIPT_TAIL_BYTES,
 	TRANSCRIPT_TAIL_MAX_BYTES,
 } from "./attention";
@@ -244,6 +242,7 @@ function emptyAttentionLedger(): AttentionLedger {
 		version: ATTENTION_LEDGER_VERSION,
 		migrationComplete: true,
 		handledCandidateBySession: {},
+		internalSessionIds: [],
 	};
 }
 
@@ -265,6 +264,10 @@ function persistedAttentionOf(entry: Entry): AttentionCandidate | null {
 
 function isNonBlockingCandidate(candidate: AttentionCandidate): boolean {
 	return candidate.kind !== "blocking";
+}
+
+function isInternalSession(sessionId: string): boolean {
+	return attentionLedger?.internalSessionIds.includes(sessionId) === true;
 }
 
 function isHandledAttention(sessionId: string, candidate: AttentionCandidate): boolean {
@@ -354,7 +357,7 @@ async function diskAttentionRows(
 			continue;
 		}
 		const { id: sessionId, version } = file.identity;
-		if (!file.identity.userVisible || file.identity.cwd !== cwd || sessions.has(sessionId))
+		if (isInternalSession(sessionId) || file.identity.cwd !== cwd || sessions.has(sessionId))
 			continue;
 		if (isAttentionDeleted(sessionId, workspaceId)) continue;
 		try {
@@ -391,7 +394,7 @@ async function migrationAttentionRows(
 		}
 		try {
 			const { id: sessionId, version } = file.identity;
-			if (!file.identity.userVisible || file.identity.cwd !== cwd || sessions.has(sessionId))
+			if (isInternalSession(sessionId) || file.identity.cwd !== cwd || sessions.has(sessionId))
 				continue;
 			rows.push({
 				sessionId,
@@ -452,12 +455,14 @@ function retractSessionRunning(sessionId: string, entry: Entry): void {
 	if (payload) publishRunning(payload);
 }
 
-function setSessionUserVisible(sessionId: string, entry: Entry, visible: boolean): void {
+async function setSessionUserVisible(
+	sessionId: string,
+	entry: Entry,
+	visible: boolean,
+): Promise<void> {
 	if (entry.userVisible === visible) return;
+	await setSessionInternal(sessionId, !visible);
 	entry.userVisible = visible;
-	entry.session.sessionManager.appendCustomEntry(SESSION_VISIBILITY_CUSTOM_TYPE, {
-		userVisible: visible,
-	});
 	if (visible) syncSessionRunning(sessionId);
 	else retractSessionRunning(sessionId, entry);
 	syncSessionAttention(sessionId);
@@ -512,14 +517,39 @@ function markAttentionHandled(sessionId: string, attentionId: string): Promise<b
 	});
 }
 
-function removeHandledAttention(sessionIds: readonly string[]): Promise<boolean> {
+function setSessionInternal(sessionId: string, internal: boolean): Promise<boolean> {
+	return queueAttentionLedgerMutation((ledger) => {
+		const current = ledger.internalSessionIds.includes(sessionId);
+		if (current === internal) return null;
+		return {
+			...ledger,
+			internalSessionIds: internal
+				? [...ledger.internalSessionIds, sessionId].sort()
+				: ledger.internalSessionIds.filter((candidate) => candidate !== sessionId),
+		};
+	});
+}
+
+function removeSessionAttentionState(sessionIds: readonly string[]): Promise<boolean> {
 	const removed = new Set(sessionIds);
 	return queueAttentionLedgerMutation((ledger) => {
 		const entries = Object.entries(ledger.handledCandidateBySession).filter(
 			([sessionId]) => !removed.has(sessionId),
 		);
-		if (entries.length === Object.keys(ledger.handledCandidateBySession).length) return null;
-		return { ...ledger, handledCandidateBySession: Object.fromEntries(entries) };
+		const internalSessionIds = ledger.internalSessionIds.filter(
+			(sessionId) => !removed.has(sessionId),
+		);
+		if (
+			entries.length === Object.keys(ledger.handledCandidateBySession).length &&
+			internalSessionIds.length === ledger.internalSessionIds.length
+		) {
+			return null;
+		}
+		return {
+			...ledger,
+			handledCandidateBySession: Object.fromEntries(entries),
+			internalSessionIds,
+		};
 	});
 }
 
@@ -536,13 +566,6 @@ export async function initializeSessionAttention(
 		const quarantined = loaded.quarantined ?? quarantineAttentionLedger();
 		log.warn(`invalid attention ledger retained at ${quarantined}`, loaded.error);
 		try {
-			for (const workspace of workspaces) {
-				try {
-					await migrationAttentionRows(workspace.id, workspace.cwd);
-				} catch (error) {
-					log.warn(`attention migration skipped workspace ${workspace.id}`, error as Error);
-				}
-			}
 			const ledger = emptyAttentionLedger();
 			saveAttentionLedger(ledger);
 			attentionLedger = ledger;
@@ -574,6 +597,7 @@ export async function initializeSessionAttention(
 		version: ATTENTION_LEDGER_VERSION,
 		migrationComplete: true,
 		handledCandidateBySession,
+		internalSessionIds: [],
 	};
 	saveAttentionLedger(ledger);
 	attentionLedger = ledger;
@@ -951,12 +975,10 @@ async function registerSession(
 	generation: PiRuntimeGeneration,
 	options: { announceCreation?: boolean; userVisible?: boolean } = {},
 ): Promise<CreateSessionResult> {
-	const persistedUserVisible = attentionSessionVisible(session.sessionManager.getEntries());
+	const persistedUserVisible = !isInternalSession(session.sessionId);
 	const userVisible = options.userVisible ?? persistedUserVisible;
-	if (!userVisible && persistedUserVisible) {
-		session.sessionManager.appendCustomEntry(SESSION_VISIBILITY_CUSTOM_TYPE, {
-			userVisible: false,
-		});
+	if (userVisible !== persistedUserVisible) {
+		await setSessionInternal(session.sessionId, !userVisible);
 	}
 	const prepared = await prepareSessionEntry(
 		session,
@@ -1028,7 +1050,6 @@ interface SessionFileIdentity {
 	id: string;
 	cwd: string;
 	version: number;
-	userVisible: boolean;
 }
 
 type ScannedSessionFile =
@@ -1055,42 +1076,31 @@ async function readSessionFileIdentity(path: string): Promise<SessionFileIdentit
 		const source = buffer
 			.subarray(0, Math.min(bytesRead, SESSION_HEADER_MAX_BYTES))
 			.toString("utf8");
-		let identity: Omit<SessionFileIdentity, "userVisible"> | null = null;
-		const visibilityEntries: SessionEntry[] = [];
 		for (const line of source.split("\n")) {
 			if (!line.trim()) continue;
 			let entry: unknown;
 			try {
 				entry = JSON.parse(line);
 			} catch {
-				if (!identity && bytesRead > SESSION_HEADER_MAX_BYTES && !source.includes("\n")) {
+				if (bytesRead > SESSION_HEADER_MAX_BYTES && !source.includes("\n")) {
 					throw new Error("session header exceeds the read limit");
 				}
 				continue;
 			}
-			if (!identity) {
-				if (typeof entry !== "object" || entry === null) {
-					throw new Error("first parsed entry is not an object");
-				}
-				const id = Reflect.get(entry, "id");
-				if (Reflect.get(entry, "type") !== "session" || typeof id !== "string") {
-					throw new Error("first parsed entry is not a session header");
-				}
-				const headerCwd = Reflect.get(entry, "cwd");
-				const headerVersion = Reflect.get(entry, "version");
-				identity = {
-					id,
-					cwd: typeof headerCwd === "string" ? headerCwd : "",
-					version: typeof headerVersion === "number" ? headerVersion : 1,
-				};
-				continue;
+			if (typeof entry !== "object" || entry === null) {
+				throw new Error("first parsed entry is not an object");
 			}
-			if (typeof entry === "object" && entry !== null && Reflect.get(entry, "type") === "custom") {
-				visibilityEntries.push(entry as SessionEntry);
+			const id = Reflect.get(entry, "id");
+			if (Reflect.get(entry, "type") !== "session" || typeof id !== "string") {
+				throw new Error("first parsed entry is not a session header");
 			}
-		}
-		if (identity) {
-			return { ...identity, userVisible: attentionSessionVisible(visibilityEntries) };
+			const headerCwd = Reflect.get(entry, "cwd");
+			const headerVersion = Reflect.get(entry, "version");
+			return {
+				id,
+				cwd: typeof headerCwd === "string" ? headerCwd : "",
+				version: typeof headerVersion === "number" ? headerVersion : 1,
+			};
 		}
 		throw new Error(
 			bytesRead > SESSION_HEADER_MAX_BYTES
@@ -1280,7 +1290,7 @@ async function ensureSessionAttachedInternal(
 	const live = sessions.get(sessionId);
 	if (live) {
 		if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
-		if (userVisible !== undefined) setSessionUserVisible(sessionId, live, userVisible);
+		if (userVisible !== undefined) await setSessionUserVisible(sessionId, live, userVisible);
 		return true;
 	}
 	const known = (await listSessionInfosStrict(cwd)).some(
@@ -1290,7 +1300,7 @@ async function ensureSessionAttachedInternal(
 	await attachDiskSession(sessionId, workspaceId, cwd, userVisible);
 	const attached = sessions.get(sessionId);
 	if (!attached) throw new Error(`Session ${sessionId} was re-opened but did not register.`);
-	if (userVisible !== undefined) setSessionUserVisible(sessionId, attached, userVisible);
+	if (userVisible !== undefined) await setSessionUserVisible(sessionId, attached, userVisible);
 	return true;
 }
 
@@ -1837,7 +1847,7 @@ async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string
 	if (cwd) await purgeDiskSessions(cwd);
 	if (attentionLedger && removedIds.size > 0) {
 		try {
-			await removeHandledAttention([...removedIds]);
+			await removeSessionAttentionState([...removedIds]);
 		} catch (error) {
 			log.warn(`attention cleanup failed for removed workspace ${workspaceId}`, error as Error);
 		}
@@ -1945,7 +1955,7 @@ async function runDeleteTransaction(
 	if (liveEntry && sessions.get(sessionId) === liveEntry) await disposeSession(sessionId);
 	if (attentionLedger) {
 		try {
-			await removeHandledAttention([sessionId]);
+			await removeSessionAttentionState([sessionId]);
 		} catch (error) {
 			log.warn(`attention cleanup failed for deleted session ${sessionId}`, error as Error);
 		}

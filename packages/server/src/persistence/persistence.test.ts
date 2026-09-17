@@ -33,6 +33,7 @@ test("attention ledger saves and reloads exact handled candidates", () => {
 		version: ATTENTION_LEDGER_VERSION,
 		migrationComplete: true,
 		handledCandidateBySession: { s1: "candidate-1", s2: "candidate-2" },
+		internalSessionIds: ["internal-1", "internal-2"],
 	});
 
 	expect(loadAttentionLedger()).toEqual({
@@ -41,10 +42,32 @@ test("attention ledger saves and reloads exact handled candidates", () => {
 			version: ATTENTION_LEDGER_VERSION,
 			migrationComplete: true,
 			handledCandidateBySession: { s1: "candidate-1", s2: "candidate-2" },
+			internalSessionIds: ["internal-1", "internal-2"],
 		},
 	});
 	expect(readdirSync(directory)).toEqual(["attention.json"]);
 	expect(readFileSync(join(directory, "attention.json"), "utf8")).toEndWith("\n");
+});
+
+test("attention ledger upgrades the pre-release shape with an empty internal-session set", () => {
+	writeFileSync(
+		join(directory, "attention.json"),
+		JSON.stringify({
+			version: ATTENTION_LEDGER_VERSION,
+			migrationComplete: true,
+			handledCandidateBySession: { s1: "candidate-1" },
+		}),
+	);
+
+	expect(loadAttentionLedger()).toEqual({
+		status: "ready",
+		ledger: {
+			version: ATTENTION_LEDGER_VERSION,
+			migrationComplete: true,
+			handledCandidateBySession: { s1: "candidate-1" },
+			internalSessionIds: [],
+		},
+	});
 });
 
 test("attention ledger reports malformed state and preserves it when quarantined", () => {
@@ -66,6 +89,7 @@ test("attention ledger rejects invalid writes without replacing valid state", ()
 		version: ATTENTION_LEDGER_VERSION,
 		migrationComplete: true as const,
 		handledCandidateBySession: { s1: "candidate-1" },
+		internalSessionIds: ["internal-1"],
 	};
 	saveAttentionLedger(valid);
 

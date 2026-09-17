@@ -139,9 +139,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   - **Attention projection** (`attention.ts`) answers one binary question for every user-facing session:
     "should the person inspect or answer this chat?" It replaces the Projects rail's waiting/failed/queued
     status vocabulary and remains independent from the ephemeral existing-icon pulse for live work. The
-    host may mark an internal session `userVisible: false`; the manager persists that policy as a non-message
-    custom entry before work begins, and both live derivation and the bounded disk scan suppress its attention.
-    The 64 KiB header probe reads the early marker even when a long transcript tail no longer contains it.
+    host may mark an internal session `userVisible: false`; before registration publishes anything, the
+    manager persists that session id in the host attention ledger. Live derivation and disk reconstruction
+    consult the same set, so reviewer/reflector policy neither depends on transcript byte windows nor writes
+    ThinkRail metadata into pi's transcript. Successful session/workspace deletion prunes the set.
 
     A pure derivation returns either no candidate or one opaque candidate with an internal kind:
     **blocking** for an unresolved `ask_user_question` or another host-known session-scoped blocking dialog;

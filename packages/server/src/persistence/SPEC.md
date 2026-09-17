@@ -14,14 +14,17 @@ Durable host state—projects, workspaces, cross-frontend app config, terminal c
 
 ## Boundary
 
-- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; the versioned attention ledger containing a migration-complete marker plus session→handled-candidate ids (never message content or derivable status); and installation identity in `installation.json` (`{ id }`, the non-rotating per-install UUID, server-only and never wire-broadcast). The former announcement marker is ignored: first observed launch defines first use, not a stored event-sent bit. JSON remains tab-indented.
+- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; the versioned attention ledger containing a migration-complete marker, session→handled-candidate ids, and the host-owned set of internal session ids excluded from user signals (never message content or derivable status); and installation identity in `installation.json` (`{ id }`, the non-rotating per-install UUID, server-only and never wire-broadcast). The former announcement marker is ignored: first observed launch defines first use, not a stored event-sent bit. JSON remains tab-indented.
 - **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, attention-ledger load/save operations, and installation identity operations.
 - **Allowed deps:** `contracts` (`Project`, `Workspace`, `AppConfig`, `LayoutPreset`, `DEFAULT_CONFIG`,
   `isTerminalWindowsShell`); Node `fs`/`os`/`path`.
 - **Forbidden:** importing feature siblings or `host`; deriving whether a session needs attention; storing message content or running/queued/failure state in the attention ledger; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys or old schemas; or reading, rewriting, or deleting old host layout snapshots.
 
 A handled candidate is either a review/interrupted result exposed to the owner or the otherwise-attentionable
-candidate of an explicit Stop; the ledger does not distinguish why it was handled. Attention-ledger reads distinguish missing
+candidate of an explicit Stop; the ledger does not distinguish why it was handled. The internal-session set
+persists the host policy that reviewer/reflector sessions produce neither attention nor running presentation,
+without adding ThinkRail metadata to pi transcripts. A missing field from the pre-release ledger shape decodes
+as an empty set and is written on the next mutation. Attention-ledger reads distinguish missing
 from malformed/unreadable. Initialization and every mutation write a complete copy to a sibling temporary
 file and atomically replace the target; concurrent serialization and publish timing belong to `agent`. A
 missing file may receive one exact-candidate baseline of old review and interrupted turns assembled by the agent before serving. A malformed or

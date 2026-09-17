@@ -5,8 +5,6 @@ import { awaitingQuestionToolCallId, isAckDetails } from "./askUserQuestion";
 
 export type AttentionCandidateKind = "blocking" | "review" | "interrupted";
 
-export const SESSION_VISIBILITY_CUSTOM_TYPE = "thinkrail.session-visibility";
-
 export interface AttentionCandidate {
 	id: string;
 	kind: AttentionCandidateKind;
@@ -114,21 +112,7 @@ function legacyInterruptedCandidateId(entry: MessageEntry, messageOrdinal: numbe
 	return `legacy-interrupted:${digest}`;
 }
 
-export function attentionSessionVisible(entries: readonly SessionEntry[]): boolean {
-	for (let index = entries.length - 1; index >= 0; index--) {
-		const entry = entries[index];
-		if (entry?.type !== "custom" || entry.customType !== SESSION_VISIBILITY_CUSTOM_TYPE) continue;
-		return !(
-			typeof entry.data === "object" &&
-			entry.data !== null &&
-			Reflect.get(entry.data, "userVisible") === false
-		);
-	}
-	return true;
-}
-
 export function deriveAttentionCandidate(inputs: AttentionInputs): AttentionCandidate | null {
-	if (!attentionSessionVisible(inputs.entries)) return null;
 	const turn = latestUserTurn(inputs.entries);
 	const turnId = turn?.entry.id ?? null;
 	if (inputs.pendingDialogId !== null) {

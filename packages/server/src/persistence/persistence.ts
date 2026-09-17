@@ -37,6 +37,7 @@ export interface AttentionLedger {
 	version: typeof ATTENTION_LEDGER_VERSION;
 	migrationComplete: true;
 	handledCandidateBySession: Record<string, string>;
+	internalSessionIds: string[];
 }
 
 export type AttentionLedgerLoadResult =
@@ -63,10 +64,19 @@ function parseAttentionLedger(value: unknown): AttentionLedger | null {
 	const entries = Object.entries(rawHandled);
 	if (entries.some(([sessionId, candidateId]) => !sessionId || !candidateId)) return null;
 	if (entries.some(([, candidateId]) => typeof candidateId !== "string")) return null;
+	const rawInternal = Reflect.get(value, "internalSessionIds");
+	if (rawInternal !== undefined && !Array.isArray(rawInternal)) return null;
+	if (
+		Array.isArray(rawInternal) &&
+		rawInternal.some((sessionId) => typeof sessionId !== "string" || !sessionId)
+	) {
+		return null;
+	}
 	return {
 		version: ATTENTION_LEDGER_VERSION,
 		migrationComplete: true,
 		handledCandidateBySession: Object.fromEntries(entries) as Record<string, string>,
+		internalSessionIds: [...new Set((rawInternal ?? []) as string[])],
 	};
 }
 
