@@ -129,5 +129,7 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   reaching into `todos/reviews.ts` or `reviews/*` internals past their barrels.
 - **Testing:** `planReview.test.ts` injects a stub runner through `startPlanReview`'s last parameter and
   drives the real record → file-findings → deliver path against a faux-model worker session, so the
-  verdict semantics are covered with no provider. `requestReview.test.ts` pins the pure parsing/compose
-  rules.
+  verdict semantics are covered with no provider. One integration test omits the stub so the real
+  `runReviewSubagent` creates a delegated child (faux model, scripted verdict) and exercises child
+  creation → request_changes → canonical finding resolution → re-review → approve end to end.
+  `requestReview.test.ts` pins the pure parsing/compose rules.
