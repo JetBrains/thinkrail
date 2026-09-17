@@ -433,6 +433,33 @@ test("a re-review approve does NOT settle the step while an earlier finding is s
 	expect(itemReviewActive(sessionId, id)).toBe(false);
 });
 
+test("the tool path marks findings sent to the worker so resolve_comment can close them", async () => {
+	installRequestReviewSeam(verdictRunner(requestChanges));
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+	const out = await createRequestReviewTool().execute(
+		"tc",
+		{ itemId: id } as never,
+		undefined,
+		undefined,
+		ctx,
+	);
+
+	const comment = (await getReviewSnapshot(WS)).comments.find((c) => c.origin?.todoId === id);
+	expect(comment?.status).toBe("sent");
+	expect(comment?.sessionId).toBe(sessionId);
+	const cid = comment?.id ?? "";
+	expect(cid).toMatch(/^rc_/);
+	// The worker-facing text names the canonical id, not the model's transient f1.
+	const text = String((out.content?.[0] as { text?: string } | undefined)?.text ?? "");
+	expect(text).toContain(cid);
+	expect(text).not.toContain("[f1]");
+	// resolve_comment closes it by canonical id — the re-review approve gate is now satisfiable.
+	expect(() => reviews.resolveCommentFromAgent(sessionId, cid)).not.toThrow();
+	expect((await getReviewSnapshot(WS)).comments.find((c) => c.id === cid)?.status).toBe("resolved");
+});
+
 test("a request_review that fails before the review starts releases its claim, so the retry runs", async () => {
 	installRequestReviewSeam(verdictRunner(approve));
 	const sessionId = await workerSession();

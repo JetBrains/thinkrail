@@ -83,12 +83,13 @@ export function parseVerdict(
 export type VerdictOutcome =
 	| { kind: "approved" }
 	| { kind: "approve-blocked"; openFindings: number }
-	| { kind: "changes"; canAutoFix: boolean };
+	| { kind: "changes"; canAutoFix: boolean; findings?: ReviewFixComment[] };
 
 export function composeText(result: PlanReviewResult, outcome: VerdictOutcome): string {
+	const list = outcome.kind === "changes" ? (outcome.findings ?? result.findings) : result.findings;
 	const findings =
-		result.findings.length > 0
-			? `\n\n${result.findings
+		list.length > 0
+			? `\n\n${list
 					.map((f) => {
 						const loc = f.path
 							? ` (${f.path}${f.startLine ? `:${f.startLine}${f.endLine && f.endLine !== f.startLine ? `-${f.endLine}` : ""}` : ""})`
@@ -123,10 +124,10 @@ async function fileFinding(
 	params: ReviewParams,
 	reviewedSha: string,
 	f: ReviewFixComment,
-): Promise<void> {
+): Promise<ReviewComment> {
 	const origin = { todoId: params.id, reviewedSha, sessionId: params.sessionId };
 	if (f.path && f.startLine && !anchorProblem(params.workspaceId, f.path, f.startLine)) {
-		await addComment({
+		return addComment({
 			workspaceId: params.workspaceId,
 			kind: "inline",
 			author: "agent",
@@ -141,9 +142,8 @@ async function fileFinding(
 				],
 			},
 		});
-		return;
 	}
-	await addComment({
+	return addComment({
 		workspaceId: params.workspaceId,
 		kind: "review",
 		author: "agent",
@@ -227,7 +227,11 @@ async function recordVerdict(
 			);
 		return { kind: "approve-blocked", openFindings: open.length };
 	}
-	for (const f of result.findings) await fileFinding(params, reviewedSha, f);
+	const findings: ReviewFixComment[] = [];
+	for (const f of result.findings) {
+		const persisted = await fileFinding(params, reviewedSha, f);
+		findings.push({ ...f, id: persisted.id });
+	}
 	decided("changes_requested");
 	const spent = todoReviewAutoCycles(params) ?? 0;
 	const canAutoFix = getConfig().reviewAutoFix !== false && spent < 1;
@@ -238,16 +242,27 @@ async function recordVerdict(
 			...(result.summary ? { note: result.summary } : {}),
 			autoCycles,
 		});
-	if (!canAutoFix || !deliverFix) {
-		record(canAutoFix ? 1 : 2);
-		return { kind: "changes", canAutoFix };
+	if (!canAutoFix) {
+		record(2);
+		return { kind: "changes", canAutoFix: false, findings };
+	}
+	if (!deliverFix) {
+		// Tool path: the tool result IS the delivery, so mark the filed findings sent to the invoking
+		// worker before spending the cycle — resolve_comment closes them by canonical id. See planReview.SPEC.md.
+		await markCommentsSent(
+			params.workspaceId,
+			findings.map((f) => f.id),
+			params.sessionId,
+		);
+		record(1);
+		return { kind: "changes", canAutoFix: true, findings };
 	}
 	const claimed = claimItemFix(params.sessionId, params.id);
 	const { item } = record(1);
 	if (claimed && (await deliverFixToWorker(params, item, note)))
-		return { kind: "changes", canAutoFix };
+		return { kind: "changes", canAutoFix: true, findings };
 	record(2);
-	return { kind: "changes", canAutoFix: false };
+	return { kind: "changes", canAutoFix: false, findings };
 }
 
 export type ReviewRunner = typeof runReviewSubagent;
@@ -302,7 +317,9 @@ async function handleRequestReview(
 			const outcome = await recordVerdict(params, result, reviewedSha, false);
 			const blocked =
 				outcome.kind === "approve-blocked" ? { blockedByOpenFindings: outcome.openFindings } : {};
-			return { result: { ...result, ...blocked }, text: composeText(result, outcome) };
+			const findings =
+				outcome.kind === "changes" ? (outcome.findings ?? result.findings) : result.findings;
+			return { result: { ...result, findings, ...blocked }, text: composeText(result, outcome) };
 		});
 	} catch (err) {
 		cancelTodoReview(params);
