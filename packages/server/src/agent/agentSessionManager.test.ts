@@ -70,6 +70,7 @@ import {
 	steerSession,
 	toWireModel,
 } from "./agentSessionManager";
+import { SESSION_VISIBILITY_CUSTOM_TYPE } from "./attention";
 import { configurePiRuntime } from "./piRuntime";
 import { setTrashImplementationForTests } from "./trash";
 import { setExtUiPublisher } from "./webUiContext";
@@ -385,7 +386,7 @@ test("running publishes start/settled transitions and lists only live streaming 
 	}
 });
 
-test("host-managed sessions can opt out of running snapshots and pushes", async () => {
+test("host-managed sessions can opt out of running and attention", async () => {
 	const slow = createFauxCore({
 		provider: "faux-running-hidden",
 		api: "faux-running-hidden",
@@ -395,8 +396,10 @@ test("host-managed sessions can opt out of running snapshots and pushes", async 
 	runtime.registerProvider("faux-running-hidden", cfg(slow, "faux-running-hidden"));
 	const workspaceId = "ws-running-hidden";
 	const published: SessionRunningPayload[] = [];
+	const publishedAttention: SessionAttentionPayload[] = [];
 	setSessionProjectResolver((id) => (id === workspaceId ? "project-running" : null));
 	setSessionRunningPublisher((payload) => published.push(payload));
+	setSessionAttentionPublisher((payload) => publishedAttention.push(payload));
 	const sessionIds: string[] = [];
 	const releases: Array<() => void> = [];
 	try {
@@ -422,12 +425,12 @@ test("host-managed sessions can opt out of running snapshots and pushes", async 
 				cwd,
 				workspaceId,
 				model: toWireModel(slow.getModel()),
-				...(mode === "create" ? { runningVisible: false } : {}),
+				...(mode === "create" ? { userVisible: false } : {}),
 			});
 			sessionIds.push(session.sessionId);
 			if (mode === "attach") {
 				await ensureSessionAttached(session.sessionId, workspaceId, cwd, {
-					runningVisible: false,
+					userVisible: false,
 				});
 			}
 			const turn = promptSession(session.sessionId, "run without a pulse");
@@ -436,10 +439,17 @@ test("host-managed sessions can opt out of running snapshots and pushes", async 
 			expect(published.some((payload) => payload.sessionId === session.sessionId)).toBe(false);
 			release();
 			await turn;
+			expect(
+				publishedAttention.some(
+					(payload) => payload.sessionId === session.sessionId && payload.attentionId !== null,
+				),
+			).toBe(false);
+			expect(await listSessionAttention([])).toEqual([]);
 		}
 	} finally {
 		for (const release of releases) release();
 		setSessionRunningPublisher(() => {});
+		setSessionAttentionPublisher(() => {});
 		setSessionProjectResolver(() => null);
 		for (const sessionId of sessionIds) {
 			if (hasSession(sessionId)) removeSession(sessionId);
@@ -2115,6 +2125,33 @@ test("attention migration baselines review and interrupted ids but keeps blocker
 			},
 		],
 	});
+	const hidden = writeFixtureSession(sessionDir, {
+		id: "attention-hidden-reviewer",
+		cwd,
+		messages: [
+			{ role: "user", text: "internal review", timestamp: 1_700_900_001_300 },
+			{
+				role: "assistant",
+				text: "approved",
+				timestamp: 1_700_900_001_400,
+				stopReason: "stop",
+			},
+		],
+	});
+	const hiddenRecords = readFileSync(hidden.path, "utf8")
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line));
+	hiddenRecords.splice(1, 0, {
+		type: "custom",
+		id: "attention-hidden-visibility",
+		parentId: null,
+		timestamp: new Date(1_700_900_001_250).toISOString(),
+		customType: SESSION_VISIBILITY_CUSTOM_TYPE,
+		data: { userVisible: false },
+	});
+	hiddenRecords[2].parentId = "attention-hidden-visibility";
+	writeFileSync(hidden.path, `${hiddenRecords.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
 	const legacyPath = join(sessionDir, "1700900001500_attention-legacy.jsonl");
 	writeFileSync(
 		legacyPath,
@@ -2190,6 +2227,7 @@ test("attention migration baselines review and interrupted ids but keeps blocker
 			"interrupted:",
 		);
 		expect(ledger.handledCandidateBySession["attention-waiting"]).toBeUndefined();
+		expect(ledger.handledCandidateBySession["attention-hidden-reviewer"]).toBeUndefined();
 		expect(await listSessionAttention([{ id: "attention-workspace", cwd }])).toEqual([
 			{
 				sessionId: "attention-waiting",

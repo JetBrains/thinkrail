@@ -18,7 +18,7 @@ test("the legacy activity snapshot name remains as an empty compatibility tombst
 });
 
 test("session attention advances the protocol and names its wire surface", () => {
-	expect(ATTENTION_PROTOCOL_VERSION).toBe(65);
+	expect(ATTENTION_PROTOCOL_VERSION).toBe(66);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ATTENTION_PROTOCOL_VERSION);
 	expect(WS_CHANNELS.sessionAttention).toBe("session.attention");
 	expect(WS_METHODS.sessionAttentionList).toBe("session.attentionList");

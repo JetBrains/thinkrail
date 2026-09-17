@@ -53,10 +53,12 @@ import {
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import {
 	type AttentionCandidate,
+	attentionSessionVisible,
 	attentionTurnId,
 	deriveAttentionCandidate,
 	deriveDiskAttentionCandidate,
 	parseAttentionEntries,
+	SESSION_VISIBILITY_CUSTOM_TYPE,
 	TRANSCRIPT_TAIL_BYTES,
 	TRANSCRIPT_TAIL_MAX_BYTES,
 } from "./attention";
@@ -105,7 +107,7 @@ interface Entry {
 	piCompactionInProgress: boolean;
 	registered: boolean;
 	subagentToolsRefreshPending: boolean;
-	runningVisible: boolean;
+	userVisible: boolean;
 	publishedAttentionId: string | null;
 	publishedRunning: boolean;
 	abortAttentionTurnId: string | null | undefined;
@@ -246,6 +248,7 @@ function emptyAttentionLedger(): AttentionLedger {
 }
 
 function rawAttentionOf(entry: Entry): AttentionCandidate | null {
+	if (!entry.userVisible) return null;
 	const manager = entry.session.sessionManager;
 	return deriveAttentionCandidate({
 		entries: manager.getBranch(),
@@ -351,7 +354,8 @@ async function diskAttentionRows(
 			continue;
 		}
 		const { id: sessionId, version } = file.identity;
-		if (file.identity.cwd !== cwd || sessions.has(sessionId)) continue;
+		if (!file.identity.userVisible || file.identity.cwd !== cwd || sessions.has(sessionId))
+			continue;
 		if (isAttentionDeleted(sessionId, workspaceId)) continue;
 		try {
 			rows.push({
@@ -387,7 +391,8 @@ async function migrationAttentionRows(
 		}
 		try {
 			const { id: sessionId, version } = file.identity;
-			if (file.identity.cwd !== cwd || sessions.has(sessionId)) continue;
+			if (!file.identity.userVisible || file.identity.cwd !== cwd || sessions.has(sessionId))
+				continue;
 			rows.push({
 				sessionId,
 				candidate: await diskAttentionCandidate(file.path, version),
@@ -421,7 +426,7 @@ export function listRunningSessions(): SessionRunning[] {
 	const rows: SessionRunning[] = [];
 	for (const [sessionId, entry] of sessions) {
 		if (hasDeletionTombstone(sessionId)) continue;
-		if (!entry.runningVisible || !entry.session.isStreaming) continue;
+		if (!entry.userVisible || !entry.session.isStreaming) continue;
 		const projectId = sessionProjectId(entry.workspaceId);
 		if (projectId === null) continue;
 		rows.push({ sessionId, workspaceId: entry.workspaceId, projectId });
@@ -432,7 +437,7 @@ export function listRunningSessions(): SessionRunning[] {
 export function syncSessionRunning(sessionId: string): void {
 	const entry = sessions.get(sessionId);
 	if (!entry) return;
-	const running = entry.runningVisible && entry.session.isStreaming;
+	const running = entry.userVisible && entry.session.isStreaming;
 	if (running === entry.publishedRunning) return;
 	const payload = runningPayload(sessionId, entry.workspaceId, running);
 	if (!payload) return;
@@ -447,11 +452,15 @@ function retractSessionRunning(sessionId: string, entry: Entry): void {
 	if (payload) publishRunning(payload);
 }
 
-function setSessionRunningVisible(sessionId: string, entry: Entry, visible: boolean): void {
-	if (entry.runningVisible === visible) return;
-	entry.runningVisible = visible;
+function setSessionUserVisible(sessionId: string, entry: Entry, visible: boolean): void {
+	if (entry.userVisible === visible) return;
+	entry.userVisible = visible;
+	entry.session.sessionManager.appendCustomEntry(SESSION_VISIBILITY_CUSTOM_TYPE, {
+		userVisible: visible,
+	});
 	if (visible) syncSessionRunning(sessionId);
 	else retractSessionRunning(sessionId, entry);
+	syncSessionAttention(sessionId);
 }
 
 export function syncSessionAttention(sessionId: string): void {
@@ -766,7 +775,7 @@ export interface CreateSessionInput {
 	workspaceId: string;
 	model?: WireModel;
 	thinkingLevel?: ThinkingLevel;
-	runningVisible?: boolean;
+	userVisible?: boolean;
 	/** True: an unresolvable `model` falls back to the default instead of throwing. */
 	modelOptional?: boolean;
 }
@@ -808,7 +817,7 @@ async function prepareSessionEntry(
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
 	lastSettlement: AgentSettlement | null | undefined = undefined,
-	runningVisible = true,
+	userVisible = true,
 ): Promise<PreparedSessionEntry> {
 	const { sessionId } = session;
 	let terminal: AgentSettlement | null = null;
@@ -825,7 +834,7 @@ async function prepareSessionEntry(
 		piCompactionInProgress: false,
 		registered: false,
 		subagentToolsRefreshPending: false,
-		runningVisible,
+		userVisible,
 		publishedAttentionId: null,
 		publishedRunning: false,
 		abortAttentionTurnId: undefined,
@@ -940,14 +949,21 @@ async function registerSession(
 	session: AgentSession,
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
-	options: { announceCreation?: boolean; runningVisible?: boolean } = {},
+	options: { announceCreation?: boolean; userVisible?: boolean } = {},
 ): Promise<CreateSessionResult> {
+	const persistedUserVisible = attentionSessionVisible(session.sessionManager.getEntries());
+	const userVisible = options.userVisible ?? persistedUserVisible;
+	if (!userVisible && persistedUserVisible) {
+		session.sessionManager.appendCustomEntry(SESSION_VISIBILITY_CUSTOM_TYPE, {
+			userVisible: false,
+		});
+	}
 	const prepared = await prepareSessionEntry(
 		session,
 		workspaceId,
 		generation,
 		undefined,
-		options.runningVisible,
+		userVisible,
 	);
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
@@ -987,7 +1003,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 	});
 	return registerSession(session, input.workspaceId, generation, {
 		announceCreation: true,
-		...(input.runningVisible !== undefined ? { runningVisible: input.runningVisible } : {}),
+		...(input.userVisible !== undefined ? { userVisible: input.userVisible } : {}),
 	});
 }
 
@@ -1012,6 +1028,7 @@ interface SessionFileIdentity {
 	id: string;
 	cwd: string;
 	version: number;
+	userVisible: boolean;
 }
 
 type ScannedSessionFile =
@@ -1038,31 +1055,42 @@ async function readSessionFileIdentity(path: string): Promise<SessionFileIdentit
 		const source = buffer
 			.subarray(0, Math.min(bytesRead, SESSION_HEADER_MAX_BYTES))
 			.toString("utf8");
+		let identity: Omit<SessionFileIdentity, "userVisible"> | null = null;
+		const visibilityEntries: SessionEntry[] = [];
 		for (const line of source.split("\n")) {
 			if (!line.trim()) continue;
 			let entry: unknown;
 			try {
 				entry = JSON.parse(line);
 			} catch {
-				if (bytesRead > SESSION_HEADER_MAX_BYTES && !source.includes("\n")) {
+				if (!identity && bytesRead > SESSION_HEADER_MAX_BYTES && !source.includes("\n")) {
 					throw new Error("session header exceeds the read limit");
 				}
 				continue;
 			}
-			if (typeof entry !== "object" || entry === null) {
-				throw new Error("first parsed entry is not an object");
+			if (!identity) {
+				if (typeof entry !== "object" || entry === null) {
+					throw new Error("first parsed entry is not an object");
+				}
+				const id = Reflect.get(entry, "id");
+				if (Reflect.get(entry, "type") !== "session" || typeof id !== "string") {
+					throw new Error("first parsed entry is not a session header");
+				}
+				const headerCwd = Reflect.get(entry, "cwd");
+				const headerVersion = Reflect.get(entry, "version");
+				identity = {
+					id,
+					cwd: typeof headerCwd === "string" ? headerCwd : "",
+					version: typeof headerVersion === "number" ? headerVersion : 1,
+				};
+				continue;
 			}
-			const id = Reflect.get(entry, "id");
-			if (Reflect.get(entry, "type") !== "session" || typeof id !== "string") {
-				throw new Error("first parsed entry is not a session header");
+			if (typeof entry === "object" && entry !== null && Reflect.get(entry, "type") === "custom") {
+				visibilityEntries.push(entry as SessionEntry);
 			}
-			const headerCwd = Reflect.get(entry, "cwd");
-			const headerVersion = Reflect.get(entry, "version");
-			return {
-				id,
-				cwd: typeof headerCwd === "string" ? headerCwd : "",
-				version: typeof headerVersion === "number" ? headerVersion : 1,
-			};
+		}
+		if (identity) {
+			return { ...identity, userVisible: attentionSessionVisible(visibilityEntries) };
 		}
 		throw new Error(
 			bytesRead > SESSION_HEADER_MAX_BYTES
@@ -1231,13 +1259,13 @@ async function ensureSessionAttachedInternal(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
-	runningVisible?: boolean,
+	userVisible?: boolean,
 ): Promise<boolean> {
 	if (isSessionDeleted(sessionId, workspaceId)) return false;
 	const live = sessions.get(sessionId);
 	if (live) {
 		if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
-		if (runningVisible !== undefined) setSessionRunningVisible(sessionId, live, runningVisible);
+		if (userVisible !== undefined) setSessionUserVisible(sessionId, live, userVisible);
 		return true;
 	}
 	const known = (await listSessionInfosStrict(cwd)).some(
@@ -1247,7 +1275,7 @@ async function ensureSessionAttachedInternal(
 	await attachDiskSession(sessionId, workspaceId, cwd);
 	const attached = sessions.get(sessionId);
 	if (!attached) throw new Error(`Session ${sessionId} was re-opened but did not register.`);
-	if (runningVisible !== undefined) setSessionRunningVisible(sessionId, attached, runningVisible);
+	if (userVisible !== undefined) setSessionUserVisible(sessionId, attached, userVisible);
 	return true;
 }
 
@@ -1255,9 +1283,9 @@ export function ensureSessionAttached(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
-	options: { runningVisible?: boolean } = {},
+	options: { userVisible?: boolean } = {},
 ): Promise<boolean> {
-	return ensureSessionAttachedInternal(sessionId, workspaceId, cwd, options.runningVisible);
+	return ensureSessionAttachedInternal(sessionId, workspaceId, cwd, options.userVisible);
 }
 
 async function getSessionMessagesInternal(

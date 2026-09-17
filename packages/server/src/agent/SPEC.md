@@ -138,7 +138,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     guard is present the workaround is still required; when it is gone the fix has shipped.
   - **Attention projection** (`attention.ts`) answers one binary question for every user-facing session:
     "should the person inspect or answer this chat?" It replaces the Projects rail's waiting/failed/queued
-    status vocabulary and remains independent from the ephemeral existing-icon pulse for live work.
+    status vocabulary and remains independent from the ephemeral existing-icon pulse for live work. The
+    host may mark an internal session `userVisible: false`; the manager persists that policy as a non-message
+    custom entry before work begins, and both live derivation and the bounded disk scan suppress its attention.
+    The 64 KiB header probe reads the early marker even when a long transcript tail no longer contains it.
 
     A pure derivation returns either no candidate or one opaque candidate with an internal kind:
     **blocking** for an unresolved `ask_user_question` or another host-known session-scoped blocking dialog;
@@ -215,9 +218,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     as a graceful shutdown's aborted terminal; no second in-flight crash journal is introduced.
 
   - **Live-running projection** is deliberately smaller than attention. `listRunningSessions()` reads only
-    registered, non-deleted top-level entries whose canonical `AgentSession.isStreaming` and host-supplied
-    `runningVisible` flag are both true; user-facing creation defaults visible, while reviewer/reflector
-    composition opts out. No transcript scan or persistence is involved. Per-entry publish-on-change state emits `SessionRunningPayload` true at
+    registered, non-deleted top-level entries whose canonical `AgentSession.isStreaming` and shared
+    `userVisible` policy are both true; user-facing creation defaults visible, while reviewer/reflector
+    composition opts out. No running-state scan or persistence is involved. Per-entry publish-on-change state emits `SessionRunningPayload` true at
     `agent_start` and false at `agent_settled` (or teardown), using the same workspace→project resolver as
     attention. Queued messages and delegated child registries are outside this projection. The client owns
     exact-chat and workspace/project rollups; the agent owns only truthful live membership.

@@ -8,6 +8,7 @@ import {
 	deriveAttentionCandidate,
 	deriveDiskAttentionCandidate,
 	parseAttentionEntries,
+	SESSION_VISIBILITY_CUSTOM_TYPE,
 } from "./attention";
 
 function message(id: string, parentId: string | null, value: AgentMessage): SessionEntry {
@@ -165,6 +166,20 @@ test("running and queued sessions stay quiet while aborted/toolUse/unfinished se
 	expect(
 		deriveDiskAttentionCandidate([user(), assistant("legacy-done", "user-1", undefined)]),
 	).toBeNull();
+});
+
+test("a persisted internal-session marker suppresses attention", () => {
+	const userEntry = user();
+	const done = assistant("assistant-1", userEntry.id, "stop");
+	const hidden: SessionEntry = {
+		type: "custom",
+		id: "visibility-1",
+		parentId: done.id,
+		timestamp: "2026-01-01T00:00:03.000Z",
+		customType: SESSION_VISIBILITY_CUSTOM_TYPE,
+		data: { userVisible: false },
+	};
+	expect(deriveDiskAttentionCandidate([userEntry, done, hidden])).toBeNull();
 });
 
 test("a live review candidate requires an observed final settlement", () => {

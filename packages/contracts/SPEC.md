@@ -573,7 +573,8 @@ no activity types, derivation, or push channel. An already-loaded old client tre
 activity-capable and calls that method on reconnect; the empty authoritative result is what clears its old
 markers instead of stranding them forever.
 
-`ATTENTION_PROTOCOL_VERSION` pins the coordinated replacement. A new client connected to an older host
+`ATTENTION_PROTOCOL_VERSION` pins the coordinated replacement at v66. Protocol v65 belongs to the earlier
+analytics-consent addition and has no attention methods; a new client connected to that or any older host
 clears its attention map and renders no dot rather than reviving the old multi-state language.
 
 ## The live-running layer
