@@ -14,12 +14,11 @@ degrade when answers don't come. Process skills name this concept at the steps t
 - One call = one **round**: one or more questions with no fixed per-round maximum, 2–4 options each.
   Group everything the current step needs into a single round — never chain a second call straight
   after for a trivial follow-up.
-- **The call ends your turn.** The questionnaire is shown and your run stops; the answers arrive as the
-  next user message (a structured "User has answered your questions:" message). Don't keep working on
-  the blocked step after calling, and don't assume an answer until it arrives — whether that is seconds
-  later or days later.
-- If the user replies with a free-form message instead of answering the card, that reply **supersedes**
-  the round — treat it as their answer, and re-ask only what is still genuinely undecided.
+- **The call blocks the current run.** The questionnaire is shown and the answers arrive as this tool's
+  result. Don't keep working on the blocked step or assume an answer until it arrives — whether that is
+  seconds later or days later.
+- The user answers or skips through the card. Composer messages sent while it is open queue behind the
+  blocking tool; they neither answer nor supersede the round.
 - Resolve the round, act on what you learned, and open a new round only when the answers raised a
   genuinely new question.
 

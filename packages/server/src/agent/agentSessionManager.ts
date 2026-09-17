@@ -59,6 +59,7 @@ import {
 	assessAnswerability,
 	buildAnswersMessage,
 	createAskUserQuestionWaiters,
+	hasQuestionAck,
 } from "./askUserQuestion";
 import {
 	disposeSessionChildren,
@@ -161,7 +162,7 @@ function effectivePendingCount(entry: Entry): number {
 function activityOf(entry: Entry): ActivityStatus | null {
 	return deriveActivityStatus({
 		isStreaming: entry.session.isStreaming,
-		hasPendingQuestion: entry.askUserQuestionWaiters.hasPending(),
+		hasPendingQuestion: entry.askUserQuestionWaiters.isWaitingForAnswer(),
 		pendingMessageCount: effectivePendingCount(entry),
 		messages: entry.session.messages,
 		lastSettlement: entry.lastSettlement,
@@ -530,8 +531,17 @@ async function prepareSessionEntry(
 	const seededRecencyMs = messagesActivityMs(session.messages);
 	if (seededRecencyMs !== null) entry.lastActivityMs = seededRecencyMs;
 	entry.unsubscribe = session.subscribe((event) => {
-		if (event.type === "tool_execution_start" && event.toolName === ASK_USER_QUESTION_TOOL_NAME)
-			entry.askUserQuestionWaiters.expect(event.toolCallId);
+		if (
+			event.type === "message_end" &&
+			event.message.role === "assistant" &&
+			event.message.stopReason !== "error" &&
+			event.message.stopReason !== "aborted"
+		) {
+			for (const block of event.message.content) {
+				if (block.type === "toolCall" && block.name === ASK_USER_QUESTION_TOOL_NAME)
+					entry.askUserQuestionWaiters.expect(block.id);
+			}
+		}
 		if (event.type === "turn_end") entry.askUserQuestionWaiters.persistTurn(event.toolResults);
 		if (event.type === "message_start" && event.message.role === "user") {
 			const lane = deliveredStuckEmptyLane(entry, event.message.content);
@@ -1018,6 +1028,9 @@ export async function answerQuestion(
 	}
 	const verdict = assessAnswerability(entry.session.messages, toolCallId);
 	if (!verdict.ok) throw new Error(`${ANSWERABILITY_ERRORS[verdict.reason]}: ${toolCallId}`);
+	if (!hasQuestionAck(entry.session.messages, toolCallId)) {
+		throw new Error(`${ANSWERABILITY_ERRORS.not_awaiting}: ${toolCallId}`);
+	}
 	await entry.session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
 		triggerTurn: true,
 	});
@@ -1433,7 +1446,7 @@ export function disposeAllSessions(): void {
 export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void> {
 	const settling = new Set<Promise<unknown>>();
 	for (const [sessionId, entry] of sessions) {
-		if (entry.session.isStreaming && !entry.askUserQuestionWaiters.hasPending())
+		if (entry.session.isStreaming && !entry.askUserQuestionWaiters.hasActiveCall())
 			settling.add(entry.session.abort());
 		settling.add(
 			trackCascade(

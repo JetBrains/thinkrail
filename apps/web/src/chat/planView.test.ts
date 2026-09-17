@@ -104,9 +104,10 @@ test("planSummary spans loose + groups and surfaces the current step", () => {
 	expect(summary.current?.title).toBe("a");
 });
 
-const asked = (answered: boolean, superseded = false): AskState => ({
+const asked = (answered: boolean, superseded = false, terminal = false): AskState => ({
 	...(answered ? { answer: { answers: [], cancelled: false } } : {}),
 	superseded,
+	terminal,
 });
 
 test("planGlance: an awaiting question wins even while its live tool blocks the run", () => {
@@ -116,6 +117,7 @@ test("planGlance: an awaiting question wins even while its live tool blocks the 
 	expect(planGlance(false, { q1: asked(false) })).toBe("waiting_question");
 	expect(planGlance(false, { q1: asked(true) })).toBe("waiting");
 	expect(planGlance(false, { q1: asked(false, true) })).toBe("waiting");
+	expect(planGlance(false, { q1: asked(false, false, true) })).toBe("waiting");
 });
 
 test("shouldNudgeOnAdd: never wake an agent waiting on a question; wake it otherwise", () => {
@@ -134,13 +136,23 @@ test("sessionGlance derives the glance straight from a runtime (deriveAskStates 
 			content: [{ type: "toolCall", id: "q1", name: "ask_user_question", arguments: {} }],
 		} as unknown as AssistantMessage,
 	};
-	expect(sessionGlance({ isStreaming: true, turns: [askTurn], askAnswers: {} })).toBe(
-		"waiting_question",
+	expect(
+		sessionGlance({ isStreaming: true, turns: [askTurn], askAnswers: {}, toolResults: {} }),
+	).toBe("waiting_question");
+	expect(
+		sessionGlance({ isStreaming: false, turns: [askTurn], askAnswers: {}, toolResults: {} }),
+	).toBe("waiting_question");
+	expect(sessionGlance({ isStreaming: false, turns: [], askAnswers: {}, toolResults: {} })).toBe(
+		"waiting",
 	);
-	expect(sessionGlance({ isStreaming: false, turns: [askTurn], askAnswers: {} })).toBe(
-		"waiting_question",
-	);
-	expect(sessionGlance({ isStreaming: false, turns: [], askAnswers: {} })).toBe("waiting");
+	expect(
+		sessionGlance({
+			isStreaming: false,
+			turns: [askTurn],
+			askAnswers: {},
+			toolResults: { q1: { status: "error", raw: {} } },
+		}),
+	).toBe("waiting");
 });
 
 test("itemChangeSet: the LATEST resolvable commit wins; live change paths (a fallback redo) win over commits", () => {

@@ -307,11 +307,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   append-only refresh preserves row identity and manual folds instead of remounting the transcript.
   Works during the run, after completion, and after a host restart (transcripts persist on disk; only
   the in-memory registry is lost — and its absence is precisely what stops the polling).
-- **`askState`** — the questionnaire lifecycle seam: the pure `deriveAskStates(turns, askAnswers)` +
-  `AskStatesContext`/`useAskState` (provided by `ChatView`, `null` standalone). The ask tool is **ack +
-  terminate** (its tool result is just an ack; the reply arrives later as an `ask-user-answers` message),
-  so "answered / superseded / awaiting" is a fact about the transcript, not a tool status — derived once
-  per runtime snapshot and consumed by the card via context, keeping it props-driven everywhere else.
+- **`askState`** — the questionnaire lifecycle seam: the pure
+  `deriveAskStates(turns, askAnswers, toolResults)` + `AskStatesContext`/`useAskState` (provided by
+  `ChatView`, `null` standalone). A live blocking ask resolves through its native tool result; a
+  restart-repaired ack resolves later through `ask-user-answers`; a stopped/error result is terminal.
+  "Answered / superseded / stopped / awaiting" is therefore derived once from all three transcript
+  projections and consumed by the card and plan glance, keeping both props-driven everywhere else.
   The same seam supplies an opaque **per-mounted-ChatView focus scope**: an awaiting card claims attention
   once within that scope (so Virtuoso remounts cannot steal focus), while a fresh mount creates a new scope
   and may focus the still-pending question again. "Fresh mount" is broader than closing/reopening the chat:

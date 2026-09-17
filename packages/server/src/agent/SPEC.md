@@ -342,7 +342,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     is provider-valid;
     **`answerQuestion(sessionId, toolCallId, result)`** — the `ask_user_question` reply path (see the
     `askUserQuestion` bullet); **`settleSessionsForShutdown(timeoutMs)`** — the polite half of shutdown:
-    abort every streaming parent except one blocked on a live ask waiter, dispose every hidden child
+    abort every streaming parent except one with an active live ask call (unanswered or answered but not
+    yet persisted), dispose every hidden child
     (including background children whose parent is idle), include cascades already pending from concurrent
     removal, and wait for all of them under the one bound. A waiting ask is deliberately left dangling for
     ack repair on the next attach; explicit user Stop is the path that persists its terminal abort result.
@@ -446,12 +447,17 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   - `askUserQuestion` — the host-owned **`ask_user_question`** pi custom tool, registered per session with
     a session-bound waiter registry. A valid live call is **sequential and blocking**: after validation its
     `execute` waits for `session.answerQuestion`, then returns the person's real
-    `AskUserQuestionResult`/`buildQuestionnaireResponse` as the native tool result. Pi therefore retains
-    ordinary steering/follow-up queues and cannot cross the tool boundary before the answer. The answer RPC
+    `AskUserQuestionResult`/`buildQuestionnaireResponse` as the native tool result. A `message_end`
+    normalizer makes the first ask the assistant response's sole tool call (non-tool content stays; sibling
+    calls are dropped for the model to re-issue after the answer), avoiding Pi's sequential-abort hole where
+    unexecuted siblings receive no result. An ask inside an errored/aborted assistant is terminal and never
+    registers a waiter; every expected call Pi does not execute is cleared at `turn_end`. Pi therefore
+    retains ordinary steering/follow-up queues and cannot cross the tool boundary before the answer. The answer RPC
     resolves the waiter and acknowledges only after the matching result reaches the persisted `turn_end`
-    boundary. Explicit Stop drains the queue, aborts the waiter with a stable stopped error, and leaves a
-    terminal provider-valid result. The question array has **no tool-level maximum**: one round carries
-    every question needed for the current decision, while each question retains the 2–4 option bound.
+    boundary. Explicit Stop drains the queue and aborts an unanswered waiter with a stable stopped error;
+    once Submit has been accepted, that answer wins and Stop only ends the continuation. Either ordering
+    leaves one terminal provider-valid result. The question array has **no tool-level maximum**: one round
+    carries every question needed for the current decision, while each question retains the 2–4 option bound.
 
     A process restart deliberately changes only the continuation mechanism: the attach-time dangling-call
     repair writes the canonical ack (`details {kind:"ack"}`) before `createAgentSession`, leaving the card

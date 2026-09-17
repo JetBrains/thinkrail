@@ -831,6 +831,8 @@ test("getSessionStats + getSessionCommands read live session info (cheap wins #3
 
 test("a live question blocks continuation, preserves queue order, and acknowledges after its native result persists", async () => {
 	setActivityProjectResolver(() => "project-live-question");
+	const activityStatuses: (ActivityStatus | null)[] = [];
+	setSessionActivityPublisher(({ status }) => activityStatuses.push(status));
 	const toolCallId = "live-question";
 	const question = {
 		questions: [
@@ -877,12 +879,13 @@ test("a live question blocks continuation, preserves queue order, and acknowledg
 			await new Promise((resolve) => setTimeout(resolve, 5));
 		}
 		expect(seen(session.sessionId)).toContain('"toolName":"ask_user_question"');
-		await steerSession(session.sessionId, "QUEUED_WHILE_ASKING");
-		await Promise.resolve();
-		expect(continuationCalls).toBe(0);
 		expect(
 			(await listSessionActivity()).find((row) => row.sessionId === session.sessionId)?.status,
 		).toBe("waiting");
+		expect(activityStatuses).toContain("waiting");
+		await steerSession(session.sessionId, "QUEUED_WHILE_ASKING");
+		await Promise.resolve();
+		expect(continuationCalls).toBe(0);
 
 		const result: AskUserQuestionResult = {
 			cancelled: false,
@@ -916,6 +919,7 @@ test("a live question blocks continuation, preserves queue order, and acknowledg
 	} finally {
 		releaseContinuation();
 		removeSession(session.sessionId);
+		setSessionActivityPublisher(() => {});
 		setActivityProjectResolver(() => null);
 	}
 });
@@ -1024,7 +1028,9 @@ test("explicit Stop restores both queues and persists a terminal ask error", asy
 		await steerSession(session.sessionId, "RESTORED_STEER");
 		await followUpSession(session.sessionId, "RESTORED_FOLLOW_UP");
 
-		expect(await abortSession(session.sessionId, true)).toEqual({
+		const stopping = abortSession(session.sessionId, true);
+		await settleSessionsForShutdown(1000);
+		expect(await stopping).toEqual({
 			steering: [{ text: "RESTORED_STEER" }],
 			followUp: [{ text: "RESTORED_FOLLOW_UP" }],
 		});
@@ -1092,6 +1098,7 @@ test("graceful settling leaves a live question dangling for restart ack repair",
 		).toBe(true);
 
 		disposeAllSessions();
+		await prompting;
 		expect(await ensureSessionAttached(session.sessionId, "ws-shutdown-question", cwd)).toBe(true);
 		const transcript = await getSessionMessages(session.sessionId, "ws-shutdown-question", cwd);
 		const repaired = transcript.messages.find(

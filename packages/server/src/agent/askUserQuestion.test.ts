@@ -12,10 +12,13 @@ import {
 	ASK_STOPPED_ERROR,
 	AskUserQuestionSchema,
 	assessAnswerability,
+	awaitingQuestionToolCallId,
 	buildAnswersMessage,
 	buildQuestionnaireResponse,
 	createAskUserQuestionTool,
 	createAskUserQuestionWaiters,
+	hasQuestionAck,
+	isolateAskUserQuestionBatch,
 	validateQuestionnaire,
 } from "./askUserQuestion";
 
@@ -47,10 +50,15 @@ const run = (hasUI = true, params: AskUserQuestionArgs = args()) =>
 		ctx(hasUI),
 	);
 
-const askCall = (toolCallId: string, a: AskUserQuestionArgs = args()) =>
+const askCall = (
+	toolCallId: string,
+	a: AskUserQuestionArgs = args(),
+	stopReason: string = "toolUse",
+) =>
 	({
 		role: "assistant",
 		content: [{ type: "toolCall", id: toolCallId, name: "ask_user_question", arguments: a }],
+		stopReason,
 	}) as unknown as AgentMessage;
 
 const ackResult = (toolCallId: string) =>
@@ -213,6 +221,25 @@ test("buildQuestionnaireResponse: a multi answer's typed free text is marked as 
 	expect(r.content[0]?.text).toContain('user\'s own answer: "some-other-lib"');
 });
 
+test("an ask call becomes the only tool in its assistant batch", () => {
+	const message = {
+		role: "assistant",
+		content: [
+			{ type: "text", text: "I need input." },
+			{ type: "toolCall", id: "read-1", name: "read", arguments: {} },
+			{ type: "toolCall", id: "ask-1", name: "ask_user_question", arguments: args() },
+			{ type: "toolCall", id: "ask-2", name: "ask_user_question", arguments: args() },
+			{ type: "toolCall", id: "bash-1", name: "bash", arguments: {} },
+		],
+	} as unknown as AgentMessage;
+	const isolated = isolateAskUserQuestionBatch(message);
+	expect(isolated?.role).toBe("assistant");
+	if (isolated?.role !== "assistant") throw new Error("assistant batch was not isolated");
+	expect(
+		isolated.content.filter((block) => block.type === "toolCall").map((block) => block.id),
+	).toEqual(["ask-1"]);
+});
+
 test("a valid live execution is sequential, blocks for its answer, and returns the real result", async () => {
 	const waiters = createAskUserQuestionWaiters();
 	const tool = createAskUserQuestionTool(waiters);
@@ -226,6 +253,8 @@ test("a valid live execution is sequential, blocks for its answer, and returns t
 		});
 	await Promise.resolve();
 	expect(settled).toBe(false);
+	expect(waiters.isWaitingForAnswer()).toBe(true);
+	expect(waiters.hasActiveCall()).toBe(true);
 
 	const result: AskUserQuestionResult = {
 		cancelled: false,
@@ -233,12 +262,15 @@ test("a valid live execution is sequential, blocks for its answer, and returns t
 	};
 	const answered = waiters.answer("tc-1", result);
 	expect(answered.handled).toBe(true);
+	expect(waiters.isWaitingForAnswer()).toBe(false);
+	expect(waiters.hasActiveCall()).toBe(true);
 	const response = await pending;
 	expect(textOf(response)).toContain('"Which library?"="luxon"');
 	expect(response.details).toEqual(result);
 	expect((response as { terminate?: boolean }).terminate).toBeUndefined();
 	waiters.persistTurn([{ toolCallId: "tc-1", toolName: "ask_user_question" }]);
 	if (answered.handled) await answered.persisted;
+	expect(waiters.hasActiveCall()).toBe(false);
 });
 
 test("an answer arriving after tool_execution_start but before execute is retained", async () => {
@@ -260,6 +292,98 @@ test("an answer arriving after tool_execution_start but before execute is retain
 	expect(response.details).toEqual(result);
 	waiters.persistTurn([{ toolCallId: "tc-early", toolName: "ask_user_question" }]);
 	if (answered.handled) await answered.persisted;
+});
+
+test("an early answer wins even if Stop reaches the tool before execute starts", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	const controller = new AbortController();
+	waiters.expect("tc-early-stop");
+	const result: AskUserQuestionResult = {
+		cancelled: false,
+		answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" }],
+	};
+	const answered = waiters.answer("tc-early-stop", result);
+	controller.abort();
+	const response = await createAskUserQuestionTool(waiters).execute(
+		"tc-early-stop",
+		args() as never,
+		controller.signal,
+		undefined,
+		ctx(),
+	);
+	expect(response.details).toEqual(result);
+	waiters.persistTurn([{ toolCallId: "tc-early-stop", toolName: "ask_user_question" }]);
+	if (answered.handled) await answered.persisted;
+});
+
+test("turn_end clears an expected call that Pi never executed", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	waiters.expect("tc-skipped");
+	const answered = waiters.answer("tc-skipped", { answers: [], cancelled: true });
+	waiters.persistTurn([]);
+	expect(waiters.hasActiveCall()).toBe(false);
+	if (answered.handled) await expect(answered.persisted).rejects.toThrow("not awaiting an answer");
+});
+
+test("abandon rejects an accepted answer's uncommitted persistence wait", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	const pending = createAskUserQuestionTool(waiters).execute(
+		"tc-dispose",
+		args() as never,
+		undefined,
+		undefined,
+		ctx(),
+	);
+	await Promise.resolve();
+	const answered = waiters.answer("tc-dispose", { answers: [], cancelled: true });
+	expect(answered.handled).toBe(true);
+	await pending;
+	waiters.abandon();
+	if (answered.handled)
+		await expect(answered.persisted).rejects.toThrow(
+			"Session disposed while waiting for a question",
+		);
+});
+
+test("an accepted answer wins over a later Stop before its result boundary", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	const controller = new AbortController();
+	const pending = createAskUserQuestionTool(waiters).execute(
+		"tc-answer-wins",
+		args() as never,
+		controller.signal,
+		undefined,
+		ctx(),
+	);
+	await Promise.resolve();
+	const result: AskUserQuestionResult = {
+		cancelled: false,
+		answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" }],
+	};
+	const answered = waiters.answer("tc-answer-wins", result);
+	controller.abort();
+	expect((await pending).details).toEqual(result);
+	waiters.persistTurn([{ toolCallId: "tc-answer-wins", toolName: "ask_user_question" }]);
+	if (answered.handled) await answered.persisted;
+});
+
+test("Stop remains terminal until turn_end and rejects a late answer", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	const controller = new AbortController();
+	const pending = createAskUserQuestionTool(waiters).execute(
+		"tc-stop-first",
+		args() as never,
+		controller.signal,
+		undefined,
+		ctx(),
+	);
+	await Promise.resolve();
+	controller.abort();
+	expect(() => waiters.answer("tc-stop-first", { answers: [], cancelled: true })).toThrow(
+		"not awaiting an answer",
+	);
+	await expect(pending).rejects.toThrow(ASK_STOPPED_ERROR);
+	waiters.persistTurn([{ toolCallId: "tc-stop-first", toolName: "ask_user_question" }]);
 });
 
 test("a live waiter rejects with the stable stopped result when Pi aborts", async () => {
@@ -292,9 +416,22 @@ test("execute returns a validation error (non-terminating) for a malformed quest
 });
 
 test("assessAnswerability: an ack'd, unanswered call is answerable and yields its args", () => {
-	const verdict = assessAnswerability([askCall("tc"), ackResult("tc")], "tc");
+	const messages = [askCall("tc"), ackResult("tc")];
+	const verdict = assessAnswerability(messages, "tc");
+	expect(hasQuestionAck(messages, "tc")).toBe(true);
 	expect(verdict.ok).toBe(true);
 	if (verdict.ok) expect(verdict.args.questions[0]?.question).toBe("Which library?");
+});
+
+test("assessAnswerability: a call from an errored or aborted assistant is terminal", () => {
+	for (const stopReason of ["error", "aborted"]) {
+		const messages = [askCall("tc-dead", args(), stopReason)];
+		expect(assessAnswerability(messages, "tc-dead")).toEqual({
+			ok: false,
+			reason: "not_awaiting",
+		});
+		expect(awaitingQuestionToolCallId(messages)).toBeNull();
+	}
 });
 
 test("assessAnswerability: an unknown tool call id is rejected", () => {

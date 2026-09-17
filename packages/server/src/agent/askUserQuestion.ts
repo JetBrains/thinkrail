@@ -81,18 +81,20 @@ const DESCRIPTION = `Ask the user one or more structured, multiple-choice questi
 1. The request is underspecified and you cannot proceed without a concrete decision.
 2. You need a user preference, requirement, or a direction/implementation choice.
 
-Calling this tool PAUSES EXECUTION until the user answers: the questions render inline in the chat as an interactive card (tabs when there are several), and the user's answers arrive as this tool's result. Do not continue working on the blocked task or assume an answer while the tool is pending. If the user replies with a free-form message instead of using the card, treat that message as their reply and re-ask only what is still genuinely undecided. Notes:
+Calling this tool PAUSES EXECUTION until the user answers: the questions render inline in the chat as an interactive card (tabs when there are several), and the user's answers arrive as this tool's result. Do not continue working on the blocked task or assume an answer while the tool is pending. The user answers or skips through the card; composer messages sent meanwhile queue behind the question and do not resolve it. Notes:
 - Every question also gets an "Other" option with a free-text field, and the user can always Skip the whole questionnaire (you are told they declined) — do NOT author "Other"-style, free-text, or escape options yourself (reserved labels are rejected).
 - Set multiSelect: true when several answers are valid; the user may combine checked options with their own typed answer.
 - If you recommend one option, make it FIRST, append "(Recommended)" to its label, and set its recommendedReason to one short sentence on why you recommend it over the alternatives (shown inline under the option).
 - Use options[].preview (markdown) for concrete artifacts to compare side-by-side (code, ASCII mockups, configs). Single-select only.
 - Group all clarifying questions into ONE call — do not chain calls back-to-back.
+- Call ask_user_question as the only tool in the assistant response; other tool calls in that response are discarded and can be re-issued after the answer.
 - The user may answer only some questions; unanswered ones are reported as declined.`;
 
 const PROMPT_GUIDELINES = [
 	`Call ask_user_question whenever the request is ambiguous and a concrete decision is needed — include every question needed in one call, with ${MIN_OPTIONS}-${MAX_OPTIONS} options each. The call blocks until its result contains the user's answers.`,
 	"Every option needs a concise label (1-5 words) and a description of what it means / its trade-off.",
 	'Recommend by putting the option first with "(Recommended)" appended and setting its recommendedReason to one short sentence (shown inline under the option) on why you recommend it over the alternatives; the user can always type a custom answer or skip the questionnaire.',
+	"Call ask_user_question as the only tool in the assistant response; continue with other tools after the answer.",
 ];
 
 const ERROR_NO_UI = "Error: UI not available (running in non-interactive mode)";
@@ -198,6 +200,7 @@ interface MessageView {
 	content?: unknown;
 	details?: unknown;
 	toolCallId?: string;
+	stopReason?: string;
 }
 
 function toolCallsOf(message: MessageView): ToolCallView[] {
@@ -219,6 +222,7 @@ export function assessAnswerability(
 ): Answerability {
 	const views = messages as readonly MessageView[];
 	let callIndex = -1;
+	let callDead = false;
 	let args: AskUserQuestionArgs | null = null;
 	for (let i = 0; i < views.length; i++) {
 		const view = views[i];
@@ -226,11 +230,13 @@ export function assessAnswerability(
 		for (const block of toolCallsOf(view)) {
 			if (block.id === toolCallId && block.name === ASK_USER_QUESTION_TOOL_NAME) {
 				callIndex = i;
+				callDead = view.stopReason === "error" || view.stopReason === "aborted";
 				args = (block.arguments ?? { questions: [] }) as AskUserQuestionArgs;
 			}
 		}
 	}
 	if (callIndex < 0 || !args) return { ok: false, reason: "unknown_call" };
+	if (callDead) return { ok: false, reason: "not_awaiting" };
 
 	for (let i = callIndex + 1; i < views.length; i++) {
 		const view = views[i];
@@ -242,6 +248,15 @@ export function assessAnswerability(
 		if (view.role === "user") return { ok: false, reason: "superseded" };
 	}
 	return { ok: true, args };
+}
+
+export function hasQuestionAck(messages: readonly AgentMessage[], toolCallId: string): boolean {
+	return (messages as readonly MessageView[]).some(
+		(message) =>
+			message.role === "toolResult" &&
+			message.toolCallId === toolCallId &&
+			isAckDetails(message.details),
+	);
 }
 
 export function awaitingQuestionToolCallId(messages: readonly AgentMessage[]): string | null {
@@ -285,11 +300,16 @@ export const ASK_USER_QUESTION_TOOL_NAME = "ask_user_question";
 
 export const ASK_STOPPED_ERROR = "Question cancelled because the run was stopped";
 
+export type AskUserQuestionWaitOutcome =
+	| { kind: "answer"; result: AskUserQuestionResult }
+	| { kind: "abandoned" };
+
 interface LiveQuestionWaiter {
 	waitStarted: boolean;
+	stopped: boolean;
 	answer: AskUserQuestionResult | undefined;
-	answerPromise: Promise<AskUserQuestionResult>;
-	resolveAnswer: (result: AskUserQuestionResult) => void;
+	answerPromise: Promise<AskUserQuestionWaitOutcome>;
+	resolveAnswer: (outcome: AskUserQuestionWaitOutcome) => void;
 	rejectAnswer: (error: Error) => void;
 	persisted: Promise<void>;
 	resolvePersisted: () => void;
@@ -298,9 +318,9 @@ interface LiveQuestionWaiter {
 }
 
 function createLiveQuestionWaiter(): LiveQuestionWaiter {
-	let resolveAnswer: (result: AskUserQuestionResult) => void = () => {};
+	let resolveAnswer: (outcome: AskUserQuestionWaitOutcome) => void = () => {};
 	let rejectAnswer: (error: Error) => void = () => {};
-	const answerPromise = new Promise<AskUserQuestionResult>((resolve, reject) => {
+	const answerPromise = new Promise<AskUserQuestionWaitOutcome>((resolve, reject) => {
 		resolveAnswer = resolve;
 		rejectAnswer = reject;
 	});
@@ -312,6 +332,7 @@ function createLiveQuestionWaiter(): LiveQuestionWaiter {
 	});
 	return {
 		waitStarted: false,
+		stopped: false,
 		answer: undefined,
 		answerPromise,
 		resolveAnswer,
@@ -325,13 +346,14 @@ function createLiveQuestionWaiter(): LiveQuestionWaiter {
 
 export interface AskUserQuestionWaiters {
 	expect(toolCallId: string): void;
-	wait(toolCallId: string, signal: AbortSignal | undefined): Promise<AskUserQuestionResult>;
+	wait(toolCallId: string, signal: AbortSignal | undefined): Promise<AskUserQuestionWaitOutcome>;
 	answer(
 		toolCallId: string,
 		result: AskUserQuestionResult,
 	): { handled: false } | { handled: true; persisted: Promise<void> };
 	persistTurn(toolResults: readonly { toolCallId: string; toolName: string }[]): void;
-	hasPending(): boolean;
+	isWaitingForAnswer(): boolean;
+	hasActiveCall(): boolean;
 	abandon(): void;
 }
 
@@ -356,18 +378,15 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 			}
 			waiter.waitStarted = true;
 			if (signal?.aborted) {
-				waiting.delete(toolCallId);
-				const error = new Error(ASK_STOPPED_ERROR);
-				waiter.rejectAnswer(error);
-				if (waiter.answer !== undefined) waiter.rejectPersisted(error);
+				if (waiter.answer !== undefined) return waiter.answerPromise;
+				waiter.stopped = true;
+				waiter.rejectAnswer(new Error(ASK_STOPPED_ERROR));
 				return waiter.answerPromise;
 			}
 			const abort = (): void => {
-				if (waiting.get(toolCallId) !== waiter) return;
-				waiting.delete(toolCallId);
-				const error = new Error(ASK_STOPPED_ERROR);
-				waiter.rejectAnswer(error);
-				if (waiter.answer !== undefined) waiter.rejectPersisted(error);
+				if (waiting.get(toolCallId) !== waiter || waiter.answer !== undefined) return;
+				waiter.stopped = true;
+				waiter.rejectAnswer(new Error(ASK_STOPPED_ERROR));
 			};
 			signal?.addEventListener("abort", abort, { once: true });
 			waiter.cleanupAbort = () => signal?.removeEventListener("abort", abort);
@@ -376,11 +395,14 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 		answer(toolCallId, result) {
 			const waiter = waiting.get(toolCallId);
 			if (!waiter) return { handled: false };
+			if (waiter.stopped) {
+				throw new Error(`This questionnaire is not awaiting an answer: ${toolCallId}`);
+			}
 			if (waiter.answer !== undefined) {
 				throw new Error(`This questionnaire was already answered: ${toolCallId}`);
 			}
 			waiter.answer = result;
-			waiter.resolveAnswer(result);
+			waiter.resolveAnswer({ kind: "answer", result });
 			return { handled: true, persisted: waiter.persisted };
 		},
 		persistTurn(toolResults) {
@@ -397,15 +419,44 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 						new Error(`This questionnaire is not awaiting an answer: ${result.toolCallId}`),
 					);
 			}
+			for (const [toolCallId, waiter] of waiting) {
+				if (waiter.waitStarted) continue;
+				waiting.delete(toolCallId);
+				waiter.cleanupAbort();
+				if (waiter.answer !== undefined)
+					waiter.rejectPersisted(
+						new Error(`This questionnaire is not awaiting an answer: ${toolCallId}`),
+					);
+			}
 		},
-		hasPending() {
-			return waiting.size > 0;
+		isWaitingForAnswer() {
+			return [...waiting.values()].some((waiter) => waiter.answer === undefined && !waiter.stopped);
+		},
+		hasActiveCall() {
+			return [...waiting.values()].some((waiter) => waiter.waitStarted && !waiter.stopped);
 		},
 		abandon() {
-			for (const waiter of waiting.values()) waiter.cleanupAbort();
+			const error = new Error("Session disposed while waiting for a question");
+			for (const waiter of waiting.values()) {
+				waiter.cleanupAbort();
+				if (waiter.waitStarted) waiter.resolveAnswer({ kind: "abandoned" });
+				if (waiter.answer !== undefined) waiter.rejectPersisted(error);
+			}
 			waiting.clear();
 		},
 	};
+}
+
+export function isolateAskUserQuestionBatch(message: AgentMessage): AgentMessage | undefined {
+	if (message.role !== "assistant") return undefined;
+	const askIndex = message.content.findIndex(
+		(block) => block.type === "toolCall" && block.name === ASK_USER_QUESTION_TOOL_NAME,
+	);
+	if (askIndex < 0) return undefined;
+	const content = message.content.filter(
+		(block, index) => block.type !== "toolCall" || index === askIndex,
+	);
+	return content.length === message.content.length ? undefined : { ...message, content };
 }
 
 export function createAskUserQuestionTool(
@@ -425,7 +476,14 @@ export function createAskUserQuestionTool(
 			const validation = validateQuestionnaire(args);
 			if (!validation.ok) return toolResult(validation.message, { answers: [], cancelled: true });
 
-			return buildQuestionnaireResponse(await waiters.wait(toolCallId, signal), args);
+			const outcome = await waiters.wait(toolCallId, signal);
+			if (outcome.kind === "abandoned") {
+				return {
+					...toolResult(ASK_STOPPED_ERROR, { answers: [], cancelled: true }),
+					terminate: true,
+				};
+			}
+			return buildQuestionnaireResponse(outcome.result, args);
 		},
 	};
 }
@@ -433,5 +491,11 @@ export function createAskUserQuestionTool(
 export function askUserQuestionExtension(
 	waiters: AskUserQuestionWaiters,
 ): (pi: ExtensionAPI) => void {
-	return (pi) => pi.registerTool(createAskUserQuestionTool(waiters));
+	return (pi) => {
+		pi.on("message_end", (event) => {
+			const message = isolateAskUserQuestionBatch(event.message);
+			return message ? { message } : undefined;
+		});
+		pi.registerTool(createAskUserQuestionTool(waiters));
+	};
 }

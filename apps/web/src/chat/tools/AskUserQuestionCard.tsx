@@ -14,11 +14,13 @@ import type {
 } from "@thinkrail/contracts";
 import { Fragment, type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib";
-import { useAskFocusScope, useAskState } from "../askState";
+import { readAskResult, useAskFocusScope, useAskState } from "../askState";
 import { useChatActions } from "../ChatActions";
 import { Markdown } from "../Markdown";
 import type { ToolRenderProps } from "../toolRegistry";
 import { resultText } from "./toolHelpers";
+
+export { readAskResult } from "../askState";
 
 export function parseQuestions(args: Record<string, unknown>): AskUserQuestionItem[] {
 	const qs = (args as Partial<AskUserQuestionArgs>).questions;
@@ -117,18 +119,6 @@ export function deriveAnswers(
 export function answerSupportsNote(answer: AskUserQuestionAnswer): boolean {
 	if (answer.kind === "option") return true;
 	return answer.kind === "multi" && (answer.selected?.length ?? 0) > 0;
-}
-
-export function readAskResult(raw: unknown): AskUserQuestionResult | null {
-	const isResult = (v: unknown): v is AskUserQuestionResult =>
-		!!v &&
-		typeof v === "object" &&
-		Array.isArray((v as AskUserQuestionResult).answers) &&
-		typeof (v as AskUserQuestionResult).cancelled === "boolean";
-	if (raw && typeof raw === "object" && isResult((raw as { details?: unknown }).details)) {
-		return (raw as { details: AskUserQuestionResult }).details;
-	}
-	return isResult(raw) ? raw : null;
 }
 
 interface RecapState {
@@ -351,7 +341,7 @@ export function AskUserQuestionCard({
 	const cardRef = useRef<HTMLElement>(null);
 	const questions = useMemo(() => parseQuestions(args), [args]);
 	const resolvedResult = ask?.answer ?? readAskResult(result);
-	const awaiting = !resolvedResult && !ask?.superseded && status !== "error";
+	const awaiting = !resolvedResult && !ask?.superseded && !ask?.terminal && status !== "error";
 	const [states, setStates] = useState<Record<number, QState>>(
 		() => cardStateCache.get(toolCallId)?.states ?? {},
 	);
