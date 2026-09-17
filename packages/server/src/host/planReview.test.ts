@@ -20,6 +20,7 @@ import {
 	toWireModel,
 } from "../agent";
 import { createRequestReviewTool } from "../agent/requestReviewTool";
+import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
 import { saveWorkspaces } from "../persistence";
 import * as reviews from "../reviews";
 import { getReviewSnapshot } from "../reviews";
@@ -424,4 +425,38 @@ test("a request_review that fails before the review starts releases its claim, s
 	});
 	await expect(run()).resolves.toBeDefined();
 	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })?.state).toBe("reviewed");
+});
+
+test("only actual agent verdicts emit review decisions, and never leak plan content", async () => {
+	const events: { event: string; properties: Record<string, unknown> }[] = [];
+	initializeAnalytics({
+		additionalEnabled: true,
+		env: {},
+		fetchImpl: (async (_url: string | URL | Request, init?: RequestInit) => {
+			events.push(...JSON.parse(String(init?.body)).batch);
+			return new Response("{}", { status: 200 });
+		}) as typeof fetch,
+	});
+	try {
+		updateConfig({ reviewAutoFix: false });
+		const sessionId = await workerSession();
+		for (const finalText of [approve, requestChanges, "no verdict here"]) {
+			const id = committedItem(sessionId, "private task");
+			startPlanReview(WS, sessionId, id, verdictRunner(finalText));
+			await settle(sessionId, id);
+		}
+		await shutdownAnalytics();
+		expect(
+			events
+				.filter((event) => event.event === "review_decided")
+				.map((event) => [event.properties.actor, event.properties.verdict]),
+		).toEqual([
+			["agent", "approved"],
+			["agent", "changes_requested"],
+		]);
+		expect(JSON.stringify(events)).not.toContain("private");
+	} finally {
+		await shutdownAnalytics();
+		resetAnalyticsForTests();
+	}
 });
