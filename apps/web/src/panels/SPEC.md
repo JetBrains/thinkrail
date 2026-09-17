@@ -637,7 +637,8 @@ a project picker, the prompt hero, and the reused
   the review runs with no chat of its own, so the toast must carry the error. The verdict lands via the
   `review.changed` broadcast (`useChatTodos` refetches the plan on it), not a `pi.event` for this
   session — the subagent's events are hidden; a post-ack failure lands via the `review.failed` broadcast
-  (`useChatTodos` raises it as an error toast).
+  (`useChatTodos` raises it as an error toast, filtered to the owning `sessionId` and deduped across split
+  views by the toast body).
   **Plan-review STATE is always derived from the plan; only the ACTIONS are host-version-gated on
   `transport.supportsPlanReview` (v66).** `reviewables`/`unsettledReviewables`/`planReady` come from
   `TodoItem.review` regardless of host version — gating them to empty would let `planReady` read ship-ready

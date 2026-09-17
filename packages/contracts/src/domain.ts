@@ -740,9 +740,11 @@ export interface ReviewChangedPayload extends ReviewSnapshot {
 }
 
 /** A plan review that failed after `todo.startReview` acknowledged — the detached button/auto path has no
- * chat of its own, so the client raises the failure as a toast. See apps/web/src/panels/SPEC.md. */
+ * chat of its own, so the owning plan session raises the failure as a toast. `sessionId` routes it to that
+ * plan only; duplicate views of one session dedupe on the toast body. See apps/web/src/panels/SPEC.md. */
 export interface ReviewFailedPayload {
 	workspaceId: string;
+	sessionId: string;
 	itemId: string;
 	itemTitle: string;
 	message: string;
