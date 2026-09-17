@@ -1,13 +1,14 @@
 import type {
 	PiEvent,
 	ReviewChangedPayload,
+	ReviewFailedPayload,
 	SessionEventPayload,
 	TodoPlan,
 } from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
-import { isConnectedGeneration, selectChatTitle, useAppStore } from "../store";
+import { isConnectedGeneration, selectChatTitle, toast, useAppStore } from "../store";
 import { errorText, getSessionMessagesWithSkillBaseline, getTransport } from "../transport";
 import { messagesToRuntime } from "./hydrate";
 import { sessionGlance, shouldNudgeOnAdd } from "./planView";
@@ -102,12 +103,23 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		const unsubscribeReview = getTransport().subscribe(WS_CHANNELS.reviewChanged, (payload) => {
 			if ((payload as ReviewChangedPayload).workspaceId === workspaceId) scheduleRefetch();
 		});
+		// A detached review (Start review / Review All / auto re-review) has no chat to carry a failure, so the
+		// host publishes it here and the plan page raises it as a toast. See apps/web/src/panels/SPEC.md.
+		const unsubscribeReviewFailed = getTransport().subscribe(
+			WS_CHANNELS.reviewFailed,
+			(payload) => {
+				const failure = payload as ReviewFailedPayload;
+				if (failure.workspaceId !== workspaceId) return;
+				toast.error(failure.message, `Review of “${failure.itemTitle}” failed`);
+			},
+		);
 		return () => {
 			cancelled = true;
 			readGeneration.current += 1;
 			if (refetch) clearTimeout(refetch);
 			unsubscribe();
 			unsubscribeReview();
+			unsubscribeReviewFailed();
 		};
 	}, [connectionGeneration, identity, live, sessionId, status, workspaceId]);
 

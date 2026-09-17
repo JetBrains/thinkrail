@@ -83,6 +83,8 @@ test("session titles normalize to one bounded non-blank line", () => {
 test("the plan-review subagent reshapes the review wire and advances the protocol", () => {
 	expect(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION).toBe(67);
 	expect(PROTOCOL_VERSION).toBe(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION);
+	expect(WS_CHANNELS.reviewChanged).toBe("review.changed");
+	expect(WS_CHANNELS.reviewFailed).toBe("review.failed");
 });
 
 describe("isTodoReviewFixMessage", () => {

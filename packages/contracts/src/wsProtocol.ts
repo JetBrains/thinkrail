@@ -288,6 +288,7 @@ export const WS_CHANNELS = {
 	hostUpdateAvailable: "host.updateAvailable",
 	feedbackInterview: "feedback.interview",
 	reviewChanged: "review.changed",
+	reviewFailed: "review.failed",
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];

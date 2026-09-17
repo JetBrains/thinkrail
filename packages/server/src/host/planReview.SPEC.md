@@ -64,6 +64,12 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   unreviewed.
 - **The `reviewing` mark is set synchronously** at start/enqueue, so the panel pulses the instant the
   client re-reads the plan — before any await.
+- **A detached failure is published, not just logged.** `todo.startReview`/`todo.reviewAll` ack the moment
+  the review is enqueued; the run then fails on a detached path (provider error, invalid output, abort) with
+  no chat of its own to show it. `startPlanReview` clears the `reviewing` mark and calls
+  `reviewFailedPublisher` (`ReviewFailedPayload`, broadcast on `review.failed`) so the plan page can raise a
+  toast — the panel spec's requirement that the toast carry failure. The awaited tool path needs no publish:
+  it rejects to the worker. Pinned by the post-ack failure test in `planReview.test.ts`.
 - **`autoCycles` must match what actually happened.** `1` stands only when the worker really accepted the
   fix request; a rejected fix — the send OR any of its preparation steps (snapshot/package/mark) failing —
   or a refused fix latch re-records `2` (terminal), always after rolling the marked findings back to
@@ -107,8 +113,8 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
 ## Boundary
 
 - **Owns / public surface:** `startPlanReview(workspaceId, sessionId, itemId, runSubagent?)`,
-  `maybeAutoReReview(workspaceId, sessionId)`, `installRequestReviewSeam()`, and the pure
-  `parseVerdict` / `composeText`; `planReviewQueue`'s `enqueuePlanReview` / `onPlanChain` / `claimItemReview` /
+  `maybeAutoReReview(workspaceId, sessionId)`, `installRequestReviewSeam()`,
+  `setReviewFailedPublisher(fn)`, and the pure `parseVerdict` / `composeText`; `planReviewQueue`'s `enqueuePlanReview` / `onPlanChain` / `claimItemReview` /
   `releaseItemReview` / `itemReviewActive` / `planReviewRunning`.
 - **Allowed deps:** `agent` (`runReviewSubagent`, `sendReviewFixToSession`, `getSessionWorkspaceId`,
   `notifyExtUi`), `todos`, `reviews`, `settings`, and host siblings `ackSend` / `reviewLock` /

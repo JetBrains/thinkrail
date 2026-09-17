@@ -95,7 +95,11 @@ import {
 	setupObservation,
 } from "./productAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
-import { installRequestReviewSeam, maybeAutoReReview } from "./requestReview";
+import {
+	installRequestReviewSeam,
+	maybeAutoReReview,
+	setReviewFailedPublisher,
+} from "./requestReview";
 import { runObservation } from "./runAnalytics";
 import { resolveSubagentsEnabled } from "./subagentPolicy";
 import { taskObservation } from "./taskAnalytics";
@@ -241,6 +245,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
+				ws.subscribe(WS_CHANNELS.reviewFailed);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -502,6 +507,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				channel: WS_CHANNELS.reviewChanged,
 				data: markClientStale(payload, payload.workspaceId),
 			}),
+		);
+	});
+	setReviewFailedPublisher((payload) => {
+		server.publish(
+			WS_CHANNELS.reviewFailed,
+			JSON.stringify({ channel: WS_CHANNELS.reviewFailed, data: payload }),
 		);
 	});
 	setReviewCommentHandler((sessionId, commentId, note) => ({

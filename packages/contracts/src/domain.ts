@@ -739,6 +739,15 @@ export interface ReviewChangedPayload extends ReviewSnapshot {
 	workspaceId: string;
 }
 
+/** A plan review that failed after `todo.startReview` acknowledged — the detached button/auto path has no
+ * chat of its own, so the client raises the failure as a toast. See apps/web/src/panels/SPEC.md. */
+export interface ReviewFailedPayload {
+	workspaceId: string;
+	itemId: string;
+	itemTitle: string;
+	message: string;
+}
+
 /** Slim view of a sent review finding on a todo-review-fix message (path/lines pre-resolved host-side). */
 export interface ReviewFixComment {
 	id: string;

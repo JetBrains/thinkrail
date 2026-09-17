@@ -9,7 +9,7 @@ import {
 	ModelRuntime,
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import type { Workspace } from "@thinkrail/contracts";
+import type { ReviewFailedPayload, Workspace } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import {
 	configurePiRuntime,
@@ -32,6 +32,7 @@ import {
 	installRequestReviewSeam,
 	maybeAutoReReview,
 	type ReviewRunner,
+	setReviewFailedPublisher,
 	startPlanReview,
 } from "./requestReview";
 import { isItemUnderActiveReview } from "./todoReview";
@@ -431,6 +432,26 @@ test("a re-review approve does NOT settle the step while an earlier finding is s
 		"sent",
 	);
 	// The spinner is cleared either way — an unsettled approve is not an in-flight review.
+	expect(itemReviewActive(sessionId, id)).toBe(false);
+});
+
+test("a post-ack review failure publishes an actionable UI error, not just a warning", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId, "flaky step");
+	const failures: ReviewFailedPayload[] = [];
+	setReviewFailedPublisher((p) => failures.push(p));
+	try {
+		startPlanReview(WS, sessionId, id, verdictRunner("no parsable verdict here"));
+		await settle(sessionId, id);
+	} finally {
+		setReviewFailedPublisher(() => {});
+	}
+	expect(failures).toHaveLength(1);
+	expect(failures[0]?.workspaceId).toBe(WS);
+	expect(failures[0]?.itemId).toBe(id);
+	expect(failures[0]?.itemTitle).toBe("flaky step");
+	expect(failures[0]?.message).toMatch(/valid verdict/);
+	// The spinner is cleared, not stranded on a failure with no toast.
 	expect(itemReviewActive(sessionId, id)).toBe(false);
 });
 
