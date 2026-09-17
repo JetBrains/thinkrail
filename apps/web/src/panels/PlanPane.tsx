@@ -545,8 +545,7 @@ export default function PlanPane({
 	const hasUnattributed = (data.unattributed?.length ?? 0) > 0;
 	const empty = groups.length === 0 && loose.length === 0;
 	const nothingToShow = empty && adopted.length === 0 && !hasUnattributed;
-	// Review STATE is always derived from the plan (so planReady never reads ship-ready over an unreviewed
-	// step); only the review ACTIONS below are gated on canReview when the host serves no plan-review methods.
+	// Review STATE always derives from the plan; only the review ACTIONS are gated on canReview. See panels/SPEC.md.
 	const reviewables = reviewableItems(data);
 	const unsettledReviewables = reviewables.filter((t) => !reviewSettled(t));
 	const reviewedCount = reviewables.length - unsettledReviewables.length;

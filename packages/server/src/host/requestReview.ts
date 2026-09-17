@@ -259,8 +259,7 @@ async function recordVerdict(
 		return { kind: "changes", canAutoFix: false, findings };
 	}
 	if (!deliverFix) {
-		// Tool path: the tool result IS the delivery, so mark the filed findings sent to the invoking
-		// worker before spending the cycle — resolve_comment closes them by canonical id. See planReview.SPEC.md.
+		// Tool path: mark findings sent to the worker so resolve_comment can close them. See planReview.SPEC.md.
 		await markCommentsSent(
 			params.workspaceId,
 			findings.map((f) => f.id),
@@ -321,8 +320,7 @@ async function handleRequestReview(
 	if (!claimItemReview(sessionId, itemId)) throw new Error("This step is already being reviewed.");
 	const params = { workspaceId, sessionId, id: itemId };
 	try {
-		// request_review fires right after todo_update: await the artifact-reconciliation barrier so the
-		// snapshot sees the just-committed change set before startTodoReview takes it. See planReview.SPEC.md.
+		// Await the reconciliation barrier so the snapshot sees the just-committed change set. See planReview.SPEC.md.
 		await settleChangeArtifacts(workspaceId);
 		const { pkg, reviewedSha } = startTodoReview(params);
 		return await onPlanChain(workspaceId, sessionId, async () => {
