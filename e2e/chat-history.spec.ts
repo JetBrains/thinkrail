@@ -104,7 +104,7 @@ test("the native name command renames a chat durably without sending an agent tu
 	);
 });
 
-test("open and closed chat rename controls share one durable dialog", async ({ page }) => {
+test("open and closed chat rename controls edit their labels inline", async ({ page }) => {
 	await openFixtureProject(page);
 	const closed = seedWorkspaceSession(repoCwd(), {
 		name: "closed before rename",
@@ -121,25 +121,27 @@ test("open and closed chat rename controls share one durable dialog", async ({ p
 	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(chatTab).toContainText("open before rename");
 	await chatTab.click({ button: "right" });
-	await page.getByRole("menuitem", { name: "Rename chat…", exact: true }).click();
-	const dialog = page.getByTestId("rename-chat-dialog");
-	const nameInput = dialog.getByTestId("rename-chat-input");
-	await expect(nameInput).toBeFocused();
-	await expect(nameInput).toHaveValue("open before rename");
-	await nameInput.fill("open after rename");
-	await dialog.getByTestId("rename-chat-save").click();
-	await expect(dialog).toHaveCount(0);
+	await page.getByRole("menuitem", { name: "Rename chat", exact: true }).click();
+	const tabNameInput = chatTab.getByTestId("chat-tab-name-input");
+	await expect(tabNameInput).toBeFocused();
+	await expect(tabNameInput).toHaveValue("open before rename");
+	await tabNameInput.fill("open after rename");
+	await tabNameInput.press("Enter");
+	await expect(tabNameInput).toHaveCount(0);
 	await expect(chatTab).toContainText("open after rename");
 
 	await page.getByTestId("chat-history").first().click();
-	const closedRow = page.getByTestId("closed-chat-row").filter({ hasText: "closed before rename" });
+	const closedRow = page.locator(
+		`[data-testid="closed-chat-row"][data-session-id="${closed.id}"]`,
+	);
 	await closedRow.getByTestId("closed-chat-rename").click();
-	await expect(nameInput).toHaveValue("closed before rename");
-	await nameInput.fill("closed after rename");
-	await page.getByTestId("rename-chat-save").click();
-	await expect(page.getByTestId("rename-chat-dialog")).toHaveCount(0);
+	const historyNameInput = closedRow.getByTestId("closed-chat-name-input");
+	await expect(historyNameInput).toBeFocused();
+	await expect(historyNameInput).toHaveValue("closed before rename");
+	await historyNameInput.fill("closed after rename");
+	await historyNameInput.press("Enter");
+	await expect(historyNameInput).toHaveCount(0);
 	await expect(chatTab).toHaveCount(1);
-	await page.getByTestId("chat-history").first().click();
 	await expect(
 		page.getByTestId("closed-chat-row").filter({ hasText: "closed after rename" }),
 	).toBeVisible();

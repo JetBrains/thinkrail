@@ -62,7 +62,6 @@ import {
 import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
 import { commitWorkspaceLayout, useWorkspaceLayoutState } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
-import { RenameChatDialog, type RenameChatTarget } from "./RenameChatDialog";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 
@@ -222,9 +221,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
 	const reviewFlagByPath = useMemo(() => reviewFlags(reviewComments), [reviewComments]);
 	const [focusRequest, setFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
-	const [renameChatTarget, setRenameChatTarget] = useState<RenameChatTarget | null>(null);
 	const requestRenameChat = useCallback(
-		(sessionId: string, title: string) => setRenameChatTarget({ workspaceId, sessionId, title }),
+		(sessionId: string, title: string) => {
+			void getTransport()
+				.request("session.rename", { workspaceId, sessionId, title })
+				.catch((error) => toast.error(errorText(error), "Couldn't rename the chat"));
+		},
 		[workspaceId],
 	);
 	const activeReviewedPath = useAppStore((state) => selectActiveReviewedPath(state, workspaceId));
@@ -752,7 +754,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				onGestureCanceled={() => toast.info("The layout changed. Your drag was canceled.")}
 			/>
 			{terminalClose.confirmation}
-			<RenameChatDialog target={renameChatTarget} onClose={() => setRenameChatTarget(null)} />
 		</div>
 	);
 }

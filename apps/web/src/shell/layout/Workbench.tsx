@@ -1,3 +1,4 @@
+import { normalizeSessionTitle, SESSION_TITLE_MAX_LENGTH } from "@thinkrail/contracts";
 import {
 	type CollisionDetection,
 	DndContext,
@@ -625,7 +626,7 @@ function TabStrip({
 }: TabStripProps) {
 	const scroller = useRef<HTMLDivElement>(null);
 	const scrollOverflow = useHorizontalOverflow(scroller);
-	const tabRefs = useRef(new Map<string, HTMLButtonElement>());
+	const tabRefs = useRef(new Map<string, HTMLElement>());
 	const overflowFocusTarget = useRef<string | null>(null);
 	const [overflowOpen, setOverflowOpen] = useState(false);
 	const overflowing = scrollOverflow.before || scrollOverflow.after;
@@ -847,7 +848,7 @@ interface WorkbenchTabProps {
 	document: WorkspaceLayoutDocument;
 	maxSideGroups: number;
 	maxBottomGroups: number;
-	register: (node: HTMLButtonElement | null) => void;
+	register: (node: HTMLElement | null) => void;
 	onSelect: (tabId: string, keep?: boolean) => void;
 	onClose: () => void;
 	onApply: (result: LayoutMutationResult) => void;
@@ -893,12 +894,49 @@ function WorkbenchTab({
 	const attentionRef = useRef(attention);
 	attentionRef.current = attention;
 	const pendingPreviewKeep = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const nameInputRef = useRef<HTMLInputElement>(null);
+	const editStartNameRef = useRef("");
+	const cancelNextBlurRef = useRef(false);
+	const enterRenameRef = useRef(false);
+	const [editingName, setEditingName] = useState(false);
 	useEffect(
 		() => () => {
 			if (pendingPreviewKeep.current) clearTimeout(pendingPreviewKeep.current);
 		},
 		[],
 	);
+	useEffect(() => {
+		if (!editingName) return;
+		const frame = requestAnimationFrame(() => {
+			nameInputRef.current?.focus();
+			nameInputRef.current?.select();
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [editingName]);
+	const commitRename = () => {
+		if (cancelNextBlurRef.current) {
+			cancelNextBlurRef.current = false;
+			setEditingName(false);
+			return;
+		}
+		const title = normalizeSessionTitle(nameInputRef.current?.value);
+		setEditingName(false);
+		if (!title || title === editStartNameRef.current || tab.kind !== "chat") return;
+		onRenameChat?.(tab.sessionId, title);
+	};
+	const onNameKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+		event.stopPropagation();
+		if (event.key === "Enter") {
+			event.preventDefault();
+			nameInputRef.current?.blur();
+			return;
+		}
+		if (event.key === "Escape") {
+			event.preventDefault();
+			cancelNextBlurRef.current = true;
+			nameInputRef.current?.blur();
+		}
+	};
 	const selectFromClick = () => {
 		if (!preview) {
 			onSelect(tab.id);
@@ -1014,27 +1052,48 @@ function WorkbenchTab({
 						data-drop-active={after.isOver || undefined}
 						className="pointer-events-none absolute inset-y-0 right-0 z-10 w-1/2 border-primary data-[drop-active]:border-r-2"
 					/>
-					<button
-						ref={register}
-						type="button"
-						id={tabDomId(location, tab.id)}
-						role="tab"
-						aria-selected={active}
-						aria-keyshortcuts="Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6"
-						aria-controls={panelId}
-						data-layout-tab-id={tab.id}
-						tabIndex={active ? 0 : -1}
-						{...drag.listeners}
-						title={preview ? "Preview — double-click to keep" : name}
-						onClick={selectFromClick}
-						onDoubleClick={selectFromDoubleClick}
-						onKeyDown={onKeyDown}
-						className={`flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none ${tab.kind === "tool" ? "pr-8" : ""}`}
-					>
-						{tabIcon(tab, active)}
-						<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
-						{renderTabAdornment(tab)}
-					</button>
+					{editingName && tab.kind === "chat" ? (
+						<div
+							ref={register}
+							className="flex min-w-0 flex-1 items-center gap-4 py-4 pl-8"
+						>
+							{tabIcon(tab, active)}
+							<input
+								ref={nameInputRef}
+								data-testid="chat-tab-name-input"
+								type="text"
+								spellCheck={false}
+								aria-label="Chat name"
+								defaultValue={name}
+								maxLength={SESSION_TITLE_MAX_LENGTH}
+								onKeyDown={onNameKeyDown}
+								onBlur={commitRename}
+								className="min-w-0 flex-1 border-0 bg-transparent p-0 tr-text-ui text-text-default outline-none"
+							/>
+						</div>
+					) : (
+						<button
+							ref={register}
+							type="button"
+							id={tabDomId(location, tab.id)}
+							role="tab"
+							aria-selected={active}
+							aria-keyshortcuts="Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6"
+							aria-controls={panelId}
+							data-layout-tab-id={tab.id}
+							tabIndex={active ? 0 : -1}
+							{...drag.listeners}
+							title={preview ? "Preview — double-click to keep" : name}
+							onClick={selectFromClick}
+							onDoubleClick={selectFromDoubleClick}
+							onKeyDown={onKeyDown}
+							className={`flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none ${tab.kind === "tool" ? "pr-8" : ""}`}
+						>
+							{tabIcon(tab, active)}
+							<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
+							{renderTabAdornment(tab)}
+						</button>
+					)}
 					{tab.kind !== "tool" ? (
 						<button
 							type="button"
@@ -1049,13 +1108,24 @@ function WorkbenchTab({
 					) : null}
 				</div>
 			</ContextMenuTrigger>
-			<ContextMenuContent>
+			<ContextMenuContent
+				onCloseAutoFocus={(event) => {
+					if (!enterRenameRef.current) return;
+					enterRenameRef.current = false;
+					event.preventDefault();
+				}}
+			>
 				<ContextMenuItem onSelect={() => focusTab()}>Focus tab</ContextMenuItem>
 				{tab.kind === "chat" && onRenameChat ? (
 					<ContextMenuItem
-						onSelect={() => requestAnimationFrame(() => onRenameChat(tab.sessionId, name))}
+						onSelect={() => {
+							editStartNameRef.current = name;
+							cancelNextBlurRef.current = false;
+							enterRenameRef.current = true;
+							setEditingName(true);
+						}}
 					>
-						Rename chat…
+						Rename chat
 					</ContextMenuItem>
 				) : null}
 				<ContextMenuItem

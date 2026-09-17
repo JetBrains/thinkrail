@@ -111,21 +111,20 @@ genuinely-stuck case it exists for.
 
 ## Chat title controls
 
-A chat tab's existing context menu gains **Rename chat…**, and every row in the workspace's **Recently
-closed** chat menu gains a visible pencil action. Both open one shell-owned rename dialog prefilled with the
-current title: the field is focused and selected; Enter/Save submits; Escape, backdrop, or Cancel leaves it
-unchanged; blank, over-80-character, and unchanged values never issue a request. The controls render only when
-the welcome protocol supports `session.rename`. Submission has no optimistic domain write: it waits for the
-host mutation while the action is disabled, then the existing `session_info_changed` store fold updates open
-tabs and closed history everywhere; rejection retains the current label and raises the standard error toast.
+A chat tab's existing context menu gains **Rename chat**, and every row in the workspace's **Recently
+closed** chat menu gains a visible pencil action. Like workspace rename, each action replaces its own label
+in place with a chrome-less single-line input carrying the same typography and geometry; the field is
+prefilled, focused, and selected. Enter or blur commits, Escape cancels, and blank, over-80-character, and
+unchanged values never issue a request. The history menu remains open while its row is edited. The controls
+render only when the welcome protocol supports `session.rename`.
 
-The shell injects the chat-only action into the otherwise domain-neutral Workbench tab menu rather than
-teaching the pure layout engine how sessions are persisted. Each menu action lets its source menu close and
-opens the dialog on the next animation frame: overlapping Radix modal scopes otherwise restore the body's
-pointer lock to `none` after the dialog closes. Renaming a closed chat does not open or select it;
-renaming an open chat does not change placement or focus. Automatic title arrival uses this same label fold
-but opens no dialog, notification, or focus transition. ChatView's `/name` command is the independent keyboard
-entry point to the same wire mutation.
+The shell injects the chat-only mutation callback into the otherwise domain-neutral Workbench tab menu rather
+than teaching the pure layout engine how sessions are persisted. A commit has no optimistic domain write: the
+inline editor returns to the prior host-owned label until the existing `session_info_changed` store fold
+updates open tabs and closed history everywhere; rejection retains that snapshot and raises the standard
+error toast. Renaming a closed chat does not open or select it; renaming an open chat does not change placement
+or focus. Automatic title arrival uses this same label fold but opens no editor, notification, or focus
+transition. ChatView's `/name` command is the independent keyboard entry point to the same wire mutation.
 
 ## Global chords
 
