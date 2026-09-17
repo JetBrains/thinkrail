@@ -24,227 +24,93 @@ spec-graph viewer, and multiple concurrent `pi` chat sessions — all scoped to 
 
 ## Install
 
-ThinkRail ships in two additive forms: a native desktop installer and the self-contained `thinkrail`
-CLI, which opens the same app in your browser. Both embed the same in-process agent host and are
-published with `SHA256SUMS` on the [releases page](https://github.com/JetBrains/thinkrail/releases).
+### Desktop app
 
-JetBrains signs the Windows CLI and desktop setup executable. The macOS CLI is signed but not yet
-notarized. Signed/notarized desktop DMGs require the coordinated JetBrains service pipeline; older
-published DMGs and local Electrobun packages may still be unsigned and blocked by Gatekeeper. Linux
-artifacts are unsigned. Local installer smoke is not notarization verification.
+Download the `thinkrail-desktop-*` asset for your platform from the
+[releases page](https://github.com/JetBrains/thinkrail/releases). It runs the app in its own window.
 
-### Desktop
+**macOS (Apple Silicon)**
 
-Download the matching `thinkrail-desktop-*` asset: a DMG for macOS Apple Silicon, a setup ZIP for Windows
-x64, or a setup tarball for Linux x64/ARM64. Extract the complete Windows ZIP before running its setup
-executable, keeping its adjacent payload; extract the Linux tarball and run `installer`. Electrobun 2.0.1
-does not provide a macOS Intel desktop build. The coordinated macOS release pipeline uses Electrobun's
-expanded app archive for JetBrains signing and SRE DMG finalization; that intermediate archive is not a
-public download. The signing limitation above remains until that private pipeline update is deployed.
+Open the DMG.
 
-Linux desktop builds require Ubuntu 24.04 or another glibc 2.38+ distribution with GTK 3, WebKitGTK 4.1,
-Ayatana AppIndicator 3, and librsvg 2. On Ubuntu 24.04:
+**Windows x64**
+
+Extract the whole setup ZIP and run its setup executable in place, next to its payload.
+
+**Linux x64 / ARM64**
+
+You need glibc 2.38+ with GTK 3, WebKitGTK 4.1, Ayatana AppIndicator 3, and librsvg 2. On Ubuntu, that means
+24.04 or newer (older releases ship an older glibc and won't work):
 
 ```bash
 sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
 ```
 
-Eligible packaged stable and nightly desktop builds check for updates in the background. An update follows the
-classic consent-driven flow in **Settings → Updates**: **Download** → **Downloading** → **Preparing update** →
-**Install & Restart**. Closing Settings or quitting normally defers it; only **Install & Restart** applies the
-prepared release. The updater appears only when the package carries a valid HTTPS feed identity. Existing
-installations that predate that identity need one manual installation before in-app updates are available.
+Then extract the setup tarball and run `installer`.
 
-### CLI / browser
+Eligible stable and nightly builds offer updates in **Settings → Updates**. Nothing installs until you choose
+**Install & Restart**.
 
-The CLI installer downloads the right binary, verifies its SHA-256 checksum, and puts `thinkrail` on
-your PATH.
+### Command line
 
-**macOS / Linux** (also Windows under Git Bash):
+The `thinkrail` CLI is a single self-contained binary that serves the same app to your browser.
+
+**macOS / Linux**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash
 ```
 
-**Windows** — the same command works from cmd and PowerShell:
+**Windows**
 
 ```powershell
 powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"
 ```
 
-Nightly builds and pinned versions:
+Then open a repo:
 
 ```bash
-# macOS / Linux — a pinned version must belong to the selected channel
-curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly
-curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel stable --version 0.1.2
-curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly --version 0.2.0-nightly.10
+thinkrail ~/code/my-repo
 ```
 
-```powershell
-# Windows — options are env vars (THINKRAIL_CHANNEL, THINKRAIL_VERSION, THINKRAIL_PREFIX, THINKRAIL_NO_MODIFY_PATH)
-$env:THINKRAIL_CHANNEL='nightly'; irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex   # PowerShell
-set "THINKRAIL_CHANNEL=stable" && set "THINKRAIL_VERSION=0.1.2" && powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"   # cmd
-```
+To follow the nightly channel or pin a version, the installer takes `--channel` and `--version` (on
+Windows, the `THINKRAIL_CHANNEL` and `THINKRAIL_VERSION` environment variables). A pinned version must
+belong to the selected channel: `--channel stable --version 0.1.5` or
+`--channel nightly --version 0.2.0-nightly.20`.
 
-Then run `thinkrail` (add a git repo path to open it as a project: `thinkrail ~/code/my-repo`). Installed
-stable/nightly CLI hosts periodically offer **Run Update** in **Settings → Updates**. That action runs the host
-machine's parameterless `thinkrail update` in the background; the current host stays alive, and a successful
-update asks you to restart it manually. This is also true when the UI is open in a browser on another machine.
+Installed CLI hosts offer **Run Update** in **Settings → Updates**. `thinkrail update` upgrades in place,
+`thinkrail uninstall` removes it (`--remove-data` also deletes `~/.thinkrail`), and `thinkrail --help` lists the rest.
 
-You can run `thinkrail update` directly on any platform. It re-runs the installer for the installed channel and
-replaces the current `<prefix>/bin/thinkrail[.exe]`; use `--channel` or `--version` only for an explicit terminal
-override. To remove it, run `thinkrail uninstall`: it takes out the executable, the PATH entry the installer
-added, and the install metadata, and asks whether to delete your `~/.thinkrail` app state (kept by default —
-pass `--remove-data` to delete it, `-y` to skip the questions). `thinkrail --help` lists the flags;
-`thinkrail --version` prints the build.
+### Requirements
 
-**Prebuilt platforms:** macOS (Apple Silicon), Linux arm64 + x64, Windows x64 (`.exe`). Intel macOS isn't
-prebuilt — use Apple Silicon or build from source.
+You need `git` on your `PATH` and a model provider — sign in with [JetBrains AI](https://www.jetbrains.com/ai/) right from
+the app, or bring your own provider credentials. App state lives under `~/.thinkrail`.
 
-> Prefer a manual CLI install? Download a binary + `SHA256SUMS` from the releases page and verify the
-> checksum. For safe self-update, rename it to `thinkrail` (`thinkrail.exe` on Windows) and place it at
-> `<prefix>/bin/thinkrail[.exe]`. A binary kept under its release filename or another arbitrary location must
-> be replaced manually or reinstalled with the script; it will not update a different hidden copy.
+### Platform notes
 
-**Runtime prerequisites:** `git` on PATH, and an authenticated `pi` provider (the agent runs against your
-real provider credentials). App state lives under `~/.thinkrail`.
+| Platform | Prebuilt | Signing |
+| --- | --- | --- |
+| macOS Apple Silicon | Yes | Notarized DMG, signed CLI |
+| macOS Intel | No, [build from source](CONTRIBUTING.md#development-setup) | — |
+| Linux arm64 / x64 | Yes | Unsigned |
+| Windows x64 | Yes | CLI and desktop installer signed |
 
-## Quick start
+See [CONTRIBUTING.md](CONTRIBUTING.md#artifact-signing) for the signing pipeline.
 
-### Prerequisites (developing ThinkRail)
+## Analytics & privacy
 
-- **Bun** 1.4.0 (the repository's pinned package manager and runtime)
-- **Node.js** ≥ 22.19 (required by the in-process `pi` engine)
-- An authenticated `pi` provider (the agent runs against your real provider credentials)
+ThinkRail sends basic usage events to [PostHog EU](https://posthog.com): launches, chat creation, message
+sends, and provider connections. These are always on and carry a random installation ID, which links events
+from one installation over time; no person profile is created.
 
-### For developers
-
-```bash
-git clone <repo-url>
-cd thinkrail
-bun install
-bun run dev
-```
-
-`bun run dev` boots the host and the web client together. Press `Ctrl+C` to stop. Source/dev and locally
-unstamped builds expose no Updates UI. Running `thinkrail update` from source installs a published binary; it
-does not pull, install dependencies, or rebuild the checkout.
-
-To run the launchers:
-
-```bash
-bun run --filter @thinkrail/cli dev  # browser launcher
-bun run build:binary                 # standalone CLI artifact
-bun run desktop:dev                  # package and open the Electrobun app
-bun run desktop:build                # package without opening it
-```
-
-Desktop commands use the standard Electrobun CLI/configuration. Its pre-build hook builds the shared UI
-and stages ThinkRail's PI/native resources; Electrobun owns preload bundling and installer creation.
-Create host-native installers with `bun run desktop:package:stable` or `bun run desktop:package:canary`;
-`canary` is Electrobun's internal name for the public **nightly** channel. Native/installer smoke and shared
-CLI/desktop probes live in `packages/artifact-tests`, outside the
-application packages. Run `bun run smoke:desktop` after a dev build; installer smoke takes an artifact
-path and channel via `bun run smoke:desktop:installer <path> <stable|canary>`.
-
-On-disk app state (projects, workspaces, worktrees) lives under `~/.thinkrail`.
-
-## Architecture (three rings)
-
-- **Engine host** — `packages/server` (+ `packages/shared`), launched by `apps/cli` or
-  `apps/desktop`. `createServer()` is a `Bun.serve` HTTP+WS host with an `AgentSessionManager` (one
-  in-process `pi` `AgentSession` per tab).
-- **The wire** — `packages/contracts`: the typed, versioned protocol (types plus tiny pure runtime).
-- **UI client** — `apps/web`: mobile-first React 19 + Zustand + Tailwind v4, ships independently and
-  dials a host over the wire.
-
-The engine is **`pi` only, run in-process** via `@earendil-works/pi-coding-agent`. `apps/web` depends on
-`packages/contracts` only — never on the server — which is what makes the UI shippable on its own.
-
-See [`goal-and-requirements.md`](goal-and-requirements.md) and [`architecture.md`](architecture.md) for
-the canonical product and design specs.
-
-## Repo layout
-
-```
-apps/
-  cli/        browser launcher: boot host + open browser
-  web/        mobile-first UI client
-  desktop/    Electrobun local-host launcher + native packaging
-  website/    public landing + blog + vibecoding site (Cloudflare Pages)
-packages/
-  artifact-tests/ source-only CLI/desktop artifact and installer tests
-  server/     createServer(): Bun.serve + AgentSessionManager
-  contracts/  the wire (types plus tiny pure runtime)
-  shared/     server-side helpers (shellEnv, freePort)
-  spec-graph/ portable pi extension: spec_* tools + skill
-```
-
-## Development
-
-Fast gates (also the husky pre-commit hook):
-
-```bash
-bun run lint        # biome
-bun run typecheck   # tsc across all packages
-bun run test        # unit tests (root tooling + each package)
-```
-
-End-to-end tests drive the real web UI against isolated hosts. The no-agent gate builds once and
-uses a machine-adaptive number of independent shards (half the available CPUs, capped at eight):
-
-```bash
-bunx playwright install chromium                    # one-time
-bun run e2e                                         # complete no-agent gate
-bun run e2e -- e2e/changes.spec.ts                  # focused iteration
-bun run e2e -- --last-failed                        # repair loop
-bun run e2e:serial                                  # one-host debugging fallback
-bun run e2e -- --shards=12                          # explicit 1–16 override
-bun run e2e:binary                                  # packaged CLI host (build first)
-bun run e2e:desktop                                 # packaged desktop host (build first)
-bun run e2e:full                                    # everything; needs pi auth
-bun run e2e:agent                                   # only @agent; remains serial
-```
-
-On macOS, every public browser E2E command prevents idle system sleep while its runner is alive; the
-display may still sleep normally.
-
-## Specification-driven development
-
-ThinkRail is developed spec-first: hierarchical, interconnected specs live in the repo alongside the
-code — top-level specs at the root (`goal-and-requirements.md`, `architecture.md`) and a co-located
-`SPEC.md` for every module. When you change a boundary, contract, or decision, update the corresponding
-spec in the same change. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
-
-## Analytics & Privacy
-
-ThinkRail sends basic usage events to [PostHog EU](https://posthog.com): launches, chat creation,
-accepted message sends, and provider connections. These are always on in desktop, CLI, and source runs;
-a packaged desktop or binary build also attempts one first-install event per installation. CI and automated
-tests are silent. Events include a random installation ID, version/channel, build kind, OS/architecture,
-send mode, catalog-bucketed provider/model names, and the observed authentication category (API key,
-subscription sign-in, OAuth, Central, or other/unknown)—never credential values or account/plan details.
-
-Additional setup, run-outcome, task, review, and PR statistics follow an optional sharing preference.
-The first-run dialog shows its switch on and saves that preference when it opens; additional events can
-start before you press Done or dismiss the dialog. Switching it off saves that choice immediately. Done
-or dismissal records completion of the dialog, not the start of delivery. Change the preference later in
-**Settings → Privacy**. With website Marketing consent and optional sharing on in a packaged build,
-ThinkRail may open its blog in your browser once and note which website link or campaign brought you there
-(source, medium, campaign, content and a coarse referrer type; the link carries no URL or page). That note
-enriches usage data for up to 30 days. `--no-analytics` or `THINKRAIL_NO_ANALYTICS=1` suppresses
-additional events for that run only; basic reporting remains on.
-
-Neither tier collects prompts, code, transcripts, file/repository names or paths, credentials, or token/cost
-counts. The installation ID links usage over time, but no person profiles are created and GeoIP enrichment
-is disabled. The [analytics spec](packages/server/src/analytics/SPEC.md) defines the event boundaries.
+The sharing switch at first launch and in **Settings → Privacy** controls only additional statistics; turning
+it off does not stop the basic events. Neither tier sends prompts, code, transcripts, file or repository
+names, or credentials. The [analytics spec](packages/server/src/analytics/SPEC.md) defines the exact event
+boundaries.
 
 ## Contributing
 
-Contributions are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md). This project and community are
-governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
-
-## License
-
-Licensed under the [Apache License 2.0](LICENSE).
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup and architecture, plus
+[`goal-and-requirements.md`](goal-and-requirements.md) and [`architecture.md`](architecture.md) for the
+canonical product and design specs. This project and community are governed by the
+[Code of Conduct](CODE_OF_CONDUCT.md).
