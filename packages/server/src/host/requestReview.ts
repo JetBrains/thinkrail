@@ -117,43 +117,40 @@ export function composeText(result: PlanReviewResult, outcome: VerdictOutcome): 
 }
 
 /** File a reviewer finding into the Review tab (an inline comment when it anchors, else review-level).
- * Best-effort: a bad anchor never fails the review. */
+ * Anchor resolution is best-effort — a bad anchor falls back to a review-level comment — but a store-write
+ * failure propagates so the caller cancels the review rather than dropping the finding. See host/SPEC.md. */
 async function fileFinding(
 	params: ReviewParams,
 	reviewedSha: string,
 	f: ReviewFixComment,
 ): Promise<void> {
 	const origin = { todoId: params.id, reviewedSha, sessionId: params.sessionId };
-	try {
-		if (f.path && f.startLine && !anchorProblem(params.workspaceId, f.path, f.startLine)) {
-			await addComment({
-				workspaceId: params.workspaceId,
-				kind: "inline",
-				author: "agent",
-				body: f.body,
-				origin,
-				anchor: {
-					path: f.path,
-					side: "worktree",
-					contentHash: "",
-					selectors: [
-						{ kind: "lineRange", startLine: f.startLine, endLine: f.endLine ?? f.startLine },
-					],
-				},
-			});
-			return;
-		}
+	if (f.path && f.startLine && !anchorProblem(params.workspaceId, f.path, f.startLine)) {
 		await addComment({
 			workspaceId: params.workspaceId,
-			kind: "review",
+			kind: "inline",
 			author: "agent",
 			body: f.body,
 			origin,
-			anchor: null,
+			anchor: {
+				path: f.path,
+				side: "worktree",
+				contentHash: "",
+				selectors: [
+					{ kind: "lineRange", startLine: f.startLine, endLine: f.endLine ?? f.startLine },
+				],
+			},
 		});
-	} catch (err) {
-		console.warn(`review finding not filed: ${err instanceof Error ? err.message : err}`);
+		return;
 	}
+	await addComment({
+		workspaceId: params.workspaceId,
+		kind: "review",
+		author: "agent",
+		body: f.body,
+		origin,
+		anchor: null,
+	});
 }
 
 /** Deliver the reviewer's findings to the worker chat as the structured `todo-review-fix` message, under
