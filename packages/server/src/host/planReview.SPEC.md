@@ -70,6 +70,12 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   `approve-blocked` so the worker is told to resolve what it fixed. Round 2 of a fix cycle is a separate
   run from round 1, so nothing structural stops an approve from landing over an unresolved `sent`
   finding — only this check does.
+- **The tool path awaits artifact reconciliation before it snapshots the change set.** `request_review`
+  fires immediately after `todo_update`, while `maybeAttachChangeArtifacts` may still be committing the
+  step's work. `handleRequestReview` awaits `settleChangeArtifacts` (the same barrier `listTodos` uses)
+  before `startTodoReview`, so the reviewer never sees a step with no change set, nor snapshots a
+  superseded artifact. The button path needs no such await — the user starts it on an already-reconciled
+  plan. Pinned by the held-reconcile ordering test in `planReview.test.ts`.
 - **A claim must not outlive the call that took it.** `handleRequestReview` claims the item, so every
   post-claim exit — including `startTodoReview` throwing on a step with no change set — has to run the
   release. Leaking it wedges that step as "already being reviewed" until the host restarts. Both are
