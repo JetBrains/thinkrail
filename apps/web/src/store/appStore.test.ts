@@ -143,6 +143,7 @@ beforeEach(() => {
 		closedChatsByWorkspace: {},
 		deletedSessionsByWorkspace: {},
 		attentionByWorkspace: {},
+		runningByWorkspace: {},
 		attentionHydrationEpoch: 0,
 		fsChangesByWorkspace: {},
 		skillChangeTickByWorkspace: {},
@@ -2586,6 +2587,31 @@ test("applyWorkspaceRemoved on a non-active workspace drops the row silently (no
 	expect(s.toasts).toHaveLength(0);
 });
 
+test("applyWorkspaceRemoved prunes running membership for the removed workspace", () => {
+	const keep = pushedWorkspace({
+		id: "other",
+		projectId: "p2",
+		name: "workspace-2",
+		branch: "workspace-2",
+	});
+	useAppStore.setState({
+		projects: [project(), project({ id: "p2" })],
+		workspaces: { p1: [pushedWorkspace()], p2: [keep] },
+		runningByWorkspace: {
+			w1: { projectId: "p1", sessions: { run1: true } },
+			other: { projectId: "p2", sessions: { run2: true } },
+		},
+		activeWorkspaceId: "other",
+		workspaceSelectionHistory: ["other", "w1"],
+	});
+
+	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
+
+	const s = useAppStore.getState();
+	expect(s.runningByWorkspace.w1).toBeUndefined();
+	expect(s.runningByWorkspace.other).toEqual({ projectId: "p2", sessions: { run2: true } });
+});
+
 test("applyWorkspaceRemoved drops the removed workspace's cached spec graph", () => {
 	const keep = pushedWorkspace({ id: "other", name: "workspace-2", branch: "workspace-2" });
 	useAppStore.setState({
@@ -3493,6 +3519,109 @@ test("attention snapshots require a post-epoch transcript while live pushes pres
 	expect(s().attentionByWorkspace.ws1?.sessions["attention-1"]?.requiredConnectionGeneration).toBe(
 		3,
 	);
+});
+
+test("running snapshots replace membership, skip tombstones, and preserve identity on no-op", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({
+		deletedSessionsByWorkspace: { ws1: { deleted: true } },
+		removedWorkspaceIds: { removed: true },
+		runningByWorkspace: {
+			stale: { projectId: "old", sessions: { stale: true } },
+		},
+	});
+
+	s().hydrateSessionRunning([
+		{ workspaceId: "ws1", projectId: "p1", sessionId: "live" },
+		{ workspaceId: "ws1", projectId: "p1", sessionId: "deleted" },
+		{ workspaceId: "removed", projectId: "p2", sessionId: "other" },
+	]);
+	expect(s().runningByWorkspace).toEqual({
+		ws1: { projectId: "p1", sessions: { live: true } },
+	});
+
+	const first = s().runningByWorkspace;
+	s().hydrateSessionRunning([{ workspaceId: "ws1", projectId: "p1", sessionId: "live" }]);
+	expect(s().runningByWorkspace).toBe(first);
+});
+
+test("running pushes fold true/false transitions and refuse removed or tombstoned rows", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({
+		deletedSessionsByWorkspace: { ws1: { deleted: true } },
+		removedWorkspaceIds: { removed: true },
+	});
+
+	s().applySessionRunning({
+		workspaceId: "ws1",
+		projectId: "p1",
+		sessionId: "live",
+		running: true,
+	});
+	expect(s().runningByWorkspace).toEqual({
+		ws1: { projectId: "p1", sessions: { live: true } },
+	});
+
+	const first = s().runningByWorkspace;
+	s().applySessionRunning({
+		workspaceId: "ws1",
+		projectId: "p1",
+		sessionId: "live",
+		running: true,
+	});
+	s().applySessionRunning({
+		workspaceId: "ws1",
+		projectId: "p1",
+		sessionId: "deleted",
+		running: true,
+	});
+	s().applySessionRunning({
+		workspaceId: "removed",
+		projectId: "p2",
+		sessionId: "ignored",
+		running: true,
+	});
+	expect(s().runningByWorkspace).toBe(first);
+
+	s().applySessionRunning({
+		workspaceId: "ws1",
+		projectId: "p1",
+		sessionId: "live",
+		running: false,
+	});
+	expect(s().runningByWorkspace.ws1).toBeUndefined();
+
+	const cleared = s().runningByWorkspace;
+	s().applySessionRunning({
+		workspaceId: "ws1",
+		projectId: "p1",
+		sessionId: "live",
+		running: false,
+	});
+	expect(s().runningByWorkspace).toBe(cleared);
+});
+
+test("clearSessionRunning is idempotent and deleteChat prunes only the deleted session", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({
+		runningByWorkspace: {
+			ws1: { projectId: "p1", sessions: { a: true, b: true } },
+		},
+	});
+
+	s().deleteChat("ws1", "a", false);
+	expect(s().runningByWorkspace).toEqual({
+		ws1: { projectId: "p1", sessions: { b: true } },
+	});
+
+	const beforeClear = s().runningByWorkspace;
+	s().clearSessionRunning();
+	const afterClear = s().runningByWorkspace;
+	expect(Object.keys(afterClear)).toHaveLength(0);
+	expect(afterClear).not.toBe(beforeClear);
+
+	s().clearSessionRunning();
+	expect(s().runningByWorkspace).toBe(afterClear);
 });
 
 test("skills badge: a LIVE restore stays conservatively stale; a disk attach anchors to its load tick", () => {

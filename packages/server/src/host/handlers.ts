@@ -42,6 +42,7 @@ import {
 	isSessionStreaming,
 	listAvailableModels,
 	listProjectAliasSkillNames,
+	listRunningSessions,
 	listSessionAttention,
 	listSessions,
 	listSkillCatalog,
@@ -781,6 +782,7 @@ const handlers: Record<string, Handler> = {
 				cwd: workspace.worktreePath,
 			})),
 		),
+	"session.runningList": () => listRunningSessions(),
 	"session.acknowledgeAttention": async (params) => {
 		const p = params as { workspaceId: string; sessionId: string; attentionId: string };
 		getWorkspace(p.workspaceId);

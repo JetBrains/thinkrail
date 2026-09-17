@@ -8,6 +8,7 @@ import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useSta
 import { AttentionDot } from "../components/AttentionDot";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
+import { RunningIcon } from "../components/RunningIcon";
 import { LoadingRegion } from "../components/Skeleton";
 import { DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { IconTooltip } from "../components/ui/tooltip";
@@ -37,6 +38,7 @@ import {
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	selectWorkspaceTick,
+	sessionIsRunning,
 	sessionNeedsAttention,
 	toast,
 	useAppStore,
@@ -214,6 +216,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
 	const attentionByWorkspace = useAppStore((state) => state.attentionByWorkspace);
+	const runningByWorkspace = useAppStore((state) => state.runningByWorkspace);
 	const knownChatCount = useAppStore((state) => workspaceKnownChatCount(state, workspaceId));
 	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
@@ -520,6 +523,19 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[review.failed, specs.failed, specs.reload, workspaceId],
 	);
 
+	const decorateTabIcon = useCallback(
+		({ tab, icon }: { tab: LayoutTab; active: boolean; icon: ReactNode }) => {
+			if (
+				tab.kind !== "chat" ||
+				!sessionIsRunning(runningByWorkspace, workspaceId, tab.sessionId)
+			) {
+				return icon;
+			}
+			return <RunningIcon>{icon}</RunningIcon>;
+		},
+		[runningByWorkspace, workspaceId],
+	);
+
 	const isDefault = workspace != null && isDefaultWorkspace(workspace);
 	const isExternal = workspace != null && isExternalWorkspace(workspace);
 
@@ -574,6 +590,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				projectionEpoch={projectionEpoch}
 				{...(focusRequest ? { focusRequest } : {})}
 				renderTabBody={renderTabBody}
+				decorateTabIcon={decorateTabIcon}
 				renderTabAdornment={(tab) => {
 					if (
 						tab.kind === "chat" &&

@@ -560,7 +560,8 @@ transmit a retraction.
   state owner-global.
 
 The internal review-versus-blocking-versus-interrupted reason remains host policy, not a wire or UI state.
-An interrupted candidate represents an idle latest turn with no successful/error/length terminal result; a
+An interrupted candidate represents an idle latest turn ending at its user entry or at an assistant with an
+explicit aborted/nonterminal stop reason; a stopless legacy assistant is too ambiguous and stays quiet. A
 full host restart therefore replaces a truthful running pulse with the same durable attention dot used for
 review. Explicit user Stop records that exact candidate as handled and stays quiet. The client stores only
 current candidate identities and derives session/workspace/project booleans; it never pre-rolls counts or

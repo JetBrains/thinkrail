@@ -7,6 +7,7 @@ import type {
 	SessionAttentionPayload,
 	SessionCreatedPayload,
 	SessionDeletedPayload,
+	SessionRunningPayload,
 	TerminalTabsPush,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
@@ -22,14 +23,15 @@ import {
 	initializeSessionAttention,
 	isProjectSkillPath,
 	refreshSubagentTools,
-	setAttentionProjectResolver,
 	setExtUiPendingObserver,
 	setExtUiPublisher,
 	setReviewCommentHandler,
 	setSessionAttentionPublisher,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
+	setSessionProjectResolver,
 	setSessionPublisher,
+	setSessionRunningPublisher,
 	setSkillAdmissionResolver,
 	setSubagentsEnabledResolver,
 	settleSessionsForShutdown,
@@ -177,7 +179,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		hostUpdate,
 	} = options;
 
-	setAttentionProjectResolver((workspaceId) => {
+	setSessionProjectResolver((workspaceId) => {
 		try {
 			return getWorkspace(workspaceId).projectId;
 		} catch {
@@ -256,6 +258,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.sessionCreated);
 				ws.subscribe(WS_CHANNELS.sessionDeleted);
 				ws.subscribe(WS_CHANNELS.sessionAttention);
+				ws.subscribe(WS_CHANNELS.sessionRunning);
 				ws.subscribe(WS_CHANNELS.providerLogin);
 				ws.subscribe(WS_CHANNELS.providerChanged);
 				ws.subscribe(WS_CHANNELS.projectUpdated);
@@ -564,6 +567,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		server.publish(
 			WS_CHANNELS.sessionAttention,
 			JSON.stringify({ channel: WS_CHANNELS.sessionAttention, data: payload }),
+		);
+	});
+
+	setSessionRunningPublisher((payload: SessionRunningPayload) => {
+		server.publish(
+			WS_CHANNELS.sessionRunning,
+			JSON.stringify({ channel: WS_CHANNELS.sessionRunning, data: payload }),
 		);
 	});
 

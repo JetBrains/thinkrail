@@ -72,6 +72,10 @@ test("the legacy activity snapshot retires old-client markers with an empty resu
 	expect(await handleRequest("session.activityList", {}, CTX)).toEqual([]);
 });
 
+test("the running snapshot returns the authoritative current live set", async () => {
+	expect(await handleRequest("session.runningList", {}, CTX)).toEqual([]);
+});
+
 test("request diagnostics expose only registered method names", async () => {
 	expect(requestMethodDiagnostic("workspace.list")).toBe("workspace.list");
 	expect(requestMethodDiagnostic("secret prompt value")).toBe("unknown method");

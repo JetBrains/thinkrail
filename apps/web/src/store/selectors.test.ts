@@ -8,6 +8,7 @@ import {
 	isExternalWorkspace,
 	isUserOwnedWorkspace,
 	matchesWorktreePath,
+	projectIsRunning,
 	projectNeedsAttention,
 	selectActiveEditorTab,
 	selectActiveWorkspace,
@@ -24,8 +25,10 @@ import {
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
 	selectSkillsStale,
+	sessionIsRunning,
 	sessionNeedsAttention,
 	specPathMatcher,
+	workspaceIsRunning,
 	workspaceKnownChatCount,
 	workspaceNeedsAttention,
 } from "./selectors";
@@ -539,4 +542,28 @@ test("project attention needs no loaded workspace list and never counts another 
 	const map = { wa: attentionEntry("never-loaded", ["s1"]) };
 	expect(projectNeedsAttention(map, "never-loaded")).toBe(true);
 	expect(projectNeedsAttention(map, "other")).toBe(false);
+});
+
+const runningEntry = (projectId: string, sessionIds: string[]) => ({
+	projectId,
+	sessions: Object.fromEntries(sessionIds.map((sessionId) => [sessionId, true as const])),
+});
+
+test("running selectors project one binary signal through session, workspace, and project", () => {
+	const map = {
+		wa: runningEntry("p1", ["s1", "s2"]),
+		wb: runningEntry("p2", ["s3"]),
+	};
+	expect(sessionIsRunning(map, "wa", "s1")).toBe(true);
+	expect(sessionIsRunning(map, "wa", "missing")).toBe(false);
+	expect(workspaceIsRunning(map, "wa")).toBe(true);
+	expect(workspaceIsRunning(map, "missing")).toBe(false);
+	expect(projectIsRunning(map, "p1")).toBe(true);
+	expect(projectIsRunning(map, "missing")).toBe(false);
+});
+
+test("project running uses projected project ids and ignores other projects", () => {
+	const map = { wa: runningEntry("never-loaded", ["s1"]) };
+	expect(projectIsRunning(map, "never-loaded")).toBe(true);
+	expect(projectIsRunning(map, "other")).toBe(false);
 });

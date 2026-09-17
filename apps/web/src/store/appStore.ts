@@ -18,6 +18,8 @@ import type {
 	SessionAttention as SessionAttentionRow,
 	SessionEventPayload,
 	SessionQueueState,
+	SessionRunningPayload,
+	SessionRunning as SessionRunningRow,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
@@ -293,6 +295,11 @@ export interface SessionAttentionState {
 export interface WorkspaceAttention {
 	projectId: string;
 	sessions: Record<string, SessionAttentionState>;
+}
+
+export interface WorkspaceRunning {
+	projectId: string;
+	sessions: Record<string, true>;
 }
 
 export interface Toast {
@@ -778,6 +785,7 @@ interface AppState {
 	worktreeCreationsByProject: Record<string, number>;
 	deletedSessionsByWorkspace: Record<string, Record<string, true>>;
 	attentionByWorkspace: Record<string, WorkspaceAttention>;
+	runningByWorkspace: Record<string, WorkspaceRunning>;
 	attentionHydrationEpoch: number;
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
@@ -964,6 +972,9 @@ interface AppState {
 	noteClosedChats: (workspaceId: string, entries: ClosedChat[]) => void;
 	hydrateSessionAttention: (rows: SessionAttentionRow[]) => void;
 	applySessionAttention: (payload: SessionAttentionPayload) => void;
+	hydrateSessionRunning: (rows: SessionRunningRow[]) => void;
+	applySessionRunning: (payload: SessionRunningPayload) => void;
+	clearSessionRunning: () => void;
 	hydrateSession: (
 		summary: SessionSummary,
 		hydrated: HydratedRuntime,
@@ -1179,19 +1190,59 @@ function sameAttentionMap(
 	});
 }
 
+function sameRunningMap(
+	prev: Record<string, WorkspaceRunning>,
+	next: Record<string, WorkspaceRunning>,
+): boolean {
+	const workspaceIds = Object.keys(prev);
+	if (workspaceIds.length !== Object.keys(next).length) return false;
+	return workspaceIds.every((workspaceId) => {
+		const before = prev[workspaceId];
+		const after = next[workspaceId];
+		if (!before || !after || before.projectId !== after.projectId) return false;
+		const sessionIds = Object.keys(before.sessions);
+		return (
+			sessionIds.length === Object.keys(after.sessions).length &&
+			sessionIds.every((sessionId) => after.sessions[sessionId] === true)
+		);
+	});
+}
+
+interface WorkspaceSessions<T> {
+	projectId: string;
+	sessions: Record<string, T>;
+}
+
+function withoutSessionMembership<T, W extends WorkspaceSessions<T>>(
+	map: Record<string, W>,
+	workspaceId: string,
+	sessionId: string,
+): Record<string, W> {
+	const current = map[workspaceId];
+	if (!current) return map;
+	const sessions = omitKey(current.sessions, sessionId);
+	return Object.keys(sessions).length === 0
+		? omitKey(map, workspaceId)
+		: { ...map, [workspaceId]: { ...current, sessions } };
+}
+
 function withoutSessionAttention(
 	s: AppState,
 	workspaceId: string,
 	sessionId: string,
 ): Pick<AppState, "attentionByWorkspace"> {
-	const current = s.attentionByWorkspace[workspaceId];
-	if (!current) return { attentionByWorkspace: s.attentionByWorkspace };
-	const sessions = omitKey(current.sessions, sessionId);
 	return {
-		attentionByWorkspace:
-			Object.keys(sessions).length === 0
-				? omitKey(s.attentionByWorkspace, workspaceId)
-				: { ...s.attentionByWorkspace, [workspaceId]: { ...current, sessions } },
+		attentionByWorkspace: withoutSessionMembership(s.attentionByWorkspace, workspaceId, sessionId),
+	};
+}
+
+function withoutSessionRunning(
+	s: AppState,
+	workspaceId: string,
+	sessionId: string,
+): Pick<AppState, "runningByWorkspace"> {
+	return {
+		runningByWorkspace: withoutSessionMembership(s.runningByWorkspace, workspaceId, sessionId),
 	};
 }
 
@@ -1395,6 +1446,7 @@ function withoutChat(
 	const hasRuntime = s.sessions[sessionId] !== undefined;
 	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
 	const hasAttention = s.attentionByWorkspace[workspaceId]?.sessions[sessionId] !== undefined;
+	const hasRunning = s.runningByWorkspace[workspaceId]?.sessions[sessionId] === true;
 	const targetsLocation =
 		s.chatLocationRequest?.workspaceId === workspaceId &&
 		s.chatLocationRequest.sessionId === sessionId;
@@ -1408,6 +1460,7 @@ function withoutChat(
 		alreadyDeleted &&
 		sessionTabs.length === 0 &&
 		!hasAttention &&
+		!hasRunning &&
 		!inHistory &&
 		!hasRuntime &&
 		!hasSkillBaseline &&
@@ -1476,6 +1529,7 @@ function withoutChat(
 			: {}),
 		...(hasRuntime ? { sessions: omitKey(s.sessions, sessionId) } : {}),
 		...(hasAttention ? withoutSessionAttention(s, workspaceId, sessionId) : {}),
+		...(hasRunning ? withoutSessionRunning(s, workspaceId, sessionId) : {}),
 		...(hasSkillBaseline
 			? { skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId) }
 			: {}),
@@ -1672,6 +1726,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workspaces: {},
 	removedWorkspaceIds: Object.create(null) as Record<string, true>,
 	attentionByWorkspace: Object.create(null) as Record<string, WorkspaceAttention>,
+	runningByWorkspace: Object.create(null) as Record<string, WorkspaceRunning>,
 	attentionHydrationEpoch: 0,
 	expandedProjectIds: Object.create(null) as Record<string, true>,
 	selectedProjectId: null,
@@ -1855,6 +1910,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				),
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
 				attentionByWorkspace: omitKey(state.attentionByWorkspace, workspaceId),
+				runningByWorkspace: omitKey(state.runningByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
@@ -2858,6 +2914,51 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
+	hydrateSessionRunning: (rows) =>
+		set((s) => {
+			const next: Record<string, WorkspaceRunning> = Object.create(null);
+			for (const row of rows) {
+				if (s.removedWorkspaceIds[row.workspaceId]) continue;
+				if (isSessionDeleted(s, row.workspaceId, row.sessionId)) continue;
+				const forWorkspace =
+					next[row.workspaceId] ??
+					({ projectId: row.projectId, sessions: Object.create(null) } as WorkspaceRunning);
+				forWorkspace.projectId = row.projectId;
+				forWorkspace.sessions[row.sessionId] = true;
+				next[row.workspaceId] = forWorkspace;
+			}
+			return sameRunningMap(s.runningByWorkspace, next) ? {} : { runningByWorkspace: next };
+		}),
+	applySessionRunning: ({ workspaceId, projectId, sessionId, running }) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const currentWorkspace = s.runningByWorkspace[workspaceId];
+			const currentlyRunning = currentWorkspace?.sessions[sessionId] === true;
+			if (!running || isSessionDeleted(s, workspaceId, sessionId)) {
+				if (!currentlyRunning) return {};
+				return withoutSessionRunning(s, workspaceId, sessionId);
+			}
+			if (currentlyRunning && currentWorkspace?.projectId === projectId) return {};
+			return {
+				runningByWorkspace: {
+					...s.runningByWorkspace,
+					[workspaceId]: {
+						projectId,
+						sessions: currentlyRunning
+							? currentWorkspace.sessions
+							: { ...currentWorkspace?.sessions, [sessionId]: true },
+					},
+				},
+			};
+		}),
+	clearSessionRunning: () =>
+		set((s) =>
+			Object.keys(s.runningByWorkspace).length === 0
+				? {}
+				: {
+						runningByWorkspace: Object.create(null) as Record<string, WorkspaceRunning>,
+					},
+		),
 	noteClosedChats: (workspaceId, entries) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};

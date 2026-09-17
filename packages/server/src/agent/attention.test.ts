@@ -28,7 +28,11 @@ function user(id = "user-1", parentId: string | null = null): SessionEntry {
 	} as unknown as AgentMessage);
 }
 
-function assistant(id: string, parentId: string, stopReason: StopReason): SessionEntry {
+function assistant(
+	id: string,
+	parentId: string,
+	stopReason: StopReason | "unfinished" | undefined,
+): SessionEntry {
 	return message(id, parentId, {
 		role: "assistant",
 		content: [{ type: "text", text: "done" }],
@@ -117,15 +121,49 @@ test("review fingerprints survive legacy normalization and distinguish repeated 
 	expect(deriveDiskAttentionCandidate(repeated)?.id).not.toBe(currentId);
 });
 
-test("running, queued, aborted, and unfinished tool outcomes do not request review", () => {
+test("interrupted fingerprints survive legacy normalization and key to the latest user turn", () => {
+	const current = [user(), assistant("assistant-1", "user-1", "toolUse")];
+	const currentCandidate = deriveDiskAttentionCandidate(current);
+	expect(currentCandidate).toMatchObject({
+		id: "interrupted:user-1",
+		kind: "interrupted",
+		turnId: "user-1",
+	});
+	const legacySource = current
+		.map((entry) => {
+			const { id: _id, parentId: _parentId, ...legacy } = entry;
+			return JSON.stringify(legacy);
+		})
+		.join("\n");
+	const legacyCandidate = deriveDiskAttentionCandidate(parseAttentionEntries(legacySource, false));
+	expect(legacyCandidate?.id).toStartWith("legacy-interrupted:");
+	expect(currentCandidate?.aliases).toContain(legacyCandidate?.id);
+	const repeated = [...current, user("user-2", "assistant-1")];
+	expect(deriveDiskAttentionCandidate(repeated)).toMatchObject({
+		id: "interrupted:user-2",
+		kind: "interrupted",
+		turnId: "user-2",
+	});
+});
+
+test("running and queued sessions stay quiet while aborted/toolUse/unfinished settle as interrupted", () => {
 	const done = [user(), assistant("assistant-1", "user-1", "stop")];
 	expect(deriveAttentionCandidate(inputs(done, { isStreaming: true }))).toBeNull();
 	expect(deriveAttentionCandidate(inputs(done, { pendingMessageCount: 1 }))).toBeNull();
+	expect(deriveDiskAttentionCandidate([user()])).toMatchObject({
+		kind: "interrupted",
+		turnId: "user-1",
+	});
+	for (const stopReason of ["aborted", "toolUse", "unfinished"] as const) {
+		expect(
+			deriveDiskAttentionCandidate([
+				user(),
+				assistant(`assistant-${stopReason}`, "user-1", stopReason),
+			]),
+		).toMatchObject({ kind: "interrupted", turnId: "user-1" });
+	}
 	expect(
-		deriveDiskAttentionCandidate([user(), assistant("assistant-2", "user-1", "aborted")]),
-	).toBeNull();
-	expect(
-		deriveDiskAttentionCandidate([user(), assistant("assistant-3", "user-1", "toolUse")]),
+		deriveDiskAttentionCandidate([user(), assistant("legacy-done", "user-1", undefined)]),
 	).toBeNull();
 });
 
@@ -146,9 +184,12 @@ test("an explicit blocker outranks streaming and cannot be mistaken for review",
 	).toEqual({ id: "dialog:dialog-1", kind: "blocking", turnId: "user-1" });
 });
 
-test("an acknowledged questionnaire blocks until an answer or later user message", () => {
+test("an acknowledged questionnaire blocks first, then yields interrupted until a fresh terminal", () => {
 	const awaiting = questionEntries();
-	expect(deriveDiskAttentionCandidate(awaiting.slice(0, 2))).toBeNull();
+	expect(deriveDiskAttentionCandidate(awaiting.slice(0, 2))).toMatchObject({
+		kind: "interrupted",
+		turnId: "user-1",
+	});
 	expect(deriveAttentionCandidate(inputs(awaiting, { isStreaming: true }))).toEqual({
 		id: "question:tc-1",
 		kind: "blocking",
@@ -164,8 +205,14 @@ test("an acknowledged questionnaire blocks until an answer or later user message
 		display: true,
 		details: { toolCallId: "tc-1", result: { answers: [], cancelled: false } },
 	};
-	expect(deriveDiskAttentionCandidate([...awaiting, answered])).toBeNull();
-	expect(deriveDiskAttentionCandidate([...awaiting, user("user-2", "ack-entry")])).toBeNull();
+	expect(deriveDiskAttentionCandidate([...awaiting, answered])).toMatchObject({
+		kind: "interrupted",
+		turnId: "user-1",
+	});
+	expect(deriveDiskAttentionCandidate([...awaiting, user("user-2", "ack-entry")])).toMatchObject({
+		kind: "interrupted",
+		turnId: "user-2",
+	});
 });
 
 test("disk derivation follows the active parent branch, not abandoned physical messages", () => {
@@ -180,7 +227,10 @@ test("disk derivation follows the active parent branch, not abandoned physical m
 		summary: "Changed direction",
 	};
 	const physical = [root, ...abandoned, branch];
-	expect(deriveDiskAttentionCandidate(physical)).toBeNull();
+	expect(deriveDiskAttentionCandidate(physical)).toMatchObject({
+		kind: "interrupted",
+		turnId: "user-1",
+	});
 	const completed = assistant("assistant-new", branch.id, "stop");
 	const candidate = deriveDiskAttentionCandidate([...physical, completed]);
 	expect(candidate).toMatchObject({ kind: "review", turnId: "user-1" });
@@ -210,5 +260,8 @@ test("the transcript parser retains stable message and custom-message entry ids"
 		"ack-entry",
 		"answer-entry",
 	]);
-	expect(deriveDiskAttentionCandidate(parseAttentionEntries(source, false))).toBeNull();
+	expect(deriveDiskAttentionCandidate(parseAttentionEntries(source, false))).toMatchObject({
+		kind: "interrupted",
+		turnId: "user-1",
+	});
 });

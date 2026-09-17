@@ -5,6 +5,7 @@ import {
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	SESSION_RUNNING_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
@@ -22,6 +23,13 @@ test("session attention advances the protocol and names its wire surface", () =>
 	expect(WS_CHANNELS.sessionAttention).toBe("session.attention");
 	expect(WS_METHODS.sessionAttentionList).toBe("session.attentionList");
 	expect(WS_METHODS.sessionAcknowledgeAttention).toBe("session.acknowledgeAttention");
+});
+
+test("live running advances the protocol and names its wire surface", () => {
+	expect(SESSION_RUNNING_PROTOCOL_VERSION).toBe(66);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SESSION_RUNNING_PROTOCOL_VERSION);
+	expect(WS_CHANNELS.sessionRunning).toBe("session.running");
+	expect(WS_METHODS.sessionRunningList).toBe("session.runningList");
 });
 
 test("system theme settings advance the protocol", () => {

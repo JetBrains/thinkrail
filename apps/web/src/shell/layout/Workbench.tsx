@@ -152,6 +152,12 @@ interface PreparedLayoutClose {
 	onAccepted: (currentDocument?: WorkspaceLayoutDocument) => void;
 }
 
+export interface WorkbenchTabIconArgs {
+	tab: LayoutTab;
+	active: boolean;
+	icon: ReactNode;
+}
+
 export interface WorkbenchProps {
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
@@ -161,6 +167,7 @@ export interface WorkbenchProps {
 	focusRequest?: LayoutTabFocusRequest;
 	renderTabBody: (tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>) => ReactNode;
 	renderTabAdornment: (tab: LayoutTab) => ReactNode;
+	decorateTabIcon?: (args: WorkbenchTabIconArgs) => ReactNode;
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
 	renderEmptyCenter: (groupId: string) => ReactNode;
 	renderCenterActions: (groupId: string) => ReactNode;
@@ -594,6 +601,7 @@ interface TabStripProps {
 	onRevealTool: (tool: LayoutToolId) => void;
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	decorateTabIcon: NonNullable<WorkbenchProps["decorateTabIcon"]>;
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
 	trailing?: ReactNode;
 }
@@ -617,6 +625,7 @@ function TabStrip({
 	onRevealTool,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	decorateTabIcon,
 	splitGeometry,
 	trailing,
 }: TabStripProps) {
@@ -717,6 +726,7 @@ function TabStrip({
 							onRevealTool={onRevealTool}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
+							decorateTabIcon={decorateTabIcon}
 							draggingTab={draggingTab}
 							panelId={panelId}
 							{...(splitGeometry ? { splitGeometry } : {})}
@@ -852,6 +862,7 @@ interface WorkbenchTabProps {
 	onRevealTool: (tool: LayoutToolId) => void;
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	decorateTabIcon: NonNullable<WorkbenchProps["decorateTabIcon"]>;
 	draggingTab: LayoutTab | null;
 	panelId: string;
 	splitGeometry?: { horizontal: boolean; vertical: boolean };
@@ -878,6 +889,7 @@ function WorkbenchTab({
 	onRevealTool,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	decorateTabIcon,
 	draggingTab,
 	panelId,
 	splitGeometry,
@@ -1025,7 +1037,7 @@ function WorkbenchTab({
 						onKeyDown={onKeyDown}
 						className={`flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none ${tab.kind === "tool" ? "pr-8" : ""}`}
 					>
-						{tabIcon(tab, active)}
+						{decorateTabIcon({ tab, active, icon: tabIcon(tab, active) })}
 						<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
 						{renderTabAdornment(tab)}
 					</button>
@@ -1254,6 +1266,7 @@ interface SharedGroupProps {
 	draggingTab: LayoutTab | null;
 	renderTabBody: WorkbenchProps["renderTabBody"];
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	decorateTabIcon: NonNullable<WorkbenchProps["decorateTabIcon"]>;
 	renderToolBody: WorkbenchProps["renderToolBody"];
 	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
 	onAttentionChange: WorkbenchProps["onAttentionChange"];
@@ -1334,6 +1347,7 @@ function CenterGroupView({
 				onRevealTool={shared.onRevealTool}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
+				decorateTabIcon={shared.decorateTabIcon}
 				trailing={
 					<>
 						{renderCenterActions(group.id)}
@@ -1633,6 +1647,7 @@ function SideGroupView({
 						onRevealTool={shared.onRevealTool}
 						canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 						renderTabAdornment={shared.renderTabAdornment}
+						decorateTabIcon={shared.decorateTabIcon}
 						trailing={
 							<SideGroupMenu
 								document={shared.document}
@@ -2030,6 +2045,7 @@ function BottomGroupView({
 						onRevealTool={shared.onRevealTool}
 						canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 						renderTabAdornment={shared.renderTabAdornment}
+						decorateTabIcon={shared.decorateTabIcon}
 						trailing={
 							showAlignmentMenu ? (
 								<BottomAlignmentMenu
@@ -2453,6 +2469,7 @@ export function Workbench({
 	focusRequest,
 	renderTabBody,
 	renderTabAdornment,
+	decorateTabIcon,
 	renderToolBody,
 	renderEmptyCenter,
 	renderCenterActions,
@@ -2486,6 +2503,10 @@ export function Workbench({
 	const [localFocusRequest, setLocalFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
 	const dragStartEpoch = useRef(projectionEpoch);
 	const canceled = useRef(false);
+	const renderTabIcon = useCallback<NonNullable<WorkbenchProps["decorateTabIcon"]>>(
+		(args) => decorateTabIcon?.(args) ?? args.icon,
+		[decorateTabIcon],
+	);
 
 	useEffect(() => {
 		if (!focusRequest) return;
@@ -2997,6 +3018,7 @@ export function Workbench({
 		draggingTab,
 		renderTabBody,
 		renderTabAdornment,
+		decorateTabIcon: renderTabIcon,
 		renderToolBody,
 		renderSideMenuActions,
 		onAttentionChange,

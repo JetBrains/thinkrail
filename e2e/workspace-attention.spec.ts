@@ -8,6 +8,7 @@ import { seedWorkspaceSession } from "./fixtures/sessions";
 const BASE_TS = 1_700_800_000_000;
 const DONE_CHAT = "attention done chat";
 const FAILED_CHAT = "attention failed chat";
+const INTERRUPTED_CHAT = "attention interrupted chat";
 const WAITING_CHAT = "attention waiting chat";
 
 function seedDoneChat(worktree: string): void {
@@ -31,6 +32,21 @@ function seedFailedChat(worktree: string): void {
 				timestamp: BASE_TS + 16_000,
 				stopReason: "error",
 				errorMessage: "provider unreachable",
+			},
+		],
+	});
+}
+
+function seedInterruptedChat(worktree: string): void {
+	seedWorkspaceSession(worktree, {
+		name: INTERRUPTED_CHAT,
+		messages: [
+			{ role: "user", text: "keep working through restart", timestamp: BASE_TS + 17_000 },
+			{
+				role: "assistant",
+				text: "work was interrupted",
+				timestamp: BASE_TS + 18_000,
+				stopReason: "aborted",
 			},
 		],
 	});
@@ -114,6 +130,23 @@ test("a failed chat uses the same attention dot and clears by the same review ge
 
 	await enterDefaultWorkspace(page);
 	await expect(page.getByText("provider unreachable")).toBeVisible();
+	await expect(row).not.toHaveAttribute("data-attention", /.+/);
+});
+
+test("a host-interrupted chat becomes durable attention instead of stale running", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	seedInterruptedChat(realpathSync(E2E_FIXTURE_REPO));
+	await reloadAttention(page);
+
+	const row = defaultWorkspaceRow(page);
+	await expect(row).not.toHaveAttribute("data-running", /.+/);
+	await expect(row).toHaveAttribute("data-attention", "true");
+	await expect(row.getByTestId("attention-dot")).toHaveAttribute("aria-label", "Needs attention");
+
+	await enterDefaultWorkspace(page);
+	await expect(page.getByText("work was interrupted")).toBeVisible();
 	await expect(row).not.toHaveAttribute("data-attention", /.+/);
 });
 

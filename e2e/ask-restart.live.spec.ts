@@ -174,19 +174,14 @@ function persistedWorkspaceId(): string {
 	return workspace.id;
 }
 
-test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, agent resumes", {
-	tag: "@agent",
-}, async ({ page }) => {
-	test.setTimeout(300_000);
+async function openPrivateWorkspace(page: Page): Promise<void> {
 	seedState();
 	await startHost();
-
 	await page.goto(BASE);
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
 	await expect(page.getByTestId("project-item").first()).toBeVisible();
-
 	await page.getByTestId("add-workspace").first().click();
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await expect(dialog).toBeVisible();
@@ -196,6 +191,13 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 		timeout: 20_000,
 	});
 	await expect(page.getByTestId("chat-input")).toBeVisible();
+}
+
+test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, agent resumes", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(300_000);
+	await openPrivateWorkspace(page);
 
 	await page
 		.getByTestId("chat-input")
@@ -263,4 +265,44 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 	} finally {
 		wire.close();
 	}
+});
+
+test("a graceful host restart turns a running chat into durable attention", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(300_000);
+	await openPrivateWorkspace(page);
+
+	await page
+		.getByTestId("chat-input")
+		.fill(
+			"Use the bash tool now to run `sleep 60; printf should-not-finish` exactly. " +
+				"Do not answer until it finishes.",
+		);
+	await page.getByTestId("chat-send").click();
+	const workspace = page.locator('[data-testid="workspace-item"][data-active="true"]');
+	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await expect(workspace).toHaveAttribute("data-running", "true", { timeout: 90_000 });
+	await expect(chatTab.getByTestId("running-icon")).toHaveAttribute("aria-label", "Agent working");
+
+	await page.getByTestId("project-name").first().click();
+	await expect(page.getByTestId("welcome")).toBeVisible();
+	await stopHost("SIGTERM");
+	await expect(page.getByTestId("connection-status")).not.toHaveAttribute(
+		"data-status",
+		"connected",
+		{ timeout: 30_000 },
+	);
+
+	await startHost();
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	const restartedWorkspace = page.locator('[data-testid="workspace-item"][data-kind="worktree"]');
+	await expect(restartedWorkspace).toBeVisible({ timeout: 15_000 });
+	await expect(restartedWorkspace).not.toHaveAttribute("data-running", /.+/);
+	await expect(restartedWorkspace).toHaveAttribute("data-attention", "true");
+	await expect(restartedWorkspace.getByTestId("attention-dot")).toHaveAttribute(
+		"aria-label",
+		"Needs attention",
+	);
 });

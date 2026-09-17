@@ -111,6 +111,7 @@ const DEFAULT_FIX_NOTE = "Address the reviewer's comments below.";
 function reviewSessionOptions() {
 	const cfg = getConfig();
 	return {
+		runningVisible: false,
 		...(cfg.reviewModel ? { model: cfg.reviewModel, modelOptional: true } : {}),
 		...(cfg.reviewEffort ? { thinkingLevel: cfg.reviewEffort } : {}),
 	};
@@ -144,7 +145,12 @@ export async function startTodoReviewFlow(
 		const { pkg, reviewedSha } = startTodoReview(p);
 		const pinned = reviewerSessionFor(p);
 		let reviewerSessionId: string;
-		if (pinned && (await ensureSessionAttached(pinned, p.workspaceId, ws.worktreePath))) {
+		if (
+			pinned &&
+			(await ensureSessionAttached(pinned, p.workspaceId, ws.worktreePath, {
+				runningVisible: false,
+			}))
+		) {
 			reviewerSessionId = pinned;
 		} else {
 			if (pinned) {

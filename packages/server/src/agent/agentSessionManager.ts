@@ -29,6 +29,8 @@ import type {
 	SessionEventPayload,
 	SessionQueueContent,
 	SessionQueueState,
+	SessionRunning,
+	SessionRunningPayload,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
@@ -103,7 +105,9 @@ interface Entry {
 	piCompactionInProgress: boolean;
 	registered: boolean;
 	subagentToolsRefreshPending: boolean;
+	runningVisible: boolean;
 	publishedAttentionId: string | null;
+	publishedRunning: boolean;
 	abortAttentionTurnId: string | null | undefined;
 	abortHeldAttentionCandidate: AttentionCandidate | null;
 	unpersistedAttentionCandidate: AttentionCandidate | null;
@@ -157,6 +161,11 @@ export function setSessionDeletedPublisher(fn: (payload: SessionDeletedPayload) 
 let publishAttention: (payload: SessionAttentionPayload) => void = () => {};
 export function setSessionAttentionPublisher(fn: (payload: SessionAttentionPayload) => void): void {
 	publishAttention = fn;
+}
+
+let publishRunning: (payload: SessionRunningPayload) => void = () => {};
+export function setSessionRunningPublisher(fn: (payload: SessionRunningPayload) => void): void {
+	publishRunning = fn;
 }
 
 function effectivePendingCount(entry: Entry): number {
@@ -251,8 +260,12 @@ function persistedAttentionOf(entry: Entry): AttentionCandidate | null {
 	return deriveDiskAttentionCandidate(entry.session.sessionManager.getEntries());
 }
 
+function isNonBlockingCandidate(candidate: AttentionCandidate): boolean {
+	return candidate.kind !== "blocking";
+}
+
 function isHandledAttention(sessionId: string, candidate: AttentionCandidate): boolean {
-	if (candidate.kind !== "review") return false;
+	if (!isNonBlockingCandidate(candidate)) return false;
 	const handledId = attentionLedger?.handledCandidateBySession[sessionId];
 	return handledId === candidate.id || candidate.aliases?.includes(handledId ?? "") === true;
 }
@@ -275,7 +288,7 @@ function effectiveAttentionOf(entry: Entry): AttentionCandidate | null {
 	}
 	if (!candidate) return null;
 	if (
-		candidate.kind === "review" &&
+		isNonBlockingCandidate(candidate) &&
 		((entry.abortAttentionTurnId !== undefined &&
 			entry.abortAttentionTurnId === candidate.turnId) ||
 			isHandledAttention(entry.session.sessionId, candidate))
@@ -295,7 +308,10 @@ async function diskAttentionCandidate(
 	handledId?: string,
 ): Promise<AttentionCandidate | null> {
 	const metadata = await stat(path);
-	const requireFullRead = version < 2 || handledId?.startsWith("legacy-review:") === true;
+	const requireFullRead =
+		version < 2 ||
+		handledId?.startsWith("legacy-review:") === true ||
+		handledId?.startsWith("legacy-interrupted:") === true;
 	const cached = diskAttentionMemo.get(path);
 	if (
 		cached &&
@@ -388,8 +404,54 @@ function attentionPayload(
 	workspaceId: string,
 	attentionId: string | null,
 ): SessionAttentionPayload | null {
-	const projectId = attentionProjectId(workspaceId);
+	const projectId = sessionProjectId(workspaceId);
 	return projectId === null ? null : { sessionId, workspaceId, projectId, attentionId };
+}
+
+function runningPayload(
+	sessionId: string,
+	workspaceId: string,
+	running: boolean,
+): SessionRunningPayload | null {
+	const projectId = sessionProjectId(workspaceId);
+	return projectId === null ? null : { sessionId, workspaceId, projectId, running };
+}
+
+export function listRunningSessions(): SessionRunning[] {
+	const rows: SessionRunning[] = [];
+	for (const [sessionId, entry] of sessions) {
+		if (hasDeletionTombstone(sessionId)) continue;
+		if (!entry.runningVisible || !entry.session.isStreaming) continue;
+		const projectId = sessionProjectId(entry.workspaceId);
+		if (projectId === null) continue;
+		rows.push({ sessionId, workspaceId: entry.workspaceId, projectId });
+	}
+	return rows;
+}
+
+export function syncSessionRunning(sessionId: string): void {
+	const entry = sessions.get(sessionId);
+	if (!entry) return;
+	const running = entry.runningVisible && entry.session.isStreaming;
+	if (running === entry.publishedRunning) return;
+	const payload = runningPayload(sessionId, entry.workspaceId, running);
+	if (!payload) return;
+	entry.publishedRunning = running;
+	publishRunning(payload);
+}
+
+function retractSessionRunning(sessionId: string, entry: Entry): void {
+	if (!entry.publishedRunning) return;
+	const payload = runningPayload(sessionId, entry.workspaceId, false);
+	entry.publishedRunning = false;
+	if (payload) publishRunning(payload);
+}
+
+function setSessionRunningVisible(sessionId: string, entry: Entry, visible: boolean): void {
+	if (entry.runningVisible === visible) return;
+	entry.runningVisible = visible;
+	if (visible) syncSessionRunning(sessionId);
+	else retractSessionRunning(sessionId, entry);
 }
 
 export function syncSessionAttention(sessionId: string): void {
@@ -484,12 +546,14 @@ export async function initializeSessionAttention(
 	const handledCandidateBySession: Record<string, string> = {};
 	for (const [sessionId, entry] of sessions) {
 		const candidate = rawAttentionOf(entry);
-		if (candidate?.kind === "review") handledCandidateBySession[sessionId] = candidate.id;
+		if (candidate && isNonBlockingCandidate(candidate)) {
+			handledCandidateBySession[sessionId] = candidate.id;
+		}
 	}
 	for (const workspace of workspaces) {
 		try {
 			for (const row of await migrationAttentionRows(workspace.id, workspace.cwd)) {
-				if (row.candidate?.kind === "review") {
+				if (row.candidate && isNonBlockingCandidate(row.candidate)) {
 					handledCandidateBySession[row.sessionId] = row.candidate.id;
 				}
 			}
@@ -528,7 +592,7 @@ export async function listSessionAttention(
 	};
 	applyLive();
 	for (const workspace of workspaces) {
-		const projectId = attentionProjectId(workspace.id);
+		const projectId = sessionProjectId(workspace.id);
 		if (projectId === null) continue;
 		try {
 			for (const row of await diskAttentionRows(workspace.id, workspace.cwd)) {
@@ -604,16 +668,14 @@ export function setSkillAdmissionResolver(
 	skillAdmissionResolver = resolver;
 }
 
-let attentionProjectResolver: (workspaceId: string) => string | null = () => null;
-export function setAttentionProjectResolver(
-	resolver: (workspaceId: string) => string | null,
-): void {
-	attentionProjectResolver = resolver;
+let sessionProjectResolver: (workspaceId: string) => string | null = () => null;
+export function setSessionProjectResolver(resolver: (workspaceId: string) => string | null): void {
+	sessionProjectResolver = resolver;
 }
 
-function attentionProjectId(workspaceId: string): string | null {
+function sessionProjectId(workspaceId: string): string | null {
 	try {
-		return attentionProjectResolver(workspaceId);
+		return sessionProjectResolver(workspaceId);
 	} catch {
 		return null;
 	}
@@ -704,6 +766,7 @@ export interface CreateSessionInput {
 	workspaceId: string;
 	model?: WireModel;
 	thinkingLevel?: ThinkingLevel;
+	runningVisible?: boolean;
 	/** True: an unresolvable `model` falls back to the default instead of throwing. */
 	modelOptional?: boolean;
 }
@@ -745,6 +808,7 @@ async function prepareSessionEntry(
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
 	lastSettlement: AgentSettlement | null | undefined = undefined,
+	runningVisible = true,
 ): Promise<PreparedSessionEntry> {
 	const { sessionId } = session;
 	let terminal: AgentSettlement | null = null;
@@ -761,7 +825,9 @@ async function prepareSessionEntry(
 		piCompactionInProgress: false,
 		registered: false,
 		subagentToolsRefreshPending: false,
+		runningVisible,
 		publishedAttentionId: null,
+		publishedRunning: false,
 		abortAttentionTurnId: undefined,
 		abortHeldAttentionCandidate: null,
 		unpersistedAttentionCandidate: null,
@@ -815,6 +881,9 @@ async function prepareSessionEntry(
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
 		if (sessions.get(sessionId) === entry) {
+			if (event.type === "agent_start" || event.type === "agent_settled") {
+				syncSessionRunning(sessionId);
+			}
 			if (
 				event.type === "agent_start" ||
 				event.type === "agent_settled" ||
@@ -871,15 +940,22 @@ async function registerSession(
 	session: AgentSession,
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
-	announceCreation = false,
+	options: { announceCreation?: boolean; runningVisible?: boolean } = {},
 ): Promise<CreateSessionResult> {
-	const prepared = await prepareSessionEntry(session, workspaceId, generation);
+	const prepared = await prepareSessionEntry(
+		session,
+		workspaceId,
+		generation,
+		undefined,
+		options.runningVisible,
+	);
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
+	syncSessionRunning(session.sessionId);
 	syncSessionAttention(session.sessionId);
 	applySubagentTools(prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
-	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
+	if (options.announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
 	return prepared.result;
 }
 
@@ -909,7 +985,10 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		...(model ? { model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
-	return registerSession(session, input.workspaceId, generation, true);
+	return registerSession(session, input.workspaceId, generation, {
+		announceCreation: true,
+		...(input.runningVisible !== undefined ? { runningVisible: input.runningVisible } : {}),
+	});
 }
 
 function summaryOf(sessionId: string, entry: Entry): SessionSummary {
@@ -1152,11 +1231,13 @@ async function ensureSessionAttachedInternal(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
+	runningVisible?: boolean,
 ): Promise<boolean> {
 	if (isSessionDeleted(sessionId, workspaceId)) return false;
 	const live = sessions.get(sessionId);
 	if (live) {
 		if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
+		if (runningVisible !== undefined) setSessionRunningVisible(sessionId, live, runningVisible);
 		return true;
 	}
 	const known = (await listSessionInfosStrict(cwd)).some(
@@ -1164,8 +1245,9 @@ async function ensureSessionAttachedInternal(
 	);
 	if (!known) return false;
 	await attachDiskSession(sessionId, workspaceId, cwd);
-	if (!sessions.has(sessionId))
-		throw new Error(`Session ${sessionId} was re-opened but did not register.`);
+	const attached = sessions.get(sessionId);
+	if (!attached) throw new Error(`Session ${sessionId} was re-opened but did not register.`);
+	if (runningVisible !== undefined) setSessionRunningVisible(sessionId, attached, runningVisible);
 	return true;
 }
 
@@ -1173,8 +1255,9 @@ export function ensureSessionAttached(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
+	options: { runningVisible?: boolean } = {},
 ): Promise<boolean> {
-	return ensureSessionAttachedInternal(sessionId, workspaceId, cwd);
+	return ensureSessionAttachedInternal(sessionId, workspaceId, cwd, options.runningVisible);
 }
 
 async function getSessionMessagesInternal(
@@ -1462,7 +1545,7 @@ export async function abortSession(
 	const turnId = attentionTurnId(entriesBefore);
 	const before = persistedAttentionOf(entry);
 	const held = effectiveAttentionOf(entry);
-	entry.abortHeldAttentionCandidate = held?.kind === "review" ? held : null;
+	entry.abortHeldAttentionCandidate = held && isNonBlockingCandidate(held) ? held : null;
 	entry.abortAttentionTurnId = turnId;
 	let restoredQueue: SessionQueueContent | undefined;
 	let persistenceFailureCandidate: AttentionCandidate | null = null;
@@ -1471,9 +1554,9 @@ export async function abortSession(
 		await entry.session.abort();
 		const after = persistedAttentionOf(entry);
 		const candidate =
-			after?.kind === "review" && after.turnId === turnId
+			after && isNonBlockingCandidate(after) && after.turnId === turnId
 				? after
-				: before?.kind === "review" && before.turnId === turnId
+				: before && isNonBlockingCandidate(before) && before.turnId === turnId
 					? before
 					: null;
 		if (candidate && attentionLedger) {
@@ -1635,6 +1718,7 @@ function disposeSession(sessionId: string): Promise<void> {
 		disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
 	);
 	cancelExtUiForSession(sessionId);
+	retractSessionRunning(sessionId, entry);
 	syncSessionAttention(sessionId);
 	entry.unsubscribe();
 	entry.session.dispose();
@@ -1655,6 +1739,7 @@ export function disposeAllSessions(): void {
 			disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
 		);
 		cancelExtUiForSession(sessionId);
+		retractSessionRunning(sessionId, entry);
 		entry.unsubscribe();
 		entry.session.dispose();
 	}

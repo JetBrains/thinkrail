@@ -1,23 +1,25 @@
 import type { SessionAttention, SessionAttentionPayload } from "@thinkrail/contracts";
 
-export interface AttentionHydrationSink {
-	apply: (payload: SessionAttentionPayload) => void;
-	hydrate: (rows: SessionAttention[]) => void;
+export interface SnapshotHydrationSink<Row, PushPayload> {
+	apply: (payload: PushPayload) => void;
+	hydrate: (rows: Row[]) => void;
 }
 
-export interface AttentionHydration {
-	push: (payload: SessionAttentionPayload) => void;
+export interface SnapshotHydration<Row, PushPayload> {
+	push: (payload: PushPayload) => void;
 	begin: () => number;
-	settle: (token: number, rows: SessionAttention[]) => void;
+	settle: (token: number, rows: Row[]) => void;
 	fail: (token: number) => void;
 	discard: (token: number) => void;
 	abandon: () => void;
 	buffered: () => number;
 }
 
-export function createAttentionHydration(sink: AttentionHydrationSink): AttentionHydration {
+export function createTokenizedSnapshotHydrator<Row, PushPayload>(
+	sink: SnapshotHydrationSink<Row, PushPayload>,
+): SnapshotHydration<Row, PushPayload> {
 	let token = 0;
-	let buffer: SessionAttentionPayload[] | null = null;
+	let buffer: PushPayload[] | null = null;
 
 	const drain = (): void => {
 		const pending = buffer ?? [];
@@ -54,4 +56,15 @@ export function createAttentionHydration(sink: AttentionHydrationSink): Attentio
 		},
 		buffered: () => buffer?.length ?? 0,
 	};
+}
+
+export type AttentionHydrationSink = SnapshotHydrationSink<
+	SessionAttention,
+	SessionAttentionPayload
+>;
+
+export type AttentionHydration = SnapshotHydration<SessionAttention, SessionAttentionPayload>;
+
+export function createAttentionHydration(sink: AttentionHydrationSink): AttentionHydration {
+	return createTokenizedSnapshotHydrator(sink);
 }

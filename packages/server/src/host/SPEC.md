@@ -434,9 +434,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   attribution contract are in [[module-contracts]].
 - **Live-running fan-out:** `createServer` installs the agent module's running publisher and broadcasts each
   `SessionRunningPayload` on `session.running`, subscribed by every client. `session.runningList` reads the
-  authoritative currently-streaming top-level entries from the live agent registry; unlike attention it
-  needs neither workspace records nor disk reconstruction. Pushes are not replayed, so welcome hydration is
-  the read-side repair. Running uses the same workspace→project resolver as attention and clears on teardown.
+  authoritative currently-streaming, running-visible top-level entries from the live agent registry;
+  unlike attention it needs neither workspace records nor disk reconstruction. User chat creation keeps the
+  default visible flag; `todoReview` passes `runningVisible: false` for reviewer/reflector creation and pinned
+  reattachment, so internal workflow sessions never pulse the Projects rail. Pushes are not replayed, so
+  welcome hydration is the read-side repair. Running uses the same workspace→project resolver as attention
+  and clears on teardown.
 - **CLI update notice:** a launcher may supply one optional asynchronous notice producer and fixed interval.
   `createServer` starts it after listening without awaiting it, repeats it without overlap, retains the latest
   successful immutable notice for later `server.welcome` snapshots, and publishes `host.updateAvailable` only

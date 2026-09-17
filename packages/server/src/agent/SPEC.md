@@ -143,8 +143,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     A pure derivation returns either no candidate or one opaque candidate with an internal kind:
     **blocking** for an unresolved `ask_user_question` or another host-known session-scoped blocking dialog;
     **review** for the final successful, error, or length settlement; and **interrupted** for an idle latest
-    turn whose branch has no such terminal result, including Pi's aborted terminal after graceful host
-    shutdown. Blocking outranks every live state and ignores view acknowledgements. A genuinely streaming
+    turn ending at its user entry or an assistant with an explicit aborted/nonterminal stop reason, including
+    Pi's aborted terminal after graceful host shutdown. A legacy assistant with no stop reason is ambiguous
+    and stays quiet. Blocking outranks every live state and ignores view acknowledgements. A genuinely streaming
     session and queued work otherwise produce no candidate. A newer user prompt/steer/follow-up supersedes an
     older result, handled tool failures never count alone, and an explicit user abort stays quiet by recording
     its exact interrupted candidate as handled. Ordinary assistant prose is never parsed to guess whether it
@@ -214,8 +215,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     as a graceful shutdown's aborted terminal; no second in-flight crash journal is introduced.
 
   - **Live-running projection** is deliberately smaller than attention. `listRunningSessions()` reads only
-    registered, non-deleted top-level entries whose canonical `AgentSession.isStreaming` is true; no transcript
-    scan or persistence is involved. Per-entry publish-on-change state emits `SessionRunningPayload` true at
+    registered, non-deleted top-level entries whose canonical `AgentSession.isStreaming` and host-supplied
+    `runningVisible` flag are both true; user-facing creation defaults visible, while reviewer/reflector
+    composition opts out. No transcript scan or persistence is involved. Per-entry publish-on-change state emits `SessionRunningPayload` true at
     `agent_start` and false at `agent_settled` (or teardown), using the same workspace→project resolver as
     attention. Queued messages and delegated child registries are outside this projection. The client owns
     exact-chat and workspace/project rollups; the agent owns only truthful live membership.

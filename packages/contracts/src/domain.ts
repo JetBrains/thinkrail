@@ -7,6 +7,12 @@ export interface SessionAttention {
 	attentionId: string;
 }
 
+export interface SessionRunning {
+	sessionId: string;
+	workspaceId: string;
+	projectId: string;
+}
+
 export interface Project {
 	id: string;
 	name: string;

@@ -32,6 +32,7 @@ import type {
 	ReviewCommentStatus,
 	ReviewSnapshot,
 	SessionAttention,
+	SessionRunning,
 	SpecGraphSnapshot,
 	SubagentOverride,
 	Template,
@@ -95,7 +96,7 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 65;
+export const PROTOCOL_VERSION = 66;
 export const ANALYTICS_CONSENT_PROTOCOL_VERSION = 65;
 export const WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION = 62;
 export const PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION = 63;
@@ -105,6 +106,7 @@ export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;
 export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
 export const FEEDBACK_INTERVIEW_PROTOCOL_VERSION = 56;
 export const ATTENTION_PROTOCOL_VERSION = 65;
+export const SESSION_RUNNING_PROTOCOL_VERSION = 66;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
@@ -141,6 +143,13 @@ export interface SessionAttentionPayload {
 	projectId: string;
 	sessionId: string;
 	attentionId: string | null;
+}
+
+export interface SessionRunningPayload {
+	workspaceId: string;
+	projectId: string;
+	sessionId: string;
+	running: boolean;
 }
 
 export const WS_METHODS = {
@@ -221,6 +230,7 @@ export const WS_METHODS = {
 	sessionActivityList: "session.activityList",
 	sessionAttentionList: "session.attentionList",
 	sessionAcknowledgeAttention: "session.acknowledgeAttention",
+	sessionRunningList: "session.runningList",
 	sessionGetMessages: "session.getMessages",
 	subagentGetTranscript: "subagent.getTranscript",
 	modelList: "model.list",
@@ -263,6 +273,7 @@ export const WS_CHANNELS = {
 	sessionCreated: "session.created",
 	sessionDeleted: "session.deleted",
 	sessionAttention: "session.attention",
+	sessionRunning: "session.running",
 	providerLogin: "provider.login",
 	providerChanged: "provider.changed",
 	terminalData: "terminal.data",
@@ -529,6 +540,7 @@ export interface WsMethodMap {
 		params: { workspaceId: string; sessionId: string; attentionId: string };
 		result: Ack;
 	};
+	"session.runningList": { params: Record<string, never>; result: SessionRunning[] };
 	"session.getMessages": {
 		params: { sessionId: string; workspaceId: string };
 		result: { summary: SessionSummary; messages: TranscriptMessage[] };

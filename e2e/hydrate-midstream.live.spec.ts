@@ -13,7 +13,7 @@ test("a reload mid-stream does not duplicate the streaming assistant message", {
 	await page
 		.getByTestId("chat-input")
 		.fill(
-			"Use the bash tool now to run `sleep 15; printf hydrated` exactly. " +
+			"Use the bash tool now to run `sleep 25; printf hydrated` exactly. " +
 				"Do not answer until it finishes, then reply with one sentence.",
 		);
 	await page.getByTestId("chat-send").click();
@@ -27,6 +27,25 @@ test("a reload mid-stream does not duplicate the streaming assistant message", {
 		.first();
 	await expect(bashActivity).toBeVisible({ timeout: 60_000 });
 	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "true");
+	const runningWorkspace = worktreeRows(page).first();
+	const runningTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]').first();
+	await expect(runningWorkspace).toHaveAttribute("data-running", "true");
+	await expect(runningTab.getByTestId("running-icon")).toHaveAttribute(
+		"aria-label",
+		"Agent working",
+	);
+	await expect(runningTab.getByTestId("running-icon")).toHaveCSS("animation-name", "pulse");
+	await page.emulateMedia({ reducedMotion: "reduce" });
+	await expect(runningTab.getByTestId("running-icon")).toHaveCSS("animation-name", "none");
+	await page.emulateMedia({ reducedMotion: "no-preference" });
+
+	const project = page.getByTestId("project-item").first();
+	const expand = project.getByTestId("project-expand");
+	await expand.click();
+	await expect(project).toHaveAttribute("data-running", "true");
+	await expect(project.getByTestId("running-icon")).toHaveAttribute("aria-label", "Agent working");
+	await expand.click();
+	await expect(runningWorkspace).toBeVisible();
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -37,9 +56,18 @@ test("a reload mid-stream does not duplicate the streaming assistant message", {
 		timeout: 30_000,
 	});
 	await expect(page.getByTestId("stream-indicator")).toBeVisible({ timeout: 10_000 });
+	const hydratedWorkspace = worktreeRows(page).first();
+	const hydratedTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]').first();
+	await expect(hydratedWorkspace).toHaveAttribute("data-running", "true");
+	await expect(hydratedTab.getByTestId("running-icon")).toHaveAttribute(
+		"aria-label",
+		"Agent working",
+	);
 
 	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false", {
 		timeout: 120_000,
 	});
+	await expect(hydratedWorkspace).not.toHaveAttribute("data-running", /.+/);
+	await expect(hydratedTab.getByTestId("running-icon")).toHaveCount(0);
 	await expect(assistant).toHaveCount(1);
 });

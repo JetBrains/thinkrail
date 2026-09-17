@@ -26,6 +26,7 @@ import type {
 	ExtUiRequest,
 	ImageContent,
 	SessionAttentionPayload,
+	SessionRunningPayload,
 	SessionSummary,
 } from "@thinkrail/contracts";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
@@ -48,6 +49,7 @@ import {
 	hasSession,
 	initializeSessionAttention,
 	listAvailableModels,
+	listRunningSessions,
 	listSessionAttention,
 	listSessions,
 	promptSession,
@@ -57,12 +59,13 @@ import {
 	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
-	setAttentionProjectResolver,
 	setSessionAttentionPublisher,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionManagerFactory,
+	setSessionProjectResolver,
 	setSessionPublisher,
+	setSessionRunningPublisher,
 	setSubagentsEnabledResolver,
 	steerSession,
 	toWireModel,
@@ -123,6 +126,14 @@ function tmpCwd(prefix: string): string {
 	const dir = mkdtempSync(join(tmpdir(), prefix));
 	tmpDirs.push(dir);
 	return dir;
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 1000): Promise<void> {
+	const started = Date.now();
+	while (!predicate()) {
+		if (Date.now() - started > timeoutMs) throw new Error("timed out waiting for condition");
+		await Bun.sleep(5);
+	}
 }
 
 let priorAgentDir: string | undefined;
@@ -263,7 +274,7 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 test("a settled result requests attention until its exact candidate is acknowledged", async () => {
 	const workspaceId = "ws-attention-live";
 	const published: SessionAttentionPayload[] = [];
-	setAttentionProjectResolver((id) => (id === workspaceId ? "project-attention" : null));
+	setSessionProjectResolver((id) => (id === workspaceId ? "project-attention" : null));
 	setSessionAttentionPublisher((payload) => published.push(payload));
 	let sessionId: string | undefined;
 	try {
@@ -303,8 +314,194 @@ test("a settled result requests attention until its exact candidate is acknowled
 		expect(await listSessionAttention([])).toEqual([]);
 	} finally {
 		setSessionAttentionPublisher(() => {});
-		setAttentionProjectResolver(() => null);
+		setSessionProjectResolver(() => null);
 		if (sessionId) removeSession(sessionId);
+	}
+});
+
+test("running publishes start/settled transitions and lists only live streaming sessions", async () => {
+	const slow = createFauxCore({
+		provider: "faux-running-live",
+		api: "faux-running-live",
+		models: [modelDef("faux-running-live")],
+		tokensPerSecond: 2000,
+	});
+	runtime.registerProvider("faux-running-live", cfg(slow, "faux-running-live"));
+	const workspaceId = "ws-running-live";
+	const published: SessionRunningPayload[] = [];
+	setSessionProjectResolver((id) => (id === workspaceId ? "project-running" : null));
+	setSessionRunningPublisher((payload) => published.push(payload));
+	let release = () => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let signalStarted = () => {};
+	const started = new Promise<void>((resolve) => {
+		signalStarted = resolve;
+	});
+	let sessionId: string | undefined;
+	try {
+		slow.setResponses([
+			async () => {
+				signalStarted();
+				await gate;
+				return fauxAssistantMessage("RUNNING_DONE");
+			},
+		]);
+		const session = await createSession({
+			cwd: tmpCwd("trpi-running-live-"),
+			workspaceId,
+			model: toWireModel(slow.getModel()),
+		});
+		sessionId = session.sessionId;
+
+		expect(listRunningSessions()).toEqual([]);
+		const turn = promptSession(sessionId, "run now");
+		await started;
+		await waitFor(() =>
+			published.some((payload) => payload.sessionId === sessionId && payload.running),
+		);
+		expect(listRunningSessions()).toEqual([
+			{ sessionId, workspaceId, projectId: "project-running" },
+		]);
+
+		release();
+		await turn;
+		await waitFor(() =>
+			published.some((payload) => payload.sessionId === sessionId && !payload.running),
+		);
+		expect(
+			published
+				.filter((payload) => payload.sessionId === sessionId)
+				.map((payload) => payload.running),
+		).toEqual([true, false]);
+		expect(listRunningSessions()).toEqual([]);
+	} finally {
+		release();
+		setSessionRunningPublisher(() => {});
+		setSessionProjectResolver(() => null);
+		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+		runtime.unregisterProvider("faux-running-live");
+	}
+});
+
+test("host-managed sessions can opt out of running snapshots and pushes", async () => {
+	const slow = createFauxCore({
+		provider: "faux-running-hidden",
+		api: "faux-running-hidden",
+		models: [modelDef("faux-running-hidden")],
+		tokensPerSecond: 2000,
+	});
+	runtime.registerProvider("faux-running-hidden", cfg(slow, "faux-running-hidden"));
+	const workspaceId = "ws-running-hidden";
+	const published: SessionRunningPayload[] = [];
+	setSessionProjectResolver((id) => (id === workspaceId ? "project-running" : null));
+	setSessionRunningPublisher((payload) => published.push(payload));
+	const sessionIds: string[] = [];
+	const releases: Array<() => void> = [];
+	try {
+		for (const mode of ["create", "attach"] as const) {
+			let release = () => {};
+			const gate = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			releases.push(release);
+			let signalStarted = () => {};
+			const started = new Promise<void>((resolve) => {
+				signalStarted = resolve;
+			});
+			slow.setResponses([
+				async () => {
+					signalStarted();
+					await gate;
+					return fauxAssistantMessage("HIDDEN_DONE");
+				},
+			]);
+			const cwd = tmpCwd(`trpi-running-hidden-${mode}-`);
+			const session = await createSession({
+				cwd,
+				workspaceId,
+				model: toWireModel(slow.getModel()),
+				...(mode === "create" ? { runningVisible: false } : {}),
+			});
+			sessionIds.push(session.sessionId);
+			if (mode === "attach") {
+				await ensureSessionAttached(session.sessionId, workspaceId, cwd, {
+					runningVisible: false,
+				});
+			}
+			const turn = promptSession(session.sessionId, "run without a pulse");
+			await started;
+			expect(listRunningSessions()).toEqual([]);
+			expect(published.some((payload) => payload.sessionId === session.sessionId)).toBe(false);
+			release();
+			await turn;
+		}
+	} finally {
+		for (const release of releases) release();
+		setSessionRunningPublisher(() => {});
+		setSessionProjectResolver(() => null);
+		for (const sessionId of sessionIds) {
+			if (hasSession(sessionId)) removeSession(sessionId);
+		}
+		runtime.unregisterProvider("faux-running-hidden");
+	}
+});
+
+test("teardown retracts a published running session", async () => {
+	const slow = createFauxCore({
+		provider: "faux-running-teardown",
+		api: "faux-running-teardown",
+		models: [modelDef("faux-running-teardown")],
+		tokensPerSecond: 2000,
+	});
+	runtime.registerProvider("faux-running-teardown", cfg(slow, "faux-running-teardown"));
+	const workspaceId = "ws-running-teardown";
+	const published: SessionRunningPayload[] = [];
+	setSessionProjectResolver((id) => (id === workspaceId ? "project-running" : null));
+	setSessionRunningPublisher((payload) => published.push(payload));
+	let release = () => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let signalStarted = () => {};
+	const started = new Promise<void>((resolve) => {
+		signalStarted = resolve;
+	});
+	let sessionId: string | undefined;
+	let turn: Promise<void> | undefined;
+	try {
+		slow.setResponses([
+			async () => {
+				signalStarted();
+				await gate;
+				return fauxAssistantMessage("RUNNING_STOPPED_BY_TEARDOWN");
+			},
+		]);
+		const session = await createSession({
+			cwd: tmpCwd("trpi-running-teardown-"),
+			workspaceId,
+			model: toWireModel(slow.getModel()),
+		});
+		sessionId = session.sessionId;
+		turn = promptSession(sessionId, "begin");
+		await started;
+		await waitFor(() =>
+			published.some((payload) => payload.sessionId === sessionId && payload.running),
+		);
+
+		await removeSession(sessionId);
+		await waitFor(() =>
+			published.some((payload) => payload.sessionId === sessionId && !payload.running),
+		);
+		expect(listRunningSessions()).toEqual([]);
+	} finally {
+		release();
+		await turn?.catch(() => {});
+		setSessionRunningPublisher(() => {});
+		setSessionProjectResolver(() => null);
+		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+		runtime.unregisterProvider("faux-running-teardown");
 	}
 });
 
@@ -1750,7 +1947,7 @@ test("a rolled-back delete preserves attention throughout the transaction", asyn
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	const published: SessionAttentionPayload[] = [];
 	setSessionAttentionPublisher((payload) => published.push(payload));
-	setAttentionProjectResolver(() => "project-1");
+	setSessionProjectResolver(() => "project-1");
 	let reportTrashStarted: () => void = () => {};
 	const trashStarted = new Promise<void>((resolve) => {
 		reportTrashStarted = resolve;
@@ -1799,14 +1996,14 @@ test("a rolled-back delete preserves attention throughout the transaction", asyn
 		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
 		setTrashImplementationForTests(undefined);
 		setSessionAttentionPublisher(() => {});
-		setAttentionProjectResolver(() => null);
+		setSessionProjectResolver(() => null);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });
 
 test("a failed abort acknowledgement keeps its exact candidate visible until persistence recovers", async () => {
 	const workspaceId = "ws-attention-abort-write";
-	setAttentionProjectResolver(() => "project-attention-abort-write");
+	setSessionProjectResolver(() => "project-attention-abort-write");
 	let sessionId: string | undefined;
 	const ledgerPath = join(process.env.THINKRAIL_DATA_DIR ?? "", "attention.json");
 	try {
@@ -1835,12 +2032,65 @@ test("a failed abort acknowledgement keeps its exact candidate visible until per
 		expect((await listSessionAttention([])).some((row) => row.sessionId === sessionId)).toBe(false);
 	} finally {
 		rmSync(ledgerPath, { recursive: true, force: true });
-		setAttentionProjectResolver(() => null);
+		setSessionProjectResolver(() => null);
 		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
 	}
 });
 
-test("attention migration baselines exact review ids but keeps blockers and later results", async () => {
+test("explicit abort handles the exact interrupted candidate while preserving later review attention", async () => {
+	const slow = createFauxCore({
+		provider: "faux-attention-stop",
+		api: "faux-attention-stop",
+		models: [modelDef("faux-attention-stop")],
+		tokensPerSecond: 40,
+	});
+	runtime.registerProvider("faux-attention-stop", cfg(slow, "faux-attention-stop"));
+	const workspaceId = "ws-attention-stop";
+	const projectId = "project-attention-stop";
+	setSessionProjectResolver((id) => (id === workspaceId ? projectId : null));
+	let sessionId: string | undefined;
+	try {
+		slow.setResponses([
+			fauxAssistantMessage(`SLOW_STOP ${"word ".repeat(80)}END`),
+			fauxAssistantMessage("AFTER_STOP_DONE"),
+		]);
+		const cwd = tmpCwd("trpi-attention-stop-");
+		const session = await createSession({
+			cwd,
+			workspaceId,
+			model: toWireModel(slow.getModel()),
+		});
+		sessionId = session.sessionId;
+		const turn = promptSession(sessionId, "stream then stop");
+		const deadline = Date.now() + 5000;
+		while (!seen(sessionId).includes("message_update")) {
+			if (Date.now() > deadline) throw new Error("turn never started streaming");
+			await Bun.sleep(20);
+		}
+
+		await abortSession(sessionId);
+		await turn.catch(() => {});
+		expect((await listSessionAttention([])).some((row) => row.sessionId === sessionId)).toBe(false);
+
+		const ledger = JSON.parse(
+			readFileSync(join(process.env.THINKRAIL_DATA_DIR ?? "", "attention.json"), "utf8"),
+		) as {
+			handledCandidateBySession: Record<string, string>;
+		};
+		expect(ledger.handledCandidateBySession[sessionId]).toStartWith("interrupted:");
+
+		await promptSession(sessionId, "run after stop");
+		expect(
+			(await listSessionAttention([])).find((row) => row.sessionId === sessionId)?.attentionId,
+		).toStartWith("review:");
+	} finally {
+		setSessionProjectResolver(() => null);
+		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+		runtime.unregisterProvider("faux-attention-stop");
+	}
+});
+
+test("attention migration baselines review and interrupted ids but keeps blockers and later results", async () => {
 	disposeAllSessions();
 	const cwd = tmpCwd("trpi-attention-migration-");
 	const sessionDir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
@@ -1850,6 +2100,19 @@ test("attention migration baselines exact review ids but keeps blockers and late
 		messages: [
 			{ role: "user", text: "old work", timestamp: 1_700_900_000_000 },
 			{ role: "assistant", text: "done", timestamp: 1_700_900_001_000, stopReason: "stop" },
+		],
+	});
+	writeFixtureSession(sessionDir, {
+		id: "attention-old-interrupted",
+		cwd,
+		messages: [
+			{ role: "user", text: "interrupted work", timestamp: 1_700_900_001_100 },
+			{
+				role: "assistant",
+				text: "stopped",
+				timestamp: 1_700_900_001_200,
+				stopReason: "aborted",
+			},
 		],
 	});
 	const legacyPath = join(sessionDir, "1700900001500_attention-legacy.jsonl");
@@ -1910,7 +2173,7 @@ test("attention migration baselines exact review ids but keeps blockers and late
 			},
 		],
 	});
-	setAttentionProjectResolver(() => "attention-project");
+	setSessionProjectResolver(() => "attention-project");
 	try {
 		rmSync(join(process.env.THINKRAIL_DATA_DIR ?? "", "attention.json"), { force: true });
 		await initializeSessionAttention([{ id: "attention-workspace", cwd }]);
@@ -1923,6 +2186,10 @@ test("attention migration baselines exact review ids but keeps blockers and late
 			readFileSync(join(process.env.THINKRAIL_DATA_DIR ?? "", "attention.json"), "utf8"),
 		);
 		expect(ledger.handledCandidateBySession["attention-legacy"]).toStartWith("legacy-review:");
+		expect(ledger.handledCandidateBySession["attention-old-interrupted"]).toStartWith(
+			"interrupted:",
+		);
+		expect(ledger.handledCandidateBySession["attention-waiting"]).toBeUndefined();
 		expect(await listSessionAttention([{ id: "attention-workspace", cwd }])).toEqual([
 			{
 				sessionId: "attention-waiting",
@@ -1957,7 +2224,14 @@ test("attention migration baselines exact review ids but keeps blockers and late
 				},
 			})}\n`,
 		);
-		expect(await listSessionAttention([{ id: "attention-workspace", cwd }])).toEqual([]);
+		const afterAnswer = await listSessionAttention([{ id: "attention-workspace", cwd }]);
+		expect(afterAnswer).toHaveLength(1);
+		expect(afterAnswer[0]).toMatchObject({
+			sessionId: "attention-waiting",
+			workspaceId: "attention-workspace",
+			projectId: "attention-project",
+		});
+		expect(afterAnswer[0]?.attentionId).toStartWith("interrupted:");
 
 		writeFixtureSession(sessionDir, {
 			id: "attention-new-done",
@@ -2003,6 +2277,9 @@ test("attention migration baselines exact review ids but keeps blockers and late
 		);
 		const afterMigration = await listSessionAttention([{ id: "attention-workspace", cwd }]);
 		expect(
+			afterMigration.find((row) => row.sessionId === "attention-waiting")?.attentionId,
+		).toStartWith("interrupted:");
+		expect(
 			afterMigration.find((row) => row.sessionId === "attention-new-done")?.attentionId,
 		).toStartWith("review:");
 		expect(
@@ -2012,6 +2289,6 @@ test("attention migration baselines exact review ids but keeps blockers and late
 			JSON.parse(readFileSync(lateLegacyPath, "utf8").split("\n")[0] ?? "{}").version,
 		).toBeUndefined();
 	} finally {
-		setAttentionProjectResolver(() => null);
+		setSessionProjectResolver(() => null);
 	}
 });

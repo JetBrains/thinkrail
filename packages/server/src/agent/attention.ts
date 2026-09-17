@@ -3,7 +3,7 @@ import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage, AgentSettlement } from "@thinkrail/contracts";
 import { awaitingQuestionToolCallId, isAckDetails } from "./askUserQuestion";
 
-export type AttentionCandidateKind = "blocking" | "review";
+export type AttentionCandidateKind = "blocking" | "review" | "interrupted";
 
 export interface AttentionCandidate {
 	id: string;
@@ -60,36 +60,61 @@ export function attentionTurnId(entries: readonly SessionEntry[]): string | null
 	return null;
 }
 
-function latestConversationalEntry(
-	entries: readonly SessionEntry[],
-): Extract<SessionEntry, { type: "message" }> | null {
+type MessageEntry = Extract<SessionEntry, { type: "message" }>;
+
+interface TurnEntry {
+	entry: MessageEntry;
+	index: number;
+}
+
+function latestUserTurn(entries: readonly SessionEntry[]): TurnEntry | null {
 	for (let index = entries.length - 1; index >= 0; index--) {
 		const entry = entries[index];
-		if (entry?.type !== "message") continue;
-		const role = (entry.message as MessageView).role;
-		if (role === "user" || role === "assistant") return entry;
+		if (entry?.type === "message" && (entry.message as MessageView).role === "user") {
+			return { entry, index };
+		}
 	}
 	return null;
 }
 
-function inferredSettlementStopReason(
-	entry: Extract<SessionEntry, { type: "message" }> | null,
-): string | undefined {
-	return entry ? (entry.message as MessageView).stopReason : undefined;
+function latestAssistantForTurn(
+	entries: readonly SessionEntry[],
+	turnIndex: number,
+): TurnEntry | null {
+	for (let index = entries.length - 1; index > turnIndex; index--) {
+		const entry = entries[index];
+		if (entry?.type === "message" && (entry.message as MessageView).role === "assistant") {
+			return { entry, index };
+		}
+	}
+	return null;
 }
 
-function legacyReviewCandidateId(
-	entry: Extract<SessionEntry, { type: "message" }>,
-	messageOrdinal: number,
-): string {
+function messageOrdinalAt(entries: readonly SessionEntry[], index: number): number {
+	let ordinal = 0;
+	for (let cursor = 0; cursor <= index; cursor++) {
+		if (entries[cursor]?.type === "message") ordinal++;
+	}
+	return ordinal;
+}
+
+function legacyReviewCandidateId(entry: MessageEntry, messageOrdinal: number): string {
 	const digest = createHash("sha256")
 		.update(JSON.stringify({ messageOrdinal, timestamp: entry.timestamp, message: entry.message }))
 		.digest("hex");
 	return `legacy-review:${digest}`;
 }
 
+function legacyInterruptedCandidateId(entry: MessageEntry, messageOrdinal: number): string {
+	const digest = createHash("sha256")
+		.update(JSON.stringify({ messageOrdinal, timestamp: entry.timestamp, message: entry.message }))
+		.digest("hex");
+	return `legacy-interrupted:${digest}`;
+}
+
 export function deriveAttentionCandidate(inputs: AttentionInputs): AttentionCandidate | null {
-	const turnId = attentionTurnId(inputs.entries);
+	const turn = latestUserTurn(inputs.entries);
+	const turnId = turn?.entry.id ?? null;
 	if (inputs.pendingDialogId !== null) {
 		return { id: `dialog:${inputs.pendingDialogId}`, kind: "blocking", turnId };
 	}
@@ -107,21 +132,41 @@ export function deriveAttentionCandidate(inputs: AttentionInputs): AttentionCand
 		return { id: `question:${questionId}`, kind: "blocking", turnId };
 	}
 	if (inputs.isStreaming || inputs.pendingMessageCount > 0) return null;
-	if (inputs.lastSettlement === null) return null;
-	const entry = latestConversationalEntry(inputs.entries);
-	if (!entry || (entry.message as MessageView).role !== "assistant") return null;
-	const stopReason =
+	if (!turn) return null;
+	const terminalAssistant = latestAssistantForTurn(inputs.entries, turn.index);
+	const inferredStopReason = terminalAssistant
+		? (terminalAssistant.entry.message as MessageView).stopReason
+		: undefined;
+	const reviewStopReason =
+		inputs.lastSettlement === undefined ? inferredStopReason : inputs.lastSettlement?.stopReason;
+	if (terminalAssistant && reviewStopReason && REVIEW_STOP_REASONS.has(reviewStopReason)) {
+		const messageOrdinal = messageOrdinalAt(inputs.entries, terminalAssistant.index);
+		const legacyId = legacyReviewCandidateId(terminalAssistant.entry, messageOrdinal);
+		return terminalAssistant.entry.id.startsWith("legacy:")
+			? { id: legacyId, kind: "review", turnId }
+			: {
+					id: `review:${terminalAssistant.entry.id}`,
+					kind: "review",
+					turnId,
+					aliases: [legacyId],
+				};
+	}
+	const interruptedStopReason =
 		inputs.lastSettlement === undefined
-			? inferredSettlementStopReason(entry)
-			: inputs.lastSettlement.stopReason;
-	if (!stopReason || !REVIEW_STOP_REASONS.has(stopReason)) return null;
-	const messageOrdinal = inputs.entries
-		.slice(0, inputs.entries.indexOf(entry) + 1)
-		.reduce((count, candidate) => count + (candidate.type === "message" ? 1 : 0), 0);
-	const legacyId = legacyReviewCandidateId(entry, messageOrdinal);
-	return entry.id.startsWith("legacy:")
-		? { id: legacyId, kind: "review", turnId }
-		: { id: `review:${entry.id}`, kind: "review", turnId, aliases: [legacyId] };
+			? inferredStopReason
+			: (inputs.lastSettlement?.stopReason ?? inferredStopReason);
+	if (terminalAssistant && interruptedStopReason === undefined) return null;
+	if (interruptedStopReason && REVIEW_STOP_REASONS.has(interruptedStopReason)) return null;
+	const interruptedOrdinal = messageOrdinalAt(inputs.entries, turn.index);
+	const legacyId = legacyInterruptedCandidateId(turn.entry, interruptedOrdinal);
+	return turn.entry.id.startsWith("legacy:")
+		? { id: legacyId, kind: "interrupted", turnId }
+		: {
+				id: `interrupted:${turn.entry.id}`,
+				kind: "interrupted",
+				turnId,
+				aliases: [legacyId],
+			};
 }
 
 const SESSION_ENTRY_TYPES: ReadonlySet<string> = new Set([

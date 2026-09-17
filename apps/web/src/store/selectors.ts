@@ -27,6 +27,7 @@ import type {
 	SessionRuntime,
 	TerminalTab,
 	WorkspaceAttention,
+	WorkspaceRunning,
 } from "./appStore";
 
 interface AnalyticsConsentState {
@@ -504,20 +505,57 @@ export function sessionNeedsAttention(
 	return sessionAttention(attentionByWorkspace, workspaceId, sessionId) !== null;
 }
 
+interface WorkspaceSessionMembership {
+	projectId: string;
+	sessions: Record<string, unknown>;
+}
+
+function workspaceHasSessions(
+	map: Record<string, WorkspaceSessionMembership>,
+	workspaceId: string,
+): boolean {
+	return Object.keys(map[workspaceId]?.sessions ?? {}).length > 0;
+}
+
+function projectHasSessions(
+	map: Record<string, WorkspaceSessionMembership>,
+	projectId: string,
+): boolean {
+	return Object.values(map).some(
+		(entry) => entry.projectId === projectId && Object.keys(entry.sessions).length > 0,
+	);
+}
+
 export function workspaceNeedsAttention(
 	attentionByWorkspace: AttentionMap,
 	workspaceId: string,
 ): boolean {
-	return Object.keys(attentionByWorkspace[workspaceId]?.sessions ?? {}).length > 0;
+	return workspaceHasSessions(attentionByWorkspace, workspaceId);
 }
 
 export function projectNeedsAttention(
 	attentionByWorkspace: AttentionMap,
 	projectId: string,
 ): boolean {
-	return Object.values(attentionByWorkspace).some(
-		(entry) => entry.projectId === projectId && Object.keys(entry.sessions).length > 0,
-	);
+	return projectHasSessions(attentionByWorkspace, projectId);
+}
+
+export type RunningMap = Record<string, WorkspaceRunning>;
+
+export function sessionIsRunning(
+	runningByWorkspace: RunningMap,
+	workspaceId: string,
+	sessionId: string,
+): boolean {
+	return runningByWorkspace[workspaceId]?.sessions[sessionId] === true;
+}
+
+export function workspaceIsRunning(runningByWorkspace: RunningMap, workspaceId: string): boolean {
+	return workspaceHasSessions(runningByWorkspace, workspaceId);
+}
+
+export function projectIsRunning(runningByWorkspace: RunningMap, projectId: string): boolean {
+	return projectHasSessions(runningByWorkspace, projectId);
 }
 
 export function workspaceKnownChatCount(
