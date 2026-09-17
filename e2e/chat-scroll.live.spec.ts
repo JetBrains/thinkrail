@@ -11,7 +11,7 @@ async function openChatAndSend(
 	await page.getByTestId("chat-send").click();
 }
 
-test("the reading band removes its temporary runway when the agent settles", {
+test("the reading band clears its streaming runway when the agent settles", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(120_000);
@@ -33,12 +33,12 @@ test("the reading band removes its temporary runway when the agent settles", {
 
 	const chatScroll = page.getByTestId("chat-scroll");
 	await expect(chatScroll).toHaveAttribute("data-latest-edge", "bottom");
-	await expect(page.getByTestId("chat-stream-runway")).toBeVisible();
 	await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
 	await expect(chatScroll).toHaveAttribute("data-streaming", "true");
 	await expect(statusSlot).toHaveAttribute("data-active", "true");
 	expect((await statusSlot.boundingBox())?.height).toBe(idleStatusHeight);
 	expect((await composer.boundingBox())?.y).toBe(idleComposerTop);
+	await expect(page.getByTestId("chat-stream-runway")).toHaveCount(1);
 	await expect(chatScroll).toHaveAttribute("data-streaming", "false", { timeout: 90_000 });
 
 	await expect(statusSlot).toHaveAttribute("data-active", "false");

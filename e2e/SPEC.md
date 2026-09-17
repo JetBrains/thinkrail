@@ -189,8 +189,13 @@ placement, not a layout revision or peer geometry synchronization.
 ## Isolation contract
 
 General and private-restart fixtures seed additional analytics off with consent already confirmed, so
-unrelated scenarios stay unblocked. Consent tests reset the choice over the real settings wire and cover
-drafts, persistence failures, reloads, cross-client convergence, prompt priority, and pre-v64 fallback.
+unrelated scenarios stay unblocked. They also seed the automatic interview invitation as permanently
+dismissed: the serial agent lane intentionally accumulates accepted prompts across scenarios, while dedicated
+feedback coverage injects and asserts the addressed invitation channel directly. Before any fixture reset
+deletes transcript storage, it lists and disposes every live session through the public wire; disposal aborts
+and settles an unfinished provider turn first, so a test ending mid-turn cannot recreate a headerless JSONL
+behind the next scenario. Consent tests reset the choice over the real settings wire and cover drafts,
+persistence failures, reloads, cross-client convergence, prompt priority, and pre-v64 fallback.
 
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,
 desktop cache/state plus ready/control files, Playwright transform cache, restart artifacts,
