@@ -77,6 +77,14 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
 - **Both entry points share the cap.** The worker's `request_review` tool and the Start review button
   compute the same `canAutoFix`; the tool path reports it in the tool result text, the button path acts
   on it by sending the fix. Without a shared cap the tool path loops fix → review → fix forever.
+- **The worker-facing finding identity is the persisted comment, not the model's id.** `fileFinding`
+  persists each finding as a new `rc_*` comment; the model's own ids (`f1`…) are transient. On the tool
+  path the tool result *is* the delivery, so when the worker is asked to fix (`canAutoFix`), `recordVerdict`
+  marks those `rc_*` comments `sent` to the invoking session (before spending the cycle) and the result
+  text/card names their canonical ids. Otherwise `resolve_comment` — which only closes a `sent` comment
+  assigned to this worker, by its persisted id — can never satisfy the open-finding gate, wedging
+  request_changes → fix → approve. The terminal path ("do not fix") leaves them `draft` for the user.
+  Pinned by the tool-path finding-identity test in `planReview.test.ts`.
 - **One review per plan at a time, one per step ever.** Both entry points serialize on the plan's chain
   (`planReviewQueue.onPlanChain`): the button path via `enqueuePlanReview` (fire-and-forget), the worker's
   `request_review` tool by awaiting `onPlanChain` for its result. The chain keeps Review All — and a tool
