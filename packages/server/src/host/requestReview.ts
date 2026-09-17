@@ -1,4 +1,9 @@
-import type { PlanReviewResult, ReviewComment, ReviewFixComment } from "@thinkrail/contracts";
+import type {
+	PlanReviewResult,
+	ReviewComment,
+	ReviewFailedPayload,
+	ReviewFixComment,
+} from "@thinkrail/contracts";
 import { isPlanReviewResult } from "@thinkrail/contracts";
 import type { Todo } from "pi-todos/core";
 import {
@@ -44,6 +49,11 @@ import { withReviewLock } from "./reviewLock";
 import { claimItemFix, itemFixFindings, itemOpenFindings, releaseItemFix } from "./todoReview";
 
 const DEFAULT_FIX_NOTE = "Address the reviewer's findings below.";
+
+let reviewFailedPublisher: (payload: ReviewFailedPayload) => void = () => {};
+export function setReviewFailedPublisher(fn: (payload: ReviewFailedPayload) => void): void {
+	reviewFailedPublisher = fn;
+}
 
 type ReviewParams = { workspaceId: string; sessionId: string; id: string };
 
@@ -346,12 +356,20 @@ export function startPlanReview(
 	const params = { workspaceId, sessionId, id: itemId };
 	const { pkg, reviewedSha } = startTodoReview(params);
 	return enqueuePlanReview(workspaceId, sessionId, itemId, async () => {
+		let itemTitle = itemId;
 		try {
-			const itemTitle = await itemTitleOf(workspaceId, sessionId, itemId);
+			itemTitle = await itemTitleOf(workspaceId, sessionId, itemId);
 			const result = await runReview(params, pkg, reviewedSha, itemTitle, undefined, runSubagent);
 			await recordVerdict(params, result, reviewedSha, true);
 		} catch (err) {
 			cancelTodoReview(params);
+			// The detached path has no chat to carry the error; publish it so the plan page can toast. See planReview.SPEC.md.
+			reviewFailedPublisher({
+				workspaceId,
+				itemId,
+				itemTitle,
+				message: err instanceof Error ? err.message : String(err),
+			});
 			throw err;
 		} finally {
 			await publishReview(workspaceId).catch(() => {});
