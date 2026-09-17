@@ -1421,6 +1421,7 @@ export function disposeAllSessions(): void {
 			disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
 		);
 		cancelExtUiForSession(sessionId);
+		entry.askUserQuestionWaiters.abandon();
 		entry.unsubscribe();
 		entry.session.dispose();
 	}
@@ -1431,7 +1432,8 @@ export function disposeAllSessions(): void {
 export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void> {
 	const settling = new Set<Promise<unknown>>();
 	for (const [sessionId, entry] of sessions) {
-		if (entry.session.isStreaming) settling.add(entry.session.abort());
+		if (entry.session.isStreaming && !entry.askUserQuestionWaiters.hasPending())
+			settling.add(entry.session.abort());
 		settling.add(
 			trackCascade(
 				entry.workspaceId,

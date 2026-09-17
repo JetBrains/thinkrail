@@ -332,6 +332,7 @@ export interface AskUserQuestionWaiters {
 	): { handled: false } | { handled: true; persisted: Promise<void> };
 	persistTurn(toolResults: readonly { toolCallId: string; toolName: string }[]): void;
 	hasPending(): boolean;
+	abandon(): void;
 }
 
 export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
@@ -399,6 +400,10 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 		},
 		hasPending() {
 			return [...waiting.values()].some((waiter) => waiter.waitStarted);
+		},
+		abandon() {
+			for (const waiter of waiting.values()) waiter.cleanupAbort();
+			waiting.clear();
 		},
 	};
 }

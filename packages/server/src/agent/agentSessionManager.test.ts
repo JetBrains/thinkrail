@@ -66,10 +66,12 @@ import {
 	setSessionManagerFactory,
 	setSessionPublisher,
 	setSubagentsEnabledResolver,
+	settleSessionsForShutdown,
 	steerSession,
 	syncSessionActivity,
 	toWireModel,
 } from "./agentSessionManager";
+import { ASK_STOPPED_ERROR, assessAnswerability } from "./askUserQuestion";
 import { configurePiRuntime } from "./piRuntime";
 import { setTrashImplementationForTests } from "./trash";
 import { setExtUiPublisher } from "./webUiContext";
@@ -981,6 +983,121 @@ test("restart repair leaves a dangling question answerable through the custom-me
 		expect(seen(fixture.id)).toContain("RESTART_QUESTION_CONTINUED");
 	} finally {
 		if (hasSession(fixture.id)) removeSession(fixture.id);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("explicit Stop restores both queues and persists a terminal ask error", async () => {
+	const toolCallId = "stopped-question";
+	const question = {
+		questions: [
+			{
+				question: "Continue?",
+				header: "Continue",
+				options: [
+					{ label: "Yes", description: "continue" },
+					{ label: "No", description: "stop" },
+				],
+			},
+		],
+	};
+	fauxA.setResponses([
+		fauxAssistantMessage(fauxToolCall("ask_user_question", question, { id: toolCallId })),
+	]);
+	const cwd = tmpCwd("trpi-stop-question-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-stop-question",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		await steerSession(session.sessionId, "RESTORED_STEER");
+		await followUpSession(session.sessionId, "RESTORED_FOLLOW_UP");
+
+		expect(await abortSession(session.sessionId, true)).toEqual({
+			steering: [{ text: "RESTORED_STEER" }],
+			followUp: [{ text: "RESTORED_FOLLOW_UP" }],
+		});
+		await prompting;
+
+		const transcript = await getSessionMessages(session.sessionId, "ws-stop-question", cwd);
+		const result = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (result?.role !== "toolResult") throw new Error("stopped result was not persisted");
+		expect(result.isError).toBe(true);
+		expect(JSON.stringify(result.content)).toContain(ASK_STOPPED_ERROR);
+		expect(assessAnswerability(transcript.messages, toolCallId)).toEqual({
+			ok: false,
+			reason: "not_awaiting",
+		});
+		expect(transcript.messages.filter((message) => message.role === "user")).toHaveLength(1);
+	} finally {
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test("graceful settling leaves a live question dangling for restart ack repair", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const toolCallId = "shutdown-question";
+	const cwd = tmpCwd("trpi-shutdown-question-");
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall(
+				"ask_user_question",
+				{
+					questions: [
+						{
+							question: "Wait through restart?",
+							header: "Restart",
+							options: [
+								{ label: "Yes", description: "wait" },
+								{ label: "No", description: "cancel" },
+							],
+						},
+					],
+				},
+				{ id: toolCallId },
+			),
+		),
+	]);
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-shutdown-question",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask and wait.");
+	prompting.catch(() => {});
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		await settleSessionsForShutdown(50);
+		expect(
+			(await listSessions("ws-shutdown-question", cwd)).find(
+				(row) => row.sessionId === session.sessionId,
+			)?.isStreaming,
+		).toBe(true);
+
+		disposeAllSessions();
+		expect(await ensureSessionAttached(session.sessionId, "ws-shutdown-question", cwd)).toBe(true);
+		const transcript = await getSessionMessages(session.sessionId, "ws-shutdown-question", cwd);
+		const repaired = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (repaired?.role !== "toolResult") throw new Error("restart ack was not persisted");
+		expect(repaired.details).toEqual({ kind: "ack" });
+		expect(repaired.isError).toBe(false);
+		expect(assessAnswerability(transcript.messages, toolCallId).ok).toBe(true);
+	} finally {
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });
