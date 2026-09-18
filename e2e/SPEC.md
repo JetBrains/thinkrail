@@ -252,9 +252,10 @@ browser-local persistence, and cross-browser isolation without involving a provi
 coverage seeds one canonical giant Markdown block and drives real coarse wheel input so initial virtual
 geometry cannot clamp before the row mounts. Chat-title coverage uses persisted Pi transcripts to prove the
 native `/name` path, open-tab and closed-history inline rename paths, keyboard focus recovery, bounded
-long-history scrolling, and reload durability without involving a provider. Questionnaire paging uses a canonical persisted tool-call/ack
-fixture to pin tall-page reveal, fresh-chat restored-page reveal, visible review focus, and coarse-pointer
-focus without provider variability; desktop package tests separately pin the stable
+long-history scrolling, and reload durability without involving a provider. Questionnaire paging uses
+canonical persisted tool-call/ack fixtures to pin six-question rounds beyond four, tall-page reveal,
+fresh-chat restored-page reveal, visible review focus, and coarse-pointer focus
+without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
 `@agent` because only Pi's real row growth exercises that lifecycle. Before handoff, every app-affecting
 change runs the complete `bun run e2e` no-agent gate. Artifact-only regressions remain covered by

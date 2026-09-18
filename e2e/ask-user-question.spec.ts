@@ -52,26 +52,12 @@ async function selectOldestFirst(page: Page): Promise<void> {
 	await page.keyboard.press("Escape");
 }
 
-function seedTallQuestionnaire(name: string, toolCallId: string) {
-	const args: AskUserQuestionArgs = {
-		questions: [
-			{
-				question: "Which first-page rollout should we use?",
-				header: "First page",
-				options: optionsFor("First"),
-			},
-			{
-				question: "Which second-page rollout should we use?",
-				header: "Second page",
-				options: optionsFor("Second"),
-			},
-		],
-	};
+function seedQuestionnaire(name: string, toolCallId: string, args: AskUserQuestionArgs) {
 	const ack: AskUserQuestionAckDetails = { kind: "ack" };
 	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name,
 		messages: [
-			{ role: "user", text: "Ask me to choose both rollout stages.", timestamp: BASE_TS },
+			{ role: "user", text: "Ask me these questions.", timestamp: BASE_TS },
 			{
 				role: "assistant",
 				content: [
@@ -98,6 +84,23 @@ function seedTallQuestionnaire(name: string, toolCallId: string) {
 	});
 	utimesSync(session.path, new Date(BASE_TS), new Date(BASE_TS));
 	return session;
+}
+
+function seedTallQuestionnaire(name: string, toolCallId: string) {
+	return seedQuestionnaire(name, toolCallId, {
+		questions: [
+			{
+				question: "Which first-page rollout should we use?",
+				header: "First page",
+				options: optionsFor("First"),
+			},
+			{
+				question: "Which second-page rollout should we use?",
+				header: "Second page",
+				options: optionsFor("Second"),
+			},
+		],
+	});
 }
 
 async function wheelUntilChatElementIntersects(
@@ -211,6 +214,44 @@ test("a persisted tall questionnaire reveals page changes and a restored page wi
 
 		expect(await nestedVerticalScrollSurfaces(reopenedCard)).toEqual([]);
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("a questionnaire with more than four questions exposes every page and the full review", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedQuestionnaire("six-question round", "ask-six-questions", {
+		questions: Array.from({ length: 6 }, (_, index) => ({
+			question: `Which choice should question ${index + 1} use?`,
+			header: `Q${index + 1}`,
+			options: [
+				{ label: `Choice ${index + 1}A`, description: "Use the first fixture choice." },
+				{ label: `Choice ${index + 1}B`, description: "Use the second fixture choice." },
+			],
+		})),
+	});
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChat(page, "six-question round");
+
+		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
+		await expect(card).toBeVisible();
+		await expect(card.getByTestId("ask-tab")).toHaveCount(7);
+		await card.getByTestId("ask-tab").nth(5).click();
+		await expect(card.getByTestId("ask-question-text")).toHaveText(
+			"Which choice should question 6 use?",
+		);
+		await card.getByTestId("ask-option").first().click();
+		await card.getByTestId("ask-continue").click();
+
+		await expect(card.getByTestId("ask-review-title")).toBeVisible();
+		await expect(card.getByTestId("ask-review-item")).toHaveCount(6);
+		await expect(card.getByTestId("ask-unanswered")).toContainText("Q1, Q2, Q3, Q4, Q5");
 	} finally {
 		rmSync(session.path, { force: true });
 	}
