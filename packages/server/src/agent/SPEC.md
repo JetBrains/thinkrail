@@ -355,11 +355,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     lost during disposal. Explicit user Stop synchronously claims an unanswered ask before signalling Pi; when
     Submit already won it waits for that exact result boundary and then aborts only the continuation. Every
     disposal path abandons the registry before unsubscribing so accepted-answer promises cannot strand.
-    `disposeAllSessions` remains the synchronous emergency stop, but registers its best-effort child cascades
+    `abandon()` is process-disposal plumbing, not semantic cancellation: it unblocks the in-memory tool only
+    immediately before synchronous session disposal, and real-`SessionManager` restart coverage pins that its
+    returned result is not persisted ahead of attach-time repair. `disposeAllSessions` remains the synchronous
+    emergency stop, but registers its best-effort child cascades
     in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: abort a streaming turn,
-    then dispose every live session for the workspace **unconditionally** — bypassing the per-chat delete
+    including an unanswered question—destructive workspace removal intentionally does not preserve a dialog
+    for restart—then dispose every live session for the workspace **unconditionally** — bypassing the per-chat delete
     guard that `removeSession` enforces, so a chat whose recoverable delete is mid-trash cannot abort the
     teardown loop and strand its siblings — then delete pi's on-disk transcripts rooted at
     the worktree `cwd` — pi's `SessionManager` is append-only, so purge = `list(cwd)` then `rm` the files
@@ -467,8 +471,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     pre-tool hooks to `execute`: graceful shutdown freezes new answer admission and preserves an expected call;
     an answer accepted before that freeze remains authoritative and is persisted before shutdown/Stop aborts
     its continuation. Stop-first synchronously marks an expected/waiting call stopped, so a later answer cannot
-    reverse the winner. Every expected call Pi does not execute is cleared at
-    `turn_end`. Pi retains ordinary steering/follow-up queues and cannot cross the tool boundary before the
+    reverse the winner. Semantic validation still gates execution: an answer accepted in the pre-execute
+    window is acknowledged only if the real ask returned and `turn_end` contains its result; validation error
+    or a missing result rejects the answer RPC rather than hanging or claiming success. Every expected call Pi
+    does not execute is cleared at `turn_end`. Pi retains ordinary steering/follow-up queues and cannot cross the
     answer. The answer RPC resolves the phase and acknowledges only after the matching result reaches the
     persisted `turn_end` boundary. Explicit Stop drains the queue and aborts an unanswered phase with a stable
     stopped error; after Submit wins, Stop defers Pi abort until the answer persists and then ends only the

@@ -362,6 +362,49 @@ test("explicit Stop claims an expected call before execute or a late answer can 
 	waiters.persistTurn([]);
 });
 
+test("semantic validation failure cannot acknowledge an answer accepted before execute", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	waiters.expect("tc-invalid");
+	const answered = waiters.answer("tc-invalid", { answers: [], cancelled: true });
+	const response = await createAskUserQuestionTool(waiters).execute(
+		"tc-invalid",
+		{
+			questions: [
+				{
+					question: "Which library?",
+					header: "Library",
+					options: [
+						{ label: "Other", description: "reserved" },
+						{ label: "Built in", description: "valid" },
+					],
+				},
+			],
+		} as never,
+		undefined,
+		undefined,
+		ctx(),
+	);
+	expect(textOf(response)).toContain("Option label is reserved");
+	waiters.persistTurn([{ toolCallId: "tc-invalid", toolName: "ask_user_question" }]);
+	if (answered.handled) await expect(answered.persisted).rejects.toThrow("not awaiting an answer");
+});
+
+test("turn_end without the returned answer rejects persistence instead of hanging", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	const pending = createAskUserQuestionTool(waiters).execute(
+		"tc-missing-result",
+		args() as never,
+		undefined,
+		undefined,
+		ctx(),
+	);
+	await Promise.resolve();
+	const answered = waiters.answer("tc-missing-result", { answers: [], cancelled: true });
+	await pending;
+	waiters.persistTurn([]);
+	if (answered.handled) await expect(answered.persisted).rejects.toThrow("not awaiting an answer");
+});
+
 test("turn_end clears an expected call that Pi never executed", async () => {
 	const waiters = createAskUserQuestionWaiters();
 	waiters.expect("tc-skipped");
