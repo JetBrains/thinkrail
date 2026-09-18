@@ -400,6 +400,55 @@ describe("website analytics", () => {
 		);
 	});
 
+	test("captures closed CTA and bridge-less download properties without journey enrichment", () => {
+		const dom = installDom("site.example");
+		const consent = createConsent(false);
+		const analytics = createWebsiteAnalytics({
+			productionHostname: "site.example",
+			marketingConsent: consent.adapter,
+		});
+
+		analytics.init();
+		analytics.capture("install_cta_clicked", {
+			content_key: "landing",
+			cta_location: "hero",
+			install_method: "desktop",
+		});
+		analytics.capture("download_started", {
+			content_key: "landing",
+			cta_location: "hero",
+			platform: "macos",
+			architecture: "arm64",
+			artifact: "dmg",
+		});
+		dom.loadPostHog();
+
+		expect(
+			dom.vendorCalls
+				.filter(({ method }) => method === "capture")
+				.map(({ value, properties }) => ({ event: value, properties })),
+		).toEqual([
+			{
+				event: "install_cta_clicked",
+				properties: {
+					content_key: "landing",
+					cta_location: "hero",
+					install_method: "desktop",
+				},
+			},
+			{
+				event: "download_started",
+				properties: {
+					content_key: "landing",
+					cta_location: "hero",
+					platform: "macos",
+					architecture: "arm64",
+					artifact: "dmg",
+				},
+			},
+		]);
+	});
+
 	test("clears a stale journey after unresolved consent becomes denied", () => {
 		const dom = installDom("site.example", { storedJourney: existingJourneyId });
 		const consent = createConsent(undefined);

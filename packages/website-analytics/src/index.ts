@@ -40,17 +40,17 @@ export type WebsiteContentViewedProperties = {
 
 export type WebsiteInstallCtaClickedProperties = {
 	content_key: string;
-	cta_location: "hero" | "install_section" | "quick_start" | "final_cta";
+	cta_location: "hero" | "install_section" | "quick_start" | "final_cta" | "blog_post";
 	install_method: "desktop" | "cli";
 };
 
 export type WebsiteDownloadStartedProperties = {
 	content_key: string;
-	cta_location: "hero" | "install_section" | "quick_start" | "final_cta";
+	cta_location: "hero" | "install_section" | "quick_start" | "final_cta" | "blog_post";
 	platform: "macos" | "windows" | "linux";
 	architecture: "arm64" | "x64";
 	artifact: "dmg" | "zip" | "tar.gz";
-	bridge_id: string;
+	bridge_id?: string;
 };
 
 export type WebsiteAnalyticsEventProperties = {
