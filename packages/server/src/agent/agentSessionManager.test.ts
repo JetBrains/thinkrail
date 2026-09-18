@@ -1092,6 +1092,8 @@ test("an answer accepted before execute persists before Stop aborts the continua
 	prompting.catch(() => {});
 	try {
 		await waitForPath(gate.startedPath);
+		await steerSession(session.sessionId, "STEER_BEFORE_STOP");
+		await followUpSession(session.sessionId, "FOLLOW_UP_BEFORE_STOP");
 		const result: AskUserQuestionResult = {
 			cancelled: false,
 			answers: [
@@ -1111,9 +1113,14 @@ test("an answer accepted before execute persists before Stop aborts the continua
 		});
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(stopResolved).toBe(false);
+		await steerSession(session.sessionId, "STEER_DURING_STOP");
+		await followUpSession(session.sessionId, "FOLLOW_UP_DURING_STOP");
 		gate.release();
 		await answering;
-		expect(await stopping).toEqual({ steering: [], followUp: [] });
+		expect(await stopping).toEqual({
+			steering: [{ text: "STEER_BEFORE_STOP" }, { text: "STEER_DURING_STOP" }],
+			followUp: [{ text: "FOLLOW_UP_BEFORE_STOP" }, { text: "FOLLOW_UP_DURING_STOP" }],
+		});
 		await prompting;
 		const transcript = await getSessionMessages(session.sessionId, "ws-answer-before-stop", cwd);
 		const persisted = transcript.messages.find(

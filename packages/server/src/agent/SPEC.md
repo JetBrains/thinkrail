@@ -265,8 +265,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     while the host snapshots its reconciled transient mirror first and returns complete per-message text +
     images. Pi emits the emptying `queue_update`). Its optional text-only precondition rejects before
     touching Pi whenever either tracked lane has queued images; manual compaction uses that guard, while
-    **`abortSession(..., true)`** snapshots/drains and synchronously signals abort in one manager operation,
-    then waits for idle and returns the complete queue so Stop cannot race a continuation or lose images /
+    **`abortSession(..., true)`** synchronously claims the Stop and drains the queue in one manager operation.
+    If an accepted question result must persist first, it drains once more immediately before abort and appends
+    those late arrivals to their original lanes; it then waits for idle and returns the complete ordered queue,
+    so deferred Stop cannot race a continuation or lose images /
     **`removeQueuedSession(sessionId, kind, index)`** — per-item queue removal, which Pi's
     API lacks (queues are bare string arrays, `clearQueue` is all-or-nothing): drain via the complete-content
     path, drop `lane[index]` (out-of-range → `removed: null`, everything re-queued), and re-queue each keeper

@@ -1141,6 +1141,16 @@ function queueContentOf(entry: Entry): SessionQueueContent {
 	};
 }
 
+function mergeQueueContent(
+	before: SessionQueueContent,
+	after: SessionQueueContent,
+): SessionQueueContent {
+	return {
+		steering: [...before.steering, ...after.steering],
+		followUp: [...before.followUp, ...after.followUp],
+	};
+}
+
 async function queueSessionMessage(
 	entry: Entry,
 	kind: QueueLane,
@@ -1280,9 +1290,13 @@ export async function abortSession(
 	restoreQueue = false,
 ): Promise<SessionQueueContent | undefined> {
 	const entry = mustGetEntry(sessionId);
-	const restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
+	let restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
 	await entry.askUserQuestionWaiters.prepareAbort()?.catch(() => {});
-	if (sessions.get(sessionId) === entry) await entry.session.abort();
+	if (sessions.get(sessionId) !== entry) return restoredQueue;
+	if (restoredQueue) {
+		restoredQueue = mergeQueueContent(restoredQueue, clearQueueSession(sessionId));
+	}
+	await entry.session.abort();
 	return restoredQueue;
 }
 
