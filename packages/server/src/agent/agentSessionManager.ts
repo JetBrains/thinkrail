@@ -1419,6 +1419,7 @@ function disposeSession(sessionId: string): Promise<void> {
 		disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
 	);
 	cancelExtUiForSession(sessionId);
+	entry.askUserQuestionWaiters.abandon();
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
@@ -1451,10 +1452,21 @@ export function disposeAllSessions(): void {
 export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void> {
 	const settling = new Set<Promise<unknown>>();
 	for (const [sessionId, entry] of sessions) {
-		const acceptedResult = entry.askUserQuestionWaiters.acceptedResultPersistence();
-		if (acceptedResult) settling.add(acceptedResult);
-		if (entry.session.isStreaming && !entry.askUserQuestionWaiters.hasRecoverableCall())
+		const acceptedResult = entry.askUserQuestionWaiters.prepareShutdown();
+		if (acceptedResult) {
+			settling.add(
+				acceptedResult
+					.catch(() => {})
+					.then(async () => {
+						if (sessions.get(sessionId) === entry && entry.session.isStreaming) {
+							await entry.session.abort();
+						}
+					}),
+			);
+		}
+		if (entry.session.isStreaming && !entry.askUserQuestionWaiters.hasRecoverableCall()) {
 			settling.add(entry.session.abort());
+		}
 		settling.add(
 			trackCascade(
 				entry.workspaceId,

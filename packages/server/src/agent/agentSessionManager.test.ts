@@ -962,7 +962,6 @@ test("graceful shutdown preserves an expected question before its tool executes"
 				{ id: toolCallId },
 			),
 		),
-		fauxAssistantMessage("EXPECTED_QUESTION_CONTINUED"),
 	]);
 	const cwd = tmpCwd("trpi-expected-shutdown-");
 	const session = await createSession({
@@ -980,18 +979,77 @@ test("graceful shutdown preserves an expected question before its tool executes"
 				(row) => row.sessionId === session.sessionId,
 			)?.isStreaming,
 		).toBe(true);
+		await expect(
+			answerQuestion(session.sessionId, toolCallId, { answers: [], cancelled: true }),
+		).rejects.toThrow("not awaiting an answer");
+		const stopping = abortSession(session.sessionId, true);
 		gate.release();
-		await answerQuestion(session.sessionId, toolCallId, { answers: [], cancelled: true });
+		await stopping;
 		await prompting;
-		const transcript = await getSessionMessages(session.sessionId, "ws-expected-shutdown", cwd);
-		expect(
-			transcript.messages.some(
-				(message) =>
-					message.role === "toolResult" &&
-					message.toolCallId === toolCallId &&
-					message.isError === false,
+	} finally {
+		gate.release();
+		gate.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test("graceful shutdown persists an accepted answer and aborts its continuation", async () => {
+	const gate = installAskToolGate("ask-shutdown-accepted-gate");
+	const toolCallId = "accepted-on-shutdown";
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall(
+				"ask_user_question",
+				{
+					questions: [
+						{
+							question: "Which runtime?",
+							header: "Runtime",
+							options: [
+								{ label: "Bun", description: "fast" },
+								{ label: "Node", description: "compatible" },
+							],
+						},
+					],
+				},
+				{ id: toolCallId },
 			),
-		).toBe(true);
+		),
+		fauxAssistantMessage("SHUTDOWN_CONTINUATION_RAN"),
+	]);
+	const cwd = tmpCwd("trpi-shutdown-accepted-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-shutdown-accepted",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	prompting.catch(() => {});
+	try {
+		await waitForPath(gate.startedPath);
+		const result: AskUserQuestionResult = {
+			cancelled: false,
+			answers: [
+				{
+					questionIndex: 0,
+					question: "Which runtime?",
+					kind: "option",
+					answer: "Bun",
+				},
+			],
+		};
+		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		const settling = settleSessionsForShutdown(1000);
+		gate.release();
+		await Promise.all([answering, settling, prompting]);
+		const transcript = await getSessionMessages(session.sessionId, "ws-shutdown-accepted", cwd);
+		const persisted = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
+		expect(persisted.details).toEqual(result);
+		expect(seen(session.sessionId)).not.toContain("SHUTDOWN_CONTINUATION_RAN");
 	} finally {
 		gate.release();
 		gate.remove();
@@ -1118,6 +1176,52 @@ test("Stop claims an expected question before a late answer can win", async () =
 		);
 		if (persisted?.role !== "toolResult") throw new Error("stopped result was not persisted");
 		expect(persisted.isError).toBe(true);
+	} finally {
+		gate.release();
+		gate.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test("direct session disposal rejects an accepted answer that cannot persist", async () => {
+	const gate = installAskToolGate("ask-dispose-gate");
+	const toolCallId = "dispose-after-answer";
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall(
+				"ask_user_question",
+				{
+					questions: [
+						{
+							question: "Continue?",
+							header: "Continue",
+							options: [
+								{ label: "Yes", description: "continue" },
+								{ label: "No", description: "stop" },
+							],
+						},
+					],
+				},
+				{ id: toolCallId },
+			),
+		),
+	]);
+	const session = await createSession({
+		cwd: tmpCwd("trpi-dispose-after-answer-"),
+		workspaceId: "ws-dispose-after-answer",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	prompting.catch(() => {});
+	try {
+		await waitForPath(gate.startedPath);
+		const answering = answerQuestion(session.sessionId, toolCallId, {
+			answers: [],
+			cancelled: true,
+		});
+		await removeSession(session.sessionId);
+		await expect(answering).rejects.toThrow("Session disposed while waiting for a question");
 	} finally {
 		gate.release();
 		gate.remove();

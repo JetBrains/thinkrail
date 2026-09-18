@@ -347,10 +347,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     abort every streaming parent except one with a recoverable live ask phase (`expected`, `waiting`, or
     `answer-accepted-uncommitted`), dispose every hidden child (including background children whose parent is
     idle), include cascades already pending from concurrent removal, and wait for all of them under the one
-    bound. An expected/waiting ask is deliberately left dangling for ack repair on the next attach; an
-    accepted answer is allowed to reach its native persisted result. Explicit user Stop aborts an unanswered
-    ask, but when Submit already won it first waits for that exact result boundary and then aborts only the
-    continuation.
+    bound. Shutdown atomically closes answer admission before it snapshots phases: an expected/waiting ask
+    stays dangling for ack repair, while an already accepted answer reaches its native persisted result and
+    then the continuation is aborted. A reply racing after that snapshot is rejected rather than accepted and
+    lost during disposal. Explicit user Stop synchronously claims an unanswered ask before signalling Pi; when
+    Submit already won it waits for that exact result boundary and then aborts only the continuation. Every
+    disposal path abandons the registry before unsubscribing so accepted-answer promises cannot strand.
     `disposeAllSessions` remains the synchronous emergency stop, but registers its best-effort child cascades
     in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
@@ -460,8 +462,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 
     The registry tracks `expected` (eligible call observed), `waiting`, `answer-accepted-uncommitted`, and
     `stopped` through `turn_end`. This includes Pi's real asynchronous gap from `tool_execution_start` through
-    pre-tool hooks to `execute`: graceful shutdown preserves an expected call, and an answer accepted in that
-    gap remains authoritative even if Stop follows. Every expected call Pi does not execute is cleared at
+    pre-tool hooks to `execute`: graceful shutdown freezes new answer admission and preserves an expected call;
+    an answer accepted before that freeze remains authoritative and is persisted before shutdown/Stop aborts
+    its continuation. Stop-first synchronously marks an expected/waiting call stopped, so a later answer cannot
+    reverse the winner. Every expected call Pi does not execute is cleared at
     `turn_end`. Pi retains ordinary steering/follow-up queues and cannot cross the tool boundary before the
     answer. The answer RPC resolves the phase and acknowledges only after the matching result reaches the
     persisted `turn_end` boundary. Explicit Stop drains the queue and aborts an unanswered phase with a stable

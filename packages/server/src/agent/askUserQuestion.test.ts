@@ -255,7 +255,6 @@ test("a valid live execution is sequential, blocks for its answer, and returns t
 	expect(settled).toBe(false);
 	expect(waiters.isWaitingForAnswer()).toBe(true);
 	expect(waiters.hasRecoverableCall()).toBe(true);
-	expect(waiters.acceptedResultPersistence()).toBeNull();
 
 	const result: AskUserQuestionResult = {
 		cancelled: false,
@@ -265,7 +264,6 @@ test("a valid live execution is sequential, blocks for its answer, and returns t
 	expect(answered.handled).toBe(true);
 	expect(waiters.isWaitingForAnswer()).toBe(false);
 	expect(waiters.hasRecoverableCall()).toBe(true);
-	expect(waiters.acceptedResultPersistence()).not.toBeNull();
 	const response = await pending;
 	expect(textOf(response)).toContain('"Which library?"="luxon"');
 	expect(response.details).toEqual(result);
@@ -273,7 +271,6 @@ test("a valid live execution is sequential, blocks for its answer, and returns t
 	waiters.persistTurn([{ toolCallId: "tc-1", toolName: "ask_user_question" }]);
 	if (answered.handled) await answered.persisted;
 	expect(waiters.hasRecoverableCall()).toBe(false);
-	expect(waiters.acceptedResultPersistence()).toBeNull();
 });
 
 test("an answer arriving after tool_execution_start but before execute is retained", async () => {
@@ -317,6 +314,36 @@ test("an early answer wins even if Stop reaches the tool before execute starts",
 	expect(response.details).toEqual(result);
 	waiters.persistTurn([{ toolCallId: "tc-early-stop", toolName: "ask_user_question" }]);
 	if (answered.handled) await answered.persisted;
+});
+
+test("shutdown freezes an expected call before a late answer can race its snapshot", () => {
+	const waiters = createAskUserQuestionWaiters();
+	waiters.expect("tc-shutdown-expected");
+	expect(waiters.prepareShutdown()).toBeNull();
+	expect(waiters.hasRecoverableCall()).toBe(true);
+	expect(() => waiters.answer("tc-shutdown-expected", { answers: [], cancelled: true })).toThrow(
+		"not awaiting an answer",
+	);
+	waiters.abandon();
+});
+
+test("shutdown waits for an answer already accepted before its snapshot", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	const pending = createAskUserQuestionTool(waiters).execute(
+		"tc-shutdown-accepted",
+		args() as never,
+		undefined,
+		undefined,
+		ctx(),
+	);
+	await Promise.resolve();
+	const answered = waiters.answer("tc-shutdown-accepted", { answers: [], cancelled: true });
+	expect(answered.handled).toBe(true);
+	await pending;
+	const settling = waiters.prepareShutdown();
+	expect(settling).not.toBeNull();
+	waiters.persistTurn([{ toolCallId: "tc-shutdown-accepted", toolName: "ask_user_question" }]);
+	await settling;
 });
 
 test("explicit Stop claims an expected call before a late answer can win", () => {

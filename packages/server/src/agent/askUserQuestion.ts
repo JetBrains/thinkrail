@@ -358,13 +358,14 @@ export interface AskUserQuestionWaiters {
 	persistTurn(toolResults: readonly { toolCallId: string; toolName: string }[]): void;
 	isWaitingForAnswer(): boolean;
 	hasRecoverableCall(): boolean;
-	acceptedResultPersistence(): Promise<void> | null;
+	prepareShutdown(): Promise<void> | null;
 	prepareAbort(): Promise<void> | null;
 	abandon(): void;
 }
 
 export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 	const waiting = new Map<string, LiveQuestionWaiter>();
+	let shutdownPrepared = false;
 	const waiterFor = (toolCallId: string): LiveQuestionWaiter => {
 		let waiter = waiting.get(toolCallId);
 		if (!waiter) {
@@ -375,6 +376,12 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 	};
 	const notAwaiting = (toolCallId: string): Error =>
 		new Error(`This questionnaire is not awaiting an answer: ${toolCallId}`);
+	const acceptedResultPersistence = (): Promise<void> | null => {
+		const accepted = [...waiting.values()]
+			.filter((waiter) => waiter.phase === "answer-accepted-uncommitted")
+			.map((waiter) => waiter.persisted);
+		return accepted.length > 0 ? Promise.all(accepted).then(() => {}) : null;
+	};
 	return {
 		expect(toolCallId) {
 			waiterFor(toolCallId);
@@ -405,7 +412,7 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 		answer(toolCallId, result) {
 			const waiter = waiting.get(toolCallId);
 			if (!waiter) return { handled: false };
-			if (waiter.phase === "stopped") throw notAwaiting(toolCallId);
+			if (shutdownPrepared || waiter.phase === "stopped") throw notAwaiting(toolCallId);
 			if (waiter.phase === "answer-accepted-uncommitted") {
 				throw new Error(`This questionnaire was already answered: ${toolCallId}`);
 			}
@@ -441,11 +448,9 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 		hasRecoverableCall() {
 			return [...waiting.values()].some((waiter) => waiter.phase !== "stopped");
 		},
-		acceptedResultPersistence() {
-			const accepted = [...waiting.values()]
-				.filter((waiter) => waiter.phase === "answer-accepted-uncommitted")
-				.map((waiter) => waiter.persisted);
-			return accepted.length > 0 ? Promise.all(accepted).then(() => {}) : null;
+		prepareShutdown() {
+			shutdownPrepared = true;
+			return acceptedResultPersistence();
 		},
 		prepareAbort() {
 			const accepted: Promise<void>[] = [];
