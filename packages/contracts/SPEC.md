@@ -258,7 +258,7 @@ of the host.
   latest protocol; **`JBCENTRAL_QUOTA_PROTOCOL_VERSION`** likewise pins the v59 quota read + settings;
   **`WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`** pins the v62 Windows-shell setting so a later web client
   hides it against a host that can preserve but cannot apply that config field;
-  **`PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION`** pins the v66 review reshape — the reviewer chat is gone, so
+  **`PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION`** pins the v67 review reshape — the reviewer chat is gone, so
   `TodoPlan.reviewerSessionId` and `ReviewComment.reflection` left the wire, `todo.startReview` returns
   a bare ack, and its detached failure arrives on the additive `review.failed` push (`ReviewFailedPayload`)
   since the review has no chat to carry it. An older client reads the dropped fields as absent, so the pin

@@ -31,7 +31,7 @@ export function supportsSessionActivity(protocolVersion: number | null): boolean
 }
 
 /** The agent plan-review capability (`todo.startReview`/`reviewAll` + the hidden review subagent) landed at
- * v66. An older host serves neither, so the UI must not offer it — see [[submodule-web-transport]]. */
+ * v67. An older host serves neither, so the UI must not offer it — see [[submodule-web-transport]]. */
 export function supportsPlanReview(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION;
 }
