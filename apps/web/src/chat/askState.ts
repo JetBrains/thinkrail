@@ -1,4 +1,4 @@
-import type { AskUserQuestionResult } from "@thinkrail/contracts";
+import { type AskUserQuestionResult, assistantToolCallsAreExecutable } from "@thinkrail/contracts";
 import { createContext, useContext } from "react";
 import type { ChatTurn, ToolResultState } from "./types";
 
@@ -45,7 +45,7 @@ export function deriveAskStates(
 				if (block.type === "toolCall" && block.name === "ask_user_question") {
 					calls[block.id] = {
 						turnIndex: i,
-						dead: turn.message.stopReason === "error" || turn.message.stopReason === "aborted",
+						dead: !assistantToolCallsAreExecutable(turn.message.stopReason),
 					};
 				}
 			}

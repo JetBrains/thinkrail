@@ -423,8 +423,8 @@ test("assessAnswerability: an ack'd, unanswered call is answerable and yields it
 	if (verdict.ok) expect(verdict.args.questions[0]?.question).toBe("Which library?");
 });
 
-test("assessAnswerability: a call from an errored or aborted assistant is terminal", () => {
-	for (const stopReason of ["error", "aborted"]) {
+test("assessAnswerability: a call from a non-executable assistant is terminal", () => {
+	for (const stopReason of ["error", "aborted", "length"]) {
 		const messages = [askCall("tc-dead", args(), stopReason)];
 		expect(assessAnswerability(messages, "tc-dead")).toEqual({
 			ok: false,

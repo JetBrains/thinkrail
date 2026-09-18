@@ -38,7 +38,11 @@ import type {
 	TranscriptMessage,
 	WireModel,
 } from "@thinkrail/contracts";
-import { isTranscriptMessageRole, normalizeSessionTitle } from "@thinkrail/contracts";
+import {
+	assistantToolCallsAreExecutable,
+	isTranscriptMessageRole,
+	normalizeSessionTitle,
+} from "@thinkrail/contracts";
 import type { ParentContext } from "pi-delegation";
 import { RECURSION_GUARD_TOOLS } from "pi-subagents";
 import { logger } from "../log";
@@ -534,8 +538,7 @@ async function prepareSessionEntry(
 		if (
 			event.type === "message_end" &&
 			event.message.role === "assistant" &&
-			event.message.stopReason !== "error" &&
-			event.message.stopReason !== "aborted"
+			assistantToolCallsAreExecutable(event.message.stopReason)
 		) {
 			for (const block of event.message.content) {
 				if (block.type === "toolCall" && block.name === ASK_USER_QUESTION_TOOL_NAME)

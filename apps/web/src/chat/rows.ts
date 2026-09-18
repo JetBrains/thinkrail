@@ -1,4 +1,8 @@
-import type { DelegationRunDetails, UserMessage } from "@thinkrail/contracts";
+import {
+	assistantToolCallsAreExecutable,
+	type DelegationRunDetails,
+	type UserMessage,
+} from "@thinkrail/contracts";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { resolveProminence } from "./toolRegistry";
 import { strArg } from "./tools/toolHelpers";
@@ -111,7 +115,7 @@ export function deriveRows(
 		if (!turn) continue;
 		if (turn.kind === "assistant") {
 			const { message } = turn;
-			const dead = message.stopReason === "aborted" || message.stopReason === "error";
+			const dead = !assistantToolCallsAreExecutable(message.stopReason);
 			for (let b = 0; b < message.content.length; b++) {
 				const block = message.content[b];
 				if (!block) continue;

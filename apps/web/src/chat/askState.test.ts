@@ -41,8 +41,8 @@ test("a user turn AFTER an unanswered call supersedes it; one before does not", 
 	expect(states.tc2).toEqual({ superseded: false, terminal: false });
 });
 
-test("an ask in an errored or aborted assistant is terminal without a tool result", () => {
-	for (const stopReason of ["error", "aborted"]) {
+test("an ask in a non-executable assistant is terminal without a tool result", () => {
+	for (const stopReason of ["error", "aborted", "length"]) {
 		expect(deriveAskStates([askTurn("a1", "tc1", stopReason)], {}).tc1).toEqual({
 			superseded: false,
 			terminal: true,

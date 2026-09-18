@@ -259,6 +259,74 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 	expect(hydrated.summary.lastSettlement).toEqual(settled?.terminal);
 });
 
+test("a length-truncated questionnaire never registers as a live blocker", async () => {
+	setActivityProjectResolver(() => "project-length-ask");
+	let releaseContinuation = (): void => {};
+	const continuationGate = new Promise<void>((resolve) => {
+		releaseContinuation = resolve;
+	});
+	let markContinuationStarted = (): void => {};
+	const continuationStarted = new Promise<void>((resolve) => {
+		markContinuationStarted = resolve;
+	});
+	const toolCallId = "length-question";
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall(
+				"ask_user_question",
+				{
+					questions: [
+						{
+							question: "Which runtime?",
+							header: "Runtime",
+							options: [
+								{ label: "Bun", description: "fast" },
+								{ label: "Node", description: "compatible" },
+							],
+						},
+					],
+				},
+				{ id: toolCallId },
+			),
+			{ stopReason: "length" },
+		),
+		async () => {
+			markContinuationStarted();
+			await continuationGate;
+			return fauxAssistantMessage("RECOVERED_AFTER_LENGTH");
+		},
+	]);
+	const cwd = tmpCwd("trpi-length-question-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-length-question",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask a question.");
+	try {
+		await continuationStarted;
+		expect(
+			(await listSessionActivity()).find((row) => row.sessionId === session.sessionId)?.status,
+		).toBe("running");
+		await expect(
+			answerQuestion(session.sessionId, toolCallId, { answers: [], cancelled: true }),
+		).rejects.toThrow("not awaiting an answer");
+		releaseContinuation();
+		await prompting;
+		const transcript = await getSessionMessages(session.sessionId, "ws-length-question", cwd);
+		const result = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (result?.role !== "toolResult") throw new Error("length tool result was not persisted");
+		expect(result.isError).toBe(true);
+	} finally {
+		releaseContinuation();
+		await prompting.catch(() => {});
+		removeSession(session.sessionId);
+		setActivityProjectResolver(() => null);
+	}
+});
+
 test("a disabled workspace creates chats without active subagent tools", async () => {
 	const workspaceId = "ws-subagents-initial-off";
 	setSubagentsEnabledResolver((id) => id !== workspaceId);

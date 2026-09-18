@@ -11,7 +11,11 @@ import type {
 	AskUserQuestionArgs,
 	AskUserQuestionResult,
 } from "@thinkrail/contracts";
-import { ASK_USER_ANSWERS_CUSTOM_TYPE, isAskUserAnswersMessage } from "@thinkrail/contracts";
+import {
+	ASK_USER_ANSWERS_CUSTOM_TYPE,
+	assistantToolCallsAreExecutable,
+	isAskUserAnswersMessage,
+} from "@thinkrail/contracts";
 import { type Static, Type } from "typebox";
 
 export const MIN_OPTIONS = 2;
@@ -230,7 +234,7 @@ export function assessAnswerability(
 		for (const block of toolCallsOf(view)) {
 			if (block.id === toolCallId && block.name === ASK_USER_QUESTION_TOOL_NAME) {
 				callIndex = i;
-				callDead = view.stopReason === "error" || view.stopReason === "aborted";
+				callDead = !assistantToolCallsAreExecutable(view.stopReason);
 				args = (block.arguments ?? { questions: [] }) as AskUserQuestionArgs;
 			}
 		}
