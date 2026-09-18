@@ -201,8 +201,8 @@ per-workspace views/attention/ephemeral running membership, terminal catalogs, a
   agree.
   - **Workspace attention** (`attentionByWorkspace`) is the host's cross-workspace signal for chats the
     person should inspect or answer. Keyed workspace → **`WorkspaceAttention`** (`{ projectId, sessions }`),
-    where each session value carries its opaque candidate id plus local arrival metadata; no candidate is
-    absence at every level. A retraction deletes the session and then its empty workspace, so a quiet rail is
+    where each session value carries its opaque candidate id, optional protocol-v67 `attentionPriority` +
+    `attentionAt`, and local arrival metadata; no candidate is absence at every level. A retraction deletes the session and then its empty workspace, so a quiet rail is
     an empty map. Each entry carries `projectId` from the wire rather than consulting lazily fetched
     workspace lists, which keeps a collapsed, never-opened project's rollup truthful.
     **`applySessionAttention`** folds one live push after transport's Pi-event flush. It may stamp the runtime
@@ -229,7 +229,11 @@ per-workspace views/attention/ephemeral running membership, terminal catalogs, a
     request settlement clears only the same candidate's local flag, so a successful blocking no-op or failure
     restores its dot while a newer candidate is untouched.
     Rollups are never stored: pure `sessionNeedsAttention`, `workspaceNeedsAttention`, and
-    `projectNeedsAttention` selectors read the same map. The all-known-chat selector deduplicates open chat
+    `projectNeedsAttention` selectors read the same map. `attentionSessionTargets` also derives, never stores,
+    the F8 ring: candidates with complete ordering metadata sort blocking before normal, then newest-first,
+    then code-unit project/workspace/session ids; locally acknowledging candidates are already absent through
+    `sessionAttention`. `nextAttentionSessionTarget` wraps from an eligible selected/pending anchor. The
+    all-known-chat selector deduplicates open chat
     resources plus closed/history membership for the chat-dot threshold; plan documents and hidden child
     sessions do not count. There is no status precedence, count, or second unread slice.
   - **Live running** (`runningByWorkspace`) is a separate ephemeral normalized map of workspace/project/
@@ -521,11 +525,7 @@ and merge lives once, so a new per-diff toggle is a one-liner, not another copy.
 panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
 `BRANCH_SCOPE`); keyed **per workspace**, not app-wide like `changesView`, because a scope belongs to that
 branch's review — a commit sha means nothing in another worktree — and dropped with the workspace in
-`applyWorkspaceRemoved`. The transient **`chatLocationRequest`** — the history-search jump
-  deep link; the requester activates the target project+workspace, the workbench shell integration
-  opens/hydrates the target
-  chat, `ChatView` consumes + clears — is **`ChatLocationRequest { workspaceId, projectId, sessionId,
-  messageIndex, anchorText, navigation? }`**, set by **`requestChatLocation(req)`** (which captures and
+`applyWorkspaceRemoved`. The transient **`chatLocationRequest`** is discriminated: `reveal-message` retains history search's message anchor and `ChatView` consumption; `open-chat` carries exact chat identity and shell reconciliation consumes it after selection, hydration, and keyboard focus. Both share **`ChatLocationRequest { kind, workspaceId, projectId, sessionId, navigation? }`**, set by **`requestChatLocation(req)`** (which captures and
   advances an already-hydrated destination group's local clock *before* switching workspaces, and sets `selectedProjectId` +
   `activeWorkspaceId` **atomically**, the same invariant `activateWorkspace` upholds, since the target chat
   can live in a different project/workspace than the one the search ran from — the caller

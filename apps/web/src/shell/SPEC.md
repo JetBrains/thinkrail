@@ -139,8 +139,11 @@ genuinely-stuck case it exists for.
 `useGlobalHotkeys` remains the one capture-phase owner of app-wide chords. It routes commands through the workbench command surface rather than imperative feature-panel refs:
 
 - `Ctrl+R` opens chat history for the locally selected chat, or the workspace's most-recent chat fallback;
+- `F8` / `Shift+F8` move forward/backward through every host-known attention candidate, blockers first then newest normal work;
 - `Mod+B` toggles the left side, restoring local group/tab attention or an eligible singleton tool;
 - `Mod+J` does the same for the right side;
 - `Mod+Shift+J` toggles bottom, restoring local bottom attention, a bottom-targeted singleton, or the terminal creation surface.
 
-Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`. The three layout chords remain app-owned inside xterm, do not repeat, and are suppressed while a modal dialog is open. With no active workspace, right/bottom chords neither act nor swallow the browser chord; Projects remains available. Terminal `Ctrl+R` still belongs to xterm; `Ctrl+Shift+R`, macOS `Cmd+R`, F5, and browser reload remain untouched. All other arrangement operations are exposed by the layout command/menu system in [[submodule-web-shell-layout]].
+Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`. The three layout chords remain app-owned inside xterm, do not repeat, and are suppressed while a modal dialog is open. With no active workspace, right/bottom chords neither act nor swallow the browser chord; Projects remains available. Terminal `Ctrl+R` still belongs to xterm; `Ctrl+Shift+R`, macOS `Cmd+R`, F5, and browser reload remain untouched.
+
+The shell attention navigator derives the ring on each discrete press and keeps only an ephemeral pending target/request generation outside Zustand. It loads missing workspace membership, rechecks current candidate identity, and routes through exact `open-chat`; rapid presses, stale reads, connection changes, and unrelated navigation are last-intent-wins. F8 is captured (including in Monaco/xterm) only while connected to a host satisfying `ATTENTION_NAVIGATION_PROTOCOL_VERSION`; repeats do not advance, modded/modal gestures yield, and activity arrival never moves focus. All other arrangement operations are exposed by [[submodule-web-shell-layout]].

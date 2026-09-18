@@ -43,9 +43,7 @@ primitives), which has its own spec.
   and removes the cosmetic curtains; reduced motion removes both optical and third-party controller opacity
   transitions. Surface colour is an explicit semantic prop (`sidebar` or `terminal`), never inferred from
   arrangement.
-- **`AttentionDot.tsx`** — the store-free, static accent dot whose sole accessible label is “Needs
-  attention.” It carries no reason, count, tooltip, motion, or clearing behavior; callers decide only
-  whether it is present.
+- **`AttentionDot.tsx`** — the store-free static accent dot whose accessible label defaults to “Needs attention.” A caller may supply the same meaning plus a shortcut hint; it still carries no reason, count, tooltip, motion, or clearing behavior. ProjectTree owns the optional tooltip, while tab/history callers remain unchanged.
 - **`RunningIcon.tsx`** — a store-free wrapper for an identity icon whose existing colour must not change.
   While active it applies the shared soft pulse and the accessible label “Agent working”; reduced-motion
   removes animation and uses the same-hue static treatment. It never renders a dot, spinner, count, or

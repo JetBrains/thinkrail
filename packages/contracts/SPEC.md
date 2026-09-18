@@ -546,10 +546,8 @@ should inspect or answer?* It deliberately does not overload that signal with ru
 waiting presentation states. Absence means no attention everywhere; only a push needs `attentionId: null` to
 transmit a retraction.
 
-- **`SessionAttention`** = `{ sessionId, workspaceId, projectId, attentionId }` — one current candidate.
-  `attentionId` is an opaque stable identity for the decisive transcript/settlement or blocking interaction.
-- **`session.attention`** push carries the same attribution plus `attentionId: string | null` whenever the
-  candidate changes or retracts.
+- **`SessionAttention`** = `{ sessionId, workspaceId, projectId, attentionId, attentionPriority?, attentionAt? }` — one current candidate. `attentionId` remains the opaque acknowledgement identity. The optional ordering fields let new clients decode a v66 host; at `ATTENTION_NAVIGATION_PROTOCOL_VERSION` and above every row carries `blocking | normal` plus a finite host-millisecond timestamp.
+- **`session.attention`** is discriminated by `attentionId`: a non-null push carries the same versioned ordering metadata, while a null retraction carries only attribution. It emits whenever the candidate changes or retracts.
 - **`projectId` rides every row** because the client has workspace membership only for projects whose
   `workspace.list` it loaded; a collapsed, never-opened project must still roll up truthfully.
 - **`session.attentionList`** (no params) returns the authoritative all-workspace candidate set, unioning live
@@ -559,7 +557,7 @@ transmit a retraction.
   candidate. A successful acknowledgement publishes the ordinary retraction to every client, making seen
   state owner-global.
 
-The internal review-versus-blocking-versus-interrupted reason remains host policy, not a wire or UI state.
+The internal review-versus-blocking-versus-interrupted reason remains host policy, not a wire or UI state. `attentionPriority` exposes only the navigation distinction approved for F8: blockers before every normal candidate; it is not rendered as another attention vocabulary.
 An interrupted candidate represents an idle latest turn ending at its user entry or at an assistant with an
 explicit aborted/nonterminal stop reason; a stopless legacy assistant is too ambiguous and stays quiet. A
 full host restart therefore replaces a truthful running pulse with the same durable attention dot used for
@@ -573,9 +571,7 @@ no activity types, derivation, or push channel. An already-loaded old client tre
 activity-capable and calls that method on reconnect; the empty authoritative result is what clears its old
 markers instead of stranding them forever.
 
-`ATTENTION_PROTOCOL_VERSION` pins the coordinated replacement at v66. Protocol v65 belongs to the earlier
-analytics-consent addition and has no attention methods; a new client connected to that or any older host
-clears its attention map and renders no dot rather than reviving the old multi-state language.
+`ATTENTION_PROTOCOL_VERSION` pins the coordinated replacement at v66. Protocol v65 belongs to the earlier analytics-consent addition and has no attention methods; a new client connected to that or any older host clears its attention map and renders no dot rather than reviving the old multi-state language. `ATTENTION_NAVIGATION_PROTOCOL_VERSION` separately pins priority/recency at v67, so v66 dots remain truthful while F8 is neither advertised nor captured.
 
 ## The live-running layer
 

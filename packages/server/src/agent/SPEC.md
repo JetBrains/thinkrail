@@ -158,7 +158,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     Review candidates are created only at `agent_settled`, never attempt-level `agent_end`, so provider retry
     and compaction recovery cannot claim the person is needed early. Each candidate id is stable across live
     and disk derivation: review keys to the decisive assistant entry, interrupted keys to the latest user turn,
-    and blockers key to their interaction. Current transcripts use that entry id; legacy linear transcripts
+    and blockers key to their interaction. The same candidate carries stable ordering metadata: blocking maps
+    to blocking priority, every other kind to normal, and `attentionAt` comes from the latest decisive
+    candidate-entry timestamp. It survives restart and never changes on attach, view, or acknowledgement.
+    Current transcripts use that entry id; legacy linear transcripts
     use a content-plus-branch-ordinal fingerprint carried as an alias after pi later migrates them, so
     attention never rewrites a transcript merely to mint identity. The manager
     keeps only publish-on-change bookkeeping per live entry. Exact-candidate acknowledgement clears a review
@@ -189,8 +192,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     host, applies the owner-global handled ledger, and returns only current candidates. This reconstructs
     completed results and unresolved questionnaires after reconnect or host restart even when no client has
     opened the workspace. Every row/push carries `projectId` through `setSessionProjectResolver`; the agent
-    remains ignorant of the workspace registry. The client owns project/workspace rollup and the
-    all-known-chat presentation threshold—there is no server precedence or count.
+    remains ignorant of the workspace registry. Non-null rows/pushes expose candidate priority and timestamp
+    for client navigation; null retractions do not. The client owns project/workspace rollup and the
+    all-known-chat presentation threshold; ordering metadata never enters the ledger and adds no server count.
 
     The pi transcript remains the sole durable source for **what happened**. The separate versioned ledger
     stores only genuinely new knowledge—session→last-handled review candidate, whether viewed or explicitly
