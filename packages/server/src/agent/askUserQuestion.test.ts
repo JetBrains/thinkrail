@@ -319,6 +319,18 @@ test("an early answer wins even if Stop reaches the tool before execute starts",
 	if (answered.handled) await answered.persisted;
 });
 
+test("explicit Stop claims an expected call before a late answer can win", () => {
+	const waiters = createAskUserQuestionWaiters();
+	waiters.expect("tc-stop-expected");
+	expect(waiters.prepareAbort()).toBeNull();
+	expect(waiters.isWaitingForAnswer()).toBe(false);
+	expect(waiters.hasRecoverableCall()).toBe(false);
+	expect(() => waiters.answer("tc-stop-expected", { answers: [], cancelled: true })).toThrow(
+		"not awaiting an answer",
+	);
+	waiters.persistTurn([]);
+});
+
 test("turn_end clears an expected call that Pi never executed", async () => {
 	const waiters = createAskUserQuestionWaiters();
 	waiters.expect("tc-skipped");

@@ -1072,6 +1072,60 @@ test("an answer accepted before execute persists before Stop aborts the continua
 	}
 });
 
+test("Stop claims an expected question before a late answer can win", async () => {
+	const gate = installAskToolGate("ask-stop-first-gate");
+	const toolCallId = "stop-before-answer";
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall(
+				"ask_user_question",
+				{
+					questions: [
+						{
+							question: "Continue?",
+							header: "Continue",
+							options: [
+								{ label: "Yes", description: "continue" },
+								{ label: "No", description: "stop" },
+							],
+						},
+					],
+				},
+				{ id: toolCallId },
+			),
+		),
+	]);
+	const cwd = tmpCwd("trpi-stop-before-answer-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-stop-before-answer",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	prompting.catch(() => {});
+	try {
+		await waitForPath(gate.startedPath);
+		const stopping = abortSession(session.sessionId, true);
+		await expect(
+			answerQuestion(session.sessionId, toolCallId, { answers: [], cancelled: true }),
+		).rejects.toThrow("not awaiting an answer");
+		gate.release();
+		expect(await stopping).toEqual({ steering: [], followUp: [] });
+		await prompting;
+		const transcript = await getSessionMessages(session.sessionId, "ws-stop-before-answer", cwd);
+		const persisted = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (persisted?.role !== "toolResult") throw new Error("stopped result was not persisted");
+		expect(persisted.isError).toBe(true);
+	} finally {
+		gate.release();
+		gate.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
 test("a live question blocks continuation, preserves queue order, and acknowledges after its native result persists", async () => {
 	setActivityProjectResolver(() => "project-live-question");
 	const activityStatuses: (ActivityStatus | null)[] = [];

@@ -1281,7 +1281,7 @@ export async function abortSession(
 ): Promise<SessionQueueContent | undefined> {
 	const entry = mustGetEntry(sessionId);
 	const restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
-	await entry.askUserQuestionWaiters.acceptedResultPersistence()?.catch(() => {});
+	await entry.askUserQuestionWaiters.prepareAbort()?.catch(() => {});
 	if (sessions.get(sessionId) === entry) await entry.session.abort();
 	return restoredQueue;
 }

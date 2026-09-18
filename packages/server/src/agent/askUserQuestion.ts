@@ -359,6 +359,7 @@ export interface AskUserQuestionWaiters {
 	isWaitingForAnswer(): boolean;
 	hasRecoverableCall(): boolean;
 	acceptedResultPersistence(): Promise<void> | null;
+	prepareAbort(): Promise<void> | null;
 	abandon(): void;
 }
 
@@ -444,6 +445,20 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 			const accepted = [...waiting.values()]
 				.filter((waiter) => waiter.phase === "answer-accepted-uncommitted")
 				.map((waiter) => waiter.persisted);
+			return accepted.length > 0 ? Promise.all(accepted).then(() => {}) : null;
+		},
+		prepareAbort() {
+			const accepted: Promise<void>[] = [];
+			for (const waiter of waiting.values()) {
+				if (waiter.phase === "answer-accepted-uncommitted") {
+					accepted.push(waiter.persisted);
+					continue;
+				}
+				if (waiter.phase === "waiting") waiter.rejectAnswer(new Error(ASK_STOPPED_ERROR));
+				if (waiter.phase === "expected" || waiter.phase === "waiting") {
+					waiter.phase = "stopped";
+				}
+			}
 			return accepted.length > 0 ? Promise.all(accepted).then(() => {}) : null;
 		},
 		abandon() {
