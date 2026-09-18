@@ -393,7 +393,7 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 			}
 			waiter.executeStarted = true;
 			if (waiter.phase === "answer-accepted-uncommitted") return waiter.answerPromise;
-			if (waiter.phase === "stopped") return waiter.answerPromise;
+			if (waiter.phase === "stopped") return Promise.reject(new Error(ASK_STOPPED_ERROR));
 			waiter.phase = "waiting";
 			if (signal?.aborted) {
 				waiter.phase = "stopped";
@@ -410,9 +410,10 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 			return waiter.answerPromise;
 		},
 		answer(toolCallId, result) {
+			if (shutdownPrepared) throw notAwaiting(toolCallId);
 			const waiter = waiting.get(toolCallId);
 			if (!waiter) return { handled: false };
-			if (shutdownPrepared || waiter.phase === "stopped") throw notAwaiting(toolCallId);
+			if (waiter.phase === "stopped") throw notAwaiting(toolCallId);
 			if (waiter.phase === "answer-accepted-uncommitted") {
 				throw new Error(`This questionnaire was already answered: ${toolCallId}`);
 			}

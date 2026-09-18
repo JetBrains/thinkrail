@@ -324,6 +324,9 @@ test("shutdown freezes an expected call before a late answer can race its snapsh
 	expect(() => waiters.answer("tc-shutdown-expected", { answers: [], cancelled: true })).toThrow(
 		"not awaiting an answer",
 	);
+	expect(() => waiters.answer("restart-repaired", { answers: [], cancelled: true })).toThrow(
+		"not awaiting an answer",
+	);
 	waiters.abandon();
 });
 
@@ -346,12 +349,13 @@ test("shutdown waits for an answer already accepted before its snapshot", async 
 	await settling;
 });
 
-test("explicit Stop claims an expected call before a late answer can win", () => {
+test("explicit Stop claims an expected call before execute or a late answer can win", async () => {
 	const waiters = createAskUserQuestionWaiters();
 	waiters.expect("tc-stop-expected");
 	expect(waiters.prepareAbort()).toBeNull();
 	expect(waiters.isWaitingForAnswer()).toBe(false);
 	expect(waiters.hasRecoverableCall()).toBe(false);
+	await expect(waiters.wait("tc-stop-expected", undefined)).rejects.toThrow(ASK_STOPPED_ERROR);
 	expect(() => waiters.answer("tc-stop-expected", { answers: [], cancelled: true })).toThrow(
 		"not awaiting an answer",
 	);

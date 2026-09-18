@@ -1291,7 +1291,8 @@ export async function abortSession(
 ): Promise<SessionQueueContent | undefined> {
 	const entry = mustGetEntry(sessionId);
 	let restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
-	await entry.askUserQuestionWaiters.prepareAbort()?.catch(() => {});
+	const acceptedResult = entry.askUserQuestionWaiters.prepareAbort();
+	if (acceptedResult) await acceptedResult.catch(() => {});
 	if (sessions.get(sessionId) !== entry) return restoredQueue;
 	if (restoredQueue) {
 		restoredQueue = mergeQueueContent(restoredQueue, clearQueueSession(sessionId));
