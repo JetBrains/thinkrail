@@ -56,7 +56,11 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   derives `agentResponded` from chronological rows (a later `markdown`/`tool`/`activity`/`divider` row
   exists after this user row, **or** it is the trailing user row while `isStreaming`) and every transcript
   integration supplies that state to the renderer. It remains client view state only, with no wire impact.
-  Below 500 chars the bubble is unchanged. The retry countdown carries a `source` (`turn` =
+  Below 500 chars the bubble is unchanged. When expanded, a large body is height-capped with an internal
+  scroll (`max-h-[60vh] overflow-y-auto`) so a huge paste never balloons the row into a multi-thousand-px
+  DOM node; and `estimateChatRowHeight` estimates a large user row at its collapsed size (the resting
+  state) rather than its full wrapped height — both prevent the virtualizer from over-reserving space and
+  stranding a phantom empty gap during streaming. The retry countdown carries a `source` (`turn` =
   pi `auto_retry_*`; `summarization` = compaction/branch-summary `summarization_retry_*`, pi ≥0.81.1) —
   the flows can overlap mid-run, each keeps exactly one indicator (re-scheduling replaces, each source's
   end event clears only its own), and `RetryIndicator` labels them apart ("Retrying" vs "Retrying

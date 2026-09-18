@@ -29,7 +29,7 @@ import { FileChip } from "./FileChip";
 import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
 import { parseReviewPackage, type ReviewPackageItem, reviewPackageLabel } from "./reviewPackage";
-import type { ChatRow, TurnDividerData } from "./rows";
+import { type ChatRow, LARGE_USER_MESSAGE, type TurnDividerData } from "./rows";
 import { formatElapsed, formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { ToolRendererBody } from "./ToolRendererBody";
@@ -226,8 +226,6 @@ function MessageWithCopy({
 	);
 }
 
-const LARGE_USER_MESSAGE = 500;
-
 function UserTurn({
 	id,
 	message,
@@ -317,7 +315,11 @@ function PlainUserTurn({
 					<div
 						data-testid="user-message-body"
 						data-collapsed={collapsed || undefined}
-						className={cn(collapsed && "line-clamp-3")}
+						className={cn(
+							collapsed
+								? "line-clamp-3"
+								: large && "max-h-[60vh] overflow-y-auto overscroll-contain",
+						)}
 					>
 						{text}
 					</div>

@@ -55,6 +55,38 @@ test("a large user message with an agent reply collapses, and Show more re-expan
 	await expect(body).toHaveAttribute("data-collapsed", "true");
 });
 
+test("a huge message expands into a bounded, scrollable body instead of a giant row", async ({
+	page,
+}) => {
+	const huge = `First line of the huge paste. ${"lorem ipsum dolor sit amet consectetur adipiscing elit ".repeat(
+		800,
+	)}`;
+	await openFixtureProject(page);
+	seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "huge message chat",
+		messages: [
+			{ role: "user", text: huge, timestamp: BASE_TS },
+			{ role: "assistant", text: "Got it.", timestamp: BASE_TS + 1_000 },
+		],
+	});
+
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
+	await enterDefaultWorkspace(page);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+
+	const body = page.getByTestId("user-message-body");
+	await page.getByTestId("user-message-toggle").click();
+	await expect(body).not.toHaveAttribute("data-collapsed", "true");
+	await expect(body).toContainText("First line of the huge paste");
+
+	const viewport = page.viewportSize();
+	const box = await body.boundingBox();
+	if (!box || !viewport) throw new Error("body/viewport not measurable");
+	expect(box.height).toBeLessThanOrEqual(viewport.height);
+	const scrollable = await body.evaluate((el) => el.scrollHeight > el.clientHeight + 1);
+	expect(scrollable).toBe(true);
+});
+
 test("a large user message with no agent reply stays expanded", async ({ page }) => {
 	await openFixtureProject(page);
 	seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {

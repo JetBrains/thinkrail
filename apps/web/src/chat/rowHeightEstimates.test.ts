@@ -92,6 +92,13 @@ describe("chat row height estimates", () => {
 		expect(heights[0]).toBeGreaterThan(heights[2] ?? 0);
 	});
 
+	test("estimates a large user message at its collapsed size, not the full expansion", () => {
+		const huge = estimateChatRowHeight(userRow("big", "word ".repeat(6000)));
+		const small = estimateChatRowHeight(userRow("small", "one short line"));
+		expect(huge).toBeLessThan(200);
+		expect(small).toBeLessThanOrEqual(huge);
+	});
+
 	test("reuses a mounted estimate while streaming and refreshes it for a virtualizer remount", () => {
 		const cache = new Map();
 		const id = "assistant-stream:text:0";

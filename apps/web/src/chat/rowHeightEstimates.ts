@@ -1,4 +1,4 @@
-import type { ChatRow } from "./rows";
+import { type ChatRow, LARGE_USER_MESSAGE } from "./rows";
 import { resolveProminence } from "./toolRegistry";
 
 const MAX_ESTIMATED_HEIGHT = 20_000;
@@ -132,10 +132,15 @@ export function estimateChatRowHeight(row: ChatRow): number {
 	switch (row.kind) {
 		case "markdown":
 			return estimateMarkdownHeight(row.text);
-		case "user":
-			return clampHeight(
-				24 + wrappedLines(userText(row), 62) * PROSE_LINE_HEIGHT + userAttachmentCount(row) * 28,
-			);
+		case "user": {
+			const text = userText(row);
+			const attachments = userAttachmentCount(row) * 28;
+			// Large messages rest collapsed; estimate that size, not full height (see chat/SPEC.md).
+			if (text.length > LARGE_USER_MESSAGE) {
+				return clampHeight(24 + 3 * PROSE_LINE_HEIGHT + 24 + attachments);
+			}
+			return clampHeight(24 + wrappedLines(text, 62) * PROSE_LINE_HEIGHT + attachments);
+		}
 		case "system":
 			return clampHeight(20 + wrappedLines(row.text) * PROSE_LINE_HEIGHT);
 		case "error":
