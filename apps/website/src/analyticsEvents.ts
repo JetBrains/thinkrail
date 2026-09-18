@@ -7,7 +7,7 @@ import {
 	initAttributionRecording,
 	recordCurrentAttributionTouch,
 	recordCurrentDownloadBridge,
-} from "./attribution/recording";
+} from "./attribution";
 
 export const contentRoutes = {
 	"/": "landing",
