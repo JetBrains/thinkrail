@@ -199,7 +199,7 @@ flowchart LR
 | `writing-specs` | concept — the spec quality bar (short / honest / on-rails) for every spec-producing flow | — (reached by name, rule 4) | active; observed by use (2026-07 manual: self-triggered for a spec revision and applied) |
 | `choosing-a-workflow` | router (root) — classification + routing for workflow-eligible work | — (conditional pointer from the always-on rule, rule 4) | active; revised narrow-entry behavior unverified by use; previous onboarding, PR/change, and direct-work classifications were observed |
 | `writing-workflow-skills` | worker — authoring checklist for adding workflows | — (self-trigger only, rule 4) | active |
-| `shipping-a-pr` | worker — PR lifecycle (create with gates / body or screenshot maintenance / up-to-date sync / checks / review comments — phases as sibling docs) | `choosing-a-workflow` (root) + narrow self-trigger | active; revised phase-completion semantics unverified by use (rule 14 suspended) |
+| `shipping-a-pr` | worker — PR lifecycle (create with gates / body or screenshot maintenance / up-to-date sync / checks / review comments — phases as sibling docs) | `choosing-a-workflow` (root) + narrow self-trigger | active; snapshot-by-default completion and verification reuse unverified by use (rule 14 suspended) |
 
 The family is open and grows from real use; candidates (research/spike, refactor, bug-fix, a composing
 skill in the composer pattern with its stage workers, and **extending an existing spec graph** — the
@@ -287,17 +287,19 @@ follows is only the rationale the skill bodies don't state:
   comments blindly" — became its gates and phase docs. One skill rather than five (rule 1): every
   lifecycle ask enters through the same trigger; the phases are internal forks as sibling docs. At
   creation time the repository's PR template owns body sections, order, and checklist; the generic
-  Summary/Changes/Testing shape is only the no-template fallback. Completion has two deliberate modes:
-  creating, syncing, any phase that pushes the PR head (including screenshot-scaffold cleanup), and
-  explicit watch/ship/merge-ready asks wait for every existing check to turn green and verify the base;
-  standalone screenshot/body/comment-only work that leaves the head unchanged, plus one-time status
-  requests, take one fresh checks + merge-state snapshot and report it without polling or fixing unrelated
-  state. Wait-mode merge readiness is explicit: `CLEAN` succeeds; `HAS_HOOKS` succeeds with a pre-receive
-  hooks caveat; `UNKNOWN` is polled; `BEHIND`/`DIRTY` sync; and `BLOCKED`/`UNSTABLE` remain
-  non-affirmative with `reviewDecision` reported. Draft state is read separately and never called
-  merge-ready. A no-CI repo is always reported explicitly, never silently green. This avoids turning
-  metadata maintenance into an unrequested CI watch while preserving the merge-ready bar where the ask
-  promises it. The review-only assets-ref screenshot default was an explicit user decision (task-spec
+  Summary/Changes/Testing shape is only the no-template fallback. Completion has two deliberate modes, selected by the user's requested outcome rather than by whether
+  the phase pushes the PR head. Ordinary creation, syncing, head updates, metadata maintenance, and
+  one-time status requests take one fresh checks + merge-state snapshot and stop without polling or
+  repairing unrelated state. Only an explicit request to monitor checks, investigate CI, wait until green,
+  or make the PR merge-ready enters wait mode. Local verification is evidence-aware: exact checks already
+  run against the final change are reused, while missing or invalidated gates run after later edits,
+  dependency or substantive base changes, and conflict resolution. CI is the final full verification layer
+  when configured. Wait-mode merge readiness remains explicit: `CLEAN` succeeds; `HAS_HOOKS` succeeds
+  with a pre-receive hooks caveat; `UNKNOWN` is polled; `BEHIND`/`DIRTY` sync; and `BLOCKED`/`UNSTABLE`
+  remain non-affirmative with `reviewDecision` reported. Draft state is read separately and never called
+  merge-ready. A no-CI repo is always reported explicitly, never silently green. This avoids repeating
+  valid development-time checks or turning routine PR delivery into an unrequested CI watch while
+  preserving the merge-ready bar where the ask promises it. The review-only assets-ref screenshot default was an explicit user decision (task-spec
   `task-shipping-a-pr-skill`). Its review hardening
   (PR #284) converged on one shared discipline instead of per-finding patches — **observed, never
   assumed**: every finding across three review rounds was the same defect (acting on, or declaring,
