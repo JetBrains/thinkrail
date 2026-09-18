@@ -898,17 +898,12 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 	const liveIds = new Set<string>();
 	const liveFiles = new Set<string>();
 	for (const [sessionId, entry] of sessions) {
-		if (
-			entry.workspaceId !== workspaceId ||
-			!entry.userVisible ||
-			isSessionDeleted(sessionId, workspaceId)
-		) {
-			continue;
-		}
-		live.push(summaryOf(sessionId, entry));
-		liveIds.add(sessionId);
+		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) continue;
 		const sessionFile = entry.session.sessionManager.getSessionFile();
 		if (sessionFile) liveFiles.add(resolve(sessionFile));
+		if (!entry.userVisible) continue;
+		live.push(summaryOf(sessionId, entry));
+		liveIds.add(sessionId);
 	}
 	const infos = await listSessionInfosStrict(cwd, liveFiles);
 	const disk: SessionSummary[] = infos
