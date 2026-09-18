@@ -43,7 +43,6 @@ import {
 	isPiSessionId,
 	listAvailableModels,
 	listProjectAliasSkillNames,
-	listSessionActivity,
 	listSessions,
 	listSkillCatalog,
 	listSkillCommands,
@@ -164,7 +163,6 @@ import {
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
 	getWorkspace,
-	listAllWorkspaceRecords,
 	listExistingWorktrees,
 	listWorkspaceRecords,
 	listWorkspaces,
@@ -867,13 +865,7 @@ const handlers: Record<string, Handler> = {
 			}
 		});
 	},
-	"session.activityList": () =>
-		listSessionActivity(
-			listAllWorkspaceRecords().map((workspace) => ({
-				id: workspace.id,
-				cwd: workspace.worktreePath,
-			})),
-		),
+	"session.activityList": () => [],
 	"session.getMessages": (params) => {
 		const p = params as { sessionId: string; workspaceId: string };
 		return getSessionMessages(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
