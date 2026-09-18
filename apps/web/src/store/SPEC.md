@@ -76,7 +76,7 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   leaving the client labelling and keying reads off a value the host no longer has; a project never fetched or an id absent from its list is a **no-op** — the next
   `workspace.list` reconciles; **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
   reaction (`removeWorkspace` drops the row + `clearWorkspaceState` drops its
-  local view/attention/terminal/activity maps and chat runtimes + recency drops the dead id,
+  local view/attention/terminal maps and chat runtimes + recency drops the dead id,
   and **if it was this client's active workspace** → activate the most recently selected loaded workspace
   whose project remains open, even across projects; when none remains, `selectProject(projectId)` falls back
   to the removed workspace's Project Home; either active fallback gets the same neutral toast that reads right
@@ -530,9 +530,6 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
   `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (deduplicated local chat
   placement + history membership used as a reconnect-reconciliation baseline),
-  **`workspaceActivityRollup` / `projectActivityRollup`** (the Projects rail's agent-state rollup — pure
-  functions *over* the slice rather than Zustand selectors, since a fresh rollup object returned from a
-  selector would re-render the rail on every store change; see the activity section);
   `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
   only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
