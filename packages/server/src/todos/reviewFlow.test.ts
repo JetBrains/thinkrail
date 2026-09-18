@@ -296,9 +296,8 @@ test("todo.remove rejects while the item is pending an agent review, leaving it 
 	const { id } = committedItem(store, "step", "impl.ts");
 	startTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
 
-	// Removing a `reviewing` item would strand the host's in-flight registration (currentReview,
-	// the per-plan latch) until the reviewer's turn settles, and let a stray add_review_comment file
-	// an orphan finding against an id that no longer exists — see host/SPEC.md.
+	// Removing a `reviewing` item would strand the host's in-flight claim until the review resolves,
+	// and let the verdict file orphan findings against an id that no longer exists — see host/SPEC.md.
 	await expect(removeTodo({ workspaceId: "w1", sessionId: SESSION, id })).rejects.toThrow(
 		/currently under review/,
 	);
@@ -340,21 +339,17 @@ test("renderFixPackage names changed paths for the fallback change set", () => {
 	expect(pkg).toContain("changed paths: a.ts, b.ts");
 });
 
-test("reviewer sidecar meta: pin + pending marks + reverse lookup; decoration ships reviewing/reviewedBy", async () => {
+test("review sidecar meta: pending marks; decoration ships reviewing/reviewedBy", async () => {
 	const store = new TodoStore(repo, SESSION);
 	const { id } = committedItem(store, "step", "impl.ts");
-	// Pin the plan's reviewer chat and find the plan back from the reviewer (the verdict seam's lookup).
-	const { pinReviewerSession, reviewerSessionFor, workerSessionForReviewer, startTodoReview } =
-		await import("./todos");
-	pinReviewerSession({ workspaceId: "w1", sessionId: SESSION }, "reviewer-1");
-	expect(reviewerSessionFor({ workspaceId: "w1", sessionId: SESSION })).toBe("reviewer-1");
-	expect(workerSessionForReviewer("w1", "reviewer-1")).toBe(SESSION);
-	expect(workerSessionForReviewer("w1", "someone-else")).toBeUndefined();
+	const { startTodoReview } = await import("./todos");
 
-	// Start review marks the item in flight (the `reviewing` decoration) and renders the package.
+	// Start review marks the item in flight (the `reviewing` decoration) and renders the package: a
+	// change-set REFERENCE only — the reviewer role and output contract belong to host/reviewerRole.
 	const { pkg } = startTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
-	expect(pkg).toContain(`plan step ${id}`);
-	expect(pkg).toContain("review_verdict");
+	expect(pkg).toContain(`Plan step ${id}`);
+	expect(pkg).not.toContain("review_verdict");
+	expect(pkg).not.toContain("add_review_comment");
 	let plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
 	expect(plan.todos.find((t) => t.id === id)?.review?.reviewing).toBe(true);
 
@@ -440,7 +435,7 @@ test("the path-list fallback drops the review verdict but preserves the spent au
 	// fresh item and grant a second automated cycle past the 1-cycle cap.
 	expect(todoReviewAutoCycles({ workspaceId: "w1", sessionId: SESSION, id })).toBe(1);
 
-	// This is exactly the (state, reviewing, autoCycles) triple host/todoReview.ts's maybeAutoReReview
+	// This is exactly the (state, reviewing, autoCycles) triple host/requestReview.ts's maybeAutoReReview
 	// reads to decide whether to fire a re-review: `state: "unreviewed"` with no reviewing flag, but a
 	// spent auto cycle still on record — the signal that a path-list fix landed and must be re-reviewed.
 	const review = (await listTodos({ workspaceId: "w1", sessionId: SESSION })).todos.find(

@@ -403,15 +403,7 @@ function CommentRow({
 							</span>
 						)}
 						{ref && <span className="tr-code-text text-text-subtle">{ref}</span>}
-						{comment.reflection?.verdict === "refuted" ? (
-							<span
-								data-testid="review-comment-refuted"
-								title={`An independent reflector judged this finding refuted: ${comment.reflection.reason} — it was held back from the auto-fix cycle.`}
-								className="tr-text-eyebrow text-text-subtle"
-							>
-								refuted by reflection
-							</span>
-						) : comment.stale ? (
+						{comment.stale ? (
 							<span
 								data-testid="review-comment-stale"
 								title="The code this finding was filed against was rewritten after review — it won't ride the auto-fix cycle"

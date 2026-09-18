@@ -185,8 +185,6 @@ export interface TodoPlan {
 	 * rewrites it at the next completion.
 	 */
 	summary?: string;
-	/** The plan's dedicated reviewer chat (set once Start review ran) — the Reviewing label opens it. */
-	reviewerSessionId?: string;
 	/**
 	 * Worktree changes attributed to NO item of this plan — **host-derived on `todo.list`, present only
 	 * when non-empty**. The honesty section of the review map: work no item claims (edits before the
@@ -518,9 +516,9 @@ export interface AppConfig extends ThemePreference {
 	chatLineWidthBounded: boolean;
 	fileLineWidthBounded: boolean;
 	customLayoutPresets: LayoutPreset[];
-	/** The model the plan reviewer + reflector run on; unset ⇒ the pi default. */
+	/** The model the plan reviewer runs on; unset ⇒ the pi default. */
 	reviewModel?: WireModel;
-	/** Reviewer + reflector thinking level; unset ⇒ the model's default. */
+	/** Reviewer thinking level; unset ⇒ the model's default. */
 	reviewEffort?: ThinkingLevel;
 	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
 	reviewAutoFix: boolean;
@@ -714,12 +712,6 @@ export interface ReviewComment {
 	origin?: { todoId: string; reviewedSha: string; sessionId: string };
 	/** Server-derived for the client, never persisted: the reviewed code was overwritten after review. */
 	stale?: boolean;
-	/** An independent reflector's verdict on an agent finding (refuted findings are held back from auto-fix). */
-	reflection?: {
-		verdict: "kept" | "refuted";
-		confidence: "low" | "medium" | "high";
-		reason: string;
-	};
 	resolvedBy?: "agent" | "user";
 	resolveNote?: string;
 	createdAt: number;
@@ -745,4 +737,95 @@ export interface ReviewSnapshot {
 
 export interface ReviewChangedPayload extends ReviewSnapshot {
 	workspaceId: string;
+}
+
+/** A plan review that failed after `todo.startReview` acknowledged — the detached button/auto path has no
+ * chat of its own, so the owning plan session raises the failure as a toast. `sessionId` routes it to that
+ * plan only; duplicate views of one session dedupe on the toast body. See apps/web/src/panels/SPEC.md. */
+export interface ReviewFailedPayload {
+	workspaceId: string;
+	sessionId: string;
+	itemId: string;
+	itemTitle: string;
+	message: string;
+}
+
+/** Slim view of a sent review finding on a todo-review-fix message (path/lines pre-resolved host-side). */
+export interface ReviewFixComment {
+	id: string;
+	kind: ReviewCommentKind;
+	body: string;
+	path?: string;
+	startLine?: number;
+	endLine?: number;
+}
+
+/** Structured payload of a todo-review-fix custom message; the message `content` stays the agent-read text. */
+export interface ReviewFixDetails {
+	itemId: string;
+	itemTitle: string;
+	reviewId?: string;
+	/** The reviewer's/user's feedback prose (renderFixPackage note), when present. */
+	note?: string;
+	comments: ReviewFixComment[];
+}
+
+export type PlanReviewVerdict = "approve" | "request_changes";
+
+/** Result of the worker-invoked request_review tool (Option A): a review subagent's structured verdict on
+ * a plan step. Carried as the tool result's `details`, rendered by the request_review card, and written to
+ * the item's review record. See submodule-server-host-plan-review + submodule-server-todos. */
+export interface PlanReviewResult {
+	itemId: string;
+	itemTitle: string;
+	verdict: PlanReviewVerdict;
+	reviewedSha?: string;
+	/** The reviewer's one-paragraph rationale (shown on the card). */
+	summary?: string;
+	findings: ReviewFixComment[];
+	/** Host-set on an `approve` it refused to settle: findings from an earlier round are still open, so
+	 * the step stays unreviewed until the worker resolves them. */
+	blockedByOpenFindings?: number;
+}
+
+export const PLAN_REVIEW_VERDICTS: readonly PlanReviewVerdict[] = ["approve", "request_changes"];
+
+const REVIEW_COMMENT_KINDS: readonly ReviewCommentKind[] = ["inline", "diff", "file", "review"];
+
+function isPositiveInt(n: unknown): n is number {
+	return typeof n === "number" && Number.isInteger(n) && n > 0;
+}
+
+/** A single reviewer finding: id + body required; kind (if present) a known enum; a line requires a path,
+ * an endLine requires a startLine, and any range is positive and coherent. See submodule-server-host-plan-review. */
+function isReviewFinding(f: unknown): f is ReviewFixComment {
+	if (!f || typeof f !== "object") return false;
+	const c = f as Partial<ReviewFixComment>;
+	if (typeof c.id !== "string" || c.id.length === 0) return false;
+	if (typeof c.body !== "string" || c.body.length === 0) return false;
+	if (c.kind !== undefined && !REVIEW_COMMENT_KINDS.includes(c.kind)) return false;
+	if (c.path !== undefined && typeof c.path !== "string") return false;
+	if (c.startLine !== undefined && !isPositiveInt(c.startLine)) return false;
+	if (c.endLine !== undefined && !isPositiveInt(c.endLine)) return false;
+	if (c.startLine !== undefined && c.path === undefined) return false;
+	if (c.endLine !== undefined && c.startLine === undefined) return false;
+	if (c.startLine !== undefined && c.endLine !== undefined && c.endLine < c.startLine) return false;
+	return true;
+}
+
+/** Validate the review subagent's parsed JSON verdict (untrusted — model output). Every finding field and
+ * its enum/line coherence is checked, and the verdict/finding cardinality is enforced: a `request_changes`
+ * with no actionable finding is rejected (it would strand the worker), while an `approve` may carry none. */
+export function isPlanReviewResult(value: unknown): value is PlanReviewResult {
+	if (!value || typeof value !== "object") return false;
+	const r = value as Partial<PlanReviewResult>;
+	if (typeof r.itemId !== "string" || typeof r.itemTitle !== "string") return false;
+	if (typeof r.verdict !== "string" || !PLAN_REVIEW_VERDICTS.includes(r.verdict)) return false;
+	if (r.summary !== undefined && typeof r.summary !== "string") return false;
+	if (r.blockedByOpenFindings !== undefined && typeof r.blockedByOpenFindings !== "number")
+		return false;
+	if (!Array.isArray(r.findings)) return false;
+	if (!r.findings.every(isReviewFinding)) return false;
+	if (r.verdict === "request_changes" && r.findings.length === 0) return false;
+	return true;
 }

@@ -1,15 +1,20 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import type { ReviewFixDetails } from "./domain";
 import {
 	ACTIVITY_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	customMessageText,
+	isTodoReviewFixMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	normalizeSessionTitle,
+	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
+	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
@@ -73,4 +78,64 @@ test("session titles normalize to one bounded non-blank line", () => {
 	expect(normalizeSessionTitle(42)).toBeNull();
 	expect(normalizeSessionTitle("x".repeat(80))).toBe("x".repeat(80));
 	expect(normalizeSessionTitle("x".repeat(81))).toBeNull();
+});
+
+test("the plan-review subagent reshapes the review wire and advances the protocol", () => {
+	expect(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION).toBe(67);
+	expect(PROTOCOL_VERSION).toBe(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION);
+	expect(WS_CHANNELS.reviewChanged).toBe("review.changed");
+	expect(WS_CHANNELS.reviewFailed).toBe("review.failed");
+});
+
+describe("isTodoReviewFixMessage", () => {
+	const details: ReviewFixDetails = {
+		itemId: "t_1",
+		itemTitle: "Fix login redirect",
+		reviewId: "r_1",
+		note: "See the two findings below.",
+		comments: [{ id: "c_1", kind: "inline", body: "off-by-one", path: "src/a.ts", startLine: 4 }],
+	};
+	const message = {
+		role: "custom",
+		customType: TODO_REVIEW_FIX_CUSTOM_TYPE,
+		content: "Address each review comment above.",
+		display: true,
+		details,
+		timestamp: 0,
+	};
+
+	test("accepts a well-formed todo-review-fix message", () => {
+		expect(isTodoReviewFixMessage(message)).toBe(true);
+	});
+
+	test("rejects other custom types, roles, and malformed details", () => {
+		expect(isTodoReviewFixMessage({ ...message, customType: "subagent-completion" })).toBe(false);
+		expect(isTodoReviewFixMessage({ ...message, role: "user" })).toBe(false);
+		expect(isTodoReviewFixMessage({ ...message, details: { itemId: "t_1" } })).toBe(false);
+		expect(isTodoReviewFixMessage({ ...message, details: undefined })).toBe(false);
+		expect(isTodoReviewFixMessage(null)).toBe(false);
+		expect(isTodoReviewFixMessage("nope")).toBe(false);
+	});
+
+	test("comments may be empty (a note-only fix request)", () => {
+		expect(isTodoReviewFixMessage({ ...message, details: { ...details, comments: [] } })).toBe(
+			true,
+		);
+	});
+});
+
+describe("customMessageText", () => {
+	test("returns a string content verbatim", () => {
+		expect(customMessageText("hello")).toBe("hello");
+	});
+
+	test("joins text blocks and drops non-text content", () => {
+		expect(
+			customMessageText([
+				{ type: "text", text: "a" },
+				{ type: "image", data: "x", mimeType: "image/png" },
+				{ type: "text", text: "b" },
+			]),
+		).toBe("ab");
+	});
 });

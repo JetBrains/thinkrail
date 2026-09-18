@@ -228,6 +228,33 @@ test("a subagent-completion custom message hydrates as its own subagentCompletio
 	expect(turnIdByMessageIndex[1]).toBe(turns[1]?.id ?? null);
 });
 
+test("a todo-review-fix custom message hydrates as its own reviewFix turn", () => {
+	const details = {
+		itemId: "t_1",
+		itemTitle: "Wire the login redirect",
+		reviewId: "rev_1",
+		note: "Two findings below.",
+		comments: [{ id: "c_1", kind: "inline", body: "off-by-one", path: "src/a.ts", startLine: 4 }],
+	};
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
+		{ role: "user", content: "go", timestamp: 1 },
+		{
+			role: "custom",
+			customType: "todo-review-fix",
+			content: [{ type: "text", text: "Address each review comment above." }],
+			display: true,
+			details,
+			timestamp: 2,
+		},
+	] as unknown as Message[]);
+	expect(turns.map((t) => t.kind)).toEqual(["user", "reviewFix"]);
+	const turn = turns[1];
+	expect(turn?.kind === "reviewFix" && turn.details.itemId).toBe("t_1");
+	expect(turn?.kind === "reviewFix" && turn.details.comments[0]?.id).toBe("c_1");
+	expect(turn?.kind === "reviewFix" && turn.text).toContain("Address each review comment");
+	expect(turnIdByMessageIndex[1]).toBe(turns[1]?.id ?? null);
+});
+
 test("a failed tool result maps to error status", () => {
 	const { toolResults } = messagesToRuntime([
 		{

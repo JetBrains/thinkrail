@@ -5,6 +5,7 @@ import {
 	adoptedCommits,
 	flatItems,
 	groupProgress,
+	isPlanReady,
 	itemChangeSet,
 	itemOpenFindings,
 	itemRevisions,
@@ -234,6 +235,25 @@ test("itemRevisions lists the commit history in order; review derivations follow
 	const plan = { todos: [reviewable, research, approved], groups: [] };
 	expect(reviewableItems(plan).map((t) => t.id)).toEqual([reviewable.id, approved.id]);
 	expect(reviewProgress(plan)).toEqual({ reviewed: 1, total: 2 });
+});
+
+test("isPlanReady is false while a reviewable step is unsettled, true once all are reviewed", () => {
+	const done: TodoItem = {
+		...item("step", "done"),
+		artifacts: [{ kind: "commit", sha: "abc" }],
+		review: { state: "unreviewed", revision: 1 },
+	};
+	// Every step done, but the reviewable one is unsettled — the plan must NOT read ship-ready.
+	expect(isPlanReady({ todos: [done], groups: [] })).toBe(false);
+	const reviewed: TodoItem = {
+		...done,
+		review: { state: "reviewed", revision: 1, at: "2026-01-01T00:00:00Z" },
+	};
+	expect(isPlanReady({ todos: [reviewed], groups: [] })).toBe(true);
+	// An open step keeps it unready regardless of review state.
+	expect(isPlanReady({ todos: [reviewed, item("pending")], groups: [] })).toBe(false);
+	// An empty plan is not ready.
+	expect(isPlanReady({ todos: [], groups: [] })).toBe(false);
 });
 
 test("reviewableItems spans adoptedCommits, but planSummary's build count counts planned items only", () => {

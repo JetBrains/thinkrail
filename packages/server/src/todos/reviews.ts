@@ -14,14 +14,12 @@ export interface TodoReviewRecord {
 }
 
 export interface TodoReviewMeta {
-	reviewerSessionId?: string;
 	pending: Record<string, { at: string; shas?: string[] }>;
 }
 
 interface ReviewsFile {
 	version: 1;
 	items: Record<string, TodoReviewRecord>;
-	reviewerSessionId?: string;
 	pending?: Record<string, { at: string; shas?: string[] }>;
 	// Auto fix→re-review cycles spent per item, kept OUTSIDE `items` on purpose: a redo that can't be
 	// committed (shared window / foreign dirt) drops the item's `items` entry entirely so the item reads
@@ -69,8 +67,6 @@ function readFile(root: string, sessionId: string): ReviewsFile {
 			}
 		}
 		const file: ReviewsFile = { version: 1, items };
-		if (typeof o.reviewerSessionId === "string" && o.reviewerSessionId)
-			file.reviewerSessionId = o.reviewerSessionId;
 		if (typeof o.pending === "object" && o.pending !== null) {
 			const pending: ReviewsFile["pending"] = {};
 			for (const [id, value] of Object.entries(o.pending)) {
@@ -97,7 +93,6 @@ function writeFile(root: string, sessionId: string, file: ReviewsFile): void {
 	const path = reviewsPath(root, sessionId);
 	const empty =
 		Object.keys(file.items).length === 0 &&
-		!file.reviewerSessionId &&
 		Object.keys(file.pending ?? {}).length === 0 &&
 		Object.keys(file.autoCycles ?? {}).length === 0;
 	if (empty) {
@@ -111,16 +106,7 @@ function writeFile(root: string, sessionId: string, file: ReviewsFile): void {
 }
 
 export function readReviewMeta(root: string, sessionId: string): TodoReviewMeta {
-	const file = readFile(root, sessionId);
-	const meta: TodoReviewMeta = { pending: file.pending ?? {} };
-	if (file.reviewerSessionId) meta.reviewerSessionId = file.reviewerSessionId;
-	return meta;
-}
-
-export function setReviewerSession(root: string, sessionId: string, reviewerId: string): void {
-	const file = readFile(root, sessionId);
-	file.reviewerSessionId = reviewerId;
-	writeFile(root, sessionId, file);
+	return { pending: readFile(root, sessionId).pending ?? {} };
 }
 
 export function markReviewPending(
@@ -207,17 +193,6 @@ export function dropReviewRecord(
 	else if (file.items[id] === undefined) return;
 	else delete file.items[id];
 	writeFile(root, sessionId, file);
-}
-
-export function findWorkerSessionByReviewer(root: string, reviewerId: string): string | undefined {
-	try {
-		return readdirSync(join(root, WORKSPACE_TODOS_DIR))
-			.filter((n) => n.endsWith(REVIEWS_SUFFIX))
-			.map((n) => n.slice(0, -REVIEWS_SUFFIX.length))
-			.find((owner) => readFile(root, owner).reviewerSessionId === reviewerId);
-	} catch {
-		return undefined;
-	}
 }
 
 export function removeSessionReviews(root: string, sessionId: string): void {
