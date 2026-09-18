@@ -177,6 +177,12 @@ section, quick start, final CTA, or blog post; one recognized activation emits `
 `install_cta_clicked` (`cli`); closing it does not. No page or child module carries analytics imports,
 vendor configuration, or another loader.
 
+[[submodule-website-attribution]] retains a 30-day normalized first/last-touch context only for the current
+website journey. Initial recording requires an existing journey; a later grant records only a subsequent
+install action, never the earlier navigation. Untagged internal/direct navigation preserves the last
+acquisition touch. A consented desktop download receives one bridge ID shared by its stored context and
+`download_started`; bridge-less download and CLI events remain valid.
+
 The existing GTM container remains Cookiebot's control plane; route-specific downstream tags use a
 `thinkrail.ai` hostname condition plus Page Path, never another GTM container. Sharing the exact apex
 origin means Cookiebot scans and browser consent state apply to all three route families.
