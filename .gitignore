@@ -3,6 +3,7 @@ dist/
 .turbo/
 *.tsbuildinfo
 .DS_Store
+.wrangler/
 .idea/
 test-results/
 playwright-report/

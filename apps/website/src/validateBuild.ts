@@ -37,12 +37,24 @@ function stylesheetUrls(content: string): Set<string> {
 }
 
 async function pageRuntimeContent(distDirectory: string, html: string): Promise<string> {
-	const scriptUrls = attributeValues(html, ["src"]).filter(
+	const pending = attributeValues(html, ["src"]).filter(
 		(value) => value.startsWith("/") && value.endsWith(".js"),
 	);
-	const scripts = await Promise.all(
-		scriptUrls.map((url) => Bun.file(`${distDirectory}/${url.replace(/^\/+/, "")}`).text()),
-	);
+	const visited = new Set<string>();
+	const scripts: string[] = [];
+	while (pending.length > 0) {
+		const url = pending.pop();
+		if (url === undefined || visited.has(url)) continue;
+		visited.add(url);
+		const content = await Bun.file(`${distDirectory}/${url.replace(/^\/+/, "")}`).text();
+		scripts.push(content);
+		for (const match of content.matchAll(/(?:from|import)\s*["']([^"']+\.js)["']/g)) {
+			const imported = match[1];
+			if (imported === undefined) continue;
+			const importedUrl = new URL(imported, `https://thinkrail.ai${url}`).pathname;
+			if (!visited.has(importedUrl)) pending.push(importedUrl);
+		}
+	}
 	return [html, ...scripts].join("\n");
 }
 
@@ -73,9 +85,10 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		).text(),
 		vibecoding: await Bun.file(`${distDirectory}/vibecoding/index.html`).text(),
 		agenticDevelopment: await Bun.file(`${distDirectory}/agentic-development/index.html`).text(),
+		claim: await Bun.file(`${distDirectory}/attribution/claim/index.html`).text(),
 	};
 	const islandPages = ["vibecoding", "agenticDevelopment"] as const;
-	const staticPages = ["landing", "blog", "introducingThinkRail"] as const;
+	const staticPages = ["landing", "blog", "introducingThinkRail", "claim"] as const;
 	const installPages = [
 		{ name: "landing", html: pages.landing, expectedDownloads: 2 },
 		{
@@ -107,6 +120,12 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	}
 	if (pages.agenticDevelopment.includes("Vibe code without losing control.")) {
 		failures.push("agenticDevelopment: hero title fell back to the vibecoding default");
+	}
+	for (const required of [
+		'<meta name="robots" content="noindex, nofollow, noarchive">',
+		'<meta name="referrer" content="no-referrer">',
+	]) {
+		if (!pages.claim.includes(required)) failures.push(`claim: missing ${required}`);
 	}
 
 	for (const url of desktopDownloadUrls) {
@@ -164,11 +183,18 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 
 	for (const [name, html] of Object.entries(pages)) {
 		const runtimeContent = await pageRuntimeContent(distDirectory, html);
-		if (occurrences(runtimeContent, "data-posthog-project") !== 1) {
-			failures.push(`${name}: expected one PostHog loader`);
+		const expectedLoaders = name === "claim" ? 0 : 1;
+		if (occurrences(runtimeContent, "data-posthog-project") !== expectedLoaders) {
+			failures.push(`${name}: expected ${expectedLoaders} PostHog loaders`);
 		}
-		if (occurrences(runtimeContent, "data-gtm-container") !== 1) {
-			failures.push(`${name}: expected one GTM loader`);
+		if (occurrences(runtimeContent, "data-gtm-container") !== expectedLoaders) {
+			failures.push(`${name}: expected ${expectedLoaders} GTM loaders`);
+		}
+		if (
+			name === "claim" &&
+			(runtimeContent.includes("content_viewed") || runtimeContent.includes("attribution_claimed"))
+		) {
+			failures.push("claim: browser analytics leaked");
 		}
 		for (const url of new Set(
 			attributeValues(html, ["src", "href", "component-url", "renderer-url"]).filter((value) =>
@@ -213,6 +239,18 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	}
 	if (sitemap.includes("https://thinkrail.ai/agentic-development/")) {
 		failures.push("sitemap lists the non-canonical agentic-development route");
+	}
+	if (sitemap.includes("https://thinkrail.ai/attribution/claim/")) {
+		failures.push("sitemap lists the non-indexed attribution claim route");
+	}
+	const headers = await Bun.file(`${distDirectory}/_headers`).text();
+	for (const required of [
+		"/attribution/claim/*",
+		"Cache-Control: no-store",
+		"Referrer-Policy: no-referrer",
+		"X-Robots-Tag: noindex, nofollow, noarchive",
+	]) {
+		if (!headers.includes(required)) failures.push(`headers: missing ${required}`);
 	}
 
 	if (failures.length > 0) {
