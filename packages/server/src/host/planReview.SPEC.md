@@ -108,8 +108,11 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
 - **The worker-facing finding identity is the persisted comment, not the model's id.** `fileFinding`
   persists each finding as a new `rc_*` comment; the model's own ids (`f1`…) are transient. On the tool
   path the tool result *is* the delivery, so when the worker is asked to fix (`canAutoFix`), `recordVerdict`
-  marks those `rc_*` comments `sent` to the invoking session (before spending the cycle) and the result
-  text/card names their canonical ids. Otherwise `resolve_comment` — which only closes a `sent` comment
+  files and marks those `rc_*` comments `sent` to the invoking session as one `withReviewLock`
+  transaction (before spending the cycle) and the result text/card names their canonical ids. Filing and
+  marking must be atomic: a concurrent Review clear or a non-draft collision mid-flight would otherwise
+  leave open findings whose canonical ids the worker never received, wedging a later approve behind
+  drafts it cannot name — so a mark failure deletes the just-filed drafts and rejects the request. Otherwise `resolve_comment` — which only closes a `sent` comment
   assigned to this worker, by its persisted id — can never satisfy the open-finding gate, wedging
   request_changes → fix → approve. The terminal path ("do not fix") leaves them `draft` for the user.
   Pinned by the tool-path finding-identity test in `planReview.test.ts`.

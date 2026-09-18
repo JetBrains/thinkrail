@@ -19,6 +19,7 @@ import {
 	anchorProblem,
 	buildReviewFixDetails,
 	buildSendPackage,
+	deleteComment,
 	getReviewSnapshot,
 	markCommentsSent,
 	publishReview,
@@ -173,6 +174,19 @@ async function fileFinding(
 	});
 }
 
+async function fileFindings(
+	params: ReviewParams,
+	reviewedSha: string,
+	raw: ReviewFixComment[],
+): Promise<ReviewFixComment[]> {
+	const findings: ReviewFixComment[] = [];
+	for (const f of raw) {
+		const persisted = await fileFinding(params, reviewedSha, f);
+		findings.push({ ...f, id: persisted.id });
+	}
+	return findings;
+}
+
 /** Deliver the reviewer's findings to the worker chat as the structured `todo-review-fix` message, under
  * the same mark-sent / pre-turn-rollback guarantee every review send has. Any failure — preparation or the
  * send itself — rolls the marked findings back to draft and returns false; the caller owes the auto cycle
@@ -247,11 +261,6 @@ async function recordVerdict(
 			);
 		return { kind: "approve-blocked", openFindings: open.length };
 	}
-	const findings: ReviewFixComment[] = [];
-	for (const f of result.findings) {
-		const persisted = await fileFinding(params, reviewedSha, f);
-		findings.push({ ...f, id: persisted.id });
-	}
 	decided("changes_requested");
 	const spent = todoReviewAutoCycles(params) ?? 0;
 	const canAutoFix = getConfig().reviewAutoFix !== false && spent < 1;
@@ -263,19 +272,32 @@ async function recordVerdict(
 			autoCycles,
 		});
 	if (!canAutoFix) {
+		const findings = await fileFindings(params, reviewedSha, result.findings);
 		record(2);
 		return { kind: "changes", canAutoFix: false, findings };
 	}
 	if (!deliverFix) {
-		// Tool path: mark findings sent to the worker so resolve_comment can close them. See planReview.SPEC.md.
-		await markCommentsSent(
-			params.workspaceId,
-			findings.map((f) => f.id),
-			params.sessionId,
-		);
+		// Tool path: file the findings and mark them sent to the worker as one locked transaction, so a
+		// concurrent clear or a non-draft collision can't strand open findings whose canonical ids the
+		// worker never received. On a mark failure the just-filed drafts are deleted. See planReview.SPEC.md.
+		const findings = await withReviewLock(params.workspaceId, async () => {
+			const filed = await fileFindings(params, reviewedSha, result.findings);
+			try {
+				await markCommentsSent(
+					params.workspaceId,
+					filed.map((f) => f.id),
+					params.sessionId,
+				);
+			} catch (err) {
+				for (const f of filed) await deleteComment(params.workspaceId, f.id).catch(() => {});
+				throw err;
+			}
+			return filed;
+		});
 		record(1);
 		return { kind: "changes", canAutoFix: true, findings };
 	}
+	const findings = await fileFindings(params, reviewedSha, result.findings);
 	const claimed = claimItemFix(params.sessionId, params.id);
 	const { item } = record(1);
 	if (claimed && (await deliverFixToWorker(params, item, note)))
