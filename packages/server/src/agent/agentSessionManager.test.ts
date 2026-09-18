@@ -130,6 +130,49 @@ function tmpCwd(prefix: string): string {
 	return dir;
 }
 
+function installAskToolGate(name: string): {
+	startedPath: string;
+	release: () => void;
+	remove: () => void;
+} {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const controlDir = tmpCwd(`trpi-${name}-`);
+	const startedPath = join(controlDir, "started");
+	const releasePath = join(controlDir, "release");
+	const extensionPath = join(agentDir, "extensions", `${name}.ts`);
+	mkdirSync(dirname(extensionPath), { recursive: true });
+	writeFileSync(
+		extensionPath,
+		[
+			'import { existsSync, writeFileSync } from "node:fs";',
+			'import { setTimeout as sleep } from "node:timers/promises";',
+			'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+			"export default function (pi: ExtensionAPI) {",
+			'\tpi.on("tool_call", async (event) => {',
+			'\t\tif (event.toolName !== "ask_user_question") return;',
+			`\t\twriteFileSync(${JSON.stringify(startedPath)}, "");`,
+			`\t\twhile (!existsSync(${JSON.stringify(releasePath)})) await sleep(2);`,
+			"\t});",
+			"}",
+			"",
+		].join("\n"),
+	);
+	return {
+		startedPath,
+		release: () => writeFileSync(releasePath, ""),
+		remove: () => rmSync(extensionPath, { force: true }),
+	};
+}
+
+async function waitForPath(path: string): Promise<void> {
+	for (let attempt = 0; attempt < 200; attempt++) {
+		if (existsSync(path)) return;
+		await new Promise((resolve) => setTimeout(resolve, 2));
+	}
+	throw new Error(`Timed out waiting for ${path}`);
+}
+
 let priorAgentDir: string | undefined;
 let priorOffline: string | undefined;
 let runtime: ModelRuntime;
@@ -895,6 +938,138 @@ test("getSessionStats + getSessionCommands read live session info (cheap wins #3
 
 	expect(Array.isArray(getSessionCommands(s.sessionId))).toBe(true);
 	removeSession(s.sessionId);
+});
+
+test("graceful shutdown preserves an expected question before its tool executes", async () => {
+	const gate = installAskToolGate("ask-shutdown-gate");
+	const toolCallId = "expected-on-shutdown";
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall(
+				"ask_user_question",
+				{
+					questions: [
+						{
+							question: "Continue after restart?",
+							header: "Continue",
+							options: [
+								{ label: "Yes", description: "continue" },
+								{ label: "No", description: "stop" },
+							],
+						},
+					],
+				},
+				{ id: toolCallId },
+			),
+		),
+		fauxAssistantMessage("EXPECTED_QUESTION_CONTINUED"),
+	]);
+	const cwd = tmpCwd("trpi-expected-shutdown-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-expected-shutdown",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	prompting.catch(() => {});
+	try {
+		await waitForPath(gate.startedPath);
+		await settleSessionsForShutdown(25);
+		expect(
+			(await listSessions("ws-expected-shutdown", cwd)).find(
+				(row) => row.sessionId === session.sessionId,
+			)?.isStreaming,
+		).toBe(true);
+		gate.release();
+		await answerQuestion(session.sessionId, toolCallId, { answers: [], cancelled: true });
+		await prompting;
+		const transcript = await getSessionMessages(session.sessionId, "ws-expected-shutdown", cwd);
+		expect(
+			transcript.messages.some(
+				(message) =>
+					message.role === "toolResult" &&
+					message.toolCallId === toolCallId &&
+					message.isError === false,
+			),
+		).toBe(true);
+	} finally {
+		gate.release();
+		gate.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test("an answer accepted before execute persists before Stop aborts the continuation", async () => {
+	const gate = installAskToolGate("ask-answer-stop-gate");
+	const toolCallId = "answer-before-stop";
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall(
+				"ask_user_question",
+				{
+					questions: [
+						{
+							question: "Which runtime?",
+							header: "Runtime",
+							options: [
+								{ label: "Bun", description: "fast" },
+								{ label: "Node", description: "compatible" },
+							],
+						},
+					],
+				},
+				{ id: toolCallId },
+			),
+		),
+		fauxAssistantMessage("CONTINUATION_AFTER_ACCEPTED_ANSWER"),
+	]);
+	const cwd = tmpCwd("trpi-answer-before-stop-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-answer-before-stop",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	prompting.catch(() => {});
+	try {
+		await waitForPath(gate.startedPath);
+		const result: AskUserQuestionResult = {
+			cancelled: false,
+			answers: [
+				{
+					questionIndex: 0,
+					question: "Which runtime?",
+					kind: "option",
+					answer: "Bun",
+				},
+			],
+		};
+		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		let stopResolved = false;
+		const stopping = abortSession(session.sessionId, true).then((queue) => {
+			stopResolved = true;
+			return queue;
+		});
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(stopResolved).toBe(false);
+		gate.release();
+		await answering;
+		expect(await stopping).toEqual({ steering: [], followUp: [] });
+		await prompting;
+		const transcript = await getSessionMessages(session.sessionId, "ws-answer-before-stop", cwd);
+		const persisted = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
+		expect(persisted.details).toEqual(result);
+		expect(persisted.isError).toBe(false);
+	} finally {
+		gate.release();
+		gate.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
 });
 
 test("a live question blocks continuation, preserves queue order, and acknowledges after its native result persists", async () => {

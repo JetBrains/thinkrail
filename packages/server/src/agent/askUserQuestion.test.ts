@@ -254,7 +254,8 @@ test("a valid live execution is sequential, blocks for its answer, and returns t
 	await Promise.resolve();
 	expect(settled).toBe(false);
 	expect(waiters.isWaitingForAnswer()).toBe(true);
-	expect(waiters.hasActiveCall()).toBe(true);
+	expect(waiters.hasRecoverableCall()).toBe(true);
+	expect(waiters.acceptedResultPersistence()).toBeNull();
 
 	const result: AskUserQuestionResult = {
 		cancelled: false,
@@ -263,14 +264,16 @@ test("a valid live execution is sequential, blocks for its answer, and returns t
 	const answered = waiters.answer("tc-1", result);
 	expect(answered.handled).toBe(true);
 	expect(waiters.isWaitingForAnswer()).toBe(false);
-	expect(waiters.hasActiveCall()).toBe(true);
+	expect(waiters.hasRecoverableCall()).toBe(true);
+	expect(waiters.acceptedResultPersistence()).not.toBeNull();
 	const response = await pending;
 	expect(textOf(response)).toContain('"Which library?"="luxon"');
 	expect(response.details).toEqual(result);
 	expect((response as { terminate?: boolean }).terminate).toBeUndefined();
 	waiters.persistTurn([{ toolCallId: "tc-1", toolName: "ask_user_question" }]);
 	if (answered.handled) await answered.persisted;
-	expect(waiters.hasActiveCall()).toBe(false);
+	expect(waiters.hasRecoverableCall()).toBe(false);
+	expect(waiters.acceptedResultPersistence()).toBeNull();
 });
 
 test("an answer arriving after tool_execution_start but before execute is retained", async () => {
@@ -319,9 +322,11 @@ test("an early answer wins even if Stop reaches the tool before execute starts",
 test("turn_end clears an expected call that Pi never executed", async () => {
 	const waiters = createAskUserQuestionWaiters();
 	waiters.expect("tc-skipped");
+	expect(waiters.isWaitingForAnswer()).toBe(true);
+	expect(waiters.hasRecoverableCall()).toBe(true);
 	const answered = waiters.answer("tc-skipped", { answers: [], cancelled: true });
 	waiters.persistTurn([]);
-	expect(waiters.hasActiveCall()).toBe(false);
+	expect(waiters.hasRecoverableCall()).toBe(false);
 	if (answered.handled) await expect(answered.persisted).rejects.toThrow("not awaiting an answer");
 });
 

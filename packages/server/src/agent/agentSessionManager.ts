@@ -1025,6 +1025,7 @@ export async function answerQuestion(
 	const entry = mustGetEntry(sessionId);
 	const live = entry.askUserQuestionWaiters.answer(toolCallId, result);
 	if (live.handled) {
+		syncSessionActivity(sessionId);
 		await live.persisted;
 		syncSessionActivity(sessionId);
 		return;
@@ -1280,7 +1281,8 @@ export async function abortSession(
 ): Promise<SessionQueueContent | undefined> {
 	const entry = mustGetEntry(sessionId);
 	const restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
-	await entry.session.abort();
+	await entry.askUserQuestionWaiters.acceptedResultPersistence()?.catch(() => {});
+	if (sessions.get(sessionId) === entry) await entry.session.abort();
 	return restoredQueue;
 }
 
@@ -1449,7 +1451,9 @@ export function disposeAllSessions(): void {
 export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void> {
 	const settling = new Set<Promise<unknown>>();
 	for (const [sessionId, entry] of sessions) {
-		if (entry.session.isStreaming && !entry.askUserQuestionWaiters.hasActiveCall())
+		const acceptedResult = entry.askUserQuestionWaiters.acceptedResultPersistence();
+		if (acceptedResult) settling.add(acceptedResult);
+		if (entry.session.isStreaming && !entry.askUserQuestionWaiters.hasRecoverableCall())
 			settling.add(entry.session.abort());
 		settling.add(
 			trackCascade(

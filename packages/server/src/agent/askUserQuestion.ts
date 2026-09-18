@@ -308,10 +308,11 @@ export type AskUserQuestionWaitOutcome =
 	| { kind: "answer"; result: AskUserQuestionResult }
 	| { kind: "abandoned" };
 
+type LiveQuestionPhase = "expected" | "waiting" | "answer-accepted-uncommitted" | "stopped";
+
 interface LiveQuestionWaiter {
-	waitStarted: boolean;
-	stopped: boolean;
-	answer: AskUserQuestionResult | undefined;
+	phase: LiveQuestionPhase;
+	executeStarted: boolean;
 	answerPromise: Promise<AskUserQuestionWaitOutcome>;
 	resolveAnswer: (outcome: AskUserQuestionWaitOutcome) => void;
 	rejectAnswer: (error: Error) => void;
@@ -335,9 +336,8 @@ function createLiveQuestionWaiter(): LiveQuestionWaiter {
 		rejectPersisted = reject;
 	});
 	return {
-		waitStarted: false,
-		stopped: false,
-		answer: undefined,
+		phase: "expected",
+		executeStarted: false,
 		answerPromise,
 		resolveAnswer,
 		rejectAnswer,
@@ -357,7 +357,8 @@ export interface AskUserQuestionWaiters {
 	): { handled: false } | { handled: true; persisted: Promise<void> };
 	persistTurn(toolResults: readonly { toolCallId: string; toolName: string }[]): void;
 	isWaitingForAnswer(): boolean;
-	hasActiveCall(): boolean;
+	hasRecoverableCall(): boolean;
+	acceptedResultPersistence(): Promise<void> | null;
 	abandon(): void;
 }
 
@@ -371,25 +372,29 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 		}
 		return waiter;
 	};
+	const notAwaiting = (toolCallId: string): Error =>
+		new Error(`This questionnaire is not awaiting an answer: ${toolCallId}`);
 	return {
 		expect(toolCallId) {
 			waiterFor(toolCallId);
 		},
 		wait(toolCallId, signal) {
 			const waiter = waiterFor(toolCallId);
-			if (waiter.waitStarted) {
+			if (waiter.executeStarted) {
 				return Promise.reject(new Error(`Duplicate ask_user_question tool call: ${toolCallId}`));
 			}
-			waiter.waitStarted = true;
+			waiter.executeStarted = true;
+			if (waiter.phase === "answer-accepted-uncommitted") return waiter.answerPromise;
+			if (waiter.phase === "stopped") return waiter.answerPromise;
+			waiter.phase = "waiting";
 			if (signal?.aborted) {
-				if (waiter.answer !== undefined) return waiter.answerPromise;
-				waiter.stopped = true;
+				waiter.phase = "stopped";
 				waiter.rejectAnswer(new Error(ASK_STOPPED_ERROR));
 				return waiter.answerPromise;
 			}
 			const abort = (): void => {
-				if (waiting.get(toolCallId) !== waiter || waiter.answer !== undefined) return;
-				waiter.stopped = true;
+				if (waiting.get(toolCallId) !== waiter || waiter.phase !== "waiting") return;
+				waiter.phase = "stopped";
 				waiter.rejectAnswer(new Error(ASK_STOPPED_ERROR));
 			};
 			signal?.addEventListener("abort", abort, { once: true });
@@ -399,13 +404,11 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 		answer(toolCallId, result) {
 			const waiter = waiting.get(toolCallId);
 			if (!waiter) return { handled: false };
-			if (waiter.stopped) {
-				throw new Error(`This questionnaire is not awaiting an answer: ${toolCallId}`);
-			}
-			if (waiter.answer !== undefined) {
+			if (waiter.phase === "stopped") throw notAwaiting(toolCallId);
+			if (waiter.phase === "answer-accepted-uncommitted") {
 				throw new Error(`This questionnaire was already answered: ${toolCallId}`);
 			}
-			waiter.answer = result;
+			waiter.phase = "answer-accepted-uncommitted";
 			waiter.resolveAnswer({ kind: "answer", result });
 			return { handled: true, persisted: waiter.persisted };
 		},
@@ -416,35 +419,39 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 				if (!waiter) continue;
 				waiting.delete(result.toolCallId);
 				waiter.cleanupAbort();
-				if (waiter.answer === undefined) continue;
-				if (waiter.waitStarted) waiter.resolvePersisted();
-				else
-					waiter.rejectPersisted(
-						new Error(`This questionnaire is not awaiting an answer: ${result.toolCallId}`),
-					);
+				if (waiter.phase !== "answer-accepted-uncommitted") continue;
+				if (waiter.executeStarted) waiter.resolvePersisted();
+				else waiter.rejectPersisted(notAwaiting(result.toolCallId));
 			}
 			for (const [toolCallId, waiter] of waiting) {
-				if (waiter.waitStarted) continue;
 				waiting.delete(toolCallId);
 				waiter.cleanupAbort();
-				if (waiter.answer !== undefined)
-					waiter.rejectPersisted(
-						new Error(`This questionnaire is not awaiting an answer: ${toolCallId}`),
-					);
+				if (waiter.phase === "waiting") waiter.rejectAnswer(notAwaiting(toolCallId));
+				if (waiter.phase === "answer-accepted-uncommitted") {
+					waiter.rejectPersisted(notAwaiting(toolCallId));
+				}
 			}
 		},
 		isWaitingForAnswer() {
-			return [...waiting.values()].some((waiter) => waiter.answer === undefined && !waiter.stopped);
+			return [...waiting.values()].some(
+				(waiter) => waiter.phase === "expected" || waiter.phase === "waiting",
+			);
 		},
-		hasActiveCall() {
-			return [...waiting.values()].some((waiter) => waiter.waitStarted && !waiter.stopped);
+		hasRecoverableCall() {
+			return [...waiting.values()].some((waiter) => waiter.phase !== "stopped");
+		},
+		acceptedResultPersistence() {
+			const accepted = [...waiting.values()]
+				.filter((waiter) => waiter.phase === "answer-accepted-uncommitted")
+				.map((waiter) => waiter.persisted);
+			return accepted.length > 0 ? Promise.all(accepted).then(() => {}) : null;
 		},
 		abandon() {
 			const error = new Error("Session disposed while waiting for a question");
 			for (const waiter of waiting.values()) {
 				waiter.cleanupAbort();
-				if (waiter.waitStarted) waiter.resolveAnswer({ kind: "abandoned" });
-				if (waiter.answer !== undefined) waiter.rejectPersisted(error);
+				if (waiter.phase === "waiting") waiter.resolveAnswer({ kind: "abandoned" });
+				if (waiter.phase === "answer-accepted-uncommitted") waiter.rejectPersisted(error);
 			}
 			waiting.clear();
 		},
