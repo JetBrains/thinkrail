@@ -252,38 +252,71 @@ describe("analytics event initialization", () => {
 		]);
 	});
 
-	test("delegates primary and middle clicks once each and ignores the middle click duplicate", () => {
+	test("records live attribution and adds a prepared bridge before each desktop download", () => {
 		const document = new FakeDocument();
 		const log = captureLog();
+		const order: string[] = [];
+		const capture: Capture = ((event, properties) => {
+			order.push(event);
+			log.capture(event, properties);
+		}) as Capture;
 		const url = Object.keys(stableDesktopAliases)[1] as string;
 		const anchor = desktopAnchor(url, "#quick-start");
 		let preventDefaultCalls = 0;
 		const preventDefault = () => {
 			preventDefaultCalls += 1;
 		};
-		initAnalyticsEvents(document, "/vibecoding/", log.capture);
+		initAnalyticsEvents(
+			document,
+			"/vibecoding/",
+			capture,
+			() => order.push("init_touch"),
+			() => order.push("action_touch"),
+			() => {
+				order.push("download_bridge");
+				return "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+			},
+		);
 		log.events.length = 0;
+		order.length = 0;
 
 		document.dispatch("click", { button: 0, target: anchor, preventDefault });
-		expect(log.events.map(({ event }) => event)).toEqual([
+		expect(order).toEqual([
+			"action_touch",
 			"install_cta_clicked",
+			"action_touch",
+			"download_bridge",
 			"download_started",
 		]);
+		expect(log.events[1]?.properties).toMatchObject({
+			bridge_id: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		});
 
 		log.events.length = 0;
+		order.length = 0;
 		document.dispatch("click", { button: 1, target: anchor, preventDefault });
 		document.dispatch("auxclick", { button: 1, target: anchor, preventDefault });
-		expect(log.events.map(({ event }) => event)).toEqual([
+		expect(order).toEqual([
+			"action_touch",
 			"install_cta_clicked",
+			"action_touch",
+			"download_bridge",
 			"download_started",
 		]);
 		expect(preventDefaultCalls).toBe(0);
 	});
 
-	test("delegates open-only CLI disclosure events", () => {
+	test("records a live attribution touch before an open-only CLI disclosure event", () => {
 		const document = new FakeDocument();
 		const log = captureLog();
-		initAnalyticsEvents(document, "/", log.capture);
+		const touches: string[] = [];
+		initAnalyticsEvents(
+			document,
+			"/",
+			log.capture,
+			() => {},
+			(key) => touches.push(key),
+		);
 		log.events.length = 0;
 
 		document.dispatch("toggle", {
@@ -293,6 +326,7 @@ describe("analytics event initialization", () => {
 			target: disclosure(true, "details.install-reference"),
 		});
 
+		expect(touches).toEqual(["landing"]);
 		expect(log.events).toEqual([
 			{
 				event: "install_cta_clicked",
