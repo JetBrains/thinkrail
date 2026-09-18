@@ -157,8 +157,8 @@ landing + blog shells                      ──▶ src/components/Analytics.as
 ## Analytics and consent
 
 `src/analytics.ts` is the site-local facade over [[module-website-analytics]]. It supplies the exact
-production hostname `thinkrail.ai` and adapts Cookiebot's current Marketing state plus consent-ready event
-to the shared current-value/subscription contract; the shared module owns the PostHog and GTM identifiers,
+production hostname `thinkrail.ai` and adapts Cookiebot's response-aware Marketing state plus
+consent-ready/accept/decline events to the shared current-value/subscription contract; the shared module owns the PostHog and GTM identifiers,
 journey persistence, typed capture, privacy configuration, and script loaders. Unknown or denied Marketing
 state stays cookieless and carries no journey ID. Localhost, `astro dev`, every `pages.dev` deployment, the
 `jetbrains.github.io` address, and sibling subdomains send nothing.
