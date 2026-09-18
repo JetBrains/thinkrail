@@ -3,29 +3,32 @@
 Entry: an open PR plus the completion mode selected by the caller. Saves nothing. This doc ends the
 workflow in one of the two terminal states below.
 
-## Snapshot mode — metadata-only work
+## Snapshot mode — default delivery and reporting
 
-Use after standalone screenshot, body, or comment-only maintenance that left the PR head unchanged,
-or for a one-time checks/merge-state request, when the ask does not promise a merge-ready result.
+Use after ordinary PR creation, syncing, screenshots, title/body maintenance, review comments, any
+routine head update, or a one-time checks/merge-state request. A push does not imply monitoring; use
+this mode whenever the user did not explicitly request remote completion.
 
-1. Run `gh pr checks <n>` once. Preserve `no checks reported` as the explicit state “no checks
-   configured”; report pending or failing checks as observed.
+1. Run `gh pr checks <n>` once. An empty rollup means only “no checks currently reported”; CI may
+   not have registered for a fresh head yet, so report its presence as indeterminate. Report pending
+   or failing checks as observed.
 2. Query `mergeStateStatus`, `isDraft`, and `reviewDecision` together once. Report every value exactly
    as observed; do not poll, sync, rerun, or repair it.
 3. Give the user the PR link, any metadata action completed, and the current checks + merge-state
    snapshot.
 
-**Snapshot terminal state:** the requested metadata mutation, if any, is complete and the current PR
-state is reported. This is not a claim that the PR is green or merge-ready.
+**Snapshot terminal state:** the requested PR action is complete and the current PR state is reported.
+This is not a claim that the PR is green or merge-ready.
 
-## Wait mode — ship or code-affecting work
+## Wait mode — explicit remote completion
 
 ### Watch
 
 - `gh pr checks <n> --watch` (or `gh run watch <run-id> --exit-status` for one run). When a watch is
   impractical, poll `gh pr checks <n>` with sleeps.
-- `no checks reported` means there is no CI to wait for; carry “no checks configured” into the
-  terminal summary and continue to merge-state verification.
+- If no checks are reported, wait briefly and retry until checks register or independently establish
+  that the repository has no CI for this PR. Never infer “no checks configured” from one empty rollup;
+  carry it into the terminal summary only after confirming it.
 - On failure, inspect `gh run view --job <job-id> --log-failed`; reproduce locally when the log is not
   conclusive.
 
@@ -59,8 +62,9 @@ Handle every state explicitly:
 - `HAS_HOOKS` — affirmative with an explicit caveat: checks pass and GitHub considers the PR
   mergeable, but pre-receive hooks still run when the merge is attempted.
 
-**Wait terminal state:** the PR exists, is non-draft, current with its base, every configured check is
-green (or there is explicitly no CI), and `mergeStateStatus` is `CLEAN` or `HAS_HOOKS` with the caveat
+**Wait terminal state:** when the user explicitly requested remote completion, the PR exists, is
+non-draft, current with its base, every configured check is green (or there is explicitly no CI), and
+`mergeStateStatus` is `CLEAN` or `HAS_HOOKS` with the caveat
 reported. The user gets the link plus what shipped, what was verified, and any deliberate exclusions.
 A requested draft or a blocker that needs a human/out-of-scope decision is an explicit alternative
 terminal state, never a merge-ready success.

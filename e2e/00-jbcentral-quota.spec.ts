@@ -122,6 +122,9 @@ test("stale quota keeps its value, retries immediately, and preserves both numbe
 		page.getByTestId("connection-status").getByText("Connected", { exact: true }),
 	).toBeHidden();
 	await expect(quota(page)).toContainText("18.5 / 20");
+	const shellBox = await page.getByTestId("shell").boundingBox();
+	expect(shellBox?.x).toBe(0);
+	expect(shellBox?.width).toBe(390);
 
 	await openProviders(page);
 	await setIntervalSeconds(page, 30);

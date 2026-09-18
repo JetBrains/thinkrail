@@ -109,6 +109,25 @@ second or two, and a retry button shown immediately reads as "this failed" for w
 stalled past a short grace window (`CHAT_RETRY_DELAY_MS`), so the retry affordance surfaces solely for the
 genuinely-stuck case it exists for.
 
+## Chat title controls
+
+A chat tab's existing context menu gains **Rename chat**, and every row in the workspace's **Recently
+closed** chat menu gains a visible pencil action. Like workspace rename, each action replaces its own label
+in place with a chrome-less single-line input carrying the same typography and geometry; the field is
+prefilled, focused, and selected. Enter or blur commits, Escape cancels, and blank, over-80-character, and
+unchanged values never issue a request. Keyboard commit/cancel restores the replacement tab or history-row
+control; pointer blur preserves the user's new focus target. The named, viewport-bounded interactive history
+popover remains open and scrollable while its row is edited. The controls render only when the welcome
+protocol supports `session.rename`.
+
+The shell injects the chat-only mutation callback into the otherwise domain-neutral Workbench tab menu rather
+than teaching the pure layout engine how sessions are persisted. A commit has no optimistic domain write: the
+inline editor returns to the prior host-owned label until the existing `session_info_changed` store fold
+updates open tabs and closed history everywhere; rejection retains that snapshot and raises the standard
+error toast. Renaming a closed chat does not open or select it; renaming an open chat does not change placement
+or focus. Automatic title arrival uses this same label fold but opens no editor, notification, or focus
+transition. ChatView's `/name` command is the independent keyboard entry point to the same wire mutation.
+
 ## Global chords
 
 `useGlobalHotkeys` remains the one capture-phase owner of app-wide chords. It routes commands through the workbench command surface rather than imperative feature-panel refs:

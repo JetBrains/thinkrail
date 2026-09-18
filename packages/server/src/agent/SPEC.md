@@ -463,9 +463,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     text = the same `buildQuestionnaireResponse` envelope the blocking design fed the model; a partial
     submission lists its unanswered questions explicitly as declined) — via pi's public
     `AgentSession.sendCustomMessage({triggerTurn: true})`, which starts a new turn when idle and steers
-    the current one when streaming. **Answering live and answering after a restart are the same code
-    path.** The questionnaire is rendered **inline** in chat by `apps/web`'s `AskUserQuestionCard`
-    (joined by tool name; lifecycle derived from the transcript — see the chat tools SPEC).
+    the current one when streaming. The question array has **no tool-level maximum**: one round carries
+    every question needed for the current decision, while each question retains the 2–4 option bound.
+    **Answering live and answering after a restart are the same code path.** The questionnaire is rendered
+    **inline** in chat by `apps/web`'s `AskUserQuestionCard` (joined by tool name; lifecycle derived from
+    the transcript — see the chat tools SPEC).
     **Rejected alternatives** (the one place these decisions are recorded): (1) the original **blocking
     design** — `execute` parked on an in-memory promise until the browser replied. A host restart
     destroyed the pending promise and left a dangling `toolCall` in the transcript; providers reject
@@ -479,8 +481,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     community `@juicesharp/rpiv-ask-user-question` extension — its questionnaire UI is a live pi-tui
     component handed to the host via `ctx.ui.custom(factory)` (*code, not data*), unserializable over the
     WS bridge; and like every blocking ask-extension it inherits the restart hole. The LLM-facing contract
-    (TypeBox schema, validation, envelope — mirroring rpiv's so the model behaves the same) stays
-    re-implemented here so we own it and avoid the package's pi-tui/i18n peer deps.
+    (TypeBox schema, validation, envelope) stays re-implemented here so we own its question-count policy
+    and avoid the package's pi-tui/i18n peer deps; its option shape and answer envelope still mirror rpiv
+    where useful.
   - `sessionRepair` — `repairDanglingToolCalls(sessionManager)`: the restart safety net (rationale under
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends only missing results from the active tail batch) —
@@ -713,6 +716,29 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 - **Forbidden:** `host`; sibling features other than `log` and the narrow `persistence.dataDir` edge (session
   worktree `cwd` remains an input, never a persistence lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
+
+## Session titles
+
+`agentSessionManager` is the only durable chat-title writer. Its `renameSession(sessionId,
+workspaceId, cwd, title, { onlyIfUnnamed? })` validates one non-blank, single-line title within contracts'
+length limit, resolves the session strictly inside the supplied workspace/cwd, and avoids an append when the
+normalized title is already current. A live session writes through `AgentSession.setSessionName`; a disk-only
+session opens its exact transcript with `SessionManager.open(...).appendSessionInfo(...)` without attaching an
+agent or resolving a model. Both paths publish the same `session_info_changed` Pi event, while
+`SessionSummary.title` remains the hydration projection.
+
+`getSessionName(sessionId)` exposes only a live session's current Pi name so the host can skip title-model
+work once one exists. `getSessionMessagesSnapshot(sessionId)` returns a copied, renderable-role view of that
+same live Pi transcript without attaching or awaiting; the host captures it before dispatch solely to decide,
+after acceptance, whether an earlier title-eligible prompt already consumed automatic naming. A reattached
+session therefore carries that decision through a host restart without title provenance or a sidecar.
+
+The guarded write remains authoritative across the async race. `onlyIfUnnamed` performs the check immediately
+beside the append and is the auto-title compare-and-set; the manual wire mutation is unconditional. Thus an
+async helper cannot overwrite a durable name that landed while it was running. No generated/manual provenance
+or title sidecar belongs here—the absent-vs-present pi name plus the durable transcript are sufficient because
+automatic naming gets one opportunity. The architecture's accepted no-cross-process coordination rule still
+applies.
 
 ## Get right
 

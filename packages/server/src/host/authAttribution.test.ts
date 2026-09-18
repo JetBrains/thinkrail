@@ -180,6 +180,11 @@ function properties(name: string) {
 
 test("preconfigured API-key chats and accepted prompt, steer and follow-up sends report auth without optional consent", async () => {
 	const sessionId = await createChat();
+	await handleRequest(
+		"session.rename",
+		{ workspaceId, sessionId, title: "Auth attribution" },
+		context,
+	);
 	const started = Promise.withResolvers<void>();
 	const release = Promise.withResolvers<void>();
 	faux.setResponses([
@@ -313,6 +318,16 @@ test("retained sessions keep their generation's API-key auth when new same-provi
 	if (candidate.outcome !== "prepared") throw new Error("Candidate was not prepared");
 	activatePiRuntimeGeneration(candidate.generation);
 	const newId = await createChat(nextFaux);
+	await handleRequest(
+		"session.rename",
+		{ workspaceId, sessionId: retainedId, title: "Retained auth" },
+		context,
+	);
+	await handleRequest(
+		"session.rename",
+		{ workspaceId, sessionId: newId, title: "New auth" },
+		context,
+	);
 	expect(await usePiRuntime((current) => current === nextRuntime)).toBe(true);
 	expect(getSessionRuntimeGeneration(retainedId)).toBe(retainedGeneration);
 	expect(getSessionRuntimeGeneration(newId)).toBe(candidate.generation);

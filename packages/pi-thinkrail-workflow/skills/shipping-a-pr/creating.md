@@ -1,8 +1,9 @@
 # creating.md — gates, then the PR
 
 Entry: finished work on a branch, no PR yet. Saves the body draft at
-`.thinkrail/context/pr-body.md`. Creating owns wait mode; control continues with that mode at
-`screenshots.md` (UI-visible change) or `checks.md`.
+`.thinkrail/context/pr-body.md`. Creating defaults to snapshot mode; an explicit remote-completion ask
+selects wait mode. Control continues with the selected mode at `screenshots.md` (UI-visible change) or
+`checks.md`.
 
 ## Gates — all five pass before `gh pr create`, in this order
 
@@ -14,18 +15,20 @@ Entry: finished work on a branch, no PR yet. Saves the body draft at
 3. **Clean branch.** Remove throwaway artifacts — repro tests, capture specs, scratch files, test
    output dirs. Read `git log --oneline <base>..HEAD` and `git status --short` as the reviewer will:
    every file in the diff must be explainable in one line.
-4. **Verified.** Run the project's own verification gates (its agent instructions / package
-   scripts) — *after* the rebase, not before. New behavior ships with tests; if the project's
-   convention demands a suite class (e.g. e2e) not yet run for this change, run it now. A project
-   with no gates of its own is verified by hand and reported as exactly that in the body's Testing
-   section — never silently treated as verified.
+4. **Verification evidence.** Apply the spine's final-tree rule: collect the exact checks already run
+   during development, reuse results whose covered inputs are unchanged, and run only missing or
+   invalidated project gates. Do not rerun a passing command merely because PR creation started.
+   Changed commit IDs alone do not invalidate evidence; relevant changes in the resulting tree do.
+   Report the exact commands and results in the body's Testing section; a project with no gates is
+   verified by hand and reported as exactly that, never silently treated as verified.
 5. **Self-review.** Re-read the full diff (`git diff <base>...HEAD` plus working tree) as a
    reviewer, holding the project's handoff-hygiene bar: no silent lint/type suppressions, no comment
    creep, no half-migrated patterns, no leftovers. Fix what you find; don't annotate it.
 
 Red flags — stop, a gate is being rationalized away:
 
-- "I'll create the PR now and run the suite while it's up."
+- "PR creation always means rerunning everything" — valid final-change evidence is reusable.
+- "That earlier result probably still applies" — later changes may have invalidated it.
 - "The rebase can wait until review starts."
 - "That file is probably fine" — you couldn't explain it to a reviewer in one line.
 
@@ -39,10 +42,10 @@ Red flags — stop, a gate is being rationalized away:
   `## Summary` (what and why, plus `Closes #NNN` when issue-driven), `## Changes` (including
   exclusions or migration steps when material),
   and `## Testing` (exact commands and results, never a bare "tests pass").
-- **Re-verify, push, then create.** Gates 3–5 edit the tree gate 1 checked — artifact removals,
-  self-review fixes: commit everything they changed and confirm `git status --porcelain` is empty
-  again *now*, immediately before the push (the spine's point-of-action rule; a deletion or fix
-  left in the working tree does not reach the PR). Then push the verified head —
+- **Stabilize the tree, push, then create.** Gates 3–5 may edit the tree gate 1 checked. When they do,
+  commit everything, then repeat gates 3–5 against the new head; push only after a pass makes no
+  further edits and `git status --porcelain` is empty *now* (the spine's point-of-action rule). Then
+  push the reviewed, final-change-verified head —
   `gh pr create --head` does **not** push for you: `git push -u origin <branch>`
   (`--force-with-lease` when the remote branch exists and was rebased) — then
   `gh pr create --base <base> --head <branch> --title "…" --body-file .thinkrail/context/pr-body.md`
@@ -53,5 +56,5 @@ Red flags — stop, a gate is being rationalized away:
 ## Next
 
 - The change is UI-visible → offer screenshots proactively (don't wait to be asked), then read and
-  follow `screenshots.md`, carrying wait mode from creation.
-- Otherwise → read and follow `checks.md` in wait mode.
+  follow `screenshots.md`, carrying the selected completion mode.
+- Otherwise → read and follow `checks.md` in the selected completion mode.

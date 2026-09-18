@@ -14,7 +14,6 @@ import type {
 import { ASK_USER_ANSWERS_CUSTOM_TYPE, isAskUserAnswersMessage } from "@thinkrail/contracts";
 import { type Static, Type } from "typebox";
 
-export const MAX_QUESTIONS = 4;
 export const MIN_OPTIONS = 2;
 export const MAX_OPTIONS = 4;
 export const MAX_HEADER_LENGTH = 16;
@@ -72,8 +71,7 @@ const QuestionSchema = Type.Object({
 export const AskUserQuestionSchema = Type.Object({
 	questions: Type.Array(QuestionSchema, {
 		minItems: 1,
-		maxItems: MAX_QUESTIONS,
-		description: `The questions to ask (1-${MAX_QUESTIONS}).`,
+		description: "One or more questions to ask.",
 	}),
 });
 
@@ -92,7 +90,7 @@ Calling this tool ENDS YOUR TURN: the questions render inline in the chat as an 
 - The user may answer only some questions; unanswered ones are reported as declined.`;
 
 const PROMPT_GUIDELINES = [
-	`Call ask_user_question whenever the request is ambiguous and a concrete decision is needed — up to ${MAX_QUESTIONS} questions per call, ${MIN_OPTIONS}-${MAX_OPTIONS} options each. The call ends your turn; the answers arrive as the next user message.`,
+	`Call ask_user_question whenever the request is ambiguous and a concrete decision is needed — include every question needed in one call, with ${MIN_OPTIONS}-${MAX_OPTIONS} options each. The call ends your turn; the answers arrive as the next user message.`,
 	"Every option needs a concise label (1-5 words) and a description of what it means / its trade-off.",
 	'Recommend by putting the option first with "(Recommended)" appended and setting its recommendedReason to one short sentence (shown inline under the option) on why you recommend it over the alternatives; the user can always type a custom answer or skip the questionnaire.',
 ];
@@ -111,8 +109,6 @@ export function validateQuestionnaire(args: AskUserQuestionArgs): ValidationResu
 	const questions = args.questions ?? [];
 	if (questions.length === 0)
 		return { ok: false, message: "Error: At least one question is required" };
-	if (questions.length > MAX_QUESTIONS)
-		return { ok: false, message: `Error: At most ${MAX_QUESTIONS} questions are allowed per call` };
 
 	const seenQuestions = new Set<string>();
 	const reserved = new Set<string>(RESERVED_LABELS);

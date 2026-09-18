@@ -32,6 +32,7 @@ of the host.
   value re-exports
   `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
+  `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
   chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
@@ -125,6 +126,14 @@ of the host.
     the server's transcript filter and history index, whose alignment keeps a history hit's `messageIndex`
     valid against the client's `turnIdByMessageIndex` — a role added to one side but not the other would
     silently shift every later jump anchor.
+  - **Chat titles** — `SessionSummary.title` remains the non-empty read
+    projection (`Chat` while pi has no durable name). The additive `session.rename` mutation takes
+    `{ workspaceId, sessionId, title }`, rejects a title whose trimmed single-line form is blank or exceeds
+    `SESSION_TITLE_MAX_LENGTH` (80), and returns an ack; `SESSION_RENAME_PROTOCOL_VERSION` pins the
+    mutation and controls to v66 so a newer client hides them against older hosts. The existing Pi event
+    `session_info_changed { name?: string }` is the one live domain update for manual and automatic changes,
+    and `session.list`/`session.getMessages` repair a missed event. No title source/provenance, uniqueness,
+    workspace coupling, or new push channel crosses the wire; session ids remain canonical.
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
     `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel.

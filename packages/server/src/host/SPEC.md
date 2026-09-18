@@ -445,6 +445,19 @@ channel fan-out, and the process-boot wrapper both launchers share.
   reconnect retains and re-delivers it after `server.welcome`. A host restart has no claim to re-deliver, and
   the welcome clears the frontend's stale popup projection. Popup `feedback.respond` actions are ordinary
   replay-safe requests and never alter the Settings link.
+- **Chat titles:** `session.rename` resolves `workspaceId` to its cwd and delegates title validation plus the
+  unconditional durable write to `agent`; it never patches one client directly. Immediately before each user
+  send dispatch, the host copies the live Pi transcript without awaiting or starting naming work. Only after
+  that send is accepted does the detached auto-title path proceed, and only when the snapshot has no earlier
+  non-control title-eligible user prompt and the Pi name is absent. Thus a first text turn already present when
+  a session is reattached consumes the opportunity across a host restart; a later request can never become the
+  naming source. `assist` produces a bounded cheap-model candidate or deterministic fallback, and `agent`
+  applies it with `onlyIfUnnamed` after the await. Naming never delays the send's dispatch or ack, and failures
+  stay best-effort (warn-log an unexpected write failure; no user-facing send failure). Image-only, blank,
+  punctuation-only, and internal control sends do not consume the opportunity; a later accepted text prompt
+  may. Concurrent first sends remain per-session single-flighted. There is no settled-turn or per-turn retitle
+  hook. Both manual and automatic writes converge every client through the existing
+  `pi.event`/`session_info_changed` channel and `session.list` repair; no new push channel exists.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for

@@ -11,7 +11,8 @@ type CommandResult = { ok: boolean; out: string };
 type CommandRunner = (cwd: string, command: string[]) => Promise<CommandResult>;
 type LookupResult = { value: OpenBranchReview | null; cacheable: boolean };
 type LookupOptions = { fresh?: boolean; now?: () => number };
-type ParsedReviewNumber = { valid: true; value: number | null } | { valid: false };
+type ReviewRow = { number: number; url?: string };
+type ParsedReviewRow = { valid: true; value: ReviewRow | null } | { valid: false };
 
 function detectReviewProviderResult(cwd: string, branch: string): ProviderDetection {
 	const configured = [
@@ -141,7 +142,7 @@ async function lookupOpenBranchReview(
 						"--state",
 						"open",
 						"--json",
-						"number",
+						"number,url",
 						"--limit",
 						"1",
 					]
@@ -149,7 +150,7 @@ async function lookupOpenBranchReview(
 		const result = await run(cwd, command);
 		if (!result.ok) return { value: null, cacheable: false };
 
-		const parsed = parseReviewNumber(result.out, provider === "github" ? "number" : "iid");
+		const parsed = parseReviewRow(result.out, provider === "github" ? "number" : "iid");
 		if (!parsed.valid) return { value: null, cacheable: false };
 		return {
 			value:
@@ -157,7 +158,8 @@ async function lookupOpenBranchReview(
 					? null
 					: {
 							kind: provider === "github" ? "pull-request" : "merge-request",
-							number: parsed.value,
+							number: parsed.value.number,
+							...(parsed.value.url ? { url: parsed.value.url } : {}),
 						},
 			cacheable: true,
 		};
@@ -166,25 +168,35 @@ async function lookupOpenBranchReview(
 	}
 }
 
-function parseReviewNumber(output: string, field: "number" | "iid"): ParsedReviewNumber {
+function reviewRowUrl(row: Record<string, unknown>): string | undefined {
+	for (const key of ["url", "web_url", "webUrl"]) {
+		const value = row[key];
+		if (typeof value === "string" && /^https:\/\/\S+$/.test(value)) return value;
+	}
+	return undefined;
+}
+
+function parseReviewRow(output: string, field: "number" | "iid"): ParsedReviewRow {
 	try {
 		const rows: unknown = JSON.parse(output);
 		if (!Array.isArray(rows)) return { valid: false };
 		if (rows.length === 0) return { valid: true, value: null };
 		const first: unknown = rows[0];
 		if (typeof first !== "object" || first === null) return { valid: false };
-		const value = (first as Record<string, unknown>)[field];
-		return typeof value === "number" && Number.isSafeInteger(value) && value > 0
-			? { valid: true, value }
-			: { valid: false };
+		const row = first as Record<string, unknown>;
+		const value = row[field];
+		if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0)
+			return { valid: false };
+		const url = reviewRowUrl(row);
+		return { valid: true, value: { number: value, ...(url ? { url } : {}) } };
 	} catch {
 		return { valid: false };
 	}
 }
 
 export function reviewNumber(output: string, field: "number" | "iid"): number | null {
-	const parsed = parseReviewNumber(output, field);
-	return parsed.valid ? parsed.value : null;
+	const parsed = parseReviewRow(output, field);
+	return parsed.valid ? (parsed.value?.number ?? null) : null;
 }
 
 export async function runProviderCommand(

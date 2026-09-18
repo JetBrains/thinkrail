@@ -96,8 +96,17 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 65;
+export const PROTOCOL_VERSION = 66;
 export const ANALYTICS_CONSENT_PROTOCOL_VERSION = 65;
+export const SESSION_RENAME_PROTOCOL_VERSION = 66;
+export const SESSION_TITLE_MAX_LENGTH = 80;
+
+export function normalizeSessionTitle(value: unknown): string | null {
+	if (typeof value !== "string") return null;
+	const title = value.replace(/[\r\n]+/g, " ").trim();
+	return title.length > 0 && title.length <= SESSION_TITLE_MAX_LENGTH ? title : null;
+}
+
 export const WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION = 62;
 export const PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION = 63;
 export const THEME_SYSTEM_PROTOCOL_VERSION = 58;
@@ -210,6 +219,7 @@ export const WS_METHODS = {
 	sessionAbort: "session.abort",
 	sessionDispose: "session.dispose",
 	sessionDelete: "session.delete",
+	sessionRename: "session.rename",
 	sessionSetModel: "session.setModel",
 	sessionSetThinkingLevel: "session.setThinkingLevel",
 	sessionCompact: "session.compact",
@@ -510,6 +520,10 @@ export interface WsMethodMap {
 	};
 	"session.dispose": { params: { sessionId: string }; result: Ack };
 	"session.delete": { params: { workspaceId: string; sessionId: string }; result: Ack };
+	"session.rename": {
+		params: { workspaceId: string; sessionId: string; title: string };
+		result: Ack;
+	};
 	"session.setModel": { params: { sessionId: string; model: WireModel }; result: Ack };
 	"session.setThinkingLevel": { params: { sessionId: string; level: ThinkingLevel }; result: Ack };
 	"session.compact": { params: { sessionId: string; instructions?: string }; result: Ack };

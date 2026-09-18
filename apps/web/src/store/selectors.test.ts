@@ -16,6 +16,7 @@ import {
 	selectAttentionCenterResourceCacheKey,
 	selectAttentionCenterResourceReady,
 	selectAttentionCenterTab,
+	selectCanRenameChat,
 	selectCatalogModel,
 	selectContextProject,
 	selectHistoryTarget,
@@ -46,6 +47,12 @@ test("connection generations reject stale or disconnected read settlements", () 
 	expect(isConnectedGeneration({ status: "connected", connectionGeneration: 4 }, 4)).toBe(true);
 	expect(isConnectedGeneration({ status: "connected", connectionGeneration: 5 }, 4)).toBe(false);
 	expect(isConnectedGeneration({ status: "disconnected", connectionGeneration: 4 }, 4)).toBe(false);
+});
+
+test("chat rename capability follows the host protocol snapshot", () => {
+	expect(selectCanRenameChat({ protocolVersion: 66 })).toBe(true);
+	expect(selectCanRenameChat({ protocolVersion: 65 })).toBe(false);
+	expect(selectCanRenameChat({ protocolVersion: null })).toBe(false);
 });
 
 test("workspace kind predicates distinguish managed and user-owned checkouts", () => {

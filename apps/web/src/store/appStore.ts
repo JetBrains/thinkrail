@@ -2996,8 +2996,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 	handlePiEvent: (event, sessionId) => get().handlePiEvents([{ event, sessionId }]),
 	handlePiEvents: (payloads) =>
 		set((s) => {
+			let state = s;
 			let sessions = s.sessions;
 			for (const { event, sessionId } of payloads) {
+				if (event.type === "session_info_changed") {
+					const title = event.name?.trim() || "Chat";
+					const renamed = renameChat(state, sessionId, title);
+					if (renamed && Object.keys(renamed).length > 0) state = { ...state, ...renamed };
+				}
 				const runtime = sessions[sessionId];
 				if (!runtime) continue;
 				if (sessions === s.sessions) sessions = { ...sessions };
@@ -3008,7 +3014,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 					statsRefreshTick: runtime.statsRefreshTick + (invalidatesSessionStats(event) ? 1 : 0),
 				};
 			}
-			return sessions === s.sessions ? s : { sessions };
+			if (sessions !== s.sessions) state = { ...state, sessions };
+			return state;
 		}),
 	setModelsForProviderVersion: (providerVersion, models) =>
 		set((s) => (s.providerVersion === providerVersion ? { models, modelsFresh: false } : s)),

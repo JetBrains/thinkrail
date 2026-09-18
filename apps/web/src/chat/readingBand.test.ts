@@ -385,6 +385,20 @@ describe("reading-band reader intent", () => {
 		expect(detached.controller.getSnapshot()).toMatchObject({ following: false, moving: true });
 	});
 
+	it("keeps wheel or keyboard outcome pending while controller motion is paused", () => {
+		const harness = createHarness({ streaming: false });
+		harness.controller.returnToEdge();
+
+		const resume = harness.controller.interruptForNativeInput("pending");
+		expect(harness.pendingFrames()).toBe(0);
+		expect(harness.controller.getSnapshot()).toMatchObject({ following: true, moving: true });
+
+		resume();
+		expect(harness.pendingFrames()).toBe(1);
+		harness.advance(220);
+		expect(harness.writes.at(-1)).toBe(1_000);
+	});
+
 	it("keeps active streaming runway intact across a no-move native pause", () => {
 		const harness = createHarness();
 		harness.setGeometry({

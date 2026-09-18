@@ -5,6 +5,7 @@ import {
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { prepareChatTitle } from "../chat/chatTitle";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
@@ -30,6 +31,7 @@ import {
 	isExternalWorkspace,
 	type LayoutIntent,
 	layoutOpenOptionsForNavigation,
+	selectCanRenameChat,
 	selectContextProject,
 	selectDiffTabTargetRef,
 	selectReviewDraftCount,
@@ -201,6 +203,7 @@ function useTerminalReservation(workspaceId: string): void {
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
+	const canRenameChat = useAppStore(selectCanRenameChat);
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
 	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
 	const projectionEpoch = useAppStore(
@@ -219,6 +222,16 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
 	const reviewFlagByPath = useMemo(() => reviewFlags(reviewComments), [reviewComments]);
 	const [focusRequest, setFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
+	const requestRenameChat = useCallback(
+		(sessionId: string, titleInput: string, currentTitle: string) => {
+			const prepared = prepareChatTitle(titleInput);
+			if ("reason" in prepared || prepared.title === currentTitle) return;
+			void getTransport()
+				.request("session.rename", { workspaceId, sessionId, title: prepared.title })
+				.catch((error) => toast.error(errorText(error), "Couldn't rename the chat"));
+		},
+		[workspaceId],
+	);
 	const activeReviewedPath = useAppStore((state) => selectActiveReviewedPath(state, workspaceId));
 	const readActiveReviewedPath = useCallback(
 		() => selectActiveReviewedPath(useAppStore.getState(), workspaceId),
@@ -657,7 +670,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				)}
 				renderCenterActions={(groupId) => (
 					<>
-						<WorkspaceChatHistory workspaceId={workspaceId} targetGroupId={groupId} />
+						<WorkspaceChatHistory
+							workspaceId={workspaceId}
+							targetGroupId={groupId}
+							{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
+						/>
 						<IconTooltip label="New terminal in this group">
 							<button
 								type="button"
@@ -687,6 +704,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				onAttentionChange={changeAttention}
 				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}
 				readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
+				{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
 				onRequestClose={(tab, prepare) => {
 					if (tab.kind === "terminal") {
 						const close = () => {

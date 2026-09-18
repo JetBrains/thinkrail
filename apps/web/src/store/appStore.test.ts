@@ -93,6 +93,10 @@ const userStart = (text: string) =>
 		type: "message_start",
 		message: { role: "user", content: [{ type: "text", text }], timestamp: 1 },
 	}) as unknown as PiEvent;
+const sessionTitleChanged = (name?: string): PiEvent => ({
+	type: "session_info_changed",
+	...(name !== undefined ? { name } : {}),
+});
 const assistantText = (text: string) =>
 	({
 		type: "message_update",
@@ -1078,12 +1082,71 @@ test("a message_update with no prior message_start still builds the turn (mid-st
 	expect(rt("a").turns.filter((t) => t.kind === "assistant")).toHaveLength(1);
 });
 
+test("a durable session title event renames an open chat without moving attention", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "named", null, "medium");
+	const before = useAppStore.getState();
+	const activeTab = before.activeTabByWorkspace.ws1;
+	const navTick = before.navTickByWorkspace.ws1;
+
+	store.handlePiEvent(sessionTitleChanged("Fix auth redirect"), "named");
+
+	const after = useAppStore.getState();
+	expect(
+		after.tabsByWorkspace.ws1?.find((tab) => tab.kind === "chat" && tab.sessionId === "named")
+			?.name,
+	).toBe("Fix auth redirect");
+	expect(after.activeTabByWorkspace.ws1).toBe(activeTab);
+	expect(after.navTickByWorkspace.ws1).toBe(navTick);
+	expect(rt("named").eventRevision).toBe(1);
+});
+
+test("a durable session title event renames closed history and restores the Chat fallback", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "closed-title", null, "medium");
+	store.closeChatToHistory("closed-title", true, "ws1");
+
+	store.handlePiEvent(sessionTitleChanged("Closed work"), "closed-title");
+	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.[0]?.title).toBe("Closed work");
+	store.handlePiEvent(sessionTitleChanged(), "closed-title");
+	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.[0]?.title).toBe("Chat");
+});
+
+test("a durable title updates a known tab without conjuring a runtime or title-event buffer", () => {
+	useAppStore.setState({
+		tabsByWorkspace: {
+			ws1: [
+				{
+					kind: "chat",
+					id: chatTabId("ws1", "tab-only-title"),
+					workspaceId: "ws1",
+					name: "Chat",
+					sessionId: "tab-only-title",
+				},
+			],
+		},
+	});
+	const sessions = useAppStore.getState().sessions;
+
+	useAppStore
+		.getState()
+		.handlePiEvent(sessionTitleChanged("Named before hydrate"), "tab-only-title");
+
+	const after = useAppStore.getState();
+	expect(after.tabsByWorkspace.ws1?.[0]?.name).toBe("Named before hydrate");
+	expect(after.sessions).toBe(sessions);
+	expect(after.extUiOrphans).toEqual([]);
+});
+
 test("an event for an unknown session is a no-op (no runtime is conjured)", () => {
-	const before = useAppStore.getState().sessions;
-	useAppStore.getState().handlePiEvent(agentStart, "ghost");
-	const after = useAppStore.getState().sessions;
-	expect(after).toBe(before);
-	expect(after.ghost).toBeUndefined();
+	const before = useAppStore.getState();
+	before.handlePiEvent(agentStart, "ghost");
+	useAppStore.getState().handlePiEvent(sessionTitleChanged("Ghost title"), "ghost");
+	const after = useAppStore.getState();
+	expect(after.sessions).toBe(before.sessions);
+	expect(after.sessions.ghost).toBeUndefined();
+	expect(after.tabsByWorkspace).toBe(before.tabsByWorkspace);
+	expect(after.extUiOrphans).toEqual([]);
 });
 
 test("closeChatRuntime drops only its own runtime", () => {

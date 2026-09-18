@@ -2,9 +2,11 @@ import { afterEach, expect, test } from "bun:test";
 import type { AssistantMessage, Message, UserMessage } from "@thinkrail/contracts";
 import {
 	extractFirstTurn,
+	naiveChatTitle,
 	naiveWorkspaceName,
 	type OneShotRunner,
 	setOneShotRunner,
+	suggestChatTitle,
 	suggestWorkspaceName,
 	toWorkspaceName,
 } from "./assist";
@@ -156,4 +158,58 @@ test("suggestWorkspaceName returns null without calling the runner when there's 
 	});
 	expect(await suggestWorkspaceName({ prompt: "   ", answer: "answer" })).toBeNull();
 	expect(called).toBe(false);
+});
+
+test("naiveChatTitle preserves useful prompt text within six words and 48 characters", () => {
+	expect(naiveChatTitle("  Fix OAuth 2.0 / PKCE redirect handling today  ")).toBe(
+		"Fix OAuth 2.0 / PKCE redirect",
+	);
+	expect(naiveChatTitle("authenticationauthorizationtoken should stay bounded")).toBe(
+		"authenticationauthorizationtoken should stay",
+	);
+	expect(naiveChatTitle(" \n !!! ??? \t")).toBeNull();
+});
+
+test("suggestChatTitle sends only bounded first-prompt text through the tool-free one-shot runner", async () => {
+	let request: Parameters<OneShotRunner>[0] | undefined;
+	fakeRunner(async (input) => {
+		request = input;
+		return { text: '"Fix OAuth 2.0 / PKCE"', model: { provider: "p", id: "m" } };
+	});
+	const marker = "TAIL_MUST_BE_CLIPPED";
+	const title = await suggestChatTitle(`repair login ${"x".repeat(2000)}${marker}`);
+	expect(title).toBe("Fix OAuth 2.0 / PKCE");
+	expect(request?.tier).toBe("cheap");
+	expect(request?.maxTokens).toBe(32);
+	expect(request?.system).toContain("untrusted");
+	expect(request?.prompt).toContain("repair login");
+	expect(request?.prompt).not.toContain(marker);
+	expect(request?.prompt.length).toBeLessThan(1700);
+	expect(request?.signal).toBeInstanceOf(AbortSignal);
+});
+
+test("suggestChatTitle normalizes model formatting and defensively bounds output", async () => {
+	fakeRunner(async () => ({
+		text: "`Preserve C++\nParser   Semantics`",
+		model: { provider: "p", id: "m" },
+	}));
+	expect(await suggestChatTitle("fix parser")).toBe("Preserve C++ Parser Semantics");
+
+	fakeRunner(async () => ({ text: "word ".repeat(30), model: { provider: "p", id: "m" } }));
+	const bounded = await suggestChatTitle("fix parser");
+	expect(bounded?.length).toBeLessThanOrEqual(80);
+
+	fakeRunner(async () => ({ text: "!!! ???", model: { provider: "p", id: "m" } }));
+	expect(await suggestChatTitle("fix parser")).toBeNull();
+});
+
+test("suggestChatTitle degrades without invoking the runner for blank input", async () => {
+	let called = false;
+	fakeRunner(async () => {
+		called = true;
+		throw new Error("no-model");
+	});
+	expect(await suggestChatTitle(" \n ")).toBeNull();
+	expect(called).toBe(false);
+	expect(await suggestChatTitle("fix parser")).toBeNull();
 });

@@ -38,7 +38,7 @@ import type {
 	TranscriptMessage,
 	WireModel,
 } from "@thinkrail/contracts";
-import { isTranscriptMessageRole } from "@thinkrail/contracts";
+import { isTranscriptMessageRole, normalizeSessionTitle } from "@thinkrail/contracts";
 import type { ParentContext } from "pi-delegation";
 import { RECURSION_GUARD_TOOLS } from "pi-subagents";
 import { logger } from "../log";
@@ -419,6 +419,20 @@ export function getSessionRuntimeGeneration(sessionId: string): PiRuntimeGenerat
 	return hasSession(sessionId) ? sessions.get(sessionId)?.generation : undefined;
 }
 
+export function getSessionName(sessionId: string): string | undefined {
+	return sessions.get(sessionId)?.session.sessionName;
+}
+
+function transcriptMessages(session: AgentSession): TranscriptMessage[] {
+	return session.messages.filter((message) =>
+		isTranscriptMessageRole(message.role),
+	) as TranscriptMessage[];
+}
+
+export function getSessionMessagesSnapshot(sessionId: string): TranscriptMessage[] {
+	return transcriptMessages(mustGet(sessionId));
+}
+
 export async function reloadSessionResources(sessionId: string): Promise<void> {
 	const session = mustGet(sessionId);
 	if (session.isStreaming) {
@@ -787,6 +801,63 @@ export function listSessions(workspaceId: string, cwd: string): Promise<SessionS
 	return listSessionsInternal(workspaceId, cwd);
 }
 
+const sessionFileOperations = new Map<string, Promise<void>>();
+
+function serializeSessionFileOperation<T>(
+	sessionId: string,
+	operation: () => Promise<T> | T,
+): Promise<T> {
+	const previous = sessionFileOperations.get(sessionId) ?? Promise.resolve();
+	const result = previous.catch(() => {}).then(operation);
+	const settled = result.then(
+		() => undefined,
+		() => undefined,
+	);
+	sessionFileOperations.set(sessionId, settled);
+	return result.finally(() => {
+		if (sessionFileOperations.get(sessionId) === settled) sessionFileOperations.delete(sessionId);
+	});
+}
+
+export interface RenameSessionOptions {
+	onlyIfUnnamed?: boolean;
+}
+
+export function renameSession(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+	title: string,
+	options: RenameSessionOptions = {},
+): Promise<boolean> {
+	const normalized = normalizeSessionTitle(title);
+	if (!normalized) return Promise.reject(new Error("Invalid session title"));
+	return serializeSessionFileOperation(sessionId, async () => {
+		if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
+		const live = sessions.get(sessionId);
+		if (live) {
+			if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
+			const current = live.session.sessionName;
+			if ((options.onlyIfUnnamed && current !== undefined) || current === normalized) return false;
+			live.session.setSessionName(normalized);
+			return true;
+		}
+
+		const info = (await listSessionInfosStrict(cwd)).find(
+			(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
+		);
+		if (!info || hasDeletionTombstone(sessionId)) {
+			throw new Error(`Unknown session: ${sessionId}`);
+		}
+		const manager = SessionManager.open(info.path);
+		const current = manager.getSessionName();
+		if ((options.onlyIfUnnamed && current !== undefined) || current === normalized) return false;
+		manager.appendSessionInfo(normalized);
+		publish({ sessionId, event: { type: "session_info_changed", name: normalized } });
+		return true;
+	});
+}
+
 const attaching = new Map<string, Promise<void>>();
 
 function attachDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
@@ -795,9 +866,9 @@ function attachDiskSession(sessionId: string, workspaceId: string, cwd: string):
 	if (sessions.has(sessionId)) return Promise.resolve();
 	let pending = attaching.get(sessionId);
 	if (!pending) {
-		pending = openDiskSession(sessionId, workspaceId, cwd).finally(() =>
-			attaching.delete(sessionId),
-		);
+		pending = serializeSessionFileOperation(sessionId, () =>
+			openDiskSession(sessionId, workspaceId, cwd),
+		).finally(() => attaching.delete(sessionId));
 		attaching.set(sessionId, pending);
 	}
 	return pending;
@@ -898,10 +969,7 @@ async function getSessionMessagesInternal(
 		entry = sessions.get(sessionId);
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
-	const messages = entry.session.messages.filter((m) =>
-		isTranscriptMessageRole(m.role),
-	) as TranscriptMessage[];
-	return { summary: summaryOf(sessionId, entry), messages };
+	return { summary: summaryOf(sessionId, entry), messages: transcriptMessages(entry.session) };
 }
 
 export function getSessionMessages(

@@ -69,3 +69,27 @@ test("a same-review refresh preserves its known URL while a different review dro
 	state.resolveRequest("w\0feature", different, pullRequest(8));
 	expect(state.getSnapshot("w\0feature")).toEqual({ review: pullRequest(8) });
 });
+
+test("a lookup's own url makes the chip a link on a fresh client, with no prior noteOpenReview", () => {
+	const state = createOpenBranchReviewState();
+	const generation = state.beginRequest("w\0feature");
+	state.resolveRequest("w\0feature", generation, {
+		...pullRequest(464),
+		url: "https://github.com/acme/app/pull/464",
+	});
+	expect(state.getSnapshot("w\0feature")).toEqual({
+		review: { ...pullRequest(464), url: "https://github.com/acme/app/pull/464" },
+		url: "https://github.com/acme/app/pull/464",
+	});
+});
+
+test("a url already known survives a lookup for the same review that reports none", () => {
+	const state = createOpenBranchReviewState();
+	state.noteOpenReview("w\0feature", pullRequest(464), "https://github.com/acme/app/pull/464");
+	const generation = state.beginRequest("w\0feature");
+	state.resolveRequest("w\0feature", generation, pullRequest(464, 2));
+	expect(state.getSnapshot("w\0feature")).toEqual({
+		review: pullRequest(464, 2),
+		url: "https://github.com/acme/app/pull/464",
+	});
+});

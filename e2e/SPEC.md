@@ -189,8 +189,13 @@ placement, not a layout revision or peer geometry synchronization.
 ## Isolation contract
 
 General and private-restart fixtures seed additional analytics off with consent already confirmed, so
-unrelated scenarios stay unblocked. Consent tests reset the choice over the real settings wire and cover
-drafts, persistence failures, reloads, cross-client convergence, prompt priority, and pre-v64 fallback.
+unrelated scenarios stay unblocked. They also seed the automatic interview invitation as permanently
+dismissed: the serial agent lane intentionally accumulates accepted prompts across scenarios, while dedicated
+feedback coverage injects and asserts the addressed invitation channel directly. Before any fixture reset
+deletes transcript storage, it lists and disposes every live session through the public wire; disposal aborts
+and settles an unfinished provider turn first, so a test ending mid-turn cannot recreate a headerless JSONL
+behind the next scenario. Consent tests reset the choice over the real settings wire and cover drafts,
+persistence failures, reloads, cross-client convergence, prompt priority, and pre-v64 fallback.
 
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,
 desktop cache/state plus ready/control files, Playwright transform cache, restart artifacts,
@@ -245,9 +250,12 @@ scroll to the latest row, and legitimately virtualize the preceding user row. Ch
 multi-round transcripts and asserts both latest edges, their physical **Latest** destinations, host-qualified
 browser-local persistence, and cross-browser isolation without involving a provider. Hydrated-history
 coverage seeds one canonical giant Markdown block and drives real coarse wheel input so initial virtual
-geometry cannot clamp before the row mounts. Questionnaire paging uses a canonical persisted tool-call/ack
-fixture to pin tall-page reveal, fresh-chat restored-page reveal, visible review focus, and coarse-pointer
-focus without provider variability; desktop package tests separately pin the stable
+geometry cannot clamp before the row mounts. Chat-title coverage uses persisted Pi transcripts to prove the
+native `/name` path, open-tab and closed-history inline rename paths, keyboard focus recovery, bounded
+long-history scrolling, and reload durability without involving a provider. Questionnaire paging uses
+canonical persisted tool-call/ack fixtures to pin six-question rounds beyond four, tall-page reveal,
+fresh-chat restored-page reveal, visible review focus, and coarse-pointer focus
+without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
 `@agent` because only Pi's real row growth exercises that lifecycle. Before handoff, every app-affecting
 change runs the complete `bun run e2e` no-agent gate. Artifact-only regressions remain covered by

@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSyn
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-import type { Workspace } from "@thinkrail/contracts";
+import type { SessionSummary, Workspace } from "@thinkrail/contracts";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import {
 	isRealCentralE2e,
@@ -23,6 +23,7 @@ import {
 	E2E_PLAIN_DIR,
 } from "./paths";
 import { fixtureRepoHealthy, seedFixtureRepo } from "./repo";
+import { E2eWire } from "./wire";
 
 export const PHONE_VIEWPORT = { width: 390, height: 780 } as const;
 
@@ -95,7 +96,8 @@ function resetState(): void {
 	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 }
 
-export function stagePlainFolder(): string {
+export async function stagePlainFolder(page: Page): Promise<string> {
+	await disposeLiveSessions(page);
 	resetState();
 	rmSync(E2E_PLAIN_DIR, { recursive: true, force: true });
 	mkdirSync(E2E_PLAIN_DIR, { recursive: true });
@@ -109,6 +111,32 @@ function loadPersistedWorkspaces(): Workspace[] {
 		return JSON.parse(readFileSync(join(E2E_DATA_DIR, "workspaces.json"), "utf8")) as Workspace[];
 	} catch {
 		return [];
+	}
+}
+
+async function disposeLiveSessions(page: Page): Promise<void> {
+	const workspaces = loadPersistedWorkspaces();
+	if (workspaces.length === 0) return;
+	const health = await page.request.get("/health");
+	const hostUrl = new URL(health.url());
+	health.dispose();
+	const port = Number(hostUrl.port) || (hostUrl.protocol === "https:" ? 443 : 80);
+	const wire = await E2eWire.connect(port);
+	try {
+		for (const workspace of workspaces) {
+			const sessions: SessionSummary[] = await wire.request(
+				"session.list",
+				{ workspaceId: workspace.id },
+				30_000,
+			);
+			for (const session of sessions) {
+				if (session.live) {
+					await wire.request("session.dispose", { sessionId: session.sessionId }, 30_000);
+				}
+			}
+		}
+	} finally {
+		wire.close();
 	}
 }
 
@@ -128,6 +156,7 @@ export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
 }
 
 export async function openAppFresh(page: Page): Promise<void> {
+	await disposeLiveSessions(page);
 	resetState();
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");

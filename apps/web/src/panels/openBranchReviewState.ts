@@ -54,17 +54,19 @@ export function createOpenBranchReviewState() {
 		resolveRequest(key: string, generation: number, review: OpenBranchReview | null): boolean {
 			const current = entry(key);
 			if (current.generation !== generation) return false;
-			const url =
+			const carried =
 				review !== null && sameReview(current.snapshot?.review ?? null, review)
 					? current.snapshot?.url
 					: undefined;
+			const url = review?.url ?? carried;
 			publish(key, { review, ...(url ? { url } : {}) });
 			return true;
 		},
 		noteOpenReview(key: string, review: OpenBranchReview, url?: string): void {
 			const current = entry(key);
 			current.generation += 1;
-			publish(key, { review, ...(url ? { url } : {}) });
+			const resolved = url ?? review.url;
+			publish(key, { review, ...(resolved ? { url: resolved } : {}) });
 		},
 	};
 }
