@@ -58,7 +58,7 @@ import {
 	parseNativeChatCommand,
 	prepareNameChatCommand,
 } from "./nativeCommands";
-import { planGlance } from "./planView";
+import { hostSessionGlance, planGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
 import { CommandLogView, ResourcesButton, ResourcesContent } from "./resources";
 import { estimateChatRowHeights, type RowHeightEstimateCache } from "./rowHeightEstimates";
@@ -882,8 +882,8 @@ export default function ChatView({
 	);
 
 	const planGlanceState = useMemo(
-		() => planGlance(isStreaming, askStates),
-		[isStreaming, askStates],
+		() => hostSessionGlance(runtime.hostState, planGlance(isStreaming, askStates)),
+		[askStates, isStreaming, runtime.hostState],
 	);
 
 	const chatActions = useMemo<ChatActions>(
