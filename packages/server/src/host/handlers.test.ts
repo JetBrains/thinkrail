@@ -138,6 +138,10 @@ test("host.update invokes only the context-injected parameterless operation", as
 	);
 });
 
+test("retired session activity returns the empty compatibility snapshot", async () => {
+	expect(await handleRequest("session.activityList", {}, CTX)).toEqual([]);
+});
+
 test("template reads resolve a project's current checkout and reject ambiguous locations", async () => {
 	const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
 	const agentDir = join(dataDir, "agent");
