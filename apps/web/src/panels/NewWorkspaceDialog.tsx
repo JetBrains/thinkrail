@@ -19,6 +19,7 @@ import {
 } from "@thinkrail/contracts";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
+import { PromptImageChips, usePromptImages } from "@/chat/promptImages";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
@@ -108,6 +109,7 @@ export function NewWorkspaceDialog({
 	const [aliasSkills, setAliasSkills] = useState<string[]>([]);
 	const [model, setModel] = useState<WireModel | null>(null);
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
+	const attachedImages = usePromptImages();
 	const [creating, setCreating] = useState(false);
 	const [trusting, setTrusting] = useState(false);
 	const [manageSkills, setManageSkills] = useState(false);
@@ -194,8 +196,9 @@ export function NewWorkspaceDialog({
 		updatePromptDraft(initialPrompt ?? "", null);
 		setTarget("worktree");
 		setCreating(false);
+		attachedImages.reset();
 		hostDefaultAsked.current = false;
-	}, [open, projectId, initialPrompt, updatePromptDraft]);
+	}, [open, projectId, initialPrompt, updatePromptDraft, attachedImages.reset]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -332,12 +335,13 @@ export function NewWorkspaceDialog({
 		setBaseRef(list.defaultBranch);
 		prefetchBase(list.defaultBranch);
 	});
-	const submitEnabled = !creating && !templatePending;
+	const submitEnabled = !creating && !templatePending && attachedImages.pending === 0;
 
 	const create = async () => {
 		if (!submitEnabled) return;
 		setCreating(true);
 		const text = finalizeTemplateSlotSession(prompt, slotSession).trim();
+		const attachments = attachedImages.images.map(({ name, content }) => ({ name, content }));
 		let workspace: Workspace;
 		if (target === "default") {
 			const def = await enterDefaultWorkspace(selectedProjectId);
@@ -382,10 +386,18 @@ export function NewWorkspaceDialog({
 				session.thinkingLevel,
 				syncedTick,
 			);
-			if (!text) return;
-			store.appendUserMessage(session.sessionId, text);
+			if (!text && attachments.length === 0) return;
+			store.appendUserMessage(
+				session.sessionId,
+				text,
+				attachments.length > 0 ? attachments : undefined,
+			);
 			getTransport()
-				.request("session.prompt", { sessionId: session.sessionId, text })
+				.request("session.prompt", {
+					sessionId: session.sessionId,
+					text,
+					...(attachments.length > 0 ? { images: attachments.map((a) => a.content) } : {}),
+				})
 				.catch((err) => store.appendErrorTurn(session.sessionId, errorText(err)));
 		} catch (err) {
 			toast.error(errorText(err), "Couldn't start the chat");
@@ -530,11 +542,25 @@ export function NewWorkspaceDialog({
 							<span>{promptNote}</span>
 						</p>
 					) : null}
+					<PromptImageChips controller={attachedImages} testId="ws-prompt-images" />
 					<Textarea
 						ref={promptRef}
 						data-testid="ws-prompt"
 						value={prompt}
 						disabled={creating}
+						onPaste={(e) => {
+							const files = [...e.clipboardData.files];
+							if (files.length > 0) {
+								e.preventDefault();
+								attachedImages.addFiles(files);
+							}
+						}}
+						onDrop={(e) => {
+							if (e.dataTransfer.files.length > 0) {
+								e.preventDefault();
+								attachedImages.addFiles([...e.dataTransfer.files]);
+							}
+						}}
 						onChange={(e) => {
 							const next = e.target.value;
 							const nextSlotSession = slotSession

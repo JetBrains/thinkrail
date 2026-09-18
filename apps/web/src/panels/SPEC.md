@@ -376,8 +376,13 @@ a project picker, the prompt hero, and the reused
   `↵` affordance) and
   **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active → **always open a
   fresh chat** (`session.create({ workspaceId, model?, thinkingLevel? })` — a held model + effort apply even
-  without a prompt, and travel together: with none held both are omitted and pi resolves them) → a typed prompt is additionally sent as the first message (fire-and-forget
-  `prompt`); an **empty prompt leaves the just-opened composer ready** — submitting the start-working
+  without a prompt, and travel together: with none held both are omitted and pi resolves them) → the typed
+  prompt **and any attached images** are additionally sent as the first message (fire-and-forget `prompt`,
+  forwarding `images` alongside `text`, with an optimistic user turn carrying the same attachments). The
+  prompt hero accepts **image paste/drop** through the shared `usePromptImages` controller (same
+  `imageAttachment` decode/downscale + chip surface as the chat `Composer`); submit is **held while any
+  image is still decoding**, and a start with **only images and no text** is a valid kick-off. An **empty
+  prompt with no images leaves the just-opened composer ready** — submitting the start-working
   surface always lands the user in a chat, never on a bare receipt (folder mode: the same tail after
   entering Default). A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
   nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with
