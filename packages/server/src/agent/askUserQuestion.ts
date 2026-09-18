@@ -437,7 +437,7 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 		},
 		recordExecutedResult(toolCallId, result) {
 			const waiter = waiting.get(toolCallId);
-			if (!waiter || waiter.phase !== "answer-accepted-uncommitted") return;
+			if (waiter?.phase !== "answer-accepted-uncommitted") return;
 			waiter.executedResult = structuredClone(result);
 		},
 		persistTurn(toolResults) {
