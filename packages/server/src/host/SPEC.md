@@ -379,10 +379,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   subscribes every client so permanent domain deletion converges beyond the initiating page. It remains a
   low-latency event, not a durable queue: a reconnecting client's active-workspace `session.list` is the
   authoritative read-side repair for an event missed while its socket was down.
-- **Retired activity compatibility:** `session.activityList` remains registered for one compatibility
-  window and returns `[]` without reading sessions or workspaces. There is no activity publisher or push
-  subscription; the empty response exists only so an already-loaded old client clears cached markers after
-  reconnect.
+- **Session-state composition:** before serving, the host supplies every workspace `{id,cwd}`, initializes
+  receipt/purpose metadata, and installs the workspace→project resolver. `session.stateList` returns the
+  complete all-workspace snapshot; `session.state` broadcasts full records; completion acknowledgement and
+  nudge handlers validate workspace/session identity through the same registry. The WS open handler
+  subscribes every client after welcome. `session.activityList` remains an inert `[]` compatibility method
+  for one window and has no push channel.
 - **CLI update notice:** a launcher may supply one optional asynchronous notice producer and fixed interval.
   `createServer` starts it after listening without awaiting it, repeats it without overlap, retains the latest
   successful immutable notice for later `server.welcome` snapshots, and publishes `host.updateAvailable` only

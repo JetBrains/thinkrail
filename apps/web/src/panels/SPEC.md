@@ -78,9 +78,12 @@ treatment.
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
   name is decoupled from the git branch (see [[submodule-server-workspaces]]).
 
-  Workspace and project rows deliberately have no trailing status or change decoration in this
-  deletion-only release. The Projects view is navigation and identity; the following session-state PR owns
-  any replacement signal rather than leaving a compatibility presentation behind.
+  Workspace/project session presentation comes only from normalized host state. A concrete input blocker
+  renders the questionnaire icon with “Waiting for your answer”; an owner-globally unread completion renders
+  a compact result-ready dot with outcome-specific accessible text. Otherwise a genuinely working session
+  makes the existing identity icon pulse without changing colour; blocked sessions never pulse. Collapsed
+  project rollup uses one shared precedence—needs input, unread completion, then working—while hover text can
+  name all counts. Quiet rows have no decoration. The components remain props-driven over store selectors.
 
   **Project rows carry the workspace count only while collapsed**; expanded, the workspace rows provide the
   detail directly. The **Default workspace**
