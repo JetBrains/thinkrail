@@ -11,6 +11,7 @@ import {
 	assessAnswerability,
 	buildAnswersMessage,
 	buildQuestionnaireResponse,
+	buildTimedOutQuestionResult,
 	createAskUserQuestionTool,
 	isAckDetails,
 	validateQuestionnaire,
@@ -78,6 +79,74 @@ const userMessage = (text = "actually, let me explain") =>
 
 test("validateQuestionnaire accepts a well-formed questionnaire", () => {
 	expect(validateQuestionnaire(args()).ok).toBe(true);
+});
+
+test("a timeout selects marked recommendations and leaves unmarked questions unanswered", () => {
+	const result = buildTimedOutQuestionResult({
+		questions: [
+			{
+				question: "Database?",
+				header: "Database",
+				options: [
+					{ label: "SQLite", description: "local" },
+					{ label: "Postgres (Recommended)", description: "shared", preview: "pg" },
+					{ label: "MySQL", description: "legacy", recommendedReason: "also marked" },
+				],
+			},
+			{
+				question: "Checks?",
+				header: "Checks",
+				multiSelect: true,
+				options: [
+					{ label: "Unit", description: "fast", recommendedReason: "baseline" },
+					{ label: "Manual", description: "slow" },
+					{ label: "E2E (Recommended)", description: "integrated" },
+				],
+			},
+			{
+				question: "Deploy now?",
+				header: "Deploy",
+				options: [
+					{ label: "Yes", description: "ship" },
+					{ label: "No", description: "wait" },
+				],
+			},
+		],
+	});
+
+	expect(result).toEqual({
+		timedOut: true,
+		cancelled: false,
+		answers: [
+			{
+				questionIndex: 0,
+				question: "Database?",
+				kind: "option",
+				answer: "Postgres (Recommended)",
+				preview: "pg",
+			},
+			{
+				questionIndex: 1,
+				question: "Checks?",
+				kind: "multi",
+				answer: null,
+				selected: ["Unit", "E2E (Recommended)"],
+			},
+		],
+	});
+});
+
+test("a timeout with no marked recommendation declines the round but still explains automatic continuation", () => {
+	const result = buildTimedOutQuestionResult(args());
+	expect(result).toEqual({ answers: [], cancelled: true, timedOut: true });
+
+	const response = buildQuestionnaireResponse(result, args());
+	const text = textOf(response);
+	expect(text).toContain("ThinkRail continued automatically after the response timeout.");
+	expect(text).toContain('No recommendation was provided for: "Which library?".');
+	expect(text).not.toContain("User has answered");
+	expect(text).not.toContain("User declined");
+	expect(response.details).toEqual(result);
 });
 
 test("the optional recommendedReason field is accepted on an option (no new validation gate)", () => {

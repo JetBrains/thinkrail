@@ -17,9 +17,12 @@ import {
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
+	answerQuestion,
 	disposeAllSessions,
+	getSessionAutoResumeState,
 	getSessionWorkspaceId,
 	isProjectSkillPath,
+	promptSession,
 	refreshSubagentTools,
 	setActivityProjectResolver,
 	setExtUiPendingObserver,
@@ -28,6 +31,7 @@ import {
 	setSessionActivityPublisher,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
+	setSessionLifecycleObserver,
 	setSessionPublisher,
 	setSkillAdmissionResolver,
 	setSubagentsEnabledResolver,
@@ -70,7 +74,7 @@ import {
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
 } from "../terminal";
-import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
+import { countOpenTodos, isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
 import {
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
@@ -84,6 +88,7 @@ import {
 	maybeAutoRenameWorkspace,
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
+import { AutoResumeScheduler } from "./autoResume";
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -181,6 +186,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	let hostUpdateChecking = false;
 	let stopping = false;
 	let shutdownPromise: Promise<void> | undefined;
+	const autoResume = new AutoResumeScheduler({
+		getTimeoutMinutes: () => getConfig().autoResumeTimeoutMinutes,
+		getSessionState: getSessionAutoResumeState,
+		countOpenTodos: (workspaceId, sessionId) => countOpenTodos({ workspaceId, sessionId }),
+		answerQuestion,
+		promptSession,
+		reportFailure: (sessionId) =>
+			log.warn(`automatic continuation failed for session ${sessionId}`),
+	});
 
 	const armClientReap = (clientKey: string): void => {
 		reapTimers.set(
@@ -418,6 +432,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 
+	setSessionLifecycleObserver(({ sessionId, state }) => {
+		if (state === "attached") autoResume.handleAttached(sessionId);
+		else autoResume.handleRemoved(sessionId);
+	});
+
 	setActivityProjectResolver((workspaceId) => {
 		try {
 			return getWorkspace(workspaceId).projectId;
@@ -474,6 +493,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setWorkspacePublisher((event) => {
+		if (event.kind === "removed") autoResume.handleWorkspaceRemoved(event.id);
 		const channel =
 			event.kind === "created"
 				? WS_CHANNELS.workspaceCreated
@@ -517,6 +537,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config) => {
+		autoResume.handleConfigChanged();
 		server.publish(
 			WS_CHANNELS.settingsChanged,
 			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
@@ -540,6 +561,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
+		autoResume.handleRemoved(payload.sessionId);
 		runObservation.forget(payload.sessionId);
 		taskObservation.forget(payload.sessionId);
 		server.publish(
@@ -558,6 +580,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setExtUiPendingObserver(syncSessionActivity);
 
 	setSessionPublisher((payload) => {
+		autoResume.handleEvent(payload.sessionId, payload.event);
 		runObservation.observe(payload.sessionId, payload.event);
 		if (payload.event.type === "tool_execution_start") {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
@@ -644,6 +667,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		cancelAllLogins();
 		stopJbcentralRuntime();
 		stopAllWatches();
+		setSessionLifecycleObserver(null);
+		autoResume.dispose();
 		disposeAllSessions();
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();

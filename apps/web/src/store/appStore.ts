@@ -38,6 +38,7 @@ import {
 	customMessageText,
 	DEFAULT_CONFIG,
 	isAskUserAnswersMessage,
+	isAutoResumeTimeoutMinutes,
 	isControlMessage,
 	isLineWidth,
 	isSubagentCompletionMessage,
@@ -808,6 +809,7 @@ interface AppState {
 	analyticsEnabled: boolean;
 	analyticsConsentConfirmed: boolean;
 	subagentsEnabled: boolean;
+	autoResumeTimeoutMinutes: number | null;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
 	terminalReplayKb: number;
@@ -1039,6 +1041,9 @@ function configPatch(config: AppConfig) {
 				? config.analyticsConsentConfirmed
 				: DEFAULT_CONFIG.analyticsConsentConfirmed,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
+		autoResumeTimeoutMinutes: isAutoResumeTimeoutMinutes(config.autoResumeTimeoutMinutes)
+			? config.autoResumeTimeoutMinutes
+			: DEFAULT_CONFIG.autoResumeTimeoutMinutes,
 		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled ?? DEFAULT_CONFIG.jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds:
 			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
@@ -1697,6 +1702,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	analyticsConsentConfirmed: DEFAULT_CONFIG.analyticsConsentConfirmed,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
+	autoResumeTimeoutMinutes: DEFAULT_CONFIG.autoResumeTimeoutMinutes,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,

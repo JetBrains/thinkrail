@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
 	type AppConfig,
 	DEFAULT_CONFIG,
+	isAutoResumeTimeoutMinutes,
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
@@ -107,6 +108,9 @@ export function loadConfig(): AppConfig {
 			typeof value.subagentsEnabled === "boolean"
 				? value.subagentsEnabled
 				: DEFAULT_CONFIG.subagentsEnabled,
+		autoResumeTimeoutMinutes: isAutoResumeTimeoutMinutes(value.autoResumeTimeoutMinutes)
+			? value.autoResumeTimeoutMinutes
+			: DEFAULT_CONFIG.autoResumeTimeoutMinutes,
 		jbcentralQuotaEnabled:
 			typeof value.jbcentralQuotaEnabled === "boolean"
 				? value.jbcentralQuotaEnabled

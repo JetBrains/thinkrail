@@ -1,10 +1,12 @@
 export type * from "./domain";
 export {
 	ACCEPTED_IMAGE_TYPES,
+	AUTO_RESUME_TIMEOUT_MINUTES,
 	base64EncodedLength,
 	COMPOSER_GROWTH_LIMITS,
 	DEFAULT_CONFIG,
 	IMAGE_MAX_BASE64_BYTES,
+	isAutoResumeTimeoutMinutes,
 	isComposerGrowthLimit,
 	isControlMessage,
 	isDelegationRunDetails,
@@ -28,5 +30,9 @@ export {
 } from "./domain";
 export type * from "./nativeClient";
 export type * from "./piProtocol";
-export { isTranscriptMessageRole } from "./piProtocol";
+export {
+	isAskUserQuestionResult,
+	isRecommendedQuestionOption,
+	isTranscriptMessageRole,
+} from "./piProtocol";
 export * from "./wsProtocol";

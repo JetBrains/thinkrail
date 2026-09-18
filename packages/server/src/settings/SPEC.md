@@ -14,7 +14,7 @@ The server-synchronized app config: opaque fixed-theme selection, fixed/system m
 pair, additional-analytics preference and explicit consent confirmation, terminal replay budget and Windows shell preference, chat composer growth preset,
 chat/file visual line widths
 plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota display/cadence, the
-host-wide subagent default, and plan-review policy. `reviewModel` /
+host-wide subagent default, the optional host-wide automatic-continuation timeout, and plan-review policy. `reviewModel` /
 `reviewEffort` select the reviewer/reflector runtime (unset means pi
 default); `reviewAutoFix: false` records a `request_changes` verdict and waits instead of auto-sending a fix.
 The module reads, normalizes, persists, caches, and broadcasts values that intentionally follow the owner
@@ -45,6 +45,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
   `terminal` owns executable resolution and spawning.
 - `chatLineWidth` / `fileLineWidth` independently default to 120 and accept only finite integers from 40 through 240; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field rejects the complete mutation before cache, persistence, or broadcast changes.
 - `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior; a present non-boolean update is rejected before cache, persistence, or broadcast changes. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.
+- `autoResumeTimeoutMinutes` is `null` by default (off) or a whole 1–1440 minute duration shared by unanswered questions and TODO-backed idle continuation. Invalid persisted values fall back to off; invalid wire updates reject atomically. Settings owns the synchronized choice, while host owns scheduling and eligibility.
 - JetBrains quota display defaults on and its interval defaults to 30 seconds when either stored field is absent/invalid. Wire updates reject a non-boolean flag or a non-integer/out-of-range interval atomically; they never clamp a caller's value into a different persisted choice.
 - Theme availability/labels/palettes, operating-system appearance, and the effective theme are not server concerns. `theme` remains the opaque fixed choice; `themeMode` defaults to `"fixed"`, and `systemThemePair` remains absent until first use. A persisted pair is retained only when both slots are strings; malformed pairs are dropped, and system mode without a retained pair normalizes to fixed without replacing a valid fixed id. A missing/invalid mode also normalizes to fixed while an independently valid dormant pair may survive. Entering system mode requires a complete valid-shaped existing-or-incoming pair; a pair mutation replaces both slots atomically. Unknown ids remain persisted for each independently shipped frontend to resolve by required appearance.
 - A `settings.update` carrying `theme` without explicit `themeMode` is a legacy-compatible fixed-theme action and sets mode to `"fixed"`. Thus an old client connected to a system-configured host can never appear to change only itself: its deliberate theme choice exits system mode through the ordinary persist-before-broadcast path.

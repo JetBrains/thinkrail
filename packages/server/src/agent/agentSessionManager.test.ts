@@ -41,6 +41,7 @@ import {
 	ensureSessionAttached,
 	followUpSession,
 	getDefaultModel,
+	getSessionAutoResumeState,
 	getSessionCommands,
 	getSessionMessages,
 	getSessionStats,
@@ -59,6 +60,7 @@ import {
 	setSessionActivityPublisher,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
+	setSessionLifecycleObserver,
 	setSessionManagerFactory,
 	setSessionPublisher,
 	setSubagentsEnabledResolver,
@@ -159,6 +161,68 @@ afterAll(() => {
 	else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
 	if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 	else process.env.PI_OFFLINE = priorOffline;
+});
+
+test("auto-resume state exposes an attached session's unanswered question", async () => {
+	const questionArgs = {
+		questions: [
+			{
+				question: "Which database?",
+				header: "Database",
+				options: [
+					{ label: "Postgres (Recommended)", description: "Shared" },
+					{ label: "SQLite", description: "Local" },
+				],
+			},
+		],
+	};
+	fauxA.setResponses([
+		fauxAssistantMessage(fauxToolCall("ask_user_question", questionArgs), {
+			stopReason: "toolUse",
+		}),
+	]);
+	const created = await createSession({
+		cwd: tmpCwd("trpi-auto-resume-state-"),
+		workspaceId: "ws-auto-resume-state",
+		model: toWireModel(fauxA.getModel()),
+	});
+	try {
+		await promptSession(created.sessionId, "ask me");
+		expect(getSessionAutoResumeState(created.sessionId)).toEqual({
+			workspaceId: "ws-auto-resume-state",
+			streaming: false,
+			question: expect.objectContaining({ toolCallId: expect.any(String), args: questionArgs }),
+		});
+	} finally {
+		await removeSession(created.sessionId);
+	}
+	expect(getSessionAutoResumeState(created.sessionId)).toBeNull();
+});
+
+test("the session lifecycle observer sees attachment and disposal exactly once", async () => {
+	const lifecycle: Array<{ sessionId: string; state: string }> = [];
+	setSessionLifecycleObserver((event: { sessionId: string; state: string }) =>
+		lifecycle.push(event),
+	);
+	let sessionId: string | undefined;
+	try {
+		const created = await createSession({
+			cwd: tmpCwd("trpi-auto-resume-lifecycle-"),
+			workspaceId: "ws-auto-resume-lifecycle",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = created.sessionId;
+		expect(lifecycle).toEqual([{ sessionId, state: "attached" }]);
+		await removeSession(sessionId);
+		expect(lifecycle).toEqual([
+			{ sessionId, state: "attached" },
+			{ sessionId, state: "removed" },
+		]);
+		sessionId = undefined;
+	} finally {
+		if (sessionId && hasSession(sessionId)) await removeSession(sessionId);
+		setSessionLifecycleObserver(null);
+	}
 });
 
 test("session creation publishes a domain summary for other frontends", async () => {

@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
 	ACCEPTED_IMAGE_TYPES,
+	AUTO_RESUME_TIMEOUT_MINUTES,
 	base64EncodedLength,
 	DEFAULT_CONFIG,
 	IMAGE_MAX_BASE64_BYTES,
+	isAutoResumeTimeoutMinutes,
 	isDelegationRunDetails,
 	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
@@ -45,6 +47,22 @@ describe("isRetriedAttempt", () => {
 });
 
 describe("config defaults", () => {
+	test("automatic continuation is opt-in", () => {
+		expect(DEFAULT_CONFIG).toHaveProperty("autoResumeTimeoutMinutes", null);
+	});
+
+	test("automatic continuation accepts only whole minutes inside its safety range", () => {
+		expect(AUTO_RESUME_TIMEOUT_MINUTES).toEqual({
+			min: 1,
+			max: 1440,
+			default: 15,
+		});
+		for (const valid of [1, 15, 1440]) expect(isAutoResumeTimeoutMinutes(valid)).toBe(true);
+		for (const invalid of [0, 1441, 1.5, "15", null]) {
+			expect(isAutoResumeTimeoutMinutes(invalid)).toBe(false);
+		}
+	});
+
 	test("the shared custom layout-preset catalog starts empty", () => {
 		expect(DEFAULT_CONFIG.customLayoutPresets).toEqual([]);
 	});

@@ -468,8 +468,12 @@ a project picker, the prompt hero, and the reused
   the displayed default is 75%→100%. It exposes no runway/tail/lifecycle controls. Message order and
   movement both apply immediately and persist only in this client through the chat preference seam:
   browsers use current-host-qualified keys, while a native shell may inject its stable
-  backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
-  remains a top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection.
+  backend-profile/window adapter. Another browser, native window, or host is unaffected. **Automatic
+  continuation** is the protocol-gated host setting below those local controls: off by default, or one
+  whole 1–1440 minute duration shared by unanswered `ask_user_question` rounds and idle chats with open
+  TODO items. Enabling starts at 15 minutes; switch/field writes converge through `settings.changed`, never
+  optimistic state, and explain that questions without recommendations are declined rather than guessed. Composer
+  growth remains a top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection.
   Labels use “message box” rather than the internal “composer” name when explaining where the user types.
   The final **Subagents** block pairs the host-wide `subagentsEnabled` switch with a named **This workspace**
   `Use global` / `On` / `Off` control when a workspace is active; no workspace means no local block. The

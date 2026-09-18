@@ -21,7 +21,7 @@ import type {
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
-import { isControlMessage } from "@thinkrail/contracts";
+import { isAskUserQuestionResult, isControlMessage } from "@thinkrail/contracts";
 import {
 	abortSession,
 	answerQuestion,
@@ -794,8 +794,7 @@ const handlers: Record<string, Handler> = {
 	"session.answerQuestion": async (params) => {
 		const p = params as { sessionId: string; toolCallId: string; result: AskUserQuestionResult };
 		if (!hasSession(p.sessionId)) throw new Error(`Unknown session: ${p.sessionId}`);
-		if (!p.result || !Array.isArray(p.result.answers) || typeof p.result.cancelled !== "boolean")
-			throw new Error("Malformed ask_user_question result");
+		if (!isAskUserQuestionResult(p.result)) throw new Error("Malformed ask_user_question result");
 		await ackSend(answerQuestion(p.sessionId, p.toolCallId, p.result));
 		return { ok: true } as const;
 	},

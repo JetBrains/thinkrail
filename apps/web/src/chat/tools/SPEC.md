@@ -40,7 +40,8 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     same way), **superseded** (a later free-form user message replaced the answer → a terminal compact
     record; the host rejects late answers, matching), **dead** (owning message aborted/errored → closed
     record), else **awaiting** — interactive now, after a reconnect, or after any number of host
-    restarts.
+    restarts. A resolved result carrying `timedOut: true` is labelled as an automatic continuation,
+    never as a user-authored submission; recommended selections and unanswered questions remain visible.
   - **Controls never stream** — while args stream it shows a stable composing placeholder and the
     complete questionnaire reveals atomically at message end (rationale in the component's jsdoc).
   - **Multi-question completion is review-gated** — every question page advances with **Next**, including

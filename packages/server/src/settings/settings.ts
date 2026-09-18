@@ -1,6 +1,7 @@
 import {
 	type AppConfig,
 	type AppConfigUpdate,
+	isAutoResumeTimeoutMinutes,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isSystemThemePair,
@@ -80,6 +81,13 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	} = runtimeUpdate;
 	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
 		throw new Error("subagentsEnabled must be a boolean");
+	}
+	if (
+		runtimeUpdate.autoResumeTimeoutMinutes !== undefined &&
+		runtimeUpdate.autoResumeTimeoutMinutes !== null &&
+		!isAutoResumeTimeoutMinutes(runtimeUpdate.autoResumeTimeoutMinutes)
+	) {
+		throw new Error("autoResumeTimeoutMinutes must be a whole number from 1 to 1440, or null");
 	}
 	if (jbcentralQuotaEnabled !== undefined && typeof jbcentralQuotaEnabled !== "boolean") {
 		throw new Error("jbcentralQuotaEnabled must be a boolean");

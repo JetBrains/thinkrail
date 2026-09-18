@@ -11,7 +11,11 @@ import type {
 	AskUserQuestionArgs,
 	AskUserQuestionResult,
 } from "@thinkrail/contracts";
-import { ASK_USER_ANSWERS_CUSTOM_TYPE, isAskUserAnswersMessage } from "@thinkrail/contracts";
+import {
+	ASK_USER_ANSWERS_CUSTOM_TYPE,
+	isAskUserAnswersMessage,
+	isRecommendedQuestionOption,
+} from "@thinkrail/contracts";
 import { type Static, Type } from "typebox";
 
 export const MAX_QUESTIONS = 4;
@@ -143,6 +147,7 @@ export function validateQuestionnaire(args: AskUserQuestionArgs): ValidationResu
 }
 
 export const DECLINE_MESSAGE = "User declined to answer questions";
+const TIMEOUT_PREFIX = "ThinkRail continued automatically after the response timeout.";
 const ENVELOPE_PREFIX = "User has answered your questions:";
 const ENVELOPE_SUFFIX = "You can now continue with the user's answers in mind.";
 
@@ -159,6 +164,36 @@ function toolResult(
 	return { content: [{ type: "text", text }], details };
 }
 
+export function buildTimedOutQuestionResult(args: AskUserQuestionArgs): AskUserQuestionResult {
+	const answers = args.questions.flatMap((question, questionIndex): AskUserQuestionAnswer[] => {
+		const recommended = question.options.filter(isRecommendedQuestionOption);
+		if (recommended.length === 0) return [];
+		if (question.multiSelect) {
+			return [
+				{
+					questionIndex,
+					question: question.question,
+					kind: "multi",
+					answer: null,
+					selected: recommended.map((option) => option.label),
+				},
+			];
+		}
+		const option = recommended[0];
+		if (!option) return [];
+		return [
+			{
+				questionIndex,
+				question: question.question,
+				kind: "option",
+				answer: option.label,
+				...(option.preview ? { preview: option.preview } : {}),
+			},
+		];
+	});
+	return { answers, cancelled: answers.length === 0, timedOut: true };
+}
+
 function answerSegment(a: AskUserQuestionAnswer): string {
 	const scalar = a.kind === "multi" ? (a.selected ?? []).join(", ") : (a.answer ?? "(no answer)");
 	const parts = [`"${a.question}"="${scalar}"`];
@@ -172,6 +207,23 @@ export function buildQuestionnaireResponse(
 	result: AskUserQuestionResult,
 	args: AskUserQuestionArgs,
 ): ToolResult<AskUserQuestionResult> {
+	if (result.timedOut) {
+		const segments: string[] = [];
+		const unanswered: string[] = [];
+		for (let i = 0; i < args.questions.length; i++) {
+			const answer = result.answers.find((candidate) => candidate.questionIndex === i);
+			if (answer) segments.push(answerSegment(answer));
+			else unanswered.push(`"${args.questions[i]?.question}"`);
+		}
+		const selected =
+			segments.length > 0 ? ` Selected the agent's recommendations: ${segments.join(" ")}` : "";
+		const declined =
+			unanswered.length > 0 ? ` No recommendation was provided for: ${unanswered.join(", ")}.` : "";
+		return toolResult(
+			`${TIMEOUT_PREFIX}${selected}${declined} Continue with these choices and use your best judgment for the rest.`,
+			result,
+		);
+	}
 	if (result.cancelled)
 		return toolResult(DECLINE_MESSAGE, { answers: result.answers, cancelled: true });
 	const segments: string[] = [];
@@ -248,7 +300,12 @@ export function assessAnswerability(
 	return { ok: true, args };
 }
 
-export function awaitingQuestionToolCallId(messages: readonly AgentMessage[]): string | null {
+export interface AwaitingQuestion {
+	toolCallId: string;
+	args: AskUserQuestionArgs;
+}
+
+export function awaitingQuestion(messages: readonly AgentMessage[]): AwaitingQuestion | null {
 	const views = messages as readonly MessageView[];
 	for (let i = views.length - 1; i >= 0; i--) {
 		const view = views[i];
@@ -257,10 +314,15 @@ export function awaitingQuestionToolCallId(messages: readonly AgentMessage[]): s
 		for (const block of toolCallsOf(view)) {
 			const { id } = block;
 			if (id === undefined || block.name !== ASK_USER_QUESTION_TOOL_NAME) continue;
-			if (assessAnswerability(messages, id).ok) return id;
+			const answerability = assessAnswerability(messages, id);
+			if (answerability.ok) return { toolCallId: id, args: answerability.args };
 		}
 	}
 	return null;
+}
+
+export function awaitingQuestionToolCallId(messages: readonly AgentMessage[]): string | null {
+	return awaitingQuestion(messages)?.toolCallId ?? null;
 }
 
 export const ANSWERABILITY_ERRORS: Record<Extract<Answerability, { ok: false }>["reason"], string> =

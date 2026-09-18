@@ -3161,6 +3161,21 @@ test("applyConfig defaults absent or malformed line-width fields independently",
 	});
 });
 
+test("applyConfig projects only valid automatic-continuation durations", () => {
+	expect(useAppStore.getState()).toHaveProperty("autoResumeTimeoutMinutes", null);
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		autoResumeTimeoutMinutes: 30,
+	});
+	expect(useAppStore.getState()).toHaveProperty("autoResumeTimeoutMinutes", 30);
+
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		autoResumeTimeoutMinutes: 0,
+	} as unknown as AppConfig);
+	expect(useAppStore.getState()).toHaveProperty("autoResumeTimeoutMinutes", null);
+});
+
 test("applyConfig projects the host-wide subagent default", () => {
 	useAppStore.getState().applyConfig({
 		...DEFAULT_CONFIG,

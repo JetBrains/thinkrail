@@ -16,6 +16,7 @@ import type {
 	ActivityStatus,
 	AgentMessage,
 	AgentSettlement,
+	AskUserQuestionArgs,
 	AskUserQuestionResult,
 	ImageContent,
 	Model,
@@ -52,7 +53,12 @@ import {
 	TRANSCRIPT_TAIL_MAX_BYTES,
 	type WorkspaceActivityRow,
 } from "./activity";
-import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
+import {
+	ANSWERABILITY_ERRORS,
+	assessAnswerability,
+	awaitingQuestion,
+	buildAnswersMessage,
+} from "./askUserQuestion";
 import {
 	disposeSessionChildren,
 	removeWorkspaceDelegation,
@@ -143,6 +149,18 @@ export function setSessionDeletedPublisher(fn: (payload: SessionDeletedPayload) 
 let publishActivity: (payload: SessionActivityPayload) => void = () => {};
 export function setSessionActivityPublisher(fn: (payload: SessionActivityPayload) => void): void {
 	publishActivity = fn;
+}
+
+export interface SessionLifecycleEvent {
+	sessionId: string;
+	state: "attached" | "removed";
+}
+
+let observeSessionLifecycle: (event: SessionLifecycleEvent) => void = () => {};
+export function setSessionLifecycleObserver(
+	observer: ((event: SessionLifecycleEvent) => void) | null,
+): void {
+	observeSessionLifecycle = observer ?? (() => {});
 }
 
 function effectivePendingCount(entry: Entry): number {
@@ -415,6 +433,23 @@ export function getSessionWorkspaceId(sessionId: string): string | undefined {
 	return sessions.get(sessionId)?.workspaceId;
 }
 
+export interface SessionAutoResumeState {
+	workspaceId: string;
+	streaming: boolean;
+	question: { toolCallId: string; args: AskUserQuestionArgs } | null;
+}
+
+export function getSessionAutoResumeState(sessionId: string): SessionAutoResumeState | null {
+	if (!hasSession(sessionId)) return null;
+	const entry = sessions.get(sessionId);
+	if (!entry) return null;
+	return {
+		workspaceId: entry.workspaceId,
+		streaming: entry.session.isStreaming,
+		question: awaitingQuestion(entry.session.messages),
+	};
+}
+
 export function getSessionRuntimeGeneration(sessionId: string): PiRuntimeGeneration | undefined {
 	return hasSession(sessionId) ? sessions.get(sessionId)?.generation : undefined;
 }
@@ -601,6 +636,7 @@ async function registerSession(
 	const prepared = await prepareSessionEntry(session, workspaceId, generation);
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
+	observeSessionLifecycle({ sessionId: session.sessionId, state: "attached" });
 	applySubagentTools(prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
@@ -1306,6 +1342,7 @@ function disposeSession(sessionId: string): Promise<void> {
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
+	observeSessionLifecycle({ sessionId, state: "removed" });
 	if (entry.publishedActivity !== null) retractActivity(sessionId, entry.workspaceId);
 	applyWorkspaceActivity(entry.workspaceId);
 	log.debug(`session ${sessionId} disposed`);
@@ -1318,6 +1355,7 @@ export function removeSession(sessionId: string): Promise<void> {
 }
 
 export function disposeAllSessions(): void {
+	const removedSessionIds = [...sessions.keys()];
 	for (const [sessionId, entry] of sessions) {
 		void trackCascade(
 			entry.workspaceId,
@@ -1328,6 +1366,9 @@ export function disposeAllSessions(): void {
 		entry.session.dispose();
 	}
 	sessions.clear();
+	for (const sessionId of removedSessionIds) {
+		observeSessionLifecycle({ sessionId, state: "removed" });
+	}
 	deletedSessions.clear();
 }
 
