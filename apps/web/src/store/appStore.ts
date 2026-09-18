@@ -16,6 +16,8 @@ import type {
 	ReviewSnapshot,
 	SessionEventPayload,
 	SessionQueueState,
+	SessionState,
+	SessionStateRecord,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
@@ -336,6 +338,7 @@ export interface SessionRuntime {
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
 	extUiWidget: Record<string, string[]>;
+	hostState: SessionState | null;
 }
 
 const EMPTY_QUEUE: SessionQueueState = { steering: [], followUp: [] };
@@ -366,6 +369,7 @@ function newRuntime(
 		extUiQueue: [],
 		extUiStatus: {},
 		extUiWidget: {},
+		hostState: null,
 	};
 }
 
@@ -779,6 +783,11 @@ interface AppState {
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
 	sessions: Record<string, SessionRuntime>;
+	sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
+	sessionStateClock: number;
+	sessionStateTickBySession: Record<string, number>;
+	directChatActivationTickBySession: Record<string, number>;
+	renderedCompletionBySession: Record<string, string>;
 	extUiOrphans: ExtUiRequest[];
 	models: WireModel[];
 	providerVersion: number;
@@ -952,6 +961,10 @@ interface AppState {
 		baselineSessionIds: readonly string[],
 		authoritativeSessionIds: readonly string[],
 	) => void;
+	installSessionStateSnapshot: (records: readonly SessionStateRecord[]) => void;
+	applySessionState: (record: SessionStateRecord) => void;
+	noteDirectChatActivation: (sessionId: string) => void;
+	noteRenderedCompletion: (sessionId: string, completionId: string) => void;
 	reopenChat: (workspaceId: string, sessionId: string, options?: LayoutOpenOptions) => void;
 	restorePlacedChatCache: (
 		workspaceId: string,
@@ -1337,6 +1350,10 @@ function withoutChat(
 	const closed = s.closedChatsByWorkspace[workspaceId] ?? [];
 	const inHistory = closed.some((chat) => chat.sessionId === sessionId);
 	const hasRuntime = s.sessions[sessionId] !== undefined;
+	const hasHostState = s.sessionStateByWorkspace[workspaceId]?.[sessionId] !== undefined;
+	const hasStateTick = Object.hasOwn(s.sessionStateTickBySession, sessionId);
+	const hasActivationTick = Object.hasOwn(s.directChatActivationTickBySession, sessionId);
+	const hasRenderedCompletion = Object.hasOwn(s.renderedCompletionBySession, sessionId);
 	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
 	const targetsLocation =
 		s.chatLocationRequest?.workspaceId === workspaceId &&
@@ -1352,6 +1369,10 @@ function withoutChat(
 		sessionTabs.length === 0 &&
 		!inHistory &&
 		!hasRuntime &&
+		!hasHostState &&
+		!hasStateTick &&
+		!hasActivationTick &&
+		!hasRenderedCompletion &&
 		!hasSkillBaseline &&
 		!targetsLocation &&
 		!targetsRoute &&
@@ -1417,6 +1438,28 @@ function withoutChat(
 				}
 			: {}),
 		...(hasRuntime ? { sessions: omitKey(s.sessions, sessionId) } : {}),
+		...(hasHostState
+			? {
+					sessionStateByWorkspace: {
+						...s.sessionStateByWorkspace,
+						[workspaceId]: omitKey(s.sessionStateByWorkspace[workspaceId] ?? {}, sessionId),
+					},
+				}
+			: {}),
+		...(hasStateTick
+			? { sessionStateTickBySession: omitKey(s.sessionStateTickBySession, sessionId) }
+			: {}),
+		...(hasActivationTick
+			? {
+					directChatActivationTickBySession: omitKey(
+						s.directChatActivationTickBySession,
+						sessionId,
+					),
+				}
+			: {}),
+		...(hasRenderedCompletion
+			? { renderedCompletionBySession: omitKey(s.renderedCompletionBySession, sessionId) }
+			: {}),
 		...(hasSkillBaseline
 			? { skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId) }
 			: {}),
@@ -1637,6 +1680,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
 	sessions: {},
+	sessionStateByWorkspace: {},
+	sessionStateClock: 0,
+	sessionStateTickBySession: {},
+	directChatActivationTickBySession: {},
+	renderedCompletionBySession: {},
 	extUiOrphans: [],
 	models: [],
 	providerVersion: 0,
@@ -1794,6 +1842,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					(id) => id !== workspaceId,
 				),
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
+				sessionStateByWorkspace: omitKey(state.sessionStateByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
@@ -2538,7 +2587,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				sessions: fresh
 					? {
 							...s.sessions,
-							[sessionId]: newRuntime(model, thinkingLevel, s.connectionGeneration),
+							[sessionId]: {
+								...newRuntime(model, thinkingLevel, s.connectionGeneration),
+								hostState: s.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state ?? null,
+							},
 						}
 					: s.sessions,
 				...(fresh
@@ -2614,6 +2666,92 @@ export const useAppStore = create<AppState>((set, get) => ({
 				}
 			}
 			return next;
+		}),
+	installSessionStateSnapshot: (records) =>
+		set((s) => {
+			const sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>> = {};
+			const stateBySession = new Map<string, SessionState>();
+			for (const record of records) {
+				if (
+					s.removedWorkspaceIds[record.workspaceId] ||
+					isSessionDeleted(s, record.workspaceId, record.sessionId)
+				) {
+					continue;
+				}
+				const workspaceStates = sessionStateByWorkspace[record.workspaceId] ?? {};
+				workspaceStates[record.sessionId] = record;
+				sessionStateByWorkspace[record.workspaceId] = workspaceStates;
+				stateBySession.set(record.sessionId, record.state);
+			}
+			const sessions = Object.fromEntries(
+				Object.entries(s.sessions).map(([sessionId, runtime]) => [
+					sessionId,
+					{ ...runtime, hostState: stateBySession.get(sessionId) ?? null },
+				]),
+			);
+			const sessionStateClock = s.sessionStateClock + 1;
+			const sessionStateTickBySession = Object.fromEntries(
+				[...stateBySession.keys()].map((sessionId) => [sessionId, sessionStateClock]),
+			);
+			return {
+				sessionStateByWorkspace,
+				sessions,
+				sessionStateClock,
+				sessionStateTickBySession,
+			};
+		}),
+	applySessionState: (record) =>
+		set((s) => {
+			if (
+				s.removedWorkspaceIds[record.workspaceId] ||
+				isSessionDeleted(s, record.workspaceId, record.sessionId)
+			) {
+				return {};
+			}
+			const workspaceStates = s.sessionStateByWorkspace[record.workspaceId] ?? {};
+			const runtime = s.sessions[record.sessionId];
+			const sessionStateClock = s.sessionStateClock + 1;
+			return {
+				sessionStateClock,
+				sessionStateTickBySession: {
+					...s.sessionStateTickBySession,
+					[record.sessionId]: sessionStateClock,
+				},
+				sessionStateByWorkspace: {
+					...s.sessionStateByWorkspace,
+					[record.workspaceId]: { ...workspaceStates, [record.sessionId]: record },
+				},
+				...(runtime
+					? {
+							sessions: {
+								...s.sessions,
+								[record.sessionId]: { ...runtime, hostState: record.state },
+							},
+						}
+					: {}),
+			};
+		}),
+	noteDirectChatActivation: (sessionId) =>
+		set((s) => {
+			const sessionStateClock = s.sessionStateClock + 1;
+			return {
+				sessionStateClock,
+				directChatActivationTickBySession: {
+					...s.directChatActivationTickBySession,
+					[sessionId]: sessionStateClock,
+				},
+			};
+		}),
+	noteRenderedCompletion: (sessionId, completionId) =>
+		set((s) => {
+			if (s.sessions[sessionId]?.hostState?.completion?.completionId !== completionId) return {};
+			if (s.renderedCompletionBySession[sessionId] === completionId) return {};
+			return {
+				renderedCompletionBySession: {
+					...s.renderedCompletionBySession,
+					[sessionId]: completionId,
+				},
+			};
 		}),
 	reopenChat: (wsId, sessionId, options = {}) =>
 		set((s) => {
@@ -2769,6 +2907,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				toolResults: hydrated.toolResults,
 				askAnswers: hydrated.askAnswers,
 				isStreaming: summary.isStreaming,
+				hostState:
+					summary.state ??
+					s.sessionStateByWorkspace[summary.workspaceId]?.[summary.sessionId]?.state ??
+					null,
 				...(summary.queue ? { queue: summary.queue } : {}),
 				...(hydrated.turnIdByMessageIndex
 					? { turnIdByMessageIndex: hydrated.turnIdByMessageIndex }
@@ -2863,6 +3005,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				queue: summary.queue ?? EMPTY_QUEUE,
 				model: summary.model,
 				thinkingLevel: summary.thinkingLevel,
+				hostState:
+					summary.state ??
+					s.sessionStateByWorkspace[summary.workspaceId]?.[summary.sessionId]?.state ??
+					current.hostState,
 				eventRevision: current.eventRevision + 1,
 				syncedConnectionGeneration: Math.max(
 					current.syncedConnectionGeneration,

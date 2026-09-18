@@ -28,6 +28,8 @@ import type {
 	SessionEventPayload,
 	SessionQueueContent,
 	SessionQueueState,
+	SessionState,
+	SessionStateRecord,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
@@ -44,6 +46,18 @@ import {
 import type { ParentContext } from "pi-delegation";
 import { RECURSION_GUARD_TOOLS } from "pi-subagents";
 import { logger } from "../log";
+import {
+	dataDir,
+	loadSessionLifecycle,
+	loadSessionPurpose,
+	loadSessionReceipts,
+	type SessionLifecycle,
+	type SessionPurpose,
+	type SessionReceipts,
+	saveSessionLifecycle,
+	saveSessionPurpose,
+	saveSessionReceipts,
+} from "../persistence";
 import {
 	ANSWERABILITY_ERRORS,
 	ASK_USER_QUESTION_TOOL_NAME,
@@ -69,9 +83,16 @@ import {
 import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
 import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
+import { deriveSessionState } from "./sessionState";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { trashFile } from "./trash";
-import { cancelExtUiForSession, createWebUiContext, notifyExtensionError } from "./webUiContext";
+import {
+	cancelExtUiForSession,
+	createWebUiContext,
+	notifyExtensionError,
+	pendingExtUiDialogId,
+	setExtUiStateChanged,
+} from "./webUiContext";
 
 const log = logger("agent");
 
@@ -96,10 +117,93 @@ interface Entry {
 	registered: boolean;
 	subagentToolsRefreshPending: boolean;
 	reviewToolRefreshPending: boolean;
+	userVisible: boolean;
+	lastPublishedState: string | null;
 	askUserQuestionWaiters: AskUserQuestionWaiters;
 }
 
 const sessions = new Map<string, Entry>();
+
+let sessionMetadataRoot: string | null = null;
+let sessionLifecycle: SessionLifecycle | null = null;
+let sessionPurpose: SessionPurpose | null = null;
+let sessionReceipts: SessionReceipts | null | undefined;
+
+function ensureSessionMetadata(): void {
+	const root = dataDir();
+	if (sessionMetadataRoot === root && sessionLifecycle && sessionPurpose) return;
+	sessionMetadataRoot = root;
+	sessionLifecycle = loadSessionLifecycle();
+	sessionPurpose = loadSessionPurpose();
+	sessionReceipts = loadSessionReceipts();
+}
+
+function lifecycle(): SessionLifecycle {
+	ensureSessionMetadata();
+	if (!sessionLifecycle) throw new Error("Session lifecycle metadata is unavailable");
+	return sessionLifecycle;
+}
+
+function purpose(): SessionPurpose {
+	ensureSessionMetadata();
+	if (!sessionPurpose) throw new Error("Session purpose metadata is unavailable");
+	return sessionPurpose;
+}
+
+function receipts(): SessionReceipts | null {
+	ensureSessionMetadata();
+	return sessionReceipts ?? null;
+}
+
+function isInternalSession(sessionId: string): boolean {
+	return purpose().internalSessionIds.includes(sessionId);
+}
+
+function markSessionInternal(sessionId: string): void {
+	const current = purpose();
+	if (current.internalSessionIds.includes(sessionId)) return;
+	const next: SessionPurpose = {
+		...current,
+		internalSessionIds: [...current.internalSessionIds, sessionId].sort(),
+	};
+	saveSessionPurpose(next);
+	sessionPurpose = next;
+}
+
+function omitMetadataKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+	const { [key]: _removed, ...rest } = record;
+	return rest;
+}
+
+function removeSessionStateMetadata(sessionId: string): void {
+	const currentLifecycle = lifecycle();
+	const nextLifecycle: SessionLifecycle = {
+		...currentLifecycle,
+		completionBySession: omitMetadataKey(currentLifecycle.completionBySession, sessionId),
+		cancelledRunBySession: omitMetadataKey(currentLifecycle.cancelledRunBySession, sessionId),
+	};
+	saveSessionLifecycle(nextLifecycle);
+	sessionLifecycle = nextLifecycle;
+	const currentReceipts = receipts();
+	if (currentReceipts) {
+		const nextReceipts: SessionReceipts = {
+			...currentReceipts,
+			handledCompletionBySession: omitMetadataKey(
+				currentReceipts.handledCompletionBySession,
+				sessionId,
+			),
+		};
+		saveSessionReceipts(nextReceipts);
+		sessionReceipts = nextReceipts;
+	}
+	const currentPurpose = purpose();
+	const nextPurpose: SessionPurpose = {
+		...currentPurpose,
+		internalSessionIds: currentPurpose.internalSessionIds.filter((id) => id !== sessionId),
+	};
+	saveSessionPurpose(nextPurpose);
+	sessionPurpose = nextPurpose;
+}
 
 export async function usePiRuntime<T>(
 	operation: (
@@ -136,9 +240,174 @@ export function setSessionDeletedPublisher(fn: (payload: SessionDeletedPayload) 
 	publishDeleted = fn;
 }
 
+let publishState: (record: SessionStateRecord) => void = () => {};
+export function setSessionStatePublisher(fn: (record: SessionStateRecord) => void): void {
+	publishState = fn;
+	setExtUiStateChanged((sessionId) => {
+		const entry = sessions.get(sessionId);
+		if (entry) publishEntryState(entry);
+	});
+}
+
+let resolveProjectId: (workspaceId: string) => string | null = () => null;
+export function setSessionProjectResolver(fn: (workspaceId: string) => string | null): void {
+	resolveProjectId = fn;
+}
+
 function effectivePendingCount(entry: Entry): number {
 	const stuck = entry.stuckEmptyDeliveries.steering + entry.stuckEmptyDeliveries.followUp;
 	return Math.max(0, entry.session.pendingMessageCount - stuck);
+}
+
+function persistedCompletion(sessionId: string) {
+	const stateReceipts = receipts();
+	return stateReceipts?.baselineComplete
+		? (lifecycle().completionBySession[sessionId] ?? null)
+		: undefined;
+}
+
+function stateFromEntry(entry: Entry): SessionState {
+	const sessionId = entry.session.sessionId;
+	return deriveSessionState({
+		entries: entry.session.sessionManager.getBranch(),
+		isStreaming: entry.session.isStreaming,
+		pendingMessageCount: effectivePendingCount(entry),
+		lastSettlement: entry.lastSettlement,
+		lifecycleCompletion:
+			entry.lastSettlement === undefined ? persistedCompletion(sessionId) : undefined,
+		liveQuestion: entry.askUserQuestionWaiters.currentQuestion(),
+		pendingDialogId: pendingExtUiDialogId(sessionId),
+		handledCompletionId: receipts()?.handledCompletionBySession[sessionId],
+		cancelledRunId: lifecycle().cancelledRunBySession[sessionId],
+	});
+}
+
+function publishEntryState(entry: Entry): void {
+	if (!entry.userVisible || sessions.get(entry.session.sessionId) !== entry) return;
+	const projectId = resolveProjectId(entry.workspaceId);
+	if (!projectId) return;
+	const state = stateFromEntry(entry);
+	const serialized = JSON.stringify(state);
+	if (entry.lastPublishedState === serialized) return;
+	entry.lastPublishedState = serialized;
+	publishState({
+		sessionId: entry.session.sessionId,
+		workspaceId: entry.workspaceId,
+		projectId,
+		state,
+	});
+}
+
+function stateFromDisk(sessionId: string, manager: SessionManager, legacy = false): SessionState {
+	return deriveSessionState({
+		entries: manager.getBranch(),
+		isStreaming: false,
+		pendingMessageCount: 0,
+		lastSettlement: undefined,
+		lifecycleCompletion: legacy ? undefined : persistedCompletion(sessionId),
+		liveQuestion: null,
+		pendingDialogId: null,
+		handledCompletionId: receipts()?.handledCompletionBySession[sessionId],
+		cancelledRunId: lifecycle().cancelledRunBySession[sessionId],
+	});
+}
+
+export function getSessionState(sessionId: string): SessionState {
+	return stateFromEntry(mustGetEntry(sessionId));
+}
+
+function stateRecordForEntry(entry: Entry): SessionStateRecord {
+	const projectId = resolveProjectId(entry.workspaceId);
+	if (!projectId) throw new Error(`Unknown workspace: ${entry.workspaceId}`);
+	return {
+		sessionId: entry.session.sessionId,
+		workspaceId: entry.workspaceId,
+		projectId,
+		state: stateFromEntry(entry),
+	};
+}
+
+export function acknowledgeCompletion(
+	sessionId: string,
+	completionId: string,
+): { acknowledged: boolean; record: SessionStateRecord } {
+	const entry = mustGetEntry(sessionId);
+	const currentReceipts = receipts();
+	if (!currentReceipts?.baselineComplete) throw new Error("Session state is not initialized");
+	const currentState = stateFromEntry(entry);
+	if (currentState.completion?.completionId !== completionId || !currentState.completionUnread) {
+		return { acknowledged: false, record: stateRecordForEntry(entry) };
+	}
+	const nextReceipts: SessionReceipts = {
+		...currentReceipts,
+		handledCompletionBySession: {
+			...currentReceipts.handledCompletionBySession,
+			[sessionId]: completionId,
+		},
+	};
+	saveSessionReceipts(nextReceipts);
+	sessionReceipts = nextReceipts;
+	publishEntryState(entry);
+	return { acknowledged: true, record: stateRecordForEntry(entry) };
+}
+
+export function nudgeSession(
+	sessionId: string,
+	text: string,
+	images?: ImageContent[],
+): {
+	disposition: "needs_input" | "queued" | "prompted";
+	send: () => Promise<void>;
+} {
+	const entry = mustGetEntry(sessionId);
+	const state = stateFromEntry(entry);
+	if (state.needsInput) return { disposition: "needs_input", send: () => Promise.resolve() };
+	if (state.execution === "running") {
+		return { disposition: "queued", send: () => followUpSession(sessionId, text, images) };
+	}
+	return { disposition: "prompted", send: () => promptSession(sessionId, text, images) };
+}
+
+function recordSettlement(entry: Entry, terminal: AgentSettlement | null): void {
+	const sessionId = entry.session.sessionId;
+	const observed = deriveSessionState({
+		entries: entry.session.sessionManager.getBranch(),
+		isStreaming: false,
+		pendingMessageCount: effectivePendingCount(entry),
+		lastSettlement: terminal,
+		lifecycleCompletion: undefined,
+		liveQuestion: entry.askUserQuestionWaiters.currentQuestion(),
+		pendingDialogId: pendingExtUiDialogId(sessionId),
+		handledCompletionId: receipts()?.handledCompletionBySession[sessionId],
+		cancelledRunId: lifecycle().cancelledRunBySession[sessionId],
+	});
+	if (!observed.runId || !observed.completion) return;
+	const current = lifecycle();
+	const next: SessionLifecycle = {
+		...current,
+		completionBySession: {
+			...current.completionBySession,
+			[sessionId]: { runId: observed.runId, completion: observed.completion },
+		},
+	};
+	saveSessionLifecycle(next);
+	sessionLifecycle = next;
+}
+
+function markCancelledRun(entry: Entry): void {
+	const state = stateFromEntry(entry);
+	if (!state.runId) return;
+	const current = lifecycle();
+	if (current.cancelledRunBySession[entry.session.sessionId] === state.runId) return;
+	const next: SessionLifecycle = {
+		...current,
+		cancelledRunBySession: {
+			...current.cancelledRunBySession,
+			[entry.session.sessionId]: state.runId,
+		},
+	};
+	saveSessionLifecycle(next);
+	sessionLifecycle = next;
 }
 
 let sessionManagerFactory: (cwd: string) => SessionManager = (cwd) => SessionManager.create(cwd);
@@ -297,9 +566,12 @@ export function buildSessionSettings(cwd: string): SettingsManager {
 	return settings;
 }
 
+export type SessionPurposeKind = "owner" | "reviewer" | "reflector";
+
 export interface CreateSessionInput {
 	cwd: string;
 	workspaceId: string;
+	purpose?: SessionPurposeKind;
 	model?: WireModel;
 	thinkingLevel?: ThinkingLevel;
 	/** True: an unresolvable `model` falls back to the default instead of throwing. */
@@ -362,6 +634,8 @@ async function prepareSessionEntry(
 		registered: false,
 		subagentToolsRefreshPending: false,
 		reviewToolRefreshPending: false,
+		userVisible: !isInternalSession(sessionId),
+		lastPublishedState: null,
 		askUserQuestionWaiters,
 	};
 	entry.unsubscribe = session.subscribe((event) => {
@@ -381,8 +655,10 @@ async function prepareSessionEntry(
 			if (lane) {
 				entry.stuckEmptyDeliveries[lane]++;
 				synchronizeQueueFromSession(entry);
-				if (sessions.get(sessionId) === entry)
+				if (sessions.get(sessionId) === entry) {
 					publish({ sessionId, event: queueUpdateEventOf(entry) });
+					publishEntryState(entry);
+				}
 			}
 		}
 		if (event.type === "queue_update") {
@@ -419,10 +695,18 @@ async function prepareSessionEntry(
 				: baseEvent;
 		if (event.type === "agent_settled") {
 			entry.lastSettlement = terminal;
+			try {
+				recordSettlement(entry, terminal);
+			} catch (error) {
+				log.warn(`session state settlement was not persisted for ${sessionId}`, error as Error);
+			}
 			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
 			if (entry.reviewToolRefreshPending) applyReviewTool(entry);
 		}
-		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
+		if (sessions.get(sessionId) === entry) {
+			publish({ sessionId, event: projected });
+			publishEntryState(entry);
+		}
 		if (event.type === "agent_settled") terminal = null;
 	});
 
@@ -481,12 +765,14 @@ async function registerSession(
 		generation,
 		askUserQuestionWaiters,
 	);
+	prepared.entry.userVisible = !isInternalSession(session.sessionId);
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	applySubagentTools(prepared.entry);
 	applyReviewTool(prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
+	publishEntryState(prepared.entry);
 	return prepared.result;
 }
 
@@ -518,6 +804,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		...(model ? { model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
+	if (input.purpose && input.purpose !== "owner") markSessionInternal(session.sessionId);
 	return registerSession(session, input.workspaceId, generation, askUserQuestionWaiters, true);
 }
 
@@ -533,6 +820,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		messageCount: session.messages.length,
 		updatedAt: Date.now(),
 		live: true,
+		state: stateFromEntry(entry),
 		...(entry.lastSettlement !== undefined ? { lastSettlement: entry.lastSettlement } : {}),
 		...(effectivePendingCount(entry) > 0 ? { queue: queueStateOf(entry) } : {}),
 	};
@@ -663,12 +951,99 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 			messageCount: info.messageCount,
 			updatedAt: info.modified.getTime(),
 			live: false,
+			state: stateFromDisk(info.id, SessionManager.open(info.path)),
 		}));
 	return [...live, ...disk];
 }
 
 export function listSessions(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
 	return listSessionsInternal(workspaceId, cwd);
+}
+
+export interface SessionStateWorkspace {
+	id: string;
+	projectId: string;
+	cwd: string;
+}
+
+async function collectSessionStates(
+	workspaces: readonly SessionStateWorkspace[],
+	legacy: boolean,
+): Promise<SessionStateRecord[]> {
+	const records: SessionStateRecord[] = [];
+	const liveIds = new Set<string>();
+	for (const [sessionId, entry] of sessions) {
+		if (!entry.userVisible || isSessionDeleted(sessionId, entry.workspaceId)) continue;
+		const workspace = workspaces.find((candidate) => candidate.id === entry.workspaceId);
+		if (!workspace) continue;
+		records.push({
+			sessionId,
+			workspaceId: entry.workspaceId,
+			projectId: workspace.projectId,
+			state: stateFromEntry(entry),
+		});
+		liveIds.add(sessionId);
+	}
+	for (const workspace of workspaces) {
+		const infos = await listSessionInfosStrict(workspace.cwd);
+		for (const info of infos) {
+			if (
+				info.cwd !== workspace.cwd ||
+				liveIds.has(info.id) ||
+				sessions.has(info.id) ||
+				isSessionDeleted(info.id, workspace.id) ||
+				isInternalSession(info.id)
+			) {
+				continue;
+			}
+			records.push({
+				sessionId: info.id,
+				workspaceId: workspace.id,
+				projectId: workspace.projectId,
+				state: stateFromDisk(info.id, SessionManager.open(info.path), legacy),
+			});
+		}
+	}
+	return records;
+}
+
+export async function initializeSessionStates(
+	workspaces: readonly SessionStateWorkspace[],
+): Promise<void> {
+	ensureSessionMetadata();
+	const currentReceipts = receipts();
+	if (currentReceipts?.baselineComplete) return;
+	const records = await collectSessionStates(workspaces, true);
+	const currentLifecycle = lifecycle();
+	const completionBySession = { ...currentLifecycle.completionBySession };
+	const handledCompletionBySession = {
+		...(currentReceipts?.handledCompletionBySession ?? {}),
+	};
+	for (const record of records) {
+		const { completion, runId } = record.state;
+		if (!completion || !runId) continue;
+		completionBySession[record.sessionId] = { runId, completion };
+		if (completion.outcome !== "cancelled") {
+			handledCompletionBySession[record.sessionId] = completion.completionId;
+		}
+	}
+	const nextLifecycle: SessionLifecycle = { ...currentLifecycle, completionBySession };
+	const nextReceipts: SessionReceipts = {
+		version: 1,
+		baselineComplete: true,
+		handledCompletionBySession,
+	};
+	saveSessionLifecycle(nextLifecycle);
+	saveSessionReceipts(nextReceipts);
+	sessionLifecycle = nextLifecycle;
+	sessionReceipts = nextReceipts;
+}
+
+export async function listSessionStates(
+	workspaces: readonly SessionStateWorkspace[],
+): Promise<SessionStateRecord[]> {
+	if (!receipts()?.baselineComplete) throw new Error("Session state is not initialized");
+	return collectSessionStates(workspaces, false);
 }
 
 const sessionFileOperations = new Map<string, Promise<void>>();
@@ -802,11 +1177,14 @@ async function ensureSessionAttachedInternal(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
+	purposeKind: SessionPurposeKind,
 ): Promise<boolean> {
+	if (purposeKind !== "owner") markSessionInternal(sessionId);
 	if (isSessionDeleted(sessionId, workspaceId)) return false;
 	const live = sessions.get(sessionId);
 	if (live) {
 		if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
+		live.userVisible = !isInternalSession(sessionId);
 		return true;
 	}
 	const known = (await listSessionInfosStrict(cwd)).some(
@@ -823,8 +1201,9 @@ export function ensureSessionAttached(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
+	options: { purpose?: SessionPurposeKind } = {},
 ): Promise<boolean> {
-	return ensureSessionAttachedInternal(sessionId, workspaceId, cwd);
+	return ensureSessionAttachedInternal(sessionId, workspaceId, cwd, options.purpose ?? "owner");
 }
 
 async function getSessionMessagesInternal(
@@ -860,6 +1239,7 @@ export async function answerQuestion(
 	const entry = mustGetEntry(sessionId);
 	const live = entry.askUserQuestionWaiters.answer(toolCallId, result);
 	if (live.handled) {
+		publishEntryState(entry);
 		await live.persisted;
 		return;
 	}
@@ -1150,6 +1530,7 @@ export async function abortSession(
 	acceptedAnswerGraceMs = ACCEPTED_ANSWER_STOP_GRACE_MS,
 ): Promise<SessionQueueContent | undefined> {
 	const entry = mustGetEntry(sessionId);
+	markCancelledRun(entry);
 	let restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
 	const acceptedResult = entry.askUserQuestionWaiters.prepareAbort();
 	await waitForAcceptedAnswerGrace(acceptedResult, acceptedAnswerGraceMs);
@@ -1386,7 +1767,13 @@ async function purgeDiskSessions(cwd: string): Promise<void> {
 		return;
 	}
 	for (const info of infos) {
-		if (info.cwd === cwd) rmSync(info.path, { force: true });
+		if (info.cwd !== cwd) continue;
+		rmSync(info.path, { force: true });
+		try {
+			removeSessionStateMetadata(info.id);
+		} catch (error) {
+			log.warn(`session state metadata was not pruned for ${info.id}`, error as Error);
+		}
 	}
 }
 
@@ -1449,5 +1836,10 @@ async function runDeleteTransaction(
 		throw error;
 	}
 	if (liveEntry && sessions.get(sessionId) === liveEntry) await disposeSession(sessionId);
+	try {
+		removeSessionStateMetadata(sessionId);
+	} catch (error) {
+		log.warn(`session state metadata was not pruned for ${sessionId}`, error as Error);
+	}
 	publishDeleted({ workspaceId, sessionId });
 }

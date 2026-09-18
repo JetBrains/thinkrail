@@ -9,11 +9,16 @@ import type {
 	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
+	SessionStateRecord,
 	Workspace,
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
 } from "@thinkrail/contracts";
-import { PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import {
+	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
+	SESSION_STATE_PROTOCOL_VERSION,
+	WS_CHANNELS,
+} from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
@@ -22,6 +27,51 @@ let transport: WsTransport | null = null;
 
 export function supportsPlanReview(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION;
+}
+
+interface SessionStateHydration {
+	generation: number;
+	installed: boolean;
+	buffered: SessionStateRecord[];
+}
+
+let sessionStateHydration: SessionStateHydration | null = null;
+
+function hydrateSessionStates(connectionGeneration: number): void {
+	const hydration: SessionStateHydration = {
+		generation: connectionGeneration,
+		installed: false,
+		buffered: [],
+	};
+	sessionStateHydration = hydration;
+	const attempt = (): void => {
+		void getTransport()
+			.request("session.stateList", {})
+			.then((records) => {
+				const current = useAppStore.getState();
+				if (
+					sessionStateHydration !== hydration ||
+					!isConnectedGeneration(current, connectionGeneration)
+				) {
+					return;
+				}
+				current.installSessionStateSnapshot(records);
+				hydration.installed = true;
+				for (const record of hydration.buffered) current.applySessionState(record);
+				hydration.buffered = [];
+			})
+			.catch(() => {
+				const current = useAppStore.getState();
+				if (
+					sessionStateHydration !== hydration ||
+					!isConnectedGeneration(current, connectionGeneration)
+				) {
+					return;
+				}
+				setTimeout(attempt, 500);
+			});
+	};
+	attempt();
 }
 
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
@@ -79,7 +129,14 @@ export function initTransport(): WsTransport {
 					: undefined,
 				welcome.hostUpdate,
 			);
-		refreshLoadedWorkspaceLists(useAppStore.getState().connectionGeneration);
+		const connectionGeneration = useAppStore.getState().connectionGeneration;
+		refreshLoadedWorkspaceLists(connectionGeneration);
+		if (welcome.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION) {
+			hydrateSessionStates(connectionGeneration);
+		} else {
+			sessionStateHydration = null;
+			useAppStore.getState().installSessionStateSnapshot([]);
+		}
 	});
 
 	transport.subscribe(WS_CHANNELS.hostUpdateAvailable, (data) => {
@@ -110,6 +167,18 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.sessionDeleted, (data) => {
 		const { workspaceId, sessionId } = data as SessionDeletedPayload;
 		useAppStore.getState().deleteChat(workspaceId, sessionId, false);
+	});
+
+	transport.subscribe(WS_CHANNELS.sessionState, (data) => {
+		const record = data as SessionStateRecord;
+		const hydration = sessionStateHydration;
+		const current = useAppStore.getState();
+		if (hydration && hydration.generation !== current.connectionGeneration) return;
+		if (hydration && !hydration.installed && isConnectedGeneration(current, hydration.generation)) {
+			hydration.buffered.push(record);
+			return;
+		}
+		current.applySessionState(record);
 	});
 
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
