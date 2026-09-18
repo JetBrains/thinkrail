@@ -8,7 +8,13 @@ import type {
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
-import { isConnectedGeneration, selectChatTitle, toast, useAppStore } from "../store";
+import {
+	isConnectedGeneration,
+	selectChatTitle,
+	selectHasNormalizedSessionState,
+	toast,
+	useAppStore,
+} from "../store";
 import {
 	errorText,
 	getSessionMessagesWithSkillBaseline,
@@ -16,6 +22,7 @@ import {
 	supportsPlanSummaryGeneration,
 } from "../transport";
 import { messagesToRuntime } from "./hydrate";
+import { sessionGlance, shouldNudgeOnAdd } from "./planView";
 
 export function shouldRefreshTodos(event: PiEvent): boolean {
 	return event.type === "tool_execution_end" || event.type === "agent_settled";
@@ -326,9 +333,46 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 		return;
 	}
 	const text = `${TODO_NUDGE_PREFIX}A TODO was added to the list: "${title}". Read the TODO list with todo_list and work any pending items, marking each done with todo_update as you finish.`;
+	if (selectHasNormalizedSessionState(state)) {
+		try {
+			await getTransport().request("session.nudge", { workspaceId, sessionId, text });
+		} catch (err) {
+			console.warn("todo nudge skipped:", errorText(err));
+		}
+		return;
+	}
+	await legacyNudgeAgent(workspaceId, sessionId, text);
+}
+
+async function legacyNudgeAgent(
+	workspaceId: string,
+	sessionId: string,
+	text: string,
+): Promise<void> {
+	const initial = useAppStore.getState();
+	const session = initial.sessions[sessionId];
+	if (session && !shouldNudgeOnAdd(sessionGlance(session))) return;
 	try {
-		await getTransport().request("session.nudge", { workspaceId, sessionId, text });
-	} catch (err) {
-		console.warn("todo nudge skipped:", errorText(err));
+		await getTransport().request(session?.isStreaming ? "session.followUp" : "session.prompt", {
+			sessionId,
+			text,
+		});
+	} catch {
+		try {
+			await hydrateSessionRuntime(workspaceId, sessionId);
+			const hydrated = useAppStore.getState();
+			const recovered = hydrated.sessions[sessionId];
+			if (
+				hydrated.removedWorkspaceIds[workspaceId] ||
+				hydrated.deletedSessionsByWorkspace[workspaceId]?.[sessionId] ||
+				!recovered ||
+				!shouldNudgeOnAdd(sessionGlance(recovered))
+			) {
+				return;
+			}
+			await getTransport().request("session.prompt", { sessionId, text });
+		} catch (err) {
+			console.warn("todo nudge skipped:", errorText(err));
+		}
 	}
 }
