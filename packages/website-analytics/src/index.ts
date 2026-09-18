@@ -4,6 +4,7 @@ const postHogUiHost = "https://eu.posthog.com";
 const gtmContainerId = "GTM-WDW2DZW4";
 const journeyStorageKey = "thinkrail_journey_id";
 const journeyProperty = "journey_id";
+const bridgeProperty = "bridge_id";
 const captureQueueLimit = 100;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -68,6 +69,8 @@ export type WebsiteAnalytics = {
 		event: EventName,
 		properties: WebsiteAnalyticsEventProperties[EventName],
 	): void;
+	currentJourneyId(): string | undefined;
+	subscribeJourney(listener: (journeyId: string | undefined) => void): () => void;
 };
 
 export type WebsiteAnalyticsOptions = {
@@ -168,6 +171,7 @@ export function createWebsiteAnalytics({
 	let journeyId: string | undefined;
 	let postHogReady = false;
 	let postHogFailed = false;
+	const journeyListeners = new Set<(journeyId: string | undefined) => void>();
 	const captureQueue: Array<{
 		event: WebsiteAnalyticsEventName;
 		properties: Record<string, unknown>;
@@ -198,19 +202,38 @@ export function createWebsiteAnalytics({
 		} catch {}
 	}
 
+	function notifyJourneyIfChanged(
+		previousJourneyId: string | undefined,
+		previousConsent: boolean | undefined,
+	): void {
+		if (previousJourneyId === journeyId && previousConsent === consentGranted) return;
+		for (const listener of journeyListeners) {
+			try {
+				listener(journeyId);
+			} catch {}
+		}
+	}
+
 	function setConsent(granted: boolean | undefined): void {
 		if (granted === undefined || granted === consentGranted) return;
+		const previousJourneyId = journeyId;
+		const previousConsent = consentGranted;
 		consentGranted = granted;
 		if (granted) {
 			journeyId = storedOrNewJourneyId();
 			registerJourney();
+			notifyJourneyIfChanged(previousJourneyId, previousConsent);
 			return;
 		}
 
 		journeyId = undefined;
 		removeStoredJourneyId();
 		unregisterJourney();
-		for (const queued of captureQueue) delete queued.properties[journeyProperty];
+		for (const queued of captureQueue) {
+			delete queued.properties[journeyProperty];
+			delete queued.properties[bridgeProperty];
+		}
+		notifyJourneyIfChanged(previousJourneyId, previousConsent);
 	}
 
 	function refreshConsent(): void {
@@ -289,5 +312,15 @@ export function createWebsiteAnalytics({
 		} catch {}
 	}
 
-	return { configurationForHostname, init, capture };
+	function currentJourneyId(): string | undefined {
+		if (!enabledInCurrentWindow() || consentGranted !== true) return undefined;
+		return journeyId;
+	}
+
+	function subscribeJourney(listener: (currentJourneyId: string | undefined) => void): () => void {
+		journeyListeners.add(listener);
+		return () => journeyListeners.delete(listener);
+	}
+
+	return { configurationForHostname, init, capture, currentJourneyId, subscribeJourney };
 }
