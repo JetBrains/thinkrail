@@ -199,6 +199,13 @@ export interface AskUserQuestionOption {
 	recommendedReason?: string;
 }
 
+export function isRecommendedQuestionOption(option: AskUserQuestionOption): boolean {
+	return (
+		/\s*\(recommended\)\s*$/i.test(option.label) ||
+		(option.recommendedReason?.trim().length ?? 0) > 0
+	);
+}
+
 export interface AskUserQuestionItem {
 	question: string;
 	header: string;
@@ -223,6 +230,7 @@ export interface AskUserQuestionAnswer {
 export interface AskUserQuestionResult {
 	answers: AskUserQuestionAnswer[];
 	cancelled: boolean;
+	timedOut?: true;
 }
 
 export interface AskUserQuestionAckDetails {

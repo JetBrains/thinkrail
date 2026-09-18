@@ -525,6 +525,7 @@ export interface AppConfig extends ThemePreference {
 	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
 	reviewAutoFix: boolean;
 	subagentsEnabled: boolean;
+	autoResumeTimeoutMinutes: number | null;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
 	/** Which shell new workspace terminals start on Windows; ignored on other platforms. */
@@ -546,6 +547,17 @@ export type TerminalWindowsShell = (typeof TERMINAL_WINDOWS_SHELLS)[number];
 
 export function isTerminalWindowsShell(value: unknown): value is TerminalWindowsShell {
 	return TERMINAL_WINDOWS_SHELLS.some((shell) => shell === value);
+}
+
+export const AUTO_RESUME_TIMEOUT_MINUTES = { min: 1, max: 1440, default: 15 } as const;
+
+export function isAutoResumeTimeoutMinutes(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= AUTO_RESUME_TIMEOUT_MINUTES.min &&
+		value <= AUTO_RESUME_TIMEOUT_MINUTES.max
+	);
 }
 
 export const JBCENTRAL_QUOTA_REFRESH_SECONDS = { min: 1, max: 3600, default: 30 } as const;
@@ -574,6 +586,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	customLayoutPresets: [],
 	reviewAutoFix: true,
 	subagentsEnabled: true,
+	autoResumeTimeoutMinutes: null,
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 };

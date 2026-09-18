@@ -306,6 +306,47 @@ test("subagents default on; an old config inherits that default; toggling off ro
 	expect(getConfig().subagentsEnabled).toBe(false);
 });
 
+test("automatic continuation defaults off and a valid duration can be enabled then disabled", () => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
+	resetConfigCache();
+	expect(getConfig().autoResumeTimeoutMinutes).toBeNull();
+
+	expect(updateConfig({ autoResumeTimeoutMinutes: 15 }).autoResumeTimeoutMinutes).toBe(15);
+	resetConfigCache();
+	expect(getConfig().autoResumeTimeoutMinutes).toBe(15);
+	expect(updateConfig({ autoResumeTimeoutMinutes: null }).autoResumeTimeoutMinutes).toBeNull();
+	resetConfigCache();
+	expect(getConfig().autoResumeTimeoutMinutes).toBeNull();
+});
+
+test.each([
+	0,
+	1441,
+	1.5,
+	"15",
+])("a stored invalid automatic-continuation timeout %p falls back to off", (value) => {
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ ...DEFAULT_CONFIG, autoResumeTimeoutMinutes: value }),
+	);
+	resetConfigCache();
+	expect(getConfig().autoResumeTimeoutMinutes).toBeNull();
+});
+
+test("invalid automatic-continuation updates change neither cache, disk, nor broadcasts", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+	for (const autoResumeTimeoutMinutes of [0, 1441, 1.5, "15"]) {
+		expect(() => updateConfig({ autoResumeTimeoutMinutes } as unknown as AppConfigUpdate)).toThrow(
+			"autoResumeTimeoutMinutes must be a whole number from 1 to 1440, or null",
+		);
+		expect(getConfig()).toEqual(before);
+	}
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+});
+
 test("Windows shell updates reject unknown values before persistence or broadcast", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));

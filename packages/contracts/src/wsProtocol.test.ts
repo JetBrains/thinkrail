@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
 	ACTIVITY_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	AUTO_RESUME_PROTOCOL_VERSION,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
@@ -53,5 +54,10 @@ test("host update advisories advance the protocol with an immutable notice chann
 
 test("explicit analytics consent advances the protocol to v65", () => {
 	expect(ANALYTICS_CONSENT_PROTOCOL_VERSION).toBe(65);
-	expect(PROTOCOL_VERSION).toBe(ANALYTICS_CONSENT_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ANALYTICS_CONSENT_PROTOCOL_VERSION);
+});
+
+test("automatic continuation advances the protocol to v66", () => {
+	expect(AUTO_RESUME_PROTOCOL_VERSION).toBe(66);
+	expect(PROTOCOL_VERSION).toBe(AUTO_RESUME_PROTOCOL_VERSION);
 });
