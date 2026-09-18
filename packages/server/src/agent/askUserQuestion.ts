@@ -287,10 +287,13 @@ export function buildAnswersMessage(
 
 export const ASK_USER_QUESTION_TOOL_NAME = "ask_user_question";
 
-export function createAskUserQuestionTool(): ToolDefinition<
-	typeof AskUserQuestionSchema,
-	AskUserQuestionAckDetails | AskUserQuestionResult
-> {
+export interface QuestionHold {
+	capture(): void;
+}
+
+export function createAskUserQuestionTool(
+	hold?: QuestionHold,
+): ToolDefinition<typeof AskUserQuestionSchema, AskUserQuestionAckDetails | AskUserQuestionResult> {
 	return {
 		name: ASK_USER_QUESTION_TOOL_NAME,
 		label: "Ask User Question",
@@ -304,6 +307,8 @@ export function createAskUserQuestionTool(): ToolDefinition<
 			const validation = validateQuestionnaire(args);
 			if (!validation.ok) return toolResult(validation.message, { answers: [], cancelled: true });
 
+			if (hold && ctx.hasPendingMessages()) hold.capture();
+
 			return {
 				content: [{ type: "text", text: ASK_ACK_TEXT }],
 				details: { kind: "ack" } satisfies AskUserQuestionAckDetails,
@@ -313,6 +318,6 @@ export function createAskUserQuestionTool(): ToolDefinition<
 	};
 }
 
-export function askUserQuestionExtension(pi: ExtensionAPI): void {
-	pi.registerTool(createAskUserQuestionTool());
+export function askUserQuestionExtensionFor(hold?: QuestionHold): (pi: ExtensionAPI) => void {
+	return (pi) => pi.registerTool(createAskUserQuestionTool(hold));
 }

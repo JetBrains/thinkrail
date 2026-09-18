@@ -4,6 +4,7 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	rmSync,
 	writeFileSync,
@@ -18,6 +19,7 @@ import {
 import {
 	createFauxCore,
 	fauxAssistantMessage,
+	fauxText,
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
@@ -31,6 +33,7 @@ import type {
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import {
 	abortSession,
+	answerQuestion,
 	buildSessionSettings,
 	clampThinkingForModel,
 	clearQueueSession,
@@ -111,6 +114,23 @@ const cfg = (faux: typeof fauxA, id: string) => ({
 
 const events = new Map<string, unknown[]>();
 const seen = (id: string) => JSON.stringify(events.get(id) ?? []);
+
+function heldSnapshots(cwd: string, sessionId: string): string[][] {
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	for (const file of readdirSync(dir).filter((f) => f.endsWith(".jsonl"))) {
+		const lines = readFileSync(join(dir, file), "utf8").split("\n").filter(Boolean);
+		const header = JSON.parse(lines[0] ?? "{}");
+		if (header.id !== sessionId) continue;
+		const snapshots: string[][] = [];
+		for (const line of lines) {
+			const entry = JSON.parse(line);
+			if (entry.type === "custom" && entry.customType === "thinkrail.heldQueue")
+				snapshots.push((entry.data?.messages ?? []).map((m: { text: string }) => m.text));
+		}
+		return snapshots;
+	}
+	return [];
+}
 
 function subagentToolState(context: { tools?: ReadonlyArray<{ name: string }> }): string {
 	const names = new Set((context.tools ?? []).map((tool) => tool.name));
@@ -1226,6 +1246,560 @@ test("followUpSession on an IDLE session runs the turn — pi's follow-up queue 
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });
+
+test("a message sent while a question is already pending is held (idle send), stays waiting, and flushes on answer", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-hold-idle");
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-idle-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-hold-idle-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-hold-idle",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		const statusOf = async () =>
+			(await listSessionActivity()).find((row) => row.sessionId === s.sessionId)?.status;
+		expect(await statusOf()).toBe("waiting");
+
+		await followUpSession(s.sessionId, "later task");
+		expect(
+			(await listSessions("ws-hold-idle", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual({ steering: [], followUp: ["later task"] });
+		expect(await statusOf()).toBe("waiting");
+		expect(seen(s.sessionId)).not.toContain("LATER_DONE");
+
+		fauxA.appendResponses([fauxAssistantMessage("ANSWERED"), fauxAssistantMessage("LATER_DONE")]);
+		await answerQuestion(s.sessionId, "ask-idle-1", {
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+			cancelled: false,
+		});
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("LATER_DONE")) {
+			if (Date.now() > ranBy) throw new Error("held follow-up never ran after the answer");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		expect(seen(s.sessionId)).toContain("ANSWERED");
+		expect(
+			(await listSessions("ws-hold-idle", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toBeUndefined();
+		removeSession(s.sessionId);
+	} finally {
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("held work flushes one message at a time, in order, on answer (per-message hand-off)", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-order");
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-o-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-flush-order-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-order",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		await followUpSession(s.sessionId, "task one");
+		await followUpSession(s.sessionId, "task two");
+		expect(
+			(await listSessions("ws-order", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual({ steering: [], followUp: ["task one", "task two"] });
+
+		fauxA.appendResponses([
+			fauxAssistantMessage("ANSWER_OK"),
+			fauxAssistantMessage("ONE_OK"),
+			fauxAssistantMessage("TWO_OK"),
+		]);
+		await answerQuestion(s.sessionId, "ask-o-1", {
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+			cancelled: false,
+		});
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("TWO_OK")) {
+			if (Date.now() > ranBy) throw new Error("held work never fully flushed");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		const events = seen(s.sessionId);
+		expect(events).toContain("ANSWER_OK");
+		expect(events.indexOf("ONE_OK")).toBeLessThan(events.indexOf("TWO_OK"));
+		expect(
+			(await listSessions("ws-order", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toBeUndefined();
+		const snapshots = heldSnapshots(cwd, s.sessionId);
+		expect(snapshots).toContainEqual(["task two"]);
+		expect(snapshots.at(-1)).toEqual([]);
+		removeSession(s.sessionId);
+	} finally {
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("removing a queued chip while a held task is running keeps the remaining held work (in-flight item is separate)", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-remove-inflight");
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-ri-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-remove-inflight-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-remove-inflight",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		await followUpSession(s.sessionId, "task A");
+		await followUpSession(s.sessionId, "task C");
+		await followUpSession(s.sessionId, "task D");
+		expect(
+			(await listSessions("ws-remove-inflight", cwd)).find((row) => row.sessionId === s.sessionId)
+				?.queue,
+		).toEqual({ steering: [], followUp: ["task A", "task C", "task D"] });
+
+		let removed = false;
+		fauxA.appendResponses([
+			fauxAssistantMessage("ANSWER_OK"),
+			async () => {
+				if (!removed) {
+					removed = true;
+					await removeQueuedSession(s.sessionId, "followUp", 0);
+				}
+				return fauxAssistantMessage("A_RAN");
+			},
+			fauxAssistantMessage("D_RAN"),
+		]);
+		await answerQuestion(s.sessionId, "ask-ri-1", {
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+			cancelled: false,
+		});
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("D_RAN")) {
+			if (Date.now() > ranBy) throw new Error("remaining held work never ran");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		const transcript = await getSessionMessages(s.sessionId, "ws-remove-inflight", cwd);
+		const userTexts = transcript.messages
+			.filter((message) => message.role === "user")
+			.map((message) => JSON.stringify(message.content));
+		const idxA = userTexts.findIndex((t) => t.includes("task A"));
+		const idxD = userTexts.findIndex((t) => t.includes("task D"));
+		expect(idxA).toBeGreaterThanOrEqual(0);
+		expect(idxD).toBeGreaterThan(idxA);
+		expect(userTexts.some((t) => t.includes("task C"))).toBe(false);
+		expect(
+			(await listSessions("ws-remove-inflight", cwd)).find((row) => row.sessionId === s.sessionId)
+				?.queue,
+		).toBeUndefined();
+		removeSession(s.sessionId);
+	} finally {
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("a rejected held delivery restores the item to the live queue, not only after a restart", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-reject");
+	const realPrompt = AgentSession.prototype.prompt;
+	const promptSpy = jest.spyOn(AgentSession.prototype, "prompt").mockImplementation(function (
+		this: AgentSession,
+		text: string,
+		options?: unknown,
+	) {
+		if (text === "task A") return Promise.reject(new Error("provider auth expired"));
+		return realPrompt.call(this, text, options as never);
+	});
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-rej-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-reject-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-reject",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		await followUpSession(s.sessionId, "task A");
+		fauxA.appendResponses([fauxAssistantMessage("ANSWER_OK")]);
+		await answerQuestion(s.sessionId, "ask-rej-1", {
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+			cancelled: false,
+		}).catch(() => {});
+		expect(
+			(await listSessions("ws-reject", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual({ steering: [], followUp: ["task A"] });
+		removeSession(s.sessionId);
+	} finally {
+		promptSpy.mockRestore();
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("a message accepted while the held suffix is still draining stays behind it (FIFO order preserved)", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-fifo");
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-fifo-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-fifo-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-fifo",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		await followUpSession(s.sessionId, "task A");
+		await followUpSession(s.sessionId, "task C");
+		expect(
+			(await listSessions("ws-fifo", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual({ steering: [], followUp: ["task A", "task C"] });
+
+		let injected = false;
+		fauxA.appendResponses([
+			fauxAssistantMessage("ANSWER_OK"),
+			() => {
+				if (!injected) {
+					injected = true;
+					void followUpSession(s.sessionId, "task B");
+				}
+				return fauxAssistantMessage("A_RAN");
+			},
+			fauxAssistantMessage("C_RAN"),
+			fauxAssistantMessage("B_RAN"),
+		]);
+		await answerQuestion(s.sessionId, "ask-fifo-1", {
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+			cancelled: false,
+		});
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("B_RAN")) {
+			if (Date.now() > ranBy) throw new Error("drain never completed");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		const transcript = await getSessionMessages(s.sessionId, "ws-fifo", cwd);
+		const userTexts = transcript.messages
+			.filter((message) => message.role === "user")
+			.map((message) => JSON.stringify(message.content));
+		const idxA = userTexts.findIndex((t) => t.includes("task A"));
+		const idxC = userTexts.findIndex((t) => t.includes("task C"));
+		const idxB = userTexts.findIndex((t) => t.includes("task B"));
+		expect(idxA).toBeGreaterThanOrEqual(0);
+		expect(idxC).toBeGreaterThan(idxA);
+		expect(idxB).toBeGreaterThan(idxC);
+		removeSession(s.sessionId);
+	} finally {
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("held work survives a host restart — reattaching a session restores the queue behind a pending question and flushes it on answer", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-restart");
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-r-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-hold-restart-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-restart",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		await followUpSession(s.sessionId, "queued behind the question");
+
+		removeSession(s.sessionId);
+		expect(await ensureSessionAttached(s.sessionId, "ws-restart", cwd)).toBe(true);
+
+		expect(
+			(await listSessions("ws-restart", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual({ steering: [], followUp: ["queued behind the question"] });
+		expect((await listSessionActivity()).find((row) => row.sessionId === s.sessionId)?.status).toBe(
+			"waiting",
+		);
+
+		fauxA.appendResponses([fauxAssistantMessage("ANSWERED"), fauxAssistantMessage("RESTORED_RAN")]);
+		await answerQuestion(s.sessionId, "ask-r-1", {
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
+			cancelled: false,
+		});
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("RESTORED_RAN")) {
+			if (Date.now() > ranBy) throw new Error("restored held work never ran after the answer");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		expect(seen(s.sessionId)).toContain("ANSWERED");
+		expect(
+			(await listSessions("ws-restart", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toBeUndefined();
+		removeSession(s.sessionId);
+	} finally {
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("a free-form prompt while a question is pending supersedes the card and then flushes previously held work in order", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setActivityProjectResolver(() => "project-supersede");
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Q?",
+								header: "H",
+								options: [
+									{ label: "A", description: "a" },
+									{ label: "B", description: "b" },
+								],
+							},
+						],
+					},
+					{ id: "ask-sup-1" },
+				),
+			),
+		]);
+		const cwd = tmpCwd("trpi-sup-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-sup",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "ask me");
+		const statusOf = async () =>
+			(await listSessionActivity()).find((row) => row.sessionId === s.sessionId)?.status;
+		expect(await statusOf()).toBe("waiting");
+
+		await followUpSession(s.sessionId, "held task");
+		expect(
+			(await listSessions("ws-sup", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual({ steering: [], followUp: ["held task"] });
+
+		fauxA.appendResponses([fauxAssistantMessage("REPLY_TURN"), fauxAssistantMessage("HELD_TURN")]);
+		await promptSession(s.sessionId, "reply instead");
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("HELD_TURN")) {
+			if (Date.now() > ranBy)
+				throw new Error("held work never flushed after the superseding prompt");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		expect(seen(s.sessionId)).toContain("REPLY_TURN");
+		expect(
+			(await listSessions("ws-sup", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toBeUndefined();
+		const transcript = await getSessionMessages(s.sessionId, "ws-sup", cwd);
+		expect(
+			transcript.messages.some(
+				(message) =>
+					message.role === "user" && JSON.stringify(message.content).includes("reply instead"),
+			),
+		).toBe(true);
+		removeSession(s.sessionId);
+	} finally {
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("a pending ask_user_question holds the queue — a mid-turn follow-up does not supersede the question (status stays waiting) and flushes in order on answer", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const slow = createFauxCore({
+		provider: "fauxask",
+		api: "fauxask",
+		models: [modelDef("fauxask")],
+		tokensPerSecond: 40,
+	});
+	runtime.registerProvider("fauxask", cfg(slow, "fauxask"));
+	setActivityProjectResolver(() => "project-hold");
+	try {
+		slow.setResponses([
+			fauxAssistantMessage([
+				fauxText(`ASKING ${"word ".repeat(60)}`),
+				fauxToolCall(
+					"ask_user_question",
+					{
+						questions: [
+							{
+								question: "Which one?",
+								header: "Pick",
+								options: [
+									{ label: "A", description: "first" },
+									{ label: "B", description: "second" },
+								],
+							},
+						],
+					},
+					{ id: "ask-hold-1" },
+				),
+			]),
+		]);
+		const cwd = tmpCwd("trpi-hold-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-hold",
+			model: toWireModel(slow.getModel()),
+		});
+		const turn = promptSession(s.sessionId, "work on the first thing");
+		turn.catch(() => {});
+		const streamedBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("message_update")) {
+			if (Date.now() > streamedBy) throw new Error("first turn never started streaming");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		await followUpSession(s.sessionId, "then do the second thing");
+		await turn;
+
+		const status = (await listSessionActivity()).find(
+			(row) => row.sessionId === s.sessionId,
+		)?.status;
+		expect(status).toBe("waiting");
+		const held = (await listSessions("ws-hold", cwd)).find((row) => row.sessionId === s.sessionId);
+		expect(held?.queue).toEqual({ steering: [], followUp: ["then do the second thing"] });
+		expect(seen(s.sessionId)).not.toContain("SECOND_TURN");
+
+		slow.appendResponses([
+			fauxAssistantMessage("ANSWER_TURN"),
+			fauxAssistantMessage("SECOND_TURN"),
+		]);
+		await answerQuestion(s.sessionId, "ask-hold-1", {
+			answers: [{ questionIndex: 0, question: "Which one?", kind: "option", answer: "A" }],
+			cancelled: false,
+		});
+		const ranBy = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("SECOND_TURN")) {
+			if (Date.now() > ranBy) throw new Error("held follow-up never ran after the answer");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		expect(seen(s.sessionId)).toContain("ANSWER_TURN");
+		expect(
+			(await listSessions("ws-hold", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toBeUndefined();
+		removeSession(s.sessionId);
+	} finally {
+		runtime.unregisterProvider("fauxask");
+		setActivityProjectResolver(() => null);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+}, 20000);
 
 test("stop losslessly restores an image-bearing queue before aborting", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));

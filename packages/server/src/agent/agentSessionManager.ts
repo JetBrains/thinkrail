@@ -52,7 +52,13 @@ import {
 	TRANSCRIPT_TAIL_MAX_BYTES,
 	type WorkspaceActivityRow,
 } from "./activity";
-import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
+import {
+	ANSWERABILITY_ERRORS,
+	assessAnswerability,
+	awaitingQuestionToolCallId,
+	buildAnswersMessage,
+	type QuestionHold,
+} from "./askUserQuestion";
 import {
 	disposeSessionChildren,
 	removeWorkspaceDelegation,
@@ -93,6 +99,10 @@ interface Entry {
 	lastSettlement: AgentSettlement | null | undefined;
 	queuedMessages: Record<QueueLane, TrackedQueuedMessage[]>;
 	stuckEmptyDeliveries: Record<QueueLane, number>;
+	heldWhileAsking: TrackedQueuedMessage[];
+	heldInFlight: TrackedQueuedMessage | null;
+	lastPersistedHeldSig: string;
+	flushingHeld: boolean;
 	nextQueuedMessageId: number;
 	manualCompactionInProgress: boolean;
 	piCompactionInProgress: boolean;
@@ -101,6 +111,14 @@ interface Entry {
 	publishedActivity: ActivityStatus | null;
 	rawActivity: ActivityStatus | null;
 	lastActivityMs: number;
+}
+
+interface MutableQuestionHold extends QuestionHold {
+	capture: () => void;
+}
+
+function newQuestionHold(): MutableQuestionHold {
+	return { capture: () => {} };
 }
 
 const sessions = new Map<string, Entry>();
@@ -481,6 +499,7 @@ async function prepareSessionEntry(
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
 	lastSettlement: AgentSettlement | null | undefined = undefined,
+	hold?: MutableQuestionHold,
 ): Promise<PreparedSessionEntry> {
 	const { sessionId } = session;
 	let terminal: AgentSettlement | null = null;
@@ -492,6 +511,10 @@ async function prepareSessionEntry(
 		lastSettlement,
 		queuedMessages: { steering: [], followUp: [] },
 		stuckEmptyDeliveries: { steering: 0, followUp: 0 },
+		heldWhileAsking: [],
+		heldInFlight: null,
+		lastPersistedHeldSig: "",
+		flushingHeld: false,
 		nextQueuedMessageId: 1,
 		manualCompactionInProgress: false,
 		piCompactionInProgress: false,
@@ -504,6 +527,8 @@ async function prepareSessionEntry(
 	entry.rawActivity = activityOf(entry);
 	const seededRecencyMs = messagesActivityMs(session.messages);
 	if (seededRecencyMs !== null) entry.lastActivityMs = seededRecencyMs;
+	if (hold) hold.capture = () => captureHeldQueue(entry);
+	restoreHeldQueue(entry);
 	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "message_start" && event.message.role === "user") {
 			const lane = deliveredStuckEmptyLane(entry, event.message.content);
@@ -537,18 +562,11 @@ async function prepareSessionEntry(
 				: null;
 		}
 		const baseEvent = projectSessionEvent(event, terminal);
-		const projected =
-			baseEvent.type === "queue_update"
-				? {
-						type: "queue_update" as const,
-						steering: displayedLane(entry, "steering", baseEvent.steering),
-						followUp: displayedLane(entry, "followUp", baseEvent.followUp),
-						...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
-					}
-				: baseEvent;
+		const projected = baseEvent.type === "queue_update" ? queueUpdateEventOf(entry) : baseEvent;
 		if (event.type === "agent_settled") {
 			entry.lastSettlement = terminal;
 			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
+			persistHeldQueueIfChanged(entry);
 		}
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
@@ -597,8 +615,9 @@ async function registerSession(
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
 	announceCreation = false,
+	hold?: MutableQuestionHold,
 ): Promise<CreateSessionResult> {
-	const prepared = await prepareSessionEntry(session, workspaceId, generation);
+	const prepared = await prepareSessionEntry(session, workspaceId, generation, undefined, hold);
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	applySubagentTools(prepared.entry);
@@ -619,6 +638,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 			if (!input.modelOptional) throw err;
 		}
 	}
+	const questionHold = newQuestionHold();
 	const { session } = await createAgentSession({
 		cwd: input.cwd,
 		modelRuntime: generation.runtime,
@@ -630,11 +650,12 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 			() => skillAdmissionResolver(input.workspaceId),
 			generation.excludedSessionExtensionPaths,
 			[subagentsExtensionFor(input.workspaceId, () => subagentsEnabled(input.workspaceId))],
+			questionHold,
 		),
 		...(model ? { model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
-	return registerSession(session, input.workspaceId, generation, true);
+	return registerSession(session, input.workspaceId, generation, true, questionHold);
 }
 
 function summaryOf(sessionId: string, entry: Entry): SessionSummary {
@@ -650,7 +671,9 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		updatedAt: Date.now(),
 		live: true,
 		...(entry.lastSettlement !== undefined ? { lastSettlement: entry.lastSettlement } : {}),
-		...(effectivePendingCount(entry) > 0 ? { queue: queueStateOf(entry) } : {}),
+		...(effectivePendingCount(entry) > 0 || entry.heldWhileAsking.length > 0
+			? { queue: queueStateOf(entry) }
+			: {}),
 	};
 }
 
@@ -834,6 +857,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		}
 	}
 	repairDanglingToolCalls(sessionManager);
+	const questionHold = newQuestionHold();
 	const { session } = await createAgentSession({
 		cwd,
 		modelRuntime: generation.runtime,
@@ -845,6 +869,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 			() => skillAdmissionResolver(workspaceId),
 			generation.excludedSessionExtensionPaths,
 			[subagentsExtensionFor(workspaceId, () => subagentsEnabled(workspaceId))],
+			questionHold,
 		),
 		...(exactModel ? { model: exactModel } : {}),
 	});
@@ -852,7 +877,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		session.dispose();
 		return;
 	}
-	await registerSession(session, workspaceId, generation);
+	await registerSession(session, workspaceId, generation, false, questionHold);
 }
 
 async function ensureSessionAttachedInternal(
@@ -917,12 +942,14 @@ export async function answerQuestion(
 	toolCallId: string,
 	result: AskUserQuestionResult,
 ): Promise<void> {
-	const session = mustGet(sessionId);
+	const entry = mustGetEntry(sessionId);
+	const { session } = entry;
 	const verdict = assessAnswerability(session.messages, toolCallId);
 	if (!verdict.ok) throw new Error(`${ANSWERABILITY_ERRORS[verdict.reason]}: ${toolCallId}`);
 	await session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
 		triggerTurn: true,
 	});
+	await flushHeldQueue(entry);
 	syncSessionActivity(sessionId);
 }
 
@@ -977,7 +1004,10 @@ function queueUpdateEventOf(entry: Entry): PiEvent {
 	return {
 		type: "queue_update",
 		steering: displayedLane(entry, "steering"),
-		followUp: displayedLane(entry, "followUp"),
+		followUp: [
+			...displayedLane(entry, "followUp"),
+			...entry.heldWhileAsking.map((message) => message.text),
+		],
 		...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
 	};
 }
@@ -1008,7 +1038,133 @@ function userContentHasImage(content: unknown): boolean {
 	return userContentBlocks(content).some((block) => block.type === "image");
 }
 
+function questionPending(entry: Entry): boolean {
+	return awaitingQuestionToolCallId(entry.session.messages) !== null;
+}
+
+const HELD_QUEUE_CUSTOM_TYPE = "thinkrail.heldQueue";
+
+interface PersistedHeldQueue {
+	messages: { text: string; images?: ImageContent[] }[];
+}
+
+function durableHeld(entry: Entry): TrackedQueuedMessage[] {
+	return entry.heldInFlight
+		? [entry.heldInFlight, ...entry.heldWhileAsking]
+		: entry.heldWhileAsking;
+}
+
+function heldQueueSignature(entry: Entry): string {
+	return JSON.stringify(durableHeld(entry).map((message) => [message.text, message.images ?? []]));
+}
+
+function persistHeldQueueIfChanged(entry: Entry): void {
+	const signature = heldQueueSignature(entry);
+	if (signature === entry.lastPersistedHeldSig) return;
+	entry.lastPersistedHeldSig = signature;
+	const data: PersistedHeldQueue = {
+		messages: durableHeld(entry).map((message) => ({
+			text: message.text,
+			...(message.images && message.images.length > 0 ? { images: message.images } : {}),
+		})),
+	};
+	entry.session.sessionManager.appendCustomEntry(HELD_QUEUE_CUSTOM_TYPE, data);
+}
+
+function restoreHeldQueue(entry: Entry): void {
+	let latest: PersistedHeldQueue | undefined;
+	for (const record of entry.session.sessionManager.getEntries()) {
+		if (record.type === "custom" && record.customType === HELD_QUEUE_CUSTOM_TYPE)
+			latest = record.data as PersistedHeldQueue;
+	}
+	if (latest) {
+		entry.heldWhileAsking = latest.messages.map((message) => ({
+			id: entry.nextQueuedMessageId++,
+			text: message.text,
+			...(message.images && message.images.length > 0 ? { images: [...message.images] } : {}),
+		}));
+	}
+	entry.lastPersistedHeldSig = heldQueueSignature(entry);
+}
+
+function cloneTracked(entry: Entry, message: TrackedQueuedMessage): TrackedQueuedMessage {
+	return {
+		id: entry.nextQueuedMessageId++,
+		text: message.text,
+		...(message.images && message.images.length > 0 ? { images: [...message.images] } : {}),
+	};
+}
+
+function publishHeldQueueUpdate(entry: Entry): void {
+	const { sessionId } = entry.session;
+	if (sessions.get(sessionId) !== entry) return;
+	publish({ sessionId, event: queueUpdateEventOf(entry) });
+	syncSessionActivity(sessionId);
+}
+
+function captureHeldQueue(entry: Entry): void {
+	synchronizeQueueFromSession(entry);
+	entry.heldWhileAsking.push(
+		...entry.queuedMessages.steering.map((message) => cloneTracked(entry, message)),
+		...entry.queuedMessages.followUp.map((message) => cloneTracked(entry, message)),
+	);
+	persistHeldQueueIfChanged(entry);
+	entry.session.clearQueue();
+	entry.stuckEmptyDeliveries = { steering: 0, followUp: 0 };
+}
+
+function parkHeld(entry: Entry, text: string, images?: ImageContent[]): void {
+	entry.heldWhileAsking.push({
+		id: entry.nextQueuedMessageId++,
+		text,
+		...(images && images.length > 0 ? { images: [...images] } : {}),
+	});
+	persistHeldQueueIfChanged(entry);
+	publishHeldQueueUpdate(entry);
+}
+
+async function deliverHeldMessage(
+	entry: Entry,
+	text: string,
+	images?: ImageContent[],
+): Promise<void> {
+	if (entry.session.isStreaming) {
+		await queueSessionMessage(entry, "followUp", text, images, () =>
+			entry.session.followUp(text, images),
+		);
+		return;
+	}
+	await entry.session.prompt(text, images ? { images } : undefined);
+}
+
+async function flushHeldQueue(entry: Entry): Promise<void> {
+	if (entry.flushingHeld) return;
+	entry.flushingHeld = true;
+	try {
+		while (entry.heldWhileAsking.length > 0 && !questionPending(entry)) {
+			const next = entry.heldWhileAsking.shift();
+			if (!next) break;
+			entry.heldInFlight = next;
+			try {
+				await deliverHeldMessage(entry, next.text, next.images ? [...next.images] : undefined);
+			} catch (error) {
+				entry.heldInFlight = null;
+				entry.heldWhileAsking.unshift(next);
+				persistHeldQueueIfChanged(entry);
+				publishHeldQueueUpdate(entry);
+				throw error;
+			}
+			entry.heldInFlight = null;
+			persistHeldQueueIfChanged(entry);
+		}
+	} finally {
+		entry.flushingHeld = false;
+		entry.heldInFlight = null;
+	}
+}
+
 function hasQueuedImages(entry: Entry): boolean {
+	if (entry.heldWhileAsking.some((message) => (message.images?.length ?? 0) > 0)) return true;
 	return (["steering", "followUp"] as const).some((kind) =>
 		entry.queuedMessages[kind].some((message) => (message.images?.length ?? 0) > 0),
 	);
@@ -1022,7 +1178,10 @@ function queueContentOf(entry: Entry): SessionQueueContent {
 	});
 	return {
 		steering: entry.queuedMessages.steering.map(project),
-		followUp: entry.queuedMessages.followUp.map(project),
+		followUp: [
+			...entry.queuedMessages.followUp.map(project),
+			...entry.heldWhileAsking.map(project),
+		],
 	};
 }
 
@@ -1056,6 +1215,10 @@ export async function promptSession(
 	images?: ImageContent[],
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
+	if (entry.flushingHeld) {
+		parkHeld(entry, text, images);
+		return;
+	}
 	if (entry.session.isStreaming) {
 		await queueSessionMessage(entry, "steering", text, images, () =>
 			entry.session.steer(text, images),
@@ -1063,6 +1226,7 @@ export async function promptSession(
 		return;
 	}
 	await entry.session.prompt(text, images ? { images } : undefined);
+	await flushHeldQueue(entry);
 }
 
 export async function steerSession(
@@ -1071,6 +1235,10 @@ export async function steerSession(
 	images?: ImageContent[],
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
+	if (questionPending(entry) || entry.flushingHeld) {
+		parkHeld(entry, text, images);
+		return;
+	}
 	await queueSessionMessage(entry, "steering", text, images, () =>
 		entry.session.steer(text, images),
 	);
@@ -1082,13 +1250,11 @@ export async function followUpSession(
 	images?: ImageContent[],
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
-	if (entry.session.isStreaming) {
-		await queueSessionMessage(entry, "followUp", text, images, () =>
-			entry.session.followUp(text, images),
-		);
+	if (questionPending(entry) || entry.flushingHeld) {
+		parkHeld(entry, text, images);
 		return;
 	}
-	await entry.session.prompt(text, images ? { images } : undefined);
+	await deliverHeldMessage(entry, text, images);
 }
 
 export async function compactSession(sessionId: string, instructions?: string): Promise<void> {
@@ -1108,7 +1274,10 @@ function queueStateOf(entry: Entry): SessionQueueState {
 	synchronizeQueueFromSession(entry);
 	return {
 		steering: displayedLane(entry, "steering"),
-		followUp: displayedLane(entry, "followUp"),
+		followUp: [
+			...displayedLane(entry, "followUp"),
+			...entry.heldWhileAsking.map((message) => message.text),
+		],
 		...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
 	};
 }
@@ -1119,6 +1288,8 @@ export function clearQueueSession(sessionId: string, requireTextOnly = false): S
 	if (requireTextOnly && hasQueuedImages(entry)) {
 		throw new Error("Cannot restore queued image messages as text");
 	}
+	entry.heldWhileAsking = [];
+	persistHeldQueueIfChanged(entry);
 	entry.session.clearQueue();
 	entry.stuckEmptyDeliveries = { steering: 0, followUp: 0 };
 	syncSessionActivity(sessionId);
