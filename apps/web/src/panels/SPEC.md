@@ -82,8 +82,8 @@ treatment.
   deletion-only release. The Projects view is navigation and identity; the following session-state PR owns
   any replacement signal rather than leaving a compatibility presentation behind.
 
-  **Project rows carry the rollup only while collapsed**, matching the collapsed-only workspace count;
-  expanded, their workspace rows already say it. The **Default workspace**
+  **Project rows carry the workspace count only while collapsed**; expanded, the workspace rows provide the
+  detail directly. The **Default workspace**
   (`kind === "default"` — the project folder itself) renders **pinned first** (the server pins it in
   `workspace.list`; `addWorkspace` appends created worktree rows after it), with a **`House` icon** in
   place of the `GitBranch` glyph and **no Rename or Remove item** (non-renamable/non-removable — the server
