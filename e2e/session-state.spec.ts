@@ -1,5 +1,5 @@
 import { realpathSync, rmSync } from "node:fs";
-import { expect, test } from "@playwright/test";
+import { expect, type Locator, test } from "@playwright/test";
 import type { AskUserQuestionArgs } from "@thinkrail/contracts";
 import {
 	defaultWorkspaceRow,
@@ -16,6 +16,13 @@ async function reconnectWithSeed(page: Parameters<typeof openFixtureProject>[0])
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect(page.getByTestId("project-item").first()).toBeVisible();
+}
+
+async function expectAttentionDot(row: Locator): Promise<void> {
+	await expect(row).toHaveAttribute("data-attention", "true");
+	const dot = row.getByTestId("attention-dot");
+	await expect(dot).toHaveAttribute("aria-label", "Needs attention");
+	await expect(dot.locator('[aria-hidden="true"]')).toHaveClass(/bg-primary/);
 }
 
 test("an unresolved persisted question is level-triggered in project and workspace state", async ({
@@ -55,17 +62,15 @@ test("an unresolved persisted question is level-triggered in project and workspa
 	});
 	try {
 		await reconnectWithSeed(page);
-		await expect(
-			page
-				.getByTestId("project-item")
-				.first()
-				.locator('[data-testid="session-state-glyph"][data-state="needs_input"]'),
-		).toHaveCount(1);
-		await expect(
-			defaultWorkspaceRow(page).locator(
-				'[data-testid="session-state-glyph"][data-state="needs_input"]',
-			),
-		).toHaveCount(1);
+		const project = page.getByTestId("project-item").first();
+		const expand = project.getByTestId("project-expand");
+		const workspace = defaultWorkspaceRow(page);
+		await expectAttentionDot(workspace);
+		await expect(expand).toHaveAttribute("data-expanded", "true");
+		await expand.click();
+		await expectAttentionDot(project);
+		await expand.click();
+		await expectAttentionDot(workspace);
 	} finally {
 		rmSync(session.path, { force: true });
 	}
@@ -84,32 +89,28 @@ test("an unread finished result clears only after direct chat activation renders
 	});
 	try {
 		await reconnectWithSeed(page);
-		const projectGlyph = page
-			.getByTestId("project-item")
-			.first()
-			.locator('[data-testid="session-state-glyph"][data-state="finished"]');
-		const workspaceGlyph = defaultWorkspaceRow(page).locator(
-			'[data-testid="session-state-glyph"][data-state="finished"]',
-		);
-		await expect(projectGlyph).toHaveCount(1);
-		await expect(workspaceGlyph).toHaveCount(1);
+		const project = page.getByTestId("project-item").first();
+		const workspace = defaultWorkspaceRow(page);
+		await expectAttentionDot(workspace);
+		await expect(project.getByTestId("project-expand")).toHaveAttribute("data-expanded", "true");
+		await project.getByTestId("project-expand").click();
+		await expectAttentionDot(project);
 		const peer = await page.context().newPage();
 		await peer.goto("/");
 		await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-		const peerGlyph = peer
-			.getByTestId("project-item")
-			.first()
-			.locator('[data-testid="session-state-glyph"][data-state="finished"]');
-		await expect(peerGlyph).toHaveCount(1);
+		const peerProject = peer.getByTestId("project-item").first();
+		const peerExpand = peerProject.getByTestId("project-expand");
+		if ((await peerExpand.getAttribute("data-expanded")) === "true") await peerExpand.click();
+		await expectAttentionDot(peerProject);
 
 		await enterDefaultWorkspace(page);
 		await openPersistedChat(page, "finished state receipt");
 		const result = page.getByText("Finished result.", { exact: true });
 		await expect(result).toBeVisible();
 		await result.click();
-		await expect(projectGlyph).toHaveCount(0);
-		await expect(workspaceGlyph).toHaveCount(0);
-		await expect(peerGlyph).toHaveCount(0);
+		await expect(project).not.toHaveAttribute("data-attention", /.+/);
+		await expect(workspace).not.toHaveAttribute("data-attention", /.+/);
+		await expect(peerProject).not.toHaveAttribute("data-attention", /.+/);
 		await peer.close();
 	} finally {
 		rmSync(session.path, { force: true });

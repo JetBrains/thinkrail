@@ -23,9 +23,13 @@ import {
 	selectLayoutResourcePlacement,
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
+	selectProjectIsRunning,
+	selectProjectNeedsAttention,
 	selectProjectSessionPresentation,
 	selectReadyCompletionActivation,
 	selectSkillsStale,
+	selectWorkspaceIsRunning,
+	selectWorkspaceNeedsAttention,
 	selectWorkspaceSessionPresentation,
 	sessionPresentation,
 	specPathMatcher,
@@ -95,7 +99,13 @@ test("normalized session presentation keeps needs-input above finished above amb
 	};
 	expect(sessionPresentation(working)).toBe("working");
 	expect(selectWorkspaceSessionPresentation(state, "w1")).toBe("finished");
+	expect(selectWorkspaceNeedsAttention(state, "w1")).toBe(true);
+	expect(selectWorkspaceIsRunning(state, "w1")).toBe(true);
+	expect(selectWorkspaceNeedsAttention(state, "w2")).toBe(true);
+	expect(selectWorkspaceIsRunning(state, "w2")).toBe(true);
 	expect(selectProjectSessionPresentation(state, "p1")).toBe("needs_input");
+	expect(selectProjectNeedsAttention(state, "p1")).toBe(true);
+	expect(selectProjectIsRunning(state, "p1")).toBe(true);
 	expect(selectProjectSessionPresentation(state, "p2")).toBe("quiet");
 });
 
