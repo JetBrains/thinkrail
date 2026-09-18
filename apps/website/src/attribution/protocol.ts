@@ -1,6 +1,11 @@
+export const productionOrigin = "https://thinkrail.ai";
+export const claimLifetimeMs = 10 * 60 * 1000;
 export const attributionLifetimeMs = 30 * 24 * 60 * 60 * 1000;
 export const attributionPolicyVersion = 1 as const;
-export const bridgeIdPattern = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
+const base64UrlSha256Pattern = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
+export const claimIdPattern = base64UrlSha256Pattern;
+export const verifierPattern = base64UrlSha256Pattern;
+export const bridgeIdPattern = base64UrlSha256Pattern;
 export const journeyIdPattern =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -34,6 +39,17 @@ export type AttributionContext = {
 	first_touch: AttributionTouch;
 	last_touch: AttributionTouch;
 };
+
+export type CreateClaimRequest = { challenge: string };
+export type CreateClaimResponse = {
+	claim_id: string;
+	claim_url: string;
+	expires_at: number;
+};
+export type BindClaimRequest = AttributionContext & { journey_id: string };
+export type BindClaimResponse = { bridge_id: string };
+export type VerifyClaimRequest = { verifier: string };
+export type RedeemClaimResponse = BindClaimRequest & { bridge_id: string };
 
 const campaignBounds = {
 	source: 64,
@@ -145,4 +161,45 @@ export function parseAttributionContext(
 		first_touch: firstTouch,
 		last_touch: lastTouch,
 	};
+}
+
+export function parseBindClaimRequest(value: unknown, now: number): BindClaimRequest | undefined {
+	if (!isRecord(value)) return undefined;
+	const hasBridgeId = Object.hasOwn(value, "bridge_id");
+	if (
+		!hasExactKeys(value, [
+			...(hasBridgeId ? ["bridge_id"] : []),
+			"journey_id",
+			"first_touch",
+			"last_touch",
+		])
+	) {
+		return undefined;
+	}
+	if (typeof value.journey_id !== "string" || !journeyIdPattern.test(value.journey_id)) {
+		return undefined;
+	}
+	const context = parseAttributionContext(
+		{
+			...(hasBridgeId ? { bridge_id: value.bridge_id } : {}),
+			first_touch: value.first_touch,
+			last_touch: value.last_touch,
+		},
+		now,
+	);
+	return context === undefined ? undefined : { journey_id: value.journey_id, ...context };
+}
+
+export function parseCreateClaimRequest(value: unknown): CreateClaimRequest | undefined {
+	if (!isRecord(value) || !hasExactKeys(value, ["challenge"])) return undefined;
+	return typeof value.challenge === "string" && claimIdPattern.test(value.challenge)
+		? { challenge: value.challenge }
+		: undefined;
+}
+
+export function parseVerifyClaimRequest(value: unknown): VerifyClaimRequest | undefined {
+	if (!isRecord(value) || !hasExactKeys(value, ["verifier"])) return undefined;
+	return typeof value.verifier === "string" && verifierPattern.test(value.verifier)
+		? { verifier: value.verifier }
+		: undefined;
 }
