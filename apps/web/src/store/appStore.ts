@@ -1,6 +1,7 @@
 import type {
 	AppConfig,
 	AskUserQuestionResult,
+	AttentionPriority,
 	ComposerGrowthLimit,
 	ExtUiRequest,
 	GitDiffScope,
@@ -291,6 +292,8 @@ export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSect
 
 export interface SessionAttentionState {
 	attentionId: string;
+	attentionPriority?: AttentionPriority;
+	attentionAt?: number;
 	requiredConnectionGeneration: number;
 	requiredHydrationEpoch: number;
 	requiredEventRevision: number | null;
@@ -1171,11 +1174,25 @@ function sameSessionAttention(
 ): boolean {
 	return (
 		before.attentionId === after.attentionId &&
+		before.attentionPriority === after.attentionPriority &&
+		before.attentionAt === after.attentionAt &&
 		before.requiredConnectionGeneration === after.requiredConnectionGeneration &&
 		before.requiredHydrationEpoch === after.requiredHydrationEpoch &&
 		before.requiredEventRevision === after.requiredEventRevision &&
 		before.acknowledging === after.acknowledging
 	);
+}
+
+function attentionOrdering(
+	attentionPriority: AttentionPriority | undefined,
+	attentionAt: number | undefined,
+): Pick<SessionAttentionState, "attentionPriority" | "attentionAt"> {
+	return {
+		...(attentionPriority === "blocking" || attentionPriority === "normal"
+			? { attentionPriority }
+			: {}),
+		...(typeof attentionAt === "number" && Number.isFinite(attentionAt) ? { attentionAt } : {}),
+	};
 }
 
 function sameAttentionMap(
@@ -2855,6 +2872,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					({ projectId: row.projectId, sessions: Object.create(null) } as WorkspaceAttention);
 				forWorkspace.sessions[row.sessionId] = {
 					attentionId: row.attentionId,
+					...attentionOrdering(row.attentionPriority, row.attentionAt),
 					requiredConnectionGeneration: s.connectionGeneration,
 					requiredHydrationEpoch: epoch,
 					requiredEventRevision: null,
@@ -2866,7 +2884,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 				...(sameAttentionMap(s.attentionByWorkspace, next) ? {} : { attentionByWorkspace: next }),
 			};
 		}),
-	applySessionAttention: ({ workspaceId, projectId, sessionId, attentionId }) =>
+	applySessionAttention: ({
+		workspaceId,
+		projectId,
+		sessionId,
+		attentionId,
+		attentionPriority,
+		attentionAt,
+	}) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const currentWorkspace = s.attentionByWorkspace[workspaceId];
@@ -2882,6 +2907,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const epoch = requiresReconcile ? s.attentionHydrationEpoch + 1 : s.attentionHydrationEpoch;
 			const incoming: SessionAttentionState = {
 				attentionId,
+				...attentionOrdering(attentionPriority, attentionAt),
 				requiredConnectionGeneration: s.connectionGeneration,
 				requiredHydrationEpoch: requiresReconcile ? epoch : 0,
 				requiredEventRevision: runtimeReady ? runtime.eventRevision : null,
@@ -2890,6 +2916,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				current?.attentionId === attentionId
 					? {
 							attentionId,
+							...attentionOrdering(
+								incoming.attentionPriority ?? current.attentionPriority,
+								incoming.attentionAt ?? current.attentionAt,
+							),
 							requiredConnectionGeneration: Math.max(
 								current.requiredConnectionGeneration,
 								incoming.requiredConnectionGeneration,

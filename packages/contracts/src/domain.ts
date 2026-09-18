@@ -1,10 +1,14 @@
 import type { ThinkingLevel, WireModel } from "./piProtocol";
 
+export type AttentionPriority = "blocking" | "normal";
+
 export interface SessionAttention {
 	sessionId: string;
 	workspaceId: string;
 	projectId: string;
 	attentionId: string;
+	attentionPriority?: AttentionPriority;
+	attentionAt?: number;
 }
 
 export interface SessionRunning {

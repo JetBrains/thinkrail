@@ -18,6 +18,7 @@ import type {
 	WorkspaceRemoved,
 } from "@thinkrail/contracts";
 import {
+	ATTENTION_NAVIGATION_PROTOCOL_VERSION,
 	ATTENTION_PROTOCOL_VERSION,
 	SESSION_RUNNING_PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -31,6 +32,10 @@ let transport: WsTransport | null = null;
 
 export function supportsSessionAttention(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= ATTENTION_PROTOCOL_VERSION;
+}
+
+export function supportsAttentionNavigation(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= ATTENTION_NAVIGATION_PROTOCOL_VERSION;
 }
 
 export function supportsSessionRunning(protocolVersion: number | null): boolean {

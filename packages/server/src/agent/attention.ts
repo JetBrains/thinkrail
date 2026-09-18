@@ -9,6 +9,7 @@ export interface AttentionCandidate {
 	id: string;
 	kind: AttentionCandidateKind;
 	turnId: string | null;
+	attentionAt: number;
 	aliases?: readonly string[];
 }
 
@@ -67,6 +68,27 @@ interface TurnEntry {
 	index: number;
 }
 
+function entryTimestamp(entry: SessionEntry | undefined): number {
+	const timestamp = entry ? Date.parse(entry.timestamp) : Number.NaN;
+	return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function questionEntry(
+	entries: readonly SessionEntry[],
+	questionId: string,
+): MessageEntry | undefined {
+	for (let index = entries.length - 1; index >= 0; index--) {
+		const entry = entries[index];
+		if (entry?.type !== "message" || entry.message.role !== "assistant") continue;
+		if (
+			entry.message.content.some((block) => block.type === "toolCall" && block.id === questionId)
+		) {
+			return entry;
+		}
+	}
+	return undefined;
+}
+
 function latestUserTurn(entries: readonly SessionEntry[]): TurnEntry | null {
 	for (let index = entries.length - 1; index >= 0; index--) {
 		const entry = entries[index];
@@ -113,10 +135,16 @@ function legacyInterruptedCandidateId(entry: MessageEntry, messageOrdinal: numbe
 }
 
 export function deriveAttentionCandidate(inputs: AttentionInputs): AttentionCandidate | null {
-	const turn = latestUserTurn(inputs.entries);
+	const { entries } = inputs;
+	const turn = latestUserTurn(entries);
 	const turnId = turn?.entry.id ?? null;
 	if (inputs.pendingDialogId !== null) {
-		return { id: `dialog:${inputs.pendingDialogId}`, kind: "blocking", turnId };
+		return {
+			id: `dialog:${inputs.pendingDialogId}`,
+			kind: "blocking",
+			turnId,
+			attentionAt: entryTimestamp(entries.at(-1)),
+		};
 	}
 	const messages = attentionMessages(inputs.entries);
 	const questionId = awaitingQuestionToolCallId(messages);
@@ -129,7 +157,12 @@ export function deriveAttentionCandidate(inputs: AttentionInputs): AttentionCand
 				isAckDetails(message.details),
 		);
 	if (questionId !== null && questionAcknowledged) {
-		return { id: `question:${questionId}`, kind: "blocking", turnId };
+		return {
+			id: `question:${questionId}`,
+			kind: "blocking",
+			turnId,
+			attentionAt: entryTimestamp(questionEntry(entries, questionId)),
+		};
 	}
 	if (inputs.isStreaming || inputs.pendingMessageCount > 0) return null;
 	if (!turn) return null;
@@ -142,12 +175,14 @@ export function deriveAttentionCandidate(inputs: AttentionInputs): AttentionCand
 	if (terminalAssistant && reviewStopReason && REVIEW_STOP_REASONS.has(reviewStopReason)) {
 		const messageOrdinal = messageOrdinalAt(inputs.entries, terminalAssistant.index);
 		const legacyId = legacyReviewCandidateId(terminalAssistant.entry, messageOrdinal);
+		const attentionAt = entryTimestamp(terminalAssistant.entry);
 		return terminalAssistant.entry.id.startsWith("legacy:")
-			? { id: legacyId, kind: "review", turnId }
+			? { id: legacyId, kind: "review", turnId, attentionAt }
 			: {
 					id: `review:${terminalAssistant.entry.id}`,
 					kind: "review",
 					turnId,
+					attentionAt,
 					aliases: [legacyId],
 				};
 	}
@@ -159,12 +194,14 @@ export function deriveAttentionCandidate(inputs: AttentionInputs): AttentionCand
 	if (interruptedStopReason && REVIEW_STOP_REASONS.has(interruptedStopReason)) return null;
 	const interruptedOrdinal = messageOrdinalAt(inputs.entries, turn.index);
 	const legacyId = legacyInterruptedCandidateId(turn.entry, interruptedOrdinal);
+	const attentionAt = entryTimestamp(terminalAssistant?.entry ?? turn.entry);
 	return turn.entry.id.startsWith("legacy:")
-		? { id: legacyId, kind: "interrupted", turnId }
+		? { id: legacyId, kind: "interrupted", turnId, attentionAt }
 		: {
 				id: `interrupted:${turn.entry.id}`,
 				kind: "interrupted",
 				turnId,
+				attentionAt,
 				aliases: [legacyId],
 			};
 }

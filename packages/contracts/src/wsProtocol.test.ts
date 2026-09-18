@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ATTENTION_NAVIGATION_PROTOCOL_VERSION,
 	ATTENTION_PROTOCOL_VERSION,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
@@ -23,6 +24,11 @@ test("session attention advances the protocol and names its wire surface", () =>
 	expect(WS_CHANNELS.sessionAttention).toBe("session.attention");
 	expect(WS_METHODS.sessionAttentionList).toBe("session.attentionList");
 	expect(WS_METHODS.sessionAcknowledgeAttention).toBe("session.acknowledgeAttention");
+});
+
+test("attention navigation metadata advances the protocol to v67", () => {
+	expect(ATTENTION_NAVIGATION_PROTOCOL_VERSION).toBe(67);
+	expect(PROTOCOL_VERSION).toBe(ATTENTION_NAVIGATION_PROTOCOL_VERSION);
 });
 
 test("live running advances the protocol and names its wire surface", () => {
@@ -64,7 +70,7 @@ test("host update advisories advance the protocol with an immutable notice chann
 	expect(WS_CHANNELS.hostUpdateAvailable).toBe("host.updateAvailable");
 });
 
-test("explicit analytics consent advances the protocol to v65", () => {
+test("explicit analytics consent remains available from v65", () => {
 	expect(ANALYTICS_CONSENT_PROTOCOL_VERSION).toBe(65);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ANALYTICS_CONSENT_PROTOCOL_VERSION);
 });

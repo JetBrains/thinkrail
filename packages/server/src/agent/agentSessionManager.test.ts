@@ -292,15 +292,21 @@ test("a settled result requests attention until its exact candidate is acknowled
 			workspaceId,
 			projectId: "project-attention",
 			sessionId,
+			attentionPriority: "normal",
 		});
 		expect(candidate?.attentionId).toStartWith("review:");
-		if (!candidate?.attentionId) throw new Error("Missing attention candidate");
+		expect(typeof candidate?.attentionAt).toBe("number");
+		if (!candidate?.attentionId || candidate.attentionAt === undefined) {
+			throw new Error("Missing attention candidate metadata");
+		}
 		expect(await listSessionAttention([])).toEqual([
 			{
 				workspaceId,
 				projectId: "project-attention",
 				sessionId,
 				attentionId: candidate.attentionId,
+				attentionPriority: "normal",
+				attentionAt: candidate.attentionAt,
 			},
 		]);
 
@@ -2240,6 +2246,8 @@ test("attention migration baselines review and interrupted ids but keeps blocker
 				workspaceId: "attention-workspace",
 				projectId: "attention-project",
 				attentionId: "question:attention-question",
+				attentionPriority: "blocking",
+				attentionAt: 1_700_900_003_000,
 			},
 		]);
 		SessionManager.open(legacyPath);
@@ -2249,6 +2257,8 @@ test("attention migration baselines review and interrupted ids but keeps blocker
 				workspaceId: "attention-workspace",
 				projectId: "attention-project",
 				attentionId: "question:attention-question",
+				attentionPriority: "blocking",
+				attentionAt: 1_700_900_003_000,
 			},
 		]);
 

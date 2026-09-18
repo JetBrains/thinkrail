@@ -3524,6 +3524,53 @@ test("attention snapshots require a post-epoch transcript while live pushes pres
 	);
 });
 
+test("attention folds preserve blocker priority and recency without weakening readiness", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({ status: "connected", connectionGeneration: 2 });
+	s().hydrateSessionAttention([
+		{
+			workspaceId: "ws1",
+			projectId: "project-1",
+			sessionId: "attention-order",
+			attentionId: "candidate-1",
+			attentionPriority: "blocking",
+			attentionAt: 10,
+		},
+	]);
+	expect(s().attentionByWorkspace.ws1?.sessions["attention-order"]).toMatchObject({
+		attentionId: "candidate-1",
+		attentionPriority: "blocking",
+		attentionAt: 10,
+	});
+
+	s().applySessionAttention({
+		workspaceId: "ws1",
+		projectId: "project-1",
+		sessionId: "attention-order",
+		attentionId: "candidate-1",
+		attentionPriority: "blocking",
+		attentionAt: 10,
+	});
+	expect(s().attentionByWorkspace.ws1?.sessions["attention-order"]).toMatchObject({
+		attentionPriority: "blocking",
+		attentionAt: 10,
+	});
+
+	s().applySessionAttention({
+		workspaceId: "ws1",
+		projectId: "project-1",
+		sessionId: "attention-order",
+		attentionId: "candidate-2",
+		attentionPriority: "normal",
+		attentionAt: 20,
+	});
+	expect(s().attentionByWorkspace.ws1?.sessions["attention-order"]).toMatchObject({
+		attentionId: "candidate-2",
+		attentionPriority: "normal",
+		attentionAt: 20,
+	});
+});
+
 test("a fresh transcript install credits the attention epoch captured at read start", () => {
 	const s = () => useAppStore.getState();
 	useAppStore.setState({ status: "connected", connectionGeneration: 2 });
