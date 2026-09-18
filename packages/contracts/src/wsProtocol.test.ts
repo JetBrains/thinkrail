@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-	ACTIVITY_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	normalizeSessionTitle,
@@ -15,11 +14,9 @@ import {
 	WS_METHODS,
 } from "./wsProtocol";
 
-test("workspace activity advances the protocol and names its channel and snapshot read", () => {
-	expect(ACTIVITY_PROTOCOL_VERSION).toBe(60);
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ACTIVITY_PROTOCOL_VERSION);
-	expect(WS_CHANNELS.sessionActivity).toBe("session.activity");
+test("retired workspace activity keeps only its empty snapshot compatibility method", () => {
 	expect(WS_METHODS.sessionActivityList).toBe("session.activityList");
+	expect(Object.hasOwn(WS_CHANNELS, "sessionActivity")).toBe(false);
 });
 
 test("system theme settings advance the protocol", () => {

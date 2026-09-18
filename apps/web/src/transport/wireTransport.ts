@@ -6,7 +6,6 @@ import type {
 	Project,
 	ReviewChangedPayload,
 	ServerWelcome,
-	SessionActivityPayload,
 	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
@@ -14,44 +13,12 @@ import type {
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
 } from "@thinkrail/contracts";
-import { ACTIVITY_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { WS_CHANNELS } from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
-import { createActivityHydration } from "./activityHydration";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
-
-export function supportsSessionActivity(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= ACTIVITY_PROTOCOL_VERSION;
-}
-
-const activityHydration = createActivityHydration({
-	apply: (payload) => useAppStore.getState().applySessionActivity(payload),
-	hydrate: (rows) => useAppStore.getState().hydrateSessionActivity(rows),
-});
-
-function refreshSessionActivity(connectionGeneration: number): void {
-	const state = useAppStore.getState();
-	if (!supportsSessionActivity(state.protocolVersion)) {
-		activityHydration.abandon();
-		state.hydrateSessionActivity([]);
-		return;
-	}
-	const token = activityHydration.begin();
-	const current = (): boolean =>
-		isConnectedGeneration(useAppStore.getState(), connectionGeneration);
-	void getTransport()
-		.request("session.activityList", {})
-		.then((rows) => {
-			if (current()) activityHydration.settle(token, rows);
-			else activityHydration.discard(token);
-		})
-		.catch(() => {
-			if (current()) activityHydration.fail(token);
-			else activityHydration.discard(token);
-		});
-}
 
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	const snapshot = useAppStore.getState();
@@ -109,7 +76,6 @@ export function initTransport(): WsTransport {
 				welcome.hostUpdate,
 			);
 		refreshLoadedWorkspaceLists(useAppStore.getState().connectionGeneration);
-		refreshSessionActivity(useAppStore.getState().connectionGeneration);
 	});
 
 	transport.subscribe(WS_CHANNELS.hostUpdateAvailable, (data) => {
@@ -140,10 +106,6 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.sessionDeleted, (data) => {
 		const { workspaceId, sessionId } = data as SessionDeletedPayload;
 		useAppStore.getState().deleteChat(workspaceId, sessionId, false);
-	});
-
-	transport.subscribe(WS_CHANNELS.sessionActivity, (data) => {
-		activityHydration.push(data as SessionActivityPayload);
 	});
 
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
