@@ -39,7 +39,7 @@ function inputs(overrides: Partial<Parameters<typeof deriveSessionState>[0]> = {
 		lastSettlement: undefined,
 		lifecycleCompletion: undefined,
 		liveQuestion: null,
-		pendingDialogId: null,
+		pendingDialog: null,
 		handledCompletionId: undefined,
 		cancelledRunId: undefined,
 		...overrides,
@@ -63,6 +63,24 @@ describe("deriveSessionState", () => {
 			completion: null,
 			completionUnread: false,
 			queuedCount: 2,
+		});
+	});
+
+	test("a pending extension dialog carries the exact replayable request", () => {
+		const request = {
+			id: "dialog-1",
+			sessionId: "session-1",
+			kind: "confirm" as const,
+			title: "Continue?",
+			message: "Confirm the operation.",
+		};
+		const state = deriveSessionState(
+			inputs({ entries: [user()], isStreaming: true, pendingDialog: request }),
+		);
+		expect(state.needsInput).toEqual({
+			interactionId: "dialog:dialog-1",
+			kind: "dialog",
+			request,
 		});
 	});
 
@@ -137,6 +155,21 @@ describe("deriveSessionState", () => {
 				).completionUnread,
 			).toBe(false);
 		}
+	});
+
+	test("a crash after an unexecuted non-question tool call reconstructs as interrupted", () => {
+		const danglingToolCall = assistant("tool-leaf", "toolUse");
+		if (danglingToolCall.type !== "message" || danglingToolCall.message.role !== "assistant") {
+			throw new Error("assistant fixture is malformed");
+		}
+		danglingToolCall.message.content = [
+			{ type: "toolCall", id: "bash-1", name: "bash", arguments: { command: "echo hi" } },
+		];
+		const state = deriveSessionState(inputs({ entries: [user("tool-user"), danglingToolCall] }));
+		expect(state.completion).toEqual({
+			completionId: "interrupted:tool-user",
+			outcome: "interrupted",
+		});
 	});
 
 	test("explicit Stop is cancelled and quiet; an otherwise unfinished run is interrupted", () => {

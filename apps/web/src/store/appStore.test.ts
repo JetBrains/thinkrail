@@ -136,6 +136,8 @@ beforeEach(() => {
 		sessionStateTickBySession: {},
 		directChatActivationTickBySession: {},
 		renderedCompletionBySession: {},
+		renderedCompletionTickBySession: {},
+		obscuredChatSessions: {},
 		extUiOrphans: [],
 		workbenchFrame: null,
 		workspaceViewsByWorkspace: {},
@@ -414,8 +416,22 @@ test("normalized session snapshots, pushes, and direct activation keep one exact
 	expect(useAppStore.getState().sessions["state-session"]?.hostState).toEqual(
 		record("completion:one").state,
 	);
-	store.noteRenderedCompletion("state-session", "completion:one");
 	store.noteDirectChatActivation("state-session");
+	store.noteRenderedCompletion("state-session", "completion:one");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBeNull();
+	store.setChatObscured("state-session", true);
+	store.noteDirectChatActivation("state-session");
+	store.setChatObscured("state-session", false);
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBeNull();
+	store.noteDirectChatActivation("state-session");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBe("completion:one");
+	store.applySessionState(record("completion:one"));
 	expect(
 		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
 	).toBe("completion:one");
@@ -1352,6 +1368,103 @@ test("a dialog for an unknown session is dropped, never replayed as a phantom", 
 	store.openChatSession("ws1", "dialog", null, "medium");
 	expect(rt("dialog").pendingExtUi).toBeNull();
 	expect(rt("dialog").extUiQueue).toEqual([]);
+});
+
+test("an exact host-authored pending dialog replays when its session hydrates", () => {
+	const store = useAppStore.getState();
+	const request = {
+		id: "d-authoritative",
+		sessionId: "dialog-authoritative",
+		kind: "confirm" as const,
+		title: "Proceed?",
+		message: "Apply?",
+	};
+	store.installSessionStateSnapshot([
+		{
+			sessionId: request.sessionId,
+			workspaceId: "ws1",
+			projectId: "p1",
+			state: {
+				execution: "running",
+				runId: "run-dialog",
+				needsInput: {
+					interactionId: `dialog:${request.id}`,
+					kind: "dialog",
+					request,
+				},
+				completion: null,
+				completionUnread: false,
+				queuedCount: 0,
+			},
+		},
+	]);
+	store.applyExtUi(request);
+	expect(useAppStore.getState().extUiOrphans).toEqual([request]);
+
+	store.openChatSession("ws1", request.sessionId, null, "medium");
+	expect(rt(request.sessionId).pendingExtUi).toEqual(request);
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+	store.applySessionState({
+		sessionId: request.sessionId,
+		workspaceId: "ws1",
+		projectId: "p1",
+		state: {
+			execution: "running",
+			runId: "run-dialog",
+			needsInput: null,
+			completion: null,
+			completionUnread: false,
+			queuedCount: 0,
+		},
+	});
+	expect(rt(request.sessionId).pendingExtUi).toBeNull();
+});
+
+test("a peer-cleared host dialog cannot replay from the orphan buffer", () => {
+	const store = useAppStore.getState();
+	const request = {
+		id: "d-peer-cleared",
+		sessionId: "dialog-peer-cleared",
+		kind: "confirm" as const,
+		title: "Proceed?",
+		message: "Apply?",
+	};
+	const base = {
+		sessionId: request.sessionId,
+		workspaceId: "ws1",
+		projectId: "p1",
+	};
+	store.applySessionState({
+		...base,
+		state: {
+			execution: "running",
+			runId: "run-dialog",
+			needsInput: {
+				interactionId: `dialog:${request.id}`,
+				kind: "dialog",
+				request,
+			},
+			completion: null,
+			completionUnread: false,
+			queuedCount: 0,
+		},
+	});
+	store.applyExtUi(request);
+	expect(useAppStore.getState().extUiOrphans).toEqual([request]);
+	store.applySessionState({
+		...base,
+		state: {
+			execution: "running",
+			runId: "run-dialog",
+			needsInput: null,
+			completion: null,
+			completionUnread: false,
+			queuedCount: 0,
+		},
+	});
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+	store.openChatSession("ws1", request.sessionId, null, "medium");
+	expect(rt(request.sessionId).pendingExtUi).toBeNull();
 });
 
 test("a frame for a chat closed to history still applies, and orphans stay bounded", () => {

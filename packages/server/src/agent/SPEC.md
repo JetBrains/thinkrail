@@ -160,7 +160,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     snapshot rather than omitting a row. The first receipt initialization marks existing completion ids
     handled but never suppresses unresolved input. Receipt/purpose writes are serialized and atomic.
     User-visible sessions publish full state records on semantic change; internal reviewer/reflector purpose
-    is persisted before registration and excludes those sessions from snapshots/pushes.
+    is persisted before registration and excludes those sessions from owner catalogs, creation pushes, and
+    state snapshots/pushes. Pending extension dialogs retain their full request so reconnecting clients can
+    render and answer the exact blocker rather than seeing an unusable needs-input marker.
 
     `listSessionStates` returns every user-visible top-level live/disk session; `acknowledgeCompletion`
     compare-and-sets only the current exact unread completion; `nudgeSession` atomically skips needs-input,

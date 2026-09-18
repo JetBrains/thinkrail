@@ -1036,9 +1036,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   run flag; "working" covers other runs; "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
   idle). The glance's working/waiting lifecycle comes from the normalized host `SessionState`; `askStates`
   remains only to identify and render the exact questionnaire/recap. `ChatView` records direct activation on
-  deliberate tab/conversation pointer or focus intent, never mount/visibility. After the same completion id
-  is installed in both host state and the rendered runtime, that activation may send one exact owner-global
-  acknowledgement; passive multi-pane rendering cannot clear another client's marker.
+  deliberate tab selection or unobscured conversation pointer intent, never mount/visibility or history-
+  overlay interaction. Only an activation newer than
+  the exact completion's committed render may send its owner-global acknowledgement; pre-render navigation
+  and passive multi-pane rendering cannot clear another client's marker. Transient acknowledgement failure
+  retries with a bounded capped-backoff budget; a later direct activation rearms that exact id.
   `TodoList` stays props-driven — it receives the resolved glance, never reads the transport.
   Its section label + pending/active/done status glyphs live in **`planKit.tsx`** — shared
   presentational atoms the Review panel (`panels/ReviewPanel`) reuses so both "work items in
