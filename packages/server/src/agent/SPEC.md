@@ -463,9 +463,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     text = the same `buildQuestionnaireResponse` envelope the blocking design fed the model; a partial
     submission lists its unanswered questions explicitly as declined) — via pi's public
     `AgentSession.sendCustomMessage({triggerTurn: true})`, which starts a new turn when idle and steers
-    the current one when streaming. **Answering live and answering after a restart are the same code
-    path.** The questionnaire is rendered **inline** in chat by `apps/web`'s `AskUserQuestionCard`
-    (joined by tool name; lifecycle derived from the transcript — see the chat tools SPEC).
+    the current one when streaming. The question array has **no tool-level maximum**: one round carries
+    every question needed for the current decision, while each question retains the 2–4 option bound.
+    **Answering live and answering after a restart are the same code path.** The questionnaire is rendered
+    **inline** in chat by `apps/web`'s `AskUserQuestionCard` (joined by tool name; lifecycle derived from
+    the transcript — see the chat tools SPEC).
     **Rejected alternatives** (the one place these decisions are recorded): (1) the original **blocking
     design** — `execute` parked on an in-memory promise until the browser replied. A host restart
     destroyed the pending promise and left a dangling `toolCall` in the transcript; providers reject
@@ -479,8 +481,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     community `@juicesharp/rpiv-ask-user-question` extension — its questionnaire UI is a live pi-tui
     component handed to the host via `ctx.ui.custom(factory)` (*code, not data*), unserializable over the
     WS bridge; and like every blocking ask-extension it inherits the restart hole. The LLM-facing contract
-    (TypeBox schema, validation, envelope — mirroring rpiv's so the model behaves the same) stays
-    re-implemented here so we own it and avoid the package's pi-tui/i18n peer deps.
+    (TypeBox schema, validation, envelope) stays re-implemented here so we own its question-count policy
+    and avoid the package's pi-tui/i18n peer deps; its option shape and answer envelope still mirror rpiv
+    where useful.
   - `sessionRepair` — `repairDanglingToolCalls(sessionManager)`: the restart safety net (rationale under
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends only missing results from the active tail batch) —
