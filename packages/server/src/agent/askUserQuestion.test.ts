@@ -111,7 +111,21 @@ test("the schema and runtime validation accept more than four questions", async 
 
 	expect(Value.Check(AskUserQuestionSchema, many)).toBe(true);
 	expect(validateQuestionnaire(many).ok).toBe(true);
-	expect(textOf(await run(true, many))).toBe(ASK_ACK_TEXT);
+
+	const waiters = createAskUserQuestionWaiters();
+	const pending = createAskUserQuestionTool(waiters).execute(
+		"tc-many",
+		many,
+		undefined,
+		undefined,
+		ctx(),
+	);
+	await Promise.resolve();
+	const answered = waiters.answer("tc-many", { answers: [], cancelled: true });
+	expect(answered.handled).toBe(true);
+	expect(textOf(await pending)).toContain("declined");
+	waiters.persistTurn([{ toolCallId: "tc-many", toolName: "ask_user_question" }]);
+	if (answered.handled) await answered.persisted;
 });
 
 test("the optional recommendedReason field is accepted on an option (no new validation gate)", () => {
