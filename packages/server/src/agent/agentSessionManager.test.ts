@@ -173,6 +173,40 @@ async function waitForPath(path: string): Promise<void> {
 	throw new Error(`Timed out waiting for ${path}`);
 }
 
+function gatedQuestionAnswer(): AskUserQuestionResult {
+	return {
+		cancelled: false,
+		answers: [
+			{
+				questionIndex: 0,
+				question: "Which runtime?",
+				kind: "option",
+				answer: "Bun",
+			},
+		],
+	};
+}
+
+function gatedQuestionMessage(toolCallId: string, stopReason?: "length") {
+	const call = fauxToolCall(
+		"ask_user_question",
+		{
+			questions: [
+				{
+					question: "Which runtime?",
+					header: "Runtime",
+					options: [
+						{ label: "Bun", description: "fast" },
+						{ label: "Node", description: "compatible" },
+					],
+				},
+			],
+		},
+		{ id: toolCallId },
+	);
+	return stopReason ? fauxAssistantMessage(call, { stopReason }) : fauxAssistantMessage(call);
+}
+
 let priorAgentDir: string | undefined;
 let priorOffline: string | undefined;
 let runtime: ModelRuntime;
@@ -314,25 +348,7 @@ test("a length-truncated questionnaire never registers as a live blocker", async
 	});
 	const toolCallId = "length-question";
 	fauxA.setResponses([
-		fauxAssistantMessage(
-			fauxToolCall(
-				"ask_user_question",
-				{
-					questions: [
-						{
-							question: "Which runtime?",
-							header: "Runtime",
-							options: [
-								{ label: "Bun", description: "fast" },
-								{ label: "Node", description: "compatible" },
-							],
-						},
-					],
-				},
-				{ id: toolCallId },
-			),
-			{ stopReason: "length" },
-		),
+		gatedQuestionMessage(toolCallId, "length"),
 		async () => {
 			markContinuationStarted();
 			await continuationGate;
@@ -943,26 +959,7 @@ test("getSessionStats + getSessionCommands read live session info (cheap wins #3
 test("graceful shutdown preserves an expected question before its tool executes", async () => {
 	const gate = installAskToolGate("ask-shutdown-gate");
 	const toolCallId = "expected-on-shutdown";
-	fauxA.setResponses([
-		fauxAssistantMessage(
-			fauxToolCall(
-				"ask_user_question",
-				{
-					questions: [
-						{
-							question: "Continue after restart?",
-							header: "Continue",
-							options: [
-								{ label: "Yes", description: "continue" },
-								{ label: "No", description: "stop" },
-							],
-						},
-					],
-				},
-				{ id: toolCallId },
-			),
-		),
-	]);
+	fauxA.setResponses([gatedQuestionMessage(toolCallId)]);
 	const cwd = tmpCwd("trpi-expected-shutdown-");
 	const session = await createSession({
 		cwd,
@@ -998,24 +995,7 @@ test("graceful shutdown persists an accepted answer and aborts its continuation"
 	const gate = installAskToolGate("ask-shutdown-accepted-gate");
 	const toolCallId = "accepted-on-shutdown";
 	fauxA.setResponses([
-		fauxAssistantMessage(
-			fauxToolCall(
-				"ask_user_question",
-				{
-					questions: [
-						{
-							question: "Which runtime?",
-							header: "Runtime",
-							options: [
-								{ label: "Bun", description: "fast" },
-								{ label: "Node", description: "compatible" },
-							],
-						},
-					],
-				},
-				{ id: toolCallId },
-			),
-		),
+		gatedQuestionMessage(toolCallId),
 		fauxAssistantMessage("SHUTDOWN_CONTINUATION_RAN"),
 	]);
 	const cwd = tmpCwd("trpi-shutdown-accepted-");
@@ -1028,17 +1008,7 @@ test("graceful shutdown persists an accepted answer and aborts its continuation"
 	prompting.catch(() => {});
 	try {
 		await waitForPath(gate.startedPath);
-		const result: AskUserQuestionResult = {
-			cancelled: false,
-			answers: [
-				{
-					questionIndex: 0,
-					question: "Which runtime?",
-					kind: "option",
-					answer: "Bun",
-				},
-			],
-		};
+		const result = gatedQuestionAnswer();
 		const answering = answerQuestion(session.sessionId, toolCallId, result);
 		const settling = settleSessionsForShutdown(1000);
 		gate.release();
@@ -1062,24 +1032,7 @@ test("an answer accepted before execute persists before Stop aborts the continua
 	const gate = installAskToolGate("ask-answer-stop-gate");
 	const toolCallId = "answer-before-stop";
 	fauxA.setResponses([
-		fauxAssistantMessage(
-			fauxToolCall(
-				"ask_user_question",
-				{
-					questions: [
-						{
-							question: "Which runtime?",
-							header: "Runtime",
-							options: [
-								{ label: "Bun", description: "fast" },
-								{ label: "Node", description: "compatible" },
-							],
-						},
-					],
-				},
-				{ id: toolCallId },
-			),
-		),
+		gatedQuestionMessage(toolCallId),
 		fauxAssistantMessage("CONTINUATION_AFTER_ACCEPTED_ANSWER"),
 	]);
 	const cwd = tmpCwd("trpi-answer-before-stop-");
@@ -1094,17 +1047,7 @@ test("an answer accepted before execute persists before Stop aborts the continua
 		await waitForPath(gate.startedPath);
 		await steerSession(session.sessionId, "STEER_BEFORE_STOP");
 		await followUpSession(session.sessionId, "FOLLOW_UP_BEFORE_STOP");
-		const result: AskUserQuestionResult = {
-			cancelled: false,
-			answers: [
-				{
-					questionIndex: 0,
-					question: "Which runtime?",
-					kind: "option",
-					answer: "Bun",
-				},
-			],
-		};
+		const result = gatedQuestionAnswer();
 		const answering = answerQuestion(session.sessionId, toolCallId, result);
 		let stopResolved = false;
 		const stopping = abortSession(session.sessionId, true).then((queue) => {
@@ -1140,26 +1083,7 @@ test("an answer accepted before execute persists before Stop aborts the continua
 test("Stop claims an expected question before a late answer can win", async () => {
 	const gate = installAskToolGate("ask-stop-first-gate");
 	const toolCallId = "stop-before-answer";
-	fauxA.setResponses([
-		fauxAssistantMessage(
-			fauxToolCall(
-				"ask_user_question",
-				{
-					questions: [
-						{
-							question: "Continue?",
-							header: "Continue",
-							options: [
-								{ label: "Yes", description: "continue" },
-								{ label: "No", description: "stop" },
-							],
-						},
-					],
-				},
-				{ id: toolCallId },
-			),
-		),
-	]);
+	fauxA.setResponses([gatedQuestionMessage(toolCallId)]);
 	const cwd = tmpCwd("trpi-stop-before-answer-");
 	const session = await createSession({
 		cwd,
@@ -1194,26 +1118,7 @@ test("Stop claims an expected question before a late answer can win", async () =
 test("direct session disposal rejects an accepted answer that cannot persist", async () => {
 	const gate = installAskToolGate("ask-dispose-gate");
 	const toolCallId = "dispose-after-answer";
-	fauxA.setResponses([
-		fauxAssistantMessage(
-			fauxToolCall(
-				"ask_user_question",
-				{
-					questions: [
-						{
-							question: "Continue?",
-							header: "Continue",
-							options: [
-								{ label: "Yes", description: "continue" },
-								{ label: "No", description: "stop" },
-							],
-						},
-					],
-				},
-				{ id: toolCallId },
-			),
-		),
-	]);
+	fauxA.setResponses([gatedQuestionMessage(toolCallId)]);
 	const session = await createSession({
 		cwd: tmpCwd("trpi-dispose-after-answer-"),
 		workspaceId: "ws-dispose-after-answer",
