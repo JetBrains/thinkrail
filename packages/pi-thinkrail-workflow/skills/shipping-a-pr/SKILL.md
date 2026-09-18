@@ -23,12 +23,16 @@ when requested. One workflow, six phases as sibling docs — enter at the phase 
 ## Observed, never assumed (applies to every phase)
 
 Git and GitHub state is concurrent and mutable: the base moves, CI lags, mergeability is computed
-lazily, and this workflow's own steps dirty the tree they just checked. Three rules hold at every
+lazily, and this workflow's own steps dirty the tree they just checked. Four rules hold at every
 step of every phase:
 
 - **Verify at the point of action.** An irreversible step — push, `gh pr create`, `gh pr edit`,
   replying to a thread, declaring done — re-checks the exact state it consumes immediately before
   running. A gate passed earlier does not survive the mutations made since it passed.
+- **Keep verification tied to the final tree.** Reuse exact prior results while the inputs they cover
+  remain unchanged. Before every code-affecting push, run project-required checks that are missing or
+  invalidated by later code, configuration, dependency, base, or conflict-resolution changes. If a
+  check, cleanup, or self-review causes another relevant edit, reassess and repeat before pushing.
 - **Fetch, don't remember.** Remote state is read fresh and completely at the moment it's needed:
   the current body before editing it, `--paginate` on every listing, `git fetch` before reasoning
   about the base.
@@ -50,9 +54,8 @@ step of every phase:
 | Address review comments | `review-comments.md` | snapshot |
 
 **Read and follow the selected phase doc** — the gates and mechanics live only there; never run a
-phase from this spine's summary. Carry the table's mode into that doc; only an explicit request to
-monitor or watch checks, investigate CI, wait until green, or make the PR merge-ready overrides the
-snapshot default with wait mode. A compound ask ("rebase, verify, and create a PR") is one flow:
+phase from this spine's summary. Carry the completion mode selected above into that doc; a later push
+does not change it. A compound ask ("rebase, verify, and create a PR") is one flow:
 start at the earliest phase named; the docs chain forward on their own. If the work itself isn't
 finished — the ask bundles new design or implementation before the ship — that part is not this
 workflow's; route it per choosing-a-workflow first and come back here when it lands.
@@ -69,5 +72,4 @@ uploading by hand — see `screenshots.md`).
 
 ## Ending
 
-Every phase ends through `checks.md` in snapshot mode by default. Only an explicit request to monitor
-or watch checks, investigate CI, wait until green, or make the PR merge-ready ends in wait mode.
+Every phase ends through `checks.md` in the completion mode selected above.

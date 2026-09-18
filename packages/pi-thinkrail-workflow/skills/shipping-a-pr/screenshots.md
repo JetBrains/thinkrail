@@ -51,5 +51,4 @@ Clean up this phase's throwaways once the body edit lands: delete `.thinkrail/co
 (unless the user is uploading by hand — then leave it until they confirm) and every capture
 scaffold (specs, throwaway builds). If any scaffolding was committed, the commit that removes it
 is pushed too — a deletion left in the working tree ships nothing. That push does not change the
-completion mode. Read and follow `checks.md` in the selected mode, which is snapshot unless the caller
-explicitly requested monitoring, CI investigation, waiting until green, or merge readiness.
+completion mode. Read and follow `checks.md` in the selected mode.

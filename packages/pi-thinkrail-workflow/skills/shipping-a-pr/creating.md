@@ -15,13 +15,12 @@ selects wait mode. Control continues with the selected mode at `screenshots.md` 
 3. **Clean branch.** Remove throwaway artifacts — repro tests, capture specs, scratch files, test
    output dirs. Read `git log --oneline <base>..HEAD` and `git status --short` as the reviewer will:
    every file in the diff must be explainable in one line.
-4. **Verification evidence.** Collect the exact checks already run during development and reuse every
-   result that still covers the final change. Do not rerun a passing command merely because PR creation
-   started. Run the project's required gates only when they are missing or invalidated by later edits,
-   relevant dependency or base changes, or conflict resolution. A conflict-free rebase that changes
-   only commit ancestry does not invalidate evidence by itself. Report the exact commands and results
-   in the body's Testing section; a project with no gates is verified by hand and reported as exactly
-   that, never silently treated as verified.
+4. **Verification evidence.** Apply the spine's final-tree rule: collect the exact checks already run
+   during development, reuse results whose covered inputs are unchanged, and run only missing or
+   invalidated project gates. Do not rerun a passing command merely because PR creation started.
+   Changed commit IDs alone do not invalidate evidence; relevant changes in the resulting tree do.
+   Report the exact commands and results in the body's Testing section; a project with no gates is
+   verified by hand and reported as exactly that, never silently treated as verified.
 5. **Self-review.** Re-read the full diff (`git diff <base>...HEAD` plus working tree) as a
    reviewer, holding the project's handoff-hygiene bar: no silent lint/type suppressions, no comment
    creep, no half-migrated patterns, no leftovers. Fix what you find; don't annotate it.
@@ -43,11 +42,10 @@ Red flags — stop, a gate is being rationalized away:
   `## Summary` (what and why, plus `Closes #NNN` when issue-driven), `## Changes` (including
   exclusions or migration steps when material),
   and `## Testing` (exact commands and results, never a bare "tests pass").
-- **Re-check the tree, push, then create.** Gates 3–5 may edit the tree gate 1 checked — artifact
-  removals and self-review fixes: commit everything they changed and confirm
-  `git status --porcelain` is empty again *now*, immediately before the push (the spine's
-  point-of-action rule; a deletion or fix left in the working tree does not reach the PR). Then push
-  the reviewed head —
+- **Stabilize the tree, push, then create.** Gates 3–5 may edit the tree gate 1 checked. When they do,
+  commit everything, then repeat gates 3–5 against the new head; push only after a pass makes no
+  further edits and `git status --porcelain` is empty *now* (the spine's point-of-action rule). Then
+  push the reviewed, final-change-verified head —
   `gh pr create --head` does **not** push for you: `git push -u origin <branch>`
   (`--force-with-lease` when the remote branch exists and was rebased) — then
   `gh pr create --base <base> --head <branch> --title "…" --body-file .thinkrail/context/pr-body.md`

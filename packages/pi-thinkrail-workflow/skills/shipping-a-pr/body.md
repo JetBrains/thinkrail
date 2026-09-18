@@ -1,8 +1,8 @@
 # body.md — maintain PR title or body
 
 Entry: an open PR plus a requested title/body change. Saves `.thinkrail/context/pr-body.md` only while
-editing the body. Default completion is snapshot mode; an explicit request to monitor checks,
-investigate CI, wait until green, or make the PR merge-ready selects wait mode.
+editing the body. Default completion is snapshot mode; preserve wait mode only when selected by the
+spine's explicit remote-completion rule.
 
 1. Fetch the current title and body (`gh pr view <n> --json title,body`) and read the repository's
    `.github/PULL_REQUEST_TEMPLATE.md` when present. Preserve existing sections, issue links, checklist
@@ -17,5 +17,4 @@ investigate CI, wait until green, or make the PR merge-ready selects wait mode.
 
 ## Next
 
-Read and follow `checks.md` in snapshot mode by default. Use wait mode only when the caller explicitly
-asked to monitor checks, investigate CI, wait until green, or make the PR merge-ready.
+Read and follow `checks.md` in the selected completion mode.

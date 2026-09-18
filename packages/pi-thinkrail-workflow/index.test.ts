@@ -50,10 +50,7 @@ describe("pi-thinkrail-workflow extension", () => {
 	});
 
 	test("creates PRs without duplicate verification or unsolicited monitoring", () => {
-		const skill = readFileSync(
-			new URL("./skills/shipping-a-pr/SKILL.md", import.meta.url),
-			"utf8",
-		);
+		const skill = readFileSync(new URL("./skills/shipping-a-pr/SKILL.md", import.meta.url), "utf8");
 		const creating = readFileSync(
 			new URL("./skills/shipping-a-pr/creating.md", import.meta.url),
 			"utf8",
@@ -62,6 +59,27 @@ describe("pi-thinkrail-workflow extension", () => {
 		expect(skill).toContain("A push never upgrades the mode by");
 		expect(creating).toContain("Do not rerun a passing command merely because PR creation");
 		expect(creating).toContain("defaults to snapshot mode");
+	});
+
+	test("ties reused verification and empty check rollups to observed final state", () => {
+		const skill = readFileSync(new URL("./skills/shipping-a-pr/SKILL.md", import.meta.url), "utf8");
+		const creating = readFileSync(
+			new URL("./skills/shipping-a-pr/creating.md", import.meta.url),
+			"utf8",
+		);
+		const comments = readFileSync(
+			new URL("./skills/shipping-a-pr/review-comments.md", import.meta.url),
+			"utf8",
+		);
+		const checks = readFileSync(
+			new URL("./skills/shipping-a-pr/checks.md", import.meta.url),
+			"utf8",
+		);
+		expect(skill).toContain("Before every code-affecting push");
+		expect(creating).toContain("repeat gates 3–5 against the new head");
+		expect(comments).toContain("final-tree verification rule");
+		expect(checks).toContain("no checks currently reported");
+		expect(checks).toContain("Never infer “no checks configured” from one empty rollup");
 	});
 
 	test("reapplies title edits after a concurrent GitHub change", () => {

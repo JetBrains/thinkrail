@@ -9,8 +9,9 @@ Use after ordinary PR creation, syncing, screenshots, title/body maintenance, re
 routine head update, or a one-time checks/merge-state request. A push does not imply monitoring; use
 this mode whenever the user did not explicitly request remote completion.
 
-1. Run `gh pr checks <n>` once. Preserve `no checks reported` as the explicit state “no checks
-   configured”; report pending or failing checks as observed.
+1. Run `gh pr checks <n>` once. An empty rollup means only “no checks currently reported”; CI may
+   not have registered for a fresh head yet, so report its presence as indeterminate. Report pending
+   or failing checks as observed.
 2. Query `mergeStateStatus`, `isDraft`, and `reviewDecision` together once. Report every value exactly
    as observed; do not poll, sync, rerun, or repair it.
 3. Give the user the PR link, any metadata action completed, and the current checks + merge-state
@@ -25,8 +26,9 @@ This is not a claim that the PR is green or merge-ready.
 
 - `gh pr checks <n> --watch` (or `gh run watch <run-id> --exit-status` for one run). When a watch is
   impractical, poll `gh pr checks <n>` with sleeps.
-- `no checks reported` means there is no CI to wait for; carry “no checks configured” into the
-  terminal summary and continue to merge-state verification.
+- If no checks are reported, wait briefly and retry until checks register or independently establish
+  that the repository has no CI for this PR. Never infer “no checks configured” from one empty rollup;
+  carry it into the terminal summary only after confirming it.
 - On failure, inspect `gh run view --job <job-id> --log-failed`; reproduce locally when the log is not
   conclusive.
 
