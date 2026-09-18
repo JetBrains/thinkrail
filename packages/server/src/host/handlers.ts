@@ -13,6 +13,7 @@ import type {
 	ReviewCommentKind,
 	ReviewCommentStatus,
 	ReviewSendResult,
+	SessionModelSelection,
 	SubagentOverride,
 	TemplateReadLocation,
 	TemplateScope,
@@ -36,6 +37,7 @@ import {
 	getSessionCommands,
 	getSessionMessages,
 	getSessionStats,
+	getSessionWorkspaceId,
 	hasSession,
 	isSessionStreaming,
 	listAvailableModels,
@@ -161,6 +163,7 @@ import {
 	reclaimWorktree,
 	renameWorkspace,
 	setWorkspaceDiffBase,
+	setWorkspaceModelPreference,
 	setWorkspaceSkillOverride,
 	setWorkspaceSubagentsOverride,
 	workspaceDiffStats,
@@ -192,6 +195,7 @@ import {
 	startReviewAllFlow,
 	startTodoReviewFlow,
 } from "./todoReview";
+import { workspaceSessionOptions } from "./workspaceSessionOptions";
 
 const log = logger("host");
 
@@ -229,6 +233,21 @@ async function sendUserMessage(
 		recordAcceptedMessage(clientKey);
 	}
 	return { ok: true };
+}
+
+function persistEffectiveWorkspaceSelection(
+	workspaceId: string | undefined,
+	selection: SessionModelSelection,
+): void {
+	if (!workspaceId || !selection.model) return;
+	try {
+		setWorkspaceModelPreference(workspaceId, {
+			model: selection.model,
+			thinkingLevel: selection.thinkingLevel,
+		});
+	} catch {
+		log.warn(`workspace model preference not persisted for ${workspaceId}`);
+	}
 }
 
 function resolveTemplateReadDirs(params: TemplateReadLocation) {
@@ -328,9 +347,9 @@ async function sendToFileChat(
 	const created = await createSession({
 		cwd: ws.worktreePath,
 		workspaceId,
-		...(opts.model ? { model: opts.model } : {}),
-		...(opts.thinkingLevel ? { thinkingLevel: opts.thinkingLevel } : {}),
+		...workspaceSessionOptions(ws, opts),
 	});
+	if (opts.model) persistEffectiveWorkspaceSelection(workspaceId, created);
 	trackChatStarted(created);
 	await markCommentsSent(workspaceId, ids, created.sessionId);
 	fireReviewPrompt(workspaceId, ids, created.sessionId, pkg);
@@ -677,9 +696,9 @@ const handlers: Record<string, Handler> = {
 		const created = await createSession({
 			cwd: ws.worktreePath,
 			workspaceId: p.workspaceId,
-			...(p.model ? { model: p.model } : {}),
-			...(p.thinkingLevel ? { thinkingLevel: p.thinkingLevel } : {}),
+			...workspaceSessionOptions(ws, p),
 		});
+		if (p.model) persistEffectiveWorkspaceSelection(p.workspaceId, created);
 		trackChatStarted(created);
 		return created;
 	},
@@ -741,13 +760,17 @@ const handlers: Record<string, Handler> = {
 	},
 	"session.setModel": async (params) => {
 		const p = params as { sessionId: string; model: WireModel };
-		await setSessionModel(p.sessionId, p.model);
-		return { ok: true } as const;
+		const workspaceId = getSessionWorkspaceId(p.sessionId);
+		const selection = await setSessionModel(p.sessionId, p.model);
+		persistEffectiveWorkspaceSelection(workspaceId, selection);
+		return selection;
 	},
 	"session.setThinkingLevel": (params) => {
 		const p = params as { sessionId: string; level: ThinkingLevel };
-		setSessionThinkingLevel(p.sessionId, p.level);
-		return { ok: true } as const;
+		const workspaceId = getSessionWorkspaceId(p.sessionId);
+		const selection = setSessionThinkingLevel(p.sessionId, p.level);
+		persistEffectiveWorkspaceSelection(workspaceId, selection);
+		return selection;
 	},
 	"session.compact": async (params) => {
 		const p = params as { sessionId: string; instructions?: string };

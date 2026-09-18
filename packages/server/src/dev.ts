@@ -1,4 +1,4 @@
-import type { Provider } from "@earendil-works/pi-ai";
+import type { Model, Provider } from "@earendil-works/pi-ai";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@earendil-works/pi-ai/oauth";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { configurePiRuntimeGenerationInitializer } from "./agent";
@@ -36,8 +36,21 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 		},
 	};
 	const dummyStream = (): never => {
-		throw new Error("e2e-apikey is a login fixture — it never streams");
+		throw new Error("e2e fixture providers never stream");
 	};
+	const stickyModel = (id: string, name: string, reasoning: boolean): Model<string> => ({
+		id,
+		name,
+		provider: "e2e-sticky",
+		api: "openai-completions",
+		baseUrl: "http://e2e-sticky.test",
+		reasoning,
+		...(reasoning ? { thinkingLevelMap: { xhigh: "xhigh" } } : {}),
+		input: ["text"],
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		contextWindow: 100_000,
+		maxTokens: 4096,
+	});
 	const fakeApiKeyProvider: Provider = {
 		id: "e2e-apikey",
 		name: "E2E Key Provider",
@@ -80,6 +93,16 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 	configurePiRuntimeGenerationInitializer((runtime) => {
 		runtime.registerProvider("e2e-oauth", { oauth: fakeOauth });
 		runtime.registerNativeProvider(fakeApiKeyProvider);
+		runtime.registerProvider("e2e-sticky", {
+			api: "openai-completions",
+			baseUrl: "http://e2e-sticky.test",
+			apiKey: "e2e",
+			streamSimple: dummyStream,
+			models: [
+				stickyModel("e2e-sticky-reasoner", "E2E Sticky Reasoner", true),
+				stickyModel("e2e-sticky-basic", "E2E Sticky Basic", false),
+			],
+		});
 	});
 }
 

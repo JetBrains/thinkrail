@@ -8,6 +8,7 @@ import {
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
+	WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
 } from "./wsProtocol";
@@ -53,5 +54,10 @@ test("host update advisories advance the protocol with an immutable notice chann
 
 test("explicit analytics consent advances the protocol to v65", () => {
 	expect(ANALYTICS_CONSENT_PROTOCOL_VERSION).toBe(65);
-	expect(PROTOCOL_VERSION).toBe(ANALYTICS_CONSENT_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ANALYTICS_CONSENT_PROTOCOL_VERSION);
+});
+
+test("sticky workspace model preferences advance the additive wire shape to v66", () => {
+	expect(WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION).toBe(66);
+	expect(PROTOCOL_VERSION).toBe(WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION);
 });

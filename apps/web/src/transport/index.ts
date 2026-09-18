@@ -7,4 +7,8 @@ export {
 	reloadSessionResourcesWithSkillBaseline,
 } from "./skillLoad";
 export type { ConnectionStatus, TransportOptions } from "./transport";
-export { getTransport, initTransport } from "./wireTransport";
+export {
+	getTransport,
+	initTransport,
+	supportsWorkspaceModelPreferences,
+} from "./wireTransport";

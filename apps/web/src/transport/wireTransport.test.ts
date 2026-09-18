@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
-import { ACTIVITY_PROTOCOL_VERSION } from "@thinkrail/contracts";
-import { supportsSessionActivity } from "./wireTransport";
+import {
+	ACTIVITY_PROTOCOL_VERSION,
+	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
+import { supportsSessionActivity, supportsWorkspaceModelPreferences } from "./wireTransport";
 
 test("a host at or beyond the activity version supports the layer", () => {
 	expect(supportsSessionActivity(ACTIVITY_PROTOCOL_VERSION)).toBe(true);
@@ -10,4 +14,10 @@ test("a host at or beyond the activity version supports the layer", () => {
 test("an older host and a pre-welcome connection do not, so the client clears rather than keeps glyphs", () => {
 	expect(supportsSessionActivity(ACTIVITY_PROTOCOL_VERSION - 1)).toBe(false);
 	expect(supportsSessionActivity(null)).toBe(false);
+});
+
+test("workspace model preference reconciliation requires v66 and rejects analytics-only v65", () => {
+	expect(supportsWorkspaceModelPreferences(WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION)).toBe(true);
+	expect(supportsWorkspaceModelPreferences(ANALYTICS_CONSENT_PROTOCOL_VERSION)).toBe(false);
+	expect(supportsWorkspaceModelPreferences(null)).toBe(false);
 });
