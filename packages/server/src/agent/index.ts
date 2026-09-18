@@ -45,6 +45,7 @@ export {
 	setReviewCommentHandler,
 } from "./reviewTool";
 export * from "./sessionRepair";
+export * from "./sessionState";
 export type { SkillAdmissionContext, SkillDecision, SkillFacts } from "./skillAdmission";
 export { isProjectSkillPath } from "./skillSources";
 export {

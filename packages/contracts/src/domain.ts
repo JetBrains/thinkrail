@@ -1,4 +1,11 @@
-import type { ThinkingLevel, WireModel } from "./piProtocol";
+import type { SessionState, ThinkingLevel, WireModel } from "./piProtocol";
+
+export interface SessionStateRecord {
+	sessionId: string;
+	workspaceId: string;
+	projectId: string;
+	state: SessionState;
+}
 
 export interface Project {
 	id: string;

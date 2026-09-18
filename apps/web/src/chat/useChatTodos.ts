@@ -16,7 +16,6 @@ import {
 	supportsPlanSummaryGeneration,
 } from "../transport";
 import { messagesToRuntime } from "./hydrate";
-import { sessionGlance, shouldNudgeOnAdd } from "./planView";
 
 export function shouldRefreshTodos(event: PiEvent): boolean {
 	return event.type === "tool_execution_end" || event.type === "agent_settled";
@@ -319,38 +318,17 @@ export function hydrateSessionRuntime(workspaceId: string, sessionId: string): P
 }
 
 async function nudgeAgent(workspaceId: string, sessionId: string, title: string): Promise<void> {
-	const initial = useAppStore.getState();
+	const state = useAppStore.getState();
 	if (
-		initial.removedWorkspaceIds[workspaceId] ||
-		initial.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
+		state.removedWorkspaceIds[workspaceId] ||
+		state.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
 	) {
 		return;
 	}
-	const session = initial.sessions[sessionId];
-	if (session && !shouldNudgeOnAdd(sessionGlance(session))) return;
-	const streaming = session?.isStreaming ?? false;
 	const text = `${TODO_NUDGE_PREFIX}A TODO was added to the list: "${title}". Read the TODO list with todo_list and work any pending items, marking each done with todo_update as you finish.`;
 	try {
-		await getTransport().request(streaming ? "session.followUp" : "session.prompt", {
-			sessionId,
-			text,
-		});
-	} catch {
-		try {
-			await hydrateSessionRuntime(workspaceId, sessionId);
-			const hydrated = useAppStore.getState();
-			const recovered = hydrated.sessions[sessionId];
-			if (
-				hydrated.removedWorkspaceIds[workspaceId] ||
-				hydrated.deletedSessionsByWorkspace[workspaceId]?.[sessionId] ||
-				!recovered ||
-				!shouldNudgeOnAdd(sessionGlance(recovered))
-			) {
-				return;
-			}
-			await getTransport().request("session.prompt", { sessionId, text });
-		} catch (err) {
-			console.warn("todo nudge skipped:", errorText(err));
-		}
+		await getTransport().request("session.nudge", { workspaceId, sessionId, text });
+	} catch (err) {
+		console.warn("todo nudge skipped:", errorText(err));
 	}
 }

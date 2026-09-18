@@ -27,6 +27,7 @@ import {
 	selectCanRenameChat,
 	selectCatalogModel,
 	selectCompactionTurnIds,
+	selectReadyCompletionActivation,
 	selectSkillsStale,
 	selectWorkspaceById,
 	specPathMatcher,
@@ -248,6 +249,27 @@ export default function ChatView({
 		() => projectRows(chronologicalRows, chatMessageOrder),
 		[chronologicalRows, chatMessageOrder],
 	);
+	const completionId = runtime.hostState?.completion?.completionId ?? null;
+	const readyCompletionId = useAppStore((state) =>
+		selectReadyCompletionActivation(state, workspaceId, sessionId),
+	);
+	const acknowledgingCompletions = useRef(new Set<string>());
+	useEffect(() => {
+		if (!completionId || isStreaming) return;
+		useAppStore.getState().noteRenderedCompletion(sessionId, completionId);
+	}, [completionId, isStreaming, sessionId]);
+	useEffect(() => {
+		if (!readyCompletionId || acknowledgingCompletions.current.has(readyCompletionId)) return;
+		acknowledgingCompletions.current.add(readyCompletionId);
+		void getTransport()
+			.request("session.acknowledgeCompletion", {
+				sessionId,
+				completionId: readyCompletionId,
+			})
+			.then(({ record }) => useAppStore.getState().applySessionState(record))
+			.catch(() => {})
+			.finally(() => acknowledgingCompletions.current.delete(readyCompletionId));
+	}, [readyCompletionId, sessionId]);
 	const rowHeightEstimateCacheRef = useRef<{
 		messageOrder: ChatMessageOrder;
 		cache: RowHeightEstimateCache;
@@ -875,6 +897,8 @@ export default function ChatView({
 			<AskStatesContext.Provider value={askContext}>
 				<div
 					ref={chatViewRef}
+					onPointerDownCapture={() => useAppStore.getState().noteDirectChatActivation(sessionId)}
+					onFocusCapture={() => useAppStore.getState().noteDirectChatActivation(sessionId)}
 					data-testid="chat-view"
 					data-line-width-bounded={chatLineWidthBounded}
 					data-message-order={chatMessageOrder}

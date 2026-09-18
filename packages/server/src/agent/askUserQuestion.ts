@@ -368,6 +368,7 @@ export interface AskUserQuestionWaiters {
 			isError?: boolean;
 		}[],
 	): void;
+	currentQuestion(): { interactionId: string; needsInput: boolean } | null;
 	isWaitingForAnswer(): boolean;
 	hasRecoverableCall(): boolean;
 	prepareShutdown(): Promise<void> | null;
@@ -468,6 +469,15 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 					waiter.rejectPersisted(answerNotPersisted(toolCallId));
 				}
 			}
+		},
+		currentQuestion() {
+			for (const [interactionId, waiter] of waiting) {
+				return {
+					interactionId,
+					needsInput: waiter.phase === "expected" || waiter.phase === "waiting",
+				};
+			}
+			return null;
 		},
 		isWaitingForAnswer() {
 			return [...waiting.values()].some(
