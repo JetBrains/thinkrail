@@ -74,6 +74,7 @@ export function jumpTarget(hit: PromptHit | MessageHit): ChatLocationRequest | n
 		return null;
 	}
 	return {
+		kind: "reveal-message",
 		workspaceId: hit.workspaceId,
 		projectId: hit.projectId,
 		sessionId: hit.sessionId,

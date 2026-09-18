@@ -162,7 +162,9 @@ The same copy and hermetic environment seed the private restart host.
 without an agent. Seeded successful, error/length, and questionnaire transcripts exercise host candidate
 derivation, `session.attention` push/snapshot, store folds, and project/workspace/chat presentation. The
 suite asserts accessible “Needs attention” labels, `data-attention`, no attention marker for
-running/queued/explicit abort, the all-known-chat threshold, and closed-history discoverability. Live-running
+running/queued/explicit abort, the all-known-chat threshold, and closed-history discoverability. It also
+seeds cold blocker and normal candidates to pin F8 blocker-first/newest ordering, Shift+F8 reversal,
+exact-focus/history behavior, and suppression of unrelated passive auto-open. Live-running
 coverage separately pins the unchanged-colour pulse on the exact chat icon plus workspace and collapsed-project
 rollups, coexistence with an attention dot, reconnect snapshot repair, prompt/settlement transitions, and no
 pulse for queued work; `data-running` is the stable test hook and reduced-motion removes animation.

@@ -1,6 +1,7 @@
 import type {
 	AppConfig,
 	AppConfigUpdate,
+	AttentionPriority,
 	BranchList,
 	DelegationRunDetails,
 	DelegationRunStatus,
@@ -96,7 +97,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 66;
+export const PROTOCOL_VERSION = 67;
+export const ATTENTION_NAVIGATION_PROTOCOL_VERSION = 67;
 export const ANALYTICS_CONSENT_PROTOCOL_VERSION = 65;
 export const WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION = 62;
 export const PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION = 63;
@@ -138,12 +140,25 @@ export interface SessionDeletedPayload {
 	sessionId: string;
 }
 
-export interface SessionAttentionPayload {
+interface SessionAttentionPayloadBase {
 	workspaceId: string;
 	projectId: string;
 	sessionId: string;
-	attentionId: string | null;
 }
+
+export type SessionAttentionPayload = SessionAttentionPayloadBase &
+	(
+		| {
+				attentionId: string;
+				attentionPriority?: AttentionPriority;
+				attentionAt?: number;
+		  }
+		| {
+				attentionId: null;
+				attentionPriority?: never;
+				attentionAt?: never;
+		  }
+	);
 
 export interface SessionRunningPayload {
 	workspaceId: string;

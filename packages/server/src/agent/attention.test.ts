@@ -10,12 +10,17 @@ import {
 	parseAttentionEntries,
 } from "./attention";
 
-function message(id: string, parentId: string | null, value: AgentMessage): SessionEntry {
+function message(
+	id: string,
+	parentId: string | null,
+	value: AgentMessage,
+	timestamp = "2026-01-01T00:00:00.000Z",
+): SessionEntry {
 	return {
 		type: "message",
 		id,
 		parentId,
-		timestamp: "2026-01-01T00:00:00.000Z",
+		timestamp,
 		message: value,
 	};
 }
@@ -32,39 +37,55 @@ function assistant(
 	id: string,
 	parentId: string,
 	stopReason: StopReason | "unfinished" | undefined,
+	timestamp?: string,
 ): SessionEntry {
-	return message(id, parentId, {
-		role: "assistant",
-		content: [{ type: "text", text: "done" }],
-		stopReason,
-		timestamp: 2,
-	} as unknown as AgentMessage);
+	return message(
+		id,
+		parentId,
+		{
+			role: "assistant",
+			content: [{ type: "text", text: "done" }],
+			stopReason,
+			timestamp: 2,
+		} as unknown as AgentMessage,
+		timestamp,
+	);
 }
 
 function questionEntries(): SessionEntry[] {
 	const userEntry = user();
-	const call = message("ask-entry", userEntry.id, {
-		role: "assistant",
-		content: [
-			{
-				type: "toolCall",
-				id: "tc-1",
-				name: "ask_user_question",
-				arguments: { questions: [] },
-			},
-		],
-		stopReason: "toolUse",
-		timestamp: 2,
-	} as unknown as AgentMessage);
-	const ack = message("ack-entry", call.id, {
-		role: "toolResult",
-		toolCallId: "tc-1",
-		toolName: "ask_user_question",
-		content: [{ type: "text", text: ASK_ACK_TEXT }],
-		details: { kind: "ack" },
-		isError: false,
-		timestamp: 3,
-	} as unknown as AgentMessage);
+	const call = message(
+		"ask-entry",
+		userEntry.id,
+		{
+			role: "assistant",
+			content: [
+				{
+					type: "toolCall",
+					id: "tc-1",
+					name: "ask_user_question",
+					arguments: { questions: [] },
+				},
+			],
+			stopReason: "toolUse",
+			timestamp: 2,
+		} as unknown as AgentMessage,
+		"2026-01-01T00:00:02.000Z",
+	);
+	const ack = message(
+		"ack-entry",
+		call.id,
+		{
+			role: "toolResult",
+			toolCallId: "tc-1",
+			toolName: "ask_user_question",
+			content: [{ type: "text", text: ASK_ACK_TEXT }],
+			details: { kind: "ack" },
+			isError: false,
+			timestamp: 3,
+		} as unknown as AgentMessage,
+		"2026-01-01T00:00:03.000Z",
+	);
 	return [userEntry, call, ack];
 }
 
@@ -89,6 +110,20 @@ test("successful, error, and length outcomes share one review candidate shape", 
 		expect(candidate).toMatchObject({ kind: "review", turnId: "user-1" });
 		expect(candidate?.id).toStartWith("review:");
 	}
+});
+
+test("attention ordering time follows the decisive candidate entry", () => {
+	const review = deriveDiskAttentionCandidate([
+		user(),
+		assistant("assistant-1", "user-1", "stop", "2026-01-01T00:00:04.000Z"),
+	]);
+	expect(review?.attentionAt).toBe(Date.parse("2026-01-01T00:00:04.000Z"));
+
+	const blocking = deriveDiskAttentionCandidate(questionEntries());
+	expect(blocking).toMatchObject({
+		kind: "blocking",
+		attentionAt: Date.parse("2026-01-01T00:00:02.000Z"),
+	});
 });
 
 test("review fingerprints survive legacy normalization and distinguish repeated identical results", () => {
@@ -181,7 +216,12 @@ test("an explicit blocker outranks streaming and cannot be mistaken for review",
 	const entries = [user()];
 	expect(
 		deriveAttentionCandidate(inputs(entries, { isStreaming: true, pendingDialogId: "dialog-1" })),
-	).toEqual({ id: "dialog:dialog-1", kind: "blocking", turnId: "user-1" });
+	).toEqual({
+		id: "dialog:dialog-1",
+		kind: "blocking",
+		turnId: "user-1",
+		attentionAt: Date.parse("2026-01-01T00:00:00.000Z"),
+	});
 });
 
 test("an acknowledged questionnaire blocks first, then yields interrupted until a fresh terminal", () => {
@@ -194,6 +234,7 @@ test("an acknowledged questionnaire blocks first, then yields interrupted until 
 		id: "question:tc-1",
 		kind: "blocking",
 		turnId: "user-1",
+		attentionAt: Date.parse("2026-01-01T00:00:02.000Z"),
 	});
 	const answered: SessionEntry = {
 		type: "custom_message",

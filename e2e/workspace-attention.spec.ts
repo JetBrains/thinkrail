@@ -10,6 +10,7 @@ const DONE_CHAT = "attention done chat";
 const FAILED_CHAT = "attention failed chat";
 const INTERRUPTED_CHAT = "attention interrupted chat";
 const WAITING_CHAT = "attention waiting chat";
+const NEWER_WAITING_CHAT = "attention newer waiting chat";
 
 function seedDoneChat(worktree: string): void {
 	seedWorkspaceSession(worktree, {
@@ -52,19 +53,24 @@ function seedInterruptedChat(worktree: string): void {
 	});
 }
 
-function seedWaitingChat(worktree: string): void {
+function seedWaitingChat(
+	worktree: string,
+	name = WAITING_CHAT,
+	questionId = "tc-attention-1",
+	baseOffset = 10_000,
+): void {
 	seedWorkspaceSession(worktree, {
-		name: WAITING_CHAT,
+		name,
 		messages: [
-			{ role: "user", text: "pick a database", timestamp: BASE_TS + 10_000 },
+			{ role: "user", text: "pick a database", timestamp: BASE_TS + baseOffset },
 			{
 				role: "assistant",
-				timestamp: BASE_TS + 11_000,
+				timestamp: BASE_TS + baseOffset + 1_000,
 				stopReason: "toolUse",
 				content: [
 					{
 						type: "toolCall",
-						id: "tc-attention-1",
+						id: questionId,
 						name: "ask_user_question",
 						arguments: {
 							questions: [
@@ -83,8 +89,8 @@ function seedWaitingChat(worktree: string): void {
 			},
 			{
 				role: "toolResult",
-				timestamp: BASE_TS + 12_000,
-				toolCallId: "tc-attention-1",
+				timestamp: BASE_TS + baseOffset + 2_000,
+				toolCallId: questionId,
 				toolName: "ask_user_question",
 				content: [{ type: "text", text: "Questions shown to the user." }],
 				details: { kind: "ack" },
@@ -108,7 +114,10 @@ test("a completed chat needs attention after reload and clears once its conversa
 
 	const row = defaultWorkspaceRow(page);
 	await expect(row).toHaveAttribute("data-attention", "true");
-	await expect(row.getByTestId("attention-dot")).toHaveAttribute("aria-label", "Needs attention");
+	await expect(row.getByTestId("attention-dot")).toHaveAttribute(
+		"aria-label",
+		"Needs attention, F8 next, Shift+F8 previous",
+	);
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
 
 	await enterDefaultWorkspace(page);
@@ -126,7 +135,10 @@ test("a failed chat uses the same attention dot and clears by the same review ge
 
 	const row = defaultWorkspaceRow(page);
 	await expect(row).toHaveAttribute("data-attention", "true");
-	await expect(row.getByTestId("attention-dot")).toHaveAttribute("aria-label", "Needs attention");
+	await expect(row.getByTestId("attention-dot")).toHaveAttribute(
+		"aria-label",
+		"Needs attention, F8 next, Shift+F8 previous",
+	);
 
 	await enterDefaultWorkspace(page);
 	await expect(page.getByText("provider unreachable")).toBeVisible();
@@ -143,7 +155,10 @@ test("a host-interrupted chat becomes durable attention instead of stale running
 	const row = defaultWorkspaceRow(page);
 	await expect(row).not.toHaveAttribute("data-running", /.+/);
 	await expect(row).toHaveAttribute("data-attention", "true");
-	await expect(row.getByTestId("attention-dot")).toHaveAttribute("aria-label", "Needs attention");
+	await expect(row.getByTestId("attention-dot")).toHaveAttribute(
+		"aria-label",
+		"Needs attention, F8 next, Shift+F8 previous",
+	);
 
 	await enterDefaultWorkspace(page);
 	await expect(page.getByText("work was interrupted")).toBeVisible();
@@ -195,6 +210,54 @@ test("a question survives viewing and is located on its tab and closed-history r
 	await expect(row).not.toHaveAttribute("data-attention", /.+/);
 });
 
+test("F8 cycles cold blockers before normal attention and continues after viewed results clear", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const worktree = realpathSync(E2E_FIXTURE_REPO);
+	seedWaitingChat(worktree);
+	seedWaitingChat(worktree, NEWER_WAITING_CHAT, "tc-attention-2", 13_000);
+	seedDoneChat(worktree);
+	seedInterruptedChat(worktree);
+	seedFailedChat(worktree);
+	await reloadAttention(page);
+
+	const row = defaultWorkspaceRow(page);
+	const dot = row.getByTestId("attention-dot");
+	await expect(dot).toHaveAttribute("aria-label", "Needs attention, F8 next, Shift+F8 previous");
+	await dot.hover();
+	await expect(page.getByRole("tooltip")).toContainText("F8 next · Shift+F8 previous");
+
+	const tabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	const tab = (name: string) => tabs.filter({ hasText: name });
+	await expect(tabs).toHaveCount(0);
+
+	await page.keyboard.press("F8");
+	await expect(tab(NEWER_WAITING_CHAT)).toHaveAttribute("data-active", "true");
+	await expect(tabs).toHaveCount(1);
+
+	await page.keyboard.press("F8");
+	await expect(tab(WAITING_CHAT)).toHaveAttribute("data-active", "true");
+
+	await page.keyboard.press("F8");
+	await expect(tab(DONE_CHAT)).toHaveAttribute("data-active", "true");
+	await expect(tab(DONE_CHAT).getByTestId("attention-dot")).toHaveCount(0);
+
+	await page.keyboard.press("F8");
+	await expect(tab(INTERRUPTED_CHAT)).toHaveAttribute("data-active", "true");
+	await page.keyboard.press("F8");
+	await expect(tab(FAILED_CHAT)).toHaveAttribute("data-active", "true");
+	await expect(tab(FAILED_CHAT).getByRole("tab")).toBeFocused();
+
+	await page.keyboard.press("F8");
+	await expect(tab(NEWER_WAITING_CHAT)).toHaveAttribute("data-active", "true");
+	await page.keyboard.press("Shift+F8");
+	await expect(tab(WAITING_CHAT)).toHaveAttribute("data-active", "true");
+
+	await page.goBack();
+	await expect(tab(NEWER_WAITING_CHAT)).toHaveAttribute("data-active", "true");
+});
+
 test("a collapsed project rolls up attention only while its workspace rows are hidden", async ({
 	page,
 }) => {
@@ -212,7 +275,7 @@ test("a collapsed project rolls up attention only while its workspace rows are h
 	await expect(project).toHaveAttribute("data-attention", "true");
 	await expect(project.getByTestId("attention-dot")).toHaveAttribute(
 		"aria-label",
-		"Needs attention",
+		"Needs attention, F8 next, Shift+F8 previous",
 	);
 	await shot(page.getByTestId("project-tree"), "attention", "project-collapsed");
 

@@ -488,6 +488,91 @@ export function selectAgentReviewCommentCount(
 }
 
 export type AttentionMap = Record<string, WorkspaceAttention>;
+export type AttentionDirection = "next" | "previous";
+
+export interface AttentionSessionTarget {
+	projectId: string;
+	workspaceId: string;
+	sessionId: string;
+	attentionId: string;
+	attentionPriority: "blocking" | "normal";
+	attentionAt: number;
+}
+
+function compareCodeUnits(left: string, right: string): number {
+	return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function compareAttentionTargets(
+	left: AttentionSessionTarget,
+	right: AttentionSessionTarget,
+): number {
+	if (left.attentionPriority !== right.attentionPriority) {
+		return left.attentionPriority === "blocking" ? -1 : 1;
+	}
+	if (left.attentionAt !== right.attentionAt) return right.attentionAt - left.attentionAt;
+	return (
+		compareCodeUnits(left.projectId, right.projectId) ||
+		compareCodeUnits(left.workspaceId, right.workspaceId) ||
+		compareCodeUnits(left.sessionId, right.sessionId)
+	);
+}
+
+function sameAttentionTarget(left: AttentionSessionTarget, right: AttentionSessionTarget): boolean {
+	return compareAttentionTargets(left, right) === 0 && left.attentionId === right.attentionId;
+}
+
+export function attentionSessionTargets(
+	attentionByWorkspace: AttentionMap,
+): AttentionSessionTarget[] {
+	const targets: AttentionSessionTarget[] = [];
+	for (const [workspaceId, workspace] of Object.entries(attentionByWorkspace)) {
+		for (const sessionId of Object.keys(workspace.sessions)) {
+			const candidate = sessionAttention(attentionByWorkspace, workspaceId, sessionId);
+			if (
+				!candidate ||
+				(candidate.attentionPriority !== "blocking" && candidate.attentionPriority !== "normal") ||
+				typeof candidate.attentionAt !== "number" ||
+				!Number.isFinite(candidate.attentionAt)
+			) {
+				continue;
+			}
+			targets.push({
+				projectId: workspace.projectId,
+				workspaceId,
+				sessionId,
+				attentionId: candidate.attentionId,
+				attentionPriority: candidate.attentionPriority,
+				attentionAt: candidate.attentionAt,
+			});
+		}
+	}
+	return targets.sort(compareAttentionTargets);
+}
+
+export function nextAttentionSessionTarget(
+	targets: readonly AttentionSessionTarget[],
+	anchor: AttentionSessionTarget | null,
+	direction: AttentionDirection,
+): AttentionSessionTarget | null {
+	if (targets.length === 0) return null;
+	if (!anchor) return direction === "next" ? (targets[0] ?? null) : (targets.at(-1) ?? null);
+	const anchorIndex = targets.findIndex((target) => sameAttentionTarget(target, anchor));
+	if (anchorIndex >= 0) {
+		const offset = direction === "next" ? 1 : -1;
+		return targets[(anchorIndex + offset + targets.length) % targets.length] ?? null;
+	}
+	if (direction === "next") {
+		return (
+			targets.find((target) => compareAttentionTargets(target, anchor) > 0) ?? targets[0] ?? null
+		);
+	}
+	return (
+		targets.findLast((target) => compareAttentionTargets(target, anchor) < 0) ??
+		targets.at(-1) ??
+		null
+	);
+}
 
 export function sessionAttention(
 	attentionByWorkspace: AttentionMap,

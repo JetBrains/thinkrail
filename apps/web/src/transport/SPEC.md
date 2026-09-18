@@ -88,8 +88,10 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   The unsupported-welcome path abandons in-flight hydration before clearing. Otherwise a resent request to
   an older host could reject and replay buffered candidates after the clear, stranding dots that host cannot
   retract. `supportsSessionAttention(protocolVersion)` gates `ATTENTION_PROTOCOL_VERSION`; unsupported hosts
-  hydrate `[]`, never preserve stale state. Store semantics live in [[submodule-web-store]] and the wire in
-  [[module-contracts]]. Before `WsTransport` dispatches any response or non-Pi
+  hydrate `[]`, never preserve stale state. Public `supportsAttentionNavigation` separately gates
+  `ATTENTION_NAVIGATION_PROTOCOL_VERSION`; a v66 host keeps dots but lacks the complete priority/recency
+  contract, so the shortcut has no fallback ordering. Store semantics live in [[submodule-web-store]] and
+  the wire in [[module-contracts]]. Before `WsTransport` dispatches any response or non-Pi
   push, `wireTransport` flushes queued Pi events synchronously; connection-status transitions do the same.
 
   **Live-running hydrates separately on welcome and clears on disconnect.** Supported hosts run
@@ -124,13 +126,14 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   than a caller convention).
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
-  `TransportOptions`. `supportsSessionAttention` and `supportsSessionRunning` stay module-internal (their
-  tests import the file directly) — no sibling decides either capability, this module does.
+  `TransportOptions`, and `supportsAttentionNavigation`. `supportsSessionAttention` and
+  `supportsSessionRunning` stay module-internal (their tests import the file directly); transport remains
+  the sole owner of all three capability decisions.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
   `SessionDeletedPayload` for `session.deleted`, `SessionAttentionPayload` +
-  `ATTENTION_PROTOCOL_VERSION` for `session.attention` and its snapshot gate, `SessionRunningPayload` +
+  `ATTENTION_PROTOCOL_VERSION` + `ATTENTION_NAVIGATION_PROTOCOL_VERSION` for `session.attention`, its snapshot gate, and navigation metadata, `SessionRunningPayload` +
   `SESSION_RUNNING_PROTOCOL_VERSION` for the additive live-running channel/snapshot gate, `provider.changed`, the empty addressed
   `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` + `host.updateAvailable`,
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +

@@ -354,9 +354,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   is its rendering); `subagent-completion` **becomes its own `subagentCompletion` turn** (the completion
   card is transcript-positioned, so it maps its message index too); unknown customTypes are ignored. No
   store/transport/shiki.
-- **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
-  a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
-  the workbench shell integration's open/reopen/hydrate half) — `ChatView` is the sole consumer. Once
+- **Jump-to-message** (the `reveal-message` variant of `chatLocationRequest`, set by `useHistorySearch.ts` over a mapped hit; see `store/SPEC.md`) — `ChatView` is the sole consumer of that variant and ignores `open-chat`, whose focus/completion belongs to shell reconciliation. Once
   `rows.length > 0`,
   it resolves the request's `messageIndex` via `runtime.turnIdByMessageIndex` (present only on a
   *hydrated* runtime — a live/already-open session's runtime, built by the event reducer, never carries

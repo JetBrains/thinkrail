@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { hasPlatformModifier } from "../lib";
-import { selectHistoryTarget, useAppStore } from "../store";
+import { type AttentionDirection, selectHistoryTarget, useAppStore } from "../store";
 
 const TERMINAL_ROOT_SELECTOR = ".xterm";
 
@@ -8,6 +8,8 @@ type GlobalHotkeyActions = {
 	onProjects: () => void;
 	onWorkspace?: () => void;
 	onBottom?: () => void;
+	onAttentionNext?: () => void;
+	onAttentionPrevious?: () => void;
 };
 
 type PanelHotkeyCommand = "projects" | "workspace" | "bottom";
@@ -15,6 +17,33 @@ type PanelHotkeyCommand = "projects" | "workspace" | "bottom";
 type PanelHotkeyAvailability = Record<PanelHotkeyCommand, boolean>;
 
 type PanelHotkeyEvent = Pick<KeyboardEvent, "altKey" | "code" | "ctrlKey" | "metaKey" | "shiftKey">;
+type AttentionHotkeyEvent = PanelHotkeyEvent & Pick<KeyboardEvent, "repeat">;
+
+export interface AttentionHotkeyCommand {
+	direction: AttentionDirection;
+	invoke: boolean;
+}
+
+export function attentionHotkeyCommand(
+	event: AttentionHotkeyEvent,
+	available: boolean,
+	modalOpen: boolean,
+): AttentionHotkeyCommand | null {
+	if (
+		!available ||
+		modalOpen ||
+		event.code !== "F8" ||
+		event.ctrlKey ||
+		event.metaKey ||
+		event.altKey
+	) {
+		return null;
+	}
+	return {
+		direction: event.shiftKey ? "previous" : "next",
+		invoke: !event.repeat,
+	};
+}
 
 export function panelHotkeyCommand(
 	event: PanelHotkeyEvent,
@@ -46,6 +75,7 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
+			const modalOpen = hasOpenModal();
 			const command = panelHotkeyCommand(
 				event,
 				{
@@ -53,7 +83,7 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 					workspace: actionsRef.current.onWorkspace !== undefined,
 					bottom: actionsRef.current.onBottom !== undefined,
 				},
-				hasOpenModal(),
+				modalOpen,
 			);
 			if (command) {
 				event.preventDefault();
@@ -62,6 +92,22 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 					if (command === "projects") actionsRef.current.onProjects();
 					else if (command === "workspace") actionsRef.current.onWorkspace?.();
 					else actionsRef.current.onBottom?.();
+				}
+				return;
+			}
+
+			const attention = attentionHotkeyCommand(
+				event,
+				actionsRef.current.onAttentionNext !== undefined &&
+					actionsRef.current.onAttentionPrevious !== undefined,
+				modalOpen,
+			);
+			if (attention) {
+				event.preventDefault();
+				event.stopPropagation();
+				if (attention.invoke) {
+					if (attention.direction === "next") actionsRef.current.onAttentionNext?.();
+					else actionsRef.current.onAttentionPrevious?.();
 				}
 				return;
 			}

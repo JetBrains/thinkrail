@@ -397,10 +397,20 @@ async function workspaceDiskAttentionRows(
 function attentionPayload(
 	sessionId: string,
 	workspaceId: string,
-	attentionId: string | null,
+	candidate: AttentionCandidate | null,
 ): SessionAttentionPayload | null {
 	const projectId = sessionProjectId(workspaceId);
-	return projectId === null ? null : { sessionId, workspaceId, projectId, attentionId };
+	if (projectId === null) return null;
+	return candidate
+		? {
+				sessionId,
+				workspaceId,
+				projectId,
+				attentionId: candidate.id,
+				attentionPriority: candidate.kind === "blocking" ? "blocking" : "normal",
+				attentionAt: candidate.attentionAt,
+			}
+		: { sessionId, workspaceId, projectId, attentionId: null };
 }
 
 function runningPayload(
@@ -464,9 +474,10 @@ export function syncSessionAttention(sessionId: string): void {
 	) {
 		return;
 	}
-	const attentionId = effectiveAttentionOf(entry)?.id ?? null;
+	const candidate = effectiveAttentionOf(entry);
+	const attentionId = candidate?.id ?? null;
 	if (attentionId === entry.publishedAttentionId) return;
-	const payload = attentionPayload(sessionId, entry.workspaceId, attentionId);
+	const payload = attentionPayload(sessionId, entry.workspaceId, candidate);
 	if (!payload) return;
 	entry.publishedAttentionId = attentionId;
 	publishAttention(payload);
@@ -607,9 +618,7 @@ export async function listSessionAttention(
 				continue;
 			}
 			const candidate = effectiveAttentionOf(entry);
-			const payload = candidate
-				? attentionPayload(sessionId, entry.workspaceId, candidate.id)
-				: null;
+			const payload = candidate ? attentionPayload(sessionId, entry.workspaceId, candidate) : null;
 			if (payload?.attentionId) rows.set(key, { ...payload, attentionId: payload.attentionId });
 			else rows.delete(key);
 		}
@@ -622,12 +631,13 @@ export async function listSessionAttention(
 			for (const row of await workspaceDiskAttentionRows(workspace.id, workspace.cwd, "snapshot")) {
 				const candidate = row.candidate;
 				if (!candidate || isHandledAttention(row.sessionId, candidate)) continue;
-				rows.set(keyOf(workspace.id, row.sessionId), {
-					sessionId: row.sessionId,
-					workspaceId: workspace.id,
-					projectId,
-					attentionId: candidate.id,
-				});
+				const payload = attentionPayload(row.sessionId, workspace.id, candidate);
+				if (payload?.attentionId) {
+					rows.set(keyOf(workspace.id, row.sessionId), {
+						...payload,
+						attentionId: payload.attentionId,
+					});
+				}
 			}
 		} catch (error) {
 			log.warn(`attention snapshot skipped workspace ${workspace.id}`, error as Error);
@@ -639,9 +649,7 @@ export async function listSessionAttention(
 	}
 	for (const [sessionId, pending] of pendingDeletionAttention) {
 		const candidate = pending.candidate;
-		const payload = candidate
-			? attentionPayload(sessionId, pending.workspaceId, candidate.id)
-			: null;
+		const payload = candidate ? attentionPayload(sessionId, pending.workspaceId, candidate) : null;
 		if (payload?.attentionId) {
 			rows.set(keyOf(pending.workspaceId, sessionId), {
 				...payload,

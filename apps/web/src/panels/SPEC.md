@@ -85,8 +85,10 @@ treatment.
 
   `ProjectTree` renders the shared dependency-light `AttentionDot` from the store's single
   `attentionByWorkspace` map through pure `workspaceNeedsAttention` / `projectNeedsAttention` selectors.
-  The dot is static accent colour, carries no count or status-specific glyph/tooltip, and has the accessible
-  label “Needs attention.” Presence/absence has one meaning, so colour does not encode competing states. It
+  The dot is static accent colour, carries no count or status-specific glyph, and defaults to the accessible
+  label “Needs attention.” On a v67 attention-navigation host, ProjectTree alone wraps it with the
+  `F8 next · Shift+F8 previous` tooltip and matching accessible suffix; v66 hosts and tab/history dots retain
+  the original label. Presence/absence has one meaning, so colour does not encode competing states. It
   occupies its own flex column between the identity button and the hover-revealed kebab. Workspace and
   collapsed-project rows expose `data-attention` only while positive for end-to-end tests.
 

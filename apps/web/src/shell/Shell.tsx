@@ -22,6 +22,7 @@ import {
 	selectActiveWorkspace,
 	selectAnalyticsConsentPromptOpen,
 	selectContextProject,
+	toast,
 	useAppStore,
 } from "../store";
 import {
@@ -30,8 +31,17 @@ import {
 	readThemeHint,
 	writeThemeHint,
 } from "../themes";
-import type { ConnectionStatus } from "../transport";
+import {
+	type ConnectionStatus,
+	errorText,
+	getTransport,
+	supportsAttentionNavigation,
+} from "../transport";
 import { UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
+import {
+	type AttentionSessionNavigation,
+	startAttentionSessionNavigation,
+} from "./attentionNavigation";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
@@ -56,6 +66,7 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 export function Shell() {
 	useLocalLayoutState();
 	const status = useAppStore((s) => s.status);
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const analyticsConsentOpen = useAppStore(selectAnalyticsConsentPromptOpen);
 	const StatusDot = status === "connected" ? RiCircleFill : Circle;
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
@@ -64,6 +75,22 @@ export function Shell() {
 	const { review: openReview } = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
 	const updates = useUpdates();
+	const attentionNavigationRef = useRef<AttentionSessionNavigation | null>(null);
+	useEffect(() => {
+		const navigation = startAttentionSessionNavigation({
+			listWorkspaces: (projectId) =>
+				getTransport().request("workspace.list", { projectId, includeDiffStats: false }),
+			onInfo: (message) => toast.info(message),
+			onError: (error) => toast.error(errorText(error), "Couldn't open the next attention chat"),
+		});
+		attentionNavigationRef.current = navigation;
+		return () => {
+			attentionNavigationRef.current = null;
+			navigation.stop();
+		};
+	}, []);
+	const attentionNavigationAvailable =
+		status === "connected" && supportsAttentionNavigation(protocolVersion);
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
@@ -84,6 +111,12 @@ export function Shell() {
 		return preference.themeMode === "system" ? onSystemAppearanceChange(apply) : undefined;
 	}, [themeHint, welcomeGeneration, theme, themeMode, systemThemePair]);
 	useGlobalHotkeys({
+		...(attentionNavigationAvailable
+			? {
+					onAttentionNext: () => attentionNavigationRef.current?.next(),
+					onAttentionPrevious: () => attentionNavigationRef.current?.previous(),
+				}
+			: {}),
 		onProjects: hasActiveWorkspace
 			? () => {
 					if (!activeWorkspaceId) return;

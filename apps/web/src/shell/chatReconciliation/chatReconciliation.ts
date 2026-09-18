@@ -21,6 +21,7 @@ import {
 	findPlacedResource,
 	findTabLocation,
 	type LayoutCenterTab,
+	type LayoutGroupLocation,
 	removeSessionLayoutTabs,
 	selectTab,
 	type WorkspaceLayoutDocument,
@@ -188,6 +189,12 @@ export function useWorkspaceChatCatalogReconciliation(
 		const target = selectCurrentRouteChatTarget(state);
 		return target?.workspaceId === workspaceId ? target.sessionId : null;
 	});
+	const openRequestSessionId = useAppStore((state) => {
+		const request = state.chatLocationRequest;
+		return request?.kind === "open-chat" && request.workspaceId === workspaceId
+			? request.sessionId
+			: null;
+	});
 	const routeTargetResolved = useAppStore((state) => {
 		const target = selectCurrentRouteChatTarget(state);
 		if (!target?.validated || target.workspaceId !== workspaceId) return false;
@@ -330,14 +337,15 @@ export function useWorkspaceChatCatalogReconciliation(
 						}
 					}
 				}
+				const handledExactSessionId = handledRouteSessionId ?? openRequestSessionId;
 				const autoOpenAlreadyAttempted = !claimAutoOpenAttempt(workspaceId, connectionGeneration);
 				const toOpen: typeof summaries = [];
 				const toHistory: typeof summaries = [];
 				for (const summary of [...summaries].sort((a, b) => b.updatedAt - a.updatedAt)) {
-					if (summary.sessionId === handledRouteSessionId || placed.has(summary.sessionId))
+					if (summary.sessionId === handledExactSessionId || placed.has(summary.sessionId))
 						continue;
 					if (
-						handledRouteSessionId === null &&
+						handledExactSessionId === null &&
 						!autoOpenAlreadyAttempted &&
 						(summary.live || (summary.openTodos ?? 0) > 0) &&
 						toOpen.length < AUTO_OPEN_CHAT_LIMIT
@@ -348,7 +356,7 @@ export function useWorkspaceChatCatalogReconciliation(
 					}
 				}
 				if (
-					handledRouteSessionId === null &&
+					handledExactSessionId === null &&
 					!autoOpenAlreadyAttempted &&
 					placed.size === 0 &&
 					toOpen.length === 0
@@ -413,7 +421,7 @@ export function useWorkspaceChatCatalogReconciliation(
 						if (!state.sessions[summary.sessionId] || !cache) continue;
 					}
 					const state = useAppStore.getState();
-					const activate = handledRouteSessionId === null && openedCount === 0;
+					const activate = handledExactSessionId === null && openedCount === 0;
 					openedCount += 1;
 					const routed = layoutOpenOptionsForNavigation(state, workspaceId, navigation);
 					state.enqueueLayoutIntent({
@@ -443,7 +451,15 @@ export function useWorkspaceChatCatalogReconciliation(
 		return () => {
 			current = false;
 		};
-	}, [commit, connectionGeneration, layoutReady, routeChatTargetGeneration, status, workspaceId]);
+	}, [
+		commit,
+		connectionGeneration,
+		layoutReady,
+		openRequestSessionId,
+		routeChatTargetGeneration,
+		status,
+		workspaceId,
+	]);
 
 	useEffect(() => {
 		if (!document || status !== "connected") return;
@@ -460,7 +476,8 @@ export function useWorkspaceChatCatalogReconciliation(
 				const currentPlacement = latestDocument ? findPlacedResource(latestDocument, tab) : null;
 				if (
 					currentPlacement?.kind !== "chat" ||
-					currentPlacement.sessionId === routeTargetSessionId
+					currentPlacement.sessionId === routeTargetSessionId ||
+					currentPlacement.sessionId === openRequestSessionId
 				) {
 					continue;
 				}
@@ -479,12 +496,13 @@ export function useWorkspaceChatCatalogReconciliation(
 		return () => {
 			current = false;
 		};
-	}, [document, routeTargetSessionId, status, workspaceId]);
+	}, [document, openRequestSessionId, routeTargetSessionId, status, workspaceId]);
 }
 
 export function useChatLocationReconciliation(
 	workspaceId: string,
 	changeAttention: (next: LayoutAttention) => void,
+	requestFocus: (location: LayoutGroupLocation, tabId: string) => void,
 ): void {
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
@@ -536,6 +554,7 @@ export function useChatLocationReconciliation(
 						shouldAdvanceAcceptedNavigation(currentAttention, navigation),
 					),
 				);
+				if (chatLocationRequest.kind === "open-chat") requestFocus(location, placed.id);
 			}
 			if (!currentState.sessions[sessionId]) {
 				void hydrateChatResource(workspaceId, sessionId)
@@ -543,7 +562,10 @@ export function useChatLocationReconciliation(
 						const latest = useAppStore.getState();
 						if (latest.chatLocationRequest !== chatLocationRequest) return;
 						const { current } = currentChatDestination(workspaceId, placed, navigation);
-						if (installed && current) return;
+						if (installed && current) {
+							if (chatLocationRequest.kind === "open-chat") latest.clearChatLocation();
+							return;
+						}
 						if (
 							!installed &&
 							current &&
@@ -568,7 +590,12 @@ export function useChatLocationReconciliation(
 						latest.clearChatLocation();
 					});
 			}
-			if (routed.activate === false) currentState.clearChatLocation();
+			if (
+				routed.activate === false ||
+				(chatLocationRequest.kind === "open-chat" && currentState.sessions[sessionId])
+			) {
+				currentState.clearChatLocation();
+			}
 			return;
 		}
 		const state = useAppStore.getState();
@@ -661,5 +688,13 @@ export function useChatLocationReconciliation(
 		return () => {
 			current = false;
 		};
-	}, [changeAttention, chatLocationRequest, connectionGeneration, document, status, workspaceId]);
+	}, [
+		changeAttention,
+		chatLocationRequest,
+		connectionGeneration,
+		document,
+		requestFocus,
+		status,
+		workspaceId,
+	]);
 }
