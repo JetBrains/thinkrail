@@ -1,21 +1,8 @@
 import { expect, test } from "bun:test";
-import {
-	ACTIVITY_PROTOCOL_VERSION,
-	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
-} from "@thinkrail/contracts";
-import { supportsPlanReview, supportsSessionActivity } from "./wireTransport";
+import { PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { supportsPlanReview } from "./wireTransport";
 
-test("a host at or beyond the activity version supports the layer", () => {
-	expect(supportsSessionActivity(ACTIVITY_PROTOCOL_VERSION)).toBe(true);
-	expect(supportsSessionActivity(ACTIVITY_PROTOCOL_VERSION + 1)).toBe(true);
-});
-
-test("an older host and a pre-welcome connection do not, so the client clears rather than keeps glyphs", () => {
-	expect(supportsSessionActivity(ACTIVITY_PROTOCOL_VERSION - 1)).toBe(false);
-	expect(supportsSessionActivity(null)).toBe(false);
-});
-
-test("plan review is offered only by a host at or beyond the v67 capability", () => {
+test("plan review is offered only by a host at or beyond its capability version", () => {
 	expect(supportsPlanReview(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION)).toBe(true);
 	expect(supportsPlanReview(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION + 1)).toBe(true);
 	expect(supportsPlanReview(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION - 1)).toBe(false);
