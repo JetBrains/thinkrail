@@ -163,16 +163,28 @@ journey persistence, typed capture, privacy configuration, and script loaders. U
 state stays cookieless and carries no journey ID. Localhost, `astro dev`, every `pages.dev` deployment, the
 `jetbrains.github.io` address, and sibling subdomains send nothing.
 
-`src/components/Analytics.astro` initializes that facade once per document and is the only analytics
-composition point for the IDE-shell and vibecoding routes. No page or child module carries vendor
-configuration or another loader. The existing GTM container remains Cookiebot's control plane; route-
-specific downstream tags use a `thinkrail.ai` hostname condition plus Page Path, never another GTM
-container. Sharing the exact apex origin means Cookiebot scans and browser consent state apply to all
-three route families.
+`src/components/Analytics.astro` initializes that facade and then the idempotent site event delegation
+once per document; it remains the only analytics composition point for the IDE-shell and vibecoding
+routes. The route classifier is closed: `/` → `landing`, `/blog/` → `blog/index`, each published post →
+`blog/<slug>`, `/vibecoding/` → `vibecoding`, and `/agentic-development/` →
+`agentic-development`. Each document emits one explicit `content_viewed` with that key.
 
-The site test pins its production-host identity, disabled hosts and Cookiebot adapter, while the shared
-package tests the PostHog/GTM, journey and capture contracts. The shared contract deliberately has no
-`posthog-js` dependency, pasted bootstrap, or static GTM `noscript` iframe.
+Document-level `click`, middle-button `auxclick`, and disclosure `toggle` delegation instruments the
+static install controls without changing their navigation or no-JS behavior. Only the four exact stable
+GitHub desktop aliases are downloads. Their CTA location comes from the containing hero, install
+section, quick start, final CTA, or blog post; one recognized activation emits `install_cta_clicked`
+(`desktop`) followed by `download_started`. Opening either landing command-line disclosure emits only
+`install_cta_clicked` (`cli`); closing it does not. No page or child module carries analytics imports,
+vendor configuration, or another loader.
+
+The existing GTM container remains Cookiebot's control plane; route-specific downstream tags use a
+`thinkrail.ai` hostname condition plus Page Path, never another GTM container. Sharing the exact apex
+origin means Cookiebot scans and browser consent state apply to all three route families.
+
+Site tests pin production-host identity, disabled hosts, the Cookiebot adapter, every route key and
+stable desktop alias, event derivation, and initializer idempotence. The shared package tests the
+PostHog/GTM, journey and capture contracts. The shared contract deliberately has no `posthog-js`
+dependency, pasted bootstrap, or static GTM `noscript` iframe.
 
 ## Deploy
 

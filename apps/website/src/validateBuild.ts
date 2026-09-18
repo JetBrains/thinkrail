@@ -36,6 +36,16 @@ function stylesheetUrls(content: string): Set<string> {
 	);
 }
 
+async function pageRuntimeContent(distDirectory: string, html: string): Promise<string> {
+	const scriptUrls = attributeValues(html, ["src"]).filter(
+		(value) => value.startsWith("/") && value.endsWith(".js"),
+	);
+	const scripts = await Promise.all(
+		scriptUrls.map((url) => Bun.file(`${distDirectory}/${url.replace(/^\/+/, "")}`).text()),
+	);
+	return [html, ...scripts].join("\n");
+}
+
 async function outputPathExists(distDirectory: string, url: string): Promise<boolean> {
 	const pathname = new URL(url, "https://thinkrail.ai").pathname;
 	const relativePath = pathname.replace(/^\/+/, "");
@@ -153,10 +163,11 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	}
 
 	for (const [name, html] of Object.entries(pages)) {
-		if (occurrences(html, "data-posthog-project") !== 1) {
+		const runtimeContent = await pageRuntimeContent(distDirectory, html);
+		if (occurrences(runtimeContent, "data-posthog-project") !== 1) {
 			failures.push(`${name}: expected one PostHog loader`);
 		}
-		if (occurrences(html, "data-gtm-container") !== 1) {
+		if (occurrences(runtimeContent, "data-gtm-container") !== 1) {
 			failures.push(`${name}: expected one GTM loader`);
 		}
 		for (const url of new Set(
