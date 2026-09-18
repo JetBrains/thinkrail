@@ -157,8 +157,10 @@ landing + blog shells                      ──▶ src/components/Analytics.as
 ## Analytics and consent
 
 `src/analytics.ts` is the site-local facade over [[module-website-analytics]]. It supplies the exact
-production hostname `thinkrail.ai`; the shared module owns the PostHog and GTM identifiers, privacy
-configuration, and typed script loaders. Localhost, `astro dev`, every `pages.dev` deployment, the
+production hostname `thinkrail.ai` and adapts Cookiebot's current Marketing state plus consent-ready event
+to the shared current-value/subscription contract; the shared module owns the PostHog and GTM identifiers,
+journey persistence, typed capture, privacy configuration, and script loaders. Unknown or denied Marketing
+state stays cookieless and carries no journey ID. Localhost, `astro dev`, every `pages.dev` deployment, the
 `jetbrains.github.io` address, and sibling subdomains send nothing.
 
 `src/components/Analytics.astro` initializes that facade once per document and is the only analytics
@@ -168,9 +170,9 @@ specific downstream tags use a `thinkrail.ai` hostname condition plus Page Path,
 container. Sharing the exact apex origin means Cookiebot scans and browser consent state apply to all
 three route families.
 
-The site test pins its production-host identity and disabled hosts, while the shared package tests the
-common PostHog/GTM contract. The shared contract deliberately has no `posthog-js` dependency, pasted
-bootstrap, or static GTM `noscript` iframe; its spec owns the cookieless behavior and consent caveat.
+The site test pins its production-host identity, disabled hosts and Cookiebot adapter, while the shared
+package tests the PostHog/GTM, journey and capture contracts. The shared contract deliberately has no
+`posthog-js` dependency, pasted bootstrap, or static GTM `noscript` iframe.
 
 ## Deploy
 
