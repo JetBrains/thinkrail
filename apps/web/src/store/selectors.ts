@@ -119,6 +119,7 @@ interface CompletionActivationState extends SessionStateProjection {
 	sessionStateTickBySession: Record<string, number>;
 	directChatActivationTickBySession: Record<string, number>;
 	renderedCompletionBySession: Record<string, string>;
+	renderedCompletionTickBySession: Record<string, number>;
 }
 
 export function selectReadyCompletionActivation(
@@ -138,7 +139,10 @@ export function selectReadyCompletionActivation(
 		runtime.hostState?.completion?.completionId !== completion.completionId ||
 		state.renderedCompletionBySession[sessionId] !== completion.completionId ||
 		(state.directChatActivationTickBySession[sessionId] ?? 0) <=
-			(state.sessionStateTickBySession[sessionId] ?? 0)
+			Math.max(
+				state.sessionStateTickBySession[sessionId] ?? 0,
+				state.renderedCompletionTickBySession[sessionId] ?? 0,
+			)
 	) {
 		return null;
 	}

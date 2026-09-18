@@ -707,6 +707,12 @@ function reduceExtUi(
 		case "confirm":
 		case "input":
 		case "editor":
+			if (
+				rt.pendingExtUi?.id === request.id ||
+				rt.extUiQueue.some((candidate) => candidate.id === request.id)
+			) {
+				return rt;
+			}
 			return rt.pendingExtUi
 				? { ...rt, extUiQueue: [...rt.extUiQueue, request] }
 				: { ...rt, pendingExtUi: request };
@@ -730,6 +736,24 @@ function reduceExtUi(
 		default:
 			return rt;
 	}
+}
+
+function withHostState(runtime: SessionRuntime, hostState: SessionState | null): SessionRuntime {
+	let next = runtime.hostState === hostState ? runtime : { ...runtime, hostState };
+	const dialogId =
+		hostState?.needsInput?.kind === "dialog" ? hostState.needsInput.request.id : null;
+	if (dialogId === null) {
+		if (!next.pendingExtUi && next.extUiQueue.length === 0) return next;
+		return { ...next, pendingExtUi: null, extUiQueue: [] };
+	}
+	while (next.pendingExtUi && next.pendingExtUi.id !== dialogId) {
+		next = reduceExtUi(next, {
+			id: next.pendingExtUi.id,
+			sessionId: next.pendingExtUi.sessionId,
+			kind: "dismiss",
+		});
+	}
+	return next;
 }
 
 interface AppState {
@@ -773,6 +797,8 @@ interface AppState {
 	sessionStateTickBySession: Record<string, number>;
 	directChatActivationTickBySession: Record<string, number>;
 	renderedCompletionBySession: Record<string, string>;
+	renderedCompletionTickBySession: Record<string, number>;
+	obscuredChatSessions: Record<string, true>;
 	extUiOrphans: ExtUiRequest[];
 	models: WireModel[];
 	providerVersion: number;
@@ -949,6 +975,7 @@ interface AppState {
 	applySessionState: (record: SessionStateRecord) => void;
 	noteDirectChatActivation: (sessionId: string) => void;
 	noteRenderedCompletion: (sessionId: string, completionId: string) => void;
+	setChatObscured: (sessionId: string, obscured: boolean) => void;
 	reopenChat: (workspaceId: string, sessionId: string, options?: LayoutOpenOptions) => void;
 	restorePlacedChatCache: (
 		workspaceId: string,
@@ -1337,6 +1364,8 @@ function withoutChat(
 	const hasStateTick = Object.hasOwn(s.sessionStateTickBySession, sessionId);
 	const hasActivationTick = Object.hasOwn(s.directChatActivationTickBySession, sessionId);
 	const hasRenderedCompletion = Object.hasOwn(s.renderedCompletionBySession, sessionId);
+	const hasRenderedCompletionTick = Object.hasOwn(s.renderedCompletionTickBySession, sessionId);
+	const isObscured = Boolean(s.obscuredChatSessions[sessionId]);
 	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
 	const targetsLocation =
 		s.chatLocationRequest?.workspaceId === workspaceId &&
@@ -1356,6 +1385,8 @@ function withoutChat(
 		!hasStateTick &&
 		!hasActivationTick &&
 		!hasRenderedCompletion &&
+		!hasRenderedCompletionTick &&
+		!isObscured &&
 		!hasSkillBaseline &&
 		!targetsLocation &&
 		!targetsRoute &&
@@ -1443,6 +1474,12 @@ function withoutChat(
 		...(hasRenderedCompletion
 			? { renderedCompletionBySession: omitKey(s.renderedCompletionBySession, sessionId) }
 			: {}),
+		...(hasRenderedCompletionTick
+			? {
+					renderedCompletionTickBySession: omitKey(s.renderedCompletionTickBySession, sessionId),
+				}
+			: {}),
+		...(isObscured ? { obscuredChatSessions: omitKey(s.obscuredChatSessions, sessionId) } : {}),
 		...(hasSkillBaseline
 			? { skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId) }
 			: {}),
@@ -1464,6 +1501,13 @@ function sameReviewSnapshot(prev: ReviewSnapshot | undefined, next: ReviewSnapsh
 	return prev !== undefined && JSON.stringify(prev) === JSON.stringify(next);
 }
 
+function sameSessionStateRecord(
+	previous: SessionStateRecord | undefined,
+	next: SessionStateRecord,
+): boolean {
+	return previous !== undefined && JSON.stringify(previous) === JSON.stringify(next);
+}
+
 const EXT_UI_ORPHAN_LIMIT = 64;
 const REPLAYABLE_EXT_UI: ReadonlySet<ExtUiRequest["kind"]> = new Set([
 	"notify",
@@ -1472,10 +1516,35 @@ const REPLAYABLE_EXT_UI: ReadonlySet<ExtUiRequest["kind"]> = new Set([
 	"setTitle",
 ]);
 
+function isDialogRequest(
+	request: ExtUiRequest,
+): request is Extract<ExtUiRequest, { kind: "select" | "confirm" | "input" | "editor" }> {
+	return (
+		request.kind === "select" ||
+		request.kind === "confirm" ||
+		request.kind === "input" ||
+		request.kind === "editor"
+	);
+}
+
+function dialogIsAuthorized(
+	state: SessionState | null | undefined,
+	request: ExtUiRequest,
+): boolean {
+	return (
+		isDialogRequest(request) &&
+		state?.needsInput?.kind === "dialog" &&
+		state.needsInput.request.id === request.id
+	);
+}
+
 function bufferExtUiOrphan(s: AppState, request: ExtUiRequest): Partial<AppState> {
-	return REPLAYABLE_EXT_UI.has(request.kind)
-		? { extUiOrphans: [...s.extUiOrphans, request].slice(-EXT_UI_ORPHAN_LIMIT) }
-		: {};
+	const stateAuthorizesDialog = Object.values(s.sessionStateByWorkspace).some((records) =>
+		dialogIsAuthorized(records[request.sessionId]?.state, request),
+	);
+	if (!REPLAYABLE_EXT_UI.has(request.kind) && !stateAuthorizesDialog) return {};
+	if (s.extUiOrphans.some((frame) => frame.id === request.id)) return {};
+	return { extUiOrphans: [...s.extUiOrphans, request].slice(-EXT_UI_ORPHAN_LIMIT) };
 }
 
 function replayExtUiOrphans(
@@ -1484,8 +1553,14 @@ function replayExtUiOrphans(
 	get: () => AppState,
 ): void {
 	if (!get().sessions[sessionId]) return;
-	const replay = get().extUiOrphans.filter((frame) => frame.sessionId === sessionId);
-	if (replay.length === 0) return;
+	const state = Object.values(get().sessionStateByWorkspace).find(
+		(records) => records[sessionId] !== undefined,
+	)?.[sessionId]?.state;
+	const sessionFrames = get().extUiOrphans.filter((frame) => frame.sessionId === sessionId);
+	if (sessionFrames.length === 0) return;
+	const replay = sessionFrames.filter(
+		(frame) => !isDialogRequest(frame) || dialogIsAuthorized(state, frame),
+	);
 	set((s) => ({ extUiOrphans: s.extUiOrphans.filter((frame) => frame.sessionId !== sessionId) }));
 	for (const frame of replay) get().applyExtUi(frame);
 }
@@ -1668,6 +1743,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	sessionStateTickBySession: {},
 	directChatActivationTickBySession: {},
 	renderedCompletionBySession: {},
+	renderedCompletionTickBySession: {},
+	obscuredChatSessions: {},
 	extUiOrphans: [],
 	models: [],
 	providerVersion: 0,
@@ -2668,8 +2745,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const sessions = Object.fromEntries(
 				Object.entries(s.sessions).map(([sessionId, runtime]) => [
 					sessionId,
-					{ ...runtime, hostState: stateBySession.get(sessionId) ?? null },
+					withHostState(runtime, stateBySession.get(sessionId) ?? null),
 				]),
+			);
+			const extUiOrphans = s.extUiOrphans.filter(
+				(frame) =>
+					!isDialogRequest(frame) || dialogIsAuthorized(stateBySession.get(frame.sessionId), frame),
 			);
 			const sessionStateClock = s.sessionStateClock + 1;
 			const sessionStateTickBySession = Object.fromEntries(
@@ -2678,6 +2759,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return {
 				sessionStateByWorkspace,
 				sessions,
+				extUiOrphans,
 				sessionStateClock,
 				sessionStateTickBySession,
 			};
@@ -2692,6 +2774,27 @@ export const useAppStore = create<AppState>((set, get) => ({
 			}
 			const workspaceStates = s.sessionStateByWorkspace[record.workspaceId] ?? {};
 			const runtime = s.sessions[record.sessionId];
+			const extUiOrphans = s.extUiOrphans.filter(
+				(frame) =>
+					frame.sessionId !== record.sessionId ||
+					!isDialogRequest(frame) ||
+					dialogIsAuthorized(record.state, frame),
+			);
+			const orphansChanged = extUiOrphans.length !== s.extUiOrphans.length;
+			if (sameSessionStateRecord(workspaceStates[record.sessionId], record)) {
+				if ((!runtime || runtime.hostState === record.state) && !orphansChanged) return {};
+				return {
+					...(runtime && runtime.hostState !== record.state
+						? {
+								sessions: {
+									...s.sessions,
+									[record.sessionId]: withHostState(runtime, record.state),
+								},
+							}
+						: {}),
+					...(orphansChanged ? { extUiOrphans } : {}),
+				};
+			}
 			const sessionStateClock = s.sessionStateClock + 1;
 			return {
 				sessionStateClock,
@@ -2703,11 +2806,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...s.sessionStateByWorkspace,
 					[record.workspaceId]: { ...workspaceStates, [record.sessionId]: record },
 				},
+				...(orphansChanged ? { extUiOrphans } : {}),
 				...(runtime
 					? {
 							sessions: {
 								...s.sessions,
-								[record.sessionId]: { ...runtime, hostState: record.state },
+								[record.sessionId]: withHostState(runtime, record.state),
 							},
 						}
 					: {}),
@@ -2715,6 +2819,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	noteDirectChatActivation: (sessionId) =>
 		set((s) => {
+			if (s.obscuredChatSessions[sessionId]) return {};
 			const sessionStateClock = s.sessionStateClock + 1;
 			return {
 				sessionStateClock,
@@ -2728,11 +2833,26 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => {
 			if (s.sessions[sessionId]?.hostState?.completion?.completionId !== completionId) return {};
 			if (s.renderedCompletionBySession[sessionId] === completionId) return {};
+			const sessionStateClock = s.sessionStateClock + 1;
 			return {
+				sessionStateClock,
 				renderedCompletionBySession: {
 					...s.renderedCompletionBySession,
 					[sessionId]: completionId,
 				},
+				renderedCompletionTickBySession: {
+					...s.renderedCompletionTickBySession,
+					[sessionId]: sessionStateClock,
+				},
+			};
+		}),
+	setChatObscured: (sessionId, obscured) =>
+		set((s) => {
+			if (obscured === Boolean(s.obscuredChatSessions[sessionId])) return {};
+			return {
+				obscuredChatSessions: obscured
+					? { ...s.obscuredChatSessions, [sessionId]: true }
+					: omitKey(s.obscuredChatSessions, sessionId),
 			};
 		}),
 	reopenChat: (wsId, sessionId, options = {}) =>

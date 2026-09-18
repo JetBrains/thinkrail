@@ -28,6 +28,15 @@ interface SessionStateHydration {
 }
 
 let sessionStateHydration: SessionStateHydration | null = null;
+const SESSION_STATE_BUFFER_LIMIT = 4_096;
+
+function applySessionStateRecord(record: SessionStateRecord): void {
+	const store = useAppStore.getState();
+	store.applySessionState(record);
+	if (record.state.needsInput?.kind === "dialog") {
+		store.applyExtUi(record.state.needsInput.request);
+	}
+}
 
 function hydrateSessionStates(connectionGeneration: number): void {
 	const hydration: SessionStateHydration = {
@@ -36,6 +45,7 @@ function hydrateSessionStates(connectionGeneration: number): void {
 		buffered: [],
 	};
 	sessionStateHydration = hydration;
+	let retryDelay = 500;
 	const attempt = (): void => {
 		void getTransport()
 			.request("session.stateList", {})
@@ -48,8 +58,13 @@ function hydrateSessionStates(connectionGeneration: number): void {
 					return;
 				}
 				current.installSessionStateSnapshot(records);
+				for (const record of records) {
+					if (record.state.needsInput?.kind === "dialog") {
+						current.applyExtUi(record.state.needsInput.request);
+					}
+				}
 				hydration.installed = true;
-				for (const record of hydration.buffered) current.applySessionState(record);
+				for (const record of hydration.buffered) applySessionStateRecord(record);
 				hydration.buffered = [];
 			})
 			.catch(() => {
@@ -60,7 +75,8 @@ function hydrateSessionStates(connectionGeneration: number): void {
 				) {
 					return;
 				}
-				setTimeout(attempt, 500);
+				setTimeout(attempt, retryDelay);
+				retryDelay = Math.min(retryDelay * 2, 8_000);
 			});
 	};
 	attempt();
@@ -167,10 +183,15 @@ export function initTransport(): WsTransport {
 		const current = useAppStore.getState();
 		if (hydration && hydration.generation !== current.connectionGeneration) return;
 		if (hydration && !hydration.installed && isConnectedGeneration(current, hydration.generation)) {
-			hydration.buffered.push(record);
+			if (hydration.buffered.length >= SESSION_STATE_BUFFER_LIMIT) {
+				hydrateSessionStates(hydration.generation);
+				sessionStateHydration?.buffered.push(record);
+			} else {
+				hydration.buffered.push(record);
+			}
 			return;
 		}
-		current.applySessionState(record);
+		applySessionStateRecord(record);
 	});
 
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
@@ -191,7 +212,15 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
-		useAppStore.getState().addWorkspace(data as Workspace);
+		const store = useAppStore.getState();
+		store.addWorkspace(data as Workspace);
+		if (
+			store.protocolVersion !== null &&
+			store.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION &&
+			store.status === "connected"
+		) {
+			hydrateSessionStates(store.connectionGeneration);
+		}
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceUpdated, (data) => {

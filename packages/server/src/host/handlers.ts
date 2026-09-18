@@ -751,7 +751,10 @@ const handlers: Record<string, Handler> = {
 	},
 	"session.dispose": async (params) => {
 		const { sessionId } = params as { sessionId: string };
-		if (isSessionStreaming(sessionId)) await abortSession(sessionId).catch(() => {});
+		if (isSessionStreaming(sessionId)) {
+			const aborting = abortSession(sessionId).catch(() => {});
+			await Promise.race([aborting, new Promise<void>((resolve) => setTimeout(resolve, 2_000))]);
+		}
 		await removeSession(sessionId);
 		runObservation.forget(sessionId);
 		taskObservation.forget(sessionId);
@@ -824,8 +827,13 @@ const handlers: Record<string, Handler> = {
 			text: string;
 			images?: ImageContent[];
 		};
-		getWorkspace(p.workspaceId);
-		if (getSessionWorkspaceId(p.sessionId) !== p.workspaceId) {
+		const workspace = getWorkspace(p.workspaceId);
+		const attachedWorkspaceId = getSessionWorkspaceId(p.sessionId);
+		if (
+			(attachedWorkspaceId !== undefined && attachedWorkspaceId !== p.workspaceId) ||
+			(attachedWorkspaceId === undefined &&
+				!(await ensureSessionAttached(p.sessionId, p.workspaceId, workspace.worktreePath)))
+		) {
 			throw new Error(`Unknown session: ${p.sessionId}`);
 		}
 		if (!isControlMessage(p.text)) throw new Error("Session nudge must be a control message");

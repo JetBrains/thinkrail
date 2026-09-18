@@ -4,16 +4,7 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
-import {
-	lazy,
-	type ReactNode,
-	Suspense,
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { prepareChatTitle } from "../chat/chatTitle";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
@@ -231,7 +222,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
 	const reviewFlagByPath = useMemo(() => reviewFlags(reviewComments), [reviewComments]);
 	const [focusRequest, setFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
-	const directNavigationPending = useRef(false);
 	const requestRenameChat = useCallback(
 		(sessionId: string, titleInput: string, currentTitle: string) => {
 			const prepared = prepareChatTitle(titleInput);
@@ -302,30 +292,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		(next: LayoutAttention) => {
 			const state = useAppStore.getState();
 			if (state.removedWorkspaceIds[workspaceId]) return;
-			if (directNavigationPending.current) {
-				directNavigationPending.current = false;
-				const previous = state.layoutAttentionByWorkspace[workspaceId];
-				for (const [groupId, tabId] of Object.entries(next.selectedByGroup)) {
-					if (previous?.selectedByGroup[groupId] === tabId) continue;
-					const tab = (state.tabsByWorkspace[workspaceId] ?? []).find(
-						(candidate) => candidate.id === tabId,
-					);
-					if (tab?.kind === "chat") state.noteDirectChatActivation(tab.sessionId);
-				}
-			}
 			state.setLayoutAttention(workspaceId, next);
 			syncLegacySelectionFromAttention(workspaceId);
 		},
 		[workspaceId],
 	);
-
-	const noteUserNavigation = useCallback(() => {
-		directNavigationPending.current = true;
-		queueMicrotask(() => {
-			directNavigationPending.current = false;
-		});
-		useAppStore.getState().noteNavigation(workspaceId);
-	}, [workspaceId]);
 
 	const commit = useCallback(
 		(next: WorkspaceLayoutDocument) => {
@@ -731,7 +702,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				}
 				onCommit={commit}
 				onAttentionChange={changeAttention}
-				onUserNavigation={noteUserNavigation}
+				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}
+				onDirectTabActivation={(tab) => {
+					if (tab.kind === "chat") {
+						useAppStore.getState().noteDirectChatActivation(tab.sessionId);
+					}
+				}}
 				readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
 				{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
 				onRequestClose={(tab, prepare) => {

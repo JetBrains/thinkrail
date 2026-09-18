@@ -16,7 +16,6 @@ import {
 	configurePiRuntime,
 	disposeAllSessions,
 	isSessionStreaming,
-	listSessions,
 	removeSession,
 	setSessionManagerFactory,
 	setSessionPublisher,
@@ -50,6 +49,7 @@ import {
 	itemFixFindings,
 	itemOpenFindings,
 	maybeResumeReflection,
+	pendingReflectorSession,
 	reconcilePendingReviewsOnBoot,
 	releaseItemFix,
 	startReviewAllFlow,
@@ -587,12 +587,6 @@ test("when reflection refutes every candidate, no empty fix request is sent — 
 	]);
 	updateConfig({ reviewModel: toWireModel(fauxReviewer.getModel()), reviewEffort: "medium" });
 
-	// listSessions(WS, ...) is workspace-scoped only — this file reuses WS across every test and
-	// never disposes a settled test's sessions until afterAll, so a "not the reviewer" filter alone
-	// would pick up an unrelated leftover session from an earlier test. Snapshot what already exists
-	// so the reflector is identified by actually being NEW, not merely by not being the reviewer.
-	const before = new Set((await listSessions(WS, worktree)).map((s) => s.sessionId));
-
 	const todo = new TodoStore(worktree, SESSION).add({
 		title: "t",
 		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],
@@ -626,40 +620,25 @@ test("when reflection refutes every candidate, no empty fix request is sent — 
 	handleReviewerSettled(reviewerSessionId, { type: "agent_settled", terminal: null });
 	expect(isItemUnderActiveReview(SESSION, todo.id)).toBe(true);
 
-	// fireReflection fires the transient reflector session detached, registering it in `pendingFix`
-	// right after creation but before this test can observe it — retry the actual reflect_finding
-	// call (not just session existence) until the registration has definitely landed.
 	const deadline = Date.now() + 5000;
 	let reflectorSessionId: string | undefined;
-	let lastErr: unknown;
 	while (!reflectorSessionId) {
-		if (Date.now() > deadline) throw lastErr ?? new Error("reflector session never became ready");
-		const sessions = await listSessions(WS, worktree);
-		const candidate = sessions.find(
-			(s) => !before.has(s.sessionId) && s.sessionId !== reviewerSessionId,
-		)?.sessionId;
-		if (candidate) {
-			try {
-				await createReflectFindingTool().execute(
-					"tc-reflect",
-					{
-						commentId: finding.id,
-						verdict: "refuted",
-						confidence: "high",
-						reason: "not actually a bug",
-					} as never,
-					undefined,
-					undefined,
-					reviewerCtx(candidate),
-				);
-				reflectorSessionId = candidate;
-				break;
-			} catch (err) {
-				lastErr = err;
-			}
-		}
-		await new Promise((resolve) => setTimeout(resolve, 20));
+		if (Date.now() > deadline) throw new Error("reflector session never became ready");
+		reflectorSessionId = pendingReflectorSession(SESSION, todo.id);
+		if (!reflectorSessionId) await new Promise((resolve) => setTimeout(resolve, 20));
 	}
+	await createReflectFindingTool().execute(
+		"tc-reflect",
+		{
+			commentId: finding.id,
+			verdict: "refuted",
+			confidence: "high",
+			reason: "not actually a bug",
+		} as never,
+		undefined,
+		undefined,
+		reviewerCtx(reflectorSessionId),
+	);
 	maybeResumeReflection(reflectorSessionId);
 	while (todoReviewAutoCycles(ref) !== 2) {
 		if (Date.now() > deadline) throw new Error("reflected fix did not settle");

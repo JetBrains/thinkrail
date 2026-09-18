@@ -20,8 +20,11 @@ export function setExtUiStateChanged(fn: (sessionId: string) => void): void {
 let seq = 0;
 const nextId = (): string => `extui_${++seq}`;
 
+type DialogRequest = Extract<ExtUiRequest, { kind: "select" | "confirm" | "input" | "editor" }>;
+
 interface Pending {
 	sessionId: string;
+	request: DialogRequest;
 	finish: (value: string | boolean | null, dismiss: boolean) => void;
 }
 const pending = new Map<string, Pending>();
@@ -36,9 +39,9 @@ export function cancelExtUiForSession(sessionId: string): void {
 	}
 }
 
-export function pendingExtUiDialogId(sessionId: string): string | null {
-	for (const [id, entry] of pending) {
-		if (entry.sessionId === sessionId) return id;
+export function pendingExtUiDialog(sessionId: string): DialogRequest | null {
+	for (const entry of pending.values()) {
+		if (entry.sessionId === sessionId) return entry.request;
 	}
 	return null;
 }
@@ -74,7 +77,7 @@ export function notifyExtensionError(sessionId: string, error: ExtensionError): 
 
 export function createWebUiContext(sessionId: string): ExtensionUIContext {
 	const bridgeDialog = (
-		request: ExtUiRequest,
+		request: DialogRequest,
 		opts?: ExtensionUIDialogOptions,
 	): Promise<string | boolean | null> =>
 		new Promise((resolve) => {
@@ -92,7 +95,7 @@ export function createWebUiContext(sessionId: string): ExtensionUIContext {
 				resolve(value);
 			};
 			const onAbort = (): void => finish(null, true);
-			pending.set(id, { sessionId, finish });
+			pending.set(id, { sessionId, request, finish });
 			stateChanged(sessionId);
 			if (opts?.signal) {
 				if (opts.signal.aborted) return finish(null, true);

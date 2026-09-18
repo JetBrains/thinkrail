@@ -298,6 +298,24 @@ test("session creation publishes a domain summary for other frontends", async ()
 	}
 });
 
+test("concurrent idle nudges reserve one prompt and queue the later wake-up", async () => {
+	fauxA.setResponses([fauxAssistantMessage("FIRST_NUDGE"), fauxAssistantMessage("SECOND_NUDGE")]);
+	const session = await createSession({
+		cwd: tmpCwd("trpi-nudge-admission-"),
+		workspaceId: "ws-nudge-admission",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const first = nudgeSession(session.sessionId, "[thinkrail:todo-nudge] first");
+	const second = nudgeSession(session.sessionId, "[thinkrail:todo-nudge] second");
+	expect(first.disposition).toBe("prompted");
+	expect(second.disposition).toBe("queued");
+	await second.send();
+	await first.send();
+	expect(seen(session.sessionId)).toContain("FIRST_NUDGE");
+	expect(seen(session.sessionId)).toContain("SECOND_NUDGE");
+	removeSession(session.sessionId);
+});
+
 test("two sessions in two worktrees stream independently; disposing one leaves the other working", async () => {
 	fauxA.setResponses([fauxAssistantMessage("ALPHA_REPLY")]);
 	fauxB.setResponses([fauxAssistantMessage("BRAVO_REPLY")]);
@@ -402,21 +420,34 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 		record: { state: { completionUnread: false } },
 	});
 	expect(acknowledgeCompletion(session.sessionId, completionId).acknowledged).toBe(false);
+	await abortSession(session.sessionId);
+	expect(getSessionState(session.sessionId)).toMatchObject({
+		completion: { completionId, outcome: "succeeded" },
+		completionUnread: false,
+	});
 });
 
-test("internal reviewer sessions are excluded from the owner session-state snapshot", async () => {
+test("internal reviewer sessions are excluded from owner catalogs and state", async () => {
 	const cwd = tmpCwd("trpi-reviewer-state-");
-	const reviewer = await createSession({
-		cwd,
-		workspaceId: "ws-reviewer-state",
-		purpose: "reviewer",
-		model: toWireModel(fauxA.getModel()),
-	});
-	const workspaces = [{ id: "ws-reviewer-state", projectId: "p-reviewer-state", cwd }];
-	await initializeSessionStates(workspaces);
-	const records = await listSessionStates(workspaces);
-	expect(records.some((record) => record.sessionId === reviewer.sessionId)).toBe(false);
-	removeSession(reviewer.sessionId);
+	const created: SessionSummary[] = [];
+	setSessionCreatedPublisher((summary) => created.push(summary));
+	try {
+		const reviewer = await createSession({
+			cwd,
+			workspaceId: "ws-reviewer-state",
+			purpose: "reviewer",
+			model: toWireModel(fauxA.getModel()),
+		});
+		const workspaces = [{ id: "ws-reviewer-state", projectId: "p-reviewer-state", cwd }];
+		await initializeSessionStates(workspaces);
+		const records = await listSessionStates(workspaces);
+		expect(records.some((record) => record.sessionId === reviewer.sessionId)).toBe(false);
+		expect(await listSessions("ws-reviewer-state", cwd)).toEqual([]);
+		expect(created).toEqual([]);
+		removeSession(reviewer.sessionId);
+	} finally {
+		setSessionCreatedPublisher(() => {});
+	}
 });
 
 test("a length-truncated questionnaire is terminal and cannot be answered", async () => {

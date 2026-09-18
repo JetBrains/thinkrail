@@ -106,6 +106,15 @@ interface PendingFix {
 
 const pendingFix = new Map<string, PendingFix>();
 
+export function pendingReflectorSession(
+	workerSessionId: string,
+	itemId: string,
+): string | undefined {
+	return [...pendingFix].find(
+		([, pending]) => pending.workerSessionId === workerSessionId && pending.item.id === itemId,
+	)?.[0];
+}
+
 const DEFAULT_FIX_NOTE = "Address the reviewer's comments below.";
 
 function reviewSessionOptions() {
