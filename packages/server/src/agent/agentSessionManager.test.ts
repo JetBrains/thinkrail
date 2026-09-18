@@ -165,6 +165,43 @@ function installAskToolGate(name: string): {
 	};
 }
 
+function installStalledAskResultHook(name: string): { startedPath: string; remove: () => void } {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const controlDir = tmpCwd(`trpi-${name}-`);
+	const startedPath = join(controlDir, "started");
+	const extensionPath = join(agentDir, "extensions", `${name}.ts`);
+	mkdirSync(dirname(extensionPath), { recursive: true });
+	writeFileSync(
+		extensionPath,
+		[
+			'import { writeFileSync } from "node:fs";',
+			'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+			"export default function (pi: ExtensionAPI) {",
+			'\tpi.on("tool_result", async (event, ctx) => {',
+			'\t\tif (event.toolName !== "ask_user_question") return;',
+			`\t\twriteFileSync(${JSON.stringify(startedPath)}, "");`,
+			"\t\tif (!ctx.signal.aborted) {",
+			"\t\t\tawait new Promise<void>((resolve) =>",
+			'\t\t\t\tctx.signal.addEventListener("abort", () => resolve(), { once: true }),',
+			"\t\t\t);",
+			"\t\t}",
+			"\t\treturn {",
+			'\t\t\tcontent: [{ type: "text", text: "post-tool result aborted" }],',
+			"\t\t\tdetails: { answers: [], cancelled: true },",
+			"\t\t\tisError: true,",
+			"\t\t};",
+			"\t});",
+			"}",
+			"",
+		].join("\n"),
+	);
+	return {
+		startedPath,
+		remove: () => rmSync(extensionPath, { force: true }),
+	};
+}
+
 async function waitForPath(path: string): Promise<void> {
 	for (let attempt = 0; attempt < 200; attempt++) {
 		if (existsSync(path)) return;
@@ -1294,6 +1331,43 @@ test("an accepted answer persists and its RPC settles when Stop races before tur
 		if (hasSession(session.sessionId)) removeSession(session.sessionId);
 	}
 });
+
+test("Stop bounds a stalled post-tool hook and rejects an answer that did not persist", async () => {
+	const hook = installStalledAskResultHook("stalled-ask-result");
+	const toolCallId = "stalled-answer-stop";
+	fauxA.setResponses([gatedQuestionMessage(toolCallId)]);
+	const cwd = tmpCwd("trpi-stalled-answer-stop-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-stalled-answer-stop",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before stopping.");
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		const answering = answerQuestion(session.sessionId, toolCallId, gatedQuestionAnswer());
+		await waitForPath(hook.startedPath);
+
+		const stopping = abortSession(session.sessionId, true, 25);
+		await expect(answering).rejects.toThrow("accepted answer was not persisted");
+		await Promise.all([stopping, prompting]);
+
+		const transcript = await getSessionMessages(session.sessionId, "ws-stalled-answer-stop", cwd);
+		const persisted = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (persisted?.role !== "toolResult") throw new Error("stopped result was not persisted");
+		expect(persisted.isError).toBe(true);
+		expect(persisted.details).toEqual({ answers: [], cancelled: true });
+	} finally {
+		hook.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+}, 20_000);
 
 test("restart repair leaves a dangling question answerable through the custom-message path", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));

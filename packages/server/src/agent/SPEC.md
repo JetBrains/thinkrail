@@ -266,9 +266,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     images. Pi emits the emptying `queue_update`). Its optional text-only precondition rejects before
     touching Pi whenever either tracked lane has queued images; manual compaction uses that guard, while
     **`abortSession(..., true)`** synchronously claims the Stop and drains the queue in one manager operation.
-    If an accepted question result must persist first, it drains once more immediately before abort and appends
-    those late arrivals to their original lanes; it then waits for idle and returns the complete ordered queue,
-    so deferred Stop cannot race a continuation or lose images /
+    If an accepted question result is still persisting, Stop grants it a bounded grace period before signalling
+    Pi's abort; this prevents an async post-tool hook from deadlocking Stop while still preserving the normal
+    fast path. It drains once more immediately before abort and appends those late arrivals to their original
+    lanes; it then waits for idle and returns the complete ordered queue, so deferred Stop cannot race a
+    continuation or lose images /
     **`removeQueuedSession(sessionId, kind, index)`** — per-item queue removal, which Pi's
     API lacks (queues are bare string arrays, `clearQueue` is all-or-nothing): drain via the complete-content
     path, drop `lane[index]` (out-of-range → `removed: null`, everything re-queued), and re-queue each keeper
@@ -353,8 +355,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     stays dangling for ack repair, while an already accepted answer reaches its native persisted result and
     then the continuation is aborted. A reply racing after that snapshot is rejected rather than accepted and
     lost during disposal. Explicit user Stop synchronously claims an unanswered ask before signalling Pi; when
-    Submit already won it waits for that exact result boundary and then aborts only the continuation. Every
-    disposal path abandons the registry before unsubscribing so accepted-answer promises cannot strand.
+    Submit already won it gives that exact result boundary a bounded grace period, then signals abort even if
+    persistence is still pending. The answer RPC resolves only when `turn_end` contains the accepted native
+    result; a replaced or missing result rejects it. Every disposal path abandons the registry before
+    unsubscribing so accepted-answer promises cannot strand.
     `abandon()` is process-disposal plumbing, not semantic cancellation: it unblocks the in-memory tool only
     immediately before synchronous session disposal, and real-`SessionManager` restart coverage pins that its
     returned result is not persisted ahead of attach-time repair. `disposeAllSessions` remains the synchronous
