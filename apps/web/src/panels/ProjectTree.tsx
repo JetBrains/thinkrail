@@ -1,5 +1,4 @@
 import {
-	RiCheckboxCircleFill as CheckCircle,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 	RiFileCopyLine as Copy,
@@ -11,7 +10,6 @@ import {
 	RiMore2Line as MoreVertical,
 	RiPencilLine as Pencil,
 	RiAddLine as Plus,
-	RiQuestionAnswerFill as QuestionAnswer,
 	RiFolderFill,
 	RiFolderLine,
 	RiFolderOpenFill,
@@ -29,6 +27,8 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { AttentionDot } from "@/components/AttentionDot";
+import { RunningIcon } from "@/components/RunningIcon";
 import { Button } from "@/components/ui/button";
 import {
 	ContextMenu,
@@ -47,15 +47,16 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { copyText } from "@/lib";
+import { cn, copyText } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
 import {
 	isDefaultWorkspace,
 	isExternalWorkspace,
-	type SessionPresentation,
 	selectActiveWorkspaceProjectId,
-	selectProjectSessionPresentation,
-	selectWorkspaceSessionPresentation,
+	selectProjectIsRunning,
+	selectProjectNeedsAttention,
+	selectWorkspaceIsRunning,
+	selectWorkspaceNeedsAttention,
 	toast,
 	useAppStore,
 } from "../store";
@@ -263,18 +264,18 @@ export function ProjectTree() {
 				{projects.map((project) => {
 					const isExpanded = expandedProjectIds[project.id] === true;
 					const list = workspaces[project.id];
-					const projectPresentation = selectProjectSessionPresentation(
-						{ sessionStateByWorkspace },
-						project.id,
-					);
+					const stateProjection = { sessionStateByWorkspace };
 					return (
 						<li key={project.id}>
 							<ProjectRow
 								project={project}
 								isSelected={selectedProjectId === project.id}
 								isExpanded={isExpanded}
+								needsAttention={
+									!isExpanded && selectProjectNeedsAttention(stateProjection, project.id)
+								}
+								isRunning={!isExpanded && selectProjectIsRunning(stateProjection, project.id)}
 								workspaceCount={(list ?? []).filter((w) => !isDefaultWorkspace(w)).length}
-								presentation={projectPresentation}
 								onToggle={() => toggleExpand(project.id)}
 								onSelect={() => void selectProject(project.id)}
 								onClose={() => closeProject(project)}
@@ -294,10 +295,8 @@ export function ProjectTree() {
 											key={ws.id}
 											workspace={ws}
 											isActive={activeWorkspaceId === ws.id}
-											presentation={selectWorkspaceSessionPresentation(
-												{ sessionStateByWorkspace },
-												ws.id,
-											)}
+											needsAttention={selectWorkspaceNeedsAttention(stateProjection, ws.id)}
+											isRunning={selectWorkspaceIsRunning(stateProjection, ws.id)}
 											canRename={canRenameWorkspace(protocolVersion, ws)}
 											editors={editors}
 											onSelect={() => selectWorkspace(ws)}
@@ -359,40 +358,13 @@ export function ProjectTree() {
 	);
 }
 
-function SessionStateGlyph({ presentation }: { presentation: SessionPresentation }) {
-	if (presentation === "quiet") return null;
-	const label =
-		presentation === "needs_input"
-			? "Needs input"
-			: presentation === "finished"
-				? "Finished"
-				: "Working";
-	return (
-		<span
-			role="img"
-			data-testid="session-state-glyph"
-			data-state={presentation}
-			aria-label={label}
-			title={label}
-			className={presentation === "working" ? "text-text-muted" : "text-primary"}
-		>
-			{presentation === "needs_input" ? (
-				<QuestionAnswer className="size-14" />
-			) : presentation === "finished" ? (
-				<CheckCircle className="size-14" />
-			) : (
-				<Loader2 className="size-14 animate-spin motion-reduce:animate-none" />
-			)}
-		</span>
-	);
-}
-
 function ProjectRow({
 	project,
 	isSelected,
 	isExpanded,
+	needsAttention,
+	isRunning,
 	workspaceCount,
-	presentation,
 	onToggle,
 	onSelect,
 	onClose,
@@ -405,8 +377,9 @@ function ProjectRow({
 	project: Project;
 	isSelected: boolean;
 	isExpanded: boolean;
+	needsAttention: boolean;
+	isRunning: boolean;
 	workspaceCount: number;
-	presentation: SessionPresentation;
 	onToggle: () => void;
 	onSelect: () => void;
 	onClose: () => void;
@@ -431,6 +404,8 @@ function ProjectRow({
 		<div
 			data-testid="project-item"
 			data-menu-open={menuOpen}
+			data-attention={needsAttention || undefined}
+			data-running={isRunning || undefined}
 			className={`group flex h-28 items-center gap-4 rounded-[var(--radius-sm)] pr-4 pl-4 transition-colors ${
 				menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 			}`}
@@ -452,14 +427,22 @@ function ProjectRow({
 				onClick={onSelect}
 				className="flex min-w-0 flex-1 items-center gap-4 text-left"
 			>
-				<Folder className={`size-14 shrink-0 ${isSelected ? "text-primary" : "text-text-muted"}`} />
+				{isRunning ? (
+					<RunningIcon className={isSelected ? "text-primary" : "text-text-muted"}>
+						<Folder className="size-14 shrink-0" />
+					</RunningIcon>
+				) : (
+					<Folder
+						className={`size-14 shrink-0 ${isSelected ? "text-primary" : "text-text-muted"}`}
+					/>
+				)}
 				<span
 					className={`truncate tr-text-ui ${isSelected ? "text-text-default" : "text-text-muted"}`}
 				>
 					{project.name}
 				</span>
 			</button>
-			<SessionStateGlyph presentation={presentation} />
+			{needsAttention ? <AttentionDot /> : null}
 			{!isExpanded && workspaceCount > 0 && (
 				<span
 					data-testid="project-workspace-count"
@@ -545,7 +528,7 @@ function ProjectRow({
 				open={confirmOpen}
 				onOpenChange={setConfirmOpen}
 				title={`Close ${project.name}?`}
-				description="Removes this project from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it from Add project → Recents."
+				description="Removes this project from the open projects list. Its repository, workspaces, chats, and attention state are kept. Reopen it from Add project → Recents."
 				confirmLabel="Close project"
 				confirmTestId="confirm-close-project"
 				onConfirm={() => {
@@ -564,7 +547,8 @@ function ProjectRow({
 function WorkspaceRow({
 	workspace,
 	isActive,
-	presentation,
+	needsAttention,
+	isRunning,
 	canRename,
 	editors,
 	onSelect,
@@ -576,7 +560,8 @@ function WorkspaceRow({
 }: {
 	workspace: Workspace;
 	isActive: boolean;
-	presentation: SessionPresentation;
+	needsAttention: boolean;
+	isRunning: boolean;
 	canRename: boolean;
 	editors: EditorInfo[];
 	onSelect: () => void;
@@ -665,7 +650,11 @@ function WorkspaceRow({
 	};
 
 	const identityClass = `flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`;
-	const identityIcon = (
+	const identityIcon = isRunning ? (
+		<RunningIcon className={cn(isTwoLine && "mt-2", isActive ? "text-primary" : "text-text-muted")}>
+			<Icon className="size-14 shrink-0" />
+		</RunningIcon>
+	) : (
 		<Icon
 			className={`${isTwoLine ? "mt-2 " : ""}size-14 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}
 		/>
@@ -686,6 +675,8 @@ function WorkspaceRow({
 				data-testid="workspace-item"
 				data-active={isActive}
 				data-kind={workspace.kind ?? "worktree"}
+				data-attention={needsAttention || undefined}
+				data-running={isRunning || undefined}
 				onContextMenu={openMenuFromContext}
 				className={`group flex min-h-28 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border-0 py-4 pr-4 pl-24 transition-colors ${
 					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
@@ -724,7 +715,7 @@ function WorkspaceRow({
 						</span>
 					</button>
 				)}
-				<SessionStateGlyph presentation={presentation} />
+				{needsAttention ? <AttentionDot /> : null}
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="workspace-menu"

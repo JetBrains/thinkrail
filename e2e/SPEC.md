@@ -158,10 +158,15 @@ used when the variable is absent). A missing artifact, failed generation, or una
 before any provider turn; PI's ordinary first-available fallback is never accepted as test configuration.
 The same copy and hermetic environment seed the private restart host.
 
-**Session state** coverage seeds complete transcript states and drives live blockers/runs to pin needs-input,
-working, and unread-completion rail presentation; reconnect/restart snapshots, direct-versus-passive
-activation, owner-global clearing, explicit-Stop quietness, internal-session exclusion, and snapshot retry
-are covered. The retired `session.activityList → []` compatibility method remains a focused handler test.
+**Session state** coverage seeds complete transcript states and drives normalized host blockers/runs to pin
+Projects rail presentation: both needs-input and owner-globally unread results render the same static green
+attention dot (“Needs attention”), while genuinely working sessions pulse the existing workspace/project
+identity icon without changing its colour. The rail must not substitute question/check/result glyphs or a
+spinner, and queued, blocked, hidden/background, and explicitly stopped sessions remain quiet. Reconnect/
+restart snapshots, direct-versus-passive activation, owner-global clearing, internal-session exclusion, and
+snapshot retry are covered; `data-attention`, `attention-dot`, `data-running`, and `running-icon` are stable
+visual hooks rather than alternate state models. The retired `session.activityList → []` compatibility method
+remains a focused handler test.
 
 Workbench scenarios exercise the normalized frontend-local frame rather than only the pure model: frame
 geometry/tool placement survives workspace switches while resource tabs and attention differ; closing a final

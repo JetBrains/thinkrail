@@ -98,6 +98,45 @@ export function selectSessionState(
 	return state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state ?? null;
 }
 
+export function selectWorkspaceNeedsAttention(
+	state: SessionStateProjection,
+	workspaceId: string,
+): boolean {
+	return Object.values(state.sessionStateByWorkspace[workspaceId] ?? {}).some(
+		(record) => record.state.needsInput !== null || record.state.completionUnread,
+	);
+}
+
+export function selectWorkspaceIsRunning(
+	state: SessionStateProjection,
+	workspaceId: string,
+): boolean {
+	return Object.values(state.sessionStateByWorkspace[workspaceId] ?? {}).some(
+		(record) => record.state.execution === "running",
+	);
+}
+
+export function selectProjectNeedsAttention(
+	state: SessionStateProjection,
+	projectId: string,
+): boolean {
+	return Object.values(state.sessionStateByWorkspace).some((records) =>
+		Object.values(records).some(
+			(record) =>
+				record.projectId === projectId &&
+				(record.state.needsInput !== null || record.state.completionUnread),
+		),
+	);
+}
+
+export function selectProjectIsRunning(state: SessionStateProjection, projectId: string): boolean {
+	return Object.values(state.sessionStateByWorkspace).some((records) =>
+		Object.values(records).some(
+			(record) => record.projectId === projectId && record.state.execution === "running",
+		),
+	);
+}
+
 export function selectWorkspaceSessionPresentation(
 	state: SessionStateProjection,
 	workspaceId: string,

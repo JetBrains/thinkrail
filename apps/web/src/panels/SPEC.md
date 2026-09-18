@@ -43,7 +43,7 @@ treatment.
   detached-HEAD rows stay visible but disabled); choosing one calls `workspace.openExisting`, then expands
   the project and activates the attached row without starting a chat. Close
   opens a centered, neutral `ConfirmDialog` titled **“Close {name}?”**, description **“Removes this project
-  from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it
+  from the open projects list. Its repository, workspaces, chats, and attention state are kept. Reopen it
   from Add project → Recents.”**, Cancel initially focused, and **Close project**; Cancel, backdrop, and
   Escape dismiss. Confirm fires `project.close` and waits for the full `project.updated` push—no optimistic
   removal; success is the
@@ -76,12 +76,25 @@ treatment.
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
   name is decoupled from the git branch (see [[submodule-server-workspaces]]).
 
-  Workspace/project session presentation comes only from normalized host state. A concrete input blocker
-  renders the questionnaire icon with “Waiting for your answer”; an owner-globally unread completion renders
-  a compact result-ready dot with outcome-specific accessible text. Otherwise a genuinely working session
-  makes the existing identity icon pulse without changing colour; blocked sessions never pulse. Collapsed
-  project rollup uses one shared precedence—needs input, unread completion, then working—while hover text can
-  name all counts. Quiet rows have no decoration. The components remain props-driven over store selectors.
+  Workspace/project session presentation comes only from normalized host state. The rail has exactly two
+  visual treatments: a static green/accent **attention dot** for either a concrete needs-input blocker or an
+  owner-globally unread result, and a soft pulse on the existing workspace/project identity icon while a
+  top-level session is genuinely working. Attention is binary: needs-input and unread-result states use the
+  same dot, with the accessible label **“Needs attention”** and no question/check/result glyph, spinner,
+  count, or status-specific tooltip. Working keeps the icon's existing active/inactive colour and exposes
+  **“Agent working”** accessibly; it never adds a second marker. Queued, hidden/background, stopped, and quiet
+  sessions do not pulse; a needs-input session may still pulse when its orthogonal execution fact remains
+  running, so the attention dot and working treatment can coexist. Reduced motion removes the animation while
+  retaining the same-hue icon. Collapsed project rollup uses the same selectors as
+  workspace rows, while expanded projects show the detail on workspace rows. The components remain
+  props-driven over the normalized host-state selectors.
+
+  `ProjectTree` renders the shared dependency-light `AttentionDot` from the store's normalized attention map.
+  It is static accent colour, carries no count or state-specific glyph/tooltip, and occupies its own flex
+  column between the identity button and the hover-revealed kebab. Workspace and collapsed-project rows
+  expose `data-attention` only while positive. Separately, the shared `RunningIcon` wraps the existing
+  identity icon for normalized working state; workspace and collapsed-project rows expose `data-running` only
+  while positive. These attributes are test hooks, not a second state model.
 
   **Project rows carry the workspace count only while collapsed**; expanded, the workspace rows provide the
   detail directly. The **Default workspace**
