@@ -115,7 +115,7 @@ export function Shell() {
 			: {}),
 	});
 	return (
-		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
+		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-16 py-8">
 				<div className="flex min-w-0 items-center gap-12">
 					<BrandLogo />

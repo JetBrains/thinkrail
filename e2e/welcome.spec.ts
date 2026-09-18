@@ -204,7 +204,7 @@ test("a project without specs suggests setting it up", async ({ page }) => {
 test("opening a non-git folder from the Welcome screen offers to initialise a repo", async ({
 	page,
 }) => {
-	stagePlainFolder();
+	await stagePlainFolder(page);
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect(page.getByTestId("welcome")).toBeVisible();

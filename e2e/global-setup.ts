@@ -60,6 +60,10 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 		rmSync(E2E_DATA_DIR, { recursive: true, force: true });
 		mkdirSync(E2E_DATA_DIR, { recursive: true });
 		writeFileSync(join(E2E_DATA_DIR, "config.json"), JSON.stringify(CONFIRMED_ANALYTICS_CONFIG));
+		writeFileSync(
+			join(E2E_DATA_DIR, "feedback.json"),
+			JSON.stringify({ acceptedMessages: 0, nextInvitationAt: 10, dismissed: true }),
+		);
 		mkdirSync(E2E_HOME_DIR, { recursive: true });
 		writeFileSync(join(E2E_HOME_DIR, ".zshrc"), "# ThinkRail e2e isolated shell\n");
 

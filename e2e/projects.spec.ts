@@ -204,7 +204,7 @@ test("manual path from the rail supersedes a picker started from Welcome", async
 test("opening a non-git folder offers to initialise a repo, then opens it end-to-end", async ({
 	page,
 }) => {
-	stagePlainFolder();
+	await stagePlainFolder(page);
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 
