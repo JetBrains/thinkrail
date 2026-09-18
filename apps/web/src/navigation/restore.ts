@@ -86,7 +86,7 @@ function isSelectedCenterTabRemovalEdge(
 	return centerPlacesTab(before.center, selectedId) && !centerPlacesTab(after.center, selectedId);
 }
 
-function isUserNavigationEdge(
+export function isUserNavigationEdge(
 	state: NavigationIntentState,
 	previous: NavigationIntentState,
 ): boolean {
@@ -125,7 +125,7 @@ export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () 
 	const syncNow = () => {
 		if (pending) return;
 		const state = useAppStore.getState();
-		if (state.routeChatTarget) return;
+		if (state.routeChatTarget || state.chatLocationRequest?.kind === "open-chat") return;
 		const location = deriveLocation(state);
 		if (!location) return;
 		const fragment = serializeLocation(location);
@@ -203,7 +203,9 @@ export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () 
 		applyRoute(() => {
 			const state = useAppStore.getState();
 			if (state.activeWorkspaceId) state.noteNavigation(state.activeWorkspaceId);
-			useAppStore.getState().clearRouteChatTarget();
+			const current = useAppStore.getState();
+			current.clearRouteChatTarget();
+			current.clearChatLocation();
 		});
 		const canonical = serializeLocation(location);
 		if (canonical !== fragment) driver.replace(canonical);
@@ -213,12 +215,10 @@ export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () 
 
 	const unsubscribeDriver = driver.onIncoming(acceptFragment);
 	const unsubscribeStore = useAppStore.subscribe((state, previous) => {
-		if (
+		const userNavigation =
 			!applyingRoute &&
-			(isUserNavigationEdge(state, previous) || isSelectedCenterTabRemovalEdge(state, previous))
-		) {
-			armedPush = true;
-		}
+			(isUserNavigationEdge(state, previous) || isSelectedCenterTabRemovalEdge(state, previous));
+		if (userNavigation) armedPush = true;
 		if (
 			!applyingRoute &&
 			pending &&

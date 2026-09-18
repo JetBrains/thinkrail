@@ -435,6 +435,37 @@ test("an unresolved exact-chat target pauses URL sync until it is consumed", asy
 	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1");
 });
 
+test("an unresolved open-chat request hides the intermediate workspace and pushes only the landed chat", async () => {
+	const d = fakeDriver("");
+	const { listWorkspaces } = fakeLists();
+	stop = startNavigation({ driver: d.driver, listWorkspaces });
+	installWelcome([project("p1")]);
+	const store = useAppStore.getState();
+	const w1 = workspace("w1");
+	const w2 = workspace("w2");
+	store.setWorkspaces("p1", [w1, w2]);
+	store.activateWorkspace(w1);
+	store.openChatSession("w1", "s1", null, "medium");
+	selectChatPlacement("w1", "s1");
+	await settle();
+	const pushesBefore = d.pushes.length;
+
+	store.requestChatLocation({
+		kind: "open-chat",
+		projectId: "p1",
+		workspaceId: "w2",
+		sessionId: "s2",
+	});
+	expect(useAppStore.getState().activeWorkspaceId).toBe("w2");
+	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
+
+	store.openChatSession("w2", "s2", null, "medium");
+	selectChatPlacement("w2", "s2");
+	expect(selectAttentionCenterTab(useAppStore.getState(), "w2")?.sessionId).toBe("s2");
+	store.clearChatLocation();
+	expect(d.pushes.slice(pushesBefore)).toEqual(["#/v1/projects/p1/workspaces/w2/chats/s2"]);
+});
+
 test("an incoming main fragment is applied even when the client is already inside a chat", async () => {
 	const d = fakeDriver("");
 	const { listWorkspaces } = fakeLists();
@@ -446,9 +477,18 @@ test("an incoming main fragment is applied even when the client is already insid
 	store.openChatSession("w1", "s1", null, "medium");
 	selectChatPlacement("w1", "s1");
 	expect(d.fragment).toContain("/chats/s1");
+	useAppStore.setState({
+		chatLocationRequest: {
+			kind: "open-chat",
+			projectId: "p1",
+			workspaceId: "w1",
+			sessionId: "s2",
+		},
+	});
 
 	d.incoming("#/v1");
 	await settle();
+	expect(useAppStore.getState().chatLocationRequest).toBeNull();
 	expect(useAppStore.getState().selectedProjectId).toBeNull();
 	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
 	expect(d.fragment).toBe("#/v1");

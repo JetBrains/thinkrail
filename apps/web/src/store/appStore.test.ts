@@ -1411,6 +1411,7 @@ test("closing a chat moves it to history with its runtime kept; reopening restor
 	store.handlePiEvent(agentStart, "a");
 	useAppStore.setState({
 		chatLocationRequest: {
+			kind: "reveal-message",
 			workspaceId: "ws1",
 			projectId: "p1",
 			sessionId: "a",
@@ -1576,6 +1577,7 @@ test("a deletion that beats session.create prevents its late response from resto
 		sourceId: "late",
 	});
 	store.requestChatLocation({
+		kind: "reveal-message",
 		workspaceId: "ws1",
 		projectId: "p1",
 		sessionId: "late",
@@ -1923,6 +1925,7 @@ test("requestChatLocation sets the jump deep link AND switches project+workspace
 	useAppStore.setState({ selectedProjectId: "p1", activeWorkspaceId: "ws1" });
 
 	store.requestChatLocation({
+		kind: "reveal-message",
 		workspaceId: "ws2",
 		projectId: "p2",
 		sessionId: "s1",
@@ -1931,6 +1934,7 @@ test("requestChatLocation sets the jump deep link AND switches project+workspace
 	});
 	let st = useAppStore.getState();
 	expect(st.chatLocationRequest).toEqual({
+		kind: "reveal-message",
 		workspaceId: "ws2",
 		projectId: "p2",
 		sessionId: "s1",
@@ -1947,6 +1951,24 @@ test("requestChatLocation sets the jump deep link AND switches project+workspace
 	expect(st.selectedProjectId).toBe("p2");
 });
 
+test("an open-chat location counts navigation immediately without fake message coordinates", () => {
+	useAppStore.getState().requestChatLocation({
+		kind: "open-chat",
+		workspaceId: "ws2",
+		projectId: "p2",
+		sessionId: "session",
+	});
+
+	expect(useAppStore.getState().chatLocationRequest).toEqual({
+		kind: "open-chat",
+		workspaceId: "ws2",
+		projectId: "p2",
+		sessionId: "session",
+		navigation: null,
+	});
+	expect(useAppStore.getState().navTickByWorkspace.ws2).toBe(1);
+});
+
 test("requestChatLocation captures an already-hydrated destination before switching workspaces", () => {
 	useAppStore.setState({
 		activeWorkspaceId: "ws1",
@@ -1960,6 +1982,7 @@ test("requestChatLocation captures an already-hydrated destination before switch
 		},
 	});
 	useAppStore.getState().requestChatLocation({
+		kind: "reveal-message",
 		workspaceId: "ws2",
 		projectId: "p2",
 		sessionId: "session",
@@ -2194,6 +2217,7 @@ test("workspace selection history tracks ordinary, route, and history-search act
 	expect(useAppStore.getState().workspaceSelectionHistory).toEqual(["w1", "w2"]);
 
 	useAppStore.getState().requestChatLocation({
+		kind: "reveal-message",
 		workspaceId: "w2",
 		projectId: "p2",
 		sessionId: "session",
@@ -2485,6 +2509,7 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 		changesRequest: { workspaceId: "w1", path: "a", navTick: 0, navigation: null },
 		specRequest: { workspaceId: "w1", path: "SPEC.md", navigation: null },
 		chatLocationRequest: {
+			kind: "reveal-message",
 			workspaceId: "w1",
 			projectId: "p1",
 			sessionId: "removed-chat",
@@ -2550,6 +2575,7 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	s.reconcileWorkspaceSessions("w1", ["removed-chat"], []);
 	s.noteClosedChats("w1", [{ sessionId: "late-chat", title: "Late", closedAt: 2 }]);
 	s.requestChatLocation({
+		kind: "reveal-message",
 		workspaceId: "w1",
 		projectId: "p1",
 		sessionId: "late-chat",

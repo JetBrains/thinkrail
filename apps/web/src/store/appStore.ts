@@ -333,14 +333,15 @@ export interface ClosedChat {
 	closedAt: number;
 }
 
-export interface ChatLocationRequest {
+interface ChatLocationRequestBase {
 	workspaceId: string;
 	projectId: string;
 	sessionId: string;
-	messageIndex: number;
-	anchorText: string;
 	navigation?: CenterNavigationStamp | null;
 }
+
+export type ChatLocationRequest = ChatLocationRequestBase &
+	({ kind: "open-chat" } | { kind: "reveal-message"; messageIndex: number; anchorText: string });
 
 export interface SessionRuntime {
 	turns: ChatTurn[];
@@ -3390,7 +3391,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				return {};
 			}
 			const hydrated = state.layoutAttentionByWorkspace[req.workspaceId] !== undefined;
-			const advanced = hydrated ? advanceCenterNavigation(state, req.workspaceId) : null;
+			const advanced =
+				req.kind === "open-chat" || hydrated
+					? advanceCenterNavigation(state, req.workspaceId)
+					: null;
 			return {
 				...(advanced?.patch ?? {}),
 				chatLocationRequest: {

@@ -6,3 +6,4 @@ export {
 	parseFragment,
 	serializeLocation,
 } from "./location";
+export { isUserNavigationEdge } from "./restore";

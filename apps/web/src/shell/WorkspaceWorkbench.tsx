@@ -12,7 +12,7 @@ import { RunningIcon } from "../components/RunningIcon";
 import { LoadingRegion } from "../components/Skeleton";
 import { DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { IconTooltip } from "../components/ui/tooltip";
-import { type LayoutAttention, layoutResourceIdentity } from "../lib";
+import { type LayoutAttention, layoutResourceIdentity, randomId } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
@@ -57,6 +57,7 @@ import {
 	findPlacedResource,
 	findTabLocation,
 	type LayoutCenterTab,
+	type LayoutGroupLocation,
 	type LayoutTab,
 	type LayoutTabFocusRequest,
 	type LayoutToolId,
@@ -293,6 +294,10 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[workspaceId],
 	);
 
+	const focusChatLocation = useCallback((location: LayoutGroupLocation, tabId: string) => {
+		setFocusRequest({ key: randomId("chat-location-focus"), location, tabId });
+	}, []);
+
 	const commit = useCallback(
 		(next: WorkspaceLayoutDocument) => {
 			void commitWorkspaceLayout(workspaceId, next, document).catch(() => {});
@@ -306,7 +311,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest);
 	useWorkspaceChatCatalogReconciliation(workspaceId, commit);
 	const { terminals } = useTerminalPlacementReconciliation(workspaceId, commit);
-	useChatLocationReconciliation(workspaceId, changeAttention);
+	useChatLocationReconciliation(workspaceId, changeAttention, focusChatLocation);
 
 	useEffect(() => {
 		if (!document || status !== "connected") return;

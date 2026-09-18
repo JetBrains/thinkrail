@@ -754,7 +754,7 @@ export default function ChatView({
 
 	useEffect(() => {
 		if (
-			!chatLocationRequest ||
+			chatLocationRequest?.kind !== "reveal-message" ||
 			chatLocationRequest.workspaceId !== workspaceId ||
 			chatLocationRequest.sessionId !== sessionId ||
 			!locationRowsReady

@@ -3,11 +3,13 @@ import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
 import type { EditorTab } from "./appStore";
 import {
+	attentionSessionTargets,
 	isConnectedGeneration,
 	isDefaultWorkspace,
 	isExternalWorkspace,
 	isUserOwnedWorkspace,
 	matchesWorktreePath,
+	nextAttentionSessionTarget,
 	projectIsRunning,
 	projectNeedsAttention,
 	selectActiveEditorTab,
@@ -542,6 +544,62 @@ test("project attention needs no loaded workspace list and never counts another 
 	const map = { wa: attentionEntry("never-loaded", ["s1"]) };
 	expect(projectNeedsAttention(map, "never-loaded")).toBe(true);
 	expect(projectNeedsAttention(map, "other")).toBe(false);
+});
+
+const orderedAttention = (
+	attentionId: string,
+	attentionPriority?: "blocking" | "normal",
+	attentionAt?: number,
+	acknowledging?: true,
+) => ({
+	attentionId,
+	...(attentionPriority ? { attentionPriority } : {}),
+	...(attentionAt !== undefined ? { attentionAt } : {}),
+	requiredConnectionGeneration: 1,
+	requiredHydrationEpoch: 0,
+	requiredEventRevision: 0,
+	...(acknowledging ? { acknowledging } : {}),
+});
+
+test("attention targets sort blockers first, then newest, and exclude incomplete or acknowledging rows", () => {
+	const targets = attentionSessionTargets({
+		w1: {
+			projectId: "p1",
+			sessions: {
+				"normal-new": orderedAttention("normal-new", "normal", 50),
+				"blocking-old": orderedAttention("blocking-old", "blocking", 20),
+				"blocking-new": orderedAttention("blocking-new", "blocking", 30),
+				legacy: orderedAttention("legacy"),
+				acknowledging: orderedAttention("ack", "blocking", 100, true),
+			},
+		},
+	});
+
+	expect(targets.map((target) => target.sessionId)).toEqual([
+		"blocking-new",
+		"blocking-old",
+		"normal-new",
+	]);
+});
+
+test("attention target ties and traversal stay deterministic in both directions", () => {
+	const targets = attentionSessionTargets({
+		w9: { projectId: "p2", sessions: { s0: orderedAttention("c0", "normal", 10) } },
+		w2: { projectId: "p1", sessions: { s1: orderedAttention("c1", "normal", 10) } },
+		w1: { projectId: "p1", sessions: { s2: orderedAttention("c2", "normal", 10) } },
+	});
+	expect(
+		targets.map(({ projectId, workspaceId, sessionId }) => [projectId, workspaceId, sessionId]),
+	).toEqual([
+		["p1", "w1", "s2"],
+		["p1", "w2", "s1"],
+		["p2", "w9", "s0"],
+	]);
+	expect(nextAttentionSessionTarget(targets, "s2", "next")?.sessionId).toBe("s1");
+	expect(nextAttentionSessionTarget(targets, "s2", "previous")?.sessionId).toBe("s0");
+	expect(nextAttentionSessionTarget(targets, null, "next")?.sessionId).toBe("s2");
+	expect(nextAttentionSessionTarget(targets, null, "previous")?.sessionId).toBe("s0");
+	expect(nextAttentionSessionTarget([], null, "next")).toBeNull();
 });
 
 const runningEntry = (projectId: string, sessionIds: string[]) => ({
