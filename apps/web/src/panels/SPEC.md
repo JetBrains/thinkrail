@@ -645,7 +645,7 @@ a project picker, the prompt hero, and the reused
   (`useChatTodos` raises it as an error toast, filtered to the owning `sessionId` and deduped across split
   views by the toast body).
   **Plan-review STATE is always derived from the plan; only the ACTIONS are host-version-gated on
-  `transport.supportsPlanReview` (v66).** `reviewables`/`unsettledReviewables`/`planReady` come from
+  `transport.supportsPlanReview` (v67).** `reviewables`/`unsettledReviewables`/`planReady` come from
   `TodoItem.review` regardless of host version — gating them to empty would let `planReady` read ship-ready
   over an unreviewed step. Against an older host that serves no `todo.startReview`/`reviewAll`, `PlanPane`
   only disables the mutating affordances (per-row `Start review`, both `Review All` triggers), so an
