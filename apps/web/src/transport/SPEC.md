@@ -61,8 +61,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   (peer-created domain state enters history only, never local placement), `session.deleted` via the idempotent
   `deleteChat(workspaceId, sessionId)` tombstone fold (an online fast path; because this event channel is
   deliberately not replayed, workbench hydration repairs any deletion missed while disconnected from the next
-  authoritative `session.list`), **`session.activity`** via `applySessionActivity(payload)`,
-  `provider.changed` via the atomic store invalidation
+  authoritative `session.list`), `provider.changed` via the atomic store invalidation
   `noteProviderChanged()` plus a `model.list` re-read installed through the store's monotonic provider-version
   guard (the model-catalog hook uses the same guarded write for every list/refresh, so an older reply cannot
   restore a removed generation's models; provider settings observes the same version and re-reads
@@ -72,33 +71,9 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `workspace.fsChanged` via `noteFsChanged(payload)`, and **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
   welcome config lands in the atomic install above.
 
-  **Activity hydrates on welcome, and retires there too.** Alongside the workspace re-read, every welcome
-  runs `session.activityList` → `hydrateSessionActivity(rows)` under the same connection-generation fence,
-  because `session.activity` pushes are never replayed and a reconnecting surface would otherwise render a
-  rail from before the outage.
-
-  A generation fence alone is **not** enough, because the collision is *within* one connection:
-  `activityHydration` therefore **buffers pushes for the duration of the read** and replays them, in
-  arrival order, immediately after the snapshot installs. Without it a push that lands while the request is
-  in flight is silently reverted by a snapshot the host computed before it — leaving a wrong glyph until
-  that session next changes. Same shape as the Pi-event batcher above: the transport owns push *ordering*,
-  the store stays a plain fold. Reads are tokenized so a stale response cannot settle over a newer one; a
-  **failed** read still replays its buffer (no snapshot arrived, so those pushes are the only truth left),
-  while a **superseded generation** discards it (a fresh welcome is already re-reading, and replaying a
-  dead connection's pushes would resurrect stale rows). Both settle *and* failure are generation-fenced for
-  that reason — `WsTransport` **resends** pending requests across a reconnect, so an outcome can arrive
-  after the connection it was issued on is gone.
-
-  The unsupported-welcome path additionally **abandons** any in-flight hydration before clearing, and that
-  ordering is load-bearing: a v60 read can be in flight with pushes buffered when the endpoint reconnects
-  to a pre-activity host, whose rejection of the resent `session.activityList` would otherwise replay those
-  pushes *after* the clear — stranding a glyph the older host can never retract. `abandon` invalidates the
-  read's token, so its late settle or failure is inert. The capability gate is **`supportsSessionActivity(protocolVersion)`**
-  (`ACTIVITY_PROTOCOL_VERSION`), and failing it does **not** skip the call: it hydrates `[]`, so a surface
-  that has seen a newer host and then reconnects to an older one clears its glyphs rather than stranding
-  them — that host can send neither a snapshot nor a retraction. Store semantics for the fold live in
-  [[submodule-web-store]]; the wire shape is [[module-contracts]]. Before `WsTransport` dispatches any response or non-Pi
-  push, `wireTransport` flushes queued Pi events synchronously; connection-status transitions do the same.
+  Activity has no transport state in this release. The host retains `session.activityList → []` only for
+  already-loaded old clients; this web client neither requests it nor subscribes to a push channel. Before
+  `WsTransport` dispatches any response or non-Pi push, `wireTransport` flushes queued Pi events synchronously; connection-status transitions do the same.
   This dispatch barrier preserves cross-message order and the store's transcript-revision fence while still
   collapsing consecutive stream frames. All subscriptions happen once at init, never in component effects);
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
@@ -124,13 +99,11 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   than a caller convention).
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
-  `TransportOptions`. `supportsSessionActivity` stays module-internal (its own tests import the file
-  directly) — no sibling decides the activity capability, this module does.
+  `TransportOptions`.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
-  `SessionDeletedPayload` for `session.deleted`, `SessionActivityPayload` +
-  `ACTIVITY_PROTOCOL_VERSION` for `session.activity` and its snapshot gate, `provider.changed`, the empty addressed
+  `SessionDeletedPayload` for `session.deleted`, `provider.changed`, the empty addressed
   `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` + `host.updateAvailable`,
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +
   `settings.changed`); `store`
