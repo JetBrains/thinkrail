@@ -151,6 +151,59 @@ test("no targets and an only-current target report distinct no-op states", () =>
 	expect(useAppStore.getState().chatLocationRequest).toBeNull();
 });
 
+test("a viewed normal candidate disappears without restarting ahead of the remaining normal work", () => {
+	const w1 = workspace("w1", "p1");
+	useAppStore.setState({ workspaces: { p1: [w1] } });
+	setAttention([
+		{
+			projectId: "p1",
+			workspaceId: "w1",
+			sessionId: "blocker",
+			attentionPriority: "blocking",
+			attentionAt: 30,
+		},
+		{
+			projectId: "p1",
+			workspaceId: "w1",
+			sessionId: "normal-new",
+			attentionAt: 20,
+		},
+		{
+			projectId: "p1",
+			workspaceId: "w1",
+			sessionId: "normal-old",
+			attentionAt: 10,
+		},
+	]);
+	const { navigation: navigator } = start();
+
+	navigator.next();
+	selectChat(w1, "blocker");
+	useAppStore.getState().clearChatLocation();
+	navigator.next();
+	expect(useAppStore.getState().chatLocationRequest?.sessionId).toBe("normal-new");
+
+	selectChat(w1, "normal-new");
+	useAppStore.getState().clearChatLocation();
+	setAttention([
+		{
+			projectId: "p1",
+			workspaceId: "w1",
+			sessionId: "blocker",
+			attentionPriority: "blocking",
+			attentionAt: 30,
+		},
+		{
+			projectId: "p1",
+			workspaceId: "w1",
+			sessionId: "normal-old",
+			attentionAt: 10,
+		},
+	]);
+	navigator.next();
+	expect(useAppStore.getState().chatLocationRequest?.sessionId).toBe("normal-old");
+});
+
 test("a known target dispatches an exact open-chat request synchronously", () => {
 	const w2 = workspace("w2", "p2");
 	useAppStore.setState({ workspaces: { p2: [w2] } });

@@ -595,11 +595,34 @@ test("attention target ties and traversal stay deterministic in both directions"
 		["p1", "w2", "s1"],
 		["p2", "w9", "s0"],
 	]);
-	expect(nextAttentionSessionTarget(targets, "s2", "next")?.sessionId).toBe("s1");
-	expect(nextAttentionSessionTarget(targets, "s2", "previous")?.sessionId).toBe("s0");
+	expect(nextAttentionSessionTarget(targets, targets[0] ?? null, "next")?.sessionId).toBe("s1");
+	expect(nextAttentionSessionTarget(targets, targets[0] ?? null, "previous")?.sessionId).toBe("s0");
 	expect(nextAttentionSessionTarget(targets, null, "next")?.sessionId).toBe("s2");
 	expect(nextAttentionSessionTarget(targets, null, "previous")?.sessionId).toBe("s0");
 	expect(nextAttentionSessionTarget([], null, "next")).toBeNull();
+});
+
+test("attention traversal continues after a viewed normal candidate disappears", () => {
+	const targets = attentionSessionTargets({
+		w1: {
+			projectId: "p1",
+			sessions: {
+				blocker: orderedAttention("blocker", "blocking", 30),
+				"normal-old": orderedAttention("normal-old", "normal", 10),
+			},
+		},
+	});
+	const viewed = {
+		projectId: "p1",
+		workspaceId: "w1",
+		sessionId: "normal-new",
+		attentionId: "normal-new",
+		attentionPriority: "normal" as const,
+		attentionAt: 20,
+	};
+
+	expect(nextAttentionSessionTarget(targets, viewed, "next")?.sessionId).toBe("normal-old");
+	expect(nextAttentionSessionTarget(targets, viewed, "previous")?.sessionId).toBe("blocker");
 });
 
 const runningEntry = (projectId: string, sessionIds: string[]) => ({

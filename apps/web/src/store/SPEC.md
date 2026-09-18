@@ -232,8 +232,9 @@ per-workspace views/attention/ephemeral running membership, terminal catalogs, a
     `projectNeedsAttention` selectors read the same map. `attentionSessionTargets` also derives, never stores,
     the F8 ring: candidates with complete ordering metadata sort blocking before normal, then newest-first,
     then code-unit project/workspace/session ids; locally acknowledging candidates are already absent through
-    `sessionAttention`. `nextAttentionSessionTarget` wraps from an eligible selected/pending anchor. The
-    all-known-chat selector deduplicates open chat
+    `sessionAttention`. `nextAttentionSessionTarget` also finds the successor/predecessor of a remembered
+    target that acknowledgement just removed, so reviewing normal candidates cannot restart at the first
+    persistent blocker. The shell clears that ephemeral anchor on unrelated navigation. The all-known-chat selector deduplicates open chat
     resources plus closed/history membership for the chat-dot threshold; plan documents and hidden child
     sessions do not count. There is no status precedence, count, or second unread slice.
   - **Live running** (`runningByWorkspace`) is a separate ephemeral normalized map of workspace/project/

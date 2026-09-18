@@ -47,6 +47,7 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { cn, copyText } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
 import {
@@ -60,7 +61,12 @@ import {
 	workspaceIsRunning,
 	workspaceNeedsAttention,
 } from "../store";
-import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
+import {
+	errorText,
+	getTransport,
+	prewarmWorkspaceSkillLoad,
+	supportsAttentionNavigation,
+} from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
@@ -69,6 +75,16 @@ import { useOpenProject } from "./useOpenProject";
 import { canRenameWorkspace, workspaceRenameValue } from "./workspaceActions";
 
 const PREWARM_WORKSPACE_LIMIT = 8;
+const ATTENTION_SHORTCUT_LABEL = "Needs attention, F8 next, Shift+F8 previous";
+
+function ProjectAttentionDot({ shortcutAvailable }: { shortcutAvailable: boolean }) {
+	if (!shortcutAvailable) return <AttentionDot />;
+	return (
+		<IconTooltip wrapTrigger label="Needs attention · F8 next · Shift+F8 previous">
+			<AttentionDot label={ATTENTION_SHORTCUT_LABEL} />
+		</IconTooltip>
+	);
+}
 
 export function ProjectTree() {
 	const projects = useAppStore((s) => s.projects);
@@ -80,6 +96,7 @@ export function ProjectTree() {
 	const attentionByWorkspace = useAppStore((s) => s.attentionByWorkspace);
 	const runningByWorkspace = useAppStore((s) => s.runningByWorkspace);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const attentionShortcutAvailable = supportsAttentionNavigation(protocolVersion);
 
 	const [editors, setEditors] = useState<EditorInfo[]>([]);
 	useEffect(() => {
@@ -276,6 +293,7 @@ export function ProjectTree() {
 								}
 								isRunning={!isExpanded && projectIsRunning(runningByWorkspace, project.id)}
 								workspaceCount={(list ?? []).filter((w) => !isDefaultWorkspace(w)).length}
+								attentionShortcutAvailable={attentionShortcutAvailable}
 								onToggle={() => toggleExpand(project.id)}
 								onSelect={() => void selectProject(project.id)}
 								onClose={() => closeProject(project)}
@@ -297,6 +315,7 @@ export function ProjectTree() {
 											isActive={activeWorkspaceId === ws.id}
 											needsAttention={workspaceNeedsAttention(attentionByWorkspace, ws.id)}
 											isRunning={workspaceIsRunning(runningByWorkspace, ws.id)}
+											attentionShortcutAvailable={attentionShortcutAvailable}
 											canRename={canRenameWorkspace(protocolVersion, ws)}
 											editors={editors}
 											onSelect={() => selectWorkspace(ws)}
@@ -365,6 +384,7 @@ function ProjectRow({
 	needsAttention,
 	isRunning,
 	workspaceCount,
+	attentionShortcutAvailable,
 	onToggle,
 	onSelect,
 	onClose,
@@ -380,6 +400,7 @@ function ProjectRow({
 	needsAttention: boolean;
 	isRunning: boolean;
 	workspaceCount: number;
+	attentionShortcutAvailable: boolean;
 	onToggle: () => void;
 	onSelect: () => void;
 	onClose: () => void;
@@ -442,7 +463,9 @@ function ProjectRow({
 					{project.name}
 				</span>
 			</button>
-			{needsAttention ? <AttentionDot /> : null}
+			{needsAttention ? (
+				<ProjectAttentionDot shortcutAvailable={attentionShortcutAvailable} />
+			) : null}
 			{!isExpanded && workspaceCount > 0 && (
 				<span
 					data-testid="project-workspace-count"
@@ -549,6 +572,7 @@ function WorkspaceRow({
 	isActive,
 	needsAttention,
 	isRunning,
+	attentionShortcutAvailable,
 	canRename,
 	editors,
 	onSelect,
@@ -562,6 +586,7 @@ function WorkspaceRow({
 	isActive: boolean;
 	needsAttention: boolean;
 	isRunning: boolean;
+	attentionShortcutAvailable: boolean;
 	canRename: boolean;
 	editors: EditorInfo[];
 	onSelect: () => void;
@@ -715,7 +740,9 @@ function WorkspaceRow({
 						</span>
 					</button>
 				)}
-				{needsAttention ? <AttentionDot /> : null}
+				{needsAttention ? (
+					<ProjectAttentionDot shortcutAvailable={attentionShortcutAvailable} />
+				) : null}
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="workspace-menu"

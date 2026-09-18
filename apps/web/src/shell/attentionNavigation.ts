@@ -65,6 +65,7 @@ export function startAttentionSessionNavigation({
 	let stopped = false;
 	let generation = 0;
 	let pending: PendingNavigation | null = null;
+	let cycleAnchor: AttentionSessionTarget | null = null;
 	let activeOpenRequest: ChatLocationRequest | null = null;
 	let activeOpenTarget: AttentionSessionTarget | null = null;
 	const workspaceLoads = new Map<string, Promise<Workspace[]>>();
@@ -81,6 +82,7 @@ export function startAttentionSessionNavigation({
 	const cancel = (): void => {
 		generation += 1;
 		pending = null;
+		cycleAnchor = null;
 		clearOwnedOpen();
 	};
 
@@ -114,13 +116,27 @@ export function startAttentionSessionNavigation({
 		}
 
 		const previousOwnedRequest = activeOpenRequest;
+		const previousOpenTarget = activeOpenTarget;
 		if (previousOwnedRequest && state.chatLocationRequest !== previousOwnedRequest) {
+			if (
+				state.chatLocationRequest === null &&
+				previousOpenTarget &&
+				state.selectedProjectId === previousOpenTarget.projectId &&
+				state.activeWorkspaceId === previousOpenTarget.workspaceId &&
+				activeChatSessionId(state) === previousOpenTarget.sessionId
+			) {
+				cycleAnchor = previousOpenTarget;
+			}
 			activeOpenRequest = null;
 			activeOpenTarget = null;
 			if (pending?.openRequest === previousOwnedRequest) pending = null;
 		}
-		if (!pending || pending.phase === "dispatching") return;
-		if (!isUserNavigationEdge(state, previous)) return;
+		const userNavigation = isUserNavigationEdge(state, previous);
+		if (!pending) {
+			if (userNavigation) cycleAnchor = null;
+			return;
+		}
+		if (pending.phase === "dispatching" || !userNavigation) return;
 		if (pending.phase === "resolving" && isOwnedLanding(state)) return;
 		if (
 			pending.phase === "opening" &&
@@ -207,7 +223,7 @@ export function startAttentionSessionNavigation({
 
 			excluded.add(targetKey(target));
 			const remaining = targets.filter((candidate) => !excluded.has(targetKey(candidate)));
-			const next = nextAttentionSessionTarget(remaining, activeChatSessionId(state), direction);
+			const next = nextAttentionSessionTarget(remaining, target, direction);
 			if (!next) {
 				pending = null;
 				onInfo("No chats need attention.");
@@ -233,13 +249,19 @@ export function startAttentionSessionNavigation({
 			? targets.find((target) => sameTarget(target, pendingNavigation.target))
 			: undefined;
 		const activeSessionId = activeChatSessionId(state);
+		const activeTarget = targets.find((target) => target.sessionId === activeSessionId);
 		const target = nextAttentionSessionTarget(
 			targets,
-			pendingTarget?.sessionId ?? activeSessionId,
+			pendingTarget ?? activeTarget ?? cycleAnchor,
 			direction,
 		);
 		if (!target) return;
-		if (!pendingTarget && targets.length === 1 && target.sessionId === activeSessionId) {
+		if (
+			!pendingTarget &&
+			activeTarget &&
+			targets.length === 1 &&
+			sameTarget(target, activeTarget)
+		) {
 			onInfo("This is the only chat needing attention.");
 			return;
 		}
@@ -259,6 +281,7 @@ export function startAttentionSessionNavigation({
 			stopped = true;
 			generation += 1;
 			pending = null;
+			cycleAnchor = null;
 			workspaceLoads.clear();
 			unsubscribe();
 			clearOwnedOpen();
