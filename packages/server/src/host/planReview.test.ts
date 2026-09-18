@@ -580,6 +580,35 @@ test("the tool path marks findings sent to the worker so resolve_comment can clo
 	expect((await getReviewSnapshot(WS)).comments.find((c) => c.id === cid)?.status).toBe("resolved");
 });
 
+test("the tool path deletes the just-filed drafts when the mark-sent transaction fails", async () => {
+	installRequestReviewSeam(verdictRunner(requestChanges));
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+
+	// Filing succeeds but the mark-sent step throws (a concurrent clear / non-draft collision). The
+	// compensation must remove the just-filed drafts so no open finding is stranded whose canonical id
+	// the worker never received, and the request must reject rather than spend the cycle.
+	const spy = spyOn(reviews, "markCommentsSent").mockImplementation(async () => {
+		throw new Error("review store unwritable");
+	});
+	try {
+		await expect(
+			createRequestReviewTool().execute("tc", { itemId: id } as never, undefined, undefined, ctx),
+		).rejects.toThrow(/review store unwritable/);
+	} finally {
+		spy.mockRestore();
+	}
+
+	expect(
+		(await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id),
+	).toHaveLength(0);
+	expect(todoReviewRecord(ref)).toBeUndefined();
+	expect(todoReviewAutoCycles(ref)).toBeUndefined();
+	expect(itemReviewActive(sessionId, id)).toBe(false);
+});
+
 test("a request_review that fails before the review starts releases its claim, so the retry runs", async () => {
 	installRequestReviewSeam(verdictRunner(approve));
 	const sessionId = await workerSession();
