@@ -1033,12 +1033,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   Its section label + pending/active/done status glyphs live in **`planKit.tsx`** — shared
   presentational atoms the Review panel (`panels/ReviewPanel`) reuses so both "work items in
   sections" surfaces read identically.
-  **The add-nudge respects that waiting state.** A user add always stores the item (loose, at the end),
-  but `nudgeAgent` **only wakes the agent when it isn't waiting on the user** (`shouldNudgeOnAdd` —
-  skip iff the glance is `waiting_question`): waking an agent that stopped on an `ask_user_question`
-  would send it off to work the new item and forget to return to its own question, so instead the item
-  just queues and is picked up on the agent's next natural turn (when the user answers, or a later idle
-  nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged.
+  **The add-nudge respects that waiting state.** A user add always stores the item (loose, at the end).
+  On protocol v67+, `session.nudge` makes the host-authoritative blocker/execution decision atomically:
+  needs-input no-ops, running queues, and idle prompts. Independently shipped clients retain the prior
+  glance-based prompt/follow-up plus hydration fallback only for older hosts; the compatibility path skips
+  an awaiting question rather than waking the agent past its blocker.
 
 ## Boundary
 
