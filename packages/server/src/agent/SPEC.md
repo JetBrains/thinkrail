@@ -677,13 +677,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
   `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload`;
+  the host-only automatic-continuation read/lifecycle seams (`getSessionAutoResumeState` +
+  `setSessionLifecycleObserver`) that expose no mutable manager state;
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
   closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams and the
   pre-bootstrap `configurePiRuntimeGenerationInitializer` composition seam;
   `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
-  helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
-  `buildAnswersMessage`/`awaitingQuestionToolCallId`); the activity layer
+  helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`buildTimedOutQuestionResult`/
+  `assessAnswerability`/`buildAnswersMessage`/`awaitingQuestion`/`awaitingQuestionToolCallId`); the activity layer
   (`deriveActivityStatus`/`ActivityInputs` + `listSessionActivity`/`syncSessionActivity`/
   `setSessionActivityPublisher`/`setActivityProjectResolver`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
   (the delegation embedding); the skill catalog helpers

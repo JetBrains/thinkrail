@@ -300,7 +300,12 @@ export function assessAnswerability(
 	return { ok: true, args };
 }
 
-export function awaitingQuestionToolCallId(messages: readonly AgentMessage[]): string | null {
+export interface AwaitingQuestion {
+	toolCallId: string;
+	args: AskUserQuestionArgs;
+}
+
+export function awaitingQuestion(messages: readonly AgentMessage[]): AwaitingQuestion | null {
 	const views = messages as readonly MessageView[];
 	for (let i = views.length - 1; i >= 0; i--) {
 		const view = views[i];
@@ -309,10 +314,15 @@ export function awaitingQuestionToolCallId(messages: readonly AgentMessage[]): s
 		for (const block of toolCallsOf(view)) {
 			const { id } = block;
 			if (id === undefined || block.name !== ASK_USER_QUESTION_TOOL_NAME) continue;
-			if (assessAnswerability(messages, id).ok) return id;
+			const answerability = assessAnswerability(messages, id);
+			if (answerability.ok) return { toolCallId: id, args: answerability.args };
 		}
 	}
 	return null;
+}
+
+export function awaitingQuestionToolCallId(messages: readonly AgentMessage[]): string | null {
+	return awaitingQuestion(messages)?.toolCallId ?? null;
 }
 
 export const ANSWERABILITY_ERRORS: Record<Extract<Answerability, { ok: false }>["reason"], string> =

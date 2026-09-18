@@ -363,8 +363,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
     recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
 - **Automatic continuation is host-composed** (`autoResume.ts`): one unref'd, generation-fenced timer per
   eligible attached session, driven by the host-synchronized optional 1–1440 minute setting. Canonical
-  `agent_settled` arms; new work, disposal/deletion, or disabling cancels; attachment and a settings change
-  reconcile attached sessions. Expiry re-checks every authority instead of trusting the arm-time snapshot:
+  `agent_settled` arms; new work, disposal/deletion, or disabling cancels; attachment and an actual timeout-
+  setting change reconcile attached sessions (unrelated config broadcasts do not postpone a deadline).
+  Expiry re-checks every authority instead of trusting the arm-time snapshot:
   an answerable `ask_user_question` wins and resumes through `answerQuestion` with explicitly marked
   recommendations plus `timedOut: true`; otherwise only a still-open TODO plan receives the hidden
   `TODO_NUDGE_PREFIX` continuation prompt. A restart persists neither timer nor deadline: reopening an
