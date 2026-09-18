@@ -12,6 +12,7 @@ export interface DesktopQuitCoordinatorDependencies {
 }
 
 export interface DesktopQuitCoordinator {
+	quit(): Promise<void>;
 	handleBeforeQuit(event: DesktopBeforeQuitEvent): void;
 	restartToUpdate(): Promise<void>;
 }
@@ -68,19 +69,20 @@ export function createDesktopQuitCoordinator(
 		ordinaryQuit();
 	};
 
-	const beginShutdown = (): void => {
-		if (shutdownPromise) return;
-		shutdownPromise = Promise.resolve()
+	const beginShutdown = (): Promise<void> => {
+		shutdownPromise ??= Promise.resolve()
 			.then(dependencies.shutdown)
 			.catch(dependencies.reportLifecycleError)
 			.then(finishShutdown);
+		return shutdownPromise;
 	};
 
 	return {
+		quit: beginShutdown,
 		handleBeforeQuit: (event) => {
 			if (shutdownComplete) return;
 			event.response = { allow: false };
-			beginShutdown();
+			void beginShutdown();
 		},
 		restartToUpdate: async () => {
 			completionIntent = "update";

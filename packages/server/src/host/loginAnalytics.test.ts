@@ -22,7 +22,7 @@ beforeEach(() => {
 	sent = [];
 	initializeAnalytics({
 		channel: "stable",
-		enabled: true,
+		additionalEnabled: false,
 		env: {},
 		fetchImpl: ((_url: string | URL | Request, init?: RequestInit) => {
 			sent.push(...JSON.parse(String(init?.body)).batch);
@@ -51,20 +51,20 @@ function logins(): BatchEntry[] {
 test("an oauth success tracks provider_login {method: oauth}", async () => {
 	recordLoginStart("l1", "oauth");
 	trackLoginOutcome({ loginId: "l1", providerId: "anthropic", frame: { kind: "success" } });
-	await drained(3);
+	await drained(2);
 	expect(logins()[0]?.properties).toMatchObject({ provider: "anthropic", method: "oauth" });
 });
 
 test("an api_key success tracks provider_login {method: api-key}; the provider is bucketed", async () => {
 	recordLoginStart("l1", "api_key");
 	trackLoginOutcome({ loginId: "l1", providerId: "acme-internal", frame: { kind: "success" } });
-	await drained(3);
+	await drained(2);
 	expect(logins()[0]?.properties).toMatchObject({ provider: "custom", method: "api-key" });
 });
 
 test("a success for an unknown loginId tracks nothing (fails closed, never a guessed method)", async () => {
 	trackLoginOutcome({ loginId: "ghost", providerId: "anthropic", frame: { kind: "success" } });
-	await drained(2);
+	await drained(1);
 	await Bun.sleep(25);
 	expect(logins()).toHaveLength(0);
 });
@@ -77,7 +77,7 @@ test("an error frame clears the entry — a later success for the same id tracks
 		frame: { kind: "error", message: "nope" },
 	});
 	trackLoginOutcome({ loginId: "l1", providerId: "anthropic", frame: { kind: "success" } });
-	await drained(2);
+	await drained(1);
 	await Bun.sleep(25);
 	expect(logins()).toHaveLength(0);
 });
@@ -86,7 +86,7 @@ test("a cancelled login (dropLogin) tracks nothing on a late success", async () 
 	recordLoginStart("l1", "api_key");
 	dropLogin("l1");
 	trackLoginOutcome({ loginId: "l1", providerId: "openai", frame: { kind: "success" } });
-	await drained(2);
+	await drained(1);
 	await Bun.sleep(25);
 	expect(logins()).toHaveLength(0);
 });
@@ -99,6 +99,6 @@ test("non-terminal frames leave the entry in place for the real terminal", async
 		frame: { kind: "progress", message: "…" },
 	});
 	trackLoginOutcome({ loginId: "l1", providerId: "anthropic", frame: { kind: "success" } });
-	await drained(3);
+	await drained(2);
 	expect(logins()[0]?.properties).toMatchObject({ provider: "anthropic", method: "oauth" });
 });

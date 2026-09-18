@@ -19,8 +19,10 @@ export {
 	listRemotes,
 	prefetchBranch,
 	readBlobAt,
+	readCommitSubject,
 	remoteRefOid,
 	resolveDefaultBranch,
+	resolveListedCommit,
 	tryCurrentBranch,
 } from "./git";
 export { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";

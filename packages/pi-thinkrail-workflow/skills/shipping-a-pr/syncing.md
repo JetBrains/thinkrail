@@ -1,7 +1,7 @@
 # syncing.md — bring the PR up to date
 
-Entry: an open PR has fallen behind its base or has conflicts. Saves nothing. Control continues at
-`checks.md`.
+Entry: an open PR has fallen behind its base or has conflicts. Saves nothing. Syncing owns wait mode;
+control continues at `checks.md`.
 
 1. `git fetch origin`, then rebase the branch onto the base — or merge, if the PR's existing
    history style is merge-based; follow what the PR already does.
@@ -19,4 +19,4 @@ depends on; step 3 is unconditional.
 
 ## Next
 
-Read and follow `checks.md`.
+Read and follow `checks.md` in wait mode.

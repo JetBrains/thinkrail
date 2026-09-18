@@ -156,6 +156,53 @@ a git failure degrades to omitting the field. A concurrent chat's work-in-flight
 shows here too — it *is* outside this plan — accepted noise, same family as the shared-window
 limitations above.
 
+**`listTodos` decoration — adopted commits (the committed remainder).** `unattributed` only covers
+*uncommitted* rows; the moment work is committed it leaves the uncommitted set and would vanish from the
+review map entirely (an empty-plan chat whose agent committed via bash, a user's hand commit, the
+host's own todo-commits for a plan that was since cleared). So the same pass also ships
+**`TodoPlan.adoptedCommits`** (present only when non-empty): every `base..HEAD` commit
+(`git.listCommits`) whose sha is owned by **no** item's `commit` artifact, surfaced as a **wire-only
+`done` `TodoItem`** — `id: "commit:<sha>"`, `origin: "adopted"`, `title` = the commit subject, a single
+`commit` artifact decorated with the same per-sha `files` list, and the `review` decoration read from the
+sidecar keyed by that id. These items are **never written to the store** — the agent's plan JSON stays
+the agent's plan (the invariant), and `"adopted"` never reaches `pi-todos`; they are recomputed on every
+read. Lifecycle is free: `commit:<sha>` is stable, a rebased-away commit's id simply vanishes (its
+sidecar record goes inert, as any orphan does), and a loose commit later claimed by a real item drops out
+automatically (now owned). A commit owned by *another* session's plan item appears here too — accepted
+noise, same family as the shared-window limitations. Derived best-effort; a git failure omits the field.
+
+**Adopted commits are reviewable without a store item.** The review ops resolve their target through
+`reviewableItem`, which first reads the `TodoStore` and, on a miss, reconstructs a synthetic `StoredItem`
+for an adopted `commit:<sha>` id — but **only after re-validating the exact set the derivation emits**:
+`git.resolveListedCommit` resolves the sha to its **canonical OID** and confirms membership in the **same
+capped `base..HEAD` list `listCommits` emits** (shared `COMMIT_LIST_MAX` — so a commit past the newest
+200, for which no adopted item is ever emitted, is not reviewable either), the requested id must equal
+`commit:<canonical-oid>` (the exact form `listTodos` emits — an abbreviated or non-canonical id is
+rejected, so review state can never be written under an id no adopted item will ever carry), **and** the
+canonical sha must be owned by no plan item. An id that fell out of the set — rebased into the base, GC'd,
+abbreviated, past the cap, or since claimed by a step — is rejected (`No TODO with id`), so a stale Plan
+action can never start/approve/fix review state against a commit that vanishes on the next reload.
+Every op (`startTodoReview`,
+`approveTodoReview`, `cancelTodoReview`, `requestTodoFix`, `recordAgentChangesRequested`,
+`renderReviewPackage`) therefore drives Start-review / Review All / verdicts over an adopted commit with
+**zero store writes**; review state persists in the existing sidecar keyed by `commit:<sha>`, and the
+reviewer↔worker reverse lookups are keyed by `reviewerSessionId`, independent of item existence. The fix
+package's "re-open this exact item" instruction has no todo to re-open for an adopted commit, so it reads
+as "revise the change in commit `<sha>`"; the worker's follow-up commit surfaces as a new adopted entry
+(or a revision, once appended).
+
+**Adopted-commit limitations (accepted).** (1) The `base..HEAD` enumeration is capped at `git`'s
+`COMMIT_LIST_MAX` (200) — a branch with more commits drops the oldest from `adoptedCommits`, the same cap
+the Changes/commits menus live under. (2) A commit is immutable, so the auto-fix cycle cannot self-heal
+one: an agent `changes_requested` verdict on an adopted commit leaves it permanently flagged and the
+worker's fix lands as a *new* adopted entry rather than a revision of the original (and `maybeAutoReReview`
+intentionally excludes `adoptedCommits` — a new sha is a new id, so there is no fresh delta on the flagged
+one to re-review). (3) A commit owned by *another* session's plan item shows as adopted here (the `owned`
+set is this session's plan only), and each session may hold its own review record for the same sha —
+accepted noise, same family as the shared-window limitations. (4) A path committed in an adopted commit
+that is then re-edited uncommitted appears in both `adoptedCommits` (the commit's files) and
+`unattributed` (the newer uncommitted row) — they are genuinely two different artifacts.
+
 **The review workflow (`reviews.ts` + the ops in `todos.ts`).** A completed item that carries a host
 change set is **reviewable** — the gate is that artifact presence, so research/verification steps never
 demand review and no LLM attribution is involved. The user's decision lives in a second host-owned
@@ -226,7 +273,9 @@ a `todo_*` tool end publishes, and the reconcile is enqueued *synchronously with
 later (it commits) — so without the barrier a commit slower than the client's refetch debounce would hand
 back a `done` item with no change set, leaving an open plan page promising an affordance it doesn't show
 until some unrelated event. Awaiting makes the read **causally after** the write it was triggered by;
-it resolves immediately when nothing is in flight, and never rejects.
+it resolves immediately when nothing is in flight, and never rejects. The barrier follows any newer
+workspace queue tail installed while it waits, so a stale pass aborted by plan drift cannot release readers
+before the already-enqueued replacement pass has reconciled the current plan.
 
 ## Boundary
 
@@ -254,7 +303,9 @@ it resolves immediately when nothing is in flight, and never rejects.
   `TodoReviewRecord` type. **Mapping only** — no plan logic; `TodoStore` owns disk.
 - **Allowed deps:** `workspaces` (worktree-path lookup via `getWorkspace`, which throws on unknown);
   `git` (`gitStatus` — the uncommitted changed-path set + the commit-scope DTO decoration;
-  `gitCommitPaths` — the per-done-item delta commit; `gitHeadSha` — the baseline's head);
+  `gitCommitPaths` — the per-done-item delta commit; `gitHeadSha` — the baseline's head;
+  `listCommits` — the `base..HEAD` enumeration behind `adoptedCommits` + the review resolver's
+  synthetic-item reconstruction);
   `contracts` (DTOs + `PiEvent` for `isTodoToolEnd`); `@thinkrail/shared/paths` (`WORKSPACE_INTERNAL_DIR`
   — the app-state prefix filtered out of change sets); **`pi-todos/core`** (the pi-free read/write model — a sanctioned host-side
   value-import of the extension package, the same pattern as `spec` → `pi-spec-graph/core`); `log`.

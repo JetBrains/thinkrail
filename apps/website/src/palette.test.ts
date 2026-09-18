@@ -49,8 +49,16 @@ function mix(a: string, b: string, percent: number): string {
 const TEXT_PAIRS: [fg: string, bg: (v: Record<string, string>) => string, what: string][] = [
 	["--text", (v) => v["--chrome"] as string, "body text on the window chrome"],
 	["--text", (v) => v["--container-workspace-bg"] as string, "body text on the editor surface"],
-	["--muted", (v) => v["--container-workspace-bg"] as string, "muted text on the editor surface"],
-	["--text", (v) => v["--elevated"] as string, "the mock callout's text on its raised surface"],
+	[
+		"--muted",
+		(v) => v["--container-workspace-bg"] as string,
+		"muted and desktop compatibility text on the editor surface",
+	],
+	[
+		"--text",
+		(v) => v["--elevated"] as string,
+		"text and desktop compatibility details on raised surfaces",
+	],
 	[
 		"--green",
 		(v) => v["--container-workspace-bg"] as string,

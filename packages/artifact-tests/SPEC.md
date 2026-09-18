@@ -22,9 +22,9 @@ It consumes finished artifacts; it does not build the application or supply appl
   and artifact-collector contract tests.
 - **Public surface:** `locateDesktopLauncher`
 - **Allowed deps:** CLI's public artifact-name helper; server's sanctioned history-fixture export;
-  shared retrying teardown; read-only access to `.github/actions/build-binary/action.yml` for executing
-  its packaging invocation and collector in isolated fixture directories; Bun/Node and native installer
-  tools.
+  shared release identity and retrying teardown; read-only access to
+  `.github/actions/build-binary/action.yml` for executing its packaging invocation and collector in
+  isolated fixture directories; Bun/Node and native installer tools.
 - **Forbidden:** application or SDK source internals, Electrobun imports/dependency, a fake host or agent,
   production packages importing this package, or real-user state mutation during tests.
 
@@ -44,11 +44,23 @@ navigation handler. Desktop-backed Playwright uses the launcher's opt-in neutral
 only hydrated client. The live-window ready/control seam remains in the launcher, never a runtime import
 of this package.
 
+Normal artifact children set `CI=1` to mute every analytics tier without changing the production runtime mode; `THINKRAIL_NO_ANALYTICS`
+alone suppresses only additional events. `bun run smoke:desktop --analytics [launcher]` instead runs a
+controlled hidden-host probe against a loopback PostHog collector, never the vendor endpoint. It removes
+inherited CI/test/optional mutes and proxies for human-mode launches, checks baseline-only `app_started`
+with desktop/release/platform provenance and one UUID across restarts (including additional opt-out), then
+proves CI and test mutes independently. No UI action or consent is simulated; delivery is checked after
+normal host shutdown. The expected release identity is the shared identity used to build the artifact.
+
 Every host owns isolated home, data, agent and cache directories; environment overrides respect Windows'
-case-insensitive keys. Temporary installation roots use shared retrying removal. First-install smoke
-runs the actual DMG app, Windows ZIP setup, or Linux tarball installer, observes the installer's automatic
-app launch, checks health and normal control-file shutdown, and waits for installer/host/launcher exit.
-The harness-only installer UI autoclose flag dismisses completion dialogs, not errors or assertions.
+case-insensitive keys. Readiness polling owns a finite deadline and observes early root exit. When a live
+launched root or validated ready-document app/launcher PIDs need failure cleanup, teardown is bounded and
+awaited before shared retrying removal of the temporary installation root. A setup root may exit successfully
+before its app handoff is ready; after that exit, the harness does not infer or discover descendants from the
+setup process. First-install smoke runs the actual DMG app, Windows ZIP setup, or Linux tarball installer,
+observes the installer's automatic app launch, checks health and normal control-file shutdown, and waits for
+installer/host/launcher exit. The harness-only installer UI autoclose flag dismisses completion dialogs, not
+errors or assertions.
 
 Windows installer smoke is permitted only on disposable GitHub-hosted Actions runners: v2 installation
 writes real known-folder shortcuts and HKCU registration beyond HOME isolation. The guard runs before

@@ -244,7 +244,7 @@ of the host.
   latest protocol; **`JBCENTRAL_QUOTA_PROTOCOL_VERSION`** likewise pins the v59 quota read + settings;
   **`WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`** pins the v62 Windows-shell setting so a later web client
   hides it against a host that can preserve but cannot apply that config field;
-  **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, terminalReplayKb,
+  **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
@@ -259,9 +259,14 @@ of the host.
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
   behavior), overridden only by `Workspace.subagentsOverride`; `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset
-  and group limits are web-local); `analyticsEnabled` is the anonymous usage-analytics switch, default
-  `true` — it is the **only** analytics fact on the wire: the installation id stays server-side by design,
-  see `submodule-server-analytics`) carries it with the **`DEFAULT_CONFIG`** fallback (persisted host-side
+  and group limits are web-local); `analyticsEnabled` is the additional-data preference, default `false`, while
+  `analyticsConsentConfirmed` defaults `false` and records the explicit decision required before that
+  preference can authorize collection. Saved legacy preferences seed the first-launch switch, not consent.
+  `ANALYTICS_CONSENT_PROTOCOL_VERSION` pins this v65 contract so newer clients do not show a consent flow
+  against older hosts that cannot persist it. Preference and confirmation are saved atomically; an older
+  client's preference-only write cannot create the new confirmation. The installation id remains entirely
+  server-side; basic events are not controlled by either flag, see [[submodule-server-analytics]]) carries
+  it with the **`DEFAULT_CONFIG`** fallback (persisted host-side
   as `config.json`, delivered in
   `server.welcome`, mutated via `settings.update`).
   **`InterviewResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic
@@ -295,6 +300,11 @@ of the host.
   remainder shipped by the same `todo.list` decoration, present only when non-empty: the worktree's
   uncommitted rows attributed to no item of the plan — the changes that would otherwise be invisible in
   the review map (derivation and rationale: [[submodule-server-todos]]).
+  **`TodoPlan.adoptedCommits?: TodoItem[]`** is the committed counterpart, shipped by the same
+  decoration and present only when non-empty: the `base..HEAD` commits owned by no item, surfaced as
+  **wire-only `done` items** (`origin: "adopted"`, `id: "commit:<sha>"`, one `commit` artifact) so a
+  chat that committed without planning still shows — and can review — that work. They are never stored;
+  the **`"adopted"`** member of `TodoOrigin` exists only on the wire (derivation: [[submodule-server-todos]]).
   **`DelegationRunDetails`** + the **`DelegationRunStatus`** union — the subagent Agent-card DTO,
   **mirrored** from `pi-delegation` (never imported): rides `tool_execution_update.partialResult`
   (REPLACE), the final `Agent` tool result, and the `subagent-completion` custom message; the
@@ -355,13 +365,13 @@ of the host.
 - **`HostUpdateNotice`** — the optional immutable host-wire advisory: current version, newer available version,
   and channel. No status, revision, error, feed URL, artifact, platform path, or shell command crosses the
   wire. Its optional welcome field plus `host.updateAvailable` change pushes enter at protocol v64.
-- Protocol v65 adds the workspace model/thinking preference fields and changes successful
+- Protocol v66 adds the workspace model/thinking preference fields and changes successful
   `session.setModel` / `session.setThinkingLevel` results to Pi's effective post-mutation
   `{ model, thinkingLevel }` pair. The changes share one protocol advance: older clients ignore the
   additive workspace fields, while independently shipped clients gate mutation-result reconciliation with
-  `WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION` so a v64 `{ ok: true }` result remains safe. The persisted
-  workspace pair reaches clients through `workspace.list` and `workspace.updated`, never by a client rewriting
-  the row it was just pushed.
+  `WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION` so a pre-v66 `{ ok: true }` result—including the
+  analytics-only v65 host—remains safe. The persisted workspace pair reaches clients through
+  `workspace.list` and `workspace.updated`, never by a client rewriting the row it was just pushed.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered

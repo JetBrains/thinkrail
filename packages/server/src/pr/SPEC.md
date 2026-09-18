@@ -14,6 +14,10 @@ tags: [github, pull-request, v1, public-surface-checked]
 The deterministic host side of "plan done → PR open" (`pr.open`): push the workspace branch to
 `origin` and open — or update — the branch's GitHub PR, with the PR body rendered from the session's
 TODO plan (the verified-plan narrative: summary, steps with sha + verification, review trail). The
+body also carries a **`## Committed outside the plan`** section for `TodoPlan.adoptedCommits` (branch
+commits no step owns — see [[submodule-server-todos]]) and the review trail spans planned steps **and**
+adopted commits, so a branch whose work never entered the plan still ships a non-empty, honest
+description instead of a blank body. The
 button never routes through the agent (a prompt-backed PR button is fragile — see task-open-pr); a
 future pi extension exposes the same library to the agent.
 

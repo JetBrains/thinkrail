@@ -1,12 +1,13 @@
 ---
 name: starting-a-new-project
-description: "Use when the workspace is empty — no code yet — and the user brings a raw idea: the brand-new branch of setting-up-a-project, normally reached via that dispatcher, directly only when the situation is unmistakable. Not for features in an existing project — use brainstorming instead."
+description: "Use when the workspace is empty, has no code, and the user brings a raw project idea. Normally reached via setting-up-a-project; not for an existing project."
 ---
 
 # Starting a new project
 
 The workspace is empty: no code, no decisions. Turn the user's idea into one clear, buildable document —
-`goal-and-requirements.md` — then hand off to `brainstorming` for the features that follow.
+`goal-and-requirements.md` — then use `brainstorming` only for later features that still require a
+product or design choice.
 
 **Hold the writing-specs bar.** Read that concept skill before saving anything — it carries the
 short / honest / on-rails rules every section you save must meet.
@@ -83,6 +84,7 @@ binary Done Conditions instead of metrics). Reject vague goals inline: "'Better 
 
 ## Next
 
-State plainly that the spec is saved. Suggest the natural next step — sketch `architecture.md`, then use
-`brainstorming` per feature. There is no board/ticket hand-off — say it and stop: **this workflow ends
-here**; feature work from now on routes through choosing-a-workflow → `brainstorming`.
+State plainly that the spec is saved. Suggest the natural next step — sketch `architecture.md`, then
+use `brainstorming` only when a feature still requires choosing scope, user-visible behavior, or
+architecture. Fully specified work proceeds directly. There is no board/ticket hand-off — say it and
+stop: **this workflow ends here**.

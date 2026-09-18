@@ -162,3 +162,64 @@ test("failed helper arming reports the error and exits the stopped host", async 
 	expect(failures).toEqual(["failed to arm update helper"]);
 	expect(quitCalls).toBe(1);
 });
+
+test("startup failure before quit interception awaits host shutdown before exiting", async () => {
+	const shutdown = deferred();
+	const calls: string[] = [];
+	const coordinator = createDesktopQuitCoordinator({
+		shutdown: () => {
+			calls.push("shutdown");
+			return shutdown.promise;
+		},
+		quit: () => {
+			calls.push("quit");
+		},
+		applyUpdate: async () => {
+			calls.push("update");
+		},
+		getUpdateError: () => "",
+		reportUpdateFailure: async () => {},
+		reportLifecycleError: () => {},
+	});
+	const first = coordinator.quit();
+	const repeated = coordinator.quit();
+	expect(first).toBe(repeated);
+	await settle();
+	expect(calls).toEqual(["shutdown"]);
+	shutdown.resolve();
+	await first;
+	expect(calls).toEqual(["shutdown", "quit"]);
+});
+
+test("startup failure and native quit share one failed shutdown and permit the final quit", async () => {
+	const failure = new Error("shutdown failed");
+	const errors: unknown[] = [];
+	let shutdownCalls = 0;
+	let quitCalls = 0;
+	const coordinator = createDesktopQuitCoordinator({
+		shutdown: async () => {
+			shutdownCalls += 1;
+			throw failure;
+		},
+		quit: () => {
+			quitCalls += 1;
+			const event = beforeQuitEvent();
+			coordinator.handleBeforeQuit(event);
+			expect(event.response).toBeUndefined();
+		},
+		applyUpdate: async () => {},
+		getUpdateError: () => "",
+		reportUpdateFailure: async () => {},
+		reportLifecycleError: (error) => {
+			errors.push(error);
+		},
+	});
+	const native = beforeQuitEvent();
+	coordinator.handleBeforeQuit(native);
+	expect(native.response).toEqual({ allow: false });
+	await coordinator.quit();
+	await coordinator.quit();
+	expect(shutdownCalls).toBe(1);
+	expect(quitCalls).toBe(1);
+	expect(errors).toEqual([failure]);
+});

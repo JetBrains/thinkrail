@@ -60,6 +60,7 @@ workflowTest(
 		],
 		watchdog: { budget: { maxTurns: 6 } },
 		expect: [
+			checks.expectNoSkillRead(["choosing-a-workflow"]),
 			checks.expectToolCalled("ask_user_question"),
 			checks.expectFile("TASK-verbose-logging.md", (content) => content !== TASK_SPEC),
 		],

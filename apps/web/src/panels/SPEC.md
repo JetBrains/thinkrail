@@ -336,7 +336,7 @@ a project picker, the prompt hero, and the reused
   model**: the picker reads **Default model**, the effort control is disabled (no model, no supported set),
   and creation sends neither field so the host applies its workspace/default precedence. The dialog does
   not fetch `model.default` or substitute a client-selected fallback. Choosing a model makes that pair
-  explicit; after successful session creation a v65+ host seeds the workspace from Pi's effective result, and
+  explicit; after successful session creation a v66+ host seeds the workspace from Pi's effective result, and
   that row reaches the dialog's client as `workspace.updated` — the dialog never writes it, so an older host
   simply persists nothing and needs no branch here. The session opens with its returned effective pair either
   way. The pickers' popovers portal into the dialog node (so their lists
@@ -533,10 +533,17 @@ a project picker, the prompt hero, and the reused
   carries the discoverability half (`chat/SPEC.md`: a `slash-templates-empty` footer nudge deep-linking
   here when no template exists anywhere), since this offer is otherwise two clicks deep in a dialog. **This
   project**'s empty state is unchanged (still the bare text) — the offer is Global-only, since it only
-  ever seeds global files. No server change. **`PrivacySettings`** is the **anonymous-usage-analytics
-  toggle** — a switch over `store.analyticsEnabled`, fired via `settings.update { analyticsEnabled }`
-  with the same converge-on-broadcast pattern as the theme, plus the what-is/isn't-collected copy; only
-  the boolean ever crosses the wire, see `submodule-server-analytics`. **`FeedbackSettings`** is the final
+  ever seeds global files. No server change. **`PrivacySettings`** manages additional-data consent and briefly
+  distinguishes it from always-on basics; the event contract belongs to [[submodule-server-analytics]].
+  **`AnalyticsConsentDialog`** mounts once through shell after a capable host's config hydrates. Its draft
+  switch uses the saved preference (absent → off); confirmation atomically saves preference plus
+  `analyticsConsentConfirmed`, while dismissal saves off/confirmed. A preselection never grants consent.
+  Failed persistence leaves the choice available with an error; broadcast closes it across clients.
+  Saved decisions survive restarts and change later through Settings. The startup window focuses on optional
+  sharing with brief anonymous/no-personal-data copy and the shared switch; its footer has only **Save choice**,
+  while Close, Escape, and backdrop remain dismissals. Full reporting details stay in Settings. Older hosts
+  retain their legacy privacy control without the new consent dialog.
+  **`FeedbackSettings`** is the final
   live section after Privacy: the same interview copy as the automatic prompt, stating that joining a user
   interview to discuss the participant's ThinkRail experience earns 100 bonus credits in Central
   (JetBrains AI), plus a real external anchor to the fixed Google Calendar booking page, opened in a new
@@ -656,7 +663,9 @@ a project picker, the prompt hero, and the reused
   merge TARGET (base ← head, the GitHub PR convention: changes flow from the workspace branch into
   its base). `N commits` is the **`PlanCommitsMenu`** (`plan-commits-trigger`) — a dropdown mirroring
   the Changes scope menu's commit list: `git.listCommits` (eager-loaded, reloaded whenever the plan's
-  commit count ticks) is the ONE source for both the count and the list, so they never diverge; each
+  commit count ticks) is the ONE source for both the count and the list, so they never diverge — and,
+  being the `base..HEAD` enumeration, it already spans the adopted commits (branch commits no step
+  owns) alongside the per-step ones; each
   row (`plan-commits-item`, `data-sha`) opens that commit's diff in the Changes panel via the same
   `openChanges({ sha })` the per-step commit chip uses. The chip self-hides while loading and when the
   branch has no commits. The total diff comes from the workspace record's `diffStats`; each piece
@@ -670,7 +679,14 @@ a project picker, the prompt hero, and the reused
   kebab item, which stays) → `ship` (all done + reviewed, no open PR → an inline **Open PR**,
   same `pr.open` flow as the header button) → hidden when nothing demands action. The plan-level
   completion note wears a `Summary` eyebrow so the report reads in labeled sections. After the item
-sections the page renders **`Outside the plan`** (`plan-unattributed`, only when
+sections the page renders **`Committed outside the plan`** (`plan-adopted-commits`, only when
+`TodoPlan.adoptedCommits` is non-empty — including on an otherwise empty plan): the host-derived
+`base..HEAD` commits no item owns (derivation: [[submodule-server-todos]]), each rendered with the same
+**`ItemBlock`** as a planned step so it carries the identical change set, Start-review, and revisions
+affordances — they are reviewable exactly like an item's commit. **Review stage only:** they are
+*excluded* from the build `d/t done` count and never gate `ship`, but `planView.reviewableItems`
+includes them so the Review stepper, the `review` next-action, and Review All cover them. Then the page
+renders **`Outside the plan`** (`plan-unattributed`, only when
 `TodoPlan.unattributed` is non-empty — including on an otherwise empty plan): the host-derived
 uncommitted rows no item claims (derivation: [[submodule-server-todos]]), rendered as `FileRow`s
 opening the **uncommitted-scope** diff — the honesty section that keeps un-planned work visible in
@@ -1360,8 +1376,16 @@ own section. The kebab menu (`plan-menu`, a
   `fontFamily` toggle), so a font that finishes loading late cannot re-lay-out an already-attached terminal.
   This ordering also prevents a fallback-width attach followed by a corrective resize from producing
   post-snapshot shell redraws that can erase replayed rows. Its pre-bind output buffer is a bounded waiting
-  state: successful bind filters it to the adopted PTY, while permanent creation failure
-  clears it and stops accepting page-wide terminal frames. **Historical replay is input-inert:** the PTY id
+  state: successful bind filters it to the adopted PTY, while creation failure clears it and stops accepting
+  page-wide terminal frames. That failure renders the host's stable guidance as escaped DOM text rather than
+  executable terminal output, with Terminal Settings and Retry actions. The failed xterm subtree is inert;
+  an explicit retry keeps that recovery surface mounted and its actions disabled until the request settles,
+  preserving focus without stealing unrelated workbench focus. Initial xterm focus is deferred until a
+  successful attach and applies only while the terminal tab that requested it still owns focus; Retry keeps
+  its overlay mounted through the successful handoff and restores xterm focus only while focus remains in that
+  terminal region. A competing detach invalidates that handoff and clears its retry state before exposing Take
+  Back again.
+  **Historical replay is input-inert:** the PTY id
   remains unadopted until xterm's replay callback, which rechecks attach freshness before binding and draining
   genuinely live frames; replies xterm synthesizes for recorded terminal queries can therefore never enter the
   live shell. PTY sizing distinguishes desired, in-flight, and

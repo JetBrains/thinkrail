@@ -55,4 +55,9 @@ describe("the shipped file tree", () => {
 	it("gives every tab a non-empty label", () => {
 		expect(deriveEditorTabs(rows).filter((t) => t.label === "")).toEqual([]);
 	});
+
+	it("presents the install section as INSTALL.md", () => {
+		expect(deriveEditorTabs(rows)).toContainEqual({ href: "#install", label: "INSTALL.md" });
+		expect(html).toContain('id="install" data-file="INSTALL.md"');
+	});
 });

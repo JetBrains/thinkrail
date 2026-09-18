@@ -1,8 +1,8 @@
 # creating.md — gates, then the PR
 
 Entry: finished work on a branch, no PR yet. Saves the body draft at
-`.thinkrail/context/pr-body.md`. Control continues at `screenshots.md` (UI-visible change) or
-`checks.md`.
+`.thinkrail/context/pr-body.md`. Creating owns wait mode; control continues with that mode at
+`screenshots.md` (UI-visible change) or `checks.md`.
 
 ## Gates — all five pass before `gh pr create`, in this order
 
@@ -32,12 +32,13 @@ Red flags — stop, a gate is being rationalized away:
 ## The PR
 
 - **Title**: `scope: imperative summary` — e.g. `feat(web): …`, `fix(website): …`, `ci: …`.
-- **Body** → `.thinkrail/context/pr-body.md`, sections scaled to the change, written for colleagues:
-  - `## Summary` — what and why; `Closes #NNN` when issue-driven.
-  - `## Changes` — grouped by module (larger PRs); note deliberate scope exclusions and any
-    migration steps.
-  - `## Testing` — the actual commands run and their results ("`bun run e2e` — 252 passed"), never
-    a bare "tests pass".
+- **Body** → `.thinkrail/context/pr-body.md`. Read the project's
+  `.github/PULL_REQUEST_TEMPLATE.md` at the point of drafting and preserve its sections, order, and
+  every checklist item; replace prompts with concrete content and tick only checks actually completed.
+  Drop a related-issues section only when the PR closes nothing. If the project has no template, use
+  `## Summary` (what and why, plus `Closes #NNN` when issue-driven), `## Changes` (including
+  exclusions or migration steps when material),
+  and `## Testing` (exact commands and results, never a bare "tests pass").
 - **Re-verify, push, then create.** Gates 3–5 edit the tree gate 1 checked — artifact removals,
   self-review fixes: commit everything they changed and confirm `git status --porcelain` is empty
   again *now*, immediately before the push (the spine's point-of-action rule; a deletion or fix
@@ -52,5 +53,5 @@ Red flags — stop, a gate is being rationalized away:
 ## Next
 
 - The change is UI-visible → offer screenshots proactively (don't wait to be asked), then read and
-  follow `screenshots.md`.
-- Otherwise → read and follow `checks.md`.
+  follow `screenshots.md`, carrying wait mode from creation.
+- Otherwise → read and follow `checks.md` in wait mode.

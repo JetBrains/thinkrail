@@ -1,7 +1,44 @@
 import { describe, expect, it } from "bun:test";
-import { installCommands, windowsShellLabels } from "./installCommands";
+import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "./installCommands";
 
 const INSTALL_PS1_URL = "https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1";
+const RELEASE_DOWNLOAD_URL = "https://github.com/JetBrains/thinkrail/releases/latest/download";
+
+describe("desktop installers", () => {
+	it("publishes the stable desktop aliases in platform order", () => {
+		expect(desktopInstallerPlatforms.map((platform) => platform.label)).toEqual([
+			"macOS",
+			"Windows",
+			"Linux",
+		]);
+		expect(desktopInstallerPlatforms.map((platform) => platform.detail)).toEqual([
+			"Apple Silicon",
+			"Windows x64",
+			"Ubuntu 24.04+",
+		]);
+		expect(desktopInstallerPlatforms.flatMap((platform) => platform.downloads)).toEqual([
+			{
+				label: "Download .dmg",
+				href: `${RELEASE_DOWNLOAD_URL}/thinkrail-desktop-darwin-arm64.dmg`,
+			},
+			{
+				label: "Download .zip",
+				href: `${RELEASE_DOWNLOAD_URL}/thinkrail-desktop-windows-x64.zip`,
+			},
+			{
+				label: "x64 .tar.gz",
+				href: `${RELEASE_DOWNLOAD_URL}/thinkrail-desktop-linux-x64.tar.gz`,
+			},
+			{
+				label: "ARM64 .tar.gz",
+				href: `${RELEASE_DOWNLOAD_URL}/thinkrail-desktop-linux-arm64.tar.gz`,
+			},
+		]);
+		expect(
+			desktopInstallerPlatforms.find((platform) => platform.id === "linux")?.downloads,
+		).toHaveLength(2);
+	});
+});
 
 describe("Windows install commands", () => {
 	it("runs the installer directly in PowerShell", () => {

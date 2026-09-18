@@ -68,9 +68,16 @@ export function planToMarkdown(plan: TodoPlan, title: string): string {
 			...plan.todos.flatMap(itemLines),
 		);
 	}
-	if (all.length === 0) lines.push("", "_No items yet._");
-
+	const adopted = plan.adoptedCommits ?? [];
 	const unattributed = plan.unattributed ?? [];
+	if (all.length === 0 && adopted.length === 0 && unattributed.length === 0) {
+		lines.push("", "_No items yet._");
+	}
+
+	if (adopted.length > 0) {
+		lines.push("", "## Committed outside the plan", ...adopted.flatMap(itemLines));
+	}
+
 	if (unattributed.length > 0) {
 		lines.push(
 			"",

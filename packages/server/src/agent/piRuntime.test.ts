@@ -108,6 +108,7 @@ test("the process-local initializer applies to every fresh runtime generation", 
 			"generation-initializer-probe",
 		);
 		expect(first.generation.providerStatusIds).toContain("generation-initializer-probe");
+		expect(first.generation.opaqueProviderIds.size).toBe(0);
 		expect(second.generation.runtime.getRegisteredProviderIds()).toContain(
 			"generation-initializer-probe",
 		);
@@ -139,6 +140,9 @@ test("candidate generation reloads an opaque extension replaced at the same path
 		if (initial.outcome !== "prepared") return;
 		expect(initial.generation.runtime.getRegisteredProviderIds()).toContain("opaque-probe");
 		expect(initial.generation.providerStatusIds).not.toContain("opaque-probe");
+		expect([...initial.generation.opaqueProviderIds]).toEqual(["opaque-probe"]);
+		initial.generation.runtime.registerProvider("later-provider", { name: "Later" });
+		expect(initial.generation.opaqueProviderIds.has("later-provider")).toBe(false);
 		writeFileSync(extensionPath, 'throw new Error("private replacement diagnostic");\n');
 		expect(await preparePiRuntimeGeneration([extensionPath])).toEqual({
 			outcome: "failed",
@@ -146,6 +150,36 @@ test("candidate generation reloads an opaque extension replaced at the same path
 		});
 	} finally {
 		configurePiRuntime(null);
+		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("opaque registrations that replace existing providers stay outside ordinary auth metadata", async () => {
+	const root = mkdtempSync(join(tmpdir(), "trpi-opaque-provider-ownership-"));
+	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	process.env.PI_CODING_AGENT_DIR = root;
+	configurePiRuntime(null);
+	configurePiRuntimeGenerationInitializer((runtime) => {
+		runtime.registerProvider("pre-registered", { name: "Host provider", apiKey: "fixture-key" });
+	});
+	try {
+		const path = join(root, "opaque.ts");
+		writeFileSync(
+			path,
+			'export default function opaque(pi) { pi.registerProvider("anthropic", { apiKey: "private-key" }); pi.registerProvider("pre-registered", { apiKey: "private-replacement" }); }\n',
+		);
+		const prepared = await preparePiRuntimeGeneration([path]);
+		expect(prepared.outcome).toBe("prepared");
+		if (prepared.outcome !== "prepared") throw new Error("opaque fixture failed");
+		for (const id of ["anthropic", "pre-registered"]) {
+			expect(prepared.generation.opaqueProviderIds.has(id)).toBe(true);
+			expect(prepared.generation.providerStatusIds.has(id)).toBe(false);
+		}
+	} finally {
+		configurePiRuntime(null);
+		configurePiRuntimeGenerationInitializer();
 		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
 		rmSync(root, { recursive: true, force: true });

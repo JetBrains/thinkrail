@@ -27,6 +27,7 @@ type BeforeQuitEvent = ReturnType<typeof Electrobun.events.events.app.beforeQuit
 
 const BACKEND_PROFILE_ID = "local";
 const WINDOW_ID = "main";
+let startupQuitCoordinator: ReturnType<typeof createElectrobunQuitCoordinator> | undefined;
 
 function writeReady(path: string, payload: unknown): void {
 	mkdirSync(dirname(path), { recursive: true });
@@ -49,6 +50,11 @@ async function start(): Promise<void> {
 		appVersion: version,
 		channel,
 	});
+	const quitCoordinator = createElectrobunQuitCoordinator(() => host.server.shutdown());
+	startupQuitCoordinator = quitCoordinator;
+	Electrobun.events.on("before-quit", (event: BeforeQuitEvent) => {
+		quitCoordinator.handleBeforeQuit(event);
+	});
 	const origin = `http://127.0.0.1:${host.port}`;
 	const userData = process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
 	const routes = new RouteStore(join(userData, "routes.json"));
@@ -56,7 +62,6 @@ async function start(): Promise<void> {
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const initialPreferences = preferences.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const neutral = process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
-	const quitCoordinator = createElectrobunQuitCoordinator(() => host.server.shutdown());
 	const updateController = await createElectrobunUpdateController({
 		isPackaged: Electrobun.app.isPackaged,
 		version,
@@ -154,9 +159,6 @@ async function start(): Promise<void> {
 		}
 	});
 
-	Electrobun.events.on("before-quit", (event: BeforeQuitEvent) => {
-		quitCoordinator.handleBeforeQuit(event);
-	});
 	const controlPath = process.env.THINKRAIL_DESKTOP_CONTROL_FILE;
 	if (controlPath) {
 		let navigationProbeStarted = false;
@@ -184,12 +186,16 @@ try {
 } catch (error) {
 	const message = error instanceof Error ? error.message : String(error);
 	console.error(message);
-	await Utils.showMessageBox({
-		type: "error",
-		title: "ThinkRail could not start",
-		message: "ThinkRail could not start",
-		detail: message,
-		buttons: ["Quit"],
-	});
-	Utils.quit();
+	try {
+		await Utils.showMessageBox({
+			type: "error",
+			title: "ThinkRail could not start",
+			message: "ThinkRail could not start",
+			detail: message,
+			buttons: ["Quit"],
+		});
+	} finally {
+		if (startupQuitCoordinator) await startupQuitCoordinator.quit();
+		else Utils.quit();
+	}
 }

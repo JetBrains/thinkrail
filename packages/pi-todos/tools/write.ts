@@ -22,7 +22,7 @@ const group = Type.Object({
 const parameters = Type.Object({
 	groups: Type.Array(group, {
 		description:
-			"The plan as tasks: one group per user ask (title = the outcome), each carrying its ordered steps. A small ask is a small group (1–2 steps is fine). Loose items are the user's lane — you never author them.",
+			"The plan as tasks: one group per user ask (title = the outcome), each carrying its ordered steps. Use a 1–2-step group only when the user explicitly asked for a plan; otherwise plans start at three substantive steps. Loose items are the user's lane — you never author them.",
 	}),
 });
 

@@ -16,9 +16,11 @@ codify how the agent should *run a piece of work*. (Contrast: `pi-spec-graph` de
 model *is*; `pi-visualize` is a rendering tool.) It contributes exactly two things, wired by the
 `package.json` pi manifest (`pi: { extensions: ["./index.ts"], skills: ["./skills"] }`):
 
-- **`index.ts`** — an `ExtensionFactory` registering one always-on `before_agent_start` rule that
-  points every new piece of work at the root router skill (`choosing-a-workflow`).
-- **`skills/`** — the workflow skill family: the root router that classifies every new piece of
+- **`index.ts`** — an `ExtensionFactory` registering one always-on `before_agent_start` rule that,
+  at the start of a new piece of work, sends project onboarding and PR lifecycle work, plus other changes
+  with unresolved product/design decisions, to the root router skill (`choosing-a-workflow`). Work already
+  routed resumes its active workflow; all other work proceeds directly without loading or announcing one.
+- **`skills/`** — the workflow skill family: the root router that classifies workflow-eligible
   work, plus the worker and concept skills reached from it. The **authoritative roster is the
   family table in [[submodule-workflow-skills]]**, alongside the system's design — concept model,
   skill roles, meta-rules, per-skill rationale. This spec keeps no roster of its own (a second list
@@ -35,7 +37,8 @@ the next skill (meta-rule 12 in [[submodule-workflow-skills]]).
 Same mechanism as `pi-spec-graph` ([[module-spec-graph]]): each workflow lives in its own skill,
 auto-discovered via the `pi.skills` manifest / `additionalSkillPaths`. The `before_agent_start` rule
 mirrors `pi-spec-graph`'s `SPEC_RULE`: short and byte-stable so it rides every run without churning
-provider prompt-caching, and a pointer, not a restatement — routing rules live once in the router
+provider prompt-caching, and a pointer, not a restatement — it applies only at the start of new work,
+while an already-routed continuation resumes its active workflow. Routing rules live once in the router
 skill; each workflow's steps live once in its own skill. The setting-up-a-project family carries no
 rule of its own — the root router routes onboarding to the dispatcher (whose `description` also
 self-triggers), and in-app the Welcome screen's "Set up project" card seeds the
@@ -79,8 +82,7 @@ it verbatim. The rule's *wording* is prose, not contract, and stays unpinned.
 Skill behavior is tested headlessly by the **workflow-test harness** — design, verdict model,
 suites, and coverage live in [[module-workflow-tests]] (`bun run test:workflows`; on-demand — needs
 pi auth, spends real tokens, never a commit/CI gate). Per-skill observation status lives in the
-family table ([[submodule-workflow-skills]]), which also records the routing suite's one open
-finding (questions bypass the root router). Slice 3 (worker flows end-to-end) is partially landed:
+family table ([[submodule-workflow-skills]]). Slice 3 (worker flows end-to-end) is partially landed:
 `importing-a-codebase` runs in the harness's importing suite (adoption + regression scenarios, added
 with the doc-adoption work). Remaining follow-up — scenario definitions only, no new machinery:
 `starting-a-new-project` / `brainstorming` full runs via the user simulator (design record:

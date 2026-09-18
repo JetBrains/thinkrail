@@ -1,44 +1,66 @@
-# checks.md — watch, react, report (terminal)
+# checks.md — observe, then either wait or report
 
-Entry: an open PR with fresh commits, or a standing ask to monitor. Saves nothing. This doc ends
-the workflow — the terminal state is declared below.
+Entry: an open PR plus the completion mode selected by the caller. Saves nothing. This doc ends the
+workflow in one of the two terminal states below.
 
-## Watch
+## Snapshot mode — metadata-only work
 
-- `gh pr checks <n> --watch` (or `gh run watch <run-id> --exit-status` for one run). When a watch
-  is impractical, poll `gh pr checks <n>` with sleeps.
-- `no checks reported` (a repo with no CI) is an observed state, not an error: there is nothing to
-  watch, fix, or wait for — go straight to the merge-state verification below and carry "no checks
-  configured" into the terminal summary.
-- On failure: `gh run view --job <job-id> --log-failed` for the failing step's log; reproduce
-  locally when the log isn't conclusive.
+Use after standalone screenshot, body, or comment-only maintenance that left the PR head unchanged,
+or for a one-time checks/merge-state request, when the ask does not promise a merge-ready result.
 
-## React
+1. Run `gh pr checks <n>` once. Preserve `no checks reported` as the explicit state “no checks
+   configured”; report pending or failing checks as observed.
+2. Query `mergeStateStatus`, `isDraft`, and `reviewDecision` together once. Report every value exactly
+   as observed; do not poll, sync, rerun, or repair it.
+3. Give the user the PR link, any metadata action completed, and the current checks + merge-state
+   snapshot.
 
-- Fix, commit, push; the loop restarts. A flaky-looking failure is investigated, not re-run into
-  submission — `gh run rerun --failed` once, and only when the failure is demonstrably unrelated to
-  the branch.
-- Never report a check green on hope: the report below is written from observed check states only.
+**Snapshot terminal state:** the requested metadata mutation, if any, is complete and the current PR
+state is reported. This is not a claim that the PR is green or merge-ready.
 
-## Before declaring done: the base, not just CI
+## Wait mode — ship or code-affecting work
 
-Checks only observe CI — they say nothing about the base moving underneath. Query the merge state
-(`gh pr view <n> --json mergeStateStatus -q .mergeStateStatus`) and act on the answer:
+### Watch
 
-- `UNKNOWN` — GitHub is still computing mergeability (normal right after a push): wait a few
-  seconds and re-query until it resolves. An indeterminate answer never falls through to done.
-- `BEHIND` or `DIRTY` — read and follow `syncing.md`, then return here.
-- Any other value is a computed, non-behind, non-conflicted state — the affirmative answer the
-  terminal state below requires.
+- `gh pr checks <n> --watch` (or `gh run watch <run-id> --exit-status` for one run). When a watch is
+  impractical, poll `gh pr checks <n>` with sleeps.
+- `no checks reported` means there is no CI to wait for; carry “no checks configured” into the
+  terminal summary and continue to merge-state verification.
+- On failure, inspect `gh run view --job <job-id> --log-failed`; reproduce locally when the log is not
+  conclusive.
 
-Only a head *observed* current with its base is reported done — never one assumed current because
-nothing said otherwise.
+### React
 
-## Terminal state (this workflow ends here)
+- Fix failures caused by the branch, commit, push, and restart the loop. A flaky-looking failure is
+  investigated rather than rerun into submission; use `gh run rerun --failed` once and only when the
+  failure is demonstrably unrelated to the branch.
+- If green is unreachable without a user decision or work outside the request, report the blocker and
+  stop rather than expanding scope.
 
-Done means: the PR exists, is up to date with its base, every check it *has* is **green** — a repo
-with no CI is reported explicitly as "no checks configured", never silently treated as green — and
-the user has the PR link plus a short state summary — what shipped, what was verified, anything deliberately
-left out. If green is unreachable without a decision that belongs to the user (e.g. a required
-check failing for reasons outside this branch's scope), report that state explicitly and stop —
-that is the alternative terminal state, stated as such, never silently abandoned.
+### Verify merge readiness
+
+After checks resolve, query the complete state together:
+
+`gh pr view <n> --json mergeStateStatus,isDraft,reviewDecision`
+
+Handle every state explicitly:
+
+- `isDraft: true` — if the user asked to mark the PR ready, run `gh pr ready` and re-query. Otherwise
+  report that it remains a draft; a user-requested draft creation may finish in that expected state,
+  but is never called merge-ready.
+- `UNKNOWN` — wait briefly and re-query until GitHub computes the state.
+- `BEHIND` or `DIRTY` — read and follow `syncing.md`, then return here in wait mode.
+- `UNSTABLE` — the commit status is not fully passing. Re-read the current checks and handle the
+  branch-caused failure; otherwise report the out-of-scope blocker. Never describe it as green.
+- `BLOCKED` — report `reviewDecision` and do not declare success. `CHANGES_REQUESTED` routes to
+  `review-comments.md` when addressing review feedback is in scope; `REVIEW_REQUIRED` needs a human
+  review; any other value means another branch-protection rule still blocks the PR.
+- `CLEAN` — affirmative: mergeable with passing commit status.
+- `HAS_HOOKS` — affirmative with an explicit caveat: checks pass and GitHub considers the PR
+  mergeable, but pre-receive hooks still run when the merge is attempted.
+
+**Wait terminal state:** the PR exists, is non-draft, current with its base, every configured check is
+green (or there is explicitly no CI), and `mergeStateStatus` is `CLEAN` or `HAS_HOOKS` with the caveat
+reported. The user gets the link plus what shipped, what was verified, and any deliberate exclusions.
+A requested draft or a blocker that needs a human/out-of-scope decision is an explicit alternative
+terminal state, never a merge-ready success.

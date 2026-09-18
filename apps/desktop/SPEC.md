@@ -121,10 +121,14 @@ injects the literal URL as code on Linux.
 
 ## Lifecycle
 
-Every quit path calls the shared idempotent asynchronous server shutdown once. It settles/aborts active
-agent work within its bound, drains analytics, disposes server resources and PTYs, and closes sockets.
+Every quit path calls the shared idempotent asynchronous server shutdown once, including a startup
+failure after acquiring the host but before the native window or quit listener is ready. Shutdown ownership
+begins as soon as the host is acquired. It settles/aborts active agent work within its bound, drains
+analytics, disposes server resources and PTYs, and closes sockets.
 Electrobun's synchronous `before-quit` callback cancels quit while that promise is pending and retries
-`Utils.quit()` under a completion guard. Abrupt death relies only on operating-system process cleanup.
+`Utils.quit()` under a completion guard. Startup failure also requests quit directly through that coordinator
+in the error-dialog finalizer, so even missing quit interception or a failed dialog cannot bypass shutdown.
+Abrupt death relies only on operating-system process cleanup.
 
 Artifact tests drive this same entrypoint through opt-in environment/ready/control seams: isolated user
 data, a hidden neutral window for browser-backed tests, host/launcher ids and origin on DOM-ready, and
@@ -152,7 +156,10 @@ at the next pre-build. On Windows that hook also brands the bundled uninstaller 
 but before release compression, wrapping, and signing. Builds in one worktree remain sequential.
 
 Electrobun's platform icon configuration points at one ThinkRail mark in the native formats each target
-requires: the macOS iconset, Windows multi-resolution ICO, and Linux PNG. The same Windows ICO is the
+requires: the macOS iconset, Windows multi-resolution ICO, and Linux PNG. The native mark preserves its
+rounded-square silhouette with the ThinkRail glyph in the dark-family brand green (`#8dff4f`) on a solid
+black tile; translucent glass, highlights, and decorative edging are excluded so small taskbar frames stay
+crisp. The browser favicon and in-app shell mark are separate web-owned surfaces. The same Windows ICO is the
 Hutch-owned source for the installed app, setup/extractor executable, shortcuts, and taskbar identity; no
 release action substitutes a second installer icon. Electrobun 2.0.1 does not apply that icon to its
 bundled Windows uninstaller, so the project `postBuild` hook adds the same icon group to

@@ -219,13 +219,21 @@ ref off the workspace-create critical path.
   **writes** the user's branch; the caller serializes it per workspace.
   **`gitHeadSha(workspaceId)`** → `string | null` — `rev-parse HEAD` (`null` on an unborn HEAD), recorded
   into the todos baseline sidecar at `in_progress`.
+  **`readCommitSubject(workspaceId, sha)`** → `string | null` — a commit's subject line (`null` when the
+  sha is malformed or unresolvable), the sync read behind the todos module's adopted-commit review
+  resolver (`base..HEAD` commits owned by no plan item).
+  **`resolveListedCommit(workspaceId, sha)`** → `string | null` — the **canonical OID** of `sha` iff it is
+  in the **same capped `base..HEAD` set `listCommits` emits** (same `COMMIT_LIST_MAX` + range), else
+  `null`. Returning the canonical sha lets the adopted-commit review resolver reject an abbreviated /
+  non-canonical id, and the shared cap guarantees it never accepts a commit past the newest
+  `COMMIT_LIST_MAX` — for which no adopted item is ever emitted. Kept in lock-step with `listCommits`.
 - **Public surface (barrel):** `git`, `gitAsync`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,
-  `readBlobAt`,
+  `readBlobAt`, `readCommitSubject`,
   `gitCommitPaths`, `gitHeadSha`, `listCommits`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
-  `canonicalPath`, `prefetchBranch`, `countUnpushedCommits`, `listRemotes`, `remoteNameOf`.
+  `canonicalPath`, `resolveListedCommit`, `prefetchBranch`, `countUnpushedCommits`, `listRemotes`, `remoteNameOf`.
 - **Allowed deps:** `persistence` (workspace + project lookup), `log`; `contracts` (`Git*`/`BranchList` types);
   `subprocess` (`runBounded`, the bounded child behind `gitAsync`);
   `@thinkrail/shared/codedError` (naming a failure for the wire); `@thinkrail/shared/spawn`

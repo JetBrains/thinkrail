@@ -14,7 +14,7 @@ import {
 	type TodoPlan as StoredPlan,
 	TodoStore,
 } from "pi-todos/core";
-import { gitStatus } from "../git";
+import { gitStatus, listCommits, readCommitSubject, resolveListedCommit } from "../git";
 import { getWorkspace } from "../workspaces";
 import { enqueueTodoMutation, settleChangeArtifacts, unattributedChanges } from "./artifacts";
 import { dropItemBaseline, readBaselines, removeSessionBaselines } from "./baselines";
@@ -122,6 +122,39 @@ async function resolveUnattributed(
 	}
 }
 
+async function resolveAdoptedCommits(
+	workspaceId: string,
+	plan: StoredPlan,
+	records: Record<string, TodoReviewRecord>,
+	pending: Record<string, { at: string; shas?: string[] }>,
+): Promise<TodoItem[]> {
+	try {
+		const owned = new Set(flatItems(plan).flatMap(commitShas));
+		const { commits } = await listCommits(workspaceId);
+		const adopted = commits.filter((c) => !owned.has(c.sha));
+		if (adopted.length === 0) return [];
+		return await Promise.all(
+			adopted.map(async (c): Promise<TodoItem> => {
+				const id = `commit:${c.sha}`;
+				const at = c.committedAt || new Date().toISOString();
+				const synthetic: StoredItem = {
+					id,
+					title: c.subject || c.sha.slice(0, 12),
+					status: "done",
+					origin: "agent",
+					artifacts: [{ kind: "commit", sha: c.sha, ...(c.subject ? { label: c.subject } : {}) }],
+					createdAt: at,
+					updatedAt: at,
+				};
+				const wire = await toWireItem(workspaceId, synthetic, records[id], id in pending);
+				return { ...wire, origin: "adopted" };
+			}),
+		);
+	} catch {
+		return [];
+	}
+}
+
 export async function listTodos(params: {
 	workspaceId: string;
 	sessionId: string;
@@ -148,6 +181,8 @@ export async function listTodos(params: {
 	if (plan.summary) wire.summary = plan.summary;
 	const unattributed = await resolveUnattributed(params.workspaceId, root, params.sessionId, plan);
 	if (unattributed.length > 0) wire.unattributed = unattributed;
+	const adoptedCommits = await resolveAdoptedCommits(params.workspaceId, plan, records, pending);
+	if (adoptedCommits.length > 0) wire.adoptedCommits = adoptedCommits;
 	const reviewer = readReviewMeta(root, params.sessionId).reviewerSessionId;
 	if (reviewer) wire.reviewerSessionId = reviewer;
 	return wire;
@@ -234,12 +269,41 @@ export function removeTodo(
 	});
 }
 
+const ADOPTED_COMMIT_ID = /^commit:([0-9a-f]{4,64})$/;
+
+function adoptedCommitSha(id: string): string | undefined {
+	return ADOPTED_COMMIT_ID.exec(id)?.[1];
+}
+
+// origin is "agent": StoredItem has no "adopted"; the wire item gets "adopted" in listTodos. see todos/SPEC.md
+function adoptedStoredItem(workspaceId: string, id: string, plan: StoredPlan): StoredItem | null {
+	const raw = adoptedCommitSha(id);
+	if (!raw) return null;
+	const sha = resolveListedCommit(workspaceId, raw);
+	if (!sha || id !== `commit:${sha}`) return null;
+	if (new Set(flatItems(plan).flatMap(commitShas)).has(sha)) return null;
+	const subject = readCommitSubject(workspaceId, sha);
+	if (subject === null) return null;
+	const now = new Date().toISOString();
+	return {
+		id,
+		title: subject || sha.slice(0, 12),
+		status: "done",
+		origin: "agent",
+		artifacts: [{ kind: "commit", sha, ...(subject ? { label: subject } : {}) }],
+		createdAt: now,
+		updatedAt: now,
+	};
+}
+
 function reviewableItem(params: { workspaceId: string; sessionId: string; id: string }): {
 	root: string;
 	item: StoredItem;
 } {
 	const root = getWorkspace(params.workspaceId).worktreePath;
-	const item = new TodoStore(root, params.sessionId).get(params.id);
+	const store = new TodoStore(root, params.sessionId);
+	const item =
+		store.get(params.id) ?? adoptedStoredItem(params.workspaceId, params.id, store.read());
 	if (!item) throw new Error(`No TODO with id "${params.id}".`);
 	if (!isReviewable(item)) throw new Error(`TODO "${params.id}" has no change set to review.`);
 	return { root, item };
@@ -386,8 +450,12 @@ export function renderReviewPackage(
 			? `commit${shas.length === 1 ? "" : "s"} ${shas.map((s) => s.slice(0, 12)).join(", ")}${paths.length > 0 ? `; uncommitted paths: ${paths.join(", ")}` : ""}`
 			: `changed paths: ${paths.join(", ")}`;
 	const rereview = prior && fresh.length > 0 && fresh.length < shas.length;
+	const adopted = adoptedCommitSha(item.id);
+	const subject = adopted
+		? `You are the REVIEWER for commit ${adopted.slice(0, 12)} ("${item.title}") of chat ${workerSessionId} — a branch commit that belongs to no plan step. Review the change set — you did not write this code.`
+		: `You are the REVIEWER for plan step ${item.id} ("${item.title}") of chat ${workerSessionId}. Review the change set — you did not write this code.`;
 	const lines = [
-		`You are the REVIEWER for plan step ${item.id} ("${item.title}") of chat ${workerSessionId}. Review the change set — you did not write this code.`,
+		subject,
 		"",
 		...(item.note ? [`Step note: ${item.note}`] : []),
 		...(item.summary ? [`Worker's completion summary: ${item.summary}`] : []),
@@ -466,7 +534,9 @@ export function renderFixPackage(item: StoredItem, feedback: string): string {
 		feedback,
 		'"""',
 		"",
-		`Address the feedback on THIS step: flip ${item.id} back to in_progress (todo_update), make the fix, then mark it done with a fresh summary AND a fresh commitSubject describing the fix (the revision is its own commit). Do not create a new item for it.`,
+		adoptedCommitSha(item.id)
+			? `Address the feedback by revising the change in ${changeSet}: make the fix and commit it. This commit belongs to no plan step, so there is nothing to re-open — your follow-up commit surfaces as a new entry. Leave unrelated commits untouched.`
+			: `Address the feedback on THIS step: flip ${item.id} back to in_progress (todo_update), make the fix, then mark it done with a fresh summary AND a fresh commitSubject describing the fix (the revision is its own commit). Do not create a new item for it.`,
 	];
 	return lines.join("\n");
 }

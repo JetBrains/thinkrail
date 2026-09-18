@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
 	ACTIVITY_PROTOCOL_VERSION,
+	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
@@ -46,11 +47,17 @@ test("project template previews advance the additive wire shape to v63", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION);
 });
 
-test("host update advisories name their immutable notice channel", () => {
+test("host update advisories advance the protocol with an immutable notice channel", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(64);
 	expect(WS_CHANNELS.hostUpdateAvailable).toBe("host.updateAvailable");
 });
 
-test("sticky workspace model preferences advance the additive wire shape to v65", () => {
-	expect(WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION).toBe(65);
+test("explicit analytics consent advances the protocol to v65", () => {
+	expect(ANALYTICS_CONSENT_PROTOCOL_VERSION).toBe(65);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ANALYTICS_CONSENT_PROTOCOL_VERSION);
+});
+
+test("sticky workspace model preferences advance the additive wire shape to v66", () => {
+	expect(WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION).toBe(66);
 	expect(PROTOCOL_VERSION).toBe(WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION);
 });

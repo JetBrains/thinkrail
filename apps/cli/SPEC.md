@@ -40,8 +40,8 @@ is a **subcommand** (`thinkrail update [--channel stable|nightly] [--version X.Y
 entry needs it too: a subcommand never boots the host, so it must not pay for (or, in `uninstall`'s case,
 re-create) the staged asset cache. Otherwise the launch args: `--port` (stable default 24242,
 scans upward to the next free port on collision), `--host` (default `localhost`), `--no-open`,
-`--no-analytics` (**per-run mute** for anonymous usage analytics — this run sends nothing; the
-durable switch is the app's Settings → Privacy toggle, see `submodule-server-analytics`),
+`--no-analytics` (**per-run suppression of additional analytics only** — basic events remain on;
+the durable additional-data choice is Settings → Privacy, see [[submodule-server-analytics]]),
 `--verbose` (debug-level logging — threaded to `bootHost` as `verbose: true`; the log files under
 `<dataDir>/logs` and their env switch `THINKRAIL_LOG_LEVEL` belong to `submodule-server-log`, whose
 module is that variable's single reader — same pattern as `THINKRAIL_NO_ANALYTICS`, so `dev.ts` honors
@@ -147,7 +147,7 @@ worktrees and any uncommitted work in them. pi's own state (`~/.pi`) is never to
 (`0.0.0-dev`). The release pipeline overwrites that one module in the throwaway CI checkout before
 building CLI and desktop, so both report identical identity. There is no analytics-key seam here.
 `bootstrap.ts` prints the shared version for `--version`, passes it into `bootHost` for
-`server.welcome.appVersion`, and threads `{ channel, build: "binary" | "source", mute }` into analytics.
+`server.welcome.appVersion`, and threads channel, `build: "binary" | "source"`, and the per-run additional-data suppression into analytics.
 
 ## Launch entries + build provenance
 
@@ -164,7 +164,9 @@ compiled binary vs a source run (see `submodule-server-analytics`). Deliberately
 `/$bunfs/` module paths: that's an implementation detail a Bun bump can change, and it would mislabel
 silently. `src/args.ts` parses `--no-analytics` into `CliOptions.noAnalytics` but does **not** read
 `THINKRAIL_NO_ANALYTICS` — the host's analytics module is that variable's single reader, so every
-entrypoint honors it (including `packages/server/src/dev.ts`, which parses no argv).
+entrypoint honors it for additional data (including `packages/server/src/dev.ts`, which parses no argv).
+Neither spelling suppresses basic events; both help entries disclose that scope rather than promising
+zero analytics traffic. CI/test suppression remains host-owned and covers both tiers.
 
 ## Single-file binary (`build:binary`)
 

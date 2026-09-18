@@ -1,17 +1,51 @@
+import { execFileSync } from "node:child_process";
 import { test } from "@playwright/test";
 import { checks, defineScenario, endAllSessions, signals, workflowTest } from "./harness";
 
 test.afterAll(() => endAllSessions());
 
 const SETUP_WORKERS = ["starting-a-new-project", "importing-a-codebase"];
+const DIRECT_WORK_FORBIDDEN_SKILLS = [
+	"choosing-a-workflow",
+	"brainstorming",
+	"setting-up-a-project",
+	"shipping-a-pr",
+	"spec-graph",
+	"todos",
+	...SETUP_WORKERS,
+];
+const DIRECT_WORK_FORBIDDEN_TOOLS = [
+	"spec_grep",
+	"spec_get",
+	"spec_graph",
+	"spec_create",
+	"spec_update",
+	"spec_delete",
+	"spec_validate",
+	"todo_list",
+	"todo_write",
+	"todo_add",
+	"todo_update",
+	"todo_remove",
+	"todo_plan_summary",
+];
+
+function changedPaths(cwd: string): string[] {
+	return execFileSync("git", ["status", "--porcelain"], { cwd, encoding: "utf8" })
+		.split("\n")
+		.filter(Boolean)
+		.map((line) => line.slice(3));
+}
 
 workflowTest(
 	defineScenario({
-		name: "root router: feature request routes to brainstorming",
+		name: "root router: decision-bearing feature request routes to brainstorming",
 		skill: "choosing-a-workflow",
 		workspace: "code-only",
 		entry: {
-			prompt: "Add a --verbose flag to the CLI that logs each resize step as it happens.",
+			prompt:
+				"Add progress reporting to the CLI for both humans and automation. I have not decided " +
+				"the output format, default behavior, or compatibility contract yet.",
 		},
 		stopWhen: [signals.skillRead("brainstorming")],
 		forbid: SETUP_WORKERS.map((name) => signals.skillRead(name)),
@@ -22,7 +56,27 @@ workflowTest(
 		],
 		judge: {
 			rubric: [
-				"The agent read the choosing-a-workflow skill and named brainstorming as its route before doing any design or implementation work.",
+				"The agent recognized unresolved user-visible behavior and routed to brainstorming before design or implementation work.",
+			],
+		},
+	}),
+);
+
+workflowTest(
+	defineScenario({
+		name: "root router: PR checks route to shipping-a-pr",
+		skill: "choosing-a-workflow",
+		workspace: "code-only",
+		entry: { prompt: "Check CI on PR #42 and investigate any failing checks." },
+		stopWhen: [signals.skillRead("shipping-a-pr")],
+		forbid: [signals.skillRead("brainstorming"), signals.skillRead("setting-up-a-project")],
+		expect: [
+			checks.expectSkillRead("choosing-a-workflow"),
+			checks.expectOrdering("choosing-a-workflow", "shipping-a-pr"),
+		],
+		judge: {
+			rubric: [
+				"The agent treated checking an existing PR as PR lifecycle work and routed to shipping-a-pr.",
 			],
 		},
 	}),
@@ -62,26 +116,59 @@ workflowTest(
 
 workflowTest(
 	defineScenario({
-		name: "root router: a pure question routes to no workflow and gets answered directly",
+		name: "direct work: a pure question bypasses workflows and gets answered directly",
 		skill: "choosing-a-workflow",
 		workspace: "code-only",
 		entry: {
 			prompt: "What does this codebase do? Give me a short overview of its modules.",
 		},
-		forbid: ["brainstorming", "setting-up-a-project", ...SETUP_WORKERS].map((name) =>
-			signals.skillRead(name),
-		),
+		forbid: DIRECT_WORK_FORBIDDEN_SKILLS.map((name) => signals.skillRead(name)),
 		expect: [
-			checks.expectNoSkillRead(["brainstorming", "setting-up-a-project", ...SETUP_WORKERS]),
+			checks.expectNoSkillRead(DIRECT_WORK_FORBIDDEN_SKILLS),
+			...DIRECT_WORK_FORBIDDEN_TOOLS.map((name) => checks.expectToolNotCalled(name)),
 			checks.custom("the answer describes the image-resizing codebase", ({ log }) =>
 				/resiz/i.test(log.assistantTexts().join("\n")),
 			),
-			checks.expectToolNotCalled("edit"),
+			checks.custom(
+				"the question leaves the worktree unchanged",
+				({ cwd }) => changedPaths(cwd).length === 0,
+			),
 		],
 		judge: {
 			rubric: [
-				"The agent declared in one line that no workflow skill covers this (or equivalent) and proceeded directly.",
+				"The agent answered without a workflow-routing announcement or loading a worker skill.",
 				"The overview is grounded in the repository's actual files (AGENTS.md / src modules).",
+			],
+		},
+	}),
+);
+
+workflowTest(
+	defineScenario({
+		name: "direct work: a localized fully specified edit bypasses workflows",
+		skill: "choosing-a-workflow",
+		workspace: "code-only",
+		entry: {
+			prompt:
+				"In src/resize/index.ts rename the files parameter to imagePaths without changing " +
+				"behavior. Make no other changes.",
+		},
+		forbid: DIRECT_WORK_FORBIDDEN_SKILLS.map((name) => signals.skillRead(name)),
+		expect: [
+			checks.expectNoSkillRead(DIRECT_WORK_FORBIDDEN_SKILLS),
+			...DIRECT_WORK_FORBIDDEN_TOOLS.map((name) => checks.expectToolNotCalled(name)),
+			checks.custom(
+				"only the requested file changed",
+				({ cwd }) => changedPaths(cwd).join("\n") === "src/resize/index.ts",
+			),
+			checks.expectFile(
+				"src/resize/index.ts",
+				/resize\(imagePaths: string\[\]\)[\s\S]*void imagePaths/,
+			),
+		],
+		judge: {
+			rubric: [
+				"The agent made the requested localized rename directly without workflow ceremony or behavior changes.",
 			],
 		},
 	}),
@@ -139,18 +226,20 @@ workflowTest(
 		skill: "setting-up-a-project",
 		workspace: "specced",
 		entry: { skill: "setting-up-a-project", args: "Set up this project." },
-		forbid: SETUP_WORKERS.map((name) => signals.skillRead(name)),
+		forbid: [...SETUP_WORKERS, "brainstorming"].map((name) => signals.skillRead(name)),
 		expect: [
-			checks.expectNoSkillRead(SETUP_WORKERS),
+			checks.expectNoSkillRead([...SETUP_WORKERS, "brainstorming"]),
 			checks.expectToolNotCalled("write", { pathEndsWith: "goal-and-requirements.md" }),
 			checks.expectToolNotCalled("spec_create"),
-			checks.custom("the reply acknowledges the existing specs", ({ log }) =>
-				/spec/i.test(log.assistantTexts().join("\n")),
+			checks.custom("the reply offers to review or extend the existing specs", ({ log }) =>
+				/(?:review|extend).{0,60}(?:spec|graph)|(?:spec|graph).{0,60}(?:review|extend)/i.test(
+					log.assistantTexts().join("\n"),
+				),
 			),
 		],
 		judge: {
 			rubric: [
-				"The agent recognized the existing spec graph and offered to review/extend it (or pointed at brainstorming) instead of redoing setup.",
+				"The agent recognized the existing spec graph and offered to review or extend it instead of redoing setup or routing to brainstorming.",
 				"After the offer was declined (skipped), the agent stopped rather than proceeding uninvited.",
 			],
 		},

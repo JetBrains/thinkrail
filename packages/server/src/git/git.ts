@@ -12,7 +12,13 @@ import type {
 } from "@thinkrail/contracts";
 import { logger } from "../log";
 import { loadProjects, loadWorkspaces } from "../persistence";
-import { changedFileArgs, type DiffRange, diffBaseRef, resolveDiffRange } from "./diffScope";
+import {
+	changedFileArgs,
+	type DiffRange,
+	diffBaseRef,
+	resolveCommitOid,
+	resolveDiffRange,
+} from "./diffScope";
 import { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";
 import { isSafeRef, remoteNameOf } from "./refs";
 
@@ -63,6 +69,31 @@ export function gitHeadSha(workspaceId: string): string | null {
 	const cwd = workspace(workspaceId).worktreePath;
 	const head = git(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"]);
 	return head.ok && head.out ? head.out : null;
+}
+
+export function readCommitSubject(workspaceId: string, sha: string): string | null {
+	if (!/^[0-9a-f]{4,64}$/.test(sha)) return null;
+	const cwd = workspace(workspaceId).worktreePath;
+	const out = git(cwd, ["log", "-1", "--format=%s", "--end-of-options", `${sha}^{commit}`, "--"]);
+	return out.ok ? plainText(out.out) : null;
+}
+
+// MUST stay in lock-step with listCommits' capped base..HEAD set (same COMMIT_LIST_MAX + range). see submodule-server-todos
+export function resolveListedCommit(workspaceId: string, sha: string): string | null {
+	if (!/^[0-9a-f]{4,64}$/.test(sha)) return null;
+	const ws = workspace(workspaceId);
+	const cwd = ws.worktreePath;
+	const canonical = resolveCommitOid(cwd, sha);
+	if (!canonical) return null;
+	const listed = git(cwd, [
+		"rev-list",
+		`--max-count=${COMMIT_LIST_MAX}`,
+		"--end-of-options",
+		`${diffBaseRef(ws)}..HEAD`,
+		"--",
+	]);
+	if (!listed.ok) return null;
+	return listed.out.split("\n").includes(canonical) ? canonical : null;
 }
 
 function lines(out: string): string[] {

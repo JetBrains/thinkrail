@@ -1,9 +1,11 @@
 import type { AuthInteraction, AuthPrompt, AuthType } from "@earendil-works/pi-ai";
 import type { LoginFrame, LoginPush, LoginReply } from "@thinkrail/contracts";
-import { usePiRuntime } from "../agent";
+import { type PiRuntimeGeneration, usePiRuntime } from "../agent";
 
-let publish: (push: LoginPush) => void = () => {};
-export function setLoginPublisher(fn: (push: LoginPush) => void): void {
+let publish: (push: LoginPush, generation?: PiRuntimeGeneration) => void = () => {};
+export function setLoginPublisher(
+	fn: (push: LoginPush, generation?: PiRuntimeGeneration) => void,
+): void {
 	publish = fn;
 }
 
@@ -100,17 +102,24 @@ export function startLogin(providerId: string, type: AuthType = "oauth"): { logi
 		},
 	};
 
-	const publishTerminal = (frame: LoginFrame): void => publish({ loginId, providerId, frame });
-
-	void usePiRuntime((runtime) => runtime.login(providerId, type, interaction))
-		.then(() => {
-			if (terminate(loginId)) publishTerminal({ kind: "success" });
+	void usePiRuntime(async (runtime, generation) => {
+		await runtime.login(providerId, type, interaction);
+		return generation;
+	})
+		.then((generation) => {
+			if (terminate(loginId)) {
+				publish({ loginId, providerId, frame: { kind: "success" } }, generation);
+			}
 		})
 		.catch((err: unknown) => {
 			if (terminate(loginId)) {
-				publishTerminal({
-					kind: "error",
-					message: err instanceof Error ? err.message : String(err),
+				publish({
+					loginId,
+					providerId,
+					frame: {
+						kind: "error",
+						message: err instanceof Error ? err.message : String(err),
+					},
 				});
 			}
 		});

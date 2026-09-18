@@ -118,6 +118,10 @@
 	content: "// ";
 }
 
+html[data-enhanced="true"] [data-install-platform-panel][data-selected="false"] {
+	display: none;
+}
+
 .reveal {
 	opacity: 1;
 	transform: none;

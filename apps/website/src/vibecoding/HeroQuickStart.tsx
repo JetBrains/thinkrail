@@ -12,7 +12,7 @@ function StepCard({
 	return (
 		<div className="rounded-md border border-border bg-container-workspace-bg p-4">
 			<div className="flex items-baseline gap-3">
-				<h3 className="text-sm font-semibold">{title}</h3>
+				<h2 className="text-sm font-semibold">{title}</h2>
 			</div>
 			{description ? (
 				<p className="mt-1.5 text-xs leading-relaxed text-text-muted">{description}</p>
@@ -27,17 +27,14 @@ export function HeroQuickStart() {
 		<div className="flex flex-col gap-3">
 			<p className="label-mono">Quick start</p>
 
-			<StepCard title="Run ThinkRail in your terminal">
+			<StepCard title="Install ThinkRail">
 				<InstallPicker />
 			</StepCard>
 
-			<StepCard title="Open your project">
-				<pre className="overflow-x-auto rounded-md border border-border bg-container-workspace-bg px-4 py-2.5">
-					<code className="font-mono text-xs whitespace-nowrap text-primary">
-						thinkrail ~/code/my-repo
-					</code>
-				</pre>
-			</StepCard>
+			<StepCard
+				title="Open your project"
+				description="Launch ThinkRail and choose a Git repository."
+			/>
 
 			<StepCard
 				title="Start working"

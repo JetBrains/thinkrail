@@ -241,3 +241,32 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 		.filter({ hasText: "Research FloodWait semantics" });
 	await expect(researchItem.getByTestId("plan-change-set")).toHaveCount(0);
 });
+
+test("a branch commit no step owns shows under 'Committed outside the plan' and is reviewable", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+
+	commitFile(
+		workspace.worktreePath,
+		"loose.ts",
+		"export const loose = 1;\n",
+		"chore: unplanned commit",
+	);
+
+	await page.getByTestId("chat-plan-toggle").click();
+	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	const pane = page.getByTestId("plan-pane");
+	await expect(pane).toBeVisible();
+
+	await expect(pane).not.toContainText("No items yet");
+	const section = pane.getByTestId("plan-adopted-commits");
+	await expect(section).toBeVisible();
+	await expect(section).toContainText("Committed outside the plan");
+	const adopted = section.getByTestId("plan-item").filter({ hasText: "chore: unplanned commit" });
+	await expect(adopted).toBeVisible();
+	await expect(adopted.getByTestId("plan-start-review")).toHaveCount(1);
+	await expect(pane.getByTestId("plan-progress")).toContainText("0/0 done");
+	await expect(pane.getByTestId("plan-review-progress")).toContainText("0/1 reviewed");
+});

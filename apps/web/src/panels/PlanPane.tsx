@@ -27,6 +27,7 @@ import {
 import { VerificationBadge, VerificationGlyph } from "../chat/planKit";
 import { planToMarkdown } from "../chat/planMarkdown";
 import {
+	adoptedCommits,
 	changeSetCounts,
 	changeSetStat,
 	flatItems,
@@ -548,7 +549,10 @@ export default function PlanPane({
 	const sections = planSections(data);
 	const groups = [...sections.activeGroups, ...sections.pendingGroups, ...sections.doneGroups];
 	const loose = [...sections.activeLoose, ...sections.pendingLoose, ...sections.doneLoose];
+	const adopted = adoptedCommits(data);
+	const hasUnattributed = (data.unattributed?.length ?? 0) > 0;
 	const empty = groups.length === 0 && loose.length === 0;
+	const nothingToShow = empty && adopted.length === 0 && !hasUnattributed;
 	const reviewables = reviewableItems(data);
 	const unsettledReviewables = reviewables.filter((t) => !reviewSettled(t));
 	const reviewedCount = reviewables.length - unsettledReviewables.length;
@@ -560,7 +564,7 @@ export default function PlanPane({
 	const sameBranch = Boolean(
 		workspace && workspace.branch === workspace.baseBranch.replace(/^origin\//, ""),
 	);
-	const allItems = flatItems(data);
+	const allItems = [...flatItems(data), ...adopted];
 	const commitCount = allItems.reduce((n, t) => n + itemRevisions(t).length, 0);
 	const flagged = allItems.filter((t) => reviewChangesRequested(t) && t.review?.reviewing !== true);
 	const jumpToItem = (id: string) => {
@@ -1028,7 +1032,7 @@ export default function PlanPane({
 					</div>
 				) : null}
 				{overallSummary ? <OverallSummary text={overallSummary} /> : null}
-				{empty ? (
+				{nothingToShow ? (
 					<p className="text-text-subtle tr-text-ui">
 						No items yet — the agent adds its plan here.
 					</p>
@@ -1077,6 +1081,36 @@ export default function PlanPane({
 						) : null}
 					</>
 				)}
+				{adopted.length > 0 ? (
+					<section className="mb-16" data-testid="plan-adopted-commits">
+						<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
+							<span className="min-w-0 flex-1 truncate">Committed outside the plan</span>
+							<span className="shrink-0 tr-text-eyebrow text-text-subtle">
+								{adopted.length} {adopted.length === 1 ? "commit" : "commits"}
+							</span>
+						</h2>
+						<p className="mb-4 px-4 tr-text-metadata text-text-subtle">
+							Commits no step claims — review them too.
+						</p>
+						<ul className="flex flex-col">
+							{adopted.map((item) => (
+								<ItemBlock
+									key={item.id}
+									item={item}
+									workspaceId={workspaceId}
+									sessionId={sessionId}
+									onOpenCommit={onOpenCommit}
+									onStartReview={startReview}
+									onOpenReview={onOpenReview}
+									reviewComments={reviewComments}
+									reviewerSessionId={data.reviewerSessionId}
+									startDisabled={reviewingAny}
+									focusRequest={focusRequest}
+								/>
+							))}
+						</ul>
+					</section>
+				) : null}
 				{data.unattributed && data.unattributed.length > 0 ? (
 					<section className="mb-16" data-testid="plan-unattributed">
 						<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">

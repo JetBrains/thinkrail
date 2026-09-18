@@ -64,6 +64,49 @@ describe("renderPrBody", () => {
 	test("an empty plan renders empty", () => {
 		expect(renderPrBody({ todos: [], groups: [] })).toBe("");
 	});
+
+	test("adopted commits render their own section and count toward the review trail", () => {
+		const body = renderPrBody({
+			...plan,
+			adoptedCommits: [
+				{
+					id: "commit:beef1234567",
+					title: "chore: unplanned commit",
+					status: "done",
+					origin: "adopted",
+					artifacts: [{ kind: "commit", sha: "beef1234567", label: "chore: unplanned commit" }],
+					review: { state: "unreviewed", revision: 1 },
+					createdAt: "2026-01-01T00:00:00Z",
+					updatedAt: "2026-01-01T00:00:00Z",
+				},
+			],
+		});
+		expect(body).toContain("## Committed outside the plan");
+		expect(body).toContain("- [x] **chore: unplanned commit** (`beef123`)");
+		expect(body).toContain("Review: 1/3 steps reviewed in ThinkRail.");
+	});
+
+	test("a branch with only adopted commits still gets a non-empty body", () => {
+		const body = renderPrBody({
+			todos: [],
+			groups: [],
+			adoptedCommits: [
+				{
+					id: "commit:abc1234def0",
+					title: "fix: standalone commit",
+					status: "done",
+					origin: "adopted",
+					artifacts: [{ kind: "commit", sha: "abc1234def0" }],
+					review: { state: "unreviewed", revision: 1 },
+					createdAt: "2026-01-01T00:00:00Z",
+					updatedAt: "2026-01-01T00:00:00Z",
+				},
+			],
+		});
+		expect(body).toContain("## Committed outside the plan");
+		expect(body).toContain("- [x] **fix: standalone commit** (`abc1234`)");
+		expect(body).not.toContain("## Plan");
+	});
 });
 
 describe("githubSlug", () => {

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
 	ACTIVITY_PROTOCOL_VERSION,
+	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { supportsSessionActivity, supportsWorkspaceModelPreferences } from "./wireTransport";
@@ -15,10 +16,8 @@ test("an older host and a pre-welcome connection do not, so the client clears ra
 	expect(supportsSessionActivity(null)).toBe(false);
 });
 
-test("workspace model preference reconciliation requires a v65 host", () => {
+test("workspace model preference reconciliation requires v66 and rejects analytics-only v65", () => {
 	expect(supportsWorkspaceModelPreferences(WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION)).toBe(true);
-	expect(supportsWorkspaceModelPreferences(WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION - 1)).toBe(
-		false,
-	);
+	expect(supportsWorkspaceModelPreferences(ANALYTICS_CONSENT_PROTOCOL_VERSION)).toBe(false);
 	expect(supportsWorkspaceModelPreferences(null)).toBe(false);
 });

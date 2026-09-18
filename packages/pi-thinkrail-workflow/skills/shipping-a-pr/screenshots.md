@@ -1,8 +1,8 @@
 # screenshots.md — before/after evidence for reviewers
 
 Entry: a PR exists (or was just created) for a UI-visible change. Saves PNGs under
-`.thinkrail/context/pr-shots/` and rewrites the PR body to reference them. Control continues at
-`checks.md`.
+`.thinkrail/context/pr-shots/` and rewrites the PR body to reference them. Preserve wait mode when
+entered from PR creation or an explicit ship/watch/merge-ready ask; otherwise use snapshot mode.
 
 ## Capture
 
@@ -49,4 +49,6 @@ assets ref is the default.
 Clean up this phase's throwaways once the body edit lands: delete `.thinkrail/context/pr-shots/`
 (unless the user is uploading by hand — then leave it until they confirm) and every capture
 scaffold (specs, throwaway builds). If any scaffolding was committed, the commit that removes it
-is pushed too — a deletion left in the working tree ships nothing. Read and follow `checks.md`.
+is pushed too — a deletion left in the working tree ships nothing — and that PR-head push upgrades
+this phase to wait mode. Read and follow `checks.md` in wait mode when inherited from creation,
+explicitly requested, or upgraded by a head push; otherwise use snapshot mode.

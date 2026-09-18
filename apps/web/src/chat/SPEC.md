@@ -512,8 +512,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   live session. Pi's effective
   clamp is authoritative, with no optimistic intermediate state. A rejection is surfaced while the selector
   stays open and triggers an authoritative `session.list` pair reconciliation before the lock releases; if
-  that read also fails, the prior pair remains intact. A v64 host's legacy ack instead reconciles the
-  requested session choice. The same successful v65+ mutation also sets that workspace's future-chat starting
+  that read also fails, the prior pair remains intact. A pre-v66 host's legacy ack—including the
+  analytics-only v65 host—instead reconciles the requested session choice. The same successful v66+ mutation
+  also sets that workspace's future-chat starting
   pair on the host, which reaches the client as its own `workspace.updated` push rather than a local mirror
   write. No separate workspace setting
   or selector mode is introduced. Its rows follow the **live catalog** — `ChatView` resolves the
@@ -941,7 +942,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `todo.review`/`todo.requestFix` remain on the wire, host-side), `planView` (pure derivations over the DTO: `groupProgress`,
   `planSummary`, `planGlance`/`sessionGlance`, `planSections`, `shouldNudgeOnAdd`, and the review-trail
   set — `itemRevisions` (the commit history, 1 TODO = N commits), `reviewableItems`/`reviewProgress`
-  (host-gated by `TodoItem.review` presence — the reviewable rule has ONE home, server-side),
+  (host-gated by `TodoItem.review` presence — the reviewable rule has ONE home, server-side; the set
+  spans the plan's items **and** `TodoPlan.adoptedCommits`, so the Review stage/Review All cover
+  committed-outside-the-plan work, while `planSummary`'s build `done/total` counts planned items only),
   `reviewChangesRequested` + `itemOpenFindings` (the changes_requested warning marking: the flag and
   the count of the reviewer's open comments — matched by the finding's `origin` provenance
   (todoId + optional sessionId) when stamped, falling back to the change-set path join only for
@@ -989,7 +992,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   markdown` compiler, `## <group> — n/m` sections — the plan page's **export** (copy / save-as-.md),
   never an interactive surface: a done item's change set renders as its short sha + `N files · +A −R`
   and status-lettered per-file rows, **plain text, no links** — an export leaves the app, where a link
-  scheme would be dead; interactive navigation is the plan page's job), and `ChatPlan` (`ChatPlanStripContent` +
+  scheme would be dead; interactive navigation is the plan page's job. It also emits a
+  **`## Committed outside the plan`** section for `TodoPlan.adoptedCommits` (mirroring `## Outside the
+  plan` for `unattributed`), so the export covers branch commits no step owns; the `No items yet`
+  placeholder is suppressed when either section is present), and `ChatPlan` (`ChatPlanStripContent` +
   `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
   the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
   is no right-panel Todo tab — the plan lives in the conversation; the plan *page* is a center tab, a
