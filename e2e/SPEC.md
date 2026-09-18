@@ -158,8 +158,10 @@ used when the variable is absent). A missing artifact, failed generation, or una
 before any provider turn; PI's ordinary first-available fallback is never accepted as test configuration.
 The same copy and hermetic environment seed the private restart host.
 
-The deletion-only activity retirement has no replacement rail E2E. Compatibility is pinned at the wire
-handler (`session.activityList` returns `[]`); the following PR owns new session-state browser coverage.
+**Session state** coverage seeds complete transcript states and drives live blockers/runs to pin needs-input,
+working, and unread-completion rail presentation; reconnect/restart snapshots, direct-versus-passive
+activation, owner-global clearing, explicit-Stop quietness, internal-session exclusion, and snapshot retry
+are covered. The retired `session.activityList → []` compatibility method remains a focused handler test.
 
 Workbench scenarios exercise the normalized frontend-local frame rather than only the pure model: frame
 geometry/tool placement survives workspace switches while resource tabs and attention differ; closing a final

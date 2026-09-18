@@ -1022,9 +1022,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   your answer" **even when every item is done** (the earlier strip hid it whenever there was no
   in-progress step, so an agent blocked on a question read as "finished"); waiting outranks the raw live
   run flag; "working" covers other runs; "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
-  idle). During the deletion-only transition the glance stays **chat-local**; there is no Projects-rail
-  session signal. `askStates` remains necessary to identify and render the exact questionnaire, while the
-  following session-state PR will replace this view's independent working/waiting lifecycle reduction.
+  idle). The glance's working/waiting lifecycle comes from the normalized host `SessionState`; `askStates`
+  remains only to identify and render the exact questionnaire/recap. `ChatView` records direct activation on
+  deliberate tab/conversation pointer or focus intent, never mount/visibility. After the same completion id
+  is installed in both host state and the rendered runtime, that activation may send one exact owner-global
+  acknowledgement; passive multi-pane rendering cannot clear another client's marker.
   `TodoList` stays props-driven — it receives the resolved glance, never reads the transport.
   Its section label + pending/active/done status glyphs live in **`planKit.tsx`** — shared
   presentational atoms the Review panel (`panels/ReviewPanel`) reuses so both "work items in

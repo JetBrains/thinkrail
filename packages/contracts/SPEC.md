@@ -108,9 +108,10 @@ of the host.
     only when non-empty — the hydration seed for the client's pending strip, since `queue_update` fires only
     on changes and a client attaching mid-run would otherwise never learn of messages queued before it
     connected. The same aggregate enriches projected `queue_update` events; image bytes never ride this
-    read-side queue state. `SessionSummary` is a *hydration* read and says nothing about cross-workspace
-    background work. The deletion-only compatibility release intentionally exposes no replacement signal.
-    Destructive operations use the separate **`SessionQueueContent`** /
+    read-side queue state. At the normalized-state protocol, optional **`state`** carries the same exact
+    `SessionState` installed by the all-workspace snapshot/push, letting transcript hydration prove which
+    completion it rendered without an attention-specific epoch. Destructive operations use the separate
+    **`SessionQueueContent`** /
     **`QueuedMessageContent`** shapes, which return each drained message's text and optional images exactly
     once so the composer can restore complete content without making ordinary queue broadcasts heavy.
     `session.getMessages` returns `{ summary, messages }` (the transcript is
@@ -544,12 +545,23 @@ of the host.
   confirming the confirmations. This behavior is protocol-versioned — a replaying UI must never run against a
   pre-dedup host.
 
-## Retired activity compatibility
+## Normalized session state
 
-The multi-state activity contract is removed before its replacement is introduced. The request registry
-keeps only `session.activityList` returning the literal empty tuple `[]` for one compatibility window, so an
-already-loaded old client can clear cached markers after reconnect. There is no `ActivityStatus`, snapshot
-row, push channel, protocol capability, derivation, or client state in this release.
+`SessionState` carries orthogonal host facts: `execution` (`idle | running`) plus stable `runId`, nullable
+`needsInput` (`interactionId`, `question | dialog`), nullable latest `completion` (stable id and explicit
+`succeeded | failed(error|length) | interrupted | cancelled` outcome), Pi's queue count, and the
+owner-global `completionUnread` receipt projection. `SessionStateRecord` adds session/workspace/project
+attribution; `SessionSummary.state` carries the exact attached session's state.
+
+`session.stateList` is an authoritative all-workspace snapshot of every user-visible top-level session and
+fails rather than returning an incomplete scan. `session.state` pushes a full record after the causative Pi
+event. `session.acknowledgeCompletion` compare-and-sets one exact completion id; needs-input is never
+acknowledgeable. `session.nudge` atomically no-ops for needs-input, queues during running work, and prompts
+an idle session. These coordinated methods start at `SESSION_STATE_PROTOCOL_VERSION`; older hosts simply
+provide no cross-workspace state.
+
+The request registry also keeps `session.activityList` returning literal `[]` for one compatibility window,
+so an already-loaded old client clears retired markers after reconnect. No activity push or type returns.
 
 ## Get right
 
