@@ -26,8 +26,8 @@ expanded consent. The preference seeds the consent window; settings owns explici
 
 Config validation normalizes the closed theme mode plus complete opaque system pair, the closed
 composer-growth preference, the closed Windows terminal-shell preference (invalid/absent →
-`DEFAULT_CONFIG.terminalWindowsShell`), chat/file line widths plus their pane-bound switches, and the
-JetBrains quota boolean + whole `1–3600` second cadence over their defaults; it accepts only the current bounded
+`DEFAULT_CONFIG.terminalWindowsShell`), chat/file line widths plus their pane-bound switches, the optional
+whole `1–1440` minute automatic-continuation timeout (`null`/malformed = off), and the JetBrains quota boolean + whole `1–3600` second cadence over their defaults; it accepts only the current bounded
 `customLayoutPresets` catalog as synchronized layout data. Current/default preset ids, group limits, and
 chat message order are not config fields; retired config shapes are stripped rather than upgraded or
 preserved as extensions. Historical `layouts/` files remain untouched and inert.

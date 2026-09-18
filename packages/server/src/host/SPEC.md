@@ -361,6 +361,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
     a failed background teardown is warn-logged, never thrown into the void (nothing awaits it), like
     the auto-rename tee. **Archive keeps the branch but not the chat:** the git branch stays (code is
     recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
+- **Automatic continuation is host-composed** (`autoResume.ts`): one unref'd, generation-fenced timer per
+  eligible attached session, driven by the host-synchronized optional 1–1440 minute setting. Canonical
+  `agent_settled` arms; new work, disposal/deletion, or disabling cancels; attachment and a settings change
+  reconcile attached sessions. Expiry re-checks every authority instead of trusting the arm-time snapshot:
+  an answerable `ask_user_question` wins and resumes through `answerQuestion` with explicitly marked
+  recommendations plus `timedOut: true`; otherwise only a still-open TODO plan receives the hidden
+  `TODO_NUDGE_PREFIX` continuation prompt. A restart persists neither timer nor deadline: reopening an
+  unfinished transcript arms a fresh duration, while boot never scans and wakes historical sessions. This
+  composition stays here so `agent`, `todos`, and `settings` remain siblings with no direct edges.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
   `reviews` (drafts + package) plus `agent` (session) plus `reviews` again (mark sent + link) — a
   check-then-mark straddling an `await createSession(…)`, the review layer's only non-atomic gap.

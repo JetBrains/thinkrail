@@ -33,7 +33,8 @@ of the host.
   `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
-  chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
+  chat/file wrap columns), `AUTO_RESUME_TIMEOUT_MINUTES` + **`isAutoResumeTimeoutMinutes(value)`**
+  (the shared 1–1440 whole-minute contract), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
   hydrate, the host skips them in the history index and does not count them as `message_sent`; both
   sides agree here rather than each re-deriving `startsWith`) + **`isRetriedAttempt(messages, index)`**
@@ -130,8 +131,11 @@ of the host.
     `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel.
   - the **`ask_user_question`** wire types — **`AskUserQuestionArgs`** (`AskUserQuestionItem` + `AskUserQuestionOption`
     — the latter carries an optional `recommendedReason` the card renders inline as a `Why:` line under the
-    option: the questions the agent authors, what the tool card reads from the `toolCall` block),
-    **`AskUserQuestionResult`** (`AskUserQuestionAnswer[]` + `cancelled`: the browser's reply),
+    option: the questions the agent authors, what the tool card reads from the `toolCall` block) plus
+    **`isRecommendedQuestionOption`**, the shared suffix/reason predicate used by host timeout selection
+    and browser presentation,
+    **`AskUserQuestionResult`** (`AskUserQuestionAnswer[]` + `cancelled`, plus optional literal
+    `timedOut: true` for the host's automatic reply; omission means a human reply),
     **`AskUserQuestionAckDetails`** (the tool result's `details` under the **ack + terminate** design —
     the call resolves instantly; the turn ends) and **`AskUserAnswersDetails`** + the
     **`ASK_USER_ANSWERS_CUSTOM_TYPE`** constant, **`AskUserAnswersMessage`** (the correctly-paired
@@ -243,7 +247,9 @@ of the host.
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled,
-  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
+  autoResumeTimeoutMinutes, jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag;
+  `autoResumeTimeoutMinutes` is `null` (off, the default) or a whole 1–1440 minute host-wide duration;
+  the line-width fields join
   the wire at protocol v61 and `terminalWindowsShell` at v62. `terminalWindowsShell`
   (`"auto" | "pwsh" | "powershell" | "cmd"`, default `"auto"`) is read only by `server/terminal` on
   Windows and ignored elsewhere — see
@@ -259,7 +265,8 @@ of the host.
   `analyticsConsentConfirmed` defaults `false` and records the explicit decision required before that
   preference can authorize collection. Saved legacy preferences seed the first-launch switch, not consent.
   `ANALYTICS_CONSENT_PROTOCOL_VERSION` pins this v65 contract so newer clients do not show a consent flow
-  against older hosts that cannot persist it. Preference and confirmation are saved atomically; an older
+  against older hosts that cannot persist it. `AUTO_RESUME_PROTOCOL_VERSION` pins the additive automatic-
+  continuation setting so a newer client hides its control against an older host. Preference and confirmation are saved atomically; an older
   client's preference-only write cannot create the new confirmation. The installation id remains entirely
   server-side; basic events are not controlled by either flag, see [[submodule-server-analytics]]) carries
   it with the **`DEFAULT_CONFIG`** fallback (persisted host-side

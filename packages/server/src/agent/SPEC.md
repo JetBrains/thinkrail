@@ -461,10 +461,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     stale answer **fails loud**, never parks), then injects **`buildAnswersMessage`** — an
     **`ask-user-answers` custom message** (`ASK_USER_ANSWERS_CUSTOM_TYPE`, `details {toolCallId, result}`,
     text = the same `buildQuestionnaireResponse` envelope the blocking design fed the model; a partial
-    submission lists its unanswered questions explicitly as declined) — via pi's public
-    `AgentSession.sendCustomMessage({triggerTurn: true})`, which starts a new turn when idle and steers
-    the current one when streaming. **Answering live and answering after a restart are the same code
-    path.** The questionnaire is rendered **inline** in chat by `apps/web`'s `AskUserQuestionCard`
+    submission lists its unanswered questions explicitly as declined; a host-generated `timedOut: true`
+    result truthfully names automatic recommendation selection rather than claiming the user answered) —
+    via pi's public `AgentSession.sendCustomMessage({triggerTurn: true})`, which starts a new turn when idle
+    and steers the current one when streaming. **Answering live and answering after a restart are the same
+    code path.** `buildTimedOutQuestionResult` selects the shared-contract recommendation markers (first
+    for a single-select, all for a multi-select) and omits unmarked questions; the host scheduler, not this
+    module, decides when to call it. The questionnaire is rendered **inline** in chat by `apps/web`'s `AskUserQuestionCard`
     (joined by tool name; lifecycle derived from the transcript — see the chat tools SPEC).
     **Rejected alternatives** (the one place these decisions are recorded): (1) the original **blocking
     design** — `execute` parked on an in-memory promise until the browser replied. A host restart
