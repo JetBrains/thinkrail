@@ -466,6 +466,9 @@ export function AskUserQuestionCard({
 		);
 	}
 	if (ask?.superseded) return <SupersededRecord questions={questions} />;
+	if (ask?.terminal) {
+		return <ResolvedRecord questions={questions} result={null} rawText={resultText(result)} />;
+	}
 	if (status === "error") {
 		return <ResolvedRecord questions={questions} result={null} rawText={resultText(result)} />;
 	}

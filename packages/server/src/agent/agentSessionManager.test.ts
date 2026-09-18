@@ -924,6 +924,64 @@ test("a live question blocks continuation, preserves queue order, and acknowledg
 	}
 });
 
+test("an accepted answer persists and its RPC settles when Stop races before turn_end", async () => {
+	const toolCallId = "answer-stop-race";
+	const question = {
+		questions: [
+			{
+				question: "Which option?",
+				header: "Option",
+				options: [
+					{ label: "A", description: "first" },
+					{ label: "B", description: "second" },
+				],
+			},
+		],
+	};
+	fauxA.setResponses([
+		fauxAssistantMessage(fauxToolCall("ask_user_question", question, { id: toolCallId })),
+	]);
+	const cwd = tmpCwd("trpi-answer-stop-race-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-answer-stop-race",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		const result: AskUserQuestionResult = {
+			cancelled: false,
+			answers: [
+				{
+					questionIndex: 0,
+					question: "Which option?",
+					kind: "option",
+					answer: "A",
+				},
+			],
+		};
+		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		const stopping = abortSession(session.sessionId, true);
+		await Promise.all([answering, stopping, prompting]);
+
+		const transcript = await getSessionMessages(session.sessionId, "ws-answer-stop-race", cwd);
+		const persisted = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (persisted?.role !== "toolResult") throw new Error("answer result was not persisted");
+		expect(persisted.details).toEqual(result);
+		expect(persisted.isError).toBe(false);
+		expect(transcript.messages.some((message) => isAskUserAnswersMessage(message))).toBe(false);
+	} finally {
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
 test("restart repair leaves a dangling question answerable through the custom-message path", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	const cwd = tmpCwd("trpi-restart-question-");
