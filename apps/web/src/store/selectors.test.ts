@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { ActivityStatus, Project, WireModel, Workspace } from "@thinkrail/contracts";
+import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
 import type { EditorTab } from "./appStore";
 import {
@@ -8,7 +8,6 @@ import {
 	isExternalWorkspace,
 	isUserOwnedWorkspace,
 	matchesWorktreePath,
-	projectActivityRollup,
 	selectActiveEditorTab,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
@@ -26,7 +25,6 @@ import {
 	selectLayoutTabPlacement,
 	selectSkillsStale,
 	specPathMatcher,
-	workspaceActivityRollup,
 } from "./selectors";
 
 const projects: Project[] = [
@@ -462,102 +460,4 @@ test("selectAgentReviewCommentCount counts only OPEN agent-authored comments", (
 	expect(selectAgentReviewCommentCount(state, "w1")).toBe(2);
 	expect(selectAgentReviewCommentCount(state, "missing")).toBe(0);
 	expect(selectAgentReviewCommentCount(state, null)).toBe(0);
-});
-
-const wsActivity = (projectId: string, sessions: Record<string, ActivityStatus>) => ({
-	projectId,
-	sessions,
-});
-
-test("a workspace with no activity rows rolls up to null, so a quiet rail draws nothing", () => {
-	expect(workspaceActivityRollup({}, "wa")).toBeNull();
-	expect(workspaceActivityRollup({ wa: wsActivity("p1", {}) }, "wa")).toBeNull();
-});
-
-test("a workspace rolls up to its single chat's status and counts it", () => {
-	expect(workspaceActivityRollup({ wa: wsActivity("p1", { s1: "running" }) }, "wa")).toEqual({
-		status: "running",
-		counts: { running: 1 },
-	});
-});
-
-test("live work outranks a failed sibling — a busy worktree never reads as red-failed", () => {
-	const rollup = workspaceActivityRollup(
-		{ wa: wsActivity("p1", { s1: "running", s2: "waiting", s3: "failed", s4: "queued" }) },
-		"wa",
-	);
-	expect(rollup?.status).toBe("waiting");
-	expect(rollup?.counts).toEqual({ running: 1, waiting: 1, failed: 1, queued: 1 });
-});
-
-test("a running chat outranks a failed one, so a still-working worktree stays 'working'", () => {
-	expect(
-		workspaceActivityRollup({ wa: wsActivity("p1", { s1: "failed", s2: "running" }) }, "wa")
-			?.status,
-	).toBe("running");
-});
-
-test("failed still owns the glyph when nothing live is happening", () => {
-	expect(
-		workspaceActivityRollup({ wa: wsActivity("p1", { s1: "failed", s2: "queued" }) }, "wa")?.status,
-	).toBe("failed");
-});
-
-test("the rollup order is waiting > running > failed > queued", () => {
-	const at = (sessions: Record<string, ActivityStatus>) =>
-		workspaceActivityRollup({ wa: wsActivity("p1", sessions) }, "wa")?.status;
-	expect(at({ s1: "waiting", s2: "running", s3: "failed", s4: "queued" })).toBe("waiting");
-	expect(at({ s1: "running", s2: "failed", s3: "queued" })).toBe("running");
-	expect(at({ s1: "failed", s2: "queued" })).toBe("failed");
-	expect(at({ s1: "queued" })).toBe("queued");
-});
-
-test("counts tally repeats, which is what lets the tooltip say '2 chats working'", () => {
-	expect(
-		workspaceActivityRollup({ wa: wsActivity("p1", { s1: "running", s2: "running" }) }, "wa")
-			?.counts,
-	).toEqual({ running: 2 });
-});
-
-test("a project rolls up across its workspaces and ignores other projects", () => {
-	const map = {
-		wa: wsActivity("p1", { s1: "running" }),
-		wb: wsActivity("p1", { s2: "failed" }),
-		wc: wsActivity("p2", { s3: "waiting" }),
-	};
-	const rollup = projectActivityRollup(map, "p1");
-	expect(rollup?.status).toBe("running");
-	expect(rollup?.counts).toEqual({ running: 1, failed: 1 });
-	expect(projectActivityRollup(map, "p2")?.status).toBe("waiting");
-	expect(projectActivityRollup(map, "p3")).toBeNull();
-});
-
-test("a project rolls up all four states across its workspaces and picks waiting", () => {
-	const map = {
-		wa: wsActivity("p1", { s1: "running", s2: "failed" }),
-		wb: wsActivity("p1", { s3: "waiting" }),
-		wc: wsActivity("p1", { s4: "queued" }),
-	};
-	const rollup = projectActivityRollup(map, "p1");
-	expect(rollup?.status).toBe("waiting");
-	expect(rollup?.counts).toEqual({ running: 1, failed: 1, waiting: 1, queued: 1 });
-});
-
-test("a project whose workspaces are all failed still surfaces the failure", () => {
-	const map = {
-		wa: wsActivity("p1", { s1: "failed" }),
-		wb: wsActivity("p1", { s2: "failed" }),
-	};
-	const rollup = projectActivityRollup(map, "p1");
-	expect(rollup?.status).toBe("failed");
-	expect(rollup?.counts).toEqual({ failed: 2 });
-});
-
-test("a project rolls up with NO workspace list loaded — the collapsed, never-opened case", () => {
-	const map = { wa: wsActivity("never-opened", { s1: "running" }) };
-	expect(projectActivityRollup(map, "never-opened")?.status).toBe("running");
-});
-
-test("a project with only quiet workspaces rolls up to null", () => {
-	expect(projectActivityRollup({}, "p1")).toBeNull();
 });
