@@ -94,7 +94,7 @@ import {
 	cancelExtUiForSession,
 	createWebUiContext,
 	notifyExtensionError,
-	pendingExtUiDialogId,
+	pendingExtUiDialog,
 	setExtUiStateChanged,
 } from "./webUiContext";
 
@@ -127,6 +127,7 @@ interface Entry {
 	subagentToolsRefreshPending: boolean;
 	reviewToolRefreshPending: boolean;
 	userVisible: boolean;
+	nudgePromptPending: boolean;
 	lastPublishedState: string | null;
 	askUserQuestionWaiters: AskUserQuestionWaiters;
 }
@@ -344,7 +345,7 @@ function stateFromEntry(entry: Entry): SessionState {
 		lifecycleCompletion:
 			entry.lastSettlement === undefined ? persistedCompletion(sessionId) : undefined,
 		liveQuestion: entry.askUserQuestionWaiters.currentQuestion(),
-		pendingDialogId: pendingExtUiDialogId(sessionId),
+		pendingDialog: pendingExtUiDialog(sessionId),
 		handledCompletionId: receipts()?.handledCompletionBySession[sessionId],
 		cancelledRunId: lifecycle().cancelledRunBySession[sessionId],
 	});
@@ -374,7 +375,7 @@ function stateFromDisk(sessionId: string, manager: SessionManager, legacy = fals
 		lastSettlement: undefined,
 		lifecycleCompletion: legacy ? undefined : persistedCompletion(sessionId),
 		liveQuestion: null,
-		pendingDialogId: null,
+		pendingDialog: null,
 		handledCompletionId: receipts()?.handledCompletionBySession[sessionId],
 		cancelledRunId: lifecycle().cancelledRunBySession[sessionId],
 	});
@@ -430,10 +431,26 @@ export function nudgeSession(
 	const entry = mustGetEntry(sessionId);
 	const state = stateFromEntry(entry);
 	if (state.needsInput) return { disposition: "needs_input", send: () => Promise.resolve() };
-	if (state.execution === "running") {
-		return { disposition: "queued", send: () => followUpSession(sessionId, text, images) };
+	if (state.execution === "running" || entry.nudgePromptPending) {
+		return {
+			disposition: "queued",
+			send: () =>
+				queueSessionMessage(entry, "followUp", text, images, () =>
+					entry.session.followUp(text, images),
+				),
+		};
 	}
-	return { disposition: "prompted", send: () => promptSession(sessionId, text, images) };
+	entry.nudgePromptPending = true;
+	return {
+		disposition: "prompted",
+		send: async () => {
+			try {
+				await promptSession(sessionId, text, images);
+			} finally {
+				entry.nudgePromptPending = false;
+			}
+		},
+	};
 }
 
 function recordSettlement(entry: Entry, terminal: AgentSettlement | null): void {
@@ -445,7 +462,7 @@ function recordSettlement(entry: Entry, terminal: AgentSettlement | null): void 
 		lastSettlement: terminal,
 		lifecycleCompletion: undefined,
 		liveQuestion: entry.askUserQuestionWaiters.currentQuestion(),
-		pendingDialogId: pendingExtUiDialogId(sessionId),
+		pendingDialog: pendingExtUiDialog(sessionId),
 		handledCompletionId: receipts()?.handledCompletionBySession[sessionId],
 		cancelledRunId: lifecycle().cancelledRunBySession[sessionId],
 	});
@@ -474,8 +491,15 @@ function markCancelledRun(entry: Entry): void {
 			[entry.session.sessionId]: state.runId,
 		},
 	};
-	saveSessionLifecycle(next);
 	sessionLifecycle = next;
+	try {
+		saveSessionLifecycle(next);
+	} catch (error) {
+		log.warn(
+			`session cancellation state was not persisted for ${entry.session.sessionId}`,
+			error as Error,
+		);
+	}
 }
 
 let sessionManagerFactory: (cwd: string) => SessionManager = (cwd) => SessionManager.create(cwd);
@@ -704,6 +728,7 @@ async function prepareSessionEntry(
 		subagentToolsRefreshPending: false,
 		reviewToolRefreshPending: false,
 		userVisible: !isInternalSession(sessionId),
+		nudgePromptPending: false,
 		lastPublishedState: null,
 		askUserQuestionWaiters,
 	};
@@ -864,7 +889,9 @@ async function registerSession(
 	commands.flushCompletions();
 	subagents.flushCompletions();
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
-	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
+	if (announceCreation && prepared.entry.userVisible) {
+		publishCreated(summaryOf(session.sessionId, prepared.entry));
+	}
 	publishEntryState(prepared.entry);
 	return prepared.result;
 }
@@ -1153,7 +1180,13 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 	const liveIds = new Set<string>();
 	const liveFiles = new Set<string>();
 	for (const [sessionId, entry] of sessions) {
-		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) continue;
+		if (
+			entry.workspaceId !== workspaceId ||
+			!entry.userVisible ||
+			isSessionDeleted(sessionId, workspaceId)
+		) {
+			continue;
+		}
 		live.push(summaryOf(sessionId, entry));
 		liveIds.add(sessionId);
 		const sessionFile = entry.session.sessionManager.getSessionFile();
@@ -1163,7 +1196,10 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 	const disk: SessionSummary[] = infos
 		.filter(
 			(info) =>
-				info.cwd === cwd && !liveIds.has(info.id) && !isSessionDeleted(info.id, workspaceId),
+				info.cwd === cwd &&
+				!liveIds.has(info.id) &&
+				!isInternalSession(info.id) &&
+				!isSessionDeleted(info.id, workspaceId),
 		)
 		.map((info) => ({
 			sessionId: info.id,
@@ -1774,7 +1810,7 @@ export async function abortSession(
 	acceptedAnswerGraceMs = ACCEPTED_ANSWER_STOP_GRACE_MS,
 ): Promise<SessionQueueContent | undefined> {
 	const entry = mustGetEntry(sessionId);
-	markCancelledRun(entry);
+	if (entry.session.isStreaming) markCancelledRun(entry);
 	return abortEntry(entry, restoreQueue, acceptedAnswerGraceMs);
 }
 

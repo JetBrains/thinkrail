@@ -46,10 +46,13 @@ export interface AgentSettlement {
 
 export type SessionInputKind = "question" | "dialog";
 
-export interface SessionInputState {
-	interactionId: string;
-	kind: SessionInputKind;
-}
+export type SessionInputState =
+	| { interactionId: string; kind: "question" }
+	| {
+			interactionId: string;
+			kind: "dialog";
+			request: Extract<ExtUiRequest, { kind: "select" | "confirm" | "input" | "editor" }>;
+	  };
 
 export type SessionCompletion =
 	| { completionId: string; outcome: "succeeded" | "interrupted" | "cancelled" }

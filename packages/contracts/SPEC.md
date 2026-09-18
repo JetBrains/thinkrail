@@ -632,7 +632,8 @@ own existing Pi transcript persistence, not a second wire-owned history store.
 ## Normalized session state
 
 `SessionState` carries orthogonal host facts: `execution` (`idle | running`) plus stable `runId`, nullable
-`needsInput` (`interactionId`, `question | dialog`), nullable latest `completion` (stable id and explicit
+`needsInput` (stable `interactionId`, `question | dialog`; a pending dialog also carries its exact replayable
+request), nullable latest `completion` (stable id and explicit
 `succeeded | failed(error|length) | interrupted | cancelled` outcome), Pi's queue count, and the
 owner-global `completionUnread` receipt projection. `SessionStateRecord` adds session/workspace/project
 attribution; `SessionSummary.state` carries the exact attached session's state.

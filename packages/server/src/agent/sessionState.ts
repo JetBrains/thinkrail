@@ -2,6 +2,7 @@ import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type {
 	AgentMessage,
 	AgentSettlement,
+	ExtUiRequest,
 	SessionCompletion,
 	SessionState,
 } from "@thinkrail/contracts";
@@ -19,7 +20,7 @@ export interface SessionStateInputs {
 	lastSettlement: AgentSettlement | null | undefined;
 	lifecycleCompletion: { runId: string; completion: SessionCompletion } | null | undefined;
 	liveQuestion: LiveQuestionState | null;
-	pendingDialogId: string | null;
+	pendingDialog: Extract<ExtUiRequest, { kind: "select" | "confirm" | "input" | "editor" }> | null;
 	handledCompletionId: string | undefined;
 	cancelledRunId: string | undefined;
 }
@@ -115,11 +116,11 @@ function deriveCompletion(
 	}
 	const terminalRole = latestConversationRole(inputs.entries, turnIndex);
 	if (assistant && terminalRole === "assistant") {
-		return completionFrom(
-			`completion:${assistant.entry.id}`,
-			(assistant.entry.message as MessageView).stopReason,
-			cancelled,
-		);
+		const stopReason = (assistant.entry.message as MessageView).stopReason;
+		if (stopReason === "toolUse") {
+			return completionFrom(`interrupted:${runId}`, undefined, cancelled);
+		}
+		return completionFrom(`completion:${assistant.entry.id}`, stopReason, cancelled);
 	}
 	return completionFrom(`interrupted:${runId}`, undefined, cancelled);
 }
@@ -128,8 +129,12 @@ export function deriveSessionState(inputs: SessionStateInputs): SessionState {
 	const turn = latestUser(inputs.entries);
 	const runId = turn?.entry.id ?? null;
 	let needsInput: SessionState["needsInput"] = null;
-	if (inputs.pendingDialogId !== null) {
-		needsInput = { interactionId: `dialog:${inputs.pendingDialogId}`, kind: "dialog" };
+	if (inputs.pendingDialog !== null) {
+		needsInput = {
+			interactionId: `dialog:${inputs.pendingDialog.id}`,
+			kind: "dialog",
+			request: inputs.pendingDialog,
+		};
 	} else if (inputs.liveQuestion?.needsInput) {
 		needsInput = {
 			interactionId: `question:${inputs.liveQuestion.interactionId}`,

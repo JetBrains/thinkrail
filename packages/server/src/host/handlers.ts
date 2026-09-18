@@ -889,8 +889,13 @@ const handlers: Record<string, Handler> = {
 			text: string;
 			images?: ImageContent[];
 		};
-		getWorkspace(p.workspaceId);
-		if (getSessionWorkspaceId(p.sessionId) !== p.workspaceId) {
+		const workspace = getWorkspace(p.workspaceId);
+		const attachedWorkspaceId = getSessionWorkspaceId(p.sessionId);
+		if (
+			(attachedWorkspaceId !== undefined && attachedWorkspaceId !== p.workspaceId) ||
+			(attachedWorkspaceId === undefined &&
+				!(await ensureSessionAttached(p.sessionId, p.workspaceId, workspace.worktreePath)))
+		) {
 			throw new Error(`Unknown session: ${p.sessionId}`);
 		}
 		if (!isControlMessage(p.text)) throw new Error("Session nudge must be a control message");

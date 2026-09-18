@@ -121,11 +121,19 @@ test("completion acknowledgement requires exact render, current connection, and 
 		sessionStateTickBySession: { s1: 8 },
 		directChatActivationTickBySession: { s1: 9 },
 		renderedCompletionBySession: { s1: completion.completionId },
+		renderedCompletionTickBySession: { s1: 8 },
 	};
 	expect(selectReadyCompletionActivation(state, "w1", "s1")).toBe(completion.completionId);
 	expect(
 		selectReadyCompletionActivation(
 			{ ...state, directChatActivationTickBySession: { s1: 8 } },
+			"w1",
+			"s1",
+		),
+	).toBeNull();
+	expect(
+		selectReadyCompletionActivation(
+			{ ...state, renderedCompletionTickBySession: { s1: 10 } },
 			"w1",
 			"s1",
 		),
