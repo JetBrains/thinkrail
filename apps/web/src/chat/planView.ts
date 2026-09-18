@@ -2,6 +2,7 @@ import type {
 	AskUserQuestionResult,
 	GitFileChange,
 	ReviewComment,
+	SessionState,
 	TodoGroupItem,
 	TodoItem,
 	TodoPlan,
@@ -212,6 +213,15 @@ export function planGlance(isStreaming: boolean, askStates: Record<string, AskSt
 	);
 	if (awaiting) return "waiting_question";
 	return isStreaming ? "working" : "waiting";
+}
+
+export function hostSessionGlance(
+	state: SessionState | null | undefined,
+	fallback: PlanGlance,
+): PlanGlance {
+	if (!state) return fallback;
+	if (state.needsInput) return "waiting_question";
+	return state.execution === "running" ? "working" : "waiting";
 }
 
 export function sessionGlance(rt: {
