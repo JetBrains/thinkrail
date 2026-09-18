@@ -186,11 +186,7 @@ function installStalledAskResultHook(name: string): { startedPath: string; remov
 			'\t\t\t\tctx.signal.addEventListener("abort", () => resolve(), { once: true }),',
 			"\t\t\t);",
 			"\t\t}",
-			"\t\treturn {",
-			'\t\t\tcontent: [{ type: "text", text: "post-tool result aborted" }],',
-			"\t\t\tdetails: { answers: [], cancelled: true },",
-			"\t\t\tisError: true,",
-			"\t\t};",
+			'\t\treturn { content: [{ type: "text", text: "post-tool result replaced" }] };',
 			"\t});",
 			"}",
 			"",
@@ -1360,8 +1356,9 @@ test("Stop bounds a stalled post-tool hook and rejects an answer that did not pe
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
 		if (persisted?.role !== "toolResult") throw new Error("stopped result was not persisted");
-		expect(persisted.isError).toBe(true);
-		expect(persisted.details).toEqual({ answers: [], cancelled: true });
+		expect(persisted.isError).toBe(false);
+		expect(persisted.details).toEqual(gatedQuestionAnswer());
+		expect(persisted.content).toEqual([{ type: "text", text: "post-tool result replaced" }]);
 	} finally {
 		hook.remove();
 		await prompting.catch(() => {});

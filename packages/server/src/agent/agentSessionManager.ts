@@ -1285,14 +1285,31 @@ export async function removeQueuedSession(
 	return { removed, queue: queueStateOf(entry) };
 }
 
+const ACCEPTED_ANSWER_STOP_GRACE_MS = 1_000;
+
+async function waitForAcceptedAnswerGrace(
+	acceptedResult: Promise<void> | null,
+	timeoutMs: number,
+): Promise<void> {
+	if (!acceptedResult) return;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise<void>((resolve) => {
+		timer = setTimeout(resolve, Math.max(0, timeoutMs));
+		timer.unref?.();
+	});
+	await Promise.race([acceptedResult.catch(() => {}), timeout]);
+	if (timer) clearTimeout(timer);
+}
+
 export async function abortSession(
 	sessionId: string,
 	restoreQueue = false,
+	acceptedAnswerGraceMs = ACCEPTED_ANSWER_STOP_GRACE_MS,
 ): Promise<SessionQueueContent | undefined> {
 	const entry = mustGetEntry(sessionId);
 	let restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
 	const acceptedResult = entry.askUserQuestionWaiters.prepareAbort();
-	if (acceptedResult) await acceptedResult.catch(() => {});
+	await waitForAcceptedAnswerGrace(acceptedResult, acceptedAnswerGraceMs);
 	if (sessions.get(sessionId) !== entry) return restoredQueue;
 	if (restoredQueue) {
 		restoredQueue = mergeQueueContent(restoredQueue, clearQueueSession(sessionId));

@@ -71,6 +71,17 @@ const ackResult = (toolCallId: string) =>
 		isError: false,
 	}) as unknown as AgentMessage;
 
+const persistedAnswer = (
+	toolCallId: string,
+	details: AskUserQuestionResult,
+	questions: AskUserQuestionArgs = args(),
+) => ({
+	toolCallId,
+	toolName: "ask_user_question",
+	...buildQuestionnaireResponse(details, questions),
+	isError: false,
+});
+
 const finalResult = (toolCallId: string) =>
 	({
 		role: "toolResult",
@@ -124,7 +135,7 @@ test("the schema and runtime validation accept more than four questions", async 
 	const answered = waiters.answer("tc-many", { answers: [], cancelled: true });
 	expect(answered.handled).toBe(true);
 	expect(textOf(await pending)).toContain("declined");
-	waiters.persistTurn([{ toolCallId: "tc-many", toolName: "ask_user_question" }]);
+	waiters.persistTurn([persistedAnswer("tc-many", { answers: [], cancelled: true }, many)]);
 	if (answered.handled) await answered.persisted;
 });
 
@@ -282,7 +293,7 @@ test("a valid live execution is sequential, blocks for its answer, and returns t
 	expect(textOf(response)).toContain('"Which library?"="luxon"');
 	expect(response.details).toEqual(result);
 	expect((response as { terminate?: boolean }).terminate).toBeUndefined();
-	waiters.persistTurn([{ toolCallId: "tc-1", toolName: "ask_user_question" }]);
+	waiters.persistTurn([persistedAnswer("tc-1", result)]);
 	if (answered.handled) await answered.persisted;
 	expect(waiters.hasRecoverableCall()).toBe(false);
 });
@@ -304,7 +315,7 @@ test("an answer arriving after tool_execution_start but before execute is retain
 		ctx(),
 	);
 	expect(response.details).toEqual(result);
-	waiters.persistTurn([{ toolCallId: "tc-early", toolName: "ask_user_question" }]);
+	waiters.persistTurn([persistedAnswer("tc-early", result)]);
 	if (answered.handled) await answered.persisted;
 });
 
@@ -326,7 +337,7 @@ test("an early answer wins even if Stop reaches the tool before execute starts",
 		ctx(),
 	);
 	expect(response.details).toEqual(result);
-	waiters.persistTurn([{ toolCallId: "tc-early-stop", toolName: "ask_user_question" }]);
+	waiters.persistTurn([persistedAnswer("tc-early-stop", result)]);
 	if (answered.handled) await answered.persisted;
 });
 
@@ -359,7 +370,7 @@ test("shutdown waits for an answer already accepted before its snapshot", async 
 	await pending;
 	const settling = waiters.prepareShutdown();
 	expect(settling).not.toBeNull();
-	waiters.persistTurn([{ toolCallId: "tc-shutdown-accepted", toolName: "ask_user_question" }]);
+	waiters.persistTurn([persistedAnswer("tc-shutdown-accepted", { answers: [], cancelled: true })]);
 	await settling;
 });
 
@@ -400,7 +411,8 @@ test("semantic validation failure cannot acknowledge an answer accepted before e
 	);
 	expect(textOf(response)).toContain("Option label is reserved");
 	waiters.persistTurn([{ toolCallId: "tc-invalid", toolName: "ask_user_question" }]);
-	if (answered.handled) await expect(answered.persisted).rejects.toThrow("not awaiting an answer");
+	if (answered.handled)
+		await expect(answered.persisted).rejects.toThrow("accepted answer was not persisted");
 });
 
 test("turn_end without the returned answer rejects persistence instead of hanging", async () => {
@@ -416,7 +428,8 @@ test("turn_end without the returned answer rejects persistence instead of hangin
 	const answered = waiters.answer("tc-missing-result", { answers: [], cancelled: true });
 	await pending;
 	waiters.persistTurn([]);
-	if (answered.handled) await expect(answered.persisted).rejects.toThrow("not awaiting an answer");
+	if (answered.handled)
+		await expect(answered.persisted).rejects.toThrow("accepted answer was not persisted");
 });
 
 test("turn_end clears an expected call that Pi never executed", async () => {
@@ -427,7 +440,8 @@ test("turn_end clears an expected call that Pi never executed", async () => {
 	const answered = waiters.answer("tc-skipped", { answers: [], cancelled: true });
 	waiters.persistTurn([]);
 	expect(waiters.hasRecoverableCall()).toBe(false);
-	if (answered.handled) await expect(answered.persisted).rejects.toThrow("not awaiting an answer");
+	if (answered.handled)
+		await expect(answered.persisted).rejects.toThrow("accepted answer was not persisted");
 });
 
 test("abandon rejects an accepted answer's uncommitted persistence wait", async () => {
@@ -468,7 +482,7 @@ test("an accepted answer wins over a later Stop before its result boundary", asy
 	const answered = waiters.answer("tc-answer-wins", result);
 	controller.abort();
 	expect((await pending).details).toEqual(result);
-	waiters.persistTurn([{ toolCallId: "tc-answer-wins", toolName: "ask_user_question" }]);
+	waiters.persistTurn([persistedAnswer("tc-answer-wins", result)]);
 	if (answered.handled) await answered.persisted;
 });
 

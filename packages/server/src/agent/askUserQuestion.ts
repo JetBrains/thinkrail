@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
@@ -313,6 +314,7 @@ type LiveQuestionPhase = "expected" | "waiting" | "answer-accepted-uncommitted" 
 interface LiveQuestionWaiter {
 	phase: LiveQuestionPhase;
 	executeStarted: boolean;
+	executedResult: ToolResult<AskUserQuestionResult> | undefined;
 	answerPromise: Promise<AskUserQuestionWaitOutcome>;
 	resolveAnswer: (outcome: AskUserQuestionWaitOutcome) => void;
 	rejectAnswer: (error: Error) => void;
@@ -338,6 +340,7 @@ function createLiveQuestionWaiter(): LiveQuestionWaiter {
 	return {
 		phase: "expected",
 		executeStarted: false,
+		executedResult: undefined,
 		answerPromise,
 		resolveAnswer,
 		rejectAnswer,
@@ -355,7 +358,16 @@ export interface AskUserQuestionWaiters {
 		toolCallId: string,
 		result: AskUserQuestionResult,
 	): { handled: false } | { handled: true; persisted: Promise<void> };
-	persistTurn(toolResults: readonly { toolCallId: string; toolName: string }[]): void;
+	recordExecutedResult(toolCallId: string, result: ToolResult<AskUserQuestionResult>): void;
+	persistTurn(
+		toolResults: readonly {
+			toolCallId: string;
+			toolName: string;
+			content?: unknown;
+			details?: unknown;
+			isError?: boolean;
+		}[],
+	): void;
 	isWaitingForAnswer(): boolean;
 	hasRecoverableCall(): boolean;
 	prepareShutdown(): Promise<void> | null;
@@ -376,6 +388,8 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 	};
 	const notAwaiting = (toolCallId: string): Error =>
 		new Error(`This questionnaire is not awaiting an answer: ${toolCallId}`);
+	const answerNotPersisted = (toolCallId: string): Error =>
+		new Error(`This questionnaire's accepted answer was not persisted: ${toolCallId}`);
 	const acceptedResultPersistence = (): Promise<void> | null => {
 		const accepted = [...waiting.values()]
 			.filter((waiter) => waiter.phase === "answer-accepted-uncommitted")
@@ -421,6 +435,11 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 			waiter.resolveAnswer({ kind: "answer", result });
 			return { handled: true, persisted: waiter.persisted };
 		},
+		recordExecutedResult(toolCallId, result) {
+			const waiter = waiting.get(toolCallId);
+			if (!waiter || waiter.phase !== "answer-accepted-uncommitted") return;
+			waiter.executedResult = structuredClone(result);
+		},
 		persistTurn(toolResults) {
 			for (const result of toolResults) {
 				if (result.toolName !== ASK_USER_QUESTION_TOOL_NAME) continue;
@@ -429,15 +448,24 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 				waiting.delete(result.toolCallId);
 				waiter.cleanupAbort();
 				if (waiter.phase !== "answer-accepted-uncommitted") continue;
-				if (waiter.executeStarted) waiter.resolvePersisted();
-				else waiter.rejectPersisted(notAwaiting(result.toolCallId));
+				if (
+					waiter.executeStarted &&
+					waiter.executedResult !== undefined &&
+					result.isError !== true &&
+					isDeepStrictEqual(result.content, waiter.executedResult.content) &&
+					isDeepStrictEqual(result.details, waiter.executedResult.details)
+				) {
+					waiter.resolvePersisted();
+				} else {
+					waiter.rejectPersisted(answerNotPersisted(result.toolCallId));
+				}
 			}
 			for (const [toolCallId, waiter] of waiting) {
 				waiting.delete(toolCallId);
 				waiter.cleanupAbort();
 				if (waiter.phase === "waiting") waiter.rejectAnswer(notAwaiting(toolCallId));
 				if (waiter.phase === "answer-accepted-uncommitted") {
-					waiter.rejectPersisted(notAwaiting(toolCallId));
+					waiter.rejectPersisted(answerNotPersisted(toolCallId));
 				}
 			}
 		},
@@ -515,7 +543,9 @@ export function createAskUserQuestionTool(
 					terminate: true,
 				};
 			}
-			return buildQuestionnaireResponse(outcome.result, args);
+			const result = buildQuestionnaireResponse(outcome.result, args);
+			waiters.recordExecutedResult(toolCallId, result);
+			return result;
 		},
 	};
 }
