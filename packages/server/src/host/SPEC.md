@@ -401,10 +401,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `available:false` only after validating its parent. No client path/PID field is accepted.
   The agent's resource publisher maps to `session.resourcesChanged`, subscribed in the WS open handler;
   this is a catalog invalidation, never an output broadcast. Resource ownership and teardown stay in agent.
-- **Retired activity compatibility:** `session.activityList` remains registered for one compatibility
-  window and returns `[]` without reading sessions or workspaces. There is no activity publisher or push
-  subscription; the empty response exists only so an already-loaded old client clears cached markers after
-  reconnect.
+- **Session-state composition:** before serving, the host supplies every workspace `{id,cwd}`, initializes
+  receipt/purpose metadata, and installs the workspace→project resolver. `session.stateList` returns the
+  complete all-workspace snapshot; `session.state` broadcasts full records; completion acknowledgement and
+  nudge handlers validate workspace/session identity through the same registry. The WS open handler
+  subscribes every client after welcome. `session.activityList` remains an inert `[]` compatibility method
+  for one window and has no push channel.
 - **CLI update lifecycle:** a launcher may supply one optional asynchronous notice producer, fixed interval,
   and parameterless update runner. `createServer` starts checks after listening without awaiting them and never
   overlaps checks. A newer release becomes the retained `available` snapshot in later welcomes. The v70
