@@ -135,7 +135,8 @@ of the host.
     **`isRecommendedQuestionOption`**, the shared suffix/reason predicate used by host timeout selection
     and browser presentation,
     **`AskUserQuestionResult`** (`AskUserQuestionAnswer[]` + `cancelled`, plus optional literal
-    `timedOut: true` for the host's automatic reply; omission means a human reply),
+    `timedOut: true` for the host's automatic reply; omission means a human reply) and the shared
+    **`isAskUserQuestionResult`** guard consumed by the message guard, host handler, and renderer,
     **`AskUserQuestionAckDetails`** (the tool result's `details` under the **ack + terminate** design —
     the call resolves instantly; the turn ends) and **`AskUserAnswersDetails`** + the
     **`ASK_USER_ANSWERS_CUSTOM_TYPE`** constant, **`AskUserAnswersMessage`** (the correctly-paired

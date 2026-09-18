@@ -1,10 +1,14 @@
 import {
 	type AppConfigUpdate,
+	AUTO_RESUME_PROTOCOL_VERSION,
+	AUTO_RESUME_TIMEOUT_MINUTES,
 	type ComposerGrowthLimit,
+	isAutoResumeTimeoutMinutes,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	type SubagentOverride,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { useEffect, useState } from "react";
 import {
 	type ChatMessageOrder,
 	moveStreamingResponseHandle,
@@ -169,10 +173,130 @@ function StreamingResponseMovementControl({
 	);
 }
 
-function saveSetting(config: AppConfigUpdate, errorMessage: string): void {
-	getTransport()
-		.request("settings.update", { config })
-		.catch(() => toast.error(errorMessage));
+async function saveSetting(config: AppConfigUpdate, errorMessage: string): Promise<void> {
+	try {
+		await getTransport().request("settings.update", { config });
+	} catch {
+		toast.error(errorMessage);
+	}
+}
+
+export function parseAutoResumeTimeout(draft: string): number | null {
+	if (!/^\d+$/.test(draft)) return null;
+	const value = Number(draft);
+	return isAutoResumeTimeoutMinutes(value) ? value : null;
+}
+
+export function AutoResumeSettings({
+	protocolVersion,
+	value,
+	onChange,
+}: {
+	protocolVersion: number | null;
+	value: number | null;
+	onChange: (value: number | null) => Promise<void> | void;
+}) {
+	const [draft, setDraft] = useState(String(value ?? AUTO_RESUME_TIMEOUT_MINUTES.default));
+	const [saving, setSaving] = useState(false);
+	useEffect(() => setDraft(String(value ?? AUTO_RESUME_TIMEOUT_MINUTES.default)), [value]);
+	if (protocolVersion === null || protocolVersion < AUTO_RESUME_PROTOCOL_VERSION) return null;
+	const enabled = value !== null;
+	const parsed = parseAutoResumeTimeout(draft);
+	const canSave = enabled && parsed !== null && parsed !== value && !saving;
+	const errorId = "auto-resume-timeout-error";
+
+	const change = async (next: number | null) => {
+		setSaving(true);
+		try {
+			await onChange(next);
+		} finally {
+			setSaving(false);
+		}
+	};
+
+	return (
+		<div
+			data-testid="settings-auto-resume"
+			className="flex flex-col gap-8 border-border-default border-t pt-16"
+		>
+			<div className="flex flex-col gap-4">
+				<h3 className="tr-title-section text-text-default">Automatic continuation</h3>
+				<p className="text-text-muted tr-text-metadata">
+					After the timeout, ThinkRail follows marked question recommendations and continues idle
+					chats only while their plan has open items. Questions without a recommendation stay
+					unanswered. This setting is saved on the host and follows you across devices.
+				</p>
+			</div>
+			<div className="flex items-center justify-between gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
+				<div className="flex flex-col gap-2">
+					<span className="tr-title-compact text-text-default">Continue unfinished chats</span>
+					<span className="text-text-muted tr-text-metadata">
+						{enabled ? `Wait ${value} minutes before continuing.` : "Off — chats wait for you."}
+					</span>
+				</div>
+				<SettingsSwitch
+					checked={enabled}
+					disabled={saving}
+					label="Automatically continue unfinished chats"
+					testId="auto-resume-toggle"
+					onChange={(checked) => void change(checked ? AUTO_RESUME_TIMEOUT_MINUTES.default : null)}
+				/>
+			</div>
+			{enabled ? (
+				<>
+					<div className="flex flex-wrap items-end gap-8">
+						<label className="flex flex-col gap-4 text-text-muted tr-text-metadata">
+							<span>Wait before continuing</span>
+							<span className="flex items-center gap-8">
+								<input
+									type="number"
+									min={AUTO_RESUME_TIMEOUT_MINUTES.min}
+									max={AUTO_RESUME_TIMEOUT_MINUTES.max}
+									step={1}
+									value={draft}
+									aria-label="Automatic continuation timeout"
+									aria-invalid={parsed === null}
+									aria-describedby={parsed === null ? errorId : undefined}
+									data-testid="auto-resume-input"
+									disabled={saving}
+									onChange={(event) => setDraft(event.currentTarget.value)}
+									onKeyDown={(event) => {
+										if (event.key === "Escape") {
+											event.preventDefault();
+											event.stopPropagation();
+											setDraft(String(value));
+										} else if (event.key === "Enter" && canSave && parsed !== null) {
+											event.preventDefault();
+											void change(parsed);
+										}
+									}}
+									className="w-96 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none focus:border-control-border-active focus:ring-2 focus:ring-primary aria-invalid:border-feedback-error disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+								/>
+								<span>minutes</span>
+							</span>
+						</label>
+						<button
+							type="button"
+							disabled={!canSave}
+							data-testid="auto-resume-save"
+							onClick={() => {
+								if (parsed !== null) void change(parsed);
+							}}
+							className="rounded-[var(--radius-sm)] border border-border-default px-12 py-4 tr-text-ui text-text-default outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
+						>
+							{saving ? "Saving…" : "Save"}
+						</button>
+					</div>
+					{parsed === null ? (
+						<p id={errorId} className="text-feedback-error tr-text-metadata">
+							Enter a whole number from {AUTO_RESUME_TIMEOUT_MINUTES.min} to{" "}
+							{AUTO_RESUME_TIMEOUT_MINUTES.max}.
+						</p>
+					) : null}
+				</>
+			) : null}
+		</div>
+	);
 }
 
 export function SubagentSettings({
@@ -250,6 +374,7 @@ export function ChatSettings() {
 	const growthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
+	const autoResumeTimeoutMinutes = useAppStore((state) => state.autoResumeTimeoutMinutes);
 	const subagentsEnabled = useAppStore((state) => state.subagentsEnabled);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const setChatMessageOrder = useAppStore((state) => state.setChatMessageOrder);
@@ -262,7 +387,7 @@ export function ChatSettings() {
 
 	const selectGrowthLimit = (composerGrowthLimit: ComposerGrowthLimit) => {
 		if (composerGrowthLimit === growthLimit) return;
-		saveSetting({ composerGrowthLimit }, "Couldn't change message box growth");
+		void saveSetting({ composerGrowthLimit }, "Couldn't change message box growth");
 	};
 
 	const selectWorkspaceSubagents = (choice: WorkspaceSubagentChoice) => {
@@ -309,6 +434,14 @@ export function ChatSettings() {
 					onChange={setStreamingResponseMovement}
 				/>
 			</div>
+
+			<AutoResumeSettings
+				protocolVersion={protocolVersion}
+				value={autoResumeTimeoutMinutes}
+				onChange={(autoResumeTimeoutMinutes) =>
+					saveSetting({ autoResumeTimeoutMinutes }, "Couldn't change automatic continuation")
+				}
+			/>
 
 			<div className="flex flex-col gap-8 border-border-default border-t pt-16">
 				<div className="flex flex-col gap-4">

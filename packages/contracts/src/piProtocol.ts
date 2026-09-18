@@ -199,7 +199,10 @@ export interface AskUserQuestionOption {
 	recommendedReason?: string;
 }
 
-export function isRecommendedQuestionOption(option: AskUserQuestionOption): boolean {
+export function isRecommendedQuestionOption(option: {
+	label: string;
+	recommendedReason?: string | undefined;
+}): boolean {
 	return (
 		/\s*\(recommended\)\s*$/i.test(option.label) ||
 		(option.recommendedReason?.trim().length ?? 0) > 0
@@ -231,6 +234,16 @@ export interface AskUserQuestionResult {
 	answers: AskUserQuestionAnswer[];
 	cancelled: boolean;
 	timedOut?: true;
+}
+
+export function isAskUserQuestionResult(value: unknown): value is AskUserQuestionResult {
+	if (!value || typeof value !== "object") return false;
+	const result = value as { answers?: unknown; cancelled?: unknown; timedOut?: unknown };
+	return (
+		Array.isArray(result.answers) &&
+		typeof result.cancelled === "boolean" &&
+		(result.timedOut === undefined || result.timedOut === true)
+	);
 }
 
 export interface AskUserQuestionAckDetails {

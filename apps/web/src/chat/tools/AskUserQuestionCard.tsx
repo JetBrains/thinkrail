@@ -5,6 +5,7 @@ import {
 	RiQuestionnaireLine as MessageCircleQuestion,
 	RiPencilLine as Pencil,
 	RiSkipForwardLine as SkipForward,
+	RiTimerLine as Timer,
 } from "@remixicon/react";
 import type {
 	AskUserQuestionAnswer,
@@ -12,6 +13,7 @@ import type {
 	AskUserQuestionItem,
 	AskUserQuestionResult,
 } from "@thinkrail/contracts";
+import { isAskUserQuestionResult, isRecommendedQuestionOption } from "@thinkrail/contracts";
 import { Fragment, type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib";
 import { useAskFocusScope, useAskState } from "../askState";
@@ -40,9 +42,9 @@ export function readRecommendation(option: {
 	recommended: boolean;
 	reason?: string | undefined;
 } {
-	const { text, recommended } = splitRecommended(option.label);
+	const { text } = splitRecommended(option.label);
 	const reason = option.recommendedReason?.trim() || undefined;
-	return { text, recommended: recommended || !!reason, reason };
+	return { text, recommended: isRecommendedQuestionOption(option), reason };
 }
 
 export interface QState {
@@ -120,15 +122,11 @@ export function answerSupportsNote(answer: AskUserQuestionAnswer): boolean {
 }
 
 export function readAskResult(raw: unknown): AskUserQuestionResult | null {
-	const isResult = (v: unknown): v is AskUserQuestionResult =>
-		!!v &&
-		typeof v === "object" &&
-		Array.isArray((v as AskUserQuestionResult).answers) &&
-		typeof (v as AskUserQuestionResult).cancelled === "boolean";
-	if (raw && typeof raw === "object" && isResult((raw as { details?: unknown }).details)) {
-		return (raw as { details: AskUserQuestionResult }).details;
+	if (raw && typeof raw === "object") {
+		const details = (raw as { details?: unknown }).details;
+		if (isAskUserQuestionResult(details)) return details;
 	}
-	return isResult(raw) ? raw : null;
+	return isAskUserQuestionResult(raw) ? raw : null;
 }
 
 interface RecapState {
@@ -1332,8 +1330,18 @@ function ResolvedRecord({
 		<div
 			data-testid="ask-user-question"
 			data-tone={result.cancelled ? "skipped" : "answered"}
+			data-timeout={result.timedOut}
 			className="flex flex-col gap-12"
 		>
+			{result.timedOut ? (
+				<div
+					data-testid="ask-timeout"
+					className="flex items-center gap-4 text-text-muted tr-text-metadata"
+				>
+					<Timer className="size-14 shrink-0" />
+					<span>Continued automatically after the timeout</span>
+				</div>
+			) : null}
 			{questions.map((q, i) => (
 				<QuestionRecap key={q.question} question={q} answer={byIndex.get(i)} variant="resolved" />
 			))}

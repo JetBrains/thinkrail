@@ -30,5 +30,9 @@ export {
 } from "./domain";
 export type * from "./nativeClient";
 export type * from "./piProtocol";
-export { isRecommendedQuestionOption, isTranscriptMessageRole } from "./piProtocol";
+export {
+	isAskUserQuestionResult,
+	isRecommendedQuestionOption,
+	isTranscriptMessageRole,
+} from "./piProtocol";
 export * from "./wsProtocol";

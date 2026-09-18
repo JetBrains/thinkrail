@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import type { AskUserQuestionAnswer, AskUserQuestionItem } from "@thinkrail/contracts";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
+	AskUserQuestionCard,
 	answerSupportsNote,
 	choiceKeyAction,
 	confirmStateFor,
@@ -506,6 +509,49 @@ describe("readRecommendation", () => {
 	});
 });
 
+describe("resolved timeout receipt", () => {
+	it("labels automatic continuation and keeps recommendations plus unanswered questions visible", () => {
+		const questions = [
+			q({
+				question: "Database?",
+				options: [
+					{ label: "Postgres (Recommended)", description: "shared" },
+					{ label: "SQLite", description: "local" },
+				],
+			}),
+			q({ question: "Deploy now?" }),
+		];
+		const markup = renderToStaticMarkup(
+			createElement(AskUserQuestionCard, {
+				toolCallId: "q-timeout",
+				toolName: "ask_user_question",
+				args: { questions },
+				result: {
+					details: {
+						timedOut: true,
+						cancelled: false,
+						answers: [
+							{
+								questionIndex: 0,
+								question: "Database?",
+								kind: "option",
+								answer: "Postgres (Recommended)",
+							},
+						],
+					},
+				},
+				status: "done",
+				streaming: false,
+			}),
+		);
+		expect(markup).toContain('data-timeout="true"');
+		expect(markup).toContain('data-testid="ask-timeout"');
+		expect(markup).toContain("Continued automatically after the timeout");
+		expect(markup).toContain("Postgres");
+		expect(markup).toContain("No answer (skipped).");
+	});
+});
+
 describe("choice patches", () => {
 	it("unchecking the option whose note editor is open closes the editor, keeps the text", () => {
 		const s = state({ multi: ["A", "B"], noteFor: "A", notes: { A: "kept" } });
@@ -560,6 +606,14 @@ describe("readAskResult", () => {
 	});
 	it("reads a bare result object (hydrated details)", () => {
 		expect(readAskResult(result)).toEqual(result);
+	});
+	it("accepts only the literal true timeout provenance", () => {
+		expect(readAskResult({ answers: [], cancelled: true, timedOut: true })).toEqual({
+			answers: [],
+			cancelled: true,
+			timedOut: true,
+		});
+		expect(readAskResult({ answers: [], cancelled: true, timedOut: false })).toBeNull();
 	});
 	it("returns null for shapes without a questionnaire result", () => {
 		expect(readAskResult({ content: [{ type: "text", text: "x" }] })).toBeNull();

@@ -1,11 +1,18 @@
 import { expect, test } from "bun:test";
 import {
+	AUTO_RESUME_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	type SubagentOverride,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ChatSettings, SubagentSettings } from "./ChatSettings";
+import {
+	AutoResumeSettings,
+	ChatSettings,
+	parseAutoResumeTimeout,
+	SubagentSettings,
+} from "./ChatSettings";
 
 test("Chat settings renders one two-handle streaming movement control", () => {
 	const markup = renderToStaticMarkup(<ChatSettings />);
@@ -21,6 +28,41 @@ test("Chat settings renders one two-handle streaming movement control", () => {
 	);
 	expect(markup).toContain('aria-valuetext="100% from the top"');
 	expect(markup.match(/type="range"/g)).toHaveLength(2);
+});
+
+test("automatic-continuation settings are protocol-gated and expose an editable minute duration", () => {
+	const render = (protocolVersion: number, value: number | null) =>
+		renderToStaticMarkup(
+			createElement(AutoResumeSettings, {
+				protocolVersion,
+				value,
+				onChange: () => {},
+			}),
+		);
+
+	expect(render(AUTO_RESUME_PROTOCOL_VERSION - 1, 20)).not.toContain(
+		'data-testid="settings-auto-resume"',
+	);
+	const off = render(AUTO_RESUME_PROTOCOL_VERSION, null);
+	expect(off).toContain('data-testid="settings-auto-resume"');
+	expect(off).toContain('data-testid="auto-resume-toggle"');
+	expect(off).toContain('aria-checked="false"');
+	expect(off).not.toContain('data-testid="auto-resume-input"');
+
+	const enabled = render(AUTO_RESUME_PROTOCOL_VERSION, 20);
+	expect(enabled).toContain('aria-checked="true"');
+	expect(enabled).toContain('data-testid="auto-resume-input"');
+	expect(enabled).toContain('type="number" min="1" max="1440" step="1"');
+	expect(enabled).toContain('value="20"');
+	expect(enabled).toContain("minutes");
+});
+
+test("automatic-continuation duration parsing accepts only the shared whole-minute range", () => {
+	expect(parseAutoResumeTimeout("1")).toBe(1);
+	expect(parseAutoResumeTimeout("1440")).toBe(1440);
+	for (const invalid of ["", "0", "1441", "1.5", "15m"]) {
+		expect(parseAutoResumeTimeout(invalid)).toBeNull();
+	}
 });
 
 function workspace(subagentsOverride?: SubagentOverride): Workspace {

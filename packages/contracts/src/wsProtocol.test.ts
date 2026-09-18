@@ -3,6 +3,7 @@ import {
 	ACTIVITY_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	AUTO_RESUME_PROTOCOL_VERSION,
+	isAskUserAnswersMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
@@ -55,6 +56,21 @@ test("host update advisories advance the protocol with an immutable notice chann
 test("explicit analytics consent advances the protocol to v65", () => {
 	expect(ANALYTICS_CONSENT_PROTOCOL_VERSION).toBe(65);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ANALYTICS_CONSENT_PROTOCOL_VERSION);
+});
+
+test("ask-user answer guards accept only literal timeout provenance", () => {
+	const message = (timedOut: unknown) => ({
+		role: "custom",
+		customType: "ask-user-answers",
+		details: {
+			toolCallId: "q-1",
+			result: { answers: [], cancelled: true, timedOut },
+		},
+	});
+	expect(isAskUserAnswersMessage(message(undefined))).toBe(true);
+	expect(isAskUserAnswersMessage(message(true))).toBe(true);
+	expect(isAskUserAnswersMessage(message(false))).toBe(false);
+	expect(isAskUserAnswersMessage(message("true"))).toBe(false);
 });
 
 test("automatic continuation advances the protocol to v66", () => {
