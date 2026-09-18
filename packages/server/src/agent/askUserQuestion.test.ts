@@ -6,8 +6,10 @@ import type {
 	AskUserQuestionResult,
 } from "@thinkrail/contracts";
 import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
+import { Value } from "typebox/value";
 import {
 	ASK_ACK_TEXT,
+	AskUserQuestionSchema,
 	assessAnswerability,
 	buildAnswersMessage,
 	buildQuestionnaireResponse,
@@ -78,6 +80,23 @@ const userMessage = (text = "actually, let me explain") =>
 
 test("validateQuestionnaire accepts a well-formed questionnaire", () => {
 	expect(validateQuestionnaire(args()).ok).toBe(true);
+});
+
+test("the schema and runtime validation accept more than four questions", async () => {
+	const many: AskUserQuestionArgs = {
+		questions: Array.from({ length: 6 }, (_, index) => ({
+			question: `Question ${index + 1}?`,
+			header: `Q${index + 1}`,
+			options: [
+				{ label: "First", description: "Use the first choice." },
+				{ label: "Second", description: "Use the second choice." },
+			],
+		})),
+	};
+
+	expect(Value.Check(AskUserQuestionSchema, many)).toBe(true);
+	expect(validateQuestionnaire(many).ok).toBe(true);
+	expect(textOf(await run(true, many))).toBe(ASK_ACK_TEXT);
 });
 
 test("the optional recommendedReason field is accepted on an option (no new validation gate)", () => {
