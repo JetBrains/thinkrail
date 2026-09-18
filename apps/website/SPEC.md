@@ -40,8 +40,8 @@ binary.
 ## Boundary
 
 - **Independently deployed leaf.** Its only workspace dependency is [[module-website-analytics]]; it
-  must never import contracts, server, shared, or web. It is not on the wire and has no protocol
-  knowledge.
+  must never import contracts, server, shared, or web. It never joins the product host wire;
+  [[submodule-website-attribution]] alone owns an independent, bounded HTTP claim protocol and D1 state.
 - **One static Astro artifact, with a route-local framework exception.** The landing and blog retain
   vanilla TypeScript + hand-written CSS: no React island and no Tailwind stylesheet or runtime reaches
   those routes. [[submodule-website-vibecoding]] alone may use one React island and Tailwind v4. Astro's
