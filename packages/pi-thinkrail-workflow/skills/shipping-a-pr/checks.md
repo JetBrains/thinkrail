@@ -3,10 +3,11 @@
 Entry: an open PR plus the completion mode selected by the caller. Saves nothing. This doc ends the
 workflow in one of the two terminal states below.
 
-## Snapshot mode — metadata-only work
+## Snapshot mode — default delivery and reporting
 
-Use after standalone screenshot, body, or comment-only maintenance that left the PR head unchanged,
-or for a one-time checks/merge-state request, when the ask does not promise a merge-ready result.
+Use after ordinary PR creation, syncing, screenshots, title/body maintenance, review comments, any
+routine head update, or a one-time checks/merge-state request. A push does not imply monitoring; use
+this mode whenever the user did not explicitly request remote completion.
 
 1. Run `gh pr checks <n>` once. Preserve `no checks reported` as the explicit state “no checks
    configured”; report pending or failing checks as observed.
@@ -15,10 +16,10 @@ or for a one-time checks/merge-state request, when the ask does not promise a me
 3. Give the user the PR link, any metadata action completed, and the current checks + merge-state
    snapshot.
 
-**Snapshot terminal state:** the requested metadata mutation, if any, is complete and the current PR
-state is reported. This is not a claim that the PR is green or merge-ready.
+**Snapshot terminal state:** the requested PR action is complete and the current PR state is reported.
+This is not a claim that the PR is green or merge-ready.
 
-## Wait mode — ship or code-affecting work
+## Wait mode — explicit remote completion
 
 ### Watch
 
@@ -59,8 +60,9 @@ Handle every state explicitly:
 - `HAS_HOOKS` — affirmative with an explicit caveat: checks pass and GitHub considers the PR
   mergeable, but pre-receive hooks still run when the merge is attempted.
 
-**Wait terminal state:** the PR exists, is non-draft, current with its base, every configured check is
-green (or there is explicitly no CI), and `mergeStateStatus` is `CLEAN` or `HAS_HOOKS` with the caveat
+**Wait terminal state:** when the user explicitly requested remote completion, the PR exists, is
+non-draft, current with its base, every configured check is green (or there is explicitly no CI), and
+`mergeStateStatus` is `CLEAN` or `HAS_HOOKS` with the caveat
 reported. The user gets the link plus what shipped, what was verified, and any deliberate exclusions.
 A requested draft or a blocker that needs a human/out-of-scope decision is an explicit alternative
 terminal state, never a merge-ready success.
