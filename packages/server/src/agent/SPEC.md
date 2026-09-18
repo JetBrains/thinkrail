@@ -148,7 +148,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     | # | condition | status |
     |---|---|---|
     | 1 | a pending blocking extension dialog | `waiting` |
-    | 2 | a live blocking `ask_user_question` waiter | `waiting` |
+    | 2 | a live `ask_user_question` in `expected` or `waiting` phase | `waiting` |
     | 3 | `session.isStreaming` | `running` |
     | 4 | `session.pendingMessageCount > 0` | `queued` |
     | 5 | an unanswered restart-repaired `ask_user_question` | `waiting` |
@@ -172,9 +172,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     instead of silently reading idle while the chat itself shows the failure.
 
     Every rung of that order is load-bearing and pinned by `activity.test.ts`:
-    - **Human blockers outrank streaming.** Pi is technically mid-turn while a live ask waiter is blocked,
-      but reporting `running` would hide the action the person must take. The manager supplies that live
-      waiter signal directly, so streaming deltas do not rescan the transcript.
+    - **Human blockers outrank streaming.** Pi is technically mid-turn while an eligible ask is expected or
+      waiting, but reporting `running` would hide the action the person must take. The manager supplies that
+      live phase directly, so streaming deltas do not rescan the transcript.
     - **Queued input does not supersede a live ask.** It stays in Pi's ordinary queues until the blocking
       tool returns the person's real result. A restart-repaired ask is idle and remains transcript-derived
       through `awaitingQuestionToolCallId` / `assessAnswerability`.
@@ -331,8 +331,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     provider rejects such a leaf (the chat would brick), and appending behind a live session would desync
     its in-memory state — so the missing results are paired at the one choke point every post-restart
     session passes. Repair is **tail-only and replay-aware**: pi positionally closes a pending tool batch
-    before examining the next assistant message, then drops `error` / `aborted` attempts. Failed attempts
-    therefore never contribute candidates but still close an older one; any later user, custom,
+    before examining the next assistant message, then drops `error` / `aborted` / `length` attempts. Pi never
+    executes tool calls from a length-truncated response because their arguments may be incomplete; those
+    calls therefore repair with ordinary error results, never an answerable ask ack. Failed attempts
+    never contribute candidates but still close an older one; any later user, custom,
     compaction, or assistant message makes that gap ineligible for a persisted leaf append. Only unique
     results whose call id **and tool name** match the final candidate batch may follow it, and parallel
     calls already carrying valid results are left alone. This prevents a late result from surviving
@@ -342,11 +344,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     is provider-valid;
     **`answerQuestion(sessionId, toolCallId, result)`** — the `ask_user_question` reply path (see the
     `askUserQuestion` bullet); **`settleSessionsForShutdown(timeoutMs)`** — the polite half of shutdown:
-    abort every streaming parent except one with an active live ask call (unanswered or answered but not
-    yet persisted), dispose every hidden child
-    (including background children whose parent is idle), include cascades already pending from concurrent
-    removal, and wait for all of them under the one bound. A waiting ask is deliberately left dangling for
-    ack repair on the next attach; explicit user Stop is the path that persists its terminal abort result.
+    abort every streaming parent except one with a recoverable live ask phase (`expected`, `waiting`, or
+    `answer-accepted-uncommitted`), dispose every hidden child (including background children whose parent is
+    idle), include cascades already pending from concurrent removal, and wait for all of them under the one
+    bound. An expected/waiting ask is deliberately left dangling for ack repair on the next attach; an
+    accepted answer is allowed to reach its native persisted result. Explicit user Stop aborts an unanswered
+    ask, but when Submit already won it first waits for that exact result boundary and then aborts only the
+    continuation.
     `disposeAllSessions` remains the synchronous emergency stop, but registers its best-effort child cascades
     in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
@@ -445,23 +449,29 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     only from pi's own CLI entrypoints, never when pi is embedded via `createAgentSession`. Every
     embedder of pi-as-a-library hits this; an upstream fix would not reach us until a deliberate pi bump.
   - `askUserQuestion` — the host-owned **`ask_user_question`** pi custom tool, registered per session with
-    a session-bound waiter registry. A valid live call is **sequential and blocking**: after validation its
-    `execute` waits for `session.answerQuestion`, then returns the person's real
-    `AskUserQuestionResult`/`buildQuestionnaireResponse` as the native tool result. A `message_end`
-    normalizer makes the first ask the assistant response's sole tool call (non-tool content stays; sibling
-    calls are dropped for the model to re-issue after the answer), avoiding Pi's sequential-abort hole where
-    unexecuted siblings receive no result. An ask inside an errored/aborted assistant is terminal and never
-    registers a waiter; every expected call Pi does not execute is cleared at `turn_end`. Pi therefore
-    retains ordinary steering/follow-up queues and cannot cross the tool boundary before the answer. The answer RPC
-    resolves the waiter and acknowledges only after the matching result reaches the persisted `turn_end`
-    boundary. Explicit Stop drains the queue and aborts an unanswered waiter with a stable stopped error;
-    once Submit has been accepted, that answer wins and Stop only ends the continuation. Either ordering
-    leaves one terminal provider-valid result. The question array has **no tool-level maximum**: one round
-    carries every question needed for the current decision, while each question retains the 2–4 option bound.
+    a session-bound phase registry. An eligible live call is **sequential and blocking**: after validation
+    its `execute` waits for `session.answerQuestion`, then returns the person's real
+    `AskUserQuestionResult`/`buildQuestionnaireResponse` as the native tool result. Eligibility is shared:
+    an assistant stopped by `error`, `aborted`, or `length` cannot execute an ask. A `message_end` normalizer
+    makes the first ask the response's sole tool call (non-tool content stays; sibling calls are dropped for
+    the model to re-issue after the answer), avoiding Pi's sequential-abort hole where unexecuted siblings
+    receive no result. The question array has **no tool-level maximum**: one round carries every question
+    needed for the current decision, while each question retains the 2–4 option bound.
 
-    A process restart deliberately changes only the continuation mechanism: the attach-time dangling-call
-    repair writes the canonical ack (`details {kind:"ack"}`) before `createAgentSession`, leaving the card
-    answerable but the session idle. With no live waiter, `answerQuestion` injects the existing
+    The registry tracks `expected` (eligible call observed), `waiting`, `answer-accepted-uncommitted`, and
+    `stopped` through `turn_end`. This includes Pi's real asynchronous gap from `tool_execution_start` through
+    pre-tool hooks to `execute`: graceful shutdown preserves an expected call, and an answer accepted in that
+    gap remains authoritative even if Stop follows. Every expected call Pi does not execute is cleared at
+    `turn_end`. Pi retains ordinary steering/follow-up queues and cannot cross the tool boundary before the
+    answer. The answer RPC resolves the phase and acknowledges only after the matching result reaches the
+    persisted `turn_end` boundary. Explicit Stop drains the queue and aborts an unanswered phase with a stable
+    stopped error; after Submit wins, Stop defers Pi abort until the answer persists and then ends only the
+    continuation. Either ordering leaves one terminal provider-valid result.
+
+    A process restart deliberately changes only the continuation mechanism: attach-time repair writes the
+    canonical ack (`details {kind:"ack"}`) only for an eligible dangling ask before `createAgentSession`,
+    leaving the card answerable but the session idle. A length-truncated ask receives the same error repair
+    as any other non-executable tool call. With no live phase, `answerQuestion` injects the existing
     `ask-user-answers` custom message through `sendCustomMessage({triggerTurn:true})`. Thus the question
     survives without restoring a JavaScript promise or calling low-level `Agent.continue`; an uncommitted
     Submit simply appears again. Queue entries remain Pi-owned and live-only by explicit scope. The card
@@ -733,9 +743,10 @@ applies.
 - **A re-opened disk session is repaired before it is seeded** (`repairDanglingToolCalls` between
   `SessionManager.open` and `createAgentSession`) — never append to a session file behind a live
   `AgentSession`, its in-memory context would desync.
-- **A live ask blocks only in its session-bound waiter; restart state stays transcript-derived.** The waiter
-  is forgotten on disposal and never restored. A dangling ask is repaired to ack before attach, then
-  `assessAnswerability` remains the one reply-validity authority; rejections fail the WS request loud.
+- **A live ask blocks only in its session-bound phase registry; restart state stays transcript-derived.**
+  The registry is forgotten on disposal and never restored. Only a tool-executable dangling ask is repaired
+  to ack before attach; `length`/`error`/`aborted` attempts are terminal. `assessAnswerability` remains the
+  one reply-validity authority; rejections fail the WS request loud.
 - Share one **current** `ModelRuntime` for pre-session reads and new sessions. Every session receives and
   retains its generation as `createAgentSession`'s `modelRuntime`; give each its own `SessionManager` and
   `dispose()` it on removal. Old runtimes remain reachable only through old live sessions and become

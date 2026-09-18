@@ -37,9 +37,9 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     the real tool result; a restarted dangling call is repaired to ack and later paired with an
     `ask-user-answers` custom message. `useAskState(toolCallId)` supplies the restart reply / superseded
     verdict, and the card resolves in order — **answered/declined** (either real result form),
-    **superseded** (a later free-form user message replaced a repaired idle question), **stopped/error**
-    (explicit Stop finalized the blocked tool), else **awaiting** — interactive while Pi is blocked, after
-    reconnect, or after any number of host restarts.
+    **superseded** (a later free-form user message replaced a repaired idle question),
+    **stopped/error/length** (explicit Stop or a non-executable assistant result finalized the tool), else
+    **awaiting** — interactive while Pi is blocked, after reconnect, or after any number of host restarts.
   - **Controls never stream** — while args stream it shows a stable composing placeholder and the
     complete questionnaire reveals atomically at message end (rationale in the component's jsdoc).
   - **Multi-question completion is review-gated** — every question page advances with **Next**, including

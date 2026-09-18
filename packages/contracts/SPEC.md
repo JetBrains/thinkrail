@@ -145,9 +145,10 @@ of the host.
     dangling live-blocking call before attach) and **`AskUserAnswersDetails`** + the
     **`ASK_USER_ANSWERS_CUSTOM_TYPE`** constant, **`AskUserAnswersMessage`** (the correctly-paired
     tag↔details shape the host's builder is compile-held to) and the shared **`isAskUserAnswersMessage`**
-    guard (all in `wsProtocol`, the value-bearing half): a live reply becomes the native tool result;
-    after restart, the reply travels as an `ask-user-answers` custom message paired by
-    `details.toolCallId`. `WireCustomMessage.customType` itself stays
+    guard (all in `wsProtocol`, the value-bearing half): an eligible live reply becomes the native tool
+    result; a `length`/`error`/`aborted` assistant call is terminal and never answerable; after restart, the
+    reply travels as an `ask-user-answers` custom message paired by `details.toolCallId`.
+    `WireCustomMessage.customType` itself stays
     `string` — the namespace is open (any pi extension can mint custom messages and they all cross the
     wire), so strictness lives at the producer + the guard, which validates the details *shape* (wire
     data is untrusted — another process, possibly another protocol version). The capability

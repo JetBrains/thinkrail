@@ -310,8 +310,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **`askState`** — the questionnaire lifecycle seam: the pure
   `deriveAskStates(turns, askAnswers, toolResults)` + `AskStatesContext`/`useAskState` (provided by
   `ChatView`, `null` standalone). A live blocking ask resolves through its native tool result; a
-  restart-repaired ack resolves later through `ask-user-answers`; a stopped/error result is terminal.
-  "Answered / superseded / stopped / awaiting" is therefore derived once from all three transcript
+  restart-repaired eligible ack resolves later through `ask-user-answers`; a stopped/error/length result is
+  terminal because Pi never executes tools from a length-truncated assistant response. "Answered /
+  superseded / stopped / awaiting" is therefore derived once from all three transcript
   projections and consumed by the card and plan glance, keeping both props-driven everywhere else.
   The same seam supplies an opaque **per-mounted-ChatView focus scope**: an awaiting card claims attention
   once within that scope (so Virtuoso remounts cannot steal focus), while a fresh mount creates a new scope
