@@ -25,6 +25,7 @@ import type {
 import { isControlMessage } from "@thinkrail/contracts";
 import {
 	abortSession,
+	acknowledgeCompletion,
 	answerQuestion,
 	clampThinkingForModel,
 	clearQueueSession,
@@ -44,10 +45,12 @@ import {
 	isSessionStreaming,
 	listAvailableModels,
 	listProjectAliasSkillNames,
+	listSessionStates,
 	listSessions,
 	listSkillCatalog,
 	listSkillCommands,
 	notifyExtUi,
+	nudgeSession,
 	promptSession,
 	readChildTranscript,
 	refreshAvailableModels,
@@ -157,6 +160,7 @@ import {
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
 	getWorkspace,
+	listAllWorkspaceRecords,
 	listExistingWorktrees,
 	listWorkspaceRecords,
 	listWorkspaces,
@@ -800,6 +804,36 @@ const handlers: Record<string, Handler> = {
 				return summary;
 			}
 		});
+	},
+	"session.stateList": () =>
+		listSessionStates(
+			listAllWorkspaceRecords().map((workspace) => ({
+				id: workspace.id,
+				projectId: workspace.projectId,
+				cwd: workspace.worktreePath,
+			})),
+		),
+	"session.acknowledgeCompletion": (params) => {
+		const p = params as { sessionId: string; completionId: string };
+		return acknowledgeCompletion(p.sessionId, p.completionId);
+	},
+	"session.nudge": async (params) => {
+		const p = params as {
+			workspaceId: string;
+			sessionId: string;
+			text: string;
+			images?: ImageContent[];
+		};
+		getWorkspace(p.workspaceId);
+		if (getSessionWorkspaceId(p.sessionId) !== p.workspaceId) {
+			throw new Error(`Unknown session: ${p.sessionId}`);
+		}
+		if (!isControlMessage(p.text)) throw new Error("Session nudge must be a control message");
+		const nudge = nudgeSession(p.sessionId, p.text, p.images);
+		if (nudge.disposition !== "needs_input") {
+			await ackSend(runObservation.send(p.sessionId, "internal", nudge.send));
+		}
+		return { disposition: nudge.disposition };
 	},
 	"session.activityList": () => [],
 	"session.getMessages": (params) => {

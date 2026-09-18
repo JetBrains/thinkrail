@@ -12,6 +12,11 @@ export function setExtUiPublisher(fn: (request: ExtUiRequest) => void): void {
 	publish = fn;
 }
 
+let stateChanged: (sessionId: string) => void = () => {};
+export function setExtUiStateChanged(fn: (sessionId: string) => void): void {
+	stateChanged = fn;
+}
+
 let seq = 0;
 const nextId = (): string => `extui_${++seq}`;
 
@@ -29,6 +34,13 @@ export function cancelExtUiForSession(sessionId: string): void {
 	for (const entry of [...pending.values()]) {
 		if (entry.sessionId === sessionId) entry.finish(null, true);
 	}
+}
+
+export function pendingExtUiDialogId(sessionId: string): string | null {
+	for (const [id, entry] of pending) {
+		if (entry.sessionId === sessionId) return id;
+	}
+	return null;
 }
 
 export function notifyExtUi(
@@ -73,6 +85,7 @@ export function createWebUiContext(sessionId: string): ExtensionUIContext {
 				if (settled) return;
 				settled = true;
 				pending.delete(id);
+				stateChanged(sessionId);
 				if (timer) clearTimeout(timer);
 				opts?.signal?.removeEventListener("abort", onAbort);
 				if (dismiss) publish({ id, sessionId, kind: "dismiss" });
@@ -80,6 +93,7 @@ export function createWebUiContext(sessionId: string): ExtensionUIContext {
 			};
 			const onAbort = (): void => finish(null, true);
 			pending.set(id, { sessionId, finish });
+			stateChanged(sessionId);
 			if (opts?.signal) {
 				if (opts.signal.aborted) return finish(null, true);
 				opts.signal.addEventListener("abort", onAbort, { once: true });

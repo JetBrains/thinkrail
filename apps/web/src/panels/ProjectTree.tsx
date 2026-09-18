@@ -1,4 +1,5 @@
 import {
+	RiCheckboxCircleFill as CheckCircle,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 	RiFileCopyLine as Copy,
@@ -10,6 +11,7 @@ import {
 	RiMore2Line as MoreVertical,
 	RiPencilLine as Pencil,
 	RiAddLine as Plus,
+	RiQuestionAnswerFill as QuestionAnswer,
 	RiFolderFill,
 	RiFolderLine,
 	RiFolderOpenFill,
@@ -50,7 +52,10 @@ import { LoadingRegion } from "../components/Skeleton";
 import {
 	isDefaultWorkspace,
 	isExternalWorkspace,
+	type SessionPresentation,
 	selectActiveWorkspaceProjectId,
+	selectProjectSessionPresentation,
+	selectWorkspaceSessionPresentation,
 	toast,
 	useAppStore,
 } from "../store";
@@ -72,6 +77,7 @@ export function ProjectTree() {
 	const worktreeCreations = useAppStore((s) => s.worktreeCreationsByProject);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const sessionStateByWorkspace = useAppStore((s) => s.sessionStateByWorkspace);
 
 	const [editors, setEditors] = useState<EditorInfo[]>([]);
 	useEffect(() => {
@@ -257,6 +263,10 @@ export function ProjectTree() {
 				{projects.map((project) => {
 					const isExpanded = expandedProjectIds[project.id] === true;
 					const list = workspaces[project.id];
+					const projectPresentation = selectProjectSessionPresentation(
+						{ sessionStateByWorkspace },
+						project.id,
+					);
 					return (
 						<li key={project.id}>
 							<ProjectRow
@@ -264,6 +274,7 @@ export function ProjectTree() {
 								isSelected={selectedProjectId === project.id}
 								isExpanded={isExpanded}
 								workspaceCount={(list ?? []).filter((w) => !isDefaultWorkspace(w)).length}
+								presentation={projectPresentation}
 								onToggle={() => toggleExpand(project.id)}
 								onSelect={() => void selectProject(project.id)}
 								onClose={() => closeProject(project)}
@@ -283,6 +294,10 @@ export function ProjectTree() {
 											key={ws.id}
 											workspace={ws}
 											isActive={activeWorkspaceId === ws.id}
+											presentation={selectWorkspaceSessionPresentation(
+												{ sessionStateByWorkspace },
+												ws.id,
+											)}
 											canRename={canRenameWorkspace(protocolVersion, ws)}
 											editors={editors}
 											onSelect={() => selectWorkspace(ws)}
@@ -344,11 +359,40 @@ export function ProjectTree() {
 	);
 }
 
+function SessionStateGlyph({ presentation }: { presentation: SessionPresentation }) {
+	if (presentation === "quiet") return null;
+	const label =
+		presentation === "needs_input"
+			? "Needs input"
+			: presentation === "finished"
+				? "Finished"
+				: "Working";
+	return (
+		<span
+			role="img"
+			data-testid="session-state-glyph"
+			data-state={presentation}
+			aria-label={label}
+			title={label}
+			className={presentation === "working" ? "text-text-muted" : "text-primary"}
+		>
+			{presentation === "needs_input" ? (
+				<QuestionAnswer className="size-14" />
+			) : presentation === "finished" ? (
+				<CheckCircle className="size-14" />
+			) : (
+				<Loader2 className="size-14 animate-spin motion-reduce:animate-none" />
+			)}
+		</span>
+	);
+}
+
 function ProjectRow({
 	project,
 	isSelected,
 	isExpanded,
 	workspaceCount,
+	presentation,
 	onToggle,
 	onSelect,
 	onClose,
@@ -362,6 +406,7 @@ function ProjectRow({
 	isSelected: boolean;
 	isExpanded: boolean;
 	workspaceCount: number;
+	presentation: SessionPresentation;
 	onToggle: () => void;
 	onSelect: () => void;
 	onClose: () => void;
@@ -414,6 +459,7 @@ function ProjectRow({
 					{project.name}
 				</span>
 			</button>
+			<SessionStateGlyph presentation={presentation} />
 			{!isExpanded && workspaceCount > 0 && (
 				<span
 					data-testid="project-workspace-count"
@@ -518,6 +564,7 @@ function ProjectRow({
 function WorkspaceRow({
 	workspace,
 	isActive,
+	presentation,
 	canRename,
 	editors,
 	onSelect,
@@ -529,6 +576,7 @@ function WorkspaceRow({
 }: {
 	workspace: Workspace;
 	isActive: boolean;
+	presentation: SessionPresentation;
 	canRename: boolean;
 	editors: EditorInfo[];
 	onSelect: () => void;
@@ -676,6 +724,7 @@ function WorkspaceRow({
 						</span>
 					</button>
 				)}
+				<SessionStateGlyph presentation={presentation} />
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="workspace-menu"

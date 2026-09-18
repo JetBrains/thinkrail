@@ -7,6 +7,7 @@ import {
 	type PiEvent,
 	type Project,
 	type SessionEventPayload,
+	type SessionStateRecord,
 	type SessionSummary,
 	type SpecGraphNode,
 	type WireModel,
@@ -33,6 +34,7 @@ import {
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectLastOpenChatSession,
+	selectReadyCompletionActivation,
 	selectSkillsStale,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
@@ -129,6 +131,11 @@ beforeEach(() => {
 		routeChatTarget: null,
 		routeChatTargetGeneration: 0,
 		sessions: {},
+		sessionStateByWorkspace: {},
+		sessionStateClock: 0,
+		sessionStateTickBySession: {},
+		directChatActivationTickBySession: {},
+		renderedCompletionBySession: {},
 		extUiOrphans: [],
 		workbenchFrame: null,
 		workspaceViewsByWorkspace: {},
@@ -384,6 +391,44 @@ test("queue_update folds pi's queue into the runtime; the canonical echo lands t
 	const turns = rt("a").turns;
 	expect(turns.map((t) => t.kind)).toEqual(["assistant", "user", "user"]);
 	expect(rt("a").queue).toEqual({ steering: [], followUp: [] });
+});
+
+test("normalized session snapshots, pushes, and direct activation keep one exact receipt projection", () => {
+	const record = (completionId: string): SessionStateRecord => ({
+		sessionId: "state-session",
+		workspaceId: "state-workspace",
+		projectId: "state-project",
+		state: {
+			execution: "idle",
+			runId: "run",
+			needsInput: null,
+			completion: { completionId, outcome: "succeeded" },
+			completionUnread: true,
+			queuedCount: 0,
+		},
+	});
+	const store = useAppStore.getState();
+	store.setStatus("connected");
+	store.openChatSession("state-workspace", "state-session", null, "medium");
+	store.installSessionStateSnapshot([record("completion:one")]);
+	expect(useAppStore.getState().sessions["state-session"]?.hostState).toEqual(
+		record("completion:one").state,
+	);
+	store.noteRenderedCompletion("state-session", "completion:one");
+	store.noteDirectChatActivation("state-session");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBe("completion:one");
+
+	store.applySessionState(record("completion:two"));
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBeNull();
+	store.deleteChat("state-workspace", "state-session");
+	expect(
+		useAppStore.getState().sessionStateByWorkspace["state-workspace"]?.["state-session"],
+	).toBeUndefined();
+	expect(useAppStore.getState().sessionStateTickBySession["state-session"]).toBeUndefined();
 });
 
 test("hydrateSession seeds the queue from the summary snapshot", () => {

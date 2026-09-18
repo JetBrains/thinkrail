@@ -3,6 +3,9 @@ import {
 	type GitDiffScope,
 	type Project,
 	SESSION_RENAME_PROTOCOL_VERSION,
+	SESSION_STATE_PROTOCOL_VERSION,
+	type SessionState,
+	type SessionStateRecord,
 	type SpecGraphNode,
 	type WireModel,
 	type Workspace,
@@ -68,6 +71,95 @@ interface ProtocolState {
 
 export function selectCanRenameChat(state: ProtocolState): boolean {
 	return state.protocolVersion !== null && state.protocolVersion >= SESSION_RENAME_PROTOCOL_VERSION;
+}
+
+export function selectHasNormalizedSessionState(state: ProtocolState): boolean {
+	return state.protocolVersion !== null && state.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION;
+}
+
+interface SessionStateProjection {
+	sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
+}
+
+export type SessionPresentation = "needs_input" | "finished" | "working" | "quiet";
+
+export function sessionPresentation(state: SessionState | null | undefined): SessionPresentation {
+	if (state?.needsInput) return "needs_input";
+	if (state?.completionUnread) return "finished";
+	if (state?.execution === "running") return "working";
+	return "quiet";
+}
+
+export function selectSessionState(
+	state: SessionStateProjection,
+	workspaceId: string,
+	sessionId: string,
+): SessionState | null {
+	return state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state ?? null;
+}
+
+export function selectWorkspaceSessionPresentation(
+	state: SessionStateProjection,
+	workspaceId: string,
+): SessionPresentation {
+	let presentation: SessionPresentation = "quiet";
+	for (const record of Object.values(state.sessionStateByWorkspace[workspaceId] ?? {})) {
+		const candidate = sessionPresentation(record.state);
+		if (candidate === "needs_input") return candidate;
+		if (candidate === "finished") presentation = "finished";
+		else if (candidate === "working" && presentation === "quiet") presentation = "working";
+	}
+	return presentation;
+}
+
+interface CompletionActivationState extends SessionStateProjection {
+	status: string;
+	connectionGeneration: number;
+	sessions: Record<string, SessionRuntime>;
+	sessionStateTickBySession: Record<string, number>;
+	directChatActivationTickBySession: Record<string, number>;
+	renderedCompletionBySession: Record<string, string>;
+}
+
+export function selectReadyCompletionActivation(
+	state: CompletionActivationState,
+	workspaceId: string,
+	sessionId: string,
+): string | null {
+	const record = state.sessionStateByWorkspace[workspaceId]?.[sessionId];
+	const completion = record?.state.completion;
+	const runtime = state.sessions[sessionId];
+	if (
+		state.status !== "connected" ||
+		!completion ||
+		!record.state.completionUnread ||
+		!runtime ||
+		runtime.syncedConnectionGeneration !== state.connectionGeneration ||
+		runtime.hostState?.completion?.completionId !== completion.completionId ||
+		state.renderedCompletionBySession[sessionId] !== completion.completionId ||
+		(state.directChatActivationTickBySession[sessionId] ?? 0) <=
+			(state.sessionStateTickBySession[sessionId] ?? 0)
+	) {
+		return null;
+	}
+	return completion.completionId;
+}
+
+export function selectProjectSessionPresentation(
+	state: SessionStateProjection,
+	projectId: string,
+): SessionPresentation {
+	let presentation: SessionPresentation = "quiet";
+	for (const records of Object.values(state.sessionStateByWorkspace)) {
+		for (const record of Object.values(records)) {
+			if (record.projectId !== projectId) continue;
+			const candidate = sessionPresentation(record.state);
+			if (candidate === "needs_input") return candidate;
+			if (candidate === "finished") presentation = "finished";
+			else if (candidate === "working" && presentation === "quiet") presentation = "working";
+		}
+	}
+	return presentation;
 }
 
 interface ActiveWorkspaceState {

@@ -31,6 +31,7 @@ import type {
 	ReviewCommentKind,
 	ReviewCommentStatus,
 	ReviewSnapshot,
+	SessionStateRecord,
 	SpecGraphSnapshot,
 	SubagentOverride,
 	Template,
@@ -94,7 +95,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 66;
+export const PROTOCOL_VERSION = 67;
+export const SESSION_STATE_PROTOCOL_VERSION = 67;
 export const ANALYTICS_CONSENT_PROTOCOL_VERSION = 65;
 export const SESSION_RENAME_PROTOCOL_VERSION = 66;
 export const SESSION_TITLE_MAX_LENGTH = 80;
@@ -219,6 +221,9 @@ export const WS_METHODS = {
 	sessionExtUiReply: "session.extUiReply",
 	sessionAnswerQuestion: "session.answerQuestion",
 	sessionList: "session.list",
+	sessionStateList: "session.stateList",
+	sessionAcknowledgeCompletion: "session.acknowledgeCompletion",
+	sessionNudge: "session.nudge",
 	sessionActivityList: "session.activityList",
 	sessionGetMessages: "session.getMessages",
 	subagentGetTranscript: "subagent.getTranscript",
@@ -261,6 +266,7 @@ export const WS_CHANNELS = {
 	piExtensionUi: "pi.extensionUi",
 	sessionCreated: "session.created",
 	sessionDeleted: "session.deleted",
+	sessionState: "session.state",
 	providerLogin: "provider.login",
 	providerChanged: "provider.changed",
 	terminalData: "terminal.data",
@@ -525,6 +531,15 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"session.list": { params: { workspaceId: string }; result: SessionSummary[] };
+	"session.stateList": { params: Record<string, never>; result: SessionStateRecord[] };
+	"session.acknowledgeCompletion": {
+		params: { sessionId: string; completionId: string };
+		result: { acknowledged: boolean; record: SessionStateRecord };
+	};
+	"session.nudge": {
+		params: { workspaceId: string; sessionId: string; text: string; images?: ImageContent[] };
+		result: { disposition: "needs_input" | "queued" | "prompted" };
+	};
 	"session.activityList": { params: Record<string, never>; result: [] };
 	"session.getMessages": {
 		params: { sessionId: string; workspaceId: string };
