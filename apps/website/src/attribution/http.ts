@@ -95,14 +95,15 @@ async function challengeForVerifier(verifier: string): Promise<string> {
 	return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
-function service(environment: AttributionEnvironment): ClaimService {
-	return new ClaimService({
+export type ClaimServiceFactory = (environment: AttributionEnvironment) => ClaimService;
+
+const service: ClaimServiceFactory = (environment) =>
+	new ClaimService({
 		repository: new D1ClaimRepository(environment.ATTRIBUTION_DB),
 		now: Date.now,
 		randomId,
 		challengeForVerifier,
 	});
-}
 
 function responseForResult<Value>(result: ServiceResult<Value>, successStatus = 200): Response {
 	switch (result.status) {
@@ -128,12 +129,13 @@ function responseForResult<Value>(result: ServiceResult<Value>, successStatus = 
 export async function handleCreateClaim(
 	request: Request,
 	environment: AttributionEnvironment,
+	serviceFactory: ClaimServiceFactory = service,
 ): Promise<Response> {
 	if (!isProductionRequest(request)) return notFound();
 	const body = parseCreateClaimRequest(await readJsonBody(request, 128));
 	if (body === undefined) return json({ error: "invalid_request" }, 400);
 	try {
-		return responseForResult(await service(environment).create(body.challenge), 201);
+		return responseForResult(await serviceFactory(environment).create(body.challenge), 201);
 	} catch {
 		return json({ error: "service_unavailable" }, 503);
 	}
@@ -143,6 +145,7 @@ export async function handleBindClaim(
 	request: Request,
 	environment: AttributionEnvironment,
 	claimId: string,
+	serviceFactory: ClaimServiceFactory = service,
 ): Promise<Response> {
 	if (!isProductionRequest(request) || request.headers.get("Origin") !== productionOrigin) {
 		return notFound();
@@ -151,7 +154,7 @@ export async function handleBindClaim(
 	const body = await readJsonBody(request, 4096);
 	if (body === undefined) return json({ error: "invalid_request" }, 400);
 	try {
-		return responseForResult(await service(environment).bind(claimId, body));
+		return responseForResult(await serviceFactory(environment).bind(claimId, body));
 	} catch {
 		return json({ error: "service_unavailable" }, 503);
 	}
@@ -162,12 +165,13 @@ async function handleVerifiedClaim(
 	environment: AttributionEnvironment,
 	claimId: string,
 	operation: "status" | "redeem",
+	serviceFactory: ClaimServiceFactory,
 ): Promise<Response> {
 	if (!isProductionRequest(request) || !claimIdPattern.test(claimId)) return notFound();
 	const body = parseVerifyClaimRequest(await readJsonBody(request, 128));
 	if (body === undefined) return json({ error: "invalid_request" }, 400);
 	try {
-		const claimService = service(environment);
+		const claimService = serviceFactory(environment);
 		if (operation === "status") {
 			return responseForResult(await claimService.status(claimId, body.verifier));
 		}
@@ -181,14 +185,16 @@ export function handleClaimStatus(
 	request: Request,
 	environment: AttributionEnvironment,
 	claimId: string,
+	serviceFactory: ClaimServiceFactory = service,
 ): Promise<Response> {
-	return handleVerifiedClaim(request, environment, claimId, "status");
+	return handleVerifiedClaim(request, environment, claimId, "status", serviceFactory);
 }
 
 export function handleRedeemClaim(
 	request: Request,
 	environment: AttributionEnvironment,
 	claimId: string,
+	serviceFactory: ClaimServiceFactory = service,
 ): Promise<Response> {
-	return handleVerifiedClaim(request, environment, claimId, "redeem");
+	return handleVerifiedClaim(request, environment, claimId, "redeem", serviceFactory);
 }
