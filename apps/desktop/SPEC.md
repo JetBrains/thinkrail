@@ -63,7 +63,11 @@ another.
    and macOS/Windows trash helpers. The generator's key map must satisfy every key of the server-owned
    `BundledExtensions` contract, so adding a required launcher field fails desktop typecheck instead of
    producing a packaged-only `undefined`. It then calls `bootHost()` on loopback port `0` with the staged web
-   directory, baked version, and `desktop` analytics provenance.
+   directory, baked version, `desktop` analytics provenance, and, only when packaged, the launcher-supplied
+   `Utils.openExternal` callback used by the host's one-shot browser attribution claim. The callback passes through
+   `DesktopHostOptions` and the generated runtime. The first native-window `dom-ready` explicitly calls the
+   proxied `host.server.startAttributionClaim()` readiness method; host boot and elapsed time do not start a
+   saved-choice claim. No deep-link or RPC surface is added.
 4. Restore the valid route fragment and bounded client-preference map for
    `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
