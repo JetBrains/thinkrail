@@ -528,7 +528,7 @@ function ProjectRow({
 				open={confirmOpen}
 				onOpenChange={setConfirmOpen}
 				title={`Close ${project.name}?`}
-				description="Removes this project from the open projects list. Its repository, workspaces, chats, and attention state are kept. Reopen it from Add project → Recents."
+				description="Removes this project from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it from Add project → Recents."
 				confirmLabel="Close project"
 				confirmTestId="confirm-close-project"
 				onConfirm={() => {

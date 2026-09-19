@@ -10,8 +10,9 @@ tags: [v1, ui, resilience]
 ## Responsibility
 
 The app's dependency-light shared React primitives: the error boundary that keeps one failed region from
-unmounting the root, project-custom icons, the binary attention dot and working-icon treatment shared by
-shell and feature panels, the quiet-scroll frame, and the shared loading-skeleton primitive. Also houses the
+unmounting the root, project-custom icons, the binary attention dot and working-icon treatment used by
+feature panels (currently the Projects rail), the quiet-scroll frame, and the shared loading-skeleton
+primitive. Also houses the
 `ui/` sub-module (shadcn primitives), which has its own spec.
 
 ## Boundary

@@ -81,15 +81,6 @@ interface SessionStateProjection {
 	sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
 }
 
-export type SessionPresentation = "needs_input" | "finished" | "working" | "quiet";
-
-export function sessionPresentation(state: SessionState | null | undefined): SessionPresentation {
-	if (state?.needsInput) return "needs_input";
-	if (state?.completionUnread) return "finished";
-	if (state?.execution === "running") return "working";
-	return "quiet";
-}
-
 export function selectSessionState(
 	state: SessionStateProjection,
 	workspaceId: string,
@@ -137,20 +128,6 @@ export function selectProjectIsRunning(state: SessionStateProjection, projectId:
 	);
 }
 
-export function selectWorkspaceSessionPresentation(
-	state: SessionStateProjection,
-	workspaceId: string,
-): SessionPresentation {
-	let presentation: SessionPresentation = "quiet";
-	for (const record of Object.values(state.sessionStateByWorkspace[workspaceId] ?? {})) {
-		const candidate = sessionPresentation(record.state);
-		if (candidate === "needs_input") return candidate;
-		if (candidate === "finished") presentation = "finished";
-		else if (candidate === "working" && presentation === "quiet") presentation = "working";
-	}
-	return presentation;
-}
-
 interface CompletionActivationState extends SessionStateProjection {
 	status: string;
 	connectionGeneration: number;
@@ -186,23 +163,6 @@ export function selectReadyCompletionActivation(
 		return null;
 	}
 	return completion.completionId;
-}
-
-export function selectProjectSessionPresentation(
-	state: SessionStateProjection,
-	projectId: string,
-): SessionPresentation {
-	let presentation: SessionPresentation = "quiet";
-	for (const records of Object.values(state.sessionStateByWorkspace)) {
-		for (const record of Object.values(records)) {
-			if (record.projectId !== projectId) continue;
-			const candidate = sessionPresentation(record.state);
-			if (candidate === "needs_input") return candidate;
-			if (candidate === "finished") presentation = "finished";
-			else if (candidate === "working" && presentation === "quiet") presentation = "working";
-		}
-	}
-	return presentation;
 }
 
 interface ActiveWorkspaceState {

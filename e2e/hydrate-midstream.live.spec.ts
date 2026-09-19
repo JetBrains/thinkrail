@@ -27,6 +27,14 @@ test("a reload mid-stream does not duplicate the streaming assistant message", {
 		.first();
 	await expect(bashActivity).toBeVisible({ timeout: 60_000 });
 	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "true");
+	const activeWorkspace = page.locator('[data-testid="workspace-item"][data-active="true"]');
+	await expect(activeWorkspace).toHaveAttribute("data-running", "true");
+	const runningIcon = activeWorkspace.getByTestId("running-icon");
+	await expect(runningIcon).toHaveAttribute("aria-label", "Agent working");
+	await expect(runningIcon).toHaveCSS("animation-name", "pulse");
+	await page.emulateMedia({ reducedMotion: "reduce" });
+	await expect(runningIcon).toHaveCSS("animation-name", "none");
+	await page.emulateMedia({ reducedMotion: "no-preference" });
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -41,5 +49,6 @@ test("a reload mid-stream does not duplicate the streaming assistant message", {
 	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false", {
 		timeout: 120_000,
 	});
+	await expect(worktreeRows(page).first()).not.toHaveAttribute("data-running", /.+/);
 	await expect(assistant).toHaveCount(1);
 });
