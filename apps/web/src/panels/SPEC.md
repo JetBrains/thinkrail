@@ -45,7 +45,7 @@ treatment.
   detached-HEAD rows stay visible but disabled); choosing one calls `workspace.openExisting`, then expands
   the project and activates the attached row without starting a chat. Close
   opens a centered, neutral `ConfirmDialog` titled **“Close {name}?”**, description **“Removes this project
-  from the open projects list. Its repository, workspaces, chats, and attention state are kept. Reopen it
+  from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it
   from Add project → Recents.”**, Cancel initially focused, and **Close project**; Cancel, backdrop, and
   Escape dismiss. Confirm fires `project.close` and waits for the full `project.updated` push—no optimistic
   removal; success is the
@@ -91,7 +91,7 @@ treatment.
   workspace rows, while expanded projects show the detail on workspace rows. The components remain
   props-driven over the normalized host-state selectors.
 
-  `ProjectTree` renders the shared dependency-light `AttentionDot` from the store's normalized attention map.
+  `ProjectTree` renders the shared dependency-light `AttentionDot` from normalized host-state selectors.
   It is static accent colour, carries no count or state-specific glyph/tooltip, and occupies its own flex
   column between the identity button and the hover-revealed kebab. Workspace and collapsed-project rows
   expose `data-attention` only while positive. Separately, the shared `RunningIcon` wraps the existing

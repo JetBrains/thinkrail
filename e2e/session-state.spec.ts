@@ -108,8 +108,10 @@ test("an unread finished result clears only after direct chat activation renders
 		const result = page.getByText("Finished result.", { exact: true });
 		await expect(result).toBeVisible();
 		await result.click();
-		await expect(project).not.toHaveAttribute("data-attention", /.+/);
 		await expect(workspace).not.toHaveAttribute("data-attention", /.+/);
+		const projectExpand = project.getByTestId("project-expand");
+		if ((await projectExpand.getAttribute("data-expanded")) === "true") await projectExpand.click();
+		await expect(project).not.toHaveAttribute("data-attention", /.+/);
 		await expect(peerProject).not.toHaveAttribute("data-attention", /.+/);
 		await peer.close();
 	} finally {

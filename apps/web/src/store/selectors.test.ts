@@ -25,13 +25,10 @@ import {
 	selectLayoutTabPlacement,
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
-	selectProjectSessionPresentation,
 	selectReadyCompletionActivation,
 	selectSkillsStale,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
-	selectWorkspaceSessionPresentation,
-	sessionPresentation,
 	specPathMatcher,
 } from "./selectors";
 
@@ -61,7 +58,7 @@ test("chat rename capability follows the host protocol snapshot", () => {
 	expect(selectCanRenameChat({ protocolVersion: null })).toBe(false);
 });
 
-test("normalized session presentation keeps needs-input above finished above ambient working", () => {
+test("normalized rail flags keep attention binary and working orthogonal", () => {
 	const record = (
 		sessionId: string,
 		projectId: string,
@@ -97,16 +94,14 @@ test("normalized session presentation keeps needs-input above finished above amb
 			w3: { d: record("d", "p2", "w3", quiet) },
 		},
 	};
-	expect(sessionPresentation(working)).toBe("working");
-	expect(selectWorkspaceSessionPresentation(state, "w1")).toBe("finished");
 	expect(selectWorkspaceNeedsAttention(state, "w1")).toBe(true);
 	expect(selectWorkspaceIsRunning(state, "w1")).toBe(true);
 	expect(selectWorkspaceNeedsAttention(state, "w2")).toBe(true);
 	expect(selectWorkspaceIsRunning(state, "w2")).toBe(true);
-	expect(selectProjectSessionPresentation(state, "p1")).toBe("needs_input");
 	expect(selectProjectNeedsAttention(state, "p1")).toBe(true);
 	expect(selectProjectIsRunning(state, "p1")).toBe(true);
-	expect(selectProjectSessionPresentation(state, "p2")).toBe("quiet");
+	expect(selectProjectNeedsAttention(state, "p2")).toBe(false);
+	expect(selectProjectIsRunning(state, "p2")).toBe(false);
 });
 
 test("completion acknowledgement requires exact render, current connection, and later direct activation", () => {

@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat } from "./fixtures/app";
+import { activeWorktreeRow, openWorkspaceChat } from "./fixtures/app";
 
 async function ask(page: Page, prompt: string): Promise<void> {
 	await openWorkspaceChat(page);
@@ -29,6 +29,17 @@ test("single-select: focus, roving keys, and Enter resolve the tool", {
 
 	const card = activeCard(page);
 	await expect(card).toBeVisible({ timeout: 90_000 });
+	const workspaceRow = activeWorktreeRow(page);
+	await expect(workspaceRow).toHaveAttribute("data-attention", "true");
+	await expect(workspaceRow.getByTestId("attention-dot")).toHaveAttribute(
+		"aria-label",
+		"Needs attention",
+	);
+	await expect(workspaceRow).toHaveAttribute("data-running", "true");
+	await expect(workspaceRow.getByTestId("running-icon")).toHaveAttribute(
+		"aria-label",
+		"Agent working",
+	);
 
 	const options = card.getByTestId("ask-option");
 	await expect(options.first()).toBeFocused();
