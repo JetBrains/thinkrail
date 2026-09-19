@@ -44,6 +44,29 @@ export interface AgentSettlement {
 	errorMessage?: string;
 }
 
+export type SessionInputKind = "question" | "dialog";
+
+export type SessionInputState =
+	| { interactionId: string; kind: "question" }
+	| {
+			interactionId: string;
+			kind: "dialog";
+			request: Extract<ExtUiRequest, { kind: "select" | "confirm" | "input" | "editor" }>;
+	  };
+
+export type SessionCompletion =
+	| { completionId: string; outcome: "succeeded" | "interrupted" | "cancelled" }
+	| { completionId: string; outcome: "failed"; failure: "error" | "length" };
+
+export interface SessionState {
+	execution: "idle" | "running";
+	runId: string | null;
+	needsInput: SessionInputState | null;
+	completion: SessionCompletion | null;
+	completionUnread: boolean;
+	queuedCount: number;
+}
+
 export type PiEvent =
 	| Exclude<AgentEvent, { type: "agent_end" }>
 	| { type: "agent_end"; messages: AgentMessage[]; willRetry: boolean }
@@ -149,6 +172,7 @@ export interface SessionSummary {
 	openTodos?: number;
 	lastSettlement?: AgentSettlement | null;
 	queue?: SessionQueueState;
+	state?: SessionState;
 }
 
 export type SlashCommandSource = "extension" | "prompt" | "skill";

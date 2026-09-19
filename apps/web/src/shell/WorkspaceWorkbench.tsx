@@ -703,6 +703,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				onCommit={commit}
 				onAttentionChange={changeAttention}
 				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}
+				onDirectTabActivation={(tab) => {
+					if (tab.kind === "chat") {
+						useAppStore.getState().noteDirectChatActivation(tab.sessionId);
+					}
+				}}
 				readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
 				{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
 				onRequestClose={(tab, prepare) => {

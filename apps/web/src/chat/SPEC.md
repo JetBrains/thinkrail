@@ -1022,19 +1022,24 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   your answer" **even when every item is done** (the earlier strip hid it whenever there was no
   in-progress step, so an agent blocked on a question read as "finished"); waiting outranks the raw live
   run flag; "working" covers other runs; "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
-  idle). During the deletion-only transition the glance stays **chat-local**; there is no Projects-rail
-  session signal. `askStates` remains necessary to identify and render the exact questionnaire, while the
-  following session-state PR will replace this view's independent working/waiting lifecycle reduction.
+  idle). The glance's working/waiting lifecycle comes from the normalized host `SessionState`; `askStates`
+  remains only to identify and render the exact questionnaire/recap. `ChatView` records direct activation on
+  deliberate tab/group selection, direct history/search open, or unobscured conversation pointer intent,
+  never passive mount/visibility or incidental history-overlay interaction. Activation captures the exact
+  current unread completion id (plus its local clock), while exact-row rendering gates the actual
+  acknowledgement: a direct open may occur before hydration/attach convergence and clears once the same
+  result mounts, without requiring a second composer focus; stale ids cannot clear newer results. Passive
+  multi-pane rendering still cannot clear another client's marker. Transient acknowledgement failure
+  retries with a bounded capped-backoff budget; a later direct activation rearms that exact id.
   `TodoList` stays props-driven — it receives the resolved glance, never reads the transport.
   Its section label + pending/active/done status glyphs live in **`planKit.tsx`** — shared
   presentational atoms the Review panel (`panels/ReviewPanel`) reuses so both "work items in
   sections" surfaces read identically.
-  **The add-nudge respects that waiting state.** A user add always stores the item (loose, at the end),
-  but `nudgeAgent` **only wakes the agent when it isn't waiting on the user** (`shouldNudgeOnAdd` —
-  skip iff the glance is `waiting_question`): waking an agent that stopped on an `ask_user_question`
-  would send it off to work the new item and forget to return to its own question, so instead the item
-  just queues and is picked up on the agent's next natural turn (when the user answers, or a later idle
-  nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged.
+  **The add-nudge respects that waiting state.** A user add always stores the item (loose, at the end).
+  On protocol v67+, `session.nudge` makes the host-authoritative blocker/execution decision atomically:
+  needs-input no-ops, running queues, and idle prompts. Independently shipped clients retain the prior
+  glance-based prompt/follow-up plus hydration fallback only for older hosts; the compatibility path skips
+  an awaiting question rather than waking the agent past its blocker.
 
 ## Boundary
 

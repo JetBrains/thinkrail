@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
+import type { Project, SessionStateRecord, WireModel, Workspace } from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
-import type { EditorTab } from "./appStore";
+import { type EditorTab, EMPTY_RUNTIME } from "./appStore";
 import {
 	isConnectedGeneration,
 	isDefaultWorkspace,
@@ -23,7 +23,12 @@ import {
 	selectLayoutResourcePlacement,
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
+	selectProjectIsRunning,
+	selectProjectNeedsAttention,
+	selectReadyCompletionActivation,
 	selectSkillsStale,
+	selectWorkspaceIsRunning,
+	selectWorkspaceNeedsAttention,
 	specPathMatcher,
 } from "./selectors";
 
@@ -51,6 +56,100 @@ test("chat rename capability follows the host protocol snapshot", () => {
 	expect(selectCanRenameChat({ protocolVersion: 66 })).toBe(true);
 	expect(selectCanRenameChat({ protocolVersion: 65 })).toBe(false);
 	expect(selectCanRenameChat({ protocolVersion: null })).toBe(false);
+});
+
+test("normalized rail flags keep attention binary and working orthogonal", () => {
+	const record = (
+		sessionId: string,
+		projectId: string,
+		workspaceId: string,
+		state: SessionStateRecord["state"],
+	): SessionStateRecord => ({ sessionId, projectId, workspaceId, state });
+	const quiet = {
+		execution: "idle" as const,
+		runId: null,
+		needsInput: null,
+		completion: null,
+		completionUnread: false,
+		queuedCount: 0,
+	};
+	const working = { ...quiet, execution: "running" as const, runId: "run-working" };
+	const finished = {
+		...quiet,
+		runId: "run-finished",
+		completion: { completionId: "done", outcome: "succeeded" as const },
+		completionUnread: true,
+	};
+	const needsInput = {
+		...working,
+		needsInput: { interactionId: "question:q1", kind: "question" as const },
+	};
+	const state = {
+		sessionStateByWorkspace: {
+			w1: {
+				a: record("a", "p1", "w1", working),
+				b: record("b", "p1", "w1", finished),
+			},
+			w2: { c: record("c", "p1", "w2", needsInput) },
+			w3: { d: record("d", "p2", "w3", quiet) },
+		},
+	};
+	expect(selectWorkspaceNeedsAttention(state, "w1")).toBe(true);
+	expect(selectWorkspaceIsRunning(state, "w1")).toBe(true);
+	expect(selectWorkspaceNeedsAttention(state, "w2")).toBe(true);
+	expect(selectWorkspaceIsRunning(state, "w2")).toBe(true);
+	expect(selectProjectNeedsAttention(state, "p1")).toBe(true);
+	expect(selectProjectIsRunning(state, "p1")).toBe(true);
+	expect(selectProjectNeedsAttention(state, "p2")).toBe(false);
+	expect(selectProjectIsRunning(state, "p2")).toBe(false);
+});
+
+test("completion acknowledgement requires exact render and a direct activation after state arrival", () => {
+	const completion = { completionId: "completion:a1", outcome: "succeeded" as const };
+	const hostState = {
+		execution: "idle" as const,
+		runId: "u1",
+		needsInput: null,
+		completion,
+		completionUnread: true,
+		queuedCount: 0,
+	};
+	const state = {
+		status: "connected",
+		connectionGeneration: 4,
+		sessionStateByWorkspace: {
+			w1: { s1: { sessionId: "s1", workspaceId: "w1", projectId: "p1", state: hostState } },
+		},
+		sessions: {
+			s1: { ...EMPTY_RUNTIME, hostState, syncedConnectionGeneration: 4 },
+		},
+		sessionStateTickBySession: { s1: 10 },
+		directChatActivationTickBySession: { s1: 9 },
+		directActivatedCompletionBySession: { s1: completion.completionId },
+		renderedCompletionBySession: { s1: completion.completionId },
+	};
+	expect(selectReadyCompletionActivation(state, "w1", "s1")).toBe(completion.completionId);
+	expect(
+		selectReadyCompletionActivation(
+			{
+				...state,
+				directChatActivationTickBySession: { s1: 8 },
+				directActivatedCompletionBySession: {},
+			},
+			"w1",
+			"s1",
+		),
+	).toBeNull();
+	expect(
+		selectReadyCompletionActivation(
+			{ ...state, renderedCompletionBySession: { s1: "older" } },
+			"w1",
+			"s1",
+		),
+	).toBeNull();
+	expect(
+		selectReadyCompletionActivation({ ...state, status: "disconnected" }, "w1", "s1"),
+	).toBeNull();
 });
 
 test("workspace kind predicates distinguish managed and user-owned checkouts", () => {

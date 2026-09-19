@@ -2,7 +2,12 @@ import type { PiEvent, SessionEventPayload, TodoPlan } from "@thinkrail/contract
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
-import { isConnectedGeneration, selectChatTitle, useAppStore } from "../store";
+import {
+	isConnectedGeneration,
+	selectChatTitle,
+	selectHasNormalizedSessionState,
+	useAppStore,
+} from "../store";
 import { errorText, getSessionMessagesWithSkillBaseline, getTransport } from "../transport";
 import { messagesToRuntime } from "./hydrate";
 import { sessionGlance, shouldNudgeOnAdd } from "./planView";
@@ -220,19 +225,35 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 }
 
 async function nudgeAgent(workspaceId: string, sessionId: string, title: string): Promise<void> {
-	const initial = useAppStore.getState();
+	const state = useAppStore.getState();
 	if (
-		initial.removedWorkspaceIds[workspaceId] ||
-		initial.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
+		state.removedWorkspaceIds[workspaceId] ||
+		state.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
 	) {
 		return;
 	}
+	const text = `${TODO_NUDGE_PREFIX}A TODO was added to the list: "${title}". Read the TODO list with todo_list and work any pending items, marking each done with todo_update as you finish.`;
+	if (selectHasNormalizedSessionState(state)) {
+		try {
+			await getTransport().request("session.nudge", { workspaceId, sessionId, text });
+		} catch (err) {
+			console.warn("todo nudge skipped:", errorText(err));
+		}
+		return;
+	}
+	await legacyNudgeAgent(workspaceId, sessionId, text);
+}
+
+async function legacyNudgeAgent(
+	workspaceId: string,
+	sessionId: string,
+	text: string,
+): Promise<void> {
+	const initial = useAppStore.getState();
 	const session = initial.sessions[sessionId];
 	if (session && !shouldNudgeOnAdd(sessionGlance(session))) return;
-	const streaming = session?.isStreaming ?? false;
-	const text = `${TODO_NUDGE_PREFIX}A TODO was added to the list: "${title}". Read the TODO list with todo_list and work any pending items, marking each done with todo_update as you finish.`;
 	try {
-		await getTransport().request(streaming ? "session.followUp" : "session.prompt", {
+		await getTransport().request(session?.isStreaming ? "session.followUp" : "session.prompt", {
 			sessionId,
 			text,
 		});
@@ -256,16 +277,8 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 				summary.live ? undefined : syncedTick,
 				{ activate: false },
 			);
-			const hydrated = useAppStore.getState();
-			const recovered = hydrated.sessions[sessionId];
-			if (
-				hydrated.removedWorkspaceIds[workspaceId] ||
-				hydrated.deletedSessionsByWorkspace[workspaceId]?.[sessionId] ||
-				!recovered ||
-				!shouldNudgeOnAdd(sessionGlance(recovered))
-			) {
-				return;
-			}
+			const recovered = useAppStore.getState().sessions[sessionId];
+			if (!recovered || !shouldNudgeOnAdd(sessionGlance(recovered))) return;
 			await getTransport().request("session.prompt", { sessionId, text });
 		} catch (err) {
 			console.warn("todo nudge skipped:", errorText(err));

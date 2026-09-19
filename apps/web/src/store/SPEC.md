@@ -204,8 +204,20 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   assistant turn (`removeSupersededAssistant`, the same rule as the overflow-compaction path) —
   otherwise the client renders the reply twice (frozen failed partial + retried copy). Hydration applies
   the same presentation rule to the persisted copy (`chat/hydrate.ts` hides retried attempts — an
-  errored assistant followed by another assistant before any user message), so live and reloaded clients
-  agree.
+  errored assistant followed by another assistant message), so live and reloaded clients agree.
+  - **Normalized session state** (`sessionStateByWorkspace`) is the full host-authored state record per
+    workspace/session. Snapshot hydration replaces the map only on a complete current-generation read;
+    ordered pushes fold one record, and deletion removes it. Shared selectors derive needs-input, working,
+    unread-finished, and project/workspace rollups—no stored precedence or second running slice.
+    `SessionRuntime.hostState` is installed with transcript hydration and by state pushes delivered after Pi
+    events. Exact completion ids let `selectReadyCompletionActivation` require current connection, rendered
+    runtime state, unread record, and direct activation of that exact unread completion. Activation records
+    the current completion id as well as its local clock, so an attach/hydration push for the same id cannot
+    erase a deliberate open while a stale activation can never clear a newer result. The exact result must
+    render before acknowledgement is sent, but a deliberate tab/history activation may happen first and
+    remains eligible once that row mounts—opening and reading is sufficient without a second composer focus. Passive mount/visibility never advances activation; chat-tab/group selection, direct
+    history/search open, and unobscured conversation pointer intent do. Incidental interactions inside an
+    obscuring history overlay do not.
   Closed chats are reopenable: the workbench close command atomically removes local placement and invokes
   **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
   **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending
@@ -529,8 +541,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
   `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (deduplicated local chat
-  placement + history membership used as a reconnect-reconciliation baseline),
-  `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
+  placement + history membership used as a reconnect-reconciliation baseline), normalized session-state
+  selectors/actions (exact session + workspace/project needs-input/working/unread-finished rollups, direct
+  activation, ready exact-completion acknowledgement), `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
   only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
   relative reports, `module-b/SPEC.md` would match the *root* `SPEC.md`) + `specPathMatcher` (is a written

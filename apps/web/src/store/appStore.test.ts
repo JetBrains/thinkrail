@@ -7,6 +7,7 @@ import {
 	type PiEvent,
 	type Project,
 	type SessionEventPayload,
+	type SessionStateRecord,
 	type SessionSummary,
 	type SpecGraphNode,
 	type WireModel,
@@ -33,6 +34,7 @@ import {
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectLastOpenChatSession,
+	selectReadyCompletionActivation,
 	selectSkillsStale,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
@@ -129,6 +131,13 @@ beforeEach(() => {
 		routeChatTarget: null,
 		routeChatTargetGeneration: 0,
 		sessions: {},
+		sessionStateByWorkspace: {},
+		sessionStateClock: 0,
+		sessionStateTickBySession: {},
+		directChatActivationTickBySession: {},
+		directActivatedCompletionBySession: {},
+		renderedCompletionBySession: {},
+		obscuredChatSessions: {},
 		extUiOrphans: [],
 		workbenchFrame: null,
 		workspaceViewsByWorkspace: {},
@@ -384,6 +393,74 @@ test("queue_update folds pi's queue into the runtime; the canonical echo lands t
 	const turns = rt("a").turns;
 	expect(turns.map((t) => t.kind)).toEqual(["assistant", "user", "user"]);
 	expect(rt("a").queue).toEqual({ steering: [], followUp: [] });
+});
+
+test("normalized session snapshots, pushes, and direct activation keep one exact receipt projection", () => {
+	const record = (completionId: string): SessionStateRecord => ({
+		sessionId: "state-session",
+		workspaceId: "state-workspace",
+		projectId: "state-project",
+		state: {
+			execution: "idle",
+			runId: "run",
+			needsInput: null,
+			completion: { completionId, outcome: "succeeded" },
+			completionUnread: true,
+			queuedCount: 0,
+		},
+	});
+	const store = useAppStore.getState();
+	store.setStatus("connected");
+	store.openChatSession("state-workspace", "state-session", null, "medium");
+	store.installSessionStateSnapshot([record("completion:one")]);
+	expect(useAppStore.getState().sessions["state-session"]?.hostState).toEqual(
+		record("completion:one").state,
+	);
+	store.noteRenderedCompletion("state-session", "completion:one");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBeNull();
+	store.noteDirectChatActivation("state-session");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBe("completion:one");
+
+	store.applySessionState(record("completion:two"));
+	store.setChatObscured("state-session", true);
+	store.noteDirectChatActivation("state-session");
+	expect(useAppStore.getState().directActivatedCompletionBySession["state-session"]).toBe(
+		"completion:one",
+	);
+	store.setChatObscured("state-session", false);
+	store.noteRenderedCompletion("state-session", "completion:two");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBeNull();
+
+	store.applySessionState(record("completion:three"));
+	store.noteDirectChatActivation("state-session");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBeNull();
+	store.noteRenderedCompletion("state-session", "completion:three");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBe("completion:three");
+	store.applySessionState({
+		...record("completion:three"),
+		state: { ...record("completion:three").state, queuedCount: 1 },
+	});
+	expect(useAppStore.getState().sessionStateTickBySession["state-session"]).toBeGreaterThan(
+		useAppStore.getState().directChatActivationTickBySession["state-session"] ?? 0,
+	);
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBe("completion:three");
+	store.deleteChat("state-workspace", "state-session");
+	expect(
+		useAppStore.getState().sessionStateByWorkspace["state-workspace"]?.["state-session"],
+	).toBeUndefined();
+	expect(useAppStore.getState().sessionStateTickBySession["state-session"]).toBeUndefined();
 });
 
 test("hydrateSession seeds the queue from the summary snapshot", () => {
@@ -1258,6 +1335,103 @@ test("a dialog for an unknown session is dropped, never replayed as a phantom", 
 	store.openChatSession("ws1", "dialog", null, "medium");
 	expect(rt("dialog").pendingExtUi).toBeNull();
 	expect(rt("dialog").extUiQueue).toEqual([]);
+});
+
+test("an exact host-authored pending dialog replays when its session hydrates", () => {
+	const store = useAppStore.getState();
+	const request = {
+		id: "d-authoritative",
+		sessionId: "dialog-authoritative",
+		kind: "confirm" as const,
+		title: "Proceed?",
+		message: "Apply?",
+	};
+	store.installSessionStateSnapshot([
+		{
+			sessionId: request.sessionId,
+			workspaceId: "ws1",
+			projectId: "p1",
+			state: {
+				execution: "running",
+				runId: "run-dialog",
+				needsInput: {
+					interactionId: `dialog:${request.id}`,
+					kind: "dialog",
+					request,
+				},
+				completion: null,
+				completionUnread: false,
+				queuedCount: 0,
+			},
+		},
+	]);
+	store.applyExtUi(request);
+	expect(useAppStore.getState().extUiOrphans).toEqual([request]);
+
+	store.openChatSession("ws1", request.sessionId, null, "medium");
+	expect(rt(request.sessionId).pendingExtUi).toEqual(request);
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+	store.applySessionState({
+		sessionId: request.sessionId,
+		workspaceId: "ws1",
+		projectId: "p1",
+		state: {
+			execution: "running",
+			runId: "run-dialog",
+			needsInput: null,
+			completion: null,
+			completionUnread: false,
+			queuedCount: 0,
+		},
+	});
+	expect(rt(request.sessionId).pendingExtUi).toBeNull();
+});
+
+test("a peer-cleared host dialog cannot replay from the orphan buffer", () => {
+	const store = useAppStore.getState();
+	const request = {
+		id: "d-peer-cleared",
+		sessionId: "dialog-peer-cleared",
+		kind: "confirm" as const,
+		title: "Proceed?",
+		message: "Apply?",
+	};
+	const base = {
+		sessionId: request.sessionId,
+		workspaceId: "ws1",
+		projectId: "p1",
+	};
+	store.applySessionState({
+		...base,
+		state: {
+			execution: "running",
+			runId: "run-dialog",
+			needsInput: {
+				interactionId: `dialog:${request.id}`,
+				kind: "dialog",
+				request,
+			},
+			completion: null,
+			completionUnread: false,
+			queuedCount: 0,
+		},
+	});
+	store.applyExtUi(request);
+	expect(useAppStore.getState().extUiOrphans).toEqual([request]);
+	store.applySessionState({
+		...base,
+		state: {
+			execution: "running",
+			runId: "run-dialog",
+			needsInput: null,
+			completion: null,
+			completionUnread: false,
+			queuedCount: 0,
+		},
+	});
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+	store.openChatSession("ws1", request.sessionId, null, "medium");
+	expect(rt(request.sessionId).pendingExtUi).toBeNull();
 });
 
 test("a frame for a chat closed to history still applies, and orphans stay bounded", () => {

@@ -5,6 +5,7 @@ import {
 	adoptedCommits,
 	flatItems,
 	groupProgress,
+	hostSessionGlance,
 	itemChangeSet,
 	itemOpenFindings,
 	itemRevisions,
@@ -118,6 +119,38 @@ test("planGlance: an awaiting question wins even while its live tool blocks the 
 	expect(planGlance(false, { q1: asked(true) })).toBe("waiting");
 	expect(planGlance(false, { q1: asked(false, true) })).toBe("waiting");
 	expect(planGlance(false, { q1: asked(false, false, true) })).toBe("waiting");
+});
+
+test("hostSessionGlance uses host blockers and execution over stale transcript fallback", () => {
+	const base = {
+		execution: "running" as const,
+		runId: "run-1",
+		needsInput: null,
+		completion: null,
+		completionUnread: false,
+		queuedCount: 0,
+	};
+	expect(hostSessionGlance(base, "waiting_question")).toBe("working");
+	expect(
+		hostSessionGlance(
+			{
+				...base,
+				needsInput: {
+					interactionId: "dialog:d1",
+					kind: "dialog",
+					request: {
+						id: "d1",
+						sessionId: "s1",
+						kind: "confirm",
+						title: "Continue?",
+						message: "Proceed?",
+					},
+				},
+			},
+			"working",
+		),
+	).toBe("waiting_question");
+	expect(hostSessionGlance(null, "waiting_question")).toBe("waiting_question");
 });
 
 test("shouldNudgeOnAdd: never wake an agent waiting on a question; wake it otherwise", () => {

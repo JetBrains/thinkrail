@@ -158,8 +158,16 @@ used when the variable is absent). A missing artifact, failed generation, or una
 before any provider turn; PI's ordinary first-available fallback is never accepted as test configuration.
 The same copy and hermetic environment seed the private restart host.
 
-The deletion-only activity retirement has no replacement rail E2E. Compatibility is pinned at the wire
-handler (`session.activityList` returns `[]`); the following PR owns new session-state browser coverage.
+**Session state** coverage seeds complete transcript states and drives normalized host blockers/runs to pin
+Projects rail presentation: both needs-input and owner-globally unread results render the same static green
+attention dot (“Needs attention”), while genuinely running sessions pulse the existing workspace/project
+identity icon without changing its colour. The rail must not substitute question/check/result glyphs or a
+spinner. Running alone has no attention dot; queued, hidden/background, and explicitly stopped sessions stay
+quiet; a live blocked question keeps its dot while its orthogonal running pulse may coexist. Reconnect/restart
+snapshots, direct-versus-passive activation, owner-global clearing, internal-session exclusion, and snapshot
+retry are covered; live-agent coverage pins `data-running`/`running-icon` pulse behavior and coexistence with
+`data-attention`/`attention-dot`. These are stable visual hooks rather than alternate state models. The retired `session.activityList → []` compatibility method
+remains a focused handler test.
 
 Workbench scenarios exercise the normalized frontend-local frame rather than only the pure model: frame
 geometry/tool placement survives workspace switches while resource tabs and attention differ; closing a final

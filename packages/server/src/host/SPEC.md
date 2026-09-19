@@ -171,10 +171,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   exists. The automatic verdict reads candidates before persisting `changes_requested` or clearing its
   pending mark, so a failed async review read remains cleanup-visible and cannot wedge Review All. A
   `session.dispose` on a still-
-  streaming reviewer chat aborts it first (mirroring `deleteSession`/`removeWorkspaceSessions`) so the
-  resulting settle event still reaches `handleReviewerSettled` before the session unsubscribes — without
-  that, a closed tab would leak its `currentReview` entry for the process's life, wedging `todo.remove`
-  on an item no review will ever finish;
+  streaming reviewer chat aborts it first (mirroring `deleteSession`/`removeWorkspaceSessions`) and normally
+  lets the settle event reach `handleReviewerSettled` before unsubscribe; the wait is bounded so a wedged
+  provider cannot wedge disposal, after which the reviewer monitor's cleanup remains the safety net. Without
+  the normal settle path, a closed tab could leak its `currentReview` entry for the process's life and wedge
+  `todo.remove` on an item no review will ever finish;
   **`todo.startReview` + `host/todoReview.ts`** compose the agent reviewer: **one review in flight
   per plan** — an in-memory latch (`inFlightReview`, set SYNCHRONOUSLY at start entry, so two starts
   can't interleave across awaits) held **until the reviewer SETTLES, not until the verdict**: the
@@ -420,10 +421,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   subscribes every client so permanent domain deletion converges beyond the initiating page. It remains a
   low-latency event, not a durable queue: a reconnecting client's active-workspace `session.list` is the
   authoritative read-side repair for an event missed while its socket was down.
-- **Retired activity compatibility:** `session.activityList` remains registered for one compatibility
-  window and returns `[]` without reading sessions or workspaces. There is no activity publisher or push
-  subscription; the empty response exists only so an already-loaded old client clears cached markers after
-  reconnect.
+- **Session-state composition:** before serving, the host supplies every workspace `{id,cwd}`, initializes
+  receipt/purpose metadata, and installs the workspace→project resolver. `session.stateList` returns the
+  complete all-workspace snapshot; `session.state` broadcasts full records; completion acknowledgement and
+  nudge handlers validate workspace/session identity through the same registry, with nudge awaiting a
+  disk-session attach before atomically choosing no-op/queue/prompt. The WS open handler
+  subscribes every client after welcome. `session.activityList` remains an inert `[]` compatibility method
+  for one window and has no push channel.
 - **CLI update notice:** a launcher may supply one optional asynchronous notice producer and fixed interval.
   `createServer` starts it after listening without awaiting it, repeats it without overlap, retains the latest
   successful immutable notice for later `server.welcome` snapshots, and publishes `host.updateAvailable` only

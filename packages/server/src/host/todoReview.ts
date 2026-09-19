@@ -106,6 +106,15 @@ interface PendingFix {
 
 const pendingFix = new Map<string, PendingFix>();
 
+export function pendingReflectorSession(
+	workerSessionId: string,
+	itemId: string,
+): string | undefined {
+	return [...pendingFix].find(
+		([, pending]) => pending.workerSessionId === workerSessionId && pending.item.id === itemId,
+	)?.[0];
+}
+
 const DEFAULT_FIX_NOTE = "Address the reviewer's comments below.";
 
 function reviewSessionOptions() {
@@ -144,7 +153,10 @@ export async function startTodoReviewFlow(
 		const { pkg, reviewedSha } = startTodoReview(p);
 		const pinned = reviewerSessionFor(p);
 		let reviewerSessionId: string;
-		if (pinned && (await ensureSessionAttached(pinned, p.workspaceId, ws.worktreePath))) {
+		if (
+			pinned &&
+			(await ensureSessionAttached(pinned, p.workspaceId, ws.worktreePath, { purpose: "reviewer" }))
+		) {
 			reviewerSessionId = pinned;
 		} else {
 			if (pinned) {
@@ -154,6 +166,7 @@ export async function startTodoReviewFlow(
 			const created = await createSession({
 				cwd: ws.worktreePath,
 				workspaceId: p.workspaceId,
+				purpose: "reviewer",
 				...reviewSessionOptions(),
 			});
 			pinReviewerSession(p, created.sessionId);
@@ -571,6 +584,7 @@ function fireReflection(pending: PendingFix, candidates: ReviewComment[]): void 
 		const reflector = await createSession({
 			cwd: ws.worktreePath,
 			workspaceId: pending.workspaceId,
+			purpose: "reflector",
 			...reviewSessionOptions(),
 		});
 		pendingFix.set(reflector.sessionId, pending);

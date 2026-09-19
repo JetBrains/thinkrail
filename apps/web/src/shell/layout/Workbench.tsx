@@ -168,6 +168,7 @@ export interface WorkbenchProps {
 	onCommit: (document: WorkspaceLayoutDocument) => void;
 	onAttentionChange: (attention: LayoutAttention) => void;
 	onUserNavigation: () => void;
+	onDirectTabActivation?: (tab: LayoutTab) => void;
 	readNavigationTick: () => number;
 	onRequestClose: (
 		tab: LayoutTab,
@@ -1348,6 +1349,7 @@ interface SharedGroupProps {
 	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
 	onAttentionChange: WorkbenchProps["onAttentionChange"];
 	onUserNavigation: WorkbenchProps["onUserNavigation"];
+	onDirectTabActivation: WorkbenchProps["onDirectTabActivation"];
 	onGestureCanceled: (() => void) | undefined;
 	onApply: (result: LayoutMutationResult) => void;
 	onClose: (tab: LayoutTab) => void;
@@ -1381,6 +1383,8 @@ function CenterGroupView({
 	const groupRemoval = removeLayoutGroup(shared.document, location);
 	const applySelect = (tabId: string, keep?: boolean) => {
 		shared.onUserNavigation();
+		const activated = group.tabs.find((tab) => tab.id === tabId);
+		if (activated) shared.onDirectTabActivation?.(activated);
 		const document = shared.document;
 		if (keep && group.previewTabId === tabId) {
 			const result = keepPreview(document, group.id, tabId);
@@ -2554,6 +2558,7 @@ export function Workbench({
 	onCommit,
 	onAttentionChange,
 	onUserNavigation,
+	onDirectTabActivation,
 	readNavigationTick,
 	onRequestClose,
 	onRenameChat,
@@ -3023,6 +3028,7 @@ export function Workbench({
 				) ?? target.tabs[0];
 			onUserNavigation();
 			if (selected) {
+				onDirectTabActivation?.(selected);
 				onAttentionChange(selectTab(currentAttention, target.location, selected.id));
 				setLocalFocusRequest({
 					key: createLayoutId("focus-group"),
@@ -3064,7 +3070,7 @@ export function Workbench({
 				location: target.location,
 			});
 		},
-		[focusableGroups, onAttentionChange, onUserNavigation],
+		[focusableGroups, onAttentionChange, onDirectTabActivation, onUserNavigation],
 	);
 	const canFocusAdjacentGroup = focusableGroups.length > 1;
 	const hideSideRegion = useCallback(
@@ -3096,6 +3102,7 @@ export function Workbench({
 		renderSideMenuActions,
 		onAttentionChange,
 		onUserNavigation,
+		onDirectTabActivation,
 		onGestureCanceled,
 		onApply: apply,
 		onClose: close,

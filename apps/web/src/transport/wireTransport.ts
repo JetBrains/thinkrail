@@ -9,16 +9,78 @@ import type {
 	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
+	SessionStateRecord,
 	Workspace,
 	WorkspaceFsChangedPayload,
 	WorkspaceRemoved,
 } from "@thinkrail/contracts";
-import { WS_CHANNELS } from "@thinkrail/contracts";
+import { SESSION_STATE_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
+
+interface SessionStateHydration {
+	generation: number;
+	installed: boolean;
+	buffered: SessionStateRecord[];
+}
+
+let sessionStateHydration: SessionStateHydration | null = null;
+const SESSION_STATE_BUFFER_LIMIT = 4_096;
+
+function applySessionStateRecord(record: SessionStateRecord): void {
+	const store = useAppStore.getState();
+	store.applySessionState(record);
+	if (record.state.needsInput?.kind === "dialog") {
+		store.applyExtUi(record.state.needsInput.request);
+	}
+}
+
+function hydrateSessionStates(connectionGeneration: number): void {
+	const hydration: SessionStateHydration = {
+		generation: connectionGeneration,
+		installed: false,
+		buffered: [],
+	};
+	sessionStateHydration = hydration;
+	let retryDelay = 500;
+	const attempt = (): void => {
+		void getTransport()
+			.request("session.stateList", {})
+			.then((records) => {
+				const current = useAppStore.getState();
+				if (
+					sessionStateHydration !== hydration ||
+					!isConnectedGeneration(current, connectionGeneration)
+				) {
+					return;
+				}
+				current.installSessionStateSnapshot(records);
+				for (const record of records) {
+					if (record.state.needsInput?.kind === "dialog") {
+						current.applyExtUi(record.state.needsInput.request);
+					}
+				}
+				hydration.installed = true;
+				for (const record of hydration.buffered) applySessionStateRecord(record);
+				hydration.buffered = [];
+			})
+			.catch(() => {
+				const current = useAppStore.getState();
+				if (
+					sessionStateHydration !== hydration ||
+					!isConnectedGeneration(current, connectionGeneration)
+				) {
+					return;
+				}
+				setTimeout(attempt, retryDelay);
+				retryDelay = Math.min(retryDelay * 2, 8_000);
+			});
+	};
+	attempt();
+}
 
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	const snapshot = useAppStore.getState();
@@ -75,7 +137,14 @@ export function initTransport(): WsTransport {
 					: undefined,
 				welcome.hostUpdate,
 			);
-		refreshLoadedWorkspaceLists(useAppStore.getState().connectionGeneration);
+		const connectionGeneration = useAppStore.getState().connectionGeneration;
+		refreshLoadedWorkspaceLists(connectionGeneration);
+		if (welcome.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION) {
+			hydrateSessionStates(connectionGeneration);
+		} else {
+			sessionStateHydration = null;
+			useAppStore.getState().installSessionStateSnapshot([]);
+		}
 	});
 
 	transport.subscribe(WS_CHANNELS.hostUpdateAvailable, (data) => {
@@ -108,6 +177,23 @@ export function initTransport(): WsTransport {
 		useAppStore.getState().deleteChat(workspaceId, sessionId, false);
 	});
 
+	transport.subscribe(WS_CHANNELS.sessionState, (data) => {
+		const record = data as SessionStateRecord;
+		const hydration = sessionStateHydration;
+		const current = useAppStore.getState();
+		if (hydration && hydration.generation !== current.connectionGeneration) return;
+		if (hydration && !hydration.installed && isConnectedGeneration(current, hydration.generation)) {
+			if (hydration.buffered.length >= SESSION_STATE_BUFFER_LIMIT) {
+				hydrateSessionStates(hydration.generation);
+				sessionStateHydration?.buffered.push(record);
+			} else {
+				hydration.buffered.push(record);
+			}
+			return;
+		}
+		applySessionStateRecord(record);
+	});
+
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
 		useAppStore.getState().applyLoginFrame(data as LoginPush);
 	});
@@ -126,7 +212,15 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
-		useAppStore.getState().addWorkspace(data as Workspace);
+		const store = useAppStore.getState();
+		store.addWorkspace(data as Workspace);
+		if (
+			store.protocolVersion !== null &&
+			store.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION &&
+			store.status === "connected"
+		) {
+			hydrateSessionStates(store.connectionGeneration);
+		}
 	});
 
 	transport.subscribe(WS_CHANNELS.workspaceUpdated, (data) => {
