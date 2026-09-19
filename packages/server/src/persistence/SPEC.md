@@ -14,15 +14,15 @@ Durable host state—projects, workspaces, cross-frontend app config, terminal c
 
 ## Boundary
 
-- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; and installation identity in `installation.json` (`{ id }`, the non-rotating per-install UUID, server-only and never wire-broadcast). The former announcement marker is ignored: first observed launch defines first use, not a stored event-sent bit. JSON remains tab-indented.
-- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, and installation identity operations.
+- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; and installation state in server-only `installation.json` (`{ id, appInstalled?: true }`). `id` is the non-rotating per-install UUID and is never wire-broadcast; the optional marker is shared by binary and desktop analytics initialization.
+- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, `ensureInstallation()` returning only `{ id }`, and narrow `claimAppInstalled()` marker persistence. Claiming writes complete JSON to a unique temporary file beside `installation.json`, atomically renames it over the record, and removes the temporary file if replacement fails; the old id/record therefore remains retryable. No cross-process lock is provided.
 - **Allowed deps:** `contracts` (`Project`, `Workspace`, `AppConfig`, `LayoutPreset`, `DEFAULT_CONFIG`,
   `isTerminalWindowsShell`); Node `fs`/`os`/`path`.
 - **Forbidden:** importing feature siblings or `host`; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys or old schemas; or reading, rewriting, or deleting old host layout snapshots.
 
-Analytics config preserves a saved boolean preference and a valid explicit `analyticsConsentConfirmed`
-boolean independently; absent/malformed values default false. A legacy true preference never implies
-expanded consent. The preference seeds the consent window; settings owns explicit confirmation writes.
+Analytics config preserves a saved boolean preference and a valid `analyticsConsentConfirmed` boolean
+independently; absent/malformed values default false. A preference-only write never implies completion.
+Settings owns initial preference priming and preference-plus-confirmation writes.
 
 Config validation normalizes the closed theme mode plus complete opaque system pair, the closed
 composer-growth preference, the closed Windows terminal-shell preference (invalid/absent →

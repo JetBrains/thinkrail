@@ -8,6 +8,7 @@ import { TodoStore } from "pi-todos/core";
 import {
 	type AdditionalAnalyticsCapture,
 	type AdditionalAnalyticsEvent,
+	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
 	resetAnalyticsForTests,
 	setAdditionalAnalyticsEnabled,
@@ -20,9 +21,11 @@ import { handleRequest } from "./handlers";
 import { dropLogin, recordLoginStart, trackLoginOutcome } from "./loginAnalytics";
 import {
 	additionalAnalyticsEnabled,
+	applyAdditionalAnalyticsSettings,
 	captureAdditional,
 	centralConnectOutcome,
 	failureReason,
+	initialAdditionalAnalyticsEnabled,
 	observeCurrentSetup,
 	observePrAction,
 	observeSetupAction,
@@ -74,14 +77,33 @@ async function captured(name: string) {
 	return sent.filter((entry) => entry.event === name);
 }
 
-test("legacy enabled without confirmation never grants additional consent", () => {
+test("initialization stays off before an unconfirmed dialog, then the persisted preference gates", () => {
 	for (const analyticsEnabled of [true, false]) {
 		for (const analyticsConsentConfirmed of [true, false]) {
-			expect(additionalAnalyticsEnabled({ analyticsEnabled, analyticsConsentConfirmed })).toBe(
+			const config = { analyticsEnabled, analyticsConsentConfirmed };
+			expect(initialAdditionalAnalyticsEnabled(config)).toBe(
 				analyticsEnabled && analyticsConsentConfirmed,
 			);
+			expect(additionalAnalyticsEnabled(config)).toBe(analyticsEnabled);
 		}
 	}
+});
+
+test("an unrelated update preserves an unconfirmed legacy grant until the mount prime is applied", () => {
+	const config = { analyticsEnabled: true, analyticsConsentConfirmed: false };
+	resetAnalyticsForTests();
+	initializeAnalytics({
+		additionalEnabled: initialAdditionalAnalyticsEnabled(config),
+		env: {},
+		fetchImpl: (async () => new Response("{}", { status: 200 })) as unknown as typeof fetch,
+	});
+	expect(getAdditionalAnalyticsCapture()).toBeNull();
+
+	expect(applyAdditionalAnalyticsSettings(config, { theme: "light" })).toBe(false);
+	expect(getAdditionalAnalyticsCapture()).toBeNull();
+
+	expect(applyAdditionalAnalyticsSettings(config, { analyticsEnabled: true })).toBe(true);
+	expect(getAdditionalAnalyticsCapture()).not.toBeNull();
 });
 
 test("current setup snapshots never probe without consent or outlive their initiating grant", async () => {

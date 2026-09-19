@@ -24,10 +24,14 @@ modules remain analytics-free. Sibling dependency edges belong to [[module-serve
 
 ## Events
 
-Basic events are always on in human runs: `app_started`,
+Basic events are always on in human runs: `app_installed`, `app_started`,
 `chat_started { provider, model, auth_method }`, `message_sent { mode, provider, auth_method }`, and
-`provider_login { provider, method, auth_method }`. First observed launch defines first use; there is no install
-announcement/marker or provider-change event. Launch means host boot, not UI readiness. Chats can be empty;
+`provider_login { provider, method, auth_method }`. `app_installed` carries only the standard environment
+properties and is emitted before `app_started` once when a non-CI/non-test binary or desktop initialization
+claims the shared installation marker. Initialization constructs the basic sink before claiming; once claimed,
+the state is installed before enqueue. A sink-construction failure therefore leaves the marker available, while
+a later delivery failure does not clear or retry it. Existing `{ id }` records emit on their first eligible packaged boot. Launch means
+host boot, not UI readiness. Chats can be empty;
 sends count after `ackSend`, exclude TODO-control nudges, and do not prove successful execution. Login
 requires correlated success, or the existing applied Central connection action. `auth_method` is a closed
 `api_key | subscription | oauth | central | other | unknown` category, never credentials or account/plan
@@ -55,10 +59,14 @@ status is not proof of value, correctness or a passed test. Arrival order is not
 
 ## Consent and delivery
 
-`analyticsEnabled` is the additional-data preference; `analyticsConsentConfirmed` records an explicit
-choice. Both must be true. Legacy preferences seed the first-launch window, not consent; absent preferences
-default off. Settings owns atomic persistence and host applies the gate. Window behavior belongs to
-[[submodule-web-panels]]. Later launches use the saved decision.
+`analyticsEnabled` is the additional-data preference and host delivery gate;
+`analyticsConsentConfirmed` records completion of the initial choice. Host initialization keeps an
+unconfirmed configuration off before the first dialog mounts. The dialog primes `analyticsEnabled: true`
+without confirmation, enabling delivery only after persistence and broadcast succeed, then completes with the draft
+preference plus confirmation. After initialization, only an applied settings update that explicitly includes
+`analyticsEnabled` changes the grant; unrelated full-config broadcasts preserve it. Settings changes write
+preference and confirmation together. Window behavior belongs to [[submodule-web-panels]]. Confirmed later
+launches do not prime or reopen.
 
 CI and `NODE_ENV=test` create no vendor clients. `--no-analytics` / `THINKRAIL_NO_ANALYTICS` suppress only
 additional events without changing consent. Host-side analytics is the sole environment-policy reader
@@ -70,7 +78,10 @@ flows or throw into callers; graceful shutdown awaits an idempotent two-second S
 
 ## Data boundary
 
-The stable UUID stays in server-only `installation.json`; shared data directories share it. Counts describe
+The stable UUID and optional `appInstalled: true` marker stay in server-only `installation.json`; marker updates
+write complete JSON to a unique same-directory temporary file and atomically rename it over the record, cleaning
+the temporary file on failure. Shared data directories share the record without cross-process locking or
+single-instance coordination. Counts describe
 installations, not people. Every event carries `app_version`, `channel`, `os`, `arch`, `build` plus its
 closed properties. Only built-in provider/model names pass raw; custom values become `custom`, preserving
 the existing explicit `jbcentral` login name. No content, paths/names, resource IDs, credentials, arbitrary

@@ -20,8 +20,15 @@ test("privacy controls additional data without disabling basics and persists acr
 
 	await toggle.click();
 	await expect(toggle).toHaveAttribute("data-active", "false");
-	await expect(dialog).toContainText("Basic reporting is always on");
-	await expect(dialog).not.toContainText("nothing is sent");
+	await expect(dialog).toContainText(
+		"Share anonymous product usage and how you found ThinkRail. We never collect prompts, code, files, credentials, or account identity.",
+	);
+	await expect(dialog).toContainText(
+		"Always-on basics: first packaged install, app launches, chat starts, message sends, and provider connections.",
+	);
+	await expect(dialog).toContainText(
+		"Setup, agent runs, task completions, reviews, and pull-request outcomes.",
+	);
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
