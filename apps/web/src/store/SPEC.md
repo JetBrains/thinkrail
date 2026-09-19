@@ -211,10 +211,13 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
     unread-finished, and project/workspace rollups—no stored precedence or second running slice.
     `SessionRuntime.hostState` is installed with transcript hydration and by state pushes delivered after Pi
     events. Exact completion ids let `selectReadyCompletionActivation` require current connection, rendered
-    runtime state, unread record, and a **direct activation** tick newer than both state arrival and the exact
-    completion's render tick. Passive mount/visibility and pre-render history navigation never qualify;
-    chat-tab selection and unobscured conversation pointer intent after render do, atomically with local
-    attention; interactions inside the history overlay do not.
+    runtime state, unread record, and direct activation of that exact unread completion. Activation records
+    the current completion id as well as its local clock, so an attach/hydration push for the same id cannot
+    erase a deliberate open while a stale activation can never clear a newer result. The exact result must
+    render before acknowledgement is sent, but a deliberate tab/history activation may happen first and
+    remains eligible once that row mounts—opening and reading is sufficient without a second composer focus. Passive mount/visibility never advances activation; chat-tab/group selection, direct
+    history/search open, and unobscured conversation pointer intent do. Incidental interactions inside an
+    obscuring history overlay do not.
   Closed chats are reopenable: the workbench close command atomically removes local placement and invokes
   **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
   **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending
