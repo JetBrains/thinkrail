@@ -548,7 +548,10 @@ a project picker, the prompt hero, and the reused
   configurations never mount or prime. Failed persistence leaves the draft and error visible for retry. Saved
   decisions survive restarts and change later through Settings. The dialog keeps only the short
   product-usage copy and shared switch; Settings also lists always-on basics, optional outcomes, report
-  dimensions, and excluded content. Older hosts retain their legacy privacy control without the new
+  dimensions, and excluded content. One compact Settings-only paragraph states that enabled additional
+  sharing can use a one-time journey/bridge link and normalized campaign source to connect discovery to
+  usage for 30 days, and that switching off removes attribution from future events. Older hosts retain
+  their legacy privacy control without the new
   consent dialog.
   **`FeedbackSettings`** is the final
   live section after Privacy: the same interview copy as the automatic prompt, stating that joining a user

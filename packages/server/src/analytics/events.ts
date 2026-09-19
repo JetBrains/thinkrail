@@ -1,4 +1,5 @@
 import { getBuiltinModels, getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
+import type { AcquisitionRecord, AttributionTouch } from "../persistence";
 
 export type BuildKind = "source" | "binary" | "desktop";
 
@@ -57,7 +58,30 @@ export interface AnalyticsRunProperties {
 	model: string;
 }
 
+export type AcquisitionCampaignProperties = {
+	first_touch_source?: string;
+	first_touch_medium?: string;
+	first_touch_campaign?: string;
+	first_touch_content?: string;
+	first_touch_referrer_class: AttributionTouch["referrer_class"];
+	first_touch_landing_content_key: AttributionTouch["landing_content_key"];
+	first_touch_touched_at: number;
+	first_touch_policy_version: 1;
+	last_touch_source?: string;
+	last_touch_medium?: string;
+	last_touch_campaign?: string;
+	last_touch_content?: string;
+	last_touch_referrer_class: AttributionTouch["referrer_class"];
+	last_touch_landing_content_key: AttributionTouch["landing_content_key"];
+	last_touch_touched_at: number;
+	last_touch_policy_version: 1;
+};
+
 export type AdditionalAnalyticsEvent =
+	| {
+			name: "acquisition_linked";
+			params: AcquisitionCampaignProperties & { journey_id: string; bridge_id: string };
+	  }
 	| {
 			name: "setup_state_observed";
 			params: {
@@ -106,6 +130,28 @@ export type AdditionalAnalyticsEvent =
 
 export type AnalyticsEvent = BasicAnalyticsEvent | AdditionalAnalyticsEvent;
 export type AdditionalAnalyticsCapture = (event: AdditionalAnalyticsEvent) => void;
+
+function touchProperties(prefix: "first_touch" | "last_touch", touch: AttributionTouch) {
+	return {
+		...(touch.source === undefined ? {} : { [`${prefix}_source`]: touch.source }),
+		...(touch.medium === undefined ? {} : { [`${prefix}_medium`]: touch.medium }),
+		...(touch.campaign === undefined ? {} : { [`${prefix}_campaign`]: touch.campaign }),
+		...(touch.content === undefined ? {} : { [`${prefix}_content`]: touch.content }),
+		[`${prefix}_referrer_class`]: touch.referrer_class,
+		[`${prefix}_landing_content_key`]: touch.landing_content_key,
+		[`${prefix}_touched_at`]: touch.touched_at,
+		[`${prefix}_policy_version`]: touch.policy_version,
+	};
+}
+
+export function acquisitionCampaignProperties(
+	record: AcquisitionRecord,
+): AcquisitionCampaignProperties {
+	return {
+		...touchProperties("first_touch", record.first_touch),
+		...touchProperties("last_touch", record.last_touch),
+	} as AcquisitionCampaignProperties;
+}
 
 export function bucketDuration(durationMs: number): AnalyticsDurationBucket {
 	if (!Number.isFinite(durationMs) || durationMs < 0) return "unknown";

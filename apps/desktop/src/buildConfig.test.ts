@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { version } from "@thinkrail/shared/version";
 import hutchConfig from "../hutch.config";
@@ -40,6 +41,16 @@ test("selects real Bun and preserves the physical runtime resources without reti
 	expect(config.scripts).toEqual({ preBuild: "preBuild.ts", postBuild: "postBuild.ts" });
 	expect(config.build).not.toHaveProperty("bunVersion");
 	expect(config.build).not.toHaveProperty("useAsar");
+});
+
+test("generated server runtime threads the opener and desktop proxies explicit readiness", () => {
+	const source = readFileSync(resolve(desktopDir, "preBuild.ts"), "utf8");
+	expect(source).toContain("options.openExternal ? { openExternal: options.openExternal } : {}");
+	const runtimeContract = readFileSync(resolve(desktopDir, "src/serverRuntime.ts"), "utf8");
+	expect(runtimeContract).toContain("startAttributionClaim(): void");
+	const launcher = readFileSync(resolve(desktopDir, "src/index.ts"), "utf8");
+	expect(launcher).toContain('mainWindow.webview.on("dom-ready"');
+	expect(launcher).toContain("host.server.startAttributionClaim()");
 });
 
 test("uses the exact npm bootstrap pin while Bun owns the workspace dependency graph", () => {

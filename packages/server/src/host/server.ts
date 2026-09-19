@@ -34,7 +34,13 @@ import {
 	settleSessionsForShutdown,
 	syncSessionActivity,
 } from "../agent";
-import { type AnalyticsOptions, initializeAnalytics, shutdownAnalytics, track } from "../analytics";
+import {
+	type AnalyticsOptions,
+	initializeAnalytics,
+	shutdownAnalytics,
+	startAttributionClaim,
+	track,
+} from "../analytics";
 import {
 	cancelAllLogins,
 	initializeJbcentralRuntime,
@@ -111,7 +117,20 @@ export interface CreateServerOptions {
 	appVersion?: string;
 	analytics?: Pick<
 		AnalyticsOptions,
-		"channel" | "build" | "posthogApiKey" | "posthogHost" | "mute"
+		| "channel"
+		| "build"
+		| "posthogApiKey"
+		| "posthogHost"
+		| "mute"
+		| "env"
+		| "fetchImpl"
+		| "openExternal"
+		| "attributionEndpoint"
+		| "attributionFetch"
+		| "attributionSleep"
+		| "attributionSchedule"
+		| "attributionRequestTimeoutMs"
+		| "attributionDeadlineMs"
 	>;
 	hostUpdate?: {
 		intervalMs: number;
@@ -121,6 +140,7 @@ export interface CreateServerOptions {
 
 export interface RunningServer {
 	readonly port: number;
+	startAttributionClaim: () => void;
 	stop: () => void;
 	shutdown: () => Promise<void>;
 }
@@ -522,6 +542,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			taskObservation.clear();
 			void observeCurrentSetup();
 		}
+		if (
+			config.analyticsEnabled &&
+			config.analyticsConsentConfirmed &&
+			(appliedUpdate.analyticsEnabled === true || appliedUpdate.analyticsConsentConfirmed === true)
+		) {
+			startAttributionClaim();
+		}
 		refreshSubagentTools();
 	});
 
@@ -607,12 +634,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	});
 
+	const initialConfig = getConfig();
 	initializeAnalytics({
 		...(appVersion ? { appVersion } : {}),
 		...(analytics ?? {}),
-		additionalEnabled: initialAdditionalAnalyticsEnabled(getConfig()),
+		additionalEnabled: initialAdditionalAnalyticsEnabled(initialConfig),
 	});
-
 	reviveTerminalSessions();
 	for (const workspace of loadWorkspaces()) provisionInitialTerminal(workspace);
 
@@ -665,10 +692,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		hostUpdateTimer = setInterval(() => void checkForHostUpdate(), hostUpdate.intervalMs);
 	}
 
+	const startAttributionClaimWhenReady = (): void => {
+		const config = getConfig();
+		if (config.analyticsEnabled && config.analyticsConsentConfirmed) startAttributionClaim();
+	};
+
 	return {
 		get port() {
 			return server.port ?? port;
 		},
+		startAttributionClaim: startAttributionClaimWhenReady,
 		stop,
 		shutdown,
 	};
