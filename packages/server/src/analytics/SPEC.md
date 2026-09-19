@@ -51,6 +51,16 @@ the schema; all properties are fixed enums or bounded buckets, never resource id
 | `task_completed` | Nonempty task-group completion transition after artifact reconciliation, change evidence and whether verification was recorded. |
 | `review_decided` | Actual user/agent approval or changes-requested decision, not aborted-review cleanup. |
 | `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs. |
+| `acquisition_linked` | One successful browser-claim redemption, carrying the transient journey/bridge ids and normalized first/last acquisition fields. |
+
+The acquisition touch schema is a strict server-side mirror of [[submodule-website-attribution]]: closed
+source/medium/campaign/content bounds, referrer class, landing-content key, timestamp, and policy version.
+The website and server copies change together; product packages never import website code. While the
+additional grant is active, persisted campaign-only first/last fields enrich later basic and additional
+events except `app_installed`; only `acquisition_linked` carries journey/bridge ids. Acquisition expires
+30 days after `last_touch`: startup terminalizes expired or invalid state, and every capture checks before
+enrichment so a process crossing expiry clears memory and atomically replaces the file with the terminal
+attempt marker. The first `app_started` remains unenriched when linking occurs during that launch.
 
 Correlation is transient and scoped to one enabled-preference period. No history replay or reconstruction
 of work started before sharing is enabled; asynchronous results from a disabled period remain discarded
@@ -72,7 +82,21 @@ it. Settings changes write preference and confirmation together. Window behavior
 
 CI and `NODE_ENV=test` create no vendor clients. `--no-analytics` / `THINKRAIL_NO_ANALYTICS` suppress only
 additional events without changing consent. Host-side analytics is the sole environment-policy reader
-across launchers.
+across launchers. Browser attribution is additionally limited to binary/desktop human runs with both
+preference and confirmation true, an injected launcher opener, and no prior attempt. Source, CI/test,
+per-run suppression, explicit off, and CLI `--no-open` do not consume the attempt. The dialog's
+unconfirmed on-prime can enable ordinary additional events but cannot start attribution; the final
+confirmed update can. Saved confirmed-on starts only after the CLI has opened its normal local UI or the
+desktop window's first `dom-ready`; server boot and elapsed time do not imply launcher readiness.
+
+The host generates a random 32-byte verifier, sends its SHA-256 challenge, requires strict protocol
+responses, invokes the returned same-origin relative claim URL opener exactly once without awaiting it,
+and performs at most twenty 500 ms status polls followed by one redeem. Each request has an abort timeout
+and the whole claim has a 15-second deadline. The current consent generation owns an AbortController;
+revocation and shutdown abort fetch and body reading and remove enrichment before subsequent capture.
+Failures and completed attempts are terminal and never auto-retry; re-enabling only restores a still-valid
+stored campaign record. A validated redemption activates memory and emits `acquisition_linked` while its
+generation remains active even if best-effort campaign persistence fails.
 
 Additional revocation drops queued/retrying requests at the transport boundary without stopping basics;
 an already-sent request cannot be recalled. Revoked queues never revive. Capture/boot never block product
@@ -80,10 +104,14 @@ flows or throw into callers; graceful shutdown awaits an idempotent two-second S
 
 ## Data boundary
 
-The stable UUID and optional `appInstalled: true` field stay server-only. [[submodule-server-persistence]]
-owns exclusive installation-ID creation and the cross-process, at-most-once install claim: a crash after the
-claim can lose the event, but cannot grant a second claimant. Shared data directories have no other
-single-instance coordination. Counts describe installations, not people. Every event carries `app_version`, `channel`, `os`, `arch`, `build` plus its
+The stable installation UUID and optional `appInstalled: true` field remain server-only;
+[[submodule-server-persistence]] owns exclusive ID creation and the at-most-once cross-process install claim.
+A crash after claiming may lose that event, never duplicate it. Separate `attribution.json` stores either a
+terminal browser-attempt marker or validated first/last campaign context, never a claim ID, verifier,
+challenge, claim URL, journey/bridge IDs, IP, or user agent. Expired or invalid context becomes terminal; stored campaign data
+survives preference off/on, while active enrichment does not. Other state has no single-instance coordination.
+Counts describe installations, not people. Every event carries `app_version`, `channel`, `os`, `arch`, `build`
+plus its
 closed properties. Only built-in provider/model names pass raw; custom values become `custom`, preserving
 the existing explicit `jbcentral` login name. No content, paths/names, resource IDs, credentials, arbitrary
 errors, token/cost counts or recordings are collected.

@@ -29,6 +29,9 @@ test("privacy controls additional data without disabling basics and persists acr
 	await expect(dialog).toContainText(
 		"Setup, agent runs, task completions, reviews, and pull-request outcomes.",
 	);
+	await expect(dialog).toContainText(
+		"When additional sharing is on, a one-time journey/bridge link and normalized campaign source may connect how you found ThinkRail to usage for 30 days. Turning sharing off removes attribution from future events.",
+	);
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");

@@ -1,10 +1,11 @@
-export const productionOrigin = "https://thinkrail.ai";
-export const claimLifetimeMs = 10 * 60 * 1000;
-export const attributionLifetimeMs = 30 * 24 * 60 * 60 * 1000;
-export const attributionPolicyVersion = 1 as const;
+export const ATTRIBUTION_ORIGIN = "https://thinkrail.ai";
+export const ATTRIBUTION_POLL_INTERVAL_MS = 500;
+export const ATTRIBUTION_MAX_POLLS = 20;
+export const ATTRIBUTION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
+export const ATTRIBUTION_POLICY_VERSION = 1 as const;
+
 const base64UrlSha256Pattern = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
 export const claimIdPattern = base64UrlSha256Pattern;
-export const verifierPattern = base64UrlSha256Pattern;
 export const bridgeIdPattern = base64UrlSha256Pattern;
 export const journeyIdPattern =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -31,25 +32,18 @@ export type AttributionTouch = {
 	referrer_class: ReferrerClass;
 	landing_content_key: AttributionContentKey;
 	touched_at: number;
-	policy_version: typeof attributionPolicyVersion;
+	policy_version: typeof ATTRIBUTION_POLICY_VERSION;
 };
 
-export type AttributionContext = {
-	bridge_id?: string;
+export type AcquisitionRecord = {
 	first_touch: AttributionTouch;
 	last_touch: AttributionTouch;
 };
 
-export type CreateClaimRequest = { challenge: string };
-export type CreateClaimResponse = {
-	claim_id: string;
-	claim_url: string;
-	expires_at: number;
+export type RedeemedAttribution = AcquisitionRecord & {
+	journey_id: string;
+	bridge_id: string;
 };
-export type BindClaimRequest = AttributionContext & { journey_id: string };
-export type BindClaimResponse = { bridge_id: string };
-export type VerifyClaimRequest = { verifier: string };
-export type RedeemClaimResponse = BindClaimRequest & { bridge_id: string };
 
 const campaignBounds = {
 	source: 64,
@@ -60,7 +54,7 @@ const campaignBounds = {
 const referrerClassSet = new Set<string>(referrerClasses);
 const contentKeySet = new Set<string>(attributionContentKeys);
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -70,7 +64,7 @@ export function hasExactKeys(value: Record<string, unknown>, keys: readonly stri
 	return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
 
-export function normalizeCampaignValue(value: string, limit: number): string | undefined {
+function normalizeCampaignValue(value: string, limit: number): string | undefined {
 	const withoutControls = Array.from(value)
 		.filter((character) => {
 			const codePoint = character.codePointAt(0) ?? 0;
@@ -103,9 +97,8 @@ export function parseAttributionTouch(value: unknown, now: number): AttributionT
 	const medium = optionalNormalizedString(value, "medium");
 	const campaign = optionalNormalizedString(value, "campaign");
 	const content = optionalNormalizedString(value, "content");
-	if (source === false || medium === false || campaign === false || content === false) {
+	if (source === false || medium === false || campaign === false || content === false)
 		return undefined;
-	}
 	if (typeof value.referrer_class !== "string" || !referrerClassSet.has(value.referrer_class)) {
 		return undefined;
 	}
@@ -120,11 +113,10 @@ export function parseAttributionTouch(value: unknown, now: number): AttributionT
 		!Number.isSafeInteger(value.touched_at) ||
 		value.touched_at < 0 ||
 		value.touched_at > now + 60_000 ||
-		value.policy_version !== attributionPolicyVersion
+		value.policy_version !== ATTRIBUTION_POLICY_VERSION
 	) {
 		return undefined;
 	}
-
 	return {
 		...(source === undefined ? {} : { source }),
 		...(medium === undefined ? {} : { medium }),
@@ -133,78 +125,44 @@ export function parseAttributionTouch(value: unknown, now: number): AttributionT
 		referrer_class: value.referrer_class as ReferrerClass,
 		landing_content_key: value.landing_content_key as AttributionContentKey,
 		touched_at: value.touched_at,
-		policy_version: attributionPolicyVersion,
+		policy_version: ATTRIBUTION_POLICY_VERSION,
 	};
 }
 
-export function parseAttributionContext(
-	value: unknown,
-	now: number,
-): AttributionContext | undefined {
-	if (!isRecord(value)) return undefined;
-	const hasBridgeId = Object.hasOwn(value, "bridge_id");
-	if (!hasExactKeys(value, [...(hasBridgeId ? ["bridge_id"] : []), "first_touch", "last_touch"])) {
-		return undefined;
-	}
-	if (
-		hasBridgeId &&
-		(typeof value.bridge_id !== "string" || !bridgeIdPattern.test(value.bridge_id))
-	) {
-		return undefined;
-	}
+export function parseAcquisitionRecord(value: unknown, now: number): AcquisitionRecord | undefined {
+	if (!isRecord(value) || !hasExactKeys(value, ["first_touch", "last_touch"])) return undefined;
 	const firstTouch = parseAttributionTouch(value.first_touch, now);
 	const lastTouch = parseAttributionTouch(value.last_touch, now);
-	if (firstTouch === undefined || lastTouch === undefined) return undefined;
 	if (
+		!firstTouch ||
+		!lastTouch ||
 		firstTouch.touched_at > lastTouch.touched_at ||
-		lastTouch.touched_at < now - attributionLifetimeMs
+		lastTouch.touched_at < now - ATTRIBUTION_LIFETIME_MS
 	) {
 		return undefined;
 	}
-	return {
-		...(hasBridgeId ? { bridge_id: value.bridge_id as string } : {}),
-		first_touch: firstTouch,
-		last_touch: lastTouch,
-	};
+	return { first_touch: firstTouch, last_touch: lastTouch };
 }
 
-export function parseBindClaimRequest(value: unknown, now: number): BindClaimRequest | undefined {
-	if (!isRecord(value)) return undefined;
-	const hasBridgeId = Object.hasOwn(value, "bridge_id");
+export function parseRedeemedAttribution(
+	value: unknown,
+	now: number,
+): RedeemedAttribution | undefined {
 	if (
-		!hasExactKeys(value, [
-			...(hasBridgeId ? ["bridge_id"] : []),
-			"journey_id",
-			"first_touch",
-			"last_touch",
-		])
+		!isRecord(value) ||
+		!hasExactKeys(value, ["journey_id", "bridge_id", "first_touch", "last_touch"]) ||
+		typeof value.journey_id !== "string" ||
+		!journeyIdPattern.test(value.journey_id) ||
+		typeof value.bridge_id !== "string" ||
+		!bridgeIdPattern.test(value.bridge_id)
 	) {
 		return undefined;
 	}
-	if (typeof value.journey_id !== "string" || !journeyIdPattern.test(value.journey_id)) {
-		return undefined;
-	}
-	const context = parseAttributionContext(
-		{
-			...(hasBridgeId ? { bridge_id: value.bridge_id } : {}),
-			first_touch: value.first_touch,
-			last_touch: value.last_touch,
-		},
+	const record = parseAcquisitionRecord(
+		{ first_touch: value.first_touch, last_touch: value.last_touch },
 		now,
 	);
-	return context === undefined ? undefined : { journey_id: value.journey_id, ...context };
-}
-
-export function parseCreateClaimRequest(value: unknown): CreateClaimRequest | undefined {
-	if (!isRecord(value) || !hasExactKeys(value, ["challenge"])) return undefined;
-	return typeof value.challenge === "string" && claimIdPattern.test(value.challenge)
-		? { challenge: value.challenge }
-		: undefined;
-}
-
-export function parseVerifyClaimRequest(value: unknown): VerifyClaimRequest | undefined {
-	if (!isRecord(value) || !hasExactKeys(value, ["verifier"])) return undefined;
-	return typeof value.verifier === "string" && verifierPattern.test(value.verifier)
-		? { verifier: value.verifier }
+	return record
+		? { journey_id: value.journey_id, bridge_id: value.bridge_id, ...record }
 		: undefined;
 }

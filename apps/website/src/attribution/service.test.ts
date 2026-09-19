@@ -189,9 +189,19 @@ describe("claim service", () => {
 		expect(
 			await fixtureValue.service.bind(claimId, {
 				...context,
-				first_touch: { ...context.first_touch, touched_at: now - 30 * 24 * 60 * 60 * 1000 - 1 },
+				last_touch: { ...context.last_touch, touched_at: now - 30 * 24 * 60 * 60 * 1000 - 1 },
 			}),
 		).toEqual({ status: "invalid" });
+
+		const refreshedFixture = fixture();
+		refreshedFixture.repository.records.set(claimId, pendingRecord());
+		refreshedFixture.setRandom(bridgeId);
+		expect(
+			await refreshedFixture.service.bind(claimId, {
+				...context,
+				first_touch: { ...context.first_touch, touched_at: now - 31 * 24 * 60 * 60 * 1000 },
+			}),
+		).toEqual({ status: "ok", value: { bridge_id: bridgeId } });
 	});
 
 	test("bind preserves a supplied download bridge without generating a replacement", async () => {

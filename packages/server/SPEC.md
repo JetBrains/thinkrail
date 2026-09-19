@@ -21,8 +21,9 @@ e2e).
 - **Owns:** the HTTP+WS server, static serving, the WS dispatch registry, server-side feature services
   (project/workspace/git/fs/terminal + the in-process `AgentSession` manager), and `~/.thinkrail`
   persistence.
-- **Public surface:** `createServer(options) → Promise<RunningServer>` (`{ port, stop, shutdown }`) —
-  `stop()` is synchronous resource disposal for low-level tests while `shutdown()` is the idempotent,
+- **Public surface:** `createServer(options) → Promise<RunningServer>`
+  (`{ port, startAttributionClaim, stop, shutdown }`) — saved-choice attribution waits for the launcher's
+  explicit UI-readiness call; `stop()` is synchronous resource disposal for low-level tests while `shutdown()` is the idempotent,
   bounded production lifecycle (settle sessions + drain analytics and dispose sockets/PTYS/watchers)
   every launcher must await — the public
   factory starts Central artifact watching and applies the initial current PI runtime before binding a socket
