@@ -81,8 +81,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   socket close,
   an optional boot-time `openProject(projectPath)` (best-effort — a launcher convenience), the
   **analytics wiring** (`initializeAnalytics` at boot from launcher provenance, destination, and per-run
-  additional-data suppression; `analyticsEnabled` plus `analyticsConsentConfirmed` control only the
-  additional tier, synced from the settings publisher. Basic events remain on in human runs. Consent
+  additional-data suppression; startup grants the additional tier only when `analyticsEnabled &&
+  analyticsConsentConfirmed`. After boot, the settings publisher still broadcasts every merged config but
+  changes the analytics grant only when its successful applied update explicitly carries `analyticsEnabled`,
+  so unrelated writes preserve the current grant and the dialog's preference prime can enable it.
+  `analyticsConsentConfirmed` controls the web prompt lifecycle. Basic events remain on in human runs. Consent
   changes clear additional-event correlation so re-enabling cannot reconstruct pre-consent work.
   `shutdownAnalytics()` remains a best-effort drain in `stop()` and awaited by graceful shutdown;
   every capture site lives here, including the existing basic events: `chat_started` in `session.create`, `message_sent` (via the
@@ -101,7 +104,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   Opaque-loader provider membership identifies Central without opening its auth/configuration surface.
   Additional setup/run/task/review/PR observations use the closed triggers in
   [[submodule-server-analytics]], with transient consent-scoped correlation and task-artifact reconciliation.
-  Host alone mediates these events; no install-announcement or provider-change capture exists.
+  Host alone mediates these events; analytics initialization emits the packaged-install lifecycle event,
+  while no provider-change capture exists.
   Setup observes existing read results, never triggers provider work; only explicit setup mutations count.
   Run timing starts at canonical `agent_start`, with local send intent recorded before calling pi (not
   after `ackSend`); unproven provenance stays unknown and retries remain one cycle until `agent_settled`.

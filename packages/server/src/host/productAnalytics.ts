@@ -1,5 +1,6 @@
 import type {
 	AppConfig,
+	AppConfigUpdate,
 	JbcentralConnectResult,
 	OpenPrResult,
 	ProviderStatusReport,
@@ -11,6 +12,7 @@ import {
 	type AdditionalAnalyticsCapture,
 	type AdditionalAnalyticsEvent,
 	getAdditionalAnalyticsCapture,
+	setAdditionalAnalyticsEnabled,
 } from "../analytics";
 import { listProjects } from "../projects";
 
@@ -18,10 +20,24 @@ type SetupState = Extract<AdditionalAnalyticsEvent, { name: "setup_state_observe
 type SetupResult = Extract<AdditionalAnalyticsEvent, { name: "setup_action_finished" }>["params"];
 type FailureReason = SetupResult["reason"];
 
-export function additionalAnalyticsEnabled(
+export function additionalAnalyticsEnabled(config: Pick<AppConfig, "analyticsEnabled">): boolean {
+	return config.analyticsEnabled;
+}
+
+export function initialAdditionalAnalyticsEnabled(
 	config: Pick<AppConfig, "analyticsEnabled" | "analyticsConsentConfirmed">,
 ): boolean {
-	return config.analyticsEnabled && config.analyticsConsentConfirmed;
+	return config.analyticsConsentConfirmed && config.analyticsEnabled;
+}
+
+export function applyAdditionalAnalyticsSettings(
+	config: Pick<AppConfig, "analyticsEnabled">,
+	appliedUpdate: AppConfigUpdate,
+): boolean {
+	if (appliedUpdate.analyticsEnabled === undefined) return false;
+	const previousGrant = additionalCapture();
+	setAdditionalAnalyticsEnabled(additionalAnalyticsEnabled(config));
+	return additionalCapture() !== previousGrant;
 }
 
 export function additionalCapture(): AdditionalAnalyticsCapture | null {

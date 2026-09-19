@@ -11,7 +11,7 @@ import {
 import { loadConfig, saveConfig } from "../persistence";
 import { normalizeStoredCustomLayoutPresets, validateCustomLayoutPresets } from "./layoutPresets";
 
-type SettingsPublisher = (config: AppConfig) => void;
+export type SettingsPublisher = (config: AppConfig, appliedUpdate: AppConfigUpdate) => void;
 type RuntimeAppConfigUpdate = AppConfigUpdate & {
 	chatMessageOrder?: unknown;
 	layout?: unknown;
@@ -142,7 +142,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	}
 	saveConfig(next);
 	cached = next;
-	publishSettings?.(next);
+	publishSettings?.(next, runtimeUpdate);
 	return next;
 }
 

@@ -404,9 +404,9 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `DEFAULT_CONFIG.terminalWindowsShell`; `TerminalSettings` consumes both terminal fields, while terminal
   spawning remains server-owned — the Terminal, Line width, Chat, shared Layout catalog, Privacy, provider
   controls, and shell quota read sides. Analytics preference and confirmation default independently to false;
-  the store never upgrades a legacy true preference to consent. A selector combines host capability,
-  hydrated configuration, and absent confirmation to drive the one first-launch prompt. Persisted updates
-  converge through `applyConfig`; a draft switch in the prompt is not a store/host write.
+  the store never upgrades a preference to confirmation. A selector combines host capability, hydrated
+  configuration, and absent confirmation to drive the one first-launch prompt. Persisted preference priming
+  and final choice updates converge through `applyConfig`; the dialog's visual draft remains component-local.
   **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
   StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by
   the chat preference seam from host-qualified browser localStorage or the native shell's injected
