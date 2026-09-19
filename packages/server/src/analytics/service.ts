@@ -1,5 +1,5 @@
 import { logger } from "../log";
-import { ensureInstallation } from "../persistence";
+import { claimAppInstalled, ensureInstallation } from "../persistence";
 import type {
 	AdditionalAnalyticsCapture,
 	AnalyticsEvent,
@@ -52,20 +52,30 @@ function detectOs(): string {
 }
 
 export function initializeAnalytics(options: AnalyticsOptions): void {
+	initializeAnalyticsWithSinkFactoryForTests(options, createPostHogSink);
+}
+
+export function initializeAnalyticsWithSinkFactoryForTests(
+	options: AnalyticsOptions,
+	sinkFactory: typeof createPostHogSink,
+): void {
 	resetAnalyticsForTests();
 	try {
 		const env = options.env ?? process.env;
 		if (environmentMute(env)) return;
-		const record = ensureInstallation();
 		const host = env.THINKRAIL_POSTHOG_HOST ?? options.posthogHost;
 		const createSink = () =>
-			createPostHogSink({
+			sinkFactory({
 				apiKey: options.posthogApiKey ?? POSTHOG_PROJECT_KEY,
 				...(host ? { host } : {}),
 				...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
 			});
+		const basic = createSink();
+		const record = ensureInstallation();
+		const build = options.build ?? "source";
+		const appInstalled = build !== "source" && claimAppInstalled();
 		state = {
-			basic: createSink(),
+			basic,
 			additional: null,
 			createAdditionalSink: options.mute || env.THINKRAIL_NO_ANALYTICS ? null : createSink,
 			clientId: record.id,
@@ -75,9 +85,10 @@ export function initializeAnalytics(options: AnalyticsOptions): void {
 				channel: options.channel ?? "dev",
 				os: detectOs(),
 				arch: process.arch,
-				build: options.build ?? "source",
+				build,
 			},
 		};
+		if (appInstalled) track({ name: "app_installed" });
 		track({ name: "app_started" });
 		setAdditionalAnalyticsEnabled(options.additionalEnabled);
 	} catch {

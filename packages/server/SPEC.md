@@ -131,7 +131,8 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 `setSessionPublisher` + `setSessionCreatedPublisher` + `setSessionDeletedPublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
 `project.updated` lifecycle, `workspaces`' `setWorkspacePublisher` for the
 `workspace.created`/`updated`/`removed` lifecycle trio, `settings`' `setSettingsPublisher` for
-`settings.changed`, `feedback`'s addressed invitation publisher, and auth's Central action analytics +
+`settings.changed` (full merged config plus the successful applied update for host-side explicit-field effects),
+`feedback`'s addressed invitation publisher, and auth's Central action analytics +
 `provider.changed` invalidation publishers) that
 `host` installs at `createServer`—so channel/analytics wiring lives only in `host`. Current layout has no
 host module, persistence, method, or publisher.
@@ -148,8 +149,9 @@ registry-free too — it takes a plain `cwd`, never a `workspaceId`; the `templa
 
 Analytics is host-mediated the same way: **every capture call site lives in `host`**. Host translates
 existing boot, session, setup, task, review and PR observations into the closed event vocabulary and
-syncs additional-data consent from the settings publisher. Correlation stays host-local and clears on
-consent changes. `analytics` has no `settings` edge and no feature module knows analytics exists.
+syncs additional-data consent from explicit `analyticsEnabled` updates received through the settings publisher;
+unrelated settings broadcasts preserve the current grant. Correlation stays host-local and clears on consent
+changes. `analytics` has no `settings` edge and no feature module knows analytics exists.
 
 Subagent availability is also host-mediated: `settings` owns the global default, `workspaces` owns the
 optional local override, and `host` injects their effective value into `agent` plus requests live-session

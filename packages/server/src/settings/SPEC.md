@@ -30,15 +30,15 @@ interval (`1–3600`, default 30), because those values govern host process cade
 
 ## Boundary
 
-- **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (merge → validate known fields → persist → broadcast); line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
-- **Public surface (barrel):** `getConfig`, `updateConfig`, `setSettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
+- **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
+- **Public surface (barrel):** `getConfig`, `updateConfig`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
 - **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`,
   `isTerminalWindowsShell`).
 - **Forbidden:** host or another feature sibling; current-layout document/snapshot types; workspace ids/resources; current frame validation; owning WS channels; or importing web preset definitions.
 
 ## Get right
 
-- **Converge on broadcast, no client optimism.** `updateConfig` persists before replacing the live cache or publishing; a failed write changes neither runtime reads nor frontends. Every frontend, including the initiator, adopts `settings.changed`. `server.welcome` seeds the same cached value.
+- **Converge on broadcast, no client optimism.** `updateConfig` persists before replacing the live cache or publishing; a failed write changes neither runtime reads nor frontends. The publisher receives the full merged config for broadcast and the applied partial update so host consumers can distinguish an explicit field write from an unrelated merge. Every frontend, including the initiator, adopts `settings.changed`. `server.welcome` seeds the same cached value.
 - `terminalWindowsShell` defaults to `"auto"`; persisted values fall back through persistence's shared
   `isTerminalWindowsShell` guard, while a wire mutation outside the closed shell union rejects the complete
   update before cache, persistence, or broadcast changes. Settings owns validation and synchronization;
@@ -51,8 +51,9 @@ interval (`1–3600`, default 30), because those values govern host process cade
 - Retired host-layout and chat-message-order fields are ignored rather than persisted or broadcast. Layout instantiation and transcript order are frontend-local preferences.
 - Custom layout presets are a complete top-level catalog replacement, not a nested per-item patch. Each value is bounded, resource-free, uniquely identified, uses only the current preset schema, and contains no workspace/tab/session/terminal identity. A malformed persisted member is isolated during config validation; a wire mutation with any malformed member is rejected as a whole. No alternate config key or old preset schema is read or upgraded.
 - Deleting or editing a custom preset changes only the shared definition. It cannot mutate any frontend's instantiated frame or local default selection.
-- Analytics preference/confirmation are validated booleans and saved atomically when confirming.
-  Confirmation without a preference rejects the update; re-enabling after a decision requires both fields.
-  Preference-only writes never infer expanded consent.
+- Analytics preference/confirmation are validated booleans. The initial dialog may persist the enabled
+  preference alone before completion; confirmation without a preference rejects the update, and re-enabling
+  after a decision requires both fields. Privacy Settings writes preference and confirmation together.
+  Preference-only writes never infer completion.
   The two-tier contract belongs to [[submodule-server-analytics]].
 - `null` clears optional `reviewModel`/`reviewEffort` overrides; it is a wire-only sentinel and never persists.

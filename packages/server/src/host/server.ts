@@ -36,13 +36,7 @@ import {
 	settleSessionsForShutdown,
 	syncSessionActivity,
 } from "../agent";
-import {
-	type AnalyticsOptions,
-	initializeAnalytics,
-	setAdditionalAnalyticsEnabled,
-	shutdownAnalytics,
-	track,
-} from "../analytics";
+import { type AnalyticsOptions, initializeAnalytics, shutdownAnalytics, track } from "../analytics";
 import {
 	cancelAllLogins,
 	initializeJbcentralRuntime,
@@ -91,8 +85,9 @@ import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import {
-	additionalAnalyticsEnabled,
 	additionalCapture,
+	applyAdditionalAnalyticsSettings,
+	initialAdditionalAnalyticsEnabled,
 	observeCurrentSetup,
 	setupObservation,
 } from "./productAnalytics";
@@ -525,14 +520,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	installRequestReviewSeam();
 	reconcilePendingReviewsOnBoot();
 
-	setSettingsPublisher((config) => {
+	setSettingsPublisher((config, appliedUpdate) => {
 		server.publish(
 			WS_CHANNELS.settingsChanged,
 			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
 		);
-		const previousGrant = additionalCapture();
-		setAdditionalAnalyticsEnabled(additionalAnalyticsEnabled(config));
-		if (additionalCapture() !== previousGrant) {
+		if (applyAdditionalAnalyticsSettings(config, appliedUpdate)) {
 			setupObservation.clear();
 			runObservation.clear();
 			taskObservation.clear();
@@ -625,7 +618,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	initializeAnalytics({
 		...(appVersion ? { appVersion } : {}),
 		...(analytics ?? {}),
-		additionalEnabled: additionalAnalyticsEnabled(getConfig()),
+		additionalEnabled: initialAdditionalAnalyticsEnabled(getConfig()),
 	});
 
 	reviveTerminalSessions();

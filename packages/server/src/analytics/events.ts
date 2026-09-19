@@ -19,6 +19,7 @@ export interface ProviderAnalyticsProperties {
 export type SendMode = "prompt" | "steer" | "follow_up";
 
 export type BasicAnalyticsEvent =
+	| { name: "app_installed" }
 	| { name: "app_started" }
 	| { name: "chat_started"; params: ProviderAnalyticsProperties & { model: string } }
 	| { name: "message_sent"; params: ProviderAnalyticsProperties & { mode: SendMode } }
