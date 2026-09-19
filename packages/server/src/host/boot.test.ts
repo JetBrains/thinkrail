@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -8,7 +8,11 @@ import type { HostUpdateNotice, ServerWelcome } from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { isPortFree } from "@thinkrail/shared/freePort";
 import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
-import { initializeAnalytics, resetAnalyticsForTests } from "../analytics";
+import {
+	getAdditionalAnalyticsCapture,
+	initializeAnalytics,
+	resetAnalyticsForTests,
+} from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
 import { resetConfigCache, updateConfig } from "../settings";
 import { type BootedHost, bootHost } from "./boot";
@@ -201,6 +205,103 @@ test("confirming consent observes current setup without another client read or p
 	} finally {
 		refresh.mockRestore();
 	}
+});
+
+test("the dialog prime enables ordinary additional events but schedules attribution only after confirmation", async () => {
+	const scheduled: Array<() => void> = [];
+	await boot({
+		port: 0,
+		host: "127.0.0.1",
+		portMode: "exact",
+		analytics: {
+			build: "binary",
+			env: {},
+			fetchImpl: (async () => new Response("{}")) as unknown as typeof fetch,
+			attributionEndpoint: "http://127.0.0.1:4567",
+			attributionFetch: (async () => {
+				throw new Error("scheduled attribution must not run in this host test");
+			}) as unknown as typeof fetch,
+			openExternal: () => {},
+			attributionSchedule: (run) => scheduled.push(run),
+		},
+	});
+
+	updateConfig({ analyticsEnabled: true });
+	expect(getAdditionalAnalyticsCapture()).not.toBeNull();
+	expect(scheduled).toEqual([]);
+	updateConfig({ theme: "light" });
+	expect(getAdditionalAnalyticsCapture()).not.toBeNull();
+	expect(scheduled).toEqual([]);
+	updateConfig({ analyticsEnabled: true, analyticsConsentConfirmed: true });
+	expect(scheduled).toHaveLength(1);
+});
+
+test("a saved confirmed-on choice waits beyond one second for explicit launcher readiness", async () => {
+	const dir = process.env.THINKRAIL_DATA_DIR;
+	if (!dir) throw new Error("missing fixture data directory");
+	writeFileSync(
+		join(dir, "config.json"),
+		JSON.stringify({ analyticsEnabled: true, analyticsConsentConfirmed: true }),
+	);
+	const scheduled: Array<() => void> = [];
+	let opens = 0;
+	const host = await boot({
+		port: 0,
+		host: "127.0.0.1",
+		portMode: "exact",
+		analytics: {
+			build: "desktop",
+			env: {},
+			fetchImpl: (async () => new Response("{}")) as unknown as typeof fetch,
+			attributionEndpoint: "http://127.0.0.1:4567",
+			attributionFetch: (async () => {
+				throw new Error("scheduled attribution must not run in this host test");
+			}) as unknown as typeof fetch,
+			openExternal: () => {
+				opens++;
+			},
+			attributionSchedule: (run) => scheduled.push(run),
+		},
+	});
+	await Bun.sleep(1_100);
+	expect(scheduled).toEqual([]);
+	expect(opens).toBe(0);
+	expect(existsSync(join(dir, "attribution.json"))).toBe(false);
+	host.server.startAttributionClaim();
+	expect(scheduled).toHaveLength(1);
+	expect(opens).toBe(0);
+	expect(existsSync(join(dir, "attribution.json"))).toBe(false);
+});
+
+test("launcher readiness cannot start attribution before an unconfirmed prime is resolved", async () => {
+	const dir = process.env.THINKRAIL_DATA_DIR;
+	if (!dir) throw new Error("missing fixture data directory");
+	writeFileSync(
+		join(dir, "config.json"),
+		JSON.stringify({ analyticsEnabled: true, analyticsConsentConfirmed: false }),
+	);
+	const scheduled: Array<() => void> = [];
+	const host = await boot({
+		port: 0,
+		host: "127.0.0.1",
+		portMode: "exact",
+		analytics: {
+			build: "desktop",
+			env: {},
+			fetchImpl: (async () => new Response("{}")) as unknown as typeof fetch,
+			attributionEndpoint: "http://127.0.0.1:4567",
+			attributionFetch: (async () => {
+				throw new Error("scheduled attribution must not run in this host test");
+			}) as unknown as typeof fetch,
+			openExternal: () => {},
+			attributionSchedule: (run) => scheduled.push(run),
+		},
+	});
+
+	host.server.startAttributionClaim();
+	expect(scheduled).toEqual([]);
+	updateConfig({ analyticsEnabled: true, analyticsConsentConfirmed: true });
+	expect(scheduled).toHaveLength(1);
 });
 
 test("the host forwards successful login generation metadata into the basic event", async () => {

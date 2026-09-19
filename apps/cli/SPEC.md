@@ -147,7 +147,7 @@ worktrees and any uncommitted work in them. pi's own state (`~/.pi`) is never to
 (`0.0.0-dev`). The release pipeline overwrites that one module in the throwaway CI checkout before
 building CLI and desktop, so both report identical identity. There is no analytics-key seam here.
 `bootstrap.ts` prints the shared version for `--version`, passes it into `bootHost` for
-`server.welcome.appVersion`, and threads channel, `build: "binary" | "source"`, and the per-run additional-data suppression into analytics.
+`server.welcome.appVersion`, and threads channel, `build: "binary" | "source"`, and the per-run additional-data suppression into analytics. When normal opening is enabled it also supplies the existing `openBrowser` launcher callback for the packaged binary's one-shot attribution claim, opens the local UI first, then explicitly signals `server.startAttributionClaim()`. `--no-open` omits that capability and never signals readiness, so it does not consume an attempt. Source runs remain ineligible.
 
 ## Launch entries + build provenance
 
