@@ -259,8 +259,8 @@ interface CompletionActivationState extends SessionStateProjection {
 	sessions: Record<string, SessionRuntime>;
 	sessionStateTickBySession: Record<string, number>;
 	directChatActivationTickBySession: Record<string, number>;
+	directActivatedCompletionBySession: Record<string, string>;
 	renderedCompletionBySession: Record<string, string>;
-	renderedCompletionTickBySession: Record<string, number>;
 }
 
 export function selectReadyCompletionActivation(
@@ -271,6 +271,8 @@ export function selectReadyCompletionActivation(
 	const record = state.sessionStateByWorkspace[workspaceId]?.[sessionId];
 	const completion = record?.state.completion;
 	const runtime = state.sessions[sessionId];
+	const directlyActivated =
+		state.directActivatedCompletionBySession[sessionId] === completion?.completionId;
 	if (
 		state.status !== "connected" ||
 		!completion ||
@@ -279,11 +281,9 @@ export function selectReadyCompletionActivation(
 		runtime.syncedConnectionGeneration !== state.connectionGeneration ||
 		runtime.hostState?.completion?.completionId !== completion.completionId ||
 		state.renderedCompletionBySession[sessionId] !== completion.completionId ||
-		(state.directChatActivationTickBySession[sessionId] ?? 0) <=
-			Math.max(
-				state.sessionStateTickBySession[sessionId] ?? 0,
-				state.renderedCompletionTickBySession[sessionId] ?? 0,
-			)
+		(!directlyActivated &&
+			(state.directChatActivationTickBySession[sessionId] ?? 0) <=
+				(state.sessionStateTickBySession[sessionId] ?? 0))
 	) {
 		return null;
 	}

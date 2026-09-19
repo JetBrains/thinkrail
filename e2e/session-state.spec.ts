@@ -87,6 +87,10 @@ test("an unread finished result clears only after direct chat activation renders
 			{ role: "assistant", text: "Finished result.", timestamp: BASE_TS + 11 },
 		],
 	});
+	const quietSibling = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "quiet sibling",
+		messages: [],
+	});
 	try {
 		await reconnectWithSeed(page);
 		const project = page.getByTestId("project-item").first();
@@ -105,9 +109,7 @@ test("an unread finished result clears only after direct chat activation renders
 
 		await enterDefaultWorkspace(page);
 		await openPersistedChat(page, "finished state receipt");
-		const result = page.getByText("Finished result.", { exact: true });
-		await expect(result).toBeVisible();
-		await result.click();
+		await expect(page.getByText("Finished result.", { exact: true })).toBeVisible();
 		await expect(workspace).not.toHaveAttribute("data-attention", /.+/);
 		const projectExpand = project.getByTestId("project-expand");
 		if ((await projectExpand.getAttribute("data-expanded")) === "true") await projectExpand.click();
@@ -116,5 +118,6 @@ test("an unread finished result clears only after direct chat activation renders
 		await peer.close();
 	} finally {
 		rmSync(session.path, { force: true });
+		rmSync(quietSibling.path, { force: true });
 	}
 });

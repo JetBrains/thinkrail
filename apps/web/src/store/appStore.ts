@@ -842,8 +842,8 @@ interface AppState {
 	sessionStateClock: number;
 	sessionStateTickBySession: Record<string, number>;
 	directChatActivationTickBySession: Record<string, number>;
+	directActivatedCompletionBySession: Record<string, string>;
 	renderedCompletionBySession: Record<string, string>;
-	renderedCompletionTickBySession: Record<string, number>;
 	obscuredChatSessions: Record<string, true>;
 	extUiOrphans: ExtUiRequest[];
 	models: WireModel[];
@@ -1412,8 +1412,8 @@ function withoutChat(
 	const hasHostState = s.sessionStateByWorkspace[workspaceId]?.[sessionId] !== undefined;
 	const hasStateTick = Object.hasOwn(s.sessionStateTickBySession, sessionId);
 	const hasActivationTick = Object.hasOwn(s.directChatActivationTickBySession, sessionId);
+	const hasActivatedCompletion = Object.hasOwn(s.directActivatedCompletionBySession, sessionId);
 	const hasRenderedCompletion = Object.hasOwn(s.renderedCompletionBySession, sessionId);
-	const hasRenderedCompletionTick = Object.hasOwn(s.renderedCompletionTickBySession, sessionId);
 	const isObscured = Boolean(s.obscuredChatSessions[sessionId]);
 	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
 	const targetsLocation =
@@ -1434,8 +1434,8 @@ function withoutChat(
 		!hasHostState &&
 		!hasStateTick &&
 		!hasActivationTick &&
+		!hasActivatedCompletion &&
 		!hasRenderedCompletion &&
-		!hasRenderedCompletionTick &&
 		!isObscured &&
 		!hasSkillBaseline &&
 		!targetsLocation &&
@@ -1529,13 +1529,16 @@ function withoutChat(
 					),
 				}
 			: {}),
+		...(hasActivatedCompletion
+			? {
+					directActivatedCompletionBySession: omitKey(
+						s.directActivatedCompletionBySession,
+						sessionId,
+					),
+				}
+			: {}),
 		...(hasRenderedCompletion
 			? { renderedCompletionBySession: omitKey(s.renderedCompletionBySession, sessionId) }
-			: {}),
-		...(hasRenderedCompletionTick
-			? {
-					renderedCompletionTickBySession: omitKey(s.renderedCompletionTickBySession, sessionId),
-				}
 			: {}),
 		...(isObscured ? { obscuredChatSessions: omitKey(s.obscuredChatSessions, sessionId) } : {}),
 		...(hasSkillBaseline
@@ -1800,8 +1803,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	sessionStateClock: 0,
 	sessionStateTickBySession: {},
 	directChatActivationTickBySession: {},
+	directActivatedCompletionBySession: {},
 	renderedCompletionBySession: {},
-	renderedCompletionTickBySession: {},
 	obscuredChatSessions: {},
 	extUiOrphans: [],
 	models: [],
@@ -2955,28 +2958,34 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => {
 			if (s.obscuredChatSessions[sessionId]) return {};
 			const sessionStateClock = s.sessionStateClock + 1;
+			const state = Object.values(s.sessionStateByWorkspace).find(
+				(records) => records[sessionId] !== undefined,
+			)?.[sessionId]?.state;
+			const completionId = state?.completionUnread ? state.completion?.completionId : undefined;
 			return {
 				sessionStateClock,
 				directChatActivationTickBySession: {
 					...s.directChatActivationTickBySession,
 					[sessionId]: sessionStateClock,
 				},
+				...(completionId
+					? {
+							directActivatedCompletionBySession: {
+								...s.directActivatedCompletionBySession,
+								[sessionId]: completionId,
+							},
+						}
+					: {}),
 			};
 		}),
 	noteRenderedCompletion: (sessionId, completionId) =>
 		set((s) => {
 			if (s.sessions[sessionId]?.hostState?.completion?.completionId !== completionId) return {};
 			if (s.renderedCompletionBySession[sessionId] === completionId) return {};
-			const sessionStateClock = s.sessionStateClock + 1;
 			return {
-				sessionStateClock,
 				renderedCompletionBySession: {
 					...s.renderedCompletionBySession,
 					[sessionId]: completionId,
-				},
-				renderedCompletionTickBySession: {
-					...s.renderedCompletionTickBySession,
-					[sessionId]: sessionStateClock,
 				},
 			};
 		}),

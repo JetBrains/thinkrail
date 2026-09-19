@@ -104,7 +104,7 @@ test("normalized rail flags keep attention binary and working orthogonal", () =>
 	expect(selectProjectIsRunning(state, "p2")).toBe(false);
 });
 
-test("completion acknowledgement requires exact render, current connection, and later direct activation", () => {
+test("completion acknowledgement requires exact render and a direct activation after state arrival", () => {
 	const completion = { completionId: "completion:a1", outcome: "succeeded" as const };
 	const hostState = {
 		execution: "idle" as const,
@@ -123,22 +123,19 @@ test("completion acknowledgement requires exact render, current connection, and 
 		sessions: {
 			s1: { ...EMPTY_RUNTIME, hostState, syncedConnectionGeneration: 4 },
 		},
-		sessionStateTickBySession: { s1: 8 },
+		sessionStateTickBySession: { s1: 10 },
 		directChatActivationTickBySession: { s1: 9 },
+		directActivatedCompletionBySession: { s1: completion.completionId },
 		renderedCompletionBySession: { s1: completion.completionId },
-		renderedCompletionTickBySession: { s1: 8 },
 	};
 	expect(selectReadyCompletionActivation(state, "w1", "s1")).toBe(completion.completionId);
 	expect(
 		selectReadyCompletionActivation(
-			{ ...state, directChatActivationTickBySession: { s1: 8 } },
-			"w1",
-			"s1",
-		),
-	).toBeNull();
-	expect(
-		selectReadyCompletionActivation(
-			{ ...state, renderedCompletionTickBySession: { s1: 10 } },
+			{
+				...state,
+				directChatActivationTickBySession: { s1: 8 },
+				directActivatedCompletionBySession: {},
+			},
 			"w1",
 			"s1",
 		),
