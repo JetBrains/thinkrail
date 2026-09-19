@@ -211,12 +211,14 @@ dependency. This keeps test process drivers outside both launchers and the serve
     [[central-integration]]. This keeps feature-specific mechanics in
     their leaf specs while making a non-terminating composition visible at the architecture layer.
 
-14. **The public website is one origin, artifact, and production deployment.** `apps/website` owns `/`,
-    `/blog/`, and `/vibecoding/` in one static Astro build deployed through one Cloudflare Pages project.
-    React and Tailwind are permitted only inside [[submodule-website-vibecoding]]; unrelated routes retain
-    their vanilla runtime and hand-written stylesheet. Browser analytics and consent initialize once on the
-    exact `thinkrail.ai` origin. The retired `vibecoding.thinkrail.ai` hostname is an edge redirect that
-    preserves path and query, never a proxy to a second site.
+14. **The public website is one origin and production deployment.** `apps/website` owns `/`, `/blog/`,
+    and `/vibecoding/` in one static Astro build deployed with same-project Cloudflare Pages Functions.
+    D1-backed [[submodule-website-attribution]] provides short-lived browser claims under that deployment;
+    it is not a second product host or identity owner. React and Tailwind are permitted only inside
+    [[submodule-website-vibecoding]]; unrelated routes retain their vanilla runtime and hand-written
+    stylesheet. Browser analytics and consent initialize once on the exact `thinkrail.ai` origin. The
+    retired `vibecoding.thinkrail.ai` hostname is an edge redirect that preserves path and query, never a
+    proxy to a second site.
 
 15. **Desktop packaging preserves the host/runtime boundary.** Electrobun `2.0.1` explicitly selects
     its release-owned Bun `1.4.0` runtime and embeds the host in that process, not the default Cottontail

@@ -5,9 +5,12 @@
 	"type": "module",
 	"scripts": {
 		"dev": "astro dev",
-		"build": "astro check && astro build && bun src/validateBuild.ts",
-		"typecheck": "astro check",
+		"build": "astro check && bun run typecheck:functions && bun run build:functions && astro build && bun src/validateBuild.ts",
+		"build:functions": "bunx wrangler@4.124.0 pages functions build functions --project-directory . --outdir .wrangler/functions-build",
+		"typecheck": "astro check && bun run typecheck:functions",
+		"typecheck:functions": "tsc --noEmit -p tsconfig.functions.json",
 		"test": "bun test",
+		"smoke:attribution": "bun src/attribution/localD1Smoke.ts",
 		"preview": "astro preview",
 		"verify:deployment": "bun src/verifyDeployment.ts"
 	},
