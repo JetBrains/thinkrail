@@ -428,6 +428,9 @@ test("normalized session snapshots, pushes, and direct activation keep one exact
 	store.applySessionState(record("completion:two"));
 	store.setChatObscured("state-session", true);
 	store.noteDirectChatActivation("state-session");
+	expect(useAppStore.getState().directActivatedCompletionBySession["state-session"]).toBe(
+		"completion:one",
+	);
 	store.setChatObscured("state-session", false);
 	store.noteRenderedCompletion("state-session", "completion:two");
 	expect(
@@ -443,7 +446,13 @@ test("normalized session snapshots, pushes, and direct activation keep one exact
 	expect(
 		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
 	).toBe("completion:three");
-	store.applySessionState(record("completion:three"));
+	store.applySessionState({
+		...record("completion:three"),
+		state: { ...record("completion:three").state, queuedCount: 1 },
+	});
+	expect(useAppStore.getState().sessionStateTickBySession["state-session"]).toBeGreaterThan(
+		useAppStore.getState().directChatActivationTickBySession["state-session"] ?? 0,
+	);
 	expect(
 		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
 	).toBe("completion:three");
