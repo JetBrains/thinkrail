@@ -166,9 +166,9 @@ function ClosedChatRow({
 					data-session-id={chat.sessionId}
 					onClick={() => {
 						onDismiss();
-						const navigation = useAppStore
-							.getState()
-							.beginCenterNavigation(workspaceId, targetGroupId);
+						const store = useAppStore.getState();
+						store.noteDirectChatActivation(chat.sessionId);
+						const navigation = store.beginCenterNavigation(workspaceId, targetGroupId);
 						void openChatInTab(workspaceId, chat.sessionId, navigation);
 					}}
 					className={cn(menuItemClass, "min-w-0 flex-1")}

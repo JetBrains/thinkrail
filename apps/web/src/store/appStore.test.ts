@@ -135,8 +135,8 @@ beforeEach(() => {
 		sessionStateClock: 0,
 		sessionStateTickBySession: {},
 		directChatActivationTickBySession: {},
+		directActivatedCompletionBySession: {},
 		renderedCompletionBySession: {},
-		renderedCompletionTickBySession: {},
 		obscuredChatSessions: {},
 		extUiOrphans: [],
 		workbenchFrame: null,
@@ -416,30 +416,37 @@ test("normalized session snapshots, pushes, and direct activation keep one exact
 	expect(useAppStore.getState().sessions["state-session"]?.hostState).toEqual(
 		record("completion:one").state,
 	);
-	store.noteDirectChatActivation("state-session");
 	store.noteRenderedCompletion("state-session", "completion:one");
 	expect(
 		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
 	).toBeNull();
-	store.setChatObscured("state-session", true);
 	store.noteDirectChatActivation("state-session");
-	store.setChatObscured("state-session", false);
-	expect(
-		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
-	).toBeNull();
-	store.noteDirectChatActivation("state-session");
-	expect(
-		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
-	).toBe("completion:one");
-	store.applySessionState(record("completion:one"));
 	expect(
 		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
 	).toBe("completion:one");
 
 	store.applySessionState(record("completion:two"));
+	store.setChatObscured("state-session", true);
+	store.noteDirectChatActivation("state-session");
+	store.setChatObscured("state-session", false);
+	store.noteRenderedCompletion("state-session", "completion:two");
 	expect(
 		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
 	).toBeNull();
+
+	store.applySessionState(record("completion:three"));
+	store.noteDirectChatActivation("state-session");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBeNull();
+	store.noteRenderedCompletion("state-session", "completion:three");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBe("completion:three");
+	store.applySessionState(record("completion:three"));
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
+	).toBe("completion:three");
 	store.deleteChat("state-workspace", "state-session");
 	expect(
 		useAppStore.getState().sessionStateByWorkspace["state-workspace"]?.["state-session"],

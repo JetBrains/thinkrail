@@ -1024,10 +1024,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   run flag; "working" covers other runs; "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
   idle). The glance's working/waiting lifecycle comes from the normalized host `SessionState`; `askStates`
   remains only to identify and render the exact questionnaire/recap. `ChatView` records direct activation on
-  deliberate tab selection or unobscured conversation pointer intent, never mount/visibility or history-
-  overlay interaction. Only an activation newer than
-  the exact completion's committed render may send its owner-global acknowledgement; pre-render navigation
-  and passive multi-pane rendering cannot clear another client's marker. Transient acknowledgement failure
+  deliberate tab/group selection, direct history/search open, or unobscured conversation pointer intent,
+  never passive mount/visibility or incidental history-overlay interaction. Activation captures the exact
+  current unread completion id (plus its local clock), while exact-row rendering gates the actual
+  acknowledgement: a direct open may occur before hydration/attach convergence and clears once the same
+  result mounts, without requiring a second composer focus; stale ids cannot clear newer results. Passive
+  multi-pane rendering still cannot clear another client's marker. Transient acknowledgement failure
   retries with a bounded capped-backoff budget; a later direct activation rearms that exact id.
   `TodoList` stays props-driven — it receives the resolved glance, never reads the transport.
   Its section label + pending/active/done status glyphs live in **`planKit.tsx`** — shared
