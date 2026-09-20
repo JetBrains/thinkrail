@@ -174,15 +174,24 @@ async function fileFinding(
 	});
 }
 
+/** File a whole finding set as one all-or-nothing operation: if any `fileFinding()` write throws
+ * partway, the drafts already persisted in this call are deleted before the error propagates, so a
+ * partial failure never strands open findings whose canonical ids the caller never received. All filed
+ * comments are still drafts here, so `deleteComment` always applies. See planReview.SPEC.md. */
 async function fileFindings(
 	params: ReviewParams,
 	reviewedSha: string,
 	raw: ReviewFixComment[],
 ): Promise<ReviewFixComment[]> {
 	const findings: ReviewFixComment[] = [];
-	for (const f of raw) {
-		const persisted = await fileFinding(params, reviewedSha, f);
-		findings.push({ ...f, id: persisted.id });
+	try {
+		for (const f of raw) {
+			const persisted = await fileFinding(params, reviewedSha, f);
+			findings.push({ ...f, id: persisted.id });
+		}
+	} catch (err) {
+		for (const f of findings) await deleteComment(params.workspaceId, f.id).catch(() => {});
+		throw err;
 	}
 	return findings;
 }
@@ -279,7 +288,8 @@ async function recordVerdict(
 	if (!deliverFix) {
 		// Tool path: file the findings and mark them sent to the worker as one locked transaction, so a
 		// concurrent clear or a non-draft collision can't strand open findings whose canonical ids the
-		// worker never received. On a mark failure the just-filed drafts are deleted. See planReview.SPEC.md.
+		// worker never received. `fileFindings` compensates a mid-loop persist failure; a mark failure
+		// deletes the just-filed drafts here. See planReview.SPEC.md.
 		const findings = await withReviewLock(params.workspaceId, async () => {
 			const filed = await fileFindings(params, reviewedSha, result.findings);
 			try {

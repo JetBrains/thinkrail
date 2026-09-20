@@ -609,6 +609,47 @@ test("the tool path deletes the just-filed drafts when the mark-sent transaction
 	expect(itemReviewActive(sessionId, id)).toBe(false);
 });
 
+const requestChangesTwo = [
+	"```json",
+	'{ "verdict": "request_changes", "summary": "two problems",',
+	'  "findings": [ { "id": "f1", "path": "a.ts", "startLine": 1, "body": "first" },',
+	'               { "id": "f2", "path": "a.ts", "startLine": 2, "body": "second" } ] }',
+	"```",
+].join("\n");
+
+test("the tool path deletes the first filed draft when a later finding fails to persist", async () => {
+	installRequestReviewSeam(verdictRunner(requestChangesTwo));
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+
+	// The first finding persists; the second addComment throws (a mid-loop store fault). fileFindings
+	// must compensate its own partial success so the first draft is deleted, leaving no stranded open
+	// finding whose canonical id the worker never received, and the request must reject.
+	const real = reviews.addComment;
+	let calls = 0;
+	const spy = spyOn(reviews, "addComment").mockImplementation(async (arg) => {
+		calls += 1;
+		if (calls === 2) throw new Error("review store unwritable");
+		return real(arg);
+	});
+	try {
+		await expect(
+			createRequestReviewTool().execute("tc", { itemId: id } as never, undefined, undefined, ctx),
+		).rejects.toThrow(/review store unwritable/);
+	} finally {
+		spy.mockRestore();
+	}
+
+	expect(
+		(await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id),
+	).toHaveLength(0);
+	expect(todoReviewRecord(ref)).toBeUndefined();
+	expect(todoReviewAutoCycles(ref)).toBeUndefined();
+	expect(itemReviewActive(sessionId, id)).toBe(false);
+});
+
 test("a request_review that fails before the review starts releases its claim, so the retry runs", async () => {
 	installRequestReviewSeam(verdictRunner(approve));
 	const sessionId = await workerSession();
