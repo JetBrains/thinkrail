@@ -2377,6 +2377,7 @@ test("applyProjectUpdated closes the current project to the next Home and preser
 		workspaces: { p1: [workspace] },
 		selectedProjectId: "p1",
 		activeWorkspaceId: "w1",
+		pendingWorkspaceChatActivation: "w1",
 		tabsByWorkspace: tabs,
 	});
 
@@ -2386,6 +2387,7 @@ test("applyProjectUpdated closes the current project to the next Home and preser
 	expect(state.projects.map((candidate) => candidate.id)).toEqual(["p2"]);
 	expect(state.selectedProjectId).toBe("p2");
 	expect(state.activeWorkspaceId).toBeNull();
+	expect(state.pendingWorkspaceChatActivation).toBeNull();
 	expect(state.workspaces.p1).toEqual([workspace]);
 	expect(state.tabsByWorkspace).toBe(tabs);
 });
@@ -2509,6 +2511,28 @@ test("deliberate workspace entry activates its selected chat after layout conver
 	});
 	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBeNull();
 	expect(useAppStore.getState().directActivatedCompletionBySession[sessionId]).toBe(completionId);
+});
+
+test("connection transitions expire a pending workspace-entry receipt", () => {
+	const workspace = pushedWorkspace();
+	const sessionId = "post-reconnect-chat";
+	useAppStore.setState({
+		layoutDocumentsByWorkspace: { [workspace.id]: selectedChatLayout(sessionId) },
+	});
+
+	const store = useAppStore.getState();
+	store.activateWorkspace(workspace);
+	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBe(workspace.id);
+	store.setStatus("connected");
+	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBeNull();
+
+	store.setLayoutAttention(workspace.id, {
+		selectedByGroup: { center: `chat:${sessionId}` },
+		lastFocusedCenterGroupId: "center",
+		lastFocusedSideGroupId: {},
+		navigationClockByGroup: { center: 0 },
+	});
+	expect(useAppStore.getState().directActivatedCompletionBySession[sessionId]).toBeUndefined();
 });
 
 test("route restoration never turns a selected visible chat into a read receipt", () => {

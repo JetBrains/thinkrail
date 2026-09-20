@@ -1185,10 +1185,16 @@ function pruneExpandedProjects(
 function reconcileProjectNavigation(
 	state: Pick<AppState, "selectedProjectId" | "activeWorkspaceId" | "workspaces">,
 	projects: Project[],
-): Pick<AppState, "selectedProjectId" | "activeWorkspaceId"> | Record<string, never> {
+):
+	| Pick<AppState, "selectedProjectId" | "activeWorkspaceId" | "pendingWorkspaceChatActivation">
+	| Record<string, never> {
 	const currentProjectId = selectActiveWorkspaceProjectId(state) ?? state.selectedProjectId;
 	if (!currentProjectId || projects.some((project) => project.id === currentProjectId)) return {};
-	return { selectedProjectId: projects[0]?.id ?? null, activeWorkspaceId: null };
+	return {
+		selectedProjectId: projects[0]?.id ?? null,
+		activeWorkspaceId: null,
+		pendingWorkspaceChatActivation: null,
+	};
 }
 
 function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
@@ -1834,6 +1840,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			protocolVersion: null,
 			connectionGeneration:
 				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
+			pendingWorkspaceChatActivation: null,
 		})),
 	installWelcomeSnapshot: (
 		protocolVersion,

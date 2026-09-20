@@ -219,8 +219,10 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
     focus. Deliberate workspace entry also activates its already-selected chat once that chat is visible and
     unobscured, so entering the workspace and reading does not require a second click on the chat. Passive
     mount/visibility and background layout restoration never advance activation; chat-tab/group selection,
-    direct history/search open, workspace entry, and unobscured conversation pointer intent do. Incidental
-    interactions inside an obscuring history overlay do not.
+    direct history/search open, workspace entry, and unobscured conversation pointer intent do. Workspace
+    entry arms one pending activation only until the first selected center tab converges; competing
+    navigation or any connection transition expires it, so a later background restore cannot inherit an
+    old read gesture. Incidental interactions inside an obscuring history overlay do not.
   Closed chats are reopenable: the workbench close command atomically removes local placement and invokes
   **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
   **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending
