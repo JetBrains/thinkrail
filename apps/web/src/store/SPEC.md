@@ -215,9 +215,12 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
     the current completion id as well as its local clock, so an attach/hydration push for the same id cannot
     erase a deliberate open while a stale activation can never clear a newer result. The exact result must
     render before acknowledgement is sent, but a deliberate tab/history activation may happen first and
-    remains eligible once that row mounts—opening and reading is sufficient without a second composer focus. Passive mount/visibility never advances activation; chat-tab/group selection, direct
-    history/search open, and unobscured conversation pointer intent do. Incidental interactions inside an
-    obscuring history overlay do not.
+    remains eligible once that row mounts—opening and reading is sufficient without a second composer
+    focus. Deliberate workspace entry also activates its already-selected chat once that chat is visible and
+    unobscured, so entering the workspace and reading does not require a second click on the chat. Passive
+    mount/visibility and background layout restoration never advance activation; chat-tab/group selection,
+    direct history/search open, workspace entry, and unobscured conversation pointer intent do. Incidental
+    interactions inside an obscuring history overlay do not.
   Closed chats are reopenable: the workbench close command atomically removes local placement and invokes
   **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
   **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending

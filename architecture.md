@@ -123,9 +123,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
    **Normalized session state.** The host projects execution, concrete input blockers, Pi-owned queue count,
    and the latest completion as orthogonal facts. Needs-input is level-triggered and cannot be cleared by
    viewing; a completion is created only by `agent_settled` or restart reconstruction. Success,
-   failure/length, and interruption remain owner-globally unread until direct activation of the exact
-   rendered result; explicit Stop is quiet. Every client hydrates the same state and exact completion
-   receipts from the host, while tab selection/focus remains frontend-local activation evidence.
+   failure/length, and interruption remain owner-globally unread until the exact result renders in an
+   unobscured chat reached by deliberate frontend navigation; explicit Stop is quiet. Every client
+   hydrates the same state and exact completion receipts from the host, while chat/tab selection and
+   workspace entry remain frontend-local activation evidence. Background restoration alone is not a read.
 
    **Chat-title contract.** A workspace display name, its Git branch/cwd,
    and each chat title are independent identities; no rename cascades between them. A chat title is pi's
