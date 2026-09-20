@@ -76,6 +76,30 @@ test("an unresolved persisted question is level-triggered in project and workspa
 	}
 });
 
+test("entering a workspace clears its visible unread result without a chat click", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "workspace entry receipt",
+		messages: [
+			{ role: "user", text: "Finish before workspace entry.", timestamp: BASE_TS + 5 },
+			{ role: "assistant", text: "Visible workspace result.", timestamp: BASE_TS + 6 },
+		],
+	});
+	try {
+		await reconnectWithSeed(page);
+		const workspace = defaultWorkspaceRow(page);
+		await expectAttentionDot(workspace);
+
+		await enterDefaultWorkspace(page);
+		await expect(page.getByText("Visible workspace result.", { exact: true })).toBeVisible();
+		await expect(workspace).not.toHaveAttribute("data-attention", /.+/);
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
 test("an unread finished result clears only after direct chat activation renders it", async ({
 	page,
 }) => {
