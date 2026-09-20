@@ -175,6 +175,7 @@ beforeEach(() => {
 		selectedProjectId: null,
 		activeWorkspaceId: null,
 		workspaceSelectionHistory: [],
+		pendingWorkspaceChatActivation: null,
 		activeLogin: null,
 		settingsOpen: false,
 		settingsSection: "providers",
@@ -2472,6 +2473,21 @@ function pushedWorkspace(over: Partial<Workspace> = {}): Workspace {
 	};
 }
 
+function selectedChatLayout(sessionId: string): WorkspaceLayoutDocument {
+	return {
+		version: 2,
+		center: {
+			kind: "group",
+			id: "center",
+			tabs: [{ kind: "chat", id: `chat:${sessionId}`, name: "Chat", sessionId }],
+		},
+		left: { visible: false, width: 0.2, groups: [] },
+		right: { visible: false, width: 0.2, groups: [] },
+		bottom: emptyBottomRegion(),
+		toolRestoreTargets: {},
+	};
+}
+
 test("project and workspace navigation update both scope ids atomically", () => {
 	useAppStore.setState({ selectedProjectId: "p1", activeWorkspaceId: "w1" });
 	const transitions: [string | null, string | null][] = [];
@@ -2486,6 +2502,81 @@ test("project and workspace navigation update both scope ids atomically", () => 
 	useAppStore.getState().activateWorkspace(pushedWorkspace({ id: "w3", projectId: "p3" }));
 	expect(transitions).toEqual([["p3", "w3"]]);
 	unsubscribe();
+});
+
+test("deliberate workspace entry activates its selected chat after layout convergence", () => {
+	const workspace = pushedWorkspace();
+	const sessionId = "workspace-entry-chat";
+	const completionId = "completion:workspace-entry";
+	const record: SessionStateRecord = {
+		workspaceId: workspace.id,
+		projectId: workspace.projectId,
+		sessionId,
+		state: {
+			execution: "idle",
+			runId: "run",
+			needsInput: null,
+			completion: { completionId, outcome: "succeeded" },
+			completionUnread: true,
+			queuedCount: 0,
+		},
+	};
+	useAppStore.setState({
+		status: "connected",
+		sessionStateByWorkspace: { [workspace.id]: { [sessionId]: record } },
+		layoutDocumentsByWorkspace: { [workspace.id]: selectedChatLayout(sessionId) },
+	});
+
+	const store = useAppStore.getState();
+	store.activateWorkspace(workspace);
+	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBe(workspace.id);
+	expect(useAppStore.getState().directActivatedCompletionBySession[sessionId]).toBeUndefined();
+
+	store.setLayoutAttention(workspace.id, {
+		selectedByGroup: { center: `chat:${sessionId}` },
+		lastFocusedCenterGroupId: "center",
+		lastFocusedSideGroupId: {},
+		navigationClockByGroup: { center: 0 },
+	});
+	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBeNull();
+	expect(useAppStore.getState().directActivatedCompletionBySession[sessionId]).toBe(completionId);
+});
+
+test("route restoration never turns a selected visible chat into a read receipt", () => {
+	const workspace = pushedWorkspace();
+	const sessionId = "restored-chat";
+	useAppStore.setState({
+		sessionStateByWorkspace: {
+			[workspace.id]: {
+				[sessionId]: {
+					workspaceId: workspace.id,
+					projectId: workspace.projectId,
+					sessionId,
+					state: {
+						execution: "idle",
+						runId: "run",
+						needsInput: null,
+						completion: { completionId: "completion:restored", outcome: "succeeded" },
+						completionUnread: true,
+						queuedCount: 0,
+					},
+				},
+			},
+		},
+		layoutDocumentsByWorkspace: { [workspace.id]: selectedChatLayout(sessionId) },
+		layoutAttentionByWorkspace: {
+			[workspace.id]: {
+				selectedByGroup: { center: `chat:${sessionId}` },
+				lastFocusedCenterGroupId: "center",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: { center: 0 },
+			},
+		},
+	});
+
+	useAppStore.getState().activateWorkspaceFromRoute(workspace);
+	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBeNull();
+	expect(useAppStore.getState().directActivatedCompletionBySession[sessionId]).toBeUndefined();
 });
 
 test("workspace selection history tracks ordinary, route, and history-search activation", () => {
@@ -2748,12 +2839,39 @@ test("addWorkspace is a no-op for a project whose list was never fetched", () =>
 test("applyWorkspaceRemoved restores the most-recent workspace across projects", () => {
 	const removed = pushedWorkspace();
 	const previous = pushedWorkspace({ id: "w2", projectId: "p2", name: "previous" });
+	const previousSessionId = "passive-fallback-chat";
 	useAppStore.setState({
 		projects: [project(), project({ id: "p2" })],
 		workspaces: { p1: [removed], p2: [previous] },
 		selectedProjectId: "p1",
 		activeWorkspaceId: "w1",
 		workspaceSelectionHistory: ["w1", "w2"],
+		sessionStateByWorkspace: {
+			w2: {
+				[previousSessionId]: {
+					workspaceId: "w2",
+					projectId: "p2",
+					sessionId: previousSessionId,
+					state: {
+						execution: "idle",
+						runId: "run",
+						needsInput: null,
+						completion: { completionId: "completion:fallback", outcome: "succeeded" },
+						completionUnread: true,
+						queuedCount: 0,
+					},
+				},
+			},
+		},
+		layoutDocumentsByWorkspace: { w2: selectedChatLayout(previousSessionId) },
+		layoutAttentionByWorkspace: {
+			w2: {
+				selectedByGroup: { center: `chat:${previousSessionId}` },
+				lastFocusedCenterGroupId: "center",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: { center: 0 },
+			},
+		},
 		toasts: [],
 	});
 
@@ -2763,6 +2881,8 @@ test("applyWorkspaceRemoved restores the most-recent workspace across projects",
 	expect(state.activeWorkspaceId).toBe("w2");
 	expect(state.selectedProjectId).toBe("p2");
 	expect(state.workspaceSelectionHistory).toEqual(["w2"]);
+	expect(state.pendingWorkspaceChatActivation).toBeNull();
+	expect(state.directActivatedCompletionBySession[previousSessionId]).toBeUndefined();
 	expect(state.toasts).toHaveLength(1);
 });
 

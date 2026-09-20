@@ -818,6 +818,7 @@ interface AppState {
 	selectedProjectId: string | null;
 	activeWorkspaceId: string | null;
 	workspaceSelectionHistory: string[];
+	pendingWorkspaceChatActivation: string | null;
 	routeChatTarget: RouteChatTarget | null;
 	routeChatTargetGeneration: number;
 	workbenchFrame: WorkbenchFrame | null;
@@ -923,6 +924,7 @@ interface AppState {
 	hydrateExpandedProjects: (projectIds: readonly string[]) => void;
 	selectMain: () => void;
 	activateWorkspace: (workspace: Pick<Workspace, "id" | "projectId">) => void;
+	consumeWorkspaceChatActivation: (workspaceId: string) => void;
 	activateWorkspaceFromRoute: (
 		workspace: Pick<Workspace, "id" | "projectId">,
 		sessionId?: string,
@@ -1793,6 +1795,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	selectedProjectId: null,
 	activeWorkspaceId: null,
 	workspaceSelectionHistory: [],
+	pendingWorkspaceChatActivation: null,
 	routeChatTarget: null,
 	routeChatTargetGeneration: 0,
 	workbenchFrame: null,
@@ -2060,6 +2063,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				workspaceSelectionHistory: state.workspaceSelectionHistory.filter(
 					(id) => id !== workspaceId,
 				),
+				pendingWorkspaceChatActivation:
+					state.pendingWorkspaceChatActivation === workspaceId
+						? null
+						: state.pendingWorkspaceChatActivation,
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
 				resourceSnapshots: omitKey(state.resourceSnapshots, workspaceId),
 				sessionStateByWorkspace: omitKey(state.sessionStateByWorkspace, workspaceId),
@@ -2094,6 +2101,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) => ({
 			selectedProjectId,
 			activeWorkspaceId: null,
+			pendingWorkspaceChatActivation: null,
 			...(opts?.reveal
 				? { expandedProjectIds: withExpandedProject(state.expandedProjectIds, selectedProjectId) }
 				: {}),
@@ -2114,13 +2122,32 @@ export const useAppStore = create<AppState>((set, get) => ({
 			expandedProjectIds: Object.fromEntries(projectIds.map((id) => [id, true as const])),
 		})),
 	selectMain: () =>
-		set({ selectedProjectId: null, activeWorkspaceId: null, routeChatTarget: null }),
+		set({
+			selectedProjectId: null,
+			activeWorkspaceId: null,
+			pendingWorkspaceChatActivation: null,
+			routeChatTarget: null,
+		}),
 	activateWorkspace: (workspace) => {
 		if (get().removedWorkspaceIds[workspace.id]) return;
-		set((state) => workspaceActivationPatch(state, workspace));
+		set((state) => ({
+			...workspaceActivationPatch(state, workspace),
+			pendingWorkspaceChatActivation: workspace.id,
+		}));
+		get().consumeWorkspaceChatActivation(workspace.id);
+	},
+	consumeWorkspaceChatActivation: (workspaceId) => {
 		const state = get();
-		const active = selectAttentionCenterTab(state, workspace.id);
-		if (active?.kind === "chat") state.noteDirectChatActivation(active.sessionId);
+		if (
+			state.activeWorkspaceId !== workspaceId ||
+			state.pendingWorkspaceChatActivation !== workspaceId
+		) {
+			return;
+		}
+		const active = selectAttentionCenterTab(state, workspaceId);
+		if (!active) return;
+		set({ pendingWorkspaceChatActivation: null });
+		if (active.kind === "chat") get().noteDirectChatActivation(active.sessionId);
 	},
 	activateWorkspaceFromRoute: (workspace, sessionId) =>
 		set((state) => {
@@ -2130,6 +2157,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				...advanced.patch,
 				selectedProjectId: workspace.projectId,
 				activeWorkspaceId: workspace.id,
+				pendingWorkspaceChatActivation: null,
 				workspaceSelectionHistory: withWorkspaceSelected(
 					state.workspaceSelectionHistory,
 					workspace.id,
@@ -2156,7 +2184,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	clearRouteChatTarget: () =>
 		set((state) => (state.routeChatTarget ? { routeChatTarget: null } : state)),
-	hydrateLocalLayoutState: (payload) =>
+	hydrateLocalLayoutState: (payload) => {
 		set((state) =>
 			state.layoutStateReady
 				? {}
@@ -2168,8 +2196,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 						localLayoutPreferences: payload.preferences,
 						layoutStateReady: true,
 					},
-		),
-	applyLocalLayoutState: (payload, invalidateProjection = false) =>
+		);
+		const pending = get().pendingWorkspaceChatActivation;
+		if (pending) get().consumeWorkspaceChatActivation(pending);
+	},
+	applyLocalLayoutState: (payload, invalidateProjection = false) => {
 		set((state) => ({
 			workbenchFrame: payload.frame,
 			workspaceViewsByWorkspace: payload.viewsByWorkspace,
@@ -2177,9 +2208,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 			layoutAttentionByWorkspace: payload.attentionByWorkspace,
 			localLayoutPreferences: payload.preferences,
 			layoutProjectionEpoch: state.layoutProjectionEpoch + (invalidateProjection ? 1 : 0),
-		})),
+		}));
+		const pending = get().pendingWorkspaceChatActivation;
+		if (pending) get().consumeWorkspaceChatActivation(pending);
+	},
 	setLocalLayoutPreferences: (preferences) => set({ localLayoutPreferences: preferences }),
-	setLayoutAttention: (workspaceId, attention) =>
+	setLayoutAttention: (workspaceId, attention) => {
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]
 				? {}
@@ -2189,7 +2223,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 							[workspaceId]: attention,
 						},
 					},
-		),
+		);
+		get().consumeWorkspaceChatActivation(workspaceId);
+	},
 	syncLegacySelection: (workspaceId, selection) =>
 		set((state) => {
 			if (state.removedWorkspaceIds[workspaceId]) return {};
@@ -3483,6 +3519,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 				selectedProjectId: req.projectId,
 				activeWorkspaceId: req.workspaceId,
+				pendingWorkspaceChatActivation: null,
 				workspaceSelectionHistory: withWorkspaceSelected(
 					state.workspaceSelectionHistory,
 					req.workspaceId,
