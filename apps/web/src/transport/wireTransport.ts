@@ -38,6 +38,15 @@ interface SessionStateHydration {
 let sessionStateHydration: SessionStateHydration | null = null;
 const SESSION_STATE_BUFFER_LIMIT = 4_096;
 
+export function mergeSessionStateRecords(
+	snapshot: readonly SessionStateRecord[],
+	buffered: readonly SessionStateRecord[],
+): SessionStateRecord[] {
+	const latestBySession = new Map(snapshot.map((record) => [record.sessionId, record]));
+	for (const record of buffered) latestBySession.set(record.sessionId, record);
+	return [...latestBySession.values()];
+}
+
 function applySessionStateRecord(record: SessionStateRecord): void {
 	const store = useAppStore.getState();
 	store.applySessionState(record);
@@ -65,14 +74,14 @@ function hydrateSessionStates(connectionGeneration: number): void {
 				) {
 					return;
 				}
-				current.installSessionStateSnapshot(records);
-				for (const record of records) {
+				const ordered = mergeSessionStateRecords(records, hydration.buffered);
+				current.installSessionStateSnapshot(ordered);
+				for (const record of ordered) {
 					if (record.state.needsInput?.kind === "dialog") {
 						current.applyExtUi(record.state.needsInput.request);
 					}
 				}
 				hydration.installed = true;
-				for (const record of hydration.buffered) applySessionStateRecord(record);
 				hydration.buffered = [];
 			})
 			.catch(() => {

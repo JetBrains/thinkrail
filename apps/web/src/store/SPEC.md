@@ -215,8 +215,8 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
     the current completion id as well as its local clock, so an attach/hydration push for the same id cannot
     erase a deliberate open while a stale activation can never clear a newer result. On a cold connection,
     a deliberate open before the first state snapshot cannot trust the retained record, which may be absent
-    or stale after reconnect; one pending activation survives only until that snapshot, which binds its exact
-    unread completion or drops it when the session is quiet/absent. Connection transition and chat deletion clear the pending activation, and
+    or stale after reconnect; one pending activation survives only until the ordered snapshot-plus-buffer
+    state installs, which binds its exact unread completion or drops it when the session is quiet/absent. Connection transition and chat deletion clear the pending activation, and
     later pushes cannot inherit it. The exact result must render before acknowledgement is sent, but a
     deliberate tab/history activation may happen first and
     remains eligible once that row mounts—opening and reading is sufficient without a second composer
