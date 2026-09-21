@@ -14,6 +14,8 @@ const FG_COLORS: ConstructorParameters<typeof Theme>[0] = {
 	dim: "",
 	text: "",
 	thinkingText: "",
+	scrollbarTrack: "",
+	scrollbarThumb: "",
 	userMessageText: "",
 	customMessageText: "",
 	customMessageLabel: "",
@@ -53,7 +55,6 @@ const FG_COLORS: ConstructorParameters<typeof Theme>[0] = {
 
 const BG_COLORS: ConstructorParameters<typeof Theme>[1] = {
 	selectedBg: "",
-	scrollbarThumb: "",
 	userMessageBg: "",
 	customMessageBg: "",
 	toolPendingBg: "",

@@ -11,9 +11,11 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+	getCurrentTools,
 	InMemoryCredentialStore,
 	type Model,
 	type ModelsRefreshResult,
+	type TranscriptContext,
 } from "@earendil-works/pi-ai";
 import {
 	createFauxCore,
@@ -118,8 +120,8 @@ const cfg = (faux: typeof fauxA, id: string) => ({
 const events = new Map<string, unknown[]>();
 const seen = (id: string) => JSON.stringify(events.get(id) ?? []);
 
-function subagentToolState(context: { tools?: ReadonlyArray<{ name: string }> }): string {
-	const names = new Set((context.tools ?? []).map((tool) => tool.name));
+function subagentToolState(context: TranscriptContext): string {
+	const names = new Set(getCurrentTools(context.messages).map((tool) => tool.name));
 	return names.has("Agent") && names.has("get_subagent_result") ? "SUBAGENTS_ON" : "SUBAGENTS_OFF";
 }
 
@@ -1051,7 +1053,7 @@ test("graceful shutdown persists an accepted answer and aborts its continuation"
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
 		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(persisted.details).toEqual(result);
+		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
 		expect(seen(session.sessionId)).not.toContain("SHUTDOWN_CONTINUATION_RAN");
 	} finally {
 		gate.release();
@@ -1103,7 +1105,7 @@ test("an answer accepted before execute persists before Stop aborts the continua
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
 		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(persisted.details).toEqual(result);
+		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
 		expect(persisted.isError).toBe(false);
 	} finally {
 		gate.release();
@@ -1254,7 +1256,7 @@ test("a live question blocks continuation, preserves queue order, and acknowledg
 		);
 		expect(persistedResult).toBeDefined();
 		if (persistedResult?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(persistedResult.details).toEqual(result);
+		expect(persistedResult.details).toEqual<AskUserQuestionResult>(result);
 		expect(messages.some((message) => message.role === "custom")).toBe(false);
 		expect(continuationContext.indexOf('"role":"toolResult"')).toBeLessThan(
 			continuationContext.indexOf("QUEUED_WHILE_ASKING"),
@@ -1319,7 +1321,7 @@ test("an accepted answer persists and its RPC settles when Stop races before tur
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
 		if (persisted?.role !== "toolResult") throw new Error("answer result was not persisted");
-		expect(persisted.details).toEqual(result);
+		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
 		expect(persisted.isError).toBe(false);
 		expect(transcript.messages.some((message) => isAskUserAnswersMessage(message))).toBe(false);
 	} finally {
@@ -1357,7 +1359,7 @@ test("Stop bounds a stalled post-tool hook and rejects an answer that did not pe
 		);
 		if (persisted?.role !== "toolResult") throw new Error("stopped result was not persisted");
 		expect(persisted.isError).toBe(false);
-		expect(persisted.details).toEqual(gatedQuestionAnswer());
+		expect(persisted.details).toEqual<AskUserQuestionResult>(gatedQuestionAnswer());
 		expect(persisted.content).toEqual([{ type: "text", text: "post-tool result replaced" }]);
 	} finally {
 		hook.remove();
