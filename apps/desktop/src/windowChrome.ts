@@ -13,9 +13,9 @@ export type WindowChromePolicy = Readonly<{
 }>;
 
 export const INITIAL_WINDOW_CHROME_GLOBAL = "__THINKRAIL_INITIAL_WINDOW_CHROME__";
-export const WINDOW_CHROME_INSET_LEFT_PROPERTY = "--window-chrome-inset-left";
-export const WINDOW_CHROME_INSET_RIGHT_PROPERTY = "--window-chrome-inset-right";
-export const WINDOW_CHROME_DRAG_REGION_PROPERTY = "--window-chrome-drag-region";
+const WINDOW_CHROME_INSET_LEFT_PROPERTY = "--window-chrome-inset-left";
+const WINDOW_CHROME_INSET_RIGHT_PROPERTY = "--window-chrome-inset-right";
+const WINDOW_CHROME_DRAG_REGION_PROPERTY = "--window-chrome-drag-region";
 export const MAX_WINDOW_CHROME_INSET = 512;
 
 const NO_INSETS: WindowChromeGeometry = { insetLeft: 0, insetRight: 0 };
