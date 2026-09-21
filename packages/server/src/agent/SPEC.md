@@ -672,11 +672,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       package's internal `new URL(…, import.meta.url)` points inside `/$bunfs/` after compilation. The
       wrapper executes an injected helper on macOS/Windows and otherwise delegates to `trash`; source mode stays on
       `trash` entirely. No platform degrades to permanent unlink.
-    The desktop server/factory bundle is staged with a `.ts` filename on purpose. PI uses that module
-    extension to select its TypeScript source-runtime Jiti configuration with bundled virtual modules;
-    Electrobun's ordinary flattened `.js` output selects built-Node aliases that do not exist inside the
-    package and rejects the Central candidate. The filename is therefore a tested artifact seam, not a
-    cosmetic build choice.
+    The desktop server/factory bundle is built with pi's `PI_BUNDLED_NODE=true` compile-time define. That
+    is pi's own switch for bundled-but-not-compiled distributions: it selects the embedded-modules extension
+    loader (jiti's static entry with Babel bundled in, plus pi's virtual modules). Without it pi treats the
+    bundle as a plain Node runtime and reaches for jiti's lazy `../dist/babel.cjs` relative to a file that
+    does not exist inside a single-file bundle, so the Central candidate fails to load (pi 0.86.0 made the
+    loader choice runtime-dependent; 0.84.x always used the static entry). The define is a tested artifact
+    seam; the `server-runtime.ts` filename is only a name.
     In every mode, the optional Central artifact remains an external filesystem path loaded by PI's public
     Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
