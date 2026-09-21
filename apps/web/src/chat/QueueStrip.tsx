@@ -1,6 +1,12 @@
 import { RiPencilLine as Pencil, RiCloseLine as X } from "@remixicon/react";
 import type { QueueLane, SessionQueueState } from "@thinkrail/contracts";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+// The strip stays mounted (it renders null when empty), so expansion must not outlive its burst:
+// a drained queue (0 or 1 left) ends the current expansion, so the next burst opens collapsed again.
+export function nextExpansion(prev: boolean, itemCount: number): boolean {
+	return itemCount <= 1 ? false : prev;
+}
 
 export function QueueStrip({
 	queue,
@@ -28,6 +34,9 @@ export function QueueStrip({
 			text,
 		})),
 	];
+	useEffect(() => {
+		setExpanded((prev) => nextExpansion(prev, items.length));
+	}, [items.length]);
 	if (items.length === 0) return null;
 	const collapsed = !expanded && items.length > 1;
 	const visible = collapsed ? items.slice(0, 1) : items;

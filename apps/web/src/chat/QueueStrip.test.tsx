@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { SessionQueueState } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
-import { QueueStrip } from "./QueueStrip";
+import { nextExpansion, QueueStrip } from "./QueueStrip";
 
 function render(queue: SessionQueueState): string {
 	return renderToStaticMarkup(<QueueStrip queue={queue} onEdit={() => {}} onRemove={() => {}} />);
@@ -33,4 +33,22 @@ test("steering leads: the nearest shown is the first steering line", () => {
 	expect(rowCount(markup)).toBe(1);
 	expect(markup).toContain("steer-first");
 	expect(markup).toContain("+1 more");
+});
+
+test("expansion does not survive a queue drain into the next burst", () => {
+	let expanded = false;
+	// Burst 1: three queued messages, collapsed by default, then the user expands.
+	expanded = nextExpansion(expanded, 3);
+	expect(expanded).toBe(false);
+	expanded = true;
+	// The burst delivers down to one, then empties.
+	expanded = nextExpansion(expanded, 2);
+	expect(expanded).toBe(true);
+	expanded = nextExpansion(expanded, 1);
+	expect(expanded).toBe(false);
+	expanded = nextExpansion(expanded, 0);
+	expect(expanded).toBe(false);
+	// Burst 2 arrives in the same chat: it must start collapsed again.
+	expanded = nextExpansion(expanded, 3);
+	expect(expanded).toBe(false);
 });

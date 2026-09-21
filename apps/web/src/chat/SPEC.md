@@ -566,8 +566,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   message the strip renders only the first (the next to deliver — steering leads follow-up, index order
   within a lane) plus a **`+N more`** button (`queue-more` testid) that expands to the full list, so a
   burst of queued sends (e.g. several TODO adds) never stacks the strip over the composer. The count is a
-  local toggle, not a runtime write; expansion is required to reach the hidden rows' actions. **Each row
-  carries its own edit and remove actions**
+  local toggle, not a runtime write; expansion is required to reach the hidden rows' actions. **Expansion
+  never outlives its burst** — the strip stays mounted (renders null when empty), so a drained queue (0 or
+  1 left) resets it (`nextExpansion`), and the next burst opens collapsed again rather than re-stacking.
+  **Each row carries its own edit and remove actions**
   (`queue-item-edit` / `queue-item-remove`) — both call `session.removeQueued { kind, index }` (rows
   are position-addressed, matching the wire op); edit additionally restores the removed message's text
   and images to the draft and refocuses. Per-row actions exist because the original all-or-nothing dequeue
