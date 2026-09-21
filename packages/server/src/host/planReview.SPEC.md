@@ -119,8 +119,15 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   a later write throws, and it always runs inside `withReviewLock` (the button and auto-fix-off paths take
   the lock around filing; the tool path already holds it) so a concurrent Review send can't mark one
   finding `sent` between two writes and defeat that compensation — an already-sent finding can't be
-  deleted, and would strand undelivered. Pinned by the tool-path finding-identity test and the
-  interleaved-send / partial-persist regression tests in `planReview.test.ts`.
+  deleted, and would strand undelivered. On the **button path** filing goes further: `deliverFixToWorker`
+  files, records the cycle, selects the drafts, and marks them `sent` in ONE `withReviewLock` hold before
+  the (necessarily unlocked) chat send, so no interleaved Review send can mark the just-filed drafts
+  between filing and reservation — which would leave `itemFixFindings` (draft-only) empty and hand the
+  worker a generic request with no canonical ids while still spending a cycle. Failure splits on whether
+  filing completed: a *filing* failure throws (nothing recorded → the review cancels), any *post-filing*
+  failure records cycle 2 to give the auto cycle back and rolls marked findings to draft. Pinned by the
+  tool-path finding-identity test and the interleaved-send / partial-persist / race-before-delivery
+  regression tests in `planReview.test.ts`.
 - **One review per plan at a time, one per step ever.** Both entry points serialize on the plan's chain
   (`planReviewQueue.onPlanChain`): the button path via `enqueuePlanReview` (fire-and-forget), the worker's
   `request_review` tool by awaiting `onPlanChain` for its result. The chain keeps Review All — and a tool

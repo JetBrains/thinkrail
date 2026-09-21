@@ -200,11 +200,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   (`todoReviewAutoCycles`), and the record is written with `autoCycles: canAutoFix ? 1 : 2` — `1` means
   "the worker was actually asked to fix, this item is mid-cycle", `2` is terminal ("the human decides
   now"). Recording `1` without asking anyone to fix would strand the item: `maybeAutoReReview`'s trigger
-  reads exactly that value, and nothing would ever produce the fresh delta it waits for. **A cycle is spent only once the worker accepts the fix.** `deliverFixToWorker` reports whether the fix
-  was delivered, wrapping prepare+send in one catch: a rejection (worker detached, busy, pre-turn refusal)
-  **or any preparation failure** (snapshot/package/mark) re-records the item terminally (`autoCycles: 2`)
+  reads exactly that value, and nothing would ever produce the fresh delta it waits for. **A cycle is spent only once the worker accepts the fix.** On the button path `deliverFixToWorker` owns
+  the whole critical section — file the findings, record the optimistic cycle `1`, select and mark them
+  `sent`, then send — with filing through mark held in one `withReviewLock` so no interleaved Review send
+  can grab the just-filed drafts before reservation. Failure splits on whether filing completed: a *filing*
+  failure throws before any record so the review cancels (`fileFindings` having compensated its partial
+  persist), while any *post-filing* failure — a send rejection (worker detached, busy, pre-turn refusal)
+  **or any preparation failure** (snapshot/package/mark) — re-records the item terminally (`autoCycles: 2`)
   on top of the optimistic `1`, alongside the `rollbackSend` that returns any marked findings to `draft`.
-  A preparation failure escaping as a throw would strand the item at `autoCycles: 1` — the whole point of
+  A post-filing failure escaping as a throw would strand the item at `autoCycles: 1` — the whole point of
   the unified catch. Leaving `1` there would strand the step forever: nothing asked the worker to change anything, so
   no fresh delta can ever reach `maybeAutoReReview`, while a later manual review would read the cycle as
   spent and refuse to send. A claim the fix latch refuses (a manual Ask-to-fix already in flight) settles
@@ -330,8 +334,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   happens after it.
   The package prompt is fired **detached** after the mark, so the lock only ever holds session
   creation, and a failed operation releases it rather than poisoning the queue. The plan-review verdict
-  path joins the same lock: `deliverFixToWorker`'s read→render→mark pass stays under it, so a Clear
-  cannot replace the candidate ids between those stages. Deliberately unlocked: `review.get` (its load → re-anchor → persist is one synchronous pass,
+  path joins the same lock: `deliverFixToWorker`'s file→record→select→render→mark pass stays under it, so
+  a Clear or an interleaved send cannot replace or grab the candidate ids between those stages. Deliberately unlocked: `review.get` (its load → re-anchor → persist is one synchronous pass,
   and hydration must not queue behind a send) — plus the two mutations that remain fully synchronous,
   `reviews.resolveCommentFromAgent` (the worker tool seam) and `reanchorWorkspace` (the fs-watch tee):
   both re-read the snapshot from disk before writing, and neither removes a comment nor closes the

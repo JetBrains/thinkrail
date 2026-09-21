@@ -196,19 +196,31 @@ async function fileFindings(
 	return findings;
 }
 
-/** Deliver the reviewer's findings to the worker chat as the structured `todo-review-fix` message, under
- * the same mark-sent / pre-turn-rollback guarantee every review send has. Any failure — preparation or the
- * send itself — rolls the marked findings back to draft and returns false; the caller owes the auto cycle
- * back when it did not accept. See host/SPEC.md. */
+/** Own the whole button-path critical section: file the reviewer's findings, record cycle 1, select
+ * them, and mark them `sent` — all in ONE `withReviewLock` hold — then deliver the structured
+ * `todo-review-fix` message to the worker chat. Filing and reservation share the lock so no interleaved
+ * Review send can mark the just-filed drafts `sent` in a gap and leave the worker a generic request with
+ * no canonical ids (which would strand a later approve). Failure semantics split on whether filing
+ * completed: a *filing* failure throws (nothing recorded yet, so the caller cancels the review — and
+ * `fileFindings` already compensated its partial persist); any *post-filing* failure records cycle 2 to
+ * give the auto cycle back, rolls any marked findings to draft, and returns the terminal outcome. The
+ * caller must not have recorded the cycle before calling this. See host/SPEC.md and planReview.SPEC.md. */
 async function deliverFixToWorker(
 	params: ReviewParams,
-	item: Todo,
 	note: string,
-): Promise<boolean> {
+	reviewedSha: string,
+	raw: ReviewFixComment[],
+	record: (autoCycles: number) => { item: Todo },
+): Promise<VerdictOutcome> {
 	let marked: string[] = [];
+	let filed: ReviewFixComment[] = [];
+	let recorded = false;
 	try {
 		const prepared = await withReviewLock(params.workspaceId, async () => {
 			const snapshot = await getReviewSnapshot(params.workspaceId);
+			filed = await fileFindings(params, reviewedSha, raw);
+			const { item } = record(1);
+			recorded = true;
 			const findings: ReviewComment[] = await itemFixFindings(params);
 			const sentIds = findings.map((c) => c.id);
 			const fixPackage =
@@ -231,15 +243,17 @@ async function deliverFixToWorker(
 			};
 		});
 		await ackSend(sendReviewFixToSession(params.sessionId, prepared.text, prepared.details));
-		return true;
+		return { kind: "changes", canAutoFix: true, findings: filed };
 	} catch (err) {
+		if (!recorded) throw err;
 		if (marked.length > 0) rollbackSend(params.workspaceId, marked, params.sessionId);
 		notifyExtUi(
 			params.sessionId,
 			`Fix send failed: ${err instanceof Error ? err.message : String(err)} — the findings stay in Review for you.`,
 			"error",
 		);
-		return false;
+		record(2);
+		return { kind: "changes", canAutoFix: false, findings: filed };
 	} finally {
 		releaseItemFix(params.sessionId, params.id);
 	}
@@ -311,16 +325,15 @@ async function recordVerdict(
 		record(1);
 		return { kind: "changes", canAutoFix: true, findings };
 	}
-	// Button path: file under the lock so filing plus its compensation is atomic against a concurrent
-	// send — otherwise finding 1 could go `sent` before finding 2 fails, and cleanup could not delete an
-	// already-sent finding, stranding it. deliverFixToWorker takes the lock again to mark+send. See planReview.SPEC.md.
+	// Button path: when we win the fix claim, deliverFixToWorker files + records + marks-sent + sends as
+	// one transaction (see its doc) so an interleaved Review send can't strand the findings; it records
+	// the cycle itself. If we lost the claim (another fix is in flight) we only file the findings for the
+	// user, under the lock, and record the terminal cycle here. See planReview.SPEC.md.
+	if (claimItemFix(params.sessionId, params.id))
+		return deliverFixToWorker(params, note, reviewedSha, result.findings, record);
 	const findings = await withReviewLock(params.workspaceId, () =>
 		fileFindings(params, reviewedSha, result.findings),
 	);
-	const claimed = claimItemFix(params.sessionId, params.id);
-	const { item } = record(1);
-	if (claimed && (await deliverFixToWorker(params, item, note)))
-		return { kind: "changes", canAutoFix: true, findings };
 	record(2);
 	return { kind: "changes", canAutoFix: false, findings };
 }

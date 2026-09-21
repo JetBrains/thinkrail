@@ -691,6 +691,54 @@ test("the button path files under the review lock, so an interleaved send cannot
 	expect(itemReviewActive(sessionId, id)).toBe(false);
 });
 
+test("the button path delivers canonical ids even when a Review send races before worker delivery", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+
+	// `sent` captures the comments each worker package was built from — canonical rc_ ids. It stays empty
+	// if a racing send marked the drafts `sent` first, since delivery would then find no drafts to package.
+	const sent: { id: string }[] = [];
+	const realBuild = reviews.buildSendPackage;
+	const buildSpy = spyOn(reviews, "buildSendPackage").mockImplementation(async (ws, comments) => {
+		sent.push(...comments);
+		return realBuild(ws, comments);
+	});
+	// The instant the finding is filed, a concurrent Review "Send" races to mark it `sent`. Filing +
+	// selection + mark-sent now share one review lock, so this send is serialized AFTER delivery selects
+	// the still-draft finding — the worker receives the canonical id, not a generic request.
+	const realAdd = reviews.addComment;
+	let raced: Promise<unknown> = Promise.resolve();
+	let racedOnce = false;
+	const addSpy = spyOn(reviews, "addComment").mockImplementation(async (arg) => {
+		const c = await realAdd(arg);
+		if (!racedOnce) {
+			racedOnce = true;
+			raced = withReviewLock(WS, () => reviews.markCommentsSent(WS, [c.id], "sess-other")).catch(
+				() => {},
+			);
+		}
+		return c;
+	});
+	try {
+		startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+		await settle(sessionId, id);
+	} finally {
+		addSpy.mockRestore();
+		buildSpy.mockRestore();
+	}
+	await raced;
+
+	expect(sent).toHaveLength(1);
+	expect(sent[0]?.id).toMatch(/^rc_/);
+	// Delivery landed on its first cycle; the finding was reserved to the worker, not the racer.
+	expect(todoReviewRecord(ref)?.state).toBe("changes_requested");
+	expect(todoReviewAutoCycles(ref)).toBe(1);
+	expect((await getReviewSnapshot(WS)).comments.find((c) => c.origin?.todoId === id)?.status).toBe(
+		"sent",
+	);
+});
+
 test("a request_review that fails before the review starts releases its claim, so the retry runs", async () => {
 	installRequestReviewSeam(verdictRunner(approve));
 	const sessionId = await workerSession();
