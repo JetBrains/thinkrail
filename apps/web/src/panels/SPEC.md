@@ -566,7 +566,10 @@ a project picker, the prompt hero, and the reused
   levels (fetched once from `model.default`) instead of an empty list. And an
   **auto-fix toggle** (`review-autofix-toggle`, a switch over `store.reviewAutoFix` →
   `settings.update { reviewAutoFix }`) — off means a `request_changes` verdict records findings and waits
-  (the host gates its auto-fix cycle on it, see `submodule-server-todos`). A single dimmed "General" nav item ("Soon") still signals the shell is
+  (the host gates its auto-fix cycle on it, see `submodule-server-todos`). And an **agent-review toggle**
+  (`agent-review-toggle`, a switch over `store.agentReviewEnabled` → `settings.update { agentReviewEnabled }`)
+  — off withholds the worker's in-session `request_review` tool so review happens only via the Review
+  button (the host gates the tool's registration on it, see `submodule-server-host-plan-review`). A single dimmed "General" nav item ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`AppearanceSettings`/`LineWidthSettings`/`ChatSettings`/`TemplatesSettings`/
   `PrivacySettings`/`ReviewSettings`/`FeedbackSettings` and the app-wide **`InterviewPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and

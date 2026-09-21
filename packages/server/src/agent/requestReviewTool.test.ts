@@ -1,5 +1,5 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { afterEach, expect, test } from "bun:test";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	createRequestReviewTool,
 	REQUEST_REVIEW_TOOL_NAME,

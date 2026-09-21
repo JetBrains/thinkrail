@@ -135,6 +135,12 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   item `changes_requested` at a spent cycle with pending still set. Pinned by the tool-path
   finding-identity test, the interleaved-send / partial-persist / race-before-delivery / record-failure
   regression tests in `planReview.test.ts`, and the one-snapshot atomicity test in `reviewFlow.test.ts`.
+- **The agent's in-session entry point is gated; the button is not.** The worker's `request_review` tool
+  (and its prompt guidelines) is registered only when the `agentReviewEnabled` config flag is on — the host
+  injects `setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false)` so the agent
+  module never takes a settings edge (see `agent/SPEC.md`). The flag is read when a session's tools are
+  built, so it applies to sessions created after the toggle. It gates only the tool: the Review button
+  (`startPlanReview`) and its downstream auto-fix / auto-re-review are independent and always available.
 - **One review per plan at a time, one per step ever.** Both entry points serialize on the plan's chain
   (`planReviewQueue.onPlanChain`): the button path via `enqueuePlanReview` (fire-and-forget), the worker's
   `request_review` tool by awaiting `onPlanChain` for its result. The chain keeps Review All — and a tool
