@@ -677,8 +677,14 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     loader (jiti's static entry with Babel bundled in, plus pi's virtual modules). Without it pi treats the
     bundle as a plain Node runtime and reaches for jiti's lazy `../dist/babel.cjs` relative to a file that
     does not exist inside a single-file bundle, so the Central candidate fails to load (pi 0.86.0 made the
-    loader choice runtime-dependent; 0.84.x always used the static entry). The define is a tested artifact
-    seam; the `server-runtime.ts` filename is only a name.
+    loader choice runtime-dependent; 0.84.x always used the static entry). The candidate loader also forces
+    jiti's transform (`JITI_TRY_NATIVE=false`, plus `JITI_REBUILD_FS_CACHE=1` so a stale transform cache
+    never survives a pi bump): with native import allowed, Bun would resolve an external extension's bare
+    `@earendil-works/pi-coding-agent` import itself — auto-installing a second pi copy, since nothing under
+    `~/.pi/agent/extensions` has `node_modules` — instead of pi's virtual-module mapping onto the bundled
+    instance. Together the define and the forced transform are the tested artifact seam (the shared artifact
+    probe's synthetic extension value-imports pi and fails closed without them); the `server-runtime.ts`
+    filename is only a name.
     In every mode, the optional Central artifact remains an external filesystem path loaded by PI's public
     Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting

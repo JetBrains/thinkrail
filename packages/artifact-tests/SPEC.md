@@ -36,7 +36,11 @@ with their owning modules.
 
 ## Artifact verification
 
-Shared probes boot the real artifact, load a synthetic external PI extension with no pi executable,
+Shared probes boot the real artifact, load a synthetic external PI extension with no pi executable (the
+fixture value-imports a bare `@earendil-works/pi-coding-agent` specifier and surfaces the imported value in
+its model name, so the load exercises pi's virtual-module mapping through the transform path the host
+forces — a bundle missing the `PI_BUNDLED_NODE` define fails this probe; [[submodule-server-agent]] owns
+the seam),
 exercise the bundled factories/skills, reach an OAuth URL without a provider turn, verify health/UI and
 transcript trash, and shut down. CLI-specific probes also check its exit-only and embedded-cache behavior.
 Native desktop smoke loads the real UI and verifies route/preload messaging plus the production external
