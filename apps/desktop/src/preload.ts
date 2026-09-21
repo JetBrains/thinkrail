@@ -1,4 +1,9 @@
-import type { NativeUpdateBridge, NativeUpdateState } from "@thinkrail/contracts";
+import type {
+	NativeUpdateBridge,
+	NativeUpdateState,
+	NativeWindowControlsBridge,
+	NativeWindowState,
+} from "@thinkrail/contracts";
 import Electrobun, { Electroview } from "electrobun/view";
 import {
 	INITIAL_DESKTOP_PREFERENCES_GLOBAL,
@@ -8,7 +13,12 @@ import {
 } from "./preferenceAdapter";
 import { takePreloadGlobal } from "./preloadGlobals";
 import type { DesktopRpc } from "./rpc";
-import { createWindowChromeStyleWriter, INITIAL_WINDOW_CHROME_GLOBAL } from "./windowChrome";
+import {
+	createWindowChromeStyleWriter,
+	INITIAL_WINDOW_CHROME_GLOBAL,
+	NATIVE_WINDOW_CONTROLS_GLOBAL,
+	readWindowChromeFlag,
+} from "./windowChrome";
 
 interface DesktopPreferenceAdapter {
 	getItem(key: string): string | null;
@@ -16,13 +26,15 @@ interface DesktopPreferenceAdapter {
 	removeItem(key: string): void;
 }
 
+const initialWindowChrome = takePreloadGlobal(INITIAL_WINDOW_CHROME_GLOBAL);
 const windowChromeStyle = createWindowChromeStyleWriter(
 	() => document.documentElement?.style ?? null,
 );
 document.addEventListener("DOMContentLoaded", windowChromeStyle.flush, { once: true });
-windowChromeStyle.update(takePreloadGlobal(INITIAL_WINDOW_CHROME_GLOBAL));
+windowChromeStyle.update(initialWindowChrome);
 
 const updateListeners = new Set<(state: NativeUpdateState) => void>();
+const windowStateListeners = new Set<(state: NativeWindowState) => void>();
 const rpc = Electroview.defineRPC<DesktopRpc>({
 	maxRequestTime: 5000,
 	handlers: {
@@ -32,6 +44,9 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 				for (const listener of updateListeners) listener(state);
 			},
 			windowChromeChanged: windowChromeStyle.update,
+			windowStateChanged: (state) => {
+				for (const listener of windowStateListeners) listener(state);
+			},
 		},
 	},
 });
@@ -52,6 +67,24 @@ Object.defineProperty(globals, "__THINKRAIL_NATIVE_UPDATES__", {
 	configurable: false,
 	enumerable: false,
 });
+if (readWindowChromeFlag(initialWindowChrome, "windowControls") === true) {
+	const windowControlsBridge: NativeWindowControlsBridge = Object.freeze({
+		getState: () => rpc.request.getWindowState(),
+		minimize: () => rpc.request.minimizeWindow(),
+		toggleMaximize: () => rpc.request.toggleMaximizeWindow(),
+		close: () => rpc.request.closeWindow(),
+		subscribe: (listener: (state: NativeWindowState) => void) => {
+			windowStateListeners.add(listener);
+			return () => windowStateListeners.delete(listener);
+		},
+	});
+	Object.defineProperty(globals, NATIVE_WINDOW_CONTROLS_GLOBAL, {
+		value: windowControlsBridge,
+		writable: false,
+		configurable: false,
+		enumerable: false,
+	});
+}
 const injectedPreferences = takePreloadGlobal(INITIAL_DESKTOP_PREFERENCES_GLOBAL);
 const preferences = new Map<string, string>();
 if (typeof injectedPreferences === "object" && injectedPreferences !== null) {

@@ -5,7 +5,7 @@ status: active
 title: shell — responsive frame
 parent: module-web
 tags: [v1, ui]
-references: [module-desktop]
+references: [module-desktop, module-contracts]
 ---
 
 ## Responsibility
@@ -49,7 +49,17 @@ name only canonical steps, and a CSS `padding-left: max(…)` would need a gate 
 `select-none`; its whole trailing action cluster (`topbar-actions`) is `window-no-drag`, so any button
 placed inside it — the Update affordance, quota Retry, Settings — is excluded from dragging by
 construction, and buttons must not be placed elsewhere in the header (`topbarChrome.test.ts` gates this),
-while plain text (breadcrumb, connection label) stays draggable.
+while plain text (breadcrumb, connection label) stays draggable. The one other button group is
+`NativeWindowControls`: when the host installs the optional `NativeWindowControlsBridge`
+(`__THINKRAIL_NATIVE_WINDOW_CONTROLS__`, [[module-contracts]]) — today only the Windows desktop — Shell
+mounts `useNativeWindowControls`, which mirrors `updates`' capability hook (read the global once, `getState`,
+subscribe, `null` in a browser), and renders three props-driven 46×40 caption buttons (minimize,
+maximize-or-restore, close) as a `window-no-drag` overlay pinned to the header's top-right, inside the zone the
+host reserved through the right inset; they disappear while the state says `fullScreen`. The controls own
+no window state and never enter the store; the hook reports a rejected action with `console.warn` rather
+than throwing. Windows caption-button conventions (no tooltips, full-height hit targets, a red-tinted close
+hover via `feedback-error-subtle`) are deliberate; macOS keeps AppKit's traffic lights and never sees the
+bridge.
 `SettingsDialog` portals out of the header and is unaffected. Nothing in the shell names or imports the
 desktop host. When the optional application updater reports a native `ready` package or CLI-host `available`
 release, a compact Update affordance remains beside the settings and connection chrome; it opens the injected
