@@ -249,7 +249,11 @@ mark — the DTO's `reviewing` — and renders `renderReviewPackage`: a change-s
 worker's summary/verification claims to VERIFY, a re-review naming only the unreviewed delta; it names
 no tools, because the reviewer's role and output contract are the host's, not the package's),
 `cancelTodoReview` (the review failed or returned no parsable verdict), `approveTodoReview(…, "agent")`
-(labeled `reviewedBy`), and `recordAgentChangesRequested` (verdict note as feedback + `autoCycles` — the
+(labeled `reviewedBy`), and `recordAgentChangesRequested` (verdict note as feedback + `autoCycles`). The
+last two mutate three things at once — the item's record, its `autoCycles` count, and its `pending`
+clear — so they persist all three as ONE snapshot write (`commitReviewTransition`), never a sequence: a
+partial failure between writes could otherwise strand an item `changes_requested` at a spent cycle with
+its pending mark still set, which no cancel would undo. The auto-cycle mechanics — the
 host's **1-auto-cycle cap**: cycle 0's verdict auto-sends the reviewer's findings to the worker
 (autoCycles 1), the fixed revision auto-re-reviews once (trigger requires autoCycles === 1 + a fresh
 delta — a sha appended past the watermark, OR the state reading `unreviewed` because the path-list

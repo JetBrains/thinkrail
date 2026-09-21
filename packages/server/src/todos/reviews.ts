@@ -167,6 +167,27 @@ export function putReviewRecord(
 	return previous;
 }
 
+/** Apply a review-verdict transition — the item's record, its auto-cycle count, and its pending-mark
+ * clear — as ONE snapshot write, so a partial failure can never leave the sidecar inconsistent (e.g.
+ * `changes_requested` at a spent cycle with the pending mark still set, which strands the automatic
+ * flow). `autoCycles` is a number to set or `"clear"` to drop. See host/planReview.SPEC.md. */
+export function commitReviewTransition(
+	root: string,
+	sessionId: string,
+	id: string,
+	opts: { record: TodoReviewRecord; autoCycles: number | "clear"; clearPending?: boolean },
+): void {
+	const file = readFile(root, sessionId);
+	file.items[id] = opts.record;
+	if (opts.autoCycles === "clear") {
+		if (file.autoCycles?.[id] !== undefined) delete file.autoCycles[id];
+	} else {
+		file.autoCycles = { ...(file.autoCycles ?? {}), [id]: opts.autoCycles };
+	}
+	if (opts.clearPending && file.pending?.[id]) delete file.pending[id];
+	writeFile(root, sessionId, file);
+}
+
 export function restoreReviewRecord(
 	root: string,
 	sessionId: string,

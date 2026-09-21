@@ -126,12 +126,15 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   worker a generic request with no canonical ids while still spending a cycle. Failure splits on whether
   filing completed: a *filing* failure throws (nothing recorded → the review cancels), any *post-filing*
   failure records cycle 2 to give the auto cycle back and rolls marked findings to draft. The cycle-record
-  write (`recordAgentChangesRequested`, a separate sidecar file) is itself part of the filing transaction
-  on every path: if it throws after the findings are persisted, they are undone under the same lock — any
-  `sent` assignment rolled back, then the drafts deleted (`unfileFindings`) — before the cancel
-  propagates, so a transient sidecar failure never leaves an open finding whose id the worker never
-  received. Pinned by the tool-path finding-identity test and the interleaved-send / partial-persist /
-  race-before-delivery / record-failure regression tests in `planReview.test.ts`.
+  write is itself part of the filing transaction on every path: if it throws after the findings are
+  persisted, they are undone under the same lock — any `sent` assignment rolled back, then the drafts
+  deleted (`unfileFindings`) — before the cancel propagates, so a sidecar failure never leaves an open
+  finding whose id the worker never received. The record write is atomic in turn: `recordAgentChangesRequested`
+  (and `approveTodoReview`) persist the item's record, its auto-cycle count, and its pending-mark clear
+  as ONE snapshot write (`commitReviewTransition`), never three, so a partial failure can't strand the
+  item `changes_requested` at a spent cycle with pending still set. Pinned by the tool-path
+  finding-identity test, the interleaved-send / partial-persist / race-before-delivery / record-failure
+  regression tests in `planReview.test.ts`, and the one-snapshot atomicity test in `reviewFlow.test.ts`.
 - **One review per plan at a time, one per step ever.** Both entry points serialize on the plan's chain
   (`planReviewQueue.onPlanChain`): the button path via `enqueuePlanReview` (fire-and-forget), the worker's
   `request_review` tool by awaiting `onPlanChain` for its result. The chain keeps Review All — and a tool

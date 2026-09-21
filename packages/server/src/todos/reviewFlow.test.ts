@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import * as fs from "node:fs";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -379,6 +380,38 @@ test("recordAgentChangesRequested stores the verdict note + autoCycles for the 1
 	expect(record?.state).toBe("changes_requested");
 	expect(record?.feedback).toBe("propagate RetryAfter");
 	expect(todoReviewAutoCycles({ workspaceId: "w1", sessionId: SESSION, id })).toBe(1);
+	const plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	expect(plan.todos.find((t) => t.id === id)?.review?.reviewing).toBeUndefined();
+});
+
+test("recordAgentChangesRequested writes record + cycle + pending-clear as one snapshot (no partial state on a late sidecar rename)", async () => {
+	const store = new TodoStore(repo, SESSION);
+	const { id } = committedItem(store, "step", "impl.ts");
+	const ref = { workspaceId: "w1", sessionId: SESSION, id };
+	const { recordAgentChangesRequested, todoReviewAutoCycles, todoReviewRecord, startTodoReview } =
+		await import("./todos");
+	startTodoReview(ref);
+
+	// Fail the SECOND sidecar rename. A three-write recorder would already have the record + autoCycles on
+	// disk before clearing pending fails, stranding changes_requested at a spent cycle with pending still
+	// set. One snapshot write means only ONE rename happens, so the injected failure never fires and the
+	// transition is all-or-nothing.
+	const realRename = fs.renameSync;
+	let renames = 0;
+	const spy = spyOn(fs, "renameSync").mockImplementation((from, to) => {
+		renames += 1;
+		if (renames >= 2) throw new Error("sidecar rename failed");
+		realRename(from, to);
+	});
+	try {
+		recordAgentChangesRequested({ ...ref, note: "propagate RetryAfter", autoCycles: 1 });
+	} finally {
+		spy.mockRestore();
+	}
+
+	expect(renames).toBe(1);
+	expect(todoReviewRecord(ref)?.state).toBe("changes_requested");
+	expect(todoReviewAutoCycles(ref)).toBe(1);
 	const plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
 	expect(plan.todos.find((t) => t.id === id)?.review?.reviewing).toBeUndefined();
 });

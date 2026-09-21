@@ -21,6 +21,7 @@ import { dropItemBaseline, readBaselines, removeSessionBaselines } from "./basel
 import {
 	clearAutoCycles,
 	clearReviewPending,
+	commitReviewTransition,
 	dropReviewRecord,
 	markReviewPending,
 	putReviewRecord,
@@ -29,7 +30,6 @@ import {
 	readReviewRecords,
 	removeSessionReviews,
 	restoreReviewRecord,
-	setAutoCycles,
 	type TodoReviewRecord,
 } from "./reviews";
 
@@ -321,14 +321,16 @@ export function approveTodoReview(
 	ok: true;
 } {
 	const { root, item } = reviewableItem(params);
-	putReviewRecord(root, params.sessionId, params.id, {
-		state: "reviewed",
-		reviewedShas: reviewedWatermark(root, params.sessionId, params.id, item),
-		at: new Date().toISOString(),
-		...(by ? { reviewedBy: by } : {}),
+	commitReviewTransition(root, params.sessionId, params.id, {
+		record: {
+			state: "reviewed",
+			reviewedShas: reviewedWatermark(root, params.sessionId, params.id, item),
+			at: new Date().toISOString(),
+			...(by ? { reviewedBy: by } : {}),
+		},
+		autoCycles: "clear",
+		clearPending: true,
 	});
-	clearReviewPending(root, params.sessionId, params.id);
-	clearAutoCycles(root, params.sessionId, params.id);
 	return { ok: true } as const;
 }
 
@@ -377,14 +379,16 @@ export function recordAgentChangesRequested(params: {
 	autoCycles: number;
 }): { item: StoredItem } {
 	const { root, item } = reviewableItem(params);
-	putReviewRecord(root, params.sessionId, params.id, {
-		state: "changes_requested",
-		reviewedShas: reviewedWatermark(root, params.sessionId, params.id, item),
-		...(params.note ? { feedback: params.note } : {}),
-		at: new Date().toISOString(),
+	commitReviewTransition(root, params.sessionId, params.id, {
+		record: {
+			state: "changes_requested",
+			reviewedShas: reviewedWatermark(root, params.sessionId, params.id, item),
+			...(params.note ? { feedback: params.note } : {}),
+			at: new Date().toISOString(),
+		},
+		autoCycles: params.autoCycles,
+		clearPending: true,
 	});
-	setAutoCycles(root, params.sessionId, params.id, params.autoCycles);
-	clearReviewPending(root, params.sessionId, params.id);
 	return { item };
 }
 
