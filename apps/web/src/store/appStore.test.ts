@@ -134,8 +134,10 @@ beforeEach(() => {
 		sessionStateByWorkspace: {},
 		sessionStateClock: 0,
 		sessionStateTickBySession: {},
+		sessionStateSnapshotInstalled: false,
 		directChatActivationTickBySession: {},
 		directActivatedCompletionBySession: {},
+		pendingDirectChatActivationBySession: {},
 		renderedCompletionBySession: {},
 		obscuredChatSessions: {},
 		extUiOrphans: [],
@@ -462,6 +464,48 @@ test("normalized session snapshots, pushes, and direct activation keep one exact
 		useAppStore.getState().sessionStateByWorkspace["state-workspace"]?.["state-session"],
 	).toBeUndefined();
 	expect(useAppStore.getState().sessionStateTickBySession["state-session"]).toBeUndefined();
+});
+
+test("a cold direct open binds the first snapshot completion without a second click", () => {
+	const record = (sessionId: string, completionId: string): SessionStateRecord => ({
+		sessionId,
+		workspaceId: "cold-workspace",
+		projectId: "cold-project",
+		state: {
+			execution: "idle",
+			runId: `run:${sessionId}`,
+			needsInput: null,
+			completion: { completionId, outcome: "succeeded" },
+			completionUnread: true,
+			queuedCount: 0,
+		},
+	});
+	const store = useAppStore.getState();
+	store.setStatus("connected");
+	store.openChatSession("cold-workspace", "cold-session", null, "medium");
+	store.noteDirectChatActivation("cold-session");
+	expect(useAppStore.getState().pendingDirectChatActivationBySession).toEqual({
+		"cold-session": true,
+	});
+
+	store.installSessionStateSnapshot([record("cold-session", "completion:cold")]);
+	expect(useAppStore.getState().pendingDirectChatActivationBySession).toEqual({});
+	expect(useAppStore.getState().directActivatedCompletionBySession["cold-session"]).toBe(
+		"completion:cold",
+	);
+	store.noteRenderedCompletion("cold-session", "completion:cold");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "cold-workspace", "cold-session"),
+	).toBe("completion:cold");
+
+	store.openChatSession("cold-workspace", "future-session", null, "medium");
+	store.noteDirectChatActivation("future-session");
+	expect(useAppStore.getState().pendingDirectChatActivationBySession).toEqual({});
+	store.applySessionState(record("future-session", "completion:future"));
+	store.noteRenderedCompletion("future-session", "completion:future");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "cold-workspace", "future-session"),
+	).toBeNull();
 });
 
 test("hydrateSession seeds the queue from the summary snapshot", () => {

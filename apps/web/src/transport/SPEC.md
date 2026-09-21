@@ -73,7 +73,9 @@ batches high-frequency Pi events without allowing later wire messages to overtak
 
   **Session state hydrates on every supported welcome.** `session.stateList` is tokenized by connection
   generation and buffers `session.state` pushes until the complete snapshot installs, then replays them in
-  order. Current-generation failures retain the previous map and retry with capped backoff; overflowing the
+  order. That first snapshot also resolves any deliberate chat activation recorded before a state row was
+  available; buffered/later pushes cannot claim it. Current-generation failures retain the previous map and
+  pending activation while retrying with capped backoff; overflowing the
   bounded push buffer restarts the complete read instead of growing without limit, while stale-generation
   outcomes discard their buffers. Pending dialog records replay their exact request, and adding/opening a
   workspace restarts the generation-guarded complete read so pre-existing disk sessions are included.

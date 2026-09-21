@@ -812,8 +812,10 @@ interface AppState {
 	sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
 	sessionStateClock: number;
 	sessionStateTickBySession: Record<string, number>;
+	sessionStateSnapshotInstalled: boolean;
 	directChatActivationTickBySession: Record<string, number>;
 	directActivatedCompletionBySession: Record<string, string>;
+	pendingDirectChatActivationBySession: Record<string, true>;
 	renderedCompletionBySession: Record<string, string>;
 	obscuredChatSessions: Record<string, true>;
 	extUiOrphans: ExtUiRequest[];
@@ -1404,6 +1406,7 @@ function withoutChat(
 	const hasStateTick = Object.hasOwn(s.sessionStateTickBySession, sessionId);
 	const hasActivationTick = Object.hasOwn(s.directChatActivationTickBySession, sessionId);
 	const hasActivatedCompletion = Object.hasOwn(s.directActivatedCompletionBySession, sessionId);
+	const hasPendingActivation = Object.hasOwn(s.pendingDirectChatActivationBySession, sessionId);
 	const hasRenderedCompletion = Object.hasOwn(s.renderedCompletionBySession, sessionId);
 	const isObscured = Boolean(s.obscuredChatSessions[sessionId]);
 	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
@@ -1425,6 +1428,7 @@ function withoutChat(
 		!hasStateTick &&
 		!hasActivationTick &&
 		!hasActivatedCompletion &&
+		!hasPendingActivation &&
 		!hasRenderedCompletion &&
 		!isObscured &&
 		!hasSkillBaseline &&
@@ -1515,6 +1519,14 @@ function withoutChat(
 			? {
 					directActivatedCompletionBySession: omitKey(
 						s.directActivatedCompletionBySession,
+						sessionId,
+					),
+				}
+			: {}),
+		...(hasPendingActivation
+			? {
+					pendingDirectChatActivationBySession: omitKey(
+						s.pendingDirectChatActivationBySession,
 						sessionId,
 					),
 				}
@@ -1785,8 +1797,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	sessionStateByWorkspace: {},
 	sessionStateClock: 0,
 	sessionStateTickBySession: {},
+	sessionStateSnapshotInstalled: false,
 	directChatActivationTickBySession: {},
 	directActivatedCompletionBySession: {},
+	pendingDirectChatActivationBySession: {},
 	renderedCompletionBySession: {},
 	obscuredChatSessions: {},
 	extUiOrphans: [],
@@ -1841,6 +1855,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 			connectionGeneration:
 				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
 			pendingWorkspaceChatActivation: null,
+			sessionStateSnapshotInstalled: false,
+			pendingDirectChatActivationBySession: {},
 		})),
 	installWelcomeSnapshot: (
 		protocolVersion,
@@ -2831,12 +2847,23 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const sessionStateTickBySession = Object.fromEntries(
 				[...stateBySession.keys()].map((sessionId) => [sessionId, sessionStateClock]),
 			);
+			const directActivatedCompletionBySession = {
+				...s.directActivatedCompletionBySession,
+			};
+			for (const sessionId of Object.keys(s.pendingDirectChatActivationBySession)) {
+				const state = stateBySession.get(sessionId);
+				const completionId = state?.completionUnread ? state.completion?.completionId : undefined;
+				if (completionId) directActivatedCompletionBySession[sessionId] = completionId;
+			}
 			return {
 				sessionStateByWorkspace,
 				sessions,
 				extUiOrphans,
 				sessionStateClock,
 				sessionStateTickBySession,
+				sessionStateSnapshotInstalled: true,
+				directActivatedCompletionBySession,
+				pendingDirectChatActivationBySession: {},
 			};
 		}),
 	applySessionState: (record) =>
@@ -2896,10 +2923,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => {
 			if (s.obscuredChatSessions[sessionId]) return {};
 			const sessionStateClock = s.sessionStateClock + 1;
-			const state = Object.values(s.sessionStateByWorkspace).find(
+			const record = Object.values(s.sessionStateByWorkspace).find(
 				(records) => records[sessionId] !== undefined,
-			)?.[sessionId]?.state;
-			const completionId = state?.completionUnread ? state.completion?.completionId : undefined;
+			)?.[sessionId];
+			const completionId = record?.state.completionUnread
+				? record.state.completion?.completionId
+				: undefined;
 			return {
 				sessionStateClock,
 				directChatActivationTickBySession: {
@@ -2911,6 +2940,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 							directActivatedCompletionBySession: {
 								...s.directActivatedCompletionBySession,
 								[sessionId]: completionId,
+							},
+						}
+					: {}),
+				...(record === undefined && !s.sessionStateSnapshotInstalled
+					? {
+							pendingDirectChatActivationBySession: {
+								...s.pendingDirectChatActivationBySession,
+								[sessionId]: true,
 							},
 						}
 					: {}),
