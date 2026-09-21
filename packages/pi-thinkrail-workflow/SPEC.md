@@ -36,14 +36,16 @@ the next skill (meta-rule 12 in [[submodule-workflow-skills]]).
 
 Same mechanism as `pi-spec-graph` ([[module-spec-graph]]): each workflow lives in its own skill,
 auto-discovered via the `pi.skills` manifest / `additionalSkillPaths`. The `before_agent_start` rule
-mirrors `pi-spec-graph`'s `SPEC_RULE`: short and byte-stable so it rides every run without churning
-provider prompt-caching, and a pointer, not a restatement — it applies only at the start of new work,
-while an already-routed continuation resumes its active workflow. Routing rules live once in the router
-skill; each workflow's steps live once in its own skill. The setting-up-a-project family carries no
-rule of its own — the root router routes onboarding to the dispatcher (whose `description` also
-self-triggers), and in-app the Welcome screen's "Set up project" card seeds the
-`/skill:setting-up-a-project` command — pi's skill-command syntax that **forces** the dispatcher to load
-rather than relying on description-matching (see [[module-web]]).
+mirrors `pi-spec-graph`'s `SPEC_RULE` — including its mechanism: the handler mutates
+`systemPromptOptions.sections` under the `pi-thinkrail-workflow` tag and returns nothing, so pi patches
+that one section instead of forcing a whole prompt ([[module-spec-graph]] owns the rationale). Short and
+byte-stable so it rides every run without churning provider prompt-caching, and a pointer, not a
+restatement — it applies only at the start of new work, while an already-routed continuation resumes its
+active workflow. Routing rules live once in the router skill; each workflow's steps live once in its own
+skill. The setting-up-a-project family carries no rule of its own — the root router routes onboarding to
+the dispatcher (whose `description` also self-triggers), and in-app the Welcome screen's "Set up project"
+card seeds the `/skill:setting-up-a-project` command — pi's skill-command syntax that **forces** the
+dispatcher to load rather than relying on description-matching (see [[module-web]]).
 
 ## Boundary
 
@@ -76,8 +78,14 @@ rather than relying on description-matching (see [[module-web]]).
 ## Testing
 
 `index.test.ts` pins the one runtime behavior this package has: the factory registers a
-`before_agent_start` handler that appends `WORKFLOW_RULE` after the existing system prompt, preserving
-it verbatim. The rule's *wording* is prose, not contract, and stays unpinned.
+`before_agent_start` handler that puts `WORKFLOW_RULE` into `systemPromptOptions.sections` and returns
+nothing, and pi's own renderer (`buildSystemPromptSections` / `buildSystemPrompt`) turns those mutated
+options into a `<pi-thinkrail-workflow>` block ordered after `cwd` and ending the prompt — the tail
+position the old free-text append had. pi 0.86.1 does not re-export that renderer from its package root,
+so the test reaches `dist/core/system-prompt.js` by resolved path; a future pi that moves it breaks the
+import loudly rather than silently weakening the assertion. The options literal is typed
+`NormalizedBuildSystemPromptOptions`, so a shape change is a compile error. The rule's *wording* is prose,
+not contract, and stays unpinned.
 
 Skill behavior is tested headlessly by the **workflow-test harness** — design, verdict model,
 suites, and coverage live in [[module-workflow-tests]] (`bun run test:workflows`; on-demand — needs
