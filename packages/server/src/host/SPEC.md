@@ -87,9 +87,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `shutdownAnalytics()` remains a best-effort drain in `stop()` and awaited by graceful shutdown;
   every capture site lives here, including the existing basic events: `chat_started` in `session.create`, `message_sent` (via the
   local `trackSend(mode, text)`) after an **accepted** `session.prompt`/`session.steer`/`session.followUp`
-  (`prompt`/`steer`/`follow_up`; skipped when contracts' `isControlMessage(text)` — the client's TODO
-  wake-nudge rides the same methods and is not a user message; `session.answerQuestion` is a tool reply,
-  not a message either),
+  (`prompt`/`steer`/`follow_up`; `session.answerQuestion` is a tool reply,
+  not a message),
   `provider_login` from the
   login-publisher tee's terminal `success` frames with the method (`oauth`/`api-key`) looked up from
   `loginAnalytics.ts` — the loginId→method map the `provider.loginStart` handler records (and

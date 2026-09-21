@@ -35,9 +35,7 @@ to preserve).
   of it). So `messageIndex` matches the client's `turnIdByMessageIndex` exactly
   (no raw-file-order drift), and abandoned/summarized text never becomes a hit — the compaction summary is
   sent (it renders the client's compaction marker), so it consumes an index slot without being searchable.
-  The internal
-  `TODO_NUDGE_PREFIX` control message (hidden from the transcript on hydrate) is skipped after its index
-  slot is consumed, so alignment holds; a **superseded auto-retry attempt** (the shared
+  A **superseded auto-retry attempt** (the shared
   `isRetriedAttempt` reading from contracts — an errored assistant immediately followed by another
   assistant, the adjacent shape pi's `_prepareRetry` produces,
   which hydration renders as no turn / null anchor) is skipped the same way, so a

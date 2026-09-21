@@ -22,7 +22,6 @@ import type {
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
-import { isControlMessage } from "@thinkrail/contracts";
 import {
 	abortSession,
 	answerQuestion,
@@ -233,15 +232,12 @@ async function sendUserMessage(
 	clientKey: string,
 	operation: () => Promise<void>,
 ): Promise<{ ok: true }> {
-	const control = isControlMessage(text);
-	const provider = control ? undefined : sessionProviderAnalytics(sessionId);
-	const priorMessages = control ? null : captureChatAutoNameHistory(sessionId);
-	await ackSend(runObservation.send(sessionId, control ? "internal" : "user", operation));
-	if (!control) {
-		const workspaceId = getSessionWorkspaceId(sessionId);
-		if (workspaceId && priorMessages) {
-			void maybeAutoNameChat(sessionId, workspaceId, text, { priorMessages });
-		}
+	const provider = sessionProviderAnalytics(sessionId);
+	const priorMessages = captureChatAutoNameHistory(sessionId);
+	await ackSend(runObservation.send(sessionId, "user", operation));
+	const workspaceId = getSessionWorkspaceId(sessionId);
+	if (workspaceId && priorMessages) {
+		void maybeAutoNameChat(sessionId, workspaceId, text, { priorMessages });
 	}
 	if (provider) {
 		track({
