@@ -28,6 +28,7 @@ export {
 	REQUEST_REVIEW_TOOL_NAME,
 	type RequestReviewHandler,
 	requestReviewExtension,
+	setAgentReviewEnabledResolver,
 	setRequestReviewHandler,
 } from "./requestReviewTool";
 export {

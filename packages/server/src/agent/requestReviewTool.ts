@@ -40,6 +40,14 @@ export function setRequestReviewHandler(fn: RequestReviewHandler): void {
 	handler = fn;
 }
 
+// Injected by the host (never an agent → settings edge, see agent/SPEC.md): when it returns false the
+// worker's in-session request_review tool — and its prompt guidelines — are withheld. The Review button
+// path is separate and unaffected. Read when a session's tools are built, so it takes effect for new sessions.
+let agentReviewEnabledResolver: () => boolean = () => true;
+export function setAgentReviewEnabledResolver(fn: () => boolean): void {
+	agentReviewEnabledResolver = fn;
+}
+
 export function createRequestReviewTool(): ToolDefinition<
 	typeof RequestReviewSchema,
 	PlanReviewResult
@@ -59,5 +67,6 @@ export function createRequestReviewTool(): ToolDefinition<
 }
 
 export function requestReviewExtension(pi: ExtensionAPI): void {
+	if (!agentReviewEnabledResolver()) return;
 	pi.registerTool(createRequestReviewTool());
 }

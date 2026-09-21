@@ -22,6 +22,7 @@ import {
 	isProjectSkillPath,
 	refreshSubagentTools,
 	setActivityProjectResolver,
+	setAgentReviewEnabledResolver,
 	setExtUiPendingObserver,
 	setExtUiPublisher,
 	setReviewCommentHandler,
@@ -448,6 +449,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return false;
 		}
 	});
+
+	setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false);
 
 	setProjectPublisher((project) => {
 		const capture = additionalCapture();

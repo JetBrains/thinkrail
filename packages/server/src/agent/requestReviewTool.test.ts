@@ -1,5 +1,11 @@
-import { expect, test } from "bun:test";
-import { createRequestReviewTool } from "./requestReviewTool";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { afterEach, expect, test } from "bun:test";
+import {
+	createRequestReviewTool,
+	REQUEST_REVIEW_TOOL_NAME,
+	requestReviewExtension,
+	setAgentReviewEnabledResolver,
+} from "./requestReviewTool";
 
 test("the tool guidance is policy-neutral — it defers to the tool result's next action", () => {
 	const tool = createRequestReviewTool();
@@ -9,4 +15,21 @@ test("the tool guidance is policy-neutral — it defers to the tool result's nex
 	expect(guidance).toContain("follow the next action");
 	expect(guidance).not.toContain("request_review again before moving to the next step");
 	expect(guidance).not.toContain("address every finding");
+});
+
+afterEach(() => setAgentReviewEnabledResolver(() => true));
+
+test("requestReviewExtension registers the tool only when agent review is enabled", () => {
+	const registered: string[] = [];
+	const pi = {
+		registerTool: (t: { name: string }) => registered.push(t.name),
+	} as unknown as ExtensionAPI;
+
+	setAgentReviewEnabledResolver(() => false);
+	requestReviewExtension(pi);
+	expect(registered).not.toContain(REQUEST_REVIEW_TOOL_NAME);
+
+	setAgentReviewEnabledResolver(() => true);
+	requestReviewExtension(pi);
+	expect(registered).toContain(REQUEST_REVIEW_TOOL_NAME);
 });
