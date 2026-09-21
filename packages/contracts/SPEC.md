@@ -30,8 +30,8 @@ of the host.
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
-  (`NativeUpdateState` and `NativeUpdateBridge`, the optional shell-local desktop update capability); the
-  value re-exports
+  (`NativeUpdateState` / `NativeUpdateBridge` and `NativeWindowState` / `NativeWindowControlsBridge`, the
+  optional shell-local desktop capabilities); the value re-exports
   `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
@@ -53,7 +53,9 @@ of the host.
   or deployment that supplies it. A feature's wire shape is shared by browser, desktop, and future clients.
   Separate type-only native client capabilities describe an optional shell-local bridge, not host WS
   methods: `NativeUpdateState` and `NativeUpdateBridge` carry update presentation and explicit local
-  actions. The same web bundle discovers that capability without importing a native SDK. An optional
+  actions; `NativeWindowState` and `NativeWindowControlsBridge` carry the maximized/fullscreen snapshot and
+  the minimize / toggle-maximize / close actions a frameless native window delegates to HTML controls. The
+  same web bundle discovers these capabilities without importing a native SDK. An optional
   `HostUpdateNotice` carries a closed CLI-host update lifecycle; protocol-gated `host.update` is an empty
   request that can start only the launcher's pre-bound updater. The browser never supplies a command, path,
   channel, version, URL, restart, or feed authority.
@@ -393,7 +395,9 @@ of the host.
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
   update bridge exposes a monotonic state snapshot, prompt check/download/install actions, failed-operation
   identity, and state subscription without exposing feed selection. Available, byte-transfer, preparation,
-  ready, and installing are distinct states.
+  ready, and installing are distinct states. The window-controls bridge exposes the same
+  snapshot/action/subscription shape for window state; a browser connection has neither bridge and renders
+  neither affordance.
 - **`HostUpdateNotice`** — the optional host-wire CLI lifecycle: current version, newer available version,
   channel, and an optional closed `available | running | succeeded | failed` status (absent means the legacy
   v64 advisory). `host.updateAvailable` publishes full replacements. Protocol v70 adds parameterless
