@@ -5,6 +5,7 @@ status: active
 title: shell — responsive frame
 parent: module-web
 tags: [v1, ui]
+references: [module-desktop]
 ---
 
 ## Responsibility
@@ -33,14 +34,30 @@ The sibling dependency graph is: `layoutState → layout`; `chatReconciliation �
 
 ## Composition
 
-The topbar keeps ThinkRail identity, connection state, Settings, and compact location context. When the
-optional application updater reports a native `ready` package or CLI-host `available` release, a compact Update
-affordance remains beside the settings and connection chrome; it opens the injected Update section and remains
-after native Later or until capability state changes. Browsers connected to a host without the advisory render
-neither that affordance nor the section. `Shell` mounts `updates`' one capability hook and passes its normalized
-state/actions into the props-driven controls; panels receive optional React content, never a launcher or
-native-runtime check. The topbar identity is the icon-only ThinkRail mark—the same vector served as
-`public/favicon.svg`, inlined at 32×32 and rendered
+The topbar keeps ThinkRail identity, connection state, Settings, and compact location context, and doubles
+as the **window title bar** when a native host removes its own strip ([[module-desktop]], *Native window
+chrome*). It is a fixed `h-topbar-row` (`--topbar-row-height`, 40px — macOS title-bar proportions, so
+native traffic lights sit centred in it) with `px-16`, and it is host-agnostic: the only host-shaped input
+is three CSS custom properties on `<html>`. `--window-chrome-inset-left` / `--window-chrome-inset-right`
+are consumed through the `w-window-chrome-inset-*` spacing tokens by one `aria-hidden` edge spacer on each
+side (`window-chrome-inset-left|right`); unset (any browser) they resolve to `0px` and the header looks as
+before, while the desktop publishes `64px` on macOS so content starts at 80px and collapses it to `0px` in
+fullscreen. `--window-chrome-drag-region` drives the header's `window-drag` utility, which resolves to
+`no-drag` unless the host publishes `drag`, so a browser tab or a natively decorated window never gains a
+drag strip. Padding was deliberately not used for the inset: the `spacingUsage` gate lets padding utilities
+name only canonical steps, and a CSS `padding-left: max(…)` would need a gate exemption. The header is
+`select-none`; its whole trailing action cluster (`topbar-actions`) is `window-no-drag`, so any button
+placed inside it — the Update affordance, quota Retry, Settings — is excluded from dragging by
+construction, and buttons must not be placed elsewhere in the header (`topbarChrome.test.ts` gates this),
+while plain text (breadcrumb, connection label) stays draggable.
+`SettingsDialog` portals out of the header and is unaffected. Nothing in the shell names or imports the
+desktop host. When the optional application updater reports a native `ready` package or CLI-host `available`
+release, a compact Update affordance remains beside the settings and connection chrome; it opens the injected
+Update section and remains after native Later or until capability state changes. Browsers connected to a host
+without the advisory render neither that affordance nor the section. `Shell` mounts `updates`' one capability
+hook and passes its normalized state/actions into the props-driven controls; panels receive optional React
+content, never a launcher or native-runtime check. The topbar identity is the icon-only ThinkRail mark—the same
+vector served as `public/favicon.svg`, inlined at 32×32 and rendered
 through semantic `text-primary`—with no divider before location. An active workspace shows one line of
 `project / workspace  branch · from baseBranch` plus optional review metadata on `tr-text-ui`; project and
 workspace use `text-text-default`, while branch/trailing metadata use `text-text-muted`, with progressive

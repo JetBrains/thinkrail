@@ -172,6 +172,13 @@ appears while the workspace is never activated and no chat tab exists, which is 
 host restart produces. Note that **seeding must happen after `openFixtureProject`**: `openAppFresh` calls
 `resetState`, which deletes the isolated agent dir's `sessions` tree, so anything seeded earlier is wiped.
 
+**Topbar chrome** (`topbar-chrome.spec.ts`) proves the web side of the desktop title-bar contract without a
+desktop: it injects the three host-published CSS properties (`--window-chrome-inset-left|right`,
+`--window-chrome-drag-region`) from the test and asserts spacer widths, logo/action-cluster offsets, an
+unchanged 40px workbench origin, the header's resolved `-webkit-app-region`, and that Update, quota Retry
+and Settings all live inside the `no-drag` action cluster. In a plain browser the properties are unset, so
+the first scenario pins the zero-inset, `no-drag` baseline and the theme-token header colour.
+
 Workbench scenarios exercise the normalized frontend-local frame rather than only the pure model: frame
 geometry/tool placement survives workspace switches while resource tabs and attention differ; closing a final
 resource retains its empty group; explicit group removal rehomes hidden-workspace resources; reload restores
