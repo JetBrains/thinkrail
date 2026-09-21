@@ -14,3 +14,16 @@ export interface NativeUpdateBridge {
 	restartToUpdate(): Promise<void>;
 	subscribe(listener: (state: NativeUpdateState) => void): () => void;
 }
+
+export interface NativeWindowState {
+	maximized: boolean;
+	fullScreen: boolean;
+}
+
+export interface NativeWindowControlsBridge {
+	getState(): Promise<NativeWindowState>;
+	minimize(): Promise<void>;
+	toggleMaximize(): Promise<void>;
+	close(): Promise<void>;
+	subscribe(listener: (state: NativeWindowState) => void): () => void;
+}

@@ -28,8 +28,8 @@ of the host.
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
-  (`NativeUpdateState` and `NativeUpdateBridge`, the optional shell-local desktop update capability); the
-  value re-exports
+  (`NativeUpdateState` / `NativeUpdateBridge` and `NativeWindowState` / `NativeWindowControlsBridge`, the
+  optional shell-local desktop capabilities); the value re-exports
   `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
@@ -51,7 +51,9 @@ of the host.
   or deployment that supplies it. A feature's wire shape is shared by browser, desktop, and future clients.
   Separate type-only native client capabilities describe an optional shell-local bridge, not host WS
   methods: `NativeUpdateState` and `NativeUpdateBridge` carry update presentation and explicit local
-  actions. The same web bundle discovers that capability without importing a native SDK. An optional
+  actions; `NativeWindowState` and `NativeWindowControlsBridge` carry the maximized/fullscreen snapshot and
+  the minimize / toggle-maximize / close actions a frameless native window delegates to HTML controls. The
+  same web bundle discovers these capabilities without importing a native SDK. An optional
   `HostUpdateNotice` is advisory only: an ordinary browser receives fixed update guidance but acquires no
   check, download, install, restart, feed-selection, or host-command authority.
 - **Forbidden:** any *value* import of a `pi` package; **any** import (even `type`) of
@@ -368,7 +370,9 @@ of the host.
   from contracts. There is no current-layout method or push channel.
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
   update bridge exposes a monotonic state snapshot, prompt manual check, explicit restart action, and state
-  subscription without granting updater authority to an ordinary browser connection.
+  subscription without granting updater authority to an ordinary browser connection. The window-controls
+  bridge exposes the same snapshot/action/subscription shape for window state; a browser connection has
+  neither bridge and renders neither affordance.
 - **`HostUpdateNotice`** — the optional immutable host-wire advisory: current version, newer available version,
   and channel. No status, revision, error, feed URL, artifact, platform path, or shell command crosses the
   wire. Its optional welcome field plus `host.updateAvailable` change pushes enter at protocol v64.
