@@ -6,7 +6,6 @@ export {
 	DEFAULT_CONFIG,
 	IMAGE_MAX_BASE64_BYTES,
 	isComposerGrowthLimit,
-	isControlMessage,
 	isDelegationRunDetails,
 	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
@@ -24,7 +23,6 @@ export {
 	TERMINAL_REPLAY_KB,
 	TERMINAL_WINDOWS_SHELLS,
 	THEME_MODES,
-	TODO_NUDGE_PREFIX,
 } from "./domain";
 export type * from "./nativeClient";
 export type * from "./piProtocol";

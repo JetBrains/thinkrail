@@ -34,10 +34,8 @@ of the host.
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
-  chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
-  **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
-  hydrate, the host skips them in the history index and does not count them as `message_sent`; both
-  sides agree here rather than each re-deriving `startsWith`) + **`isRetriedAttempt(messages, index)`**
+  chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`,
+  **`isRetriedAttempt(messages, index)`**
   (the one shared reading of pi's persisted-but-superseded auto-retry attempts — the client's hydration
   hides their turns, the host's history indexer skips their text; both consume the index slot so jump
   anchors stay aligned) from `domain`; **`isTranscriptMessageRole(role)`**
