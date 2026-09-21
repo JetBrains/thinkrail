@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { TODO_NUDGE_PREFIX } from "@thinkrail/contracts";
 import { extractSession } from "./extract";
 
 const line = (obj: unknown) => JSON.stringify(obj);
@@ -307,38 +306,6 @@ describe("extractSession", () => {
 		expect(entriesOf(jsonl)).toEqual([
 			{ text: "kept question", role: "user", timestamp: 300, messageIndex: 1 },
 			{ text: "post-compaction answer", role: "assistant", timestamp: 400, messageIndex: 2 },
-		]);
-	});
-
-	test("excludes the internal todo-nudge prompt but still consumes its index slot", () => {
-		const jsonl = [
-			header(),
-			line({
-				type: "message",
-				id: "u0",
-				parentId: null,
-				message: { role: "user", content: "real prompt", timestamp: 100 },
-			}),
-			line({
-				type: "message",
-				id: "n0",
-				parentId: "u0",
-				message: {
-					role: "user",
-					content: `${TODO_NUDGE_PREFIX}A TODO was added to the list: "x".`,
-					timestamp: 200,
-				},
-			}),
-			line({
-				type: "message",
-				id: "u1",
-				parentId: "n0",
-				message: { role: "user", content: "next prompt", timestamp: 300 },
-			}),
-		].join("\n");
-		expect(entriesOf(jsonl)).toEqual([
-			{ text: "real prompt", role: "user", timestamp: 100, messageIndex: 0 },
-			{ text: "next prompt", role: "user", timestamp: 300, messageIndex: 2 },
 		]);
 	});
 

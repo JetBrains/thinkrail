@@ -352,8 +352,8 @@ test("a host-fired USER message folds into the transcript; the composer's optimi
 	store.handlePiEvent(userStart("fix the tests"), "a");
 	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
 
-	store.handlePiEvent(userStart("[thinkrail:todo-nudge] plan changed"), "a");
-	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
+	store.handlePiEvent(userStart("plan changed"), "a");
+	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(3);
 });
 
 test("queue_update folds pi's queue into the runtime; the canonical echo lands the turn at its true position", () => {
