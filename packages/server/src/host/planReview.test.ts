@@ -739,6 +739,83 @@ test("the button path delivers canonical ids even when a Review send races befor
 	);
 });
 
+test("the tool path rolls back and deletes the findings when the cycle record fails", async () => {
+	installRequestReviewSeam(verdictRunner(requestChanges));
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+
+	// Findings file and mark `sent`, then the todo-review sidecar write throws. The transaction must roll
+	// the sent findings back to draft and delete them so the cancelled review leaves nothing open whose
+	// canonical id the worker never received, and the request must reject without spending the cycle.
+	const spy = spyOn(todos, "recordAgentChangesRequested").mockImplementation(() => {
+		throw new Error("sidecar rename failed");
+	});
+	try {
+		await expect(
+			createRequestReviewTool().execute("tc", { itemId: id } as never, undefined, undefined, ctx),
+		).rejects.toThrow(/sidecar rename failed/);
+	} finally {
+		spy.mockRestore();
+	}
+
+	expect(
+		(await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id),
+	).toHaveLength(0);
+	expect(todoReviewRecord(ref)).toBeUndefined();
+	expect(todoReviewAutoCycles(ref)).toBeUndefined();
+	expect(itemReviewActive(sessionId, id)).toBe(false);
+});
+
+test("the button path deletes the filed drafts when the cycle record fails", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+
+	// Filing succeeds, then record(1) throws before any mark. The just-filed drafts must be deleted so the
+	// cancelled review leaves nothing open, and no cycle is recorded.
+	const spy = spyOn(todos, "recordAgentChangesRequested").mockImplementation(() => {
+		throw new Error("sidecar rename failed");
+	});
+	try {
+		startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+		await settle(sessionId, id);
+	} finally {
+		spy.mockRestore();
+	}
+
+	expect(
+		(await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id),
+	).toHaveLength(0);
+	expect(todoReviewRecord(ref)).toBeUndefined();
+	expect(todoReviewAutoCycles(ref)).toBeUndefined();
+	expect(isItemUnderActiveReview(sessionId, id)).toBe(false);
+});
+
+test("the auto-fix-off path deletes the filed drafts when the cycle record fails", async () => {
+	updateConfig({ reviewAutoFix: false });
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+
+	const spy = spyOn(todos, "recordAgentChangesRequested").mockImplementation(() => {
+		throw new Error("sidecar rename failed");
+	});
+	try {
+		startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+		await settle(sessionId, id);
+	} finally {
+		spy.mockRestore();
+	}
+
+	expect(
+		(await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id),
+	).toHaveLength(0);
+	expect(todoReviewRecord(ref)).toBeUndefined();
+	expect(itemReviewActive(sessionId, id)).toBe(false);
+});
+
 test("a request_review that fails before the review starts releases its claim, so the retry runs", async () => {
 	installRequestReviewSeam(verdictRunner(approve));
 	const sessionId = await workerSession();

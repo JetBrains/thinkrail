@@ -196,6 +196,24 @@ async function fileFindings(
 	return findings;
 }
 
+/** Undo just-filed findings while the review lock is held: roll back any `sent` assignment first, then
+ * delete the drafts. Compensates a review-record write that throws AFTER filing so a cancelled review
+ * never leaves open findings whose canonical ids the worker never received. Best-effort per comment. */
+async function unfileFindings(
+	params: ReviewParams,
+	filed: ReviewFixComment[],
+	sent: boolean,
+): Promise<void> {
+	if (sent) {
+		rollbackSend(
+			params.workspaceId,
+			filed.map((f) => f.id),
+			params.sessionId,
+		);
+	}
+	for (const f of filed) await deleteComment(params.workspaceId, f.id).catch(() => {});
+}
+
 /** Own the whole button-path critical section: file the reviewer's findings, record cycle 1, select
  * them, and mark them `sent` — all in ONE `withReviewLock` hold — then deliver the structured
  * `todo-review-fix` message to the worker chat. Filing and reservation share the lock so no interleaved
@@ -219,7 +237,13 @@ async function deliverFixToWorker(
 		const prepared = await withReviewLock(params.workspaceId, async () => {
 			const snapshot = await getReviewSnapshot(params.workspaceId);
 			filed = await fileFindings(params, reviewedSha, raw);
-			const { item } = record(1);
+			let item: Todo;
+			try {
+				item = record(1).item;
+			} catch (err) {
+				await unfileFindings(params, filed, false);
+				throw err;
+			}
 			recorded = true;
 			const findings: ReviewComment[] = await itemFixFindings(params);
 			const sentIds = findings.map((c) => c.id);
@@ -295,19 +319,27 @@ async function recordVerdict(
 			autoCycles,
 		});
 	if (!canAutoFix) {
-		// Auto-fix off / cycle spent: file under the lock so a concurrent send can't mark one draft `sent`
-		// between two writes and defeat fileFindings' compensation on a later failure. See planReview.SPEC.md.
-		const findings = await withReviewLock(params.workspaceId, () =>
-			fileFindings(params, reviewedSha, result.findings),
-		);
-		record(2);
+		// Auto-fix off / cycle spent: file + record under the lock so a concurrent send can't mark one
+		// draft `sent` between two writes (defeating fileFindings' compensation), and a record-write failure
+		// deletes the just-filed drafts rather than stranding them past the cancel. See planReview.SPEC.md.
+		const findings = await withReviewLock(params.workspaceId, async () => {
+			const filed = await fileFindings(params, reviewedSha, result.findings);
+			try {
+				record(2);
+			} catch (err) {
+				await unfileFindings(params, filed, false);
+				throw err;
+			}
+			return filed;
+		});
 		return { kind: "changes", canAutoFix: false, findings };
 	}
 	if (!deliverFix) {
-		// Tool path: file the findings and mark them sent to the worker as one locked transaction, so a
-		// concurrent clear or a non-draft collision can't strand open findings whose canonical ids the
-		// worker never received. `fileFindings` compensates a mid-loop persist failure; a mark failure
-		// deletes the just-filed drafts here. See planReview.SPEC.md.
+		// Tool path: file the findings, mark them sent to the worker, and record the cycle as one locked
+		// transaction, so a concurrent clear or a non-draft collision can't strand open findings whose
+		// canonical ids the worker never received. `fileFindings` compensates a mid-loop persist failure;
+		// a mark failure deletes the just-filed drafts; a record failure rolls the sent findings back and
+		// deletes them so the cancel leaves nothing open. See planReview.SPEC.md.
 		const findings = await withReviewLock(params.workspaceId, async () => {
 			const filed = await fileFindings(params, reviewedSha, result.findings);
 			try {
@@ -317,12 +349,17 @@ async function recordVerdict(
 					params.sessionId,
 				);
 			} catch (err) {
-				for (const f of filed) await deleteComment(params.workspaceId, f.id).catch(() => {});
+				await unfileFindings(params, filed, false);
+				throw err;
+			}
+			try {
+				record(1);
+			} catch (err) {
+				await unfileFindings(params, filed, true);
 				throw err;
 			}
 			return filed;
 		});
-		record(1);
 		return { kind: "changes", canAutoFix: true, findings };
 	}
 	// Button path: when we win the fix claim, deliverFixToWorker files + records + marks-sent + sends as
@@ -331,10 +368,16 @@ async function recordVerdict(
 	// user, under the lock, and record the terminal cycle here. See planReview.SPEC.md.
 	if (claimItemFix(params.sessionId, params.id))
 		return deliverFixToWorker(params, note, reviewedSha, result.findings, record);
-	const findings = await withReviewLock(params.workspaceId, () =>
-		fileFindings(params, reviewedSha, result.findings),
-	);
-	record(2);
+	const findings = await withReviewLock(params.workspaceId, async () => {
+		const filed = await fileFindings(params, reviewedSha, result.findings);
+		try {
+			record(2);
+		} catch (err) {
+			await unfileFindings(params, filed, false);
+			throw err;
+		}
+		return filed;
+	});
 	return { kind: "changes", canAutoFix: false, findings };
 }
 
