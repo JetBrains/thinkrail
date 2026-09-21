@@ -3,8 +3,10 @@ import {
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	type SessionStateRecord,
 } from "@thinkrail/contracts";
 import {
+	mergeSessionStateRecords,
 	supportsHostUpdateRun,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
@@ -30,4 +32,30 @@ test("auto plan-summary is requested only from a host at or beyond the v69 capab
 	// A pre-v69 host serves no todo.generateSummary, so a new client must not issue the request.
 	expect(supportsPlanSummaryGeneration(PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION - 1)).toBe(false);
 	expect(supportsPlanSummaryGeneration(null)).toBe(false);
+});
+
+function record(sessionId: string, completionId: string): SessionStateRecord {
+	return {
+		sessionId,
+		workspaceId: "workspace",
+		projectId: "project",
+		state: {
+			execution: "idle",
+			runId: `run:${sessionId}`,
+			needsInput: null,
+			completion: { completionId, outcome: "succeeded" },
+			completionUnread: true,
+			queuedCount: 0,
+		},
+	};
+}
+
+test("buffered state replaces its stale snapshot row before activation binding", () => {
+	const other = record("other", "completion:other");
+	expect(
+		mergeSessionStateRecords(
+			[record("target", "completion:old"), other],
+			[record("target", "completion:newer"), record("target", "completion:latest")],
+		),
+	).toEqual([record("target", "completion:latest"), other]);
 });
