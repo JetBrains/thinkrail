@@ -9,7 +9,6 @@ import {
 	isRetriedAttempt,
 	isSubagentCompletionMessage,
 } from "@thinkrail/contracts";
-import { userText } from "../lib";
 import { assistantFailureText } from "./assistantFailure";
 import type { ChatTurn, ToolResultState } from "./types";
 
