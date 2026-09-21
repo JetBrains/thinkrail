@@ -66,6 +66,9 @@ test("queueing: pending strip + canonical order; per-row edit/remove; interrupt 
 	await input.press("ControlOrMeta+Enter");
 	await input.fill("second queued edit");
 	await input.press("ControlOrMeta+Enter");
+	// The strip collapses to the nearest message; expand to reach every queued row.
+	await expect(page.getByTestId("queue-item")).toHaveCount(1);
+	await page.getByTestId("queue-more").click();
 	await expect(page.getByTestId("queue-item")).toHaveCount(2);
 
 	await page
