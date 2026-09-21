@@ -31,6 +31,23 @@ body {
 	}
 }
 
+* {
+	--scrollbar-thumb: transparent;
+	--scrollbar-thumb-inset: 0px;
+}
+:hover,
+[data-quiet-scroll-intent] {
+	--scrollbar-thumb: var(--border-default);
+}
+[data-theme-contrast="high"] * {
+	--scrollbar-thumb: var(--text-subtle);
+	--scrollbar-thumb-inset: 2px;
+}
+[data-theme-contrast="high"] :hover,
+[data-theme-contrast="high"] [data-quiet-scroll-intent] {
+	--scrollbar-thumb: var(--border-default);
+	--scrollbar-thumb-inset: 0px;
+}
 ::-webkit-scrollbar {
 	width: 6px;
 	height: 6px;
@@ -40,34 +57,14 @@ body {
 	background: transparent;
 }
 ::-webkit-scrollbar-thumb {
+	border: var(--scrollbar-thumb-inset) solid transparent;
 	border-radius: var(--radius-sm);
-	background-color: transparent;
+	background-clip: padding-box;
+	background-color: var(--scrollbar-thumb);
 	transition: background-color var(--transition-fast);
-}
-:hover::-webkit-scrollbar-thumb,
-[data-quiet-scroll-intent]::-webkit-scrollbar-thumb {
-	background-color: var(--border-default);
 }
 ::-webkit-scrollbar-thumb:hover,
 ::-webkit-scrollbar-thumb:active {
-	background-color: var(--text-muted);
-}
-
-[data-theme-contrast="high"] *::-webkit-scrollbar-thumb {
-	border: 2px solid transparent;
-	background-clip: padding-box;
-	background-color: var(--text-subtle);
-	transition:
-		background-color var(--transition-fast),
-		border-width var(--transition-fast);
-}
-[data-theme-contrast="high"] *:hover::-webkit-scrollbar-thumb,
-[data-theme-contrast="high"] [data-quiet-scroll-intent]::-webkit-scrollbar-thumb {
-	border-width: 0;
-	background-color: var(--border-default);
-}
-[data-theme-contrast="high"] *::-webkit-scrollbar-thumb:hover,
-[data-theme-contrast="high"] *::-webkit-scrollbar-thumb:active {
 	border-width: 0;
 	background-color: var(--text-muted);
 }
@@ -75,7 +72,9 @@ body {
 .monaco-editor .monaco-scrollable-element > .scrollbar > .slider {
 	border-radius: var(--radius-sm);
 }
-.quiet-scroll-host .xterm-scrollable-element > .scrollbar.vertical > .slider {
+.quiet-scroll-host .xterm-scrollable-element > .scrollbar.vertical > .slider,
+.quiet-scroll-host .xterm-scrollable-element > .scrollbar.vertical > .slider:hover,
+.quiet-scroll-host .xterm-scrollable-element > .scrollbar.vertical > .slider.active {
 	background: transparent;
 }
 .quiet-scroll-host .xterm-scrollable-element > .scrollbar.vertical > .slider::before {
@@ -92,7 +91,9 @@ body {
 		background-color var(--transition-fast);
 }
 @media (prefers-reduced-motion: reduce) {
-	.quiet-scroll-host .xterm-scrollable-element > .scrollbar.vertical {
+	.quiet-scroll-host[data-quiet-scroll-surface="terminal"]
+		.xterm-scrollable-element
+		> .scrollbar.vertical {
 		transition: none;
 	}
 }
@@ -158,12 +159,9 @@ body {
 @supports not selector(::-webkit-scrollbar) {
 	html {
 		scrollbar-width: thin;
-		scrollbar-color: transparent transparent;
 	}
-	:hover,
-	[data-quiet-scroll-intent],
-	[data-theme-contrast="high"] * {
-		scrollbar-color: var(--border-default) transparent;
+	* {
+		scrollbar-color: var(--scrollbar-thumb) transparent;
 	}
 }
 
@@ -177,11 +175,9 @@ body {
 
 @media (forced-colors: active) {
 	::-webkit-scrollbar-thumb,
-	:hover::-webkit-scrollbar-thumb,
-	[data-quiet-scroll-intent]::-webkit-scrollbar-thumb,
-	[data-theme-contrast="high"] *::-webkit-scrollbar-thumb {
+	::-webkit-scrollbar-thumb:hover,
+	::-webkit-scrollbar-thumb:active {
 		border: 1px solid Canvas;
-		background-clip: padding-box;
 		background-color: CanvasText;
 	}
 	.quiet-scroll-host[data-quiet-scroll-overflow-y][data-quiet-scroll-surface="terminal"]
@@ -204,10 +200,7 @@ body {
 		display: none;
 	}
 	@supports not selector(::-webkit-scrollbar) {
-		html,
-		:hover,
-		[data-quiet-scroll-intent],
-		[data-theme-contrast="high"] * {
+		* {
 			scrollbar-color: CanvasText Canvas;
 		}
 	}

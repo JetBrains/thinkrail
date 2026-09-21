@@ -34,7 +34,10 @@ its own spec.
   library's authoritative edge state. `styles/global.css` owns the single scrollbar definition for every
   native scroll container: a 6px gutter, transparent track, transparent resting thumb, `--border-default`
   while the scrolling element is hovered or carries `data-quiet-scroll-intent`, and `--text-muted` on
-  direct thumb hover/active; Firefox gets the same via inherited `scrollbar-color`. Bundled high-contrast
+  direct thumb hover/active. The reveal travels through an element-level custom property
+  (`--scrollbar-thumb`) that the thumb pseudo-element and Firefox's `scrollbar-color` both read, because
+  Chromium evaluates `:hover` inside a `::-webkit-scrollbar-*` selector against the scrollbar part, not
+  the element; every element resets the property so a hovered ancestor never reveals its descendants. Bundled high-contrast
   themes keep a 2px resting hairline; OS forced-colours keeps a system-colour thumb and removes curtains;
   reduced motion removes transitions. `QuietScrollArea` and `QuietScrollFrame` therefore own no look: they
   add intent beyond hover (focus-within, active scrolling with a short grace period, pointer drags that

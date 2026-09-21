@@ -65,8 +65,6 @@ function useScrollIntent(viewport: HTMLElement | null, intentRoot: HTMLElement |
 	useEffect(() => {
 		if (!viewport || !intentRoot) return;
 
-		const hadViewportClass = viewport.classList.contains("quiet-scroll-viewport");
-		viewport.classList.add("quiet-scroll-viewport");
 		let pointerInside = intentRoot.matches(":hover");
 		let focusInside = intentRoot.contains(document.activeElement);
 		let scrolling = false;
@@ -140,7 +138,6 @@ function useScrollIntent(viewport: HTMLElement | null, intentRoot: HTMLElement |
 			window.removeEventListener("pointerup", onPointerEnd, { capture: true });
 			window.removeEventListener("pointercancel", onPointerEnd, { capture: true });
 			viewport.removeAttribute("data-quiet-scroll-intent");
-			if (!hadViewportClass) viewport.classList.remove("quiet-scroll-viewport");
 		};
 	}, [intentRoot, viewport]);
 }
