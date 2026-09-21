@@ -842,7 +842,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
     `description: 'single-quoted'` loaded into the form with literal quotes and saved back corrupted).
     Its boundary
     rule mirrors pi's own `extractFrontmatter` (`@earendil-works/pi-coding-agent`'s
-    `dist/utils/frontmatter.js` + `dist/utils/text.js`, pinned against pi v0.84.3 — the same pin
+    `dist/utils/frontmatter.js` + `dist/utils/text.js`, pinned against pi v0.86.1 — the same pin
     `packages/server/src/templates/SPEC.md` uses server-side; re-verify both on a pi version bump): strip
     one leading UTF-8 BOM, normalize newlines, then end the frontmatter block at the FIRST later `\n---`
     line; the body is everything after that fence run through `.trim()` — not a single optional `\n`.
