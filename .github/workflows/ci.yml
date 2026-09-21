@@ -134,6 +134,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun test packages/spec-graph
       - run: bun test packages/server/src/subprocess
+      - run: bun test apps/desktop/src/windowsFrame.test.ts apps/desktop/src/windowChrome.test.ts
       - run: bun run build:binary
       - run: bun run smoke:binary
 

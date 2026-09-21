@@ -39,8 +39,10 @@ Real-provider tests remain explicitly authorized and separate.
 
 A platform's native behavior is proven only on that platform. Windows remains a PR gate because its
 executable, environment, path, and trash behavior differs materially from POSIX hosts. Its subprocess
-unit gate also exercises native descendant-console behavior, which the Linux unit run cannot prove.
-Native macOS and Linux ARM64 acceptance belongs to the release matrix.
+unit gate also exercises native descendant-console behavior, which the Linux unit run cannot prove, and
+its desktop window-chrome unit gate binds the `user32.dll` frame symbols the frameless title bar relies on
+([[module-desktop]]); neither needs the Electrobun devkit. Native macOS and Linux ARM64 acceptance belongs
+to the release matrix.
 
 ## Native build contract
 

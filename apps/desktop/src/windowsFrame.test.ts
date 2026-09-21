@@ -1,6 +1,7 @@
-import { dlopen, FFIType, type Pointer } from "bun:ffi";
+import type { Pointer } from "bun:ffi";
 import { expect, test } from "bun:test";
 import {
+	loadWindowsFrameApi,
 	restoreWindowsFrameControls,
 	WS_MAXIMIZEBOX,
 	WS_MINIMIZEBOX,
@@ -74,28 +75,10 @@ test("throws when refreshing the frame fails", () => {
 	);
 });
 
-test.skipIf(process.platform !== "win32")("binds the user32 style symbol", () => {
-	const library = dlopen("user32.dll", {
-		GetWindowLongPtrW: {
-			args: [FFIType.ptr, FFIType.i32],
-			returns: FFIType.i64,
-		},
-		SetWindowLongPtrW: {
-			args: [FFIType.ptr, FFIType.i32, FFIType.i64],
-			returns: FFIType.i64,
-		},
-		SetWindowPos: {
-			args: [
-				FFIType.ptr,
-				FFIType.ptr,
-				FFIType.i32,
-				FFIType.i32,
-				FFIType.i32,
-				FFIType.i32,
-				FFIType.u32,
-			],
-			returns: FFIType.bool,
-		},
-	});
-	expect(library.symbols.GetWindowLongPtrW(null as unknown as Pointer, -16)).toBe(0n);
+test.skipIf(process.platform !== "win32")("binds the user32 symbols behind the frame api", () => {
+	const api = loadWindowsFrameApi();
+	expect(loadWindowsFrameApi()).toBe(api);
+	expect(api.getStyle(0 as unknown as Pointer)).toBe(0n);
+	expect(api.setStyle(0 as unknown as Pointer, 0n)).toBe(0n);
+	expect(api.refreshFrame(0 as unknown as Pointer)).toBe(false);
 });
