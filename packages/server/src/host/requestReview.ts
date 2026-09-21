@@ -281,7 +281,11 @@ async function recordVerdict(
 			autoCycles,
 		});
 	if (!canAutoFix) {
-		const findings = await fileFindings(params, reviewedSha, result.findings);
+		// Auto-fix off / cycle spent: file under the lock so a concurrent send can't mark one draft `sent`
+		// between two writes and defeat fileFindings' compensation on a later failure. See planReview.SPEC.md.
+		const findings = await withReviewLock(params.workspaceId, () =>
+			fileFindings(params, reviewedSha, result.findings),
+		);
 		record(2);
 		return { kind: "changes", canAutoFix: false, findings };
 	}
@@ -307,7 +311,12 @@ async function recordVerdict(
 		record(1);
 		return { kind: "changes", canAutoFix: true, findings };
 	}
-	const findings = await fileFindings(params, reviewedSha, result.findings);
+	// Button path: file under the lock so filing plus its compensation is atomic against a concurrent
+	// send — otherwise finding 1 could go `sent` before finding 2 fails, and cleanup could not delete an
+	// already-sent finding, stranding it. deliverFixToWorker takes the lock again to mark+send. See planReview.SPEC.md.
+	const findings = await withReviewLock(params.workspaceId, () =>
+		fileFindings(params, reviewedSha, result.findings),
+	);
 	const claimed = claimItemFix(params.sessionId, params.id);
 	const { item } = record(1);
 	if (claimed && (await deliverFixToWorker(params, item, note)))

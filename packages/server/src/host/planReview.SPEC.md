@@ -115,7 +115,12 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   drafts it cannot name — so a mark failure deletes the just-filed drafts and rejects the request. Otherwise `resolve_comment` — which only closes a `sent` comment
   assigned to this worker, by its persisted id — can never satisfy the open-finding gate, wedging
   request_changes → fix → approve. The terminal path ("do not fix") leaves them `draft` for the user.
-  Pinned by the tool-path finding-identity test in `planReview.test.ts`.
+  Filing itself is all-or-nothing on every path: `fileFindings` deletes the drafts it already persisted if
+  a later write throws, and it always runs inside `withReviewLock` (the button and auto-fix-off paths take
+  the lock around filing; the tool path already holds it) so a concurrent Review send can't mark one
+  finding `sent` between two writes and defeat that compensation — an already-sent finding can't be
+  deleted, and would strand undelivered. Pinned by the tool-path finding-identity test and the
+  interleaved-send / partial-persist regression tests in `planReview.test.ts`.
 - **One review per plan at a time, one per step ever.** Both entry points serialize on the plan's chain
   (`planReviewQueue.onPlanChain`): the button path via `enqueuePlanReview` (fire-and-forget), the worker's
   `request_review` tool by awaiting `onPlanChain` for its result. The chain keeps Review All — and a tool

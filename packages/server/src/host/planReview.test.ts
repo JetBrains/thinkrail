@@ -35,6 +35,7 @@ import {
 	setReviewFailedPublisher,
 	startPlanReview,
 } from "./requestReview";
+import { withReviewLock } from "./reviewLock";
 import { isItemUnderActiveReview } from "./todoReview";
 
 let dataDir: string;
@@ -647,6 +648,46 @@ test("the tool path deletes the first filed draft when a later finding fails to 
 	).toHaveLength(0);
 	expect(todoReviewRecord(ref)).toBeUndefined();
 	expect(todoReviewAutoCycles(ref)).toBeUndefined();
+	expect(itemReviewActive(sessionId, id)).toBe(false);
+});
+
+test("the button path files under the review lock, so an interleaved send cannot strand a finding", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+
+	// Button path (deliverFix), two findings. The first persists; a concurrent Review "Send" then races
+	// in to mark it `sent`, and the second write fails. With filing under withReviewLock the send is
+	// serialized AFTER filing + compensation, so cleanup deletes the still-draft first finding and the
+	// send finds nothing to mark — no open finding survives with an id the worker never received.
+	const real = reviews.addComment;
+	let firstId = "";
+	let sendDone: Promise<unknown> = Promise.resolve();
+	let calls = 0;
+	const spy = spyOn(reviews, "addComment").mockImplementation(async (arg) => {
+		calls += 1;
+		if (calls === 1) {
+			const c = await real(arg);
+			firstId = c.id;
+			return c;
+		}
+		sendDone = withReviewLock(WS, () => reviews.markCommentsSent(WS, [firstId], sessionId)).catch(
+			() => {},
+		);
+		throw new Error("review store unwritable");
+	});
+	try {
+		startPlanReview(WS, sessionId, id, verdictRunner(requestChangesTwo));
+		await settle(sessionId, id);
+	} finally {
+		spy.mockRestore();
+	}
+	await sendDone;
+
+	expect(
+		(await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id),
+	).toHaveLength(0);
+	expect(todoReviewRecord(ref)).toBeUndefined();
 	expect(itemReviewActive(sessionId, id)).toBe(false);
 });
 
