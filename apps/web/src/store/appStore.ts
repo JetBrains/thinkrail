@@ -2943,7 +2943,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 							},
 						}
 					: {}),
-				...(record === undefined && !s.sessionStateSnapshotInstalled
+				...(!s.sessionStateSnapshotInstalled
 					? {
 							pendingDirectChatActivationBySession: {
 								...s.pendingDirectChatActivationBySession,

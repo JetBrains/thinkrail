@@ -498,6 +498,33 @@ test("a cold direct open binds the first snapshot completion without a second cl
 		selectReadyCompletionActivation(useAppStore.getState(), "cold-workspace", "cold-session"),
 	).toBe("completion:cold");
 
+	store.setStatus("disconnected");
+	store.setStatus("connected");
+	store.noteDirectChatActivation("cold-session");
+	expect(useAppStore.getState().pendingDirectChatActivationBySession).toEqual({
+		"cold-session": true,
+	});
+	store.installSessionStateSnapshot([record("cold-session", "completion:reconnected")]);
+	expect(useAppStore.getState().directActivatedCompletionBySession["cold-session"]).toBe(
+		"completion:reconnected",
+	);
+	const reconnected = useAppStore.getState();
+	const runtime = reconnected.sessions["cold-session"];
+	if (!runtime) throw new Error("cold session runtime is missing");
+	useAppStore.setState({
+		sessions: {
+			...reconnected.sessions,
+			"cold-session": {
+				...runtime,
+				syncedConnectionGeneration: reconnected.connectionGeneration,
+			},
+		},
+	});
+	store.noteRenderedCompletion("cold-session", "completion:reconnected");
+	expect(
+		selectReadyCompletionActivation(useAppStore.getState(), "cold-workspace", "cold-session"),
+	).toBe("completion:reconnected");
+
 	store.openChatSession("cold-workspace", "future-session", null, "medium");
 	store.noteDirectChatActivation("future-session");
 	expect(useAppStore.getState().pendingDirectChatActivationBySession).toEqual({});
