@@ -30,6 +30,7 @@ import { todoReviewAutoCycles, todoReviewRecord } from "../todos";
 import { itemReviewActive } from "./planReviewQueue";
 import {
 	installRequestReviewSeam,
+	itemTitleOf,
 	maybeAutoReReview,
 	type ReviewRunner,
 	setReviewFailedPublisher,
@@ -119,6 +120,11 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	rmSync(worktree, { recursive: true, force: true });
 });
+
+function sh(cwd: string, ...args: string[]): void {
+	const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
+	if (!r.success) throw new Error(`git ${args.join(" ")} failed`);
+}
 
 const verdictRunner =
 	(finalText: string, onRun?: () => void): ReviewRunner =>
@@ -834,6 +840,42 @@ test("a request_review that fails before the review starts releases its claim, s
 	});
 	await expect(run()).resolves.toBeDefined();
 	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })?.state).toBe("reviewed");
+});
+
+test("itemTitleOf labels a Review-All adopted commit with its subject, not the commit:<sha> id", async () => {
+	// A commit no plan item owns is surfaced only as a wire-only adoptedCommits entry; the review result
+	// card / detached-failure toast must name its subject, so itemTitleOf has to look there too.
+	const wt = mkdtempSync(join(tmpdir(), "planreview-adopt-"));
+	const ws = "ws-adopt";
+	sh(wt, "init", "-b", "main");
+	sh(wt, "config", "user.email", "t@thinkrail.test");
+	sh(wt, "config", "user.name", "test");
+	sh(wt, "config", "commit.gpgsign", "false");
+	writeFileSync(join(wt, "README.md"), "# repo\n");
+	sh(wt, "add", "-A");
+	sh(wt, "commit", "-m", "init");
+	sh(wt, "checkout", "-b", "feature");
+	writeFileSync(join(wt, "loose.ts"), "export const a = 1;\n");
+	sh(wt, "add", "-A");
+	sh(wt, "commit", "-m", "feat: loose work");
+	const sha = Bun.spawnSync(["git", "-C", wt, "rev-parse", "HEAD"]).stdout.toString().trim();
+	saveWorkspaces([
+		{
+			id: ws,
+			projectId: "p1",
+			name: "w",
+			branch: "feature",
+			baseBranch: "main",
+			worktreePath: wt,
+			createdAt: 0,
+		} as Workspace,
+	]);
+	try {
+		expect(await itemTitleOf(ws, "sess-adopt", `commit:${sha}`)).toBe("feat: loose work");
+		expect(await itemTitleOf(ws, "sess-adopt", "commit:deadbeef")).toBe("commit:deadbeef");
+	} finally {
+		rmSync(wt, { recursive: true, force: true });
+	}
 });
 
 test("only actual agent verdicts emit review decisions, and never leak plan content", async () => {

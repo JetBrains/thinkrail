@@ -58,9 +58,21 @@ export function setReviewFailedPublisher(fn: (payload: ReviewFailedPayload) => v
 
 type ReviewParams = { workspaceId: string; sessionId: string; id: string };
 
-function itemTitleOf(workspaceId: string, sessionId: string, itemId: string): Promise<string> {
+/** Resolve an item's display title across every plan collection — stored todos, grouped todos, AND
+ * wire-only `adoptedCommits` (a Review-All target the plan never stored) — so a result card or a
+ * detached-review failure toast names the commit subject, not the opaque `commit:<sha>` id. Falls back
+ * to the id when nothing matches. */
+export function itemTitleOf(
+	workspaceId: string,
+	sessionId: string,
+	itemId: string,
+): Promise<string> {
 	return listTodos({ workspaceId, sessionId }).then((plan) => {
-		const all = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+		const all = [
+			...plan.todos,
+			...plan.groups.flatMap((g) => g.todos),
+			...(plan.adoptedCommits ?? []),
+		];
 		return all.find((t) => t.id === itemId)?.title ?? itemId;
 	});
 }
