@@ -1365,7 +1365,8 @@ own section. The kebab menu (`plan-menu`, a
   `TerminalInstance` similarly rebuilds from the complete 16-slot ANSI variable set; both consume the
   nullable editor selection-foreground override when provided. `MonacoDiff` re-themes exactly like
   `MonacoEditor` — both consume `monacoSetup.ts`'s define + observer, so a palette swap lands in the
-  diff tab too.
+  diff tab too. Both editors also share the app's scrollbar geometry via `sharedEditorOptions`
+  (6px sliders, no shadow, no overview ruler) and take slider colours from the same theme tokens.
 - **Terminal renderer + font measurement.** `TerminalInstance` runs xterm's **default DOM renderer** on
   purpose — `addon-webgl` is *not* loaded, and loading it would be a regression (see `architecture.md`
   Decision #11: the DOM renderer is a prerequisite for touch, and `WebglAddon.dispose()` leaks its WebGL2

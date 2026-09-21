@@ -31,18 +31,17 @@ its own spec.
 - **`QuietScrollArea.tsx`** — the store-free overflow observer and two presentation surfaces:
   `QuietScrollArea` owns an ordinary native scroll viewport, while `QuietScrollFrame` observes a
   third-party descendant scroll control without taking over its content or input and can receive the
-  library's authoritative edge state. Native areas use the shared 6px scrollbar gutter, revealing a 5px
-  optical thumb on hover/focus-within/drag/active scrolling and the full 6px thumb on direct hover. A
-  third-party frame preserves that library's wider hit geometry while replacing only the optical slider;
-  the underlying slider stays transparent through its base, hover, and active states. Authoritative edges
-  also declare vertical overflow, so xterm's controller can remain visible for local intent and accessibility
-  modes only when scrollback exists. Pointer intent lasts through release or cancellation, including a drag
-  that leaves the frame. Both surfaces paint pointer-transparent 16px curtains only on clipped directions.
-  Native measurement follows scroll, viewport/content resize, and descendant replacement. Bundled
-  high-contrast themes retain a resting hairline; OS forced-colours mode keeps a visible system-colour thumb
-  and removes the cosmetic curtains; reduced motion removes both optical and third-party controller opacity
-  transitions. Surface colour is an explicit semantic prop (`sidebar` or `terminal`), never inferred from
-  arrangement.
+  library's authoritative edge state. `styles/global.css` owns the single scrollbar definition for every
+  native scroll container: a 6px gutter, transparent track, transparent resting thumb, `--border-default`
+  while the scrolling element is hovered or carries `data-quiet-scroll-intent`, and `--text-muted` on
+  direct thumb hover/active; Firefox gets the same via inherited `scrollbar-color`. Bundled high-contrast
+  themes keep a 2px resting hairline; OS forced-colours keeps a system-colour thumb and removes curtains;
+  reduced motion removes transitions. `QuietScrollArea` and `QuietScrollFrame` therefore own no look: they
+  add intent beyond hover (focus-within, active scrolling with a short grace period, pointer drags that
+  leave the frame, touch), overflow measurement, and pointer-transparent 16px edge curtains on clipped
+  directions. `QuietScrollFrame` also re-skins xterm's non-native slider to the same thumb (transparent
+  underlying slider, a 6px optical thumb, opacity gated on intent and measured vertical overflow).
+  Surface colour is an explicit semantic prop (`sidebar` or `terminal`), never inferred from arrangement.
 - **Also owns:** `Skeleton.tsx` — `SkeletonRows`, the one pulsing-rows placeholder every loading surface
   uses, and `LoadingRegion`, the sized-wrapper shape around it that most call sites actually want (a
   `className` for the region's own padding/sizing, an optional `label` threaded to `SkeletonRows`'
