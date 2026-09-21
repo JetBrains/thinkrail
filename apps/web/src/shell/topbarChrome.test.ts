@@ -67,3 +67,15 @@ test("the topbar reserves host-published window-chrome insets at both edges thro
 		expect(classAttribute(spacer ?? "")).toContain(`w-window-chrome-inset-${edge}`);
 	}
 });
+
+test("the native window controls mount once, positioned after the right inset spacer, and the header is a positioning root", () => {
+	const classes = classAttribute(openingTag);
+	expect(classes).toContain("relative");
+	const controlMatches = [...header.matchAll(/<NativeWindowControls\b/g)];
+	expect(controlMatches).toHaveLength(1);
+	const controlIndex = controlMatches[0]?.index;
+	const insetRightIndex = header.indexOf('data-testid="window-chrome-inset-right"');
+	expect(insetRightIndex).toBeGreaterThanOrEqual(0);
+	expect(controlIndex).toBeDefined();
+	expect(controlIndex ?? -1).toBeGreaterThan(insetRightIndex);
+});
