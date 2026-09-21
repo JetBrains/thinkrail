@@ -1,5 +1,5 @@
 import type { PiEvent, SessionEventPayload, TodoPlan } from "@thinkrail/contracts";
-import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
+import { WS_CHANNELS } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
 import { isConnectedGeneration, selectChatTitle, useAppStore } from "../store";
@@ -230,7 +230,7 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 	const session = initial.sessions[sessionId];
 	if (session && !shouldNudgeOnAdd(sessionGlance(session))) return;
 	const streaming = session?.isStreaming ?? false;
-	const text = `${TODO_NUDGE_PREFIX}A TODO was added to the list: "${title}". Read the TODO list with todo_list and work any pending items, marking each done with todo_update as you finish.`;
+	const text = `Added a TODO: "${title}". Work the pending items in the plan and mark each done as you finish.`;
 	try {
 		await getTransport().request(streaming ? "session.followUp" : "session.prompt", {
 			sessionId,

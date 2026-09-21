@@ -1039,7 +1039,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   skip iff the glance is `waiting_question`): waking an agent that stopped on an `ask_user_question`
   would send it off to work the new item and forget to return to its own question, so instead the item
   just queues and is picked up on the agent's next natural turn (when the user answers, or a later idle
-  nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged.
+  nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`. The nudge is an **ordinary user
+  message** — no hidden control-message marker — so it shows in the queue strip and transcript, and counts
+  toward analytics/auto-name like any send.
 
 ## Boundary
 
