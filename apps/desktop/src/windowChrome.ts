@@ -1,3 +1,4 @@
+import type { NativeWindowState } from "@thinkrail/contracts";
 import { prependPreloadGlobal } from "./preloadGlobals";
 
 export type WindowChromeGeometry = Readonly<{
@@ -10,9 +11,19 @@ export type WindowChromePolicy = Readonly<{
 	trafficLightOffset: { x: number; y: number } | null;
 	geometry: WindowChromeGeometry;
 	dragRegion: boolean;
+	windowControls: boolean;
+	restoreFrameControls: boolean;
 }>;
 
+export type WindowChromePreloadSeed = Readonly<
+	WindowChromeGeometry & {
+		dragRegion: boolean;
+		windowControls: boolean;
+	}
+>;
+
 export const INITIAL_WINDOW_CHROME_GLOBAL = "__THINKRAIL_INITIAL_WINDOW_CHROME__";
+export const NATIVE_WINDOW_CONTROLS_GLOBAL = "__THINKRAIL_NATIVE_WINDOW_CONTROLS__";
 const WINDOW_CHROME_INSET_LEFT_PROPERTY = "--window-chrome-inset-left";
 const WINDOW_CHROME_INSET_RIGHT_PROPERTY = "--window-chrome-inset-right";
 const WINDOW_CHROME_DRAG_REGION_PROPERTY = "--window-chrome-drag-region";
@@ -27,6 +38,18 @@ export function desktopWindowChrome(platform: NodeJS.Platform): WindowChromePoli
 			trafficLightOffset: { x: 0, y: 4 },
 			geometry: { insetLeft: 64, insetRight: 0 },
 			dragRegion: true,
+			windowControls: false,
+			restoreFrameControls: false,
+		};
+	}
+	if (platform === "win32") {
+		return {
+			titleBarStyle: "hiddenInset",
+			trafficLightOffset: null,
+			geometry: { insetLeft: 0, insetRight: 138 },
+			dragRegion: true,
+			windowControls: true,
+			restoreFrameControls: true,
 		};
 	}
 	return {
@@ -34,6 +57,8 @@ export function desktopWindowChrome(platform: NodeJS.Platform): WindowChromePoli
 		trafficLightOffset: null,
 		geometry: NO_INSETS,
 		dragRegion: false,
+		windowControls: false,
+		restoreFrameControls: false,
 	};
 }
 
@@ -42,6 +67,14 @@ export function windowChromeGeometry(
 	fullScreen: boolean,
 ): WindowChromeGeometry {
 	return fullScreen ? NO_INSETS : policy.geometry;
+}
+
+export function windowChromePreloadSeed(policy: WindowChromePolicy): WindowChromePreloadSeed {
+	return {
+		...policy.geometry,
+		dragRegion: policy.dragRegion,
+		windowControls: policy.windowControls,
+	};
 }
 
 function isWindowChromeInset(value: unknown): value is number {
@@ -64,19 +97,18 @@ export function readWindowChromeGeometry(payload: unknown): WindowChromeGeometry
 
 export function injectInitialWindowChrome(
 	preloadSource: string,
-	geometry: WindowChromeGeometry,
-	dragRegion: boolean,
+	seed: WindowChromePreloadSeed,
 ): string {
-	return prependPreloadGlobal(preloadSource, INITIAL_WINDOW_CHROME_GLOBAL, {
-		...geometry,
-		dragRegion,
-	});
+	return prependPreloadGlobal(preloadSource, INITIAL_WINDOW_CHROME_GLOBAL, seed);
 }
 
-export function readWindowChromeDragRegion(payload: unknown): boolean | null {
+export function readWindowChromeFlag(
+	payload: unknown,
+	name: "dragRegion" | "windowControls",
+): boolean | null {
 	if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return null;
-	const dragRegion = Reflect.get(payload, "dragRegion");
-	return typeof dragRegion === "boolean" ? dragRegion : null;
+	const value = Reflect.get(payload, name);
+	return typeof value === "boolean" ? value : null;
 }
 
 export function createWindowChromeStyleWriter(
@@ -98,12 +130,35 @@ export function createWindowChromeStyleWriter(
 			const nextGeometry = readWindowChromeGeometry(payload);
 			if (!nextGeometry) return;
 			geometry = nextGeometry;
-			const nextDragRegion = readWindowChromeDragRegion(payload);
+			const nextDragRegion = readWindowChromeFlag(payload, "dragRegion");
 			if (nextDragRegion !== null) dragRegion = nextDragRegion;
 			flush();
 		},
 		flush,
 	};
+}
+
+export function installWindowChromePublisher<T>(
+	window: {
+		on(name: "resize", listener: () => void): void;
+		webview: { on(name: "dom-ready", listener: () => void): void };
+	},
+	read: () => T,
+	publish: (value: T) => void,
+	equal: (a: T, b: T) => boolean,
+): void {
+	let lastPublished: { value: T } | undefined;
+	window.on("resize", () => {
+		const next = read();
+		if (lastPublished && equal(lastPublished.value, next)) return;
+		lastPublished = { value: next };
+		publish(next);
+	});
+	window.webview.on("dom-ready", () => {
+		const next = read();
+		lastPublished = { value: next };
+		publish(next);
+	});
 }
 
 export function installWindowChromeGeometry(
@@ -114,22 +169,21 @@ export function installWindowChromeGeometry(
 	readGeometry: () => WindowChromeGeometry,
 	publish: (geometry: WindowChromeGeometry) => void,
 ): void {
-	let lastPublished: WindowChromeGeometry | undefined;
-	window.on("resize", () => {
-		const geometry = readGeometry();
-		if (
-			lastPublished &&
-			lastPublished.insetLeft === geometry.insetLeft &&
-			lastPublished.insetRight === geometry.insetRight
-		) {
-			return;
-		}
-		lastPublished = geometry;
-		publish(geometry);
-	});
-	window.webview.on("dom-ready", () => {
-		const geometry = readGeometry();
-		lastPublished = geometry;
-		publish(geometry);
-	});
+	installWindowChromePublisher(
+		window,
+		readGeometry,
+		publish,
+		(a, b) => a.insetLeft === b.insetLeft && a.insetRight === b.insetRight,
+	);
+}
+
+export function readNativeWindowState(window: {
+	isMaximized(): boolean;
+	isFullScreen(): boolean;
+}): NativeWindowState {
+	return { maximized: window.isMaximized(), fullScreen: window.isFullScreen() };
+}
+
+export function sameNativeWindowState(a: NativeWindowState, b: NativeWindowState): boolean {
+	return a.maximized === b.maximized && a.fullScreen === b.fullScreen;
 }

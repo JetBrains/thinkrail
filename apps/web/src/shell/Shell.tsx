@@ -38,8 +38,10 @@ import { CollapsedPanelRail } from "./CollapsedPanelRail";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
+import { NativeWindowControls } from "./NativeWindowControls";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
+import { useNativeWindowControls } from "./useNativeWindowControls";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
@@ -66,6 +68,7 @@ export function Shell() {
 	const hasActiveWorkspace = activeWorkspaceId != null;
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const updates = useUpdates(supportsHostUpdateRun(protocolVersion) ? runHostUpdate : null);
+	const windowControls = useNativeWindowControls();
 	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
@@ -124,7 +127,7 @@ export function Shell() {
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
 			<header
 				data-testid="topbar"
-				className="window-drag flex h-topbar-row min-w-0 select-none items-center border-b border-border-default bg-container-header-bg px-16"
+				className="relative window-drag flex h-topbar-row min-w-0 select-none items-center border-b border-border-default bg-container-header-bg px-16"
 			>
 				<div
 					aria-hidden="true"
@@ -222,6 +225,14 @@ export function Shell() {
 					data-testid="window-chrome-inset-right"
 					className="w-window-chrome-inset-right shrink-0"
 				/>
+				{windowControls ? (
+					<NativeWindowControls
+						state={windowControls.state}
+						onMinimize={windowControls.minimize}
+						onToggleMaximize={windowControls.toggleMaximize}
+						onClose={windowControls.close}
+					/>
+				) : null}
 				<SettingsDialog
 					layoutSettings={<LayoutSettings />}
 					updateSettings={updates ? <UpdateSettings updates={updates} /> : undefined}

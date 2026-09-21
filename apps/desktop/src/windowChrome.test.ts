@@ -6,10 +6,12 @@ import {
 	INITIAL_WINDOW_CHROME_GLOBAL,
 	injectInitialWindowChrome,
 	installWindowChromeGeometry,
+	installWindowChromePublisher,
 	MAX_WINDOW_CHROME_INSET,
-	readWindowChromeDragRegion,
+	readWindowChromeFlag,
 	readWindowChromeGeometry,
 	windowChromeGeometry,
+	windowChromePreloadSeed,
 } from "./windowChrome";
 
 test("macOS hides the native strip, reserves its zone, and opts into dragging", () => {
@@ -18,16 +20,31 @@ test("macOS hides the native strip, reserves its zone, and opts into dragging", 
 		trafficLightOffset: { x: 0, y: 4 },
 		geometry: { insetLeft: 64, insetRight: 0 },
 		dragRegion: true,
+		windowControls: false,
+		restoreFrameControls: false,
 	});
 });
 
-test("Windows and Linux keep the default native chrome and do not drag", () => {
-	for (const platform of ["win32", "linux", "freebsd"] as const) {
+test("Windows uses frameless web controls and restores the frame style", () => {
+	expect(desktopWindowChrome("win32")).toEqual({
+		titleBarStyle: "hiddenInset",
+		trafficLightOffset: null,
+		geometry: { insetLeft: 0, insetRight: 138 },
+		dragRegion: true,
+		windowControls: true,
+		restoreFrameControls: true,
+	});
+});
+
+test("other platforms keep the default native chrome and do not drag", () => {
+	for (const platform of ["linux", "freebsd"] as const) {
 		expect(desktopWindowChrome(platform)).toEqual({
 			titleBarStyle: "default",
 			trafficLightOffset: null,
 			geometry: { insetLeft: 0, insetRight: 0 },
 			dragRegion: false,
+			windowControls: false,
+			restoreFrameControls: false,
 		});
 	}
 });
@@ -66,11 +83,24 @@ test("geometry payloads accept only finite non-negative bounded insets", () => {
 });
 
 test("drag-region payloads accept only boolean fields", () => {
-	expect(readWindowChromeDragRegion({ insetLeft: 64, insetRight: 0, dragRegion: true })).toBe(true);
-	expect(readWindowChromeDragRegion({ dragRegion: false })).toBe(false);
+	expect(
+		readWindowChromeFlag({ insetLeft: 64, insetRight: 0, dragRegion: true }, "dragRegion"),
+	).toBe(true);
+	expect(readWindowChromeFlag({ windowControls: true }, "windowControls")).toBe(true);
+	expect(readWindowChromeFlag({ dragRegion: false }, "dragRegion")).toBe(false);
+	expect(readWindowChromeFlag({ dragRegion: false }, "dragRegion")).toBe(false);
 	for (const malformed of [null, [], "drag", {}, { dragRegion: "drag" }]) {
-		expect(readWindowChromeDragRegion(malformed)).toBeNull();
+		expect(readWindowChromeFlag(malformed, "dragRegion")).toBeNull();
 	}
+});
+
+test("window chrome preload seeds include the web controls policy", () => {
+	expect(windowChromePreloadSeed(desktopWindowChrome("win32"))).toEqual({
+		insetLeft: 0,
+		insetRight: 138,
+		dragRegion: true,
+		windowControls: true,
+	});
 });
 
 test("the style writer keeps the latest geometry until the document root exists", () => {
@@ -138,14 +168,51 @@ test("window chrome geometry publishes on dom-ready and only changed resize geom
 	]);
 });
 
-test("preload injection installs initial geometry and drag policy before bundled source", () => {
+test("window chrome publishers send state on dom-ready and changed resize", () => {
+	let resizeListener: (() => void) | undefined;
+	let domReadyListener: (() => void) | undefined;
+	const window = {
+		on(name: "resize", listener: () => void) {
+			expect(name).toBe("resize");
+			resizeListener = listener;
+		},
+		webview: {
+			on(name: "dom-ready", listener: () => void) {
+				expect(name).toBe("dom-ready");
+				domReadyListener = listener;
+			},
+		},
+	};
+	let state = { maximized: false, fullScreen: false };
+	const published: (typeof state)[] = [];
+	installWindowChromePublisher(
+		window,
+		() => state,
+		(next) => published.push(next),
+		(a, b) => a.maximized === b.maximized && a.fullScreen === b.fullScreen,
+	);
+	domReadyListener?.();
+	resizeListener?.();
+	state = { maximized: true, fullScreen: false };
+	resizeListener?.();
+	expect(published).toEqual([
+		{ maximized: false, fullScreen: false },
+		{ maximized: true, fullScreen: false },
+	]);
+});
+
+test("preload injection installs initial geometry and policies before bundled source", () => {
 	const preload = injectInitialWindowChrome(
 		"globalThis.seed = globalThis.__THINKRAIL_INITIAL_WINDOW_CHROME__;",
-		{ insetLeft: 64, insetRight: 0 },
-		true,
+		{ insetLeft: 64, insetRight: 0, dragRegion: true, windowControls: true },
 	);
 	const context: { seed?: unknown } = {};
 	runInNewContext(preload, context);
-	expect(context.seed).toEqual({ insetLeft: 64, insetRight: 0, dragRegion: true });
+	expect(context.seed).toEqual({
+		insetLeft: 64,
+		insetRight: 0,
+		dragRegion: true,
+		windowControls: true,
+	});
 	expect(preload.indexOf(INITIAL_WINDOW_CHROME_GLOBAL)).toBeGreaterThanOrEqual(0);
 });

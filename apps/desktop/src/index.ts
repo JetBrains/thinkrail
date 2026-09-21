@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import type { NativeWindowState } from "@thinkrail/contracts";
 import { channel, version } from "@thinkrail/shared/version";
 import Electrobun, {
 	ApplicationMenu,
@@ -32,8 +33,13 @@ import {
 	desktopWindowChrome,
 	injectInitialWindowChrome,
 	installWindowChromeGeometry,
+	installWindowChromePublisher,
+	readNativeWindowState,
+	sameNativeWindowState,
 	windowChromeGeometry,
+	windowChromePreloadSeed,
 } from "./windowChrome";
+import { loadWindowsFrameApi, restoreWindowsFrameControls } from "./windowsFrame";
 
 type BeforeQuitEvent = ReturnType<typeof Electrobun.events.events.app.beforeQuit>;
 
@@ -128,6 +134,17 @@ async function start(): Promise<void> {
 		handlers: {
 			requests: {
 				getUpdateState: () => updateController.getState(),
+				getWindowState: (): NativeWindowState => readNativeWindowState(mainWindow),
+				minimizeWindow: (): undefined => {
+					mainWindow.minimize();
+				},
+				toggleMaximizeWindow: (): undefined => {
+					if (mainWindow.isMaximized()) mainWindow.unmaximize();
+					else mainWindow.maximize();
+				},
+				closeWindow: (): undefined => {
+					mainWindow.requestClose();
+				},
 				checkForUpdates: async () => {
 					await updateController.checkForUpdates();
 					return undefined;
@@ -183,8 +200,7 @@ async function start(): Promise<void> {
 					await Bun.file(join(PATHS.VIEWS_FOLDER, "preload", "index.js")).text(),
 					initialPreferences,
 				),
-				windowChrome.geometry,
-				windowChrome.dragRegion,
+				windowChromePreloadSeed(windowChrome),
 			);
 	mainWindow = new BrowserWindow({
 		title: "ThinkRail",
@@ -219,11 +235,29 @@ async function start(): Promise<void> {
 					}
 				: {}),
 		});
+		if (windowChrome.restoreFrameControls) {
+			const handle = mainWindow.ptr;
+			if (handle) {
+				try {
+					restoreWindowsFrameControls(handle, loadWindowsFrameApi());
+				} catch (error) {
+					console.error("[desktop] could not restore the Windows frame controls", error);
+				}
+			}
+		}
 		installWindowChromeGeometry(
 			mainWindow,
 			() => windowChromeGeometry(windowChrome, mainWindow.isFullScreen()),
 			(geometry) => rpc.send.windowChromeChanged(geometry),
 		);
+		if (windowChrome.windowControls) {
+			installWindowChromePublisher(
+				mainWindow,
+				() => readNativeWindowState(mainWindow),
+				(state) => rpc.send.windowStateChanged(state),
+				sameNativeWindowState,
+			);
+		}
 	}
 	const navigationProbePath = neutral
 		? undefined
