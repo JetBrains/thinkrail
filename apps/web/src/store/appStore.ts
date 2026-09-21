@@ -837,6 +837,7 @@ interface AppState {
 	reviewModel: WireModel | undefined;
 	reviewEffort: ThinkingLevel | undefined;
 	reviewAutoFix: boolean;
+	agentReviewEnabled: boolean;
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -1080,6 +1081,7 @@ function configPatch(config: AppConfig) {
 		reviewModel: config.reviewModel,
 		reviewEffort: config.reviewEffort,
 		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
+		agentReviewEnabled: config.agentReviewEnabled ?? DEFAULT_CONFIG.agentReviewEnabled,
 	};
 }
 
@@ -1727,6 +1729,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewModel: DEFAULT_CONFIG.reviewModel,
 	reviewEffort: DEFAULT_CONFIG.reviewEffort,
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
+	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	toasts: [],
 	setStatus: (status) =>
 		set((state) => ({

@@ -11,6 +11,7 @@ export function ReviewSettings() {
 	const reviewModel = useAppStore((s) => s.reviewModel);
 	const reviewEffort = useAppStore((s) => s.reviewEffort);
 	const autoFix = useAppStore((s) => s.reviewAutoFix);
+	const agentReviewEnabled = useAppStore((s) => s.agentReviewEnabled);
 	const { models, refreshing, refresh } = useModelCatalog(true);
 	const [fallback, setFallback] = useState<{
 		model: WireModel | null;
@@ -44,6 +45,11 @@ export function ReviewSettings() {
 			.request("settings.update", { config: { reviewAutoFix } })
 			.catch(() => toast.error("Couldn't change the auto-fix setting"));
 	};
+	const setAgentReviewEnabled = (value: boolean) => {
+		getTransport()
+			.request("settings.update", { config: { agentReviewEnabled: value } })
+			.catch(() => toast.error("Couldn't change the agent-review setting"));
+	};
 
 	return (
 		<section data-testid="settings-review" className="flex flex-col gap-16">
@@ -69,6 +75,31 @@ export function ReviewSettings() {
 					level={effortLevel}
 					levels={effortModel?.thinkingLevels ?? []}
 					onSelect={(level) => update({ reviewEffort: level })}
+				/>
+			</div>
+
+			<div className="flex flex-col gap-4">
+				<h3 className="tr-title-section text-text-default">Agent-triggered review</h3>
+				<p className="text-text-muted tr-text-metadata">
+					When on, the worker reviews each completed plan step itself (via its <code>request_review</code>{" "}
+					tool) during the session. When off, that tool is withheld and review happens only when you press
+					the Review button.
+				</p>
+			</div>
+			<div className="flex items-center justify-between gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
+				<div className="flex flex-col gap-2">
+					<span className="tr-title-compact text-text-default">Let the agent request review</span>
+					<span className="text-text-muted tr-text-metadata">
+						{agentReviewEnabled
+							? "On — the worker reviews its own completed steps in-session."
+							: "Off — only the Review button starts a review."}
+					</span>
+				</div>
+				<SettingsSwitch
+					checked={agentReviewEnabled}
+					label="Let the agent request review"
+					testId="agent-review-toggle"
+					onChange={setAgentReviewEnabled}
 				/>
 			</div>
 
