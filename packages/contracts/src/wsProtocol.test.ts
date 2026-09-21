@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { ReviewFixDetails } from "./domain";
 import {
 	ACTIVITY_PROTOCOL_VERSION,
+	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	customMessageText,
 	isTodoReviewFixMessage,
@@ -82,9 +83,14 @@ test("session titles normalize to one bounded non-blank line", () => {
 
 test("the plan-review subagent reshapes the review wire and advances the protocol", () => {
 	expect(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION).toBe(67);
-	expect(PROTOCOL_VERSION).toBe(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION);
 	expect(WS_CHANNELS.reviewChanged).toBe("review.changed");
 	expect(WS_CHANNELS.reviewFailed).toBe("review.failed");
+});
+
+test("the agent-review setting advances the protocol to v68", () => {
+	expect(AGENT_REVIEW_SETTING_PROTOCOL_VERSION).toBe(68);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(AGENT_REVIEW_SETTING_PROTOCOL_VERSION);
 });
 
 describe("isTodoReviewFixMessage", () => {

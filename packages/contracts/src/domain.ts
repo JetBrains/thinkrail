@@ -522,6 +522,8 @@ export interface AppConfig extends ThemePreference {
 	reviewEffort?: ThinkingLevel;
 	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
 	reviewAutoFix: boolean;
+	/** When false, the worker's in-session `request_review` tool is withheld; the Review button still works. */
+	agentReviewEnabled: boolean;
 	subagentsEnabled: boolean;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
@@ -571,6 +573,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	fileLineWidthBounded: true,
 	customLayoutPresets: [],
 	reviewAutoFix: true,
+	agentReviewEnabled: true,
 	subagentsEnabled: true,
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
