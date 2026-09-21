@@ -1,15 +1,15 @@
 import { dlopen, FFIType, type Pointer } from "bun:ffi";
 
-export const GWL_STYLE = -16;
+const GWL_STYLE = -16;
 export const WS_SYSMENU = 0x00080000n;
 export const WS_MINIMIZEBOX = 0x00020000n;
 export const WS_MAXIMIZEBOX = 0x00010000n;
-export const SWP_NOSIZE = 0x0001;
-export const SWP_NOMOVE = 0x0002;
-export const SWP_NOZORDER = 0x0004;
-export const SWP_NOACTIVATE = 0x0010;
-export const SWP_FRAMECHANGED = 0x0020;
-export const SWP_FRAME_REFRESH =
+const SWP_NOSIZE = 0x0001;
+const SWP_NOMOVE = 0x0002;
+const SWP_NOZORDER = 0x0004;
+const SWP_NOACTIVATE = 0x0010;
+const SWP_FRAMECHANGED = 0x0020;
+const SWP_FRAME_REFRESH =
 	SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED;
 
 export function windowsFrameControlsStyle(style: bigint): bigint {
