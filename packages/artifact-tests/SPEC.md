@@ -53,7 +53,7 @@ proves CI and test mutes independently. No UI action or consent is simulated; de
 normal host shutdown. The expected release identity is the shared identity used to build the artifact.
 
 Every host owns isolated home, data, agent and cache directories; environment overrides respect Windows'
-case-insensitive keys. Readiness polling owns a finite deadline and observes early root exit. When a live
+case-insensitive keys. Readiness polling owns a finite deadline and observes early root exit; because the launcher writes its ready, route and navigation-probe documents non-atomically, the smoke treats a missing or half-written JSON file as "not yet" and keeps polling rather than failing on a torn read. When a live
 launched root or validated ready-document app/launcher PIDs need failure cleanup, teardown is bounded and
 awaited before shared retrying removal of the temporary installation root. A setup root may exit successfully
 before its app handoff is ready; after that exit, the harness does not infer or discover descendants from the
