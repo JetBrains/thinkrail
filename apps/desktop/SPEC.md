@@ -113,26 +113,28 @@ removes decorations together with WM-provided resize handles. Fully custom macOS
 (`titleBarStyle: "hidden"` with drawn traffic lights) was rejected because the platform provides real
 ones.
 
-**Geometry contract.** The desktop publishes window-chrome geometry to the page as exactly two CSS custom
-properties on `<html>` — `--window-chrome-inset-left` and `--window-chrome-inset-right`, each a `<px>`
-length naming the edge zone native controls occupy — and nothing else: no global the web must call, no
-platform name, no reason. The web consumes them with `0px` fallbacks, so a browser-hosted client and the
-neutral E2E-host window (`about:blank`, no preload) are unaffected and the *web client still has no
-desktop branch*. Initial values ride the preload the same way initial preferences do (a serialized
-`__THINKRAIL_INITIAL_WINDOW_CHROME__` prepended to the preload source; the preload validates finite
-non-negative numbers, writes both properties at document-start, and deletes the global). Later changes
-arrive as the one bun→webview message in the RPC schema, `windowChromeChanged { insetLeft, insetRight }`,
-applied identically. The right inset is always `0px` today and exists so the Windows follow-up changes a
-value, not the contract.
+**Geometry contract.** The desktop publishes three CSS custom properties on `<html>`: the two inset
+properties plus `--window-chrome-drag-region` (`drag` | `no-drag`), which tells the page whether its
+header is the title bar. The drag flag rides only the initial preload global (it is a per-policy constant);
+geometry updates arrive as `windowChromeChanged { insetLeft, insetRight }`. The web consumes the properties
+with `0px` fallbacks, so a browser-hosted client and the neutral E2E-host window (`about:blank`, no
+preload) are unaffected and the *web client still has no desktop branch*. The preload validates geometry,
+keeps only the latest value while the document root is absent, and flushes it at `DOMContentLoaded`, so a
+pending startup write cannot overwrite a newer native state. The right inset is always `0px` today and
+exists so the Windows follow-up changes a value, not the contract.
 
-**Fullscreen.** macOS native fullscreen auto-hides the traffic lights with the menu bar, so the main
-process watches the window `resize` event, reads `isFullScreen()`, and on a transition sends
-`windowChromeChanged` with a `0px` left inset (fullscreen) or the policy value (normal).
+**Fullscreen.** macOS native fullscreen auto-hides the traffic lights with the menu bar, so fullscreen
+zeroes both insets. The main process publishes geometry on every webview `dom-ready` (a reload during
+fullscreen must not inherit the windowed insets) and on `resize` only when the geometry changed. The
+neutral E2E-host window (`THINKRAIL_DESKTOP_E2E_HOST=1`) keeps the default native chrome and publishes
+nothing.
 
-**Dragging** needs no desktop involvement: the web header declares `-webkit-app-region: drag` (inert in
-a browser tab), and Electrobun's own injected preload rewrites app-region declarations from same-origin
-stylesheets into a mirrored custom property it hit-tests against. Double-click-to-zoom on the header is
-not promised — the webview covers the strip, so the click reaches `NSWindow` only incidentally.
+**Dragging.** The desktop's only contribution is the `drag` flag: the web header's `window-drag` utility
+resolves to `-webkit-app-region: drag` only when `--window-chrome-drag-region` says so, and Electrobun's
+own injected preload rewrites app-region declarations from same-origin stylesheets into a mirrored custom
+property it hit-tests against on `mousedown`. A decorated window (Windows, Linux, the neutral window)
+publishes `no-drag` and so never acquires a second, partial drag strip. Double-click-to-zoom on the header
+is not promised — the webview covers the strip, so the click reaches `NSWindow` only incidentally.
 
 ## Navigation and window security
 

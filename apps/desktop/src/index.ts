@@ -25,6 +25,7 @@ import { createElectrobunQuitCoordinator, createElectrobunUpdateController } fro
 import {
 	desktopWindowChrome,
 	injectInitialWindowChrome,
+	installWindowChromeGeometry,
 	windowChromeGeometry,
 } from "./windowChrome";
 
@@ -122,6 +123,7 @@ async function start(): Promise<void> {
 					initialPreferences,
 				),
 				windowChrome.geometry,
+				windowChrome.dragRegion,
 			);
 	const mainWindow = new BrowserWindow({
 		title: "ThinkRail",
@@ -133,19 +135,21 @@ async function start(): Promise<void> {
 			process.env.THINKRAIL_DESKTOP_E2E_HOST === "1",
 		navigationRules: neutral ? null : JSON.stringify(["^*", `${origin}/*`]),
 		frame: { x: 80, y: 60, width: 1440, height: 920 },
-		titleBarStyle: windowChrome.titleBarStyle,
-		...(windowChrome.trafficLightOffset
-			? { trafficLightOffset: windowChrome.trafficLightOffset }
-			: {}),
+		...(neutral
+			? {}
+			: {
+					titleBarStyle: windowChrome.titleBarStyle,
+					...(windowChrome.trafficLightOffset
+						? { trafficLightOffset: windowChrome.trafficLightOffset }
+						: {}),
+				}),
 	});
 	if (!neutral) {
-		let fullScreen = false;
-		mainWindow.on("resize", () => {
-			const next = mainWindow.isFullScreen();
-			if (next === fullScreen) return;
-			fullScreen = next;
-			rpc.send.windowChromeChanged(windowChromeGeometry(windowChrome, fullScreen));
-		});
+		installWindowChromeGeometry(
+			mainWindow,
+			() => windowChromeGeometry(windowChrome, mainWindow.isFullScreen()),
+			(geometry) => rpc.send.windowChromeChanged(geometry),
+		);
 	}
 	const navigationProbePath = neutral
 		? undefined

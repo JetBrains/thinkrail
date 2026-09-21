@@ -14,16 +14,47 @@ test("the topbar is a fixed-height window-drag region on the topbar row token", 
 	expect(headerStart).toBeGreaterThanOrEqual(0);
 	expect(headerEnd).toBeGreaterThan(headerStart);
 	const classes = classAttribute(openingTag);
+	expect(openingTag).toContain('data-testid="topbar"');
 	expect(classes).toContain("window-drag");
+	expect(classes).toContain("min-w-0");
 	expect(classes).toContain("select-none");
 	expect(classes).toContain("h-topbar-row");
 	expect(classes.some((c) => /^py-/.test(c))).toBe(false);
 });
 
-test("every button inside the topbar opts out of window dragging", () => {
-	const buttons = [...header.matchAll(jsxTag("button"))].map((m) => m[0]);
+test("the trailing topbar action cluster owns the no-drag boundary", () => {
+	const actionOpenings = [...header.matchAll(/<div\b[^>]*data-testid="topbar-actions"[^>]*>/g)];
+	expect(actionOpenings).toHaveLength(1);
+	const actionOpening = actionOpenings[0];
+	if (!actionOpening || actionOpening.index === undefined)
+		throw new Error("missing action cluster");
+	expect(classAttribute(actionOpening[0])).toEqual(
+		expect.arrayContaining(["window-no-drag", "ml-auto"]),
+	);
+	const openingEnd = actionOpening.index + actionOpening[0].length;
+	let depth = 1;
+	let closeStart: number | undefined;
+	const divTags = /<\/?div\b[^>]*>/g;
+	divTags.lastIndex = openingEnd;
+	for (const match of header.matchAll(divTags)) {
+		if (match.index === undefined) continue;
+		if (match[0].startsWith("</div")) {
+			depth -= 1;
+			if (depth === 0) {
+				closeStart = match.index;
+				break;
+			}
+		} else if (!match[0].endsWith("/>") && !match[0].endsWith(" />")) {
+			depth += 1;
+		}
+	}
+	expect(closeStart).toBeDefined();
+	const buttons = [...header.matchAll(/<button\b/g)];
 	expect(buttons.length).toBeGreaterThan(0);
-	for (const button of buttons) expect(classAttribute(button)).toContain("window-no-drag");
+	for (const button of buttons) {
+		expect(button.index).toBeGreaterThanOrEqual(openingEnd);
+		expect(button.index).toBeLessThan(closeStart ?? -1);
+	}
 });
 
 test("the topbar reserves host-published window-chrome insets at both edges through width tokens", () => {

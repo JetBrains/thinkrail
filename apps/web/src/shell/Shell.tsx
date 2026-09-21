@@ -116,19 +116,22 @@ export function Shell() {
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
-			<header className="window-drag flex h-topbar-row select-none items-center border-b border-border-default bg-container-header-bg px-16">
+			<header
+				data-testid="topbar"
+				className="window-drag flex h-topbar-row min-w-0 select-none items-center border-b border-border-default bg-container-header-bg px-16"
+			>
 				<div
 					aria-hidden="true"
 					data-testid="window-chrome-inset-left"
 					className="w-window-chrome-inset-left shrink-0"
 				/>
-				<div className="flex min-w-0 items-center gap-12">
+				<div className="flex min-w-0 items-center gap-12 pr-12">
 					<BrandLogo />
 					{contextProject ? (
 						<div
 							data-testid="scope-context"
 							data-context={activeWorkspace ? "workspace" : "project-home"}
-							className="flex min-w-0 items-center gap-4 leading-tight tr-text-ui"
+							className="flex min-w-0 items-center gap-4 overflow-hidden leading-tight tr-text-ui"
 						>
 							<span className="hidden min-w-0 items-center gap-4 sm:flex">
 								<span
@@ -170,7 +173,10 @@ export function Shell() {
 						</div>
 					) : null}
 				</div>
-				<div className="ml-auto flex shrink-0 items-center gap-12">
+				<div
+					data-testid="topbar-actions"
+					className="window-no-drag ml-auto flex shrink-0 items-center gap-12"
+				>
 					{updates ? (
 						<UpdateReadyButton
 							updates={updates}
@@ -199,7 +205,7 @@ export function Shell() {
 							data-testid="open-settings"
 							aria-label="Settings"
 							onClick={() => useAppStore.getState().openSettings()}
-							className="window-no-drag flex size-28 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+							className="flex size-28 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 						>
 							<Settings className="size-16" />
 						</button>

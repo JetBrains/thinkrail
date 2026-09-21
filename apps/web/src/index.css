@@ -94,8 +94,8 @@
 }
 
 @utility window-drag {
-	-webkit-app-region: drag;
-	app-region: drag;
+	-webkit-app-region: var(--window-chrome-drag-region, no-drag);
+	app-region: var(--window-chrome-drag-region, no-drag);
 }
 @utility window-no-drag {
 	-webkit-app-region: no-drag;

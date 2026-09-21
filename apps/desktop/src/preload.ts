@@ -8,12 +8,7 @@ import {
 } from "./preferenceAdapter";
 import { takePreloadGlobal } from "./preloadGlobals";
 import type { DesktopRpc } from "./rpc";
-import {
-	INITIAL_WINDOW_CHROME_GLOBAL,
-	readWindowChromeGeometry,
-	type WindowChromeGeometry,
-	windowChromeCssDeclarations,
-} from "./windowChrome";
+import { createWindowChromeStyleWriter, INITIAL_WINDOW_CHROME_GLOBAL } from "./windowChrome";
 
 interface DesktopPreferenceAdapter {
 	getItem(key: string): string | null;
@@ -21,20 +16,11 @@ interface DesktopPreferenceAdapter {
 	removeItem(key: string): void;
 }
 
-function applyWindowChrome(geometry: WindowChromeGeometry): void {
-	const apply = () => {
-		for (const [property, value] of windowChromeCssDeclarations(geometry)) {
-			document.documentElement.style.setProperty(property, value);
-		}
-	};
-	if (document.documentElement) apply();
-	else window.addEventListener("DOMContentLoaded", apply, { once: true });
-}
-
-const initialWindowChrome = readWindowChromeGeometry(
-	takePreloadGlobal(INITIAL_WINDOW_CHROME_GLOBAL),
+const windowChromeStyle = createWindowChromeStyleWriter(
+	() => document.documentElement?.style ?? null,
 );
-if (initialWindowChrome) applyWindowChrome(initialWindowChrome);
+document.addEventListener("DOMContentLoaded", windowChromeStyle.flush, { once: true });
+windowChromeStyle.update(takePreloadGlobal(INITIAL_WINDOW_CHROME_GLOBAL));
 
 const updateListeners = new Set<(state: NativeUpdateState) => void>();
 const rpc = Electroview.defineRPC<DesktopRpc>({
@@ -45,10 +31,7 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 			updateStateChanged: (state) => {
 				for (const listener of updateListeners) listener(state);
 			},
-			windowChromeChanged: (payload) => {
-				const geometry = readWindowChromeGeometry(payload);
-				if (geometry) applyWindowChrome(geometry);
-			},
+			windowChromeChanged: windowChromeStyle.update,
 		},
 	},
 });
