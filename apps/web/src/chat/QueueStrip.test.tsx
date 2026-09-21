@@ -4,9 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { QueueStrip } from "./QueueStrip";
 
 function render(queue: SessionQueueState): string {
-	return renderToStaticMarkup(
-		<QueueStrip queue={queue} onEdit={() => {}} onRemove={() => {}} />,
-	);
+	return renderToStaticMarkup(<QueueStrip queue={queue} onEdit={() => {}} onRemove={() => {}} />);
 }
 
 function rowCount(markup: string): number {
