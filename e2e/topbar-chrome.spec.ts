@@ -1,6 +1,11 @@
 import { writeFileSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import type { NativeUpdateBridge, NativeUpdateState } from "@thinkrail/contracts";
+import type {
+	NativeUpdateBridge,
+	NativeUpdateState,
+	NativeWindowControlsBridge,
+	NativeWindowState,
+} from "@thinkrail/contracts";
 import {
 	enterDefaultWorkspace,
 	openAppFresh,
@@ -116,6 +121,7 @@ test("ordinary browsers have a fixed themed header with zero native insets", asy
 		await expect(inset).toHaveCSS("width", "0px");
 	}
 	await expect(page.getByTestId("update-ready")).toHaveCount(0);
+	await expect(page.getByTestId("window-controls")).toHaveCount(0);
 	await expectUsableHeader(page);
 	expect((await bounds(page.getByTestId("welcome-shell-layout"))).y).toBe(40);
 	const initialColors = await headerColors(page);
@@ -241,4 +247,100 @@ test("the action cluster keeps Update, quota Retry and Settings out of the drag 
 	writeFileSync(E2E_CENTRAL_STATE, "");
 	await page.getByTestId("jetbrains-disconnect").click();
 	await waitForCentralState(page, "supported");
+});
+
+test("HTML window controls appear only with the native bridge and drive it", async ({ page }) => {
+	await page.addInitScript(() => {
+		const actions: string[] = [];
+		const listeners = new Set<(state: NativeWindowState) => void>();
+		let state: NativeWindowState = { maximized: false, fullScreen: false };
+		const bridge: NativeWindowControlsBridge = {
+			getState: async () => state,
+			minimize: async () => {
+				actions.push("minimize");
+			},
+			toggleMaximize: async () => {
+				actions.push("toggleMaximize");
+				state = { ...state, maximized: !state.maximized };
+				for (const listener of listeners) listener(state);
+			},
+			close: async () => {
+				actions.push("close");
+			},
+			subscribe: (listener) => {
+				listeners.add(listener);
+				return () => {
+					listeners.delete(listener);
+				};
+			},
+		};
+		Object.defineProperty(globalThis, "__THINKRAIL_NATIVE_WINDOW_CONTROLS__", { value: bridge });
+		Object.defineProperty(globalThis, "__TEST_WINDOW_ACTIONS__", { value: actions });
+		Object.defineProperty(globalThis, "__TEST_WINDOW_LISTENERS__", { value: listeners });
+	});
+	await openAppFresh(page);
+	await page.evaluate(() =>
+		document.documentElement.style.setProperty("--window-chrome-drag-region", "drag"),
+	);
+	await setInsets(page, 0, 138);
+
+	const controls = page.getByTestId("window-controls");
+	await expect(controls).toHaveCSS("-webkit-app-region", "no-drag");
+	await expect(controls.locator("button")).toHaveCount(3);
+	const minimize = controls.getByTestId("window-minimize");
+	const maximize = controls.getByTestId("window-maximize");
+	const close = controls.getByTestId("window-close");
+	await expect(minimize).toHaveAttribute("aria-label", "Minimize");
+	await expect(maximize).toHaveAttribute("aria-label", "Maximize");
+	await expect(close).toHaveAttribute("aria-label", "Close");
+
+	const header = page.getByTestId("topbar");
+	const spacer = page.getByTestId("window-chrome-inset-right");
+	const headerBox = await bounds(header);
+	const spacerBox = await bounds(spacer);
+	const controlsBox = await bounds(controls);
+	expect(controlsBox.right).toBe(headerBox.right);
+	expect(controlsBox.y).toBe(headerBox.y);
+	expect(controlsBox.height).toBe(40);
+	expect(controlsBox.x).toBeGreaterThanOrEqual(spacerBox.x);
+	await expectUsableHeader(page, ["open-settings"], "drag");
+
+	const getActions = () => page.evaluate(() => Reflect.get(globalThis, "__TEST_WINDOW_ACTIONS__"));
+
+	await maximize.click();
+	await expect.poll(getActions).toEqual(["toggleMaximize"]);
+	await expect(maximize).toHaveAttribute("aria-label", "Restore");
+	await expect(maximize).toHaveAttribute("data-maximized", "true");
+
+	await maximize.click();
+	await expect.poll(getActions).toEqual(["toggleMaximize", "toggleMaximize"]);
+	await expect(maximize).toHaveAttribute("aria-label", "Maximize");
+	await expect(maximize).toHaveAttribute("data-maximized", "false");
+
+	await minimize.click();
+	await expect.poll(getActions).toEqual(["toggleMaximize", "toggleMaximize", "minimize"]);
+
+	await close.click();
+	await expect.poll(getActions).toEqual(["toggleMaximize", "toggleMaximize", "minimize", "close"]);
+
+	await page.evaluate(() => {
+		const listeners = Reflect.get(globalThis, "__TEST_WINDOW_LISTENERS__") as Set<
+			(state: NativeWindowState) => void
+		>;
+		const next: NativeWindowState = { maximized: false, fullScreen: true };
+		for (const listener of listeners) listener(next);
+	});
+	await setInsets(page, 0, 0);
+	await expect(controls).toHaveCount(0);
+	await expectUsableHeader(page, ["open-settings"], "drag");
+
+	await page.evaluate(() => {
+		const listeners = Reflect.get(globalThis, "__TEST_WINDOW_LISTENERS__") as Set<
+			(state: NativeWindowState) => void
+		>;
+		const next: NativeWindowState = { maximized: false, fullScreen: false };
+		for (const listener of listeners) listener(next);
+	});
+	await setInsets(page, 0, 138);
+	await expect(controls).toHaveCount(1);
 });
