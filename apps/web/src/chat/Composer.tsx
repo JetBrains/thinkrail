@@ -9,8 +9,6 @@ import {
 } from "@remixicon/react";
 import type { ComposerGrowthLimit, ThinkingLevel, WireModel } from "@thinkrail/contracts";
 import {
-	type ClipboardEvent,
-	type DragEvent,
 	forwardRef,
 	type KeyboardEvent,
 	useCallback,
@@ -42,7 +40,7 @@ import {
 } from "@/prompt";
 import { FileChip } from "./FileChip";
 import { ModelSelector } from "./ModelSelector";
-import { PromptImageChips, usePromptImages } from "./promptImages";
+import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "./promptImages";
 import { ThinkingSelector } from "./ThinkingSelector";
 import type { ChatAttachment } from "./types";
 
@@ -56,6 +54,10 @@ const COMPOSER_EDITOR_LIMIT_CLASS = {
 	"half-chat":
 		"max-h-[calc(50cqh-var(--space-16)-var(--space-16)-var(--space-4)-var(--space-4)-var(--space-4)-var(--space-4))]",
 } satisfies Record<ComposerGrowthLimit, string>;
+
+// Square icon button in the composer's trailing controls (history / stop / send-options).
+const COMPOSER_ICON_BUTTON =
+	"flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered";
 
 const STREAMING_SEND_MODES = [
 	{
@@ -453,20 +455,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		}
 	};
 
-	const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
-		const files = [...e.clipboardData.files];
-		if (files.length > 0) {
-			e.preventDefault();
-			attachedImages.addFiles(files);
-		}
-	};
-
-	const onDrop = (e: DragEvent<HTMLTextAreaElement>) => {
-		if (e.dataTransfer.files.length > 0) {
-			e.preventDefault();
-			attachedImages.addFiles([...e.dataTransfer.files]);
-		}
-	};
+	const { onPaste, onDrop } = imagePasteDropHandlers(attachedImages);
 
 	return (
 		<div
@@ -652,7 +641,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							data-testid="history-open"
 							aria-label="Search history"
 							onClick={openHistory}
-							className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+							className={COMPOSER_ICON_BUTTON}
 						>
 							<History className="size-16" />
 						</button>
@@ -662,7 +651,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								data-testid="chat-abort"
 								aria-label="Stop"
 								onClick={onAbort}
-								className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+								className={COMPOSER_ICON_BUTTON}
 							>
 								<Square className="size-16" />
 							</button>
@@ -674,7 +663,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 										type="button"
 										data-testid="send-menu"
 										aria-label="Send options"
-										className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+										className={COMPOSER_ICON_BUTTON}
 									>
 										<ChevronUp className="size-16" />
 									</button>

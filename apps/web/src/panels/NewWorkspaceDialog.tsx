@@ -19,7 +19,12 @@ import {
 } from "@thinkrail/contracts";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
-import { PROMPT_IMAGE_CHIPS_PADDING, PromptImageChips, usePromptImages } from "@/chat/promptImages";
+import {
+	imagePasteDropHandlers,
+	PROMPT_IMAGE_CHIPS_PADDING,
+	PromptImageChips,
+	usePromptImages,
+} from "@/chat/promptImages";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
@@ -552,19 +557,7 @@ export function NewWorkspaceDialog({
 						data-testid="ws-prompt"
 						value={prompt}
 						disabled={creating}
-						onPaste={(e) => {
-							const files = [...e.clipboardData.files];
-							if (files.length > 0) {
-								e.preventDefault();
-								attachedImages.addFiles(files);
-							}
-						}}
-						onDrop={(e) => {
-							if (e.dataTransfer.files.length > 0) {
-								e.preventDefault();
-								attachedImages.addFiles([...e.dataTransfer.files]);
-							}
-						}}
+						{...imagePasteDropHandlers(attachedImages)}
 						onChange={(e) => {
 							const next = e.target.value;
 							const nextSlotSession = slotSession
