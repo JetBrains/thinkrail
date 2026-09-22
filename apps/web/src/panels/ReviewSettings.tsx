@@ -1,4 +1,8 @@
-import type { ThinkingLevel, WireModel } from "@thinkrail/contracts";
+import {
+	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
+	type ThinkingLevel,
+	type WireModel,
+} from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
@@ -12,6 +16,7 @@ export function ReviewSettings() {
 	const reviewEffort = useAppStore((s) => s.reviewEffort);
 	const autoFix = useAppStore((s) => s.reviewAutoFix);
 	const agentReviewEnabled = useAppStore((s) => s.agentReviewEnabled);
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const { models, refreshing, refresh } = useModelCatalog(true);
 	const [fallback, setFallback] = useState<{
 		model: WireModel | null;
@@ -78,30 +83,11 @@ export function ReviewSettings() {
 				/>
 			</div>
 
-			<div className="flex flex-col gap-4">
-				<h3 className="tr-title-section text-text-default">Agent-triggered review</h3>
-				<p className="text-text-muted tr-text-metadata">
-					When on, the worker reviews each completed plan step itself (via its request_review tool)
-					during the session. When off, that tool is withheld and review happens only when you press
-					the Review button.
-				</p>
-			</div>
-			<div className="flex items-center justify-between gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
-				<div className="flex flex-col gap-2">
-					<span className="tr-title-compact text-text-default">Let the agent request review</span>
-					<span className="text-text-muted tr-text-metadata">
-						{agentReviewEnabled
-							? "On — the worker reviews its own completed steps in-session."
-							: "Off — only the Review button starts a review."}
-					</span>
-				</div>
-				<SettingsSwitch
-					checked={agentReviewEnabled}
-					label="Let the agent request review"
-					testId="agent-review-toggle"
-					onChange={setAgentReviewEnabled}
-				/>
-			</div>
+			<AgentReviewSettings
+				protocolVersion={protocolVersion}
+				enabled={agentReviewEnabled}
+				onChange={setAgentReviewEnabled}
+			/>
 
 			<div className="flex flex-col gap-4">
 				<h3 className="tr-title-section text-text-default">Automatic fix cycle</h3>
@@ -128,5 +114,50 @@ export function ReviewSettings() {
 				/>
 			</div>
 		</section>
+	);
+}
+
+/** The v68 agent-review toggle; props-driven so it stays testable under `renderToStaticMarkup` (see
+ * panels/SPEC.md). Hidden against a pre-v68 host, which can echo/store the unknown field yet still keep
+ * `request_review` registered — so the switch would misreport the worker's behavior. */
+export function AgentReviewSettings({
+	protocolVersion,
+	enabled,
+	onChange,
+}: {
+	protocolVersion: number | null;
+	enabled: boolean;
+	onChange: (value: boolean) => void;
+}) {
+	if (protocolVersion === null || protocolVersion < AGENT_REVIEW_SETTING_PROTOCOL_VERSION) {
+		return null;
+	}
+	return (
+		<>
+			<div className="flex flex-col gap-4">
+				<h3 className="tr-title-section text-text-default">Agent-triggered review</h3>
+				<p className="text-text-muted tr-text-metadata">
+					When on, the worker reviews each completed plan step itself (via its request_review tool)
+					during the session. When off, that tool is withheld and review happens only when you press
+					the Review button.
+				</p>
+			</div>
+			<div className="flex items-center justify-between gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
+				<div className="flex flex-col gap-2">
+					<span className="tr-title-compact text-text-default">Let the agent request review</span>
+					<span className="text-text-muted tr-text-metadata">
+						{enabled
+							? "On — the worker reviews its own completed steps in-session."
+							: "Off — only the Review button starts a review."}
+					</span>
+				</div>
+				<SettingsSwitch
+					checked={enabled}
+					label="Let the agent request review"
+					testId="agent-review-toggle"
+					onChange={onChange}
+				/>
+			</div>
+		</>
 	);
 }
