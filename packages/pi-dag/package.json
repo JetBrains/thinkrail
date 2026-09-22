@@ -29,5 +29,10 @@
 		"@types/bun": "catalog:",
 		"typebox": "catalog:",
 		"typescript": "catalog:"
+	},
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
 	}
 }
