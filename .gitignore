@@ -13,6 +13,7 @@ e2e/screenshots/
 e2e/.workflow-runs.jsonl
 
 docs/*
+!docs/delegation-orchestration.md
 .playwright-mcp/
 .claude/
 .mockups/
