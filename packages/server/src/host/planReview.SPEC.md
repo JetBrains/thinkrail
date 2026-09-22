@@ -136,10 +136,13 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   finding-identity test, the interleaved-send / partial-persist / race-before-delivery / record-failure
   regression tests in `planReview.test.ts`, and the one-snapshot atomicity test in `reviewFlow.test.ts`.
 - **The agent's in-session entry point is gated; the button is not.** The worker's `request_review` tool
-  (and its prompt guidelines) is registered only when the `agentReviewEnabled` config flag is on — the host
-  injects `setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false)` so the agent
-  module never takes a settings edge (see `agent/SPEC.md`). The flag is read when a session's tools are
-  built, so it applies to sessions created after the toggle. It gates only the tool: the Review button
+  is always registered, but kept in a session's active tool set only while the `agentReviewEnabled` config
+  flag is on. The host injects `setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false)`
+  so the agent module never takes a settings edge (see `agent/SPEC.md`), and toggling the setting calls
+  `refreshAgentReviewTool()` to apply the change **live** to open sessions (idle sessions synchronously, a
+  streaming session at its next `agent_settled`). Because `setActiveToolsByName` rebuilds the system prompt
+  from only the active tools' guidelines, dropping the tool also drops its guidance — no stale "always
+  request_review" instruction survives a disable. It gates only the tool: the Review button
   (`startPlanReview`) and its downstream auto-fix / auto-re-review are independent and always available.
 - **One review per plan at a time, one per step ever.** Both entry points serialize on the plan's chain
   (`planReviewQueue.onPlanChain`): the button path via `enqueuePlanReview` (fire-and-forget), the worker's

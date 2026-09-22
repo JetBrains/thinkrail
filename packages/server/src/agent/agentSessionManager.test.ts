@@ -52,6 +52,7 @@ import {
 	listSessionActivity,
 	listSessions,
 	promptSession,
+	refreshAgentReviewTool,
 	refreshAvailableModels,
 	refreshSubagentTools,
 	reloadSessionResources,
@@ -60,6 +61,7 @@ import {
 	removeWorkspaceSessions,
 	renameSession,
 	setActivityProjectResolver,
+	setAgentReviewEnabledResolver,
 	setSessionActivityPublisher,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -121,6 +123,19 @@ const seen = (id: string) => JSON.stringify(events.get(id) ?? []);
 function subagentToolState(context: { tools?: ReadonlyArray<{ name: string }> }): string {
 	const names = new Set((context.tools ?? []).map((tool) => tool.name));
 	return names.has("Agent") && names.has("get_subagent_result") ? "SUBAGENTS_ON" : "SUBAGENTS_OFF";
+}
+
+function reviewToolState(context: {
+	tools?: ReadonlyArray<{ name: string }>;
+	systemPrompt?: string;
+}): string {
+	const names = new Set((context.tools ?? []).map((tool) => tool.name));
+	const toolActive = names.has("request_review");
+	// The guidance must track the tool: setActiveToolsByName rebuilds the prompt from active tools only.
+	const guidanceInPrompt = (context.systemPrompt ?? "").includes("request_review");
+	if (toolActive && guidanceInPrompt) return "REVIEW_ON";
+	if (!toolActive && !guidanceInPrompt) return "REVIEW_OFF";
+	return "REVIEW_INCONSISTENT";
 }
 
 const tmpDirs: string[] = [];
@@ -512,6 +527,43 @@ test("an idle chat adopts subagent policy changes, survives resource reload, and
 		expect(seen(sessionId)).toContain("SUBAGENTS_ON");
 	} finally {
 		setSubagentsEnabledResolver(() => true);
+		if (sessionId) removeSession(sessionId);
+	}
+});
+
+test("an idle chat adopts an agent-review policy change live — request_review and its guidance drop and return", async () => {
+	const workspaceId = "ws-agent-review-idle-toggle";
+	let enabled = true;
+	setAgentReviewEnabledResolver((id) => id !== workspaceId || enabled);
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-agent-review-idle-toggle-"),
+			workspaceId,
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+
+		// On by default: the tool is active and its guidance is in the (rebuilt) system prompt.
+		fauxA.setResponses([(context) => fauxAssistantMessage(reviewToolState(context))]);
+		await promptSession(sessionId, "Check enabled review tool.");
+		expect(seen(sessionId)).toContain("REVIEW_ON");
+
+		// Toggle off live: the tool leaves the active set AND its guidance leaves the rebuilt prompt.
+		enabled = false;
+		refreshAgentReviewTool(workspaceId);
+		fauxA.setResponses([(context) => fauxAssistantMessage(reviewToolState(context))]);
+		await promptSession(sessionId, "Check disabled review tool.");
+		expect(seen(sessionId)).toContain("REVIEW_OFF");
+
+		// And back on.
+		enabled = true;
+		refreshAgentReviewTool(workspaceId);
+		fauxA.setResponses([(context) => fauxAssistantMessage(reviewToolState(context))]);
+		await promptSession(sessionId, "Check re-enabled review tool.");
+		expect(seen(sessionId)).toContain("REVIEW_ON");
+	} finally {
+		setAgentReviewEnabledResolver(() => true);
 		if (sessionId) removeSession(sessionId);
 	}
 });

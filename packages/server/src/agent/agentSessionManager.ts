@@ -80,6 +80,7 @@ import {
 	refreshCatalogs,
 	settledAvailableModels,
 } from "./piRuntime";
+import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
 import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
@@ -112,6 +113,7 @@ interface Entry {
 	piCompactionInProgress: boolean;
 	registered: boolean;
 	subagentToolsRefreshPending: boolean;
+	reviewToolRefreshPending: boolean;
 	publishedActivity: ActivityStatus | null;
 	rawActivity: ActivityStatus | null;
 	lastActivityMs: number;
@@ -408,6 +410,43 @@ export function refreshSubagentTools(workspaceId?: string): void {
 	}
 }
 
+// Injected by the host (never an agent → settings edge, see agent/SPEC.md); default on. Gates the
+// worker's in-session request_review tool live: `setActiveToolsByName` rebuilds the system prompt from
+// only the active tools' guidelines, so toggling the tool off also drops its guidance. The Review button
+// path (startPlanReview) is separate and unaffected.
+let agentReviewEnabledResolver: (workspaceId: string) => boolean = () => true;
+export function setAgentReviewEnabledResolver(resolver: (workspaceId: string) => boolean): void {
+	agentReviewEnabledResolver = resolver;
+}
+
+function agentReviewEnabled(workspaceId: string): boolean {
+	try {
+		return agentReviewEnabledResolver(workspaceId);
+	} catch {
+		return false;
+	}
+}
+
+function applyReviewTool(entry: Entry): void {
+	const withoutReview = entry.session
+		.getActiveToolNames()
+		.filter((name) => name !== REQUEST_REVIEW_TOOL_NAME);
+	entry.session.setActiveToolsByName(
+		agentReviewEnabled(entry.workspaceId)
+			? [...withoutReview, REQUEST_REVIEW_TOOL_NAME]
+			: withoutReview,
+	);
+	entry.reviewToolRefreshPending = false;
+}
+
+export function refreshAgentReviewTool(workspaceId?: string): void {
+	for (const entry of sessions.values()) {
+		if (workspaceId !== undefined && entry.workspaceId !== workspaceId) continue;
+		if (entry.session.isStreaming) entry.reviewToolRefreshPending = true;
+		else applyReviewTool(entry);
+	}
+}
+
 function hasDeletionTombstone(sessionId: string): boolean {
 	return deletedSessions.has(sessionId);
 }
@@ -528,6 +567,7 @@ async function prepareSessionEntry(
 		piCompactionInProgress: false,
 		registered: false,
 		subagentToolsRefreshPending: false,
+		reviewToolRefreshPending: false,
 		publishedActivity: null,
 		rawActivity: null,
 		lastActivityMs: Date.now(),
@@ -592,6 +632,7 @@ async function prepareSessionEntry(
 		if (event.type === "agent_settled") {
 			entry.lastSettlement = terminal;
 			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
+			if (entry.reviewToolRefreshPending) applyReviewTool(entry);
 		}
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
@@ -651,6 +692,7 @@ async function registerSession(
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	applySubagentTools(prepared.entry);
+	applyReviewTool(prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
 	await reconcileWorkspaceActivity(workspaceId);

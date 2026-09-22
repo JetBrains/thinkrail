@@ -20,6 +20,7 @@ import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	isProjectSkillPath,
+	refreshAgentReviewTool,
 	refreshSubagentTools,
 	setActivityProjectResolver,
 	setAgentReviewEnabledResolver,
@@ -538,6 +539,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			void observeCurrentSetup();
 		}
 		refreshSubagentTools();
+		refreshAgentReviewTool();
 	});
 
 	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {
