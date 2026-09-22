@@ -81,9 +81,9 @@ export function ReviewSettings() {
 			<div className="flex flex-col gap-4">
 				<h3 className="tr-title-section text-text-default">Agent-triggered review</h3>
 				<p className="text-text-muted tr-text-metadata">
-					When on, the worker reviews each completed plan step itself (via its{" "}
-					<code>request_review</code> tool) during the session. When off, that tool is withheld and
-					review happens only when you press the Review button.
+					When on, the worker reviews each completed plan step itself (via its request_review tool)
+					during the session. When off, that tool is withheld and review happens only when you press
+					the Review button.
 				</p>
 			</div>
 			<div className="flex items-center justify-between gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
