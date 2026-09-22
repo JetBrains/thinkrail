@@ -153,6 +153,22 @@
         "typescript": "catalog:",
       },
     },
+    "packages/pi-background-commands": {
+      "name": "pi-background-commands",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@earendil-works/pi-agent-core": "catalog:",
+        "@earendil-works/pi-ai": "catalog:",
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@types/bun": "catalog:",
+        "typebox": "catalog:",
+        "typescript": "catalog:",
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*",
+        "typebox": "*",
+      },
+    },
     "packages/pi-delegation": {
       "name": "pi-delegation",
       "version": "0.0.0",
@@ -249,6 +265,7 @@
         "@thinkrail/contracts": "workspace:*",
         "@thinkrail/shared": "workspace:*",
         "bun-pty": "0.4.10",
+        "pi-background-commands": "workspace:*",
         "pi-delegation": "workspace:*",
         "pi-spec-graph": "workspace:*",
         "pi-subagents": "workspace:*",
@@ -1808,6 +1825,8 @@
     "path-type": ["path-type@6.0.0", "", {}, "sha512-Vj7sf++t5pBD637NSfkxpHSMfWaeig5+DKWLhcqIYx6mWQz5hdJTGDVMQiJcw1ZYkhs7AazKDGpRVji1LJCZUQ=="],
 
     "pe-library": ["pe-library@2.0.1", "", {}, "sha512-/qjYFqNSlq59B5DI36am++5/3gMgh02QnzpYigrwrW6s+QpU0mHf09/iA4wjTu21UUxodyV7ZCetV5MiDhaN/A=="],
+
+    "pi-background-commands": ["pi-background-commands@workspace:packages/pi-background-commands"],
 
     "pi-delegation": ["pi-delegation@workspace:packages/pi-delegation"],
 

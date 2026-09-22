@@ -5,7 +5,7 @@ status: active
 title: Wire contracts (types-only)
 parent: architecture
 depends-on: []
-references: [central-integration]
+references: [central-integration, module-pi-background-commands]
 tags: [v1, wire]
 ---
 
@@ -22,8 +22,9 @@ of the host.
   registries, and the protocol version. Including **`WsErrorCode`** — the closed set of failures the *host
   names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`, and
   `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is `subagent.getTranscript`'s **permanent** miss, the
-  signal that stops the transcript dialog's polling, while transport blips stay plain-`error` transients
-  worth retrying), so a client can react to one specific failure
+  signal that stops the transcript dialog's polling. A known child whose first transcript file is not
+  written yet instead returns empty messages with its current status, so a live run remains pollable;
+  transport blips stay plain-`error` transients worth retrying), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
@@ -546,6 +547,53 @@ of the host.
   as reliable as the socket carrying it and nothing would ever re-send a lost one: restating the live set beats
   confirming the confirmations. This behavior is protocol-versioned — a replaying UI must never run against a
   pre-dedup host.
+
+## Chat Resources
+
+The current-chat resource view is a projection of two existing capability owners, not a generic
+process API. `CHAT_RESOURCES_PROTOCOL_VERSION` (67) gates its methods and affordances; hosts through
+v66 must not receive these requests. No native Pi background-task protocol is implied. The command DTOs mirror [[module-pi-background-commands]]
+without importing that package. Subagents retain their Pi child session ids and delegation statuses.
+
+- `session.resources({workspaceId, sessionId})` returns separate command and subagent summaries:
+  all currently active records plus bounded recent terminal records. The snapshot echoes workspace
+  and session identity. Commands mirror the owner's bounded snapshot; subagent summaries carry only
+  child/parent ids, role, task, status, creation time and optional abort reason, not usage or reports.
+  Subagent role/task summaries are capped at 200/2,000 characters, with the latest twenty terminal
+  children by creation order retained in the projection. These are runtime catalogs; neither historical
+  tool acknowledgements nor persisted PIDs supply live authority after restart.
+- `backgroundCommand.output({workspaceId, sessionId, commandId})` returns the current bounded
+  `{available: true, command, output: {text, truncated}}`, or `{available: false}` for an unknown,
+  foreign or evicted command after validating its parent. Output REPLACES the previous snapshot;
+  truncation is explicit. It accepts no filesystem path or PID.
+- `backgroundCommand.stop({workspaceId, sessionId, commandId})` and
+  `subagent.stop({workspaceId, parentSessionId, childSessionId})` request cancellation of one owned
+  resource. Known terminal resources are idempotent successes; unknown, expired or foreign ids
+  share the `RESOURCE_UNAVAILABLE` error code. Unavailable parent sessions use that same code.
+  A successful `Ack` acknowledges intent, not observed termination.
+- `subagent.stopAll({workspaceId, parentSessionId})` captures the currently active direct children,
+  requests every cancellation before awaiting settlement, and returns `Ack & {targeted: number}`. It does
+  not stop the parent, remove child records, or disable future launches.
+- `session.resourcesChanged` is a scoped `{workspaceId, sessionId}` invalidation on membership or
+  lifecycle changes. Clients reread the snapshot; output bytes do not ride a broadcast or transcript
+  tool update after the start acknowledgement. Existing `subagent.getTranscript` remains unchanged.
+
+`DelegationRunDetails.abortReason` mirrors the optional string owned by [[module-pi-delegation]].
+Historical details without this field stay valid; non-string values are rejected by its guard. User
+Stop uses `"user"` so the portable completion owner can suppress idle-parent wake-up without a
+wire-owned cancellation registry.
+
+`background-command-completion` is a displayed Pi custom message, not a catalog update. Its guarded
+wire details contain terminal snapshot metadata without the full command, plus the owner's bounded
+plain-text diagnostic excerpt and truncation flag. The conversation may render that historical notice,
+but must never infer current resource authority from it; logs and controls still use scoped reads.
+
+Every read/control validates workspace membership and parent lineage, not merely a syntactically
+valid id. The start capability stays agent-facing; there is no browser shell-execution method.
+Reconnection invalidates old control authority until hydration completes; transient read failure
+must not become a successful empty snapshot. Unsupported hosts clear earlier resource projections.
+Recent command output is ephemeral; completed-message excerpts and child transcripts have their
+own existing Pi transcript persistence, not a second wire-owned history store.
 
 ## The activity layer
 

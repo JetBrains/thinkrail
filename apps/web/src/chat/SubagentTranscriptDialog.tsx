@@ -1,13 +1,14 @@
 import type { DelegationRunStatus, TranscriptMessage } from "@thinkrail/contracts";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { isConnectedGeneration, useAppStore } from "@/store";
 import { errorText, getTransport, wsErrorCode } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { ChatActionsContext } from "./ChatActions";
+import { startDetailPolling } from "./detailPolling";
 import { messagesToRuntime } from "./hydrate";
 import { deriveMessageActions } from "./messageActions";
 import { deriveRows } from "./rows";
-import { startSubagentTranscriptPolling } from "./subagentTranscriptPolling";
 import { ChatTurnView } from "./turns";
 
 function isLiveTranscriptStatus(status: DelegationRunStatus | undefined): boolean {
@@ -23,39 +24,45 @@ export function SubagentTranscriptDialog({
 	parentSessionId,
 	childSessionId,
 	onOpenChange,
+	onCloseAutoFocus,
 }: {
 	workspaceId: string;
 	parentSessionId: string;
 	childSessionId: string;
 	onOpenChange: (open: boolean) => void;
+	onCloseAutoFocus?: (event: Event) => void;
 }) {
+	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
+	const status = useAppStore((state) => state.status);
 	const [messages, setMessages] = useState<TranscriptMessage[] | null>(null);
 	const [live, setLive] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	useEffect(
-		() =>
-			startSubagentTranscriptPolling({
-				read: () =>
-					getTransport().request("subagent.getTranscript", {
-						workspaceId,
-						parentSessionId,
-						childSessionId,
-					}),
-				isLive: (response) => isLiveTranscriptStatus(response.status),
-				isPermanentError: isPermanentTranscriptError,
-				onResult: (response) => {
-					setMessages(response.messages);
-					setError(null);
-					setLive(isLiveTranscriptStatus(response.status));
-				},
-				onError: (requestError) => {
-					setError(errorText(requestError));
-					if (isPermanentTranscriptError(requestError)) setLive(false);
-				},
-			}),
-		[workspaceId, parentSessionId, childSessionId],
-	);
+	useEffect(() => {
+		if (status !== "connected") return;
+		const current = () => isConnectedGeneration(useAppStore.getState(), connectionGeneration);
+		return startDetailPolling({
+			read: () =>
+				getTransport().request("subagent.getTranscript", {
+					workspaceId,
+					parentSessionId,
+					childSessionId,
+				}),
+			isLive: (response) => current() && isLiveTranscriptStatus(response.status),
+			isPermanentError: (error) => !current() || isPermanentTranscriptError(error),
+			onResult: (response) => {
+				if (!current()) return;
+				setMessages(response.messages);
+				setError(null);
+				setLive(isLiveTranscriptStatus(response.status));
+			},
+			onError: (requestError) => {
+				if (!current()) return;
+				setError(errorText(requestError));
+				if (isPermanentTranscriptError(requestError)) setLive(false);
+			},
+		}).dispose;
+	}, [workspaceId, parentSessionId, childSessionId, status, connectionGeneration]);
 
 	const runtime = useMemo(
 		() =>
@@ -82,6 +89,7 @@ export function SubagentTranscriptDialog({
 	return (
 		<Dialog open onOpenChange={onOpenChange}>
 			<DialogContent
+				onCloseAutoFocus={onCloseAutoFocus}
 				data-testid="subagent-transcript-dialog"
 				className="h-[85vh] max-w-3xl gap-16 p-16"
 			>
@@ -91,7 +99,7 @@ export function SubagentTranscriptDialog({
 					</DialogTitle>
 					<span className="min-w-0 truncate text-text-muted tr-text-metadata">
 						{childSessionId}
-						{live ? " · live" : ""}
+						{status !== "connected" ? " · stale" : live ? " · live" : ""}
 					</span>
 				</div>
 				<ChatActionsContext.Provider value={null}>
@@ -101,7 +109,9 @@ export function SubagentTranscriptDialog({
 							className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto"
 						>
 							{error ? (
-								<span className="text-feedback-error tr-text-ui">{error}</span>
+								<span role="alert" className="text-feedback-error tr-text-ui">
+									{error}
+								</span>
 							) : messages === null ? (
 								<span className="text-text-muted tr-text-metadata">Loading…</span>
 							) : rows.length === 0 ? (

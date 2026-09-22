@@ -183,6 +183,62 @@ function gatedChildResponse(): { release: () => void } {
 	return { release };
 }
 
+test("owned children remain inspectable before Pi writes their first transcript file", async () => {
+	const cwd = tmpDir("trdel-prefile-");
+	const workspaceId = "ws-prefile";
+	const { sessionId } = await createSession({ cwd, workspaceId });
+	const service = delegationServiceFor(workspaceId);
+	const child = await service.createChild({
+		parent: sessionId,
+		info: { createdBy: "test" },
+		visibility: "hidden",
+		session: {},
+	});
+	expect(existsSync(child.record.sessionFile)).toBe(false);
+	expect(readChildTranscript(workspaceId, sessionId, child.sessionId)).toEqual({
+		messages: [],
+		status: "queued",
+	});
+	for (const [workspace, parent, id] of [
+		["foreign-workspace", sessionId, child.sessionId],
+		[workspaceId, "foreign-parent", child.sessionId],
+		[workspaceId, sessionId, "unknown-child"],
+	] as const)
+		expect(() => readChildTranscript(workspace, parent, id)).toThrow("No transcript found");
+	const { release } = gatedChildResponse();
+	const run = child.runQueued("Wait for the provider.");
+	try {
+		await waitFor(() => child.snapshot?.status === "running");
+		expect(existsSync(child.record.sessionFile)).toBe(false);
+		expect(readChildTranscript(workspaceId, sessionId, child.sessionId)).toEqual({
+			messages: [],
+			status: "running",
+		});
+	} finally {
+		release();
+		await run;
+	}
+	expect(JSON.stringify(readChildTranscript(workspaceId, sessionId, child.sessionId))).toContain(
+		"GATED_DONE",
+	);
+	const canceled = await service.createChild({
+		parent: sessionId,
+		info: { createdBy: "test" },
+		visibility: "hidden",
+		session: {},
+	});
+	await canceled.runQueued("Never sent.", { signal: AbortSignal.abort() });
+	expect(existsSync(canceled.record.sessionFile)).toBe(false);
+	expect(readChildTranscript(workspaceId, sessionId, canceled.sessionId)).toEqual({
+		messages: [],
+		status: "aborted",
+	});
+	await removeSession(sessionId);
+	expect(() => readChildTranscript(workspaceId, sessionId, canceled.sessionId)).toThrow(
+		"No transcript found",
+	);
+});
+
 test("deleteSession resolves only after its child cascade settles", async () => {
 	const cwd = tmpDir("trdel-await-");
 	const { sessionId } = await createSession({ cwd, workspaceId: "ws-await" });

@@ -223,6 +223,24 @@ consumer, the ThinkRail worktree provider. Report-back from a subsession to its 
 subsessions land) is pi-native (`sendMessage`/`followUp`) — no core provision needed beyond
 lineage.
 
+## User cancellation
+
+`ChildHandle.abort(reason?: string)` records its optional plain-string reason in the active run's
+`DelegationRunDetails.abortReason`, preserved in snapshots, outcomes and terminal events. The first
+accepted cancellation wins, including one with no reason; caller signals, disposal and turn caps
+participate in that ordering without adding a reason. Terminal runs are unchanged, and each new run
+resets both the cancellation latch and reason. Reasons are metadata, not lifecycle statuses.
+
+Child creation revalidates parent liveness after asynchronous session/extension preparation, before
+registering the handle. If the embedder closed that parent during preparation, the unregistered child
+is disposed and creation fails with `unknown-parent`. This prevents an in-flight birth from escaping
+a parent's already-captured teardown list without introducing a second pending-child registry.
+
+The host uses `"user"` for explicit user cancellation; [[module-pi-subagents]] owns its completion
+policy. No UI dependency or second registry is involved. Queued cancellation settles immediately,
+returns any eventual slot grant and starts no provider work; running cancellation uses the existing
+run-scoped signal. Non-user paths retain their behavior.
+
 ## Decision log (how the contract got its shape)
 
 1. **Two-phase surface** (`createChild` → `runQueued`/`runNow`) chosen over one mega-`spawnSession`
