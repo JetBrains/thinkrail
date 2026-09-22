@@ -648,6 +648,7 @@ async function prepareSessionEntry(
 		entry.unsubscribe();
 		entry.unsubscribeCommands();
 		void closeSessionResources(entry);
+		clearEntryQueue(entry);
 		session.dispose();
 		throw error;
 	}
@@ -787,6 +788,7 @@ async function createParentSession(
 				workspaceId,
 				commands.dispose().catch(() => {}),
 			);
+			session?.clearQueue();
 			askUserQuestionWaiters.abandon();
 			session?.dispose();
 		}
@@ -1370,14 +1372,17 @@ function queueStateOf(entry: Entry): SessionQueueState {
 }
 
 export function clearQueueSession(sessionId: string, requireTextOnly = false): SessionQueueContent {
-	const entry = mustGetEntry(sessionId);
+	return clearEntryQueue(mustGetEntry(sessionId), requireTextOnly);
+}
+
+function clearEntryQueue(entry: Entry, requireTextOnly = false): SessionQueueContent {
 	const content = queueContentOf(entry);
 	if (requireTextOnly && hasQueuedImages(entry)) {
 		throw new Error("Cannot restore queued image messages as text");
 	}
 	entry.session.clearQueue();
 	entry.stuckEmptyDeliveries = { steering: 0, followUp: 0 };
-	syncSessionActivity(sessionId);
+	syncSessionActivity(entry.session.sessionId);
 	return content;
 }
 
@@ -1437,13 +1442,20 @@ export async function abortSession(
 	restoreQueue = false,
 	acceptedAnswerGraceMs = ACCEPTED_ANSWER_STOP_GRACE_MS,
 ): Promise<SessionQueueContent | undefined> {
-	const entry = mustGetEntry(sessionId);
-	let restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
+	return abortEntry(mustGetEntry(sessionId), restoreQueue, acceptedAnswerGraceMs);
+}
+
+async function abortEntry(
+	entry: Entry,
+	restoreQueue: boolean,
+	acceptedAnswerGraceMs = ACCEPTED_ANSWER_STOP_GRACE_MS,
+): Promise<SessionQueueContent | undefined> {
+	let restoredQueue = restoreQueue ? clearEntryQueue(entry) : undefined;
 	const acceptedResult = entry.askUserQuestionWaiters.prepareAbort();
 	await waitForAcceptedAnswerGrace(acceptedResult, acceptedAnswerGraceMs);
-	if (sessions.get(sessionId) !== entry) return restoredQueue;
+	if (sessions.get(entry.session.sessionId) !== entry) return restoredQueue;
 	if (restoredQueue) {
-		restoredQueue = mergeQueueContent(restoredQueue, clearQueueSession(sessionId));
+		restoredQueue = mergeQueueContent(restoredQueue, clearEntryQueue(entry));
 	}
 	await entry.session.abort();
 	return restoredQueue;
@@ -1595,6 +1607,7 @@ function disposeSession(sessionId: string): Promise<void> {
 	entry.askUserQuestionWaiters.abandon();
 	entry.unsubscribe();
 	entry.unsubscribeCommands();
+	clearEntryQueue(entry);
 	entry.session.dispose();
 	sessions.delete(sessionId);
 	if (entry.publishedActivity !== null) retractActivity(sessionId, entry.workspaceId);
@@ -1610,7 +1623,7 @@ export function removeSession(sessionId: string): Promise<void> {
 	if (!entry) return Promise.resolve();
 	closeSessionResources(entry);
 	if (entry.session.isStreaming)
-		return abortSession(sessionId)
+		return abortEntry(entry, true)
 			.catch(() => {})
 			.then(() => disposeSession(sessionId));
 	return disposeSession(sessionId);
@@ -1623,6 +1636,7 @@ export function disposeAllSessions(): void {
 		entry.askUserQuestionWaiters.abandon();
 		entry.unsubscribe();
 		entry.unsubscribeCommands();
+		clearEntryQueue(entry);
 		entry.session.dispose();
 	}
 	sessions.clear();
@@ -1633,6 +1647,7 @@ export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void>
 	const settling = new Set<Promise<unknown>>();
 	for (const entry of sessions.values()) settling.add(closeSessionResources(entry, timeoutMs));
 	for (const [sessionId, entry] of sessions) {
+		clearEntryQueue(entry);
 		const acceptedResult = entry.askUserQuestionWaiters.prepareShutdown();
 		if (acceptedResult) {
 			settling.add(
@@ -1640,6 +1655,7 @@ export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void>
 					.catch(() => {})
 					.then(async () => {
 						if (sessions.get(sessionId) === entry && entry.session.isStreaming) {
+							clearEntryQueue(entry);
 							await entry.session.abort();
 						}
 					}),
@@ -1671,7 +1687,7 @@ async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string
 	for (const [, entry] of entries) void closeSessionResources(entry);
 	await Promise.all(
 		entries.map(async ([sessionId, entry]) => {
-			if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
+			if (entry.session.isStreaming) await abortEntry(entry, true).catch(() => {});
 			await disposeSession(sessionId);
 		}),
 	);
@@ -1735,7 +1751,7 @@ async function runDeleteTransaction(
 		let path: string | undefined;
 		if (entry) {
 			liveEntry = entry;
-			if (entry.session.isStreaming) await entry.session.abort();
+			if (entry.session.isStreaming) await abortEntry(entry, true);
 			const manager = entry.session.sessionManager;
 			if (manager.getSessionId() !== sessionId || manager.getCwd() !== cwd) {
 				throw new Error(`Session transcript scope mismatch: ${sessionId}`);

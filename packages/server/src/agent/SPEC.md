@@ -355,7 +355,18 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     bound. Shutdown atomically closes answer admission before it snapshots phases: an expected/waiting ask
     stays dangling for ack repair, while an already accepted answer reaches its native persisted result and
     then the continuation is aborted. A reply racing after that snapshot is rejected rather than accepted and
-    lost during disposal. Explicit user Stop synchronously claims an unanswered ask before signalling Pi; when
+    lost during disposal. Destructive teardown drains both Pi input queues before abort/disposal, including
+    recoverable chat deletion, workspace archive, polite shutdown and emergency disposal. Pi 0.84.3's
+    `abort()` only signals the current core run and waits for session idle; post-run handling can continue
+    queued input with a fresh abort controller, so abort alone can restart work and strand disposal.
+    Removal/archive/deletion reuse Stop's entry-based drain and bounded accepted-answer grace, draining
+    again immediately before abort to discard input queued during that grace. Public commands retain their
+    deletion guard; captured-entry teardown bypasses it so archive still settles tombstoned parents.
+    Polite shutdown instead preserves unanswered asks for restart repair, drains again at an accepted
+    result's persistence boundary, and retains its existing shared shutdown budget. Synchronous disposal
+    (including failed preparation) clears queues before disconnecting Pi, after the host unsubscribes so
+    disposal does not publish an extra queue event.
+    Explicit user Stop synchronously claims an unanswered ask before signalling Pi; when
     Submit already won it gives that exact result boundary a bounded grace period, then signals abort even if
     persistence is still pending. The answer RPC resolves only when `turn_end` contains the accepted native
     result; a replaced or missing result rejects it. Every disposal path abandons the registry before
@@ -792,8 +803,9 @@ Command services outlive view placement and parent-turn cancellation. Actual ses
 workspace archive close command admission and signal command/child work before awaiting teardown
 under the existing host shutdown budget. Resource closure runs for every captured workspace parent before
 any parent abort is awaited; individual removal likewise signals resources before waiting for the main turn.
-Streaming individual removal uses `abortSession` so accepted answers retain the same bounded persistence
-grace as explicit Stop before the parent is disposed.
+Streaming destructive removal reuses the manager's queue-draining Stop path, discarding the drained
+input while retaining the same bounded accepted-answer persistence grace before the parent is disposed.
+Main-turn Stop alone never closes Resource owners.
 Command and detached-subagent completion delivery respect pending session deletion and its rollback;
 no notice may append or wake the parent behind a transcript being moved to trash. The tombstone is
 temporary and does not dispose either owner. Resource reload retains the command service and portable
