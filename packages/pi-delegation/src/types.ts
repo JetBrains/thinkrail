@@ -1,7 +1,9 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type {
 	ExtensionContext,
 	ExtensionFactory,
+	ModelRegistry,
 	ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
 
@@ -44,6 +46,7 @@ export interface CreateChildSpec {
 	origin?:
 		| { kind: "fresh" }
 		| { kind: "fork"; sourceSessionId: string; entryId?: string }
+		| { kind: "fork-captured"; history: CapturedHistory }
 		| { kind: "seeded"; digest: string };
 	visibility: "hidden" | "listed";
 	interactive?: boolean;
@@ -58,6 +61,8 @@ export interface RunOptions {
 }
 
 export interface RunOutcome {
+	readonly historyEntryId: string | null;
+	stopReason?: AssistantMessage["stopReason"];
 	status: RunStatus;
 	finalText?: string;
 	details: DelegationRunDetails;
@@ -65,16 +70,16 @@ export interface RunOutcome {
 }
 
 export interface SpawnRecord {
-	sessionId: string;
-	parentSessionId: string;
-	scope: string;
-	originKind: "fresh" | "fork" | "seeded";
-	entryId?: string;
-	info: ChildInfo;
-	interactive: boolean;
-	visibility: "hidden" | "listed";
-	createdAt: string;
-	sessionFile: string;
+	readonly sessionId: string;
+	readonly parentSessionId: string;
+	readonly scope: string;
+	readonly originKind: "fresh" | "fork" | "seeded";
+	readonly entryId?: string;
+	readonly info: Readonly<ChildInfo>;
+	readonly interactive: boolean;
+	readonly visibility: "hidden" | "listed";
+	readonly createdAt: string;
+	readonly sessionFile: string;
 }
 
 export interface RunSnapshot {
@@ -117,7 +122,18 @@ export type DelegationErrorCode =
 	| "invalid-combination"
 	| "unknown-parent"
 	| "already-running"
-	| "disposed";
+	| "disposed"
+	| "resource-exists"
+	| "model-unavailable"
+	| "unsupported-auth"
+	| "history-unavailable"
+	| "invalid-history"
+	| "incomplete-history"
+	| "source-busy"
+	| "invalid-child-record"
+	| "child-transcript-unavailable"
+	| "invalid-child-transcript"
+	| "not-running";
 
 export class DelegationError extends Error {
 	readonly code: DelegationErrorCode;
@@ -143,6 +159,12 @@ export interface ChildHandle {
 }
 
 export interface DelegationService {
+	captureHistory(source: HistoryCaptureSource): Promise<CapturedHistory>;
+	registerResource(
+		resourceId: string,
+		context: ResourceContextInput,
+		options?: ResourceDelegationOptions,
+	): Promise<ResourceDelegation>;
 	createChild(spec: CreateChildSpec): Promise<ChildHandle>;
 	findChild(sessionId: string): ChildHandle | undefined;
 	childrenOf(parentSessionId: string): ChildHandle[];
@@ -156,10 +178,65 @@ export type ParentContext = Pick<ExtensionContext, "cwd" | "model" | "thinkingLe
 };
 
 export interface DelegationBindings {
-	resolveParent: (sessionId: string) => ParentContext | undefined;
+	resolveParent?: (sessionId: string) => ParentContext | undefined;
 	delegationRoot?: string;
 	scope?: string;
 	modelRuntime?: ModelRuntime | (() => ModelRuntime | Promise<ModelRuntime>);
 	maxConcurrentPerParent?: number;
 	childExtensionFactories?: ExtensionFactory[];
+}
+
+export type HistoryCaptureSource =
+	| {
+			kind: "session";
+			sessionId: string;
+			sessionManager: ExtensionContext["sessionManager"];
+			cut:
+				| { kind: "before-tool-call"; toolCallId: string }
+				| { kind: "at-entry"; entryId: string | null };
+	  }
+	| { kind: "resource-child"; resourceId: string; sessionId: string; entryId: string | null };
+
+export interface CapturedHistory {
+	readonly format: "pi-session-branch-v1";
+	readonly sourceSessionId: string;
+	readonly entryId: string | null;
+	readonly sha256: string;
+	readonly sizeBytes: number;
+	readonly jsonl: string;
+}
+
+export type ResourceContextInput = {
+	cwd: string;
+	model?: SessionOptions["model"];
+	thinkingLevel?: SessionOptions["thinkingLevel"];
+} & (
+	| { kind: "runtime"; modelRuntime: ModelRuntime }
+	| { kind: "registry"; modelRegistry: ModelRegistry }
+);
+
+export interface ResourceDelegationOptions {
+	maxConcurrent?: number;
+	childExtensionFactories?: ExtensionFactory[];
+}
+
+export type ResourceSpawnRecord = Omit<SpawnRecord, "parentSessionId"> & {
+	readonly resourceId: string;
+};
+export type ResourceChildBirth = Readonly<Omit<ResourceSpawnRecord, "sessionFile">>;
+export type ResourceChildHandle = Pick<
+	ChildHandle,
+	"sessionId" | "runQueued" | "steer" | "abort" | "dispose"
+> & {
+	readonly record: ResourceSpawnRecord;
+};
+
+export interface ResourceDelegation {
+	validateModels(models: Array<NonNullable<SessionOptions["model"]>>): Promise<void>;
+	createChild(spec: Omit<CreateChildSpec, "parent">): Promise<ResourceChildHandle>;
+	reopenChild(spec: {
+		birth: ResourceChildBirth;
+		session: SessionOptions;
+	}): Promise<ResourceChildHandle>;
+	release(): Promise<void>;
 }

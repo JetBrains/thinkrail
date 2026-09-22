@@ -905,3 +905,34 @@ test("disposeChildrenOf cascades: children disposed, steer rejects disposed", as
 	expect(await codeOf(child.steer("hello?"))).toBe("disposed");
 	expect(await codeOf(child.runQueued("again?"))).toBe("disposed");
 });
+
+test("parent-owned children can opt into captured history without inheriting its model or changing collection", async () => {
+	const source = SessionManager.inMemory(parentCwd);
+	source.appendModelChange("unavailable-source", "old");
+	source.appendThinkingLevelChange("xhigh");
+	source.appendMessage({ role: "user", content: "captured knowledge", timestamp: Date.now() });
+	const history = await service.captureHistory({
+		kind: "session",
+		sessionId: source.getSessionId(),
+		sessionManager: source,
+		cut: { kind: "at-entry", entryId: source.getLeafId() },
+	});
+	const child = await service.createChild(
+		subagentSpec({ origin: { kind: "fork-captured", history } }),
+	);
+	try {
+		expect(child.record.originKind).toBe("fork");
+		expect(child.record.entryId).toBe(history.entryId ?? undefined);
+		const manager = SessionManager.open(child.record.sessionFile);
+		expect(manager.buildSessionContext().model).toEqual({ provider: "faux", modelId: "faux" });
+		expect(manager.buildSessionContext().thinkingLevel).toBe("off");
+		faux.setResponses([fauxAssistantMessage("CAPTURED_PARENT")]);
+		const outcome = await child.runQueued("continue");
+		expect(outcome.finalText).toBe("CAPTURED_PARENT");
+		expect(outcome.stopReason).toBe("stop");
+		expect(service.findChild(child.sessionId)).toBe(child);
+		expect(child.collectResult()?.collected).toBe(true);
+	} finally {
+		await child.dispose();
+	}
+});
