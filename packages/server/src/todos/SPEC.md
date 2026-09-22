@@ -185,8 +185,10 @@ action can never start/approve/fix review state against a commit that vanishes o
 Every op (`startTodoReview`,
 `approveTodoReview`, `cancelTodoReview`, `requestTodoFix`, `recordAgentChangesRequested`,
 `renderReviewPackage`) therefore drives Start-review / Review All / verdicts over an adopted commit with
-**zero store writes**; review state persists in the existing sidecar keyed by `commit:<sha>`, and the
-reviewer↔worker reverse lookups are keyed by `reviewerSessionId`, independent of item existence. The fix
+**zero store writes**; review state persists in the existing sidecar keyed by `commit:<sha>`, and each
+finding carries its origin plan session + item id (`{ todoId, sessionId }`) — the reviewer is a hidden
+delegation child of that plan session, so routing needs no reviewer-session identity and works whether or
+not a stored item exists. The fix
 package's "re-open this exact item" instruction has no todo to re-open for an adopted commit, so it reads
 as "revise the change in commit `<sha>`"; the worker's follow-up commit surfaces as a new adopted entry
 (or a revision, once appended).
