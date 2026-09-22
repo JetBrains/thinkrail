@@ -19,7 +19,7 @@ import {
 } from "@thinkrail/contracts";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
-import { PromptImageChips, usePromptImages } from "@/chat/promptImages";
+import { PROMPT_IMAGE_CHIPS_PADDING, PromptImageChips, usePromptImages } from "@/chat/promptImages";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
@@ -542,7 +542,11 @@ export function NewWorkspaceDialog({
 							<span>{promptNote}</span>
 						</p>
 					) : null}
-					<PromptImageChips controller={attachedImages} testId="ws-prompt-images" />
+					<PromptImageChips
+						controller={attachedImages}
+						testId="ws-prompt-images"
+						className={PROMPT_IMAGE_CHIPS_PADDING.dialog}
+					/>
 					<Textarea
 						ref={promptRef}
 						data-testid="ws-prompt"

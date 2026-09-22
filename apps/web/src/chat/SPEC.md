@@ -121,7 +121,10 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   and user bubbles retain their 85% maximum inside it. Composer/header/queue/history chrome remains
   pane-width. With `chatLineWidthBounded` (default `true`), the column is capped by the mounted chat pane;
   without it, the column keeps its configured measure and the transcript viewport scrolls horizontally from
-  its left edge. Code blocks and tables retain their own inner scrolling. This changes presentation only:
+  its left edge — but the right-aligned **user side** is additionally clamped to the pane width (a
+  container-query cap keyed off `data-line-width-bounded=false`), so a user message never lands past the
+  visible viewport and clips on the left; only assistant/tool content uses the full measure. Code blocks
+  and tables retain their own inner scrolling. This changes presentation only:
   canonical turns and the props-driven row renderers never acquire settings state.
 - **Message copy** — plain user bubbles and the **round's concluding assistant answer** carry a
   hover-revealed (`group`/`opacity-0 group-hover:opacity-100`) **`CopyButton`** (`chat/CopyButton.tsx`,

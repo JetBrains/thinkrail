@@ -169,6 +169,14 @@ const USER_BUBBLE_BASE =
 	"whitespace-pre-wrap break-words rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8 tr-text-reading text-text-muted";
 const USER_BUBBLE = cn("max-w-[85%]", USER_BUBBLE_BASE);
 
+// In unbounded chat-width mode the transcript row is a fixed measure that can be far wider than the
+// pane; a right-aligned user bubble would otherwise sit off-screen and clip on the left. Cap the
+// user side to the pane's content width (the container-query width minus the row's `px-12` gutters,
+// the same `--space-24` the transcript-width calc uses) only in that mode — so a user bubble matches
+// its bounded-mode width and stays fully visible. Bounded mode never matches the selector.
+const USER_SIDE_UNBOUNDED_CLAMP =
+	"[[data-line-width-bounded=false]_&]:max-w-[calc(100cqw-var(--space-24))]";
+
 function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 	const [open, setOpen] = useState(false);
 	return (
@@ -215,7 +223,11 @@ function MessageWithCopy({
 		<div
 			data-testid="chat-message"
 			data-role={messageRole}
-			className={cn("group relative flex flex-col", side === "right" ? "items-end" : "items-start")}
+			className={cn(
+				"group relative flex flex-col",
+				side === "right" ? "items-end" : "items-start",
+				side === "right" && USER_SIDE_UNBOUNDED_CLAMP,
+			)}
 		>
 			{children}
 			<CopyButton
@@ -242,7 +254,11 @@ function UserTurn({
 	const skill = parseSkillInvocation(text);
 	if (skill) {
 		return (
-			<div data-testid="chat-message" data-role="user" className="flex justify-end">
+			<div
+				data-testid="chat-message"
+				data-role="user"
+				className={cn("flex justify-end", USER_SIDE_UNBOUNDED_CLAMP)}
+			>
 				<div className="flex w-full flex-col items-end gap-4">
 					<SkillInvocationCard foldId={`${id}:skill`} invocation={skill} />
 					{skill.userMessage ? (
@@ -258,7 +274,11 @@ function UserTurn({
 	const review = parseReviewPackage(text);
 	if (review) {
 		return (
-			<div data-testid="chat-message" data-role="user" className="flex justify-end">
+			<div
+				data-testid="chat-message"
+				data-role="user"
+				className={cn("flex justify-end", USER_SIDE_UNBOUNDED_CLAMP)}
+			>
 				<div className={USER_BUBBLE}>
 					{attachments.length > 0 ? (
 						<div className="flex flex-wrap gap-4 pb-4" data-testid="chat-message-images">
