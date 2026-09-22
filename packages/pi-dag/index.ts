@@ -42,3 +42,6 @@ export type {
 	PageRequest,
 } from "./domain/index.ts";
 export { LIMITS } from "./domain/index.ts";
+export { createDagExtension, type DagExtensionOptions, default } from "./extension/index.ts";
+export type { DagServiceOptions } from "./runtime/index.ts";
+export { createDagService } from "./runtime/index.ts";
