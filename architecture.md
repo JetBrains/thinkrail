@@ -40,6 +40,8 @@ packages/spec-graph portable pi extension: spec_* tools + skill (bundled into ev
 packages/pi-visualize          portable pi extension: the visualize tool (bundled into every session)
 packages/pi-delegation         portable pure-pi package: the delegation core — agent sessions spawned
                     from agent sessions (createChild + run-owning handle, lineage, registry, events)
+packages/pi-dag               portable durable backend DAGs over pi-delegation; host-owned resources,
+                    not bundled V1 workflow UI or a second pi runtime
 packages/pi-subagents          portable pure-pi extension: Agent + get_subagent_result tools over
                     pi-delegation (bundled into every ThinkRail parent session by packages/server)
 packages/pi-thinkrail-workflow pi extension: the workflow skill system + its always-on routing rule
@@ -250,6 +252,15 @@ dependency. This keeps test process drivers outside both launchers and the serve
     wire mirrors only the UI-facing run details and exposes transcript reads; neither portable package
     depends on ThinkRail. Contract, semantics, and the full decision log:
     [[module-pi-delegation]], [[module-pi-subagents]], and [[submodule-server-agent]].
+
+17. **Durable DAGs are host-owned resources, not parent chats.** [[module-pi-dag]] is a separately
+    scoped portable consumer of [[module-pi-delegation]], not a dependency of subagents or the V1
+    workflow skill system. Delegation owns canonical history capture/forking, retained resource
+    execution contexts, child assembly/reopen and the existing run loop; DAG owns persistence,
+    scheduling, gates and recovery. ThinkRail's selected future composition is workspace-owned,
+    with an explicit host runtime, so no heading session is required. Embedders may apply different
+    lifetime policies through trusted lifecycle controls without another scheduler or human-gate
+    bypass. Restore paused; one process controls each DAG. UI/wire/bundling remain separate work.
 
 ## Invariants
 

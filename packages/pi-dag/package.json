@@ -1,0 +1,33 @@
+{
+	"name": "pi-dag",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"description": "Durable, host-owned DAG orchestration over pi-delegation without a required parent session.",
+	"exports": {
+		".": "./index.ts",
+		"./index.ts": "./index.ts",
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"pi-delegation": "workspace:*"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-agent-core": "*",
+		"@earendil-works/pi-ai": "*",
+		"@earendil-works/pi-coding-agent": "*",
+		"typebox": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-agent-core": "catalog:",
+		"@earendil-works/pi-ai": "catalog:",
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@types/bun": "catalog:",
+		"typebox": "catalog:",
+		"typescript": "catalog:"
+	}
+}
