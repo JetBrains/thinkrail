@@ -130,11 +130,14 @@ as a permanently open foreign window and force every sibling chat into the fallb
   re-worked item (fresh baseline present) gets its new `commit` **appended** to the existing ones — the
   artifact list is the item's **revision history** (1 TODO = N commits is first-class; each fix cycle is
   one more commit, and the review watermark below diffs against the list) — while old `change` path-lists
-  are replaced (a live delta has no history to keep). A redo that lands in the **pure** path-list fallback
-  also **drops the item's review record** (→ `unreviewed`): a live-path delta can't be watermarked by sha,
-  so "review only the new delta" honestly degrades to reviewing the change set afresh. When the pass also
-  adopted an in-window commit, the record is **kept** — the adopted shas are watermarkable, so the
-  `unreviewedShas` delta flags them without discarding the prior verdict. The **auto-cycle
+  are replaced (a live delta has no history to keep). A redo whose fresh attachment includes **any**
+  path-list `change` **drops the item's review record** (→ `unreviewed`): a live-path delta can't be
+  watermarked by sha and `reviewInfo` derives `unreviewedShas` from commits only, so a `change` riding
+  alongside adopted commits would be invisible to review state (a covered sha set could read fully
+  reviewed while the path delta went unseen) — so "review only the new delta" honestly degrades to
+  reviewing the change set afresh. The record is **kept only when the fresh attachment is entirely
+  SHA-backed** (pure in-window commit adoption, no leftover path-list): the adopted shas are
+  watermarkable, so the `unreviewedShas` delta flags them without discarding the prior verdict. The **auto-cycle
   count survives that drop** — it is kept in a separate durable map (`reviews.ts`'s `autoCycles`, keyed
   by item id, sibling to `items`/`pending`), not embedded in the review record, so dropping the record
   for the sha-watermark reset above can never silently regrant a spent auto-fix cycle (a bug once fixed:

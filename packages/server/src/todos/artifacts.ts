@@ -290,9 +290,12 @@ export async function reconcileChangeArtifacts(
 		const changes = deltaPaths.map((path): TodoArtifact => ({ kind: "change", path }));
 		store.update(todo.id, { artifacts: [...preserved, ...adopted, ...changes] });
 		acceptPlanWrite();
-		// A path-list delta can't be watermarked by sha → review afresh. But adopted commits are
-		// watermarkable, so keep the review record when any commit was attached this pass.
-		if (adopted.length === 0) dropReviewRecord(root, sessionId, todo.id);
+		// A path-list `change` delta can't be watermarked by sha, and `reviewInfo` only derives
+		// `unreviewedShas` from commits — so a change riding alongside adopted commits would be invisible
+		// to review state (a covered sha set could read fully reviewed while the path delta went unseen).
+		// Keep the record only when the fresh attachment is entirely SHA-backed (pure adoption); any live
+		// path-list delta drops it → review afresh. autoCycles is a separate durable map, untouched.
+		if (changes.length > 0) dropReviewRecord(root, sessionId, todo.id);
 		if (!flushBaselines()) return;
 	}
 }

@@ -874,7 +874,46 @@ test("no baseline head (unborn HEAD at in_progress) means no in-window commit ad
 	}
 });
 
-test("adoption riding a path-list fallback keeps the review record (adopted shas are watermarkable)", async () => {
+test("pure in-window adoption (no path-list delta) keeps the review record — adopted shas are watermarkable", async () => {
+	const { store, root } = tempStore();
+	try {
+		const todo = store.add({ title: "step" });
+		store.update(todo.id, { status: "in_progress" });
+		await reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			async () => [],
+			undefined,
+			() => "h0",
+		);
+		store.update(todo.id, { status: "done" });
+		putReviewRecord(root, SESSION, todo.id, {
+			state: "reviewed",
+			reviewedShas: ["old"],
+			at: new Date().toISOString(),
+		});
+		// subagent committed everything → empty delta, only an adopted commit attaches (no `change`).
+		await reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			async () => [],
+			undefined,
+			() => "h0",
+			true,
+			async () => [{ sha: "sub1", subject: "sub work" }],
+		);
+		expect(store.get(todo.id)?.artifacts).toEqual([
+			{ kind: "commit", sha: "sub1", label: "sub work" },
+		]);
+		expect(readReviewRecords(root, SESSION)[todo.id]?.state).toBe("reviewed");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("adoption riding a path-list fallback DROPS the review record — the change delta can't be watermarked", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
@@ -908,7 +947,8 @@ test("adoption riding a path-list fallback keeps the review record (adopted shas
 			{ kind: "commit", sha: "sub1", label: "sub work" },
 			{ kind: "change", path: "new.ts" },
 		]);
-		expect(readReviewRecords(root, SESSION)[todo.id]?.state).toBe("reviewed");
+		// the unwatermarkable new.ts delta forces a fresh review — record dropped.
+		expect(readReviewRecords(root, SESSION)[todo.id]).toBeUndefined();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
