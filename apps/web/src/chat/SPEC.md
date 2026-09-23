@@ -556,9 +556,18 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   overflow then scrolls inside the textarea. Attachment chips, completion menus, slot hints, and QueueStrip
   keep their existing separate chrome. The slot-highlight backdrop must follow every dynamic textarea box
   change with the exact box-model and scroll-sync invariants under Template slots below.
+- **Follow-up from the composer is a plan add, not a pi follow-up.** Lining up work has one mechanism:
+  the streaming **"Add to plan"** action (`Cmd/Ctrl+Enter`, the former "Queue") routes a **text-only**
+  send through `useChatTodos.add` — it creates a `origin: "user"` TODO item and wakes the agent — rather
+  than `session.followUp`, so queuing from chat and adding a TODO converge on the plan (the asymmetry
+  where a follow-up never reached the plan is gone). **Steering** (`Enter` while streaming —
+  interrupt-at-next-step) stays the message-queue primitive, and a follow-up **carrying attachments**
+  falls back to a real `session.followUp` because a plan item is text-only. A failed add restores the
+  draft and surfaces an `appendErrorTurn`, like a rejected queued send.
 - **Queued messages: the pending strip** (`QueueStrip.tsx`, props-driven: `queue` + `onEdit`/`onRemove`)
-  — the web mirror of pi's interactive-mode pending-messages area. A **streaming send never renders an
-  optimistic transcript bubble** (see the store SPEC's echo contract): `ChatView.onSubmit` skips
+  — the web mirror of pi's interactive-mode pending-messages area. It still carries **steering**, the
+  agent-wake nudges plan adds emit, and any attachment-fallback follow-ups. A **streaming send never
+  renders an optimistic transcript bubble** (see the store SPEC's echo contract): `ChatView.onSubmit` skips
   `appendUserMessage` for `steer`/`followUp`, and the queued texts render between transcript and
   composer as dim rows — one truncated `Steering:`/`Follow-up:` line per message (`queue-strip` /
   `queue-item` testids, `data-kind` + `data-index`; full text + delivery meaning in the row `title`),
