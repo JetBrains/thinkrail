@@ -1057,7 +1057,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   just queues and is picked up on the agent's next natural turn (when the user answers, or a later idle
   nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`. The nudge is an **ordinary user
   message** — no hidden control-message marker — so it shows in the queue strip and transcript, and counts
-  toward analytics/auto-name like any send.
+  toward analytics/auto-name like any send. **Removing the item drops its still-pending nudge**
+  (`dequeueTodoNudge` → `session.removeQueued`, matched by the exact `todoNudgeText`): the queue is
+  pi-owned and position-addressed, so text is the only handle back to the wake, and it's a no-op once the
+  nudge has been delivered — without it a follow-up row lingers over the chat for a TODO that no longer
+  exists.
 
 ## Boundary
 

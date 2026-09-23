@@ -149,6 +149,9 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 
 	const remove = async (id: string) => {
 		const requestIdentity = identity;
+		const removedTitle = data
+			? [...data.todos, ...data.groups.flatMap((g) => g.todos)].find((t) => t.id === id)?.title
+			: undefined;
 		setData((current) =>
 			current
 				? {
@@ -161,6 +164,9 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		);
 		try {
 			await getTransport().request("todo.remove", { workspaceId, sessionId, id });
+			// A user add wakes the agent with a queued nudge; dropping the item must drop its still-pending
+			// nudge too, or a follow-up row lingers over the chat referencing a TODO that no longer exists.
+			if (removedTitle) dequeueTodoNudge(sessionId, removedTitle);
 			if (live(requestIdentity)) {
 				await reloadPlan();
 			}
@@ -219,6 +225,28 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	};
 }
 
+export function todoNudgeText(title: string): string {
+	return `Added a TODO: "${title}". Work the pending items in the plan and mark each done as you finish.`;
+}
+
+// The queue is pi-owned and position-addressed, so the exact nudge text is the only handle back to the
+// item's still-pending wake. -1 when it isn't queued (already delivered, or an agent item never nudged).
+export function findTodoNudgeIndex(followUp: readonly string[], title: string): number {
+	return followUp.indexOf(todoNudgeText(title));
+}
+
+// Best-effort: drop a still-queued add-nudge when its TODO is removed, or a follow-up row lingers over
+// the chat referencing a TODO that no longer exists. A no-op once the nudge has been delivered.
+function dequeueTodoNudge(sessionId: string, title: string): void {
+	const queue = useAppStore.getState().sessions[sessionId]?.queue;
+	if (!queue) return;
+	const index = findTodoNudgeIndex(queue.followUp, title);
+	if (index < 0) return;
+	void getTransport()
+		.request("session.removeQueued", { sessionId, kind: "followUp", index })
+		.catch(() => {});
+}
+
 async function nudgeAgent(workspaceId: string, sessionId: string, title: string): Promise<void> {
 	const initial = useAppStore.getState();
 	if (
@@ -230,7 +258,7 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 	const session = initial.sessions[sessionId];
 	if (session && !shouldNudgeOnAdd(sessionGlance(session))) return;
 	const streaming = session?.isStreaming ?? false;
-	const text = `Added a TODO: "${title}". Work the pending items in the plan and mark each done as you finish.`;
+	const text = todoNudgeText(title);
 	try {
 		await getTransport().request(streaming ? "session.followUp" : "session.prompt", {
 			sessionId,
