@@ -59,7 +59,7 @@ On `in_progress` it **opens the item's work window**: a baseline of the worktree
 changed-path set + the current `HEAD` sha, captured through the git module's deliberately synchronous
 `gitUncommittedPaths` leaf before the tool-end publisher returns, then **persisted** in a host-owned sidecar next to the todos JSON
 (`.thinkrail/context/todos/<sessionId>.baselines.json`, read-modify-write like the store) — so a host
-restart mid-item changes nothing; `head` is recorded for future window-commit attribution, unused today.
+restart mid-item changes nothing; `head` is the range base for **in-window commit adoption** (below).
 A window opening while **another chat** already has one records `shared: true` and marks that other
 window shared too (`markOtherSessionWindowsShared`) — the flag is **sticky**, because "was this window
 exclusive for its whole life?" is what the gate needs and can't be re-derived once the other closed.
@@ -77,6 +77,18 @@ as a permanently open foreign window and force every sibling chat into the fallb
   `commit` artifact** (the sha, `label` = the item title) and **nothing else**: the commit is
   self-sufficient — its file list is *derived*, never denormalized into the JSON (see the `listTodos`
   decoration below).
+- **Adopt in-window commits.** The host is the intended sole committer during an item's window (the
+  worker subagent's prompt forbids it from committing — [[module-pi-subagents]]), but that is guidance,
+  not enforcement, and the user may hand-commit too. So before the delta commit, any commit that landed
+  in `base.head..HEAD` while the item was open (`git.listCommitsSince`) and is owned by no plan item is
+  **attached to the item as a `commit` artifact** — oldest-first, ahead of the delta commit, so the
+  step's revision history reads chronologically. Without this a subagent that commits its own work
+  empties the delta at `done` — the step would show no change set and the work would leak to
+  `adoptedCommits` (below) as an orphan. Adoption rides the **same exclusive-window gate** as the delta
+  commit (gate 3: never `shared`, no other chat mid-work) and needs a recorded `base.head`: only then are
+  the range's commits provably this item's work. It does **not** need gate 2 (foreign *uncommitted*
+  dirt), which governs the delta commit alone. An `owned` sha set across the pass prevents a commit from
+  being claimed by two items.
 - **The message is a single subject line the user can push unedited.** These commits land on the user's
   own branch, in the same history as their hand-written ones, and the branch ships straight to a PR
   ([[submodule-server-pr]] pushes it) — so anything the user would have to reword before pushing is a
@@ -110,9 +122,11 @@ as a permanently open foreign window and force every sibling chat into the fallb
   re-worked item (fresh baseline present) gets its new `commit` **appended** to the existing ones — the
   artifact list is the item's **revision history** (1 TODO = N commits is first-class; each fix cycle is
   one more commit, and the review watermark below diffs against the list) — while old `change` path-lists
-  are replaced (a live delta has no history to keep). A redo that lands in the path-list fallback also
-  **drops the item's review record** (→ `unreviewed`): a live-path delta can't be watermarked by sha, so
-  "review only the new delta" honestly degrades to reviewing the change set afresh. The **auto-cycle
+  are replaced (a live delta has no history to keep). A redo that lands in the **pure** path-list fallback
+  also **drops the item's review record** (→ `unreviewed`): a live-path delta can't be watermarked by sha,
+  so "review only the new delta" honestly degrades to reviewing the change set afresh. When the pass also
+  adopted an in-window commit, the record is **kept** — the adopted shas are watermarkable, so the
+  `unreviewedShas` delta flags them without discarding the prior verdict. The **auto-cycle
   count survives that drop** — it is kept in a separate durable map (`reviews.ts`'s `autoCycles`, keyed
   by item id, sibling to `items`/`pending`), not embedded in the review record, so dropping the record
   for the sha-watermark reset above can never silently regrant a spent auto-fix cycle (a bug once fixed:
@@ -125,11 +139,14 @@ The host's own on-disk state (anything under `WORKSPACE_INTERNAL_DIR` = `.thinkr
 JSON under `context/todos/`) is filtered out of every change set — writing a todo shows up in `git status`
 but is never a change the step *produced*. The pi-free `TodoStore` never touches git; `commit`/`change`
 are host-only, while the agent attaches `file`/`spec` itself through the `todo_*` tools (see
-[[module-pi-todos]]). Known limitations (accepted): an agent that commits *itself* mid-item leaves an empty
-delta at `done` → no artifacts; and a writer this mechanism cannot see — the user editing through a
-terminal or an external editor mid-window, or a chat with no plan at all — is indistinguishable from agent
-work in `git status`, so its edits can land in the item's commit (the app's own editor is read-only, and
-anything already dirty when the window opened is caught by gate 2).
+[[module-pi-todos]]). Known limitations (accepted): an agent that commits *itself* mid-item is handled by
+in-window commit adoption above (its commits attach to the step) **only for an exclusive window with a
+recorded `base.head`** — a shared window, a missing baseline, or an unborn-HEAD baseline still leaves
+those commits as orphan `adoptedCommits`; and a writer this mechanism cannot see — the user editing
+through a terminal or an external editor mid-window, or a chat with no plan at all — is indistinguishable
+from agent work in `git status`, so its uncommitted edits can land in the item's delta commit **and its
+commits can be adopted into the step** (the app's own editor is read-only, and anything already dirty when
+the window opened is caught by gate 2).
 
 **`listTodos` decoration — unfolding the commit.** The wire DTO's `commit` artifact carries a derived
 **`files`** list — full `GitFileChange[]` rows (path + status + `+/−` line counts), read through
