@@ -662,7 +662,14 @@ test("done adopts an in-window commit when the subagent committed the item's wor
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		await reconcileChangeArtifacts(store, root, SESSION, async () => [], undefined, () => "base-head");
+		await reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			async () => [],
+			undefined,
+			() => "base-head",
+		);
 		store.update(todo.id, { status: "done" });
 		let hostCommitCalled = false;
 		await reconcileChangeArtifacts(
@@ -693,7 +700,14 @@ test("done adopts in-window commits AND appends the host delta commit, oldest-fi
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		await reconcileChangeArtifacts(store, root, SESSION, async () => [], undefined, () => "h0");
+		await reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			async () => [],
+			undefined,
+			() => "h0",
+		);
 		store.update(todo.id, { status: "done" });
 		await reconcileChangeArtifacts(
 			store,
@@ -724,7 +738,14 @@ test("a shared window never adopts in-window commits — they stay orphan, delta
 
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		await reconcileChangeArtifacts(store, root, SESSION, async () => [], undefined, () => "h0");
+		await reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			async () => [],
+			undefined,
+			() => "h0",
+		);
 		expect(readBaselines(root, SESSION)[todo.id]?.shared).toBe(true);
 		store.update(todo.id, { status: "done" });
 		await reconcileChangeArtifacts(
@@ -753,7 +774,14 @@ test("an in-window commit already owned by another item is not adopted twice", a
 		store.update(owner.id, { status: "done" });
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		await reconcileChangeArtifacts(store, root, SESSION, async () => [], undefined, () => "h0");
+		await reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			async () => [],
+			undefined,
+			() => "h0",
+		);
 		store.update(todo.id, { status: "done" });
 		await reconcileChangeArtifacts(
 			store,

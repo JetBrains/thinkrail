@@ -477,7 +477,8 @@ export async function listCommitsSince(
 		`${sinceSha}..HEAD`,
 		"--",
 	]);
-	if (log.failure) throw new Error(`Could not list commits since ${sinceSha}: ${log.err || "git failed"}`);
+	if (log.failure)
+		throw new Error(`Could not list commits since ${sinceSha}: ${log.err || "git failed"}`);
 	if (!log.ok || !log.out) return [];
 	const commits: { sha: string; subject: string }[] = [];
 	for (const line of log.out.split("\n")) {
