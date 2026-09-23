@@ -67,8 +67,8 @@ const STREAMING_SEND_MODES = [
 	},
 	{
 		behavior: "followUp" as const,
-		name: "Queue",
-		meaning: "runs after the agent finishes",
+		name: "Add to plan",
+		meaning: "adds a to-do the agent works after finishing",
 		keys: "Cmd/Ctrl+Enter",
 		testid: "send-mode-queue",
 	},
@@ -635,7 +635,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							rows={1}
 							placeholder={
 								isStreaming
-									? "Enter steers at the next step · Cmd/Ctrl+Enter queues for when it finishes"
+									? "Enter steers at the next step · Cmd/Ctrl+Enter adds it to the plan"
 									: expanded
 										? "Message the agent…  (@ files · / commands · Enter to send)"
 										: "Message…"
