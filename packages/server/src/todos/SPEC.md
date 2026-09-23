@@ -85,10 +85,18 @@ as a permanently open foreign window and force every sibling chat into the fallb
   step's revision history reads chronologically. Without this a subagent that commits its own work
   empties the delta at `done` — the step would show no change set and the work would leak to
   `adoptedCommits` (below) as an orphan. Adoption rides the **same exclusive-window gate** as the delta
-  commit (gate 3: never `shared`, no other chat mid-work) and needs a recorded `base.head`: only then are
-  the range's commits provably this item's work. It does **not** need gate 2 (foreign *uncommitted*
-  dirt), which governs the delta commit alone. An `owned` sha set across the pass prevents a commit from
-  being claimed by two items.
+  commit (gate 3: never `shared`, no other chat mid-work), needs a recorded `base.head`, **and requires
+  the item's to be the sole same-session window in the pass**. The sole-window rule is load-bearing: the
+  range is `base.head..HEAD`, so on a linear branch an *earlier* item's range is a **superset** of a
+  *later* item's window — if a done item reconciled while another same-session window was open (its own
+  done-pass deferred behind the per-workspace queue while the next item started and its subagent
+  committed), a naive `base.head..HEAD` would let the earlier item greedily claim the later item's
+  commits (the `owned` dedup only stops the *same* sha being claimed twice, not this cross-window
+  over-reach). So when a second same-session window exists the item adopts **nothing** and those commits
+  degrade to the safe `adoptedCommits` fallback — the pre-existing behavior, never a mis-attribution.
+  Adoption does **not** need gate 2 (foreign *uncommitted* dirt), which governs the delta commit alone.
+  An `owned` sha set across the pass additionally prevents a commit already owned by any item (e.g. a
+  redo's prior commit) from being re-adopted.
 - **The message is a single subject line the user can push unedited.** These commits land on the user's
   own branch, in the same history as their hand-written ones, and the branch ships straight to a PR
   ([[submodule-server-pr]] pushes it) — so anything the user would have to reword before pushing is a
@@ -140,9 +148,9 @@ JSON under `context/todos/`) is filtered out of every change set — writing a t
 but is never a change the step *produced*. The pi-free `TodoStore` never touches git; `commit`/`change`
 are host-only, while the agent attaches `file`/`spec` itself through the `todo_*` tools (see
 [[module-pi-todos]]). Known limitations (accepted): an agent that commits *itself* mid-item is handled by
-in-window commit adoption above (its commits attach to the step) **only for an exclusive window with a
-recorded `base.head`** — a shared window, a missing baseline, or an unborn-HEAD baseline still leaves
-those commits as orphan `adoptedCommits`; and a writer this mechanism cannot see — the user editing
+in-window commit adoption above (its commits attach to the step) **only for an exclusive, sole window
+with a recorded `base.head`** — a shared window, a missing baseline, an unborn-HEAD baseline, or a second
+same-session window open in the same pass still leaves those commits as orphan `adoptedCommits`; and a writer this mechanism cannot see — the user editing
 through a terminal or an external editor mid-window, or a chat with no plan at all — is indistinguishable
 from agent work in `git status`, so its uncommitted edits can land in the item's delta commit **and its
 commits can be adopted into the step** (the app's own editor is read-only, and anything already dirty when

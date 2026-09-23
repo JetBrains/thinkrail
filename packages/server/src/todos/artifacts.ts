@@ -210,6 +210,12 @@ export async function reconcileChangeArtifacts(
 		if (!liveIds.has(id)) dropBaseline(id);
 	}
 	if (!flushBaselines()) return;
+	// Snapshot the same-session windows in play this pass. In-window commit adoption (below) reaches
+	// from base.head to HEAD, so on a linear branch an earlier item's range is a superset of a later
+	// item's window — adopting while a second window exists could greedily claim the other item's
+	// commits. So adopt ONLY when a done item's is the sole window; interleaved windows degrade to the
+	// safe adoptedCommits fallback (no mis-attribution). see todos/SPEC.md
+	const windowIds = new Set(Object.keys(baselines));
 	for (const todo of items) {
 		if (todo.status === "in_progress") {
 			if (!baselines[todo.id] && openMissingWorkWindow) {
@@ -242,9 +248,11 @@ export async function reconcileChangeArtifacts(
 		const exclusive = base?.shared !== true && !otherChatWorking();
 		// Adopt commits a subagent/user landed while the item was in_progress (base.head..HEAD) into the
 		// item, so they attach to the plan step instead of leaking to adoptedCommits. Only for an
-		// exclusive, headed window: the same safety the delta commit needs. see todos/SPEC.md
+		// exclusive, headed, SOLE window: the delta commit's safety plus no other same-session window whose
+		// commits this range could swallow. see todos/SPEC.md
+		const soleWindow = [...windowIds].every((id) => id === todo.id);
 		const adopted: TodoArtifact[] = [];
-		if (windowCommits && base?.head && exclusive) {
+		if (windowCommits && base?.head && exclusive && soleWindow) {
 			const ranged = await windowCommits(base.head);
 			if (!planUnchanged() || !baselinesUnchanged()) return;
 			for (const c of ranged) {

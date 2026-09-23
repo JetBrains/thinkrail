@@ -21,6 +21,7 @@ import {
 	removeSessionBaselines,
 	writeBaselines,
 } from "./baselines";
+import { putReviewRecord, readReviewRecords } from "./reviews";
 import { removeTodo } from "./todos";
 
 const SESSION = "sess-artifacts";
@@ -804,6 +805,46 @@ test("an in-window commit already owned by another item is not adopted twice", a
 	}
 });
 
+test("a done item does NOT adopt when another same-session window is open (no cross-window over-reach)", async () => {
+	const { store, root } = tempStore();
+	try {
+		const a = store.add({ title: "A" });
+		const c = store.add({ title: "C" });
+		// A finished but its done-reconcile is deferred; C is now in_progress — both hold a window.
+		store.update(a.id, { status: "done" });
+		store.update(c.id, { status: "in_progress" });
+		writeBaselines(root, SESSION, {
+			[a.id]: { paths: [], head: "h0" },
+			[c.id]: { paths: [], head: "hX" },
+		});
+		const askedFor: string[] = [];
+		await reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			async () => [],
+			undefined,
+			() => "hX",
+			true,
+			async (head) => {
+				askedFor.push(head ?? "");
+				return head === "h0"
+					? [
+							{ sha: "Xsha", subject: "A work" },
+							{ sha: "Ysha", subject: "C work" },
+						]
+					: [];
+			},
+		);
+		// A must not greedily claim C's commit (Ysha) — it adopts nothing while C's window is open.
+		expect(askedFor).toEqual([]);
+		expect(store.get(a.id)?.artifacts).toBeUndefined();
+		expect(store.get(c.id)?.status).toBe("in_progress");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 test("no baseline head (unborn HEAD at in_progress) means no in-window commit adoption", async () => {
 	const { store, root } = tempStore();
 	try {
@@ -828,6 +869,82 @@ test("no baseline head (unborn HEAD at in_progress) means no in-window commit ad
 		);
 		expect(asked).toBe(false);
 		expect(store.get(todo.id)?.artifacts).toBeUndefined();
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("adoption riding a path-list fallback keeps the review record (adopted shas are watermarkable)", async () => {
+	const { store, root } = tempStore();
+	try {
+		const todo = store.add({ title: "step" });
+		store.update(todo.id, { status: "in_progress" });
+		// foreign dirt present at baseline that is STILL dirty at done → gate 2 blocks the delta commit
+		await reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			async () => ["foreign.ts"],
+			undefined,
+			() => "h0",
+		);
+		store.update(todo.id, { status: "done" });
+		putReviewRecord(root, SESSION, todo.id, {
+			state: "reviewed",
+			reviewedShas: ["sub1"],
+			at: new Date().toISOString(),
+		});
+		await reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			async () => ["foreign.ts", "new.ts"],
+			() => ({ sha: "must-not-commit" }),
+			() => "h0",
+			true,
+			async () => [{ sha: "sub1", subject: "sub work" }],
+		);
+		expect(store.get(todo.id)?.artifacts).toEqual([
+			{ kind: "commit", sha: "sub1", label: "sub work" },
+			{ kind: "change", path: "new.ts" },
+		]);
+		expect(readReviewRecords(root, SESSION)[todo.id]?.state).toBe("reviewed");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("a pure path-list fallback (no adoption) still drops the review record", async () => {
+	const { store, root } = tempStore();
+	try {
+		const todo = store.add({ title: "step" });
+		store.update(todo.id, { status: "in_progress" });
+		await reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			async () => ["foreign.ts"],
+			undefined,
+			() => "h0",
+		);
+		store.update(todo.id, { status: "done" });
+		putReviewRecord(root, SESSION, todo.id, {
+			state: "reviewed",
+			reviewedShas: [],
+			at: new Date().toISOString(),
+		});
+		await reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			async () => ["foreign.ts", "new.ts"],
+			() => ({ sha: "must-not-commit" }),
+			() => "h0",
+			true,
+			async () => [], // no in-window commits to adopt
+		);
+		expect(store.get(todo.id)?.artifacts).toEqual([{ kind: "change", path: "new.ts" }]);
+		expect(readReviewRecords(root, SESSION)[todo.id]).toBeUndefined();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
