@@ -458,6 +458,37 @@ export async function listCommits(workspaceId: string): Promise<{ commits: GitCo
 	return { commits };
 }
 
+// Commits made in `sinceSha..HEAD`, oldest-first, for the TODO work-window commit-adoption
+// (see submodule-server-todos): subagent/loose commits landed while an item was in_progress. `sinceSha`
+// comes from the item's own baseline sidecar (`gitHeadSha` at in_progress); it is shape-checked and
+// bracketed by `--end-of-options` regardless. A null/unborn baseline head has no range → no commits.
+export async function listCommitsSince(
+	workspaceId: string,
+	sinceSha: string | null,
+): Promise<{ sha: string; subject: string }[]> {
+	if (!sinceSha || !/^[0-9a-f]{4,64}$/.test(sinceSha)) return [];
+	const ws = workspace(workspaceId);
+	const log = await gitAsync(ws.worktreePath, [
+		"log",
+		"--reverse",
+		`--max-count=${COMMIT_LIST_MAX}`,
+		"--format=%H%x00%s",
+		"--end-of-options",
+		`${sinceSha}..HEAD`,
+		"--",
+	]);
+	if (log.failure) throw new Error(`Could not list commits since ${sinceSha}: ${log.err || "git failed"}`);
+	if (!log.ok || !log.out) return [];
+	const commits: { sha: string; subject: string }[] = [];
+	for (const line of log.out.split("\n")) {
+		const sep = line.indexOf(LOG_SEP);
+		const sha = sep === -1 ? line : line.slice(0, sep);
+		if (!/^[0-9a-f]{40,64}$/.test(sha)) continue;
+		commits.push({ sha, subject: plainText(sep === -1 ? "" : line.slice(sep + 1)) });
+	}
+	return commits;
+}
+
 export async function countUnpushedCommits(
 	worktreePath: string,
 	branch: string,
