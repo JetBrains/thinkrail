@@ -17,7 +17,7 @@ import {
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import {
 	imagePasteDropHandlers,
@@ -62,6 +62,7 @@ import {
 	TemplateSlotHint,
 	type TemplateSlotSessionState,
 	templateToSlashCommand,
+	usePendingSelection,
 	useSlashCommandCompletion,
 	useTemplateCommandPicker,
 } from "@/prompt";
@@ -119,10 +120,6 @@ export function NewWorkspaceDialog({
 	const [trusting, setTrusting] = useState(false);
 	const [manageSkills, setManageSkills] = useState(false);
 	const promptRef = useRef<HTMLTextAreaElement>(null);
-	const [pendingPromptSelection, setPendingPromptSelection] = useState<{
-		start: number;
-		end: number;
-	} | null>(null);
 	const hostDefaultAsked = useRef(false);
 	const targetGroupName = useId();
 	const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
@@ -134,19 +131,7 @@ export function NewWorkspaceDialog({
 		[],
 	);
 
-	const focusPromptSelection = useCallback((start: number, end: number = start) => {
-		setPendingPromptSelection({ start, end });
-	}, []);
-
-	useLayoutEffect(() => {
-		if (!pendingPromptSelection) return;
-		const input = promptRef.current;
-		if (input) {
-			input.focus();
-			input.setSelectionRange(pendingPromptSelection.start, pendingPromptSelection.end);
-		}
-		setPendingPromptSelection(null);
-	}, [pendingPromptSelection]);
+	const focusPromptSelection = usePendingSelection(promptRef);
 
 	const supportsProjectTemplatePreview =
 		protocolVersion !== null && protocolVersion >= PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION;

@@ -36,6 +36,7 @@ import {
 	stepTemplateSlotSession,
 	TemplateSlotHint,
 	type TemplateSlotSessionState,
+	usePendingSelection,
 	useSlashCommandCompletion,
 } from "@/prompt";
 import { FileChip } from "./FileChip";
@@ -255,24 +256,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	const mentionOpen = !mentionDismissed && mentionQuery !== null && mentionCandidates.length > 0;
 
-	const [pendingSelection, setPendingSelection] = useState<{ start: number; end: number } | null>(
-		null,
-	);
-
-	useLayoutEffect(() => {
-		if (pendingSelection === null) return;
-		const el = ref.current;
-		if (el) {
-			el.focus();
-			el.setSelectionRange(pendingSelection.start, pendingSelection.end);
-		}
-		setCaret(pendingSelection.start);
-		setPendingSelection(null);
-	}, [pendingSelection]);
-
-	const focusSelection = useCallback((start: number, end: number = start) => {
-		setPendingSelection({ start, end });
-	}, []);
+	const focusSelection = usePendingSelection(ref, setCaret);
 
 	const replaceDraft = useCallback(
 		(text: string, caret: number = text.length) => {
