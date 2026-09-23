@@ -1,21 +1,18 @@
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
-import { E2eWire } from "./fixtures/wire";
 
 const COUNT_PROMPT =
 	"Count from 1 to 60, one number per line. No other text, no tools, just the numbers.";
 
-test("queueing: pending strip + canonical order; per-row edit/remove; interrupt aborts and sends now", {
+test("queuing from chat while streaming adds a plan item the agent then works; interrupt sends now", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(300_000);
 	await openFixtureProject(page);
-	const workspace = await createWorkspaceViaDialog(page);
+	await createWorkspaceViaDialog(page);
 	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(chatTab).toHaveCount(1);
-	const sessionId = await chatTab.getAttribute("data-session-id");
-	if (!sessionId) throw new Error("Queue test chat is missing its session id");
 
 	const input = page.getByTestId("chat-input");
 	const users = page.locator('[data-testid="chat-message"][data-role="user"]');
@@ -28,32 +25,26 @@ test("queueing: pending strip + canonical order; per-row edit/remove; interrupt 
 		timeout: 60_000,
 	});
 
-	await input.fill("Now reply with exactly the single word: QUEUEDOK");
+	// Cmd/Ctrl+Enter while streaming no longer queues a pi follow-up: it adds a user plan item.
+	await input.fill("Reply with exactly the single word QUEUEDOK when you work this plan item.");
 	await input.press("ControlOrMeta+Enter");
-
 	await expect(input).toHaveValue("");
-	await expect(strip).toBeVisible();
-	await expect(page.getByTestId("queue-item")).toContainText("QUEUEDOK");
-	await expect(page.getByTestId("queue-item")).toHaveAttribute("data-kind", "followUp");
-	await expect(page.getByTestId("send-menu")).toBeVisible();
-	await expect(users).toHaveCount(1);
 
-	await expect(assistants.last()).toContainText("QUEUEDOK", { timeout: 120_000 });
-	await expect(strip).toBeHidden();
-	await expect(users.last()).toContainText("QUEUEDOK");
-	await expect(assistants.first()).toContainText("60");
+	// It lands in the plan as a user-origin item — not as a "QUEUEDOK" follow-up row in the strip.
+	await page.getByTestId("chat-plan-toggle").click();
+	const popover = page.getByTestId("chat-plan-popover");
+	const row = popover.getByTestId("todo-row").filter({ hasText: "QUEUEDOK" });
+	await expect(row).toBeVisible();
+	await expect(row).toHaveAttribute("data-status", "pending");
+	await expect(row.getByTestId("todo-origin-user")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(popover).toHaveCount(0);
 
-	const wire = await E2eWire.connect();
-	const transcript = await wire
-		.request("session.getMessages", { sessionId, workspaceId: workspace.id })
-		.finally(() => wire.close());
-	const firstAssistant = transcript.messages.findIndex((message) => message.role === "assistant");
-	const queuedUser = transcript.messages.findIndex(
-		(message) => message.role === "user" && JSON.stringify(message.content).includes("QUEUEDOK"),
-	);
-	expect(firstAssistant).toBeGreaterThan(0);
-	expect(queuedUser).toBeGreaterThan(firstAssistant);
+	// The agent finishes the count, is woken, and works the queued plan item.
+	await expect(assistants.first()).toContainText("60", { timeout: 120_000 });
+	await expect(assistants.last()).toContainText("QUEUEDOK", { timeout: 180_000 });
 
+	// Interrupt (Cmd/Ctrl+Shift+Enter) still aborts the current response and sends now.
 	await input.fill(
 		"Count from 1 to 200, one number per line. No other text, no tools, just the numbers.",
 	);
@@ -61,30 +52,10 @@ test("queueing: pending strip + canonical order; per-row edit/remove; interrupt 
 	await expect(input).toHaveAttribute("placeholder", /Enter steers at the next step/, {
 		timeout: 60_000,
 	});
-
-	await input.fill("first queued edit");
-	await input.press("ControlOrMeta+Enter");
-	await input.fill("second queued edit");
-	await input.press("ControlOrMeta+Enter");
-	// The strip collapses to the nearest message; expand to reach every queued row.
-	await expect(page.getByTestId("queue-item")).toHaveCount(1);
-	await page.getByTestId("queue-more").click();
-	await expect(page.getByTestId("queue-item")).toHaveCount(2);
-
-	await page
-		.locator('[data-testid="queue-item"][data-index="0"]')
-		.getByTestId("queue-item-remove")
-		.click();
-	await expect(page.getByTestId("queue-item")).toHaveCount(1);
-	await expect(page.getByTestId("queue-item")).toContainText("second queued edit");
-
-	await page.getByTestId("queue-item-edit").click();
-	await expect(strip).toBeHidden();
-	await expect(input).toHaveValue("second queued edit");
-
 	await input.fill("Now reply with exactly the single word: INTERRUPTOK");
 	await input.press("ControlOrMeta+Shift+Enter");
 	await expect(users.last()).toContainText("INTERRUPTOK", { timeout: 60_000 });
 	await expect(assistants.last()).toContainText("INTERRUPTOK", { timeout: 120_000 });
 	await expect(page.getByTestId("chat-abort")).toBeHidden({ timeout: 60_000 });
+	await expect(strip).toBeHidden();
 });
