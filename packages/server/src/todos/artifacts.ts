@@ -1,7 +1,13 @@
 import type { GitFileChange, PiEvent } from "@thinkrail/contracts";
 import { WORKSPACE_INTERNAL_DIR } from "@thinkrail/shared/paths";
 import { type TodoArtifact, type TodoPlan, TodoStore } from "pi-todos/core";
-import { gitCommitPaths, gitHeadSha, gitStatus, gitUncommittedPaths } from "../git";
+import {
+	gitCommitPaths,
+	gitHeadSha,
+	gitStatus,
+	gitUncommittedPaths,
+	listCommitsSince,
+} from "../git";
 import { logger } from "../log";
 import { getWorkspace } from "../workspaces";
 import {
@@ -116,6 +122,7 @@ async function runReconcile(workspaceId: string, sessionId: string): Promise<voi
 			({ subject, paths }) => gitCommitPaths(workspaceId, subject, paths),
 			() => gitHeadSha(workspaceId),
 			false,
+			(head) => listCommitsSince(workspaceId, head),
 		);
 	} catch {
 		log.warn(`todo change-artifacts skipped (${workspaceId}/${sessionId})`);
@@ -149,6 +156,8 @@ export function unattributedChanges(
 	);
 }
 
+export type WindowCommits = (head: string | null) => Promise<{ sha: string; subject: string }[]>;
+
 export async function reconcileChangeArtifacts(
 	store: TodoStore,
 	root: string,
@@ -157,6 +166,7 @@ export async function reconcileChangeArtifacts(
 	commit?: CommitWindow,
 	getHead: () => string | null = () => null,
 	openMissingWorkWindow = true,
+	windowCommits?: WindowCommits,
 ): Promise<void> {
 	const plan = store.read();
 	let planFingerprint = JSON.stringify(plan);
@@ -190,6 +200,11 @@ export async function reconcileChangeArtifacts(
 	const otherChatWorking = (): boolean => (othersOpen ??= otherSessionWindows(root, sessionId));
 
 	const items = flatten(plan);
+	const owned = new Set(
+		items.flatMap((t) =>
+			(t.artifacts ?? []).flatMap((a) => (a.kind === "commit" && a.sha ? [a.sha] : [])),
+		),
+	);
 	const liveIds = new Set(items.map((t) => t.id));
 	for (const id of Object.keys(baselines)) {
 		if (!liveIds.has(id)) dropBaseline(id);
@@ -224,32 +239,52 @@ export async function reconcileChangeArtifacts(
 		const now = await currentChanged();
 		if (!planUnchanged() || !baselinesUnchanged()) return;
 		const deltaPaths = base ? now.filter((p) => !base.paths.includes(p)) : now;
-		if (deltaPaths.length === 0) {
+		const exclusive = base?.shared !== true && !otherChatWorking();
+		// Adopt commits a subagent/user landed while the item was in_progress (base.head..HEAD) into the
+		// item, so they attach to the plan step instead of leaking to adoptedCommits. Only for an
+		// exclusive, headed window: the same safety the delta commit needs. see todos/SPEC.md
+		const adopted: TodoArtifact[] = [];
+		if (windowCommits && base?.head && exclusive) {
+			const ranged = await windowCommits(base.head);
+			if (!planUnchanged() || !baselinesUnchanged()) return;
+			for (const c of ranged) {
+				if (owned.has(c.sha)) continue;
+				owned.add(c.sha);
+				adopted.push({ kind: "commit", sha: c.sha, label: c.subject || todo.title });
+			}
+		}
+		if (deltaPaths.length === 0 && adopted.length === 0) {
 			if (!flushBaselines()) return;
 			continue;
 		}
 		const preserved = existing.filter((a) => a.kind !== "change");
-		const exclusive = base?.shared !== true && !otherChatWorking();
 		const committed =
-			commit && base?.paths.every((p) => !now.includes(p)) && exclusive
+			commit && deltaPaths.length > 0 && base?.paths.every((p) => !now.includes(p)) && exclusive
 				? commit({
 						subject: (todo.commitSubject ?? todo.title).split(/[\r\n]/u, 1)[0] ?? "",
 						paths: deltaPaths,
 					})
 				: null;
 		if (committed) {
+			owned.add(committed.sha);
 			changed = null;
 			store.update(todo.id, {
-				artifacts: [...preserved, { kind: "commit", sha: committed.sha, label: todo.title }],
+				artifacts: [
+					...preserved,
+					...adopted,
+					{ kind: "commit", sha: committed.sha, label: todo.title },
+				],
 			});
 			acceptPlanWrite();
 			if (!flushBaselines()) return;
 			continue;
 		}
 		const changes = deltaPaths.map((path): TodoArtifact => ({ kind: "change", path }));
-		store.update(todo.id, { artifacts: [...preserved, ...changes] });
+		store.update(todo.id, { artifacts: [...preserved, ...adopted, ...changes] });
 		acceptPlanWrite();
-		dropReviewRecord(root, sessionId, todo.id);
+		// A path-list delta can't be watermarked by sha → review afresh. But adopted commits are
+		// watermarkable, so keep the review record when any commit was attached this pass.
+		if (adopted.length === 0) dropReviewRecord(root, sessionId, todo.id);
 		if (!flushBaselines()) return;
 	}
 }
