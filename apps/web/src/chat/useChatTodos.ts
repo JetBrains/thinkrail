@@ -225,8 +225,10 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	};
 }
 
+// The wake sent when a TODO is added is just the item's own text — no "Added a TODO" wrapper or
+// instruction tail. It doubles as the queue-match handle for dequeue-on-remove, so add and remove agree.
 export function todoNudgeText(title: string): string {
-	return `Added a TODO: "${title}". Work the pending items in the plan and mark each done as you finish.`;
+	return title;
 }
 
 // The queue is pi-owned and position-addressed, so the exact nudge text is the only handle back to the
