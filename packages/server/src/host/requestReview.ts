@@ -404,8 +404,12 @@ async function runReview(
 	runSubagent: ReviewRunner,
 ): Promise<PlanReviewResult> {
 	const cfg = getConfig();
-	// Pinned reviewer model, else the user's default — never the worker's inherited model. See planReview.SPEC.md.
-	const model = cfg.reviewModel ?? (await getDefaultModel()).model;
+	// Pinned reviewer model + effort, else the user's default for each — never the worker's silently
+	// inherited model or effort. `thinkingLevel` is passed unconditionally so pi-delegation cannot fall
+	// back to the parent worker's effort when reviewEffort is unset. See planReview.SPEC.md.
+	const def = await getDefaultModel();
+	const model = cfg.reviewModel ?? def.model;
+	const thinkingLevel = cfg.reviewEffort ?? def.thinkingLevel;
 	const run = await runSubagent(
 		params.workspaceId,
 		params.sessionId,
@@ -414,7 +418,7 @@ async function runReview(
 			systemPrompt: REVIEWER_SYSTEM_PROMPT,
 			tools: REVIEWER_TOOLS,
 			...(model ? { model: { provider: model.provider, id: model.id } } : {}),
-			...(cfg.reviewEffort ? { thinkingLevel: cfg.reviewEffort } : {}),
+			thinkingLevel,
 		},
 		signal,
 	);
