@@ -16,7 +16,7 @@ Consumed by the `template.*` host handlers; this module owns no WS surface itsel
 passed in by the caller after resolving either a live workspace or a pre-session project's current checkout,
 never looked up here.
 
-## pi facts (pinned against pi v0.86.1 — `@earendil-works/pi-coding-agent`)
+## pi facts (pinned against pi v0.87.1 — `@earendil-works/pi-coding-agent`)
 
 Verified by reading `dist/core/prompt-templates.js` (`loadTemplateFromFile` / `loadTemplatesFromDir` /
 `loadPromptTemplates`), `dist/core/resource-loader.js` (`dedupePrompts`, `updatePromptsFromPaths`), and
@@ -36,12 +36,17 @@ assumption; re-verify on a pi version bump.
   Path-traversal safety for **our** by-name paths (`saveTemplate` / `getTemplate` / `deleteTemplate`) is
   entirely this module's own `isValidTemplateName` gate; pi gives us nothing to lean on there.
 - **`loadTemplatesFromDir`'s error handling is two-layered, at two different granularities.** The whole
-  `readdirSync` call plus the loop around it sits inside one `try { … } catch { return templates; }` — an
-  unreadable directory returns whatever had already been collected rather than throwing out of the
-  function. Independently, each file goes through `loadTemplateFromFile`, which has its *own* inner
-  `try { … } catch { return null; }` around the read + `parseFrontmatter` + object-build. This module's
-  `listDir` mirrors both layers (see "Design" below) — the whole-scan wrapper is what protects
-  `listTemplates` from an EACCES (or similar) blanking every scope's results, not just the bad one's.
+  `readdirSync` call plus the loop around it sits inside one `try { … } catch { return { templates,
+  diagnostics }; }` — an unreadable directory returns whatever had already been collected rather than
+  throwing out of the function. Independently, each file goes through `loadTemplateFromFile`, which now
+  has *two* separate inner `try/catch`es — one around the read, one around `parseFrontmatter` — and on
+  either failure returns `{ template: null, diagnostics: [{ type: "warning", message, path }] }` instead
+  of silently returning `null` (upstream PR #9830: a malformed file used to vanish with no trace; as of
+  0.87 it produces a resource diagnostic pi's own callers can surface). This module's `listDir` mirrors
+  the two-layer *structure* only — its own per-file/per-scan `catch {}` still swallows silently, since
+  this module never calls `loadPromptTemplates`/`loadTemplatesFromDir` and has no diagnostics channel to
+  populate; see "Design" below. The whole-scan wrapper is what protects `listTemplates` from an EACCES
+  (or similar) blanking every scope's results, not just the bad one's.
 - **`parseFrontmatter`'s real signature** (`dist/utils/frontmatter.d.ts`): `parseFrontmatter<T extends
   Record<string, unknown> = Record<string, unknown>>(content: string): { frontmatter: T; body: string
   }` — a plain sync function, generic over the frontmatter shape (unvalidated at runtime; the generic
@@ -156,7 +161,9 @@ assumption; re-verify on a pi version bump.
 - Two layers of failure containment inside `listDir` (the directory scan `listTemplates` calls twice),
   each mirroring a different pi behavior at a different granularity: **(1)** a per-file read/parse
   failure (unreadable file, malformed YAML frontmatter) is caught and that one file is skipped — mirrors
-  pi's own `loadTemplateFromFile`'s `try { … } catch { return null; }`. **(2)** the *directory scan
+  the *shape* of pi's own `loadTemplateFromFile` (its per-file catches still return a null template on
+  failure; since 0.87 they additionally push a warning diagnostic, but this module has no diagnostics
+  channel and simply drops the file, as before). **(2)** the *directory scan
   itself* — the `readdirSync` call plus the loop around it — is also wrapped, so an unreadable directory
   (EACCES, or, deterministically, a path that turns out not to be a directory at all) returns whatever
   had already been collected instead of throwing out of `listTemplates` entirely — mirrors pi's own
