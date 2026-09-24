@@ -29,12 +29,20 @@ test("connects and follows external add, replacement, and remove without a host 
 	await expect(page.getByTestId("jetbrains-connected")).toBeVisible();
 	expect(existsSync(E2E_CENTRAL_ARTIFACT)).toBe(true);
 	expect(existsSync(join(E2E_PI_AGENT_DIR, "extensions", "jetbrains-central.ts"))).toBe(false);
+	const anthropicRow = page.locator(
+		'[data-testid="provider-row"][data-provider="anthropic"][data-kind="central"]',
+	);
+	await expect(anthropicRow).toHaveAttribute("data-configured", "true");
+	await expect(anthropicRow).toContainText("JetBrains AI");
+	await expect(anthropicRow).toContainText("Anthropic");
+	await expect(anthropicRow.getByTestId("provider-signout")).toHaveCount(0);
 	await expect(page.getByTestId("settings-dialog")).not.toContainText(
 		"E2E_PROVIDER_SECRET_SENTINEL",
 	);
 	await expect(page.getByTestId("settings-dialog")).not.toContainText(
 		"E2E_PROVIDER_CONFIG_SENTINEL",
 	);
+	await expect(page.getByTestId("settings-dialog")).not.toContainText("E2E_PROVIDER_NAME_SENTINEL");
 	await expect(
 		page.locator('[data-testid="provider-row"][data-provider="e2e-central"]'),
 	).toHaveCount(0);
@@ -42,6 +50,7 @@ test("connects and follows external add, replacement, and remove without a host 
 	rmSync(E2E_CENTRAL_ARTIFACT, { force: true });
 	await waitForCentralState(page, "supported");
 	await expect(page.getByTestId("jetbrains-connect")).toBeVisible();
+	await expect(anthropicRow).toHaveCount(0);
 
 	const replacement = readFileSync(E2E_CENTRAL_EXTENSION_SOURCE, "utf8")
 		.replaceAll("e2e-central-model", "e2e-central-model-v2")

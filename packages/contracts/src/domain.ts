@@ -289,7 +289,7 @@ export interface BranchList {
 	defaultBranch: string;
 }
 
-export type ProviderAuthKind = "oauth" | "api-key" | "env" | "other";
+export type ProviderAuthKind = "oauth" | "api-key" | "env" | "central" | "other";
 
 export interface ProviderStatus {
 	id: string;

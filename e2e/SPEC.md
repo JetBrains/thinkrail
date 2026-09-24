@@ -96,7 +96,9 @@ whether credentials exist, and how an action fails are independent facts about a
 made real combinations unrepresentable, and a state that cannot be reached is a failure mode nothing asserts
 (`update --install` refusing while the host is below the minimum needs both at once). It
 materializes a test-owned synthetic PI extension written solely against PI's public API; no Central artifact,
-source fragment, output string, route, constant, binary, or secret is copied. Browser scenarios cover
+source fragment, output string, route, constant, binary, or secret is copied. Like the real artifact it both
+introduces a novel provider (never a row) and re-registers the built-in `anthropic` (a configured row
+labelled JetBrains AI with no Sign-out, gone again once the artifact is removed). Browser scenarios cover
 absent/outdated/malformed probes plus an above-minimum version staying ready, update, sign-in/retry, native
 add/remove, synchronous-action
 serialization, watched external add/change/remove, successful current-generation cutover for new chats, old

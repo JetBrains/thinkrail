@@ -70,6 +70,10 @@ Two facts the lifecycle table encodes that no single module states:
 2. **No Central-derived text reaches a client.** The process adapter, pre-extension provider allowlist, and
    closed wire status each enforce one part of that guarantee; their local contracts remain in
    [[module-shared]], [[submodule-server-agent]], [[submodule-server-auth]], and [[module-contracts]].
+   The built-ins the artifact re-registers (`anthropic`, `openai`, `google-vertex`) are the one place Central
+   *is* visible outside the card: they remain ordinary provider rows labelled `kind: "central"` ("JetBrains
+   AI"), attributed by registration identity so the user can see which providers reach them through Central
+   without any of its configuration crossing the wire.
    Quota extends the rule with a structured numeric allowlist: account, plan, usage, top-up, refill,
    diagnostics, and raw output remain host-local and are discarded.
 3. **Quota is a separate read, not provider status and not a host ticker.** Provider lifecycle and quota have

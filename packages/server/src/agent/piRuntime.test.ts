@@ -156,7 +156,7 @@ test("candidate generation reloads an opaque extension replaced at the same path
 	}
 });
 
-test("opaque registrations that replace existing providers stay outside ordinary auth metadata", async () => {
+test("opaque registrations that replace existing providers stay visible to provider status and are attributed to Central", async () => {
 	const root = mkdtempSync(join(tmpdir(), "trpi-opaque-provider-ownership-"));
 	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = root;
@@ -165,18 +165,34 @@ test("opaque registrations that replace existing providers stay outside ordinary
 		runtime.registerProvider("pre-registered", { name: "Host provider", apiKey: "fixture-key" });
 	});
 	try {
+		const plain = await preparePiRuntimeGeneration([]);
+		expect(plain.outcome).toBe("prepared");
+		if (plain.outcome !== "prepared") throw new Error("plain fixture failed");
+		const preExtensionAnthropicName = plain.generation.providerStatusNames.get("anthropic");
+		expect(preExtensionAnthropicName).toBeDefined();
+
 		const path = join(root, "opaque.ts");
 		writeFileSync(
 			path,
-			'export default function opaque(pi) { pi.registerProvider("anthropic", { apiKey: "private-key" }); pi.registerProvider("pre-registered", { apiKey: "private-replacement" }); }\n',
+			'export default function opaque(pi) { pi.registerProvider("anthropic", { apiKey: "private-key", name: "private-name" }); pi.registerProvider("pre-registered", { apiKey: "private-replacement" }); pi.registerProvider("central-only", { name: "Central only" }); }\n',
 		);
 		const prepared = await preparePiRuntimeGeneration([path]);
 		expect(prepared.outcome).toBe("prepared");
 		if (prepared.outcome !== "prepared") throw new Error("opaque fixture failed");
+		expect(prepared.generation.providerStatusNames.get("anthropic")).toBe(
+			preExtensionAnthropicName,
+		);
+		expect(prepared.generation.providerStatusNames.get("anthropic")).not.toBe("private-name");
+		expect(prepared.generation.providerStatusNames.get("central-only")).toBeUndefined();
+		expect([...prepared.generation.providerStatusNames.keys()]).toEqual([
+			...prepared.generation.providerStatusIds,
+		]);
 		for (const id of ["anthropic", "pre-registered"]) {
 			expect(prepared.generation.opaqueProviderIds.has(id)).toBe(true);
-			expect(prepared.generation.providerStatusIds.has(id)).toBe(false);
+			expect(prepared.generation.providerStatusIds.has(id)).toBe(true);
 		}
+		expect(prepared.generation.opaqueProviderIds.has("central-only")).toBe(true);
+		expect(prepared.generation.providerStatusIds.has("central-only")).toBe(false);
 	} finally {
 		configurePiRuntime(null);
 		configurePiRuntimeGenerationInitializer();
