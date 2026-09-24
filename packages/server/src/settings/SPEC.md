@@ -15,7 +15,7 @@ pair, additional-analytics preference and explicit consent confirmation, termina
 chat/file visual line widths
 plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota display/cadence, the
 host-wide subagent default, and plan-review policy. `reviewModel` /
-`reviewEffort` select the reviewer/reflector runtime (unset means pi
+`reviewEffort` select the reviewer runtime (unset means pi
 default); `reviewAutoFix: false` records a `request_changes` verdict and waits instead of auto-sending a fix.
 The module reads, normalizes, persists, caches, and broadcasts values that intentionally follow the owner
 across frontends.

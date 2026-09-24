@@ -21,6 +21,7 @@ import {
 	createAskUserQuestionWaiters,
 } from "./askUserQuestion";
 import { oversizedImageGuard } from "./imageGuard";
+import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
 import {
@@ -199,6 +200,7 @@ export async function buildResourceLoader(
 		headlessSearchPolicy,
 		askUserQuestionExtension(askUserQuestionWaiters),
 		reviewToolExtension,
+		requestReviewExtension,
 		oversizedImageGuard,
 		...extraFactories,
 	];

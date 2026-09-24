@@ -550,6 +550,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     instance is never replaced, so already-running detached children
     finish and retain completion delivery; a disabled launch is still rejected immediately by the live
     predicate even before a streaming parent's tool set can be refreshed.
+    The plan-review `request_review` tool follows the same live-toggle shape: it is always registered, but
+    `setAgentReviewEnabledResolver` (host-injected, global — no `agent` → settings edge) decides whether it
+    stays in a session's active set, and `refreshAgentReviewTool(workspaceId?)` applies a change idle-sync /
+    streaming-deferred to `agent_settled`, exactly like the subagent tools. Because `setActiveToolsByName`
+    rebuilds the system prompt from active tools' guidelines, dropping the tool drops its guidance too. Only
+    the tool is gated — the `startPlanReview` button path is a separate host seam. See `submodule-server-host-plan-review`.
     Cascades: `removeSession`/`disposeAllSessions` fire
     `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
     awaits it before `publishDeleted`/resolving** (safe: the cascade carries its own swallow, so a

@@ -295,6 +295,19 @@ test("reviewAutoFix defaults on; an old config without it loads the default; tog
 	expect(getConfig().reviewAutoFix).toBe(false);
 });
 
+test("agentReviewEnabled defaults on; an old config loads the default; toggling off round-trips; non-boolean rejected", () => {
+	expect(DEFAULT_CONFIG.agentReviewEnabled).toBe(true);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
+	resetConfigCache();
+	expect(getConfig().agentReviewEnabled).toBe(true);
+	const next = updateConfig({ agentReviewEnabled: false });
+	expect(next.agentReviewEnabled).toBe(false);
+	resetConfigCache();
+	expect(getConfig().agentReviewEnabled).toBe(false);
+	const invalid = { agentReviewEnabled: "nope" } as unknown as AppConfigUpdate;
+	expect(() => updateConfig(invalid)).toThrow("agentReviewEnabled must be a boolean");
+});
+
 test("subagents default on; an old config inherits that default; toggling off round-trips", () => {
 	expect(DEFAULT_CONFIG.subagentsEnabled).toBe(true);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));

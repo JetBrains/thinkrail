@@ -116,6 +116,13 @@ export function reviewSettled(item: TodoItem): boolean {
 	return r !== undefined && r.state === "reviewed" && (r.unreviewedShas?.length ?? 0) === 0;
 }
 
+/** Ship-ready = every step done AND no reviewable step still unsettled. Derived from the plan alone so a
+ * host-version action gate can never make it read ready over an unreviewed step. See panels/SPEC.md. */
+export function isPlanReady(plan: TodoPlan): boolean {
+	const { done, total } = planSummary(plan);
+	return total > 0 && done === total && reviewableItems(plan).every(reviewSettled);
+}
+
 export function reviewChangesRequested(item: TodoItem): boolean {
 	return item.review?.state === "changes_requested";
 }

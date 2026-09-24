@@ -7,6 +7,7 @@ import {
 	isDelegationRunDetails,
 	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
+	isPlanReviewResult,
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
 	REQUEST_IMAGE_BASE64_BUDGET,
@@ -41,6 +42,55 @@ describe("isRetriedAttempt", () => {
 	test("an intervening toolResult breaks adjacency — pi's _prepareRetry re-runs the turn directly, so anything between the two means this was not a retry", () => {
 		const toolResult = { role: "toolResult" };
 		expect(isRetriedAttempt([userMsg, failed, toolResult, ok], 1)).toBe(false);
+	});
+});
+
+describe("isPlanReviewResult", () => {
+	const ok = {
+		itemId: "t_1",
+		itemTitle: "Wire login",
+		verdict: "request_changes",
+		summary: "one off-by-one",
+		findings: [{ id: "c_1", kind: "inline", body: "off-by-one", path: "a.ts", startLine: 3 }],
+	};
+
+	test("accepts a well-formed verdict with findings", () => {
+		expect(isPlanReviewResult(ok)).toBe(true);
+		expect(isPlanReviewResult({ ...ok, verdict: "approve", findings: [] })).toBe(true);
+	});
+
+	test("rejects bad verdict, missing fields, and malformed findings", () => {
+		expect(isPlanReviewResult({ ...ok, verdict: "maybe" })).toBe(false);
+		expect(isPlanReviewResult({ ...ok, itemId: 1 })).toBe(false);
+		expect(isPlanReviewResult({ ...ok, findings: "nope" })).toBe(false);
+		expect(isPlanReviewResult({ ...ok, findings: [{ id: "c_1" }] })).toBe(false);
+		expect(isPlanReviewResult(null)).toBe(false);
+	});
+
+	const finding = (extra: Record<string, unknown>) => ({
+		...ok,
+		findings: [{ id: "c_1", body: "b", ...extra }],
+	});
+
+	test("rejects a finding with an empty id/body or an unknown kind", () => {
+		expect(isPlanReviewResult({ ...ok, findings: [{ id: "", body: "b" }] })).toBe(false);
+		expect(isPlanReviewResult({ ...ok, findings: [{ id: "c_1", body: "" }] })).toBe(false);
+		expect(isPlanReviewResult(finding({ kind: "nope" }))).toBe(false);
+		expect(isPlanReviewResult(finding({ kind: "inline", path: "a.ts" }))).toBe(true);
+	});
+
+	test("rejects an incoherent or non-positive line range, and a line without a path", () => {
+		expect(isPlanReviewResult(finding({ path: "a.ts", startLine: 0 }))).toBe(false);
+		expect(isPlanReviewResult(finding({ path: "a.ts", startLine: 1.5 }))).toBe(false);
+		expect(isPlanReviewResult(finding({ startLine: 3 }))).toBe(false); // line with no path
+		expect(isPlanReviewResult(finding({ path: "a.ts", endLine: 3 }))).toBe(false); // endLine, no startLine
+		expect(isPlanReviewResult(finding({ path: "a.ts", startLine: 5, endLine: 3 }))).toBe(false);
+		expect(isPlanReviewResult(finding({ path: "a.ts", startLine: 3, endLine: 5 }))).toBe(true);
+	});
+
+	test("enforces cardinality: request_changes needs a finding, approve may have none", () => {
+		expect(isPlanReviewResult({ ...ok, verdict: "request_changes", findings: [] })).toBe(false);
+		expect(isPlanReviewResult({ ...ok, verdict: "approve", findings: [] })).toBe(true);
 	});
 });
 
