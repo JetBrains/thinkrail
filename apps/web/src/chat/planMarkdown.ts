@@ -22,12 +22,22 @@ function plusMinus(added: number, removed: number): string {
 	return parts.join(" ");
 }
 
+// Collapse a possibly-multiline (Markdown bullet) field into one export line so the nested list stays
+// valid: strip leading bullet markers, drop blank lines, join with " · ".
+function flattenInline(text: string): string {
+	return text
+		.split("\n")
+		.map((line) => line.replace(/^\s*[-*]\s+/, "").trim())
+		.filter(Boolean)
+		.join(" · ");
+}
+
 function itemLines(item: TodoItem): string[] {
 	const head = `- ${checkbox(item)} ${item.title}`;
 	const summary = [
-		...(item.status === "done" && item.summary ? [`    - _${item.summary}_`] : []),
+		...(item.status === "done" && item.summary ? [`    - _${flattenInline(item.summary)}_`] : []),
 		...(item.status === "done" && item.verification
-			? [`    - Verified: ${item.verification}`]
+			? [`    - Verified: ${flattenInline(item.verification)}`]
 			: []),
 	];
 	const set = itemChangeSet(item);

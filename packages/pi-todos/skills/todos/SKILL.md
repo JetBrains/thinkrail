@@ -86,15 +86,17 @@ everything the diff cannot show — intent, decisions, and honesty about verific
 reviewer, not for yourself.
 
 - **A step that changed code gets a summary AND a verification when you mark it done** — pass both
-   on the same `todo_update` call that sets `status: done`. `summary`: 1–3 short sentences covering
-   **what changed** and **why** — especially decisions that are NOT visible in the diff (a rejected
-   alternative, a constraint you worked around). Research/analysis/verification-only steps that
-   produced no code changes need neither.
-- **Verification is its own field, named, never claimed.** Pass `verification` in the normalized shape
-   `check → result` — the exact check you ran and its outcome ("`bun test src/todos` → 34 pass",
-   "typecheck → green") — or the honest
-   **"not verified"**; the UI renders it as a status badge on the review card, so a vague or missing
-   line is visible at a glance. Never write "tests pass" for tests you didn't run. And never make a
+   on the same `todo_update` call that sets `status: done`. `summary` is **Markdown, written structured**
+   (a short lead sentence + a bullet list when it has parts), covering **what changed** and **why** —
+   especially decisions that are NOT visible in the diff (a rejected alternative, a constraint you worked
+   around) — not one run-on paragraph. Research/analysis/verification-only steps that produced no code
+   changes need neither.
+- **Verification is its own field, named, never claimed.** Pass `verification` as one or more checks in
+   the normalized shape `check → result` — the exact check you ran and its outcome ("`bun test src/todos`
+   → 34 pass", "typecheck → green") — or the honest **"not verified"**. It renders as **Markdown** on the
+   plan page, so when you ran several checks write them as a **bullet list** (one `- check → result` per
+   line), not one run-on line crammed with `;` separators; a single check stays one line. The UI shows it
+   as a status badge on the review card, so a vague or missing line is visible at a glance. Never write "tests pass" for tests you didn't run. And never make a
    check pass by weakening it — if you changed, skipped, or deleted a test as part of the step, the
    summary must say so explicitly: a reviewer who finds it themselves stops trusting every other
    summary.

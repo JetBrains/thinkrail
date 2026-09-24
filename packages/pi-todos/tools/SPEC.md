@@ -39,12 +39,14 @@ the host wire still use loose items):
   it), the nudge **echoes that text and asks the agent to extend it** rather than rewrite from scratch, so
   the note stays cumulative over everything done instead of narrowing to the last step.
 - **Completion summaries (the review trail):** `todo_update` takes optional `summary` (what/why — the
-  decisions the diff can't show, plus any scope drift), **`commitSubject`** (the git-facing subject line
+  decisions the diff can't show, plus any scope drift; **structured Markdown** — lead + bullets),
+  **`commitSubject`** (the git-facing subject line
   for the step's delta, written in the host repository's own commit style — the schema description is
   where the "read `git log` and match it" instruction lives, since the tools are the agent's only
-  contact with this field) and **`verification`** (the exact check run +
-  result, or "not verified" — a separate field so the UI renders it as a status badge and a vague or
-  missing line is visible at a glance) — all three set together with `status: done` (skill-mandated for
+  contact with this field) and **`verification`** (the exact check(s) run +
+  result, or "not verified" — a separate field so the UI badges it with a status glyph; **Markdown**, so
+  several checks render as a bullet list rather than one `;`-crammed line, and a vague or missing line is
+  visible at a glance) — all three set together with `status: done` (skill-mandated for
   code-changing steps, never a tool gate: the tool can't know whether the step changed code — git
   lives host-side). `todo_plan_summary` sets the plan-level handoff note
   (`TodoStore.setSummary`) — a **cumulative** recap of everything done across the whole plan (every task,

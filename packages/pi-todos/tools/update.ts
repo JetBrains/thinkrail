@@ -29,13 +29,13 @@ const parameters = Type.Object({
 	summary: Type.Optional(
 		Type.String({
 			description:
-				"Completion summary, set together with status=done when the step changed code: 1–3 short sentences (Markdown; bullet only if it genuinely has parts) — what changed, why (decisions not visible in the diff), and any scope drift (things touched beyond this step). Do NOT restate the title — add what the title can't show. Verification goes in the separate verification field, not here. Empty string clears it.",
+				"Completion summary, set together with status=done when the step changed code. Rendered as Markdown on the plan page — write it structured: a short lead sentence plus a bullet list when it has parts (what changed, why — decisions not visible in the diff — and any scope drift), NOT one run-on paragraph. Do NOT restate the title — add what the title can't show. Verification goes in the separate verification field, not here. Empty string clears it.",
 		}),
 	),
 	verification: Type.Optional(
 		Type.String({
 			description:
-				'Verification line, set together with status=done: one line in the normalized shape `check → result` — the EXACT check you ran and its outcome ("bun test src/todos → 34 pass", "typecheck → green") — or exactly "not verified" when you ran nothing. No prose, no summary restatement. Never claim a check you did not run. Empty string clears it.',
+				'Verification, set together with status=done: each check in the normalized shape `check → result` — the EXACT check you ran and its outcome ("bun test src/todos → 34 pass", "typecheck → green"). Rendered as Markdown on the plan page: when you ran several checks write them as a Markdown bullet list (one `- check → result` per line), not one run-on line; a single check stays one line. Write exactly "not verified" when you ran nothing. No prose, no summary restatement. Never claim a check you did not run. Empty string clears it.',
 		}),
 	),
 	commitSubject: Type.Optional(

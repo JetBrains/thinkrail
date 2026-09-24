@@ -29,9 +29,10 @@ the `commit` kind, `5` added the `summary` fields, `6` added `commitSubject`); a
 and is upgraded on the next write.
 
 **Summaries (the review trail).** An item may carry `summary` — the agent's completion note (what/why,
-the decisions the diff can't show) — and **`verification`**, a separate field for the exact check run +
-result (or the honest "not verified"), kept apart from the prose so the UI renders it as a status badge
-and a missing line is visible at a glance; both set via `TodoPatch` when the item flips `done`; the plan itself may carry a
+the decisions the diff can't show, written as structured Markdown) — and **`verification`**, a separate
+field for the exact check(s) run + result (or the honest "not verified"), kept apart from the prose so
+the UI can badge it with a status glyph; both are **Markdown** (several checks read as a bullet list, not
+one run-on line), and a missing verification line is visible at a glance; both set via `TodoPatch` when the item flips `done`; the plan itself may carry a
 plan-level `summary` (`TodoFile.summary`, written by `TodoStore.setSummary`) — the overall handoff note
 the agent writes when the whole plan completes; it is **cumulative** (everything done across the whole
 plan, extended not rewritten when a prior note survives a re-completion — the tool layer echoes the

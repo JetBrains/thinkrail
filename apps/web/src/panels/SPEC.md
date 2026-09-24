@@ -639,7 +639,8 @@ a project picker, the prompt hero, and the reused
   touch, which has no hover) and the meta line yields to it (`group-data-[expanded=true]:hidden`);
   the chevron rotates the same way. No JS hover state — a static `<div>` with mouse/focus handlers is
   an a11y smell the lint rightly rejects. The detail block is an indented
-  left-rail (`border-l`) block holding the note, the agent's `summary`, the full `VerificationBadge`,
+  left-rail (`border-l`) block holding the note, the agent's `summary` (Markdown), the full
+  `VerificationBadge` (glyph + the verification as Markdown, so multiple checks read as bullet points),
   a changes_requested `feedback` note, the change set, **and — when the item accumulated 2+ commits
   (fix cycles) — a REVISIONS mini-timeline** (`plan-revisions`/`plan-revision`, off
   `planView.itemRevisions`): one row per commit in order (`#n` + sha chip routing the Changes panel +

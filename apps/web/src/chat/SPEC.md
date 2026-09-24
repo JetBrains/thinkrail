@@ -988,11 +988,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (no separate "Your requests" header — they're placed by status). **The compact list is title-only**
   (status glyph + title + the change-set chip) — a row's `note`, a done item's agent-authored `summary`,
   and its `verification` are **not** shown here, so a long plan reads at a glance without overloading;
-  the **full plan page** (`PlanPane`) is where those surface: the `summary` as a clamped muted line
-  (`todo-summary`) and the `verification` as the shared **`VerificationBadge`** (`planKit`; the
-  "Tests ✓" element — check glyph for a named check, warning glyph for an honest "not verified", the
-  split derived by `planView.verificationStatus`, ONE home; the badge's title labels it self-reported —
-  never a host-run gate). The plan page has no in-page review list
+  the **full plan page** (`PlanPane`) is where those surface: the `summary` as **Markdown** (a muted
+  structured note — lead + bullets) and the `verification` as the shared **`VerificationBadge`**
+  (`planKit`; a status glyph — check for a named check, warning for an honest "not verified", the split
+  derived by `planView.verificationStatus`, ONE home — beside the verification rendered as **Markdown**,
+  so several checks read as bullet points instead of one run-on line; the badge's title labels it
+  self-reported — never a host-run gate). The plan page has no in-page review list
   — its header kebab offers **Review All** (host-side queue, `todo.reviewAll`) and a comment chip that
   focuses the right-panel Review tab (see `panels/SPEC.md`). A row whose review is **settled** (`planView.reviewSettled` — approved and
   nothing landed since) upgrades its done check to the **circled Verified glyph**

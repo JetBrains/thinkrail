@@ -112,6 +112,27 @@ test("a fallback done item (change artifacts, no commit) lists bare paths — no
 	);
 });
 
+test("multiline (bullet) summary and verification flatten to one export line each", () => {
+	const done: TodoItem = {
+		...item("Rework ranking", "done"),
+		summary: "Switched to Expected Value.\n\n- EV = P_accept × value\n- Added feature logging",
+		verification:
+			"- alembic upgrade head applies f3a5\n- pytest → 3 pass\n- ruff + pyright → clean",
+	};
+	expect(planToMarkdown({ todos: [done], groups: [] }, "c")).toBe(
+		[
+			"# TODO — c",
+			"",
+			"Progress: 1/1",
+			"",
+			"- [x] Rework ranking",
+			"    - _Switched to Expected Value. · EV = P_accept × value · Added feature logging_",
+			"    - Verified: alembic upgrade head applies f3a5 · pytest → 3 pass · ruff + pyright → clean",
+			"",
+		].join("\n"),
+	);
+});
+
 test("a commit artifact without decorated files (unresolvable sha) degrades to a plain row", () => {
 	const done: TodoItem = {
 		...item("Old step", "done"),
