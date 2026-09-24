@@ -31,7 +31,9 @@ treatment.
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
   project `+`** — both are `Button variant="ghost" size="icon"`, so they render identically and their glyphs
-  line up on one vertical axis (both sit at the row's `pr-xs` right edge).
+  line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+` carries a
+  tooltip and accessible name naming the shell's `Mod+N` chord and its `Mod+Alt+N` browser alias through `lib`'s
+  `platformShortcutLabel` (see `submodule-web-shell` global chords); the context-menu item stays plain.
   Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
   Hover highlights the full row and the highlight remains while its **project context menu** is open.
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
@@ -374,7 +376,11 @@ a project picker, the prompt hero, and the reused
   *Trust project* button — the repo's skills stay withheld until granted (`project.setTrust`, which folds the
   updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
-  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active → **always open a
+  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active,
+  and the dialog itself expands the project and refreshes its authoritative `workspace.list` (fire-and-forget;
+  the `workspace.created` push is not relied on because an unloaded project list drops it) — there is no
+  `onCreated` callback, so every mount site (`ProjectTree`, `WelcomePanel`, the shell's keyboard-opened
+  instance) gets the same post-create fold → **always open a
   fresh chat** (`session.create({ workspaceId, model?, thinkingLevel? })` — a held model + effort apply even
   without a prompt, and travel together: with none held both are omitted and pi resolves them) → the typed
   prompt **and any attached images** are additionally sent as the first message (fire-and-forget `prompt`,

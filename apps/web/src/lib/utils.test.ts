@@ -16,7 +16,8 @@ import {
 
 test("platform shortcuts use Ctrl on non-Apple platforms", () => {
 	const platform = "Linux x86_64";
-	expect(platformShortcutLabel("B", platform)).toBe("Ctrl+B");
+	expect(platformShortcutLabel("B", { platform })).toBe("Ctrl+B");
+	expect(platformShortcutLabel("N", { platform, alt: true })).toBe("Ctrl+Alt+N");
 	expect(hasPlatformModifier({ ctrlKey: true, metaKey: false }, platform)).toBe(true);
 	expect(hasPlatformModifier({ ctrlKey: false, metaKey: true }, platform)).toBe(false);
 	expect(hasPlatformModifier({ ctrlKey: true, metaKey: true }, platform)).toBe(false);
@@ -24,7 +25,8 @@ test("platform shortcuts use Ctrl on non-Apple platforms", () => {
 
 test("platform shortcuts use Command on Apple platforms", () => {
 	const platform = "MacIntel";
-	expect(platformShortcutLabel("B", platform)).toBe("⌘B");
+	expect(platformShortcutLabel("B", { platform })).toBe("⌘B");
+	expect(platformShortcutLabel("N", { platform, alt: true })).toBe("⌥⌘N");
 	expect(hasPlatformModifier({ ctrlKey: false, metaKey: true }, platform)).toBe(true);
 	expect(hasPlatformModifier({ ctrlKey: true, metaKey: false }, platform)).toBe(false);
 	expect(hasPlatformModifier({ ctrlKey: true, metaKey: true }, platform)).toBe(false);

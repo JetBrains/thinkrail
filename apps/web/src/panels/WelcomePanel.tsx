@@ -5,7 +5,6 @@ import {
 	RiRocketLine as Rocket,
 	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
-import type { Workspace } from "@thinkrail/contracts";
 import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRODUCT_NAME } from "../constants/branding";
@@ -60,16 +59,6 @@ export function WelcomePanel() {
 	const { openProject, pickAndOpen, enterHostPath, dialogs } = useOpenProject((opened) =>
 		useAppStore.getState().selectProject(opened.id, { reveal: true }),
 	);
-
-	const onWorkspaceCreated = async (ws: Workspace) => {
-		useAppStore
-			.getState()
-			.setWorkspaces(
-				ws.projectId,
-				await getTransport().request("workspace.list", { projectId: ws.projectId }),
-			);
-	};
-
 	const noProjects = project == null;
 
 	const projectFolderCard = (projectId: string) => (
@@ -175,7 +164,6 @@ export function WelcomePanel() {
 					onOpenChange={(o) => {
 						if (!o) setDialog(null);
 					}}
-					onCreated={(ws) => void onWorkspaceCreated(ws)}
 				/>
 			) : null}
 			{dialogs}

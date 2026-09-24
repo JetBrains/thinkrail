@@ -45,7 +45,8 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { copyText } from "@/lib";
+import { IconTooltip } from "@/components/ui/tooltip";
+import { copyText, platformShortcutLabel } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
 import {
 	type ActivityRollup,
@@ -67,6 +68,7 @@ import { useOpenProject } from "./useOpenProject";
 import { canRenameWorkspace, workspaceRenameValue } from "./workspaceActions";
 
 const PREWARM_WORKSPACE_LIMIT = 8;
+const CREATE_WORKSPACE_LABEL = `Create workspace (${platformShortcutLabel("N")} or ${platformShortcutLabel("N", { alt: true })})`;
 
 export function ProjectTree() {
 	const projects = useAppStore((s) => s.projects);
@@ -166,11 +168,6 @@ export function ProjectTree() {
 	const { openProject, pickAndOpen, enterHostPath, dialogs } = useOpenProject((project) =>
 		selectProject(project.id),
 	);
-
-	const onWorkspaceCreated = async (workspace: Workspace) => {
-		useAppStore.getState().expandProject(workspace.projectId);
-		await loadWorkspaces(workspace.projectId);
-	};
 
 	const onExistingWorktreeOpened = async (workspace: Workspace) => {
 		const rows = await getTransport().request("workspace.list", {
@@ -329,7 +326,6 @@ export function ProjectTree() {
 						workspaceDialogReturnFocusIdRef.current = null;
 						if (returnFocusId) focusProjectNameOrAdd(returnFocusId);
 					}}
-					onCreated={(ws) => void onWorkspaceCreated(ws)}
 				/>
 			) : null}
 
@@ -435,16 +431,18 @@ function ProjectRow({
 					{workspaceCount}
 				</span>
 			)}
-			<Button
-				variant="ghost"
-				size="icon"
-				className="shrink-0"
-				data-testid="add-workspace"
-				aria-label="Create workspace"
-				onClick={onAddWorkspace}
-			>
-				<Plus className="size-14" />
-			</Button>
+			<IconTooltip label={CREATE_WORKSPACE_LABEL}>
+				<Button
+					variant="ghost"
+					size="icon"
+					className="shrink-0"
+					data-testid="add-workspace"
+					aria-label={CREATE_WORKSPACE_LABEL}
+					onClick={onAddWorkspace}
+				>
+					<Plus className="size-14" />
+				</Button>
+			</IconTooltip>
 		</div>
 	);
 	return (
