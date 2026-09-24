@@ -11,7 +11,10 @@ import {
 } from "./shared.ts";
 
 const parameters = Type.Object({
-	title: Type.String({ description: "The item's one-line title." }),
+	title: Type.String({
+		description:
+			'The step\'s one-line title: imperative and about the change/outcome, short and scannable — not the process ("make a plan", "read the files") and not agent bookkeeping (that goes in note).',
+	}),
 	group: Type.Optional(
 		Type.String({
 			description:

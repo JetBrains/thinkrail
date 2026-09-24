@@ -33,7 +33,9 @@ the decisions the diff can't show) — and **`verification`**, a separate field 
 result (or the honest "not verified"), kept apart from the prose so the UI renders it as a status badge
 and a missing line is visible at a glance; both set via `TodoPatch` when the item flips `done`; the plan itself may carry a
 plan-level `summary` (`TodoFile.summary`, written by `TodoStore.setSummary`) — the overall handoff note
-the agent writes when the whole plan completes. Both are stored verbatim across later edits, with one
+the agent writes when the whole plan completes; it is **cumulative** (everything done across the whole
+plan, extended not rewritten when a prior note survives a re-completion — the tool layer echoes the
+surviving text so the agent can build on it), never a recap of only the last step. Both are stored verbatim across later edits, with one
 invalidation rule: `update` clears an item's `summary`/`verification`, and drops the plan-level `summary`
 with it, the moment that item's `status` leaves `done` — unless the same patch also supplies fresh values
 for them, which win.
