@@ -604,10 +604,26 @@ a project picker, the prompt hero, and the reused
   after the last tab closes without introducing onboarding state. The workbench resource renderer handles
   registered **`plan`** tabs (`PlanTab`) via the lazy **`PlanPane`** — the chat plan's **live review-map
   page**. Frontend-local placement stores only the `todo-plan` resolver kind + session identity, never inline
-  plan content; another client can explicitly reopen the same host-owned page without inheriting placement. It renders the session's TODO plan document-scale
-  (groups as sections, items with status glyphs) with a **scan-first item anatomy**: the item TITLE is
+  plan content; another client can explicitly reopen the same host-owned page without inheriting placement. It renders the session's TODO plan document-scale,
+  **status-grouped** (`planSections`, the same split as the popup): a **`Now executing` block**
+  (`plan-now-executing`) holds the active group(s)/loose items, or an idle line when none is in
+  progress (`plan-now-idle`: `Up next: <first pending>` → `All steps are done.` → `No steps yet…`); a
+  **`To do` section** (`plan-todo-section`) holds the pending groups then pending loose; a **`Done`
+  section** (`plan-done-section`, always expanded — the page is the review trail) holds the completed
+  groups then done loose. All three status blocks share ONE `PLAN_CARD_CLASS` card shape (via
+  `PlanCardSection` for To do/Done) with a `glyph + title` header — Now executing (`CircleDot`), To do
+  (`Circle`), Done (`CircleCheck`) — so the whole plan reads as one consistent card stack. The
+  Now-executing block header carries the plan page's **add-task control**
+  (the plan page's only in-page way to add): a `+ Task` button (`plan-add-task`) toggles an inline input
+  (`plan-add-input`, Enter adds / Esc closes) wired to the SAME `useChatTodos.add` as the popup's
+  `TodoAddRow` — a loose **user** item plus the agent nudge — so the two entry points stay one flow.
+  Items keep a **scan-first item
+  anatomy**: the item TITLE is
   the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,
-  subtle/muted) — so titles never blend into prose. A **done item collapses to a compact two-line
+  subtle/muted) — so titles never blend into prose. A **done item carries no leading status glyph**
+  (`hideStatusGlyph` — its section already says "done"; only an active review or a `changes_requested`
+  warning keeps a leading glyph; the slot holds a ghost spacer so titles stay aligned). A **done item
+  collapses to a compact two-line
   block**: line 1 is a LEADING chevron (matching the change-set disclosure's anatomy; non-collapsible
   rows reserve the chevron's width with a ghost spacer so every title in the list aligns) + the title,
   with the **review slot at its right edge**; line 2 is a quiet meta strip UNDER the title (the
@@ -680,10 +696,11 @@ a project picker, the prompt hero, and the reused
   matched by `origin` provenance (path-join fallback for provenance-less ones) — the Review tab is
   the truth; the chip
   `requestToolView`s the Review tab) and the verdict's `feedback` note renders inline
-  (`plan-item-review-feedback`); approving settles the item — its status glyph upgrades to the **circled Verified check**
-  (`StatusIcon reviewed`, hover "Verified", `data-reviewed` on the row; `planView.reviewSettled` is the
+  (`plan-item-review-feedback`); approving settles the item — the plan page shows a **`Verified` label**
+  in the row's review slot, right of the title (`plan-item-verified`, `CircleCheck` + text, success tone),
+  and `data-reviewed` on the row (the popup keeps the circled `StatusIcon reviewed` glyph); `planView.reviewSettled` is the
   one derivation — approved AND no unreviewed delta, so a fresh revision drops the item back out of both
-  the glyph and the reviewed counter). **The header is a title + a lifecycle STEPPER and a kebab menu**. The stepper (`plan-progress`)
+  the label and the reviewed counter. **The header is a title + a lifecycle STEPPER and a kebab menu**. The stepper (`plan-progress`)
   renders the plan's shipping funnel — **Build (`d/t done`) → Review (`r/k reviewed`,
   `plan-review-progress`, only when the plan has reviewable items) → PR (`plan-pr-stage`,
   `data-state`)** — each stage wearing a glyph for its state: done (check), active (the stage the
@@ -709,7 +726,12 @@ a project picker, the prompt hero, and the reused
   (N unsettled reviewables → an inline **Review All** button, same `todo.reviewAll` flow as the
   kebab item, which stays) → `ship` (all done + reviewed, no open PR → an inline **Open PR**,
   same `pr.open` flow as the header button) → hidden when nothing demands action. The plan-level
-  completion note wears a `Summary` eyebrow so the report reads in labeled sections. After the item
+  completion note wears a `Summary` eyebrow so the report reads in labeled sections; when the note is
+  long it clamps to two lines and its **expand/collapse toggle lives in the card header** (a right-aligned
+  chevron on the clickable `plan-overall-summary-toggle` header, rotating on `open`) — not a trailing
+  button — so collapsing never requires scrolling past the expanded prose. The next-action
+  banner, the Summary block, and the Now-executing block share ONE card shape (`PLAN_CARD_CLASS` — same
+  elevated bg, border, radius, and padding) so the top of the plan reads as one consistent stack. After the item
 sections the page renders **`Committed outside the plan`** (`plan-adopted-commits`, only when
 `TodoPlan.adoptedCommits` is non-empty — including on an otherwise empty plan): the host-derived
 `base..HEAD` commits no item owns (derivation: [[submodule-server-todos]]), each rendered with the same

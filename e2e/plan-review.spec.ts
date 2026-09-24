@@ -207,7 +207,8 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	// The settled step: circled Verified glyph, no review affordance anywhere on the row.
 	const reviewedItem = pane.getByTestId("plan-item").filter({ hasText: "Implement retry policy" });
 	await expect(reviewedItem).toHaveAttribute("data-reviewed", "true");
-	await expect(reviewedItem.locator('[data-reviewed="true"][class*="remixicon"]')).toBeVisible();
+	// The settled step wears a "Verified" label to the right of its title (no leading status glyph).
+	await expect(reviewedItem.getByTestId("plan-item-verified")).toContainText("Verified");
 	await expect(reviewedItem.getByTestId("plan-start-review")).toHaveCount(0);
 
 	// The changes-requested step wears the warning ON the collapsed row: alert glyph + the
@@ -269,6 +270,113 @@ test("a branch commit no step owns shows under 'Committed outside the plan' and 
 	await expect(adopted.getByTestId("plan-start-review")).toHaveCount(1);
 	await expect(pane.getByTestId("plan-progress")).toContainText("0/0 done");
 	await expect(pane.getByTestId("plan-review-progress")).toContainText("0/1 reviewed");
+});
+
+test("the plan page groups items into Now executing / To do / Done and adds a task inline", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const sessionId = await page
+		.locator('[data-testid="editor-tab"][data-kind="chat"]')
+		.first()
+		.getAttribute("data-session-id");
+	if (!sessionId) throw new Error("chat tab exposes no session id");
+	const iso = "2026-01-01T00:00:00Z";
+	const todosDir = join(workspace.worktreePath, ".thinkrail", "context", "todos");
+	mkdirSync(todosDir, { recursive: true });
+	writeFileSync(
+		join(todosDir, `${sessionId}.json`),
+		JSON.stringify({
+			version: 6,
+			todos: [],
+			groups: [
+				{
+					id: "g_active",
+					title: "Build the feature",
+					todos: [
+						{
+							id: "a1",
+							title: "Scaffold",
+							status: "done",
+							origin: "agent",
+							createdAt: iso,
+							updatedAt: iso,
+						},
+						{
+							id: "a2",
+							title: "Wire the API",
+							status: "in_progress",
+							origin: "agent",
+							createdAt: iso,
+							updatedAt: iso,
+						},
+					],
+				},
+				{
+					id: "g_pending",
+					title: "Polish the UI",
+					todos: [
+						{
+							id: "p1",
+							title: "Empty states",
+							status: "pending",
+							origin: "agent",
+							createdAt: iso,
+							updatedAt: iso,
+						},
+					],
+				},
+				{
+					id: "g_done",
+					title: "Set up",
+					todos: [
+						{
+							id: "d1",
+							title: "Init repo",
+							status: "done",
+							origin: "agent",
+							createdAt: iso,
+							updatedAt: iso,
+						},
+					],
+				},
+			],
+		}),
+	);
+
+	await page.getByTestId("chat-plan-toggle").click();
+	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	const pane = page.getByTestId("plan-pane");
+	await expect(pane).toBeVisible();
+
+	// The active group lives in the Now-executing block; pending under To do; done under Done.
+	const now = pane.getByTestId("plan-now-executing");
+	await expect(now).toContainText("Now executing");
+	await expect(now.getByTestId("plan-item").filter({ hasText: "Wire the API" })).toBeVisible();
+	await expect(
+		pane
+			.getByTestId("plan-todo-section")
+			.getByTestId("plan-item")
+			.filter({ hasText: "Empty states" }),
+	).toBeVisible();
+	await expect(
+		pane.getByTestId("plan-done-section").getByTestId("plan-item").filter({ hasText: "Init repo" }),
+	).toBeVisible();
+
+	// The add-task control: button reveals an inline input; Enter adds the task, which appears under To do.
+	await expect(pane.getByTestId("plan-add-input")).toHaveCount(0);
+	await now.getByTestId("plan-add-task").click();
+	const input = pane.getByTestId("plan-add-input");
+	await expect(input).toBeVisible();
+	await input.fill("Write the changelog");
+	await input.press("Enter");
+	await expect(
+		pane
+			.getByTestId("plan-todo-section")
+			.getByTestId("plan-item")
+			.filter({ hasText: "Write the changelog" }),
+	).toBeVisible();
 });
 
 test("a re-opened plan keeps the completion note on the page, marked stale, but out of the export", async ({

@@ -14,9 +14,10 @@ import {
 	RiLoader4Line as Loader2,
 	RiChat1Line as MessageSquare,
 	RiMore2Line as MoreVertical,
+	RiAddLine as Plus,
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -152,8 +153,10 @@ function ChangeSetBlock({
 	);
 }
 
-const NEXT_ACTION_CLASS =
-	"mb-16 flex items-center gap-8 rounded-[var(--radius-md)] bg-container-elevated-bg px-12 py-8";
+// One card shape for every top-of-plan block (next-action banner, Summary, Now executing).
+const PLAN_CARD_CLASS =
+	"mb-16 rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-12";
+const NEXT_ACTION_CLASS = `${PLAN_CARD_CLASS} flex items-center gap-8`;
 const NEXT_ACTION_BUTTON_CLASS =
 	"flex h-28 shrink-0 items-center rounded-[var(--radius-sm)] bg-control-primary-bg px-8 tr-text-ui text-control-primary-text transition-colors hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text";
 
@@ -250,6 +253,9 @@ function ItemBlock({
 	const reviewing = item.review?.reviewing === true;
 	const changesRequested = reviewChangesRequested(item) && !reviewing;
 	const needsReview = item.review !== undefined && !reviewed;
+	// A done step needs no status glyph — its section (or strikethrough) already says "done"; only a
+	// warning (changes requested) or an active review keeps a leading glyph.
+	const hideStatusGlyph = item.status === "done" && !reviewing && !changesRequested;
 	const findings = changesRequested ? itemOpenFindings(item, reviewComments, sessionId) : 0;
 	const set = itemChangeSet(item);
 	const counts = set ? changeSetCounts(set) : null;
@@ -287,18 +293,20 @@ function ItemBlock({
 							? "Reviewing — the reviewer agent is reading this step"
 							: changesRequested
 								? "Changes requested"
-								: reviewed
-									? "Verified"
-									: undefined
+								: undefined
 					}
 				>
-					<StatusIcon
-						status={item.status}
-						glance="working"
-						reviewed={reviewed}
-						reviewing={reviewing}
-						changesRequested={changesRequested}
-					/>
+					{hideStatusGlyph ? (
+						<span className="size-12 shrink-0" aria-hidden="true" />
+					) : (
+						<StatusIcon
+							status={item.status}
+							glance="working"
+							reviewed={reviewed}
+							reviewing={reviewing}
+							changesRequested={changesRequested}
+						/>
+					)}
 				</span>
 				<div className="flex min-w-0 flex-1 flex-col gap-2">
 					<div className="flex min-h-8 items-center gap-8">
@@ -359,6 +367,15 @@ function ItemBlock({
 							>
 								Start review
 							</button>
+						) : reviewed ? (
+							<span
+								data-testid="plan-item-verified"
+								title="This step's changes were reviewed and approved"
+								className="flex min-h-8 shrink-0 items-center gap-2 tr-text-metadata text-feedback-success"
+							>
+								<CircleCheck className="size-14" />
+								Verified
+							</span>
 						) : null}
 					</div>
 					{collapsible && (item.verification || set) ? (
@@ -437,41 +454,52 @@ function PlanSummary({
 	if (files > 0) facts.push(`${files} ${files === 1 ? "file" : "files"}`);
 	if (reviewTotal > 0) facts.push(`${reviewed}/${reviewTotal} reviewed`);
 	const clampable = (summary?.length ?? 0) > 160;
+	const header = (
+		<>
+			<span className="tr-text-eyebrow text-text-subtle">Summary</span>
+			{stale ? (
+				<span
+					data-testid="plan-summary-stale"
+					className="flex items-center gap-4 tr-text-metadata text-text-muted"
+				>
+					<Loader2 className="size-14 shrink-0 animate-spin text-text-muted" />
+					Updating… shows the last completed recap until the plan finishes again
+				</span>
+			) : (
+				<span className="flex items-center gap-4 tr-text-metadata text-text-subtle">
+					<CircleCheck className="size-14 shrink-0 text-feedback-success" />
+					{facts.join(" · ")}
+				</span>
+			)}
+		</>
+	);
 	return (
-		<div className="mb-16 flex flex-col gap-8 rounded-[var(--radius-md)] bg-container-elevated-bg p-12">
-			<div className="flex flex-wrap items-center gap-x-8 gap-y-2">
-				<span className="tr-text-eyebrow text-text-subtle">Summary</span>
-				{stale ? (
-					<span
-						data-testid="plan-summary-stale"
-						className="flex items-center gap-4 tr-text-metadata text-text-muted"
-					>
-						<Loader2 className="size-14 shrink-0 animate-spin text-text-muted" />
-						Updating… shows the last completed recap until the plan finishes again
-					</span>
-				) : (
-					<span className="flex items-center gap-4 tr-text-metadata text-text-subtle">
-						<CircleCheck className="size-14 shrink-0 text-feedback-success" />
-						{facts.join(" · ")}
-					</span>
-				)}
-			</div>
+		<div className={`${PLAN_CARD_CLASS} flex flex-col gap-8`}>
+			{clampable ? (
+				<button
+					type="button"
+					data-testid="plan-overall-summary-toggle"
+					aria-expanded={open}
+					title={open ? "Collapse the summary" : "Expand the summary"}
+					onClick={() => setOpen((v) => !v)}
+					className="flex w-full flex-wrap items-center gap-x-8 gap-y-2 text-left"
+				>
+					{header}
+					<ChevronRight
+						className={`ml-auto size-16 shrink-0 text-text-muted transition-transform ${
+							open ? "rotate-90" : ""
+						}`}
+					/>
+				</button>
+			) : (
+				<div className="flex flex-wrap items-center gap-x-8 gap-y-2">{header}</div>
+			)}
 			{summary ? (
 				<div data-testid="plan-overall-summary">
 					<Markdown
 						text={summary}
 						className={`tr-text-ui ${SUMMARY_PROSE} ${clampable && !open ? "line-clamp-2" : ""}`}
 					/>
-					{clampable ? (
-						<button
-							type="button"
-							data-testid="plan-overall-summary-toggle"
-							onClick={() => setOpen((v) => !v)}
-							className="mt-4 tr-text-metadata text-text-subtle underline-offset-2 hover:text-text-default hover:underline"
-						>
-							{open ? "Show less" : "Show more"}
-						</button>
-					) : null}
 				</div>
 			) : null}
 		</div>
@@ -538,6 +566,126 @@ function downloadMarkdown(markdown: string, title: string): void {
 	URL.revokeObjectURL(url);
 }
 
+function PlanAddRow({
+	onAdd,
+	onClose,
+}: {
+	onAdd: (title: string) => Promise<void>;
+	onClose: () => void;
+}) {
+	const [draft, setDraft] = useState("");
+	const inputRef = useRef<HTMLInputElement>(null);
+	useEffect(() => {
+		inputRef.current?.focus();
+	}, []);
+	const submit = async () => {
+		const title = draft.trim();
+		if (!title) return;
+		try {
+			await onAdd(title);
+			setDraft("");
+		} catch {}
+	};
+	return (
+		<div className="mt-8 flex items-center gap-8 rounded-[var(--radius-sm)] border border-border-default px-8 py-4">
+			<Plus className="size-14 shrink-0 text-text-muted" />
+			<input
+				ref={inputRef}
+				data-testid="plan-add-input"
+				value={draft}
+				onChange={(e) => setDraft(e.target.value)}
+				onKeyDown={(e) => {
+					if (e.key === "Enter") void submit();
+					if (e.key === "Escape") onClose();
+				}}
+				placeholder="Add a task for the agent…"
+				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+			/>
+		</div>
+	);
+}
+
+function PlanCardSection({
+	testId,
+	label,
+	Icon,
+	iconClass,
+	children,
+}: {
+	testId: string;
+	label: string;
+	Icon: typeof CircleDot;
+	iconClass: string;
+	children: ReactNode;
+}) {
+	return (
+		<section data-testid={testId} className={PLAN_CARD_CLASS}>
+			<div className="mb-8 flex items-center gap-8">
+				<Icon className={`size-14 shrink-0 ${iconClass}`} />
+				<h2 className="min-w-0 flex-1 tr-title-compact text-text-default">{label}</h2>
+			</div>
+			{children}
+		</section>
+	);
+}
+
+function NowExecutingBlock({
+	activeGroups,
+	activeLoose,
+	nextUp,
+	allDone,
+	onAdd,
+	renderGroup,
+	renderItem,
+}: {
+	activeGroups: TodoGroupItem[];
+	activeLoose: TodoItem[];
+	nextUp: string | undefined;
+	allDone: boolean;
+	onAdd: (title: string) => Promise<void>;
+	renderGroup: (group: TodoGroupItem) => ReactNode;
+	renderItem: (item: TodoItem) => ReactNode;
+}) {
+	const [adding, setAdding] = useState(false);
+	const hasActive = activeGroups.length > 0 || activeLoose.length > 0;
+	const idleText = allDone
+		? "All steps are done."
+		: nextUp
+			? `Up next: ${nextUp}`
+			: "No steps yet — add one to get started.";
+	return (
+		<section data-testid="plan-now-executing" className={PLAN_CARD_CLASS}>
+			<div className="mb-8 flex items-center gap-8">
+				<CircleDot className="size-14 shrink-0 text-primary" />
+				<h2 className="min-w-0 flex-1 tr-title-compact text-text-default">Now executing</h2>
+				<button
+					type="button"
+					data-testid="plan-add-task"
+					onClick={() => setAdding((v) => !v)}
+					title="Add a task to the plan"
+					className="flex h-24 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-action text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+				>
+					<Plus className="size-14" />
+					Task
+				</button>
+			</div>
+			{hasActive ? (
+				<>
+					{activeGroups.map(renderGroup)}
+					{activeLoose.length > 0 ? (
+						<ul className="flex flex-col">{activeLoose.map(renderItem)}</ul>
+					) : null}
+				</>
+			) : (
+				<p data-testid="plan-now-idle" className="px-4 tr-text-ui text-text-subtle">
+					{idleText}
+				</p>
+			)}
+			{adding ? <PlanAddRow onAdd={onAdd} onClose={() => setAdding(false)} /> : null}
+		</section>
+	);
+}
+
 export default function PlanPane({
 	workspaceId,
 	sessionId,
@@ -585,13 +733,14 @@ export default function PlanPane({
 	const data = plan.data;
 	const { done, total } = planSummary(data);
 	const sections = planSections(data);
-	const groups = [...sections.activeGroups, ...sections.pendingGroups, ...sections.doneGroups];
-	const loose = [...sections.activeLoose, ...sections.pendingLoose, ...sections.doneLoose];
 	const adopted = adoptedCommits(data);
-	const hasUnattributed = (data.unattributed?.length ?? 0) > 0;
-	const empty = groups.length === 0 && loose.length === 0;
-	const nothingToShow = empty && adopted.length === 0 && !hasUnattributed;
-	// Review STATE always derives from the plan; only the review ACTIONS are gated on canReview. See panels/SPEC.md.
+	const nextUp = (() => {
+		for (const g of sections.pendingGroups) {
+			const t = g.todos.find((x) => x.status === "pending");
+			if (t) return t.title;
+		}
+		return sections.pendingLoose.find((x) => x.status === "pending")?.title;
+	})();
 	const reviewables = reviewableItems(data);
 	const unsettledReviewables = reviewables.filter((t) => !reviewSettled(t));
 	const reviewedCount = reviewables.length - unsettledReviewables.length;
@@ -805,6 +954,34 @@ export default function PlanPane({
 			);
 	};
 	const exportMarkdown = () => planToMarkdown(data, title);
+	const renderGroup = (group: TodoGroupItem): ReactNode => (
+		<GroupSection
+			key={group.id}
+			group={group}
+			workspaceId={workspaceId}
+			sessionId={sessionId}
+			onOpenCommit={onOpenCommit}
+			onStartReview={startReview}
+			onOpenReview={onOpenReview}
+			reviewComments={reviewComments}
+			startDisabled={reviewingAny}
+			focusRequest={focusRequest}
+		/>
+	);
+	const renderItem = (item: TodoItem): ReactNode => (
+		<ItemBlock
+			key={item.id}
+			item={item}
+			workspaceId={workspaceId}
+			sessionId={sessionId}
+			onOpenCommit={onOpenCommit}
+			onStartReview={startReview}
+			onOpenReview={onOpenReview}
+			reviewComments={reviewComments}
+			startDisabled={reviewingAny}
+			focusRequest={focusRequest}
+		/>
+	);
 
 	return (
 		<div
@@ -1080,53 +1257,41 @@ export default function PlanPane({
 						stale={!buildDone}
 					/>
 				) : null}
-				{nothingToShow ? (
-					<p className="text-text-subtle tr-text-ui">
-						No items yet — the agent adds its plan here.
-					</p>
-				) : (
-					<>
-						{groups.map((group) => (
-							<GroupSection
-								key={group.id}
-								group={group}
-								workspaceId={workspaceId}
-								sessionId={sessionId}
-								onOpenCommit={onOpenCommit}
-								onStartReview={startReview}
-								onOpenReview={onOpenReview}
-								reviewComments={reviewComments}
-								startDisabled={reviewingAny || !canReview}
-								focusRequest={focusRequest}
-							/>
-						))}
-						{loose.length > 0 ? (
-							<section className="mb-16" data-testid="plan-loose">
-								{groups.length > 0 ? (
-									<h2 className="mb-4 border-border-default border-b pb-4 tr-title-compact text-text-default">
-										Other
-									</h2>
-								) : null}
-								<ul className="flex flex-col">
-									{loose.map((item) => (
-										<ItemBlock
-											key={item.id}
-											item={item}
-											workspaceId={workspaceId}
-											sessionId={sessionId}
-											onOpenCommit={onOpenCommit}
-											onStartReview={startReview}
-											onOpenReview={onOpenReview}
-											reviewComments={reviewComments}
-											startDisabled={reviewingAny || !canReview}
-											focusRequest={focusRequest}
-										/>
-									))}
-								</ul>
-							</section>
+				<NowExecutingBlock
+					activeGroups={sections.activeGroups}
+					activeLoose={sections.activeLoose}
+					nextUp={nextUp}
+					allDone={buildDone}
+					onAdd={plan.add}
+					renderGroup={renderGroup}
+					renderItem={renderItem}
+				/>
+				{sections.pendingGroups.length > 0 || sections.pendingLoose.length > 0 ? (
+					<PlanCardSection
+						testId="plan-todo-section"
+						label="To do"
+						Icon={Circle}
+						iconClass="text-text-muted"
+					>
+						{sections.pendingGroups.map(renderGroup)}
+						{sections.pendingLoose.length > 0 ? (
+							<ul className="flex flex-col">{sections.pendingLoose.map(renderItem)}</ul>
 						) : null}
-					</>
-				)}
+					</PlanCardSection>
+				) : null}
+				{sections.doneGroups.length > 0 || sections.doneLoose.length > 0 ? (
+					<PlanCardSection
+						testId="plan-done-section"
+						label="Done"
+						Icon={CircleCheck}
+						iconClass="text-feedback-success"
+					>
+						{sections.doneGroups.map(renderGroup)}
+						{sections.doneLoose.length > 0 ? (
+							<ul className="flex flex-col">{sections.doneLoose.map(renderItem)}</ul>
+						) : null}
+					</PlanCardSection>
+				) : null}
 				{adopted.length > 0 ? (
 					<section className="mb-16" data-testid="plan-adopted-commits">
 						<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
