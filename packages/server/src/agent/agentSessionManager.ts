@@ -498,9 +498,16 @@ export async function reloadSessionResources(sessionId: string): Promise<void> {
 	await session.reload();
 }
 
+const SESSION_SETTINGS_OVERRIDES = { images: { autoResize: false } };
+
 export function buildSessionSettings(cwd: string): SettingsManager {
 	const settings = SettingsManager.create(cwd, undefined, { projectTrusted: true });
-	settings.applyOverrides({ images: { autoResize: false } });
+	const reload = settings.reload.bind(settings);
+	settings.reload = async () => {
+		await reload();
+		settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
+	};
+	settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
 	return settings;
 }
 

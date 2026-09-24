@@ -104,7 +104,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
     the web UI downsizes user-attached images itself at attach time — `apps/web`'s `chat/imageAttachment`
     caps the long edge at 1568px — and the `imageGuard` extension below is the in-context second line of
-    defense); a shared `registerSession` publishes each event
+    defense). The override is **re-applied after every `settings.reload()`**: pi's `SettingsManager.reload()`
+    rebuilds settings from disk and drops `applyOverrides`, and the resource loader reloads settings on every
+    `reload()` — including inside `createAgentSession` — so a one-shot override never reached a prompt. Since
+    pi 0.87 the same setting also governs prompt-attached and tool-result images, so the override is what keeps
+    pi from rewriting user text with `[Image omitted…]` hints (which would defeat the client's optimistic-echo
+    dedup); a shared `registerSession` publishes each event
     tagged with its id + `bindExtensions({ mode:'rpc', uiContext })`. The event projection retains the
     final `agent_end` assistant's reported terminal metadata and attaches it to `agent_settled`, so the
     wire has one authoritative automatic-work terminal even when compaction/retry happens between those

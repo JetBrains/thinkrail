@@ -756,8 +756,35 @@ test("disabling an idle parent lets its running background child finish and deli
 	}
 });
 
-test("buildSessionSettings disables image autoResize (in-memory, so the read tool sends images raw)", () => {
-	expect(buildSessionSettings(tmpCwd("trpi-settings-")).getImageAutoResize()).toBe(false);
+test("buildSessionSettings disables image autoResize, and the override survives a settings.reload()", async () => {
+	const settings = buildSessionSettings(tmpCwd("trpi-settings-"));
+	expect(settings.getImageAutoResize()).toBe(false);
+	await settings.reload();
+	expect(settings.getImageAutoResize()).toBe(false);
+});
+
+test("a prompt image reaches the transcript raw — the autoResize override survives pi's loader reload", async () => {
+	fauxA.setResponses([fauxAssistantMessage("IMAGE_ACK")]);
+	const cwd = tmpCwd("trpi-raw-image-");
+	const s = await createSession({
+		cwd,
+		workspaceId: "ws-raw-image",
+		model: toWireModel(fauxA.getModel()),
+	});
+	try {
+		const rawImageData = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64");
+		await promptSession(s.sessionId, "describe this", [
+			{ type: "image", mimeType: "image/png", data: rawImageData },
+		]);
+		const transcript = await getSessionMessages(s.sessionId, "ws-raw-image", cwd);
+		const userMessage = transcript.messages.find((message) => message.role === "user");
+		expect(userMessage?.content).toEqual([
+			{ type: "text", text: "describe this" },
+			{ type: "image", mimeType: "image/png", data: rawImageData },
+		]);
+	} finally {
+		await removeSession(s.sessionId);
+	}
 });
 
 test("listAvailableModels returns the configured (faux) models", async () => {
