@@ -31,7 +31,10 @@ need producers. Readiness consumes accepted, current, authorized evidence, not t
 Affected descendants include waiting/paused work. Authorization is trusted binding provenance;
 owner callbacks are not human approvals. Cancellation does not decide a gate: unresolved current-attempt
 gates still protect skip and dependency edits, even when their execution was cancelled. Explicit retry
-supersedes that attempt but preserves the node's release/input policy. Revisions never erase prior evidence. Edit preparation computes the validated graph, affected nodes
+supersedes that attempt but preserves the node's release/input policy. Omitted `inputAuthority`
+means human-only, even before the first input gate: weakening that policy or removing the node
+requires human provenance, just like an explicit human-only policy.
+Revisions never erase prior evidence. Edit preparation computes the validated graph, affected nodes
 and required authority once; the runtime reuses that result only if the acquired state still has the
 prepared version and matches the caller's expected version. This includes authority stamped on the
 replay receipt: an ownership handoff cannot reuse authorization from an older snapshot.
