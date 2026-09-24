@@ -48,7 +48,7 @@ from the terminal.
 
 <iframe src="https://www.youtube.com/embed/rJDV4qrLZlo" width="640" height="360" allow="autoplay" allowfullscreen></iframe>
 
-That is all for now. To try out ThinkRail, visit [our main webpage](https://thinkrail.ai) and follow the installation 
+That is all for now. To try out ThinkRail, visit [our main webpage](https://jb.gg/osk2n7) and follow the installation 
 instructions. You can also browse [our GitHub repository](https://github.com/JetBrains/thinkrail), 
 take [our survey](https://forms.gle/es1ksqAax6hnDWCP8), and join [our Discord server](https://discord.gg/Wybu9ceWkY) 
 to say "hi!" and let us know what you think. Your feedback is greatly appreciated.

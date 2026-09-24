@@ -36,7 +36,11 @@ with their owning modules.
 
 ## Artifact verification
 
-Shared probes boot the real artifact, load a synthetic external PI extension with no pi executable,
+Shared probes boot the real artifact, load a synthetic external PI extension with no pi executable (the
+fixture value-imports a bare `@earendil-works/pi-coding-agent` specifier and surfaces the imported value in
+its model name, so the load exercises pi's virtual-module mapping through the transform path the host
+forces — a bundle missing the `PI_BUNDLED_NODE` define fails this probe; [[submodule-server-agent]] owns
+the seam),
 exercise the bundled factories/skills, reach an OAuth URL without a provider turn, verify health/UI and
 transcript trash, and shut down. CLI-specific probes also check its exit-only and embedded-cache behavior.
 Native desktop smoke loads the real UI and verifies route/preload messaging plus the production external
@@ -53,7 +57,7 @@ proves CI and test mutes independently. No UI action or consent is simulated; de
 normal host shutdown. The expected release identity is the shared identity used to build the artifact.
 
 Every host owns isolated home, data, agent and cache directories; environment overrides respect Windows'
-case-insensitive keys. Readiness polling owns a finite deadline and observes early root exit. When a live
+case-insensitive keys. Readiness polling owns a finite deadline and observes early root exit; because the launcher writes its ready, route and navigation-probe documents non-atomically, the smoke treats a missing or half-written JSON file as "not yet" and keeps polling rather than failing on a torn read. When a live
 launched root or validated ready-document app/launcher PIDs need failure cleanup, teardown is bounded and
 awaited before shared retrying removal of the temporary installation root. A setup root may exit successfully
 before its app handoff is ready; after that exit, the harness does not infer or discover descendants from the

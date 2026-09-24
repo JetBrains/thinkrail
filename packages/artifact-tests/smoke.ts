@@ -17,6 +17,16 @@ import { pollUntil, terminateProcess, within } from "./src/lifecycle";
 const root = mkdtempSync(join(tmpdir(), "thinkrail-desktop-smoke-"));
 let sequence = 0;
 
+function readSettledJson(path: string): unknown {
+	try {
+		return JSON.parse(readFileSync(path, "utf8"));
+	} catch (error) {
+		if (error instanceof SyntaxError) return undefined;
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+		throw error;
+	}
+}
+
 function copyApplication(launcher: string): string {
 	const bundleRoot =
 		process.platform === "darwin"
@@ -94,13 +104,20 @@ async function launchDesktop(
 	try {
 		const exitedEarly = (code: number) =>
 			new Error(`${label} desktop host exited early with ${code}`);
-		await pollUntil(() => existsSync(readyPath), {
-			timeoutMs: 30_000,
-			what: `${label} desktop ready`,
-			exited: proc.exited,
-			exitError: exitedEarly,
-		});
-		const ready = JSON.parse(readFileSync(readyPath, "utf8")) as {
+		let readyDocument: unknown;
+		await pollUntil(
+			() => {
+				readyDocument = readSettledJson(readyPath);
+				return readyDocument !== undefined;
+			},
+			{
+				timeoutMs: 30_000,
+				what: `${label} desktop ready`,
+				exited: proc.exited,
+				exitError: exitedEarly,
+			},
+		);
+		const ready = readyDocument as {
 			origin: string;
 			runtimeDir: string;
 			windowUrl: string;
@@ -109,10 +126,12 @@ async function launchDesktop(
 		};
 		if (mode === "ui") {
 			await pollUntil(
-				() =>
-					JSON.parse(readFileSync(join(userDataPath, "routes.json"), "utf8")).routes[
-						"local:main"
-					] === "#/v1",
+				() => {
+					const routes = readSettledJson(join(userDataPath, "routes.json")) as
+						| { routes?: Record<string, string> }
+						| undefined;
+					return routes?.routes?.["local:main"] === "#/v1";
+				},
 				{
 					timeoutMs: 15_000,
 					what: "native route preload/RPC round-trip",
@@ -121,15 +140,23 @@ async function launchDesktop(
 				},
 			);
 			writeFileSync(controlPath, "navigate");
-			await pollUntil(() => existsSync(navigationProbePath), {
-				timeoutMs: 15_000,
-				what: "native external navigation",
-				exited: proc.exited,
-				exitError: exitedEarly,
-			});
-			const navigation = JSON.parse(readFileSync(navigationProbePath, "utf8"));
-			if (navigation.url !== "https://example.invalid/thinkrail-navigation-probe") {
-				throw new Error(`native external navigation reported an unexpected URL: ${navigation.url}`);
+			let navigation: { url?: string } | undefined;
+			await pollUntil(
+				() => {
+					navigation = readSettledJson(navigationProbePath) as { url?: string } | undefined;
+					return navigation !== undefined;
+				},
+				{
+					timeoutMs: 15_000,
+					what: "native external navigation",
+					exited: proc.exited,
+					exitError: exitedEarly,
+				},
+			);
+			if (navigation?.url !== "https://example.invalid/thinkrail-navigation-probe") {
+				throw new Error(
+					`native external navigation reported an unexpected URL: ${navigation?.url}`,
+				);
 			}
 		}
 		let stopPromise: Promise<void> | undefined;

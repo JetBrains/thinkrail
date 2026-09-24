@@ -80,52 +80,32 @@ to preserve).
   so fixtures can land where a real no-arg `listAll()` would actually look.
 
 ## On-disk JSONL structure (observed from pi session files)
-- **`message` entries:** `{ type: "message", ..., message: { role: "user"|"assistant"|"toolResult", content: string|array, timestamp: ms-number } }`
-  — `message.role` determines renderability; `message.timestamp` is milliseconds since epoch.
-- **`custom_message` entries:** `{ type: "custom_message", customType: string, content: string|array, timestamp: ISO-string, display: boolean, ... }`
-  — top-level structure (no `message` wrapper); always renderable as role "custom"; `timestamp` is ISO 8601 string at entry level.
+- **`message` entries:** `{ type: "message", ..., message: { role: "system"|"user"|"assistant"|"toolResult", content: string|array, timestamp: ms-number } }`.
+  System messages carry prompt `sections` and/or `toolsAdded`/`toolsRemoved`; the first request persists the
+  full system message and later prompt/tool changes persist patches. `isTranscriptMessageRole` excludes system,
+  so it renders no transcript row and consumes no `messageIndex` slot.
+- **`usage` entries:** `{ type: "usage", ..., kind, provider, model, usage, note? }`; they are hidden from the
+  conversation tree and context, but pi includes their token/cost data in session totals. Compaction entries may
+  carry a `systemMessage` snapshot alongside their summary.
+- **`custom_message` entries:** `{ type: "custom_message", customType: string, content: string|array, timestamp: ISO-string, display: boolean, ... }`.
+  They have no `message` wrapper and become role `custom` context messages.
 
-## pi file format (pinned v0.84.3 — `@earendil-works/pi-coding-agent`)
-Verified by reading `dist/core/session-manager.{js,d.ts}` in the installed package (source of truth over
-any assumption — re-verify on a pi version bump). These facts now pin **two** consumers: the fixtures
-below, and `historyIndex.ts`'s own discovery walk (which must see exactly the files pi's `SessionManager`
-would):
-- **Header line** (always line 1, `SessionHeader`): `{ type: "session", version?: number, id: string,
-  timestamp: string /* ISO */, cwd: string, parentSession?: string }`. `readSessionHeader`/`buildSessionInfo`
-  reject the file (return `null`/`[]`) unless the first line parses as JSON with `type === "session"` and a
-  string `id`. `CURRENT_SESSION_VERSION = 3`; pi's own writer stamps `version: 3` — fixtures should too, so
-  a real `SessionManager` that later opens one never runs migration.
-- **File naming:** discovery is driven **purely by the `.jsonl` suffix** — `listSessionsFromDir` does
-  `readdir(dir).filter(f => f.endsWith(".jsonl"))`; nothing parses the filename. pi's own writer names new
-  files `<isoTimestamp-with-:-and-.-replaced-by-'-'>_<sessionId>.jsonl`, but any `*.jsonl` name works for
-  discovery — fixtures don't need to match that exact pattern.
-- **`cwd` recovery — and the non-recursive-custom-dir trap:** `cwd` always comes from the header's `cwd`
-  field (`header.cwd`), never from directory placement. But *directory structure interacts with discovery*:
-  `SessionManager.listAll()` (no args) walks pi's real default root (`~/.pi/agent/sessions/`) **one level of
-  directories or symbolic links** — normally one dir per encoded cwd (`getDefaultSessionDirPath`:
-  `--<cwd, / and \ and : → '-'>--`) — and flattens the `.jsonl` files found inside each; a symlink whose
-  target cannot be read as a directory contributes nothing. But `listAll(sessionDir)` / `list(cwd, sessionDir)`
-  — the path taken whenever a **custom** `sessionDir` string is passed (exactly what `HistoryIndex`'s
-  constructor and this module's tests do) — calls `listSessionsFromDir(customDir)`, which does a **flat,
-  non-recursive** `readdir(customDir)`. Files placed in subdirectories of a custom `sessionDir` are invisible
-  to `listAll`. Consequence for fixtures: multi-session, multi-cwd test fixtures must write all `.jsonl`
-  files **flat, directly under** the given dir; different `cwd`s are expressed via each file's own header
-  `cwd` field, never via subdirectory nesting.
-- **Default-layout encoding is not importable — fixtures replicate it (pinned by A5):** the per-cwd
-  subdirectory name above is computed by `getDefaultSessionDirPath`, a *private* (unexported) helper inside
-  `core/session-manager.js`. The mkdir-ing wrapper that IS exported from that module (`getDefaultSessionDir`)
-  is not re-exported from the package root `@earendil-works/pi-coding-agent` index either (checked
-  `dist/index.js`: only `SessionManager` + a handful of pure tree-traversal helpers cross that boundary) —
-  so nothing importable computes this path. `testFixtures.ts` exports `defaultSessionDirFor(agentDir, cwd)`,
-  a from-scratch replica of the exact regex (`--<cwd, / and \ and : → '-'>--`), pinned in
-  `testFixtures.test.ts` against a real `SessionManager.list(cwd)` / `listAll()` call — re-verify against
-  `dist/core/session-manager.js` on a pi version bump.
-- **`PI_CODING_AGENT_DIR` is read live, not cached (pinned by A5):** `getAgentDir()` (`config.js`) reads
-  `process.env.PI_CODING_AGENT_DIR` directly in its function body on every call — there is no top-level
-  capture at module load. So a same-process test (or the e2e seeder) can set the env var immediately before
-  the `SessionManager` call it needs to affect and restore it in a `finally`/`afterAll`; no subprocess is
-  needed to observe a "live" env read. (Existing precedent: `agent/agentSessionManager.test.ts` already
-  does this for its disk-reopen case.)
+## pi file format (pinned v0.86.1 — `@earendil-works/pi-coding-agent`)
+Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify these facts on a pi version bump;
+`testFixtures.ts` and `historyIndex.ts` both depend on the discovery layout.
+- **Header:** pi writes `{ type: "session", version: 3, id, timestamp, cwd, parentSession? }`; `CURRENT_SESSION_VERSION = 3`.
+  Readers require the first *parseable* entry to be a session header with a string `id` (not necessarily physical line 1).
+  `cwd` is recovered from that header; a missing/invalid header rejects the file.
+- **Naming and custom directories:** discovery only considers direct children whose names end in `.jsonl`; pi writes
+  `<ISO timestamp with ':' and '.' replaced by '-'>_<sessionId>.jsonl`, but the filename otherwise has no meaning.
+  `list(cwd, sessionDir)` and `listAll(sessionDir)` use a flat, non-recursive custom directory; custom-list filtering
+  still compares the header `cwd` with `cwd`. Subdirectory placement is invisible.
+- **Default layout:** no-argument `listAll()` scans `<agentDir>/sessions/` one level deep, considering child directories
+  and symlinks, then their direct `.jsonl` children. Unreadable or broken symlink targets contribute no files. Each cwd
+  directory is `--<resolved cwd with a leading slash removed and slash/backslash/colon replaced by `-`>--`; `getDefaultSessionDirPath`
+  is private, while `getDefaultSessionDir` is not exported from the package root. `defaultSessionDirFor` replicates it.
+- **Environment:** `getAgentDir()` reads `PI_CODING_AGENT_DIR` when called, so changing that variable before a SessionManager
+  discovery call changes the root used by pi.
 
 ## Boundary
 - **Public surface (`index.ts`):** `HistoryIndex`, `getHistoryIndex()`, `matchesTerms`, `makeSnippet`,

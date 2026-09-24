@@ -6,13 +6,21 @@ import {
 	isDesktopPreferenceValue,
 	STABLE_PREFERENCES_GLOBAL,
 } from "./preferenceAdapter";
+import { takePreloadGlobal } from "./preloadGlobals";
 import type { DesktopRpc } from "./rpc";
+import { createWindowChromeStyleWriter, INITIAL_WINDOW_CHROME_GLOBAL } from "./windowChrome";
 
 interface DesktopPreferenceAdapter {
 	getItem(key: string): string | null;
 	setItem(key: string, value: string): void;
 	removeItem(key: string): void;
 }
+
+const windowChromeStyle = createWindowChromeStyleWriter(
+	() => document.documentElement?.style ?? null,
+);
+document.addEventListener("DOMContentLoaded", windowChromeStyle.flush, { once: true });
+windowChromeStyle.update(takePreloadGlobal(INITIAL_WINDOW_CHROME_GLOBAL));
 
 const updateListeners = new Set<(state: NativeUpdateState) => void>();
 const rpc = Electroview.defineRPC<DesktopRpc>({
@@ -23,6 +31,7 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 			updateStateChanged: (state) => {
 				for (const listener of updateListeners) listener(state);
 			},
+			windowChromeChanged: windowChromeStyle.update,
 		},
 	},
 });
@@ -43,7 +52,7 @@ Object.defineProperty(globals, "__THINKRAIL_NATIVE_UPDATES__", {
 	configurable: false,
 	enumerable: false,
 });
-const injectedPreferences = Reflect.get(globals, INITIAL_DESKTOP_PREFERENCES_GLOBAL);
+const injectedPreferences = takePreloadGlobal(INITIAL_DESKTOP_PREFERENCES_GLOBAL);
 const preferences = new Map<string, string>();
 if (typeof injectedPreferences === "object" && injectedPreferences !== null) {
 	for (const key of Object.keys(injectedPreferences)) {
@@ -53,7 +62,6 @@ if (typeof injectedPreferences === "object" && injectedPreferences !== null) {
 		}
 	}
 }
-Reflect.deleteProperty(globals, INITIAL_DESKTOP_PREFERENCES_GLOBAL);
 const preferenceAdapter: DesktopPreferenceAdapter = Object.freeze({
 	getItem: (key: string) => (isDesktopPreferenceKey(key) ? (preferences.get(key) ?? null) : null),
 	setItem: (key: string, value: string) => {
