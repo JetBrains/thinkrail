@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+	getCurrentSystemPrompt,
 	getCurrentTools,
 	InMemoryCredentialStore,
 	type Model,
@@ -127,14 +128,11 @@ function subagentToolState(context: TranscriptContext): string {
 	return names.has("Agent") && names.has("get_subagent_result") ? "SUBAGENTS_ON" : "SUBAGENTS_OFF";
 }
 
-function reviewToolState(context: {
-	tools?: ReadonlyArray<{ name: string }>;
-	systemPrompt?: string;
-}): string {
-	const names = new Set((context.tools ?? []).map((tool) => tool.name));
+function reviewToolState(context: TranscriptContext): string {
+	const names = new Set(getCurrentTools(context.messages).map((tool) => tool.name));
 	const toolActive = names.has("request_review");
 	// The guidance must track the tool: setActiveToolsByName rebuilds the prompt from active tools only.
-	const guidanceInPrompt = (context.systemPrompt ?? "").includes("request_review");
+	const guidanceInPrompt = getCurrentSystemPrompt(context.messages).includes("request_review");
 	if (toolActive && guidanceInPrompt) return "REVIEW_ON";
 	if (!toolActive && !guidanceInPrompt) return "REVIEW_OFF";
 	return "REVIEW_INCONSISTENT";
