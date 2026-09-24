@@ -12,6 +12,7 @@ import {
 	RiGitPullRequestLine as GitPullRequestArrow,
 	RiListCheck3 as ListChecks,
 	RiLoader4Line as Loader2,
+	RiQuestionnaireLine as MessageCircleQuestion,
 	RiChat1Line as MessageSquare,
 	RiMore2Line as MoreVertical,
 	RiAddLine as Plus,
@@ -65,6 +66,7 @@ import {
 } from "../store";
 import { errorText, getTransport, supportsPlanReview, wsErrorCode } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
+import { openChatInTab } from "./openChat";
 import { openDiffInTab } from "./openTabs";
 import { PlanCommitsMenu } from "./PlanCommitsMenu";
 import { PrComposeDialog, type PrComposeState } from "./PrComposeDialog";
@@ -574,55 +576,55 @@ function downloadMarkdown(markdown: string, title: string): void {
 	URL.revokeObjectURL(url);
 }
 
-function PlanAddRow({
-	onAdd,
+// One inline textarea composer for the plan: Enter submits, Shift+Enter newlines, Esc closes (when
+// closable). Used both for adding TODOs and for the chat/steer field in the Session block.
+function PlanComposer({
+	icon: Icon,
+	placeholder,
+	testId,
+	autoFocus = false,
+	onSubmit,
 	onClose,
 }: {
-	onAdd: (title: string) => Promise<void>;
-	onClose: () => void;
+	icon: typeof Plus;
+	placeholder: string;
+	testId: string;
+	autoFocus?: boolean;
+	onSubmit: (text: string) => Promise<void> | void;
+	onClose?: (() => void) | undefined;
 }) {
 	const [draft, setDraft] = useState("");
 	const inputRef = useRef<HTMLTextAreaElement>(null);
-	const grow = () => {
-		const el = inputRef.current;
-		if (!el) return;
-		el.style.height = "auto";
-		el.style.height = `${el.scrollHeight}px`;
-	};
 	useEffect(() => {
-		inputRef.current?.focus();
-	}, []);
+		if (autoFocus) inputRef.current?.focus();
+	}, [autoFocus]);
 	const submit = async () => {
-		const title = draft.trim();
-		if (!title) return;
+		const text = draft.trim();
+		if (!text) return;
 		try {
-			await onAdd(title);
+			await onSubmit(text);
 			setDraft("");
-			requestAnimationFrame(grow);
 		} catch {}
 	};
 	return (
-		<div className="mt-8 flex items-start gap-8 rounded-[var(--radius-sm)] border border-border-default px-8 py-4">
-			<Plus className="mt-2 size-14 shrink-0 text-text-muted" />
+		<div className="mt-8 flex items-start gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 py-8 transition-colors focus-within:border-control-border-active">
+			<Icon className="mt-2 size-14 shrink-0 text-text-muted" />
 			<textarea
 				ref={inputRef}
-				data-testid="plan-add-input"
+				data-testid={testId}
 				rows={1}
 				value={draft}
-				onChange={(e) => {
-					setDraft(e.target.value);
-					grow();
-				}}
+				onChange={(e) => setDraft(e.target.value)}
 				onKeyDown={(e) => {
 					if (e.key === "Enter" && !e.shiftKey) {
 						e.preventDefault();
 						void submit();
-					} else if (e.key === "Escape") {
+					} else if (e.key === "Escape" && onClose) {
 						onClose();
 					}
 				}}
-				placeholder="Add a task…  (Enter to add, Shift+Enter for a new line)"
-				className="max-h-[10rem] min-w-0 flex-1 resize-none bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+				placeholder={placeholder}
+				className="field-sizing-content max-h-[10rem] min-w-0 flex-1 resize-none overflow-x-hidden overflow-y-auto bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
 		</div>
 	);
@@ -705,6 +707,8 @@ function SessionBlock({
 	glance,
 	askSlot,
 	onAdd,
+	onOpenChat,
+	onSend,
 	renderGroup,
 	renderItem,
 }: {
@@ -716,6 +720,8 @@ function SessionBlock({
 	glance: PlanGlance;
 	askSlot: ReactNode;
 	onAdd: (title: string) => Promise<void>;
+	onOpenChat: () => void;
+	onSend: (text: string) => Promise<void> | void;
 	renderGroup: (group: TodoGroupItem) => ReactNode;
 	renderItem: (item: TodoItem) => ReactNode;
 }) {
@@ -723,21 +729,35 @@ function SessionBlock({
 	const hasActive = activeGroups.length > 0 || activeLoose.length > 0;
 	const hasPending = pendingGroups.length > 0 || pendingLoose.length > 0;
 	const hasAny = hasActive || hasPending;
-	const idleText = allDone ? "All steps are done." : "No steps yet — add one to get started.";
 	return (
 		<section data-testid="plan-now-executing" className={PLAN_CARD_CLASS}>
 			<div className="mb-8 flex items-center gap-8">
 				<CircleDot className="size-14 shrink-0 text-primary" />
 				<h2 className="shrink-0 tr-title-compact text-text-default">Session</h2>
 				{glance === "working" ? (
-					<span
+					<button
+						type="button"
 						data-testid="plan-now-status"
 						data-glance="working"
-						className="flex min-w-0 items-center gap-4 tr-text-metadata text-text-subtle"
+						onClick={onOpenChat}
+						title="Open the chat"
+						className="flex min-w-0 items-center gap-4 tr-text-metadata text-text-subtle underline-offset-2 hover:text-text-default hover:underline"
 					>
 						<Loader2 className="size-14 shrink-0 animate-spin text-primary" />
 						Working…
-					</span>
+					</button>
+				) : glance === "waiting_question" ? (
+					<button
+						type="button"
+						data-testid="plan-now-status"
+						data-glance="waiting_question"
+						onClick={onOpenChat}
+						title="Open the chat"
+						className="flex min-w-0 items-center gap-4 tr-text-metadata text-primary underline-offset-2 hover:underline"
+					>
+						<MessageCircleQuestion className="size-14 shrink-0" />
+						Question
+					</button>
 				) : null}
 				<button
 					type="button"
@@ -767,16 +787,45 @@ function SessionBlock({
 					) : null}
 				</>
 			) : null}
-			{!hasAny && glance === "waiting" ? (
-				<p
-					data-testid="plan-now-idle"
-					data-glance="waiting"
-					className="px-4 tr-text-ui text-text-subtle"
-				>
-					{idleText}
-				</p>
+			{glance === "waiting_question" ? null : glance === "waiting" && !hasAny && !allDone ? (
+				!adding ? (
+					<button
+						type="button"
+						data-testid="plan-now-idle"
+						data-glance="waiting"
+						onClick={() => setAdding(true)}
+						title="Add a task"
+						className="group flex w-full items-center gap-8 rounded-[var(--radius-sm)] px-4 py-2 text-left tr-text-ui text-text-subtle transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+					>
+						<span className="min-w-0 flex-1">No steps yet — add one to get started.</span>
+						<span className="flex shrink-0 items-center gap-4 text-text-muted opacity-0 transition-opacity group-hover:opacity-100">
+							<Plus className="size-14" />
+							Add a task
+						</span>
+					</button>
+				) : null
+			) : (
+				<PlanComposer
+					icon={MessageSquare}
+					testId="plan-session-chat"
+					placeholder={
+						glance === "working"
+							? "Steer the agent…  (Enter to send, Shift+Enter for a new line)"
+							: "Message the agent…  (Enter to send, Shift+Enter for a new line)"
+					}
+					onSubmit={onSend}
+				/>
+			)}
+			{adding ? (
+				<PlanComposer
+					icon={Plus}
+					testId="plan-add-input"
+					placeholder="Add a task…  (Enter to add, Shift+Enter for a new line)"
+					autoFocus
+					onSubmit={onAdd}
+					onClose={() => setAdding(false)}
+				/>
 			) : null}
-			{adding ? <PlanAddRow onAdd={onAdd} onClose={() => setAdding(false)} /> : null}
 		</section>
 	);
 }
@@ -1354,6 +1403,17 @@ export default function PlanPane({
 					glance={glance}
 					askSlot={<PlanAskQuestion workspaceId={workspaceId} sessionId={sessionId} />}
 					onAdd={plan.add}
+					onOpenChat={() => void openChatInTab(workspaceId, sessionId)}
+					onSend={async (text) => {
+						// Behaves like the chat composer: steer a running agent, otherwise start a new turn —
+						// then hand off to the chat where the reply streams.
+						const streaming = useAppStore.getState().sessions[sessionId]?.isStreaming ?? false;
+						void openChatInTab(workspaceId, sessionId);
+						await getTransport().request(streaming ? "session.steer" : "session.prompt", {
+							sessionId,
+							text,
+						});
+					}}
 					renderGroup={renderGroup}
 					renderItem={renderItem}
 				/>

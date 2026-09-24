@@ -607,16 +607,24 @@ a project picker, the prompt hero, and the reused
   plan content; another client can explicitly reopen the same host-owned page without inheriting placement. It renders the session's TODO plan document-scale,
   **status-grouped** (`planSections`): a single **`Session` block** (`plan-now-executing`) holds the
   current work — the active group(s)/loose items followed by the pending ones (no separate To-do
-  section; item status glyphs distinguish in-progress from pending). Its **live status is a chip in the
-  header, right of the `Session` title** (`plan-now-status`, `data-glance`, off `sessionGlance`): `working`
-  → a `Working…` spinner. A `waiting_question` state is surfaced not as a chip but as the **actual
-  question, answerable in place**: the Session body hosts the SAME **`AskUserQuestionCard`** as the chat
+  section; item status glyphs distinguish in-progress from pending). Its **live status is a clickable chip
+  in the header, right of the `Session` title** (`plan-now-status`, `data-glance`, off `sessionGlance`)
+  that **opens the chat** (`openChatInTab`) so you can jump from the plan into the conversation: `working`
+  → a `Working…` spinner, `waiting_question` → a `Question` chip. The awaiting question is ALSO
+  **answerable in place**: the Session body hosts the SAME **`AskUserQuestionCard`** as the chat
   (`PlanAskQuestion` → `plan-ask`), which subscribes to the session runtime, finds the awaiting ask
   (`planView.pendingAsk`), and mounts the card inside a minimal `ChatActionsContext` (a real
   `session.answerQuestion`; the chat-only actions — reveal/focus/subagent — are no-ops) plus a derived
   `AskStatesContext`, so an answer submitted from the plan flows through the identical path as the chat.
-  It renders nothing when no question is awaiting. Only when the plan has no items and the session is idle
-  does the body show the `plan-now-idle` line (`All steps are done.` → `No steps yet…`). A **`Done` section**
+  It renders nothing when no question is awaiting. Below the items the Session ends in a **chat/steer
+  composer** (`plan-session-chat`, a `PlanComposer` textarea that works like the chat composer — Enter
+  sends, Shift+Enter newlines) whose send adapts to the run: while the agent is streaming it **steers**
+  (`session.steer`, "Steer the agent…"), otherwise it **starts a turn** (`session.prompt`, "Message the
+  agent…"); either way it hands off to the chat (`openChatInTab`) where the reply streams. So a completed
+  plan (no open steps) turns its Session into a chat entry point rather than a dead "all steps done" line,
+  and a running plan gets an in-place steering field. The one exception is a **truly empty** plan (no items,
+  idle): there the body shows the `plan-now-idle` line (`No steps yet…`), itself a click target that opens
+  the add-task input (a hover `+ Add a task` hint) to bootstrap the plan. A **`Done` section**
   (`plan-done-section`, always expanded — the page is the review trail) holds the completed groups then
   done loose. Both blocks share ONE `PLAN_CARD_CLASS` card shape with a `glyph + title` header — Session
   (`CircleDot`), Done (`CircleCheck`, via `PlanCardSection`) — so the plan reads as one consistent card

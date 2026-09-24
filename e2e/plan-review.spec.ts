@@ -427,6 +427,70 @@ test("plan items can be removed, and the add box takes multi-line input (Enter a
 	await expect(pane.getByTestId("plan-item").filter({ hasText: "A task I added" })).toHaveCount(0);
 });
 
+test("an empty plan's idle line is a click target that opens the add input", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const sessionId = await page
+		.locator('[data-testid="editor-tab"][data-kind="chat"]')
+		.first()
+		.getAttribute("data-session-id");
+	if (!sessionId) throw new Error("chat tab exposes no session id");
+	const todosDir = join(workspace.worktreePath, ".thinkrail", "context", "todos");
+	mkdirSync(todosDir, { recursive: true });
+	writeFileSync(
+		join(todosDir, `${sessionId}.json`),
+		JSON.stringify({ version: 6, todos: [], groups: [] }),
+	);
+
+	await page.getByTestId("chat-plan-toggle").click();
+	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	const pane = page.getByTestId("plan-pane");
+	await expect(pane).toBeVisible();
+	const idle = pane.getByTestId("plan-now-idle");
+	await expect(idle).toContainText("No steps yet");
+	await idle.click();
+	await expect(pane.getByTestId("plan-add-input")).toBeVisible();
+	await expect(idle).toHaveCount(0);
+});
+
+test("a completed plan turns the Session into a chat composer instead of an idle line", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const sessionId = await page
+		.locator('[data-testid="editor-tab"][data-kind="chat"]')
+		.first()
+		.getAttribute("data-session-id");
+	if (!sessionId) throw new Error("chat tab exposes no session id");
+	const todosDir = join(workspace.worktreePath, ".thinkrail", "context", "todos");
+	mkdirSync(todosDir, { recursive: true });
+	writeFileSync(
+		join(todosDir, `${sessionId}.json`),
+		JSON.stringify({
+			version: 6,
+			todos: [
+				{
+					id: "d1",
+					title: "Done thing",
+					status: "done",
+					origin: "agent",
+					createdAt: "2026-01-01T00:00:00Z",
+					updatedAt: "2026-01-01T00:00:00Z",
+				},
+			],
+			groups: [],
+		}),
+	);
+
+	await page.getByTestId("chat-plan-toggle").click();
+	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	const pane = page.getByTestId("plan-pane");
+	await expect(pane).toBeVisible();
+	await expect(pane.getByTestId("plan-session-chat")).toBeVisible();
+	await expect(pane.getByTestId("plan-now-idle")).toHaveCount(0);
+});
+
 test("a re-opened plan keeps the completion note on the page, marked stale, but out of the export", async ({
 	page,
 	context,
