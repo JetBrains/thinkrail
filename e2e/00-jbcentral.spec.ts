@@ -34,6 +34,7 @@ test("connects and follows external add, replacement, and remove without a host 
 	);
 	await expect(anthropicRow).toHaveAttribute("data-configured", "true");
 	await expect(anthropicRow).toContainText("JetBrains AI");
+	await expect(anthropicRow).toContainText("Anthropic");
 	await expect(anthropicRow.getByTestId("provider-signout")).toHaveCount(0);
 	await expect(page.getByTestId("settings-dialog")).not.toContainText(
 		"E2E_PROVIDER_SECRET_SENTINEL",
@@ -41,6 +42,7 @@ test("connects and follows external add, replacement, and remove without a host 
 	await expect(page.getByTestId("settings-dialog")).not.toContainText(
 		"E2E_PROVIDER_CONFIG_SENTINEL",
 	);
+	await expect(page.getByTestId("settings-dialog")).not.toContainText("E2E_PROVIDER_NAME_SENTINEL");
 	await expect(
 		page.locator('[data-testid="provider-row"][data-provider="e2e-central"]'),
 	).toHaveCount(0);

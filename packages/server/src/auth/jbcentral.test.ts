@@ -51,6 +51,7 @@ export default function syntheticCentralExtension(pi) {
   pi.registerProvider("anthropic", {
     baseUrl: "https://synthetic-central.invalid/anthropic",
     apiKey: "synthetic-proxy-key",
+    name: "synthetic-sensitive-provider-name",
   });
   pi.registerProvider("central-test", {
     api: "openai-completions",
@@ -253,10 +254,12 @@ describe("watched native Central runtime", () => {
 		expect(anthropic).toBeDefined();
 		if (!anthropic) throw new Error("synthetic Central anthropic provider missing");
 		expect(anthropic).toMatchObject({ id: "anthropic", configured: true, kind: "central" });
+		expect(anthropic.name).not.toBe("synthetic-sensitive-provider-name");
 		expect(anthropic.detail).toBeUndefined();
 		expect(anthropic.canLogout).toBeUndefined();
 		expect(JSON.stringify(report)).not.toContain("synthetic-central.invalid");
 		expect(JSON.stringify(report)).not.toContain("synthetic-proxy-key");
+		expect(JSON.stringify(report)).not.toContain("synthetic-sensitive-provider-name");
 		expect(report.providers.map((provider) => provider.id)).not.toContain("central-test");
 		expect(await disconnectJbcentral()).toEqual({ outcome: "applied" });
 		const disconnectedAnthropic = (await getProviderStatus()).providers.find(

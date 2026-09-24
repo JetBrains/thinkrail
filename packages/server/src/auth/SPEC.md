@@ -46,8 +46,9 @@ ourselves and never surface a credential value over the wire.
     never become rows or cross the wire. A built-in Central *replaces* (`anthropic`, `openai`, `google-vertex`
     in the real artifact) stays a row — the user must be able to see which providers reach them through
     JetBrains AI — and is reported as `kind: "central"` with no `detail`, decided purely by the id's membership
-    in the generation's `opaqueProviderIds`; its name, `configured`, and `canLogout` follow the ordinary
-    reads, and Central's `baseUrl`/`apiKey` are never read.
+    in the generation's `opaqueProviderIds`; its `name` is the generation's pre-extension display name (pi
+    composes `extension.name ?? base.name`, so a live read would hand an artifact-chosen string to the client),
+    while `configured` and `canLogout` follow the ordinary reads and Central's `baseUrl`/`apiKey` are never read.
     - **OAuth-capable ids are first-class rows.** The id universe unions model-catalog providers,
       stored-credential providers (`listCredentials()`), **and** providers whose `Provider.auth.oauth`
       is present — an OAuth id can differ from any model-provider id (`openai-codex` ≠ `openai`), and a

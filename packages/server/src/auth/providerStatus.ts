@@ -125,15 +125,16 @@ export async function getProviderStatus(): Promise<ProviderStatusReport> {
 		const credentialTypes = new Map(
 			visibleCredentials.map((credential) => [credential.providerId, credential.type]),
 		);
+		const centralProviders = new Set(
+			providerStatusIds.filter((providerId) => generation.opaqueProviderIds.has(providerId)),
+		);
 
 		return buildProviderReport({
 			modelProviderIds: new Set(
 				providerStatusIds.filter((providerId) => runtime.getModels(providerId).length > 0),
 			),
 			availableProviders: new Set(available.map((model) => model.provider)),
-			centralProviders: new Set(
-				providerStatusIds.filter((providerId) => generation.opaqueProviderIds.has(providerId)),
-			),
+			centralProviders,
 			credentialProviders: visibleCredentials.map((credential) => credential.providerId),
 			oauthProviders: visibleProviders
 				.filter((provider) => provider.auth.oauth)
@@ -144,7 +145,10 @@ export async function getProviderStatus(): Promise<ProviderStatusReport> {
 			credentialType: (id) => credentialTypes.get(id),
 			providerAuth: (id) => runtime.getProviderAuthStatus(id),
 			apiKeyLogin: (id) => Boolean(runtime.getProvider(id)?.auth.apiKey?.login),
-			displayName: (id) => runtime.getProvider(id)?.name ?? id,
+			displayName: (id) =>
+				centralProviders.has(id)
+					? (generation.providerStatusNames.get(id) ?? id)
+					: (runtime.getProvider(id)?.name ?? id),
 			hasAuth: (id) => runtime.getProviderAuthStatus(id).configured,
 			jbcentral,
 			jbcentralInstall: install,
