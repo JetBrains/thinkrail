@@ -525,6 +525,29 @@ test("an unset reviewer model resolves the user's default, not the worker's inhe
 	expect(captured).toEqual({ provider: "faux-worker", id: "faux-worker-model" });
 });
 
+test("an unset reviewer effort resolves the user's default, not the worker's inherited effort", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const settingsPath = join(agentDir, "settings.json");
+	// No pinned reviewEffort; the user's default thinking level is "high", while the worker session runs
+	// on the faux model at its own effort. The reviewer must run at the resolved default, never inherit.
+	writeFileSync(settingsPath, `${JSON.stringify({ defaultThinkingLevel: "high" })}\n`);
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	let captured: string | undefined;
+	const capturingRunner: ReviewRunner = async (_ws, _sess, _task, role) => {
+		captured = role.thinkingLevel;
+		return { childSessionId: "child", status: "completed" as const, finalText: approve };
+	};
+	try {
+		startPlanReview(WS, sessionId, id, capturingRunner);
+		await settle(sessionId, id);
+	} finally {
+		rmSync(settingsPath, { force: true });
+	}
+	expect(captured).toBe("high");
+});
+
 test("the tool path awaits artifact reconciliation before it snapshots the change set", async () => {
 	installRequestReviewSeam(verdictRunner(approve));
 	const sessionId = await workerSession();
