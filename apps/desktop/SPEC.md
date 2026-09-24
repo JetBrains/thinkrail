@@ -55,10 +55,12 @@ another.
 1. Resolve app resources and set `BUN_PTY_LIB` to the staged current-target FFI library before any server
    import. Electrobun emits an ordinary JavaScript entry, not a `bun build --compile` executable, so it
    does not embed `bun-pty`'s library.
-2. Dynamically import the separately built, unpacked `server-runtime.ts` resource. The `.ts` filename is a
-   runtime contract: PI then selects its TypeScript source-runtime Jiti path and supplies bundled virtual
-   modules to external extensions. Flattening PI into Electrobun's normal `.js` entry makes it select
-   built-Node aliases that are absent from a self-contained app and breaks Central/external extensions.
+2. Dynamically import the separately built, unpacked `server-runtime.ts` resource. That bundle is built with
+   pi's `PI_BUNDLED_NODE=true` define, which makes PI use its embedded-modules extension loader (static jiti
+   with Babel bundled, plus virtual modules) for external extensions such as Central. Without the define a
+   single-file bundle is treated as a plain Node runtime and PI's lazy Babel `require` cannot resolve inside
+   it ([[submodule-server-agent]] owns the seam). Flattening PI into Electrobun's normal entry is still
+   forbidden: it would load `bun-pty` before `BUN_PTY_LIB` is set.
 3. The runtime value-imports the five bundled extension factories and calls `registerBundledRuntime()`
    with those factories, the named `pi-web-access` factory needed by delegation children, the staged skills,
    and macOS/Windows trash helpers. The generator's key map must satisfy every key of the server-owned
@@ -72,7 +74,7 @@ another.
    renderer.
 
 The Electrobun entry bundle contains native-shell code only. A static server import there is forbidden:
-it can load `bun-pty` before `BUN_PTY_LIB` and flatten PI into the wrong extension-loader mode. Startup
+it can load `bun-pty` before `BUN_PTY_LIB` and bypass the defined server-runtime build. Startup
 failure is logged through the shared crash path, shown in a native error dialog, and exits without leaving
 a hidden host.
 

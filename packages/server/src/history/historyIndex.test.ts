@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AssistantMessage, SystemMessage, Usage } from "@earendil-works/pi-ai";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { extractSession } from "./extract";
 import { getHistoryIndex, HistoryIndex, makeSnippet, matchesTerms } from "./historyIndex";
 import { defaultSessionDirFor, writeFixtureSession } from "./testFixtures";
 
@@ -49,6 +52,55 @@ describe("HistoryIndex.search", () => {
 		expect(result.prompts.map((p) => p.timestamp)).toEqual([2000, 1000]);
 		expect(result.prompts.map((p) => p.sessionId)).toEqual(["sess-b", "sess-a"]);
 		expect(result.indexing).toBe(false);
+	});
+
+	test("ignores persisted system and usage entries in extraction and search", async () => {
+		const manager = SessionManager.create("/repo/system-usage", dir, { id: "system-usage" });
+		const usage: Usage = {
+			input: 2,
+			output: 3,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 5,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		};
+		const system: SystemMessage = {
+			role: "system",
+			content: "private system instruction",
+			sections: { rules: "private system instruction" },
+			timestamp: 1,
+		};
+		manager.appendMessage(system);
+		manager.appendUsage("cache_warm", "test", "test-model", usage);
+		manager.appendMessage({ role: "user", content: "visible prompt", timestamp: 2 });
+		const assistant: AssistantMessage = {
+			role: "assistant",
+			content: [{ type: "text", text: "visible answer" }],
+			api: "test",
+			provider: "test",
+			model: "test-model",
+			usage,
+			stopReason: "stop",
+			timestamp: 3,
+		};
+		manager.appendMessage(assistant);
+		const path = manager.getSessionFile();
+		expect(path).toBeString();
+		const jsonl = readFileSync(path as string, "utf8");
+		expect(JSON.parse(jsonl.split("\n")[1] ?? "{}").message.role).toBe("system");
+		expect(extractSession(jsonl)?.entries).toEqual([
+			{ text: "visible prompt", role: "user", timestamp: 2, messageIndex: 0 },
+			{ text: "visible answer", role: "assistant", timestamp: 3, messageIndex: 1 },
+		]);
+
+		const result = await new HistoryIndex(dir).search({
+			query: "visible",
+			filter: allowAll,
+			labels: noLabels,
+		});
+		expect(result.prompts.map((hit) => hit.text)).toEqual(["visible prompt"]);
+		expect(result.messages.map((hit) => hit.text)).toEqual(["visible answer"]);
+		expect(result.prompts.some((hit) => hit.text.includes("private"))).toBe(false);
 	});
 
 	test("(b) dedups prompts by normalized text, keeping the newest", async () => {

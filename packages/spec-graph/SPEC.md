@@ -70,8 +70,15 @@ with pi's normal `read`/`write`/`edit`.
 Concept, schema, and workflow live in the **skill** (auto-discovered via the `pi.skills` manifest /
 `additionalSkillPaths`). The always-on rule keeps specs authoritative while making lookup contextual:
 consult the relevant spec when work is governed by or may alter a documented boundary, contract,
-invariant, behavior, or architecture decision; localized work need not read unrelated specs. The rule is injected once per agent
-run via `before_agent_start`.
+invariant, behavior, or architecture decision; localized work need not read unrelated specs. The rule is
+contributed in `before_agent_start` as the `pi-spec-graph` entry of `systemPromptOptions.sections` — mutated
+in place, handler returns nothing — so it renders as its own XML-tagged block after `cwd`, the tail position
+the old free-text append had. Returning `systemPrompt` forces the whole prompt: a cache miss on any change,
+where a named section is one diffed patch. Not a `promptGuidelines` bullet, which would flatten this
+multi-line rule into pi's shared `rules` list. Tag = package name: globally unique, and a portable package
+must not carry a host brand. A third-party extension that returns `systemPrompt` forces the whole prompt and
+drops every structured section, ours included — pi's documented force semantics; accepted rather than
+re-appending the rule to a forced prompt.
 Each tool carries a `description` (its constraints) and a one-line `promptSnippet` (its entry in the system
 prompt's Available-tools list, matching the bundled `pi-web-access` / `pi-visualize` tools). This is
 pi-native prompt influence through an extension, not host prompt assembly.

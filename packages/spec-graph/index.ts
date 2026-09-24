@@ -1,6 +1,8 @@
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { registerSpecTools } from "./tools/index.ts";
 
+const SPEC_SECTION = "pi-spec-graph";
+
 const SPEC_RULE = [
 	"Specs are this project's ground truth.",
 	"- Consult the relevant spec when work is governed by or may alter a documented boundary, contract, invariant, behavior, or architecture decision; localized work need not read unrelated specs.",
@@ -11,9 +13,9 @@ const SPEC_RULE = [
 const factory: ExtensionFactory = (pi: ExtensionAPI) => {
 	registerSpecTools(pi);
 
-	pi.on("before_agent_start", (event) => ({
-		systemPrompt: `${event.systemPrompt}\n\n${SPEC_RULE}`,
-	}));
+	pi.on("before_agent_start", (event) => {
+		event.systemPromptOptions.sections[SPEC_SECTION] = SPEC_RULE;
+	});
 };
 
 export default factory;

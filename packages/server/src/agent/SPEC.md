@@ -130,8 +130,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     never survive a process restart) and resets whenever `clearQueue()` empties both lanes.
 
     **Remove this whole override on the next pi bump that ships the upstream fix.** The repo pins
-    `pi@0.84.3`; the upstream fix (earendil-works/pi#8612) is **open and unreleased** — not present in any
-    published version through `0.85.1`. Once Pi clears empty-text image deliveries natively, drop
+    `pi@0.86.1`; the upstream fix (earendil-works/pi#8612) is **open and unreleased** — not present in any
+    published version through `0.86.1`. Once Pi clears empty-text image deliveries natively, drop
     `stuckEmptyDeliveries`, `displayedLane`, the synthesized `queue_update`, and the `effectivePendingCount`
     adjustment. The removal gate is the installed code, not the PR state: on every pi bump grep the installed
     `agent-session.js` for the `if (messageText)` guard around `this._steeringMessages.indexOf` — while that
@@ -672,11 +672,19 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       package's internal `new URL(…, import.meta.url)` points inside `/$bunfs/` after compilation. The
       wrapper executes an injected helper on macOS/Windows and otherwise delegates to `trash`; source mode stays on
       `trash` entirely. No platform degrades to permanent unlink.
-    The desktop server/factory bundle is staged with a `.ts` filename on purpose. PI uses that module
-    extension to select its TypeScript source-runtime Jiti configuration with bundled virtual modules;
-    Electrobun's ordinary flattened `.js` output selects built-Node aliases that do not exist inside the
-    package and rejects the Central candidate. The filename is therefore a tested artifact seam, not a
-    cosmetic build choice.
+    The desktop server/factory bundle is built with pi's `PI_BUNDLED_NODE=true` compile-time define. That
+    is pi's own switch for bundled-but-not-compiled distributions: it selects the embedded-modules extension
+    loader (jiti's static entry with Babel bundled in, plus pi's virtual modules). Without it pi treats the
+    bundle as a plain Node runtime and reaches for jiti's lazy `../dist/babel.cjs` relative to a file that
+    does not exist inside a single-file bundle, so the Central candidate fails to load (pi 0.86.0 made the
+    loader choice runtime-dependent; 0.84.x always used the static entry). The candidate loader also forces
+    jiti's transform (`JITI_TRY_NATIVE=false`, plus `JITI_REBUILD_FS_CACHE=1` so a stale transform cache
+    never survives a pi bump): with native import allowed, Bun would resolve an external extension's bare
+    `@earendil-works/pi-coding-agent` import itself — auto-installing a second pi copy, since nothing under
+    `~/.pi/agent/extensions` has `node_modules` — instead of pi's virtual-module mapping onto the bundled
+    instance. Together the define and the forced transform are the tested artifact seam (the shared artifact
+    probe's synthetic extension value-imports pi and fails closed without them); the `server-runtime.ts`
+    filename is only a name.
     In every mode, the optional Central artifact remains an external filesystem path loaded by PI's public
     Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting

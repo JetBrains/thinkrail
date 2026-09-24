@@ -16,7 +16,7 @@ Consumed by the `template.*` host handlers; this module owns no WS surface itsel
 passed in by the caller after resolving either a live workspace or a pre-session project's current checkout,
 never looked up here.
 
-## pi facts (pinned against pi v0.84.3 — `@earendil-works/pi-coding-agent`)
+## pi facts (pinned against pi v0.86.1 — `@earendil-works/pi-coding-agent`)
 
 Verified by reading `dist/core/prompt-templates.js` (`loadTemplateFromFile` / `loadTemplatesFromDir` /
 `loadPromptTemplates`), `dist/core/resource-loader.js` (`dedupePrompts`, `updatePromptsFromPaths`), and

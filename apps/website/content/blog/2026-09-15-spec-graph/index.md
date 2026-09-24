@@ -106,9 +106,15 @@ I invite you to read ["Spec-Driven Development: From Code to Contract in the Age
 a comprehensive introduction to the modern version of SDD. And of course, please try it out in ThinkRail, working on 
 your project, and let us know: what do you work on? Has SDD helped you? Or have you decided it is not a good approach?
 
-To try out ThinkRail, visit [our main webpage](https://thinkrail.ai) and follow the installation
+To try out ThinkRail, visit [our main webpage](https://jb.gg/osk2n7) and follow the installation
 instructions. You can also browse [our GitHub repository](https://github.com/JetBrains/thinkrail),
 take [our survey](https://forms.gle/es1ksqAax6hnDWCP8), and join [our Discord server](https://discord.gg/Wybu9ceWkY)
 to say "hi!" and let us know what you think. Your feedback is greatly appreciated.
 
 Happy developing!
+
+------
+
+
+
+*ThinkRail is backed by JetBrains, leveraging their expertise in building developer tools that are both powerful and intuitive.*
