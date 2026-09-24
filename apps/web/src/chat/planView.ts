@@ -73,6 +73,18 @@ export function changeSetCounts(set: ItemChangeSet): {
 		: changeSetStat(set.files);
 }
 
+/** Whole-plan change footprint: the count of distinct files any item's change set touched. */
+export function planChangeTotals(plan: TodoPlan): { files: number } {
+	const paths = new Set<string>();
+	for (const item of flatItems(plan)) {
+		const set = itemChangeSet(item);
+		if (!set) continue;
+		if (set.kind === "paths") for (const path of set.paths) paths.add(path);
+		else for (const file of set.files) paths.add(file.path);
+	}
+	return { files: paths.size };
+}
+
 export function groupProgress(group: TodoGroupItem): { done: number; total: number } {
 	return {
 		done: group.todos.filter((t) => t.status === "done").length,
@@ -159,6 +171,19 @@ export function planCompletionSummary(plan: TodoPlan): string | undefined {
 	const all = flatItems(plan);
 	if (all.length === 0 || all.some((t) => t.status !== "done")) return undefined;
 	return plan.summary;
+}
+
+/**
+ * The plan-level note to keep visible ON THE PLAN PAGE while the plan is being redone: the stored
+ * summary from a previous completion, surfaced (the caller marks it stale) once an item has re-opened.
+ * Undefined for a plan that was never completed (no stored summary), an empty plan, or an all-done plan
+ * (that case is `planCompletionSummary`). Exports stay gated on `planCompletionSummary`, never this.
+ */
+export function planStaleSummary(plan: TodoPlan): string | undefined {
+	if (!plan.summary) return undefined;
+	const all = flatItems(plan);
+	if (all.length === 0) return undefined;
+	return all.some((t) => t.status !== "done") ? plan.summary : undefined;
 }
 
 export function stripStatus(

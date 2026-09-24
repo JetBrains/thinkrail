@@ -969,8 +969,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (todoId + optional sessionId) when stamped, falling back to the change-set path join only for
   provenance-less comments, so two steps touching one file don't count each other's findings; the
   Review tab is the truth), and
-  `planCompletionSummary` (the plan-level note gated on "everything done", so a re-opened plan never
-  shows a stale all-done note). `itemChangeSet`'s precedence: live `change` paths win (a fallback redo's
+  `planCompletionSummary` (the agent's plan-level note gated on "everything done", so a re-opened plan
+  never leaks a stale all-done note into ungated outputs — it feeds the markdown export; the plan page also
+  shows a derived one-line recap, see `panels/SPEC.md`) and its plan-page-only companion `planStaleSummary`
+  (the same stored note surfaced, marked stale, once an item re-opens after a completion, so the recap
+  persists on the page instead of vanishing until the agent rewrites it) and `planChangeTotals` (the whole-plan distinct-file count
+  behind that recap). `itemChangeSet`'s precedence: live `change` paths win (a fallback redo's
   latest delta), else the NEWEST resolvable commit. A group's *status* is
   **not** derived here — the host computes it and ships it on `TodoGroupItem.status`, so the rule has one
   home; a user edit therefore re-reads the plan rather than patching it locally, see `useChatTodos`), `TodoList` (the

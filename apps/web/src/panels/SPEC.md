@@ -630,7 +630,7 @@ a project picker, the prompt hero, and the reused
   `DiffStatBadge` when the sha still resolves), the last marked *current*, and any sha in the
   review's `unreviewedShas` delta marked *unreviewed* (`data-unreviewed`) — the honest
   how-the-agent-got-here story (commit → review → fix → commit) no final-diff view can tell.
-  Non-done items keep their note inline (no toggle — they rarely carry details). Inside the details, the change set stays its own **collapsible**
+  Any item that carries details is collapsible — including a **non-done item with only a `note`**: the note is agent-facing working detail, so it stays behind the disclosure and the default human view is titles + status, never the agent's inline notes. Inside the details, the change set stays its own **collapsible**
   disclosure — a summary line (sha chip + `N files` + `DiffStatBadge`) toggling the commit's
   `GitFileChange[]` rows; the chevron/summary is the
   toggle while the sha chip stays a separate button (routing the Changes panel, never toggling). Expanded,
@@ -805,13 +805,19 @@ own section. The kebab menu (`plan-menu`, a
   *without* `ghProblem` (offline seam, transient gh failure) keeps the window.open + toast path.
   This dialog is unit/e2e-pinned on the server side (`isPushAuthFailure`, `ghSetupProblem`); the
   browser-side arms need a real broken push / missing gh, so they stay convention-held.
-  The agent's plan-level completion note (`plan-overall-summary`) renders **clamped to
-  3 lines** with a `Show more`/`Show less` toggle (`plan-overall-summary-toggle`, shown only for long
-  notes) — the page opens on the plan, not on a wall of prose. There is **no in-page "Review mode"** — findings live in the right-panel **Review** tab;
+  On a completed build (every planned step done) the page shows a **one-line derived recap**
+  (`plan-overall-summary`): `N steps done · M files · r/k reviewed` — facts aggregated over the WHOLE
+  plan (`planView.planChangeTotals` counts the distinct files any step's change set touched), never the
+  agent's prose. It deliberately replaces the old clamped `todo_plan_summary` box, which read as a recap
+  of the last step and buried the plan under a wall of prose; the agent's note still ships to the
+  Copy / Save-.md export via `planCompletionSummary`. There is **no in-page "Review mode"** — findings live in the right-panel **Review** tab;
   when the reviewer agent has open comments (`selectAgentReviewCommentCount` — open, `author: "agent"`) the
   header shows a **`N comments`** chip (`plan-review-comments`) that `requestToolView(ws, "review")` to
   focus that tab. The header also shows the agent's plan-level completion note
-  (`planCompletionSummary`-gated `plan-overall-summary`). `FileRow` (`planFileRow.tsx`, its own module so plan surfaces
+  (`planCompletionSummary`-gated `plan-overall-summary`); once an item re-opens after a completion the note
+  stays visible via `planStaleSummary`, marked stale with an "updating" badge (`plan-summary-stale`)
+  instead of disappearing, until the agent rewrites it at the next completion — exports stay gated on
+  `planCompletionSummary`. `FileRow` (`planFileRow.tsx`, its own module so plan surfaces
   share one row without cycles) is the shared change-set row. Live by
   construction, it reads through the same `useChatTodos` hook as the plan popup (per-mount fetch +
   `pi.event` refetch), so it cannot show a stale snapshot.

@@ -270,3 +270,70 @@ test("a branch commit no step owns shows under 'Committed outside the plan' and 
 	await expect(pane.getByTestId("plan-progress")).toContainText("0/0 done");
 	await expect(pane.getByTestId("plan-review-progress")).toContainText("0/1 reviewed");
 });
+
+test("a re-opened plan keeps the completion note on the page, marked stale, but out of the export", async ({
+	page,
+	context,
+}) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const sessionId = await page
+		.locator('[data-testid="editor-tab"][data-kind="chat"]')
+		.first()
+		.getAttribute("data-session-id");
+	if (!sessionId) throw new Error("chat tab exposes no session id");
+
+	// The state a completed plan leaves behind, then re-opened: one step went back to work, so the plan
+	// is no longer all-done, but the stored plan-level note from the last completion is still on disk.
+	const todosDir = join(workspace.worktreePath, ".thinkrail", "context", "todos");
+	mkdirSync(todosDir, { recursive: true });
+	writeFileSync(
+		join(todosDir, `${sessionId}.json`),
+		JSON.stringify({
+			version: 6,
+			todos: [],
+			summary: "Everything shipped; suite green.",
+			groups: [
+				{
+					id: "g_1",
+					title: "Ship the feature",
+					todos: [
+						{
+							id: "t_a",
+							title: "First step",
+							status: "done",
+							origin: "agent",
+							createdAt: "2026-01-01T00:00:00Z",
+							updatedAt: "2026-01-01T00:00:00Z",
+						},
+						{
+							id: "t_b",
+							title: "Second step",
+							status: "in_progress",
+							origin: "agent",
+							createdAt: "2026-01-01T00:00:00Z",
+							updatedAt: "2026-01-01T00:00:00Z",
+						},
+					],
+				},
+			],
+		}),
+	);
+
+	await page.getByTestId("chat-plan-toggle").click();
+	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	const pane = page.getByTestId("plan-pane");
+	await expect(pane).toBeVisible();
+
+	// The plan is not all-done, yet the note stays visible — marked stale ("updating") instead of gone.
+	await expect(pane.getByTestId("plan-progress")).toContainText("1/2 done");
+	await expect(pane.getByTestId("plan-overall-summary")).toContainText("Everything shipped");
+	await expect(pane.getByTestId("plan-summary-stale")).toBeVisible();
+
+	// The ungated export still gates on completion: the stale note never leaves the app.
+	await pane.getByTestId("plan-menu").click();
+	await page.getByTestId("plan-copy-markdown").click();
+	const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+	expect(clipboard).not.toContain("Everything shipped");
+});

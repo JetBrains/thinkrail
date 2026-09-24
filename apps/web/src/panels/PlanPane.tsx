@@ -24,6 +24,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Markdown } from "../chat/Markdown";
 import { VerificationBadge, VerificationGlyph } from "../chat/planKit";
 import { planToMarkdown } from "../chat/planMarkdown";
 import {
@@ -36,8 +37,10 @@ import {
 	itemChangeSet,
 	itemOpenFindings,
 	itemRevisions,
+	planChangeTotals,
 	planCompletionSummary,
 	planSections,
+	planStaleSummary,
 	planSummary,
 	reviewableItems,
 	reviewChangesRequested,
@@ -152,7 +155,7 @@ function ChangeSetBlock({
 const NEXT_ACTION_CLASS =
 	"mb-16 flex items-center gap-8 rounded-[var(--radius-md)] bg-container-elevated-bg px-12 py-8";
 const NEXT_ACTION_BUTTON_CLASS =
-	"shrink-0 rounded-[var(--radius-sm)] bg-primary px-8 py-4 tr-text-ui text-text-on-primary hover:opacity-90 disabled:opacity-50";
+	"flex h-28 shrink-0 items-center rounded-[var(--radius-sm)] bg-control-primary-bg px-8 tr-text-ui text-control-primary-text transition-colors hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text";
 
 type StageState = "done" | "active" | "pending";
 
@@ -255,7 +258,7 @@ function ItemBlock({
 	const hasDetails = Boolean(
 		item.note || item.summary || item.verification || feedback || set !== null,
 	);
-	const collapsible = item.status === "done" && hasDetails;
+	const collapsible = hasDetails;
 	const [expanded, setExpanded] = useState(false);
 	const consumedFocusTick = useRef(0);
 	useEffect(() => {
@@ -276,9 +279,9 @@ function ItemBlock({
 			data-expanded={collapsible ? expanded : undefined}
 			className="group py-2"
 		>
-			<div className="flex items-start gap-8 rounded-[var(--radius-sm)] transition-colors group-hover:bg-control-bg-hovered">
+			<div className="flex items-start gap-8 rounded-[var(--radius-sm)] p-4 transition-colors group-hover:bg-control-bg-hovered">
 				<span
-					className="flex min-h-8 shrink-0 items-center"
+					className="flex min-h-24 shrink-0 items-center"
 					title={
 						reviewing
 							? "Reviewing — the reviewer agent is reading this step"
@@ -306,7 +309,7 @@ function ItemBlock({
 								aria-expanded={expanded}
 								onClick={() => setExpanded((v) => !v)}
 								title={expanded ? "Hide this step's details" : "Show this step's details"}
-								className="flex min-w-0 flex-1 items-center gap-8 rounded-[var(--radius-sm)] px-4 py-2 text-left"
+								className="flex min-w-0 flex-1 items-center gap-8 rounded-[var(--radius-sm)] text-left"
 							>
 								<ChevronRight className="size-14 shrink-0 text-text-muted transition-transform group-data-[expanded=true]:rotate-90" />
 								<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
@@ -314,7 +317,7 @@ function ItemBlock({
 								</span>
 							</button>
 						) : (
-							<span className="flex min-w-0 flex-1 items-center gap-8 px-4">
+							<span className="flex min-w-0 flex-1 items-center gap-8">
 								<span className="size-14 shrink-0" />
 								<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
 									{item.title}
@@ -359,7 +362,7 @@ function ItemBlock({
 						) : null}
 					</div>
 					{collapsible && (item.verification || set) ? (
-						<span className="flex items-center gap-8 px-4 tr-text-metadata text-text-subtle group-data-[expanded=true]:hidden">
+						<span className="flex items-center gap-8 tr-text-metadata text-text-subtle group-data-[expanded=true]:hidden">
 							<span className="size-14 shrink-0" />
 							{item.verification ? <VerificationGlyph verification={item.verification} /> : null}
 							{set ? (
@@ -379,7 +382,7 @@ function ItemBlock({
 			</div>
 			{hasDetails ? (
 				<div
-					className={`mt-2 ml-8 flex-col gap-2 border-border-default border-l pl-12 ${detailsClass}`}
+					className={`mt-2 ml-24 flex-col gap-2 border-border-default border-l pl-12 ${detailsClass}`}
 				>
 					{feedback ? (
 						<div
@@ -391,8 +394,8 @@ function ItemBlock({
 					) : null}
 					{item.note ? <div className="tr-text-metadata text-text-subtle">{item.note}</div> : null}
 					{item.status === "done" && item.summary ? (
-						<div data-testid="plan-item-summary" className="tr-text-metadata text-text-muted">
-							{item.summary}
+						<div data-testid="plan-item-summary">
+							<Markdown text={item.summary} className={`tr-text-metadata ${SUMMARY_PROSE}`} />
 						</div>
 					) : null}
 					{item.status === "done" && item.verification ? (
@@ -406,27 +409,70 @@ function ItemBlock({
 	);
 }
 
-function OverallSummary({ text }: { text: string }) {
+const SUMMARY_PROSE = [
+	"max-w-none break-words text-text-muted",
+	"[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+	"[&_p]:my-4 [&_strong]:text-text-default",
+	"[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2",
+	"[&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-16 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-16 [&_li]:my-2",
+].join(" ");
+
+function PlanSummary({
+	steps,
+	files,
+	reviewed,
+	reviewTotal,
+	summary,
+	stale = false,
+}: {
+	steps: number;
+	files: number;
+	reviewed: number;
+	reviewTotal: number;
+	summary: string | undefined;
+	stale?: boolean;
+}) {
 	const [open, setOpen] = useState(false);
-	const clampable = text.length > 240;
+	const facts = [`${steps} ${steps === 1 ? "step" : "steps"} done`];
+	if (files > 0) facts.push(`${files} ${files === 1 ? "file" : "files"}`);
+	if (reviewTotal > 0) facts.push(`${reviewed}/${reviewTotal} reviewed`);
+	const clampable = (summary?.length ?? 0) > 160;
 	return (
-		<div className="mb-16 rounded-[var(--radius-md)] bg-container-elevated-bg p-12">
-			<div className="mb-2 tr-text-eyebrow text-text-subtle">Summary</div>
-			<p
-				data-testid="plan-overall-summary"
-				className={`tr-text-ui text-text-muted ${clampable && !open ? "line-clamp-3" : ""}`}
-			>
-				{text}
-			</p>
-			{clampable ? (
-				<button
-					type="button"
-					data-testid="plan-overall-summary-toggle"
-					onClick={() => setOpen((v) => !v)}
-					className="mt-4 tr-text-metadata text-text-subtle underline-offset-2 hover:text-text-default hover:underline"
-				>
-					{open ? "Show less" : "Show more"}
-				</button>
+		<div className="mb-16 flex flex-col gap-8 rounded-[var(--radius-md)] bg-container-elevated-bg p-12">
+			<div className="flex flex-wrap items-center gap-x-8 gap-y-2">
+				<span className="tr-text-eyebrow text-text-subtle">Summary</span>
+				{stale ? (
+					<span
+						data-testid="plan-summary-stale"
+						className="flex items-center gap-4 tr-text-metadata text-text-muted"
+					>
+						<Loader2 className="size-14 shrink-0 animate-spin text-text-muted" />
+						Updating… shows the last completed recap until the plan finishes again
+					</span>
+				) : (
+					<span className="flex items-center gap-4 tr-text-metadata text-text-subtle">
+						<CircleCheck className="size-14 shrink-0 text-feedback-success" />
+						{facts.join(" · ")}
+					</span>
+				)}
+			</div>
+			{summary ? (
+				<div data-testid="plan-overall-summary">
+					<Markdown
+						text={summary}
+						className={`tr-text-ui ${SUMMARY_PROSE} ${clampable && !open ? "line-clamp-2" : ""}`}
+					/>
+					{clampable ? (
+						<button
+							type="button"
+							data-testid="plan-overall-summary-toggle"
+							onClick={() => setOpen((v) => !v)}
+							className="mt-4 tr-text-metadata text-text-subtle underline-offset-2 hover:text-text-default hover:underline"
+						>
+							{open ? "Show less" : "Show more"}
+						</button>
+					) : null}
+				</div>
 			) : null}
 		</div>
 	);
@@ -549,7 +595,6 @@ export default function PlanPane({
 	const reviewables = reviewableItems(data);
 	const unsettledReviewables = reviewables.filter((t) => !reviewSettled(t));
 	const reviewedCount = reviewables.length - unsettledReviewables.length;
-	const overallSummary = planCompletionSummary(data);
 	const onOpenCommit = (sha: string) => plan.openChanges({ sha });
 	const onOpenReview = () => requestToolView(workspaceId, "review");
 	const reviewingAny = reviewables.some((t) => t.review?.reviewing === true);
@@ -567,6 +612,7 @@ export default function PlanPane({
 			?.scrollIntoView({ behavior: "smooth", block: "center" });
 	};
 	const buildDone = total > 0 && done === total;
+	const staleSummary = planStaleSummary(data);
 	const stages: { build: StageState; review: StageState; pr: StageState } = {
 		build: buildDone ? "done" : "active",
 		review:
@@ -851,7 +897,7 @@ export default function PlanPane({
 							data-testid="plan-review-comments"
 							onClick={onOpenReview}
 							title="Open the Review tab — the reviewer's findings"
-							className="flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex h-32 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-ui text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<MessageSquare className="size-14" />
 							{agentComments} {agentComments === 1 ? "comment" : "comments"}
@@ -864,14 +910,14 @@ export default function PlanPane({
 								href={openReviewUrl}
 								target="_blank"
 								rel="noopener noreferrer"
-								className="shrink-0 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex h-32 shrink-0 items-center rounded-[var(--radius-sm)] px-8 tr-text-ui text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 							>
 								{openReviewLabel(openReview)}
 							</a>
 						) : (
 							<span
 								data-testid="plan-pr-chip"
-								className="shrink-0 px-8 py-4 tr-text-ui text-text-muted"
+								className="flex h-32 shrink-0 items-center px-8 tr-text-ui text-text-muted"
 							>
 								{openReviewLabel(openReview)}
 							</span>
@@ -889,10 +935,10 @@ export default function PlanPane({
 									? "Push new commits to the open PR and refresh its description from the plan"
 									: "Push the branch and open a PR whose description comes from this plan"
 						}
-						className={`flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui disabled:opacity-50 ${
+						className={`flex h-32 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-ui transition-colors ${
 							(planReady && !openReview) || unpushed > 0
-								? "bg-primary text-text-on-primary hover:opacity-90"
-								: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+								? "bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+								: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
 						}`}
 					>
 						{prBusy ? (
@@ -1024,7 +1070,16 @@ export default function PlanPane({
 						</button>
 					</div>
 				) : null}
-				{overallSummary ? <OverallSummary text={overallSummary} /> : null}
+				{buildDone || staleSummary ? (
+					<PlanSummary
+						steps={done}
+						files={planChangeTotals(data).files}
+						reviewed={reviewedCount}
+						reviewTotal={reviewables.length}
+						summary={buildDone ? planCompletionSummary(data) : staleSummary}
+						stale={!buildDone}
+					/>
+				) : null}
 				{nothingToShow ? (
 					<p className="text-text-subtle tr-text-ui">
 						No items yet — the agent adds its plan here.
