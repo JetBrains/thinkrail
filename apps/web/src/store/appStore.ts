@@ -38,7 +38,6 @@ import {
 	customMessageText,
 	DEFAULT_CONFIG,
 	isAskUserAnswersMessage,
-	isControlMessage,
 	isLineWidth,
 	isSubagentCompletionMessage,
 	isTerminalWindowsShell,
@@ -532,7 +531,6 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			if (event.message.role === "user") {
 				const message = event.message as UserMessage;
 				const text = userText(message.content);
-				if (isControlMessage(text)) return rt;
 				const last = rt.turns[rt.turns.length - 1];
 				if (last?.kind === "user") {
 					const optimisticText = userText(last.message.content);

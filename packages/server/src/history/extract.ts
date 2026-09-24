@@ -4,7 +4,7 @@ import {
 	parseSessionEntries,
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
-import { isControlMessage, isRetriedAttempt, isTranscriptMessageRole } from "@thinkrail/contracts";
+import { isRetriedAttempt, isTranscriptMessageRole } from "@thinkrail/contracts";
 
 export interface HistoryEntry {
 	text: string;
@@ -51,7 +51,6 @@ export function extractSession(jsonl: string): ExtractedSession | null {
 		if (message.role !== "user" && message.role !== "assistant") continue;
 		const text = textOf(message.content);
 		if (!text.trim()) continue;
-		if (message.role === "user" && isControlMessage(text)) continue;
 		if (isRetriedAttempt(renderable, index)) continue;
 		out.push({
 			text,

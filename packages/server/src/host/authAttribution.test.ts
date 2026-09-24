@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createProvider, envApiKeyAuth, InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import { TODO_NUDGE_PREFIX, type WsResult } from "@thinkrail/contracts";
+import type { WsResult } from "@thinkrail/contracts";
 import {
 	activatePiRuntimeGeneration,
 	configurePiRuntime,
@@ -346,7 +346,7 @@ test("retained sessions keep their generation's API-key auth when new same-provi
 	expect(nextFaux.state.callCount).toBe(1);
 });
 
-test("accepted TODO nudges and rejected sends do not emit message events", async () => {
+test("accepted sends emit message events; rejected sends do not", async () => {
 	const sessionId = await createChat();
 	faux.setResponses([
 		fauxAssistantMessage("Complete"),
@@ -356,11 +356,7 @@ test("accepted TODO nudges and rejected sends do not emit message events", async
 	const methods = ["session.prompt", "session.steer", "session.followUp"];
 	for (const method of methods) {
 		expect(
-			await handleRequest(
-				method,
-				{ sessionId, text: `${TODO_NUDGE_PREFIX}${PRIVATE}-control` },
-				context,
-			),
+			await handleRequest(method, { sessionId, text: `${PRIVATE}-accepted` }, context),
 		).toEqual({ ok: true });
 	}
 	await handleRequest("session.dispose", { sessionId }, context);
@@ -370,6 +366,16 @@ test("accepted TODO nudges and rejected sends do not emit message events", async
 		).rejects.toThrow("Unknown session");
 	}
 	await shutdownAnalytics();
-	expect(properties("message_sent")).toEqual([]);
-	expect(events.map(({ event }) => event)).toEqual(["app_started", "chat_started"]);
+	expect(properties("message_sent")).toMatchObject([
+		{ mode: "prompt", provider: "anthropic", auth_method: "api_key" },
+		{ mode: "steer", provider: "anthropic", auth_method: "api_key" },
+		{ mode: "follow_up", provider: "anthropic", auth_method: "api_key" },
+	]);
+	expect(events.map(({ event }) => event)).toEqual([
+		"app_started",
+		"chat_started",
+		"message_sent",
+		"message_sent",
+		"message_sent",
+	]);
 });

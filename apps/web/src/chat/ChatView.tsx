@@ -539,6 +539,17 @@ export default function ChatView({
 		attachments: ChatAttachment[],
 		behavior: Exclude<SubmitBehavior, "interrupt">,
 	) => {
+		// One mechanism for lining up work: a text-only "Queue" (follow-up) from the composer becomes a
+		// plan item instead of a pi follow-up message, so queuing from chat and adding a TODO converge.
+		// Steering (interrupt-at-next-step) and idle sends stay ordinary messages; a follow-up carrying
+		// images has no place in a text-only plan, so it falls back to a real pi follow-up.
+		if (behavior === "followUp" && attachments.length === 0 && text.trim()) {
+			void plan.add(text).catch((err) => {
+				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
+				restoreTextToDraft(text);
+			});
+			return;
+		}
 		const queued = behavior !== "send";
 		if (!queued && (text || attachments.length > 0)) {
 			armImmediateTurn();

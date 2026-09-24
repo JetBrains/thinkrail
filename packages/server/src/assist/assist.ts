@@ -1,6 +1,5 @@
 import {
 	type AssistantMessage,
-	isControlMessage,
 	normalizeSessionTitle,
 	SESSION_TITLE_MAX_LENGTH,
 	type TextContent,
@@ -96,7 +95,7 @@ export function hasEligibleChatTitlePrompt(messages: readonly TranscriptMessage[
 	return messages.some((message) => {
 		if (message.role !== "user") return false;
 		const prompt = userText(message as UserMessage);
-		return !isControlMessage(prompt) && naiveChatTitle(prompt) !== null;
+		return naiveChatTitle(prompt) !== null;
 	});
 }
 

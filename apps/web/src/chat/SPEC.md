@@ -556,13 +556,29 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   overflow then scrolls inside the textarea. Attachment chips, completion menus, slot hints, and QueueStrip
   keep their existing separate chrome. The slot-highlight backdrop must follow every dynamic textarea box
   change with the exact box-model and scroll-sync invariants under Template slots below.
+- **Follow-up from the composer is a plan add, not a pi follow-up.** Lining up work has one mechanism:
+  the streaming **"Add to plan"** action (`Cmd/Ctrl+Enter`, the former "Queue") routes a **text-only**
+  send through `useChatTodos.add` — it creates a `origin: "user"` TODO item and wakes the agent — rather
+  than `session.followUp`, so queuing from chat and adding a TODO converge on the plan (the asymmetry
+  where a follow-up never reached the plan is gone). **Steering** (`Enter` while streaming —
+  interrupt-at-next-step) stays the message-queue primitive, and a follow-up **carrying attachments**
+  falls back to a real `session.followUp` because a plan item is text-only. A failed add restores the
+  draft and surfaces an `appendErrorTurn`, like a rejected queued send.
 - **Queued messages: the pending strip** (`QueueStrip.tsx`, props-driven: `queue` + `onEdit`/`onRemove`)
-  — the web mirror of pi's interactive-mode pending-messages area. A **streaming send never renders an
-  optimistic transcript bubble** (see the store SPEC's echo contract): `ChatView.onSubmit` skips
+  — the web mirror of pi's interactive-mode pending-messages area. It still carries **steering**, the
+  agent-wake nudges plan adds emit, and any attachment-fallback follow-ups. A **streaming send never
+  renders an optimistic transcript bubble** (see the store SPEC's echo contract): `ChatView.onSubmit` skips
   `appendUserMessage` for `steer`/`followUp`, and the queued texts render between transcript and
   composer as dim rows — one truncated `Steering:`/`Follow-up:` line per message (`queue-strip` /
   `queue-item` testids, `data-kind` + `data-index`; full text + delivery meaning in the row `title`),
-  sourced from the runtime's `queue`. **Each row carries its own edit and remove actions**
+  sourced from the runtime's `queue`. **Collapsed to the nearest by default:** with more than one queued
+  message the strip renders only the first (the next to deliver — steering leads follow-up, index order
+  within a lane) plus a **`+N more`** button (`queue-more` testid) that expands to the full list, so a
+  burst of queued sends (e.g. several TODO adds) never stacks the strip over the composer. The count is a
+  local toggle, not a runtime write; expansion is required to reach the hidden rows' actions. **Expansion
+  never outlives its burst** — the strip stays mounted (renders null when empty), so a drained queue (0 or
+  1 left) resets it (`nextExpansion`), and the next burst opens collapsed again rather than re-stacking.
+  **Each row carries its own edit and remove actions**
   (`queue-item-edit` / `queue-item-remove`) — both call `session.removeQueued { kind, index }` (rows
   are position-addressed, matching the wire op); edit additionally restores the removed message's text
   and images to the draft and refocuses. Per-row actions exist because the original all-or-nothing dequeue
@@ -1039,7 +1055,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   skip iff the glance is `waiting_question`): waking an agent that stopped on an `ask_user_question`
   would send it off to work the new item and forget to return to its own question, so instead the item
   just queues and is picked up on the agent's next natural turn (when the user answers, or a later idle
-  nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged.
+  nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`. The nudge is an **ordinary user
+  message** — no hidden control-message marker — so it shows in the queue strip and transcript, and counts
+  toward analytics/auto-name like any send. Its text is **the item's own text verbatim** (`todoNudgeText`
+  is identity): no `Added a TODO` wrapper or instruction tail, so the queued row reads as exactly what the
+  user typed. **Removing the item drops its still-pending nudge**
+  (`dequeueTodoNudge` → `session.removeQueued`, matched by the exact `todoNudgeText`): the queue is
+  pi-owned and position-addressed, so text is the only handle back to the wake, and it's a no-op once the
+  nudge has been delivered — without it a follow-up row lingers over the chat for a TODO that no longer
+  exists.
 
 ## Boundary
 

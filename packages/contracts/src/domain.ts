@@ -597,12 +597,6 @@ export function normalizeThemePreference(value: unknown): ThemePreference {
 	};
 }
 
-export const TODO_NUDGE_PREFIX = "[thinkrail:todo-nudge] ";
-
-export function isControlMessage(text: string): boolean {
-	return text.startsWith(TODO_NUDGE_PREFIX);
-}
-
 export const IMAGE_MAX_BASE64_BYTES = 4.5 * 1024 * 1024;
 
 export function base64EncodedLength(byteLength: number): number {

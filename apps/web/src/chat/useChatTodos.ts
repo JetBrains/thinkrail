@@ -1,5 +1,5 @@
 import type { PiEvent, SessionEventPayload, TodoPlan } from "@thinkrail/contracts";
-import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
+import { WS_CHANNELS } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
 import { isConnectedGeneration, selectChatTitle, useAppStore } from "../store";
@@ -149,6 +149,9 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 
 	const remove = async (id: string) => {
 		const requestIdentity = identity;
+		const removedTitle = data
+			? [...data.todos, ...data.groups.flatMap((g) => g.todos)].find((t) => t.id === id)?.title
+			: undefined;
 		setData((current) =>
 			current
 				? {
@@ -161,6 +164,9 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		);
 		try {
 			await getTransport().request("todo.remove", { workspaceId, sessionId, id });
+			// A user add wakes the agent with a queued nudge; dropping the item must drop its still-pending
+			// nudge too, or a follow-up row lingers over the chat referencing a TODO that no longer exists.
+			if (removedTitle) dequeueTodoNudge(sessionId, removedTitle);
 			if (live(requestIdentity)) {
 				await reloadPlan();
 			}
@@ -219,6 +225,30 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	};
 }
 
+// The wake sent when a TODO is added is just the item's own text — no "Added a TODO" wrapper or
+// instruction tail. It doubles as the queue-match handle for dequeue-on-remove, so add and remove agree.
+export function todoNudgeText(title: string): string {
+	return title;
+}
+
+// The queue is pi-owned and position-addressed, so the exact nudge text is the only handle back to the
+// item's still-pending wake. -1 when it isn't queued (already delivered, or an agent item never nudged).
+export function findTodoNudgeIndex(followUp: readonly string[], title: string): number {
+	return followUp.indexOf(todoNudgeText(title));
+}
+
+// Best-effort: drop a still-queued add-nudge when its TODO is removed, or a follow-up row lingers over
+// the chat referencing a TODO that no longer exists. A no-op once the nudge has been delivered.
+function dequeueTodoNudge(sessionId: string, title: string): void {
+	const queue = useAppStore.getState().sessions[sessionId]?.queue;
+	if (!queue) return;
+	const index = findTodoNudgeIndex(queue.followUp, title);
+	if (index < 0) return;
+	void getTransport()
+		.request("session.removeQueued", { sessionId, kind: "followUp", index })
+		.catch(() => {});
+}
+
 async function nudgeAgent(workspaceId: string, sessionId: string, title: string): Promise<void> {
 	const initial = useAppStore.getState();
 	if (
@@ -230,7 +260,7 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 	const session = initial.sessions[sessionId];
 	if (session && !shouldNudgeOnAdd(sessionGlance(session))) return;
 	const streaming = session?.isStreaming ?? false;
-	const text = `${TODO_NUDGE_PREFIX}A TODO was added to the list: "${title}". Read the TODO list with todo_list and work any pending items, marking each done with todo_update as you finish.`;
+	const text = todoNudgeText(title);
 	try {
 		await getTransport().request(streaming ? "session.followUp" : "session.prompt", {
 			sessionId,

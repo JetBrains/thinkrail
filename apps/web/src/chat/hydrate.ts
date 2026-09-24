@@ -6,11 +6,9 @@ import type {
 import {
 	customMessageText,
 	isAskUserAnswersMessage,
-	isControlMessage,
 	isRetriedAttempt,
 	isSubagentCompletionMessage,
 } from "@thinkrail/contracts";
-import { userText } from "../lib";
 import { assistantFailureText } from "./assistantFailure";
 import type { ChatTurn, ToolResultState } from "./types";
 
@@ -47,10 +45,8 @@ export function messagesToRuntime(
 	for (const [index, message] of messages.entries()) {
 		let turnId: string | null = null;
 		if (message.role === "user") {
-			if (!isControlMessage(userText(message.content))) {
-				turnId = transcriptTurnId(message, index, options);
-				turns.push({ kind: "user", id: turnId, message });
-			}
+			turnId = transcriptTurnId(message, index, options);
+			turns.push({ kind: "user", id: turnId, message });
 		} else if (message.role === "assistant") {
 			if (isRetriedAttempt(messages, index)) {
 			} else {

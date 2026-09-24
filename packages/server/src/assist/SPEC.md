@@ -56,8 +56,8 @@ no wire method; consumers are host-side flows.
   `naiveWorkspaceName`, `setOneShotRunner`, `suggestChatTitle`, `suggestWorkspaceName`, `toWorkspaceName`,
   `OneShotRunner`, `WorkspaceNameTurn`.
 - **Allowed deps:** `agent` (the `completeOnce`/`OneShotRequest`/`OneShotResult` primitive, via its
-  barrel); `contracts` (`Message`/`UserMessage`/`AssistantMessage`/`TextContent`, session-title normalization,
-  and `isControlMessage`); Node.
+  barrel); `contracts` (`Message`/`UserMessage`/`AssistantMessage`/`TextContent`, and session-title
+  normalization); Node.
 - **Forbidden:** `host`; **`@earendil-works/pi-ai` / `pi-coding-agent` directly** (model access + dispatch
   belong to `agent`); reaching into another feature's internals.
 

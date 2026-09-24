@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Message, type PiEvent, TODO_NUDGE_PREFIX } from "@thinkrail/contracts";
+import type { Message, PiEvent } from "@thinkrail/contracts";
 import { setOneShotRunner } from "../assist";
 import { createWorkspace, listWorkspaces, removeWorkspace, renameWorkspace } from "../workspaces";
 import {
@@ -379,7 +379,7 @@ test("chat auto-name never retries from a later prompt after restart", async () 
 	expect(writes).toBe(0);
 });
 
-test("blank, punctuation, image-only, and control history leaves the first text prompt eligible", async () => {
+test("blank, punctuation, and image-only history leaves the first text prompt eligible", async () => {
 	const ws = await createWorkspace("p1");
 	const runner = fakeRunner("First Eligible Title");
 	let writes = 0;
@@ -391,7 +391,6 @@ test("blank, punctuation, image-only, and control history leaves the first text 
 			content: [{ type: "image", data: "image-data", mimeType: "image/png" }],
 			timestamp: 0,
 		} as Message,
-		user(`${TODO_NUDGE_PREFIX}refresh the plan`),
 	];
 
 	expect(

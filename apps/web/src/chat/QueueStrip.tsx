@@ -1,5 +1,12 @@
 import { RiPencilLine as Pencil, RiCloseLine as X } from "@remixicon/react";
 import type { QueueLane, SessionQueueState } from "@thinkrail/contracts";
+import { useEffect, useState } from "react";
+
+// The strip stays mounted (it renders null when empty), so expansion must not outlive its burst:
+// a drained queue (0 or 1 left) ends the current expansion, so the next burst opens collapsed again.
+export function nextExpansion(prev: boolean, itemCount: number): boolean {
+	return itemCount <= 1 ? false : prev;
+}
 
 export function QueueStrip({
 	queue,
@@ -10,6 +17,7 @@ export function QueueStrip({
 	onEdit: (kind: QueueLane, index: number) => void;
 	onRemove: (kind: QueueLane, index: number) => void;
 }) {
+	const [expanded, setExpanded] = useState(false);
 	const items = [
 		...queue.steering.map((text, index) => ({
 			kind: "steering" as const,
@@ -26,13 +34,19 @@ export function QueueStrip({
 			text,
 		})),
 	];
+	useEffect(() => {
+		setExpanded((prev) => nextExpansion(prev, items.length));
+	}, [items.length]);
 	if (items.length === 0) return null;
+	const collapsed = !expanded && items.length > 1;
+	const visible = collapsed ? items.slice(0, 1) : items;
+	const hiddenCount = items.length - visible.length;
 	return (
 		<div
 			data-testid="queue-strip"
 			className="flex w-full shrink-0 flex-col gap-2 border-border-default border-t bg-container-elevated-bg px-12 py-4 text-text-muted tr-text-metadata"
 		>
-			{items.map((item) => (
+			{visible.map((item) => (
 				<div
 					key={`${item.kind}:${item.index}`}
 					data-testid="queue-item"
@@ -64,6 +78,17 @@ export function QueueStrip({
 					</button>
 				</div>
 			))}
+			{collapsed ? (
+				<button
+					type="button"
+					data-testid="queue-more"
+					aria-label={`Show ${hiddenCount} more queued message${hiddenCount === 1 ? "" : "s"}`}
+					onClick={() => setExpanded(true)}
+					className="self-start rounded-[var(--radius-xs)] text-text-muted hover:text-text-default"
+				>
+					+{hiddenCount} more
+				</button>
+			) : null}
 		</div>
 	);
 }
