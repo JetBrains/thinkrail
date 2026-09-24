@@ -206,9 +206,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const canRenameChat = useAppStore(selectCanRenameChat);
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
 	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
-	const projectionEpoch = useAppStore(
-		(state) => state.layoutProjectionEpochByWorkspace[workspaceId] ?? 0,
-	);
+	const projectionEpoch = useAppStore((state) => state.layoutProjectionEpoch);
 	const layoutPreferences = useAppStore((state) => state.localLayoutPreferences);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const contextProject = useAppStore(selectContextProject);
@@ -513,10 +511,10 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					);
 					break;
 				case "changes":
-					body = <ChangesPanel workspaceId={workspaceId} />;
+					body = <ChangesPanel key={workspaceId} workspaceId={workspaceId} />;
 					break;
 				case "review":
-					body = <ReviewPanel workspaceId={workspaceId} failed={review.failed} />;
+					body = <ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />;
 					break;
 			}
 			return (
@@ -671,6 +669,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				renderCenterActions={(groupId) => (
 					<>
 						<WorkspaceChatHistory
+							key={workspaceId}
 							workspaceId={workspaceId}
 							targetGroupId={groupId}
 							{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
@@ -715,7 +714,14 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							if (!latest || prepared.document !== latest) {
 								void commitWorkspaceLayout(workspaceId, prepared.document, latest).catch(() => {});
 							}
-							prepared.onAccepted(useAppStore.getState().layoutDocumentsByWorkspace[workspaceId]);
+							const finalState = useAppStore.getState();
+							const finalDocument = finalState.layoutDocumentsByWorkspace[workspaceId];
+							const finalAttention = finalState.layoutAttentionByWorkspace[workspaceId];
+							prepared.onAccepted(
+								finalDocument && finalAttention
+									? { document: finalDocument, attention: finalAttention }
+									: undefined,
+							);
 						};
 						const terminal = terminalByKey.get(tab.tabKey);
 						if (terminal) terminalClose.requestClose(terminal, close);
@@ -736,7 +742,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							) {
 								return;
 							}
-							prepared.onAccepted(current);
+							const currentAttention = state.layoutAttentionByWorkspace[workspaceId];
+							prepared.onAccepted(
+								current && currentAttention
+									? { document: current, attention: currentAttention }
+									: undefined,
+							);
 							if (tab.kind === "chat") {
 								state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
 							} else if (tab.kind === "file" || tab.kind === "diff" || tab.kind === "document") {

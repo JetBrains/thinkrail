@@ -774,7 +774,7 @@ interface AppState {
 	localLayoutPreferences: LocalLayoutPreferences;
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
-	layoutProjectionEpochByWorkspace: Record<string, number>;
+	layoutProjectionEpoch: number;
 	layoutIntents: LayoutIntent[];
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
@@ -870,11 +870,7 @@ interface AppState {
 	validateRouteChatTarget: (sessionId: string) => void;
 	clearRouteChatTarget: () => void;
 	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
-	applyLocalLayoutState: (
-		payload: LocalLayoutStatePayload,
-		changedWorkspaceIds: readonly string[],
-		invalidateProjection?: boolean,
-	) => void;
+	applyLocalLayoutState: (payload: LocalLayoutStatePayload, invalidateProjection?: boolean) => void;
 	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
 	setLayoutAttention: (workspaceId: string, attention: LayoutAttention) => void;
 	syncLegacySelection: (
@@ -1673,7 +1669,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	localLayoutPreferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
 	layoutDocumentsByWorkspace: {},
 	layoutAttentionByWorkspace: {},
-	layoutProjectionEpochByWorkspace: {},
+	layoutProjectionEpoch: 0,
 	layoutIntents: [],
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
@@ -1956,24 +1952,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 						layoutStateReady: true,
 					},
 		),
-	applyLocalLayoutState: (payload, changedWorkspaceIds, invalidateProjection = false) =>
-		set((state) => {
-			const layoutProjectionEpochByWorkspace = { ...state.layoutProjectionEpochByWorkspace };
-			if (invalidateProjection) {
-				for (const workspaceId of changedWorkspaceIds) {
-					layoutProjectionEpochByWorkspace[workspaceId] =
-						(layoutProjectionEpochByWorkspace[workspaceId] ?? 0) + 1;
-				}
-			}
-			return {
-				workbenchFrame: payload.frame,
-				workspaceViewsByWorkspace: payload.viewsByWorkspace,
-				layoutDocumentsByWorkspace: payload.documentsByWorkspace,
-				layoutAttentionByWorkspace: payload.attentionByWorkspace,
-				localLayoutPreferences: payload.preferences,
-				layoutProjectionEpochByWorkspace,
-			};
-		}),
+	applyLocalLayoutState: (payload, invalidateProjection = false) =>
+		set((state) => ({
+			workbenchFrame: payload.frame,
+			workspaceViewsByWorkspace: payload.viewsByWorkspace,
+			layoutDocumentsByWorkspace: payload.documentsByWorkspace,
+			layoutAttentionByWorkspace: payload.attentionByWorkspace,
+			localLayoutPreferences: payload.preferences,
+			layoutProjectionEpoch: state.layoutProjectionEpoch + (invalidateProjection ? 1 : 0),
+		})),
 	setLocalLayoutPreferences: (preferences) => set({ localLayoutPreferences: preferences }),
 	setLayoutAttention: (workspaceId, attention) =>
 		set((state) =>
@@ -2324,7 +2311,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 				workspaceViewsByWorkspace: omitKey(s.workspaceViewsByWorkspace, workspaceId),
 				layoutDocumentsByWorkspace: omitKey(s.layoutDocumentsByWorkspace, workspaceId),
 				layoutAttentionByWorkspace: omitKey(s.layoutAttentionByWorkspace, workspaceId),
-				layoutProjectionEpochByWorkspace: omitKey(s.layoutProjectionEpochByWorkspace, workspaceId),
 				layoutIntents: s.layoutIntents.filter((intent) => intent.workspaceId !== workspaceId),
 				tabsByWorkspace: omitKey(s.tabsByWorkspace, workspaceId),
 				activeTabByWorkspace: omitKey(s.activeTabByWorkspace, workspaceId),

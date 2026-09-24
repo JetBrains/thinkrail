@@ -16,7 +16,13 @@ import {
 } from "@thinkrail/contracts";
 import type { ChatTurn, FailureRecovery } from "../chat/types";
 import { userText } from "../lib";
-import type { WorkspaceLayoutDocument } from "../shell/layout";
+import {
+	BUILTIN_LAYOUT_PRESETS,
+	emptyWorkspaceView,
+	instantiateWorkbenchFrame,
+	projectWorkspaceLayout,
+	type WorkspaceLayoutDocument,
+} from "../shell/layout";
 import {
 	captureCenterNavigation,
 	chatTabId,
@@ -136,7 +142,7 @@ beforeEach(() => {
 		layoutStateReady: false,
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
-		layoutProjectionEpochByWorkspace: {},
+		layoutProjectionEpoch: 0,
 		layoutIntents: [],
 		tabsByWorkspace: {},
 		terminalsByWorkspace: {},
@@ -170,6 +176,27 @@ beforeEach(() => {
 		streamingResponseMovement: { settle: 75, trigger: 100 },
 		toasts: [],
 	});
+});
+
+test("layout projection epoch advances only when projection invalidation is requested", () => {
+	const preset = BUILTIN_LAYOUT_PRESETS.find((candidate) => candidate.id === "balanced");
+	if (!preset) throw new Error("missing Balanced preset");
+	const frame = instantiateWorkbenchFrame(preset);
+	const view = emptyWorkspaceView();
+	const payload = {
+		frame,
+		viewsByWorkspace: { workspace: view },
+		documentsByWorkspace: { workspace: projectWorkspaceLayout(frame, view) },
+		attentionByWorkspace: {},
+		preferences: useAppStore.getState().localLayoutPreferences,
+	};
+	const store = useAppStore.getState();
+	store.applyLocalLayoutState(payload);
+	expect(useAppStore.getState().layoutProjectionEpoch).toBe(0);
+	useAppStore.getState().applyLocalLayoutState(payload, true);
+	expect(useAppStore.getState().layoutProjectionEpoch).toBe(1);
+	useAppStore.getState().applyLocalLayoutState(payload);
+	expect(useAppStore.getState().layoutProjectionEpoch).toBe(1);
 });
 
 function rt(sessionId: string): SessionRuntime {

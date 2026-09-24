@@ -65,7 +65,7 @@ function resetStore(): void {
 		},
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
-		layoutProjectionEpochByWorkspace: {},
+		layoutProjectionEpoch: 0,
 		toasts: [],
 	});
 }
@@ -136,6 +136,21 @@ describe("frontend-local layout state", () => {
 		expect(first.bottom).toMatchObject({ visible: true, groups: [{ tabs: [] }] });
 		expect(second).toBe(first);
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
+	});
+
+	test("a ready layout installs a new workspace view", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await initializeLocalLayoutState();
+
+		const state = useAppStore.getState();
+		expect(state.layoutStateReady).toBe(true);
+		expect(state.workbenchFrame).not.toBeNull();
+		const document = await ensureWorkspaceLayoutState("new-workspace");
+
+		expect(useAppStore.getState().layoutDocumentsByWorkspace["new-workspace"]).toBe(document);
 	});
 
 	test("an invalid local frame falls back directly to Balanced", async () => {

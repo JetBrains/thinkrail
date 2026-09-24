@@ -1,5 +1,5 @@
 import type { LayoutPreset } from "@thinkrail/contracts";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../../clientPreferences";
 import { type LayoutAttention, randomId } from "../../lib";
 import {
@@ -590,6 +590,32 @@ export function initializeLocalLayoutState(): Promise<void> {
 	return initialization;
 }
 
+function installWorkspaceView(workspaceId: string): WorkspaceLayoutDocument {
+	const state = useAppStore.getState();
+	if (state.removedWorkspaceIds[workspaceId]) throw new Error("Workspace has been removed");
+	const existingDocument = state.layoutDocumentsByWorkspace[workspaceId];
+	if (existingDocument) return existingDocument;
+	if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
+	const view = emptyWorkspaceView();
+	const document = projectWorkspaceLayout(state.workbenchFrame, view);
+	state.applyLocalLayoutState({
+		frame: state.workbenchFrame,
+		viewsByWorkspace: { ...state.workspaceViewsByWorkspace, [workspaceId]: view },
+		documentsByWorkspace: {
+			...state.layoutDocumentsByWorkspace,
+			[workspaceId]: document,
+		},
+		attentionByWorkspace: {
+			...state.layoutAttentionByWorkspace,
+			[workspaceId]: reconcileAttention(document, undefined),
+		},
+		preferences: state.localLayoutPreferences,
+	});
+	const installed = useAppStore.getState().layoutDocumentsByWorkspace[workspaceId];
+	if (!installed) throw new Error("The workspace layout could not be initialized");
+	return installed;
+}
+
 export function ensureWorkspaceLayoutState(workspaceId: string): Promise<WorkspaceLayoutDocument> {
 	const existing = workspaceInitializations.get(workspaceId);
 	if (existing) return existing;
@@ -598,32 +624,7 @@ export function ensureWorkspaceLayoutState(workspaceId: string): Promise<Workspa
 			throw new Error("Workspace has been removed");
 		}
 		await initializeLocalLayoutState();
-		const state = useAppStore.getState();
-		if (state.removedWorkspaceIds[workspaceId]) throw new Error("Workspace has been removed");
-		const existingDocument = state.layoutDocumentsByWorkspace[workspaceId];
-		if (existingDocument) return existingDocument;
-		if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
-		const view = emptyWorkspaceView();
-		const document = projectWorkspaceLayout(state.workbenchFrame, view);
-		state.applyLocalLayoutState(
-			{
-				frame: state.workbenchFrame,
-				viewsByWorkspace: { ...state.workspaceViewsByWorkspace, [workspaceId]: view },
-				documentsByWorkspace: {
-					...state.layoutDocumentsByWorkspace,
-					[workspaceId]: document,
-				},
-				attentionByWorkspace: {
-					...state.layoutAttentionByWorkspace,
-					[workspaceId]: reconcileAttention(document, undefined),
-				},
-				preferences: state.localLayoutPreferences,
-			},
-			[workspaceId],
-		);
-		const installed = useAppStore.getState().layoutDocumentsByWorkspace[workspaceId];
-		if (!installed) throw new Error("The workspace layout could not be initialized");
-		return installed;
+		return installWorkspaceView(workspaceId);
 	})().finally(() => {
 		if (workspaceInitializations.get(workspaceId) === request) {
 			workspaceInitializations.delete(workspaceId);
@@ -667,7 +668,6 @@ export function applyLayoutPresetLocally(preset: LayoutPreset): void {
 				),
 			},
 		},
-		Object.keys(documentsByWorkspace),
 		true,
 	);
 }
@@ -735,7 +735,6 @@ export async function commitWorkspaceLayout(
 			attentionByWorkspace,
 			preferences: state.localLayoutPreferences,
 		},
-		changedWorkspaceIds,
 		frameChanged,
 	);
 	return useAppStore.getState().layoutDocumentsByWorkspace[workspaceId] ?? document;
@@ -750,7 +749,23 @@ export function useLocalLayoutState(): void {
 }
 
 export function useWorkspaceLayoutState(workspaceId: string): void {
-	useEffect(() => {
+	useLayoutEffect(() => {
+		const state = useAppStore.getState();
+		if (
+			state.layoutStateReady &&
+			state.workbenchFrame &&
+			!state.removedWorkspaceIds[workspaceId] &&
+			!state.layoutDocumentsByWorkspace[workspaceId]
+		) {
+			try {
+				installWorkspaceView(workspaceId);
+			} catch (error) {
+				if (!useAppStore.getState().removedWorkspaceIds[workspaceId]) {
+					toast.error(errorText(error), "Couldn't load the local layout");
+				}
+			}
+			return;
+		}
 		void ensureWorkspaceLayoutState(workspaceId).catch((error) => {
 			if (!useAppStore.getState().removedWorkspaceIds[workspaceId]) {
 				toast.error(errorText(error), "Couldn't load the local layout");
