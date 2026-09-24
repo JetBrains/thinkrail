@@ -124,6 +124,24 @@ test("continuations retain legacy snapshot compatibility without accepting malfo
 	}
 });
 
+test("default human input policy is protected before the first gate", () => {
+	const { state, node } = fixture();
+	node.attempts = [];
+	const edits = [
+		{
+			kind: "put-node" as const,
+			node: {
+				id: "worker",
+				task: "Work",
+				outputs: {},
+				inputAuthority: "human-or-controller" as const,
+			},
+		},
+	];
+	expect(() => prepareEdit(state, edits, { kind: "controller" })).toThrow("human input policy");
+	expect(prepareEdit(state, edits, actor).authority).toBe("human");
+});
+
 test("human release and historical input policies cannot be removed by controllers", () => {
 	const { state, node } = fixture();
 	state.gates.input = {

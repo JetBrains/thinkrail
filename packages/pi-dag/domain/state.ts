@@ -171,7 +171,7 @@ export function prepareEdit(
 		)
 			requireHuman("Only a human may remove or change a human-only release policy");
 		const humanInput =
-			before.inputAuthority === "human" ||
+			(before.inputAuthority ?? "human") === "human" ||
 			Object.values(state.gates).some(
 				(gate) =>
 					gate.kind === "input" && gate.target.nodeId === before.id && gate.authority === "human",
