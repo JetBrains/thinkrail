@@ -324,7 +324,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   the in-memory registry is lost — and its absence is precisely what stops the polling).
 - **`askState`** — the questionnaire lifecycle seam: the pure
   `deriveAskStates(turns, askAnswers, toolResults)` + `AskStatesContext`/`useAskState` (provided by
-  `ChatView`, `null` standalone). A live blocking ask resolves through its native tool result; a
+  `ChatView`, and also by the plan page's `PlanAskQuestion` so the SAME `AskUserQuestionCard` can be
+  answered from the plan — see `panels/SPEC.md`; `null` standalone). A live blocking ask resolves through its native tool result; a
   restart-repaired eligible ack resolves later through `ask-user-answers`; a stopped/error/length result is
   terminal because Pi never executes tools from a length-truncated assistant response. "Answered /
   superseded / stopped / awaiting" is therefore derived once from all three transcript

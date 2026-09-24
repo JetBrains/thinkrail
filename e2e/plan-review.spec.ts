@@ -374,6 +374,59 @@ test("the plan page groups items into a Session block and Done, and adds a task 
 	).toBeVisible();
 });
 
+test("plan items can be removed, and the add box takes multi-line input (Enter adds, Shift+Enter wraps)", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const sessionId = await page
+		.locator('[data-testid="editor-tab"][data-kind="chat"]')
+		.first()
+		.getAttribute("data-session-id");
+	if (!sessionId) throw new Error("chat tab exposes no session id");
+	const todosDir = join(workspace.worktreePath, ".thinkrail", "context", "todos");
+	mkdirSync(todosDir, { recursive: true });
+	writeFileSync(
+		join(todosDir, `${sessionId}.json`),
+		JSON.stringify({
+			version: 6,
+			todos: [
+				{
+					id: "t1",
+					title: "A task I added from the plan",
+					status: "pending",
+					origin: "user",
+					createdAt: "2026-01-01T00:00:00Z",
+					updatedAt: "2026-01-01T00:00:00Z",
+				},
+			],
+			groups: [],
+		}),
+	);
+
+	await page.getByTestId("chat-plan-toggle").click();
+	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	const pane = page.getByTestId("plan-pane");
+	await expect(pane).toBeVisible();
+
+	// Multi-line add: Shift+Enter inserts a newline (no submit), plain Enter submits.
+	await pane.getByTestId("plan-add-task").click();
+	const input = pane.getByTestId("plan-add-input");
+	await input.click();
+	await input.type("first line");
+	await input.press("Shift+Enter");
+	await input.type("second line");
+	await expect(input).toHaveValue("first line\nsecond line");
+	await input.press("Enter");
+	await expect(pane.getByTestId("plan-item").filter({ hasText: "second line" })).toBeVisible();
+
+	// Remove: the hover affordance deletes the item.
+	const item = pane.getByTestId("plan-item").filter({ hasText: "A task I added" });
+	await item.hover();
+	await item.getByTestId("plan-item-remove").click();
+	await expect(pane.getByTestId("plan-item").filter({ hasText: "A task I added" })).toHaveCount(0);
+});
+
 test("a re-opened plan keeps the completion note on the page, marked stale, but out of the export", async ({
 	page,
 	context,

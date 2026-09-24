@@ -7,7 +7,7 @@ import type {
 	TodoPlan,
 } from "@thinkrail/contracts";
 import { type AskState, deriveAskStates } from "./askState";
-import type { ChatTurn, ToolResultState } from "./types";
+import type { ChatTurn, ToolResultState, ToolStatus } from "./types";
 
 export type ItemChangeSet =
 	| { kind: "commit"; sha: string; files: GitFileChange[] }
@@ -250,4 +250,43 @@ export function sessionGlance(rt: {
 
 export function shouldNudgeOnAdd(glance: PlanGlance): boolean {
 	return glance !== "waiting_question";
+}
+
+export interface PendingAsk {
+	toolCallId: string;
+	args: Record<string, unknown>;
+	result: unknown;
+	status: ToolStatus;
+	streaming: boolean;
+}
+
+/**
+ * The session's currently-awaiting `ask_user_question` — the one the user still has to answer (no answer,
+ * not superseded, not terminal) — reconstructed as the tool render props the shared `AskUserQuestionCard`
+ * needs, so the plan page can host the SAME card. Undefined when nothing is awaiting. Latest wins.
+ */
+export function pendingAsk(rt: {
+	turns: ChatTurn[];
+	askAnswers: Record<string, AskUserQuestionResult>;
+	toolResults: Record<string, ToolResultState>;
+}): PendingAsk | undefined {
+	const states = deriveAskStates(rt.turns, rt.askAnswers, rt.toolResults);
+	let found: PendingAsk | undefined;
+	for (const turn of rt.turns) {
+		if (turn.kind !== "assistant") continue;
+		for (const block of turn.message.content) {
+			if (block.type !== "toolCall" || block.name !== "ask_user_question") continue;
+			const state = states[block.id];
+			if (!state || state.answer || state.superseded || state.terminal) continue;
+			const tool = rt.toolResults[block.id];
+			found = {
+				toolCallId: block.id,
+				args: (block.arguments ?? {}) as Record<string, unknown>,
+				result: tool?.raw,
+				status: tool?.status ?? "running",
+				streaming: turn.streaming,
+			};
+		}
+	}
+	return found;
 }

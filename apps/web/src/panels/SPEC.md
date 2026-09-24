@@ -609,17 +609,24 @@ a project picker, the prompt hero, and the reused
   current work — the active group(s)/loose items followed by the pending ones (no separate To-do
   section; item status glyphs distinguish in-progress from pending). Its **live status is a chip in the
   header, right of the `Session` title** (`plan-now-status`, `data-glance`, off `sessionGlance`): `working`
-  → a `Working…` spinner, `waiting_question` → `Waiting for your answer` (primary; "reply in the chat" in
-  the tooltip) — so an idle/empty plan still says whether the agent is busy or blocked, without a
-  separate line under the items. Only when the plan has no items and the session is idle does the body
-  show the `plan-now-idle` line (`All steps are done.` → `No steps yet…`). A **`Done` section**
+  → a `Working…` spinner. A `waiting_question` state is surfaced not as a chip but as the **actual
+  question, answerable in place**: the Session body hosts the SAME **`AskUserQuestionCard`** as the chat
+  (`PlanAskQuestion` → `plan-ask`), which subscribes to the session runtime, finds the awaiting ask
+  (`planView.pendingAsk`), and mounts the card inside a minimal `ChatActionsContext` (a real
+  `session.answerQuestion`; the chat-only actions — reveal/focus/subagent — are no-ops) plus a derived
+  `AskStatesContext`, so an answer submitted from the plan flows through the identical path as the chat.
+  It renders nothing when no question is awaiting. Only when the plan has no items and the session is idle
+  does the body show the `plan-now-idle` line (`All steps are done.` → `No steps yet…`). A **`Done` section**
   (`plan-done-section`, always expanded — the page is the review trail) holds the completed groups then
   done loose. Both blocks share ONE `PLAN_CARD_CLASS` card shape with a `glyph + title` header — Session
   (`CircleDot`), Done (`CircleCheck`, via `PlanCardSection`) — so the plan reads as one consistent card
   stack. The Session block header carries the plan page's **add-task control**
-  (the plan page's only in-page way to add): a `+ Task` button (`plan-add-task`) toggles an inline input
-  (`plan-add-input`, Enter adds / Esc closes) wired to the SAME `useChatTodos.add` as the popup's
+  (the plan page's only in-page way to add): a `+ Task` button (`plan-add-task`) toggles an inline
+  **auto-growing textarea** (`plan-add-input`) — plain **Enter adds**, **Shift+Enter** inserts a newline
+  (multi-line like the composer), Esc closes — wired to the SAME `useChatTodos.add` as the popup's
   `TodoAddRow` — a loose **user** item plus the agent nudge — so the two entry points stay one flow.
+  Every plan item carries a **hover Remove affordance** (`plan-item-remove` — `useChatTodos.remove`,
+  disabled while the row is under review); adopted commits (host-derived) get no remove.
   Items keep a **scan-first item
   anatomy**: the item TITLE is
   the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,

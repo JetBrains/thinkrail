@@ -12,13 +12,13 @@ import {
 	RiGitPullRequestLine as GitPullRequestArrow,
 	RiListCheck3 as ListChecks,
 	RiLoader4Line as Loader2,
-	RiQuestionnaireLine as MessageCircleQuestion,
 	RiChat1Line as MessageSquare,
 	RiMore2Line as MoreVertical,
 	RiAddLine as Plus,
+	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -26,6 +26,8 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AskStatesContext, deriveAskStates } from "../chat/askState";
+import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
 import { Markdown } from "../chat/Markdown";
 import { VerificationBadge, VerificationGlyph } from "../chat/planKit";
 import { planToMarkdown } from "../chat/planMarkdown";
@@ -40,6 +42,7 @@ import {
 	itemOpenFindings,
 	itemRevisions,
 	type PlanGlance,
+	pendingAsk,
 	planCompletionSummary,
 	planSections,
 	planStaleSummary,
@@ -50,6 +53,7 @@ import {
 	sessionGlance,
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
+import { AskUserQuestionCard } from "../chat/tools/AskUserQuestionCard";
 import { useChatTodos } from "../chat/useChatTodos";
 import { LoadingRegion } from "../components/Skeleton";
 import { IconTooltip } from "../components/ui/tooltip";
@@ -237,6 +241,7 @@ function ItemBlock({
 	onOpenCommit,
 	onStartReview,
 	onOpenReview,
+	onRemove,
 	reviewComments,
 	startDisabled,
 	focusRequest,
@@ -247,6 +252,7 @@ function ItemBlock({
 	onOpenCommit: (sha: string) => void;
 	onStartReview: (id: string) => Promise<void>;
 	onOpenReview: () => void;
+	onRemove?: ((id: string) => void) | undefined;
 	reviewComments: ReviewComment[] | undefined;
 	startDisabled: boolean;
 	focusRequest: { id: string; tick: number } | null;
@@ -379,6 +385,26 @@ function ItemBlock({
 								Verified
 							</span>
 						) : null}
+						{onRemove ? (
+							<IconTooltip
+								label={
+									reviewing
+										? "Reviewing… — wait for the review to finish before removing"
+										: "Remove"
+								}
+							>
+								<button
+									type="button"
+									data-testid="plan-item-remove"
+									onClick={() => onRemove(item.id)}
+									disabled={reviewing}
+									aria-label="Remove"
+									className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error focus-visible:opacity-100 group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+								>
+									<Trash2 className="size-14" />
+								</button>
+							</IconTooltip>
+						) : null}
 					</div>
 					{collapsible && (item.verification || set) ? (
 						<span className="flex items-center gap-8 tr-text-metadata text-text-subtle group-data-[expanded=true]:hidden">
@@ -492,6 +518,7 @@ function GroupSection({
 	onOpenCommit,
 	onStartReview,
 	onOpenReview,
+	onRemove,
 	reviewComments,
 	startDisabled,
 	focusRequest,
@@ -502,6 +529,7 @@ function GroupSection({
 	onOpenCommit: (sha: string) => void;
 	onStartReview: (id: string) => Promise<void>;
 	onOpenReview: () => void;
+	onRemove?: ((id: string) => void) | undefined;
 	reviewComments: ReviewComment[] | undefined;
 	startDisabled: boolean;
 	focusRequest: { id: string; tick: number } | null;
@@ -525,6 +553,7 @@ function GroupSection({
 						onOpenCommit={onOpenCommit}
 						onStartReview={onStartReview}
 						onOpenReview={onOpenReview}
+						onRemove={onRemove}
 						reviewComments={reviewComments}
 						startDisabled={startDisabled}
 						focusRequest={focusRequest}
@@ -553,7 +582,13 @@ function PlanAddRow({
 	onClose: () => void;
 }) {
 	const [draft, setDraft] = useState("");
-	const inputRef = useRef<HTMLInputElement>(null);
+	const inputRef = useRef<HTMLTextAreaElement>(null);
+	const grow = () => {
+		const el = inputRef.current;
+		if (!el) return;
+		el.style.height = "auto";
+		el.style.height = `${el.scrollHeight}px`;
+	};
 	useEffect(() => {
 		inputRef.current?.focus();
 	}, []);
@@ -563,22 +598,31 @@ function PlanAddRow({
 		try {
 			await onAdd(title);
 			setDraft("");
+			requestAnimationFrame(grow);
 		} catch {}
 	};
 	return (
-		<div className="mt-8 flex items-center gap-8 rounded-[var(--radius-sm)] border border-border-default px-8 py-4">
-			<Plus className="size-14 shrink-0 text-text-muted" />
-			<input
+		<div className="mt-8 flex items-start gap-8 rounded-[var(--radius-sm)] border border-border-default px-8 py-4">
+			<Plus className="mt-2 size-14 shrink-0 text-text-muted" />
+			<textarea
 				ref={inputRef}
 				data-testid="plan-add-input"
+				rows={1}
 				value={draft}
-				onChange={(e) => setDraft(e.target.value)}
-				onKeyDown={(e) => {
-					if (e.key === "Enter") void submit();
-					if (e.key === "Escape") onClose();
+				onChange={(e) => {
+					setDraft(e.target.value);
+					grow();
 				}}
-				placeholder="Add a task for the agent…"
-				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+				onKeyDown={(e) => {
+					if (e.key === "Enter" && !e.shiftKey) {
+						e.preventDefault();
+						void submit();
+					} else if (e.key === "Escape") {
+						onClose();
+					}
+				}}
+				placeholder="Add a task…  (Enter to add, Shift+Enter for a new line)"
+				className="max-h-[10rem] min-w-0 flex-1 resize-none bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
 		</div>
 	);
@@ -608,6 +652,50 @@ function PlanCardSection({
 	);
 }
 
+// Hosts the SAME `AskUserQuestionCard` as the chat, so the pending question can be answered from the
+// plan. Subscribes to the session runtime itself (isolating re-renders from the heavy PlanPane) and
+// supplies the contexts the card needs: a real `answerQuestion` (session.answerQuestion) with no-op
+// chat-only actions, plus the derived ask states. Renders nothing when no question is awaiting.
+function PlanAskQuestion({ sessionId }: { workspaceId: string; sessionId: string }) {
+	const runtime = useAppStore((s) => s.sessions[sessionId]);
+	const focusScope = useRef({}).current;
+	const actions = useMemo<ChatActions>(
+		() => ({
+			answerQuestion: (toolCallId, result) =>
+				getTransport()
+					.request("session.answerQuestion", { sessionId, toolCallId, result })
+					.then(() => undefined),
+			cancelAutomaticReveal: () => {},
+			focusComposer: () => {},
+			openSubagentTranscript: () => {},
+			revealChatElement: () => {},
+		}),
+		[sessionId],
+	);
+	const askStates = useMemo(
+		() => (runtime ? deriveAskStates(runtime.turns, runtime.askAnswers, runtime.toolResults) : {}),
+		[runtime],
+	);
+	const ask = runtime ? pendingAsk(runtime) : undefined;
+	if (!ask) return null;
+	return (
+		<ChatActionsContext.Provider value={actions}>
+			<AskStatesContext.Provider value={{ states: askStates, focusScope }}>
+				<div data-testid="plan-ask" className="mb-8">
+					<AskUserQuestionCard
+						toolCallId={ask.toolCallId}
+						toolName="ask_user_question"
+						args={ask.args}
+						result={ask.result}
+						status={ask.status}
+						streaming={ask.streaming}
+					/>
+				</div>
+			</AskStatesContext.Provider>
+		</ChatActionsContext.Provider>
+	);
+}
+
 function SessionBlock({
 	activeGroups,
 	activeLoose,
@@ -615,6 +703,7 @@ function SessionBlock({
 	pendingLoose,
 	allDone,
 	glance,
+	askSlot,
 	onAdd,
 	renderGroup,
 	renderItem,
@@ -625,6 +714,7 @@ function SessionBlock({
 	pendingLoose: TodoItem[];
 	allDone: boolean;
 	glance: PlanGlance;
+	askSlot: ReactNode;
 	onAdd: (title: string) => Promise<void>;
 	renderGroup: (group: TodoGroupItem) => ReactNode;
 	renderItem: (item: TodoItem) => ReactNode;
@@ -639,17 +729,7 @@ function SessionBlock({
 			<div className="mb-8 flex items-center gap-8">
 				<CircleDot className="size-14 shrink-0 text-primary" />
 				<h2 className="shrink-0 tr-title-compact text-text-default">Session</h2>
-				{glance === "waiting_question" ? (
-					<span
-						data-testid="plan-now-status"
-						data-glance="waiting_question"
-						title="Reply in the chat"
-						className="flex min-w-0 items-center gap-4 tr-text-metadata text-primary"
-					>
-						<MessageCircleQuestion className="size-14 shrink-0" />
-						<span className="truncate">Waiting for your answer</span>
-					</span>
-				) : glance === "working" ? (
+				{glance === "working" ? (
 					<span
 						data-testid="plan-now-status"
 						data-glance="working"
@@ -670,6 +750,7 @@ function SessionBlock({
 					Task
 				</button>
 			</div>
+			{askSlot}
 			{hasActive ? (
 				<>
 					{activeGroups.map(renderGroup)}
@@ -977,6 +1058,7 @@ export default function PlanPane({
 			onOpenCommit={onOpenCommit}
 			onStartReview={startReview}
 			onOpenReview={onOpenReview}
+			onRemove={plan.remove}
 			reviewComments={reviewComments}
 			startDisabled={reviewingAny}
 			focusRequest={focusRequest}
@@ -991,6 +1073,7 @@ export default function PlanPane({
 			onOpenCommit={onOpenCommit}
 			onStartReview={startReview}
 			onOpenReview={onOpenReview}
+			onRemove={plan.remove}
 			reviewComments={reviewComments}
 			startDisabled={reviewingAny}
 			focusRequest={focusRequest}
@@ -1269,6 +1352,7 @@ export default function PlanPane({
 					pendingLoose={sections.pendingLoose}
 					allDone={buildDone}
 					glance={glance}
+					askSlot={<PlanAskQuestion workspaceId={workspaceId} sessionId={sessionId} />}
 					onAdd={plan.add}
 					renderGroup={renderGroup}
 					renderItem={renderItem}
