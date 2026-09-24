@@ -272,7 +272,7 @@ test("a branch commit no step owns shows under 'Committed outside the plan' and 
 	await expect(pane.getByTestId("plan-review-progress")).toContainText("0/1 reviewed");
 });
 
-test("the plan page groups items into Now executing / To do / Done and adds a task inline", async ({
+test("the plan page groups items into a Session block and Done, and adds a task inline", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -350,21 +350,19 @@ test("the plan page groups items into Now executing / To do / Done and adds a ta
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 
-	// The active group lives in the Now-executing block; pending under To do; done under Done.
+	// The Session block holds both the active and the pending items; done lives under Done. There is no
+	// separate To-do section anymore.
 	const now = pane.getByTestId("plan-now-executing");
-	await expect(now).toContainText("Now executing");
+	await expect(now).toContainText("Session");
+	await expect(pane.getByTestId("plan-todo-section")).toHaveCount(0);
 	await expect(now.getByTestId("plan-item").filter({ hasText: "Wire the API" })).toBeVisible();
-	await expect(
-		pane
-			.getByTestId("plan-todo-section")
-			.getByTestId("plan-item")
-			.filter({ hasText: "Empty states" }),
-	).toBeVisible();
+	await expect(now.getByTestId("plan-item").filter({ hasText: "Empty states" })).toBeVisible();
 	await expect(
 		pane.getByTestId("plan-done-section").getByTestId("plan-item").filter({ hasText: "Init repo" }),
 	).toBeVisible();
 
-	// The add-task control: button reveals an inline input; Enter adds the task, which appears under To do.
+	// The add-task control: button reveals an inline input; Enter adds the task, which appears in the
+	// Session block.
 	await expect(pane.getByTestId("plan-add-input")).toHaveCount(0);
 	await now.getByTestId("plan-add-task").click();
 	const input = pane.getByTestId("plan-add-input");
@@ -372,10 +370,7 @@ test("the plan page groups items into Now executing / To do / Done and adds a ta
 	await input.fill("Write the changelog");
 	await input.press("Enter");
 	await expect(
-		pane
-			.getByTestId("plan-todo-section")
-			.getByTestId("plan-item")
-			.filter({ hasText: "Write the changelog" }),
+		now.getByTestId("plan-item").filter({ hasText: "Write the changelog" }),
 	).toBeVisible();
 });
 

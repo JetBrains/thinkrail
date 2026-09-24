@@ -605,22 +605,26 @@ a project picker, the prompt hero, and the reused
   registered **`plan`** tabs (`PlanTab`) via the lazy **`PlanPane`** — the chat plan's **live review-map
   page**. Frontend-local placement stores only the `todo-plan` resolver kind + session identity, never inline
   plan content; another client can explicitly reopen the same host-owned page without inheriting placement. It renders the session's TODO plan document-scale,
-  **status-grouped** (`planSections`, the same split as the popup): a **`Now executing` block**
-  (`plan-now-executing`) holds the active group(s)/loose items, or an idle line when none is in
-  progress (`plan-now-idle`: `Up next: <first pending>` → `All steps are done.` → `No steps yet…`); a
-  **`To do` section** (`plan-todo-section`) holds the pending groups then pending loose; a **`Done`
-  section** (`plan-done-section`, always expanded — the page is the review trail) holds the completed
-  groups then done loose. All three status blocks share ONE `PLAN_CARD_CLASS` card shape (via
-  `PlanCardSection` for To do/Done) with a `glyph + title` header — Now executing (`CircleDot`), To do
-  (`Circle`), Done (`CircleCheck`) — so the whole plan reads as one consistent card stack. The
-  Now-executing block header carries the plan page's **add-task control**
+  **status-grouped** (`planSections`): a single **`Session` block** (`plan-now-executing`) holds the
+  current work — the active group(s)/loose items followed by the pending ones (no separate To-do
+  section; item status glyphs distinguish in-progress from pending). Its **live status is a chip in the
+  header, right of the `Session` title** (`plan-now-status`, `data-glance`, off `sessionGlance`): `working`
+  → a `Working…` spinner, `waiting_question` → `Waiting for your answer` (primary; "reply in the chat" in
+  the tooltip) — so an idle/empty plan still says whether the agent is busy or blocked, without a
+  separate line under the items. Only when the plan has no items and the session is idle does the body
+  show the `plan-now-idle` line (`All steps are done.` → `No steps yet…`). A **`Done` section**
+  (`plan-done-section`, always expanded — the page is the review trail) holds the completed groups then
+  done loose. Both blocks share ONE `PLAN_CARD_CLASS` card shape with a `glyph + title` header — Session
+  (`CircleDot`), Done (`CircleCheck`, via `PlanCardSection`) — so the plan reads as one consistent card
+  stack. The Session block header carries the plan page's **add-task control**
   (the plan page's only in-page way to add): a `+ Task` button (`plan-add-task`) toggles an inline input
   (`plan-add-input`, Enter adds / Esc closes) wired to the SAME `useChatTodos.add` as the popup's
   `TodoAddRow` — a loose **user** item plus the agent nudge — so the two entry points stay one flow.
   Items keep a **scan-first item
   anatomy**: the item TITLE is
   the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,
-  subtle/muted) — so titles never blend into prose. A **done item carries no leading status glyph**
+  subtle/muted) — so titles never blend into prose. Titles **wrap** (`break-words`, never truncated) — a
+  long title is revealed in full, not clipped. A **done item carries no leading status glyph**
   (`hideStatusGlyph` — its section already says "done"; only an active review or a `changes_requested`
   warning keeps a leading glyph; the slot holds a ghost spacer so titles stay aligned). A **done item
   collapses to a compact two-line
@@ -828,17 +832,16 @@ own section. The kebab menu (`plan-menu`, a
   *without* `ghProblem` (offline seam, transient gh failure) keeps the window.open + toast path.
   This dialog is unit/e2e-pinned on the server side (`isPushAuthFailure`, `ghSetupProblem`); the
   browser-side arms need a real broken push / missing gh, so they stay convention-held.
-  On a completed build (every planned step done) the page shows a **one-line derived recap**
-  (`plan-overall-summary`): `N steps done · M files · r/k reviewed` — facts aggregated over the WHOLE
-  plan (`planView.planChangeTotals` counts the distinct files any step's change set touched), never the
-  agent's prose. It deliberately replaces the old clamped `todo_plan_summary` box, which read as a recap
-  of the last step and buried the plan under a wall of prose; the agent's note still ships to the
+  The **`Summary` card** (`plan-overall-summary`) shows ONLY the agent's plan-level note — fresh via
+  `planCompletionSummary` when every step is done, or the stale note via `planStaleSummary` while the plan
+  is being redone. It carries **no step/file/review facts** (those live in the header stepper + context
+  line, so repeating them here was noise), and it is **omitted entirely when there is no prose** (a
+  completed plan whose agent wrote no note renders no empty card). The agent's note still ships to the
   Copy / Save-.md export via `planCompletionSummary`. There is **no in-page "Review mode"** — findings live in the right-panel **Review** tab;
   when the reviewer agent has open comments (`selectAgentReviewCommentCount` — open, `author: "agent"`) the
   header shows a **`N comments`** chip (`plan-review-comments`) that `requestToolView(ws, "review")` to
-  focus that tab. The header also shows the agent's plan-level completion note
-  (`planCompletionSummary`-gated `plan-overall-summary`); once an item re-opens after a completion the note
-  stays visible via `planStaleSummary`, marked stale with an "updating" badge (`plan-summary-stale`)
+  focus that tab. Once an item re-opens after a completion the Summary note
+  stays visible via `planStaleSummary`, marked stale with an `Updating…` badge (`plan-summary-stale`)
   instead of disappearing, until the agent rewrites it at the next completion — exports stay gated on
   `planCompletionSummary`. `FileRow` (`planFileRow.tsx`, its own module so plan surfaces
   share one row without cycles) is the shared change-set row. Live by

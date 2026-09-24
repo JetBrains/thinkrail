@@ -12,6 +12,7 @@ import {
 	RiGitPullRequestLine as GitPullRequestArrow,
 	RiListCheck3 as ListChecks,
 	RiLoader4Line as Loader2,
+	RiQuestionnaireLine as MessageCircleQuestion,
 	RiChat1Line as MessageSquare,
 	RiMore2Line as MoreVertical,
 	RiAddLine as Plus,
@@ -38,7 +39,7 @@ import {
 	itemChangeSet,
 	itemOpenFindings,
 	itemRevisions,
-	planChangeTotals,
+	type PlanGlance,
 	planCompletionSummary,
 	planSections,
 	planStaleSummary,
@@ -46,6 +47,7 @@ import {
 	reviewableItems,
 	reviewChangesRequested,
 	reviewSettled,
+	sessionGlance,
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
@@ -320,14 +322,14 @@ function ItemBlock({
 								className="flex min-w-0 flex-1 items-center gap-8 rounded-[var(--radius-sm)] text-left"
 							>
 								<ChevronRight className="size-14 shrink-0 text-text-muted transition-transform group-data-[expanded=true]:rotate-90" />
-								<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
+								<span className="min-w-0 flex-1 break-words tr-title-section text-text-default">
 									{item.title}
 								</span>
 							</button>
 						) : (
 							<span className="flex min-w-0 flex-1 items-center gap-8">
 								<span className="size-14 shrink-0" />
-								<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
+								<span className="min-w-0 flex-1 break-words tr-title-section text-text-default">
 									{item.title}
 								</span>
 							</span>
@@ -434,43 +436,22 @@ const SUMMARY_PROSE = [
 	"[&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-16 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-16 [&_li]:my-2",
 ].join(" ");
 
-function PlanSummary({
-	steps,
-	files,
-	reviewed,
-	reviewTotal,
-	summary,
-	stale = false,
-}: {
-	steps: number;
-	files: number;
-	reviewed: number;
-	reviewTotal: number;
-	summary: string | undefined;
-	stale?: boolean;
-}) {
+function PlanSummary({ summary, stale = false }: { summary: string; stale?: boolean }) {
 	const [open, setOpen] = useState(false);
-	const facts = [`${steps} ${steps === 1 ? "step" : "steps"} done`];
-	if (files > 0) facts.push(`${files} ${files === 1 ? "file" : "files"}`);
-	if (reviewTotal > 0) facts.push(`${reviewed}/${reviewTotal} reviewed`);
-	const clampable = (summary?.length ?? 0) > 160;
+	const clampable = summary.length > 160;
 	const header = (
 		<>
 			<span className="tr-text-eyebrow text-text-subtle">Summary</span>
 			{stale ? (
 				<span
 					data-testid="plan-summary-stale"
+					title="Showing the last completed recap until the plan finishes again"
 					className="flex items-center gap-4 tr-text-metadata text-text-muted"
 				>
 					<Loader2 className="size-14 shrink-0 animate-spin text-text-muted" />
-					Updating… shows the last completed recap until the plan finishes again
+					Updating…
 				</span>
-			) : (
-				<span className="flex items-center gap-4 tr-text-metadata text-text-subtle">
-					<CircleCheck className="size-14 shrink-0 text-feedback-success" />
-					{facts.join(" · ")}
-				</span>
-			)}
+			) : null}
 		</>
 	);
 	return (
@@ -494,14 +475,12 @@ function PlanSummary({
 			) : (
 				<div className="flex flex-wrap items-center gap-x-8 gap-y-2">{header}</div>
 			)}
-			{summary ? (
-				<div data-testid="plan-overall-summary">
-					<Markdown
-						text={summary}
-						className={`tr-text-ui ${SUMMARY_PROSE} ${clampable && !open ? "line-clamp-2" : ""}`}
-					/>
-				</div>
-			) : null}
+			<div data-testid="plan-overall-summary">
+				<Markdown
+					text={summary}
+					className={`tr-text-ui ${SUMMARY_PROSE} ${clampable && !open ? "line-clamp-2" : ""}`}
+				/>
+			</div>
 		</div>
 	);
 }
@@ -531,7 +510,7 @@ function GroupSection({
 	return (
 		<section className="mb-16" data-testid="plan-group">
 			<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
-				<span className="min-w-0 flex-1 truncate">{group.title}</span>
+				<span className="min-w-0 flex-1 break-words">{group.title}</span>
 				<span className="shrink-0 tr-text-eyebrow text-text-subtle">
 					{done}/{total}
 				</span>
@@ -629,41 +608,63 @@ function PlanCardSection({
 	);
 }
 
-function NowExecutingBlock({
+function SessionBlock({
 	activeGroups,
 	activeLoose,
-	nextUp,
+	pendingGroups,
+	pendingLoose,
 	allDone,
+	glance,
 	onAdd,
 	renderGroup,
 	renderItem,
 }: {
 	activeGroups: TodoGroupItem[];
 	activeLoose: TodoItem[];
-	nextUp: string | undefined;
+	pendingGroups: TodoGroupItem[];
+	pendingLoose: TodoItem[];
 	allDone: boolean;
+	glance: PlanGlance;
 	onAdd: (title: string) => Promise<void>;
 	renderGroup: (group: TodoGroupItem) => ReactNode;
 	renderItem: (item: TodoItem) => ReactNode;
 }) {
 	const [adding, setAdding] = useState(false);
 	const hasActive = activeGroups.length > 0 || activeLoose.length > 0;
-	const idleText = allDone
-		? "All steps are done."
-		: nextUp
-			? `Up next: ${nextUp}`
-			: "No steps yet — add one to get started.";
+	const hasPending = pendingGroups.length > 0 || pendingLoose.length > 0;
+	const hasAny = hasActive || hasPending;
+	const idleText = allDone ? "All steps are done." : "No steps yet — add one to get started.";
 	return (
 		<section data-testid="plan-now-executing" className={PLAN_CARD_CLASS}>
 			<div className="mb-8 flex items-center gap-8">
 				<CircleDot className="size-14 shrink-0 text-primary" />
-				<h2 className="min-w-0 flex-1 tr-title-compact text-text-default">Now executing</h2>
+				<h2 className="shrink-0 tr-title-compact text-text-default">Session</h2>
+				{glance === "waiting_question" ? (
+					<span
+						data-testid="plan-now-status"
+						data-glance="waiting_question"
+						title="Reply in the chat"
+						className="flex min-w-0 items-center gap-4 tr-text-metadata text-primary"
+					>
+						<MessageCircleQuestion className="size-14 shrink-0" />
+						<span className="truncate">Waiting for your answer</span>
+					</span>
+				) : glance === "working" ? (
+					<span
+						data-testid="plan-now-status"
+						data-glance="working"
+						className="flex min-w-0 items-center gap-4 tr-text-metadata text-text-subtle"
+					>
+						<Loader2 className="size-14 shrink-0 animate-spin text-primary" />
+						Working…
+					</span>
+				) : null}
 				<button
 					type="button"
 					data-testid="plan-add-task"
 					onClick={() => setAdding((v) => !v)}
 					title="Add a task to the plan"
-					className="flex h-24 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-action text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+					className="ml-auto flex h-24 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-action text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<Plus className="size-14" />
 					Task
@@ -676,11 +677,24 @@ function NowExecutingBlock({
 						<ul className="flex flex-col">{activeLoose.map(renderItem)}</ul>
 					) : null}
 				</>
-			) : (
-				<p data-testid="plan-now-idle" className="px-4 tr-text-ui text-text-subtle">
+			) : null}
+			{hasPending ? (
+				<>
+					{pendingGroups.map(renderGroup)}
+					{pendingLoose.length > 0 ? (
+						<ul className="flex flex-col">{pendingLoose.map(renderItem)}</ul>
+					) : null}
+				</>
+			) : null}
+			{!hasAny && glance === "waiting" ? (
+				<p
+					data-testid="plan-now-idle"
+					data-glance="waiting"
+					className="px-4 tr-text-ui text-text-subtle"
+				>
 					{idleText}
 				</p>
-			)}
+			) : null}
 			{adding ? <PlanAddRow onAdd={onAdd} onClose={() => setAdding(false)} /> : null}
 		</section>
 	);
@@ -698,6 +712,10 @@ export default function PlanPane({
 	const pushToast = useAppStore((s) => s.pushToast);
 	const requestToolView = useAppStore((s) => s.requestToolView);
 	const workspace = useAppStore((s) => selectWorkspaceById(s, workspaceId));
+	const glance = useAppStore((s): PlanGlance => {
+		const rt = s.sessions[sessionId];
+		return rt ? sessionGlance(rt) : "waiting";
+	});
 	const connection = useAppStore((s) => s.status);
 	const hostPlatform = useAppStore((s) => s.hostPlatform);
 	const canReview = supportsPlanReview(useAppStore((s) => s.protocolVersion));
@@ -734,13 +752,6 @@ export default function PlanPane({
 	const { done, total } = planSummary(data);
 	const sections = planSections(data);
 	const adopted = adoptedCommits(data);
-	const nextUp = (() => {
-		for (const g of sections.pendingGroups) {
-			const t = g.todos.find((x) => x.status === "pending");
-			if (t) return t.title;
-		}
-		return sections.pendingLoose.find((x) => x.status === "pending")?.title;
-	})();
 	const reviewables = reviewableItems(data);
 	const unsettledReviewables = reviewables.filter((t) => !reviewSettled(t));
 	const reviewedCount = reviewables.length - unsettledReviewables.length;
@@ -762,6 +773,9 @@ export default function PlanPane({
 	};
 	const buildDone = total > 0 && done === total;
 	const staleSummary = planStaleSummary(data);
+	// The Summary card shows ONLY the agent's prose (fresh when all-done, else the stale note). No prose
+	// → no card (the header stepper already carries the step/file/review counts).
+	const summaryProse = buildDone ? planCompletionSummary(data) : staleSummary;
 	const stages: { build: StageState; review: StageState; pr: StageState } = {
 		build: buildDone ? "done" : "active",
 		review:
@@ -1247,38 +1261,18 @@ export default function PlanPane({
 						</button>
 					</div>
 				) : null}
-				{buildDone || staleSummary ? (
-					<PlanSummary
-						steps={done}
-						files={planChangeTotals(data).files}
-						reviewed={reviewedCount}
-						reviewTotal={reviewables.length}
-						summary={buildDone ? planCompletionSummary(data) : staleSummary}
-						stale={!buildDone}
-					/>
-				) : null}
-				<NowExecutingBlock
+				{summaryProse ? <PlanSummary summary={summaryProse} stale={!buildDone} /> : null}
+				<SessionBlock
 					activeGroups={sections.activeGroups}
 					activeLoose={sections.activeLoose}
-					nextUp={nextUp}
+					pendingGroups={sections.pendingGroups}
+					pendingLoose={sections.pendingLoose}
 					allDone={buildDone}
+					glance={glance}
 					onAdd={plan.add}
 					renderGroup={renderGroup}
 					renderItem={renderItem}
 				/>
-				{sections.pendingGroups.length > 0 || sections.pendingLoose.length > 0 ? (
-					<PlanCardSection
-						testId="plan-todo-section"
-						label="To do"
-						Icon={Circle}
-						iconClass="text-text-muted"
-					>
-						{sections.pendingGroups.map(renderGroup)}
-						{sections.pendingLoose.length > 0 ? (
-							<ul className="flex flex-col">{sections.pendingLoose.map(renderItem)}</ul>
-						) : null}
-					</PlanCardSection>
-				) : null}
 				{sections.doneGroups.length > 0 || sections.doneLoose.length > 0 ? (
 					<PlanCardSection
 						testId="plan-done-section"
