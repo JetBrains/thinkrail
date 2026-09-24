@@ -422,8 +422,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     entrypoint (`SKILL.md`, `index.ts`), never "Extension SKILL.md failed"; a bare
     "An extension failed." is what made #277 unreadable from the UI alone). The manager's
     `bindExtensions({onError})` wraps it in `reportExtensionError`, which does **two** things the notify
-    cannot: it writes one `warn` to the rotated host log carrying the **full** `extensionPath` and the
-    extension's own `stack` (rehydrated onto an `Error` so it lands in the structured `err` field — the
+    cannot: for a live entry, it writes one `warn` to the rotated host log carrying the **full**
+    `extensionPath` and the extension's own `stack` (rehydrated onto an `Error` so it lands in the structured `err` field — the
     chat gets the short name, the log gets the unambiguous one, and a crash stays findable after the tab
     is closed), and it **gates the client push** on `entry.registered`, the explicit flag
     `registerSession` sets when it puts the entry in the map. The event path's `sessions.get(id) === entry`
@@ -431,11 +431,16 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     stricter form would suppress the `session_start` failure #277 is about. Nor can *absence* from the map
     stand in for "not registered yet" — `disposeSession` deletes without leaving a tombstone, so a disposed
     entry is indistinguishable from an unregistered one, and a late error would be pushed at a client that
-    can never drain it. The log is never gated (a superseded session's crash is still worth recording) and
-    it attaches an `Error` **only when pi supplied a stack**: several of pi's own `emitError` sites omit it
-    (`runner.js` message_end, `agent-session.js` command/`<runtime>`), and synthesising one there would
-    record the *host's* stack — pointing the reader at `prepareSessionEntry` instead of the extension,
-    which is the opposite of why the line exists.
+    can never drain it. The log is never gated for a live entry, but an entry the host has **disposed**
+    (`entry.disposed`, set before `session.dispose()` in every teardown path) downgrades the report to a
+    single `debug` line with no stack and no client push: pi 0.87's `finishTurn` agent-loop hook outlives
+    `AgentSession.dispose()` and still dispatches `turn_end`/`context` boundaries into the runner we just
+    invalidated, so its “stale ctx” and “could not resolve the persisted assistant entry ID” reports are
+    echoes of our own teardown, not extension crashes; pi 0.86 disconnected from the agent first, so they
+    never surfaced. For a live entry, it attaches an `Error` **only when pi supplied a stack**: several of
+    pi's own `emitError` sites omit it (`runner.js` message_end, `agent-session.js` command/`<runtime>`),
+    and synthesising one there would record the *host's* stack — pointing the reader at
+    `prepareSessionEntry` instead of the extension, which is the opposite of why the line exists.
     **Members split three ways, not two.** *Untranslatable* ones are inert no-ops and rightly so — they take a
     TUI `Component` factory a web host cannot render (`setFooter`, `setHeader`, `setEditorComponent`,
     `custom`, `setWidget`'s factory overload; the string-array overload **is** rendered).

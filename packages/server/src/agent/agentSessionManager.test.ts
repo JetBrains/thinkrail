@@ -1635,6 +1635,76 @@ test("graceful settling leaves a live question dangling for restart ack repair",
 	}
 });
 
+test("disposing a session mid-run reports pi's stale-boundary errors at debug, never as a client-visible extension crash", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const toolCallId = "dispose-mid-run-question";
+	const cwd = tmpCwd("trpi-dispose-mid-run-");
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall(
+				"ask_user_question",
+				{
+					questions: [
+						{
+							question: "Dispose while waiting?",
+							header: "Dispose",
+							options: [
+								{ label: "Yes", description: "dispose" },
+								{ label: "No", description: "keep waiting" },
+							],
+						},
+					],
+				},
+				{ id: toolCallId },
+			),
+		),
+	]);
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-dispose-mid-run",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before disposal.");
+	prompting.catch(() => {});
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((frame) => frames.push(frame));
+	const stderrChunks: string[] = [];
+	const originalStderrWrite = process.stderr.write;
+	process.stderr.write = (chunk) => {
+		stderrChunks.push(String(chunk));
+		return true;
+	};
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		const framesAtDisposal = frames.length;
+		disposeAllSessions();
+		await prompting.catch(() => {});
+		await new Promise((resolve) => setTimeout(resolve, 200));
+
+		const stderr = stderrChunks.join("");
+		expect(stderr).not.toMatch(/WARN[^\n]*This extension ctx is stale/);
+		expect(stderr).not.toMatch(/WARN[^\n]*could not resolve the persisted assistant entry ID/);
+		expect(
+			frames
+				.slice(framesAtDisposal)
+				.some(
+					(frame) =>
+						frame.sessionId === session.sessionId &&
+						frame.kind === "notify" &&
+						frame.level === "error",
+				),
+		).toBe(false);
+	} finally {
+		process.stderr.write = originalStderrWrite;
+		setExtUiPublisher(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("listSessions reports a workspace's live sessions; getSessionMessages returns its transcript", async () => {
 	fauxA.setResponses([fauxAssistantMessage("HYDRATE_REPLY")]);
 	const cwd = tmpCwd("trpi-hyd-");
