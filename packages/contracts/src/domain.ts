@@ -518,7 +518,7 @@ export interface AppConfig extends ThemePreference {
 	customLayoutPresets: LayoutPreset[];
 	/** The model the plan reviewer runs on; unset ⇒ the pi default. */
 	reviewModel?: WireModel;
-	/** Reviewer thinking level; unset ⇒ the model's default. */
+	/** Reviewer thinking level; unset ⇒ the user's default thinking level, never the worker's inherited effort. */
 	reviewEffort?: ThinkingLevel;
 	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
 	reviewAutoFix: boolean;
