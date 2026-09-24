@@ -12,6 +12,7 @@ import { getJbcentralStatus } from "./jbcentral";
 export interface ProviderStatusSources {
 	modelProviderIds: Set<string>;
 	availableProviders: Set<string>;
+	centralProviders: Set<string>;
 	credentialProviders: string[];
 	oauthProviders: { id: string; name: string }[];
 	credentialType: (id: string) => "oauth" | "api_key" | undefined;
@@ -71,6 +72,9 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 			sources.availableProviders.has(id) ||
 			(!sources.modelProviderIds.has(id) && sources.hasAuth(id));
 		if (!configured) return { id, name, configured: false, ...login };
+		if (sources.centralProviders.has(id)) {
+			return { id, name, configured: true, kind: "central", ...login };
+		}
 		const { source, label } = sources.providerAuth(id);
 		const kind = resolveKind(sources.credentialType(id), source);
 		const detail = resolveDetail(source, label);
@@ -127,6 +131,9 @@ export async function getProviderStatus(): Promise<ProviderStatusReport> {
 				providerStatusIds.filter((providerId) => runtime.getModels(providerId).length > 0),
 			),
 			availableProviders: new Set(available.map((model) => model.provider)),
+			centralProviders: new Set(
+				providerStatusIds.filter((providerId) => generation.opaqueProviderIds.has(providerId)),
+			),
 			credentialProviders: visibleCredentials.map((credential) => credential.providerId),
 			oauthProviders: visibleProviders
 				.filter((provider) => provider.auth.oauth)

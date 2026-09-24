@@ -173,7 +173,7 @@ async function createRuntimeWithExtensions(
 	);
 	return {
 		runtime,
-		providerStatusIds: new Set([...providerStatusIds].filter((id) => !opaqueProviderIds.has(id))),
+		providerStatusIds,
 		opaqueProviderIds,
 	};
 }

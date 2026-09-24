@@ -12,6 +12,7 @@ function sources(overrides: Partial<ProviderStatusSources> = {}): ProviderStatus
 	return {
 		modelProviderIds: new Set(),
 		availableProviders: new Set(),
+		centralProviders: new Set(),
 		credentialProviders: [],
 		oauthProviders: [],
 		credentialType: () => undefined,
@@ -55,6 +56,51 @@ describe("buildProviderReport", () => {
 		).toEqual([
 			["anthropic", "oauth", true],
 			["openai", "api-key", true],
+		]);
+	});
+
+	test("Central attribution overrides provider auth detail without changing ordinary rows", () => {
+		const report = buildProviderReport(
+			sources({
+				modelProviderIds: new Set(["anthropic", "fallback"]),
+				availableProviders: new Set(["anthropic", "fallback"]),
+				centralProviders: new Set(["anthropic"]),
+				credentialProviders: ["fallback"],
+				credentialType: (id) => (id === "fallback" ? "api_key" : undefined),
+				providerAuth: (id) =>
+					id === "anthropic"
+						? { source: "environment", label: "ANTHROPIC_API_KEY" }
+						: { source: "fallback" },
+			}),
+		);
+		expect(report.providers).toEqual([
+			{
+				id: "anthropic",
+				name: "anthropic",
+				configured: true,
+				kind: "central",
+				canApiKey: true,
+			},
+			{
+				id: "fallback",
+				name: "fallback",
+				configured: true,
+				kind: "api-key",
+				canApiKey: true,
+				canLogout: true,
+			},
+		]);
+	});
+
+	test("an unconfigured Central id remains unconfigured", () => {
+		const report = buildProviderReport(
+			sources({
+				modelProviderIds: new Set(["central-only"]),
+				centralProviders: new Set(["central-only"]),
+			}),
+		);
+		expect(report.providers).toEqual([
+			{ id: "central-only", name: "central-only", configured: false, canApiKey: true },
 		]);
 	});
 

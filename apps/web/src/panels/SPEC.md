@@ -395,7 +395,9 @@ a project picker, the prompt hero, and the reused
   a horizontal segmented strip): `settingsOpen`/`settingsSection` live in the store so the gear AND the
   Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app
   provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env /
-  models.json auth shows a "Managed" tag instead, since the host can't unset it); a **"Sign in with a
+  models.json auth shows a "Managed" tag instead, since the host can't unset it; a `kind: "central"` row
+  is labelled "JetBrains AI" and its Managed tag points at the JetBrains AI card, which owns that
+  connection); a **"Sign in with a
   subscription"** block of `canOAuth` providers; an **"Add an API key"** group of `canApiKey`-only
   providers (capped with a "Show N more" expander) — **both routes start `provider.loginStart`**
   (`type` `"oauth"` / `"api_key"`, issue #97) into the same store-driven `auth/LoginDialog` (open the

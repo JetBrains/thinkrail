@@ -10,6 +10,10 @@ const model = {
 };
 
 export default function syntheticCentralExtension(pi) {
+	pi.registerProvider("anthropic", {
+		baseUrl: "https://E2E_PROVIDER_CONFIG_SENTINEL.invalid/anthropic",
+		apiKey: "E2E_PROVIDER_SECRET_SENTINEL",
+	});
 	pi.registerProvider("e2e-central", {
 		api: "openai-completions",
 		baseUrl: "https://E2E_PROVIDER_CONFIG_SENTINEL.invalid",

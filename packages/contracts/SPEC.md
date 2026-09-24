@@ -209,7 +209,9 @@ of the host.
   place** — collapsing them into one field would make a re-pointed target lie about where the branch came
   from; **`ProviderStatus`/`ProviderStatusReport`**
   — the auth-provider status rows the Welcome strip renders (per-provider `configured` + auth `kind`:
-  oauth / api-key / env / other — never credential values; plus `canOAuth`/`canApiKey`/`canLogout`,
+  oauth / api-key / env / central / other — never credential values; `central` marks a built-in provider
+  whose registration the JetBrains AI (Central) extension replaced, derived from registration identity
+  alone, never from Central's configuration; plus `canOAuth`/`canApiKey`/`canLogout`,
   which gate the strip's in-app Sign-in / Sign-out affordances — `canLogout` is true only for a removable
   auth.json credential, false for env / runtime / models.json auth the host can't unset); the **in-app login wire** — **`LoginFrame`** (the streamed
   flow updates: `authUrl` / `deviceCode` / `select` / `prompt` / `progress` / `success` / `error`, which

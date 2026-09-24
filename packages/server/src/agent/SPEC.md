@@ -67,9 +67,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     Candidate preparation takes only the reviewed opaque Central path set, builds a fresh runtime, applies the
     composition root's invariant generation initializer (the source-mode e2e host uses it for its gated fake
     providers), records that pre-opaque provider-id allowlist for `provider.status`, and then applies the opaque
-    extensions once through PI's public headless loader. The generation records ids introduced or replaced
-    by that loader through opaque registration-identity comparison, never configuration values; those ids
-    stay outside ordinary auth reads. Thus auth never inspects or emits Central's provider
+    extensions once through PI's public headless loader. The generation separately records ids introduced
+    or replaced by that loader (`opaqueProviderIds`) through opaque registration-identity comparison, never
+    configuration values. The allowlist stays the full pre-opaque set: a novel Central id was never in it
+    and so never becomes a row, while a replaced built-in (`anthropic`, `openai`, …) stays visible and
+    auth attributes it to Central by intersecting the two sets. (Subtracting the opaque set from the allowlist
+    — briefly done for analytics attribution — made every Central-routed provider vanish from the Providers
+    section; the two facts must stay separate.) Thus auth never inspects or emits Central's provider
     configuration, while an add/remove/replace can never drop process-local provider registrations. The
     initializer must be configured before the first generation and runs for every candidate. The path is the
     only artifact fact this module receives;
