@@ -139,9 +139,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `queue_update` cannot resurrect the phantom. The counter is per live entry only (Pi's ephemeral queues
     never survive a process restart) and resets whenever `clearQueue()` empties both lanes.
 
-    **Remove this whole override on the next pi bump that ships the upstream fix.** The repo pins
-    `pi@0.87.1`; the upstream fix (earendil-works/pi#8612) is **open and unreleased** — not present in any
-    published version through `0.87.1`. Once Pi clears empty-text image deliveries natively, drop
+    **Remove this whole override on the pi bump that ships the upstream fix** (earendil-works/pi#8612,
+    still open when last checked). Once Pi clears empty-text image deliveries natively, drop
     `stuckEmptyDeliveries`, `displayedLane`, the synthesized `queue_update`, and the `effectivePendingCount`
     adjustment. The removal gate is the installed code, not the PR state: on every pi bump grep the installed
     `agent-session.js` for the `if (messageText)` guard around `this._steeringMessages.indexOf` — while that

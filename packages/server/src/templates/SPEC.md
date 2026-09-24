@@ -16,12 +16,12 @@ Consumed by the `template.*` host handlers; this module owns no WS surface itsel
 passed in by the caller after resolving either a live workspace or a pre-session project's current checkout,
 never looked up here.
 
-## pi facts (pinned against pi v0.87.1 — `@earendil-works/pi-coding-agent`)
+## pi facts (`@earendil-works/pi-coding-agent`, the catalog-pinned version)
 
 Verified by reading `dist/core/prompt-templates.js` (`loadTemplateFromFile` / `loadTemplatesFromDir` /
 `loadPromptTemplates`), `dist/core/resource-loader.js` (`dedupePrompts`, `updatePromptsFromPaths`), and
 `dist/utils/frontmatter.js` + `dist/utils/text.js` in the installed package — source of truth over
-assumption; re-verify on a pi version bump.
+assumption; re-verify on a pi bump.
 
 - **Directories:** global = `join(agentDir, "prompts")`; project = `resolve(cwd, CONFIG_DIR_NAME,
   "prompts")` (`CONFIG_DIR_NAME = ".pi"`, pi root export) — exactly `templateDirs`'s two fields.
