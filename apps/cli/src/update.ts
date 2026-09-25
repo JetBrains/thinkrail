@@ -1,7 +1,12 @@
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { posix, win32 } from "node:path";
 import { channel as bakedChannel, version } from "@thinkrail/shared/version";
-import { type InstallMeta, readInstallMeta } from "./paths";
+import {
+	type InstallMeta,
+	normalizeWindowsInstallPrefix,
+	readInstallMeta,
+	sameWindowsPath,
+} from "./paths";
 import { psQuote, runPowerShellScript } from "./powershell";
 
 const DEFAULT_INSTALL_SCRIPT_URL =
@@ -17,6 +22,10 @@ const SEMVER_RE =
 	/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 const VERSION_RE = /^(?:latest|\d+\.\d+\.\d+(?:-nightly\.\d+)?)$/;
 const PREFIX_FORBIDDEN_RE = /[;|&`$<>\n\r"'\\]/;
+const WINDOWS_PREFIX_FORBIDDEN_RE = /["%;\n\r]/;
+
+export const MANUAL_LAYOUT_UPDATE_ERROR =
+	"This ThinkRail executable is outside the supported <prefix>/bin layout and cannot self-update safely. Reinstall it with the published installer, or replace it manually from https://github.com/JetBrains/thinkrail/releases";
 
 export type ReleaseChannel = "stable" | "nightly";
 
@@ -125,7 +134,8 @@ Re-download and install the latest ThinkRail for the current channel.
 
 Options:
   --channel stable|nightly   Override the channel (default: the installed channel).
-  --version X.Y.Z|latest     Install a specific version (default: latest).
+  --version X.Y.Z|X.Y.Z-nightly.N|latest
+                             Install a specific version (default: latest).
   -h, --help                 Show this help.`;
 
 export interface UpdateArgs {
@@ -168,6 +178,8 @@ export interface ResolveUpdateInput {
 	installMeta: InstallMeta;
 	baked: string;
 	home: string;
+	platform: string;
+	execPath: string;
 }
 
 export interface UpdatePlan {
@@ -188,15 +200,60 @@ export function resolveUpdateChannel(
 	);
 }
 
-export function resolveUpdatePlan(input: ResolveUpdateInput): UpdatePlan {
-	const channel = resolveUpdateChannel(input.args, input.installMeta.channel, input.baked);
+function validateVersionChannel(version: string, channel: ReleaseChannel): void {
+	if (version === "latest") return;
+	const nightly = version.includes("-nightly.");
+	if ((channel === "nightly") !== nightly) {
+		throw new Error(`Version ${version} does not belong to the ${channel} channel`);
+	}
+}
 
-	const metaPrefix = input.installMeta.prefix;
-	const prefix =
-		typeof metaPrefix === "string" && metaPrefix ? metaPrefix : join(input.home, ".local");
-	if (PREFIX_FORBIDDEN_RE.test(prefix) || !isAbsolute(prefix)) {
+function inferRunningPrefix(input: ResolveUpdateInput): string | undefined {
+	const windows = input.platform === "win32";
+	const path = windows ? win32 : posix;
+	const exeName = windows ? "thinkrail.exe" : "thinkrail";
+	if (path.basename(input.execPath) !== exeName) return undefined;
+	const binDir = path.dirname(input.execPath);
+	const binName = path.basename(binDir);
+	if ((windows ? binName.toLowerCase() : binName) !== "bin" || !path.isAbsolute(input.execPath)) {
+		throw new Error(MANUAL_LAYOUT_UPDATE_ERROR);
+	}
+	return path.dirname(binDir);
+}
+
+function unixMetadataPrefix(value: unknown, home: string): string {
+	const prefix = typeof value === "string" && value ? value : posix.join(home, ".local");
+	if (PREFIX_FORBIDDEN_RE.test(prefix) || !posix.isAbsolute(prefix)) {
 		throw new Error(`Refusing suspicious install prefix from metadata: ${prefix}`);
 	}
+	return prefix;
+}
+
+function sameUnixPath(a: string, b: string): boolean {
+	const normalized = (value: string) => posix.normalize(value).replace(/\/$/, "");
+	return normalized(a) === normalized(b);
+}
+
+function trustedUnixMetadata(input: ResolveUpdateInput, runningPrefix: string): boolean {
+	if (typeof input.installMeta.prefix !== "string" || !input.installMeta.prefix) return false;
+	try {
+		const prefix = unixMetadataPrefix(input.installMeta.prefix, input.home);
+		return sameUnixPath(prefix, runningPrefix);
+	} catch {
+		return false;
+	}
+}
+
+export function resolveUpdatePlan(input: ResolveUpdateInput): UpdatePlan {
+	const runningPrefix = inferRunningPrefix(input);
+	const trustMetadata = runningPrefix === undefined || trustedUnixMetadata(input, runningPrefix);
+	const prefix = runningPrefix ?? unixMetadataPrefix(input.installMeta.prefix, input.home);
+	const channel = resolveUpdateChannel(
+		input.args,
+		trustMetadata ? input.installMeta.channel : undefined,
+		input.baked,
+	);
+	validateVersionChannel(input.args.version, channel);
 
 	const bashArgs = ["-s", "--", "--channel", channel, "--prefix", prefix];
 	if (input.args.version !== "latest") bashArgs.push("--version", input.args.version);
@@ -205,25 +262,31 @@ export function resolveUpdatePlan(input: ResolveUpdateInput): UpdatePlan {
 
 const DEFAULT_INSTALL_PS1_URL =
 	"https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1";
-const WINDOWS_ROOTED_RE = /^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/])/;
-const WINDOWS_PREFIX_FORBIDDEN_RE = /["%;\n\r]/;
-
-function sameWindowsPath(a: string, b: string): boolean {
-	const norm = (p: string) => p.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
-	return norm(a) === norm(b);
-}
 
 export function resolveWindowsInstallPrefix(metaPrefix: unknown, home: string): string {
-	const prefix = typeof metaPrefix === "string" && metaPrefix ? metaPrefix : `${home}\\.local`;
-	if (!WINDOWS_ROOTED_RE.test(prefix) || WINDOWS_PREFIX_FORBIDDEN_RE.test(prefix)) {
-		throw new Error(`Refusing suspicious install prefix from metadata: ${prefix}`);
+	const rawPrefix =
+		typeof metaPrefix === "string" && metaPrefix ? metaPrefix : win32.join(home, ".local");
+	const prefix = normalizeWindowsInstallPrefix(rawPrefix);
+	if (prefix === undefined || WINDOWS_PREFIX_FORBIDDEN_RE.test(prefix)) {
+		throw new Error(`Refusing suspicious install prefix from metadata: ${rawPrefix}`);
 	}
 	return prefix;
 }
 
 export function resolveWindowsPrefix(metaPrefix: unknown, home: string): string | undefined {
 	const prefix = resolveWindowsInstallPrefix(metaPrefix, home);
-	return sameWindowsPath(prefix, `${home}\\.local`) ? undefined : prefix;
+	const defaultPrefix = resolveWindowsInstallPrefix(undefined, home);
+	return sameWindowsPath(prefix, defaultPrefix) ? undefined : prefix;
+}
+
+function trustedWindowsMetadata(input: ResolveUpdateInput, runningPrefix: string): boolean {
+	if (typeof input.installMeta.prefix !== "string" || !input.installMeta.prefix) return false;
+	try {
+		const prefix = resolveWindowsInstallPrefix(input.installMeta.prefix, input.home);
+		return sameWindowsPath(prefix, runningPrefix);
+	} catch {
+		return false;
+	}
 }
 
 export interface WindowsUpdatePlan {
@@ -235,15 +298,26 @@ export interface WindowsUpdatePlan {
 }
 
 export function resolveWindowsUpdatePlan(input: ResolveUpdateInput): WindowsUpdatePlan {
-	const channel = resolveUpdateChannel(input.args, input.installMeta.channel, input.baked);
-	const prefix = resolveWindowsInstallPrefix(input.installMeta.prefix, input.home);
+	const runningPrefix = inferRunningPrefix(input);
+	const trustMetadata = runningPrefix === undefined || trustedWindowsMetadata(input, runningPrefix);
+	const prefix = runningPrefix
+		? resolveWindowsInstallPrefix(runningPrefix, input.home)
+		: resolveWindowsInstallPrefix(input.installMeta.prefix, input.home);
+	const channel = resolveUpdateChannel(
+		input.args,
+		trustMetadata ? input.installMeta.channel : undefined,
+		input.baked,
+	);
 	const version = input.args.version;
+	validateVersionChannel(version, channel);
 	return {
 		channel,
 		version,
 		prefix,
 		psArgs: ["-Channel", channel, "-Version", version, "-Prefix", prefix],
-		manualPrefix: resolveWindowsPrefix(input.installMeta.prefix, input.home),
+		manualPrefix: sameWindowsPath(prefix, resolveWindowsInstallPrefix(undefined, input.home))
+			? undefined
+			: prefix,
 	};
 }
 
@@ -325,6 +399,8 @@ export async function runUpdate(
 			installMeta: readInstallMeta(home),
 			baked: bakedChannel,
 			home,
+			platform: process.platform,
+			execPath: process.execPath,
 		};
 		plan =
 			process.platform === "win32" ? resolveWindowsUpdatePlan(input) : resolveUpdatePlan(input);
