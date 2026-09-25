@@ -13,6 +13,7 @@ import {
 	gitUncommittedPaths,
 	listBranches,
 	listCommits,
+	listCommitsSince,
 	prefetchBranch,
 	tryCurrentBranch,
 } from "./git";
@@ -608,6 +609,26 @@ test("listCommits keeps semantic empty-range fallback but propagates execution f
 	expect(await listCommits("w1")).toEqual({ commits: [] });
 	process.env.PATH = join(dataDir, "missing-bin");
 	await expect(listCommits("w1")).rejects.toThrow(/Could not list commits/);
+});
+
+test("listCommitsSince lists sinceSha..HEAD oldest-first and excludes the base commit", async () => {
+	seedWorkspace();
+	const base = gitHeadSha("w1");
+	if (!base) throw new Error("no head");
+	commitOnFeature("a.ts", "export const a = 1;\n", "feat: first");
+	commitOnFeature("b.ts", "export const b = 2;\n", "feat: second");
+	const since = await listCommitsSince("w1", base);
+	expect(since.map((c) => c.subject)).toEqual(["feat: first", "feat: second"]);
+	expect(since.every((c) => /^[0-9a-f]{40}$/.test(c.sha))).toBe(true);
+	expect(since.map((c) => c.sha)).not.toContain(base);
+});
+
+test("listCommitsSince returns [] for a null, non-hex, or unknown-range sinceSha", async () => {
+	seedWorkspace();
+	commitOnFeature("a.ts", "export const a = 1;\n", "feat: work");
+	expect(await listCommitsSince("w1", null)).toEqual([]);
+	expect(await listCommitsSince("w1", "not-a-sha")).toEqual([]);
+	expect(await listCommitsSince("w1", "deadbeef")).toEqual([]);
 });
 
 test("listCommits: a subject carrying the field separator can't shift author or timestamp", async () => {
