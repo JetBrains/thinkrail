@@ -93,6 +93,7 @@ import { trackLoginOutcome } from "./loginAnalytics";
 import {
 	additionalAnalyticsEnabled,
 	additionalCapture,
+	captureReviewCommentResolved,
 	observeCurrentSetup,
 	setupObservation,
 } from "./productAnalytics";
@@ -519,9 +520,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			JSON.stringify({ channel: WS_CHANNELS.reviewFailed, data: payload }),
 		);
 	});
-	setReviewCommentHandler((sessionId, commentId, note) => ({
-		resolvedBody: resolveCommentFromAgent(sessionId, commentId, note).body,
-	}));
+	setReviewCommentHandler((sessionId, commentId, note) => {
+		const capture = additionalCapture();
+		const resolved = resolveCommentFromAgent(sessionId, commentId, note);
+		captureReviewCommentResolved(capture, "agent", "resolved");
+		return { resolvedBody: resolved.body };
+	});
 	installRequestReviewSeam();
 	reconcilePendingReviewsOnBoot();
 

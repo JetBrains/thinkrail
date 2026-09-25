@@ -45,8 +45,33 @@ all properties are fixed enums or bounded buckets, never resource identities or 
 | `agent_run_started` | Work-cycle origin, workspace kind and catalog-bucketed provider/model. |
 | `agent_run_settled` | Final outcome, elapsed-time/retry/compaction buckets; only `agent_settled`, never attempt-level `agent_end`. |
 | `task_completed` | Nonempty task-group completion transition after artifact reconciliation, change evidence and whether verification was recorded. |
+| `plan_opened` | The plan surfaced for the user, by `surface` (`page`/`popup`); a deliberate open action, not every plan refetch. |
+| `plan_item_added` | A user-added plan item (`origin:"user"`), by `surface` (`chat`/`page`); the user curating the plan, not agent re-plans. |
 | `review_decided` | Actual user/agent approval or changes-requested decision, not aborted-review cleanup. |
-| `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs. |
+| `review_comment_added` | A review comment created on a file/diff/doc, by `author` (`user`/`agent`) and `kind`; the human draft flow and the reviewer agent's findings, distinguished — not draft edits. |
+| `review_comment_sent` | One event **per comment** delivered to the agent (the value moment), with `outdated` (`yes`/`no`); per-comment so added→sent→resolved is a countable funnel, and `outdated` is the re-anchoring quality signal. Delivery, not proof the agent acted usefully. |
+| `review_comment_resolved` | A comment's terminal outcome, by `actor` (`user`/`agent`) and `outcome` (`resolved`/`dismissed`); the human update and the agent `resolve_comment` tool, not draft deletes or Clear. An agent `resolved` is the agent's claim, never proof the concern was fixed. |
+| `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs; `source` = `plan_page` when driven from the plan page's PR stage, else `other`. |
+
+The review-comment funnel is likewise host-observed off existing wire/tool actions: `review_comment_added`
+off the `review.commentAdd` handler (human, `author:user`) and the reviewer agent's `add_review_comment`
+seam (`author:agent`); `review_comment_sent` off `review.sendComment` and `review.sendBatch`, emitted once
+per comment in the already-re-anchored send set so `outdated` reports true anchor drift at send time and the
+added→sent→resolved conversion is countable across a personless population (a per-action event with a count
+bucket would make that ratio unrecoverable). It fires on the send's **acceptance**, not when the detached
+prompt starts: a pre-turn rejection (bad model/expired key) rolls the comments back to draft, so an early
+capture would report an undelivered comment as sent and inflate the conversion; `review_comment_resolved` off `review.commentUpdate` (user
+resolved/dismissed) and the agent `resolve_comment` seam (`agent`/`resolved`). No comment body, path, anchor
+text or line numbers are ever copied — only the closed `author`/`kind`/`actor`/`outcome`/`outdated` enums.
+
+The plan/TODO funnel rides existing wire actions, never browser autocapture: the host captures
+`plan_opened` off a deliberate `todo.list { opened }` call (the plan page open or the chat popup open —
+not the automatic refetches), `plan_item_added` off `todo.add`, and stamps the `source` discriminator on
+`pr_action_finished` from the `pr.open` caller (`plan_page` when the plan page's PR button drove it). The
+plan page's Review stage runs through pi-subagents delegation ([[submodule-server-host]]'s plan review),
+whose asynchronous verdict is decoupled from the triggering surface, so `review_decided` carries no source
+today. `surface`/`source` are closed enums; absence defaults to `chat`/`other`, so an omitted param never
+fabricates plan-page attribution.
 
 Correlation is transient and scoped to one consent grant. No history replay or reconstruction of work
 started before consent; asynchronous results from a revoked grant remain discarded after re-enabling.
