@@ -489,6 +489,16 @@ test("a completed plan turns the Session into a chat composer instead of an idle
 	await expect(pane).toBeVisible();
 	await expect(pane.getByTestId("plan-session-chat")).toBeVisible();
 	await expect(pane.getByTestId("plan-now-idle")).toHaveCount(0);
+
+	// Sending from the plan composer optimistically records the user turn and hands off to the chat
+	// (mirrors ChatView.performSend), so the typed message survives the navigation.
+	await pane.getByTestId("plan-session-chat").fill("hello from the plan");
+	await pane.getByTestId("plan-session-chat").press("Enter");
+	await expect(
+		page
+			.locator('[data-testid="chat-message"][data-role="user"]')
+			.filter({ hasText: "hello from the plan" }),
+	).toBeVisible();
 });
 
 test("a re-opened plan keeps the completion note on the page, marked stale, but out of the export", async ({

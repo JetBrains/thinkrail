@@ -1432,14 +1432,21 @@ export default function PlanPane({
 					onAdd={plan.add}
 					onOpenChat={() => void openChatInTab(workspaceId, sessionId)}
 					onSend={async (text) => {
-						// Behaves like the chat composer: steer a running agent, otherwise start a new turn —
-						// then hand off to the chat where the reply streams.
-						const streaming = useAppStore.getState().sessions[sessionId]?.isStreaming ?? false;
+						// Mirror the chat composer (ChatView.performSend): optimistically record the user turn so
+						// the handoff to chat can't drop it, steer a running agent otherwise start a new turn, and
+						// surface a failed send as an error turn in the chat rather than swallowing it.
+						const store = useAppStore.getState();
+						const streaming = store.sessions[sessionId]?.isStreaming ?? false;
+						store.appendUserMessage(sessionId, text);
 						void openChatInTab(workspaceId, sessionId);
-						await getTransport().request(streaming ? "session.steer" : "session.prompt", {
-							sessionId,
-							text,
-						});
+						try {
+							await getTransport().request(streaming ? "session.steer" : "session.prompt", {
+								sessionId,
+								text,
+							});
+						} catch (err) {
+							useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
+						}
 					}}
 					renderGroup={renderGroup}
 					renderItem={renderItem}

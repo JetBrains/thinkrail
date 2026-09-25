@@ -623,7 +623,10 @@ a project picker, the prompt hero, and the reused
   composer** (`plan-session-chat`, a `PlanComposer` textarea that works like the chat composer — Enter
   sends, Shift+Enter newlines) whose send adapts to the run: while the agent is streaming it **steers**
   (`session.steer`, "Steer the agent…"), otherwise it **starts a turn** (`session.prompt`, "Message the
-  agent…"); either way it hands off to the chat (`openChatInTab`) where the reply streams. So a completed
+  agent…"); either way it mirrors `ChatView.performSend` — it optimistically records the user turn
+  (`appendUserMessage`) before handing off to the chat (`openChatInTab`) so the message can't vanish in the
+  navigation, and surfaces a rejected send as an `appendErrorTurn` in that chat rather than swallowing it.
+  So a completed
   plan (no open steps) turns its Session into a chat entry point rather than a dead "all steps done" line,
   and a running plan gets an in-place steering field. The one exception is a **truly empty** plan (no items,
   idle): there the body shows the `plan-now-idle` line (`No steps yet…`), itself a click target that opens
