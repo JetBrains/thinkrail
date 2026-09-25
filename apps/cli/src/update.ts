@@ -21,7 +21,7 @@ const NIGHTLY_RELEASE_TAG_RE = /^v(\d+\.\d+\.\d+-nightly\.\d+)$/;
 const SEMVER_RE =
 	/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 const VERSION_RE = /^(?:latest|\d+\.\d+\.\d+(?:-nightly\.\d+)?)$/;
-const PREFIX_FORBIDDEN_RE = /[;|&`$<>\n\r"'\\]/;
+const UNIX_INSTALL_PREFIX_RE = /^[-A-Za-z0-9_./ ]+$/;
 const WINDOWS_PREFIX_FORBIDDEN_RE = /["%;\n\r]/;
 
 export const MANUAL_LAYOUT_UPDATE_ERROR =
@@ -232,12 +232,21 @@ function inferRunningPrefix(input: UpdateRuntime & { build: string }): string | 
 	if ((windows ? binName.toLowerCase() : binName) !== "bin" || !path.isAbsolute(input.execPath)) {
 		throw new Error(MANUAL_LAYOUT_UPDATE_ERROR);
 	}
-	return path.dirname(binDir);
+	const prefix = path.dirname(binDir);
+	if (windows) {
+		const normalized = normalizeWindowsInstallPrefix(prefix);
+		if (normalized === undefined || WINDOWS_PREFIX_FORBIDDEN_RE.test(normalized)) {
+			throw new Error(MANUAL_LAYOUT_UPDATE_ERROR);
+		}
+		return normalized;
+	}
+	if (!UNIX_INSTALL_PREFIX_RE.test(prefix)) throw new Error(MANUAL_LAYOUT_UPDATE_ERROR);
+	return prefix;
 }
 
 function unixMetadataPrefix(value: unknown, home: string): string {
 	const prefix = typeof value === "string" && value ? value : posix.join(home, ".local");
-	if (PREFIX_FORBIDDEN_RE.test(prefix) || !posix.isAbsolute(prefix)) {
+	if (!UNIX_INSTALL_PREFIX_RE.test(prefix) || !posix.isAbsolute(prefix)) {
 		throw new Error(`Refusing suspicious install prefix from metadata: ${prefix}`);
 	}
 	return prefix;

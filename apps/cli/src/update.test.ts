@@ -231,10 +231,12 @@ describe("createCliHostUpdate", () => {
 		expect(createCliHostUpdate("binary", "nightly", "1.2.3-nightly.1")).toBeDefined();
 		for (const runtime of [
 			{ platform: "linux", execPath: "/downloads/thinkrail-linux-x64" },
+			{ platform: "linux", execPath: "/opt/unsafe;prefix/bin/thinkrail" },
 			{
 				platform: "win32",
 				execPath: "C:\\Downloads\\thinkrail-windows-x64.exe",
 			},
+			{ platform: "win32", execPath: "C:\\unsafe%prefix\\bin\\thinkrail.exe" },
 		]) {
 			expect(createCliHostUpdateImpl("binary", "stable", "1.2.3", runtime)).toBeUndefined();
 		}
@@ -415,6 +417,7 @@ describe("resolveUpdatePlan", () => {
 	test.each([
 		["/opt/manual/thinkrail", { prefix: "/home/u/.local", channel: "nightly" }],
 		["/downloads/thinkrail-linux-x64", {}],
+		["/opt/unsafe;prefix/bin/thinkrail", {}],
 	])("fails closed for the manual binary %s", (execPath, installMeta) => {
 		expect(() =>
 			resolveUpdatePlan({
@@ -575,6 +578,7 @@ describe("resolveWindowsUpdatePlan", () => {
 			"D:\\Downloads\\thinkrail-windows-x64.exe",
 			{ prefix: "C:\\Users\\u\\.local", channel: "nightly" },
 		],
+		["D:\\unsafe%prefix\\bin\\thinkrail.exe", {}],
 	])("fails closed for the manual Windows binary %s", (execPath, installMeta) => {
 		expect(() =>
 			resolveWindowsUpdatePlan({

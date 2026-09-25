@@ -228,7 +228,9 @@ resolve_tag() {
 }
 
 echo "Resolving latest $CHANNEL release for ${OS}/${ARCH} ..."
-TAG=$(resolve_tag)
+if ! TAG=$(resolve_tag); then
+    TAG=""
+fi
 if [ -z "$TAG" ]; then
     echo "Failed to resolve a $CHANNEL release. Has one been published yet?" >&2
     exit 1
