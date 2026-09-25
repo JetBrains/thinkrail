@@ -8,13 +8,145 @@
 		<meta name="viewport" content="width=device-width" />
 		<meta name="robots" content="noindex, nofollow, noarchive" />
 		<meta name="referrer" content="no-referrer" />
-		<title>ThinkRail</title>
+		<title>Link this visit to ThinkRail</title>
+		<style>
+			:root {
+				color-scheme: dark;
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+				color: #dfe1e5;
+				background: #09090b;
+				font-synthesis: none;
+				text-rendering: optimizeLegibility;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			body {
+				min-height: 100vh;
+				margin: 0;
+				display: grid;
+				place-items: center;
+				padding: 1.5rem;
+			}
+
+			main {
+				width: min(100%, 38rem);
+				padding: clamp(1.5rem, 5vw, 3rem);
+				border: 1px solid #2b2d30;
+				border-radius: 0.75rem;
+				background: #18181b;
+				box-shadow: 0 24px 80px rgb(0 0 0 / 0.4);
+			}
+
+			.eyebrow {
+				margin: 0 0 0.75rem;
+				color: #8dff4f;
+				font-size: 0.8125rem;
+				font-weight: 650;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+			}
+
+			h1 {
+				margin: 0;
+				font-size: clamp(1.75rem, 6vw, 2.5rem);
+				line-height: 1.15;
+				letter-spacing: -0.035em;
+			}
+
+			.copy {
+				margin-top: 1.5rem;
+				color: #a8adb5;
+				font-size: 1rem;
+				line-height: 1.7;
+			}
+
+			.copy p {
+				margin: 0 0 1rem;
+			}
+
+			.copy p:last-child {
+				margin-bottom: 0;
+			}
+
+			.actions {
+				margin-top: 2rem;
+				display: flex;
+				flex-wrap: wrap;
+				align-items: center;
+				gap: 1rem;
+			}
+
+			button,
+			.actions a {
+				min-height: 2.75rem;
+				padding: 0.7rem 1rem;
+				border-radius: 0.4rem;
+				font: inherit;
+				font-weight: 650;
+			}
+
+			button {
+				border: 1px solid #8dff4f;
+				background: #8dff4f;
+				color: #0a0a0a;
+				cursor: pointer;
+			}
+
+			button:hover:not(:disabled) {
+				border-color: #59d915;
+				background: #59d915;
+			}
+
+			button:disabled {
+				cursor: wait;
+			}
+
+			.actions a {
+				display: inline-flex;
+				align-items: center;
+				color: #dfe1e5;
+				text-decoration: underline;
+				text-underline-offset: 0.2em;
+			}
+
+			button:focus-visible,
+			.actions a:focus-visible {
+				outline: 3px solid #8dff4f;
+				outline-offset: 3px;
+			}
+
+			@media (prefers-reduced-motion: no-preference) {
+				button,
+				.actions a {
+					transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+				}
+			}
+		</style>
 	</head>
 	<body>
+		<main>
+			<p class="eyebrow">ThinkRail</p>
+			<h1 id="claim-title">Link this visit to ThinkRail?</h1>
+			<section class="copy" aria-labelledby="claim-title">
+				<p>
+					Continuing sends a random visit identifier and limited campaign tags from this browser to
+					ThinkRail so it can link this visit with the app. These tags can describe where this visit
+					came from, its campaign, or its landing page.
+				</p>
+				<p>Continue only if you opened this link from ThinkRail to connect your visit. If you did not initiate this link, choose Not now.</p>
+			</section>
+			<div class="actions">
+				<button type="button" data-claim-confirm>Link to ThinkRail</button>
+				<a href="/blog/" data-claim-decline>Not now</a>
+			</div>
+		</main>
 		<script>
-			import { runClaimPage } from "../../../attribution/claim";
+			import { mountClaimPage } from "../../../attribution/claim";
 
-			void runClaimPage();
+			mountClaimPage();
 		</script>
 	</body>
 </html>

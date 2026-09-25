@@ -194,10 +194,9 @@ stable desktop alias, event derivation, and initializer idempotence. The shared 
 PostHog/GTM, journey and capture contracts. The shared contract deliberately has no `posthog-js`
 dependency, pasted bootstrap, or static GTM `noscript` iframe.
 
-The non-indexed `/attribution/claim/` route belongs to [[submodule-website-attribution]]. It initializes no
-PostHog or GTM loader and emits no browser analytics, reads a validated unexpired journey context directly
-from attribution browser storage, attempts one bounded bind, and replaces the location with `/blog/`
-without carrying claim state into that URL.
+The non-indexed `/attribution/claim/` route belongs to [[submodule-website-attribution]]; its
+analytics-free confirmation page is separate from the site's ordinary route shells. That module owns the
+activation gate, claim protocol, and framing protections.
 
 ## Deploy
 

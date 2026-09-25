@@ -124,6 +124,13 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	for (const required of [
 		'<meta name="robots" content="noindex, nofollow, noarchive">',
 		'<meta name="referrer" content="no-referrer">',
+		"data-claim-confirm",
+		"Link to ThinkRail",
+		"data-claim-decline",
+		"Not now",
+		"random visit identifier",
+		"limited campaign tags",
+		"If you did not initiate this link",
 	]) {
 		if (!pages.claim.includes(required)) failures.push(`claim: missing ${required}`);
 	}
@@ -249,6 +256,8 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		"Cache-Control: no-store",
 		"Referrer-Policy: no-referrer",
 		"X-Robots-Tag: noindex, nofollow, noarchive",
+		"Content-Security-Policy: frame-ancestors 'none'",
+		"X-Frame-Options: DENY",
 	]) {
 		if (!headers.includes(required)) failures.push(`headers: missing ${required}`);
 	}

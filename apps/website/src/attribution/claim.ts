@@ -1,1 +1,1 @@
-export { runClaimPage } from "./claimPage";
+export { mountClaimPage } from "./claimPage";

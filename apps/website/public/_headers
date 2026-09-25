@@ -3,3 +3,5 @@
   Referrer-Policy: no-referrer
   X-Robots-Tag: noindex, nofollow, noarchive
   X-Content-Type-Options: nosniff
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
