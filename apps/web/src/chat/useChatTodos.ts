@@ -105,6 +105,8 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		});
 		// A plan review runs as a hidden subagent (no piEvent for this session) and writes its verdict to the
 		// review record; the host re-broadcasts reviewChanged when it lands, so refetch the plan to show it.
+		// The same broadcast fires for any review edit (a finding deleted/resolved can clear a step's
+		// host-derived changes_requested decoration), so this one subscription covers those too.
 		const unsubscribeReview = getTransport().subscribe(WS_CHANNELS.reviewChanged, (payload) => {
 			if ((payload as ReviewChangedPayload).workspaceId === workspaceId) scheduleRefetch();
 		});
@@ -196,21 +198,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			return false;
 		}
 	};
-
-	// The plan's review decoration (e.g. an item's changes_requested) is host-derived from the review
-	// sidecar; a review edit like deleting a finding can clear it. Re-read the plan when this
-	// workspace's review snapshot changes (skip the initial value; the main load already covers it).
-	const reviewComments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
-	const reloadPlanRef = useRef(reloadPlan);
-	reloadPlanRef.current = reloadPlan;
-	const reviewSeen = useRef(false);
-	useEffect(() => {
-		if (!reviewSeen.current) {
-			reviewSeen.current = true;
-			return;
-		}
-		void reloadPlanRef.current();
-	}, [reviewComments]);
 
 	const remove = async (id: string) => {
 		const requestIdentity = identity;

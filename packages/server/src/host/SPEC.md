@@ -247,11 +247,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   request), while the review model counts **both `draft` and `sent`** as unresolved, since a worker that
   fixed the code without calling `resolve_comment` left the finding open. Without the gate the plan reads
   ready-to-ship and Open PR lights up over a comment the Review panel still shows as blocking. The
-  **inverse also holds, a `changes_requested` verdict must not outlive its findings:**
-  `review.commentDelete` reconciles via `clearChangesRequestedIfResolved`. When the deleted draft was
-  the item's LAST open finding (`itemOpenFindings` empty) and the item is still `changes_requested`, its
-  review record is dropped (`dropTodoReview`) back to `unreviewed`. It runs only off a finding removal, so
-  a whole-change verdict that never had an inline finding is never touched; the plan chip is host-derived
+  **inverse also holds, a `changes_requested` verdict must not outlive its findings:** both human paths
+  that close a finding reconcile via `clearChangesRequestedIfResolved` — `review.commentDelete` (deletion)
+  and `review.commentUpdate` (resolve/dismiss). When the closed finding was the item's LAST open one
+  (`itemOpenFindings` empty) and the item is still `changes_requested`, its review record is dropped
+  (`dropTodoReview`) back to `unreviewed`; the check is a no-op while any finding stays open, so a
+  whole-change verdict that never had an inline finding is never touched. The agent's `resolve_comment`
+  path (`applyAgentResolution`) is deliberately NOT reconciled here — it lands inside a fix cycle whose
+  following re-review re-derives the verdict, and the record is inert either way (the Open-PR gate counts
+  open findings, not the record). The plan chip is host-derived
   from that record and `apps/web`'s `useChatTodos` re-reads the plan on any review-snapshot change. A blocked
   approve clears the `reviewing` mark, leaves the record alone, tells the worker to `resolve_comment`
   what it addressed (`composeText`'s third shape) and rides the wire as
