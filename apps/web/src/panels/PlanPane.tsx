@@ -1130,7 +1130,7 @@ export default function PlanPane({
 			onOpenReview={onOpenReview}
 			onRemove={plan.remove}
 			reviewComments={reviewComments}
-			startDisabled={reviewingAny}
+			startDisabled={reviewingAny || !canReview}
 			focusRequest={focusRequest}
 		/>
 	);
@@ -1145,7 +1145,7 @@ export default function PlanPane({
 			onOpenReview={onOpenReview}
 			onRemove={plan.remove}
 			reviewComments={reviewComments}
-			startDisabled={reviewingAny}
+			startDisabled={reviewingAny || !canReview}
 			focusRequest={focusRequest}
 		/>
 	);
