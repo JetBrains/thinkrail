@@ -118,6 +118,12 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
 
   **Workspace-local attention** is selected tab per stable frame group, last-focused center group,
   last-focused auxiliary group, and group navigation clocks. Selection/focus never mutates the frame.
+  A group's *tool* selection is nevertheless shared: singleton tools are frame placements, so a group
+  that shows a tool shows the same tool in every workspace of the window. Selecting a tool (click, reveal,
+  or the focus of a tool move) is written into every retained attention whose selection in that group is a
+  tool or absent, and a newly materialized view inherits the tool selections of the most recently active
+  workspace. A selected workspace *resource* (a terminal in a mixed auxiliary group) stays local and is
+  never overridden. `shell/layoutState` owns this fan-out in the same transaction as the local write.
   Frame replacement reconciles each workspace's attention to a surviving group/tab. Navigation clocks advance
   at request time for local focus-changing opens and explicit re-selection; the stamp travels with the intent
   so acceptance does not count twice. A slow completion is discarded when newer navigation overtakes it.

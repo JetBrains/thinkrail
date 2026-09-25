@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { LayoutAttention } from "../../lib";
 import {
+	adoptToolSelections,
 	canShowSide,
+	changedToolSelections,
 	closeLayoutTab,
 	closePlacedResource,
 	collectAllGroups,
@@ -589,6 +591,140 @@ describe("workspace layout model", () => {
 		);
 		expect(passivelySelected.selectedByGroup["center-a"]).toBe("one");
 		expect(passivelySelected.navigationClockByGroup["center-a"]).toBe(7);
+	});
+
+	test("adopts source tool selections without replacing a selected resource", () => {
+		const document = baseDocument();
+		const right = document.right.groups[0];
+		if (!right) throw new Error("missing right group");
+		right.tabs = [toolTab("specs"), toolTab("files")];
+		const source = reconcileAttention(document, undefined);
+		const target = {
+			...source,
+			selectedByGroup: { ...source.selectedByGroup, "right-a": "tool:specs" },
+		};
+		const sourceSelection = {
+			...source,
+			selectedByGroup: { ...source.selectedByGroup, "right-a": "tool:files" },
+		};
+
+		expect(
+			adoptToolSelections(target, document, sourceSelection, document).selectedByGroup["right-a"],
+		).toBe("tool:files");
+
+		const mixedDocument = structuredClone(document);
+		const mixedRight = mixedDocument.right.groups[0];
+		if (!mixedRight) throw new Error("missing right group");
+		mixedRight.tabs.push({
+			kind: "terminal",
+			id: "terminal:right",
+			name: "Terminal",
+			tabKey: "right-terminal",
+		});
+		const terminalSelection = {
+			...target,
+			selectedByGroup: { ...target.selectedByGroup, "right-a": "terminal:right" },
+		};
+		expect(adoptToolSelections(terminalSelection, mixedDocument, sourceSelection, document)).toBe(
+			terminalSelection,
+		);
+	});
+
+	test("tool selection adoption requires placement and respects the selected group set", () => {
+		const document = baseDocument();
+		const right = document.right.groups[0];
+		const left = document.left.groups[0];
+		if (!right || !left) throw new Error("missing side group");
+		right.tabs = [toolTab("specs"), toolTab("files")];
+		left.tabs = [toolTab("projects"), toolTab("changes")];
+		const source = reconcileAttention(document, undefined);
+		const target = {
+			...source,
+			selectedByGroup: {
+				...source.selectedByGroup,
+				"right-a": "tool:specs",
+				"left-a": "tool:projects",
+			},
+		};
+		const sourceSelection = {
+			...source,
+			selectedByGroup: {
+				...source.selectedByGroup,
+				"right-a": "tool:files",
+				"left-a": "tool:changes",
+			},
+		};
+		const targetWithoutFiles = structuredClone(document);
+		const targetRight = targetWithoutFiles.right.groups[0];
+		if (!targetRight) throw new Error("missing right group");
+		targetRight.tabs = [toolTab("specs")];
+		expect(
+			adoptToolSelections(target, targetWithoutFiles, sourceSelection, document).selectedByGroup[
+				"right-a"
+			],
+		).toBe("tool:specs");
+
+		const selected = adoptToolSelections(
+			target,
+			document,
+			sourceSelection,
+			document,
+			new Set(["right-a"]),
+		);
+		expect(selected.selectedByGroup["right-a"]).toBe("tool:files");
+		expect(selected.selectedByGroup["left-a"]).toBe("tool:projects");
+	});
+
+	test("tool selection adoption preserves identity when nothing changes", () => {
+		const document = baseDocument();
+		const attention = reconcileAttention(document, undefined);
+		expect(adoptToolSelections(attention, document, attention, document)).toBe(attention);
+	});
+
+	test("changed tool selections include only newly selected tool tabs", () => {
+		const document = baseDocument();
+		const right = document.right.groups[0];
+		if (!right) throw new Error("missing right group");
+		right.tabs = [toolTab("specs"), toolTab("files")];
+		document.bottom = {
+			visible: true,
+			height: 0.3,
+			alignment: "center",
+			groups: [
+				{
+					id: "bottom-a",
+					weight: 1,
+					folded: false,
+					tabs: [
+						{
+							kind: "terminal",
+							id: "terminal:bottom",
+							name: "Terminal",
+							tabKey: "bottom-terminal",
+						},
+						{
+							kind: "terminal",
+							id: "terminal:bottom-other",
+							name: "Other terminal",
+							tabKey: "bottom-other",
+						},
+					],
+				},
+			],
+		};
+		const previous: LayoutAttention = {
+			selectedByGroup: { "right-a": "tool:specs", "bottom-a": "terminal:bottom" },
+			lastFocusedCenterGroupId: "center-a",
+			lastFocusedSideGroupId: {},
+			navigationClockByGroup: {},
+		};
+		const next = {
+			...previous,
+			selectedByGroup: { "right-a": "tool:files", "bottom-a": "terminal:bottom-other" },
+		};
+		expect(changedToolSelections(previous, next, document)).toEqual(new Set(["right-a"]));
+		expect(changedToolSelections(previous, previous, document)).toEqual(new Set());
+		expect(changedToolSelections(undefined, next, document)).toEqual(new Set(["right-a"]));
 	});
 
 	test("attention tracks bottom selection and last focus without affecting center navigation", () => {

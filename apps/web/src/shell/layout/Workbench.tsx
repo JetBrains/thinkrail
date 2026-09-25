@@ -149,7 +149,7 @@ export interface LayoutTabFocusRequest {
 
 interface PreparedLayoutClose {
 	document: WorkspaceLayoutDocument;
-	onAccepted: (currentDocument?: WorkspaceLayoutDocument) => void;
+	onAccepted: (current?: { document: WorkspaceLayoutDocument; attention: LayoutAttention }) => void;
 }
 
 export interface WorkbenchProps {
@@ -2595,11 +2595,16 @@ export function Workbench({
 	}, [localFocusRequest]);
 
 	useEffect(() => {
-		if (!draggingTab || dragStartEpoch.current === projectionEpoch) return;
+		if (!draggingTab) return;
+		if (
+			dragStartEpoch.current === projectionEpoch &&
+			findTabLocation(document, draggingTab.id) !== null
+		)
+			return;
 		canceled.current = true;
 		setDraggingTab(null);
 		onGestureCanceled?.();
-	}, [draggingTab, onGestureCanceled, projectionEpoch]);
+	}, [document, draggingTab, onGestureCanceled, projectionEpoch]);
 
 	const updateAttentionForResult = useCallback(
 		(result: LayoutMutationResult) => {
@@ -2667,9 +2672,9 @@ export function Workbench({
 				const result = closePlacedResource(latestDocument, tab);
 				return {
 					document: result.document,
-					onAccepted: (currentDocument) => {
-						const acceptedDocument = currentDocument ?? result.document;
-						const latestAttention = attentionRef.current;
+					onAccepted: (current) => {
+						const acceptedDocument = current?.document ?? result.document;
+						const latestAttention = current?.attention ?? requestedAttention;
 						let nextAttention = reconcileAttention(
 							acceptedDocument,
 							latestAttention,
@@ -2774,7 +2779,13 @@ export function Workbench({
 	const handleDragEnd = (event: DragEndEvent) => {
 		const tab = draggingTab;
 		setDraggingTab(null);
-		if (!tab || canceled.current || dragStartEpoch.current !== projectionEpoch) return;
+		if (
+			!tab ||
+			canceled.current ||
+			dragStartEpoch.current !== projectionEpoch ||
+			findTabLocation(document, tab.id) === null
+		)
+			return;
 		const target = event.over?.data.current?.target as DropTarget | undefined;
 		if (!target) return;
 		let result: LayoutOperationResult;

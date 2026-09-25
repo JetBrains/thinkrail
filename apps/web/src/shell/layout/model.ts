@@ -1226,6 +1226,53 @@ export function reconcileAttention(
 	};
 }
 
+export function adoptToolSelections(
+	attention: LayoutAttention,
+	document: WorkspaceLayoutDocument,
+	source: LayoutAttention,
+	sourceDocument: WorkspaceLayoutDocument,
+	groupIds?: ReadonlySet<string>,
+): LayoutAttention {
+	let selectedByGroup: Record<string, string> | undefined;
+	const sourceGroups = collectAllGroups(sourceDocument);
+	for (const group of collectAllGroups(document)) {
+		const groupId = group.location.groupId;
+		if (groupIds && !groupIds.has(groupId)) continue;
+		const sourceId = readLayoutSelection(source, groupId);
+		if (sourceId === undefined) continue;
+		const sourceGroup = sourceGroups.find((candidate) => candidate.location.groupId === groupId);
+		const sourceTab = sourceGroup?.tabs.find((tab) => tab.id === sourceId);
+		if (sourceTab?.kind !== "tool") continue;
+		if (!group.tabs.some((tab) => tab.id === sourceId)) continue;
+		const currentId = readLayoutSelection(attention, groupId);
+		const current = group.tabs.find((tab) => tab.id === currentId);
+		if (current && current.kind !== "tool") continue;
+		if (currentId === sourceId) continue;
+		const nextSelectedByGroup =
+			selectedByGroup ?? Object.assign(Object.create(null), attention.selectedByGroup);
+		nextSelectedByGroup[groupId] = sourceId;
+		selectedByGroup = nextSelectedByGroup;
+	}
+	return selectedByGroup ? { ...attention, selectedByGroup } : attention;
+}
+
+export function changedToolSelections(
+	previous: LayoutAttention | undefined,
+	next: LayoutAttention,
+	document: WorkspaceLayoutDocument,
+): Set<string> {
+	const changed = new Set<string>();
+	for (const group of collectAllGroups(document)) {
+		const groupId = group.location.groupId;
+		const nextId = readLayoutSelection(next, groupId);
+		if (previous && nextId === readLayoutSelection(previous, groupId)) continue;
+		if (group.tabs.some((tab) => tab.id === nextId && tab.kind === "tool")) {
+			changed.add(groupId);
+		}
+	}
+	return changed;
+}
+
 export function selectTab(
 	attention: LayoutAttention,
 	location: LayoutGroupLocation,

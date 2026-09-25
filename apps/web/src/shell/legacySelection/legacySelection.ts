@@ -48,15 +48,21 @@ export function useLegacySelectionAdapter(
 		selectAttentionCenterResourceCacheKey(state, workspaceId),
 	);
 	const activeLegacyTabId = useAppStore((state) => state.activeTabByWorkspace[workspaceId] ?? null);
-	const previousReviewedSelection = useRef<string | null>(null);
+	const previousReviewedSelection = useRef<{
+		workspaceId: string;
+		selection: string | null;
+	} | null>(null);
 
 	useEffect(() => {
 		const reviewedSelection =
 			activeLegacyTabId && activeReviewedPath
 				? JSON.stringify([activeLegacyTabId, activeReviewedPath])
 				: null;
-		const previous = previousReviewedSelection.current;
-		previousReviewedSelection.current = reviewedSelection;
+		const previous =
+			previousReviewedSelection.current?.workspaceId === workspaceId
+				? previousReviewedSelection.current.selection
+				: null;
+		previousReviewedSelection.current = { workspaceId, selection: reviewedSelection };
 		if (!reviewedSelection || reviewedSelection === previous) return;
 		const state = useAppStore.getState();
 		const currentActiveTabId = state.activeTabByWorkspace[workspaceId];
