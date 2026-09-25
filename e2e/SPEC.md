@@ -160,19 +160,8 @@ used when the variable is absent). A missing artifact, failed generation, or una
 before any provider turn; PI's ordinary first-available fallback is never accepted as test configuration.
 The same copy and hermetic environment seed the private restart host.
 
-**Workspace activity** (`workspace-activity.spec.ts`) covers the Projects rail's agent-state glyphs without
-an agent, and is the reason the host's `failed`/`waiting` derivations read the transcript: a seeded fixture
-transcript (an assistant with `stopReason: "error"`, or an `ask_user_question` call plus its `ack` tool
-result) becomes real activity, so the whole chain — host derivation, `session.activity` push, store fold,
-rollup, render — runs for real on the no-agent lane. It asserts the row's `data-activity` and the glyph's
-`aria-label` (never the tooltip, which needs hover), the rollup breakdown when one workspace holds both
-states, and the collapsed-project rollup.
-
-Two entry paths are covered on purpose. Opening the chat attaches the session and exercises the **live**
-path; a **reload after seeding** exercises the **disk** path — the snapshot union — by asserting the glyph
-appears while the workspace is never activated and no chat tab exists, which is the reviewer scenario a
-host restart produces. Note that **seeding must happen after `openFixtureProject`**: `openAppFresh` calls
-`resetState`, which deletes the isolated agent dir's `sessions` tree, so anything seeded earlier is wiped.
+The deletion-only activity retirement has no replacement rail E2E. Compatibility is pinned at the wire
+handler (`session.activityList` returns `[]`); the following PR owns new session-state browser coverage.
 
 **Topbar chrome** (`topbar-chrome.spec.ts`) proves the web side of the desktop title-bar contract without a
 desktop: it injects the three host-published CSS properties (`--window-chrome-inset-left|right`,
