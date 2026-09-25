@@ -5,7 +5,8 @@
 	"workspaces": {
 		"packages": [
 			"apps/*",
-			"packages/*"
+			"packages/*",
+			".thinkrail/extensions/*"
 		],
 		"catalog": {
 			"@astrojs/check": "0.9.10",

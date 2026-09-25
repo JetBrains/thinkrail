@@ -25,13 +25,14 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
   - `ThinkRailExtension` — `(tr: Tr) => Disposer | undefined | Promise<Disposer | undefined>`. A returned
     `Disposer` runs when the generation is disposed (close watchers, sockets, …).
   - `Tr`, `Off`, `Disposer`, `SessionRef`, `ActionCtx`, `ActionHandler`, `ExtStore`, `PiEventName`,
-    `PiEventOf<E>`, `PiExtensionFactory` (pi's `ExtensionFactory`, type-only), `SessionStats`.
+    `PiEventOf<E>`, `PiExtensionFactory` (pi's `ExtensionFactory`, type-only), `SessionStats`,
+    `WorkspaceRef` (`{ workspaceId, projectId, name, branch, path }`, what `tr.workspaces` returns).
 - `./view` (`src/view.ts` + `src/viewUi.ts`, browser side): `SurfaceProps` (contracts'
   `ExtSurfaceProps`: `surfaceId`, `host`, optional `params` from `openSurface`, `toolCall` for a
   `toolCard` surface, `message` for a `message` surface), `HostContext`, `SessionStats` (the shape of a
   published `sessions.stats`), `ExtViewUi` + its prop types, and
   **declared** (type-only, no body) runtime values named by contracts' `EXT_VIEW_EXPORTS`: `useChannel`,
-  `useAction`, `useHostContext`, `openSurface`, `ui`, `cn`, `remixicon`. The file emits nothing; the host's
+  `useAction`, `useHostContext`, `openSurface`, `startChat`, `ui`, `cn`, `remixicon`. The file emits nothing; the host's
   view builder resolves this specifier to a shim over the web's runtime global, so the declarations only
   type-check authoring code.
 
@@ -59,6 +60,10 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
   `unpublish(key)` drops it (views then read `undefined`).
 - `store` persists JSON per extension; values must survive `JSON.stringify`.
 - `sessions.stats` is pi's `getSessionStats()` as ThinkRail already projects it; never recomputed.
+- `workspaces` lists the workspaces of open projects, read-only. `path` is the checkout directory; it is
+  how a host half maps a view's `ctx.workspaceId` to files on disk.
+- `startChat(draft)` (view) opens a new chat in the active workspace with `draft` in the composer; it
+  never sends.
 
 ## Worked example
 
@@ -66,6 +71,10 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
 this package's public entries. `typecheck` also checks it through its own `tsconfig.json`, which maps
 `@thinkrail/ext`, `@thinkrail/ext/view`, and React types onto this package, so an SDK change that breaks
 an author's code fails here.
+
+`.thinkrail/extensions/railmap/` is the larger example (own dependencies, `tr.workspaces`, `tr.pi` tool and
+settle hook, four slots). It is a root workspace member with its own `package.json` and `tsconfig.json`, so
+turbo's `typecheck` covers it directly.
 
 ## Boundary
 

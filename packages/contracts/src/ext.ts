@@ -51,6 +51,7 @@ export const EXT_VIEW_EXPORTS = [
 	"useAction",
 	"useHostContext",
 	"openSurface",
+	"startChat",
 	"ui",
 	"cn",
 	"remixicon",

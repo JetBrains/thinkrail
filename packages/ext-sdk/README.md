@@ -86,6 +86,9 @@ export default defineExtension((tr) => {
 - `tr.sessions.list()`, `tr.sessions.stats(sessionId)`: live sessions and pi's own stats
   (`SessionStats`: tokens, `cost` in USD, `contextUsage.percent`). Never compute cost yourself. `stats`
   rejects for a session that is not live.
+- `tr.workspaces.list()`, `tr.workspaces.get(workspaceId)`: workspaces of open projects as
+  `{ workspaceId, projectId, name, branch, path }`. `path` is the checkout on disk, so an action can turn
+  `ctx.workspaceId` into the directory the user is looking at.
 - `tr.every(ms, fn)`: interval timer.
 - `tr.pi((pi) => { … })`: a pi extension factory added to every top-level chat session (`pi.registerTool`,
   `pi.on("tool_call", …)`, `pi.sendMessage({ customType, content, display: true, details })` …). Sessions
@@ -99,6 +102,16 @@ disposer. Keep state in closures or `tr.store`. Do not write files into the exte
 there triggers a reload. Split code into more files freely: `index.ts` and views can import relative
 modules (`./model`), and a pure module can be shared by both halves. Imports available without install: `@thinkrail/ext`, `typebox`,
 `@earendil-works/pi-coding-agent`, Node/Bun built-ins.
+
+## Dependencies
+
+Anything else goes in the extension's own `package.json`, installed in the extension directory, for both
+halves. The host half resolves packages from the extension directory; the view build bundles them. Do not
+lean on a package that only resolves from a directory above the extension (a monorepo's root
+`node_modules`): the same extension copied into `~/.thinkrail/extensions` breaks. Inside a Bun monorepo,
+list the extensions directory in the root `workspaces` instead; then `bun install` at the root links its
+`node_modules`, and `workspace:*` / `catalog:` versions work (`railmap` gets `pi-spec-graph` and
+`typescript` this way). Pin exact versions.
 
 ## Views (`<surfaceId>.tsx`)
 
@@ -131,6 +144,8 @@ From `@thinkrail/ext/view`:
   `host.sessionId` in `SurfaceProps` is the same value. `useAction` sends it as `ctx`, so an action like
   `watch` can make the host half publish data for the chat the user is looking at.
 - `openSurface(ext, surfaceId, params?)`: open a `tab`/`panel` surface; it receives `params`.
+- `startChat(draft)`: open a new chat in the active workspace with `draft` in its composer (not sent), for
+  "fix with agent" buttons.
 - `SurfaceProps`: `{ surfaceId, host, params?, toolCall?, message? }`. A `toolCard` view gets
   `toolCall = { toolCallId, toolName, args, result, status }`; a `message` view gets
   `message = { customType, text, details, timestamp }`.
@@ -139,8 +154,8 @@ From `@thinkrail/ext/view`:
   `ContextMenu*`, `Command*`.
 - Types: `SurfaceProps`, `HostContext`, `SessionStats` (the value of a published `tr.sessions.stats`).
 - `cn(...classes)`, `remixicon` (all `@remixicon/react` icons: `Ri…Line`, `Ri…Fill`).
-- `react`, `react-dom`, `react/jsx-runtime` resolve to the app's React. Other npm deps: add them to the
-  extension's own `package.json` and `bun install`; they are bundled into the view.
+- `react`, `react-dom`, `react/jsx-runtime` resolve to the app's React. Other npm deps (see
+  Dependencies) are bundled into the view, minified; the inline source map covers only your own files.
 
 ## Styling
 
@@ -154,6 +169,9 @@ Tailwind v4 utilities are compiled for each view against the app's theme. Use se
 - Spacing is in pixels on the scale 0, 2, 4, 8, 12, 16, 24, 32, 40, 64 (`p-12`, `gap-8`). Icon sizes:
   `size-14`, `size-16`. Radius: `rounded-sm`, `rounded-md`, `rounded-lg`.
 - Type: `tr-title-compact`, `tr-title-section`, `tr-text-ui`, `tr-text-metadata`, `tr-code-text`.
+
+CSS a view imports (a library's stylesheet, `import "@xyflow/react/dist/base.css"`) lands in the
+`components` layer, so your utility classes override it without `!important`.
 
 Positions and sizes computed at runtime (a bar at `left: 42%`) go in `style`; everything else is a
 class. No raw hex, no inline `style` objects for colour, no Tailwind palette names (`bg-blue-500`): they do not
@@ -186,3 +204,9 @@ panel and a topbar cost item. It shows the patterns above working together:
 - `timeline.tsx`, `cost.tsx`: a `panel` and a `status` surface that read the same channels, keyed by
   `host.sessionId`.
 - `tsconfig.json`: type-checks the extension against this SDK.
+
+`.thinkrail/extensions/railmap/` is the larger one: a module graph from `SPEC.md` frontmatter next to the
+real imports, with drift. It shows own dependencies (`@xyflow/react` and `elkjs` in views, `typescript`
+and `pi-spec-graph` in the host half), `tr.workspaces` to find the checkout, an `fs.watch` closed by the
+returned disposer, `tr.pi` with a tool (`may_import`) and an `agent_before_settle` hook that appends a
+custom message, and all four other slots: `tab`, `panel`, `message`, `toolCard`.

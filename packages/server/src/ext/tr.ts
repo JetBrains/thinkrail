@@ -2,6 +2,10 @@ import type { PiEvent, SessionStats } from "@thinkrail/contracts";
 import type { ExtStore, PiEventName, PiEventOf, SessionRef, Tr } from "@thinkrail/ext";
 import type { Generation } from "./generation";
 
+export type WorkspaceReads = Tr["workspaces"];
+
+export const NO_WORKSPACES: WorkspaceReads = { list: () => [], get: () => undefined };
+
 export interface SessionReads {
 	list(): SessionRef[];
 	get(sessionId: string): SessionRef | undefined;
@@ -29,6 +33,7 @@ export const createTr = ({
 	generation,
 	store,
 	sessions,
+	workspaces,
 	log,
 }: {
 	name: string;
@@ -36,6 +41,7 @@ export const createTr = ({
 	generation: Generation;
 	store: ExtStore;
 	sessions: SessionReads;
+	workspaces: WorkspaceReads;
 	log: (level: "info" | "error", message: string) => void;
 }): Tr => {
 	const guard =
@@ -67,6 +73,10 @@ export const createTr = ({
 		sessions: {
 			list: () => sessions.list(),
 			stats: async (sessionId) => sessions.stats(sessionId),
+		},
+		workspaces: {
+			list: () => workspaces.list(),
+			get: (workspaceId) => workspaces.get(workspaceId),
 		},
 		every(ms, fn) {
 			if (!Number.isFinite(ms) || ms < 10)

@@ -13,7 +13,7 @@ import { createGeneration, type Generation } from "./generation";
 import { importExtension } from "./loader";
 import { readManifest } from "./manifest";
 import { createDryStore, createExtStore } from "./store";
-import { createTr, formatLog, type SessionReads } from "./tr";
+import { createTr, formatLog, NO_WORKSPACES, type SessionReads, type WorkspaceReads } from "./tr";
 import { errorMessage } from "./util";
 import { createExtWatcher } from "./watch";
 
@@ -29,6 +29,7 @@ export interface ExtHostOptions {
 	userDir: string;
 	storeDir: string;
 	sessions: SessionReads;
+	workspaces?: WorkspaceReads;
 	onPiFactoriesChanged?: () => void;
 	onChanged?: (info: ExtensionInfo) => void;
 	onRemoved?: (name: string) => void;
@@ -158,6 +159,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 			generation,
 			store: sink.store,
 			sessions: options.sessions,
+			workspaces: options.workspaces ?? NO_WORKSPACES,
 			log: sink.log,
 		});
 		try {

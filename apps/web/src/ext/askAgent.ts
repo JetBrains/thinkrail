@@ -18,7 +18,7 @@ export const fixPrompt = ({
 		`Run ext_logs("${name}") to read its logs, fix the code, then run ext_reload("${name}").`,
 	].join("\n");
 
-export const askAgentToFix = async (text: string) => {
+export const startChat = async (text: string) => {
 	const workspaceId = useAppStore.getState().activeWorkspaceId;
 	if (!workspaceId) {
 		toast.error("Open a workspace first.", "Couldn't start the chat");

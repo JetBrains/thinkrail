@@ -43,7 +43,7 @@ ignored, so a push that races the read is never reverted. A failed read replays 
 frozen object keyed by contracts' `EXT_RUNTIME_MODULES`: the app's own `react`, `react/jsx-runtime`,
 `react/jsx-dev-runtime`, `react-dom` namespaces (the production build ships production React, matching the
 production JSX the host emits), and `@thinkrail/ext/view` = `{ useChannel, useAction, useHostContext,
-openSurface, ui, cn, remixicon }`. `ui` is exactly contracts' `EXT_VIEW_UI_EXPORTS` from
+openSurface, startChat, ui, cn, remixicon }`. `ui` is exactly contracts' `EXT_VIEW_UI_EXPORTS` from
 `components/ui` (`satisfies` keeps the key set equal; `runtime.test.ts` checks it at runtime). The global
 is installed once and never replaced, so every view shares one React instance.
 
@@ -76,7 +76,7 @@ every icon in the eager vendor chunk the rest of the app shares.
 - Each mount has its own `SurfaceErrorBoundary`: a render crash reports through `ext.reportError` (so
   `ext_logs` sees it), shows the error with **Ask agent to fix** and **Try again**, and resets when the
   build changes. **Ask agent to fix** opens a new chat in the active workspace with a draft that names
-  the error and points at `ext_logs` / `ext_reload`.
+  the error and points at `ext_logs` / `ext_reload`, through the same `startChat` (`askAgent.ts`) views get.
 
 ## View hooks
 

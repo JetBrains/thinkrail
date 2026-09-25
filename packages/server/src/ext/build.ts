@@ -4,7 +4,8 @@ import { dirname, join, relative, resolve } from "node:path";
 import type { ExtensionSurface } from "@thinkrail/contracts";
 import type { BunPlugin } from "bun";
 import { compileExtensionCss } from "./css";
-import { runtimeExportLists, runtimeGlobalPlugin } from "./runtimeShims";
+import { runtimeGlobalPlugin } from "./runtimeShims";
+import { ownSourcesMap } from "./sourceMap";
 import { errorMessage } from "./util";
 
 export interface ExtAsset {
@@ -59,6 +60,13 @@ const formatLog = (dir: string, log: BuildLog) => {
 		: log.message;
 };
 
+const isOwnSource = (source: string) => !source.includes("node_modules/") && !source.includes(":");
+
+const inlineMap = (json: string) =>
+	`\n//# sourceMappingURL=data:application/json;base64,${Buffer.from(
+		ownSourcesMap(json, isOwnSource),
+	).toString("base64")}\n`;
+
 const buildErrors = (dir: string, error: unknown) => {
 	const logs = error instanceof AggregateError ? error.errors : [error];
 	return logs.map((log) => (isBuildLog(log) ? formatLog(dir, log) : errorMessage(log)));
@@ -72,7 +80,6 @@ export const buildSurface = async ({
 	surfaceId: string;
 }) => {
 	const dir = await realpath(rawDir);
-	const lists = await runtimeExportLists();
 	let result: Bun.BuildOutput;
 	try {
 		result = await Bun.build({
@@ -80,10 +87,11 @@ export const buildSurface = async ({
 			target: "browser",
 			format: "esm",
 			splitting: false,
-			sourcemap: "inline",
+			sourcemap: "external",
+			minify: { whitespace: true, syntax: true },
 			jsx: { runtime: "automatic", development: false },
 			define: { "process.env.NODE_ENV": JSON.stringify("production") },
-			plugins: [runtimeGlobalPlugin(lists), inlineAssetPlugin],
+			plugins: [runtimeGlobalPlugin, inlineAssetPlugin],
 		});
 	} catch (error) {
 		throw new Error(buildErrors(dir, error).join("\n"));
@@ -97,11 +105,16 @@ export const buildSurface = async ({
 		);
 	const entry = result.outputs.find((output) => output.kind === "entry-point");
 	if (!entry) throw new Error(`${surfaceId}.tsx: build produced no entry point`);
-	const js = await entry.text();
+	const code = await entry.text();
+	const map = result.outputs.find((output) => output.kind === "sourcemap");
+	const js = map ? `${code}${inlineMap(await map.text())}` : code;
 	const importedCss = await Promise.all(
 		result.outputs.filter((output) => output.path.endsWith(".css")).map((output) => output.text()),
 	);
-	const css = [await compileExtensionCss(js), ...importedCss].join("\n");
+	const css = [
+		await compileExtensionCss(code),
+		...importedCss.map((text) => `@layer components {\n${text}\n}`),
+	].join("\n");
 	return { js, css };
 };
 

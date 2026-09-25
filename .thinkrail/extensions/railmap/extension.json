@@ -1,0 +1,11 @@
+{
+	"name": "railmap",
+	"title": "Railmap",
+	"surfaces": [
+		{ "id": "graph", "slot": "tab", "title": "Railmap" },
+		{ "id": "drift", "slot": "panel", "title": "Spec drift" },
+		{ "id": "drift-card", "slot": "message", "customType": "railmap-drift" },
+		{ "id": "may-import", "slot": "toolCard", "tool": "may_import" }
+	],
+	"permissions": ["fs:read", "sessions:hooks"]
+}

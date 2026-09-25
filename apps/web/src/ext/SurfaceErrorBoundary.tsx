@@ -4,7 +4,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { IconTooltip } from "../components/ui/tooltip";
 import { cn } from "../lib";
 import { getTransport } from "../transport";
-import { askAgentToFix, fixPrompt } from "./askAgent";
+import { fixPrompt, startChat } from "./askAgent";
 
 export type SurfaceLayout = "fill" | "inline" | "status";
 
@@ -35,7 +35,7 @@ const askToFix = ({
 	surfaceId,
 	error,
 }: Pick<SurfaceErrorProps, "name" | "surfaceId" | "error">) =>
-	void askAgentToFix(fixPrompt({ name, error, ...(surfaceId ? { surfaceId } : {}) }));
+	void startChat(fixPrompt({ name, error, ...(surfaceId ? { surfaceId } : {}) }));
 
 const SurfaceErrorChip = ({ name, surfaceId, title, error }: SurfaceErrorProps) => (
 	<IconTooltip label={`${title}: ${error.split("\n")[0] ?? ""}`}>

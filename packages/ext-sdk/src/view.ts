@@ -28,6 +28,7 @@ export declare const openSurface: (
 	surfaceId: string,
 	params?: Record<string, string>,
 ) => void;
+export declare const startChat: (draft: string) => Promise<void>;
 export declare const ui: ExtViewUi;
 export declare const cn: (...inputs: unknown[]) => string;
 export declare const remixicon: typeof Remixicon;

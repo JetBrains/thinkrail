@@ -6,6 +6,7 @@ import {
 	type ExtWsMethodMap,
 	type Project,
 	redactLaunchToken,
+	type Workspace,
 	WS_CHANNELS,
 	type WsChannel,
 } from "@thinkrail/contracts";
@@ -19,6 +20,7 @@ import { createExtDevTools, createExtHost, EXT_SDK_GUIDE, type ExtHost } from ".
 import { logger } from "../log";
 import { dataDir } from "../persistence";
 import { getProjects } from "../projects";
+import { listAllWorkspaceRecords } from "../workspaces";
 import { setExtHandlers } from "./handlers";
 
 const log = logger("ext");
@@ -36,6 +38,25 @@ const trustedProjectRoots = (projects: readonly Project[]) =>
 	projects
 		.filter((project) => project.trusted === true && project.closed !== true)
 		.map((project) => ({ projectId: project.id, path: project.path }));
+
+const workspaceRef = (workspace: Workspace) => ({
+	workspaceId: workspace.id,
+	projectId: workspace.projectId,
+	name: workspace.name,
+	branch: workspace.branch,
+	path: workspace.worktreePath,
+});
+
+const openWorkspaceRefs = () => {
+	const open = new Set(
+		getProjects()
+			.filter((project) => project.closed !== true)
+			.map((project) => project.id),
+	);
+	return listAllWorkspaceRecords()
+		.filter((workspace) => open.has(workspace.projectId))
+		.map(workspaceRef);
+};
 
 const record = (params: unknown): Record<string, unknown> =>
 	typeof params === "object" && params !== null ? { ...params } : {};
@@ -122,6 +143,10 @@ export const installExtHost = ({ publish }: { publish?: ExtPublish } = {}) => {
 			list: listLiveSessionRefs,
 			get: (sessionId) => listLiveSessionRefs().find((ref) => ref.sessionId === sessionId),
 			stats: getSessionStats,
+		},
+		workspaces: {
+			list: openWorkspaceRefs,
+			get: (workspaceId) => openWorkspaceRefs().find((ref) => ref.workspaceId === workspaceId),
 		},
 		onPiFactoriesChanged: () => void reloadSessionsForHostExtensions(),
 		onChanged: (info) => publish?.(WS_CHANNELS.extChanged, info),

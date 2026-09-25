@@ -16,6 +16,14 @@ export interface SessionRef {
 	isStreaming: boolean;
 }
 
+export interface WorkspaceRef {
+	workspaceId: string;
+	projectId: string;
+	name: string;
+	branch: string;
+	path: string;
+}
+
 export type ActionCtx = ExtActionContext;
 
 export type ActionHandler = (payload: unknown, ctx: ActionCtx) => unknown;
@@ -38,6 +46,10 @@ export interface Tr {
 	readonly sessions: {
 		list(): SessionRef[];
 		stats(sessionId: string): Promise<SessionStats>;
+	};
+	readonly workspaces: {
+		list(): WorkspaceRef[];
+		get(workspaceId: string): WorkspaceRef | undefined;
 	};
 	every(ms: number, fn: () => void): Off;
 }

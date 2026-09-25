@@ -60,7 +60,7 @@ describe("buildSurface", () => {
 		const { js } = await buildSurface({ dir, surfaceId: "main" });
 
 		expect(js).not.toMatch(/^\s*import\s/m);
-		expect(js).toContain(`globalThis["${EXT_RUNTIME_GLOBAL}"]?.["react"]`);
+		expect(js).toContain(`globalThis.${EXT_RUNTIME_GLOBAL}?.react`);
 		expect(js).toContain("data:image/svg+xml");
 		expect(js).toContain("sourceMappingURL=data:");
 
@@ -75,6 +75,38 @@ describe("buildSurface", () => {
 		const loaded: { default: () => { props: { children: unknown[] } } } = await import(file);
 		expect(loaded.default().props.children).toContain("value of demo:label");
 		expect(loaded.default().props.children).toContain(2);
+	});
+
+	test("a CommonJS dependency that requires react gets the runtime React", async () => {
+		const dir = writeExtension(
+			join(base, "cjs"),
+			'import label from "cjs-dep";\nimport { useState } from "react";\nexport default () => [label(), useState(7)[0]];\n',
+		);
+		mkdirSync(join(dir, "node_modules", "cjs-dep"), { recursive: true });
+		writeFileSync(
+			join(dir, "node_modules", "cjs-dep", "index.js"),
+			'const React = require("react");\nmodule.exports = () => React.createContext("ctx");\n',
+		);
+		const { js } = await buildSurface({ dir, surfaceId: "main" });
+		Reflect.set(globalThis, EXT_RUNTIME_GLOBAL, {
+			react: {
+				createContext: (value: string) => `context ${value}`,
+				useState: (value: number) => [value],
+			},
+		});
+		const file = join(mkdtempSync(join(bundles, "cjs-")), "main.mjs");
+		writeFileSync(file, js);
+		const loaded: { default: () => unknown[] } = await import(file);
+		expect(loaded.default()).toEqual(["context ctx", 7]);
+	});
+
+	test("keeps only the extension's own files in the inline source map", async () => {
+		const dir = join(base, "cjs", "demo");
+		const { js } = await buildSurface({ dir, surfaceId: "main" });
+		const encoded = js.slice(js.lastIndexOf("base64,") + "base64,".length).trim();
+		const map = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
+		expect(map.sources.some((source: string) => source.endsWith("main.tsx"))).toBe(true);
+		expect(map.sources.some((source: string) => source.includes("node_modules"))).toBe(false);
 	});
 
 	test("compiles extension classes against the app theme without preflight", async () => {
@@ -119,7 +151,8 @@ describe("buildSurface", () => {
 		);
 		writeFileSync(join(dir, "s.css"), ".x{background:url(./dot.svg)}");
 		const { css } = await buildSurface({ dir, surfaceId: "main" });
-		expect(css).toContain('url("data:image/svg+xml;base64,');
+		expect(css).toMatch(/url\("?data:image\/svg\+xml;base64,/);
+		expect(css).toContain("@layer components {");
 	});
 });
 

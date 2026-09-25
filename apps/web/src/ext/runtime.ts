@@ -49,6 +49,7 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "../compo
 import { Textarea } from "../components/ui/textarea";
 import { IconTooltip, Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { cn } from "../lib";
+import { startChat } from "./askAgent";
 import { openSurface, useAction, useChannel } from "./hooks";
 import { useHostContext } from "./hostContext";
 
@@ -99,6 +100,7 @@ export const viewModule = {
 	openSurface: (name: string, surfaceId: string, params?: Record<string, string>) => {
 		openSurface(name, surfaceId, params);
 	},
+	startChat,
 	ui: viewUi,
 	cn,
 	remixicon,

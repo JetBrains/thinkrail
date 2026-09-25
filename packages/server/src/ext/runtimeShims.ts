@@ -7,44 +7,18 @@ import {
 import type { BunPlugin } from "bun";
 
 const NAMESPACE = "thinkrail-runtime";
-const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+const VIEW_MODULE = "@thinkrail/ext/view";
 
-export type RuntimeExportLists = Record<ExtRuntimeModule, readonly string[]>;
-
-const exportNames = (module: object) =>
-	Object.keys(module)
-		.filter((name) => name !== "default" && IDENTIFIER.test(name))
-		.sort();
-
-const loadExportLists = async (): Promise<RuntimeExportLists> => {
-	const [react, jsxRuntime, jsxDevRuntime, reactDom] = await Promise.all([
-		import("react"),
-		import("react/jsx-runtime"),
-		import("react/jsx-dev-runtime"),
-		import("react-dom"),
-	]);
-	return {
-		react: exportNames(react),
-		"react/jsx-runtime": exportNames(jsxRuntime),
-		"react/jsx-dev-runtime": exportNames(jsxDevRuntime),
-		"react-dom": exportNames(reactDom),
-		"@thinkrail/ext/view": EXT_VIEW_EXPORTS,
-	};
-};
-
-let exportLists: Promise<RuntimeExportLists> | undefined;
-export const runtimeExportLists = () => {
-	exportLists ??= loadExportLists();
-	return exportLists;
-};
-
-export const shimSource = (specifier: ExtRuntimeModule, names: readonly string[]) =>
+const lookup = (specifier: ExtRuntimeModule) =>
 	[
 		`const m = globalThis[${JSON.stringify(EXT_RUNTIME_GLOBAL)}]?.[${JSON.stringify(specifier)}];`,
 		`if (!m) throw new Error(${JSON.stringify(`ThinkRail view runtime is missing "${specifier}"`)});`,
-		"export default m.default ?? m;",
-		...(names.length > 0 ? [`export const { ${names.join(", ")} } = m;`] : []),
 	].join("\n");
+
+export const shimSource = (specifier: ExtRuntimeModule) =>
+	specifier === VIEW_MODULE
+		? [lookup(specifier), `export const { ${EXT_VIEW_EXPORTS.join(", ")} } = m;`].join("\n")
+		: [lookup(specifier), "module.exports = m;"].join("\n");
 
 const isRuntimeModule = (specifier: string): specifier is ExtRuntimeModule =>
 	EXT_RUNTIME_MODULES.some((known) => known === specifier);
@@ -52,7 +26,7 @@ const isRuntimeModule = (specifier: string): specifier is ExtRuntimeModule =>
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 const RUNTIME_FILTER = new RegExp(`^(?:${EXT_RUNTIME_MODULES.map(escapeRegExp).join("|")})$`);
 
-export const runtimeGlobalPlugin = (lists: RuntimeExportLists): BunPlugin => ({
+export const runtimeGlobalPlugin: BunPlugin = {
 	name: "thinkrail-runtime-global",
 	setup(build) {
 		build.onResolve({ filter: RUNTIME_FILTER }, (args) => ({
@@ -61,7 +35,7 @@ export const runtimeGlobalPlugin = (lists: RuntimeExportLists): BunPlugin => ({
 		}));
 		build.onLoad({ filter: /.*/, namespace: NAMESPACE }, (args) => {
 			if (!isRuntimeModule(args.path)) throw new Error(`unknown runtime module ${args.path}`);
-			return { loader: "js", contents: shimSource(args.path, lists[args.path]) };
+			return { loader: "js", contents: shimSource(args.path) };
 		});
 	},
-});
+};

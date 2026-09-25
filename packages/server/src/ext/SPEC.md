@@ -58,22 +58,31 @@ actionable one-liners with a JSON-ish path, e.g.
 ## View build
 
 Each surface's `<id>.tsx` is bundled with `Bun.build` into one self-contained ESM file: browser target,
-no code splitting, production JSX (`react/jsx-runtime`), inline source map, and images/fonts inlined as
-data URLs. A single file means the browser never makes a relative request that lacks the launch token.
+no code splitting, production JSX (`react/jsx-runtime`), whitespace + syntax minification (identifiers
+kept, so stacks stay readable), an inline source map, and images/fonts inlined as data URLs. A single file
+means the browser never makes a relative request that lacks the launch token.
+
+- **Source map of own files only.** `sourceMap.ts` drops every source under `node_modules/` and the
+  runtime shims from the map, with their mapping segments (a dropped run becomes an unmapped segment). A
+  view that bundles a large dependency (railmap's `elkjs`) would otherwise ship a map several times
+  the size of its code.
 
 - **Runtime-global plugin.** `react`, `react/jsx-runtime`, `react/jsx-dev-runtime`, `react-dom` and
   `@thinkrail/ext/view` (contracts' `EXT_RUNTIME_MODULES`) resolve to virtual shims that read
-  `globalThis[EXT_RUNTIME_GLOBAL][specifier]` and re-export its members. React's named-export lists come
-  from enumerating the host's own `react` / `react-dom` (the root catalog pins the browser's version too);
-  the view list is contracts' `EXT_VIEW_EXPORTS`. Extension-local deps (the extension's own
-  `node_modules`) bundle normally, and their `react` imports hit the same shims, so one React instance runs.
+  `globalThis[EXT_RUNTIME_GLOBAL][specifier]`. The React shims are CommonJS (`module.exports = m`), the
+  shape real React has: a dependency that `require`s React (`use-sync-external-store`, zustand) gets it,
+  and ESM importers get named imports through Bun's interop. The `@thinkrail/ext/view` shim is ESM with
+  contracts' `EXT_VIEW_EXPORTS` as named exports, so a misspelled view import fails the build.
+  Extension-local deps (the extension's own `node_modules`) bundle normally, and their `react` imports
+  hit the same shims, so one React instance runs.
 - **CSS (Tailwind v4).** The host compiles one stylesheet per surface with the `tailwindcss` compiler
   against Tailwind's theme plus the app's `@theme` blocks (`appTheme.generated.ts`, produced by
   `bun run --filter @thinkrail/server ext-theme:generate` from `apps/web`'s CSS; `appTheme.test.ts`
   fails when stale), so
   extension utilities resolve to the same semantic tokens as the app. Candidates are every class-like
-  token in the bundled JS. No preflight: the app already ships it. CSS a view imports is appended. Results
-  are cached in memory by a hash of the candidate set.
+  token in the bundled JS. No preflight: the app already ships it. CSS a view imports is appended inside
+  `@layer components`, so a library stylesheet never beats the author's utilities (layered utilities
+  lose to unlayered rules otherwise). Results are cached in memory by a hash of the candidate set.
 - **Build id.** A generation's assets carry a content hash (`ExtensionInfo.build`, 16 hex) over every
   surface's JS and CSS. It is the URL segment, so an immutable cache entry can never serve stale code,
   even though generation numbers restart every boot.
@@ -157,6 +166,8 @@ lists trusted project paths, so the section stays stable across trust changes an
   failures, and view errors the web reports (`recordError`); `logs(name, since?)`.
 - `tr.sessions`: read-only projections injected by the composition root; stats are pi's, never
   recomputed.
+- `tr.workspaces`: read-only workspace refs injected by the composition root (`workspaces` option,
+  default empty): open projects' workspaces with their checkout `path`.
 
 ## Example extension
 
@@ -166,6 +177,11 @@ feeds pi events through `observe`, and asserts the published spans, the `agent_s
 channel, persistence across hosts, and the span cap. It is the regression test for this module's public
 behaviour as an author sees it.
 
+`.thinkrail/extensions/railmap/` is the second one. `railmapExample.test.ts` loads that directory the same
+way against a generated fixture repo (declared, undeclared, barrel-bypass, unused, and no-spec cases), checks
+incremental updates after a file write, `may_import`, the settle hook's drift diff, and smoke-builds this
+repository's own graph.
+
 ## Boundary
 
 - **Public surface (barrel):** `createExtHost(options)` → `ExtHost` (incl. `asset`, `validate`); types
@@ -174,7 +190,6 @@ behaviour as an author sees it.
   (the agent dev-loop pi factory) + `EXT_SDK_GUIDE` (the SDK README text, text-imported); `projectExtensionsDir`; type `ExtValidation`.
 - **Allowed deps:** `@thinkrail/ext` (types + the module object handed to jiti), `@thinkrail/contracts`
   (types, `SURFACE_SLOTS`, runtime-module names), `@thinkrail/shared/paths`, `typebox`, `jiti`,
-  pi-coding-agent (types, and the module object handed to jiti), `node:fs` `watch`, `react` + `react-dom` (export-name
-  enumeration only), `tailwindcss` (compiler + `theme.css` text), `Bun.build`.
+  pi-coding-agent (types, and the module object handed to jiti), `node:fs` `watch`, `tailwindcss` (compiler + `theme.css` text), `Bun.build`.
 - **Forbidden:** `host`; `agent`, `persistence`, `log`, and every other feature module. Sessions, trust,
   directories, warnings, and publishing are injected by the composition root, which keeps this module testable against a fixture directory.
