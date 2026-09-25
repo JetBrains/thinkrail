@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export interface InstallationRecord {
@@ -19,27 +19,59 @@ function readInstallation(directory: string): Partial<PersistedInstallationRecor
 	}
 }
 
-function writeInstallation(directory: string, record: InstallationRecord): void {
-	mkdirSync(directory, { recursive: true });
-	writeFileSync(join(directory, "installation.json"), `${JSON.stringify(record, null, "\t")}\n`);
+function hasInstallationId(
+	record: Partial<PersistedInstallationRecord>,
+): record is PersistedInstallationRecord {
+	return typeof record.id === "string" && record.id.length > 0;
 }
 
-export function ensureInstallationIn(directory: string): InstallationRecord {
+function isAlreadyExists(error: unknown): boolean {
+	return typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST";
+}
+
+export function ensureInstallationIn(
+	directory: string,
+	publish: typeof linkSync = linkSync,
+): InstallationRecord {
+	mkdirSync(directory, { recursive: true });
 	const raw = readInstallation(directory);
-	if (typeof raw.id === "string" && raw.id.length > 0) return { id: raw.id };
+	if (hasInstallationId(raw)) return { id: raw.id };
+
+	const target = join(directory, "installation.json");
+	const temp = join(directory, `.installation.json.${process.pid}.${randomUUID()}.tmp`);
 	const record: InstallationRecord = { id: randomUUID() };
-	writeInstallation(directory, record);
-	return record;
+	try {
+		writeFileSync(temp, `${JSON.stringify(record, null, "\t")}\n`, { flag: "wx" });
+		try {
+			publish(temp, target);
+			return record;
+		} catch (error) {
+			if (!isAlreadyExists(error)) throw error;
+			const winner = readInstallation(directory);
+			if (hasInstallationId(winner)) return { id: winner.id };
+			throw new Error("installation.json exists without a valid installation id", { cause: error });
+		}
+	} finally {
+		try {
+			unlinkSync(temp);
+		} catch {}
+	}
 }
 
 export function claimAppInstalledIn(
 	directory: string,
 	replace: typeof renameSync = renameSync,
 ): boolean {
-	const raw = readInstallation(directory);
-	if (raw.appInstalled === true) return false;
+	if (readInstallation(directory).appInstalled === true) return false;
 	const { id } = ensureInstallationIn(directory);
-	mkdirSync(directory, { recursive: true });
+	const claim = join(directory, ".installation-app-installed.claim");
+	try {
+		writeFileSync(claim, "", { flag: "wx" });
+	} catch (error) {
+		if (isAlreadyExists(error)) return false;
+		throw error;
+	}
+
 	const target = join(directory, "installation.json");
 	const temp = join(directory, `.installation.json.${process.pid}.${randomUUID()}.tmp`);
 	try {
@@ -52,6 +84,9 @@ export function claimAppInstalledIn(
 	} catch (error) {
 		try {
 			unlinkSync(temp);
+		} catch {}
+		try {
+			unlinkSync(claim);
 		} catch {}
 		throw error;
 	}

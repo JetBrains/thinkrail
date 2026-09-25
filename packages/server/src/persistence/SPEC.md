@@ -15,7 +15,14 @@ Durable host state—projects, workspaces, cross-frontend app config, terminal c
 ## Boundary
 
 - **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; and installation state in server-only `installation.json` (`{ id, appInstalled?: true }`). `id` is the non-rotating per-install UUID and is never wire-broadcast; the optional marker is shared by binary and desktop analytics initialization.
-- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, `ensureInstallation()` returning only `{ id }`, and narrow `claimAppInstalled()` marker persistence. Claiming writes complete JSON to a unique temporary file beside `installation.json`, atomically renames it over the record, and removes the temporary file if replacement fails; the old id/record therefore remains retryable. No cross-process lock is provided.
+- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations,
+  `ensureInstallation()` returning only `{ id }`, and narrow `claimAppInstalled()` marker persistence.
+  Initial ID creation writes a complete sibling temporary file, publishes it via an atomic no-overwrite
+  hard link, and rereads a concurrent winner; malformed existing records are preserved rather than overwritten. A fixed, exclusive claim marker permits only one packaged host to emit
+  `app_installed` across processes. The complete JSON record is atomically replaced from a unique sibling
+  temporary file; a caught replacement failure removes the marker and temporary file for retry. A process
+  crash after claiming can consume the event without emitting it, but cannot authorize a second claimant.
+  Legacy records already marked installed remain claimed. Other state has no cross-process lock.
 - **Allowed deps:** `contracts` (`Project`, `Workspace`, `AppConfig`, `LayoutPreset`, `DEFAULT_CONFIG`,
   `isTerminalWindowsShell`); Node `fs`/`os`/`path`.
 - **Forbidden:** importing feature siblings or `host`; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys or old schemas; or reading, rewriting, or deleting old host layout snapshots.
