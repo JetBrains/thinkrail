@@ -42,9 +42,10 @@ binary.
 - **Independently deployed leaf.** Its only workspace dependency is [[module-website-analytics]]; it
   must never import contracts, server, shared, or web. It never joins the product host wire;
   [[submodule-website-attribution]] alone owns an independent, bounded HTTP claim protocol and D1 state.
-- **One static Astro artifact, with a route-local framework exception.** The landing and blog retain
-  vanilla TypeScript + hand-written CSS: no React island and no Tailwind stylesheet or runtime reaches
-  those routes. [[submodule-website-vibecoding]] alone may use one React island and Tailwind v4. Astro's
+- **One static Astro artifact plus same-project claim functions, with a route-local framework exception.**
+  The landing and blog retain vanilla TypeScript + hand-written CSS: no React island and no Tailwind
+  stylesheet or runtime reaches those routes. [[submodule-website-attribution]] alone adds Pages Functions
+  and D1; [[submodule-website-vibecoding]] alone may use one React island and Tailwind v4. Astro's
   React integration and Tailwind Vite plugin are build-wide tooling, but generated page references are
   the runtime boundary; package build validation fails if unrelated routes reference the island renderer,
   component chunks, or vibecoding stylesheet. The browser analytics workspace module is compiled into
@@ -169,19 +170,20 @@ routes. The route classifier is closed: `/` → `landing`, `/blog/` → `blog/in
 `blog/<slug>`, `/vibecoding/` → `vibecoding`, and `/agentic-development/` →
 `agentic-development`. Each document emits one explicit `content_viewed` with that key.
 
-Document-level `click`, middle-button `auxclick`, and disclosure `toggle` delegation instruments the
-static install controls without changing their navigation or no-JS behavior. Only the four exact stable
+At initialization, the current page touch is recorded only when a consented journey already exists;
+journey appearance after initialization does not replay the page URL or referrer, and journey removal
+clears attribution context. Document-level `click`, middle-button `auxclick`, and disclosure `toggle`
+delegation instruments the static install controls without changing their navigation or no-JS behavior.
+Before each post-initialization install CTA, download, or CLI event, the current navigation touch is
+attempted so consent granted on the page can affect only a subsequent action. Only the four exact stable
 GitHub desktop aliases are downloads. Their CTA location comes from the containing hero, install
 section, quick start, final CTA, or blog post; one recognized activation emits `install_cta_clicked`
-(`desktop`) followed by `download_started`. Opening either landing command-line disclosure emits only
+(`desktop`) followed by `download_started`. When a consented journey context is available, the activation
+creates and stores a canonical per-download bridge ID before `download_started`, and that event carries
+the same ID. A later desktop download replaces only the stored latest bridge ID; a download without
+consent remains bridge-less. Opening either landing command-line disclosure emits only
 `install_cta_clicked` (`cli`); closing it does not. No page or child module carries analytics imports,
 vendor configuration, or another loader.
-
-[[submodule-website-attribution]] retains a 30-day normalized first/last-touch context only for the current
-website journey. Initial recording requires an existing journey; a later grant records only a subsequent
-install action, never the earlier navigation. Untagged internal/direct navigation preserves the last
-acquisition touch. A consented desktop download receives one bridge ID shared by its stored context and
-`download_started`; bridge-less download and CLI events remain valid.
 
 The existing GTM container remains Cookiebot's control plane; route-specific downstream tags use a
 `thinkrail.ai` hostname condition plus Page Path, never another GTM container. Sharing the exact apex
@@ -192,11 +194,21 @@ stable desktop alias, event derivation, and initializer idempotence. The shared 
 PostHog/GTM, journey and capture contracts. The shared contract deliberately has no `posthog-js`
 dependency, pasted bootstrap, or static GTM `noscript` iframe.
 
+The non-indexed `/attribution/claim/` route belongs to [[submodule-website-attribution]]. It initializes no
+PostHog or GTM loader and emits no browser analytics, reads a validated unexpired journey context directly
+from attribution browser storage, attempts one bounded bind, and replaces the location with `/blog/`
+without carrying claim state into that URL.
+
 ## Deploy
 
-Cloudflare Pages project `thinkrail-website` owns production and previews for the one static artifact.
-`.github/workflows/site.yml` runs `bun run --filter @thinkrail/website build` (`astro check && astro
-build` plus artifact validation) and direct-uploads `apps/website/dist` to branch `main` on pushes that
+Cloudflare Pages project `thinkrail-website` owns production and previews for the static artifact and
+claim Functions. Pinned Wrangler `4.124.0` deploys from `apps/website` so its configuration,
+`functions/`, D1 binding, and `dist` artifact form one deployment; production applies committed
+attribution migrations before deploy, while preview hosts cannot mutate attribution state. The build
+compiles the Functions, and a local Pages/D1 smoke starts Pages from the checked-in configuration,
+applies the actual migration, and exercises create, bind, and redeem. `.github/workflows/site.yml` runs
+`bun run --filter @thinkrail/website build` (`astro check`, the Functions typecheck and build, `astro
+build`, and artifact validation) on pushes that
 touch this module, [[module-website-analytics]], the root package manifest, or the lockfile (plus manual
 dispatch). It verifies the provider URL before succeeding. `thinkrail.ai` is the project's custom apex
 domain; provider URLs are deployment probes, not product identities.
@@ -220,9 +232,11 @@ marks its preview metadata retired; PRs without that marker are no-ops. The shar
 prevents cleanup racing an in-flight publish. A newer push cancels only the superseded preview for that
 PR.
 
-One-time setup creates `thinkrail-website` with production branch `main`, using the existing
-`CLOUDFLARE_API_TOKEN` (Pages:Edit) and `CLOUDFLARE_ACCOUNT_ID` repository secrets, then attaches the
-`thinkrail.ai` custom domain after the provider-hosted main deployment is verified.
+One-time setup creates `thinkrail-website` with production branch `main`, using
+`CLOUDFLARE_API_TOKEN` (Pages:Edit plus D1:Edit for committed attribution migrations) and
+`CLOUDFLARE_ACCOUNT_ID` repository secrets, then attaches the `thinkrail.ai` custom domain after the
+provider-hosted main deployment is verified. The token permission update must land before the first
+claim-enabled production deployment.
 
 ### Hosting and retired hostname
 

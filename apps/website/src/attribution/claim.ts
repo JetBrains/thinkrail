@@ -1,0 +1,1 @@
+export { runClaimPage } from "./claimPage";
