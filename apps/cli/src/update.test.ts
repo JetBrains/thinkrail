@@ -241,9 +241,11 @@ describe("parseUpdateArgs", () => {
 
 describe("resolveUpdatePlan", () => {
 	const home = "/home/u";
+	const sourceRuntime = { platform: "linux", execPath: "/usr/bin/bun" };
 
 	test("flag channel wins over metadata and baked", () => {
 		const plan = resolveUpdatePlan({
+			...sourceRuntime,
 			args: { channel: "nightly", version: "latest" },
 			installMeta: { channel: "stable", prefix: "/home/u/.local" },
 			baked: "stable",
@@ -263,6 +265,7 @@ describe("resolveUpdatePlan", () => {
 	test("falls back metadata → baked → stable, and default prefix", () => {
 		expect(
 			resolveUpdatePlan({
+				...sourceRuntime,
 				args: { version: "latest" },
 				installMeta: { channel: "nightly" },
 				baked: "stable",
@@ -270,10 +273,16 @@ describe("resolveUpdatePlan", () => {
 			}).channel,
 		).toBe("nightly");
 		expect(
-			resolveUpdatePlan({ args: { version: "latest" }, installMeta: {}, baked: "nightly", home })
-				.channel,
+			resolveUpdatePlan({
+				...sourceRuntime,
+				args: { version: "latest" },
+				installMeta: {},
+				baked: "nightly",
+				home,
+			}).channel,
 		).toBe("nightly");
 		const dev = resolveUpdatePlan({
+			...sourceRuntime,
 			args: { version: "latest" },
 			installMeta: {},
 			baked: "dev",
@@ -285,6 +294,7 @@ describe("resolveUpdatePlan", () => {
 
 	test("appends --version only when pinned", () => {
 		const pinned = resolveUpdatePlan({
+			...sourceRuntime,
 			args: { version: "0.3.0" },
 			installMeta: {},
 			baked: "stable",
@@ -305,6 +315,7 @@ describe("resolveUpdatePlan", () => {
 	test("rejects an unsafe or relative prefix from metadata", () => {
 		expect(() =>
 			resolveUpdatePlan({
+				...sourceRuntime,
 				args: { version: "latest" },
 				installMeta: { prefix: "/tmp/$(rm -rf ~)" },
 				baked: "stable",
@@ -313,6 +324,7 @@ describe("resolveUpdatePlan", () => {
 		).toThrow("suspicious install prefix");
 		expect(() =>
 			resolveUpdatePlan({
+				...sourceRuntime,
 				args: { version: "latest" },
 				installMeta: { prefix: "relative/dir" },
 				baked: "stable",
@@ -320,33 +332,115 @@ describe("resolveUpdatePlan", () => {
 			}),
 		).toThrow("suspicious install prefix");
 	});
+
+	test("the running bin layout is authoritative over stale or missing metadata", () => {
+		const runtime = { platform: "linux", execPath: "/opt/current/bin/thinkrail" };
+		const stale = resolveUpdatePlan({
+			...runtime,
+			args: { version: "latest" },
+			installMeta: { prefix: "/opt/other", channel: "nightly" },
+			baked: "stable",
+			home,
+		});
+		expect(stale.prefix).toBe("/opt/current");
+		expect(stale.channel).toBe("stable");
+
+		const missing = resolveUpdatePlan({
+			...runtime,
+			args: { version: "latest" },
+			installMeta: {},
+			baked: "nightly",
+			home,
+		});
+		expect(missing.prefix).toBe("/opt/current");
+		expect(missing.channel).toBe("nightly");
+	});
+
+	test("trusts a matching metadata channel, while an explicit channel still wins", () => {
+		const runtime = { platform: "darwin", execPath: "/opt/current/bin/thinkrail" };
+		expect(
+			resolveUpdatePlan({
+				...runtime,
+				args: { version: "latest" },
+				installMeta: { prefix: "/opt/current/./", channel: "nightly" },
+				baked: "stable",
+				home,
+			}).channel,
+		).toBe("nightly");
+		expect(
+			resolveUpdatePlan({
+				...runtime,
+				args: { channel: "stable", version: "latest" },
+				installMeta: { prefix: "/opt/current", channel: "nightly" },
+				baked: "nightly",
+				home,
+			}).channel,
+		).toBe("stable");
+	});
+
+	test("fails closed for a named manual binary outside a bin directory", () => {
+		expect(() =>
+			resolveUpdatePlan({
+				platform: "linux",
+				execPath: "/opt/manual/thinkrail",
+				args: { version: "latest" },
+				installMeta: { prefix: "/home/u/.local" },
+				baked: "stable",
+				home,
+			}),
+		).toThrow("outside the supported <prefix>/bin layout");
+	});
+
+	test("rejects a pinned version from the other channel after resolution", () => {
+		expect(() =>
+			resolveUpdatePlan({
+				...sourceRuntime,
+				args: { version: "1.2.3-nightly.4" },
+				installMeta: {},
+				baked: "stable",
+				home,
+			}),
+		).toThrow("does not belong to the stable channel");
+		expect(() =>
+			resolveUpdatePlan({
+				...sourceRuntime,
+				args: { version: "1.2.3" },
+				installMeta: { channel: "nightly" },
+				baked: "stable",
+				home,
+			}),
+		).toThrow("does not belong to the nightly channel");
+	});
 });
 
 describe("resolveWindowsUpdatePlan", () => {
 	const home = "C:\\Users\\u";
+	const sourceRuntime = { platform: "win32", execPath: "C:\\bun\\bun.exe" };
 
 	test("passes channel, version and prefix to install.ps1 — always all three", () => {
 		const plan = resolveWindowsUpdatePlan({
+			...sourceRuntime,
 			args: { version: "latest" },
 			installMeta: { channel: "nightly", prefix: "D:\\tools" },
 			baked: "stable",
 			home,
 		});
 		expect(plan.channel).toBe("nightly");
-		expect(plan.prefix).toBe("D:\\tools");
+		expect(plan.prefix).toBe("D:/tools");
 		expect(plan.psArgs).toEqual([
 			"-Channel",
 			"nightly",
 			"-Version",
 			"latest",
 			"-Prefix",
-			"D:\\tools",
+			"D:/tools",
 		]);
-		expect(plan.manualPrefix).toBe("D:\\tools");
+		expect(plan.manualPrefix).toBe("D:/tools");
 	});
 
 	test("resolves the channel exactly like the Unix plan, and defaults the prefix", () => {
 		const plan = resolveWindowsUpdatePlan({
+			...sourceRuntime,
 			args: { channel: "stable", version: "0.3.0" },
 			installMeta: { channel: "nightly" },
 			baked: "nightly",
@@ -359,7 +453,7 @@ describe("resolveWindowsUpdatePlan", () => {
 			"-Version",
 			"0.3.0",
 			"-Prefix",
-			"C:\\Users\\u\\.local",
+			"C:/Users/u/.local",
 		]);
 		expect(plan.manualPrefix).toBeUndefined();
 	});
@@ -367,6 +461,7 @@ describe("resolveWindowsUpdatePlan", () => {
 	test("refuses to install anywhere a tampered install.json points", () => {
 		expect(() =>
 			resolveWindowsUpdatePlan({
+				...sourceRuntime,
 				args: { version: "latest" },
 				installMeta: { prefix: 'D:\\a" && del /f /q C:\\Windows\\System32 && set "X=' },
 				baked: "stable",
@@ -374,19 +469,85 @@ describe("resolveWindowsUpdatePlan", () => {
 			}),
 		).toThrow("suspicious install prefix");
 	});
+
+	test("targets the running Windows bin layout and ignores stale metadata", () => {
+		const plan = resolveWindowsUpdatePlan({
+			platform: "win32",
+			execPath: "D:\\current\\bin\\thinkrail.exe",
+			args: { version: "latest" },
+			installMeta: { prefix: "C:\\other", channel: "nightly" },
+			baked: "stable",
+			home,
+		});
+		expect(plan.prefix).toBe("D:/current");
+		expect(plan.channel).toBe("stable");
+		expect(plan.manualPrefix).toBe("D:/current");
+		const missing = resolveWindowsUpdatePlan({
+			platform: "win32",
+			execPath: "D:\\current\\bin\\thinkrail.exe",
+			args: { version: "latest" },
+			installMeta: {},
+			baked: "nightly",
+			home,
+		});
+		expect(missing.prefix).toBe("D:/current");
+		expect(missing.channel).toBe("nightly");
+	});
+
+	test.each([
+		"/d/current",
+		"/cygdrive/d/current",
+	])("trusts matching legacy Git Bash metadata prefix %s", (prefix) => {
+		const plan = resolveWindowsUpdatePlan({
+			platform: "win32",
+			execPath: "D:\\current\\bin\\thinkrail.exe",
+			args: { version: "latest" },
+			installMeta: { prefix, channel: "nightly" },
+			baked: "stable",
+			home,
+		});
+		expect(plan.prefix).toBe("D:/current");
+		expect(plan.channel).toBe("nightly");
+	});
+
+	test("normalizes and trusts a slash-form UNC prefix", () => {
+		const plan = resolveWindowsUpdatePlan({
+			platform: "win32",
+			execPath: "\\\\nas\\share\\thinkrail\\bin\\thinkrail.exe",
+			args: { version: "latest" },
+			installMeta: { prefix: "//nas/share/thinkrail", channel: "nightly" },
+			baked: "stable",
+			home,
+		});
+		expect(plan.prefix).toBe("//nas/share/thinkrail");
+		expect(plan.channel).toBe("nightly");
+	});
+
+	test("fails closed for a named Windows binary outside a bin directory", () => {
+		expect(() =>
+			resolveWindowsUpdatePlan({
+				platform: "win32",
+				execPath: "D:\\manual\\thinkrail.exe",
+				args: { version: "latest" },
+				installMeta: {},
+				baked: "stable",
+				home,
+			}),
+		).toThrow("outside the supported <prefix>/bin layout");
+	});
 });
 
 describe("resolveWindowsInstallPrefix", () => {
 	const home = "C:\\Users\\u";
 
 	test("falls back to the installer's own default", () => {
-		expect(resolveWindowsInstallPrefix(undefined, home)).toBe("C:\\Users\\u\\.local");
-		expect(resolveWindowsInstallPrefix("", home)).toBe("C:\\Users\\u\\.local");
-		expect(resolveWindowsInstallPrefix(42, home)).toBe("C:\\Users\\u\\.local");
+		expect(resolveWindowsInstallPrefix(undefined, home)).toBe("C:/Users/u/.local");
+		expect(resolveWindowsInstallPrefix("", home)).toBe("C:/Users/u/.local");
+		expect(resolveWindowsInstallPrefix(42, home)).toBe("C:/Users/u/.local");
 	});
 
 	test("keeps a recorded prefix, refuses an unusable one", () => {
-		expect(resolveWindowsInstallPrefix("D:\\tools", home)).toBe("D:\\tools");
+		expect(resolveWindowsInstallPrefix("D:\\tools", home)).toBe("D:/tools");
 		expect(() => resolveWindowsInstallPrefix("relative\\dir", home)).toThrow(
 			"suspicious install prefix",
 		);
@@ -457,11 +618,9 @@ describe("resolveWindowsPrefix", () => {
 	});
 
 	test("keeps a custom prefix, including a UNC path", () => {
-		expect(resolveWindowsPrefix("D:\\tools", home)).toBe("D:\\tools");
-		expect(resolveWindowsPrefix("\\\\nas\\share\\thinkrail", home)).toBe(
-			"\\\\nas\\share\\thinkrail",
-		);
-		expect(resolveWindowsPrefix("C:\\R&D\\tools", home)).toBe("C:\\R&D\\tools");
+		expect(resolveWindowsPrefix("D:\\tools", home)).toBe("D:/tools");
+		expect(resolveWindowsPrefix("\\\\nas\\share\\thinkrail", home)).toBe("//nas/share/thinkrail");
+		expect(resolveWindowsPrefix("C:\\R&D\\tools", home)).toBe("C:/R&D/tools");
 	});
 
 	test("refuses a prefix that isn't rooted or can't be safely quoted", () => {

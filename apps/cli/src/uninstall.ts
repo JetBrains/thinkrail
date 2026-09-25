@@ -10,7 +10,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, posix, win32 } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { dataDir } from "@thinkrail/server";
 import { channel, version } from "@thinkrail/shared/version";
@@ -18,6 +18,7 @@ import {
 	type InstallMeta,
 	installConfigDir,
 	installMetaFile,
+	normalizeWindowsInstallPrefix,
 	readInstallMeta,
 	stagingRoot,
 } from "./paths";
@@ -115,19 +116,35 @@ export interface ResolveUninstallInput {
 
 export function resolveUninstallTargets(input: ResolveUninstallInput): UninstallTargets {
 	const windows = input.platform === "win32";
+	const path = windows ? win32 : posix;
 	const exeName = windows ? "thinkrail.exe" : "thinkrail";
 	const recordedPrefix = input.installMeta.prefix;
-	const prefix =
-		typeof recordedPrefix === "string" && isAbsolutePath(recordedPrefix, windows)
+	const normalizedRecordedPrefix = windows
+		? normalizeWindowsInstallPrefix(recordedPrefix)
+		: typeof recordedPrefix === "string" && posix.isAbsolute(recordedPrefix)
 			? recordedPrefix
-			: join(input.home, ".local");
-	const binDir = join(prefix, "bin");
+			: undefined;
+	const defaultPrefix = windows
+		? normalizeWindowsInstallPrefix(win32.join(input.home, ".local"))
+		: posix.join(input.home, ".local");
+	if (!defaultPrefix) throw new Error(`Invalid home directory: ${input.home}`);
+	const prefix = normalizedRecordedPrefix ?? defaultPrefix;
+	const binDir = path.join(prefix, "bin");
 
 	const pathEntryOwned =
-		windows && prefix === recordedPrefix && input.installMeta.path_entry_added === true;
+		windows &&
+		normalizedRecordedPrefix !== undefined &&
+		input.installMeta.path_entry_added === true;
 
-	const binaries = [join(binDir, exeName)];
-	if (basename(input.execPath) === exeName && !binaries.includes(input.execPath)) {
+	const binaries = [path.join(binDir, exeName)];
+	if (
+		path.basename(input.execPath) === exeName &&
+		!binaries.some((candidate) =>
+			windows
+				? win32.normalize(candidate).toLowerCase() === win32.normalize(input.execPath).toLowerCase()
+				: candidate === input.execPath,
+		)
+	) {
 		binaries.push(input.execPath);
 	}
 
@@ -136,11 +153,11 @@ export function resolveUninstallTargets(input: ResolveUninstallInput): Uninstall
 		? []
 		: [
 				...new Set([
-					join(input.home, ".bashrc"),
-					join(input.home, ".bash_profile"),
-					join(input.home, ".profile"),
-					join(input.home, ".zshrc"),
-					...(zdotdir ? [join(zdotdir, ".zshrc")] : []),
+					path.join(input.home, ".bashrc"),
+					path.join(input.home, ".bash_profile"),
+					path.join(input.home, ".profile"),
+					path.join(input.home, ".zshrc"),
+					...(zdotdir ? [path.join(zdotdir, ".zshrc")] : []),
 				]),
 			];
 
@@ -149,16 +166,12 @@ export function resolveUninstallTargets(input: ResolveUninstallInput): Uninstall
 		binDir,
 		pathEntryOwned,
 		rcFiles,
-		fishFile: windows ? "" : join(input.home, ".config", "fish", "conf.d", "thinkrail.fish"),
+		fishFile: windows ? "" : path.join(input.home, ".config", "fish", "conf.d", "thinkrail.fish"),
 		installMetaFile: installMetaFile(input.home),
 		installConfigDir: installConfigDir(input.home),
 		stagingRoot: input.stagingRoot,
 		dataDir: input.dataDir,
 	};
-}
-
-function isAbsolutePath(path: string, windows: boolean): boolean {
-	return windows ? /^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/])/.test(path) : path.startsWith("/");
 }
 
 export function stripRcPathBlock(content: string): {

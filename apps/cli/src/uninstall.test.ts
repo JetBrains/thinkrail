@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { join } from "node:path";
+import { posix, win32 } from "node:path";
 import {
 	parseUninstallArgs,
 	parseYesNo,
@@ -66,17 +66,17 @@ describe("resolveUninstallTargets", () => {
 				platform: "linux",
 				installMeta: { prefix: "/opt/tools" },
 			}).binaries,
-		).toEqual([join("/opt/tools", "bin", "thinkrail")]);
+		).toEqual([posix.join("/opt/tools", "bin", "thinkrail")]);
 		expect(
 			resolveUninstallTargets({ ...base, platform: "linux", installMeta: {} }).binaries,
-		).toEqual([join("/home/u/.local", "bin", "thinkrail")]);
+		).toEqual([posix.join("/home/u/.local", "bin", "thinkrail")]);
 	});
 
 	test("ignores a relative or non-string prefix instead of trusting it", () => {
 		for (const prefix of ["relative/dir", "", 7, null]) {
 			expect(
 				resolveUninstallTargets({ ...base, platform: "linux", installMeta: { prefix } }).binDir,
-			).toBe(join("/home/u/.local", "bin"));
+			).toBe(posix.join("/home/u/.local", "bin"));
 		}
 	});
 
@@ -91,14 +91,14 @@ describe("resolveUninstallTargets", () => {
 			installMeta: {},
 		});
 		expect(targets.binaries).toEqual([
-			join("/home/u/.local", "bin", "thinkrail"),
+			posix.join("/home/u/.local", "bin", "thinkrail"),
 			"/opt/elsewhere/bin/thinkrail",
 		]);
 		expect(
 			resolveUninstallTargets({
 				...base,
 				platform: "linux",
-				execPath: join("/home/u/.local", "bin", "thinkrail"),
+				execPath: posix.join("/home/u/.local", "bin", "thinkrail"),
 				installMeta: {},
 			}).binaries,
 		).toHaveLength(1);
@@ -112,9 +112,25 @@ describe("resolveUninstallTargets", () => {
 			execPath: "D:\\tools\\bin\\thinkrail.exe",
 			installMeta: { prefix: "D:\\tools" },
 		});
-		expect(targets.binaries).toEqual([join("D:\\tools", "bin", "thinkrail.exe")]);
+		expect(targets.binaries).toEqual([win32.join("D:/tools", "bin", "thinkrail.exe")]);
 		expect(targets.rcFiles).toEqual([]);
 		expect(targets.fishFile).toBe("");
+	});
+
+	test.each([
+		["/c/tools/thinkrail", "C:\\tools\\thinkrail\\bin\\thinkrail.exe"],
+		["/cygdrive/d/tools/thinkrail", "D:\\tools\\thinkrail\\bin\\thinkrail.exe"],
+		["//nas/share/thinkrail", "\\\\nas\\share\\thinkrail\\bin\\thinkrail.exe"],
+	])("normalizes a legacy Windows metadata prefix %s", (prefix, expectedBinary) => {
+		const targets = resolveUninstallTargets({
+			...base,
+			platform: "win32",
+			home: "C:\\Users\\u",
+			execPath: "C:\\bun\\bun.exe",
+			installMeta: { prefix, path_entry_added: false },
+		});
+		expect(targets.binaries).toEqual([expectedBinary]);
+		expect(targets.pathEntryOwned).toBe(false);
 	});
 
 	test("the Windows PATH edit is licensed only by install.ps1's own ownership flag", () => {

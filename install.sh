@@ -6,9 +6,9 @@
 #
 # Options (pass after `-s --`):
 #   --channel stable|nightly   (default: stable)
-#   --version X.Y.Z|latest     (default: latest)
+#   --version X.Y.Z|X.Y.Z-nightly.N|latest
+#                              (default: latest)
 #   --prefix DIR               (default: ~/.local; binary lands at <prefix>/bin/thinkrail)
-#                              Allowed chars: A-Z a-z 0-9 _ - . / ~ and space.
 #   --no-modify-path           don't touch shell rc files; just print PATH advice
 #
 # After install, run `thinkrail`. To update later, run `thinkrail update`; to remove it, run
@@ -19,6 +19,10 @@ set -euo pipefail
 REPO="${THINKRAIL_REPO:-JetBrains/thinkrail}"
 CHANNEL="stable"
 VERSION="latest"
+if [ -z "${HOME:-}" ]; then
+    echo "Error: HOME is not set; pass a shell environment with a home directory." >&2
+    exit 1
+fi
 PREFIX="${HOME}/.local"
 MODIFY_PATH=1
 
@@ -28,13 +32,13 @@ ThinkRail binary installer.
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash
-  curl -fsSL ... | bash -s -- --channel nightly --version 0.2.0 --prefix ~/.local
+  curl -fsSL ... | bash -s -- --channel nightly --version 0.2.0-nightly.4 --prefix ~/.local
 
 Options:
   --channel stable|nightly   (default: stable)
-  --version X.Y.Z|latest     (default: latest)
+  --version X.Y.Z|X.Y.Z-nightly.N|latest
+                             (default: latest)
   --prefix DIR               (default: ~/.local; binary lands at <prefix>/bin/thinkrail)
-                             Allowed chars: A-Z a-z 0-9 _ - . / ~ and space.
   --no-modify-path           don't touch shell rc files; just print PATH advice
 
 After install, run `thinkrail`. To update later, run `thinkrail update`; to remove it, run
@@ -43,59 +47,155 @@ EOF
     exit "${1:-0}"
 }
 
+missing_value() {
+    echo "Error: $1 requires a value" >&2
+    exit 1
+}
+
 while [ $# -gt 0 ]; do
     case "$1" in
-        --channel)         CHANNEL="$2";       shift 2 ;;
-        --channel=*)       CHANNEL="${1#*=}";  shift ;;
-        --version)         VERSION="$2";       shift 2 ;;
-        --version=*)       VERSION="${1#*=}";  shift ;;
-        --prefix)          PREFIX="$2";        shift 2 ;;
-        --prefix=*)        PREFIX="${1#*=}";   shift ;;
-        --no-modify-path)  MODIFY_PATH=0;      shift ;;
-        -h|--help)         usage 0 ;;
-        *) echo "Unknown arg: $1" >&2; usage 1 ;;
+        --channel)
+            [ $# -ge 2 ] || missing_value "$1"
+            CHANNEL="$2"
+            shift 2
+            ;;
+        --channel=*)
+            CHANNEL="${1#*=}"
+            [ -n "$CHANNEL" ] || missing_value "--channel"
+            shift
+            ;;
+        --version)
+            [ $# -ge 2 ] || missing_value "$1"
+            VERSION="$2"
+            shift 2
+            ;;
+        --version=*)
+            VERSION="${1#*=}"
+            [ -n "$VERSION" ] || missing_value "--version"
+            shift
+            ;;
+        --prefix)
+            [ $# -ge 2 ] || missing_value "$1"
+            PREFIX="$2"
+            shift 2
+            ;;
+        --prefix=*)
+            PREFIX="${1#*=}"
+            [ -n "$PREFIX" ] || missing_value "--prefix"
+            shift
+            ;;
+        --no-modify-path)
+            MODIFY_PATH=0
+            shift
+            ;;
+        -h|--help)
+            usage 0
+            ;;
+        *)
+            echo "Unknown arg: $1" >&2
+            usage 1
+            ;;
     esac
 done
 
 case "$CHANNEL" in
     stable|nightly) ;;
-    *) echo "Invalid channel: $CHANNEL (expected: stable or nightly)" >&2; exit 1 ;;
+    *)
+        echo "Invalid channel: $CHANNEL (expected: stable or nightly)" >&2
+        exit 1
+        ;;
 esac
 
-# ── Validate PREFIX ───────────────────────────────────────────────────────
-# PREFIX is interpolated into shell rc files later. Constrain to a conservative allow-list so a prefix
-# containing $(...), backticks, ;, |, etc. can't execute when written into an rc file.
-case "${PREFIX:-}" in
-    "")
-        echo "Error: --prefix must not be empty" >&2; exit 1 ;;
-    *[!-A-Za-z0-9_./~\ ]*)
-        echo "Error: --prefix contains characters that are unsafe to write into shell rc files." >&2
-        echo "Allowed: letters, digits, and '_' '-' '.' '/' '~' space." >&2
-        exit 1 ;;
-esac
+if [[ ! "$VERSION" =~ ^(latest|[0-9]+\.[0-9]+\.[0-9]+(-nightly\.[0-9]+)?)$ ]]; then
+    echo "Invalid version: $VERSION (expected: X.Y.Z, X.Y.Z-nightly.N, or latest)" >&2
+    exit 1
+fi
+if [ "$VERSION" != "latest" ]; then
+    if [ "$CHANNEL" = "stable" ] && [[ "$VERSION" = *-nightly.* ]]; then
+        echo "Version $VERSION does not belong to the stable channel" >&2
+        exit 1
+    fi
+    if [ "$CHANNEL" = "nightly" ] && [[ "$VERSION" != *-nightly.* ]]; then
+        echo "Version $VERSION does not belong to the nightly channel" >&2
+        exit 1
+    fi
+fi
 
 detect_os() {
     case "$(uname -s)" in
-        Linux*)  echo linux ;;
+        Linux*) echo linux ;;
         Darwin*) echo darwin ;;
         MINGW*|MSYS*|CYGWIN*) echo windows ;;
-        *) echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
+        *)
+            echo "Unsupported OS: $(uname -s)" >&2
+            exit 1
+            ;;
     esac
 }
 
 detect_arch() {
     case "$(uname -m)" in
-        x86_64|amd64)   echo x64 ;;
-        arm64|aarch64)  echo arm64 ;;
-        *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+        x86_64|amd64) echo x64 ;;
+        arm64|aarch64) echo arm64 ;;
+        *)
+            echo "Unsupported architecture: $(uname -m)" >&2
+            exit 1
+            ;;
     esac
 }
 
+case "$PREFIX" in
+    "~") PREFIX="$HOME" ;;
+    "~/"*) PREFIX="$HOME/${PREFIX#\~/}" ;;
+esac
+[ -n "$PREFIX" ] || missing_value "--prefix"
+
 OS=$(detect_os)
+METADATA_PREFIX="$PREFIX"
+CONFIG_HOME="$HOME"
+if [ "$OS" = "windows" ]; then
+    if [[ ! "$PREFIX" =~ ^[-A-Za-z0-9_./:\ \\]+$ ]]; then
+        echo "Error: --prefix contains unsafe characters." >&2
+        exit 1
+    fi
+    command -v cygpath >/dev/null 2>&1 || {
+        echo "Error: cygpath is required when running install.sh on Windows." >&2
+        exit 1
+    }
+    PREFIX=$(cygpath -u -- "$PREFIX") || {
+        echo "Error: --prefix must be an absolute Windows path." >&2
+        exit 1
+    }
+    METADATA_PREFIX=$(cygpath -m -- "$PREFIX") || {
+        echo "Error: --prefix must be an absolute Windows path." >&2
+        exit 1
+    }
+    if [[ ! "$PREFIX" = /* ]] || [[ ! "$METADATA_PREFIX" =~ ^([A-Za-z]:/|//[^/]+/[^/]+) ]]; then
+        echo "Error: --prefix must be an absolute Windows path." >&2
+        exit 1
+    fi
+    if [ -z "${USERPROFILE:-}" ]; then
+        echo "Error: USERPROFILE is not set; it is required when running install.sh on Windows." >&2
+        exit 1
+    fi
+    CONFIG_HOME=$(cygpath -u -- "$USERPROFILE") || {
+        echo "Error: USERPROFILE is not a usable Windows path." >&2
+        exit 1
+    }
+else
+    if [[ ! "$PREFIX" =~ ^[-A-Za-z0-9_./\ ]+$ ]]; then
+        echo "Error: --prefix contains characters that are unsafe to write into shell rc files." >&2
+        echo "Allowed: letters, digits, and '_' '-' '.' '/' space." >&2
+        exit 1
+    fi
+    if [[ "$PREFIX" != /* ]]; then
+        echo "Error: --prefix must be an absolute path." >&2
+        exit 1
+    fi
+fi
+
 ARCH=$(detect_arch)
-# Windows on ARM has no native build yet; the x64 binary runs under emulation.
 [ "$OS" = "windows" ] && ARCH="x64"
-# Intel macOS isn't prebuilt (the release matrix skips it for runner-queue latency).
 if [ "$OS" = "darwin" ] && [ "$ARCH" = "x64" ]; then
     echo "No prebuilt ThinkRail for Intel macOS." >&2
     echo "Use an Apple Silicon Mac, or build from source: https://github.com/$REPO" >&2
@@ -111,7 +211,7 @@ api() {
 
 resolve_tag() {
     if [ "$VERSION" != "latest" ]; then
-        printf 'v%s\n' "${VERSION#v}"
+        printf 'v%s\n' "$VERSION"
         return
     fi
     if [ "$CHANNEL" = "stable" ]; then
@@ -133,14 +233,29 @@ if [ -z "$TAG" ]; then
     echo "Failed to resolve a $CHANNEL release. Has one been published yet?" >&2
     exit 1
 fi
+if [ "$CHANNEL" = "stable" ]; then
+    TAG_VALID_PATTERN='^v[0-9]+\.[0-9]+\.[0-9]+$'
+else
+    TAG_VALID_PATTERN='^v[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]+$'
+fi
+if [[ ! "$TAG" =~ $TAG_VALID_PATTERN ]]; then
+    echo "Invalid resolved tag for the $CHANNEL channel: $TAG" >&2
+    exit 1
+fi
 echo "  → $TAG"
 
 TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+STAGED_BINARY=""
+META_TMP=""
+cleanup() {
+    [ -z "$STAGED_BINARY" ] || rm -f "$STAGED_BINARY" || true
+    [ -z "$META_TMP" ] || rm -f "$META_TMP" || true
+    rm -rf "$TMP" || true
+}
+trap cleanup EXIT
 
 download_asset() {
     local name="$1" out="$2"
-    # -L follows the redirect to the pre-signed asset URL.
     curl -fL --progress-bar -o "$out" \
         "https://github.com/$REPO/releases/download/$TAG/$name"
 }
@@ -176,32 +291,47 @@ BIN_DIR="$PREFIX/bin"
 mkdir -p "$BIN_DIR"
 DEST="$BIN_DIR/thinkrail"
 [ "$OS" = "windows" ] && DEST="$BIN_DIR/thinkrail.exe"
-mv "$TMP/$ASSET_NAME" "$DEST"
-chmod +x "$DEST"
+STAGED_BINARY=$(mktemp "$BIN_DIR/.thinkrail.XXXXXX.new")
+if ! cp "$TMP/$ASSET_NAME" "$STAGED_BINARY"; then
+    echo "Failed to stage ThinkRail in $BIN_DIR; the previous executable was left unchanged." >&2
+    exit 1
+fi
+if ! chmod +x "$STAGED_BINARY"; then
+    echo "Failed to make the staged ThinkRail executable runnable; the previous executable was left unchanged." >&2
+    exit 1
+fi
+if ! mv -f "$STAGED_BINARY" "$DEST"; then
+    echo "Failed to replace $DEST; the previous executable was left unchanged." >&2
+    exit 1
+fi
+STAGED_BINARY=""
 echo "Installed → $DEST"
 
-CONFIG_DIR="${HOME}/.config/thinkrail"
+CONFIG_DIR="$CONFIG_HOME/.config/thinkrail"
 mkdir -p "$CONFIG_DIR"
-cat > "$CONFIG_DIR/install.json" <<EOF
+META_TMP=$(mktemp "$CONFIG_DIR/.install.json.XXXXXX.tmp")
+cat > "$META_TMP" <<EOF
 {
   "channel": "$CHANNEL",
   "version": "${TAG#v}",
   "tag": "$TAG",
-  "prefix": "$PREFIX",
+  "prefix": "$METADATA_PREFIX",
+  "path_entry_added": false,
   "installed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
+if ! mv -f "$META_TMP" "$CONFIG_DIR/install.json"; then
+    echo "Failed to record install metadata in $CONFIG_DIR." >&2
+    exit 1
+fi
+META_TMP=""
 
 echo
 echo "ThinkRail ${TAG#v} ($CHANNEL) installed."
 
-# ── PATH setup ────────────────────────────────────────────────────────────
-# If $BIN_DIR is on PATH, nothing to do. Otherwise append it to the login shell's rc file (idempotent
-# via a marker block), or print instructions when we can't / shouldn't touch it.
 PATH_NEEDS_MANUAL_ADD=0
 case ":$PATH:" in
-    *":$BIN_DIR:"*)
-        ;;
+    *":$BIN_DIR:"*) ;;
     *)
         if [ "$MODIFY_PATH" -eq 0 ] || [ "$OS" = "windows" ]; then
             PATH_NEEDS_MANUAL_ADD=1
@@ -226,15 +356,32 @@ case ":$PATH:" in
                     rc_file="$HOME/.config/fish/conf.d/thinkrail.fish"
                     rc_line="fish_add_path '$BIN_DIR'"
                     ;;
-                *)
-                    PATH_NEEDS_MANUAL_ADD=1
-                    ;;
+                *) PATH_NEEDS_MANUAL_ADD=1 ;;
             esac
 
             if [ -n "$rc_file" ]; then
                 marker_begin="# >>> thinkrail PATH >>>"
                 marker_end="# <<< thinkrail PATH <<<"
-                if [ -f "$rc_file" ] \
+                markers_valid=1
+                if [ -f "$rc_file" ] && ! awk -v begin="$marker_begin" -v end="$marker_end" '
+                    $0 == begin {
+                        if (in_block) bad = 1
+                        in_block = 1
+                        next
+                    }
+                    $0 == end {
+                        if (!in_block) bad = 1
+                        in_block = 0
+                        next
+                    }
+                    END { exit (bad || in_block) ? 1 : 0 }
+                ' "$rc_file" 2>/dev/null; then
+                    markers_valid=0
+                    echo "PATH:           warning: malformed ThinkRail PATH markers in $rc_file; left it unchanged" >&2
+                    PATH_NEEDS_MANUAL_ADD=1
+                fi
+
+                if [ "$markers_valid" -eq 1 ] && [ -f "$rc_file" ] \
                     && awk -v begin="$marker_begin" -v end="$marker_end" -v target="$rc_line" '
                         $0 == begin { in_block = 1; next }
                         $0 == end { in_block = 0; next }
@@ -242,7 +389,7 @@ case ":$PATH:" in
                         END { exit found ? 0 : 1 }
                     ' "$rc_file" 2>/dev/null; then
                     echo "PATH:           already configured in $rc_file"
-                else
+                elif [ "$markers_valid" -eq 1 ]; then
                     had_stale_block=0
                     if [ -f "$rc_file" ] && grep -Fq "$marker_begin" "$rc_file" 2>/dev/null; then
                         had_stale_block=1
@@ -260,7 +407,7 @@ case ":$PATH:" in
                                 ' "$rc_file"
                             fi
                             printf '\n%s\n%s\n%s\n' "$marker_begin" "$rc_line" "$marker_end"
-                        } > "$tmp_rc" 2>/dev/null && mv "$tmp_rc" "$rc_file" 2>/dev/null; then
+                        } > "$tmp_rc" 2>/dev/null && mv -f "$tmp_rc" "$rc_file" 2>/dev/null; then
                             wrote_ok=1
                         fi
                     fi
@@ -272,7 +419,7 @@ case ":$PATH:" in
                         fi
                         echo "                start a new shell or run: source $rc_file"
                     else
-                        if [ -n "$tmp_rc" ]; then rm -f "$tmp_rc"; fi
+                        [ -z "$tmp_rc" ] || rm -f "$tmp_rc"
                         echo "PATH:           could not write to $rc_file" >&2
                         PATH_NEEDS_MANUAL_ADD=1
                     fi

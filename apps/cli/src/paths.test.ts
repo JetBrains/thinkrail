@@ -2,11 +2,26 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { installConfigDir, installMetaFile, readInstallMeta } from "./paths";
+import {
+	installConfigDir,
+	installMetaFile,
+	normalizeWindowsInstallPrefix,
+	readInstallMeta,
+	sameWindowsPath,
+} from "./paths";
 
 test("installMetaFile is where both installers write install.json", () => {
-	expect(installMetaFile("/home/u")).toBe("/home/u/.config/thinkrail/install.json");
-	expect(installConfigDir("/home/u")).toBe("/home/u/.config/thinkrail");
+	expect(installMetaFile("/home/u")).toBe(join("/home/u", ".config", "thinkrail", "install.json"));
+	expect(installConfigDir("/home/u")).toBe(join("/home/u", ".config", "thinkrail"));
+});
+
+test("normalizes native and legacy Windows install prefixes", () => {
+	expect(normalizeWindowsInstallPrefix("C:\\tools\\thinkrail")).toBe("C:/tools/thinkrail");
+	expect(normalizeWindowsInstallPrefix("/c/tools/thinkrail")).toBe("C:/tools/thinkrail");
+	expect(normalizeWindowsInstallPrefix("/cygdrive/c/tools/thinkrail")).toBe("C:/tools/thinkrail");
+	expect(normalizeWindowsInstallPrefix("//nas/share/thinkrail")).toBe("//nas/share/thinkrail");
+	expect(normalizeWindowsInstallPrefix("/home/u/.local")).toBeUndefined();
+	expect(sameWindowsPath("c:/TOOLS/thinkrail/", "C:\\tools\\thinkrail")).toBe(true);
 });
 
 test("readInstallMeta reads the installers' file and degrades to {} on anything else", () => {
