@@ -86,6 +86,10 @@ is wired the same way as railmap.
 `.thinkrail/extensions/tool-guard/` (a blocking pi `tool_call` hook through `tr.pi`, rules in `tr.store`, a
 `panel` and a `status` slot) is wired the same way.
 
+`.thinkrail/extensions/test-runner/` (a cancellable child process, a JUnit reporter parsed with its own
+`fast-xml-parser` dependency, a `tr.pi` tool sharing state with a `panel`, and a `toolCard`) is wired the
+same way.
+
 ## Known limitations
 
 The package is private to this repository. An author outside it gets the README but no installable

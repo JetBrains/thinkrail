@@ -1,0 +1,9 @@
+{
+	"name": "test-runner",
+	"title": "Test runner",
+	"surfaces": [
+		{ "id": "runner", "slot": "panel", "title": "Tests" },
+		{ "id": "run-tests", "slot": "toolCard", "tool": "run_tests" }
+	],
+	"permissions": ["process:spawn", "pi:tool"]
+}

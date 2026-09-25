@@ -1,0 +1,20 @@
+{
+	"name": "@thinkrail/ext-test-runner",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"description": "ThinkRail UI extension: run the workspace's tests from a panel or from the agent and show failures.",
+	"scripts": {
+		"typecheck": "tsc --noEmit -p ."
+	},
+	"dependencies": {
+		"@thinkrail/ext": "workspace:*",
+		"fast-xml-parser": "5.7.3",
+		"typebox": "catalog:"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"typescript": "catalog:"
+	}
+}

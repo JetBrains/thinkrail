@@ -211,6 +211,12 @@ log, persistence across hosts), then runs a real pi session on a faux provider w
 asserts that a blocked `bash` call comes back as an error tool result carrying the reason while an allowed
 one runs.
 
+`.thinkrail/extensions/test-runner/` is the fifth. `testRunnerExample.test.ts` builds real test directories
+(bun default, a shell `test` script, an invalid `package.json`, a slow test) and runs real `bun test`
+through the extension's actions: JUnit parsing with nested names and locations, a file filter, a refused
+flag-like filter, the console fallback, one run per workspace, cancel, the store surviving a new host, and
+a real pi session on a faux provider calling `run_tests`.
+
 ## Known limitations
 
 - A duplicate extension name shows only as a host warning; `list()` never reports the skipped copy.

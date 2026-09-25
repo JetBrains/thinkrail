@@ -237,3 +237,14 @@ shows:
   `~/.ssh`).
 - A capped decision log published on every call and saved to `tr.store` at most once a second.
 - A `check` action the panel uses to try a command against the rules without running it.
+
+`.thinkrail/extensions/test-runner/` runs the workspace's tests from a **Tests** panel or from the agent.
+It shows:
+
+- A long-running child process: `spawn` in the `tr.workspaces` path with a timeout, a **Cancel** action
+  that kills the whole process group, a capped output tail, and one run per workspace.
+- A structured reporter over regex: bun and vitest write JUnit to a temp file that `fast-xml-parser` reads;
+  other `test` scripts fall back to bun's console summary.
+- A `tr.pi` tool (`run_tests({ filter? })`) that shares state with the panel: the agent's run shows in the
+  panel, a call during a panel run joins it, and `onUpdate` streams the elapsed time to its `toolCard`.
+- The last result per workspace in `tr.store`, and **Fix with agent** (`startChat`) on each failure.

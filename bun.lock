@@ -48,6 +48,20 @@
         "@types/react": "catalog:",
       },
     },
+    ".thinkrail/extensions/test-runner": {
+      "name": "@thinkrail/ext-test-runner",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thinkrail/ext": "workspace:*",
+        "fast-xml-parser": "5.7.3",
+        "typebox": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     ".thinkrail/extensions/tool-guard": {
       "name": "@thinkrail/ext-tool-guard",
       "version": "0.0.0",
@@ -998,6 +1012,8 @@
     "@thinkrail/ext-git-pulse": ["@thinkrail/ext-git-pulse@workspace:.thinkrail/extensions/git-pulse"],
 
     "@thinkrail/ext-railmap": ["@thinkrail/ext-railmap@workspace:.thinkrail/extensions/railmap"],
+
+    "@thinkrail/ext-test-runner": ["@thinkrail/ext-test-runner@workspace:.thinkrail/extensions/test-runner"],
 
     "@thinkrail/ext-tool-guard": ["@thinkrail/ext-tool-guard@workspace:.thinkrail/extensions/tool-guard"],
 
