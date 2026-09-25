@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EXT_RUNTIME_GLOBAL } from "@thinkrail/contracts";
@@ -96,8 +96,30 @@ describe("buildSurface", () => {
 			'import x from "nope-missing";\nexport default x;\n',
 		);
 		await expect(buildSurface({ dir, surfaceId: "main" })).rejects.toThrow(
-			/main\.tsx:1:\d+: .*nope-missing/,
+			/^main\.tsx:1:\d+: .*nope-missing/,
 		);
+	});
+
+	test("error paths stay relative when the extension dir sits behind a symlink", async () => {
+		const real = writeExtension(
+			join(base, "linked-real"),
+			'import x from "./missing";\nexport default x;\n',
+		);
+		const link = join(base, "linked");
+		symlinkSync(real, link);
+		await expect(buildSurface({ dir: link, surfaceId: "main" })).rejects.toThrow(
+			/^main\.tsx:1:\d+: .*\.\/missing/,
+		);
+	});
+
+	test("inlines CSS url() assets as data URLs", async () => {
+		const dir = writeExtension(
+			join(base, "cssurl"),
+			'import "./s.css";\nexport default () => null;\n',
+		);
+		writeFileSync(join(dir, "s.css"), ".x{background:url(./dot.svg)}");
+		const { css } = await buildSurface({ dir, surfaceId: "main" });
+		expect(css).toContain('url("data:image/svg+xml;base64,');
 	});
 });
 

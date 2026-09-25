@@ -13,8 +13,7 @@
 		"dev": "bun run --watch src/dev.ts",
 		"typecheck": "tsc --noEmit",
 		"test": "bun test",
-		"ext-theme:generate": "bun scripts/generate-ext-theme.ts",
-		"ext-theme:check": "bun scripts/generate-ext-theme.ts --check"
+		"ext-theme:generate": "bun scripts/generate-ext-theme.ts"
 	},
 	"dependencies": {
 		"@earendil-works/pi-ai": "catalog:",

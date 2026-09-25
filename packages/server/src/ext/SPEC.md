@@ -74,6 +74,9 @@ data URLs. A single file means the browser never makes a relative request that l
 - **Build id.** A generation's assets carry a content hash (`ExtensionInfo.build`, 16 hex) over every
   surface's JS and CSS. It is the URL segment, so an immutable cache entry can never serve stale code,
   even though generation numbers restart every boot.
+- **Assets.** Images and fonts (`png`, `jpg`, `gif`, `webp`, `svg`, `woff`, `woff2`, `ttf`, `otf`) inline
+  as data URLs, both when TSX imports them and when imported CSS names them in `url()`. Resolution goes by
+  the realpath of the extension dir, so error positions stay relative behind a symlink.
 - A build error fails the load like any other load error (old generation stays). Messages name the file
   and position: `main.tsx:3:9: Could not resolve "x"`.
 - `Bun.build` and the Tailwind compiler both run inside the compiled binary (`bun build --compile`); the
@@ -112,7 +115,7 @@ agent's host-extension bridge, one factory injected into every top-level session
 ## Boundary
 
 - **Public surface (barrel):** `createExtHost(options)` → `ExtHost` (incl. `asset`); types `ExtHost`,
-  `ExtHostOptions`, `ExtLogEntry`, `ExtAsset`, `ProjectRoot`; `parseManifest` + `ExtensionManifest`
+  `ExtHostOptions`, `ExtLogEntry`, `ProjectRoot`; `parseManifest` + `ExtensionManifest`
   (validation reuse); `buildSurface` (one view's JS + CSS, for validation reuse).
 - **Allowed deps:** `@thinkrail/ext` (types + the module object handed to jiti), `@thinkrail/contracts`
   (types, `SURFACE_SLOTS`, runtime-module names), `@thinkrail/shared/paths`, `typebox`, `jiti`,

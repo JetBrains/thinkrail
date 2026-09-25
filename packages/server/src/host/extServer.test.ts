@@ -47,10 +47,10 @@ afterAll(async () => {
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
-const connect = async (protocol: number) => {
+const connect = async (protocol: number, client = `c${protocol}`) => {
 	const messages: WsServerMessage[] = [];
 	const ws = new WebSocket(
-		`ws://localhost:${server.port}/ws?token=${TOKEN}&protocol=${protocol}&client=c${protocol}`,
+		`ws://localhost:${server.port}/ws?token=${TOKEN}&protocol=${protocol}&client=${client}`,
 	);
 	ws.onmessage = (event) => messages.push(JSON.parse(String(event.data)));
 	await new Promise((resolve, reject) => {
@@ -144,5 +144,38 @@ test("ext wire methods, pushes, and the tokened immutable asset route", async ()
 	} finally {
 		current.ws.close();
 		legacy.ws.close();
+	}
+}, 30_000);
+
+const pushes = (messages: readonly WsServerMessage[], channel: string) =>
+	messages.flatMap((message) =>
+		"channel" in message && message.channel === channel ? [message.data] : [],
+	);
+
+test("a broken view build pushes an error and keeps serving the old build; removal pushes ext.removed", async () => {
+	const client = await connect(EXT_PROTOCOL_VERSION, "broken");
+	const dir = join(dataDir, "extensions", "demo");
+	try {
+		const demo = await loadedDemo(client.request);
+		const js = extAssetPath({ name: "demo", build: demo.build, surfaceId: "main", kind: "js" });
+		writeFileSync(join(dir, "main.tsx"), 'import x from "./missing";\nexport default x;\n');
+		await expect(client.request("ext.reload", { name: "demo" })).resolves.toMatchObject({
+			status: "error",
+		});
+		expect(await waitFor(() => pushes(client.messages, "ext.changed").at(-1))).toMatchObject({
+			name: "demo",
+			status: "error",
+			build: demo.build,
+		});
+		const old = await fetch(`http://localhost:${server.port}${js}?token=${TOKEN}`);
+		expect(old.status).toBe(200);
+
+		rmSync(dir, { recursive: true, force: true });
+		await expect(client.request("ext.reload", { name: "ghost" })).rejects.toThrow("not found");
+		expect(await waitFor(() => pushes(client.messages, "ext.removed").at(0))).toEqual({
+			name: "demo",
+		});
+	} finally {
+		client.ws.close();
 	}
 }, 30_000);

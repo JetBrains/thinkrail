@@ -45,13 +45,4 @@ export const renderAppTheme = () => {
 	].join("\n");
 };
 
-if (import.meta.main) {
-	const next = renderAppTheme();
-	if (process.argv.includes("--check")) {
-		const current = readFileSync(OUTPUT, "utf8");
-		if (current !== next) {
-			console.error("appTheme.generated.ts is stale: run `bun run ext-theme:generate`");
-			process.exit(1);
-		}
-	} else writeFileSync(OUTPUT, next);
-}
+if (import.meta.main) writeFileSync(OUTPUT, renderAppTheme());

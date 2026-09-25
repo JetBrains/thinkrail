@@ -43,6 +43,10 @@ const NON_REPLAYABLE_CHANNELS: ReadonlySet<string> = new Set([
 	WS_CHANNELS.sessionDeleted,
 	WS_CHANNELS.providerChanged,
 	WS_CHANNELS.feedbackInterview,
+	WS_CHANNELS.extChanged,
+	WS_CHANNELS.extRemoved,
+	WS_CHANNELS.extChannel,
+	WS_CHANNELS.extChannelsDropped,
 ]);
 
 let clientId: string | undefined;

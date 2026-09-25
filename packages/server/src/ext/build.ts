@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { join, relative } from "node:path";
+import { realpath } from "node:fs/promises";
+import { dirname, join, relative, resolve } from "node:path";
 import type { ExtensionSurface } from "@thinkrail/contracts";
 import type { BunPlugin } from "bun";
 import { compileExtensionCss } from "./css";
@@ -22,15 +23,24 @@ const BUILD_ID_LENGTH = 16;
 
 const INLINE_ASSET = /\.(?:png|jpe?g|gif|webp|svg|woff2?|ttf|otf)$/;
 
+const dataUrl = async (path: string) => {
+	const file = Bun.file(path);
+	const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
+	return `data:${file.type};base64,${base64}`;
+};
+
 const inlineAssetPlugin: BunPlugin = {
 	name: "thinkrail-inline-assets",
 	setup(build) {
-		build.onLoad({ filter: INLINE_ASSET }, async (args) => {
-			const file = Bun.file(args.path);
-			const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
-			const url = `data:${file.type};base64,${base64}`;
-			return { loader: "js", contents: `export default ${JSON.stringify(url)};` };
-		});
+		build.onResolve({ filter: INLINE_ASSET }, async (args) =>
+			args.importer.endsWith(".css")
+				? { path: await dataUrl(resolve(dirname(args.importer), args.path)), external: true }
+				: undefined,
+		);
+		build.onLoad({ filter: INLINE_ASSET }, async (args) => ({
+			loader: "js",
+			contents: `export default ${JSON.stringify(await dataUrl(args.path))};`,
+		}));
 	},
 };
 
@@ -54,7 +64,14 @@ const buildErrors = (dir: string, error: unknown) => {
 	return logs.map((log) => (isBuildLog(log) ? formatLog(dir, log) : errorMessage(log)));
 };
 
-export const buildSurface = async ({ dir, surfaceId }: { dir: string; surfaceId: string }) => {
+export const buildSurface = async ({
+	dir: rawDir,
+	surfaceId,
+}: {
+	dir: string;
+	surfaceId: string;
+}) => {
+	const dir = await realpath(rawDir);
 	const lists = await runtimeExportLists();
 	let result: Bun.BuildOutput;
 	try {

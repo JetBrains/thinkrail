@@ -34,7 +34,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `resume` repairs them all at once by restating the truth rather than confirming the confirmations —, channel
   `subscribe` with last-value replay for snapshots; append-only terminal data and the one-shot terminal
   exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview`
-  channels are never cached or replayed to late subscribers, reconnect/backoff;
+  + the multi-extension `ext.*` pushes (hydrate from `ext.list` / `ext.snapshot` instead) channels are never
+  cached or replayed to late subscribers, reconnect/backoff;
   `inferUrl` defaults to
   same-origin; **`httpBase()`** derives the host's HTTP origin
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
