@@ -9,10 +9,11 @@ import {
 import { createExtHost } from "../ext";
 import { logger } from "../log";
 import { dataDir } from "../persistence";
+import { getProjects } from "../projects";
 
 const log = logger("ext");
 
-export const trustedProjectRoots = (projects: readonly Project[]) =>
+const trustedProjectRoots = (projects: readonly Project[]) =>
 	projects
 		.filter((project) => project.trusted === true && project.closed !== true)
 		.map((project) => ({ projectId: project.id, path: project.path }));
@@ -26,21 +27,24 @@ export const installExtHost = () => {
 			get: (sessionId) => listLiveSessionRefs().find((ref) => ref.sessionId === sessionId),
 			stats: getSessionStats,
 		},
-		onPiFactoriesChanged: reloadSessionsForHostExtensions,
+		onPiFactoriesChanged: () => void reloadSessionsForHostExtensions(),
 		warn: (message) => log.warn(message),
 	});
 	setHostExtensionFactorySource({
 		factories: extHost.piFactories,
 		onError: (factory, error) => {
 			const owner = extHost.piFactoryOwner(factory);
-			const message = `pi factory failed: ${error instanceof Error ? error.message : String(error)}`;
-			if (owner) extHost.recordError(owner, message);
-			else log.warn(message);
+			if (owner) extHost.recordError(owner, "pi factory failed", error);
+			else log.warn("pi factory failed", error);
 		},
 	});
+	const syncProjectRoots = () =>
+		extHost
+			.setProjectRoots(trustedProjectRoots(getProjects()))
+			.catch((error: unknown) => log.warn("extension rescan failed", error));
 	const dispose = async () => {
 		setHostExtensionFactorySource(undefined);
 		await extHost.dispose();
 	};
-	return { extHost, dispose };
+	return { extHost, syncProjectRoots, dispose };
 };

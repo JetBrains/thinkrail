@@ -86,7 +86,7 @@ import {
 	maybeAutoRenameWorkspace,
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
-import { installExtHost, trustedProjectRoots } from "./extWiring";
+import { installExtHost } from "./extWiring";
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -468,13 +468,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false);
 
 	const extensions = installExtHost();
-	const syncExtensionRoots = () =>
-		extensions.extHost
-			.setProjectRoots(trustedProjectRoots(getProjects()))
-			.catch((error: unknown) => log.warn("extension rescan failed", error));
-
 	setProjectPublisher((project) => {
-		void syncExtensionRoots();
+		void extensions.syncProjectRoots();
 		const capture = additionalCapture();
 		if (capture) {
 			try {
@@ -662,7 +657,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	}
 
 	void observeCurrentSetup();
-	void syncExtensionRoots();
+	void extensions.syncProjectRoots();
 
 	const stop = (): void => {
 		if (stopping) return;

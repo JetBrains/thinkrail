@@ -21,7 +21,8 @@ actions, the per-extension JSON store, timers, and logs.
 - User extensions: `<dataDir>/extensions/<name>/` (`dataDir` honours `THINKRAIL_DATA_DIR`).
 - Project extensions: `<projectPath>/.thinkrail/extensions/<name>/`, only for projects the host passes
   as trusted roots. A cloned repo never runs code before the user trusts the project. A trust change
-  rescans: a newly trusted root loads, an untrusted root's extensions unload.
+  rescans: a newly trusted root loads, an untrusted root's extensions unload. Rescans run one at a
+  time in call order, so the last `setProjectRoots` wins.
 - A directory is a candidate when it holds `extension.json`. Names are unique: the first candidate wins
   (user before project); a later duplicate is skipped with a warning.
 
@@ -48,7 +49,8 @@ actionable one-liners with a JSON-ish path, e.g.
   ignored. Disposal runs every tracked `Off` plus the factory's returned `Disposer`.
 - Loads of one extension are serialized. Generation numbers are host-global and increase per load.
 - Unloading an extension (removed from disk, root untrusted) disposes its generation and drops its
-  channel snapshots.
+  channel snapshots. A swap also drops the old generation's snapshots before the new one's buffered
+  publishes flush, so a key the new code no longer publishes disappears.
 
 ## `tr.pi` and live sessions
 
@@ -77,8 +79,7 @@ agent's host-extension bridge, one factory injected into every top-level session
 
 - **Public surface (barrel):** `createExtHost(options)` → `ExtHost`; types `ExtHost`, `ExtHostOptions`,
   `ExtLogEntry`, `ProjectRoot`; `parseManifest` + `ExtensionManifest` (validation reuse).
-- **Allowed deps:** `persistence` (`dataDir`), `log`; `@thinkrail/ext` (types + the module object handed
-  to jiti), `@thinkrail/contracts` (types, `SURFACE_SLOTS`), `@thinkrail/shared/paths`, `typebox`,
+- **Allowed deps:** `@thinkrail/ext` (types + the module object handed to jiti), `@thinkrail/contracts` (types, `SURFACE_SLOTS`), `@thinkrail/shared/paths`, `typebox`,
   `jiti`, pi-coding-agent (types, and the module object handed to jiti).
-- **Forbidden:** `host`; `agent` and every other feature module. Sessions, trust, and publishing are
-  injected by the composition root, which keeps this module testable against a fixture directory.
+- **Forbidden:** `host`; `agent`, `persistence`, `log`, and every other feature module. Sessions, trust,
+  directories, warnings, and publishing are injected by the composition root, which keeps this module testable against a fixture directory.

@@ -134,6 +134,7 @@ export function setProjectTrust(
 	project.trusted = trusted;
 	if (acknowledgedSkills !== undefined) project.acknowledgedSkills = acknowledgedSkills;
 	saveProjects(projects);
+	emit(project);
 	return project;
 }
 

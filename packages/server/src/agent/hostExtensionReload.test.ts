@@ -136,11 +136,58 @@ test("an idle session reloads at once and picks up a host extension's tool", asy
 
 		factories = [probeTool];
 		const before = bridgeRuns;
-		reloadSessionsForHostExtensions();
-		await until(() => bridgeRuns > before);
+		await reloadSessionsForHostExtensions();
+		expect(bridgeRuns).toBe(before + 1);
 		faux.setResponses([record]);
 		await promptSession(sessionId, "after");
 		expect(states).toEqual(["PROBE_OFF", "PROBE_ON"]);
+	} finally {
+		factories = [];
+		await removeSession(sessionId);
+	}
+});
+
+test("overlapping reload requests coalesce into one trailing reload", async () => {
+	factories = [];
+	const { sessionId } = await createSession({
+		cwd: tmp("trpi-hostext-coalesce-"),
+		workspaceId: "ws-hostext-coalesce",
+		model: toWireModel(faux.getModel()),
+	});
+	try {
+		const before = bridgeRuns;
+		const reloads = [
+			reloadSessionsForHostExtensions(),
+			reloadSessionsForHostExtensions(),
+			reloadSessionsForHostExtensions(),
+		];
+		await Promise.all(reloads);
+		expect(bridgeRuns).toBe(before + 2);
+	} finally {
+		await removeSession(sessionId);
+	}
+});
+
+test("a prompt sent mid-reload waits for the reloaded tools", async () => {
+	factories = [];
+	const { sessionId } = await createSession({
+		cwd: tmp("trpi-hostext-midreload-"),
+		workspaceId: "ws-hostext-midreload",
+		model: toWireModel(faux.getModel()),
+	});
+	try {
+		const states: string[] = [];
+		faux.setResponses([
+			(context: TranscriptContext) => {
+				states.push(probeState(getCurrentTools(context.messages)));
+				return fauxAssistantMessage("done");
+			},
+		]);
+		factories = [probeTool];
+		const reload = reloadSessionsForHostExtensions();
+		await promptSession(sessionId, "mid-reload");
+		await reload;
+		expect(states).toEqual(["PROBE_ON"]);
 	} finally {
 		factories = [];
 		await removeSession(sessionId);

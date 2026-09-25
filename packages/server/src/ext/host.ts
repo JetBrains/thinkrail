@@ -82,6 +82,10 @@ export const createExtHost = (options: ExtHostOptions) => {
 		options.onChannel?.(key, value);
 	};
 
+	const dropChannels = (name: string) => {
+		for (const key of [...channels.keys()]) if (key.startsWith(`${name}:`)) channels.delete(key);
+	};
+
 	const disposeGeneration = async (name: string, generation: Generation) => {
 		const failures = await generation.dispose();
 		for (const failure of failures) log(name, "error", `dispose: ${formatLog([failure])}`);
@@ -130,15 +134,17 @@ export const createExtHost = (options: ExtHostOptions) => {
 			return infoOf(state);
 		}
 		const previous = state.current;
+		const piChanged = (previous?.piFactories.size ?? 0) > 0 || generation.piFactories.size > 0;
 		state.current = generation;
 		state.error = undefined;
 		state.title = manifest.manifest.title;
 		state.surfaces = manifest.manifest.surfaces;
 		state.permissions = manifest.manifest.permissions;
+		dropChannels(name);
 		generation.activate();
 		if (previous) await disposeGeneration(name, previous);
 		log(name, "info", `generation ${generation.id} active`);
-		if (previous?.piFactories.size || generation.piFactories.size) options.onPiFactoriesChanged?.();
+		if (piChanged) options.onPiFactoriesChanged?.();
 		options.onChanged?.(infoOf(state));
 		return infoOf(state);
 	};
@@ -162,14 +168,14 @@ export const createExtHost = (options: ExtHostOptions) => {
 			state.current = undefined;
 			const hadPiFactories = (generation?.piFactories.size ?? 0) > 0;
 			if (generation) await disposeGeneration(name, generation);
-			for (const key of [...channels.keys()]) if (key.startsWith(`${name}:`)) channels.delete(key);
+			dropChannels(name);
 			if (disposed) return;
 			options.onRemoved?.(name);
 			if (hadPiFactories) options.onPiFactoriesChanged?.();
 		});
 	};
 
-	const rescan = async () => {
+	const scan = async () => {
 		const { candidates, duplicates } = await discoverExtensions({
 			userDir: options.userDir,
 			projectRoots,
@@ -193,6 +199,13 @@ export const createExtHost = (options: ExtHostOptions) => {
 			loads.push(serialized(state, () => loadInto(state)));
 		}
 		await Promise.all(loads);
+	};
+
+	let scans: Promise<unknown> = Promise.resolve();
+	const rescan = () => {
+		const run = scans.then(scan);
+		scans = run.catch(() => {});
+		return run;
 	};
 
 	return {
@@ -262,8 +275,8 @@ export const createExtHost = (options: ExtHostOptions) => {
 		logs(name: string, since = 0) {
 			return (logs.get(name) ?? []).filter((entry) => entry.at >= since);
 		},
-		recordError(name: string, message: string) {
-			log(name, "error", message);
+		recordError(name: string, context: string, error: unknown) {
+			log(name, "error", `${context}: ${formatLog([error])}`);
 		},
 		async dispose() {
 			disposed = true;

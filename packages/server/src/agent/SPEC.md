@@ -712,7 +712,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     reported and skipped; the rest still run. Delegated children never get the bridge.
     `reloadSessionsForHostExtensions()` reloads every idle live session at once and marks streaming ones;
     a marked session reloads right after its `agent_settled` (deferred a tick, re-checked, re-marked if a new
-    run already started), because `reload()` must not run mid-run. Reload failures are logged, never thrown.
+    run already started), because `reload()` must not run mid-run. One reload per session runs at a time;
+    requests during it merge into one trailing reload, and the returned promise settles after it.
+    `promptSession`/`followUpSession` await an in-flight reload so a turn never races the tool swap.
+    Reload failures are logged, never thrown.
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
   `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload`;
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the

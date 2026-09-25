@@ -239,6 +239,38 @@ describe("ext host", () => {
 		expect(trace()).toEqual([]);
 	});
 
+	test("a reload that drops tr.pi and a channel key refreshes sessions and the snapshot", async () => {
+		writeExtension(userDir, "g1");
+		const host = makeHost();
+		await host.rescan();
+		expect(events.piChanges).toBe(1);
+		writeExtension(
+			userDir,
+			"g2",
+			HOST_HALF.replace("tr.pi(() => {});", "").replace(
+				'tr.publish("tag", tag);',
+				'tr.publish("other", tag);',
+			),
+		);
+		await host.reload("demo");
+		expect(host.piFactories()).toEqual([]);
+		expect(events.piChanges).toBe(2);
+		expect(host.snapshot()).toEqual({ "demo:other": "g2" });
+		await host.dispose();
+	});
+
+	test("overlapping rescans settle on the latest project roots", async () => {
+		const project = join(base, "repo");
+		writeExtension(projectExtensionsDir(project), "p1");
+		const host = makeHost();
+		await Promise.all([
+			host.setProjectRoots([{ projectId: "p", path: project }]),
+			host.setProjectRoots([]),
+		]);
+		expect(host.list()).toEqual([]);
+		await host.dispose();
+	});
+
 	test("the store persists across hosts under the store dir", async () => {
 		writeExtension(userDir, "g1");
 		const first = makeHost();

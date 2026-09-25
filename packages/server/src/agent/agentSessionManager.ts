@@ -115,6 +115,7 @@ interface Entry {
 	subagentToolsRefreshPending: boolean;
 	reviewToolRefreshPending: boolean;
 	hostExtensionReloadPending: boolean;
+	hostExtensionReload: Promise<void> | undefined;
 	publishedActivity: ActivityStatus | null;
 	rawActivity: ActivityStatus | null;
 	lastActivityMs: number;
@@ -500,20 +501,27 @@ export function listLiveSessionRefs() {
 		}));
 }
 
-function reloadForHostExtensions(sessionId: string, entry: Entry): void {
-	if (sessions.get(sessionId) !== entry) return;
-	if (entry.session.isStreaming) {
-		entry.hostExtensionReloadPending = true;
-		return;
-	}
+function reloadForHostExtensions(sessionId: string, entry: Entry): Promise<void> | undefined {
+	if (sessions.get(sessionId) !== entry) return undefined;
+	entry.hostExtensionReloadPending = true;
+	if (entry.hostExtensionReload || entry.session.isStreaming) return entry.hostExtensionReload;
 	entry.hostExtensionReloadPending = false;
-	entry.session
+	entry.hostExtensionReload = entry.session
 		.reload()
-		.catch((error: unknown) => log.warn(`session ${sessionId} extension reload failed`, error));
+		.catch((error: unknown) => log.warn(`session ${sessionId} extension reload failed`, error))
+		.then(() => {
+			entry.hostExtensionReload = undefined;
+			return entry.hostExtensionReloadPending
+				? reloadForHostExtensions(sessionId, entry)
+				: undefined;
+		});
+	return entry.hostExtensionReload;
 }
 
-export function reloadSessionsForHostExtensions(): void {
-	for (const [sessionId, entry] of sessions) reloadForHostExtensions(sessionId, entry);
+export async function reloadSessionsForHostExtensions(): Promise<void> {
+	await Promise.all(
+		[...sessions].map(([sessionId, entry]) => reloadForHostExtensions(sessionId, entry)),
+	);
 }
 
 export async function reloadSessionResources(sessionId: string): Promise<void> {
@@ -597,6 +605,7 @@ async function prepareSessionEntry(
 		subagentToolsRefreshPending: false,
 		reviewToolRefreshPending: false,
 		hostExtensionReloadPending: false,
+		hostExtensionReload: undefined,
 		publishedActivity: null,
 		rawActivity: null,
 		lastActivityMs: Date.now(),
@@ -663,7 +672,7 @@ async function prepareSessionEntry(
 			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
 			if (entry.reviewToolRefreshPending) applyReviewTool(entry);
 			if (entry.hostExtensionReloadPending)
-				setTimeout(() => reloadForHostExtensions(sessionId, entry), 0);
+				setTimeout(() => void reloadForHostExtensions(sessionId, entry), 0);
 		}
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
@@ -1256,6 +1265,7 @@ export async function promptSession(
 	images?: ImageContent[],
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
+	await entry.hostExtensionReload;
 	if (entry.session.isStreaming) {
 		await queueSessionMessage(entry, "steering", text, images, () =>
 			entry.session.steer(text, images),
@@ -1282,6 +1292,7 @@ export async function followUpSession(
 	images?: ImageContent[],
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
+	await entry.hostExtensionReload;
 	if (entry.session.isStreaming) {
 		await queueSessionMessage(entry, "followUp", text, images, () =>
 			entry.session.followUp(text, images),

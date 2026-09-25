@@ -124,8 +124,9 @@ the host from env via `bootHost` for dev/e2e.
 - `agent` → `log`, `persistence` (`dataDir` — the static state-root resolver; the delegation store lives at
   `<dataDir>/delegation`, bound in the agent's delegation embedding) — otherwise the pi runtime alone; auth
   passes desired opaque Central paths through its public generation seam
-- `ext` → `persistence` (`dataDir`), `log` — plus `@thinkrail/ext` (external). Sessions, trust roots, and
-  the pi-factory bridge are injected by `host` (`host/extWiring.ts`), so there is no `ext`→`agent` edge
+- `ext` → (no feature modules) — only `@thinkrail/ext`, `@thinkrail/contracts`, `@thinkrail/shared/paths`,
+  `typebox`, `jiti`, pi-coding-agent. Sessions, trust roots, dirs, warnings, and the pi-factory bridge are
+  injected by `host` (`host/extWiring.ts`), so there is no `ext`→`agent` edge
 - `persistence`, `dialog`, `history`, `templates`, `subprocess` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.

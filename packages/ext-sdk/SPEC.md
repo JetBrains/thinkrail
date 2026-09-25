@@ -22,7 +22,7 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
 
 - `.` (`src/index.ts`, host half, Node-side only):
   - `defineExtension(factory)` — identity; gives the factory its `Tr` parameter type.
-  - `ThinkRailExtension` — `(tr: Tr) => void | Disposer | Promise<void | Disposer>`. A returned
+  - `ThinkRailExtension` — `(tr: Tr) => Disposer | undefined | Promise<Disposer | undefined>`. A returned
     `Disposer` runs when the generation is disposed (close watchers, sockets, …).
   - `Tr`, `Off`, `Disposer`, `SessionRef`, `ActionCtx`, `ActionHandler`, `ExtStore`, `PiEventName`,
     `PiEventOf<E>`, `PiExtensionFactory` (pi's `ExtensionFactory`, type-only).
