@@ -101,8 +101,23 @@ surface through the store's layout intents in the active workspace.
 `toolCard` and `message` registrations follow the store: added when an extension with a build declares
 them, disposed when it disappears. Two surfaces claiming one name stack; removal in any order falls back to
 the newest remaining one, then the built-in or default. Chat
-re-renders through its renderer-registry version. `ExtensionMenu` (center group actions) lists every
-`tab` and `panel` surface and opens it.
+re-renders through its renderer-registry version.
+
+## Extensions menu and project trust
+
+`ExtensionMenu` (center group actions, the puzzle button) is always shown.
+
+- It lists every `tab` and `panel` surface, grouped by scope: **User** (`~/.thinkrail/extensions`) then
+  **Project**. With nothing to list it shows an empty state naming both folders and the SDK guide path.
+- `selectBlocked(extensions, projectId)` gives the active project's `blocked` entries (host-reported, see
+  [[submodule-server-ext]]) while the store's project is not trusted. When there are some, the first click
+  opens `TrustExtensionsDialog` instead of the menu: a security warning (extensions run code with full
+  access to files, network, and sessions), the extension names, **Trust project** (`project.setTrust`,
+  then `applyProjectUpdated`; the host loads them live) and **Cancel**. After Cancel the button opens the
+  menu for that project, with a first item that reopens the dialog. The dismissal is per mounted menu, in
+  memory.
+- A mounted surface of a blocked extension shows the placeholder `extension <name> is off until you trust
+  this project`.
 
 ## Known limitations
 
@@ -114,7 +129,8 @@ re-renders through its renderer-registry version. `ExtensionMenu` (center group 
 - **Public surface (barrel):** `initExtensions`, `ExtensionMenu`, `ExtensionPanelBody`,
   `ExtensionStatusItems`, `ExtensionTabBody`.
 - **Allowed deps:** `contracts`; `transport` (requests, pushes, `hostUrl`, session creation); `store`
-  (welcome generation, protocol version, host ids, layout intents, chat draft, toasts); `themes`
+  (welcome generation, protocol version, host ids, projects + `applyProjectUpdated`, layout intents, chat
+  draft, toasts); `themes`
   (`onThemeSwap`); `chat/toolRegistry` + `chat/rendererRegistry` (registration only); `components/ui`;
   `lib`; `@remixicon/react`; React; Zustand.
 - **Forbidden:** `shell`, `panels`; any `server`/`shared`/`pi` import; evaluating extension code any way

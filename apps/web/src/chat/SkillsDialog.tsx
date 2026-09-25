@@ -3,7 +3,13 @@ import {
 	RiRefreshLine as RefreshCw,
 	RiShieldCheckLine as ShieldCheck,
 } from "@remixicon/react";
-import type { Project, SkillCatalogEntry, SkillDecision, Workspace } from "@thinkrail/contracts";
+import {
+	EXT_PROTOCOL_VERSION,
+	type Project,
+	type SkillCatalogEntry,
+	type SkillDecision,
+	type Workspace,
+} from "@thinkrail/contracts";
 import { useCallback, useEffect, useState } from "react";
 import { LoadingRegion } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
@@ -78,7 +84,25 @@ export function SkillsDialog({
 	const [busy, setBusy] = useState(false);
 	const workspaceId = workspace?.workspaceId;
 
+	const [blockedExtensions, setBlockedExtensions] = useState<string[]>([]);
+
+	const refreshBlockedExtensions = useCallback(async () => {
+		const version = useAppStore.getState().protocolVersion;
+		if (version === null || version < EXT_PROTOCOL_VERSION) return setBlockedExtensions([]);
+		try {
+			const list = await getTransport().request("ext.list", {});
+			setBlockedExtensions(
+				list
+					.filter((ext) => ext.status === "blocked" && ext.projectId === projectId)
+					.map((ext) => ext.title),
+			);
+		} catch {
+			setBlockedExtensions([]);
+		}
+	}, [projectId]);
+
 	const refresh = useCallback(async () => {
+		void refreshBlockedExtensions();
 		try {
 			setEntries(
 				workspaceId
@@ -88,7 +112,7 @@ export function SkillsDialog({
 		} catch {
 			setEntries([]);
 		}
-	}, [workspaceId, projectId]);
+	}, [workspaceId, projectId, refreshBlockedExtensions]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -148,6 +172,13 @@ export function SkillsDialog({
 	const disabledGroups = new Set(project?.disabledGroups ?? []);
 	const pluginsDisabled = disabledGroups.has("@plugins");
 	const untrustedCount = entries?.filter((e) => e.decision === "untrusted").length ?? 0;
+	const offExtensions = project?.trusted === true ? [] : blockedExtensions;
+	const offParts = [
+		untrustedCount > 0 ? `${untrustedCount} project skill${untrustedCount === 1 ? "" : "s"}` : "",
+		offExtensions.length > 0
+			? `${offExtensions.length} extension${offExtensions.length === 1 ? "" : "s"} (${offExtensions.join(", ")})`
+			: "",
+	].filter(Boolean);
 	const groups = groupCatalog(entries ?? []);
 	const hasPlugins = groups.some((g) => g.isPlugin);
 	const isLeadingKey = (key: string) => key === "bundled" || key === "pi";
@@ -245,14 +276,16 @@ export function SkillsDialog({
 					</div>
 				) : null}
 
-				{untrustedCount > 0 ? (
+				{offParts.length > 0 ? (
 					<div
 						data-testid="skills-trust-all"
 						className="flex items-center gap-8 rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8"
 					>
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
-							{untrustedCount} project skill{untrustedCount === 1 ? "" : "s"} off until you trust
-							this repo.
+							{offParts.join(" and ")} off until you trust this repo.
+							{offExtensions.length > 0
+								? " Extensions run code with full access to your files, network, and sessions."
+								: ""}
 						</span>
 						<Button
 							size="sm"

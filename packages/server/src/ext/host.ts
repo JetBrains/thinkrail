@@ -77,6 +77,22 @@ const infoOf = (state: ExtState): ExtensionInfo => ({
 	...(state.error !== undefined ? { error: state.error } : {}),
 });
 
+const blockedInfo = async (candidate: Candidate): Promise<ExtensionInfo> => {
+	const read = await readManifest(candidate.dir);
+	const manifest = read.ok ? read.manifest : undefined;
+	return {
+		name: candidate.name,
+		title: manifest?.title ?? candidate.name,
+		scope: candidate.scope,
+		...(candidate.projectId !== undefined ? { projectId: candidate.projectId } : {}),
+		status: "blocked",
+		generation: null,
+		surfaces: manifest?.surfaces ?? [],
+		permissions: manifest?.permissions ?? [],
+		build: null,
+	};
+};
+
 const sameCandidate = (a: Candidate, b: Candidate) =>
 	a.dir === b.dir && a.scope === b.scope && a.projectId === b.projectId;
 
@@ -85,7 +101,9 @@ export const createExtHost = (options: ExtHostOptions) => {
 	const stores = new Map<string, ExtStore>();
 	const logs = new Map<string, ExtLogEntry[]>();
 	const channels = new Map<string, unknown>();
+	const blocked = new Map<string, ExtensionInfo>();
 	let projectRoots: readonly ProjectRoot[] = [];
+	let blockedRoots: readonly ProjectRoot[] = [];
 	let nextGeneration = 1;
 	let disposed = false;
 
@@ -238,10 +256,31 @@ export const createExtHost = (options: ExtHostOptions) => {
 		});
 	};
 
+	const syncBlocked = async (found: readonly Candidate[], loadable: ReadonlySet<string>) => {
+		const next = new Map(
+			await Promise.all(found.map(async (c) => [c.name, await blockedInfo(c)] as const)),
+		);
+		for (const name of [...blocked.keys()]) {
+			if (next.has(name)) continue;
+			blocked.delete(name);
+			if (!loadable.has(name) && !disposed) options.onRemoved?.(name);
+		}
+		for (const [name, info] of next) {
+			const previous = blocked.get(name);
+			blocked.set(name, info);
+			if (!previous || JSON.stringify(previous) !== JSON.stringify(info)) options.onChanged?.(info);
+		}
+	};
+
 	const scan = async () => {
-		const { candidates, duplicates } = await discoverExtensions({
+		const {
+			candidates,
+			duplicates,
+			blocked: blockedFound,
+		} = await discoverExtensions({
 			userDir: options.userDir,
 			projectRoots,
+			blockedRoots,
 		});
 		for (const duplicate of duplicates)
 			options.warn?.(
@@ -254,6 +293,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 			if (!candidate || !sameCandidate(candidate, state.candidate)) tasks.push(unload(name));
 		}
 		await Promise.all(tasks);
+		await syncBlocked(blockedFound, new Set(wanted.keys()));
 		const loads: Promise<unknown>[] = [];
 		for (const candidate of candidates) {
 			if (states.has(candidate.name)) continue;
@@ -283,7 +323,11 @@ export const createExtHost = (options: ExtHostOptions) => {
 	const rescan = () => {
 		const run = scans.then(scan).finally(() => {
 			const { user, projects } = roots();
-			watcher?.sync([user, ...projects]);
+			watcher?.sync([
+				user,
+				...projects,
+				...blockedRoots.map((root) => projectExtensionsDir(root.path)),
+			]);
 		});
 		scans = run.catch(() => {});
 		return run;
@@ -300,6 +344,10 @@ export const createExtHost = (options: ExtHostOptions) => {
 		if (!known || !existsSync(join(known.candidate.dir, "extension.json"))) {
 			await rescan();
 			const found = states.get(name);
+			if (!found && blocked.has(name))
+				throw new Error(
+					`extension "${name}" is in an untrusted project; trust the project to load it`,
+				);
 			if (!found) throw new Error(notFound(name));
 			await found.queue;
 			return infoOf(found);
@@ -329,8 +377,9 @@ export const createExtHost = (options: ExtHostOptions) => {
 
 	return {
 		rescan,
-		async setProjectRoots(roots: readonly ProjectRoot[]) {
+		async setProjectRoots(roots: readonly ProjectRoot[], untrusted: readonly ProjectRoot[] = []) {
 			projectRoots = roots;
+			blockedRoots = untrusted;
 			await rescan();
 		},
 		reload,
@@ -342,7 +391,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 			if (!candidate) return { ok: false, errors: [notFound(name)], logs: [] };
 			return dryLoad(candidate);
 		},
-		list: () => [...states.values()].map(infoOf),
+		list: () => [...[...states.values()].map(infoOf), ...blocked.values()],
 		get: (name: string) => {
 			const state = states.get(name);
 			return state ? infoOf(state) : undefined;
@@ -402,6 +451,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 		async dispose() {
 			disposed = true;
 			watcher?.dispose();
+			blocked.clear();
 			await Promise.all([...states.keys()].map(unload));
 		},
 	};

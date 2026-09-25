@@ -7,7 +7,8 @@ in-process with full rights, like a pi extension.
 ## Where it lives
 
 - `~/.thinkrail/extensions/<name>/` (user; `$THINKRAIL_DATA_DIR/extensions` when that is set). Loads always.
-- `<project>/.thinkrail/extensions/<name>/`. Loads only after the user trusts the project.
+- `<project>/.thinkrail/extensions/<name>/`. Loads only after the user trusts the project. Until then the
+  Extensions (puzzle) button lists it as off and offers **Trust project** behind a security warning.
 
 `<name>` matches `^[a-z][a-z0-9-]*$` and equals `name` in the manifest. The first one found wins (user
 before project).

@@ -141,6 +141,17 @@ The engine is **`pi` only, run in-process** via `@earendil-works/pi-coding-agent
 See [`goal-and-requirements.md`](goal-and-requirements.md) and [`architecture.md`](architecture.md) for
 the canonical product and design specs.
 
+## UI extensions
+
+An extension adds a panel, tab, topbar item, or chat card. It is a folder of TypeScript the host builds and
+loads hot, with full access to your machine. Two places:
+
+- `~/.thinkrail/extensions/<name>/`: yours, on every project. Loads always.
+- `<project>/.thinkrail/extensions/<name>/`: ships with a repo. Loads only after you trust the project.
+
+The puzzle button in the center tab bar opens them. For an untrusted project with extensions it first shows
+a trust dialog. Authoring guide: [`packages/ext-sdk/README.md`](packages/ext-sdk/README.md).
+
 ## Repo layout
 
 ```

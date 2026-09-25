@@ -12,7 +12,7 @@ export interface ExtensionSurface {
 }
 
 export type ExtensionScope = "user" | "project";
-export type ExtensionStatus = "active" | "error";
+export type ExtensionStatus = "active" | "error" | "blocked";
 
 export interface ExtensionInfo {
 	name: string;

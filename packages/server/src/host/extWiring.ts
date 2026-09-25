@@ -34,9 +34,9 @@ const WATCH_DEBOUNCE_MS = 300;
 type ExtHandlers = Parameters<typeof setExtHandlers>[0];
 type ExtPublish = (channel: WsChannel, data: unknown) => void;
 
-const trustedProjectRoots = (projects: readonly Project[]) =>
+const projectRoots = (projects: readonly Project[], trusted: boolean) =>
 	projects
-		.filter((project) => project.trusted === true && project.closed !== true)
+		.filter((project) => (project.trusted === true) === trusted && project.closed !== true)
 		.map((project) => ({ projectId: project.id, path: project.path }));
 
 const workspaceRef = (workspace: Workspace) => ({
@@ -165,10 +165,12 @@ export const installExtHost = ({ publish }: { publish?: ExtPublish } = {}) => {
 		},
 	});
 	setExtHandlers(extHandlers(extHost));
-	const syncProjectRoots = () =>
-		extHost
-			.setProjectRoots(trustedProjectRoots(getProjects()))
+	const syncProjectRoots = () => {
+		const projects = getProjects();
+		return extHost
+			.setProjectRoots(projectRoots(projects, true), projectRoots(projects, false))
 			.catch((error: unknown) => log.warn("extension rescan failed", error));
+	};
 	const dispose = async () => {
 		setExtHandlers({});
 		setHostExtensionFactorySource(undefined);

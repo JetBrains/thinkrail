@@ -130,6 +130,10 @@ export const ExtensionSurface = ({
 			);
 		return <Placeholder layout={layout} text={`extension ${name} not loaded`} />;
 	}
+	if (info.status === "blocked")
+		return (
+			<Placeholder layout={layout} text={`extension ${name} is off until you trust this project`} />
+		);
 	if (!declared)
 		return <Placeholder layout={layout} text={`extension ${name} has no surface ${surfaceId}`} />;
 	if (!loaded) {

@@ -342,6 +342,56 @@ describe("ext host", () => {
 		await host.dispose();
 	});
 
+	test("an untrusted project's extensions list as blocked without running code", async () => {
+		const project = join(base, "repo");
+		writeExtension(projectExtensionsDir(project), "p1");
+		const removed: string[] = [];
+		const host = makeHost({ onRemoved: (name) => removed.push(name) });
+		const root = { projectId: "p", path: project };
+		await host.setProjectRoots([], [root]);
+		expect(host.list()).toEqual([
+			{
+				name: "demo",
+				title: "Demo",
+				scope: "project",
+				projectId: "p",
+				status: "blocked",
+				generation: null,
+				surfaces: [{ id: "main", slot: "panel" }],
+				permissions: MANIFEST.permissions,
+				build: null,
+			},
+		]);
+		expect(host.get("demo")).toBeUndefined();
+		expect(trace()).toEqual([]);
+		expect(events.changed.map((info) => info.status)).toEqual(["blocked"]);
+		await expect(host.reload("demo")).rejects.toThrow("untrusted project");
+
+		await host.setProjectRoots([root]);
+		expect(host.list()).toMatchObject([{ name: "demo", status: "active" }]);
+		expect(removed).toEqual([]);
+		expect(trace()).toContain("start:p1");
+
+		await host.setProjectRoots([], [root]);
+		expect(removed).toEqual(["demo"]);
+		expect(host.list()).toMatchObject([{ name: "demo", status: "blocked" }]);
+
+		await host.setProjectRoots([]);
+		expect(removed).toEqual(["demo", "demo"]);
+		expect(host.list()).toEqual([]);
+		await host.dispose();
+	});
+
+	test("a blocked project extension never shadows a loaded one", async () => {
+		const project = join(base, "repo");
+		writeExtension(projectExtensionsDir(project), "p1");
+		writeExtension(userDir, "u1");
+		const host = makeHost();
+		await host.setProjectRoots([], [{ projectId: "p", path: project }]);
+		expect(host.list()).toMatchObject([{ name: "demo", scope: "user", status: "active" }]);
+		await host.dispose();
+	});
+
 	test("a user extension shadows a project one with the same name", async () => {
 		const project = join(base, "repo");
 		writeExtension(projectExtensionsDir(project), "p1");

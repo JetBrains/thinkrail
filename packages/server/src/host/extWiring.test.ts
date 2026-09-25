@@ -40,7 +40,7 @@ afterEach(() => {
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
-test("project.setTrust loads and unloads the project's extensions", async () => {
+test("project.setTrust loads the project's extensions and untrust blocks them again", async () => {
 	const { extHost, syncProjectRoots, dispose } = installExtHost();
 	let published: Promise<void> | undefined;
 	setProjectPublisher(() => {
@@ -48,7 +48,7 @@ test("project.setTrust loads and unloads the project's extensions", async () => 
 	});
 	try {
 		await syncProjectRoots();
-		expect(extHost.list()).toEqual([]);
+		expect(extHost.list()).toMatchObject([{ name: "demo", projectId: "p1", status: "blocked" }]);
 
 		await handleRequest("project.setTrust", { id: "p1", trusted: true }, CTX);
 		expect(published).toBeDefined();
@@ -63,7 +63,7 @@ test("project.setTrust loads and unloads the project's extensions", async () => 
 		await handleRequest("project.setTrust", { id: "p1", trusted: false }, CTX);
 		expect(published).toBeDefined();
 		await published;
-		expect(extHost.list()).toEqual([]);
+		expect(extHost.list()).toMatchObject([{ name: "demo", status: "blocked" }]);
 	} finally {
 		await dispose();
 	}

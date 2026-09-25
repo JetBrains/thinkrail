@@ -78,6 +78,11 @@ export const selectSurfaces = (
 				.map((surface) => ({ extension, surface })),
 		);
 
+export const selectBlocked = (extensions: Record<string, ExtensionInfo>, projectId: string) =>
+	Object.values(extensions)
+		.filter((extension) => extension.status === "blocked" && extension.projectId === projectId)
+		.sort((a, b) => a.name.localeCompare(b.name));
+
 export const selectSurface = (
 	extensions: Record<string, ExtensionInfo>,
 	name: string,

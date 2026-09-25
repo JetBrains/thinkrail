@@ -443,7 +443,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   the SDK authoring guide (`EXT_SDK_GUIDE`, text-imported so the binary carries it) to
   `<dataDir>/ext-sdk/README.md` when its content differs, and maps `onPiFactoriesChanged` to
   `reloadSessionsForHostExtensions`. `createServer` starts it, forwards every published session event to
-  `observe`, passes trusted projects as roots on boot and on every project update, and disposes it on
+  `observe`, passes open trusted projects as roots and open untrusted ones as blocked roots on boot and on every
+  project update, and disposes it on
   stop. It also owns the extension wire: handlers `ext.list`, `ext.snapshot`, `ext.action`, `ext.reload`,
   `ext.reportError` (joined into the registry through `setExtHandlers`, so `handlers.ts` holds no ext
   code; the reported text passes `redactLaunchToken` before it reaches the extension log), broadcast pushes `ext.changed`, `ext.removed`, `ext.channel`, `ext.channelsDropped` (a socket

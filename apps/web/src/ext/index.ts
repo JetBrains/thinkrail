@@ -1,5 +1,5 @@
+export { ExtensionMenu } from "./ExtensionMenu";
 export {
-	ExtensionMenu,
 	ExtensionPanelBody,
 	ExtensionStatusItems,
 	ExtensionTabBody,

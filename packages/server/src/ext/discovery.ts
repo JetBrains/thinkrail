@@ -28,25 +28,37 @@ const candidatesIn = async (root: string) => {
 		.sort((a, b) => a.name.localeCompare(b.name));
 };
 
-export const discoverExtensions = async ({
-	userDir,
-	projectRoots,
-}: {
-	userDir: string;
-	projectRoots: readonly ProjectRoot[];
-}) => {
-	const found: Candidate[] = (await candidatesIn(userDir)).map((c) => ({ ...c, scope: "user" }));
-	for (const root of projectRoots) {
+const projectCandidates = async (roots: readonly ProjectRoot[]) => {
+	const found: Candidate[] = [];
+	for (const root of roots) {
 		const project = await candidatesIn(projectExtensionsDir(root.path));
 		found.push(
 			...project.map((c) => ({ ...c, scope: "project" as const, projectId: root.projectId })),
 		);
 	}
+	return found;
+};
+
+export const discoverExtensions = async ({
+	userDir,
+	projectRoots,
+	blockedRoots = [],
+}: {
+	userDir: string;
+	projectRoots: readonly ProjectRoot[];
+	blockedRoots?: readonly ProjectRoot[];
+}) => {
+	const found: Candidate[] = (await candidatesIn(userDir)).map((c) => ({ ...c, scope: "user" }));
+	found.push(...(await projectCandidates(projectRoots)));
 	const unique = new Map<string, Candidate>();
 	const duplicates: Candidate[] = [];
 	for (const candidate of found) {
 		if (unique.has(candidate.name)) duplicates.push(candidate);
 		else unique.set(candidate.name, candidate);
 	}
-	return { candidates: [...unique.values()], duplicates };
+	const blocked = new Map<string, Candidate>();
+	for (const candidate of await projectCandidates(blockedRoots))
+		if (!unique.has(candidate.name) && !blocked.has(candidate.name))
+			blocked.set(candidate.name, candidate);
+	return { candidates: [...unique.values()], duplicates, blocked: [...blocked.values()] };
 };

@@ -400,8 +400,10 @@ of the host.
   validator's allowed set) + `SurfaceSlot`, `ExtensionSurface` (`tool` names a `toolCard`'s tool,
   `customType` a `message` slot's custom message type), `ExtensionScope`, `ExtensionStatus`, and
   `ExtensionInfo` (`generation` is the active generation, `null` when none loaded; `status: "error"` with
-  a non-null `generation` means a failed reload left the old generation running; `build` is the content
-  hash of that generation's view assets, the `/ext` URL segment, `null` with no generation).
+  a non-null `generation` means a failed reload left the old generation running; `status: "blocked"` is a
+  project extension found in an untrusted project: manifest fields only, never loaded, `generation` and
+  `build` `null`; `build` is the content hash of that generation's view assets, the `/ext` URL segment,
+  `null` with no generation).
   `ExtActionContext` (active project/workspace/session) and `HostContext` (that + `theme`) are what a view
   sees and what `ext.action` carries. The view runtime contract shared by host builder and web:
   `EXT_RUNTIME_GLOBAL` (`"__thinkrail_runtime__"`), `EXT_RUNTIME_MODULES` (the bare specifiers the host
@@ -414,7 +416,8 @@ of the host.
   `ext.reload({ name })` → `ExtensionInfo`, `ext.reportError({ name, surfaceId, message })` → ack (view
   ErrorBoundary reports for `ext_logs`). Pushes: `ext.changed` (`ExtensionInfo`), `ext.removed`
   (`{ name }`), `ext.channel` (`{ key, value }`), `ext.channelsDropped` (`{ name, keys }`: a swap or unload
-  dropped these keys; clear them). All enter at `EXT_PROTOCOL_VERSION` = v69.
+  dropped these keys; clear them). All enter at `EXT_PROTOCOL_VERSION` = v69. `blocked` was added without a
+  bump: an older client ignores it because a blocked entry has no `build`.
 - **launchAuth.ts** — the launch-token names host, launchers, browser, and e2e harness share (listed under
   the public surface). No token logic: minting, Origin checks, and comparison are the host's.
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
