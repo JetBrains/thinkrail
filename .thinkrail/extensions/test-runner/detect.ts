@@ -55,6 +55,7 @@ export const parseFilter = (filter: string | undefined): ParsedFilter => {
 	const text = filter?.trim() ?? "";
 	if (text.length > FILTER_MAX_CHARS)
 		return { ok: false, message: `filter is longer than ${FILTER_MAX_CHARS} characters` };
+	if (/\p{Cc}/u.test(text)) return { ok: false, message: "filter contains control characters" };
 	const parts = text ? text.split(/\s+/) : [];
 	const flag = parts.find((part) => part.startsWith("-"));
 	if (flag) return { ok: false, message: `filter part "${flag}" looks like a flag` };

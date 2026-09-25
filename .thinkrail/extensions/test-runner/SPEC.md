@@ -35,14 +35,16 @@ the error lines printed above it. An invalid `package.json` is a runner `error`;
 Run is off.
 
 `filter` is split on whitespace into positional arguments: for bun and vitest each is a file path
-substring. A part starting with `-` is rejected so a filter can never become a flag; `bun run` quotes
-the arguments it appends to the script.
+substring. A part starting with `-` is rejected so a filter can never become a flag, and control characters
+are rejected; `bun run` quotes the arguments it appends to the script.
 
 ## Process
 
 - `spawn` with no shell, `cwd` = the workspace `path` from `tr.workspaces`, `CI=1`, `NO_COLOR=1`,
   `FORCE_COLOR=0`, `detached: true` so cancel reaches the whole process group (`bun run` → shell →
   runner). Cancel and timeout send `SIGTERM` to the group, then `SIGKILL` after 3 s.
+- Every run ends: a spawn that throws or a run that rejects becomes an `error` result, so the
+  workspace never stays busy.
 - Timeout 10 min → outcome `timeout`. `bun` missing from `PATH` or a missing directory → `error`.
 - Output: the last 256 KB are kept while running; the result keeps the last 4 KB. The JUnit file lives in
   the OS temp dir (never the extension dir) and is deleted after the run; a report over 20 MB falls back

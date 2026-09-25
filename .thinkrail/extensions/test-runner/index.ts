@@ -14,7 +14,7 @@ import {
 	type TestsState,
 } from "./model";
 import { type AgentRun, type RunForAgent, testRunnerPi } from "./pi";
-import { runTests } from "./process";
+import { errorResult, runTests } from "./process";
 
 const STORE_KEY = "results";
 const STORE_WORKSPACES = 10;
@@ -127,11 +127,12 @@ export default defineExtension(async (tr) => {
 		const onGeneration = () => abort.abort();
 		generation.signal.addEventListener("abort", onGeneration, { once: true });
 		const command = commandText(detected.runner, parsed.parts);
+		const startedAt = Date.now();
 		const entry: Active = {
 			command,
 			...(parsed.parts.length > 0 ? { filter: parsed.parts.join(" ") } : {}),
 			by,
-			startedAt: Date.now(),
+			startedAt,
 			lastLine: "",
 			abort,
 			done: runTests({
@@ -145,16 +146,20 @@ export default defineExtension(async (tr) => {
 					entry.lastLine = clip(line, LINE_CHARS);
 					dirty.add(workspaceId);
 				},
-			}).then(async (result) => {
-				generation.signal.removeEventListener("abort", onGeneration);
-				if (active.get(workspaceId) === entry) active.delete(workspaceId);
-				if (generation.signal.aborted) return result;
-				results.set(workspaceId, result);
-				tr.log(`${command} in ${path}: ${result.outcome}`);
-				publish(workspaceId);
-				await save().catch((error: unknown) => tr.log("saving results failed", error));
-				return result;
-			}),
+			})
+				.catch((error: unknown) =>
+					errorResult({ filters: parsed.parts, command, by }, startedAt, error),
+				)
+				.then(async (result) => {
+					generation.signal.removeEventListener("abort", onGeneration);
+					if (active.get(workspaceId) === entry) active.delete(workspaceId);
+					if (generation.signal.aborted) return result;
+					results.set(workspaceId, result);
+					tr.log(`${command} in ${path}: ${result.outcome}`);
+					publish(workspaceId);
+					await save().catch((error: unknown) => tr.log("saving results failed", error));
+					return result;
+				}),
 		};
 		active.set(workspaceId, entry);
 		publish(workspaceId);

@@ -43,6 +43,43 @@ interface Exit {
 	spawnError?: string;
 }
 
+const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+export const errorResult = (
+	request: Pick<RunRequest, "filters" | "command" | "by">,
+	startedAt: number,
+	error: unknown,
+): RunResult => ({
+	command: request.command,
+	...(request.filters.length > 0 ? { filter: request.filters.join(" ") } : {}),
+	by: request.by,
+	startedAt,
+	durationMs: Date.now() - startedAt,
+	outcome: "error",
+	exitCode: null,
+	source: "console",
+	counts: { pass: 0, fail: 0, skip: 0 },
+	failures: [],
+	failuresTotal: 0,
+	output: "",
+	message: `The run failed: ${messageOf(error)}`,
+});
+
+const launch = (cwd: string, args: string[]) => {
+	const bun = bunBinary();
+	try {
+		const child = spawn(bun, args, {
+			cwd,
+			detached: true,
+			stdio: ["ignore", "pipe", "pipe"],
+			env: runEnv(bun),
+		});
+		return { ok: true as const, child };
+	} catch (error) {
+		return { ok: false as const, error };
+	}
+};
+
 const killGroup = (pid: number | undefined, signal: NodeJS.Signals) => {
 	if (!pid) return;
 	try {
@@ -91,13 +128,12 @@ export const runTests = async (request: RunRequest): Promise<RunResult> => {
 			resolve({ code: null });
 			return;
 		}
-		const bun = bunBinary();
-		const child = spawn(bun, planArgs(runner, filters, reportFile), {
-			cwd: path,
-			detached: true,
-			stdio: ["ignore", "pipe", "pipe"],
-			env: runEnv(bun),
-		});
+		const launched = launch(path, planArgs(runner, filters, reportFile));
+		if (!launched.ok) {
+			resolve({ code: null, spawnError: `spawn failed: ${messageOf(launched.error)}` });
+			return;
+		}
+		const { child } = launched;
 		let killTimer: ReturnType<typeof setTimeout> | undefined;
 		const terminate = (reason: "cancelled" | "timeout") => {
 			if (stop) return;

@@ -230,6 +230,16 @@ describe("test-runner example extension", () => {
 		});
 	}, 60_000);
 
+	test("a control character in the filter is refused and the workspace stays free", async () => {
+		expect(await action(host, "run", "w1", { filter: "a\u0000b" })).toEqual({
+			started: false,
+			reason: "filter contains control characters",
+		});
+		const since = Date.now();
+		expect(await action(host, "run", "w1", { filter: "passing" })).toEqual({ started: true });
+		expect(await finished(host, "w1", since)).toMatchObject({ outcome: "passed" });
+	}, 60_000);
+
 	test("a script that is not a plain runner falls back to console parsing", async () => {
 		const since = Date.now();
 		expect(await action(host, "run", "w2")).toEqual({ started: true });
