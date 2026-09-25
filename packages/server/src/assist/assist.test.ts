@@ -7,6 +7,7 @@ import {
 	type OneShotRunner,
 	setOneShotRunner,
 	suggestChatTitle,
+	suggestPlanSummary,
 	suggestWorkspaceName,
 	toWorkspaceName,
 } from "./assist";
@@ -129,6 +130,44 @@ test("extractFirstTurn skips a killed multi-round turn by its terminal assistant
 		assistant("on it"),
 	]);
 	expect(turn).toEqual({ prompt: "second task", answer: "on it" });
+});
+
+test("suggestPlanSummary feeds the finished steps to the runner and returns markdown prose", async () => {
+	let seen = "";
+	fakeRunner(async (req) => {
+		seen = req.prompt;
+		return { text: "Shipped the ranker rework.\n\n- EV ranking\n- feature logging" };
+	});
+	const out = await suggestPlanSummary([
+		{ title: "Rework ranking", summary: "EV = P_accept \u00d7 value", verification: "pytest \u2192 3 pass" },
+		{ title: "Add logging" },
+	]);
+	expect(out).toBe("Shipped the ranker rework.\n\n- EV ranking\n- feature logging");
+	expect(seen).toContain("Rework ranking");
+	expect(seen).toContain("note: EV = P_accept");
+	expect(seen).toContain("verified: pytest");
+	expect(seen).toContain("Add logging");
+});
+
+test("suggestPlanSummary strips a code fence / 'Summary:' label and degrades to null", async () => {
+	fakeRunner(async () => ({ text: "```md\nSummary: All done.\n```" }));
+	expect(await suggestPlanSummary([{ title: "Do it" }])).toBe("All done.");
+	fakeRunner(async () => ({ text: "   " }));
+	expect(await suggestPlanSummary([{ title: "Do it" }])).toBeNull();
+	fakeRunner(async () => {
+		throw new Error("no auth");
+	});
+	expect(await suggestPlanSummary([{ title: "Do it" }])).toBeNull();
+});
+
+test("suggestPlanSummary returns null without calling the runner when there are no usable steps", async () => {
+	let called = false;
+	fakeRunner(async () => {
+		called = true;
+		return { text: "x" };
+	});
+	expect(await suggestPlanSummary([{ title: "   " }])).toBeNull();
+	expect(called).toBe(false);
 });
 
 test("suggestWorkspaceName runs the turn through the runner and normalizes the reply", async () => {
