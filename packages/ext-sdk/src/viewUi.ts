@@ -50,6 +50,7 @@ type UiShape = { [K in ExtViewUiExport]: unknown };
 
 export interface ExtViewUi extends UiShape {
 	Button: ComponentType<ButtonProps>;
+	Input: ComponentType<InputHTMLAttributes<HTMLInputElement>>;
 	Textarea: ComponentType<TextareaHTMLAttributes<HTMLTextAreaElement>>;
 	Tooltip: ComponentType<RootProps>;
 	TooltipContent: ComponentType<ContentProps>;

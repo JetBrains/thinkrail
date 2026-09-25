@@ -48,6 +48,18 @@
         "@types/react": "catalog:",
       },
     },
+    ".thinkrail/extensions/tool-guard": {
+      "name": "@thinkrail/ext-tool-guard",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thinkrail/ext": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "apps/cli": {
       "name": "@thinkrail/cli",
       "version": "0.0.0",
@@ -986,6 +998,8 @@
     "@thinkrail/ext-git-pulse": ["@thinkrail/ext-git-pulse@workspace:.thinkrail/extensions/git-pulse"],
 
     "@thinkrail/ext-railmap": ["@thinkrail/ext-railmap@workspace:.thinkrail/extensions/railmap"],
+
+    "@thinkrail/ext-tool-guard": ["@thinkrail/ext-tool-guard@workspace:.thinkrail/extensions/tool-guard"],
 
     "@thinkrail/server": ["@thinkrail/server@workspace:packages/server"],
 

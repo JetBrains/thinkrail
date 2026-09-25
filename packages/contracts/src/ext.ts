@@ -59,6 +59,7 @@ export const EXT_VIEW_EXPORTS = [
 export type ExtViewExport = (typeof EXT_VIEW_EXPORTS)[number];
 export const EXT_VIEW_UI_EXPORTS = [
 	"Button",
+	"Input",
 	"Textarea",
 	"Tooltip",
 	"TooltipContent",

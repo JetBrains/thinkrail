@@ -83,6 +83,9 @@ turbo's `typecheck` covers it directly.
 `.thinkrail/extensions/git-pulse/` (git dashboard: `tr.onWatch`, `execFile`, a `tab` and a `status` slot)
 is wired the same way as railmap.
 
+`.thinkrail/extensions/tool-guard/` (a blocking pi `tool_call` hook through `tr.pi`, rules in `tr.store`, a
+`panel` and a `status` slot) is wired the same way.
+
 ## Known limitations
 
 The package is private to this repository. An author outside it gets the README but no installable

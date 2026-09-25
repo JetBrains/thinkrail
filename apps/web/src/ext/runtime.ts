@@ -45,6 +45,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
+import { Input } from "../components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import { Textarea } from "../components/ui/textarea";
 import { IconTooltip, Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
@@ -55,6 +56,7 @@ import { useHostContext } from "./hostContext";
 
 export const viewUi = {
 	Button,
+	Input,
 	Textarea,
 	Tooltip,
 	TooltipContent,

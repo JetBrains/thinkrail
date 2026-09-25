@@ -155,7 +155,7 @@ From `@thinkrail/ext/view`:
   `toolCall = { toolCallId, toolName, args, result, status }`; a `message` view gets
   `message = { customType, text, details, timestamp }`.
 - `ui`: the app's own components: `Button` (`variant`: default, destructive, outline, ghost; `size`:
-  default, sm, icon), `Textarea`, `Tooltip*`, `IconTooltip`, `Popover*`, `Dialog*`, `DropdownMenu*`,
+  default, sm, icon), `Input` (one-line text field), `Textarea`, `Tooltip*`, `IconTooltip`, `Popover*`, `Dialog*`, `DropdownMenu*`,
   `ContextMenu*`, `Command*`.
 - Types: `SurfaceProps`, `HostContext`, `SessionStats` (the value of a published `tr.sessions.stats`).
 - `cn(...classes)`, `remixicon` (all `@remixicon/react` icons: `Ri…Line`, `Ri…Fill`).
@@ -226,3 +226,14 @@ shows:
   `fs.watch` on the git dir for instant refresh, closed by the returned disposer.
 - An action with a slow side effect (`fetch`) whose result the view shows in place.
 - A discriminated channel value (`loading`, `not-git`, `error`, `ready`) so every view handles each case.
+
+`.thinkrail/extensions/tool-guard/` stops dangerous agent tool calls before they run. It shows:
+
+- A **blocking** pi hook: `tr.pi` registers `pi.on("tool_call", …)`. Returning `{ block: true, reason }`
+  skips the tool, and pi gives `reason` to the model as the tool's error result. Return `undefined` to
+  let the call run. Every tool call waits for the handler, so keep it fast.
+- Rules the user edits in a panel (`ui.Input`, toggles, remove) and keeps in `tr.store`, next to built-ins
+  (`rm -rf` outside the workspace, `git push --force`, `git reset --hard`, `curl | sh`, `.env` files,
+  `~/.ssh`).
+- A capped decision log published on every call and saved to `tr.store` at most once a second.
+- A `check` action the panel uses to try a command against the rules without running it.

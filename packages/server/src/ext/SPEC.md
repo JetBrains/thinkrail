@@ -205,6 +205,12 @@ plain directory) and drives the extension through `setWatched` / `dropClient`: n
 watches, `fetch` moves `behind` without touching `HEAD`, a `.git` change refreshes before the poll, and
 the last view leaving drops the channel.
 
+`.thinkrail/extensions/tool-guard/` is the fourth. `toolGuardExample.test.ts` feeds `tool_call` events
+straight into the hook its `tr.pi` factory registers (built-in and user rules, block and allow, the capped
+log, persistence across hosts), then runs a real pi session on a faux provider with the host's factory and
+asserts that a blocked `bash` call comes back as an error tool result carrying the reason while an allowed
+one runs.
+
 ## Known limitations
 
 - A duplicate extension name shows only as a host warning; `list()` never reports the skipped copy.

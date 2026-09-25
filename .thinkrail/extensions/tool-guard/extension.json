@@ -1,0 +1,9 @@
+{
+	"name": "tool-guard",
+	"title": "Tool guard",
+	"surfaces": [
+		{ "id": "guard", "slot": "panel", "title": "Tool guard" },
+		{ "id": "badge", "slot": "status" }
+	],
+	"permissions": ["pi:tool_call"]
+}
