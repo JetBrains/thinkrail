@@ -57,8 +57,9 @@ A compiled `stable`/`nightly` binary supplies `bootHost` with one optional perio
 source and `dev` identities do not expose the capability. After the host is ready it performs a bounded lookup
 immediately and every six hours on the baked channel with the same GitHub rules as the installers: stable reads
 `releases/latest`, while nightly selects the first `vX.Y.Z-nightly.N` tag from `releases?per_page=20`. Only a
-strictly newer version produces an immutable `{ currentVersion, availableVersion, channel }` notice; failure
-and no-update are silent, while a later still-newer release replaces the retained notice.
+strictly newer version produces `{ currentVersion, availableVersion, channel }` state; discovery failure and
+no-update are silent. A different newer release may replace available or failed state, but successful execution
+latches until host restart so the still-running old process can neither rediscover nor install another release.
 
 The shared update surface offers **Run Update** for a compiled host and retains fixed `thinkrail update`
 guidance for older clients/hosts or a failed run. The action invokes this same installed binary's parameterless

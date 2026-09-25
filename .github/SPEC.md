@@ -152,7 +152,8 @@ regressions and the existing public artifact-output contract tests; no dedicated
 ## CLI installation and other automation
 
 Root `install.sh` and `install.ps1` remain CLI-only consumers: validate channel/version identity, resolve the
-requested release, download the native CLI plus `SHA256SUMS`, verify it, and stage replacement in the
+requested release, validate its tag against the selected channel's exact grammar before constructing any
+artifact URL, download the native CLI plus `SHA256SUMS`, verify it, and stage replacement in the
 destination directory before an atomic rename. Git Bash writes native-readable Windows metadata; malformed
 shell PATH blocks are preserved rather than rewritten. CLI self-update binds metadata to the running executable
 and invokes these installers rather than duplicating download/checksum logic. Controlled script tests own these
