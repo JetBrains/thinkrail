@@ -402,7 +402,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   The agent's resource publisher maps to `session.resourcesChanged`, subscribed in the WS open handler;
   this is a catalog invalidation, never an output broadcast. Resource ownership and teardown stay in agent.
 - **Session-state composition:** before serving, the host supplies every workspace `{id,cwd}`, initializes
-  receipt/purpose metadata, and installs the workspace→project resolver. `session.stateList` returns the
+  lifecycle/receipt metadata, and installs the workspace→project resolver. `session.stateList` returns the
   complete all-workspace snapshot; `session.state` broadcasts full records; completion acknowledgement and
   nudge handlers validate workspace/session identity through the same registry. The WS open handler
   subscribes every client after welcome. `session.activityList` remains an inert `[]` compatibility method

@@ -4,10 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	loadSessionLifecycle,
-	loadSessionPurpose,
 	loadSessionReceipts,
 	saveSessionLifecycle,
-	saveSessionPurpose,
 	saveSessionReceipts,
 } from "./persistence";
 
@@ -26,7 +24,7 @@ afterAll(() => {
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
-test("session lifecycle, receipts, and purpose round-trip exact ids", () => {
+test("session lifecycle and receipts round-trip exact ids", () => {
 	saveSessionLifecycle({
 		version: 1,
 		completionBySession: {
@@ -42,8 +40,6 @@ test("session lifecycle, receipts, and purpose round-trip exact ids", () => {
 		baselineComplete: true,
 		handledCompletionBySession: { s1: "completion-1" },
 	});
-	saveSessionPurpose({ version: 1, internalSessionIds: ["reviewer-1"] });
-
 	expect(loadSessionLifecycle()).toEqual({
 		version: 1,
 		completionBySession: {
@@ -59,7 +55,6 @@ test("session lifecycle, receipts, and purpose round-trip exact ids", () => {
 		baselineComplete: true,
 		handledCompletionBySession: { s1: "completion-1" },
 	});
-	expect(loadSessionPurpose()).toEqual({ version: 1, internalSessionIds: ["reviewer-1"] });
 });
 
 test("malformed receipt metadata fails loudly instead of resetting owner-global attention", () => {
