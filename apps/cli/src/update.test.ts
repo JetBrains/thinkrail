@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-	createCliHostUpdate,
+	createCliHostUpdate as createCliHostUpdateImpl,
 	discoverReleaseVersion,
 	parseUpdateArgs,
 	type ReleaseFetch,
@@ -18,6 +18,23 @@ function githubJson(body: unknown): Response {
 		status: 200,
 		headers: { "Content-Type": "application/json" },
 	});
+}
+
+function createCliHostUpdate(
+	build: string,
+	baked: string,
+	installedVersion: string,
+	fetchImpl?: ReleaseFetch,
+	childRunner?: Parameters<typeof createCliHostUpdateImpl>[5],
+) {
+	return createCliHostUpdateImpl(
+		build,
+		baked,
+		installedVersion,
+		{ platform: "linux", execPath: "/opt/thinkrail/bin/thinkrail" },
+		fetchImpl,
+		childRunner,
+	);
 }
 
 describe("discoverReleaseVersion", () => {
@@ -148,7 +165,7 @@ describe("createCliHostUpdate", () => {
 			settled = true;
 		});
 		await Promise.resolve();
-		expect(command).toEqual([process.execPath, "update"]);
+		expect(command).toEqual(["/opt/thinkrail/bin/thinkrail", "update"]);
 		expect(settled).toBe(false);
 
 		finish(0);
@@ -206,12 +223,21 @@ describe("createCliHostUpdate", () => {
 		await expect(updates.check()).rejects.toThrow(RELEASE_ERROR_RE);
 	});
 
-	test("disables discovery for source, desktop, and dev or unsupported channels", () => {
+	test("disables discovery for source, desktop, dev, unsupported channels, and unsafe layouts", () => {
 		expect(createCliHostUpdate("source", "stable", "1.2.3")).toBeUndefined();
 		expect(createCliHostUpdate("desktop", "stable", "1.2.3")).toBeUndefined();
 		expect(createCliHostUpdate("binary", "dev", "0.0.0-dev")).toBeUndefined();
 		expect(createCliHostUpdate("binary", "beta", "1.2.3-beta.1")).toBeUndefined();
 		expect(createCliHostUpdate("binary", "nightly", "1.2.3-nightly.1")).toBeDefined();
+		for (const runtime of [
+			{ platform: "linux", execPath: "/downloads/thinkrail-linux-x64" },
+			{
+				platform: "win32",
+				execPath: "C:\\Downloads\\thinkrail-windows-x64.exe",
+			},
+		]) {
+			expect(createCliHostUpdateImpl("binary", "stable", "1.2.3", runtime)).toBeUndefined();
+		}
 	});
 });
 
@@ -241,7 +267,7 @@ describe("parseUpdateArgs", () => {
 
 describe("resolveUpdatePlan", () => {
 	const home = "/home/u";
-	const sourceRuntime = { platform: "linux", execPath: "/usr/bin/bun" };
+	const sourceRuntime = { build: "source", platform: "linux", execPath: "/usr/bin/bun" };
 
 	test("flag channel wins over metadata and baked", () => {
 		const plan = resolveUpdatePlan({
@@ -334,7 +360,11 @@ describe("resolveUpdatePlan", () => {
 	});
 
 	test("the running bin layout is authoritative over stale or missing metadata", () => {
-		const runtime = { platform: "linux", execPath: "/opt/current/bin/thinkrail" };
+		const runtime = {
+			build: "binary",
+			platform: "linux",
+			execPath: "/opt/current/bin/thinkrail",
+		};
 		const stale = resolveUpdatePlan({
 			...runtime,
 			args: { version: "latest" },
@@ -357,7 +387,11 @@ describe("resolveUpdatePlan", () => {
 	});
 
 	test("trusts a matching metadata channel, while an explicit channel still wins", () => {
-		const runtime = { platform: "darwin", execPath: "/opt/current/bin/thinkrail" };
+		const runtime = {
+			build: "binary",
+			platform: "darwin",
+			execPath: "/opt/current/bin/thinkrail",
+		};
 		expect(
 			resolveUpdatePlan({
 				...runtime,
@@ -378,13 +412,17 @@ describe("resolveUpdatePlan", () => {
 		).toBe("stable");
 	});
 
-	test("fails closed for a named manual binary outside a bin directory", () => {
+	test.each([
+		["/opt/manual/thinkrail", { prefix: "/home/u/.local", channel: "nightly" }],
+		["/downloads/thinkrail-linux-x64", {}],
+	])("fails closed for the manual binary %s", (execPath, installMeta) => {
 		expect(() =>
 			resolveUpdatePlan({
+				build: "binary",
 				platform: "linux",
-				execPath: "/opt/manual/thinkrail",
+				execPath,
 				args: { version: "latest" },
-				installMeta: { prefix: "/home/u/.local" },
+				installMeta,
 				baked: "stable",
 				home,
 			}),
@@ -415,7 +453,11 @@ describe("resolveUpdatePlan", () => {
 
 describe("resolveWindowsUpdatePlan", () => {
 	const home = "C:\\Users\\u";
-	const sourceRuntime = { platform: "win32", execPath: "C:\\bun\\bun.exe" };
+	const sourceRuntime = {
+		build: "source",
+		platform: "win32",
+		execPath: "C:\\bun\\bun.exe",
+	};
 
 	test("passes channel, version and prefix to install.ps1 — always all three", () => {
 		const plan = resolveWindowsUpdatePlan({
@@ -472,6 +514,7 @@ describe("resolveWindowsUpdatePlan", () => {
 
 	test("targets a mixed-case running Windows bin layout and ignores stale metadata", () => {
 		const plan = resolveWindowsUpdatePlan({
+			build: "binary",
 			platform: "win32",
 			execPath: "D:\\current\\bin\\ThinkRail.exe",
 			args: { version: "latest" },
@@ -483,6 +526,7 @@ describe("resolveWindowsUpdatePlan", () => {
 		expect(plan.channel).toBe("stable");
 		expect(plan.manualPrefix).toBe("D:/current");
 		const missing = resolveWindowsUpdatePlan({
+			build: "binary",
 			platform: "win32",
 			execPath: "D:\\current\\bin\\thinkrail.exe",
 			args: { version: "latest" },
@@ -499,6 +543,7 @@ describe("resolveWindowsUpdatePlan", () => {
 		"/cygdrive/d/current",
 	])("trusts matching legacy Git Bash metadata prefix %s", (prefix) => {
 		const plan = resolveWindowsUpdatePlan({
+			build: "binary",
 			platform: "win32",
 			execPath: "D:\\current\\bin\\thinkrail.exe",
 			args: { version: "latest" },
@@ -512,6 +557,7 @@ describe("resolveWindowsUpdatePlan", () => {
 
 	test("normalizes and trusts a slash-form UNC prefix", () => {
 		const plan = resolveWindowsUpdatePlan({
+			build: "binary",
 			platform: "win32",
 			execPath: "\\\\nas\\share\\thinkrail\\bin\\thinkrail.exe",
 			args: { version: "latest" },
@@ -523,13 +569,20 @@ describe("resolveWindowsUpdatePlan", () => {
 		expect(plan.channel).toBe("nightly");
 	});
 
-	test("fails closed for a mixed-case Windows binary outside a bin directory", () => {
+	test.each([
+		["D:\\manual\\ThinkRail.exe", {}],
+		[
+			"D:\\Downloads\\thinkrail-windows-x64.exe",
+			{ prefix: "C:\\Users\\u\\.local", channel: "nightly" },
+		],
+	])("fails closed for the manual Windows binary %s", (execPath, installMeta) => {
 		expect(() =>
 			resolveWindowsUpdatePlan({
+				build: "binary",
 				platform: "win32",
-				execPath: "D:\\manual\\ThinkRail.exe",
+				execPath,
 				args: { version: "latest" },
-				installMeta: {},
+				installMeta,
 				baked: "stable",
 				home,
 			}),
