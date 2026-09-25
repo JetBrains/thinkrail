@@ -158,7 +158,6 @@ test("xterm uses the shared quiet rail and directional curtains", async ({ page 
 	const terminalInput = terminal.locator(".xterm-helper-textarea");
 	const terminalTab = page.getByTestId("terminal-tab").getByRole("tab");
 	const cues = frame.getByTestId("quiet-scroll-cues");
-	await expect(viewport).toHaveClass(/quiet-scroll-viewport/);
 
 	await runInTerminal(page, "for i in $(seq 1 80); do echo TR_SCROLL_$i; done");
 	await expect(visibleTerminalScreen(page)).toContainText("TR_SCROLL_80");

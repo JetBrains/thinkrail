@@ -61,6 +61,16 @@ export function sharedEditorOptions(lineWidth: number, bounded: boolean) {
 		fontSize,
 		fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
 		...(lineHeight && lineHeight > 0 ? { lineHeight } : {}),
+		scrollbar: {
+			vertical: "auto",
+			horizontal: "auto",
+			verticalScrollbarSize: 6,
+			horizontalScrollbarSize: 6,
+			useShadows: false,
+		},
+		overviewRulerLanes: 0,
+		overviewRulerBorder: false,
+		hideCursorInOverviewRuler: true,
 	} as const;
 }
 
@@ -100,6 +110,9 @@ export function defineThinkrailTheme(m: Monaco): void {
 	set("editorCursor.foreground", token("--primary"));
 	set("editor.selectionBackground", token("--editor-selection-bg"));
 	set("editor.selectionForeground", token("--editor-selection-text"));
+	set("scrollbarSlider.background", token("--border-default"));
+	set("scrollbarSlider.hoverBackground", token("--text-muted"));
+	set("scrollbarSlider.activeBackground", token("--text-muted"));
 	const rules = SYNTAX_TOKENS.flatMap(([monacoToken, name]) => {
 		const color = token(name);
 		return color ? [{ token: monacoToken, foreground: color.replace("#", "") }] : [];
