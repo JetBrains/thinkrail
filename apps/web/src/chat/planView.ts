@@ -2,6 +2,7 @@ import type {
 	AskUserQuestionResult,
 	GitFileChange,
 	ReviewComment,
+	TextContent,
 	TodoGroupItem,
 	TodoItem,
 	TodoPlan,
@@ -250,6 +251,25 @@ export function sessionGlance(rt: {
 
 export function shouldNudgeOnAdd(glance: PlanGlance): boolean {
 	return glance !== "waiting_question";
+}
+
+/**
+ * The latest visible text the agent produced (newest assistant turn with non-empty text; thinking and
+ * tool-only turns are skipped). Streaming-safe: a live turn's partial text is returned as it grows. Used
+ * by the plan's Session block to show what the agent is doing when it isn't asking or on a plan item.
+ */
+export function lastAgentText(rt: { turns: ChatTurn[] }): string | undefined {
+	for (let i = rt.turns.length - 1; i >= 0; i -= 1) {
+		const turn = rt.turns[i];
+		if (turn?.kind !== "assistant") continue;
+		const text = turn.message.content
+			.filter((b): b is TextContent => b.type === "text")
+			.map((b) => b.text)
+			.join("")
+			.trim();
+		if (text) return text;
+	}
+	return undefined;
 }
 
 export interface PendingAsk {

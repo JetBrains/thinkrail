@@ -611,12 +611,15 @@ a project picker, the prompt hero, and the reused
   in the header, right of the `Session` title** (`plan-now-status`, `data-glance`, off `sessionGlance`)
   that **opens the chat** (`openChatInTab`) so you can jump from the plan into the conversation: `working`
   → a `Working…` spinner, `waiting_question` → a `Question` chip. The awaiting question is ALSO
-  **answerable in place**: the Session body hosts the SAME **`AskUserQuestionCard`** as the chat
-  (`PlanAskQuestion` → `plan-ask`), which subscribes to the session runtime, finds the awaiting ask
-  (`planView.pendingAsk`), and mounts the card inside a minimal `ChatActionsContext` (a real
+  **answerable in place**: the Session body's **live slot** (`PlanSessionLive`, which subscribes to the
+  session runtime so its re-renders stay off the heavy PlanPane) hosts the SAME **`AskUserQuestionCard`**
+  as the chat (`plan-ask`, found via `planView.pendingAsk`) inside a minimal `ChatActionsContext` (a real
   `session.answerQuestion`; the chat-only actions — reveal/focus/subagent — are no-ops) plus a derived
   `AskStatesContext`, so an answer submitted from the plan flows through the identical path as the chat.
-  It renders nothing when no question is awaiting. Below the items the Session ends in a **chat/steer
+  When there's no pending question AND no step is in progress, the same slot instead shows the **agent's
+  latest message** (`plan-agent-message`, `planView.lastAgentText` rendered Markdown, clamped, live while
+  it streams) — so the plan stays transparent about what the agent is doing when it isn't asking or on a
+  step; it renders nothing when a step is in progress or there's no message. Below the items the Session ends in a **chat/steer
   composer** (`plan-session-chat`, a `PlanComposer` textarea that works like the chat composer — Enter
   sends, Shift+Enter newlines) whose send adapts to the run: while the agent is streaming it **steers**
   (`session.steer`, "Steer the agent…"), otherwise it **starts a turn** (`session.prompt`, "Message the

@@ -42,6 +42,7 @@ import {
 	itemChangeSet,
 	itemOpenFindings,
 	itemRevisions,
+	lastAgentText,
 	type PlanGlance,
 	pendingAsk,
 	planCompletionSummary,
@@ -654,11 +655,19 @@ function PlanCardSection({
 	);
 }
 
-// Hosts the SAME `AskUserQuestionCard` as the chat, so the pending question can be answered from the
-// plan. Subscribes to the session runtime itself (isolating re-renders from the heavy PlanPane) and
-// supplies the contexts the card needs: a real `answerQuestion` (session.answerQuestion) with no-op
-// chat-only actions, plus the derived ask states. Renders nothing when no question is awaiting.
-function PlanAskQuestion({ sessionId }: { workspaceId: string; sessionId: string }) {
+// The Session block's LIVE slot. Subscribes to the session runtime itself (isolating re-renders from
+// the heavy PlanPane). Shows the pending question as the SAME `AskUserQuestionCard` the chat uses
+// (answerable in place via a real `session.answerQuestion`, chat-only actions no-op); otherwise, when
+// no plan item is in progress (`showAgentMessage`), shows the agent's latest message so the plan stays
+// transparent about what it's doing when it isn't asking or on a step. Renders nothing when neither.
+function PlanSessionLive({
+	sessionId,
+	showAgentMessage,
+}: {
+	workspaceId: string;
+	sessionId: string;
+	showAgentMessage: boolean;
+}) {
 	const runtime = useAppStore((s) => s.sessions[sessionId]);
 	const focusScope = useRef({}).current;
 	const actions = useMemo<ChatActions>(
@@ -679,22 +688,34 @@ function PlanAskQuestion({ sessionId }: { workspaceId: string; sessionId: string
 		[runtime],
 	);
 	const ask = runtime ? pendingAsk(runtime) : undefined;
-	if (!ask) return null;
+	if (ask) {
+		return (
+			<ChatActionsContext.Provider value={actions}>
+				<AskStatesContext.Provider value={{ states: askStates, focusScope }}>
+					<div data-testid="plan-ask" className="mb-8">
+						<AskUserQuestionCard
+							toolCallId={ask.toolCallId}
+							toolName="ask_user_question"
+							args={ask.args}
+							result={ask.result}
+							status={ask.status}
+							streaming={ask.streaming}
+						/>
+					</div>
+				</AskStatesContext.Provider>
+			</ChatActionsContext.Provider>
+		);
+	}
+	const message = showAgentMessage && runtime ? lastAgentText(runtime) : undefined;
+	if (!message) return null;
 	return (
-		<ChatActionsContext.Provider value={actions}>
-			<AskStatesContext.Provider value={{ states: askStates, focusScope }}>
-				<div data-testid="plan-ask" className="mb-8">
-					<AskUserQuestionCard
-						toolCallId={ask.toolCallId}
-						toolName="ask_user_question"
-						args={ask.args}
-						result={ask.result}
-						status={ask.status}
-						streaming={ask.streaming}
-					/>
-				</div>
-			</AskStatesContext.Provider>
-		</ChatActionsContext.Provider>
+		<div data-testid="plan-agent-message" className="mb-8 flex items-start gap-8 px-4">
+			<MessageSquare className="mt-2 size-14 shrink-0 text-text-muted" />
+			<div className="min-w-0 flex-1">
+				<div className="tr-text-eyebrow text-text-muted">Agent</div>
+				<Markdown text={message} className={`line-clamp-4 tr-text-metadata ${SUMMARY_PROSE}`} />
+			</div>
+		</div>
 	);
 }
 
@@ -705,7 +726,7 @@ function SessionBlock({
 	pendingLoose,
 	allDone,
 	glance,
-	askSlot,
+	renderLive,
 	onAdd,
 	onOpenChat,
 	onSend,
@@ -718,7 +739,7 @@ function SessionBlock({
 	pendingLoose: TodoItem[];
 	allDone: boolean;
 	glance: PlanGlance;
-	askSlot: ReactNode;
+	renderLive: (showAgentMessage: boolean) => ReactNode;
 	onAdd: (title: string) => Promise<void>;
 	onOpenChat: () => void;
 	onSend: (text: string) => Promise<void> | void;
@@ -770,7 +791,7 @@ function SessionBlock({
 					Task
 				</button>
 			</div>
-			{askSlot}
+			{renderLive(!hasActive)}
 			{hasActive ? (
 				<>
 					{activeGroups.map(renderGroup)}
@@ -1401,7 +1422,13 @@ export default function PlanPane({
 					pendingLoose={sections.pendingLoose}
 					allDone={buildDone}
 					glance={glance}
-					askSlot={<PlanAskQuestion workspaceId={workspaceId} sessionId={sessionId} />}
+					renderLive={(showAgentMessage) => (
+						<PlanSessionLive
+							workspaceId={workspaceId}
+							sessionId={sessionId}
+							showAgentMessage={showAgentMessage}
+						/>
+					)}
 					onAdd={plan.add}
 					onOpenChat={() => void openChatInTab(workspaceId, sessionId)}
 					onSend={async (text) => {
