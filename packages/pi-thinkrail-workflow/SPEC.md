@@ -81,8 +81,9 @@ dispatcher to load rather than relying on description-matching (see [[module-web
 `before_agent_start` handler that puts `WORKFLOW_RULE` into `systemPromptOptions.sections` and returns
 nothing, and pi's own renderer (`buildSystemPromptSections` / `buildSystemPrompt`) turns those mutated
 options into a `<pi-thinkrail-workflow>` block ordered after `cwd` and ending the prompt — the tail
-position the old free-text append had. pi 0.86.1 does not re-export that renderer from its package root,
-so the test reaches `dist/core/system-prompt.js` by resolved path; a future pi that moves it breaks the
+position the old free-text append had. pi does not re-export that renderer from its package root or
+`core/index.ts` (only its `BuildSystemPromptOptions`/`NormalizedBuildSystemPromptOptions` types are
+root-exported), so the test reaches `dist/core/system-prompt.js` by resolved path; a pi that moves it breaks the
 import loudly rather than silently weakening the assertion. The options literal is typed
 `NormalizedBuildSystemPromptOptions`, so a shape change is a compile error. The rule's *wording* is prose,
 not contract, and stays unpinned.

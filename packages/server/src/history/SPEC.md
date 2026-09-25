@@ -90,8 +90,8 @@ to preserve).
 - **`custom_message` entries:** `{ type: "custom_message", customType: string, content: string|array, timestamp: ISO-string, display: boolean, ... }`.
   They have no `message` wrapper and become role `custom` context messages.
 
-## pi file format (pinned v0.86.1 — `@earendil-works/pi-coding-agent`)
-Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify these facts on a pi version bump;
+## pi file format (`@earendil-works/pi-coding-agent`, the catalog-pinned version)
+Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify these facts on a pi bump;
 `testFixtures.ts` and `historyIndex.ts` both depend on the discovery layout.
 - **Header:** pi writes `{ type: "session", version: 3, id, timestamp, cwd, parentSession? }`; `CURRENT_SESSION_VERSION = 3`.
   Readers require the first *parseable* entry to be a session header with a string `id` (not necessarily physical line 1).

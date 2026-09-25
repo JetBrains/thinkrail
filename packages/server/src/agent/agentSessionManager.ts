@@ -111,6 +111,7 @@ interface Entry {
 	nextQueuedMessageId: number;
 	manualCompactionInProgress: boolean;
 	piCompactionInProgress: boolean;
+	disposed: boolean;
 	registered: boolean;
 	subagentToolsRefreshPending: boolean;
 	reviewToolRefreshPending: boolean;
@@ -498,9 +499,16 @@ export async function reloadSessionResources(sessionId: string): Promise<void> {
 	await session.reload();
 }
 
+const SESSION_SETTINGS_OVERRIDES = { images: { autoResize: false } };
+
 export function buildSessionSettings(cwd: string): SettingsManager {
 	const settings = SettingsManager.create(cwd, undefined, { projectTrusted: true });
-	settings.applyOverrides({ images: { autoResize: false } });
+	const reload = settings.reload.bind(settings);
+	settings.reload = async () => {
+		await reload();
+		settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
+	};
+	settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
 	return settings;
 }
 
@@ -565,6 +573,7 @@ async function prepareSessionEntry(
 		nextQueuedMessageId: 1,
 		manualCompactionInProgress: false,
 		piCompactionInProgress: false,
+		disposed: false,
 		registered: false,
 		subagentToolsRefreshPending: false,
 		reviewToolRefreshPending: false,
@@ -641,6 +650,10 @@ async function prepareSessionEntry(
 
 	const reportExtensionError = (failure: ExtensionError): void => {
 		const line = `extension ${failure.extensionPath} failed on ${failure.event}: ${failure.error}`;
+		if (entry.disposed) {
+			log.debug(line);
+			return;
+		}
 		if (failure.stack) {
 			const cause = new Error(failure.error);
 			cause.stack = failure.stack;
@@ -662,6 +675,7 @@ async function prepareSessionEntry(
 	} catch (error) {
 		cancelExtUiForSession(sessionId);
 		entry.unsubscribe();
+		entry.disposed = true;
 		session.dispose();
 		throw error;
 	}
@@ -1503,6 +1517,7 @@ function trackCascade(workspaceId: string, cascade: Promise<void>): Promise<void
 function disposeSession(sessionId: string): Promise<void> {
 	const entry = sessions.get(sessionId);
 	if (!entry) return Promise.resolve();
+	entry.disposed = true;
 	const cascade = trackCascade(
 		entry.workspaceId,
 		disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
@@ -1532,6 +1547,7 @@ export function disposeAllSessions(): void {
 		cancelExtUiForSession(sessionId);
 		entry.askUserQuestionWaiters.abandon();
 		entry.unsubscribe();
+		entry.disposed = true;
 		entry.session.dispose();
 	}
 	sessions.clear();

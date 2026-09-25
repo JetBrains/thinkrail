@@ -104,7 +104,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
     the web UI downsizes user-attached images itself at attach time — `apps/web`'s `chat/imageAttachment`
     caps the long edge at 1568px — and the `imageGuard` extension below is the in-context second line of
-    defense); a shared `registerSession` publishes each event
+    defense). The override is **re-applied after every `settings.reload()`**: pi's `SettingsManager.reload()`
+    rebuilds settings from disk and drops `applyOverrides`, and the resource loader reloads settings on every
+    `reload()` — including inside `createAgentSession` — so a one-shot override never reached a prompt. Since
+    pi 0.87 the same setting also governs prompt-attached and tool-result images, so the override is what keeps
+    pi from rewriting user text with `[Image omitted…]` hints (which would defeat the client's optimistic-echo
+    dedup); a shared `registerSession` publishes each event
     tagged with its id + `bindExtensions({ mode:'rpc', uiContext })`. The event projection retains the
     final `agent_end` assistant's reported terminal metadata and attaches it to `agent_settled`, so the
     wire has one authoritative automatic-work terminal even when compaction/retry happens between those
@@ -134,9 +139,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `queue_update` cannot resurrect the phantom. The counter is per live entry only (Pi's ephemeral queues
     never survive a process restart) and resets whenever `clearQueue()` empties both lanes.
 
-    **Remove this whole override on the next pi bump that ships the upstream fix.** The repo pins
-    `pi@0.86.1`; the upstream fix (earendil-works/pi#8612) is **open and unreleased** — not present in any
-    published version through `0.86.1`. Once Pi clears empty-text image deliveries natively, drop
+    **Remove this whole override on the pi bump that ships the upstream fix** (earendil-works/pi#8612,
+    still open when last checked). Once Pi clears empty-text image deliveries natively, drop
     `stuckEmptyDeliveries`, `displayedLane`, the synthesized `queue_update`, and the `effectivePendingCount`
     adjustment. The removal gate is the installed code, not the PR state: on every pi bump grep the installed
     `agent-session.js` for the `if (messageText)` guard around `this._steeringMessages.indexOf` — while that
@@ -417,8 +421,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     entrypoint (`SKILL.md`, `index.ts`), never "Extension SKILL.md failed"; a bare
     "An extension failed." is what made #277 unreadable from the UI alone). The manager's
     `bindExtensions({onError})` wraps it in `reportExtensionError`, which does **two** things the notify
-    cannot: it writes one `warn` to the rotated host log carrying the **full** `extensionPath` and the
-    extension's own `stack` (rehydrated onto an `Error` so it lands in the structured `err` field — the
+    cannot: for a live entry, it writes one `warn` to the rotated host log carrying the **full**
+    `extensionPath` and the extension's own `stack` (rehydrated onto an `Error` so it lands in the structured `err` field — the
     chat gets the short name, the log gets the unambiguous one, and a crash stays findable after the tab
     is closed), and it **gates the client push** on `entry.registered`, the explicit flag
     `registerSession` sets when it puts the entry in the map. The event path's `sessions.get(id) === entry`
@@ -426,11 +430,16 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     stricter form would suppress the `session_start` failure #277 is about. Nor can *absence* from the map
     stand in for "not registered yet" — `disposeSession` deletes without leaving a tombstone, so a disposed
     entry is indistinguishable from an unregistered one, and a late error would be pushed at a client that
-    can never drain it. The log is never gated (a superseded session's crash is still worth recording) and
-    it attaches an `Error` **only when pi supplied a stack**: several of pi's own `emitError` sites omit it
-    (`runner.js` message_end, `agent-session.js` command/`<runtime>`), and synthesising one there would
-    record the *host's* stack — pointing the reader at `prepareSessionEntry` instead of the extension,
-    which is the opposite of why the line exists.
+    can never drain it. The log is never gated for a live entry, but an entry the host has **disposed**
+    (`entry.disposed`, set before `session.dispose()` in every teardown path) downgrades the report to a
+    single `debug` line with no stack and no client push: pi 0.87's `finishTurn` agent-loop hook outlives
+    `AgentSession.dispose()` and still dispatches `turn_end`/`context` boundaries into the runner we just
+    invalidated, so its “stale ctx” and “could not resolve the persisted assistant entry ID” reports are
+    echoes of our own teardown, not extension crashes; pi 0.86 disconnected from the agent first, so they
+    never surfaced. For a live entry, it attaches an `Error` **only when pi supplied a stack**: several of
+    pi's own `emitError` sites omit it (`runner.js` message_end, `agent-session.js` command/`<runtime>`),
+    and synthesising one there would record the *host's* stack — pointing the reader at
+    `prepareSessionEntry` instead of the extension, which is the opposite of why the line exists.
     **Members split three ways, not two.** *Untranslatable* ones are inert no-ops and rightly so — they take a
     TUI `Component` factory a web host cannot render (`setFooter`, `setHeader`, `setEditorComponent`,
     `custom`, `setWidget`'s factory overload; the string-array overload **is** rendered).

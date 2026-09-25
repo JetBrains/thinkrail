@@ -756,8 +756,35 @@ test("disabling an idle parent lets its running background child finish and deli
 	}
 });
 
-test("buildSessionSettings disables image autoResize (in-memory, so the read tool sends images raw)", () => {
-	expect(buildSessionSettings(tmpCwd("trpi-settings-")).getImageAutoResize()).toBe(false);
+test("buildSessionSettings disables image autoResize, and the override survives a settings.reload()", async () => {
+	const settings = buildSessionSettings(tmpCwd("trpi-settings-"));
+	expect(settings.getImageAutoResize()).toBe(false);
+	await settings.reload();
+	expect(settings.getImageAutoResize()).toBe(false);
+});
+
+test("a prompt image reaches the transcript raw — the autoResize override survives pi's loader reload", async () => {
+	fauxA.setResponses([fauxAssistantMessage("IMAGE_ACK")]);
+	const cwd = tmpCwd("trpi-raw-image-");
+	const s = await createSession({
+		cwd,
+		workspaceId: "ws-raw-image",
+		model: toWireModel(fauxA.getModel()),
+	});
+	try {
+		const rawImageData = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64");
+		await promptSession(s.sessionId, "describe this", [
+			{ type: "image", mimeType: "image/png", data: rawImageData },
+		]);
+		const transcript = await getSessionMessages(s.sessionId, "ws-raw-image", cwd);
+		const userMessage = transcript.messages.find((message) => message.role === "user");
+		expect(userMessage?.content).toEqual([
+			{ type: "text", text: "describe this" },
+			{ type: "image", mimeType: "image/png", data: rawImageData },
+		]);
+	} finally {
+		await removeSession(s.sessionId);
+	}
 });
 
 test("listAvailableModels returns the configured (faux) models", async () => {
@@ -1603,6 +1630,76 @@ test("graceful settling leaves a live question dangling for restart ack repair",
 		expect(repaired.isError).toBe(false);
 		expect(assessAnswerability(transcript.messages, toolCallId).ok).toBe(true);
 	} finally {
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("disposing a session mid-run reports pi's stale-boundary errors at debug, never as a client-visible extension crash", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const toolCallId = "dispose-mid-run-question";
+	const cwd = tmpCwd("trpi-dispose-mid-run-");
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall(
+				"ask_user_question",
+				{
+					questions: [
+						{
+							question: "Dispose while waiting?",
+							header: "Dispose",
+							options: [
+								{ label: "Yes", description: "dispose" },
+								{ label: "No", description: "keep waiting" },
+							],
+						},
+					],
+				},
+				{ id: toolCallId },
+			),
+		),
+	]);
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-dispose-mid-run",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before disposal.");
+	prompting.catch(() => {});
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((frame) => frames.push(frame));
+	const stderrChunks: string[] = [];
+	const originalStderrWrite = process.stderr.write;
+	process.stderr.write = (chunk) => {
+		stderrChunks.push(String(chunk));
+		return true;
+	};
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		const framesAtDisposal = frames.length;
+		disposeAllSessions();
+		await prompting.catch(() => {});
+		await new Promise((resolve) => setTimeout(resolve, 200));
+
+		const stderr = stderrChunks.join("");
+		expect(stderr).not.toMatch(/WARN[^\n]*This extension ctx is stale/);
+		expect(stderr).not.toMatch(/WARN[^\n]*could not resolve the persisted assistant entry ID/);
+		expect(
+			frames
+				.slice(framesAtDisposal)
+				.some(
+					(frame) =>
+						frame.sessionId === session.sessionId &&
+						frame.kind === "notify" &&
+						frame.level === "error",
+				),
+		).toBe(false);
+	} finally {
+		process.stderr.write = originalStderrWrite;
+		setExtUiPublisher(() => {});
 		if (hasSession(session.sessionId)) removeSession(session.sessionId);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}

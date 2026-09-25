@@ -854,8 +854,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
     `description: 'single-quoted'` loaded into the form with literal quotes and saved back corrupted).
     Its boundary
     rule mirrors pi's own `extractFrontmatter` (`@earendil-works/pi-coding-agent`'s
-    `dist/utils/frontmatter.js` + `dist/utils/text.js`, pinned against pi v0.86.1 — the same pin
-    `packages/server/src/templates/SPEC.md` uses server-side; re-verify both on a pi version bump): strip
+    `dist/utils/frontmatter.js` + `dist/utils/text.js` of the catalog-pinned pi — the same facts
+    `packages/server/src/templates/SPEC.md` relies on server-side; re-verify both on a pi bump): strip
     one leading UTF-8 BOM, normalize newlines, then end the frontmatter block at the FIRST later `\n---`
     line; the body is everything after that fence run through `.trim()` — not a single optional `\n`.
     A prior version had two independently hand-rolled regex splitters (one per file), each consuming only
