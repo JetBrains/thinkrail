@@ -85,8 +85,14 @@ channel fan-out, and the process-boot wrapper both launchers share.
   analyticsConsentConfirmed`. After boot, the settings publisher still broadcasts every merged config but
   changes the analytics grant only when its successful applied update explicitly carries `analyticsEnabled`,
   so unrelated writes preserve the current grant and the dialog's preference prime can enable it.
-  `analyticsConsentConfirmed` controls the web prompt lifecycle. Basic events remain on in human runs. Consent
-  changes clear additional-event correlation so re-enabling cannot reconstruct pre-consent work.
+  `analyticsConsentConfirmed` controls the web prompt lifecycle. Its unconfirmed on-prime may enable ordinary
+  additional capture, but browser attribution starts only from confirmed-on state: directly after the final
+  applied dialog update (the UI is ready), or for a saved choice only through the launcher's explicit
+  `RunningServer.startAttributionClaim()` readiness signal after normal UI readiness. Revocation cancels the
+  claim generation. Basic
+  events remain on in human runs. Consent changes clear additional-event correlation so re-enabling cannot
+  reconstruct pre-consent work; campaign-only enrichment is inactive while off and restored from its strict
+  server record when on without retrying a consumed claim.
   `shutdownAnalytics()` remains a best-effort drain in `stop()` and awaited by graceful shutdown;
   every capture site lives here, including the existing basic events: `chat_started` in `session.create`, `message_sent` (via the
   local `trackSend(mode, text)`) after an **accepted** `session.prompt`/`session.steer`/`session.followUp`
@@ -422,6 +428,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   may. Concurrent first sends remain per-session single-flighted. There is no settled-turn or per-turn retitle
   hook. Both manual and automatic writes converge every client through the existing
   `pi.event`/`session_info_changed` channel and `session.list` repair; no new push channel exists.
+
+`RunningServer.startAttributionClaim()` is the explicit launcher-readiness signal and rechecks the saved
+enabled/confirmed choice before entering analytics attribution.
+
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
