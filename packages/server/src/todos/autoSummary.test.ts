@@ -69,6 +69,23 @@ test("generates and persists a summary when the completed plan has none", async 
 	expect(seen).toContain("verified: pytest");
 });
 
+test("discards the draft when the plan's step set changed during generation", async () => {
+	const store = new TodoStore(repo, SESSION);
+	seedDone(store);
+	setOneShotRunner(async () => {
+		// A concurrent edit lands while the model runs: a completed step is removed, leaving a DIFFERENT
+		// (still all-done) set — the stale draft must not persist onto it.
+		const s = new TodoStore(repo, SESSION);
+		const first = s.read().todos[0];
+		if (first) s.remove(first.id);
+		return { text: "stale draft", model: { provider: "p", id: "m" } };
+	});
+
+	const result = await generateTodoSummary({ workspaceId: "w1", sessionId: SESSION });
+	expect(result.summary).toBeNull();
+	expect(new TodoStore(repo, SESSION).read().summary).toBeUndefined();
+});
+
 test("returns the existing note untouched and never calls the model", async () => {
 	let called = false;
 	setOneShotRunner(async () => {

@@ -224,12 +224,21 @@ export function addTodo(params: {
 
 const summaryInFlight = new Set<string>();
 
+// The exact step set a draft was generated from: id + status + the fields fed to the model. Persist only
+// if the plan still matches this, so a draft never lands on a plan mutated (steps removed/replaced) mid-call.
+function planSummaryFingerprint(items: StoredItem[]): string {
+	return JSON.stringify(
+		items.map((t) => [t.id, t.status, t.title, t.summary ?? "", t.verification ?? ""]),
+	);
+}
+
 /**
  * Auto-draft the plan-level summary when the plan is fully done but the agent left none. Best-effort:
  * returns the existing note untouched, `{ summary: null }` when the plan isn't complete / generation
  * fails, or the freshly generated + persisted note. The slow model call runs OUTSIDE the write lock; the
  * final re-check + `setSummary` runs inside `enqueueTodoMutation` and never clobbers an agent-authored
- * note or a plan that re-opened meanwhile. One in-flight generation per session.
+ * note, a plan that re-opened, or a plan whose step set changed mid-call (a fingerprint of the exact
+ * steps the draft was built from must still match). One in-flight generation per session.
  */
 export async function generateTodoSummary(params: {
 	workspaceId: string;
@@ -245,6 +254,7 @@ export async function generateTodoSummary(params: {
 	if (summaryInFlight.has(key)) return { summary: null };
 	summaryInFlight.add(key);
 	try {
+		const fingerprint = planSummaryFingerprint(items);
 		const text = await suggestPlanSummary(
 			items.map((t) => ({ title: t.title, summary: t.summary, verification: t.verification })),
 		);
@@ -253,9 +263,8 @@ export async function generateTodoSummary(params: {
 			const store = storeFor(workspaceId, sessionId);
 			const fresh = store.read();
 			if (fresh.summary?.trim()) return { summary: fresh.summary };
-			const freshItems = flatItems(fresh);
-			if (freshItems.length === 0 || freshItems.some((t) => t.status !== "done"))
-				return { summary: null };
+			// Discard the draft unless the plan is still the exact all-done step set it was built from.
+			if (planSummaryFingerprint(flatItems(fresh)) !== fingerprint) return { summary: null };
 			store.setSummary(text);
 			return { summary: text };
 		});

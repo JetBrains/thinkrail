@@ -9,7 +9,12 @@ import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
 import { isConnectedGeneration, selectChatTitle, toast, useAppStore } from "../store";
-import { errorText, getSessionMessagesWithSkillBaseline, getTransport } from "../transport";
+import {
+	errorText,
+	getSessionMessagesWithSkillBaseline,
+	getTransport,
+	supportsPlanSummaryGeneration,
+} from "../transport";
 import { messagesToRuntime } from "./hydrate";
 import { sessionGlance, shouldNudgeOnAdd } from "./planView";
 
@@ -134,6 +139,8 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			summaryTriedRef.current = false;
 			return;
 		}
+		// Only ask hosts that advertise the capability (v69+); an older host has no such method.
+		if (!supportsPlanSummaryGeneration(useAppStore.getState().protocolVersion)) return;
 		if (summaryTriedRef.current) return;
 		summaryTriedRef.current = true;
 		const requestIdentity = identity;
