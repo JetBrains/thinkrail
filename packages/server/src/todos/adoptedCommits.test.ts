@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TodoStore } from "pi-todos/core";
 import { gitCommitPaths } from "../git";
+import { maybeAttachChangeArtifacts, settleChangeArtifacts } from "./artifacts";
 import { approveTodoReview, listTodos, startTodoReview } from "./todos";
 
 let dataDir: string;
@@ -83,6 +84,25 @@ test("a branch commit no item owns surfaces as an adopted, unreviewed commit —
 	expect(adopted?.artifacts?.[0]).toMatchObject({ kind: "commit", sha });
 	expect(adopted?.artifacts?.[0]?.files?.map((f) => f.path)).toEqual(["loose.ts"]);
 	expect(adopted?.review?.state).toBe("unreviewed");
+});
+
+test("a commit a subagent makes during an item's window attaches to the step, not adoptedCommits", async () => {
+	const store = new TodoStore(repo, SESSION);
+	const todo = store.add({ title: "implement feature" });
+	store.update(todo.id, { status: "in_progress" });
+	await maybeAttachChangeArtifacts("w1", SESSION); // opens the work window (baseline head)
+
+	// a subagent commits its own work directly into the shared worktree
+	const sha = commitFile("impl.ts", "export const x = 1;\n", "feat: implement x");
+
+	store.update(todo.id, { status: "done" });
+	await maybeAttachChangeArtifacts("w1", SESSION);
+	await settleChangeArtifacts("w1");
+
+	const plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	const item = plan.todos.find((t) => t.id === todo.id);
+	expect(item?.artifacts?.some((a) => a.kind === "commit" && a.sha === sha)).toBe(true);
+	expect((plan.adoptedCommits ?? []).some((a) => a.artifacts?.[0]?.sha === sha)).toBe(false);
 });
 
 test("a commit owned by a todo item is NOT adopted (no double-counting)", async () => {

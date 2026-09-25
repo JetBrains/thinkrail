@@ -127,6 +127,16 @@ test("the builtin set is the settled four, all with prompts and descriptions", (
 	expect(BUILTIN_AGENTS.find((d) => d.name === "planner")?.tools).not.toContain("web_search");
 });
 
+test("the builtin worker leaves changes uncommitted and is forbidden from mutating git", () => {
+	const worker = BUILTIN_AGENTS.find((definition) => definition.name === "worker");
+	expect(worker?.systemPrompt).toContain("UNCOMMITTED");
+	expect(worker?.systemPrompt).toMatch(/never run `git commit`/i);
+	expect(worker?.systemPrompt).toContain("git add");
+	expect(worker?.systemPrompt).toContain("git push");
+	// bash stays available for tests/typecheck/lint (worker inherits pi's default tool set).
+	expect(worker?.tools).toBeUndefined();
+});
+
 test("the builtin reviewer carries the portable review contract", () => {
 	const reviewer = BUILTIN_AGENTS.find((definition) => definition.name === "reviewer");
 	expect(reviewer?.inheritProjectContext).toBe(true);

@@ -16,6 +16,7 @@ export {
 	gitUncommittedPaths,
 	listBranches,
 	listCommits,
+	listCommitsSince,
 	listRemotes,
 	prefetchBranch,
 	readBlobAt,
