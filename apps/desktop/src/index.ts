@@ -85,6 +85,10 @@ async function start(): Promise<void> {
 					await updateController.checkForUpdates();
 					return undefined;
 				},
+				downloadUpdate: async () => {
+					await updateController.downloadUpdate();
+					return undefined;
+				},
 				restartToUpdate: async () => {
 					await updateController.restartToUpdate();
 					return undefined;
