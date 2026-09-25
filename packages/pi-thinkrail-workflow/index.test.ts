@@ -15,7 +15,7 @@ type PiSystemPromptRenderer = {
 	buildSystemPrompt: (options: NormalizedBuildSystemPromptOptions) => string;
 };
 
-// pi 0.86.1 does not re-export its renderer from the package root; this reaches an internal path.
+// pi 0.87.1 does not re-export its renderer from the package root; this reaches an internal path.
 async function loadPiRenderer(): Promise<PiSystemPromptRenderer> {
 	return await import(
 		new URL("./core/system-prompt.js", import.meta.resolve("@earendil-works/pi-coding-agent")).href

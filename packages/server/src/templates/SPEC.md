@@ -16,7 +16,7 @@ Consumed by the `template.*` host handlers; this module owns no WS surface itsel
 passed in by the caller after resolving either a live workspace or a pre-session project's current checkout,
 never looked up here.
 
-## pi facts (pinned against pi v0.86.1 — `@earendil-works/pi-coding-agent`)
+## pi facts (pinned against pi v0.87.1 — `@earendil-works/pi-coding-agent`)
 
 Verified by reading `dist/core/prompt-templates.js` (`loadTemplateFromFile` / `loadTemplatesFromDir` /
 `loadPromptTemplates`), `dist/core/resource-loader.js` (`dedupePrompts`, `updatePromptsFromPaths`), and
@@ -38,8 +38,10 @@ assumption; re-verify on a pi version bump.
 - **`loadTemplatesFromDir`'s error handling is two-layered, at two different granularities.** The whole
   `readdirSync` call plus the loop around it sits inside one `try { … } catch { return templates; }` — an
   unreadable directory returns whatever had already been collected rather than throwing out of the
-  function. Independently, each file goes through `loadTemplateFromFile`, which has its *own* inner
-  `try { … } catch { return null; }` around the read + `parseFrontmatter` + object-build. This module's
+  function. Independently, each file goes through `loadTemplateFromFile`, which catches the read and
+  `parseFrontmatter` separately and skips the file. Since 0.87 the skip is not silent: each loader returns
+  `{ templates, diagnostics }` and a failed file becomes a `warning` diagnostic; `description` and
+  `argument-hint` count only when they are strings. This module's
   `listDir` mirrors both layers (see "Design" below) — the whole-scan wrapper is what protects
   `listTemplates` from an EACCES (or similar) blanking every scope's results, not just the bad one's.
 - **`parseFrontmatter`'s real signature** (`dist/utils/frontmatter.d.ts`): `parseFrontmatter<T extends

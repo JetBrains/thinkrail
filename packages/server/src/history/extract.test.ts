@@ -408,4 +408,48 @@ describe("extractSession", () => {
 			{ text: "try again", role: "user", timestamp: 200, messageIndex: 1 },
 		]);
 	});
+
+	test("context_edit entries shape history like pi's live projection", () => {
+		const jsonl = [
+			header(),
+			line({
+				type: "message",
+				id: "u1",
+				parentId: null,
+				message: { role: "user", content: "first", timestamp: 100 },
+			}),
+			line({
+				type: "message",
+				id: "a1",
+				parentId: "u1",
+				message: {
+					role: "assistant",
+					content: [{ type: "text", text: "abandoned" }],
+					timestamp: 200,
+				},
+			}),
+			line({
+				type: "message",
+				id: "a2",
+				parentId: "a1",
+				message: {
+					role: "assistant",
+					content: [{ type: "text", text: "original" }],
+					timestamp: 300,
+				},
+			}),
+			line({ type: "context_edit", id: "e1", parentId: "a2", targetId: "a1", replacement: null }),
+			line({
+				type: "context_edit",
+				id: "e2",
+				parentId: "e1",
+				targetId: "a2",
+				replacement: { content: [{ type: "text", text: "edited" }] },
+			}),
+		].join("\n");
+		expect(entriesOf(jsonl)).toEqual([
+			{ text: "first", role: "user", timestamp: 100, messageIndex: 0 },
+			{ text: "edited", role: "assistant", timestamp: 300, messageIndex: 1 },
+		]);
+	});
 });
