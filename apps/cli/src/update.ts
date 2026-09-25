@@ -10,6 +10,7 @@ const GITHUB_RELEASES_URL = "https://api.github.com/repos/JetBrains/thinkrail/re
 const RELEASE_CHECK_TIMEOUT_MS = 5_000;
 const RELEASE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const RELEASE_CHECK_ERROR = "Unable to check for ThinkRail updates.";
+const UPDATE_RUN_ERROR = "Unable to update ThinkRail.";
 const STABLE_RELEASE_TAG_RE = /^v(\d+\.\d+\.\d+)$/;
 const NIGHTLY_RELEASE_TAG_RE = /^v(\d+\.\d+\.\d+-nightly\.\d+)$/;
 const SEMVER_RE =
@@ -30,7 +31,19 @@ export interface CliHostUpdateNotice {
 export interface CliHostUpdate {
 	intervalMs: number;
 	check(): Promise<CliHostUpdateNotice | null>;
+	run(): Promise<void>;
 }
+
+export type UpdateChildRunner = (command: readonly string[]) => Promise<number>;
+
+const spawnUpdateChild: UpdateChildRunner = async (command) => {
+	const child = Bun.spawn([...command], {
+		stdin: "inherit",
+		stdout: "inherit",
+		stderr: "inherit",
+	});
+	return await child.exited;
+};
 
 function tagNameOf(value: unknown): string | undefined {
 	if (typeof value !== "object" || value === null || !("tag_name" in value)) return undefined;
@@ -84,6 +97,7 @@ export function createCliHostUpdate(
 	baked: string,
 	installedVersion: string,
 	fetchImpl: ReleaseFetch = fetch,
+	childRunner: UpdateChildRunner = spawnUpdateChild,
 ): CliHostUpdate | undefined {
 	if (build !== "binary" || (baked !== "stable" && baked !== "nightly")) return undefined;
 	return {
@@ -92,6 +106,15 @@ export function createCliHostUpdate(
 			const availableVersion = await discoverReleaseVersion(baked, fetchImpl);
 			if (!isStrictlyNewerVersion(installedVersion, availableVersion)) return null;
 			return { currentVersion: installedVersion, availableVersion, channel: baked };
+		},
+		run: async () => {
+			try {
+				if ((await childRunner([process.execPath, "update"])) !== 0) {
+					throw new Error(UPDATE_RUN_ERROR);
+				}
+			} catch {
+				throw new Error(UPDATE_RUN_ERROR);
+			}
 		},
 	};
 }

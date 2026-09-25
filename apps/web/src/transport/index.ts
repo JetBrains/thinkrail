@@ -10,6 +10,8 @@ export type { ConnectionStatus, TransportOptions } from "./transport";
 export {
 	getTransport,
 	initTransport,
+	runHostUpdate,
+	supportsHostUpdateRun,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
 } from "./wireTransport";

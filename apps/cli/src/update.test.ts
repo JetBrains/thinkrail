@@ -114,7 +114,7 @@ describe("createCliHostUpdate", () => {
 		const updates = createCliHostUpdate("binary", "stable", "1.2.3", fetchImpl);
 		if (!updates) throw new Error("expected host updates");
 
-		expect(Object.keys(updates).sort()).toEqual(["check", "intervalMs"]);
+		expect(Object.keys(updates).sort()).toEqual(["check", "intervalMs", "run"]);
 		expect(updates.intervalMs).toBe(6 * 60 * 60 * 1000);
 		expect(requests).toBe(0);
 		expect(await updates.check()).toEqual({
@@ -123,6 +123,56 @@ describe("createCliHostUpdate", () => {
 			channel: "stable",
 		});
 		expect(requests).toBe(1);
+	});
+
+	test("runs this installed executable's parameterless update child asynchronously", async () => {
+		let command: readonly string[] | undefined;
+		let finish!: (exitCode: number) => void;
+		const exited = new Promise<number>((resolve) => {
+			finish = resolve;
+		});
+		const updates = createCliHostUpdate(
+			"binary",
+			"stable",
+			"1.2.3",
+			async () => githubJson({ tag_name: "v1.2.4" }),
+			async (nextCommand) => {
+				command = nextCommand;
+				return await exited;
+			},
+		);
+		if (!updates) throw new Error("expected host updates");
+
+		let settled = false;
+		const running = updates.run().then(() => {
+			settled = true;
+		});
+		await Promise.resolve();
+		expect(command).toEqual([process.execPath, "update"]);
+		expect(settled).toBe(false);
+
+		finish(0);
+		await running;
+		expect(settled).toBe(true);
+	});
+
+	test("closes child launch and nonzero-exit diagnostics", async () => {
+		const create = (runner: () => Promise<number>) =>
+			createCliHostUpdate(
+				"binary",
+				"nightly",
+				"1.2.3-nightly.1",
+				async () => githubJson([{ tag_name: "v1.2.3-nightly.2" }]),
+				runner,
+			);
+		const nonzero = create(async () => 23);
+		const launchFailure = create(async () => {
+			throw new Error("private child launch diagnostic");
+		});
+		if (!nonzero || !launchFailure) throw new Error("expected host updates");
+
+		await expect(nonzero.run()).rejects.toThrow(/^Unable to update ThinkRail\.$/);
+		await expect(launchFailure.run()).rejects.toThrow(/^Unable to update ThinkRail\.$/);
 	});
 
 	test("returns a notice only for a strictly newer same-channel version", async () => {

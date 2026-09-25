@@ -31,7 +31,7 @@ import {
 	readThemeHint,
 	writeThemeHint,
 } from "../themes";
-import type { ConnectionStatus } from "../transport";
+import { type ConnectionStatus, runHostUpdate, supportsHostUpdateRun } from "../transport";
 import { UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
@@ -64,7 +64,8 @@ export function Shell() {
 	const contextProject = useAppStore(selectContextProject);
 	const { review: openReview } = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
-	const updates = useUpdates();
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const updates = useUpdates(supportsHostUpdateRun(protocolVersion) ? runHostUpdate : null);
 	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);

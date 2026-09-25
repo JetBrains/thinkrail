@@ -28,6 +28,9 @@ export type UpdatesController =
 	| {
 			source: "host";
 			state: HostUpdateNotice;
+			canRun: boolean;
+			requestFailed: boolean;
+			runUpdate(): void;
 	  };
 
 export function getNativeUpdateBridge(value: unknown): NativeUpdateBridge | null {
@@ -63,6 +66,16 @@ export function runNativeUpdateRequest(
 		void operation().catch(reject);
 	} catch (error) {
 		reject(error);
+	}
+}
+
+export type HostUpdateRunner = () => Promise<unknown>;
+
+export function runHostUpdateRequest(operation: HostUpdateRunner, onError: () => void): void {
+	try {
+		void operation().catch(() => onError());
+	} catch {
+		onError();
 	}
 }
 
@@ -112,7 +125,7 @@ export function hasNativeUpdateSurface(
 	return state !== null && state.status !== "disabled";
 }
 
-export function useUpdates(): UpdatesController | null {
+export function useUpdates(hostUpdateRunner: HostUpdateRunner | null): UpdatesController | null {
 	const [bridge] = useState(() =>
 		getNativeUpdateBridge(Reflect.get(globalThis, NATIVE_UPDATES_GLOBAL)),
 	);
@@ -120,6 +133,7 @@ export function useUpdates(): UpdatesController | null {
 	const [nativeRequestError, setNativeRequestError] = useState<NativeUpdateRequestError | null>(
 		null,
 	);
+	const [failedHostRequestFor, setFailedHostRequestFor] = useState<HostUpdateNotice | null>(null);
 	const hostUpdate = useAppStore((state) => state.hostUpdate);
 
 	useEffect(() => {
@@ -150,6 +164,19 @@ export function useUpdates(): UpdatesController | null {
 			restartToUpdate: () => request("install", () => bridge.restartToUpdate()),
 		};
 	}
-	if (source === "host" && hostUpdate) return { source, state: hostUpdate };
+	if (source === "host" && hostUpdate) {
+		const canRun = hostUpdateRunner !== null && hostUpdate.status !== undefined;
+		return {
+			source,
+			state: hostUpdate,
+			canRun,
+			requestFailed: failedHostRequestFor === hostUpdate,
+			runUpdate: () => {
+				if (!canRun || !hostUpdateRunner) return;
+				setFailedHostRequestFor(null);
+				runHostUpdateRequest(hostUpdateRunner, () => setFailedHostRequestFor(hostUpdate));
+			},
+		};
+	}
 	return null;
 }

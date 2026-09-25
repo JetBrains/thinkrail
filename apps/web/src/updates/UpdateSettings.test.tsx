@@ -22,11 +22,12 @@ function nativeState(
 	};
 }
 
-function hostNotice(): HostUpdateNotice {
+function hostNotice(status?: HostUpdateNotice["status"]): HostUpdateNotice {
 	return {
 		currentVersion: "0.1.0",
 		channel: "stable",
 		availableVersion: "0.2.0",
+		...(status ? { status } : {}),
 	};
 }
 
@@ -44,8 +45,12 @@ function nativeUpdates(
 	};
 }
 
-function hostUpdates(state: HostUpdateNotice): UpdatesController {
-	return { source: "host", state };
+function hostUpdates(
+	state: HostUpdateNotice,
+	canRun = false,
+	requestFailed = false,
+): UpdatesController {
+	return { source: "host", state, canRun, requestFailed, runUpdate: () => {} };
 }
 
 function render(updates: UpdatesController): string {
@@ -205,7 +210,7 @@ test("a native request error remains discoverable from the topbar", () => {
 	expect(markup).toContain("Update needs attention");
 });
 
-test("a host notice keeps immutable release details and fixed machine guidance only", () => {
+test("a legacy host notice keeps immutable release details and fixed machine guidance only", () => {
 	const markup = render(hostUpdates(hostNotice()));
 	expect(markup).toContain("ThinkRail 0.2.0 is available");
 	expect(markup).toContain("Current: 0.1.0 · stable channel");
@@ -220,10 +225,59 @@ test("a host notice keeps immutable release details and fixed machine guidance o
 	expect(markup).not.toContain("<progress");
 });
 
-test("a host notice still exposes the shared Update available affordance", () => {
+test("a legacy host notice still exposes guidance and the shared available affordance", () => {
 	const markup = renderAffordance(hostUpdates(hostNotice()));
 	expect(markup).toContain('data-testid="update-ready"');
 	expect(markup).toContain('data-source="host"');
+	expect(markup).toContain('data-status="legacy"');
 	expect(markup).toContain("Update available");
 	expect(markup).toContain("ThinkRail 0.2.0 is available");
+});
+
+test("a current host offers Run Update only for available state", () => {
+	const markup = render(hostUpdates(hostNotice("available"), true));
+	expect(markup).toContain('data-status="available"');
+	expect(markup).toContain('data-testid="update-run-host"');
+	expect(markup).toContain("Run Update");
+	expect(markup).not.toContain("thinkrail update");
+	expect(markup).not.toContain('data-testid="update-retry"');
+});
+
+test("a running host update shows indeterminate progress without another action", () => {
+	const updates = hostUpdates(hostNotice("running"), true);
+	const markup = render(updates);
+	expect(markup).toContain('data-status="running"');
+	expect(markup).toContain("Updating ThinkRail to 0.2.0");
+	expect(markup).toContain('aria-label="Running update…"');
+	expect(markup).toContain("<progress");
+	expect(markup).not.toContain('value="');
+	expect(markup).not.toContain("Run Update");
+	expect(renderAffordance(updates)).toContain("Updating host");
+});
+
+test("a succeeded host update latches manual restart guidance", () => {
+	const updates = hostUpdates(hostNotice("succeeded"), true);
+	const markup = render(updates);
+	expect(markup).toContain('data-status="succeeded"');
+	expect(markup).toContain("ThinkRail 0.2.0 was installed");
+	expect(markup).toContain('data-testid="update-host-restart-guidance"');
+	expect(markup).toContain("Restart the ThinkRail host manually");
+	expect(markup).not.toContain("thinkrail update");
+	expect(markup).not.toContain("Run Update");
+	expect(renderAffordance(updates)).toContain("Restart host");
+});
+
+test("failed lifecycle and request rejection offer retry plus fixed manual fallback", () => {
+	for (const updates of [
+		hostUpdates(hostNotice("failed"), true),
+		hostUpdates(hostNotice("available"), true, true),
+	]) {
+		const markup = render(updates);
+		expect(markup).toContain("The host update couldn&#x27;t be completed");
+		expect(markup).toContain('data-testid="update-retry"');
+		expect(markup).toContain("Retry");
+		expect(markup).toContain("thinkrail update");
+		expect(markup).not.toContain("private server diagnostic");
+		expect(renderAffordance(updates)).toContain("Update failed");
+	}
 });
