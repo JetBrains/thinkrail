@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { LAUNCH_TOKEN_STORAGE_KEY } from "@thinkrail/contracts";
+import { LAUNCH_TOKEN_PARAM, LAUNCH_TOKEN_STORAGE_KEY } from "@thinkrail/contracts";
 import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
@@ -116,10 +116,10 @@ async function requestOverWire<T>(
 	params: Record<string, unknown>,
 ): Promise<T> {
 	return page.evaluate(
-		async ({ requestMethod, requestParams, tokenKey }) => {
+		async ({ requestMethod, requestParams, tokenKey, tokenParam }) => {
 			const protocol = location.protocol === "https:" ? "wss:" : "ws:";
 			const socket = new WebSocket(
-				`${protocol}//${location.host}/ws?token=${encodeURIComponent(localStorage.getItem(tokenKey) ?? "")}`,
+				`${protocol}//${location.host}/ws?${tokenParam}=${encodeURIComponent(localStorage.getItem(tokenKey) ?? "")}`,
 			);
 			await new Promise<void>((resolve) => {
 				socket.onopen = () => resolve();
@@ -150,7 +150,12 @@ async function requestOverWire<T>(
 				socket.close();
 			}
 		},
-		{ requestMethod: method, requestParams: params, tokenKey: LAUNCH_TOKEN_STORAGE_KEY },
+		{
+			requestMethod: method,
+			requestParams: params,
+			tokenKey: LAUNCH_TOKEN_STORAGE_KEY,
+			tokenParam: LAUNCH_TOKEN_PARAM,
+		},
 	) as Promise<T>;
 }
 
@@ -183,41 +188,44 @@ async function readLocalSideWidths(page: Page): Promise<{ left: number; right: n
 }
 
 async function createWorkspaceWithoutOpening(page: Page): Promise<{ id: string; name: string }> {
-	return page.evaluate(async (tokenKey) => {
-		const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-		const socket = new WebSocket(
-			`${protocol}//${location.host}/ws?token=${encodeURIComponent(localStorage.getItem(tokenKey) ?? "")}`,
-		);
-		await new Promise<void>((resolve) => {
-			socket.onopen = () => resolve();
-		});
-		const request = <T>(method: string, params: unknown) =>
-			new Promise<T>((resolve, reject) => {
-				const id = `bottom_${Math.random()}`;
-				const listener = (event: MessageEvent<string>) => {
-					const message = JSON.parse(event.data) as {
-						id?: string;
-						result?: T;
-						error?: { message?: string };
-					};
-					if (message.id !== id) return;
-					socket.removeEventListener("message", listener);
-					if (message.error) reject(new Error(message.error.message ?? "request failed"));
-					else resolve(message.result as T);
-				};
-				socket.addEventListener("message", listener);
-				socket.send(JSON.stringify({ id, method, params }));
+	return page.evaluate(
+		async ({ tokenKey, tokenParam }) => {
+			const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+			const socket = new WebSocket(
+				`${protocol}//${location.host}/ws?${tokenParam}=${encodeURIComponent(localStorage.getItem(tokenKey) ?? "")}`,
+			);
+			await new Promise<void>((resolve) => {
+				socket.onopen = () => resolve();
 			});
-		const projects = await request<{ id: string }[]>("project.list", {});
-		const project = projects[0];
-		if (!project) throw new Error("fixture project is not open");
-		const workspace = await request<{ id: string; name: string }>("workspace.create", {
-			projectId: project.id,
-			name: `inert-layout-${Date.now()}`,
-		});
-		socket.close();
-		return workspace;
-	}, LAUNCH_TOKEN_STORAGE_KEY);
+			const request = <T>(method: string, params: unknown) =>
+				new Promise<T>((resolve, reject) => {
+					const id = `bottom_${Math.random()}`;
+					const listener = (event: MessageEvent<string>) => {
+						const message = JSON.parse(event.data) as {
+							id?: string;
+							result?: T;
+							error?: { message?: string };
+						};
+						if (message.id !== id) return;
+						socket.removeEventListener("message", listener);
+						if (message.error) reject(new Error(message.error.message ?? "request failed"));
+						else resolve(message.result as T);
+					};
+					socket.addEventListener("message", listener);
+					socket.send(JSON.stringify({ id, method, params }));
+				});
+			const projects = await request<{ id: string }[]>("project.list", {});
+			const project = projects[0];
+			if (!project) throw new Error("fixture project is not open");
+			const workspace = await request<{ id: string; name: string }>("workspace.create", {
+				projectId: project.id,
+				name: `inert-layout-${Date.now()}`,
+			});
+			socket.close();
+			return workspace;
+		},
+		{ tokenKey: LAUNCH_TOKEN_STORAGE_KEY, tokenParam: LAUNCH_TOKEN_PARAM },
+	);
 }
 
 test("full-height panel-header actions stay square", async ({ page }) => {

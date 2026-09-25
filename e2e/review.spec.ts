@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Browser, expect, type Page, test } from "@playwright/test";
-import { LAUNCH_TOKEN_STORAGE_KEY } from "@thinkrail/contracts";
+import { LAUNCH_TOKEN_PARAM, LAUNCH_TOKEN_STORAGE_KEY } from "@thinkrail/contracts";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 
@@ -82,10 +82,10 @@ async function overWire(
 	calls: { method: string; params: Record<string, unknown> }[],
 ): Promise<unknown[]> {
 	return page.evaluate(
-		async ({ calls: pending, tokenKey }) => {
+		async ({ calls: pending, tokenKey, tokenParam }) => {
 			const proto = location.protocol === "https:" ? "wss:" : "ws:";
 			const ws = new WebSocket(
-				`${proto}//${location.host}/ws?token=${encodeURIComponent(localStorage.getItem(tokenKey) ?? "")}`,
+				`${proto}//${location.host}/ws?${tokenParam}=${encodeURIComponent(localStorage.getItem(tokenKey) ?? "")}`,
 			);
 			await new Promise((r) => {
 				ws.onopen = r;
@@ -112,7 +112,7 @@ async function overWire(
 			ws.close();
 			return results;
 		},
-		{ calls, tokenKey: LAUNCH_TOKEN_STORAGE_KEY },
+		{ calls, tokenKey: LAUNCH_TOKEN_STORAGE_KEY, tokenParam: LAUNCH_TOKEN_PARAM },
 	);
 }
 

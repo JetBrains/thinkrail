@@ -41,8 +41,14 @@ export const assertProbeExtensionServed = async ({
 	request: (method: string, params: unknown) => Promise<unknown>;
 	assetUrl: (path: string) => string;
 }) => {
-	const list = (await request("ext.list", {})) as ProbeInfo[];
-	const info = list.find((entry) => entry.name === NAME);
+	const deadline = Date.now() + 25_000;
+	let info: ProbeInfo | undefined;
+	while (Date.now() < deadline) {
+		const list = (await request("ext.list", {})) as ProbeInfo[];
+		info = list.find((entry) => entry.name === NAME);
+		if (info?.status === "active" || info?.status === "error") break;
+		await Bun.sleep(250);
+	}
 	if (info?.status !== "active" || !info.build)
 		throw new Error(`probe extension did not load: ${JSON.stringify(info)}`);
 	const snapshot = (await request("ext.snapshot", {})) as Record<string, unknown>;
