@@ -750,27 +750,20 @@ export function useLocalLayoutState(): void {
 
 export function useWorkspaceLayoutState(workspaceId: string): void {
 	useLayoutEffect(() => {
-		const state = useAppStore.getState();
-		if (
-			state.layoutStateReady &&
-			state.workbenchFrame &&
-			!state.removedWorkspaceIds[workspaceId] &&
-			!state.layoutDocumentsByWorkspace[workspaceId]
-		) {
-			try {
-				installWorkspaceView(workspaceId);
-			} catch (error) {
-				if (!useAppStore.getState().removedWorkspaceIds[workspaceId]) {
-					toast.error(errorText(error), "Couldn't load the local layout");
-				}
-			}
-			return;
-		}
-		void ensureWorkspaceLayoutState(workspaceId).catch((error) => {
+		const report = (error: unknown) => {
 			if (!useAppStore.getState().removedWorkspaceIds[workspaceId]) {
 				toast.error(errorText(error), "Couldn't load the local layout");
 			}
-		});
+		};
+		if (useAppStore.getState().layoutStateReady) {
+			try {
+				installWorkspaceView(workspaceId);
+			} catch (error) {
+				report(error);
+			}
+			return;
+		}
+		void ensureWorkspaceLayoutState(workspaceId).catch(report);
 	}, [workspaceId]);
 }
 
