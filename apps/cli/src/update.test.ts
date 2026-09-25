@@ -237,6 +237,7 @@ describe("createCliHostUpdate", () => {
 				execPath: "C:\\Downloads\\thinkrail-windows-x64.exe",
 			},
 			{ platform: "win32", execPath: "C:\\unsafe%prefix\\bin\\thinkrail.exe" },
+			{ platform: "win32", execPath: "C:\\unsafe!prefix\\bin\\thinkrail.exe" },
 		]) {
 			expect(createCliHostUpdateImpl("binary", "stable", "1.2.3", runtime)).toBeUndefined();
 		}
@@ -579,6 +580,7 @@ describe("resolveWindowsUpdatePlan", () => {
 			{ prefix: "C:\\Users\\u\\.local", channel: "nightly" },
 		],
 		["D:\\unsafe%prefix\\bin\\thinkrail.exe", {}],
+		["D:\\unsafe!prefix\\bin\\thinkrail.exe", {}],
 	])("fails closed for the manual Windows binary %s", (execPath, installMeta) => {
 		expect(() =>
 			resolveWindowsUpdatePlan({
@@ -686,6 +688,7 @@ describe("resolveWindowsPrefix", () => {
 			"/home/u/.local",
 			'D:\\a" && del /f /q C:\\Windows\\System32 && set "X=',
 			"D:\\%APPDATA%\\x",
+			"D:\\unsafe!prefix",
 			"D:\\a;C:\\b",
 			"D:\\a\nrm -rf /",
 		]) {

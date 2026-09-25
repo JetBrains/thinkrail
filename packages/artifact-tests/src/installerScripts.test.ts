@@ -297,9 +297,12 @@ describe.skipIf(process.platform !== "win32" || !powershell)("install.ps1 valida
 		expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);
 	});
 
-	test("rejects a cmd-unsafe prefix before network access", () => {
+	test.each([
+		"C:/isolated/100%",
+		"C:/isolated/unsafe!prefix",
+	])("rejects the cmd-unsafe prefix %s before network access", (prefix) => {
 		const fixture = makeFixture();
-		const result = runPowerShellInstaller(fixture, "stable", "1.2.3", "v1.2.3", "C:/isolated/100%");
+		const result = runPowerShellInstaller(fixture, "stable", "1.2.3", "v1.2.3", prefix);
 		expect(result.exitCode).not.toBe(0);
 		expect(`${result.stdout}\n${result.stderr}`).toContain("Invalid prefix");
 		expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);

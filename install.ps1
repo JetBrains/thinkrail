@@ -213,8 +213,8 @@ function Install-ThinkRail {
         $prefix = Join-Path $env:USERPROFILE '.local'
     }
     # The prefix is written into the ';'-delimited PATH registry value and printed in cmd guidance.
-    if ($prefix -match "[%;`"`r`n]") {
-        throw "Invalid prefix: must not contain '%', ';', double quotes, or newlines"
+    if ($prefix -match "[%!;`"`r`n]") {
+        throw "Invalid prefix: must not contain '%', '!', ';', double quotes, or newlines"
     }
     if (-not [System.IO.Path]::IsPathRooted($prefix)) {
         throw "Invalid prefix: must be an absolute path (got: $prefix)"
