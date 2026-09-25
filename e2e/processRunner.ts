@@ -51,6 +51,10 @@ export function processRunnerInterruption(): NodeJS.Signals | null {
 	return interruptedBy;
 }
 
+export function e2eProcessDetached(platform: NodeJS.Platform): boolean {
+	return platform !== "win32";
+}
+
 function readPosixProcessSnapshot(): PosixProcessSnapshot[] {
 	const result = spawnSync("ps", ["-A", "-o", "pid=,ppid=,pgid="], { encoding: "utf8" });
 	if (result.error || result.status !== 0 || typeof result.stdout !== "string") return [];
@@ -256,7 +260,7 @@ export async function runE2eProcess(
 	if (!executable) throw new Error("Cannot run an empty E2E command");
 	const child = spawn(executable, command.slice(1), {
 		cwd: E2E_ROOT_DIR,
-		detached: true,
+		detached: e2eProcessDetached(process.platform),
 		env: options.env ?? process.env,
 		stdio: ["ignore", options.stdout ?? "inherit", "inherit"],
 		windowsHide: true,
