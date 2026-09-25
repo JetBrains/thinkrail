@@ -1,5 +1,5 @@
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import type { PiEvent, SessionStats } from "@thinkrail/contracts";
+import type { ExtActionContext, PiEvent, SessionStats } from "@thinkrail/contracts";
 
 export type Off = () => void;
 export type Disposer = () => void | Promise<void>;
@@ -14,11 +14,7 @@ export interface SessionRef {
 	isStreaming: boolean;
 }
 
-export interface ActionCtx {
-	projectId?: string;
-	workspaceId?: string;
-	sessionId?: string;
-}
+export type ActionCtx = ExtActionContext;
 
 export type ActionHandler = (payload: unknown, ctx: ActionCtx) => unknown;
 

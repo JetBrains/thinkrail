@@ -432,17 +432,22 @@ channel fan-out, and the process-boot wrapper both launchers share.
   knows the parameter name. Origin alone would stop cross-site pages; the token also stops DNS
   rebinding (the attacker page's origin equals its own `Host`) and other local pages on a wildcard bind.
   `launchAuthResponse` maps the verdict to the `403` / `401` / `204` response, or `null` to continue.
-  Known limit: the query token rides only on URLs built through the web's `hostUrl()`. Relative requests
-  a served `/ext/*` bundle makes by itself (chunk imports, CSS `url()` assets, source maps) carry no
-  token and get `401`. The extension-serving work must pick one fix (single-file bundles with inlined
-  assets, token-rewritten asset URLs, or an `HttpOnly SameSite=Strict` cookie set by `/auth`) and
-  record it here.
+  The query token rides only on URLs built through the web's `hostUrl()`, so `/ext/*` serves only
+  self-contained files: one JS bundle per surface (no chunks, inline source map, assets as data URLs)
+  and one CSS file the web loads through its own tokened `<link>`. A request a bundle makes by itself
+  would get `401`; the builder never emits one.
 - **UI extension wiring** (`extWiring.ts`): `installExtHost` creates the [[submodule-server-ext]] host
   over `<dataDir>/extensions` + `<dataDir>/ext-store`, injects live-session reads from `agent`, installs
   its `piFactories` as the agent's host-extension source, and maps `onPiFactoriesChanged` to
   `reloadSessionsForHostExtensions`. `createServer` starts it, forwards every published session event to
   `observe`, passes trusted projects as roots on boot and on every project update, and disposes it on
-  stop. Wire methods, pushes, and the `/ext` route are not wired yet.
+  stop. It also owns the extension wire: handlers `ext.list`, `ext.snapshot`, `ext.action`, `ext.reload`,
+  `ext.reportError` (joined into the registry through `setExtHandlers`, so `handlers.ts` holds no ext
+  code), broadcast pushes `ext.changed`, `ext.removed`, `ext.channel`, `ext.channelsDropped` (a socket
+  subscribes only when its client protocol is at least `EXT_PROTOCOL_VERSION`), and the route
+  `GET /ext/<name>/<build>/<surface>.js|.css` behind launch auth. The route answers
+  `Cache-Control: private, max-age=31536000, immutable` because `<build>` is a content hash; a stale or
+  unknown build is `404`, a non-GET is `405`.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for

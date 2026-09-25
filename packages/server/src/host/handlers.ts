@@ -1060,8 +1060,21 @@ const handlers: Record<string, Handler> = {
 	},
 };
 
+let extHandlers: Readonly<Record<string, Handler>> = {};
+
+export const setExtHandlers = (next: Readonly<Record<string, Handler>>) => {
+	extHandlers = next;
+};
+
+const handlerFor = (method: string) =>
+	Object.hasOwn(handlers, method)
+		? handlers[method]
+		: Object.hasOwn(extHandlers, method)
+			? extHandlers[method]
+			: undefined;
+
 export function requestMethodDiagnostic(method: string): string {
-	return Object.hasOwn(handlers, method) ? method : "unknown method";
+	return handlerFor(method) ? method : "unknown method";
 }
 
 export function shouldRefreshOpenReview(allowCached: boolean | undefined): boolean {
@@ -1073,7 +1086,7 @@ export async function handleRequest(
 	params: unknown,
 	ctx: RequestContext,
 ): Promise<unknown> {
-	const handler = Object.hasOwn(handlers, method) ? handlers[method] : undefined;
+	const handler = handlerFor(method);
 	if (!handler) throw new Error(`Unknown method: ${method}`);
 	return handler(params, ctx);
 }

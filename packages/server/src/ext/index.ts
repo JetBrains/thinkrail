@@ -1,3 +1,4 @@
+export { buildSurface, type ExtAsset } from "./build";
 export type { ProjectRoot } from "./discovery";
 export { projectExtensionsDir } from "./discovery";
 export { createExtHost, type ExtHost, type ExtHostOptions, type ExtLogEntry } from "./host";

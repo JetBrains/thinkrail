@@ -1,24 +1,101 @@
 import { join } from "node:path";
-import type { Project } from "@thinkrail/contracts";
+import {
+	type ExtActionContext,
+	type ExtWsMethodMap,
+	type Project,
+	WS_CHANNELS,
+	type WsChannel,
+} from "@thinkrail/contracts";
 import {
 	getSessionStats,
 	listLiveSessionRefs,
 	reloadSessionsForHostExtensions,
 	setHostExtensionFactorySource,
 } from "../agent";
-import { createExtHost } from "../ext";
+import { createExtHost, type ExtHost } from "../ext";
 import { logger } from "../log";
 import { dataDir } from "../persistence";
 import { getProjects } from "../projects";
+import { setExtHandlers } from "./handlers";
 
 const log = logger("ext");
+
+const ASSET_PATH = /^\/ext\/([a-z][a-z0-9-]*)\/([0-9a-f]{16})\/([a-z][a-z0-9-]*\.(?:js|css))$/;
+const IMMUTABLE = "private, max-age=31536000, immutable";
+
+type ExtHandlers = Parameters<typeof setExtHandlers>[0];
+type ExtPublish = (channel: WsChannel, data: unknown) => void;
 
 const trustedProjectRoots = (projects: readonly Project[]) =>
 	projects
 		.filter((project) => project.trusted === true && project.closed !== true)
 		.map((project) => ({ projectId: project.id, path: project.path }));
 
-export const installExtHost = () => {
+const record = (params: unknown): Record<string, unknown> =>
+	typeof params === "object" && params !== null ? { ...params } : {};
+
+const requireString = (params: Record<string, unknown>, key: string) => {
+	const value = params[key];
+	if (typeof value !== "string" || value === "") throw new Error(`${key} must be a string`);
+	return value;
+};
+
+const actionContext = (value: unknown): ExtActionContext => {
+	const raw = record(value);
+	const pick = (key: keyof ExtActionContext) =>
+		typeof raw[key] === "string" ? { [key]: raw[key] } : {};
+	return { ...pick("projectId"), ...pick("workspaceId"), ...pick("sessionId") };
+};
+
+const extHandlers = (extHost: ExtHost) =>
+	({
+		"ext.list": () => extHost.list(),
+		"ext.snapshot": (params) => {
+			const keys = record(params).keys;
+			if (keys === undefined) return extHost.snapshot();
+			if (!Array.isArray(keys) || keys.some((key) => typeof key !== "string"))
+				throw new Error("keys must be a string array");
+			return extHost.snapshot(keys);
+		},
+		"ext.action": (params) => {
+			const p = record(params);
+			return extHost.invokeAction({
+				ext: requireString(p, "ext"),
+				id: requireString(p, "id"),
+				payload: p.payload,
+				ctx: actionContext(p.ctx),
+			});
+		},
+		"ext.reload": (params) => extHost.reload(requireString(record(params), "name")),
+		"ext.reportError": (params) => {
+			const p = record(params);
+			const name = requireString(p, "name");
+			if (!extHost.get(name)) throw new Error(`extension "${name}" is not loaded`);
+			extHost.recordError(
+				name,
+				`view ${requireString(p, "surfaceId")}`,
+				requireString(p, "message"),
+			);
+			return { ok: true } as const;
+		},
+	}) satisfies Record<keyof ExtWsMethodMap, ExtHandlers[string]>;
+
+export const serveExtAsset = (extHost: ExtHost, req: Request, pathname: string) => {
+	if (req.method !== "GET" && req.method !== "HEAD")
+		return new Response("method not allowed", { status: 405 });
+	const match = ASSET_PATH.exec(pathname);
+	const asset = match ? extHost.asset(match[1] ?? "", match[2] ?? "", match[3] ?? "") : undefined;
+	if (!asset) return new Response("not found", { status: 404 });
+	return new Response(asset.body, {
+		headers: {
+			"content-type": asset.contentType,
+			"cache-control": IMMUTABLE,
+			"x-content-type-options": "nosniff",
+		},
+	});
+};
+
+export const installExtHost = ({ publish }: { publish?: ExtPublish } = {}) => {
 	const extHost = createExtHost({
 		userDir: join(dataDir(), "extensions"),
 		storeDir: join(dataDir(), "ext-store"),
@@ -28,6 +105,10 @@ export const installExtHost = () => {
 			stats: getSessionStats,
 		},
 		onPiFactoriesChanged: () => void reloadSessionsForHostExtensions(),
+		onChanged: (info) => publish?.(WS_CHANNELS.extChanged, info),
+		onRemoved: (name) => publish?.(WS_CHANNELS.extRemoved, { name }),
+		onChannel: (key, value) => publish?.(WS_CHANNELS.extChannel, { key, value }),
+		onChannelsDropped: (name, keys) => publish?.(WS_CHANNELS.extChannelsDropped, { name, keys }),
 		warn: (message) => log.warn(message),
 	});
 	setHostExtensionFactorySource({
@@ -38,13 +119,20 @@ export const installExtHost = () => {
 			else log.warn("pi factory failed", error);
 		},
 	});
+	setExtHandlers(extHandlers(extHost));
 	const syncProjectRoots = () =>
 		extHost
 			.setProjectRoots(trustedProjectRoots(getProjects()))
 			.catch((error: unknown) => log.warn("extension rescan failed", error));
 	const dispose = async () => {
+		setExtHandlers({});
 		setHostExtensionFactorySource(undefined);
 		await extHost.dispose();
 	};
-	return { extHost, syncProjectRoots, dispose };
+	return {
+		extHost,
+		syncProjectRoots,
+		serveAsset: (req: Request, pathname: string) => serveExtAsset(extHost, req, pathname),
+		dispose,
+	};
 };

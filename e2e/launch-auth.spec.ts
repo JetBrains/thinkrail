@@ -25,6 +25,9 @@ test("the host refuses a foreign Origin and a missing token", async ({ request, 
 	).toBe(403);
 	expect((await request.get(`${baseURL}/ws`)).status()).toBe(401);
 	expect((await request.get(`${baseURL}/files/missing/readme.md`)).status()).toBe(401);
+	const extAsset = `${baseURL}/ext/missing/0000000000000000/main.js`;
+	expect((await request.get(extAsset)).status()).toBe(401);
+	expect((await request.get(withE2eLaunchToken(extAsset))).status()).toBe(404);
 	expect((await request.get(`${baseURL}/health`)).status()).toBe(200);
 });
 

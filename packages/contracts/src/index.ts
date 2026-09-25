@@ -29,7 +29,15 @@ export {
 	TODO_NUDGE_PREFIX,
 } from "./domain";
 export type * from "./ext";
-export { SURFACE_SLOTS } from "./ext";
+export {
+	EXT_RUNTIME_GLOBAL,
+	EXT_RUNTIME_MODULES,
+	EXT_VIEW_EXPORTS,
+	EXT_WS_CHANNELS,
+	EXT_WS_METHODS,
+	extAssetPath,
+	SURFACE_SLOTS,
+} from "./ext";
 export type * from "./nativeClient";
 export type * from "./piProtocol";
 export { assistantToolCallsAreExecutable, isTranscriptMessageRole } from "./piProtocol";

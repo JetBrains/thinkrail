@@ -87,7 +87,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `feedback` | host-scoped usage count + addressed product-interview invitation lifecycle | [feedback/SPEC.md](src/feedback/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 | `editors` | detect installed editors/IDEs, launch one at a worktree, reveal a worktree in the file manager | [editors/SPEC.md](src/editors/SPEC.md) |
-| `ext` | UI extension host core: discovery (+ project trust), manifest validation, jiti loader with generations, `Tr` registries (observers, pi factories, channels, actions, store, timers, logs) | [ext/SPEC.md](src/ext/SPEC.md) |
+| `ext` | UI extension host core: discovery (+ project trust), manifest validation, view build (`Bun.build` + Tailwind), jiti loader with generations, `Tr` registries (observers, pi factories, channels, actions, store, timers, logs), asset lookup | [ext/SPEC.md](src/ext/SPEC.md) |
 | `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
 | `templates` | file CRUD over pi's prompt-template dirs (global + project scoped) | [templates/SPEC.md](src/templates/SPEC.md) |
 
@@ -125,7 +125,7 @@ the host from env via `bootHost` for dev/e2e.
   `<dataDir>/delegation`, bound in the agent's delegation embedding) — otherwise the pi runtime alone; auth
   passes desired opaque Central paths through its public generation seam
 - `ext` → (no feature modules) — only `@thinkrail/ext`, `@thinkrail/contracts`, `@thinkrail/shared/paths`,
-  `typebox`, `jiti`, pi-coding-agent. Sessions, trust roots, dirs, warnings, and the pi-factory bridge are
+  `typebox`, `jiti`, pi-coding-agent, `react` + `react-dom` (export names), `tailwindcss`. Sessions, trust roots, dirs, warnings, and the pi-factory bridge are
   injected by `host` (`host/extWiring.ts`), so there is no `ext`→`agent` edge
 - `persistence`, `dialog`, `history`, `templates`, `subprocess` → (leaves)
 

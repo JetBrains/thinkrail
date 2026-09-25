@@ -26,8 +26,11 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
     `Disposer` runs when the generation is disposed (close watchers, sockets, …).
   - `Tr`, `Off`, `Disposer`, `SessionRef`, `ActionCtx`, `ActionHandler`, `ExtStore`, `PiEventName`,
     `PiEventOf<E>`, `PiExtensionFactory` (pi's `ExtensionFactory`, type-only).
-- `./view` (`src/view.ts`, browser side): view types only for now. The runtime-global shim and hooks
-  arrive with the web runtime; the host resolves this specifier to that shim when it bundles views.
+- `./view` (`src/view.ts`, browser side): `SurfaceProps`, `HostContext` (from contracts), and
+  **declared** (type-only, no body) runtime values named by contracts' `EXT_VIEW_EXPORTS`: `useChannel`,
+  `useAction`, `useHostContext`, `openSurface`, `ui`, `cn`. The file emits nothing; the host's view
+  builder resolves this specifier to a shim over the web's runtime global, so the declarations only
+  type-check authoring code.
 
 ## Host-half contract (`Tr`)
 

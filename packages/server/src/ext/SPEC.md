@@ -37,7 +37,7 @@ actionable one-liners with a JSON-ish path, e.g.
 
 ## Generations (hot swap)
 
-- A load builds a **new generation**: validate manifest, jiti-import `index.ts` (`moduleCache: false`,
+- A load builds a **new generation**: validate manifest, build every view (see "View build"), jiti-import `index.ts` (`moduleCache: false`,
   virtual modules for `@thinkrail/ext`, `@earendil-works/pi-coding-agent`, `typebox`), run the default
   export with a `Tr` bound to that generation.
 - Only on success does the generation become current; then the old generation is disposed. A failure
@@ -52,6 +52,39 @@ actionable one-liners with a JSON-ish path, e.g.
   channel snapshots. A swap also drops the old generation's snapshots before the new one's buffered
   publishes flush, so a key the new code no longer publishes disappears.
 
+## View build
+
+Each surface's `<id>.tsx` is bundled with `Bun.build` into one self-contained ESM file: browser target,
+no code splitting, production JSX (`react/jsx-runtime`), inline source map, and images/fonts inlined as
+data URLs. A single file means the browser never makes a relative request that lacks the launch token.
+
+- **Runtime-global plugin.** `react`, `react/jsx-runtime`, `react/jsx-dev-runtime`, `react-dom` and
+  `@thinkrail/ext/view` (contracts' `EXT_RUNTIME_MODULES`) resolve to virtual shims that read
+  `globalThis[EXT_RUNTIME_GLOBAL][specifier]` and re-export its members. React's named-export lists come
+  from enumerating the host's own `react` / `react-dom` (the root catalog pins the browser's version too);
+  the view list is contracts' `EXT_VIEW_EXPORTS`. Extension-local deps (the extension's own
+  `node_modules`) bundle normally, and their `react` imports hit the same shims, so one React instance runs.
+- **CSS (Tailwind v4).** The host compiles one stylesheet per surface with the `tailwindcss` compiler
+  against Tailwind's theme plus the app's `@theme` blocks (`appTheme.generated.ts`, produced by
+  `bun run --filter @thinkrail/server ext-theme:generate` from `apps/web`'s CSS; `appTheme.test.ts`
+  fails when stale), so
+  extension utilities resolve to the same semantic tokens as the app. Candidates are every class-like
+  token in the bundled JS. No preflight: the app already ships it. CSS a view imports is appended. Results
+  are cached in memory by a hash of the candidate set.
+- **Build id.** A generation's assets carry a content hash (`ExtensionInfo.build`, 16 hex) over every
+  surface's JS and CSS. It is the URL segment, so an immutable cache entry can never serve stale code,
+  even though generation numbers restart every boot.
+- A build error fails the load like any other load error (old generation stays). Messages name the file
+  and position: `main.tsx:3:9: Could not resolve "x"`.
+- `Bun.build` and the Tailwind compiler both run inside the compiled binary (`bun build --compile`); the
+  Tailwind theme is text-imported, so no file on disk is read.
+
+## Serving
+
+`asset(name, build, file)` returns the current generation's `<surface>.js` or `<surface>.css` body and
+content type, or `undefined` for an unknown name, stale build, or unknown file. HTTP framing, launch
+auth, and caching headers are `host`'s job.
+
 ## `tr.pi` and live sessions
 
 `piFactories()` returns the current generations' pi factories. The composition root feeds it to the
@@ -65,21 +98,25 @@ agent's host-extension bridge, one factory injected into every top-level session
 - `tr.on(type, fn)`: the composition root forwards every projected session event (`observe`) —
   the same payloads as the `pi.event` channel, top-level sessions only. Handler errors go to the
   extension's log.
-- Channels: key `<name>:<key>`; `snapshot(keys?)` returns last values; `onChannel` fires per publish.
+- Channels: key `<name>:<key>`; `snapshot(keys?)` returns last values; `onChannel` fires per publish;
+  `onChannelsDropped(name, keys)` fires when a swap or unload drops keys, so clients clear them.
 - Actions: `invokeAction({ ext, id, payload, ctx })` runs the current generation's handler; unknown
   extension or id throws. A duplicate id within one generation throws at registration.
 - Store: `<dataDir>/ext-store/<name>.json`, loaded lazily, writes serialized per extension and
   atomic (temp file + rename). The store survives reloads and unloads.
-- Logs: in-memory ring (500 entries) per extension, fed by `tr.log`, handler errors, and load failures;
-  `logs(name, since?)`.
+- Logs: in-memory ring (500 entries) per extension, fed by `tr.log`, handler errors, load and build
+  failures, and view errors the web reports (`recordError`); `logs(name, since?)`.
 - `tr.sessions`: read-only projections injected by the composition root; stats are pi's, never
   recomputed.
 
 ## Boundary
 
-- **Public surface (barrel):** `createExtHost(options)` → `ExtHost`; types `ExtHost`, `ExtHostOptions`,
-  `ExtLogEntry`, `ProjectRoot`; `parseManifest` + `ExtensionManifest` (validation reuse).
-- **Allowed deps:** `@thinkrail/ext` (types + the module object handed to jiti), `@thinkrail/contracts` (types, `SURFACE_SLOTS`), `@thinkrail/shared/paths`, `typebox`,
-  `jiti`, pi-coding-agent (types, and the module object handed to jiti).
+- **Public surface (barrel):** `createExtHost(options)` → `ExtHost` (incl. `asset`); types `ExtHost`,
+  `ExtHostOptions`, `ExtLogEntry`, `ExtAsset`, `ProjectRoot`; `parseManifest` + `ExtensionManifest`
+  (validation reuse); `buildSurface` (one view's JS + CSS, for validation reuse).
+- **Allowed deps:** `@thinkrail/ext` (types + the module object handed to jiti), `@thinkrail/contracts`
+  (types, `SURFACE_SLOTS`, runtime-module names), `@thinkrail/shared/paths`, `typebox`, `jiti`,
+  pi-coding-agent (types, and the module object handed to jiti), `react` + `react-dom` (export-name
+  enumeration only), `tailwindcss` (compiler + `theme.css` text), `Bun.build`.
 - **Forbidden:** `host`; `agent`, `persistence`, `log`, and every other feature module. Sessions, trust,
   directories, warnings, and publishing are injected by the composition root, which keeps this module testable against a fixture directory.

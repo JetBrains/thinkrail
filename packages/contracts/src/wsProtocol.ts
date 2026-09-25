@@ -45,6 +45,7 @@ import type {
 	Workspace,
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
+import { EXT_WS_CHANNELS, EXT_WS_METHODS, type ExtWsMethodMap } from "./ext";
 import type {
 	AskUserAnswersDetails,
 	AskUserQuestionResult,
@@ -97,7 +98,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 68;
+export const PROTOCOL_VERSION = 69;
+export const EXT_PROTOCOL_VERSION = 69;
 export const LAUNCH_TOKEN_PARAM = "token";
 export const LAUNCH_AUTH_PATH = "/auth";
 export const PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION = 67;
@@ -267,6 +269,7 @@ export const WS_METHODS = {
 	templateGet: "template.get",
 	templateSave: "template.save",
 	templateDelete: "template.delete",
+	...EXT_WS_METHODS,
 } as const;
 
 export const WS_CHANNELS = {
@@ -292,6 +295,7 @@ export const WS_CHANNELS = {
 	feedbackInterview: "feedback.interview",
 	reviewChanged: "review.changed",
 	reviewFailed: "review.failed",
+	...EXT_WS_CHANNELS,
 } as const;
 
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
@@ -375,7 +379,7 @@ export interface WorkspaceWatchReadyResult {
 	startupNudge: boolean;
 }
 
-export interface WsMethodMap {
+export interface WsMethodMap extends ExtWsMethodMap {
 	"project.open": { params: { path: string }; result: Project };
 	"project.list": { params: Record<string, never>; result: Project[] };
 	"project.close": { params: { id: string }; result: Ack };

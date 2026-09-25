@@ -11,6 +11,8 @@ import type {
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
 import {
+	EXT_PROTOCOL_VERSION,
+	EXT_WS_CHANNELS,
 	FEEDBACK_INTERVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -229,6 +231,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			if (url.pathname.startsWith("/files/")) {
 				return serveWorktreeFile(url.pathname);
 			}
+			if (url.pathname.startsWith("/ext/")) return extensions.serveAsset(req, url.pathname);
 			if (staticDir) {
 				return serveStatic(url.pathname, staticDir);
 			}
@@ -262,6 +265,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
 				ws.subscribe(WS_CHANNELS.reviewFailed);
+				if (ws.data.protocolVersion >= EXT_PROTOCOL_VERSION)
+					for (const channel of Object.values(EXT_WS_CHANNELS)) ws.subscribe(channel);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -467,7 +472,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false);
 
-	const extensions = installExtHost();
+	const extensions = installExtHost({
+		publish: (channel, data) => server.publish(channel, JSON.stringify({ channel, data })),
+	});
 	setProjectPublisher((project) => {
 		void extensions.syncProjectRoots();
 		const capture = additionalCapture();

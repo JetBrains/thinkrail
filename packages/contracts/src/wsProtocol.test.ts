@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { ReviewFixDetails } from "./domain";
+import { extAssetPath } from "./ext";
 import {
 	ACTIVITY_PROTOCOL_VERSION,
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	customMessageText,
+	EXT_PROTOCOL_VERSION,
 	isTodoReviewFixMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	normalizeSessionTitle,
@@ -144,4 +146,14 @@ describe("customMessageText", () => {
 			]),
 		).toBe("ab");
 	});
+});
+
+test("UI extensions advance the protocol and name their methods and pushes", () => {
+	expect(EXT_PROTOCOL_VERSION).toBe(69);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXT_PROTOCOL_VERSION);
+	expect(WS_METHODS.extAction).toBe("ext.action");
+	expect(WS_CHANNELS.extChannelsDropped).toBe("ext.channelsDropped");
+	expect(extAssetPath({ name: "demo", build: "abc", surfaceId: "main", kind: "css" })).toBe(
+		"/ext/demo/abc/main.css",
+	);
 });

@@ -43,7 +43,8 @@ of the host.
   anchors stay aligned) from `domain`; **`isTranscriptMessageRole(role)`**
   from `piProtocol` (the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
-  would silently shift every later jump anchor); `SURFACE_SLOTS` from `ext`; `export *` (value) of `wsProtocol`
+  would silently shift every later jump anchor); from `ext`: `SURFACE_SLOTS`, `EXT_RUNTIME_GLOBAL`,
+  `EXT_RUNTIME_MODULES`, `EXT_VIEW_EXPORTS`, `extAssetPath`; `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, feature-introduction versions, and the
   launch-auth names `LAUNCH_TOKEN_PARAM` + `LAUNCH_AUTH_PATH` shared by host and browser).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
@@ -389,7 +390,21 @@ of the host.
   validator's allowed set) + `SurfaceSlot`, `ExtensionSurface` (`tool` names a `toolCard`'s tool,
   `customType` a `message` slot's custom message type), `ExtensionScope`, `ExtensionStatus`, and
   `ExtensionInfo` (`generation` is the active generation, `null` when none loaded; `status: "error"` with
-  a non-null `generation` means a failed reload left the old generation running).
+  a non-null `generation` means a failed reload left the old generation running; `build` is the content
+  hash of that generation's view assets, the `/ext` URL segment, `null` with no generation).
+  `ExtActionContext` (active project/workspace/session) and `HostContext` (that + `theme`) are what a view
+  sees and what `ext.action` carries. The view runtime contract shared by host builder and web:
+  `EXT_RUNTIME_GLOBAL` (`"__thinkrail_runtime__"`), `EXT_RUNTIME_MODULES` (the bare specifiers the host
+  shims to that global: `react`, `react/jsx-runtime`, `react/jsx-dev-runtime`, `react-dom`,
+  `@thinkrail/ext/view`), `EXT_VIEW_EXPORTS` (`@thinkrail/ext/view`'s runtime names), and
+  `extAssetPath({ name, build, surfaceId, kind })` → `/ext/<name>/<build>/<surfaceId>.<js|css>`.
+  Wire: `EXT_WS_METHODS` / `EXT_WS_CHANNELS` (spread into `WS_METHODS` / `WS_CHANNELS`) and
+  `ExtWsMethodMap` (extended by `WsMethodMap`): `ext.list` → `ExtensionInfo[]`, `ext.snapshot({ keys? })`
+  → key→value record, `ext.action({ ext, id, payload?, ctx? })` → the handler's result,
+  `ext.reload({ name })` → `ExtensionInfo`, `ext.reportError({ name, surfaceId, message })` → ack (view
+  ErrorBoundary reports for `ext_logs`). Pushes: `ext.changed` (`ExtensionInfo`), `ext.removed`
+  (`{ name }`), `ext.channel` (`{ key, value }`), `ext.channelsDropped` (`{ name, keys }`: a swap or unload
+  dropped these keys; clear them). All enter at `EXT_PROTOCOL_VERSION` = v69.
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
   update bridge exposes a monotonic state snapshot, prompt manual check, explicit restart action, and state
   subscription without granting updater authority to an ordinary browser connection.

@@ -1,5 +1,6 @@
 import type { ExtensionInfo, ExtensionSurface, SessionEventPayload } from "@thinkrail/contracts";
 import type { ActionCtx, ExtStore, PiExtensionFactory } from "@thinkrail/ext";
+import { buildAssets, type ExtAssets } from "./build";
 import { type Candidate, discoverExtensions, type ProjectRoot } from "./discovery";
 import { createGeneration, type Generation } from "./generation";
 import { importExtension } from "./loader";
@@ -24,6 +25,7 @@ export interface ExtHostOptions {
 	onChanged?: (info: ExtensionInfo) => void;
 	onRemoved?: (name: string) => void;
 	onChannel?: (key: string, value: unknown) => void;
+	onChannelsDropped?: (name: string, keys: string[]) => void;
 	warn?: (message: string) => void;
 }
 
@@ -33,6 +35,7 @@ interface ExtState {
 	surfaces: ExtensionSurface[];
 	permissions: string[];
 	current: Generation | undefined;
+	assets: ExtAssets | undefined;
 	error: string | undefined;
 	queue: Promise<unknown>;
 }
@@ -46,6 +49,7 @@ const infoOf = (state: ExtState): ExtensionInfo => ({
 	generation: state.current?.id ?? null,
 	surfaces: state.surfaces,
 	permissions: state.permissions,
+	build: state.assets?.build ?? null,
 	...(state.error !== undefined ? { error: state.error } : {}),
 });
 
@@ -83,7 +87,9 @@ export const createExtHost = (options: ExtHostOptions) => {
 	};
 
 	const dropChannels = (name: string) => {
-		for (const key of [...channels.keys()]) if (key.startsWith(`${name}:`)) channels.delete(key);
+		const keys = [...channels.keys()].filter((key) => key.startsWith(`${name}:`));
+		for (const key of keys) channels.delete(key);
+		if (keys.length > 0 && !disposed) options.onChannelsDropped?.(name, keys);
 	};
 
 	const disposeGeneration = async (name: string, generation: Generation) => {
@@ -107,6 +113,12 @@ export const createExtHost = (options: ExtHostOptions) => {
 		};
 		const manifest = await readManifest(dir);
 		if (!manifest.ok) return fail(manifest.errors.join("\n"));
+		let assets: ExtAssets;
+		try {
+			assets = await buildAssets({ dir, surfaces: manifest.manifest.surfaces });
+		} catch (error) {
+			return fail(errorMessage(error));
+		}
 		let factory: Awaited<ReturnType<typeof importExtension>>;
 		try {
 			factory = await importExtension(dir);
@@ -136,6 +148,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 		const previous = state.current;
 		const piChanged = (previous?.piFactories.size ?? 0) > 0 || generation.piFactories.size > 0;
 		state.current = generation;
+		state.assets = assets;
 		state.error = undefined;
 		state.title = manifest.manifest.title;
 		state.surfaces = manifest.manifest.surfaces;
@@ -155,6 +168,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 		surfaces: [],
 		permissions: [],
 		current: undefined,
+		assets: undefined,
 		error: undefined,
 		queue: Promise.resolve(),
 	});
@@ -166,6 +180,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 		return serialized(state, async () => {
 			const generation = state.current;
 			state.current = undefined;
+			state.assets = undefined;
 			const hadPiFactories = (generation?.piFactories.size ?? 0) > 0;
 			if (generation) await disposeGeneration(name, generation);
 			dropChannels(name);
@@ -271,6 +286,10 @@ export const createExtHost = (options: ExtHostOptions) => {
 				log(ext, "error", `action ${id}: ${formatLog([error])}`);
 				throw error;
 			}
+		},
+		asset(name: string, build: string, file: string) {
+			const assets = states.get(name)?.assets;
+			return assets?.build === build ? assets.files.get(file) : undefined;
 		},
 		logs(name: string, since = 0) {
 			return (logs.get(name) ?? []).filter((entry) => entry.at >= since);
