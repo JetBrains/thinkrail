@@ -177,6 +177,7 @@ function runPowerShellInstaller(
 	channel: string,
 	version: string,
 	tag = "v1.2.3",
+	prefix = "C:/isolated/thinkrail",
 ): ScriptResult {
 	if (!powershell) throw new Error("PowerShell is unavailable");
 	const wrapper = join(fixture.root, "invoke-installer.ps1");
@@ -192,7 +193,7 @@ function global:Invoke-WebRequest {
     Add-Content -LiteralPath $env:FAKE_NETWORK_LOG -Value ("artifact:" + $Uri)
     throw "controlled artifact stop"
 }
-& $env:THINKRAIL_INSTALLER -Channel $env:TEST_CHANNEL -Version $env:TEST_VERSION -Prefix "C:/isolated/thinkrail" -NoModifyPath
+& $env:THINKRAIL_INSTALLER -Channel $env:TEST_CHANNEL -Version $env:TEST_VERSION -Prefix $env:TEST_PREFIX -NoModifyPath
 `,
 	);
 	const child = Bun.spawnSync(
@@ -206,6 +207,7 @@ function global:Invoke-WebRequest {
 				THINKRAIL_INSTALLER: powershellInstaller,
 				TEST_CHANNEL: channel,
 				TEST_VERSION: version,
+				TEST_PREFIX: prefix,
 				FAKE_TAG: tag,
 				FAKE_NETWORK_LOG: networkLog,
 			},
@@ -238,6 +240,17 @@ describe("install.sh validation", () => {
 		expect(result.exitCode).not.toBe(0);
 		expect(result.stderr).toContain(message);
 		expect(curlRequests(fixture)).toEqual([]);
+	});
+
+	test("reports a release response without a usable tag before artifact download", () => {
+		const fixture = makeFixture();
+		const result = runInstaller(fixture, ["--channel", "nightly"], {
+			FAKE_API_BODY: '{"tag_name":"v1.2.3"}',
+		});
+		expect(result.exitCode).not.toBe(0);
+		expect(result.stderr).toContain("Failed to resolve a nightly release");
+		expect(curlRequests(fixture)).toHaveLength(1);
+		expect(curlRequests(fixture)[0]).toContain("api.github.com");
 	});
 
 	test("rejects a resolved tag from the wrong channel before artifact download", () => {
@@ -281,6 +294,14 @@ describe.skipIf(process.platform !== "win32" || !powershell)("install.ps1 valida
 		const result = runPowerShellInstaller(fixture, channel, requested);
 		expect(result.exitCode).not.toBe(0);
 		expect(`${result.stdout}\n${result.stderr}`).toContain(message);
+		expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);
+	});
+
+	test("rejects a cmd-unsafe prefix before network access", () => {
+		const fixture = makeFixture();
+		const result = runPowerShellInstaller(fixture, "stable", "1.2.3", "v1.2.3", "C:/isolated/100%");
+		expect(result.exitCode).not.toBe(0);
+		expect(`${result.stdout}\n${result.stderr}`).toContain("Invalid prefix");
 		expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);
 	});
 
