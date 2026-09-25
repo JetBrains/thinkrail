@@ -13,7 +13,13 @@ export type {
 	BasicAnalyticsEvent,
 	BuildKind,
 	LoginMethod,
+	PlanActionSource,
+	PlanAddSurface,
+	PlanOpenSurface,
 	ProviderAnalyticsProperties,
+	ReviewCommentActor,
+	ReviewCommentKindProp,
+	ReviewResolveOutcome,
 	SendMode,
 	SetupAction,
 } from "./events";

@@ -1025,6 +1025,7 @@ export default function PlanPane({
 					...(titleEdited ? { titleEdited: true } : {}),
 					...(prBody !== undefined ? { body: prBody } : {}),
 					...(draft ? { draft: true } : {}),
+					source: "plan_page",
 				},
 				{ timeoutMs: 180_000 },
 			);

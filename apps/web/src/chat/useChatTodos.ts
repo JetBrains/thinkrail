@@ -45,6 +45,8 @@ export interface ChatTodos {
 	add: (title: string) => Promise<void>;
 	remove: (id: string) => Promise<void>;
 	openPlan: () => void;
+	/** Records plan_opened for the in-chat popup (openPlan already records the page). */
+	notifyOpened: (surface: "popup") => void;
 	openChanges: (target: { sha: string } | { path: string }) => void;
 	startReview: (id: string) => Promise<void>;
 	reviewAll: () => Promise<{ total: number; alreadyRunning?: boolean }>;
@@ -175,7 +177,12 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		const title = rawTitle.trim();
 		if (!title) return;
 		const requestIdentity = identity;
-		const todo = await getTransport().request("todo.add", { workspaceId, sessionId, title });
+		const todo = await getTransport().request("todo.add", {
+			workspaceId,
+			sessionId,
+			title,
+			surface: "chat",
+		});
 		if (!live(requestIdentity)) return;
 		readGeneration.current += 1;
 		setData((prev) =>
@@ -237,9 +244,16 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		}
 	};
 
+	const notifyOpened = (surface: "page" | "popup") => {
+		void getTransport()
+			.request("todo.list", { workspaceId, sessionId, opened: surface })
+			.catch(() => {});
+	};
+
 	const openPlan = () => {
 		const state = useAppStore.getState();
 		const title = selectChatTitle(state, workspaceId, sessionId);
+		notifyOpened("page");
 		state.openDoc({
 			kind: "plan",
 			id: `${workspaceId}:plan:${sessionId}`,
@@ -280,6 +294,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		add,
 		remove,
 		openPlan,
+		notifyOpened: (surface: "popup") => notifyOpened(surface),
 		openChanges,
 		startReview,
 		reviewAll,

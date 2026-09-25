@@ -200,6 +200,9 @@ import { planReviewRunning } from "./planReviewQueue";
 import {
 	additionalCapture,
 	captureAdditional,
+	captureReviewCommentAdded,
+	captureReviewCommentResolved,
+	captureReviewCommentsSent,
 	centralConnectOutcome,
 	directoryPickOutcome,
 	observePrAction,
@@ -273,20 +276,26 @@ function resolveTemplateReadDirs(params: TemplateReadLocation) {
 
 function fireReviewPrompt(
 	workspaceId: string,
-	ids: string[],
+	comments: readonly ReviewComment[],
 	sessionId: string,
 	pkg: string,
+	capture: AdditionalAnalyticsCapture | null,
 	send: (sessionId: string, text: string) => Promise<void> = promptSession,
 ): void {
+	const ids = comments.map((c) => c.id);
 	void ackSend(runObservation.send(sessionId, "internal", () => send(sessionId, pkg)))
-		.then(undefined, (err) => {
-			rollbackSend(workspaceId, ids, sessionId);
-			notifyExtUi(
-				sessionId,
-				`Review send failed: ${err instanceof Error ? err.message : String(err)}`,
-				"error",
-			);
-		})
+		.then(
+			// capture on acceptance, not before: a pre-turn rejection rolls these back to draft.
+			() => captureReviewCommentsSent(capture, comments),
+			(err) => {
+				rollbackSend(workspaceId, ids, sessionId);
+				notifyExtUi(
+					sessionId,
+					`Review send failed: ${err instanceof Error ? err.message : String(err)}`,
+					"error",
+				);
+			},
+		)
 		.catch(() => {
 			log.warn("review send rollback failed");
 		});
@@ -333,6 +342,7 @@ async function sendToFileChat(
 	workspaceId: string,
 	comments: ReviewComment[],
 	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: string },
+	capture: AdditionalAnalyticsCapture | null,
 ): Promise<ReviewSendResult> {
 	const ids = comments.map((c) => c.id);
 	const pkg = await buildSendPackage(workspaceId, comments);
@@ -342,7 +352,7 @@ async function sendToFileChat(
 	const existing = opts.sessionId ?? (await fileReviewSession(workspaceId, path));
 	if (existing && (await ensureSessionAttached(existing, workspaceId, ws.worktreePath))) {
 		await markCommentsSent(workspaceId, ids, existing);
-		fireReviewPrompt(workspaceId, ids, existing, pkg, followUpSession);
+		fireReviewPrompt(workspaceId, comments, existing, pkg, capture, followUpSession);
 		return {
 			sessionId: existing,
 			model: null,
@@ -368,7 +378,7 @@ async function sendToFileChat(
 		model: defaults.model ? created.model : null,
 	});
 	await markCommentsSent(workspaceId, ids, created.sessionId);
-	fireReviewPrompt(workspaceId, ids, created.sessionId, pkg);
+	fireReviewPrompt(workspaceId, comments, created.sessionId, pkg, capture);
 	return { ...created, reused: false };
 }
 
@@ -499,19 +509,18 @@ const handlers: Record<string, Handler> = {
 	"github.refresh": () => githubRefresh(),
 	"pr.preview": (params) =>
 		previewPr(params as { workspaceId: string; sessionId: string; title?: string }),
-	"pr.open": (params) =>
-		observePrAction(() =>
-			openPr(
-				params as {
-					workspaceId: string;
-					sessionId: string;
-					title?: string;
-					titleEdited?: boolean;
-					body?: string;
-					draft?: boolean;
-				},
-			),
-		),
+	"pr.open": (params) => {
+		const p = params as {
+			workspaceId: string;
+			sessionId: string;
+			title?: string;
+			titleEdited?: boolean;
+			body?: string;
+			draft?: boolean;
+			source?: "plan_page";
+		};
+		return observePrAction(() => openPr(p), p.source ?? "other");
+	},
 	"dialog.selectDirectory": () =>
 		observeSetupAction("directory_pick", selectDirectory, directoryPickOutcome),
 	"fs.readDir": (params) => {
@@ -529,9 +538,30 @@ const handlers: Record<string, Handler> = {
 		void ensureWatch(p.workspaceId);
 		return specGraph(p.workspaceId);
 	},
-	"todo.list": (params) => listTodos(params as { workspaceId: string; sessionId: string }),
-	"todo.add": (params) =>
-		addTodo(params as { workspaceId: string; sessionId: string; title: string; note?: string }),
+	"todo.list": (params) => {
+		const p = params as { workspaceId: string; sessionId: string; opened?: "page" | "popup" };
+		if (p.opened)
+			captureAdditional(additionalCapture(), {
+				name: "plan_opened",
+				params: { surface: p.opened },
+			});
+		return listTodos(p);
+	},
+	"todo.add": (params) => {
+		const p = params as {
+			workspaceId: string;
+			sessionId: string;
+			title: string;
+			note?: string;
+			surface?: "chat" | "page";
+		};
+		const result = addTodo(p);
+		captureAdditional(additionalCapture(), {
+			name: "plan_item_added",
+			params: { surface: p.surface ?? "chat" },
+		});
+		return result;
+	},
 	"todo.update": async (params) => {
 		const p = params as {
 			workspaceId: string;
@@ -1105,7 +1135,12 @@ const handlers: Record<string, Handler> = {
 			body: string;
 			scope?: GitDiffScope;
 		};
-		return withReviewLock(p.workspaceId, async () => addComment(p));
+		const capture = additionalCapture();
+		return withReviewLock(p.workspaceId, async () => {
+			const comment = await addComment(p);
+			captureReviewCommentAdded(capture, comment);
+			return comment;
+		});
 	},
 	"review.commentUpdate": (params) => {
 		const p = params as {
@@ -1114,8 +1149,11 @@ const handlers: Record<string, Handler> = {
 			body?: string;
 			status?: ReviewCommentStatus;
 		};
+		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () => {
 			const updated = await updateComment(p);
+			if (p.status === "resolved" || p.status === "dismissed")
+				captureReviewCommentResolved(capture, "user", p.status);
 			// Resolving/dismissing the item's last open finding must clear its changes_requested verdict
 			// too (no-op while findings remain), the same invariant as commentDelete.
 			if (updated.origin?.todoId)
@@ -1167,8 +1205,9 @@ const handlers: Record<string, Handler> = {
 			thinkingLevel?: ThinkingLevel;
 			sessionId?: string;
 		};
+		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () =>
-			sendToFileChat(p.workspaceId, await sendableComments(p.workspaceId, [p.id]), p),
+			sendToFileChat(p.workspaceId, await sendableComments(p.workspaceId, [p.id]), p, capture),
 		);
 	},
 	"review.sendBatch": (params) => {
@@ -1179,6 +1218,7 @@ const handlers: Record<string, Handler> = {
 			thinkingLevel?: ThinkingLevel;
 			sessionId?: string;
 		};
+		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () => {
 			const comments = await sendableComments(p.workspaceId, p.commentIds);
 			const groups = new Map<string, typeof comments>();
@@ -1188,7 +1228,7 @@ const handlers: Record<string, Handler> = {
 			}
 			const sessions: ReviewSendResult[] = [];
 			for (const group of groups.values()) {
-				sessions.push(await sendToFileChat(p.workspaceId, group, p));
+				sessions.push(await sendToFileChat(p.workspaceId, group, p, capture));
 			}
 			if (sessions.length === 0) throw new Error("No draft comments to send.");
 			return { sessions };
