@@ -45,6 +45,11 @@ export interface CliHostUpdate {
 
 export type UpdateChildRunner = (command: readonly string[]) => Promise<number>;
 
+export interface UpdateRuntime {
+	platform: string;
+	execPath: string;
+}
+
 const spawnUpdateChild: UpdateChildRunner = async (command) => {
 	const child = Bun.spawn([...command], {
 		stdin: "inherit",
@@ -105,10 +110,16 @@ export function createCliHostUpdate(
 	build: string,
 	baked: string,
 	installedVersion: string,
+	runtime: UpdateRuntime,
 	fetchImpl: ReleaseFetch = fetch,
 	childRunner: UpdateChildRunner = spawnUpdateChild,
 ): CliHostUpdate | undefined {
 	if (build !== "binary" || (baked !== "stable" && baked !== "nightly")) return undefined;
+	try {
+		inferRunningPrefix({ ...runtime, build });
+	} catch {
+		return undefined;
+	}
 	return {
 		intervalMs: RELEASE_CHECK_INTERVAL_MS,
 		check: async () => {
@@ -118,7 +129,7 @@ export function createCliHostUpdate(
 		},
 		run: async () => {
 			try {
-				if ((await childRunner([process.execPath, "update"])) !== 0) {
+				if ((await childRunner([runtime.execPath, "update"])) !== 0) {
 					throw new Error(UPDATE_RUN_ERROR);
 				}
 			} catch {
@@ -173,13 +184,12 @@ export function parseUpdateArgs(argv: readonly string[]): UpdateArgs {
 	return channel ? { channel, version } : { version };
 }
 
-export interface ResolveUpdateInput {
+export interface ResolveUpdateInput extends UpdateRuntime {
+	build: string;
 	args: UpdateArgs;
 	installMeta: InstallMeta;
 	baked: string;
 	home: string;
-	platform: string;
-	execPath: string;
 }
 
 export interface UpdatePlan {
@@ -208,12 +218,15 @@ function validateVersionChannel(version: string, channel: ReleaseChannel): void 
 	}
 }
 
-function inferRunningPrefix(input: ResolveUpdateInput): string | undefined {
+function inferRunningPrefix(input: UpdateRuntime & { build: string }): string | undefined {
 	const windows = input.platform === "win32";
 	const path = windows ? win32 : posix;
 	const exeName = windows ? "thinkrail.exe" : "thinkrail";
 	const runningName = path.basename(input.execPath);
-	if ((windows ? runningName.toLowerCase() : runningName) !== exeName) return undefined;
+	if ((windows ? runningName.toLowerCase() : runningName) !== exeName) {
+		if (input.build === "binary") throw new Error(MANUAL_LAYOUT_UPDATE_ERROR);
+		return undefined;
+	}
 	const binDir = path.dirname(input.execPath);
 	const binName = path.basename(binDir);
 	if ((windows ? binName.toLowerCase() : binName) !== "bin" || !path.isAbsolute(input.execPath)) {
@@ -387,6 +400,7 @@ async function runWindowsUpdate(
 export async function runUpdate(
 	argv: readonly string[],
 	env: Record<string, string | undefined>,
+	build = "source",
 ): Promise<number> {
 	if (argv.includes("-h") || argv.includes("--help")) {
 		console.log(UPDATE_USAGE);
@@ -400,6 +414,7 @@ export async function runUpdate(
 			installMeta: readInstallMeta(home),
 			baked: bakedChannel,
 			home,
+			build,
 			platform: process.platform,
 			execPath: process.execPath,
 		};
