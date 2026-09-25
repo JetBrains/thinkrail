@@ -32,6 +32,7 @@ import {
 	changeSetStat,
 	flatItems,
 	groupProgress,
+	isPlanReady,
 	itemChangeSet,
 	itemOpenFindings,
 	itemRevisions,
@@ -52,9 +53,8 @@ import {
 	selectWorkspaceById,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport, wsErrorCode } from "../transport";
+import { errorText, getTransport, supportsPlanReview, wsErrorCode } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
-import { openChatInTab } from "./openChat";
 import { openDiffInTab } from "./openTabs";
 import { PlanCommitsMenu } from "./PlanCommitsMenu";
 import { PrComposeDialog, type PrComposeState } from "./PrComposeDialog";
@@ -230,7 +230,6 @@ function ItemBlock({
 	onStartReview,
 	onOpenReview,
 	reviewComments,
-	reviewerSessionId,
 	startDisabled,
 	focusRequest,
 }: {
@@ -241,7 +240,6 @@ function ItemBlock({
 	onStartReview: (id: string) => Promise<void>;
 	onOpenReview: () => void;
 	reviewComments: ReviewComment[] | undefined;
-	reviewerSessionId?: string | undefined;
 	startDisabled: boolean;
 	focusRequest: { id: string; tick: number } | null;
 }) {
@@ -324,17 +322,13 @@ function ItemBlock({
 							</span>
 						)}
 						{reviewing ? (
-							<button
-								type="button"
+							<span
 								data-testid="plan-item-reviewing"
-								title="Open the reviewer's chat to watch the process"
-								onClick={() =>
-									reviewerSessionId && void openChatInTab(workspaceId, reviewerSessionId)
-								}
-								className="min-h-8 shrink-0 tr-text-metadata text-primary underline-offset-2 hover:underline"
+								title="A review subagent is reading this step…"
+								className="min-h-8 shrink-0 animate-pulse tr-text-metadata text-primary"
 							>
 								Reviewing…
-							</button>
+							</span>
 						) : changesRequested ? (
 							<button
 								type="button"
@@ -446,7 +440,6 @@ function GroupSection({
 	onStartReview,
 	onOpenReview,
 	reviewComments,
-	reviewerSessionId,
 	startDisabled,
 	focusRequest,
 }: {
@@ -457,7 +450,6 @@ function GroupSection({
 	onStartReview: (id: string) => Promise<void>;
 	onOpenReview: () => void;
 	reviewComments: ReviewComment[] | undefined;
-	reviewerSessionId?: string | undefined;
 	startDisabled: boolean;
 	focusRequest: { id: string; tick: number } | null;
 }) {
@@ -481,7 +473,6 @@ function GroupSection({
 						onStartReview={onStartReview}
 						onOpenReview={onOpenReview}
 						reviewComments={reviewComments}
-						reviewerSessionId={reviewerSessionId}
 						startDisabled={startDisabled}
 						focusRequest={focusRequest}
 					/>
@@ -515,6 +506,7 @@ export default function PlanPane({
 	const workspace = useAppStore((s) => selectWorkspaceById(s, workspaceId));
 	const connection = useAppStore((s) => s.status);
 	const hostPlatform = useAppStore((s) => s.hostPlatform);
+	const canReview = supportsPlanReview(useAppStore((s) => s.protocolVersion));
 	const {
 		review: openReview,
 		url: openReviewUrl,
@@ -553,6 +545,7 @@ export default function PlanPane({
 	const hasUnattributed = (data.unattributed?.length ?? 0) > 0;
 	const empty = groups.length === 0 && loose.length === 0;
 	const nothingToShow = empty && adopted.length === 0 && !hasUnattributed;
+	// Review STATE always derives from the plan; only the review ACTIONS are gated on canReview. See panels/SPEC.md.
 	const reviewables = reviewableItems(data);
 	const unsettledReviewables = reviewables.filter((t) => !reviewSettled(t));
 	const reviewedCount = reviewables.length - unsettledReviewables.length;
@@ -560,7 +553,7 @@ export default function PlanPane({
 	const onOpenCommit = (sha: string) => plan.openChanges({ sha });
 	const onOpenReview = () => requestToolView(workspaceId, "review");
 	const reviewingAny = reviewables.some((t) => t.review?.reviewing === true);
-	const planReady = total > 0 && done === total && unsettledReviewables.length === 0;
+	const planReady = isPlanReady(data);
 	const sameBranch = Boolean(
 		workspace && workspace.branch === workspace.baseBranch.replace(/^origin\//, ""),
 	);
@@ -950,7 +943,7 @@ export default function PlanPane({
 									<DropdownMenuSeparator />
 									<DropdownMenuItem
 										data-testid="plan-review-all"
-										disabled={unsettledReviewables.length === 0 || reviewingAny}
+										disabled={unsettledReviewables.length === 0 || reviewingAny || !canReview}
 										onSelect={() => void reviewAll()}
 									>
 										<ListChecks />
@@ -990,7 +983,7 @@ export default function PlanPane({
 						<button
 							type="button"
 							data-testid="plan-next-action-go"
-							disabled={reviewingAny}
+							disabled={reviewingAny || !canReview}
 							onClick={() => void reviewAll()}
 							className={NEXT_ACTION_BUTTON_CLASS}
 						>
@@ -1048,8 +1041,7 @@ export default function PlanPane({
 								onStartReview={startReview}
 								onOpenReview={onOpenReview}
 								reviewComments={reviewComments}
-								reviewerSessionId={data.reviewerSessionId}
-								startDisabled={reviewingAny}
+								startDisabled={reviewingAny || !canReview}
 								focusRequest={focusRequest}
 							/>
 						))}
@@ -1071,8 +1063,7 @@ export default function PlanPane({
 											onStartReview={startReview}
 											onOpenReview={onOpenReview}
 											reviewComments={reviewComments}
-											reviewerSessionId={data.reviewerSessionId}
-											startDisabled={reviewingAny}
+											startDisabled={reviewingAny || !canReview}
 											focusRequest={focusRequest}
 										/>
 									))}
@@ -1103,8 +1094,7 @@ export default function PlanPane({
 									onStartReview={startReview}
 									onOpenReview={onOpenReview}
 									reviewComments={reviewComments}
-									reviewerSessionId={data.reviewerSessionId}
-									startDisabled={reviewingAny}
+									startDisabled={reviewingAny || !canReview}
 									focusRequest={focusRequest}
 								/>
 							))}

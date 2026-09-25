@@ -66,10 +66,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 
     Candidate preparation takes only the reviewed opaque Central path set, builds a fresh runtime, applies the
     composition root's invariant generation initializer (the source-mode e2e host uses it for its gated fake
-    providers), records that pre-opaque provider-id allowlist for `provider.status`, and then applies the opaque
-    extensions once through PI's public headless loader. The generation records ids introduced or replaced
-    by that loader through opaque registration-identity comparison, never configuration values; those ids
-    stay outside ordinary auth reads. Thus auth never inspects or emits Central's provider
+    providers), records that pre-opaque provider-id allowlist for `provider.status` together with each id's
+    display name at that moment, and then applies the opaque
+    extensions once through PI's public headless loader. The generation separately records ids introduced
+    or replaced by that loader (`opaqueProviderIds`) through opaque registration-identity comparison, never
+    configuration values. The allowlist stays the full pre-opaque set: a novel Central id was never in it
+    and so never becomes a row, while a replaced built-in (`anthropic`, `openai`, …) stays visible and
+    auth attributes it to Central by intersecting the two sets. (Subtracting the opaque set from the allowlist
+    — briefly done for analytics attribution — made every Central-routed provider vanish from the Providers
+    section; the two facts must stay separate.) Thus auth never inspects or emits Central's provider
     configuration, while an add/remove/replace can never drop process-local provider registrations. The
     initializer must be configured before the first generation and runs for every candidate. The path is the
     only artifact fact this module receives;
@@ -99,7 +104,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
     the web UI downsizes user-attached images itself at attach time — `apps/web`'s `chat/imageAttachment`
     caps the long edge at 1568px — and the `imageGuard` extension below is the in-context second line of
-    defense); a shared `registerSession` publishes each event
+    defense). The override is **re-applied after every `settings.reload()`**: pi's `SettingsManager.reload()`
+    rebuilds settings from disk and drops `applyOverrides`, and the resource loader reloads settings on every
+    `reload()` — including inside `createAgentSession` — so a one-shot override never reached a prompt. Since
+    pi 0.87 the same setting also governs prompt-attached and tool-result images, so the override is what keeps
+    pi from rewriting user text with `[Image omitted…]` hints (which would defeat the client's optimistic-echo
+    dedup); a shared `registerSession` publishes each event
     tagged with its id + `bindExtensions({ mode:'rpc', uiContext })`. The event projection retains the
     final `agent_end` assistant's reported terminal metadata and attaches it to `agent_settled`, so the
     wire has one authoritative automatic-work terminal even when compaction/retry happens between those
@@ -129,9 +139,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `queue_update` cannot resurrect the phantom. The counter is per live entry only (Pi's ephemeral queues
     never survive a process restart) and resets whenever `clearQueue()` empties both lanes.
 
-    **Remove this whole override on the next pi bump that ships the upstream fix.** The repo pins
-    `pi@0.84.3`; the upstream fix (earendil-works/pi#8612) is **open and unreleased** — not present in any
-    published version through `0.85.1`. Once Pi clears empty-text image deliveries natively, drop
+    **Remove this whole override on the pi bump that ships the upstream fix** (earendil-works/pi#8612,
+    still open when last checked). Once Pi clears empty-text image deliveries natively, drop
     `stuckEmptyDeliveries`, `displayedLane`, the synthesized `queue_update`, and the `effectivePendingCount`
     adjustment. The removal gate is the installed code, not the PR state: on every pi bump grep the installed
     `agent-session.js` for the `if (messageText)` guard around `this._steeringMessages.indexOf` — while that
@@ -412,8 +421,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     entrypoint (`SKILL.md`, `index.ts`), never "Extension SKILL.md failed"; a bare
     "An extension failed." is what made #277 unreadable from the UI alone). The manager's
     `bindExtensions({onError})` wraps it in `reportExtensionError`, which does **two** things the notify
-    cannot: it writes one `warn` to the rotated host log carrying the **full** `extensionPath` and the
-    extension's own `stack` (rehydrated onto an `Error` so it lands in the structured `err` field — the
+    cannot: for a live entry, it writes one `warn` to the rotated host log carrying the **full**
+    `extensionPath` and the extension's own `stack` (rehydrated onto an `Error` so it lands in the structured `err` field — the
     chat gets the short name, the log gets the unambiguous one, and a crash stays findable after the tab
     is closed), and it **gates the client push** on `entry.registered`, the explicit flag
     `registerSession` sets when it puts the entry in the map. The event path's `sessions.get(id) === entry`
@@ -421,11 +430,16 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     stricter form would suppress the `session_start` failure #277 is about. Nor can *absence* from the map
     stand in for "not registered yet" — `disposeSession` deletes without leaving a tombstone, so a disposed
     entry is indistinguishable from an unregistered one, and a late error would be pushed at a client that
-    can never drain it. The log is never gated (a superseded session's crash is still worth recording) and
-    it attaches an `Error` **only when pi supplied a stack**: several of pi's own `emitError` sites omit it
-    (`runner.js` message_end, `agent-session.js` command/`<runtime>`), and synthesising one there would
-    record the *host's* stack — pointing the reader at `prepareSessionEntry` instead of the extension,
-    which is the opposite of why the line exists.
+    can never drain it. The log is never gated for a live entry, but an entry the host has **disposed**
+    (`entry.disposed`, set before `session.dispose()` in every teardown path) downgrades the report to a
+    single `debug` line with no stack and no client push: pi 0.87's `finishTurn` agent-loop hook outlives
+    `AgentSession.dispose()` and still dispatches `turn_end`/`context` boundaries into the runner we just
+    invalidated, so its “stale ctx” and “could not resolve the persisted assistant entry ID” reports are
+    echoes of our own teardown, not extension crashes; pi 0.86 disconnected from the agent first, so they
+    never surfaced. For a live entry, it attaches an `Error` **only when pi supplied a stack**: several of
+    pi's own `emitError` sites omit it (`runner.js` message_end, `agent-session.js` command/`<runtime>`),
+    and synthesising one there would record the *host's* stack — pointing the reader at
+    `prepareSessionEntry` instead of the extension, which is the opposite of why the line exists.
     **Members split three ways, not two.** *Untranslatable* ones are inert no-ops and rightly so — they take a
     TUI `Component` factory a web host cannot render (`setFooter`, `setHeader`, `setEditorComponent`,
     `custom`, `setWidget`'s factory overload; the string-array overload **is** rendered).
@@ -550,6 +564,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     instance is never replaced, so already-running detached children
     finish and retain completion delivery; a disabled launch is still rejected immediately by the live
     predicate even before a streaming parent's tool set can be refreshed.
+    The plan-review `request_review` tool follows the same live-toggle shape: it is always registered, but
+    `setAgentReviewEnabledResolver` (host-injected, global — no `agent` → settings edge) decides whether it
+    stays in a session's active set, and `refreshAgentReviewTool(workspaceId?)` applies a change idle-sync /
+    streaming-deferred to `agent_settled`, exactly like the subagent tools. Because `setActiveToolsByName`
+    rebuilds the system prompt from active tools' guidelines, dropping the tool drops its guidance too. Only
+    the tool is gated — the `startPlanReview` button path is a separate host seam. See `submodule-server-host-plan-review`.
     Cascades: `removeSession`/`disposeAllSessions` fire
     `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
     awaits it before `publishDeleted`/resolving** (safe: the cascade carries its own swallow, so a
@@ -672,11 +692,19 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       package's internal `new URL(…, import.meta.url)` points inside `/$bunfs/` after compilation. The
       wrapper executes an injected helper on macOS/Windows and otherwise delegates to `trash`; source mode stays on
       `trash` entirely. No platform degrades to permanent unlink.
-    The desktop server/factory bundle is staged with a `.ts` filename on purpose. PI uses that module
-    extension to select its TypeScript source-runtime Jiti configuration with bundled virtual modules;
-    Electrobun's ordinary flattened `.js` output selects built-Node aliases that do not exist inside the
-    package and rejects the Central candidate. The filename is therefore a tested artifact seam, not a
-    cosmetic build choice.
+    The desktop server/factory bundle is built with pi's `PI_BUNDLED_NODE=true` compile-time define. That
+    is pi's own switch for bundled-but-not-compiled distributions: it selects the embedded-modules extension
+    loader (jiti's static entry with Babel bundled in, plus pi's virtual modules). Without it pi treats the
+    bundle as a plain Node runtime and reaches for jiti's lazy `../dist/babel.cjs` relative to a file that
+    does not exist inside a single-file bundle, so the Central candidate fails to load (pi 0.86.0 made the
+    loader choice runtime-dependent; 0.84.x always used the static entry). The candidate loader also forces
+    jiti's transform (`JITI_TRY_NATIVE=false`, plus `JITI_REBUILD_FS_CACHE=1` so a stale transform cache
+    never survives a pi bump): with native import allowed, Bun would resolve an external extension's bare
+    `@earendil-works/pi-coding-agent` import itself — auto-installing a second pi copy, since nothing under
+    `~/.pi/agent/extensions` has `node_modules` — instead of pi's virtual-module mapping onto the bundled
+    instance. Together the define and the forced transform are the tested artifact seam (the shared artifact
+    probe's synthetic extension value-imports pi and fails closed without them); the `server-runtime.ts`
+    filename is only a name.
     In every mode, the optional Central artifact remains an external filesystem path loaded by PI's public
     Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting

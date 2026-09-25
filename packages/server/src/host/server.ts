@@ -20,8 +20,10 @@ import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	isProjectSkillPath,
+	refreshAgentReviewTool,
 	refreshSubagentTools,
 	setActivityProjectResolver,
+	setAgentReviewEnabledResolver,
 	setExtUiPendingObserver,
 	setExtUiPublisher,
 	setReviewCommentHandler,
@@ -95,18 +97,16 @@ import {
 	setupObservation,
 } from "./productAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
+import {
+	installRequestReviewSeam,
+	maybeAutoReReview,
+	setReviewFailedPublisher,
+} from "./requestReview";
 import { runObservation } from "./runAnalytics";
 import { resolveSubagentsEnabled } from "./subagentPolicy";
 import { taskObservation } from "./taskAnalytics";
 import { terminalDeliveryForSendStatus } from "./terminalSend";
-import {
-	handleReviewerSettled,
-	installTodoReviewSeams,
-	markClientStale,
-	maybeAutoReReview,
-	maybeResumeReflection,
-	reconcilePendingReviewsOnBoot,
-} from "./todoReview";
+import { markClientStale, reconcilePendingReviewsOnBoot } from "./todoReview";
 
 export interface CreateServerOptions {
 	port?: number;
@@ -247,6 +247,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
+				ws.subscribe(WS_CHANNELS.reviewFailed);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -450,6 +451,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 
+	setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false);
+
 	setProjectPublisher((project) => {
 		const capture = additionalCapture();
 		if (capture) {
@@ -510,10 +513,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			}),
 		);
 	});
+	setReviewFailedPublisher((payload) => {
+		server.publish(
+			WS_CHANNELS.reviewFailed,
+			JSON.stringify({ channel: WS_CHANNELS.reviewFailed, data: payload }),
+		);
+	});
 	setReviewCommentHandler((sessionId, commentId, note) => ({
 		resolvedBody: resolveCommentFromAgent(sessionId, commentId, note).body,
 	}));
-	installTodoReviewSeams();
+	installRequestReviewSeam();
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config) => {
@@ -530,6 +539,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			void observeCurrentSetup();
 		}
 		refreshSubagentTools();
+		refreshAgentReviewTool();
 	});
 
 	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {
@@ -573,8 +583,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		} else if (isSettledTurn(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			if (workspaceId) void maybeAutoRenameWorkspace(payload.sessionId, workspaceId);
-			handleReviewerSettled(payload.sessionId, payload.event);
-			maybeResumeReflection(payload.sessionId);
 		}
 		if (isTodoToolEnd(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);

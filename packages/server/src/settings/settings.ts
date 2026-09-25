@@ -55,6 +55,8 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		["fileLineWidthBounded", runtimeUpdate.fileLineWidthBounded],
 		["analyticsEnabled", runtimeUpdate.analyticsEnabled],
 		["analyticsConsentConfirmed", runtimeUpdate.analyticsConsentConfirmed],
+		["reviewAutoFix", runtimeUpdate.reviewAutoFix],
+		["agentReviewEnabled", runtimeUpdate.agentReviewEnabled],
 	] as const) {
 		if (value !== undefined && typeof value !== "boolean") {
 			throw new Error(`${name} must be a boolean`);

@@ -11,9 +11,12 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+	getCurrentSystemPrompt,
+	getCurrentTools,
 	InMemoryCredentialStore,
 	type Model,
 	type ModelsRefreshResult,
+	type TranscriptContext,
 } from "@earendil-works/pi-ai";
 import {
 	createFauxCore,
@@ -52,6 +55,7 @@ import {
 	listSessionActivity,
 	listSessions,
 	promptSession,
+	refreshAgentReviewTool,
 	refreshAvailableModels,
 	refreshSubagentTools,
 	reloadSessionResources,
@@ -60,6 +64,7 @@ import {
 	removeWorkspaceSessions,
 	renameSession,
 	setActivityProjectResolver,
+	setAgentReviewEnabledResolver,
 	setSessionActivityPublisher,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -118,9 +123,19 @@ const cfg = (faux: typeof fauxA, id: string) => ({
 const events = new Map<string, unknown[]>();
 const seen = (id: string) => JSON.stringify(events.get(id) ?? []);
 
-function subagentToolState(context: { tools?: ReadonlyArray<{ name: string }> }): string {
-	const names = new Set((context.tools ?? []).map((tool) => tool.name));
+function subagentToolState(context: TranscriptContext): string {
+	const names = new Set(getCurrentTools(context.messages).map((tool) => tool.name));
 	return names.has("Agent") && names.has("get_subagent_result") ? "SUBAGENTS_ON" : "SUBAGENTS_OFF";
+}
+
+function reviewToolState(context: TranscriptContext): string {
+	const names = new Set(getCurrentTools(context.messages).map((tool) => tool.name));
+	const toolActive = names.has("request_review");
+	// The guidance must track the tool: setActiveToolsByName rebuilds the prompt from active tools only.
+	const guidanceInPrompt = getCurrentSystemPrompt(context.messages).includes("request_review");
+	if (toolActive && guidanceInPrompt) return "REVIEW_ON";
+	if (!toolActive && !guidanceInPrompt) return "REVIEW_OFF";
+	return "REVIEW_INCONSISTENT";
 }
 
 const tmpDirs: string[] = [];
@@ -516,6 +531,43 @@ test("an idle chat adopts subagent policy changes, survives resource reload, and
 	}
 });
 
+test("an idle chat adopts an agent-review policy change live — request_review and its guidance drop and return", async () => {
+	const workspaceId = "ws-agent-review-idle-toggle";
+	let enabled = true;
+	setAgentReviewEnabledResolver((id) => id !== workspaceId || enabled);
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-agent-review-idle-toggle-"),
+			workspaceId,
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+
+		// On by default: the tool is active and its guidance is in the (rebuilt) system prompt.
+		fauxA.setResponses([(context) => fauxAssistantMessage(reviewToolState(context))]);
+		await promptSession(sessionId, "Check enabled review tool.");
+		expect(seen(sessionId)).toContain("REVIEW_ON");
+
+		// Toggle off live: the tool leaves the active set AND its guidance leaves the rebuilt prompt.
+		enabled = false;
+		refreshAgentReviewTool(workspaceId);
+		fauxA.setResponses([(context) => fauxAssistantMessage(reviewToolState(context))]);
+		await promptSession(sessionId, "Check disabled review tool.");
+		expect(seen(sessionId)).toContain("REVIEW_OFF");
+
+		// And back on.
+		enabled = true;
+		refreshAgentReviewTool(workspaceId);
+		fauxA.setResponses([(context) => fauxAssistantMessage(reviewToolState(context))]);
+		await promptSession(sessionId, "Check re-enabled review tool.");
+		expect(seen(sessionId)).toContain("REVIEW_ON");
+	} finally {
+		setAgentReviewEnabledResolver(() => true);
+		if (sessionId) removeSession(sessionId);
+	}
+});
+
 test("a streaming chat defers its tool-set change until agent_settled", async () => {
 	const slow = createFauxCore({
 		provider: "faux-subagent-policy",
@@ -704,8 +756,35 @@ test("disabling an idle parent lets its running background child finish and deli
 	}
 });
 
-test("buildSessionSettings disables image autoResize (in-memory, so the read tool sends images raw)", () => {
-	expect(buildSessionSettings(tmpCwd("trpi-settings-")).getImageAutoResize()).toBe(false);
+test("buildSessionSettings disables image autoResize, and the override survives a settings.reload()", async () => {
+	const settings = buildSessionSettings(tmpCwd("trpi-settings-"));
+	expect(settings.getImageAutoResize()).toBe(false);
+	await settings.reload();
+	expect(settings.getImageAutoResize()).toBe(false);
+});
+
+test("a prompt image reaches the transcript raw — the autoResize override survives pi's loader reload", async () => {
+	fauxA.setResponses([fauxAssistantMessage("IMAGE_ACK")]);
+	const cwd = tmpCwd("trpi-raw-image-");
+	const s = await createSession({
+		cwd,
+		workspaceId: "ws-raw-image",
+		model: toWireModel(fauxA.getModel()),
+	});
+	try {
+		const rawImageData = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64");
+		await promptSession(s.sessionId, "describe this", [
+			{ type: "image", mimeType: "image/png", data: rawImageData },
+		]);
+		const transcript = await getSessionMessages(s.sessionId, "ws-raw-image", cwd);
+		const userMessage = transcript.messages.find((message) => message.role === "user");
+		expect(userMessage?.content).toEqual([
+			{ type: "text", text: "describe this" },
+			{ type: "image", mimeType: "image/png", data: rawImageData },
+		]);
+	} finally {
+		await removeSession(s.sessionId);
+	}
 });
 
 test("listAvailableModels returns the configured (faux) models", async () => {
@@ -1051,7 +1130,7 @@ test("graceful shutdown persists an accepted answer and aborts its continuation"
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
 		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(persisted.details).toEqual(result);
+		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
 		expect(seen(session.sessionId)).not.toContain("SHUTDOWN_CONTINUATION_RAN");
 	} finally {
 		gate.release();
@@ -1103,7 +1182,7 @@ test("an answer accepted before execute persists before Stop aborts the continua
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
 		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(persisted.details).toEqual(result);
+		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
 		expect(persisted.isError).toBe(false);
 	} finally {
 		gate.release();
@@ -1254,7 +1333,7 @@ test("a live question blocks continuation, preserves queue order, and acknowledg
 		);
 		expect(persistedResult).toBeDefined();
 		if (persistedResult?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(persistedResult.details).toEqual(result);
+		expect(persistedResult.details).toEqual<AskUserQuestionResult>(result);
 		expect(messages.some((message) => message.role === "custom")).toBe(false);
 		expect(continuationContext.indexOf('"role":"toolResult"')).toBeLessThan(
 			continuationContext.indexOf("QUEUED_WHILE_ASKING"),
@@ -1319,7 +1398,7 @@ test("an accepted answer persists and its RPC settles when Stop races before tur
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
 		if (persisted?.role !== "toolResult") throw new Error("answer result was not persisted");
-		expect(persisted.details).toEqual(result);
+		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
 		expect(persisted.isError).toBe(false);
 		expect(transcript.messages.some((message) => isAskUserAnswersMessage(message))).toBe(false);
 	} finally {
@@ -1357,7 +1436,7 @@ test("Stop bounds a stalled post-tool hook and rejects an answer that did not pe
 		);
 		if (persisted?.role !== "toolResult") throw new Error("stopped result was not persisted");
 		expect(persisted.isError).toBe(false);
-		expect(persisted.details).toEqual(gatedQuestionAnswer());
+		expect(persisted.details).toEqual<AskUserQuestionResult>(gatedQuestionAnswer());
 		expect(persisted.content).toEqual([{ type: "text", text: "post-tool result replaced" }]);
 	} finally {
 		hook.remove();
@@ -1551,6 +1630,76 @@ test("graceful settling leaves a live question dangling for restart ack repair",
 		expect(repaired.isError).toBe(false);
 		expect(assessAnswerability(transcript.messages, toolCallId).ok).toBe(true);
 	} finally {
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("disposing a session mid-run reports pi's stale-boundary errors at debug, never as a client-visible extension crash", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const toolCallId = "dispose-mid-run-question";
+	const cwd = tmpCwd("trpi-dispose-mid-run-");
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall(
+				"ask_user_question",
+				{
+					questions: [
+						{
+							question: "Dispose while waiting?",
+							header: "Dispose",
+							options: [
+								{ label: "Yes", description: "dispose" },
+								{ label: "No", description: "keep waiting" },
+							],
+						},
+					],
+				},
+				{ id: toolCallId },
+			),
+		),
+	]);
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-dispose-mid-run",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before disposal.");
+	prompting.catch(() => {});
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((frame) => frames.push(frame));
+	const stderrChunks: string[] = [];
+	const originalStderrWrite = process.stderr.write;
+	process.stderr.write = (chunk) => {
+		stderrChunks.push(String(chunk));
+		return true;
+	};
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		const framesAtDisposal = frames.length;
+		disposeAllSessions();
+		await prompting.catch(() => {});
+		await new Promise((resolve) => setTimeout(resolve, 200));
+
+		const stderr = stderrChunks.join("");
+		expect(stderr).not.toMatch(/WARN[^\n]*This extension ctx is stale/);
+		expect(stderr).not.toMatch(/WARN[^\n]*could not resolve the persisted assistant entry ID/);
+		expect(
+			frames
+				.slice(framesAtDisposal)
+				.some(
+					(frame) =>
+						frame.sessionId === session.sessionId &&
+						frame.kind === "notify" &&
+						frame.level === "error",
+				),
+		).toBe(false);
+	} finally {
+		process.stderr.write = originalStderrWrite;
+		setExtUiPublisher(() => {});
 		if (hasSession(session.sessionId)) removeSession(session.sessionId);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}

@@ -12,6 +12,7 @@ export interface PiRuntimeGeneration {
 	readonly id: number;
 	readonly runtime: ModelRuntime;
 	readonly providerStatusIds: ReadonlySet<string>;
+	readonly providerStatusNames: ReadonlyMap<string, string>;
 	readonly opaqueProviderIds: ReadonlySet<string>;
 	readonly additionalExtensionPaths: readonly string[];
 	readonly excludedSessionExtensionPaths: readonly string[];
@@ -30,29 +31,41 @@ let configuredSessionExtensionExclusions: readonly string[] = [];
 interface PreparedRuntime {
 	runtime: ModelRuntime;
 	providerStatusIds: ReadonlySet<string>;
+	providerStatusNames: ReadonlyMap<string, string>;
 	opaqueProviderIds: ReadonlySet<string>;
 }
 let runtimeFactory: (additionalExtensionPaths: readonly string[]) => Promise<PreparedRuntime> =
 	createRuntimeWithExtensions;
 let generationInitializer: PiRuntimeGenerationInitializer = () => {};
 
-function captureProviderStatusIds(runtime: ModelRuntime): ReadonlySet<string> {
-	return new Set(runtime.getProviders?.().map((provider) => provider.id) ?? []);
+function captureProviderStatus(runtime: ModelRuntime): {
+	ids: ReadonlySet<string>;
+	names: ReadonlyMap<string, string>;
+} {
+	const providers = runtime.getProviders?.() ?? [];
+	return {
+		ids: new Set(providers.map((provider) => provider.id)),
+		names: new Map(providers.map((provider) => [provider.id, provider.name])),
+	};
 }
 
 export function configurePiRuntime(rt: ModelRuntime | null): void {
 	configuredExtensionPaths = [];
 	configuredSessionExtensionExclusions = [];
-	activeGeneration = rt
-		? Promise.resolve({
-				id: nextGenerationId++,
-				runtime: rt,
-				providerStatusIds: captureProviderStatusIds(rt),
-				opaqueProviderIds: new Set<string>(),
-				additionalExtensionPaths: [],
-				excludedSessionExtensionPaths: [],
-			})
-		: null;
+	if (!rt) {
+		activeGeneration = null;
+		return;
+	}
+	const providerStatus = captureProviderStatus(rt);
+	activeGeneration = Promise.resolve({
+		id: nextGenerationId++,
+		runtime: rt,
+		providerStatusIds: providerStatus.ids,
+		providerStatusNames: providerStatus.names,
+		opaqueProviderIds: new Set<string>(),
+		additionalExtensionPaths: [],
+		excludedSessionExtensionPaths: [],
+	});
 }
 
 export function configurePiRuntimeFactory(
@@ -62,9 +75,11 @@ export function configurePiRuntimeFactory(
 		? async (additionalExtensionPaths) => {
 				const runtime = await factory(additionalExtensionPaths);
 				await generationInitializer(runtime);
+				const providerStatus = captureProviderStatus(runtime);
 				return {
 					runtime,
-					providerStatusIds: captureProviderStatusIds(runtime),
+					providerStatusIds: providerStatus.ids,
+					providerStatusNames: providerStatus.names,
 					opaqueProviderIds: new Set<string>(),
 				};
 			}
@@ -115,7 +130,7 @@ async function createRuntimeWithExtensions(
 	await advanceExtensionCacheGeneration();
 	const runtime = await createRuntimeOfflineByDefault();
 	await generationInitializer(runtime);
-	const providerStatusIds = captureProviderStatusIds(runtime);
+	const providerStatus = captureProviderStatus(runtime);
 	const priorRegistrations = new Map(
 		runtime.getRegisteredProviderIds().map((id) => [
 			id,
@@ -156,10 +171,11 @@ async function createRuntimeWithExtensions(
 	) {
 		throw new Error("PI runtime extension loading failed");
 	}
+	const postExtensionProviderStatus = captureProviderStatus(runtime);
 	const opaqueProviderIds = new Set(
 		additionalExtensionPaths.length > 0
 			? [
-					...[...captureProviderStatusIds(runtime)].filter((id) => !providerStatusIds.has(id)),
+					...[...postExtensionProviderStatus.ids].filter((id) => !providerStatus.ids.has(id)),
 					...runtime.getRegisteredProviderIds().filter((id) => {
 						const prior = priorRegistrations.get(id);
 						return (
@@ -173,7 +189,8 @@ async function createRuntimeWithExtensions(
 	);
 	return {
 		runtime,
-		providerStatusIds: new Set([...providerStatusIds].filter((id) => !opaqueProviderIds.has(id))),
+		providerStatusIds: providerStatus.ids,
+		providerStatusNames: providerStatus.names,
 		opaqueProviderIds,
 	};
 }
@@ -186,6 +203,7 @@ async function createGeneration(paths: readonly string[]): Promise<PiRuntimeGene
 		id: nextGenerationId++,
 		runtime: prepared.runtime,
 		providerStatusIds: prepared.providerStatusIds,
+		providerStatusNames: prepared.providerStatusNames,
 		opaqueProviderIds: prepared.opaqueProviderIds,
 		additionalExtensionPaths,
 		excludedSessionExtensionPaths,

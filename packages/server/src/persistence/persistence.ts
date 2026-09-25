@@ -103,6 +103,10 @@ export function loadConfig(): AppConfig {
 				: DEFAULT_CONFIG.fileLineWidthBounded,
 		reviewAutoFix:
 			typeof value.reviewAutoFix === "boolean" ? value.reviewAutoFix : DEFAULT_CONFIG.reviewAutoFix,
+		agentReviewEnabled:
+			typeof value.agentReviewEnabled === "boolean"
+				? value.agentReviewEnabled
+				: DEFAULT_CONFIG.agentReviewEnabled,
 		subagentsEnabled:
 			typeof value.subagentsEnabled === "boolean"
 				? value.subagentsEnabled

@@ -163,7 +163,12 @@ dependency. This keeps test process drivers outside both launchers and the serve
     a live wire; more broadly, a silent minor/patch bump is the classic irreproducible-build trap. Exact
     pins make the lockfile the single source of a dependency's version and turn every upgrade into an
     explicit, reviewable diff. Cross-cutting deps (pi, TypeScript, typebox, bun types) are pinned **once** in
-    the root `workspaces.catalog` and referenced via `catalog:`, so their version lives in exactly one place.
+    the root `workspaces.catalog` and referenced via `catalog:`, so their version lives in exactly one place 
+    **and only there: specs never restate it.** A spec that depends on pi behavior names *what* it verified
+    (the dist file, the function, the observed rule) and says "re-verify on a pi bump"; it does not carry
+    "pinned against vX", which is a second copy of the catalog that goes stale on every bump and adds no
+    information. Historical rationale ("pi 0.86 made the loader choice runtime-dependent") is different: it
+    explains *why* a decision exists and never needs updating.
     **Enforced**, not just documented: `scripts/check-catalog.ts` (`bun run check:deps`, in pre-commit + CI)
     rejects any range, any catalog drift, and a lockfile graph that resolves `react` or `react-dom` outside
     its one catalog pin (the temporary prerelease override rationale belongs to [[module-web]]). Exempt:
