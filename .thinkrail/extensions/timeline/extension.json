@@ -1,0 +1,9 @@
+{
+	"name": "timeline",
+	"title": "Timeline",
+	"surfaces": [
+		{ "id": "timeline", "slot": "panel", "title": "Timeline" },
+		{ "id": "cost", "slot": "status" }
+	],
+	"permissions": ["sessions:read"]
+}

@@ -10,7 +10,7 @@
 	},
 	"description": "SDK for ThinkRail UI extensions: defineExtension, the host-half API types, and the view API.",
 	"scripts": {
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit && tsc --noEmit -p ../../.thinkrail/extensions/timeline"
 	},
 	"devDependencies": {
 		"@earendil-works/pi-coding-agent": "catalog:",

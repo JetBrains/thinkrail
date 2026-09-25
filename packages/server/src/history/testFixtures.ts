@@ -8,6 +8,7 @@ type FixtureAssistantMessage = {
 	timestamp: number;
 	stopReason?: StopReason;
 	errorMessage?: string;
+	usage?: AssistantMessage["usage"];
 } & ({ text: string; content?: never } | { text?: never; content: AssistantMessage["content"] });
 
 export type FixtureMessage =
@@ -83,6 +84,7 @@ export function writeFixtureSession(
 					...(m.role === "assistant" && m.errorMessage !== undefined
 						? { errorMessage: m.errorMessage }
 						: {}),
+					...(m.role === "assistant" && m.usage ? { usage: m.usage } : {}),
 					...(m.role === "toolResult"
 						? {
 								toolCallId: m.toolCallId,

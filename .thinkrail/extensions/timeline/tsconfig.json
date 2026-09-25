@@ -1,0 +1,16 @@
+{
+	"extends": "../../../tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"jsx": "react-jsx",
+		"lib": ["ES2023", "DOM"],
+		"types": [],
+		"paths": {
+			"@thinkrail/ext": ["../../../packages/ext-sdk/src/index.ts"],
+			"@thinkrail/ext/view": ["../../../packages/ext-sdk/src/view.ts"],
+			"react": ["../../../packages/ext-sdk/node_modules/@types/react"],
+			"react/jsx-runtime": ["../../../packages/ext-sdk/node_modules/@types/react/jsx-runtime"]
+		}
+	},
+	"include": ["*.ts", "*.tsx"]
+}

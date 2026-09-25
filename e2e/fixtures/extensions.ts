@@ -34,13 +34,25 @@ const withWire = async <T>(run: (wire: E2eWire) => Promise<T>) => {
 	}
 };
 
-export const reloadDemoExtension = () =>
-	withWire((wire) => wire.request("ext.reload", { name: DEMO_EXTENSION }, 30_000));
+export const reloadDemoExtension = () => reloadExtension(DEMO_EXTENSION);
 
 export const invokeDemoAction = (id: string, payload?: unknown) =>
 	withWire((wire) => wire.request("ext.action", { ext: DEMO_EXTENSION, id, payload }));
 
-export const removeDemoExtension = async () => {
-	rmSync(demoDir(), { recursive: true, force: true });
-	await withWire((wire) => wire.request("ext.reload", { name: DEMO_EXTENSION })).catch(() => {});
+export const removeDemoExtension = () => removeExtension(DEMO_EXTENSION);
+
+const REPO_EXTENSIONS = new URL("../../.thinkrail/extensions/", import.meta.url);
+
+export const installRepoExtension = (name: string) => {
+	const target = join(E2E_EXTENSIONS_DIR, name);
+	rmSync(target, { recursive: true, force: true });
+	cpSync(new URL(`${name}/`, REPO_EXTENSIONS), target, { recursive: true });
+};
+
+export const reloadExtension = (name: string) =>
+	withWire((wire) => wire.request("ext.reload", { name }, 30_000));
+
+export const removeExtension = async (name: string) => {
+	rmSync(join(E2E_EXTENSIONS_DIR, name), { recursive: true, force: true });
+	await withWire((wire) => wire.request("ext.reload", { name })).catch(() => {});
 };
