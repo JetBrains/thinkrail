@@ -6,6 +6,7 @@ export type DesktopRpc = {
 		requests: {
 			getUpdateState: { params: undefined; response: NativeUpdateState };
 			checkForUpdates: { params: undefined; response: undefined };
+			downloadUpdate: { params: undefined; response: undefined };
 			restartToUpdate: { params: undefined; response: undefined };
 		};
 		messages: {

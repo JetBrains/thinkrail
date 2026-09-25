@@ -198,10 +198,12 @@ test("the action cluster keeps Update, quota Retry and Settings out of the drag 
 			availableVersion: "0.1.1",
 			progress: null,
 			error: null,
+			failedPhase: null,
 		};
 		const bridge: NativeUpdateBridge = {
 			getState: async () => state,
 			checkForUpdates: async () => {},
+			downloadUpdate: async () => {},
 			restartToUpdate: async () => {},
 			subscribe: () => () => {},
 		};

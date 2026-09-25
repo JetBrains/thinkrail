@@ -223,14 +223,7 @@ export function Shell() {
 				/>
 				<SettingsDialog
 					layoutSettings={<LayoutSettings />}
-					updateSettings={
-						updates ? (
-							<UpdateSettings
-								updates={updates}
-								onLater={() => useAppStore.getState().closeSettings()}
-							/>
-						) : undefined
-					}
+					updateSettings={updates ? <UpdateSettings updates={updates} /> : undefined}
 				/>
 				{newWorkspaceProjectId !== null ? (
 					<NewWorkspaceDialog
