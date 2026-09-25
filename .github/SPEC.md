@@ -139,10 +139,11 @@ are uploaded and made publicly retrievable before their channel manifests. This 
 signing, notarization, verification, or publication gate; the existing platform requirements remain in force.
 
 Native update acceptance is **manual-first**. It uses finalized release bytes in disposable installations,
-records both versions and per-target results, and covers explicit restart, deferral with Later, channel isolation,
-interrupted download/retry, post-update version/host health and restoration of local state. Running agents
-and terminal commands are not expected to survive host restart. Windows qualification uses a disposable
-VM/runner because installation integrates beyond HOME. Relevant checks repeat when
+records both versions and per-target results, and covers check-stops-at-available, explicit download, distinct
+transfer/preparation, deferral by closing Settings, **Install & Restart**, channel isolation, interrupted
+transfer/retry, post-update version/host health, and restoration of local state. Running agents and terminal
+commands are not expected to survive host restart. Windows qualification uses a disposable VM/runner because
+installation integrates beyond HOME. Relevant checks repeat when
 Electrobun, packaging, signing or restart handling changes. This limits investment in a broad new updater
 suite for an infrequently changing integration; it does not remove existing signing, artifact-smoke, fast
 or complete no-agent browser gates. New automated coverage stays narrow around application-owned lifecycle
@@ -150,10 +151,12 @@ regressions and the existing public artifact-output contract tests; no dedicated
 
 ## CLI installation and other automation
 
-Root `install.sh` and `install.ps1` remain CLI-only consumers: resolve the requested release, download
-the native CLI plus `SHA256SUMS`, verify it, and install atomically. Their filename and checksum rules do
-not change with desktop packaging. CLI self-update invokes these installers rather than duplicating their
-logic.
+Root `install.sh` and `install.ps1` remain CLI-only consumers: validate channel/version identity, resolve the
+requested release, download the native CLI plus `SHA256SUMS`, verify it, and stage replacement in the
+destination directory before an atomic rename. Git Bash writes native-readable Windows metadata; malformed
+shell PATH blocks are preserved rather than rewritten. CLI self-update binds metadata to the running executable
+and invokes these installers rather than duplicating download/checksum logic. Controlled script tests own these
+regressions; finalized Windows PowerShell/Git-Bash and custom-volume behavior remains release qualification.
 
 Website deployment contains no signing credentials. CODEOWNERS and the main-branch rules protect the
 public recipes; local builds and public PR jobs never publish user-facing release artifacts.

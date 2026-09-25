@@ -391,12 +391,14 @@ channel fan-out, and the process-boot wrapper both launchers share.
   nothing) — the registry lives here, so attribution is composed here rather than the agent learning what
   a project is. Derivation, precedence, and lifetime belong to [[submodule-server-agent]]; the wire shape
   and why `projectId` rides each row are in [[module-contracts]].
-- **CLI update notice:** a launcher may supply one optional asynchronous notice producer and fixed interval.
-  `createServer` starts it after listening without awaiting it, repeats it without overlap, retains the latest
-  successful immutable notice for later `server.welcome` snapshots, and publishes `host.updateAvailable` only
-  when that notice first appears or changes. Failure/no-update are silent and preserve a known notice; shutdown
-  clears the timer and makes a late result inert. The host owns only this capability composition—no feed,
-  retry policy, updater, command, persistence, or launcher branch.
+- **CLI update lifecycle:** a launcher may supply one optional asynchronous notice producer, fixed interval,
+  and parameterless update runner. `createServer` starts checks after listening without awaiting them and never
+  overlaps checks. A newer release becomes the retained `available` snapshot in later welcomes. The v69
+  `host.update` request acknowledges after starting one detached, server-single-flighted run; running,
+  succeeded, and failed are full replacements on `host.updateAvailable` for every client. Success latches until
+  host restart and does not shut down or relaunch the unsupervised process; failure permits retry and exposes no
+  child output or arbitrary diagnostic. Discovery failures preserve known state, shutdown makes late results
+  inert, and the host never learns feed, installer, command, path, channel, or version selection.
 - **Interview invitation delivery:** the three user-send handlers share one post-`ackSend` path that
   filters control traffic once, tracks anonymous `message_sent`, and records the local feedback count. The
   feedback module's injected publisher maps an eligible claim to addressed `feedback.interview` delivery
@@ -436,8 +438,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   the `projects` module's injected publisher) + the workspace lifecycle trio
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher) +
   **`session.deleted`** (published from the agent module's injected publisher) + **`provider.changed`**
-  (published from auth's Central/runtime invalidation seam) + **`host.updateAvailable`** (published when the
-  optional periodic launcher notice first appears or changes) use push channels. Every
+  (published from auth's Central/runtime invalidation seam) + **`host.updateAvailable`** (published for each
+  retained CLI-update lifecycle replacement) use push channels. Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
   `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Four channels are deliberately
   **not** subscribed and not broadcast: `feedback.interview`, `terminal.data`, `terminal.exit`, and

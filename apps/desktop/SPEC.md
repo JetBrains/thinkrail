@@ -273,29 +273,29 @@ CI-only and are never shipped as user configuration.
 ## Auto-update policy
 
 Desktop updates check after window readiness and then on a jittered six-hour schedule with bounded retries.
-Checks and full-package downloads run in the background without blocking startup. Manual checks acknowledge
-promptly and state converges asynchronously through monotonic revisions. The one native controller owns the
-SDK's single status callback, coalesces concurrent work, reconciles returned errors as well as thrown ones,
-and retains a prepared newer version across transient poll failures. Electrobun's hash inequality alone is
-not eligibility: same-version and downgrade manifests are not downloaded or offered.
+Checks run in the background without blocking startup, but stop at an available release; only the explicit
+**Download** action starts a full-package transfer. Manual actions acknowledge promptly and state converges
+asynchronously through monotonic revisions. The one native controller owns the SDK's single status callback,
+coalesces concurrent work, separates transfer progress from package preparation, and retains a prepared newer
+version across transient failures. Electrobun's hash inequality alone is not eligibility: same-version and
+downgrade manifests are not offered.
 
 Production checks are enabled only in packaged supported stable/canary applications whose stamped release
 metadata supplies a nonempty HTTPS updater base URL. That packaged metadata is the sole feed authority;
-development and standard artifact-test seams stay disabled and cannot select a feed. Installation requires an
-explicit **Restart to Update** action; **Later** preserves the
-running app, and ordinary quit does not silently install. A cross-platform in-app control exposes manual
-checking, progress, the available version and retry; native menus are supplementary because this SDK has no
-Linux application menu. Installations stay on their packaged channel; CLI and remote-host updates are outside
-this capability. Release scope and manual-first acceptance belong to [[module-ci-release]].
+development and standard artifact-test seams stay disabled and expose no update surface. A prepared package
+requires explicit **Install & Restart**; closing Settings defers the choice and ordinary quit does not install.
+The action applies the already-prepared release without another feed check. Installations stay on their
+packaged channel; the product UI calls Electrobun's canary channel **nightly**. CLI-host updates are a separate
+launcher capability composed by the server. Release scope and manual-first acceptance belong to
+[[module-ci-release]].
 
 Electrobun calls, updater scheduling and update lifecycle stay behind the bounded desktop `updates` module;
 update controls stay in the web client and graceful host shutdown stays in server. The frozen optional
-`__THINKRAIL_NATIVE_UPDATES__` preload capability carries `getState`, prompt `checkForUpdates` and
-`restartToUpdate` requests, plus state subscription over the typed native RPC. Web imports no desktop SDK,
-and an ordinary browser connection acquires no host-update operation. An update restarts the entire local
-host: active agents may be aborted and PTYs terminate. **Restart to Update** is the sole confirmation and
-uses the existing ordinary-quit shutdown. There is no additional warning dialog, update-specific draft
-saving, or renderer-preparation handshake.
+`__THINKRAIL_NATIVE_UPDATES__` preload capability carries `getState`, prompt `checkForUpdates`,
+`downloadUpdate`, and `restartToUpdate` requests, plus state subscription over the typed native RPC. Web
+imports no desktop SDK. An update restarts the entire local host: active agents may be aborted and PTYs
+terminate. **Install & Restart** is the sole confirmation and uses the existing ordinary-quit shutdown. There
+is no additional warning dialog, update-specific draft saving, or renderer-preparation handshake.
 
 Quit coordination preserves its completion action. Electrobun 2.0.1's first `applyUpdate()` returns on the
 asynchronous `before-quit` veto before arming its replacement helper. The update intent waits for the same
