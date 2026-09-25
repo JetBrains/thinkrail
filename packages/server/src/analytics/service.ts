@@ -96,7 +96,6 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 	try {
 		const env = options.env ?? process.env;
 		if (environmentMute(env)) return;
-		// Reading on every eligible startup also terminalizes malformed or expired persisted context.
 		readAcquisition();
 		const host = env.THINKRAIL_POSTHOG_HOST ?? options.posthogHost;
 		const createSink = () =>
@@ -327,12 +326,15 @@ function send(s: AnalyticsState, sink: AnalyticsSink, event: AnalyticsEvent): vo
 			event.name !== "app_installed" && event.name !== "acquisition_linked"
 				? acquisitionForEnrichment(s)
 				: null;
-		const campaign = acquisition ? acquisitionCampaignProperties(acquisition) : {};
+		const basicGrant = sink === s.basic ? s.additional : null;
+		const enrich = acquisition !== null && (sink !== s.basic || basicGrant !== null);
+		const campaign = enrich && acquisition ? acquisitionCampaignProperties(acquisition) : {};
 		const outgoing: OutgoingEvent = {
 			name: event.name,
 			params: { ...s.env, ...campaign, ...("params" in event ? event.params : {}) },
 		};
-		sink.send(s.clientId, [outgoing]);
+		const destination = enrich && basicGrant ? basicGrant.sink : sink;
+		destination.send(s.clientId, [outgoing]);
 	} catch {
 		log.debug("analytics capture failed");
 	}

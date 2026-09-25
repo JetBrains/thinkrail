@@ -40,7 +40,8 @@ metadata before dispatch, uses each session/login's retained runtime, and leaves
 other/unknown. Central provenance uses loader registration metadata without inspecting opaque auth.
 
 Additional events follow the `analyticsEnabled` preference. Their exact property unions and payload tests are
-the schema; all properties are fixed enums or bounded buckets, never resource identities or free-form strings.
+the schema. Product outcome fields use fixed enums or bounded buckets; acquisition touch fields below are
+bounded browser-derived strings, never resource identities or arbitrary product payloads.
 
 | Event | Signal |
 | --- | --- |
@@ -53,14 +54,18 @@ the schema; all properties are fixed enums or bounded buckets, never resource id
 | `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs. |
 | `acquisition_linked` | One successful browser-claim redemption, carrying the transient journey/bridge ids and normalized first/last acquisition fields. |
 
-The acquisition touch schema is a strict server-side mirror of [[submodule-website-attribution]]: closed
-source/medium/campaign/content bounds, referrer class, landing-content key, timestamp, and policy version.
+The acquisition touch schema is a strict server-side mirror of [[submodule-website-attribution]]: bounded
+normalized source/medium/campaign/content strings, closed referrer class and landing-content key, timestamp,
+and policy version.
 The website and server copies change together; product packages never import website code. While the
 additional grant is active, persisted campaign-only first/last fields enrich later basic and additional
-events except `app_installed`; only `acquisition_linked` carries journey/bridge ids. Acquisition expires
-30 days after `last_touch`: startup terminalizes expired or invalid state, and every capture checks before
-enrichment so a process crossing expiry clears memory and atomically replaces the file with the terminal
-attempt marker. The first `app_started` remains unenriched when linking occurs during that launch.
+events except `app_installed`; enriched basics use only the current grant's revocable sink, while
+unenriched basics stay on the permanent basic sink. Revocation therefore drops queued/retrying enriched
+basics together with additional events, without stopping ordinary basics; only `acquisition_linked` carries
+journey/bridge ids. Acquisition expires 30 days after `last_touch`: startup terminalizes expired or invalid
+state, and every capture checks before enrichment so a process crossing expiry clears memory and atomically
+replaces the file with the terminal attempt marker. The first `app_started` remains unenriched when linking
+occurs during that launch.
 
 Correlation is transient and scoped to one enabled-preference period. No history replay or reconstruction
 of work started before sharing is enabled; asynchronous results from a disabled period remain discarded
@@ -91,9 +96,10 @@ desktop window's first `dom-ready`; server boot and elapsed time do not imply la
 
 The host generates a random 32-byte verifier, sends its SHA-256 challenge, requires strict protocol
 responses, invokes the returned same-origin relative claim URL opener exactly once without awaiting it,
-and performs at most twenty 500 ms status polls followed by one redeem. Each request has an abort timeout
-and the whole claim has a 15-second deadline. The current consent generation owns an AbortController;
-revocation and shutdown abort fetch and body reading and remove enrichment before subsequent capture.
+and performs at most 54 status polls at 10-second intervals followed by one redeem. Each request has an
+abort timeout and the whole claim has a nine-minute deadline, below the website claim lifetime. The current
+consent generation owns an AbortController; revocation and shutdown abort fetch and body reading and remove
+enrichment before subsequent capture.
 Failures and completed attempts are terminal and never auto-retry; re-enabling only restores a still-valid
 stored campaign record. A validated redemption activates memory and emits `acquisition_linked` while its
 generation remains active even if best-effort campaign persistence fails.
@@ -113,8 +119,8 @@ survives preference off/on, while active enrichment does not. Other state has no
 Counts describe installations, not people. Every event carries `app_version`, `channel`, `os`, `arch`, `build`
 plus its
 closed properties. Only built-in provider/model names pass raw; custom values become `custom`, preserving
-the existing explicit `jbcentral` login name. No content, paths/names, resource IDs, credentials, arbitrary
-errors, token/cost counts or recordings are collected.
+the existing explicit `jbcentral` login name. No chat/file contents, paths/names, resource IDs, credentials,
+arbitrary errors, token/cost counts or recordings are collected.
 
 The sink uses the committed public key, EU endpoint, disabled GeoIP enrichment and
 `$process_person_profile: false`; key/endpoint/fetch injection supports tests and self-hosting. Personless

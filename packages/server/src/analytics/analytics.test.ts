@@ -23,7 +23,7 @@ import {
 	shutdownAnalytics,
 	track,
 } from "./service";
-import { POSTHOG_PROJECT_KEY } from "./sink";
+import { type OutgoingEvent, POSTHOG_PROJECT_KEY } from "./sink";
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
@@ -393,6 +393,116 @@ test.each([
 	else expect(events).toContain("review_decided");
 	expect(events).toContain("message_sent");
 	expect(events).not.toContain("task_completed");
+});
+
+test("campaign-enriched basics use the revocable grant sink across 503 retry and regrant", async () => {
+	const now = Date.now();
+	const touch = {
+		source: "newsletter",
+		referrer_class: "referral",
+		landing_content_key: "landing",
+		touched_at: now,
+		policy_version: 1,
+	};
+	writeFileSync(
+		join(dataDir, "attribution.json"),
+		JSON.stringify({ first_touch: touch, last_touch: { ...touch, touched_at: now + 1 } }),
+	);
+
+	let attempts = 0;
+	const sent: SentPayload[] = [];
+	const fetchImpl: typeof fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+		const body = JSON.parse(String(init?.body)) as { api_key: string; batch: BatchEntry[] };
+		if (
+			body.batch.some(
+				(entry) => entry.event === "chat_started" && entry.properties.first_touch_source,
+			)
+		) {
+			attempts++;
+			if (attempts === 1) {
+				setAdditionalAnalyticsEnabled(false);
+				track(BASIC_EVENTS.provider_login);
+				setAdditionalAnalyticsEnabled(true);
+				return new Response("{}", { status: 503, headers: { "Retry-After": "0" } });
+			}
+		}
+		sent.push({ url: String(url), body });
+		return new Response("{}", { status: 200 });
+	}) as typeof fetch;
+	boot(sent, { additionalEnabled: true, fetchImpl });
+	track(BASIC_EVENTS.chat_started);
+	const deadline = Date.now() + 2_000;
+	while (!attempts && Date.now() < deadline) await Bun.sleep(5);
+	expect(attempts).toBe(1);
+	await Bun.sleep(3_500);
+	getAdditionalAnalyticsCapture()?.(ADDITIONAL_EVENTS.task_completed);
+	await shutdownAnalytics();
+
+	expect(attempts).toBe(1);
+	const entries = allEntries(sent);
+	const installed = entries.filter((entry) => entry.event === "app_installed");
+	expect(installed).toHaveLength(1);
+	expect(installed[0]?.properties).not.toHaveProperty("first_touch_source");
+	const plainBasic = entries.filter((entry) => entry.event === "provider_login");
+	expect(plainBasic).toHaveLength(1);
+	expect(plainBasic[0]?.properties).not.toHaveProperty("first_touch_source");
+	const linkedAdditional = entries.find((entry) => entry.event === "task_completed");
+	expect(linkedAdditional?.properties).toMatchObject({
+		change_evidence: "commit",
+		verification_recorded: "yes",
+		first_touch_source: "newsletter",
+	});
+});
+
+test("campaign-enriched basics stay on the current grant sink while plain basics remain permanent", async () => {
+	const touch = {
+		source: "newsletter",
+		referrer_class: "referral",
+		landing_content_key: "landing",
+		touched_at: Date.now() - 1_000,
+		policy_version: 1,
+	};
+	writeFileSync(
+		join(dataDir, "attribution.json"),
+		JSON.stringify({ first_touch: touch, last_touch: touch }),
+	);
+	const sinks: Array<{ deliveries: OutgoingEvent[]; sending: boolean }> = [];
+	initializeAnalyticsWithSinkFactoryForTests(
+		{ build: "binary", additionalEnabled: true, env: {} },
+		() => {
+			const sink = { deliveries: [] as OutgoingEvent[], sending: true };
+			sinks.push(sink);
+			return {
+				send(_clientId, events) {
+					sink.deliveries.push(...events);
+				},
+				setSending(enabled) {
+					sink.sending = enabled;
+				},
+				async shutdown() {},
+			};
+		},
+	);
+	track(BASIC_EVENTS.chat_started);
+	setAdditionalAnalyticsEnabled(false);
+	track(BASIC_EVENTS.message_sent);
+	setAdditionalAnalyticsEnabled(true);
+	track(BASIC_EVENTS.chat_started);
+	getAdditionalAnalyticsCapture()?.(ADDITIONAL_EVENTS.task_completed);
+	await shutdownAnalytics();
+
+	expect(sinks.map((sink) => sink.deliveries.map((event) => event.name))).toEqual([
+		["app_installed", "message_sent"],
+		["app_started", "chat_started"],
+		["chat_started", "task_completed"],
+	]);
+	expect(
+		sinks[0]?.deliveries.every((event) => !Object.hasOwn(event.params, "first_touch_source")),
+	).toBe(true);
+	expect(sinks[1]?.sending).toBe(false);
+	expect(
+		sinks[2]?.deliveries.every((event) => event.params.first_touch_source === "newsletter"),
+	).toBe(true);
 });
 
 test("failed additional requests do not retry on the network after revoke/regrant", async () => {

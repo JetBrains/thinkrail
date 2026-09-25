@@ -1,6 +1,6 @@
 export const ATTRIBUTION_ORIGIN = "https://thinkrail.ai";
-export const ATTRIBUTION_POLL_INTERVAL_MS = 500;
-export const ATTRIBUTION_MAX_POLLS = 20;
+export const ATTRIBUTION_POLL_INTERVAL_MS = 10_000;
+export const ATTRIBUTION_MAX_POLLS = 54;
 export const ATTRIBUTION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 export const ATTRIBUTION_POLICY_VERSION = 1 as const;
 

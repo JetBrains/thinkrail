@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runAttributionClaim } from "./attribution";
+import { ATTRIBUTION_MAX_POLLS, ATTRIBUTION_POLL_INTERVAL_MS } from "../persistence";
+import { ATTRIBUTION_DEADLINE_MS, runAttributionClaim } from "./attribution";
 import {
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
@@ -169,6 +170,7 @@ test("a packaged confirmed grant claims once, links once, and persists only norm
 		name: "message_sent",
 		params: { mode: "prompt", provider: "openai", auth_method: "api_key" },
 	});
+	await waitFor(() => events.some((event) => event.event === "message_sent"));
 	setAdditionalAnalyticsEnabled(false);
 	track({
 		name: "message_sent",
@@ -352,10 +354,122 @@ test("redeem activates memory and emits linked when terminal persistence replace
 	);
 });
 
-test("pending status polling is capped at twenty requests and never opens twice", async () => {
+test("revocation aborts a pending poll wait before another status request", async () => {
+	const controller = new AbortController();
+	let waiting = false;
+	let statuses = 0;
+	const now = Date.now();
+	const running = runAttributionClaim({
+		endpoint: "http://127.0.0.1:4567",
+		fetchImpl: (async (url: Parameters<typeof fetch>[0]) => {
+			const path = new URL(String(url)).pathname;
+			if (path === "/api/attribution/claims") {
+				return json(
+					{
+						claim_id: claimId,
+						claim_url: `/attribution/claim/?id=${claimId}`,
+						expires_at: now + 60_000,
+					},
+					201,
+				);
+			}
+			statuses++;
+			throw new Error("status polling was aborted");
+		}) as typeof fetch,
+		openExternal: () => {},
+		sleep: () => {
+			waiting = true;
+			return new Promise<void>(() => {});
+		},
+		signal: controller.signal,
+		active: () => true,
+		persist: () => {},
+		linked: () => {},
+	});
+	await waitFor(() => waiting);
+	const cancelledAt = Date.now();
+	controller.abort();
+	await running;
+	expect(Date.now() - cancelledAt).toBeLessThan(100);
+	expect(statuses).toBe(0);
+});
+
+test("revocation cancels the default poll delay before its ten-second timer fires", async () => {
+	const controller = new AbortController();
+	let opened = false;
+	let statuses = 0;
+	const now = Date.now();
+	const running = runAttributionClaim({
+		endpoint: "http://127.0.0.1:4567",
+		fetchImpl: (async (url: Parameters<typeof fetch>[0]) => {
+			if (new URL(String(url)).pathname === "/api/attribution/claims") {
+				return json(
+					{
+						claim_id: claimId,
+						claim_url: `/attribution/claim/?id=${claimId}`,
+						expires_at: now + 10 * 60_000,
+					},
+					201,
+				);
+			}
+			statuses++;
+			return json({ error: "pending" }, 409);
+		}) as typeof fetch,
+		openExternal: () => {
+			opened = true;
+		},
+		signal: controller.signal,
+		active: () => true,
+		persist: () => {},
+		linked: () => {},
+	});
+	await waitFor(() => opened);
+	await Bun.sleep(10);
+	const cancelledAt = Date.now();
+	controller.abort();
+	await running;
+	expect(Date.now() - cancelledAt).toBeLessThan(200);
+	expect(statuses).toBe(0);
+});
+
+test("the overall deadline interrupts a stalled poll wait", async () => {
+	const now = Date.now();
+	const started = Date.now();
+	let statuses = 0;
+	await runAttributionClaim({
+		endpoint: "http://127.0.0.1:4567",
+		fetchImpl: (async (url: Parameters<typeof fetch>[0]) => {
+			const path = new URL(String(url)).pathname;
+			if (path === "/api/attribution/claims") {
+				return json(
+					{
+						claim_id: claimId,
+						claim_url: `/attribution/claim/?id=${claimId}`,
+						expires_at: now + 60_000,
+					},
+					201,
+				);
+			}
+			statuses++;
+			throw new Error("the deadline should end polling first");
+		}) as typeof fetch,
+		openExternal: () => {},
+		sleep: () => new Promise<void>(() => {}),
+		active: () => true,
+		persist: () => {},
+		linked: () => {},
+		requestTimeoutMs: 500,
+		overallDeadlineMs: 20,
+	});
+	expect(Date.now() - started).toBeLessThan(500);
+	expect(statuses).toBe(0);
+});
+
+test("default polling allows a human-scale confirmation window within the claim lifetime", async () => {
 	const scheduled: Array<() => void> = [];
 	let opens = 0;
 	let statuses = 0;
+	const waits: number[] = [];
 	const attributionFetch: typeof fetch = (async (url: Parameters<typeof fetch>[0]) => {
 		const path = new URL(String(url)).pathname;
 		if (path === "/api/attribution/claims") {
@@ -363,7 +477,7 @@ test("pending status polling is capped at twenty requests and never opens twice"
 				{
 					claim_id: claimId,
 					claim_url: `/attribution/claim/?id=${claimId}`,
-					expires_at: Date.now() + 60_000,
+					expires_at: Date.now() + 10 * 60_000,
 				},
 				201,
 			);
@@ -381,7 +495,9 @@ test("pending status polling is capped at twenty requests and never opens twice"
 		fetchImpl: analyticsFetch([]),
 		attributionEndpoint: "http://127.0.0.1:4567",
 		attributionFetch,
-		attributionSleep: async () => {},
+		attributionSleep: async (milliseconds) => {
+			waits.push(milliseconds);
+		},
 		attributionSchedule: (run) => scheduled.push(run),
 		openExternal: () => {
 			opens++;
@@ -389,9 +505,12 @@ test("pending status polling is capped at twenty requests and never opens twice"
 	});
 	startAttributionClaim();
 	scheduled[0]?.();
-	await waitFor(() => statuses === 20);
+	await waitFor(() => statuses === ATTRIBUTION_MAX_POLLS);
 	expect(opens).toBe(1);
-	expect(statuses).toBe(20);
+	expect(statuses).toBe(54);
+	expect(waits).toEqual(Array(54).fill(ATTRIBUTION_POLL_INTERVAL_MS));
+	expect(ATTRIBUTION_POLL_INTERVAL_MS).toBe(10_000);
+	expect(ATTRIBUTION_DEADLINE_MS).toBe(9 * 60 * 1_000);
 	expect(readFileSync(join(dataDir, "attribution.json"), "utf8")).toContain(
 		'"browserClaimAttempted": true',
 	);

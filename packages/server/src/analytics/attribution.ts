@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import {
 	ATTRIBUTION_MAX_POLLS,
 	ATTRIBUTION_ORIGIN,
@@ -11,7 +12,7 @@ import {
 } from "../persistence";
 
 export const ATTRIBUTION_REQUEST_TIMEOUT_MS = 5_000;
-export const ATTRIBUTION_DEADLINE_MS = 15_000;
+export const ATTRIBUTION_DEADLINE_MS = 9 * 60 * 1_000;
 
 export interface AttributionClaimDependencies {
 	endpoint?: string;
@@ -147,7 +148,6 @@ export async function runAttributionClaim(
 	dependencies: AttributionClaimDependencies,
 ): Promise<void> {
 	const fetchImpl = dependencies.fetchImpl ?? fetch;
-	const sleep = dependencies.sleep ?? Bun.sleep;
 	const requestTimeoutMs = dependencies.requestTimeoutMs ?? ATTRIBUTION_REQUEST_TIMEOUT_MS;
 	const overallDeadlineMs = dependencies.overallDeadlineMs ?? ATTRIBUTION_DEADLINE_MS;
 	const pollIntervalMs = dependencies.pollIntervalMs ?? ATTRIBUTION_POLL_INTERVAL_MS;
@@ -200,7 +200,11 @@ export async function runAttributionClaim(
 
 		const verifiedBody = { verifier };
 		for (let poll = 0; poll < maxPolls; poll++) {
-			await abortable(sleep(pollIntervalMs), overall.signal);
+			if (dependencies.sleep) {
+				await abortable(dependencies.sleep(pollIntervalMs), overall.signal);
+			} else {
+				await delay(pollIntervalMs, undefined, { signal: overall.signal });
+			}
 			if (!dependencies.active()) return;
 			const statusResult = await postJson(
 				new URL(`/api/attribution/claims/${created.claim_id}/status`, endpoint).href,
