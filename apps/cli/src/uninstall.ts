@@ -137,9 +137,8 @@ export function resolveUninstallTargets(input: ResolveUninstallInput): Uninstall
 		input.installMeta.path_entry_added === true;
 
 	const binaries = [path.join(binDir, exeName)];
-	const runningName = path.basename(input.execPath);
 	if (
-		(windows ? runningName.toLowerCase() : runningName) === exeName &&
+		path.basename(input.execPath) === exeName &&
 		!binaries.some((candidate) =>
 			windows
 				? win32.normalize(candidate).toLowerCase() === win32.normalize(input.execPath).toLowerCase()
