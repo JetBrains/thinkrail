@@ -3,6 +3,9 @@ import {
 	type GitDiffScope,
 	type Project,
 	SESSION_RENAME_PROTOCOL_VERSION,
+	SESSION_STATE_PROTOCOL_VERSION,
+	type SessionState,
+	type SessionStateRecord,
 	type SpecGraphNode,
 	type WireModel,
 	type Workspace,
@@ -68,6 +71,98 @@ interface ProtocolState {
 
 export function selectCanRenameChat(state: ProtocolState): boolean {
 	return state.protocolVersion !== null && state.protocolVersion >= SESSION_RENAME_PROTOCOL_VERSION;
+}
+
+export function selectHasNormalizedSessionState(state: ProtocolState): boolean {
+	return state.protocolVersion !== null && state.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION;
+}
+
+interface SessionStateProjection {
+	sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
+}
+
+export function selectSessionState(
+	state: SessionStateProjection,
+	workspaceId: string,
+	sessionId: string,
+): SessionState | null {
+	return state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state ?? null;
+}
+
+export function selectWorkspaceNeedsAttention(
+	state: SessionStateProjection,
+	workspaceId: string,
+): boolean {
+	return Object.values(state.sessionStateByWorkspace[workspaceId] ?? {}).some(
+		(record) => record.state.needsInput !== null || record.state.completionUnread,
+	);
+}
+
+export function selectWorkspaceIsRunning(
+	state: SessionStateProjection,
+	workspaceId: string,
+): boolean {
+	return Object.values(state.sessionStateByWorkspace[workspaceId] ?? {}).some(
+		(record) => record.state.execution === "running",
+	);
+}
+
+export function selectProjectNeedsAttention(
+	state: SessionStateProjection,
+	projectId: string,
+): boolean {
+	return Object.values(state.sessionStateByWorkspace).some((records) =>
+		Object.values(records).some(
+			(record) =>
+				record.projectId === projectId &&
+				(record.state.needsInput !== null || record.state.completionUnread),
+		),
+	);
+}
+
+export function selectProjectIsRunning(state: SessionStateProjection, projectId: string): boolean {
+	return Object.values(state.sessionStateByWorkspace).some((records) =>
+		Object.values(records).some(
+			(record) => record.projectId === projectId && record.state.execution === "running",
+		),
+	);
+}
+
+interface CompletionActivationState extends SessionStateProjection {
+	status: string;
+	connectionGeneration: number;
+	sessions: Record<string, SessionRuntime>;
+	sessionStateTickBySession: Record<string, number>;
+	directChatActivationTickBySession: Record<string, number>;
+	directActivatedCompletionBySession: Record<string, string>;
+	renderedCompletionBySession: Record<string, string>;
+}
+
+export function selectReadyCompletionActivation(
+	state: CompletionActivationState,
+	workspaceId: string,
+	sessionId: string,
+): string | null {
+	const record = state.sessionStateByWorkspace[workspaceId]?.[sessionId];
+	const completion = record?.state.completion;
+	const runtime = state.sessions[sessionId];
+	const directlyActivated =
+		state.directActivatedCompletionBySession[sessionId] === completion?.completionId;
+	if (
+		state.status !== "connected" ||
+		!completion ||
+		!record.state.completionUnread ||
+		!runtime ||
+		runtime.syncedConnectionGeneration !== state.connectionGeneration ||
+		runtime.hostState?.completion?.completionId !== completion.completionId ||
+		state.renderedCompletionBySession[sessionId] !== completion.completionId ||
+		(!directlyActivated &&
+			(state.directChatActivationTickBySession[sessionId] ?? 0) <=
+				(state.sessionStateTickBySession[sessionId] ?? 0))
+	) {
+		return null;
+	}
+	return completion.completionId;
 }
 
 interface ActiveWorkspaceState {

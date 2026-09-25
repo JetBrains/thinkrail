@@ -10,9 +10,10 @@ tags: [v1, ui, resilience]
 ## Responsibility
 
 The app's dependency-light shared React primitives: the error boundary that keeps one failed region from
-unmounting the root, project-custom icons, the quiet-scroll frame used by shell and feature panels, and
-the shared loading-skeleton primitive. Also houses the `ui/` sub-module (shadcn primitives), which has
-its own spec.
+unmounting the root, project-custom icons, the binary attention dot and working-icon treatment used by
+feature panels (currently the Projects rail), the quiet-scroll frame, and the shared loading-skeleton
+primitive. Also houses the
+`ui/` sub-module (shadcn primitives), which has its own spec.
 
 ## Boundary
 
@@ -45,13 +46,21 @@ its own spec.
   directions. `QuietScrollFrame` also re-skins xterm's non-native slider to the same thumb (transparent
   underlying slider, a 6px optical thumb, opacity gated on intent and measured vertical overflow).
   Surface colour is an explicit semantic prop (`sidebar` or `terminal`), never inferred from arrangement.
+- **`AttentionDot.tsx`** — the store-free, static green/accent dot whose sole accessible label is “Needs
+  attention.” It carries no reason, count, tooltip, motion, or clearing behavior; callers decide only whether
+  it is present. It is the one marker for both needs-input and unread-result attention.
+- **`RunningIcon.tsx`** — a store-free wrapper for an identity icon whose existing colour must not change.
+  While active it applies the shared soft pulse and the accessible label “Agent working”; reduced motion
+  removes animation and uses the same-hue static treatment. It never renders a dot, spinner, count, or
+  tooltip. Feature callers decide whether normalized host state says a top-level session is running.
 - **Also owns:** `Skeleton.tsx` — `SkeletonRows`, the one pulsing-rows placeholder every loading surface
   uses, and `LoadingRegion`, the sized-wrapper shape around it that most call sites actually want (a
   `className` for the region's own padding/sizing, an optional `label` threaded to `SkeletonRows`'
   `role="status"` region rather than opening a second one, and an optional `testId`). The full loading
   vocabulary and its rules are below.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `SkeletonRows`, `LoadingRegion` — imported
-  directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `CustomIcon`,
+  directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `AttentionDot` via
+  `@/components/AttentionDot`; `RunningIcon` via `@/components/RunningIcon`; `CustomIcon`,
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
   `QuietScrollEdges` type via `@/components/QuietScrollArea`. The `ui/` primitives are their own sub-module
   ([components/ui/SPEC.md](ui/SPEC.md)).

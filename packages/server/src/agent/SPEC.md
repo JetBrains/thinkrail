@@ -145,6 +145,29 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     adjustment. The removal gate is the installed code, not the PR state: on every pi bump grep the installed
     `agent-session.js` for the `if (messageText)` guard around `this._steeringMessages.indexOf` — while that
     guard is present the workaround is still required; when it is gone the fix has shipped.
+
+  - **Normalized session state** is one host projection over orthogonal facts, never a second agent runtime.
+    Live derivation reads Pi execution/queue state, the question phase registry's exact expected/waiting id,
+    the extension-dialog registry, final settlement, and explicit-Stop intent. Needs-input outranks working
+    for presentation while the underlying execution may remain running. Only `agent_settled` creates a
+    normal completion; one terminal classifier distinguishes success, error, length, abort, and missing work.
+    Explicit Stop records its current run id as cancelled before abort and stays quiet; an unfinished run
+    found after restart becomes interrupted.
+
+    State ids come from Pi's active session-entry chain: run/interruption from the latest user entry,
+    completion from the decisive assistant entry, questions/dialogs from their interaction ids. Disk state
+    is reconstructed from the complete active branch; a file read/parse failure fails the all-workspace
+    snapshot rather than omitting a row. The first receipt initialization marks existing completion ids
+    handled but never suppresses unresolved input. Receipt writes are serialized and atomic.
+    Sessions publish full state records on semantic change. Pending extension dialogs retain their
+    full request so reconnecting clients can render and answer the exact blocker rather than seeing an
+    unusable needs-input marker.
+
+    `listSessionStates` returns every top-level live/disk session; `acknowledgeCompletion`
+    compare-and-sets only the current exact unread completion; `nudgeSession` atomically skips needs-input,
+    queues while running, or prompts while idle. `SessionSummary.state` and `session.state` use the same
+    derivation, so a client proves the exact rendered completion by id rather than inventing lifecycle.
+
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.
     `prompt`/`steer`/`followUp` (with images) /
@@ -606,7 +629,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
-  `buildAnswersMessage`/`awaitingQuestionToolCallId`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
+  `buildAnswersMessage`/`awaitingQuestionToolCallId`); normalized-state operations
+  (`listSessionStates`/`acknowledgeCompletion`/`nudgeSession` + publisher/project seams);
+  `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
   (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
@@ -632,10 +657,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `unlink`); `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SessionSummary`/
   `Session*Payload`/`SlashCommandInfo`/`ExtUi*`/`AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics +
-  session-lifecycle debug traces); `persistence` (`dataDir` only, to root the host-owned delegation
-  transcript store); Node.
-- **Forbidden:** `host`; sibling features other than `log` and the narrow `persistence.dataDir` edge (session
-  worktree `cwd` remains an input, never a persistence lookup); Central process/filesystem knowledge—the
+  session-lifecycle debug traces); `persistence` (`dataDir` for delegation plus the narrow session
+  receipt stores); Node.
+- **Forbidden:** `host`; sibling features other than `log` and those narrow persistence surfaces (session
+  worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
 
 ## Session titles

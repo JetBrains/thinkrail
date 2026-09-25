@@ -27,6 +27,7 @@ import { isAskUserAnswersMessage } from "@thinkrail/contracts";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import {
 	abortSession,
+	acknowledgeCompletion,
 	answerQuestion,
 	buildSessionSettings,
 	clampThinkingForModel,
@@ -40,10 +41,14 @@ import {
 	getDefaultModel,
 	getSessionCommands,
 	getSessionMessages,
+	getSessionState,
 	getSessionStats,
 	hasSession,
+	initializeSessionStates,
 	listAvailableModels,
+	listSessionStates,
 	listSessions,
+	nudgeSession,
 	promptSession,
 	refreshAgentReviewTool,
 	refreshAvailableModels,
@@ -57,6 +62,7 @@ import {
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionManagerFactory,
+	setSessionProjectResolver,
 	setSessionPublisher,
 	setSubagentsEnabledResolver,
 	settleSessionsForShutdown,
@@ -243,12 +249,15 @@ function gatedQuestionMessage(toolCallId: string, stopReason?: "length") {
 }
 
 let priorAgentDir: string | undefined;
+let priorDataDir: string | undefined;
 let priorOffline: string | undefined;
 let runtime: ModelRuntime;
 
 beforeAll(async () => {
 	priorAgentDir = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = tmpCwd("trpi-agentdir-");
+	priorDataDir = process.env.THINKRAIL_DATA_DIR;
+	process.env.THINKRAIL_DATA_DIR = tmpCwd("trpi-data-");
 
 	priorOffline = process.env.PI_OFFLINE;
 	process.env.PI_OFFLINE = "1";
@@ -263,6 +272,7 @@ beforeAll(async () => {
 
 	configurePiRuntime(runtime);
 	setSessionManagerFactory(() => SessionManager.inMemory());
+	setSessionProjectResolver((workspaceId) => `project-${workspaceId}`);
 	setSessionPublisher(({ sessionId, event }) => {
 		const list = events.get(sessionId) ?? [];
 		list.push(event);
@@ -275,6 +285,8 @@ afterAll(() => {
 	for (const dir of tmpDirs) rmSync(dir, { recursive: true, force: true });
 	if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 	else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+	if (priorDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+	else process.env.THINKRAIL_DATA_DIR = priorDataDir;
 	if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 	else process.env.PI_OFFLINE = priorOffline;
 });
@@ -299,6 +311,24 @@ test("session creation publishes a domain summary for other frontends", async ()
 	} finally {
 		setSessionCreatedPublisher(() => {});
 	}
+});
+
+test("concurrent idle nudges reserve one prompt and queue the later wake-up", async () => {
+	fauxA.setResponses([fauxAssistantMessage("FIRST_NUDGE"), fauxAssistantMessage("SECOND_NUDGE")]);
+	const session = await createSession({
+		cwd: tmpCwd("trpi-nudge-admission-"),
+		workspaceId: "ws-nudge-admission",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const first = nudgeSession(session.sessionId, "[thinkrail:todo-nudge] first");
+	const second = nudgeSession(session.sessionId, "[thinkrail:todo-nudge] second");
+	expect(first.disposition).toBe("prompted");
+	expect(second.disposition).toBe("queued");
+	await second.send();
+	await first.send();
+	expect(seen(session.sessionId)).toContain("FIRST_NUDGE");
+	expect(seen(session.sessionId)).toContain("SECOND_NUDGE");
+	removeSession(session.sessionId);
 });
 
 test("two sessions in two worktrees stream independently; disposing one leaves the other working", async () => {
@@ -369,6 +399,47 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 	});
 	const hydrated = await getSessionMessages(session.sessionId, "ws-settled", cwd);
 	expect(hydrated.summary.lastSettlement).toEqual(settled?.terminal);
+	expect(hydrated.summary.state).toMatchObject({
+		execution: "idle",
+		needsInput: null,
+		queuedCount: 0,
+		completion: { outcome: "failed" },
+		completionUnread: true,
+	});
+	expect(
+		getSessionState(session.sessionId).completion?.completionId.startsWith("completion:"),
+	).toBe(true);
+
+	await initializeSessionStates([{ id: "ws-settled", projectId: "p-settled", cwd }]);
+	const baseline = await listSessionStates([{ id: "ws-settled", projectId: "p-settled", cwd }]);
+	expect(baseline).toEqual([
+		expect.objectContaining({
+			sessionId: session.sessionId,
+			workspaceId: "ws-settled",
+			projectId: "p-settled",
+			state: expect.objectContaining({
+				completion: expect.objectContaining({ outcome: "failed" }),
+				completionUnread: false,
+			}),
+		}),
+	]);
+
+	fauxA.setResponses([fauxAssistantMessage("complete")]);
+	await promptSession(session.sessionId, "again");
+	const completionId = getSessionState(session.sessionId).completion?.completionId;
+	if (!completionId) throw new Error("settled run has no completion id");
+	expect(acknowledgeCompletion(session.sessionId, "stale").acknowledged).toBe(false);
+	expect(getSessionState(session.sessionId).completionUnread).toBe(true);
+	expect(acknowledgeCompletion(session.sessionId, completionId)).toMatchObject({
+		acknowledged: true,
+		record: { state: { completionUnread: false } },
+	});
+	expect(acknowledgeCompletion(session.sessionId, completionId).acknowledged).toBe(false);
+	await abortSession(session.sessionId);
+	expect(getSessionState(session.sessionId)).toMatchObject({
+		completion: { completionId, outcome: "succeeded" },
+		completionUnread: false,
+	});
 });
 
 test("a length-truncated questionnaire is terminal and cannot be answered", async () => {
@@ -1283,6 +1354,9 @@ test("a live question blocks continuation, preserves queue order, and acknowledg
 			await new Promise((resolve) => setTimeout(resolve, 5));
 		}
 		expect(seen(session.sessionId)).toContain('"toolName":"ask_user_question"');
+		const nudge = nudgeSession(session.sessionId, "[thinkrail:todo-nudge] ignored");
+		expect(nudge.disposition).toBe("needs_input");
+		await nudge.send();
 		await steerSession(session.sessionId, "QUEUED_WHILE_ASKING");
 		await Promise.resolve();
 		expect(continuationCalls).toBe(0);
@@ -1962,6 +2036,9 @@ test("a malformed detached transcript is never treated as authoritative absence"
 		writeFileSync(info.path, "not a pi transcript\n");
 
 		await expect(listSessions("ws-delete-corrupt", cwd)).rejects.toThrow("unreadable or malformed");
+		await expect(
+			listSessionStates([{ id: "ws-delete-corrupt", projectId: "p-delete-corrupt", cwd }]),
+		).rejects.toThrow("unreadable or malformed");
 		await expect(deleteSession(session.sessionId, "ws-delete-corrupt", cwd)).rejects.toThrow(
 			"unreadable or malformed",
 		);

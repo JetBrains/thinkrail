@@ -71,9 +71,19 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `workspace.fsChanged` via `noteFsChanged(payload)`, and **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
   welcome config lands in the atomic install above.
 
-  Activity has no transport state in this release. The host retains `session.activityList → []` only for
-  already-loaded old clients; this web client neither requests it nor subscribes to a push channel. Before
-  `WsTransport` dispatches any response or non-Pi push, `wireTransport` flushes queued Pi events synchronously; connection-status transitions do the same.
+  **Session state hydrates on every supported welcome.** `session.stateList` is tokenized by connection
+  generation and buffers `session.state` pushes until the complete snapshot returns, folds those full-record
+  replacements over their snapshot rows in arrival order, then installs the resulting authoritative map once.
+  That ordered snapshot-plus-buffer state resolves any deliberate chat activation recorded before a current
+  state row was available; later pushes cannot claim it. Current-generation failures retain the previous map and
+  pending activation while retrying with capped backoff; overflowing the
+  bounded push buffer restarts the complete read instead of growing without limit, while stale-generation
+  outcomes discard their buffers. Pending dialog records replay their exact request, and adding/opening a
+  workspace restarts the generation-guarded complete read so pre-existing disk sessions are included.
+  Unsupported hosts clear the map. The old `session.activityList` tombstone
+  is never requested by this client. Before `WsTransport` dispatches a state push, any queued Pi events flush
+  synchronously, so the runtime transcript/render state precedes the host state that refers to it;
+  connection-status transitions keep the same barrier.
   This dispatch barrier preserves cross-message order and the store's transcript-revision fence while still
   collapsing consecutive stream frames. All subscriptions happen once at init, never in component effects);
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error

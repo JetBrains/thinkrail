@@ -204,8 +204,29 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   assistant turn (`removeSupersededAssistant`, the same rule as the overflow-compaction path) —
   otherwise the client renders the reply twice (frozen failed partial + retried copy). Hydration applies
   the same presentation rule to the persisted copy (`chat/hydrate.ts` hides retried attempts — an
-  errored assistant followed by another assistant before any user message), so live and reloaded clients
-  agree.
+  errored assistant followed by another assistant message), so live and reloaded clients agree.
+  - **Normalized session state** (`sessionStateByWorkspace`) is the full host-authored state record per
+    workspace/session. Snapshot hydration replaces the map only on a complete current-generation read;
+    ordered pushes fold one record, and deletion removes it. Shared selectors derive needs-input, working,
+    unread-finished, and project/workspace rollups—no stored precedence or second running slice.
+    `SessionRuntime.hostState` is installed with transcript hydration and by state pushes delivered after Pi
+    events. Exact completion ids let `selectReadyCompletionActivation` require current connection, rendered
+    runtime state, unread record, and direct activation of that exact unread completion. Activation records
+    the current completion id as well as its local clock, so an attach/hydration push for the same id cannot
+    erase a deliberate open while a stale activation can never clear a newer result. On a cold connection,
+    a deliberate open before the first state snapshot cannot trust the retained record, which may be absent
+    or stale after reconnect; one pending activation survives only until the ordered snapshot-plus-buffer
+    state installs, which binds its exact unread completion or drops it when the session is quiet/absent. Connection transition and chat deletion clear the pending activation, and
+    later pushes cannot inherit it. The exact result must render before acknowledgement is sent, but a
+    deliberate tab/history activation may happen first and
+    remains eligible once that row mounts—opening and reading is sufficient without a second composer
+    focus. Deliberate workspace entry also activates its already-selected chat once that chat is visible and
+    unobscured, so entering the workspace and reading does not require a second click on the chat. Passive
+    mount/visibility and background layout restoration never advance activation; chat-tab/group selection,
+    direct history/search open, workspace entry, and unobscured conversation pointer intent do. Workspace
+    entry arms one pending activation only until the first selected center tab converges; competing
+    navigation or any connection transition expires it, so a later background restore cannot inherit an
+    old read gesture. Incidental interactions inside an obscuring history overlay do not.
   Closed chats are reopenable: the workbench close command atomically removes local placement and invokes
   **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
   **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending
@@ -529,8 +550,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
   `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (deduplicated local chat
-  placement + history membership used as a reconnect-reconciliation baseline),
-  `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
+  placement + history membership used as a reconnect-reconciliation baseline), normalized session-state
+  selectors/actions (exact session + workspace/project needs-input/working/unread-finished rollups, direct
+  activation, ready exact-completion acknowledgement), `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
   only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
   relative reports, `module-b/SPEC.md` would match the *root* `SPEC.md`) + `specPathMatcher` (is a written

@@ -11,6 +11,7 @@ import {
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
+	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
@@ -67,6 +68,15 @@ test("session rename is versioned and bounded", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SESSION_RENAME_PROTOCOL_VERSION);
 	expect(SESSION_TITLE_MAX_LENGTH).toBe(80);
 	expect(WS_METHODS.sessionRename).toBe("session.rename");
+});
+
+test("normalized session state advances the protocol and names one snapshot/push channel", () => {
+	expect(SESSION_STATE_PROTOCOL_VERSION).toBe(69);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SESSION_STATE_PROTOCOL_VERSION);
+	expect(WS_METHODS.sessionStateList).toBe("session.stateList");
+	expect(WS_METHODS.sessionAcknowledgeCompletion).toBe("session.acknowledgeCompletion");
+	expect(WS_METHODS.sessionNudge).toBe("session.nudge");
+	expect(WS_CHANNELS.sessionState).toBe("session.state");
 });
 
 test("session titles normalize to one bounded non-blank line", () => {
