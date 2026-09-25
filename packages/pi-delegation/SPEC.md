@@ -25,7 +25,7 @@ rules below).
 
 ## Approved resource-owned extension
 
-Durable orchestration callers can use an independent resource owner alongside session
+The durable DAG consumer [[module-pi-dag]] adds an independent resource owner alongside session
 parents. No dummy parent session or live-parent lookup is required for resource children. This revises
 the parent-only workflow assumption and decision #9 below for this additional ownership path; existing
 parent APIs, defaults, collection, events and cascades retain their semantics. This extension is
