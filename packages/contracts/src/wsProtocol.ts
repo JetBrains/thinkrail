@@ -201,6 +201,7 @@ export const WS_METHODS = {
 	todoRequestFix: "todo.requestFix",
 	todoStartReview: "todo.startReview",
 	todoReviewAll: "todo.reviewAll",
+	todoGenerateSummary: "todo.generateSummary",
 	gitStatus: "git.status",
 	gitDiffFile: "git.diffFile",
 	gitListCommits: "git.listCommits",
@@ -485,6 +486,10 @@ export interface WsMethodMap {
 	"todo.reviewAll": {
 		params: { workspaceId: string; sessionId: string };
 		result: { ok: true; total: number; alreadyRunning?: true };
+	};
+	"todo.generateSummary": {
+		params: { workspaceId: string; sessionId: string };
+		result: { summary: string | null };
 	};
 	"git.status": { params: { workspaceId: string; scope?: GitDiffScope }; result: GitStatus };
 	"git.diffFile": {

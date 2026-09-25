@@ -146,6 +146,7 @@ import {
 	addTodo,
 	approveTodoReview,
 	countOpenTodos,
+	generateTodoSummary,
 	listTodos,
 	removeSessionTodoWindows,
 	removeTodo,
@@ -557,6 +558,8 @@ const handlers: Record<string, Handler> = {
 			return { ok: true, total: 0, alreadyRunning: true };
 		return { ok: true, total: started.length };
 	},
+	"todo.generateSummary": (params) =>
+		generateTodoSummary(params as { workspaceId: string; sessionId: string }),
 	"todo.requestFix": async (params) => {
 		const capture = additionalCapture();
 		const p = params as { workspaceId: string; sessionId: string; id: string; feedback: string };

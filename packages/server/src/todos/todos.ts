@@ -14,6 +14,7 @@ import {
 	type TodoPlan as StoredPlan,
 	TodoStore,
 } from "pi-todos/core";
+import { suggestPlanSummary } from "../assist";
 import { gitStatus, listCommits, readCommitSubject, resolveListedCommit } from "../git";
 import { getWorkspace } from "../workspaces";
 import { enqueueTodoMutation, settleChangeArtifacts, unattributedChanges } from "./artifacts";
@@ -219,6 +220,48 @@ export function addTodo(params: {
 		if (params.note !== undefined) input.note = params.note;
 		return storeFor(params.workspaceId, params.sessionId).add(input);
 	});
+}
+
+const summaryInFlight = new Set<string>();
+
+/**
+ * Auto-draft the plan-level summary when the plan is fully done but the agent left none. Best-effort:
+ * returns the existing note untouched, `{ summary: null }` when the plan isn't complete / generation
+ * fails, or the freshly generated + persisted note. The slow model call runs OUTSIDE the write lock; the
+ * final re-check + `setSummary` runs inside `enqueueTodoMutation` and never clobbers an agent-authored
+ * note or a plan that re-opened meanwhile. One in-flight generation per session.
+ */
+export async function generateTodoSummary(params: {
+	workspaceId: string;
+	sessionId: string;
+}): Promise<{ summary: string | null }> {
+	const { workspaceId, sessionId } = params;
+	const plan = storeFor(workspaceId, sessionId).read();
+	const existing = plan.summary?.trim();
+	if (existing) return { summary: existing };
+	const items = flatItems(plan);
+	if (items.length === 0 || items.some((t) => t.status !== "done")) return { summary: null };
+	const key = `${workspaceId}\u0000${sessionId}`;
+	if (summaryInFlight.has(key)) return { summary: null };
+	summaryInFlight.add(key);
+	try {
+		const text = await suggestPlanSummary(
+			items.map((t) => ({ title: t.title, summary: t.summary, verification: t.verification })),
+		);
+		if (!text) return { summary: null };
+		return await enqueueTodoMutation(workspaceId, () => {
+			const store = storeFor(workspaceId, sessionId);
+			const fresh = store.read();
+			if (fresh.summary?.trim()) return { summary: fresh.summary };
+			const freshItems = flatItems(fresh);
+			if (freshItems.length === 0 || freshItems.some((t) => t.status !== "done"))
+				return { summary: null };
+			store.setSummary(text);
+			return { summary: text };
+		});
+	} finally {
+		summaryInFlight.delete(key);
+	}
 }
 
 export function updateTodo(params: {

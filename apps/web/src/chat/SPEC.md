@@ -953,6 +953,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
+  **auto-summary trigger** (a fully-done plan with no agent `summary` fires one best-effort
+  `todo.generateSummary` that folds a host-drafted note in — re-armed if the plan re-opens or its summary
+  clears, never overwriting an existing note) + the
   `openMarkdown` snapshot action; tool completion refreshes immediately and `agent_settled` supplies the
   final refresh; overlapping list reads are latest-wins and connection-generation stamped, accepted adds
   fold by item id, and a failed optimistic removal re-reads authority rather than restoring a stale whole-plan

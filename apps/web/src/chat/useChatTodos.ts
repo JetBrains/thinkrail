@@ -123,6 +123,30 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		};
 	}, [connectionGeneration, identity, live, sessionId, status, workspaceId]);
 
+	// When a completed plan carries no agent-authored summary, ask the host to draft one once (a
+	// best-effort cheap-model one-shot). Re-armed if the plan re-opens or its summary clears.
+	const summaryTriedRef = useRef(false);
+	useEffect(() => {
+		if (!data) return;
+		const items = [...data.todos, ...data.groups.flatMap((group) => group.todos)];
+		const allDone = items.length > 0 && items.every((todo) => todo.status === "done");
+		if (!allDone || data.summary) {
+			summaryTriedRef.current = false;
+			return;
+		}
+		if (summaryTriedRef.current) return;
+		summaryTriedRef.current = true;
+		const requestIdentity = identity;
+		getTransport()
+			.request("todo.generateSummary", { workspaceId, sessionId })
+			.then((res) => {
+				const summary = res.summary;
+				if (!summary || !live(requestIdentity)) return;
+				setData((prev) => (prev && !prev.summary ? { ...prev, summary } : prev));
+			})
+			.catch(() => {});
+	}, [data, identity, live, sessionId, workspaceId]);
+
 	const add = async (rawTitle: string) => {
 		const title = rawTitle.trim();
 		if (!title) return;
