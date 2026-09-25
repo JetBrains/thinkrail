@@ -87,6 +87,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `feedback` | host-scoped usage count + addressed product-interview invitation lifecycle | [feedback/SPEC.md](src/feedback/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 | `editors` | detect installed editors/IDEs, launch one at a worktree, reveal a worktree in the file manager | [editors/SPEC.md](src/editors/SPEC.md) |
+| `ext` | UI extension host core: discovery (+ project trust), manifest validation, jiti loader with generations, `Tr` registries (observers, pi factories, channels, actions, store, timers, logs) | [ext/SPEC.md](src/ext/SPEC.md) |
 | `history` | prompt recall + conversation search over pi's session files | [history/SPEC.md](src/history/SPEC.md) |
 | `templates` | file CRUD over pi's prompt-template dirs (global + project scoped) | [templates/SPEC.md](src/templates/SPEC.md) |
 
@@ -98,7 +99,7 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`, `feedback`, `ext`, `log`, `persistence` (`dataDir`, for the crash report)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
@@ -107,7 +108,7 @@ the host from env via `bootHost` for dev/e2e.
 - `github` → `subprocess` (both `gh auth status` probes run under the same bounded runner as `git`/`branch-review`)
 - `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics`, `feedback` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
 - `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
-  cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,
+  cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`, `ext`,
   `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`). `persistence` never imports
   `log` (would cycle); `initLogging` is called only from `host`'s `bootHost`
 - `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
@@ -123,6 +124,8 @@ the host from env via `bootHost` for dev/e2e.
 - `agent` → `log`, `persistence` (`dataDir` — the static state-root resolver; the delegation store lives at
   `<dataDir>/delegation`, bound in the agent's delegation embedding) — otherwise the pi runtime alone; auth
   passes desired opaque Central paths through its public generation seam
+- `ext` → `persistence` (`dataDir`), `log` — plus `@thinkrail/ext` (external). Sessions, trust roots, and
+  the pi-factory bridge are injected by `host` (`host/extWiring.ts`), so there is no `ext`→`agent` edge
 - `persistence`, `dialog`, `history`, `templates`, `subprocess` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.

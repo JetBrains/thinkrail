@@ -153,6 +153,16 @@
         "typescript": "catalog:",
       },
     },
+    "packages/ext-sdk": {
+      "name": "@thinkrail/ext",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@thinkrail/contracts": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/pi-delegation": {
       "name": "pi-delegation",
       "version": "0.0.0",
@@ -247,8 +257,10 @@
         "@earendil-works/pi-coding-agent": "catalog:",
         "@stroncium/procfs": "1.2.1",
         "@thinkrail/contracts": "workspace:*",
+        "@thinkrail/ext": "workspace:*",
         "@thinkrail/shared": "workspace:*",
         "bun-pty": "0.4.10",
+        "jiti": "2.7.0",
         "pi-delegation": "workspace:*",
         "pi-spec-graph": "workspace:*",
         "pi-subagents": "workspace:*",
@@ -936,6 +948,8 @@
     "@thinkrail/contracts": ["@thinkrail/contracts@workspace:packages/contracts"],
 
     "@thinkrail/desktop": ["@thinkrail/desktop@workspace:apps/desktop"],
+
+    "@thinkrail/ext": ["@thinkrail/ext@workspace:packages/ext-sdk"],
 
     "@thinkrail/server": ["@thinkrail/server@workspace:packages/server"],
 

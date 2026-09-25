@@ -23,6 +23,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		allowed: ["apps/cli", "packages/server", "packages/shared"],
 	},
 	{ root: "packages/contracts", allowed: [] },
+	{ root: "packages/ext-sdk", allowed: ["packages/contracts"] },
 	{ root: "packages/shared", allowed: ["packages/contracts"] },
 	{ root: "packages/pi-delegation", allowed: [] },
 	{ root: "packages/pi-subagents", allowed: ["packages/pi-delegation"] },
@@ -30,6 +31,7 @@ const MODULE_RULES: readonly ModuleRule[] = [
 		root: "packages/server",
 		allowed: [
 			"packages/contracts",
+			"packages/ext-sdk",
 			"packages/shared",
 			"packages/spec-graph",
 			"packages/pi-delegation",

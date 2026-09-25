@@ -706,6 +706,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     value-imported so dev and the compiled binary take the same path.
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
+  - **Host-extension bridge** (`hostExtensions.ts`): one extra shared factory that, each time pi runs
+    factories (session creation and every `reload()`), invokes the factories the composition root supplies
+    through `setHostExtensionFactorySource` (ThinkRail UI extensions' `tr.pi`). A throwing source factory is
+    reported and skipped; the rest still run. Delegated children never get the bridge.
+    `reloadSessionsForHostExtensions()` reloads every idle live session at once and marks streaming ones;
+    a marked session reloads right after its `agent_settled` (deferred a tick, re-checked, re-marked if a new
+    run already started), because `reload()` must not run mid-run. Reload failures are logged, never thrown.
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
   `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload`;
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
@@ -721,7 +728,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
   `isProjectSkillPath(relativePath)` (watch-classification predicate);
-  `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
+  `reloadSessionResources(sessionId)` (active-chat reload); `listLiveSessionRefs()` (read-only live-session
+  rows for UI extensions); the host-extension seams `setHostExtensionFactorySource` +
+  `reloadSessionsForHostExtensions`; the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context); the subagent-policy seams
   **`setSubagentsEnabledResolver`** + **`refreshSubagentTools`** (host resolves the effective global default
   plus workspace override; manager owns live-session activation timing);

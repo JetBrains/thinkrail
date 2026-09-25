@@ -1,0 +1,20 @@
+{
+	"name": "@thinkrail/ext",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./view": "./src/view.ts"
+	},
+	"description": "SDK for ThinkRail UI extensions: defineExtension, the host-half API types, and the view API.",
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@thinkrail/contracts": "workspace:*",
+		"@types/bun": "catalog:",
+		"typescript": "catalog:"
+	}
+}

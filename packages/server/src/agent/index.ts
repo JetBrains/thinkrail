@@ -10,6 +10,7 @@ export {
 	listSkillCommands,
 	registerBundledRuntime,
 } from "./extensions";
+export { type HostExtensionFactorySource, setHostExtensionFactorySource } from "./hostExtensions";
 export * from "./oneshot";
 export {
 	activatePiRuntimeGeneration,

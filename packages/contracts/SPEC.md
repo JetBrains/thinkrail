@@ -27,7 +27,7 @@ of the host.
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
-- **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
+- **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `ext` + `nativeClient`
   (`NativeUpdateState` and `NativeUpdateBridge`, the optional shell-local desktop update capability); the
   value re-exports
   `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
@@ -43,7 +43,7 @@ of the host.
   anchors stay aligned) from `domain`; **`isTranscriptMessageRole(role)`**
   from `piProtocol` (the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
-  would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
+  would silently shift every later jump anchor); `SURFACE_SLOTS` from `ext`; `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, feature-introduction versions, and the
   launch-auth names `LAUNCH_TOKEN_PARAM` + `LAUNCH_AUTH_PATH` shared by host and browser).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
@@ -385,6 +385,11 @@ of the host.
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.
+- **ext.ts** — UI-extension domain types: `SURFACE_SLOTS` (the closed slot list, also the manifest
+  validator's allowed set) + `SurfaceSlot`, `ExtensionSurface` (`tool` names a `toolCard`'s tool,
+  `customType` a `message` slot's custom message type), `ExtensionScope`, `ExtensionStatus`, and
+  `ExtensionInfo` (`generation` is the active generation, `null` when none loaded; `status: "error"` with
+  a non-null `generation` means a failed reload left the old generation running).
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
   update bridge exposes a monotonic state snapshot, prompt manual check, explicit restart action, and state
   subscription without granting updater authority to an ordinary browser connection.

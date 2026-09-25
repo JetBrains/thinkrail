@@ -9,6 +9,7 @@ const roots: string[] = [];
 const modules = {
 	"packages/artifact-tests": "@thinkrail/artifact-tests",
 	"packages/contracts": "@thinkrail/contracts",
+	"packages/ext-sdk": "@thinkrail/ext",
 	"packages/shared": "@thinkrail/shared",
 	"packages/pi-delegation": "pi-delegation",
 	"packages/pi-subagents": "pi-subagents",
@@ -38,6 +39,7 @@ function fixture(): string {
 			"@thinkrail/shared": "workspace:*",
 		},
 		"packages/shared": { "@thinkrail/contracts": "workspace:*" },
+		"packages/ext-sdk": { "@thinkrail/contracts": "workspace:*" },
 		"packages/pi-subagents": { "pi-delegation": "workspace:*" },
 		"packages/server": {
 			"@thinkrail/contracts": "workspace:*",

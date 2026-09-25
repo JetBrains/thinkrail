@@ -86,6 +86,7 @@ import {
 	maybeAutoRenameWorkspace,
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
+import { installExtHost, trustedProjectRoots } from "./extWiring";
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -466,7 +467,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false);
 
+	const extensions = installExtHost();
+	const syncExtensionRoots = () =>
+		extensions.extHost
+			.setProjectRoots(trustedProjectRoots(getProjects()))
+			.catch((error: unknown) => log.warn("extension rescan failed", error));
+
 	setProjectPublisher((project) => {
+		void syncExtensionRoots();
 		const capture = additionalCapture();
 		if (capture) {
 			try {
@@ -581,6 +589,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setExtUiPendingObserver(syncSessionActivity);
 
 	setSessionPublisher((payload) => {
+		extensions.extHost.observe(payload);
 		runObservation.observe(payload.sessionId, payload.event);
 		if (payload.event.type === "tool_execution_start") {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
@@ -653,6 +662,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	}
 
 	void observeCurrentSetup();
+	void syncExtensionRoots();
 
 	const stop = (): void => {
 		if (stopping) return;
@@ -665,6 +675,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		cancelAllLogins();
 		stopJbcentralRuntime();
 		stopAllWatches();
+		void extensions.dispose();
 		disposeAllSessions();
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();

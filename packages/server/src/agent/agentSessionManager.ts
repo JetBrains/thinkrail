@@ -114,6 +114,7 @@ interface Entry {
 	registered: boolean;
 	subagentToolsRefreshPending: boolean;
 	reviewToolRefreshPending: boolean;
+	hostExtensionReloadPending: boolean;
 	publishedActivity: ActivityStatus | null;
 	rawActivity: ActivityStatus | null;
 	lastActivityMs: number;
@@ -488,6 +489,33 @@ export function getSessionMessagesSnapshot(sessionId: string): TranscriptMessage
 	return transcriptMessages(mustGet(sessionId));
 }
 
+export function listLiveSessionRefs() {
+	return [...sessions]
+		.filter(([sessionId]) => !hasDeletionTombstone(sessionId))
+		.map(([sessionId, entry]) => ({
+			sessionId,
+			workspaceId: entry.workspaceId,
+			title: entry.session.sessionName ?? "Chat",
+			isStreaming: entry.session.isStreaming,
+		}));
+}
+
+function reloadForHostExtensions(sessionId: string, entry: Entry): void {
+	if (sessions.get(sessionId) !== entry) return;
+	if (entry.session.isStreaming) {
+		entry.hostExtensionReloadPending = true;
+		return;
+	}
+	entry.hostExtensionReloadPending = false;
+	entry.session
+		.reload()
+		.catch((error: unknown) => log.warn(`session ${sessionId} extension reload failed`, error));
+}
+
+export function reloadSessionsForHostExtensions(): void {
+	for (const [sessionId, entry] of sessions) reloadForHostExtensions(sessionId, entry);
+}
+
 export async function reloadSessionResources(sessionId: string): Promise<void> {
 	const session = mustGet(sessionId);
 	if (session.isStreaming) {
@@ -568,6 +596,7 @@ async function prepareSessionEntry(
 		registered: false,
 		subagentToolsRefreshPending: false,
 		reviewToolRefreshPending: false,
+		hostExtensionReloadPending: false,
 		publishedActivity: null,
 		rawActivity: null,
 		lastActivityMs: Date.now(),
@@ -633,6 +662,8 @@ async function prepareSessionEntry(
 			entry.lastSettlement = terminal;
 			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
 			if (entry.reviewToolRefreshPending) applyReviewTool(entry);
+			if (entry.hostExtensionReloadPending)
+				setTimeout(() => reloadForHostExtensions(sessionId, entry), 0);
 		}
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;

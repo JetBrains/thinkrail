@@ -32,9 +32,10 @@ apps/web        UI client (mobile-first)                           ── depend
 apps/desktop    Electrobun local-host launcher (V1)                ── depends on ─▶ packages/server, packages/contracts, packages/shared
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
-packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/pi-delegation, packages/pi-subagents
+packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/ext-sdk, packages/pi-delegation, packages/pi-subagents
 packages/contracts  the wire (types-only)
 packages/shared     shellEnv (server-side only)
+packages/ext-sdk    @thinkrail/ext: authoring API types for ThinkRail UI extensions (defineExtension, Tr)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
                     its pi-free core/ read model also backs the host's spec.graph read method)
 packages/pi-visualize          portable pi extension: the visualize tool (bundled into every session)

@@ -437,6 +437,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   token and get `401`. The extension-serving work must pick one fix (single-file bundles with inlined
   assets, token-rewritten asset URLs, or an `HttpOnly SameSite=Strict` cookie set by `/auth`) and
   record it here.
+- **UI extension wiring** (`extWiring.ts`): `installExtHost` creates the [[submodule-server-ext]] host
+  over `<dataDir>/extensions` + `<dataDir>/ext-store`, injects live-session reads from `agent`, installs
+  its `piFactories` as the agent's host-extension source, and maps `onPiFactoriesChanged` to
+  `reloadSessionsForHostExtensions`. `createServer` starts it, forwards every published session event to
+  `observe`, passes trusted projects as roots on boot and on every project update, and disposes it on
+  stop. Wire methods, pushes, and the `/ext` route are not wired yet.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for

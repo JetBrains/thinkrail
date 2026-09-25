@@ -20,6 +20,7 @@ import {
 	askUserQuestionExtension,
 	createAskUserQuestionWaiters,
 } from "./askUserQuestion";
+import { hostExtensionBridge } from "./hostExtensions";
 import { oversizedImageGuard } from "./imageGuard";
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
@@ -202,6 +203,7 @@ export async function buildResourceLoader(
 		reviewToolExtension,
 		requestReviewExtension,
 		oversizedImageGuard,
+		hostExtensionBridge,
 		...extraFactories,
 	];
 	const skillInputs = resolveSkillInputs(cwd, getAdmission);
