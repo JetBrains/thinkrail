@@ -174,7 +174,16 @@ export const EXT_WS_CHANNELS = {
 
 export interface ExtRemovedPush {
 	name: string;
+	blockedProjectId?: string;
 }
+
+export const blockedExtensionKey = (projectId: string, name: string) => `${projectId}/${name}`;
+
+export const extensionKey = ({ name, status, projectId }: ExtensionInfo) =>
+	status === "blocked" && projectId !== undefined ? blockedExtensionKey(projectId, name) : name;
+
+export const removedExtensionKey = ({ name, blockedProjectId }: ExtRemovedPush) =>
+	blockedProjectId === undefined ? name : blockedExtensionKey(blockedProjectId, name);
 
 export interface ExtChannelPush {
 	key: string;

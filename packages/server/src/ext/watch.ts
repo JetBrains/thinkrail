@@ -15,20 +15,21 @@ export const createExtWatcher = ({
 	warn,
 }: {
 	debounceMs: number;
-	onChange: (name: string) => void;
+	onChange: (change: { root: string; name: string }) => void;
 	warn?: (message: string) => void;
 }) => {
 	const watchers = new Map<string, FSWatcher>();
 	const timers = new Map<string, ReturnType<typeof setTimeout>>();
 	let closed = false;
 
-	const schedule = (name: string) => {
-		clearTimeout(timers.get(name));
+	const schedule = (root: string, name: string) => {
+		const key = `${root}\0${name}`;
+		clearTimeout(timers.get(key));
 		timers.set(
-			name,
+			key,
 			setTimeout(() => {
-				timers.delete(name);
-				if (!closed) onChange(name);
+				timers.delete(key);
+				if (!closed) onChange({ root, name });
 			}, debounceMs),
 		);
 	};
@@ -37,7 +38,7 @@ export const createExtWatcher = ({
 		try {
 			const watcher = watch(root, { recursive: true }, (_event, filename) => {
 				const name = changedExtension(filename);
-				if (name) schedule(name);
+				if (name) schedule(root, name);
 			});
 			watcher.on("error", (error) => warn?.(`extension watcher ${root}: ${String(error)}`));
 			watchers.set(root, watcher);

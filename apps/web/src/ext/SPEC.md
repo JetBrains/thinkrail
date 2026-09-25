@@ -109,6 +109,9 @@ re-renders through its renderer-registry version.
 
 - It lists every `tab` and `panel` surface, grouped by scope: **User** (`~/.thinkrail/extensions`) then
   **Project**. With nothing to list it shows an empty state naming both folders and the SDK guide path.
+- The store keys entries by `extensionKey`, so blocked copies sit beside a loaded extension of the same
+  name; `selectExtension(extensions, name, projectId)` resolves the loaded one first, then that project's
+  blocked copy. Removing a blocked entry never drops channels.
 - `selectBlocked(extensions, projectId)` gives the active project's `blocked` entries (host-reported, see
   [[submodule-server-ext]]) while the store's project is not trusted. When there are some, the first click
   opens `TrustExtensionsDialog` instead of the menu: a security warning (extensions run code with full
@@ -116,6 +119,8 @@ re-renders through its renderer-registry version.
   then `applyProjectUpdated`; the host loads them live) and **Cancel**. After Cancel the button opens the
   menu for that project, with a first item that reopens the dialog. The dismissal is per mounted menu, in
   memory.
+- Sync pushes `blockedTitlesByProject` into `chat/blockedExtensions` on every store change, so the
+  Skills dialog's trust banner reads the same live list without importing `ext`.
 - A mounted surface of a blocked extension shows the placeholder `extension <name> is off until you trust
   this project`.
 
@@ -131,7 +136,8 @@ re-renders through its renderer-registry version.
 - **Allowed deps:** `contracts`; `transport` (requests, pushes, `hostUrl`, session creation); `store`
   (welcome generation, protocol version, host ids, projects + `applyProjectUpdated`, layout intents, chat
   draft, toasts); `themes`
-  (`onThemeSwap`); `chat/toolRegistry` + `chat/rendererRegistry` (registration only); `components/ui`;
+  (`onThemeSwap`); `chat/toolRegistry` + `chat/rendererRegistry` + `chat/blockedExtensions` (registration
+  only); `components/ui`;
   `lib`; `@remixicon/react`; React; Zustand.
 - **Forbidden:** `shell`, `panels`; any `server`/`shared`/`pi` import; evaluating extension code any way
   other than the host-served module URL.

@@ -27,10 +27,11 @@ actions, the per-extension JSON store, timers, and logs.
   (user before project); a later duplicate is skipped with a warning.
 - **Blocked.** `setProjectRoots(trusted, untrusted)` also takes the open untrusted projects. Their
   extensions are listed as `status: "blocked"` entries (name, title, surfaces, permissions read from
-  `extension.json`; no build, no import, no code run), so the UI can offer trust. A blocked name that
-  collides with a loadable one is dropped. Trust turns a blocked entry into a load; the host does not push
-  `ext.removed` in between, and the load's `ext.changed` replaces it. Untrust unloads (`ext.removed`) and then
-  pushes the blocked entry. `get(name)` sees loaded extensions only; `reload` of a blocked name throws
+  `extension.json`; no build, no import, no code run), so the UI can offer trust. Blocked entries are kept
+  per `(projectId, name)`: every untrusted project reports its own copies, even when a loaded extension or
+  another project has the same name. Their `ext.removed` carries `blockedProjectId`, so a client never drops
+  a loaded extension of that name. Trust pushes the blocked entry's removal and then the load's `ext.changed`.
+  Untrust unloads (`ext.removed`) and then pushes the blocked entry. `get(name)` sees loaded extensions only; `reload` of a blocked name throws
   "untrusted project". Untrusted roots are watched too, so a new or removed folder updates the blocked list.
 
 ## Manifest
@@ -134,7 +135,9 @@ on `validate`, so this never blocks applying it.
 
 With `watchDebounceMs` set, the host watches the user extensions dir and every open project's
 `.thinkrail/extensions` recursively (untrusted ones only refresh the blocked list). A change at `<root>/<name>` or under it (ignoring any `node_modules` or
-`.git` segment) reloads `<name>` after `watchDebounceMs` of quiet, per name; `reload` rescans, so a new directory
+`.git` segment) reloads `<name>` after `watchDebounceMs` of quiet, per root and name. Only a change under the
+loaded extension's own directory reloads it; any other change (an untrusted copy, a shadowed duplicate, a new
+folder) rescans, so an untrusted repo can never restart a loaded extension; `reload` rescans, so a new directory
 loads and a deleted one unloads, including a directory moved in or out. Watches are re-armed after every scan: a root that does not exist yet is
 not watched until a later scan finds it (an `ext_reload` of a new extension rescans). The user root is created on
 start so it is always watched. `dispose()` closes every watch and pending timer.

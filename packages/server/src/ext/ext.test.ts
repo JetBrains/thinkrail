@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionInfo, SessionStats } from "@thinkrail/contracts";
+import type { ExtensionInfo, ExtRemovedPush, SessionStats } from "@thinkrail/contracts";
 import type { SessionRef } from "@thinkrail/ext";
 import type { ExtHostOptions } from "./host";
 import { createExtHost, projectExtensionsDir } from "./index";
@@ -237,7 +237,7 @@ describe("ext host", () => {
 	test("reloading a deleted extension unloads it", async () => {
 		const dir = writeExtension(userDir, "g1");
 		const removed: string[] = [];
-		const host = makeHost({ onRemoved: (name) => removed.push(name) });
+		const host = makeHost({ onRemoved: ({ name }) => removed.push(name) });
 		await host.rescan();
 		rmSync(dir, { recursive: true, force: true });
 		expect(host.reload("demo")).rejects.toThrow('extension "demo" not found');
@@ -345,8 +345,8 @@ describe("ext host", () => {
 	test("an untrusted project's extensions list as blocked without running code", async () => {
 		const project = join(base, "repo");
 		writeExtension(projectExtensionsDir(project), "p1");
-		const removed: string[] = [];
-		const host = makeHost({ onRemoved: (name) => removed.push(name) });
+		const removed: ExtRemovedPush[] = [];
+		const host = makeHost({ onRemoved: (push) => removed.push(push) });
 		const root = { projectId: "p", path: project };
 		await host.setProjectRoots([], [root]);
 		expect(host.list()).toEqual([
@@ -367,28 +367,43 @@ describe("ext host", () => {
 		expect(events.changed.map((info) => info.status)).toEqual(["blocked"]);
 		await expect(host.reload("demo")).rejects.toThrow("untrusted project");
 
+		const blockedPush = { name: "demo", blockedProjectId: "p" };
 		await host.setProjectRoots([root]);
 		expect(host.list()).toMatchObject([{ name: "demo", status: "active" }]);
-		expect(removed).toEqual([]);
+		expect(removed).toEqual([blockedPush]);
 		expect(trace()).toContain("start:p1");
 
 		await host.setProjectRoots([], [root]);
-		expect(removed).toEqual(["demo"]);
+		expect(removed).toEqual([blockedPush, { name: "demo" }]);
 		expect(host.list()).toMatchObject([{ name: "demo", status: "blocked" }]);
 
 		await host.setProjectRoots([]);
-		expect(removed).toEqual(["demo", "demo"]);
+		expect(removed).toEqual([blockedPush, { name: "demo" }, blockedPush]);
 		expect(host.list()).toEqual([]);
 		await host.dispose();
 	});
 
-	test("a blocked project extension never shadows a loaded one", async () => {
-		const project = join(base, "repo");
-		writeExtension(projectExtensionsDir(project), "p1");
+	test("each untrusted project reports its own blocked copy beside a loaded one", async () => {
+		const repoA = join(base, "repo-a");
+		const repoB = join(base, "repo-b");
+		writeExtension(projectExtensionsDir(repoA), "a1");
+		writeExtension(projectExtensionsDir(repoB), "b1");
 		writeExtension(userDir, "u1");
 		const host = makeHost();
-		await host.setProjectRoots([], [{ projectId: "p", path: project }]);
-		expect(host.list()).toMatchObject([{ name: "demo", scope: "user", status: "active" }]);
+		await host.setProjectRoots(
+			[],
+			[
+				{ projectId: "a", path: repoA },
+				{ projectId: "b", path: repoB },
+			],
+		);
+		expect(host.list()).toMatchObject([
+			{ name: "demo", scope: "user", status: "active" },
+			{ name: "demo", projectId: "a", status: "blocked" },
+			{ name: "demo", projectId: "b", status: "blocked" },
+		]);
+		expect(host.get("demo")?.scope).toBe("user");
+		expect(trace()).toEqual(["start:u1"]);
 		await host.dispose();
 	});
 

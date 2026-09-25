@@ -555,7 +555,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (above the All-plugins master, which governs only the plugin groups), then Personal / **a group per
   installed Claude plugin** / the repo's Project skills last — each with its admission verdict,
   project-trust (the **Trust project** banner shows when the repo has untrusted project skills or blocked
-  project extensions; it reads the latter with `ext.list` on hosts at `EXT_PROTOCOL_VERSION`+), re-confirm-new, a **per-group on/off** toggle + an **All-plugins** master, and per-skill
+  project extensions; it reads the latter from `useBlockedExtensions(projectId)`, a store `ext` sync fills), re-confirm-new, a **per-group on/off** toggle + an **All-plugins** master, and per-skill
   toggles. It runs in **two modes** via an optional `workspace` prop: chat (`skills.state`, per-workspace
   skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,
   disabled while streaming) or project (`project.skills`, per-project-baseline toggles, no session) — the
@@ -1070,7 +1070,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 ## Boundary
 
-- **Public surface:** the registry API (`toolRegistry`, `rendererRegistry`), the shared workspace-file target canonicalizer
+- **Public surface:** the registry API (`toolRegistry`, `rendererRegistry`, `blockedExtensions`), the shared workspace-file target canonicalizer
   (`fileTargets`), and the renderers (incl. the presentational
   `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses the compact bubble skin (`tr-prose-chat`),

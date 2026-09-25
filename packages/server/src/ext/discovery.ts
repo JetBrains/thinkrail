@@ -16,6 +16,10 @@ export interface Candidate {
 	projectId?: string;
 }
 
+export interface ProjectCandidate extends Candidate {
+	projectId: string;
+}
+
 export const projectExtensionsDir = (projectPath: string) =>
 	join(projectPath, WORKSPACE_INTERNAL_DIR, "extensions");
 
@@ -29,7 +33,7 @@ const candidatesIn = async (root: string) => {
 };
 
 const projectCandidates = async (roots: readonly ProjectRoot[]) => {
-	const found: Candidate[] = [];
+	const found: ProjectCandidate[] = [];
 	for (const root of roots) {
 		const project = await candidatesIn(projectExtensionsDir(root.path));
 		found.push(
@@ -56,9 +60,6 @@ export const discoverExtensions = async ({
 		if (unique.has(candidate.name)) duplicates.push(candidate);
 		else unique.set(candidate.name, candidate);
 	}
-	const blocked = new Map<string, Candidate>();
-	for (const candidate of await projectCandidates(blockedRoots))
-		if (!unique.has(candidate.name) && !blocked.has(candidate.name))
-			blocked.set(candidate.name, candidate);
-	return { candidates: [...unique.values()], duplicates, blocked: [...blocked.values()] };
+	const blocked = await projectCandidates(blockedRoots);
+	return { candidates: [...unique.values()], duplicates, blocked };
 };

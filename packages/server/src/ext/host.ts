@@ -1,8 +1,10 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
+	blockedExtensionKey,
 	type ExtensionInfo,
 	type ExtensionSurface,
+	type ExtRemovedPush,
 	isOwnChannelKey,
 	type SessionEventPayload,
 } from "@thinkrail/contracts";
@@ -11,6 +13,7 @@ import { buildAssets, type ExtAssets } from "./build";
 import {
 	type Candidate,
 	discoverExtensions,
+	type ProjectCandidate,
 	type ProjectRoot,
 	projectExtensionsDir,
 } from "./discovery";
@@ -37,7 +40,7 @@ export interface ExtHostOptions {
 	workspaces?: WorkspaceReads;
 	onPiFactoriesChanged?: () => void;
 	onChanged?: (info: ExtensionInfo) => void;
-	onRemoved?: (name: string) => void;
+	onRemoved?: (removed: ExtRemovedPush) => void;
 	onChannel?: (key: string, value: unknown) => void;
 	onChannelsDropped?: (name: string, keys: string[]) => void;
 	warn?: (message: string) => void;
@@ -77,15 +80,15 @@ const infoOf = (state: ExtState): ExtensionInfo => ({
 	...(state.error !== undefined ? { error: state.error } : {}),
 });
 
-const blockedInfo = async (candidate: Candidate): Promise<ExtensionInfo> => {
+const blockedInfo = async (candidate: ProjectCandidate) => {
 	const read = await readManifest(candidate.dir);
 	const manifest = read.ok ? read.manifest : undefined;
 	return {
 		name: candidate.name,
 		title: manifest?.title ?? candidate.name,
 		scope: candidate.scope,
-		...(candidate.projectId !== undefined ? { projectId: candidate.projectId } : {}),
-		status: "blocked",
+		projectId: candidate.projectId,
+		status: "blocked" as const,
 		generation: null,
 		surfaces: manifest?.surfaces ?? [],
 		permissions: manifest?.permissions ?? [],
@@ -101,7 +104,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 	const stores = new Map<string, ExtStore>();
 	const logs = new Map<string, ExtLogEntry[]>();
 	const channels = new Map<string, unknown>();
-	const blocked = new Map<string, ExtensionInfo>();
+	const blocked = new Map<string, Awaited<ReturnType<typeof blockedInfo>>>();
 	let projectRoots: readonly ProjectRoot[] = [];
 	let blockedRoots: readonly ProjectRoot[] = [];
 	let nextGeneration = 1;
@@ -251,23 +254,25 @@ export const createExtHost = (options: ExtHostOptions) => {
 				await disposeGeneration(generation, (level, message) => log(name, level, message));
 			dropChannels(name);
 			if (disposed) return;
-			options.onRemoved?.(name);
+			options.onRemoved?.({ name });
 			if (hadPiFactories) options.onPiFactoriesChanged?.();
 		});
 	};
 
-	const syncBlocked = async (found: readonly Candidate[], loadable: ReadonlySet<string>) => {
+	const syncBlocked = async (found: readonly ProjectCandidate[]) => {
+		const infos = await Promise.all(found.map(blockedInfo));
+		if (disposed) return;
 		const next = new Map(
-			await Promise.all(found.map(async (c) => [c.name, await blockedInfo(c)] as const)),
+			infos.map((info) => [blockedExtensionKey(info.projectId, info.name), info]),
 		);
-		for (const name of [...blocked.keys()]) {
-			if (next.has(name)) continue;
-			blocked.delete(name);
-			if (!loadable.has(name) && !disposed) options.onRemoved?.(name);
+		for (const [key, info] of [...blocked]) {
+			if (next.has(key)) continue;
+			blocked.delete(key);
+			options.onRemoved?.({ name: info.name, blockedProjectId: info.projectId });
 		}
-		for (const [name, info] of next) {
-			const previous = blocked.get(name);
-			blocked.set(name, info);
+		for (const [key, info] of next) {
+			const previous = blocked.get(key);
+			blocked.set(key, info);
 			if (!previous || JSON.stringify(previous) !== JSON.stringify(info)) options.onChanged?.(info);
 		}
 	};
@@ -293,7 +298,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 			if (!candidate || !sameCandidate(candidate, state.candidate)) tasks.push(unload(name));
 		}
 		await Promise.all(tasks);
-		await syncBlocked(blockedFound, new Set(wanted.keys()));
+		await syncBlocked(blockedFound);
 		const loads: Promise<unknown>[] = [];
 		for (const candidate of candidates) {
 			if (states.has(candidate.name)) continue;
@@ -314,7 +319,10 @@ export const createExtHost = (options: ExtHostOptions) => {
 			? undefined
 			: createExtWatcher({
 					debounceMs: options.watchDebounceMs,
-					onChange: (name) => void reload(name).catch(() => {}),
+					onChange: ({ root, name }) => {
+						const loaded = states.get(name)?.candidate.dir === join(root, name);
+						void (loaded ? reload(name) : rescan()).catch(() => {});
+					},
 					...(options.warn ? { warn: options.warn } : {}),
 				});
 	if (watcher) mkdirSync(options.userDir, { recursive: true });
@@ -344,7 +352,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 		if (!known || !existsSync(join(known.candidate.dir, "extension.json"))) {
 			await rescan();
 			const found = states.get(name);
-			if (!found && blocked.has(name))
+			if (!found && [...blocked.values()].some((info) => info.name === name))
 				throw new Error(
 					`extension "${name}" is in an untrusted project; trust the project to load it`,
 				);

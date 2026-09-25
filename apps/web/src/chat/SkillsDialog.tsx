@@ -3,13 +3,7 @@ import {
 	RiRefreshLine as RefreshCw,
 	RiShieldCheckLine as ShieldCheck,
 } from "@remixicon/react";
-import {
-	EXT_PROTOCOL_VERSION,
-	type Project,
-	type SkillCatalogEntry,
-	type SkillDecision,
-	type Workspace,
-} from "@thinkrail/contracts";
+import type { Project, SkillCatalogEntry, SkillDecision, Workspace } from "@thinkrail/contracts";
 import { useCallback, useEffect, useState } from "react";
 import { LoadingRegion } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
@@ -18,6 +12,7 @@ import { IconTooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport, reloadSessionResourcesWithSkillBaseline } from "@/transport";
+import { useBlockedExtensions } from "./blockedExtensions";
 
 const TIER_META: Record<string, { label: string; hint: string; rank: number }> = {
 	bundled: { label: "ThinkRail", hint: "Bundled with the app.", rank: 0 },
@@ -84,25 +79,9 @@ export function SkillsDialog({
 	const [busy, setBusy] = useState(false);
 	const workspaceId = workspace?.workspaceId;
 
-	const [blockedExtensions, setBlockedExtensions] = useState<string[]>([]);
-
-	const refreshBlockedExtensions = useCallback(async () => {
-		const version = useAppStore.getState().protocolVersion;
-		if (version === null || version < EXT_PROTOCOL_VERSION) return setBlockedExtensions([]);
-		try {
-			const list = await getTransport().request("ext.list", {});
-			setBlockedExtensions(
-				list
-					.filter((ext) => ext.status === "blocked" && ext.projectId === projectId)
-					.map((ext) => ext.title),
-			);
-		} catch {
-			setBlockedExtensions([]);
-		}
-	}, [projectId]);
+	const blockedExtensions = useBlockedExtensions(projectId);
 
 	const refresh = useCallback(async () => {
-		void refreshBlockedExtensions();
 		try {
 			setEntries(
 				workspaceId
@@ -112,7 +91,7 @@ export function SkillsDialog({
 		} catch {
 			setEntries([]);
 		}
-	}, [workspaceId, projectId, refreshBlockedExtensions]);
+	}, [workspaceId, projectId]);
 
 	useEffect(() => {
 		if (!open) return;

@@ -6,9 +6,10 @@ import {
 	type ExtRemovedPush,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
+import { setBlockedExtensions } from "../chat/blockedExtensions";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
-import { useExtStore } from "./extStore";
+import { blockedTitlesByProject, useExtStore } from "./extStore";
 import { syncRendererSlots } from "./rendererSlots";
 
 const supportsExtensions = (protocolVersion: number | null) =>
@@ -45,7 +46,7 @@ export const startExtensionSync = (transport: SyncTransport) => {
 			route(() => ext().applyChanged(data as ExtensionInfo)),
 		),
 		transport.subscribe(WS_CHANNELS.extRemoved, (data) =>
-			route(() => ext().applyRemoved((data as ExtRemovedPush).name)),
+			route(() => ext().applyRemoved(data as ExtRemovedPush)),
 		),
 		transport.subscribe(WS_CHANNELS.extChannel, (data) => {
 			const { key, value } = data as ExtChannelPush;
@@ -73,7 +74,9 @@ export const startExtensionSync = (transport: SyncTransport) => {
 		if (state.welcomeGeneration !== previous.welcomeGeneration) hydrate();
 	});
 	const stopRenderers = useExtStore.subscribe((state, previous) => {
-		if (state.extensions !== previous.extensions) syncRendererSlots(state.extensions);
+		if (state.extensions === previous.extensions) return;
+		syncRendererSlots(state.extensions);
+		setBlockedExtensions(blockedTitlesByProject(state.extensions));
 	});
 	return () => {
 		for (const unsubscribe of unsubscribes) unsubscribe();

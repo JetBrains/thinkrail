@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { ExtensionInfo } from "@thinkrail/contracts";
+import { projectExtensionsDir } from "./discovery";
 import { createExtDevTools, createExtHost, EXT_SDK_GUIDE } from "./index";
 import { changedExtension } from "./watch";
 
@@ -49,16 +50,20 @@ const writeExtension = ({
 	name = "hello",
 	tag = "g1",
 	slot = "panel",
+	root = userDir,
+	title,
 }: {
 	name?: string;
 	tag?: string;
 	slot?: string;
+	root?: string;
+	title?: string;
 } = {}) => {
-	const dir = join(userDir, name);
+	const dir = join(root, name);
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(
 		join(dir, "extension.json"),
-		JSON.stringify({ name, surfaces: [{ id: "main", slot }] }),
+		JSON.stringify({ name, ...(title ? { title } : {}), surfaces: [{ id: "main", slot }] }),
 	);
 	writeFileSync(join(dir, "index.ts"), hostHalf(tag));
 	writeFileSync(join(dir, "main.tsx"), "export default () => null;\n");
@@ -215,6 +220,21 @@ describe("watcher", () => {
 		writeExtension({ tag: "g3" });
 		await Bun.sleep(150);
 		expect(trace()).toHaveLength(count);
+	});
+
+	test("a change in an untrusted copy refreshes only its blocked entry", async () => {
+		writeExtension();
+		const project = join(base, "repo");
+		const root = projectExtensionsDir(project);
+		writeExtension({ root, tag: "b1", title: "b1" });
+		const host = makeHost(30);
+		await host.setProjectRoots([], [{ projectId: "p", path: project }]);
+		const generation = host.get("hello")?.generation;
+		writeExtension({ root, tag: "b2", title: "b2" });
+		await until(() => host.list().some((info) => info.status === "blocked" && info.title === "b2"));
+		expect(host.get("hello")?.generation).toBe(generation);
+		expect(trace()).toEqual(["start:g1"]);
+		await host.dispose();
 	});
 });
 

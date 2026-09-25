@@ -1,7 +1,9 @@
 import { beforeEach, expect, test } from "bun:test";
 import type { ExtensionInfo } from "@thinkrail/contracts";
 import {
+	blockedTitlesByProject,
 	selectBlocked,
+	selectExtension,
 	selectSurface,
 	selectSurfaces,
 	surfaceTitle,
@@ -44,7 +46,7 @@ test("removal drops the extension and only its own channel keys", () => {
 		"demo:a": 1,
 		"demo-two:a": 2,
 	});
-	store.applyRemoved("demo");
+	store.applyRemoved({ name: "demo" });
 	const state = useExtStore.getState();
 	expect(Object.keys(state.extensions)).toEqual(["demo-two"]);
 	expect(state.channels).toEqual({ "demo-two:a": 2 });
@@ -95,4 +97,31 @@ test("blocked extensions are scoped to their project and never offer surfaces", 
 	expect(
 		selectSurfaces(extensions, ["tab", "panel"]).map(({ extension }) => extension.name),
 	).toEqual(["live", "live"]);
+});
+
+test("blocked copies are kept per project beside a loaded extension of the same name", () => {
+	const blocked = (projectId: string) =>
+		info("demo", {
+			title: `Demo ${projectId}`,
+			scope: "project",
+			projectId,
+			status: "blocked",
+			generation: null,
+			build: null,
+		});
+	const store = useExtStore.getState();
+	store.install([info("demo"), blocked("a")], { "demo:count": 1 });
+	store.applyChanged(blocked("b"));
+	const { extensions } = useExtStore.getState();
+	expect(blockedTitlesByProject(extensions)).toEqual({ a: ["Demo a"], b: ["Demo b"] });
+	expect(selectExtension(extensions, "demo", "a")?.status).toBe("active");
+
+	store.applyRemoved({ name: "demo", blockedProjectId: "a" });
+	expect(useExtStore.getState().channels).toEqual({ "demo:count": 1 });
+	store.applyRemoved({ name: "demo" });
+	const state = useExtStore.getState();
+	expect(state.channels).toEqual({});
+	expect(Object.values(state.extensions).map((extension) => extension.projectId)).toEqual(["b"]);
+	expect(selectExtension(state.extensions, "demo", "b")?.status).toBe("blocked");
+	expect(selectExtension(state.extensions, "demo", "a")).toBeUndefined();
 });

@@ -1,7 +1,11 @@
 import {
+	blockedExtensionKey,
 	type ExtensionInfo,
 	type ExtensionSurface,
+	type ExtRemovedPush,
+	extensionKey,
 	isOwnChannelKey,
+	removedExtensionKey,
 	type SurfaceSlot,
 } from "@thinkrail/contracts";
 import { create } from "zustand";
@@ -17,7 +21,7 @@ export interface ExtState {
 	markUnsupported: () => void;
 	markFailed: () => void;
 	applyChanged: (info: ExtensionInfo) => void;
-	applyRemoved: (name: string) => void;
+	applyRemoved: (removed: ExtRemovedPush) => void;
 	applyChannel: (key: string, value: unknown) => void;
 	dropChannels: (keys: readonly string[]) => void;
 	setParams: (name: string, surfaceId: string, params: Record<string, string>) => void;
@@ -42,17 +46,20 @@ export const useExtStore = create<ExtState>((set) => ({
 	install: (list, snapshot) =>
 		set({
 			hydration: "ready",
-			extensions: Object.fromEntries(list.map((info) => [info.name, info])),
+			extensions: Object.fromEntries(list.map((info) => [extensionKey(info), info])),
 			channels: { ...snapshot },
 		}),
 	markUnsupported: () => set({ hydration: "unsupported", extensions: {}, channels: {} }),
 	markFailed: () => set({ hydration: "failed" }),
 	applyChanged: (info) =>
-		set((state) => ({ extensions: { ...state.extensions, [info.name]: info } })),
-	applyRemoved: (name) =>
+		set((state) => ({ extensions: { ...state.extensions, [extensionKey(info)]: info } })),
+	applyRemoved: (removed) =>
 		set((state) => ({
-			extensions: withoutKeys(state.extensions, [name]),
-			channels: withoutKeys(state.channels, ownedKeys(state.channels, name)),
+			extensions: withoutKeys(state.extensions, [removedExtensionKey(removed)]),
+			channels:
+				removed.blockedProjectId === undefined
+					? withoutKeys(state.channels, ownedKeys(state.channels, removed.name))
+					: state.channels,
 		})),
 	applyChannel: (key, value) => set((state) => ({ channels: { ...state.channels, [key]: value } })),
 	dropChannels: (keys) => set((state) => ({ channels: withoutKeys(state.channels, keys) })),
@@ -82,6 +89,30 @@ export const selectBlocked = (extensions: Record<string, ExtensionInfo>, project
 	Object.values(extensions)
 		.filter((extension) => extension.status === "blocked" && extension.projectId === projectId)
 		.sort((a, b) => a.name.localeCompare(b.name));
+
+export const blockedTitlesByProject = (extensions: Record<string, ExtensionInfo>) => {
+	const projects = new Set(
+		Object.values(extensions).flatMap((extension) =>
+			extension.status === "blocked" && extension.projectId !== undefined
+				? [extension.projectId]
+				: [],
+		),
+	);
+	return Object.fromEntries(
+		[...projects].map((projectId) => [
+			projectId,
+			selectBlocked(extensions, projectId).map((extension) => extension.title),
+		]),
+	);
+};
+
+export const selectExtension = (
+	extensions: Record<string, ExtensionInfo>,
+	name: string,
+	projectId: string | undefined,
+) =>
+	extensions[name] ??
+	(projectId === undefined ? undefined : extensions[blockedExtensionKey(projectId, name)]);
 
 export const selectSurface = (
 	extensions: Record<string, ExtensionInfo>,

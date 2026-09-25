@@ -1,7 +1,7 @@
 import { type ExtMessageView, type ExtToolCallView, redactLaunchToken } from "@thinkrail/contracts";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "../lib";
-import { surfaceKey, useExtStore } from "./extStore";
+import { selectExtension, surfaceKey, useExtStore } from "./extStore";
 import { SurfaceContext } from "./hooks";
 import { useHostContext } from "./hostContext";
 import {
@@ -101,9 +101,9 @@ export const ExtensionSurface = ({
 	message,
 }: ExtensionSurfaceProps) => {
 	const hydration = useExtStore((state) => state.hydration);
-	const info = useExtStore((state) => state.extensions[name]);
-	const params = useExtStore((state) => state.params[surfaceKey(name, surfaceId)]);
 	const host = useHostContext();
+	const info = useExtStore((state) => selectExtension(state.extensions, name, host.projectId));
+	const params = useExtStore((state) => state.params[surfaceKey(name, surfaceId)]);
 	const declared = info?.surfaces.some((surface) => surface.id === surfaceId) === true;
 	const build = declared ? (info?.build ?? null) : null;
 	const asset = useMemo(

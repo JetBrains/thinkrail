@@ -30,6 +30,7 @@ export {
 } from "./domain";
 export type * from "./ext";
 export {
+	blockedExtensionKey,
 	EXT_NAME_PATTERN,
 	EXT_RUNTIME_GLOBAL,
 	EXT_RUNTIME_MODULES,
@@ -38,10 +39,12 @@ export {
 	EXT_WS_CHANNELS,
 	extAssetPath,
 	extChannelKey,
+	extensionKey,
 	extToolId,
 	isExtLayoutToolId,
 	isOwnChannelKey,
 	parseExtToolId,
+	removedExtensionKey,
 	SURFACE_SLOTS,
 } from "./ext";
 export {

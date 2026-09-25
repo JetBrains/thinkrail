@@ -150,7 +150,7 @@ export const installExtHost = ({ publish }: { publish?: ExtPublish } = {}) => {
 		},
 		onPiFactoriesChanged: () => void reloadSessionsForHostExtensions(),
 		onChanged: (info) => publish?.(WS_CHANNELS.extChanged, info),
-		onRemoved: (name) => publish?.(WS_CHANNELS.extRemoved, { name }),
+		onRemoved: (removed) => publish?.(WS_CHANNELS.extRemoved, removed),
 		onChannel: (key, value) => publish?.(WS_CHANNELS.extChannel, { key, value }),
 		onChannelsDropped: (name, keys) => publish?.(WS_CHANNELS.extChannelsDropped, { name, keys }),
 		warn: (message) => log.warn(message),

@@ -415,9 +415,12 @@ of the host.
   → key→value record, `ext.action({ ext, id, payload?, ctx? })` → the handler's result,
   `ext.reload({ name })` → `ExtensionInfo`, `ext.reportError({ name, surfaceId, message })` → ack (view
   ErrorBoundary reports for `ext_logs`). Pushes: `ext.changed` (`ExtensionInfo`), `ext.removed`
-  (`{ name }`), `ext.channel` (`{ key, value }`), `ext.channelsDropped` (`{ name, keys }`: a swap or unload
+  (`{ name, blockedProjectId? }`: with `blockedProjectId` it removes only that project's blocked entry),
+  `ext.channel` (`{ key, value }`), `ext.channelsDropped` (`{ name, keys }`: a swap or unload
   dropped these keys; clear them). All enter at `EXT_PROTOCOL_VERSION` = v69. `blocked` was added without a
-  bump: an older client ignores it because a blocked entry has no `build`.
+  bump: an older client ignores it because a blocked entry has no `build`. Clients key entries with
+  `extensionKey(info)` (the name, or `blockedExtensionKey(projectId, name)` for a blocked entry) and
+  removals with `removedExtensionKey(push)`, so a loaded extension and blocked copies of its name coexist.
 - **launchAuth.ts** — the launch-token names host, launchers, browser, and e2e harness share (listed under
   the public surface). No token logic: minting, Origin checks, and comparison are the host's.
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
