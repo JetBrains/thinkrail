@@ -291,7 +291,7 @@ BIN_DIR="$PREFIX/bin"
 mkdir -p "$BIN_DIR"
 DEST="$BIN_DIR/thinkrail"
 [ "$OS" = "windows" ] && DEST="$BIN_DIR/thinkrail.exe"
-STAGED_BINARY=$(mktemp "$BIN_DIR/.thinkrail.XXXXXX.new")
+STAGED_BINARY=$(mktemp "$BIN_DIR/.thinkrail.new.XXXXXX")
 if ! cp "$TMP/$ASSET_NAME" "$STAGED_BINARY"; then
     echo "Failed to stage ThinkRail in $BIN_DIR; the previous executable was left unchanged." >&2
     exit 1
@@ -309,7 +309,7 @@ echo "Installed → $DEST"
 
 CONFIG_DIR="$CONFIG_HOME/.config/thinkrail"
 mkdir -p "$CONFIG_DIR"
-META_TMP=$(mktemp "$CONFIG_DIR/.install.json.XXXXXX.tmp")
+META_TMP=$(mktemp "$CONFIG_DIR/.install.json.tmp.XXXXXX")
 cat > "$META_TMP" <<EOF
 {
   "channel": "$CHANNEL",

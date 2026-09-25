@@ -56,6 +56,18 @@ function makeFixture(): Fixture {
 	);
 	writeTool(
 		fakeBin,
+		"mktemp",
+		`last=""
+for arg in "$@"; do last="$arg"; done
+case "$last" in
+    *X) ;;
+    *X*) printf 'BSD mktemp requires trailing Xs: %s\\n' "$last" >&2; exit 91 ;;
+esac
+exec /usr/bin/mktemp "$@"
+`,
+	);
+	writeTool(
+		fakeBin,
 		"curl",
 		`out=""
 url=""
@@ -299,23 +311,31 @@ describe.skipIf(process.platform !== "win32" || !powershell)("install.ps1 valida
 
 describe("install.sh controlled installation", () => {
 	test.each([
-		["stable", "1.2.3", "v1.2.3"],
-		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7"],
-	])("selects the exact %s release target", (channel, version, tag) => {
+		["stable", "1.2.3", "v1.2.3", "Linux", "x86_64", "thinkrail-linux-x64"],
+		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Linux", "x86_64", "thinkrail-linux-x64"],
+		["stable", "1.2.3", "v1.2.3", "Linux", "aarch64", "thinkrail-linux-arm64"],
+		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Linux", "aarch64", "thinkrail-linux-arm64"],
+		["stable", "1.2.3", "v1.2.3", "Darwin", "arm64", "thinkrail-darwin-arm64"],
+		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7", "Darwin", "arm64", "thinkrail-darwin-arm64"],
+	])("selects the exact %s %s target (%s, %s/%s, %s)", (channel, version, tag, unameS, unameM, assetName) => {
 		const fixture = makeFixture();
-		const result = runInstaller(fixture, [
-			"--channel",
-			channel,
-			"--version",
-			version,
-			"--prefix",
-			shellPath(fixture.prefix),
-			"--no-modify-path",
-		]);
+		const result = runInstaller(
+			fixture,
+			[
+				"--channel",
+				channel,
+				"--version",
+				version,
+				"--prefix",
+				shellPath(fixture.prefix),
+				"--no-modify-path",
+			],
+			{ FAKE_UNAME_S: unameS, FAKE_UNAME_M: unameM, FAKE_ASSET_NAME: assetName },
+		);
 		expect(result.exitCode).toBe(0);
 		const requests = curlRequests(fixture);
 		expect(requests).toHaveLength(2);
-		expect(requests[0]).toContain(`/releases/download/${tag}/thinkrail-linux-x64`);
+		expect(requests[0]).toContain(`/releases/download/${tag}/${assetName}`);
 		expect(requests[1]).toContain(`/releases/download/${tag}/SHA256SUMS`);
 		const metadata = JSON.parse(
 			readFileSync(join(fixture.home, ".config", "thinkrail", "install.json"), "utf8"),
@@ -323,7 +343,7 @@ describe("install.sh controlled installation", () => {
 		expect(metadata).toMatchObject({ channel, version, tag, path_entry_added: false });
 		expect(
 			readdirSync(join(fixture.home, ".config", "thinkrail")).filter((name) =>
-				name.endsWith(".tmp"),
+				name.includes(".tmp."),
 			),
 		).toEqual([]);
 	});
@@ -398,7 +418,7 @@ exit 88
 		expect(result.exitCode).not.toBe(0);
 		expect(result.stderr).toContain("previous executable was left unchanged");
 		expect(readFileSync(destination, "utf8")).toBe("old binary\n");
-		expect(readdirSync(binDir).filter((name) => name.endsWith(".new"))).toEqual([]);
+		expect(readdirSync(binDir).filter((name) => name.startsWith(".thinkrail.new."))).toEqual([]);
 		expect(existsSync(join(fixture.home, ".config", "thinkrail", "install.json"))).toBe(false);
 	});
 });

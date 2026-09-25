@@ -42,6 +42,12 @@ Ayatana AppIndicator 3, and librsvg 2. On Ubuntu 24.04:
 sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
 ```
 
+Eligible packaged stable and nightly desktop builds check for updates in the background. An update follows the
+classic consent-driven flow in **Settings → Updates**: **Download** → **Downloading** → **Preparing update** →
+**Install & Restart**. Closing Settings or quitting normally defers it; only **Install & Restart** applies the
+prepared release. The updater appears only when the package carries a valid HTTPS feed identity. Existing
+installations that predate that identity need one manual installation before in-app updates are available.
+
 ### CLI / browser
 
 The CLI installer downloads the right binary, verifies its SHA-256 checksum, and puts `thinkrail` on
@@ -62,29 +68,37 @@ powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/in
 Nightly builds and pinned versions:
 
 ```bash
-# macOS / Linux
+# macOS / Linux — a pinned version must belong to the selected channel
 curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly
-curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --version 0.2.0
+curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel stable --version 0.1.2
+curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly --version 0.2.0-nightly.10
 ```
 
 ```powershell
 # Windows — options are env vars (THINKRAIL_CHANNEL, THINKRAIL_VERSION, THINKRAIL_PREFIX, THINKRAIL_NO_MODIFY_PATH)
 $env:THINKRAIL_CHANNEL='nightly'; irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex   # PowerShell
-set "THINKRAIL_VERSION=0.2.0" && powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"   # cmd
+set "THINKRAIL_CHANNEL=stable" && set "THINKRAIL_VERSION=0.1.2" && powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"   # cmd
 ```
 
-Then run `thinkrail` (add a git repo path to open it as a project: `thinkrail ~/code/my-repo`). To update
-later, run `thinkrail update` on any platform — it re-runs the installer for your channel (on Windows it
-replaces the running `thinkrail.exe` in place). To remove it, run `thinkrail uninstall`: it takes out the
-executable, the PATH entry the installer added, and the install metadata, and asks whether to delete your
-`~/.thinkrail` app state (kept by default — pass `--remove-data` to delete it, `-y` to skip the
-questions). `thinkrail --help` lists the flags; `thinkrail --version` prints the build.
+Then run `thinkrail` (add a git repo path to open it as a project: `thinkrail ~/code/my-repo`). Installed
+stable/nightly CLI hosts periodically offer **Run Update** in **Settings → Updates**. That action runs the host
+machine's parameterless `thinkrail update` in the background; the current host stays alive, and a successful
+update asks you to restart it manually. This is also true when the UI is open in a browser on another machine.
+
+You can run `thinkrail update` directly on any platform. It re-runs the installer for the installed channel and
+replaces the current `<prefix>/bin/thinkrail[.exe]`; use `--channel` or `--version` only for an explicit terminal
+override. To remove it, run `thinkrail uninstall`: it takes out the executable, the PATH entry the installer
+added, and the install metadata, and asks whether to delete your `~/.thinkrail` app state (kept by default —
+pass `--remove-data` to delete it, `-y` to skip the questions). `thinkrail --help` lists the flags;
+`thinkrail --version` prints the build.
 
 **Prebuilt platforms:** macOS (Apple Silicon), Linux arm64 + x64, Windows x64 (`.exe`). Intel macOS isn't
 prebuilt — use Apple Silicon or build from source.
 
-> Prefer a manual CLI install? Download a binary + `SHA256SUMS` from the releases page, verify the
-> checksum, `chmod +x`, and move it onto your PATH.
+> Prefer a manual CLI install? Download a binary + `SHA256SUMS` from the releases page and verify the
+> checksum. For safe self-update, rename it to `thinkrail` (`thinkrail.exe` on Windows) and place it at
+> `<prefix>/bin/thinkrail[.exe]`. A binary kept under its release filename or another arbitrary location must
+> be replaced manually or reinstalled with the script; it will not update a different hidden copy.
 
 **Runtime prerequisites:** `git` on PATH, and an authenticated `pi` provider (the agent runs against your
 real provider credentials). App state lives under `~/.thinkrail`.
@@ -106,7 +120,9 @@ bun install
 bun run dev
 ```
 
-`bun run dev` boots the host and the web client together. Press `Ctrl+C` to stop.
+`bun run dev` boots the host and the web client together. Press `Ctrl+C` to stop. Source/dev and locally
+unstamped builds expose no Updates UI. Running `thinkrail update` from source installs a published binary; it
+does not pull, install dependencies, or rebuild the checkout.
 
 To run the V1 launchers:
 
@@ -119,8 +135,9 @@ bun run desktop:build                # package without opening it
 
 Desktop commands use the standard Electrobun CLI/configuration. Its pre-build hook builds the shared UI
 and stages ThinkRail's PI/native resources; Electrobun owns preload bundling and installer creation.
-Create host-native installers with `bun run desktop:package:stable` or `bun run desktop:package:canary`.
-Native/installer smoke and shared CLI/desktop probes live in `packages/artifact-tests`, outside the
+Create host-native installers with `bun run desktop:package:stable` or `bun run desktop:package:canary`;
+`canary` is Electrobun's internal name for the public **nightly** channel. Native/installer smoke and shared
+CLI/desktop probes live in `packages/artifact-tests`, outside the
 application packages. Run `bun run smoke:desktop` after a dev build; installer smoke takes an artifact
 path and channel via `bun run smoke:desktop:installer <path> <stable|canary>`.
 

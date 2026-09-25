@@ -26,7 +26,8 @@ Download the stable desktop application for your platform:
 
 For either Linux archive, extract it and run `./installer`. Linux desktop builds require Ubuntu 24.04+ or another distribution with glibc 2.38 and the required GTK/WebKitGTK libraries.
 
-Prefer the command line? The CLI-only host remains available for terminal and remote workflows.
+Prefer the command line? The CLI/browser host remains available for terminal and remote workflows. Its install,
+channel, and update options are documented in the [project install guide](https://github.com/JetBrains/thinkrail#install).
 
 **macOS/Linux/WSL:**
 

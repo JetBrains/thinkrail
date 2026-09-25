@@ -83,6 +83,21 @@ test("available native update exposes Download with nightly public identity", ()
 	expect(markup.toLowerCase()).not.toContain("verified");
 });
 
+test("stable native updates keep their public channel identity", () => {
+	const markup = render(
+		nativeUpdates(
+			nativeState("available", {
+				version: "0.1.1",
+				channel: "stable",
+				availableVersion: "0.1.2",
+			}),
+		),
+	);
+	expect(markup).toContain("ThinkRail 0.1.2 is available");
+	expect(markup).toContain("Version 0.1.1 · stable channel");
+	expect(markup).not.toContain("nightly channel");
+});
+
 test("download transfer shows determinate progress", () => {
 	const markup = render(
 		nativeUpdates(

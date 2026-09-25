@@ -116,8 +116,16 @@ test("enables only supported packaged production identities and blocks artifact 
 		arch: "arm64",
 		artifactTestSeam: false,
 	};
-	expect(nativeUpdatesEnabled(enabled)).toBe(true);
-	expect(nativeUpdatesEnabled({ ...enabled, channel: "canary" })).toBe(true);
+	for (const channel of ["stable", "canary"]) {
+		for (const [platform, arch] of [
+			["darwin", "arm64"],
+			["win32", "x64"],
+			["linux", "x64"],
+			["linux", "arm64"],
+		] as const) {
+			expect(nativeUpdatesEnabled({ ...enabled, channel, platform, arch })).toBe(true);
+		}
+	}
 	expect(nativeUpdatesEnabled({ ...enabled, isPackaged: false })).toBe(false);
 	expect(nativeUpdatesEnabled({ ...enabled, channel: "dev" })).toBe(false);
 	expect(nativeUpdatesEnabled({ ...enabled, baseUrl: "" })).toBe(false);
