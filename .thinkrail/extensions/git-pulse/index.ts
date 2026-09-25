@@ -15,10 +15,12 @@ interface Tracked {
 	again: boolean;
 	published: string | undefined;
 	fetching: Promise<FetchResult> | undefined;
+	abort: AbortController;
 }
 
 export default defineExtension((tr) => {
 	const tracked = new Map<string, Tracked>();
+	const generation = new AbortController();
 
 	const publish = (entry: Tracked, pulse: Pulse) => {
 		if (tracked.get(entry.workspaceId) !== entry) return;
@@ -36,7 +38,7 @@ export default defineExtension((tr) => {
 	};
 
 	const watchGitDir = async (entry: Tracked, path: string) => {
-		const found = await gitDirOf(path);
+		const found = await gitDirOf(path, entry.abort.signal);
 		if (!("gitDir" in found) || entry.watcher || entry.path !== path) return;
 		if (tracked.get(entry.workspaceId) !== entry) return;
 		try {
@@ -66,7 +68,7 @@ export default defineExtension((tr) => {
 				closeWatcher(entry);
 				entry.path = path;
 			}
-			const pulse = await readPulse(path);
+			const pulse = await readPulse(path, entry.abort.signal);
 			publish(entry, pulse);
 			if (pulse.state === "ready" && !entry.watcher) await watchGitDir(entry, path);
 		} catch (error) {
@@ -91,6 +93,7 @@ export default defineExtension((tr) => {
 			again: false,
 			published: undefined,
 			fetching: undefined,
+			abort: new AbortController(),
 		};
 		tracked.set(workspaceId, entry);
 		publish(entry, { state: "loading" });
@@ -101,6 +104,7 @@ export default defineExtension((tr) => {
 		const entry = tracked.get(workspaceId);
 		if (!entry) return;
 		closeWatcher(entry);
+		entry.abort.abort();
 		tracked.delete(workspaceId);
 		tr.unpublish(channelKey(workspaceId));
 	};
@@ -130,7 +134,7 @@ export default defineExtension((tr) => {
 			return { ok: false, output: "No open workspace to fetch.", at: Date.now() };
 		const entry = tracked.get(workspaceId);
 		if (entry?.fetching) return entry.fetching;
-		const fetching = fetchRemotes(path);
+		const fetching = fetchRemotes(path, (entry?.abort ?? generation).signal);
 		if (entry) entry.fetching = fetching;
 		try {
 			const result = await fetching;
@@ -143,7 +147,11 @@ export default defineExtension((tr) => {
 	});
 
 	return () => {
-		for (const entry of tracked.values()) closeWatcher(entry);
+		generation.abort();
+		for (const entry of tracked.values()) {
+			closeWatcher(entry);
+			entry.abort.abort();
+		}
 		tracked.clear();
 	};
 });

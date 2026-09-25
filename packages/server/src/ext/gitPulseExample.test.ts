@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { WorkspaceRef } from "@thinkrail/ext";
@@ -49,6 +49,7 @@ let repo: string;
 let plain: string;
 let detached: string;
 let peer: string;
+let sshMarker: string;
 
 beforeAll(() => {
 	base = realpathSync(mkdtempSync(join(tmpdir(), "git-pulse-ext-")));
@@ -78,6 +79,12 @@ beforeAll(() => {
 	writeFileSync(join(repo, "untracked.txt"), "new\n");
 	git(base, "clone", "-q", "-b", "feat/x", remote, detached);
 	git(detached, "checkout", "-q", "--detach", "HEAD~1");
+	mkdirSync(join(detached, "build"));
+	for (const name of ["x.txt", "y.txt", "z.txt"])
+		writeFileSync(join(detached, "build", name), "x\n");
+	sshMarker = join(base, "ssh-used");
+	git(detached, "remote", "add", "far", "ssh://pulse.invalid/repo.git");
+	git(detached, "config", "core.sshCommand", `sh -c 'touch "${sshMarker}"; exit 1'`);
 });
 
 afterAll(() => rmSync(base, { recursive: true, force: true }));
@@ -203,9 +210,19 @@ describe("git-pulse example extension", () => {
 		expect(detachedPulse.head).toMatchObject({ kind: "detached" });
 		expect(detachedPulse.head?.oid).toBe(git(detached, "rev-parse", "HEAD"));
 		expect(detachedPulse.upstream).toBeUndefined();
+		expect(detachedPulse.filesTotal).toBe(1);
+		expect(detachedPulse.files).toEqual([
+			{ path: "build/", kind: "untracked", index: "?", worktree: "?" },
+		]);
 		expect((await ready(host, "w4", "error")).path).toBe(join(base, "missing"));
 		const fetched = await host.invokeAction({ ext: EXT, id: "fetch", ctx: { workspaceId: "w2" } });
 		expect(fetched).toMatchObject({ ok: false });
+	});
+
+	test("fetch keeps the repository's own core.sshCommand", async () => {
+		const result = await host.invokeAction({ ext: EXT, id: "fetch", ctx: { workspaceId: "w3" } });
+		expect(result).toMatchObject({ ok: false });
+		expect(existsSync(sshMarker)).toBe(true);
 	});
 
 	test("the last view leaving stops polling and drops the channel", async () => {

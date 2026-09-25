@@ -5,7 +5,7 @@ status: active
 title: git-pulse — git dashboard extension for the active workspace
 parent: module-ext-sdk
 depends-on: [module-ext-sdk]
-references: [submodule-server-ext, submodule-web-ext, ext-timeline, ext-railmap]
+references: [submodule-server-ext, submodule-web-ext, submodule-server-git, ext-timeline, ext-railmap]
 tags: [extensions, example]
 ---
 
@@ -32,15 +32,18 @@ upstream?, counts, files, filesTotal, stash, commits }`.
 ## Host half
 
 - Git runs with `execFile` (no shell) in the workspace `path` from `tr.workspaces`, with
-  `--no-optional-locks`, `GIT_TERMINAL_PROMPT=0`, `LC_ALL=C`, and ssh in batch mode, so it never writes
-  the index, never waits for a password, and parses stable English output. Reads: one `git status
-  --porcelain=v2 --branch --show-stash --untracked-files=all -z` (parsed by pure `parse.ts`) and one
-  `git log -n20` (skipped for an unborn branch). `rev-parse --absolute-git-dir` finds the git dir for the
+  `--no-optional-locks`, `GIT_TERMINAL_PROMPT=0`, and `LC_ALL=C`, so it never writes the index, never
+  waits for an https password, and parses stable English output. The user's ssh client is left alone
+  (same rule as `submodule-server-git`): forcing `BatchMode` would override their `core.sshCommand` and
+  kill `SSH_ASKPASS` dialogs; the 60 s fetch timeout bounds a prompt instead. Reads: one `git status
+  --porcelain=v2 --branch --show-stash -z` (default untracked mode: an untracked directory is one entry;
+  parsed by pure `parse.ts`) and one `git log -n20` (skipped for an unborn branch). `rev-parse --absolute-git-dir` finds the git dir for the
   watcher (a linked worktree gets its own).
 - **Demand.** A workspace is tracked only while a view reads `pulse:<workspaceId>`: `tr.onWatch` starts
   tracking on the first view and stops it on the last one (watcher closed, key unpublished). Tracked
   workspaces refresh every 4 s (`tr.every`) and 250 ms after any change in the git dir (one
-  non-recursive `fs.watch`, closed by the returned disposer). Refreshes of one workspace never overlap;
+  non-recursive `fs.watch`, closed by the returned disposer). Each tracked workspace owns an
+  `AbortController`; stopping it or disposing the extension kills its running git reads and fetch. Refreshes of one workspace never overlap;
   a request during a run queues one more. A value equal to the last published one is not republished.
 - Not a repository → `not-git`; a missing directory, closed workspace, or failing git → `error`.
 - **Mutations.** The only command that changes the repository is `git fetch --all
@@ -78,3 +81,6 @@ upstream?, counts, files, filesTotal, stash, commits }`.
   `refs/` (a `git push` moving a remote-tracking ref) waits for the next 4 s poll.
 - `--show-stash` needs git 2.35 or newer; an older git reports 0 stashes.
 - Submodules show as changed files; their own state is not read.
+- An untracked directory shows as one `dir/` entry, not its files. `git status` output past 8 MB (tens of
+  thousands of changed tracked files) turns the pulse into `error`.
+- An ssh passphrase prompt on a controlling terminal holds `fetch` until the 60 s timeout.
