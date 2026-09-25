@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
 import { removeTree } from "@thinkrail/shared/removeTree";
+import { assertProbeExtensionServed, writeProbeExtension } from "./extensionProbe";
 import { within } from "./lifecycle";
 
 export interface ArtifactResources {
@@ -305,6 +306,7 @@ export default function syntheticExternalExtension(pi) {
 		await defaultHost.stop();
 		defaultHost = undefined;
 
+		writeProbeExtension(join(root, "data"));
 		const customEnv = hostEnvironment({
 			...baseEnv,
 			THINKRAIL_DATA_DIR: join(root, "data"),
@@ -404,6 +406,20 @@ export default function syntheticExternalExtension(pi) {
 			"session.dispose",
 		);
 		await assertOAuthLoginReachesAuthUrl(socket);
+		const extSocket = socket;
+		const extOrigin = customHost.origin;
+		await within(
+			assertProbeExtensionServed({
+				request: (method, params) => rpc(extSocket, method, params),
+				assetUrl: (path) => {
+					const url = new URL(path, extOrigin);
+					url.searchParams.set(LAUNCH_TOKEN_PARAM, ARTIFACT_LAUNCH_TOKEN);
+					return url.toString();
+				},
+			}),
+			30_000,
+			"UI extension load and serve",
+		);
 
 		for (const helper of Object.values(customHost.resources.trashHelpers)) {
 			assert(existsSync(helper), `trash helper is missing: ${helper}`);

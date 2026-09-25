@@ -31,6 +31,10 @@ It consumes finished artifacts; it does not build the application or supply appl
 Every host environment carries the fixed `ARTIFACT_LAUNCH_TOKEN` as `THINKRAIL_LAUNCH_TOKEN`, replacing any
 inherited value, so probes can open `/ws` and the desktop smoke can expect the token in the window URL.
 The `token` query name is asserted as a literal: these probes test the shipped URL contract as a black box.
+The custom-agent host also loads a user UI extension seeded under its data dir (`extensionProbe.ts`): it
+must reach `active`, publish from its host half (jiti), and serve a view bundle (`Bun.build` with the
+runtime shims) and a Tailwind stylesheet with app tokens, so the compiled artifact proves the whole
+extension build path.
 
 The root smoke commands execute the CLI, desktop and installer entrypoints directly. Browser E2E
 orchestration stays in [[module-browser-e2e]] and imports the pure locator through this package's barrel.
