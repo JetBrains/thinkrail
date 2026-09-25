@@ -4,6 +4,7 @@ const postHogUiHost = "https://eu.posthog.com";
 const gtmContainerId = "GTM-WDW2DZW4";
 const journeyStorageKey = "thinkrail_journey_id";
 const journeyProperty = "journey_id";
+const bridgeProperty = "bridge_id";
 const captureQueueLimit = 100;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -198,9 +199,24 @@ export function createWebsiteAnalytics({
 		} catch {}
 	}
 
+	function clearQueuedIdentity(): void {
+		for (const queued of captureQueue) {
+			delete queued.properties[journeyProperty];
+			delete queued.properties[bridgeProperty];
+		}
+	}
+
 	function setConsent(granted: boolean | undefined): void {
-		if (granted === undefined || granted === consentGranted) return;
+		if (granted === consentGranted) return;
+		const wasGranted = consentGranted === true;
 		consentGranted = granted;
+		if (granted === undefined) {
+			if (!wasGranted) return;
+			journeyId = undefined;
+			unregisterJourney();
+			clearQueuedIdentity();
+			return;
+		}
 		if (granted) {
 			journeyId = storedOrNewJourneyId();
 			registerJourney();
@@ -210,7 +226,7 @@ export function createWebsiteAnalytics({
 		journeyId = undefined;
 		removeStoredJourneyId();
 		unregisterJourney();
-		for (const queued of captureQueue) delete queued.properties[journeyProperty];
+		clearQueuedIdentity();
 	}
 
 	function refreshConsent(): void {

@@ -338,6 +338,84 @@ describe("website analytics", () => {
 		});
 	});
 
+	test("clears queued journey and bridge IDs on granted-to-unknown without changing storage", () => {
+		const dom = installDom("site.example", { storedJourney: existingJourneyId });
+		const consent = createConsent(true);
+		const analytics = createWebsiteAnalytics({
+			productionHostname: "site.example",
+			marketingConsent: consent.adapter,
+		});
+		const downloadStarted = {
+			content_key: "landing/download",
+			cta_location: "hero",
+			platform: "macos",
+			architecture: "arm64",
+			artifact: "dmg",
+			bridge_id: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		} as const;
+
+		analytics.init();
+		analytics.capture("download_started", downloadStarted);
+		consent.set(undefined);
+
+		expect(dom.storageCalls).toEqual([`get:${journeyStorageKey}`]);
+		expect(dom.values.get(journeyStorageKey)).toBe(existingJourneyId);
+
+		dom.loadPostHog();
+		expect(dom.vendorCalls.filter(({ method }) => method === "capture")).toEqual([
+			{
+				method: "capture",
+				value: "download_started",
+				properties: {
+					content_key: "landing/download",
+					cta_location: "hero",
+					platform: "macos",
+					architecture: "arm64",
+					artifact: "dmg",
+				},
+			},
+		]);
+		expect(dom.vendorCalls.some(({ method }) => method === "register")).toBeFalse();
+
+		consent.set(true);
+		analytics.capture("content_viewed", contentViewed);
+
+		expect(dom.storageCalls).toEqual([`get:${journeyStorageKey}`, `get:${journeyStorageKey}`]);
+		expect(dom.values.get(journeyStorageKey)).toBe(existingJourneyId);
+		expect(dom.vendorCalls.at(-2)).toEqual({
+			method: "register",
+			properties: { journey_id: existingJourneyId },
+		});
+		expect(dom.vendorCalls.at(-1)).toEqual({
+			method: "capture",
+			value: "content_viewed",
+			properties: { ...contentViewed, journey_id: existingJourneyId },
+		});
+	});
+
+	test("unregisters a loaded journey and omits it from captures on granted-to-unknown", () => {
+		const dom = installDom("site.example", { storedJourney: existingJourneyId });
+		const consent = createConsent(true);
+		const analytics = createWebsiteAnalytics({
+			productionHostname: "site.example",
+			marketingConsent: consent.adapter,
+		});
+
+		analytics.init();
+		dom.loadPostHog();
+		consent.set(undefined);
+		analytics.capture("content_viewed", contentViewed);
+
+		expect(dom.storageCalls).toEqual([`get:${journeyStorageKey}`]);
+		expect(dom.values.get(journeyStorageKey)).toBe(existingJourneyId);
+		expect(dom.vendorCalls).toEqual([
+			{ method: "init", value: expectedPostHogProjectKey, properties: expectedPostHogOptions },
+			{ method: "register", properties: { journey_id: existingJourneyId } },
+			{ method: "unregister", value: "journey_id" },
+			{ method: "capture", value: "content_viewed", properties: contentViewed },
+		]);
+	});
+
 	test("registers an existing valid ID and unregisters and removes it on withdrawal", () => {
 		const dom = installDom("site.example", { storedJourney: existingJourneyId });
 		const consent = createConsent(true);
