@@ -981,7 +981,18 @@ const handlers: Record<string, Handler> = {
 			body?: string;
 			status?: ReviewCommentStatus;
 		};
-		return withReviewLock(p.workspaceId, async () => updateComment(p));
+		return withReviewLock(p.workspaceId, async () => {
+			const updated = await updateComment(p);
+			// Resolving/dismissing the item's last open finding must clear its changes_requested verdict
+			// too (no-op while findings remain), the same invariant as commentDelete.
+			if (updated.origin?.todoId)
+				await clearChangesRequestedIfResolved({
+					workspaceId: p.workspaceId,
+					sessionId: updated.origin.sessionId,
+					id: updated.origin.todoId,
+				});
+			return updated;
+		});
 	},
 	"review.commentDelete": (params) => {
 		const p = params as { workspaceId: string; id: string };

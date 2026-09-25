@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TodoStore } from "pi-todos/core";
 import { gitCommitPaths } from "../git";
-import { addComment, deleteComment, getReviewSnapshot } from "../reviews";
+import { addComment, deleteComment, getReviewSnapshot, updateComment } from "../reviews";
 import { recordAgentChangesRequested, todoReviewRecord } from "../todos";
 import { clearChangesRequestedIfResolved } from "./todoReview";
 
@@ -109,6 +109,27 @@ test("keeps the verdict while a finding remains, drops it once the last one is d
 
 	// Delete the last finding → the verdict clears.
 	await deleteComment(WS, comment.id);
+	await clearChangesRequestedIfResolved({ workspaceId: WS, sessionId: SESSION, id });
+	expect(todoReviewRecord({ workspaceId: WS, sessionId: SESSION, id })).toBeUndefined();
+});
+
+test("resolving (not just deleting) the last finding clears the verdict", async () => {
+	const store = new TodoStore(repo, SESSION);
+	const { id, sha } = flaggedItem(store, "step", "f.ts");
+	const comment = await addComment({
+		workspaceId: WS,
+		kind: "inline",
+		author: "agent",
+		anchor: {
+			path: "f.ts",
+			side: "worktree",
+			selectors: [{ kind: "lineRange", startLine: 1, endLine: 1 }],
+		},
+		body: "fix this",
+		origin: { todoId: id, reviewedSha: sha, sessionId: SESSION },
+	});
+
+	await updateComment({ workspaceId: WS, id: comment.id, status: "resolved" });
 	await clearChangesRequestedIfResolved({ workspaceId: WS, sessionId: SESSION, id });
 	expect(todoReviewRecord({ workspaceId: WS, sessionId: SESSION, id })).toBeUndefined();
 });
