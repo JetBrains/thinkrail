@@ -197,6 +197,7 @@ import { runObservation } from "./runAnalytics";
 import { taskObservation } from "./taskAnalytics";
 import {
 	claimItemFix,
+	clearChangesRequestedIfResolved,
 	isItemUnderActiveReview,
 	itemFixFindings,
 	markClientStale,
@@ -985,7 +986,18 @@ const handlers: Record<string, Handler> = {
 	"review.commentDelete": (params) => {
 		const p = params as { workspaceId: string; id: string };
 		return withReviewLock(p.workspaceId, async () => {
+			const origin = (await getReviewSnapshot(p.workspaceId)).comments.find(
+				(c) => c.id === p.id,
+			)?.origin;
 			await deleteComment(p.workspaceId, p.id);
+			// A changes_requested verdict must not outlive its findings: if this was the item's last open
+			// finding, drop the verdict back to unreviewed.
+			if (origin?.todoId)
+				await clearChangesRequestedIfResolved({
+					workspaceId: p.workspaceId,
+					sessionId: origin.sessionId,
+					id: origin.todoId,
+				});
 			return { ok: true } as const;
 		});
 	},

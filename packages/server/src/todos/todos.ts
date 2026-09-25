@@ -414,6 +414,19 @@ export function cancelTodoReview(params: {
 	clearReviewPending(getWorkspace(params.workspaceId).worktreePath, params.sessionId, params.id);
 }
 
+/** Drop an item's review record entirely (back to `unreviewed`): record, pending mark, and auto-cycle
+ * counter. Used when the review's findings are all gone (see host `clearChangesRequestedIfResolved`). */
+export function dropTodoReview(params: {
+	workspaceId: string;
+	sessionId: string;
+	id: string;
+}): void {
+	const root = getWorkspace(params.workspaceId).worktreePath;
+	dropReviewRecord(root, params.sessionId, params.id);
+	clearReviewPending(root, params.sessionId, params.id);
+	clearAutoCycles(root, params.sessionId, params.id);
+}
+
 export function recordAgentChangesRequested(params: {
 	workspaceId: string;
 	sessionId: string;

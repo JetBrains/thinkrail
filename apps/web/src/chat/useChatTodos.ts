@@ -190,6 +190,21 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		}
 	};
 
+	// The plan's review decoration (e.g. an item's changes_requested) is host-derived from the review
+	// sidecar; a review edit like deleting a finding can clear it. Re-read the plan when this
+	// workspace's review snapshot changes (skip the initial value; the main load already covers it).
+	const reviewComments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
+	const reloadPlanRef = useRef(reloadPlan);
+	reloadPlanRef.current = reloadPlan;
+	const reviewSeen = useRef(false);
+	useEffect(() => {
+		if (!reviewSeen.current) {
+			reviewSeen.current = true;
+			return;
+		}
+		void reloadPlanRef.current();
+	}, [reviewComments]);
+
 	const remove = async (id: string) => {
 		const requestIdentity = identity;
 		setData((current) =>

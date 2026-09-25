@@ -955,7 +955,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
   **auto-summary trigger** (a fully-done plan with no agent `summary` fires one best-effort
   `todo.generateSummary` that folds a host-drafted note in — re-armed if the plan re-opens or its summary
-  clears, never overwriting an existing note) + the
+  clears, never overwriting an existing note) + the **review-snapshot refetch** (the plan's review
+  decoration is host-derived, so a change to the workspace's review comments, e.g. deleting a finding that
+  clears a step's `changes_requested`, re-reads the plan) + the
   `openMarkdown` snapshot action; tool completion refreshes immediately and `agent_settled` supplies the
   final refresh; overlapping list reads are latest-wins and connection-generation stamped, accepted adds
   fold by item id, and a failed optimistic removal re-reads authority rather than restoring a stale whole-plan
