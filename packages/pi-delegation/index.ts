@@ -1,3 +1,4 @@
+export { scanReplayTools } from "./src/replayTools";
 export { createDelegationService } from "./src/service";
 export {
 	DEFAULT_SCOPE,
@@ -6,6 +7,7 @@ export {
 	deriveChildSessionFile,
 } from "./src/storage";
 export {
+	type CapturedHistory,
 	type ChildHandle,
 	type ChildInfo,
 	type CreateChildSpec,
@@ -14,8 +16,15 @@ export {
 	type DelegationErrorCode,
 	type DelegationRunDetails,
 	type DelegationService,
+	type HistoryCaptureSource,
 	type LifecycleEvent,
 	type ParentContext,
+	type ResourceChildBirth,
+	type ResourceChildHandle,
+	type ResourceContextInput,
+	type ResourceDelegation,
+	type ResourceDelegationOptions,
+	type ResourceSpawnRecord,
 	type RunLifecycleStatus,
 	type RunOptions,
 	type RunOutcome,
