@@ -150,3 +150,21 @@ test("switching workspaces re-targets the mounted workbench instead of remountin
 		),
 	).toBe(0);
 });
+
+test("a same-id terminal body remounts instead of carrying across workspaces", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspaces = worktreeRows(page);
+	await createWorkspaceViaDialog(page);
+	await createWorkspaceViaDialog(page);
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
+	const terminal = page.locator(
+		'[data-testid="terminal-instance"][data-tab-key="thinkrail-initial"]',
+	);
+	await expect(terminal).toHaveAttribute("data-ready", "true");
+	await terminal.evaluate((node) => node.setAttribute("data-switch-probe", "workspace-2"));
+
+	await workspaces.nth(0).getByRole("button").first().click();
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
+	await expect(terminal).toHaveAttribute("data-ready", "true");
+	await expect(terminal).not.toHaveAttribute("data-switch-probe", "workspace-2");
+});

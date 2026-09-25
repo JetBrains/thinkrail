@@ -4,7 +4,16 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
-import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+	Fragment,
+	lazy,
+	type ReactNode,
+	Suspense,
+	useCallback,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 import { prepareChatTitle } from "../chat/chatTitle";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
@@ -433,7 +442,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	);
 	const rendered = document && attention ? { document, attention } : pendingProjection;
 
-	const renderTabBody = useCallback(
+	const renderResourceBody = useCallback(
 		(tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>) => {
 			if (tab.kind === "chat") {
 				return <ChatResourceBody workspaceId={workspaceId} tab={tab} onOpenFile={openToolFile} />;
@@ -498,6 +507,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			terminalByKey,
 			workspaceId,
 		],
+	);
+	const renderTabBody = useCallback(
+		(tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>) => (
+			<Fragment key={workspaceId}>{renderResourceBody(tab)}</Fragment>
+		),
+		[renderResourceBody, workspaceId],
 	);
 
 	const renderToolBody = useCallback(
