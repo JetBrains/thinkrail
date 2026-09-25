@@ -51,13 +51,10 @@ placed inside it — the Update affordance, quota Retry, Settings — is exclude
 construction, and buttons must not be placed elsewhere in the header (`topbarChrome.test.ts` gates this),
 while plain text (breadcrumb, connection label) stays draggable.
 `SettingsDialog` portals out of the header and is unaffected. Nothing in the shell names or imports the
-desktop host. When the optional application updater reports an actionable native or CLI-host phase, a compact Update status
-affordance remains beside the settings and connection chrome and opens the injected Update section. Available,
-downloading/preparing/running, ready/succeeded, and failure states remain discoverable; closing Settings never
-dismisses the underlying state. Browsers connected to a host without the capability render neither affordance
-nor section. `Shell` mounts `updates`' one capability hook, injects the version-gated empty host-update request,
-and passes normalized state/actions into props-driven controls; panels receive optional React content, never a
-launcher or native-runtime check. The topbar identity is the icon-only ThinkRail mark—the same
+desktop host. `Shell` mounts the optional update hook, injects the version-gated empty host action, and passes
+normalized state into props-driven controls. Its compact status affordance opens the injected Update section;
+without a capability, neither renders. Panels receive optional React content, never launcher or native-runtime
+checks. The topbar identity is the icon-only ThinkRail mark—the same
 vector served as `public/favicon.svg`, inlined at 32×32 and rendered
 through semantic `text-primary`—with no divider before location. An active workspace shows one line of
 `project / workspace  branch · from baseBranch` plus optional review metadata on `tr-text-ui`; project and
