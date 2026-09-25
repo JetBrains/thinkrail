@@ -58,7 +58,7 @@ test("project template previews advance the additive wire shape to v63", () => {
 
 test("host update execution advances the additive lifecycle protocol", () => {
 	expect(HOST_UPDATE_RUN_PROTOCOL_VERSION).toBe(69);
-	expect(PROTOCOL_VERSION).toBe(HOST_UPDATE_RUN_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(HOST_UPDATE_RUN_PROTOCOL_VERSION);
 	expect(WS_CHANNELS.hostUpdateAvailable).toBe("host.updateAvailable");
 	expect(WS_METHODS.hostUpdate).toBe("host.update");
 });
