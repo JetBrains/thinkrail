@@ -9,6 +9,7 @@ import {
 import { setBlockedExtensions } from "../chat/blockedExtensions";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { channelDemand } from "./demand";
 import { blockedTitlesByProject, useExtStore } from "./extStore";
 import { syncRendererSlots } from "./rendererSlots";
 
@@ -61,10 +62,12 @@ export const startExtensionSync = (transport: SyncTransport) => {
 		const current = ++generation;
 		if (!supportsExtensions(useAppStore.getState().protocolVersion)) {
 			buffered = null;
+			channelDemand.disconnect();
 			ext().markUnsupported();
 			return;
 		}
 		buffered = [];
+		channelDemand.connect((keys) => transport.request("ext.watch", { keys }));
 		Promise.all([transport.request("ext.list", {}), transport.request("ext.snapshot", {})])
 			.then(([list, snapshot]) => settle(current, () => ext().install(list, snapshot)))
 			.catch(() => settle(current, () => ext().markFailed()));
@@ -80,6 +83,7 @@ export const startExtensionSync = (transport: SyncTransport) => {
 	});
 	return () => {
 		for (const unsubscribe of unsubscribes) unsubscribe();
+		channelDemand.disconnect();
 		stopWelcome();
 		stopRenderers();
 	};

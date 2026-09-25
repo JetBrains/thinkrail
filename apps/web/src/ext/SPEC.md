@@ -82,7 +82,10 @@ every icon in the eager vendor chunk the rest of the app shares.
 
 A surface renders inside `SurfaceContext` (`{ name, surfaceId }`), so hooks are scoped to their own
 extension: `useChannel(key)` reads `<name>:<key>` from the store (the connection snapshot, then live
-`ext.channel` pushes); `useAction(id)` returns a stable function that sends `ext.action` with the current
+`ext.channel` pushes) and, while mounted with a non-empty key, retains it in `demand.ts`, a ref-counted
+key set. `sync.ts` connects that set on every hydration: it sends `ext.watch` with the whole set, then
+again (microtask-batched) whenever it changes, so the host half's `tr.onWatch` sees views come and go;
+`useAction(id)` returns a stable function that sends `ext.action` with the current
 host ids as `ctx`. `useHostContext()` is the active project/workspace, the focused chat's session id
 (attention center tab, else the workspace's newest chat tab), and the theme appearance; it re-renders when any of them changes.
 `openSurface(name, surfaceId, params?)` opens a `tab` surface as a center tab or reveals a `panel`

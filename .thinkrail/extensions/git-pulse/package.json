@@ -1,0 +1,18 @@
+{
+	"name": "@thinkrail/ext-git-pulse",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"description": "ThinkRail UI extension: git status, ahead/behind, recent commits, and fetch for the active workspace.",
+	"scripts": {
+		"typecheck": "tsc --noEmit -p ."
+	},
+	"dependencies": {
+		"@thinkrail/ext": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"typescript": "catalog:"
+	}
+}

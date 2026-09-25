@@ -34,6 +34,7 @@ export const createTr = ({
 	store,
 	sessions,
 	workspaces,
+	watched,
 	log,
 }: {
 	name: string;
@@ -42,6 +43,7 @@ export const createTr = ({
 	store: ExtStore;
 	sessions: SessionReads;
 	workspaces: WorkspaceReads;
+	watched: () => string[];
 	log: (level: "info" | "error", message: string) => void;
 }): Tr => {
 	const guard =
@@ -68,6 +70,11 @@ export const createTr = ({
 		pi: (factory) => generation.addPiFactory(factory),
 		publish: (key, value) => generation.publish(extChannelKey(name, key), value),
 		unpublish: (key) => generation.unpublish(extChannelKey(name, key)),
+		watched,
+		onWatch(fn) {
+			const safe = guard("onWatch", fn);
+			return generation.addWatchObserver((key, watching) => safe(key, watching));
+		},
 		action: (id, fn) => generation.addAction(id, fn),
 		store,
 		sessions: {

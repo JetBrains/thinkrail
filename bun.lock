@@ -20,6 +20,18 @@
         "typescript": "catalog:",
       },
     },
+    ".thinkrail/extensions/git-pulse": {
+      "name": "@thinkrail/ext-git-pulse",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thinkrail/ext": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     ".thinkrail/extensions/railmap": {
       "name": "@thinkrail/ext-railmap",
       "version": "0.0.0",
@@ -970,6 +982,8 @@
     "@thinkrail/desktop": ["@thinkrail/desktop@workspace:apps/desktop"],
 
     "@thinkrail/ext": ["@thinkrail/ext@workspace:packages/ext-sdk"],
+
+    "@thinkrail/ext-git-pulse": ["@thinkrail/ext-git-pulse@workspace:.thinkrail/extensions/git-pulse"],
 
     "@thinkrail/ext-railmap": ["@thinkrail/ext-railmap@workspace:.thinkrail/extensions/railmap"],
 

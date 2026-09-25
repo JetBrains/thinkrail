@@ -169,6 +169,48 @@ describe("ext host", () => {
 		await host.dispose();
 	});
 
+	test("onWatch replays watched keys on activation and follows view demand across clients", async () => {
+		writeExtension(
+			userDir,
+			"g1",
+			HOST_HALF.replace(
+				'tr.publish("tag", tag);',
+				'tr.publish("tag", tag); tr.onWatch((key, on) => trace.push("watch:" + tag + ":" + key + ":" + on));',
+			),
+		);
+		const host = makeHost();
+		host.setWatched("c1", ["demo:tag", "other:x"]);
+		await host.rescan();
+		expect(trace()).toContain("watch:g1:tag:true");
+		host.setWatched("c2", ["demo:tag", "demo:more"]);
+		host.setWatched("c1", []);
+		expect(trace().filter((line) => line.startsWith("watch:g1"))).toEqual([
+			"watch:g1:tag:true",
+			"watch:g1:more:true",
+		]);
+		writeExtension(
+			userDir,
+			"g2",
+			HOST_HALF.replace(
+				'tr.publish("tag", tag);',
+				'tr.publish("tag", tag); tr.onWatch((key, on) => trace.push("watch:" + tag + ":" + key + ":" + on));',
+			),
+		);
+		await host.reload("demo");
+		expect(
+			trace()
+				.filter((line) => line.startsWith("watch:g2"))
+				.sort(),
+		).toEqual(["watch:g2:more:true", "watch:g2:tag:true"]);
+		host.dropClient("c2");
+		expect(
+			trace()
+				.filter((line) => line.endsWith(":false"))
+				.sort(),
+		).toEqual(["watch:g2:more:false", "watch:g2:tag:false"]);
+		await host.dispose();
+	});
+
 	test("actions round trip payload, context, and session reads", async () => {
 		writeExtension(userDir, "g1");
 		const host = makeHost();

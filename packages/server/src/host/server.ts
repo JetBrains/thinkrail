@@ -374,6 +374,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					sockets.delete(clientKey);
 					terminalBackpressured.delete(clientKey);
 				}
+				if (!sockets.has(clientKey)) extensions.extHost.dropClient(clientKey);
 				if (sockets.has(clientKey) || reapTimers.has(clientKey)) return;
 				armClientReap(clientKey);
 			},

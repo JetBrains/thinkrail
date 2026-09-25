@@ -20,6 +20,8 @@ import { defineExtension } from "@thinkrail/ext";
 export default defineExtension((tr) => {
 	tr.publish("count", 1);
 	tr.action("double", (payload) => Number(payload) * 2);
+	tr.onWatch((key, watching) => tr.publish("watch:" + key, watching));
+	tr.action("watched", () => tr.watched());
 });
 `;
 
@@ -144,6 +146,33 @@ test("ext wire methods, pushes, and the tokened immutable asset route", async ()
 	} finally {
 		current.ws.close();
 		legacy.ws.close();
+	}
+}, 30_000);
+
+test("ext.watch counts views per client and a closed socket releases its keys", async () => {
+	const first = await connect(EXT_PROTOCOL_VERSION, "watch-a");
+	const second = await connect(EXT_PROTOCOL_VERSION, "watch-b");
+	const watching = async () =>
+		(await first.request("ext.snapshot", { keys: ["demo:watch:count"] })) as Record<
+			string,
+			unknown
+		>;
+	try {
+		await loadedDemo(first.request);
+		await first.request("ext.watch", { keys: ["demo:count"] });
+		expect(await watching()).toEqual({ "demo:watch:count": true });
+		await second.request("ext.watch", { keys: ["demo:count", "other:x"] });
+		expect(await first.request("ext.action", { ext: "demo", id: "watched" })).toEqual(["count"]);
+
+		second.ws.close();
+		await Bun.sleep(50);
+		expect(await watching()).toEqual({ "demo:watch:count": true });
+		await first.request("ext.watch", { keys: [] });
+		expect(await watching()).toEqual({ "demo:watch:count": false });
+		await expect(first.request("ext.watch", { keys: [1] })).rejects.toThrow("string array");
+	} finally {
+		first.ws.close();
+		second.ws.close();
 	}
 }, 30_000);
 

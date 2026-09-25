@@ -41,6 +41,8 @@ export interface Tr {
 	pi(factory: PiExtensionFactory): Off;
 	publish(key: string, value: unknown): void;
 	unpublish(key: string): void;
+	watched(): string[];
+	onWatch(fn: (key: string, watching: boolean) => void): Off;
 	action(id: string, fn: ActionHandler): Off;
 	readonly store: ExtStore;
 	readonly sessions: {

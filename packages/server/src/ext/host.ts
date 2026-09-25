@@ -5,6 +5,7 @@ import {
 	type ExtensionInfo,
 	type ExtensionSurface,
 	type ExtRemovedPush,
+	extChannelKey,
 	isOwnChannelKey,
 	type SessionEventPayload,
 } from "@thinkrail/contracts";
@@ -136,6 +137,43 @@ export const createExtHost = (options: ExtHostOptions) => {
 		options.onChannelsDropped?.(name, [key]);
 	};
 
+	const viewers = new Map<string, ReadonlySet<string>>();
+	const watchCounts = new Map<string, number>();
+
+	const watchedOf = (name: string) =>
+		[...watchCounts.keys()]
+			.filter((key) => isOwnChannelKey(name, key))
+			.map((key) => key.slice(extChannelKey(name, "").length));
+
+	const notifyWatch = (key: string, watching: boolean) => {
+		const split = key.indexOf(":");
+		if (split <= 0) return;
+		const name = key.slice(0, split);
+		states.get(name)?.current?.notifyWatch(key.slice(split + 1), watching);
+	};
+
+	const setWatched = (clientKey: string, keys: readonly string[]) => {
+		const next = new Set(keys);
+		const previous = viewers.get(clientKey) ?? new Set<string>();
+		if (next.size > 0) viewers.set(clientKey, next);
+		else viewers.delete(clientKey);
+		for (const key of previous) {
+			if (next.has(key)) continue;
+			const count = (watchCounts.get(key) ?? 1) - 1;
+			if (count > 0) watchCounts.set(key, count);
+			else {
+				watchCounts.delete(key);
+				notifyWatch(key, false);
+			}
+		}
+		for (const key of next) {
+			if (previous.has(key)) continue;
+			const count = (watchCounts.get(key) ?? 0) + 1;
+			watchCounts.set(key, count);
+			if (count === 1) notifyWatch(key, true);
+		}
+	};
+
 	const dropChannels = (name: string) => {
 		const keys = [...channels.keys()].filter((key) => isOwnChannelKey(name, key));
 		for (const key of keys) channels.delete(key);
@@ -178,6 +216,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 			id: generationId(),
 			emit: emitChannel,
 			drop: (key) => dropChannel(name, key),
+			watched: () => watchedOf(name),
 		});
 		const tr = createTr({
 			name,
@@ -186,6 +225,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 			store: sink.store,
 			sessions: options.sessions,
 			workspaces: options.workspaces ?? NO_WORKSPACES,
+			watched: () => watchedOf(name),
 			log: sink.log,
 		});
 		try {
@@ -453,6 +493,8 @@ export const createExtHost = (options: ExtHostOptions) => {
 		logs(name: string, since = 0) {
 			return (logs.get(name) ?? []).filter((entry) => entry.at >= since);
 		},
+		setWatched,
+		dropClient: (clientKey: string) => setWatched(clientKey, []),
 		recordError(name: string, context: string, error: unknown) {
 			log(name, "error", `${context}: ${formatLog([error])}`);
 		},

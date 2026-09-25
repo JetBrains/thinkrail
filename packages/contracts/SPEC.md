@@ -414,7 +414,8 @@ of the host.
   `ExtWsMethodMap` (extended by `WsMethodMap`): `ext.list` → `ExtensionInfo[]`, `ext.snapshot({ keys? })`
   → key→value record, `ext.action({ ext, id, payload?, ctx? })` → the handler's result,
   `ext.reload({ name })` → `ExtensionInfo`, `ext.reportError({ name, surfaceId, message })` → ack (view
-  ErrorBoundary reports for `ext_logs`). Pushes: `ext.changed` (`ExtensionInfo`), `ext.removed`
+  ErrorBoundary reports for `ext_logs`), `ext.watch({ keys })` → ack (the full set of channel keys this
+  client's mounted views read; replaces the previous set). Pushes: `ext.changed` (`ExtensionInfo`), `ext.removed`
   (`{ name, blockedProjectId? }`: with `blockedProjectId` it removes only that project's blocked entry),
   `ext.channel` (`{ key, value }`), `ext.channelsDropped` (`{ name, keys }`: a swap or unload
   dropped these keys; clear them). All enter at `EXT_PROTOCOL_VERSION` = v69. `blocked` was added without a

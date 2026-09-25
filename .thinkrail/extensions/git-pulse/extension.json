@@ -1,0 +1,9 @@
+{
+	"name": "git-pulse",
+	"title": "Git pulse",
+	"surfaces": [
+		{ "id": "dashboard", "slot": "tab", "title": "Git pulse" },
+		{ "id": "badge", "slot": "status" }
+	],
+	"permissions": ["git:read", "git:fetch"]
+}

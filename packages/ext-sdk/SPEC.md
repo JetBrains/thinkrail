@@ -58,6 +58,10 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
   extension factories): the host may run it again on every reload.
 - `publish(key, value)` keys are auto-prefixed `<name>:`; the host keeps the last value per key until
   `unpublish(key)` drops it (views then read `undefined`).
+- `watched()` / `onWatch(fn)` report view demand: the own keys at least one mounted view on any connected
+  client reads with `useChannel`. `onWatch` fires `(key, true)` for every key already watched when the
+  generation goes live (or when registered after that), then on each first-view / last-view change. A
+  host half uses it to run work only while someone looks.
 - `store` persists JSON per extension; values must survive `JSON.stringify`.
 - `sessions.stats` is pi's `getSessionStats()` as ThinkRail already projects it; never recomputed.
 - `workspaces` lists the workspaces of open projects, read-only. `path` is the checkout directory; it is
@@ -75,6 +79,9 @@ an author's code fails here.
 `.thinkrail/extensions/railmap/` is the larger example (own dependencies, `tr.workspaces`, `tr.pi` tool and
 settle hook, four slots). It is a root workspace member with its own `package.json` and `tsconfig.json`, so
 turbo's `typecheck` covers it directly.
+
+`.thinkrail/extensions/git-pulse/` (git dashboard: `tr.onWatch`, `execFile`, a `tab` and a `status` slot)
+is wired the same way as railmap.
 
 ## Known limitations
 

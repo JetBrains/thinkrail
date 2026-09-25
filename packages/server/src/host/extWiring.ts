@@ -30,6 +30,7 @@ const ASSET_PATH = new RegExp(
 );
 const IMMUTABLE = "private, max-age=31536000, immutable";
 const WATCH_DEBOUNCE_MS = 300;
+const MAX_WATCHED_KEYS = 1_000;
 
 type ExtHandlers = Parameters<typeof setExtHandlers>[0];
 type ExtPublish = (channel: WsChannel, data: unknown) => void;
@@ -103,6 +104,15 @@ const extHandlers = (extHost: ExtHost) =>
 				`view ${requireString(p, "surfaceId")}`,
 				redactLaunchToken(requireString(p, "message")),
 			);
+			return { ok: true } as const;
+		},
+		"ext.watch": (params, ctx) => {
+			const keys = record(params).keys;
+			if (!Array.isArray(keys) || keys.some((key) => typeof key !== "string"))
+				throw new Error("keys must be a string array");
+			if (keys.length > MAX_WATCHED_KEYS)
+				throw new Error(`at most ${MAX_WATCHED_KEYS} watched keys`);
+			extHost.setWatched(ctx.clientKey, keys);
 			return { ok: true } as const;
 		},
 	}) satisfies Record<keyof ExtWsMethodMap, ExtHandlers[string]>;

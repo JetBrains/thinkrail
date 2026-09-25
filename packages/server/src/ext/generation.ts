@@ -2,6 +2,7 @@ import type { PiEvent } from "@thinkrail/contracts";
 import type { ActionHandler, Disposer, Off, PiExtensionFactory, SessionRef } from "@thinkrail/ext";
 
 type Observer = (event: PiEvent, session: SessionRef) => void;
+type WatchObserver = (key: string, watching: boolean) => void;
 type Phase = "loading" | "active" | "disposed";
 
 export interface Generation {
@@ -14,6 +15,8 @@ export interface Generation {
 	addPiFactory(factory: PiExtensionFactory): Off;
 	addAction(id: string, fn: ActionHandler): Off;
 	addTimer(start: () => Off): Off;
+	addWatchObserver(fn: WatchObserver): Off;
+	notifyWatch(key: string, watching: boolean): void;
 	addDisposer(fn: Disposer): void;
 	publish(key: string, value: unknown): void;
 	unpublish(key: string): void;
@@ -25,10 +28,12 @@ export const createGeneration = ({
 	id,
 	emit,
 	drop,
+	watched,
 }: {
 	id: number;
 	emit: (key: string, value: unknown) => void;
 	drop: (key: string) => void;
+	watched: () => string[];
 }): Generation => {
 	let phase: Phase = "loading";
 	const observers = new Map<string, Set<Observer>>();
@@ -37,6 +42,11 @@ export const createGeneration = ({
 	const timers = new Map<() => Off, Off | undefined>();
 	const disposers: Disposer[] = [];
 	const pendingPublishes = new Map<string, unknown>();
+	const watchObservers = new Set<WatchObserver>();
+
+	const replayWatched = (fn: WatchObserver) => {
+		for (const key of watched()) fn(key, true);
+	};
 
 	const startTimer = (start: () => Off) => {
 		timers.set(start, start());
@@ -79,6 +89,17 @@ export const createGeneration = ({
 				timers.delete(start);
 			};
 		},
+		addWatchObserver(fn) {
+			watchObservers.add(fn);
+			if (phase === "active") replayWatched(fn);
+			return () => {
+				watchObservers.delete(fn);
+			};
+		},
+		notifyWatch(key, watching) {
+			if (phase !== "active") return;
+			for (const fn of watchObservers) fn(key, watching);
+		},
 		addDisposer(fn) {
 			disposers.push(fn);
 		},
@@ -96,6 +117,7 @@ export const createGeneration = ({
 			for (const start of timers.keys()) startTimer(start);
 			for (const [key, value] of pendingPublishes) emit(key, value);
 			pendingPublishes.clear();
+			for (const fn of watchObservers) replayWatched(fn);
 		},
 		async dispose() {
 			if (phase === "disposed") return [];
@@ -103,6 +125,7 @@ export const createGeneration = ({
 			for (const stop of timers.values()) stop?.();
 			timers.clear();
 			observers.clear();
+			watchObservers.clear();
 			piFactories.clear();
 			actions.clear();
 			pendingPublishes.clear();

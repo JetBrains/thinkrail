@@ -80,6 +80,10 @@ export default defineExtension((tr) => {
   gets it. Values must be JSON. Per-session data goes under one key per session (`tr.publish(sessionId, …)`).
 - `tr.unpublish(key)`: forget a key's last value; open views see `undefined`. Use it for data that
   belongs to a session that has closed, so the host does not keep it forever.
+- `tr.onWatch((key, watching) => …)`: fires `true` when the first open view reads `useChannel(key)` (on
+  any connected window) and `false` when the last one unmounts or its window disconnects. Keys already
+  watched fire `true` when this version goes live. `tr.watched()` lists them. Use it to poll or watch
+  files only while a view shows the result.
 - `tr.action(id, (payload, ctx) => result)`: a function views can call. `ctx` has `projectId`,
   `workspaceId`, `sessionId` of the calling view.
 - `tr.store.get(key)` / `tr.store.set(key, value)`: JSON that survives reloads and restarts.
@@ -211,3 +215,14 @@ real imports, with drift. It shows own dependencies (`@xyflow/react` and `elkjs`
 and `pi-spec-graph` in the host half), `tr.workspaces` to find the checkout, an `fs.watch` closed by the
 returned disposer, `tr.pi` with a tool (`may_import`) and an `agent_before_settle` hook that appends a
 custom message, and all four other slots: `tab`, `panel`, `message`, `toolCard`.
+
+`.thinkrail/extensions/git-pulse/` is a git dashboard for the active workspace: a topbar item
+(`⎇ feat/x ↑2 ↓0 · 5 changed`) and a tab with recent commits, changed files, and a **Fetch** button. It
+shows:
+
+- `tr.onWatch`: a workspace is polled only while a view reads its `pulse:<workspaceId>` key, and
+  dropped when the last one closes.
+- `node:child_process` `execFile` running read-only `git` in the `tr.workspaces` path, plus an
+  `fs.watch` on the git dir for instant refresh, closed by the returned disposer.
+- An action with a slow side effect (`fetch`) whose result the view shows in place.
+- A discriminated channel value (`loading`, `not-git`, `error`, `ready`) so every view handles each case.

@@ -169,6 +169,12 @@ lists trusted project paths, so the section stays stable across trust changes an
   `onChannelsDropped(name, keys)` fires when a swap or unload drops keys, so clients clear them.
   `tr.unpublish(key)` drops one key the same way (only if it was held); during loading it discards a
   buffered publish; a disposed generation's call is ignored. Extensions use it to bound per-session keys.
+- View demand: `setWatched(clientKey, keys)` replaces one client's set of full channel keys that its
+  mounted views read (`ext.watch`); `dropClient(clientKey)` clears it when the client's socket is gone.
+  The host counts clients per key and calls the owning extension's current generation on a key's first
+  and last client (`tr.onWatch`, unprefixed key). A generation replays every watched key as `true` on
+  activation, so a swap keeps demand; a loading or disposed generation gets nothing. `tr.watched()` reads
+  the live counts.
 - Actions: `invokeAction({ ext, id, payload, ctx })` runs the current generation's handler; unknown
   extension or id throws. A duplicate id within one generation throws at registration.
 - Store: `<dataDir>/ext-store/<name>.json`, loaded lazily, writes serialized per extension and
@@ -192,6 +198,12 @@ behaviour as an author sees it.
 way against a generated fixture repo (declared, undeclared, barrel-bypass, unused, and no-spec cases), checks
 incremental updates after a file write, `may_import`, the settle hook's drift diff, and smoke-builds this
 repository's own graph.
+
+`.thinkrail/extensions/git-pulse/` is the third. `gitPulseExample.test.ts` builds real repositories (an
+upstream with a teammate's commit, staged/unstaged/untracked/renamed files, a stash, a detached clone, a
+plain directory) and drives the extension through `setWatched` / `dropClient`: nothing runs before a view
+watches, `fetch` moves `behind` without touching `HEAD`, a `.git` change refreshes before the poll, and
+the last view leaving drops the channel.
 
 ## Known limitations
 

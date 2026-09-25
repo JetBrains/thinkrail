@@ -163,6 +163,7 @@ export const EXT_WS_METHODS = {
 	extAction: "ext.action",
 	extReload: "ext.reload",
 	extReportError: "ext.reportError",
+	extWatch: "ext.watch",
 } as const;
 
 export const EXT_WS_CHANNELS = {
@@ -207,4 +208,5 @@ export interface ExtWsMethodMap {
 		params: { name: string; surfaceId: string; message: string };
 		result: { ok: true };
 	};
+	"ext.watch": { params: { keys: string[] }; result: { ok: true } };
 }
