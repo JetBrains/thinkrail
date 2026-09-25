@@ -102,17 +102,23 @@ agent's host-extension bridge, one factory injected into every top-level session
 ## Validation (dry load)
 
 `validate(name)` runs the same steps as a load (manifest, every view build, jiti import, factory run in a
-throwaway generation) and then disposes that generation. It never swaps, never publishes, never touches
-the running generation, and does not write load errors to the log. A name the host does not know yet is
-looked up on disk (user dir, then trusted project roots) without registering it. Result:
-`{ ok: true, surfaces, build }` or `{ ok: false, errors }` with the same actionable one-liners a load reports.
+throwaway generation) and then disposes that generation. It never swaps and never publishes. The dry `tr`
+is isolated: `tr.store` reads the persisted store but writes only to an in-memory overlay, and `tr.log`
+plus dispose failures go to the result's `logs`, never the extension's log ring. A known extension's dry
+run queues behind its loads. A name the host does not know yet is looked up on disk (user dir, then
+trusted project roots) without registering it or creating a store. Result: `{ ok: true, surfaces, build,
+logs }` or `{ ok: false, errors, logs }` with the same actionable one-liners a load reports.
+
+Limit: the dry factory runs while the live generation keeps running. A host half that holds an exclusive
+resource (port, lock file) can fail a dry run that a real reload would pass; `ext_reload` does not depend
+on `validate`, so this never blocks applying it.
 
 ## File watcher
 
 With `watchDebounceMs` set, the host watches the user extensions dir and every trusted project's
-`.thinkrail/extensions` recursively. A change under `<root>/<name>/` (ignoring any `node_modules` or `.git`
-segment) reloads `<name>` after `watchDebounceMs` of quiet, per name; `reload` rescans, so a new directory
-loads and a deleted one unloads. Watches are re-armed after every scan: a root that does not exist yet is
+`.thinkrail/extensions` recursively. A change at `<root>/<name>` or under it (ignoring any `node_modules` or
+`.git` segment) reloads `<name>` after `watchDebounceMs` of quiet, per name; `reload` rescans, so a new directory
+loads and a deleted one unloads, including a directory moved in or out. Watches are re-armed after every scan: a root that does not exist yet is
 not watched until a later scan finds it (an `ext_reload` of a new extension rescans). The user root is created on
 start so it is always watched. `dispose()` closes every watch and pending timer.
 
@@ -122,15 +128,17 @@ start so it is always watched. `dispose()` closes every watch and pending timer.
 the composition root ahead of the `tr.pi` factories in the host-extension bridge, so top-level sessions get
 it and delegated children never do. It registers:
 
-- `ext_validate(name)`: `validate` as text; errors are the actionable one-liners.
-- `ext_reload(name)`: `validate`, then (only when valid) `reload`; returns the resulting status, generation,
-  build, and error. An invalid extension is not reloaded, so its old generation keeps running.
+- `ext_validate(name)`: `validate` as text; errors are the actionable one-liners, then the dry run's logs.
+- `ext_reload(name)`: `reload`; returns the resulting status, generation, build, and error, and fails
+  when the status is `error`. A failed load never swaps, so the old generation keeps running.
 - `ext_logs(name, since?)`: the extension's log ring (`tr.log`, load/build errors, view errors from
-  `ext.reportError`) at or after `since` (epoch ms), passed through `redactLaunchToken`.
+  `ext.reportError`) at or after `since` (epoch ms). Browser-reported text is redacted at ingress by the
+  composition root; server-side entries never carry the launch token.
 
 A tool error (unknown name, invalid extension) sets `isError`. A `before_agent_start` hook adds a short
-system-prompt section naming the guide at `docsPath` (the SDK README), the extension roots (`host.roots()`), and the three
-tools; it never inlines the guide.
+system-prompt section naming the guide at `docsPath` (the SDK README), the user root, the generic
+`<project>/.thinkrail/extensions` pattern, and the three tools. It never inlines the guide and never
+lists trusted project paths, so the section stays stable across trust changes and sessions.
 
 ## Other registries
 
@@ -155,7 +163,7 @@ tools; it never inlines the guide.
   (validation reuse); `buildSurface` (one view's JS + CSS, for validation reuse); `createExtDevTools`
   (the agent dev-loop pi factory) + `EXT_SDK_GUIDE` (the SDK README text, text-imported); `projectExtensionsDir`; type `ExtValidation`.
 - **Allowed deps:** `@thinkrail/ext` (types + the module object handed to jiti), `@thinkrail/contracts`
-  (types, `SURFACE_SLOTS`, runtime-module names, `redactLaunchToken`), `@thinkrail/shared/paths`, `typebox`, `jiti`,
+  (types, `SURFACE_SLOTS`, runtime-module names), `@thinkrail/shared/paths`, `typebox`, `jiti`,
   pi-coding-agent (types, and the module object handed to jiti), `node:fs` `watch`, `react` + `react-dom` (export-name
   enumeration only), `tailwindcss` (compiler + `theme.css` text), `Bun.build`.
 - **Forbidden:** `host`; `agent`, `persistence`, `log`, and every other feature module. Sessions, trust,

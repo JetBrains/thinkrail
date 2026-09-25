@@ -5,8 +5,7 @@ const IGNORED_SEGMENTS = new Set(["node_modules", ".git"]);
 export const changedExtension = (filename: string | null) => {
 	if (!filename) return undefined;
 	const segments = filename.split(/[\\/]/);
-	if (segments.length < 2 || segments.some((segment) => IGNORED_SEGMENTS.has(segment)))
-		return undefined;
+	if (segments.some((segment) => IGNORED_SEGMENTS.has(segment))) return undefined;
 	return segments[0] || undefined;
 };
 

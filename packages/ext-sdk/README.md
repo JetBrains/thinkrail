@@ -152,8 +152,9 @@ follow the theme. An unknown utility renders unstyled without an error.
 
 1. Write the files.
 2. `ext_validate(name)`: checks the manifest, builds every view, and dry-runs `index.ts` without touching
-   the running version. Fix every error it lists.
-3. `ext_reload(name)`: validates, then loads it as the running version (a new extension loads too). Open
+   the running version. The dry run's `tr.store` writes are thrown away and its `tr.log` lines come back
+   in the result. Fix every error it lists.
+3. `ext_reload(name)`: loads it as the running version (a new extension loads too). Open
    surfaces swap in place. If it fails, the old version keeps running.
 4. `ext_logs(name, since?)`: `tr.log` output, load and build errors, and errors from views crashing in the
    browser. Each line carries its time in ms; pass it as `since` to see only newer entries.

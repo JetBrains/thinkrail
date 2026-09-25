@@ -12,7 +12,7 @@ import {
 import { createGeneration, type Generation } from "./generation";
 import { importExtension } from "./loader";
 import { readManifest } from "./manifest";
-import { createExtStore } from "./store";
+import { createDryStore, createExtStore } from "./store";
 import { createTr, formatLog, type SessionReads } from "./tr";
 import { errorMessage } from "./util";
 import { createExtWatcher } from "./watch";
@@ -39,8 +39,13 @@ export interface ExtHostOptions {
 }
 
 export type ExtValidation =
-	| { ok: true; surfaces: ExtensionSurface[]; build: string }
-	| { ok: false; errors: string[] };
+	| { ok: true; surfaces: ExtensionSurface[]; build: string; logs: string[] }
+	| { ok: false; errors: string[]; logs: string[] };
+
+interface Sink {
+	store: ExtStore;
+	log: (level: ExtLogEntry["level"], message: string) => void;
+}
 
 interface ExtState {
 	candidate: Candidate;
@@ -105,10 +110,15 @@ export const createExtHost = (options: ExtHostOptions) => {
 		if (keys.length > 0 && !disposed) options.onChannelsDropped?.(name, keys);
 	};
 
-	const disposeGeneration = async (name: string, generation: Generation) => {
+	const disposeGeneration = async (generation: Generation, sink: Sink["log"]) => {
 		const failures = await generation.dispose();
-		for (const failure of failures) log(name, "error", `dispose: ${formatLog([failure])}`);
+		for (const failure of failures) sink("error", `dispose: ${formatLog([failure])}`);
 	};
+
+	const liveSink = (name: string): Sink => ({
+		store: storeFor(name),
+		log: (level, message) => log(name, level, message),
+	});
 
 	const serialized = <T>(state: ExtState, task: () => Promise<T>) => {
 		const run = state.queue.then(task);
@@ -116,7 +126,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 		return run;
 	};
 
-	const prepare = async (candidate: Candidate, generationId: () => number) => {
+	const prepare = async (candidate: Candidate, generationId: () => number, sink: Sink) => {
 		const { name, dir } = candidate;
 		const manifest = await readManifest(dir);
 		if (!manifest.ok) return { ok: false as const, errors: manifest.errors };
@@ -137,15 +147,15 @@ export const createExtHost = (options: ExtHostOptions) => {
 			name,
 			dir,
 			generation,
-			store: storeFor(name),
+			store: sink.store,
 			sessions: options.sessions,
-			log: (level, message) => log(name, level, message),
+			log: sink.log,
 		});
 		try {
 			const cleanup = await factory(tr);
 			if (typeof cleanup === "function") generation.addDisposer(cleanup);
 		} catch (error) {
-			await disposeGeneration(name, generation);
+			await disposeGeneration(generation, sink.log);
 			return { ok: false as const, errors: [`factory threw: ${errorMessage(error)}`] };
 		}
 		return { ok: true as const, manifest: manifest.manifest, assets, generation };
@@ -153,7 +163,8 @@ export const createExtHost = (options: ExtHostOptions) => {
 
 	const loadInto = async (state: ExtState) => {
 		const { name } = state.candidate;
-		const prepared = await prepare(state.candidate, () => nextGeneration++);
+		const sink = liveSink(name);
+		const prepared = await prepare(state.candidate, () => nextGeneration++, sink);
 		if (!prepared.ok) {
 			state.error = prepared.errors.join("\n");
 			log(name, "error", `load failed: ${state.error}`);
@@ -162,7 +173,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 		}
 		const { manifest, assets, generation } = prepared;
 		if (disposed || states.get(name) !== state) {
-			await disposeGeneration(name, generation);
+			await disposeGeneration(generation, sink.log);
 			return infoOf(state);
 		}
 		const previous = state.current;
@@ -175,7 +186,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 		state.permissions = manifest.permissions;
 		dropChannels(name);
 		generation.activate();
-		if (previous) await disposeGeneration(name, previous);
+		if (previous) await disposeGeneration(previous, sink.log);
 		log(name, "info", `generation ${generation.id} active`);
 		if (piChanged) options.onPiFactoriesChanged?.();
 		options.onChanged?.(infoOf(state));
@@ -202,7 +213,8 @@ export const createExtHost = (options: ExtHostOptions) => {
 			state.current = undefined;
 			state.assets = undefined;
 			const hadPiFactories = (generation?.piFactories.size ?? 0) > 0;
-			if (generation) await disposeGeneration(name, generation);
+			if (generation)
+				await disposeGeneration(generation, (level, message) => log(name, level, message));
 			dropChannels(name);
 			if (disposed) return;
 			options.onRemoved?.(name);
@@ -280,10 +292,24 @@ export const createExtHost = (options: ExtHostOptions) => {
 	};
 
 	const findCandidate = async (name: string) =>
-		states.get(name)?.candidate ??
 		(await discoverExtensions({ userDir: options.userDir, projectRoots })).candidates.find(
 			(candidate) => candidate.name === name,
 		);
+
+	const dryLoad = async (candidate: Candidate): Promise<ExtValidation> => {
+		const logs: string[] = [];
+		const sink: Sink = {
+			store: createDryStore(
+				stores.get(candidate.name) ??
+					createExtStore({ dir: options.storeDir, name: candidate.name }),
+			),
+			log: (level, message) => logs.push(`${level} ${message}`),
+		};
+		const prepared = await prepare(candidate, () => 0, sink);
+		if (!prepared.ok) return { ...prepared, logs };
+		await disposeGeneration(prepared.generation, sink.log);
+		return { ok: true, surfaces: prepared.manifest.surfaces, build: prepared.assets.build, logs };
+	};
 
 	return {
 		rescan,
@@ -294,12 +320,11 @@ export const createExtHost = (options: ExtHostOptions) => {
 		reload,
 		roots,
 		async validate(name: string): Promise<ExtValidation> {
+			const known = states.get(name);
+			if (known) return serialized(known, () => dryLoad(known.candidate));
 			const candidate = await findCandidate(name);
-			if (!candidate) return { ok: false, errors: [notFound(name)] };
-			const prepared = await prepare(candidate, () => 0);
-			if (!prepared.ok) return prepared;
-			await disposeGeneration(name, prepared.generation);
-			return { ok: true, surfaces: prepared.manifest.surfaces, build: prepared.assets.build };
+			if (!candidate) return { ok: false, errors: [notFound(name)], logs: [] };
+			return dryLoad(candidate);
 		},
 		list: () => [...states.values()].map(infoOf),
 		get: (name: string) => {

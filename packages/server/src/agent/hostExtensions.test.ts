@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import { childExtensionFactories } from "./extensions";
 import { hostExtensionBridge, setHostExtensionFactorySource } from "./hostExtensions";
 
 afterEach(() => setHostExtensionFactorySource(undefined));
@@ -23,4 +24,8 @@ test("the bridge runs every source factory and isolates a throwing one", async (
 
 test("the bridge is a no-op without a source", async () => {
 	await hostExtensionBridge({} as ExtensionAPI);
+});
+
+test("delegated children never get the bridge, so no ext_* tools or tr.pi factories", () => {
+	expect(childExtensionFactories()).not.toContain(hostExtensionBridge);
 });

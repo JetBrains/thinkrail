@@ -1,7 +1,8 @@
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import { type ExtensionInfo, redactLaunchToken } from "@thinkrail/contracts";
+import type { ExtensionInfo } from "@thinkrail/contracts";
 import guide from "@thinkrail/ext/README.md" with { type: "text" };
 import { Type } from "typebox";
+import { projectExtensionsDir } from "./discovery";
 import type { ExtHost, ExtLogEntry, ExtValidation } from "./host";
 
 const PROMPT_SECTION = "thinkrail-extensions";
@@ -9,6 +10,8 @@ const PROMPT_SECTION = "thinkrail-extensions";
 export const EXT_SDK_GUIDE = guide;
 
 type DevHost = Pick<ExtHost, "validate" | "reload" | "logs" | "get" | "roots">;
+
+const PROJECT_ROOT = projectExtensionsDir("<project>");
 
 const NameParams = Type.Object({
 	name: Type.String({ description: "Extension name (its directory name)." }),
@@ -24,11 +27,14 @@ const LogsParams = Type.Object({
 const text = (value: string) => ({ content: [{ type: "text" as const, text: value }] });
 
 const validationText = (name: string, result: ExtValidation) =>
-	result.ok
-		? `${name}: valid (build ${result.build}; surfaces: ${
-				result.surfaces.map((surface) => `${surface.id} [${surface.slot}]`).join(", ") || "none"
-			})`
-		: `${name}: invalid\n${result.errors.map((error) => `- ${error}`).join("\n")}`;
+	[
+		result.ok
+			? `${name}: valid (build ${result.build}; surfaces: ${
+					result.surfaces.map((surface) => `${surface.id} [${surface.slot}]`).join(", ") || "none"
+				})`
+			: `${name}: invalid\n${result.errors.map((error) => `- ${error}`).join("\n")}`,
+		...(result.logs.length > 0 ? [`dry-run log:\n${result.logs.join("\n")}`] : []),
+	].join("\n");
 
 const infoText = (info: ExtensionInfo) =>
 	[
@@ -37,14 +43,14 @@ const infoText = (info: ExtensionInfo) =>
 	].join("\n");
 
 const logLine = (entry: ExtLogEntry) =>
-	`${new Date(entry.at).toISOString()} ${entry.at} ${entry.level} ${redactLaunchToken(entry.message)}`;
+	`${new Date(entry.at).toISOString()} ${entry.at} ${entry.level} ${entry.message}`;
 
 export const promptSection = ({ docsPath, host }: { docsPath: string; host: DevHost }) => {
-	const { user, projects } = host.roots();
+	const { user } = host.roots();
 	return [
 		"ThinkRail UI extensions: you can add panels, tabs, topbar items, tool cards, and chat message cards to this app.",
 		`- Read the authoring guide before writing one: ${docsPath}`,
-		`- Put an extension in ${user}/<name>/${projects.length > 0 ? ` or a trusted project's ${projects.join(", ")}/<name>/` : ""}.`,
+		`- Put an extension in ${user}/<name>/ or, in a trusted project, ${PROJECT_ROOT}/<name>/.`,
 		"- Check with ext_validate, apply with ext_reload, debug with ext_logs.",
 	].join("\n");
 };
@@ -56,7 +62,7 @@ export const createExtDevTools =
 			name: "ext_validate",
 			label: "Validate extension",
 			description:
-				"Dry-load a ThinkRail UI extension: checks extension.json, builds every view, and runs index.ts in a throwaway generation. Never swaps the running version. Returns actionable errors.",
+				"Dry-load a ThinkRail UI extension: checks extension.json, builds every view, and runs index.ts in a throwaway generation with a throwaway store. Never swaps the running version. Returns actionable errors and the dry run's tr.log lines.",
 			parameters: NameParams,
 			async execute(_id, { name }) {
 				const result = await host.validate(name);
@@ -69,11 +75,9 @@ export const createExtDevTools =
 			name: "ext_reload",
 			label: "Reload extension",
 			description:
-				"Validate a ThinkRail UI extension, then load it as the new running version (a new extension loads too). Returns status and errors; an invalid extension keeps its old version running.",
+				"Load a ThinkRail UI extension as the new running version (a new extension loads too). Returns status and errors; on failure the old version keeps running.",
 			parameters: NameParams,
 			async execute(_id, { name }) {
-				const validation = await host.validate(name);
-				if (!validation.ok) throw new Error(`${validationText(name, validation)}\nnot reloaded`);
 				const info = await host.reload(name);
 				const body = infoText(info);
 				if (info.status === "error") throw new Error(body);

@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -15,6 +23,15 @@ export default defineExtension((tr) => {
 	tr.publish("tag", "${tag}");
 	tr.log("hello ${tag}");
 	return () => trace.push("dispose:${tag}");
+});
+`;
+
+const storeHalf = `
+import { defineExtension } from "@thinkrail/ext";
+export default defineExtension(async (tr) => {
+	const count = (await tr.store.get("count")) ?? 0;
+	await tr.store.set("count", count + 1);
+	tr.log(\`count \${count}\`);
 });
 `;
 
@@ -131,6 +148,32 @@ describe("validate", () => {
 		await host.dispose();
 	});
 
+	test("isolates the dry run's store writes and log lines from the running version", async () => {
+		const dir = writeExtension();
+		writeFileSync(join(dir, "index.ts"), storeHalf);
+		const host = makeHost();
+		await host.rescan();
+		const storeFile = join(base, "ext-store", "hello.json");
+		const persisted = readFileSync(storeFile, "utf8");
+		expect(JSON.parse(persisted)).toEqual({ count: 1 });
+		const ring = host.logs("hello").length;
+
+		const result = await host.validate("hello");
+		expect(result).toMatchObject({ ok: true, logs: ["info count 1"] });
+		expect(readFileSync(storeFile, "utf8")).toBe(persisted);
+		expect(host.logs("hello")).toHaveLength(ring);
+		await host.dispose();
+	});
+
+	test("does not create a store for an undiscovered extension", async () => {
+		writeFileSync(join(writeExtension({ name: "fresh" }), "index.ts"), storeHalf);
+		const host = makeHost();
+		expect(await host.validate("fresh")).toMatchObject({ ok: true, logs: ["info count 0"] });
+		expect(existsSync(join(base, "ext-store", "fresh.json"))).toBe(false);
+		expect(host.logs("fresh")).toEqual([]);
+		await host.dispose();
+	});
+
 	test("names the searched directories for an unknown extension", async () => {
 		const host = makeHost();
 		const result = await host.validate("ghost");
@@ -144,7 +187,7 @@ describe("validate", () => {
 describe("watcher", () => {
 	test("maps changed paths to extension names and ignores node_modules", () => {
 		expect(changedExtension("hello/main.tsx")).toBe("hello");
-		expect(changedExtension("hello")).toBeUndefined();
+		expect(changedExtension("hello")).toBe("hello");
 		expect(changedExtension("hello/node_modules/x/index.js")).toBeUndefined();
 		expect(changedExtension("hello/.git/HEAD")).toBeUndefined();
 		expect(changedExtension(null)).toBeUndefined();
@@ -160,6 +203,11 @@ describe("watcher", () => {
 		expect(trace()).toContain("start:g2");
 
 		writeExtension({ name: "fresh", tag: "f1" });
+		await until(() => host.get("fresh")?.status === "active");
+
+		renameSync(join(userDir, "fresh"), join(base, "moved-out"));
+		await until(() => host.get("fresh") === undefined);
+		renameSync(join(base, "moved-out"), join(userDir, "fresh"));
 		await until(() => host.get("fresh")?.status === "active");
 
 		await host.dispose();
@@ -192,7 +240,7 @@ describe("agent dev tools", () => {
 		await host.dispose();
 	});
 
-	test("ext_reload refuses an invalid extension and keeps the old generation", async () => {
+	test("ext_reload reports a failed load and keeps the old generation running", async () => {
 		writeExtension();
 		const host = makeHost();
 		await host.rescan();
@@ -201,9 +249,13 @@ describe("agent dev tools", () => {
 		writeFileSync(join(userDir, "hello", "main.tsx"), "export default () => <div>{</div>;\n");
 		const failure = tool("ext_reload").execute({ name: "hello" });
 		await expect(failure).rejects.toThrow(
-			/hello: invalid\n- view build failed:\nmain\.tsx:1:\d+: [^\n]+\nnot reloaded/,
+			/hello: error \(generation \d+, build [^)]+\)\nerror:\nview build failed:\nmain\.tsx:1:\d+: /,
 		);
-		expect(host.get("hello")).toEqual(running);
+		expect(host.get("hello")).toMatchObject({
+			status: "error",
+			generation: running?.generation,
+			build: running?.build,
+		});
 		await expect(tool("ext_validate").execute({ name: "ghost" })).rejects.toThrow("not found");
 		await expect(tool("ext_logs").execute({ name: "ghost" })).rejects.toThrow("not loaded");
 		await host.dispose();
@@ -211,12 +263,18 @@ describe("agent dev tools", () => {
 
 	test("before_agent_start adds a short pointer to the guide and the tools", async () => {
 		const host = makeHost();
+		await host.setProjectRoots([
+			{ projectId: "a", path: join(base, "a") },
+			{ projectId: "b", path: join(base, "b") },
+		]);
 		const { handlers } = captureDevTools(host);
 		const event = { systemPromptOptions: { sections: {} as Record<string, string> } };
 		handlers.get("before_agent_start")?.(event);
 		const section = event.systemPromptOptions.sections["thinkrail-extensions"] ?? "";
 		expect(section).toContain("/docs/README.md");
-		expect(section).toContain(userDir);
+		expect(section).toContain(`${userDir}/<name>/`);
+		expect(section).toContain("<project>/.thinkrail/extensions/<name>/");
+		expect(section).not.toContain(join(base, "a"));
 		expect(section).toContain("ext_validate");
 		expect(section.split("\n").length).toBeLessThanOrEqual(5);
 		expect(EXT_SDK_GUIDE).toContain("# Writing a ThinkRail UI extension");

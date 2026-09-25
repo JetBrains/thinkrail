@@ -45,3 +45,16 @@ export const createExtStore = ({ dir, name }: { dir: string; name: string }): Ex
 		},
 	};
 };
+
+export const createDryStore = (live: ExtStore): ExtStore => {
+	const overlay = new Map<string, unknown>();
+	return {
+		async get<T>(key: string) {
+			return (overlay.has(key) ? overlay.get(key) : await live.get(key)) as T | undefined;
+		},
+		async set(key, value) {
+			const serialized = JSON.stringify(value);
+			overlay.set(key, serialized === undefined ? undefined : JSON.parse(serialized));
+		},
+	};
+};
