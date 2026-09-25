@@ -455,6 +455,26 @@ test("Pi's image-note echo keeps the optimistic turn; other suffixes still appen
 	expect(rt("other").turns.filter((turn) => turn.kind === "user")).toHaveLength(2);
 });
 
+test("Pi's skill echo with image notes replaces its slash command in place", () => {
+	const skillBlock =
+		'<skill name="foo" location="/repo/.pi/skills/foo/SKILL.md">\nDo foo.\n</skill>';
+	const note =
+		"[Image: original 3000x2000, displayed at 2000x1333. Multiply coordinates by 1.50 to map to original image.]";
+	const store = useAppStore.getState();
+	for (const [id, command, echo] of [
+		["skill-args", "/skill:foo args", `${skillBlock}\n\nargs\n\n${note}`],
+		["skill-bare", "/skill:foo", `${skillBlock}\n\n${note}`],
+	] as const) {
+		store.openChatSession("ws1", id, null, "medium");
+		store.appendUserMessage(id, command);
+		const optimistic = rt(id).turns[0];
+		store.handlePiEvent(userStart(echo), id);
+		const turns = rt(id).turns;
+		expect(turns).toHaveLength(1);
+		expect(turns[0]?.id).toBe(optimistic?.id);
+	}
+});
+
 test("an assistant turn is built (and replaced, not duplicated) from message_update partials", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");

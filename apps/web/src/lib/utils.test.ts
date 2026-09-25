@@ -12,6 +12,7 @@ import {
 	shallowEqualArrays,
 	stripFrontmatter,
 	tupleKey,
+	userText,
 } from "./utils";
 
 test("platform shortcuts use Ctrl on non-Apple platforms", () => {
@@ -150,4 +151,14 @@ test("shallowEqualArrays compares element-wise and treats absent as unequal", ()
 	expect(shallowEqualArrays([Number.NaN], [Number.NaN])).toBe(true);
 	expect(shallowEqualArrays(undefined, [])).toBe(false);
 	expect(shallowEqualArrays(undefined, undefined)).toBe(true);
+});
+
+test("userText drops only Pi's trailing image note lines", () => {
+	const notes =
+		"[Image: original 3000x2000, displayed at 2000x1333. Multiply coordinates by 1.50 to map to original image.]\n[Image converted from image/bmp to image/png.]\n[Image omitted: could not be resized below the inline image size limit.]";
+	expect(userText(`look\n\n${notes}`)).toBe("look");
+	expect(userText([{ type: "text", text: `look\n\n${notes}` }])).toBe("look");
+	expect(userText("look\n\nand something else")).toBe("look\n\nand something else");
+	expect(userText("look\n\n[Image 1]")).toBe("look\n\n[Image 1]");
+	expect(userText(`look\n\n${notes}\nmore`)).toBe(`look\n\n${notes}\nmore`);
 });

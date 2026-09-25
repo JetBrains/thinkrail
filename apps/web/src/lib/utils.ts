@@ -78,22 +78,25 @@ export function randomId(prefix = "id"): string {
 	return `${prefix}-${value}`;
 }
 
-export function userText(content: UserMessage["content"]): string {
-	if (typeof content === "string") return content;
-	return content
-		.filter((c) => c.type === "text")
-		.map((c) => c.text)
-		.join("");
-}
+const PI_IMAGE_NOTE =
+	/^\[Image(?: converted from \S+ to \S+\.| omitted: [^\]\n]+\.|: original \d+x\d+, displayed at \d+x\d+\. [^\]\n]+)\]$/;
 
-const PI_IMAGE_NOTE = /^\[Image[ :][^\n]*\]$/;
-
-export const isImageNoteEcho = ({ sent, delivered }: { sent: string; delivered: string }) => {
-	const prefix = `${sent}\n\n`;
-	if (!delivered.startsWith(prefix)) return false;
-	const notes = delivered.slice(prefix.length).split("\n");
-	return notes.every((line) => PI_IMAGE_NOTE.test(line));
+const stripImageNotes = (text: string) => {
+	const split = text.lastIndexOf("\n\n");
+	if (split === -1) return text;
+	const notes = text.slice(split + 2).split("\n");
+	return notes.every((line) => PI_IMAGE_NOTE.test(line)) ? text.slice(0, split) : text;
 };
+
+export const userText = (content: UserMessage["content"]) =>
+	stripImageNotes(
+		typeof content === "string"
+			? content
+			: content
+					.filter((c) => c.type === "text")
+					.map((c) => c.text)
+					.join(""),
+	);
 
 export function isMarkdownPath(path: string): boolean {
 	return /\.(md|markdown)$/i.test(path);
