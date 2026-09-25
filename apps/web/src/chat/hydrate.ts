@@ -2,6 +2,7 @@ import type {
 	AgentSettlement,
 	AskUserAnswersDetails,
 	TranscriptMessage,
+	WireCustomMessage,
 } from "@thinkrail/contracts";
 import {
 	customMessageText,
@@ -15,6 +16,15 @@ import {
 import { userText } from "../lib";
 import { assistantFailureText } from "./assistantFailure";
 import type { ChatTurn, ToolResultState } from "./types";
+
+export const customTurn = (message: WireCustomMessage, id: string): ChatTurn => ({
+	kind: "custom",
+	id,
+	customType: message.customType,
+	text: customMessageText(message.content),
+	details: message.details,
+	timestamp: message.timestamp,
+});
 
 export interface HydratedRuntime {
 	turns: ChatTurn[];
@@ -91,14 +101,7 @@ export function messagesToRuntime(
 				text: customMessageText(message.content),
 			});
 		} else if (isGenericCustomMessage(message)) {
-			turns.push({
-				kind: "custom",
-				id: transcriptTurnId(message, index, options),
-				customType: message.customType,
-				text: customMessageText(message.content),
-				details: message.details,
-				timestamp: message.timestamp,
-			});
+			turns.push(customTurn(message, transcriptTurnId(message, index, options)));
 		}
 		turnIdByMessageIndex.push(turnId);
 	}

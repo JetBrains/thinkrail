@@ -283,15 +283,16 @@ the **capability** registers with the pi session server-side (custom tool or pi 
   primary card renders expanded once complete, e.g. `visualize`). Read through the single
   **`resolveProminence`** seam — where a per-user override map (settings) can plug in later.
 
-Unregistered tools fall back to `DefaultToolRenderer`. `registerToolRenderer` returns a disposer that
-restores whatever registration the name had before (runtime registrants, such as extension `toolCard`
+Unregistered tools fall back to `DefaultToolRenderer`. Registrations per name form a stack
+(`createStackRegistry`): the newest live one wins, and each disposer removes only its own entry, in any
+order, so a disposed renderer never comes back (runtime registrants, such as extension `toolCard`
 surfaces, come and go); `ToolRendererBody` reads through `useToolRenderer`, so a mounted card switches
 renderer without a remount.
 
 **Custom-message renderers.** `rendererRegistry.ts` holds `registerMessageRenderer(customType, renderer)`
 (same disposer rule) and one registry snapshot (`useRendererRegistry`) whose identity changes on every tool or
 message registration change. Every `display: true` custom message that no built-in card claims becomes a
-`custom` turn (in `hydrate.ts` and in the live `message_end` fold); `deriveRows` keeps a `custom` turn only
+`custom` turn (one `customTurn` builder, used by `hydrate.ts` and the live `message_end` fold); `deriveRows` keeps a `custom` turn only
 when its `customType` is in the snapshot's `messageTypes`, and `ChatView` re-derives rows when the snapshot
 changes. An unregistered type therefore renders nothing and shifts no divider. `custom` turns take no
 `turnIdByMessageIndex` slot, so history jump anchors are unchanged.

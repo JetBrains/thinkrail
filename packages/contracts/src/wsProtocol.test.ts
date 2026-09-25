@@ -13,6 +13,7 @@ import {
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	redactLaunchToken,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
@@ -156,4 +157,14 @@ test("UI extensions advance the protocol and name their methods and pushes", () 
 	expect(extAssetPath({ name: "demo", build: "abc", surfaceId: "main", kind: "css" })).toBe(
 		"/ext/demo/abc/main.css",
 	);
+});
+
+test("redactLaunchToken strips the launch token from URLs in free text", () => {
+	const text =
+		"Failed to fetch http://127.0.0.1:4000/ext/a/0123/v.js?token=s3cr3t-x\n  at (http://h/x.js?a=1&token=abc:10:2)";
+	const redacted = redactLaunchToken(text);
+	expect(redacted).not.toContain("s3cr3t");
+	expect(redacted).not.toContain("abc:10");
+	expect(redacted).toContain("v.js?token=redacted");
+	expect(redacted).toContain("a=1&token=redacted");
 });

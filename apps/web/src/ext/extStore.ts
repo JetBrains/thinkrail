@@ -1,7 +1,7 @@
 import type { ExtensionInfo, ExtensionSurface, SurfaceSlot } from "@thinkrail/contracts";
 import { create } from "zustand";
 
-export type ExtHydration = "idle" | "ready" | "unsupported";
+export type ExtHydration = "idle" | "ready" | "failed" | "unsupported";
 
 export interface ExtState {
 	hydration: ExtHydration;
@@ -10,6 +10,7 @@ export interface ExtState {
 	params: Record<string, Record<string, string>>;
 	install: (list: readonly ExtensionInfo[], snapshot: Record<string, unknown>) => void;
 	markUnsupported: () => void;
+	markFailed: () => void;
 	applyChanged: (info: ExtensionInfo) => void;
 	applyRemoved: (name: string) => void;
 	applyChannel: (key: string, value: unknown) => void;
@@ -40,6 +41,7 @@ export const useExtStore = create<ExtState>((set) => ({
 			channels: { ...snapshot },
 		}),
 	markUnsupported: () => set({ hydration: "unsupported", extensions: {}, channels: {} }),
+	markFailed: () => set({ hydration: "failed" }),
 	applyChanged: (info) =>
 		set((state) => ({ extensions: { ...state.extensions, [info.name]: info } })),
 	applyRemoved: (name) =>

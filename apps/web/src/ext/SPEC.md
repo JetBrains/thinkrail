@@ -21,7 +21,8 @@ a slot sits; this module decides what renders there.
 `extStore.ts` is a separate Zustand store (`useExtStore`), not a slice of `appStore`: nothing outside this
 module reads extension state, and `appStore` is already far over the file budget.
 
-- `hydration`: `idle` until the first `ext.list` + `ext.snapshot` pair of a connection installs; `unsupported`
+- `hydration`: `idle` until the first `ext.list` + `ext.snapshot` pair of a connection installs; `failed`
+  when that read fails (pushes still apply, surfaces with no pushed extension show an error); `unsupported`
   when the host's protocol is older than `EXT_PROTOCOL_VERSION` (every extension and channel clears).
 - `extensions` by name, `channels` by full key (`<name>:<key>`), `params` by `<name>:<surface>` (the last
   `openSurface` params, in memory only).
@@ -33,8 +34,8 @@ module reads extension state, and `appStore` is already far over the file budget
 `sync.ts` (`initExtensions`, called once from `main.tsx` right after `initTransport`) subscribes the four
 `ext.*` pushes, then hydrates on every `server.welcome` (the store's `welcomeGeneration`). During a
 hydration read, pushes are buffered and replayed after the snapshot installs, and a superseded read is
-ignored, so a push that races the read is never reverted. A failed read replays its buffer and leaves
-`hydration` as it was; the next welcome retries.
+ignored, so a push that races the read is never reverted. A failed read replays its buffer and marks
+`hydration` `failed`; the next welcome retries.
 
 ## Runtime global
 
@@ -62,9 +63,16 @@ every icon in the eager vendor chunk the rest of the app shares.
   `import(/* @vite-ignore */ url)`; imports are cached per URL. The build id is content-hashed, so a new
   generation is a new URL. The previous component keeps rendering until the new one resolves, so a reload
   swaps without a blank frame and without a page reload.
-- The surface stylesheet is a ref-counted `<link>` per URL, retained only for the build on screen.
-- A reload that failed (`status: "error"` with a build still present) keeps the old view and shows a
-  compact banner with the error.
+- The surface stylesheet is a ref-counted `<link>` per URL. A new build's stylesheet is retained and must
+  load (or fail) before the component swaps, so the new view never paints unstyled; the old link is
+  released only after the swap.
+- A reload that failed (`status: "error"` with a build still present), or a new build that fails to import
+  in the browser, keeps the old view and shows a compact banner with the error. An import failure is
+  reported through `ext.reportError` once per build.
+- `layout` is `fill` (tab, panel), `inline` (tool card, message: compact error card), or `status` (topbar:
+  errors collapse to an icon chip with a tooltip).
+- Error text is passed through contracts' `redactLaunchToken` before it is shown, reported, or put into an
+  **Ask agent to fix** draft: module URLs carry the launch token.
 - Each mount has its own `SurfaceErrorBoundary`: a render crash reports through `ext.reportError` (so
   `ext_logs` sees it), shows the error with **Ask agent to fix** and **Try again**, and resets when the
   build changes. **Ask agent to fix** opens a new chat in the active workspace with a draft that names
@@ -76,7 +84,7 @@ A surface renders inside `SurfaceContext` (`{ name, surfaceId }`), so hooks are 
 extension: `useChannel(key)` reads `<name>:<key>` from the store (the connection snapshot, then live
 `ext.channel` pushes); `useAction(id)` returns a stable function that sends `ext.action` with the current
 host ids as `ctx`. `useHostContext()` is the active project/workspace, the focused chat's session id
-(attention center tab), and the theme appearance; it re-renders when any of them changes.
+(attention center tab, else the workspace's newest chat tab), and the theme appearance; it re-renders when any of them changes.
 `openSurface(name, surfaceId, params?)` opens a `tab` surface as a center tab or reveals a `panel`
 surface through the store's layout intents in the active workspace.
 
@@ -91,7 +99,8 @@ surface through the store's layout intents in the active workspace.
 | `message` | `rendererSlots.tsx` | chat's `registerMessageRenderer(customType)` |
 
 `toolCard` and `message` registrations follow the store: added when an extension with a build declares
-them, disposed when it disappears. Disposing restores whatever renderer the name had before. Chat
+them, disposed when it disappears. Two surfaces claiming one name stack; removal in any order falls back to
+the newest remaining one, then the built-in or default. Chat
 re-renders through its renderer-registry version. `ExtensionMenu` (center group actions) lists every
 `tab` and `panel` surface and opens it.
 

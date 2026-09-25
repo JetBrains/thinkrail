@@ -1,10 +1,17 @@
 import type { ExtActionContext, HostContext } from "@thinkrail/contracts";
 import { useMemo, useSyncExternalStore } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { selectActiveWorkspaceProjectId, selectAttentionCenterTab, useAppStore } from "../store";
+import {
+	selectActiveWorkspaceProjectId,
+	selectAttentionCenterTab,
+	selectHistoryTarget,
+	useAppStore,
+} from "../store";
 import { onThemeSwap } from "../themes";
 
-type AppState = ReturnType<typeof useAppStore.getState>;
+type HostIdsState = Parameters<typeof selectActiveWorkspaceProjectId>[0] &
+	Parameters<typeof selectAttentionCenterTab>[0] &
+	Parameters<typeof selectHistoryTarget>[0];
 
 const readAppearance = (): HostContext["theme"] =>
 	typeof document !== "undefined" && document.documentElement.dataset.themeAppearance === "light"
@@ -14,14 +21,15 @@ const readAppearance = (): HostContext["theme"] =>
 export const useThemeAppearance = () =>
 	useSyncExternalStore(onThemeSwap, readAppearance, readAppearance);
 
-export const selectHostIds = (state: AppState): ExtActionContext => {
+export const selectHostIds = (state: HostIdsState): ExtActionContext => {
 	const workspaceId = state.activeWorkspaceId;
 	const projectId = selectActiveWorkspaceProjectId(state);
 	const tab = workspaceId ? selectAttentionCenterTab(state, workspaceId) : null;
+	const sessionId = tab?.kind === "chat" ? tab.sessionId : selectHistoryTarget(state)?.sessionId;
 	return {
 		...(projectId ? { projectId } : {}),
 		...(workspaceId ? { workspaceId } : {}),
-		...(tab?.kind === "chat" ? { sessionId: tab.sessionId } : {}),
+		...(sessionId ? { sessionId } : {}),
 	};
 };
 

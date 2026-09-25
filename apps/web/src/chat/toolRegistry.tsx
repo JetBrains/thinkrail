@@ -1,5 +1,9 @@
 import { type ReactNode, useSyncExternalStore } from "react";
-import { bumpRendererRegistry, subscribeRendererRegistry } from "./rendererRegistry";
+import {
+	bumpRendererRegistry,
+	createStackRegistry,
+	subscribeRendererRegistry,
+} from "./rendererRegistry";
 import { parseToolResultContent, toolValueText } from "./toolResultContent";
 import type { ToolStatus } from "./types";
 
@@ -33,23 +37,14 @@ interface ToolRegistration extends ToolRegistrationOptions {
 	renderer: ToolRenderer;
 }
 
-const registry = new Map<string, ToolRegistration>();
+const registry = createStackRegistry<ToolRegistration>(bumpRendererRegistry);
 
 export function registerToolRenderer(
 	toolName: string,
 	renderer: ToolRenderer,
 	options: ToolRegistrationOptions = {},
 ): () => void {
-	const previous = registry.get(toolName);
-	const registration: ToolRegistration = { renderer, ...options };
-	registry.set(toolName, registration);
-	bumpRendererRegistry();
-	return () => {
-		if (registry.get(toolName) !== registration) return;
-		if (previous) registry.set(toolName, previous);
-		else registry.delete(toolName);
-		bumpRendererRegistry();
-	};
+	return registry.register(toolName, { renderer, ...options });
 }
 
 export function getToolRenderer(toolName: string): ToolRenderer {

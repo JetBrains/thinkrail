@@ -443,7 +443,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `observe`, passes trusted projects as roots on boot and on every project update, and disposes it on
   stop. It also owns the extension wire: handlers `ext.list`, `ext.snapshot`, `ext.action`, `ext.reload`,
   `ext.reportError` (joined into the registry through `setExtHandlers`, so `handlers.ts` holds no ext
-  code), broadcast pushes `ext.changed`, `ext.removed`, `ext.channel`, `ext.channelsDropped` (a socket
+  code; the reported text passes `redactLaunchToken` before it reaches the extension log), broadcast pushes `ext.changed`, `ext.removed`, `ext.channel`, `ext.channelsDropped` (a socket
   subscribes only when its client protocol is at least `EXT_PROTOCOL_VERSION`), and the route
   `GET /ext/<name>/<build>/<surface>.js|.css` behind launch auth. The route answers
   `Cache-Control: private, max-age=31536000, immutable` because `<build>` is a content hash; a stale or

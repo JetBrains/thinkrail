@@ -23,14 +23,19 @@ const info = (generation: number): ExtensionInfo => ({
 
 const fakeTransport = () => {
 	const handlers = new Map<string, (data: unknown) => void>();
-	const pending: { method: WsMethodName; resolve: (value: unknown) => void }[] = [];
+	const pending: {
+		method: WsMethodName;
+		resolve: (value: unknown) => void;
+		reject: (error: Error) => void;
+	}[] = [];
+	const take = (method: WsMethodName) => {
+		const index = pending.findIndex((entry) => entry.method === method);
+		return pending.splice(index, 1)[0];
+	};
 	return {
 		push: (channel: string, data: unknown) => handlers.get(channel)?.(data),
-		settle: (method: WsMethodName, value: unknown) => {
-			const index = pending.findIndex((entry) => entry.method === method);
-			const [entry] = pending.splice(index, 1);
-			entry?.resolve(value);
-		},
+		settle: (method: WsMethodName, value: unknown) => take(method)?.resolve(value),
+		fail: (method: WsMethodName) => take(method)?.reject(new Error(`${method} failed`)),
 		transport: {
 			subscribe: (channel: string, handler: (data: unknown) => void) => {
 				handlers.set(channel, handler);
@@ -39,8 +44,8 @@ const fakeTransport = () => {
 				};
 			},
 			request: <M extends WsMethodName>(method: M) =>
-				new Promise<WsResult<M>>((resolve) =>
-					pending.push({ method, resolve: (value) => resolve(value as WsResult<M>) }),
+				new Promise<WsResult<M>>((resolve, reject) =>
+					pending.push({ method, resolve: (value) => resolve(value as WsResult<M>), reject }),
 				),
 		} satisfies SyncTransport,
 	};
@@ -85,4 +90,17 @@ test("an older host marks extensions unsupported without a request", () => {
 	stop = startExtensionSync(fake.transport);
 	welcome(EXT_PROTOCOL_VERSION - 1);
 	expect(useExtStore.getState().hydration).toBe("unsupported");
+});
+
+test("a failed hydration read leaves idle and still applies buffered pushes", async () => {
+	const fake = fakeTransport();
+	stop = startExtensionSync(fake.transport);
+	welcome(EXT_PROTOCOL_VERSION);
+	fake.push(WS_CHANNELS.extChanged, info(3));
+	fake.fail("ext.list");
+	fake.settle("ext.snapshot", {});
+	await Bun.sleep(0);
+	const state = useExtStore.getState();
+	expect(state.hydration).toBe("failed");
+	expect(state.extensions.demo?.generation).toBe(3);
 });

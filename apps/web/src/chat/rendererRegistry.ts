@@ -15,7 +15,30 @@ export interface RendererRegistrySnapshot {
 }
 
 const listeners = new Set<() => void>();
-const messageRenderers = new Map<string, MessageRenderer>();
+
+export const createStackRegistry = <T>(onChange: () => void) => {
+	const stacks = new Map<string, { entry: T }[]>();
+	const register = (key: string, entry: T) => {
+		const slot = { entry };
+		stacks.set(key, [...(stacks.get(key) ?? []), slot]);
+		onChange();
+		return () => {
+			const stack = stacks.get(key);
+			if (!stack?.includes(slot)) return;
+			const rest = stack.filter((candidate) => candidate !== slot);
+			if (rest.length > 0) stacks.set(key, rest);
+			else stacks.delete(key);
+			onChange();
+		};
+	};
+	return {
+		register,
+		get: (key: string) => stacks.get(key)?.at(-1)?.entry,
+		keys: () => stacks.keys(),
+	};
+};
+
+const messageRenderers = createStackRegistry<MessageRenderer>(() => bumpRendererRegistry());
 let snapshot: RendererRegistrySnapshot = { version: 0, messageTypes: new Set() };
 
 export const bumpRendererRegistry = () => {
@@ -35,19 +58,12 @@ const getSnapshot = () => snapshot;
 export const useRendererRegistry = () =>
 	useSyncExternalStore(subscribeRendererRegistry, getSnapshot, getSnapshot);
 
-export const registerMessageRenderer = (customType: string, renderer: MessageRenderer) => {
-	const previous = messageRenderers.get(customType);
-	messageRenderers.set(customType, renderer);
-	bumpRendererRegistry();
-	return () => {
-		if (messageRenderers.get(customType) !== renderer) return;
-		if (previous) messageRenderers.set(customType, previous);
-		else messageRenderers.delete(customType);
-		bumpRendererRegistry();
-	};
-};
+export const registerMessageRenderer = (customType: string, renderer: MessageRenderer) =>
+	messageRenderers.register(customType, renderer);
 
-const readMessageRenderer = (customType: string) => () => messageRenderers.get(customType);
+export const getMessageRenderer = (customType: string) => messageRenderers.get(customType);
+
+const readMessageRenderer = (customType: string) => () => getMessageRenderer(customType);
 
 export const useMessageRenderer = (customType: string) =>
 	useSyncExternalStore(

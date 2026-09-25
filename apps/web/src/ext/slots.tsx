@@ -25,7 +25,7 @@ export const ExtensionStatusItems = () => {
 					data-testid="ext-status-item"
 					className="flex max-w-[16rem] items-center overflow-hidden tr-text-ui text-text-muted"
 				>
-					<ExtensionSurface name={extension.name} surfaceId={surface.id} layout="inline" />
+					<ExtensionSurface name={extension.name} surfaceId={surface.id} layout="status" />
 				</div>
 			))}
 		</div>

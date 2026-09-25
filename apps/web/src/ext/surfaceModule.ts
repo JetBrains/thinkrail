@@ -42,25 +42,39 @@ export const loadSurfaceModule = (asset: SurfaceAsset) => {
 	return pending;
 };
 
-const stylesheets = new Map<string, { link: HTMLLinkElement; users: number }>();
+interface StylesheetEntry {
+	link: HTMLLinkElement;
+	users: number;
+	ready: Promise<void>;
+}
+
+const stylesheets = new Map<string, StylesheetEntry>();
+
+const appendStylesheet = (url: string): StylesheetEntry => {
+	const link = document.createElement("link");
+	link.rel = "stylesheet";
+	link.href = url;
+	link.dataset.extStylesheet = "";
+	const ready = new Promise<void>((resolve) => {
+		link.addEventListener("load", () => resolve(), { once: true });
+		link.addEventListener("error", () => resolve(), { once: true });
+	});
+	document.head.append(link);
+	return { link, users: 0, ready };
+};
 
 export const retainStylesheet = (url: string) => {
-	const existing = stylesheets.get(url);
-	if (existing) existing.users += 1;
-	else {
-		const link = document.createElement("link");
-		link.rel = "stylesheet";
-		link.href = url;
-		link.dataset.extStylesheet = "";
-		document.head.append(link);
-		stylesheets.set(url, { link, users: 1 });
-	}
-	return () => {
-		const entry = stylesheets.get(url);
-		if (!entry) return;
+	const entry = stylesheets.get(url) ?? appendStylesheet(url);
+	stylesheets.set(url, entry);
+	entry.users += 1;
+	let released = false;
+	const release = () => {
+		if (released) return;
+		released = true;
 		entry.users -= 1;
 		if (entry.users > 0) return;
 		entry.link.remove();
 		stylesheets.delete(url);
 	};
+	return { ready: entry.ready, release };
 };

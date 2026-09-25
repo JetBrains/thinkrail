@@ -1,8 +1,10 @@
 import { join } from "node:path";
 import {
+	EXT_NAME_PATTERN,
 	type ExtActionContext,
 	type ExtWsMethodMap,
 	type Project,
+	redactLaunchToken,
 	WS_CHANNELS,
 	type WsChannel,
 } from "@thinkrail/contracts";
@@ -20,7 +22,9 @@ import { setExtHandlers } from "./handlers";
 
 const log = logger("ext");
 
-const ASSET_PATH = /^\/ext\/([a-z][a-z0-9-]*)\/([0-9a-f]{16})\/([a-z][a-z0-9-]*\.(?:js|css))$/;
+const ASSET_PATH = new RegExp(
+	`^/ext/(${EXT_NAME_PATTERN})/([0-9a-f]{16})/(${EXT_NAME_PATTERN}\\.(?:js|css))$`,
+);
 const IMMUTABLE = "private, max-age=31536000, immutable";
 
 type ExtHandlers = Parameters<typeof setExtHandlers>[0];
@@ -74,7 +78,7 @@ const extHandlers = (extHost: ExtHost) =>
 			extHost.recordError(
 				name,
 				`view ${requireString(p, "surfaceId")}`,
-				requireString(p, "message"),
+				redactLaunchToken(requireString(p, "message")),
 			);
 			return { ok: true } as const;
 		},

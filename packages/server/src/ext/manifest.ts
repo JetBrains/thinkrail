@@ -1,12 +1,17 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { type ExtensionSurface, SURFACE_SLOTS, type SurfaceSlot } from "@thinkrail/contracts";
+import {
+	EXT_NAME_PATTERN,
+	type ExtensionSurface,
+	SURFACE_SLOTS,
+	type SurfaceSlot,
+} from "@thinkrail/contracts";
 import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
 import { errorMessage } from "./util";
 
-const NAME_PATTERN = "^[a-z][a-z0-9-]*$";
+const NAME_PATTERN = `^${EXT_NAME_PATTERN}$`;
 
 const ManifestSchema = Type.Object({
 	name: Type.String({ pattern: NAME_PATTERN }),

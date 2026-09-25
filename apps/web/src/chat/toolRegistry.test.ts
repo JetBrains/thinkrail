@@ -114,3 +114,14 @@ describe("toolRegistry runtime registrations", () => {
 		expect(getToolRenderer("ephemeral-tool")).toBe(DefaultToolRenderer);
 	});
 });
+
+it("tool renderers fall back to the default after non-LIFO disposal", () => {
+	const a = () => null;
+	const b = () => null;
+	const disposeA = registerToolRenderer("stack-tool", a);
+	const disposeB = registerToolRenderer("stack-tool", b);
+	disposeA();
+	expect(getToolRenderer("stack-tool")).toBe(b);
+	disposeB();
+	expect(getToolRenderer("stack-tool")).toBe(DefaultToolRenderer);
+});

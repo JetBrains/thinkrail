@@ -50,7 +50,7 @@ import { create } from "zustand";
 import type { LoginState } from "../auth";
 import { assistantFailureText } from "../chat/assistantFailure";
 import type { ChatMessageOrder } from "../chat/chatPreferences";
-import type { HydratedRuntime } from "../chat/hydrate";
+import { customTurn, type HydratedRuntime } from "../chat/hydrate";
 import type {
 	ChatAttachment,
 	ChatTurn,
@@ -620,20 +620,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				};
 			}
 			if (isGenericCustomMessage(event.message)) {
-				return {
-					...rt,
-					turns: [
-						...rt.turns,
-						{
-							kind: "custom",
-							id: crypto.randomUUID(),
-							customType: event.message.customType,
-							text: customMessageText(event.message.content),
-							details: event.message.details,
-							timestamp: event.message.timestamp,
-						},
-					],
-				};
+				return { ...rt, turns: [...rt.turns, customTurn(event.message, crypto.randomUUID())] };
 			}
 			if (event.message.role !== "assistant" || !rt.currentAssistantId) return rt;
 			const id = rt.currentAssistantId;

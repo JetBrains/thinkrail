@@ -66,7 +66,7 @@ export const startExtensionSync = (transport: SyncTransport) => {
 		buffered = [];
 		Promise.all([transport.request("ext.list", {}), transport.request("ext.snapshot", {})])
 			.then(([list, snapshot]) => settle(current, () => ext().install(list, snapshot)))
-			.catch(() => settle(current));
+			.catch(() => settle(current, () => ext().markFailed()));
 	};
 
 	const stopWelcome = useAppStore.subscribe((state, previous) => {

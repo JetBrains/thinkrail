@@ -120,7 +120,8 @@ export interface ExtSurfaceProps {
 	message?: ExtMessageView;
 }
 
-const EXT_NAME = /^[a-z][a-z0-9-]*$/;
+export const EXT_NAME_PATTERN = "[a-z][a-z0-9-]*";
+const EXT_NAME = new RegExp(`^${EXT_NAME_PATTERN}$`);
 const EXT_TOOL_PREFIX = "ext:";
 
 export const extToolId = ({ name, surfaceId }: { name: string; surfaceId: string }) =>

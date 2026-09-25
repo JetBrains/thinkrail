@@ -30,6 +30,7 @@ export {
 } from "./domain";
 export type * from "./ext";
 export {
+	EXT_NAME_PATTERN,
 	EXT_RUNTIME_GLOBAL,
 	EXT_RUNTIME_MODULES,
 	EXT_VIEW_EXPORTS,
