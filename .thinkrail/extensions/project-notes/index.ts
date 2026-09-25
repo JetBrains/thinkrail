@@ -33,6 +33,17 @@ export default defineExtension((tr) => {
 		return loaded;
 	};
 
+	const queues = new Map<string, Promise<unknown>>();
+
+	const serial = <T>(projectId: string, run: () => Promise<T>) => {
+		const next = (queues.get(projectId) ?? Promise.resolve()).then(run, run);
+		queues.set(
+			projectId,
+			next.catch(() => undefined),
+		);
+		return next;
+	};
+
 	const commit = async (projectId: string, notes: Note[]) => {
 		cache.set(projectId, notes);
 		const key = channelKey(projectId);
@@ -51,7 +62,7 @@ export default defineExtension((tr) => {
 		return inside[0]?.projectId;
 	};
 
-	const save = async (
+	const saveNow = async (
 		projectId: string,
 		draft: NoteDraft,
 		source: NoteSource,
@@ -88,12 +99,16 @@ export default defineExtension((tr) => {
 		return { ok: true, note };
 	};
 
-	const update = async (projectId: string, id: string, change: (notes: Note[]) => Note[]) => {
-		const notes = await load(projectId);
-		if (!notes.some((note) => note.id === id)) return { ok: false };
-		await commit(projectId, change(notes));
-		return { ok: true };
-	};
+	const save = (projectId: string, draft: NoteDraft, source: NoteSource) =>
+		serial(projectId, () => saveNow(projectId, draft, source));
+
+	const update = (projectId: string, id: string, change: (notes: Note[]) => Note[]) =>
+		serial(projectId, async () => {
+			const notes = await load(projectId);
+			if (!notes.some((note) => note.id === id)) return { ok: false };
+			await commit(projectId, change(notes));
+			return { ok: true };
+		});
 
 	tr.pi(
 		notesPi({

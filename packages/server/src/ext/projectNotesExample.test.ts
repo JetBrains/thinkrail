@@ -186,6 +186,35 @@ describe("project-notes example extension", () => {
 		}
 	});
 
+	test("overlapping writes to one project all land, cold cache and warm", async () => {
+		const host = await load();
+		try {
+			const cold = await Promise.all([
+				save(host, { title: "", body: "a" }),
+				save(host, { title: "", body: "b" }),
+			]);
+			expect(cold).toMatchObject([{ ok: true }, { ok: true }]);
+			host.setWatched("c1", [`${EXT}:notes:p1`]);
+			await Bun.sleep(20);
+			const [first] = channel(host, "p1") ?? [];
+			await Promise.all([
+				save(host, { title: "", body: "c" }),
+				act(host, "toggle", { id: first?.id }),
+				save(host, { title: "", body: "d" }),
+			]);
+			expect(channel(host, "p1")?.map((note) => [note.body, note.enabled])).toEqual([
+				["a", false],
+				["b", true],
+				["c", true],
+				["d", true],
+			]);
+			const stored = JSON.parse(readFileSync(join(base, "store", `${EXT}.json`), "utf8"));
+			expect(stored["notes:p1"]).toHaveLength(4);
+		} finally {
+			await host.dispose();
+		}
+	});
+
 	test("before_agent_start owns the project_notes section, maps the session to its project, and caps it", async () => {
 		const host = await load();
 		try {

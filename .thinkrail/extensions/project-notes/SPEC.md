@@ -21,7 +21,8 @@ and `@thinkrail/ext/view`; the SDK README's reference for **system-prompt inject
 `Note { id, title, body, enabled, source: user | agent, createdAt, updatedAt }`. `body` is markdown, 1–4,000
 characters after trimming; `title` is optional, at most 80 (an empty title shows the body's first line). A
 project keeps at most 50 notes, in creation order. The list lives in `tr.store` under `notes:<projectId>`;
-an empty list deletes the key.
+an empty list deletes the key. Every write (save, toggle, remove, agent add) runs through one queue per
+project, so overlapping writes, such as parallel `add_project_note` calls in one turn, never drop a note.
 
 ## Injection
 
@@ -82,3 +83,7 @@ throws (tool error) outside a project or on a validation error.
 - The token count is `chars/4`.
 - No reordering: the oldest notes win when the cap is reached.
 - A subagent session does not get the notes (`tr.pi` covers top-level chat sessions only).
+- Agent notes are saved enabled, with no confirmation. Text the agent reads (a repo file, tool output, a
+  web page) can lead it to pin an instruction that then reaches every later run's system prompt. Chosen
+  trade-off: the user asked the agent to remember it, so a disabled note would silently not work. The
+  signals are the tool card and the "added by agent" tag; the user turns it off or deletes it in the panel.
