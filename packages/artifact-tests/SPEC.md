@@ -28,6 +28,10 @@ It consumes finished artifacts; it does not build the application or supply appl
 - **Forbidden:** application or SDK source internals, Electrobun imports/dependency, a fake host or agent,
   production packages importing this package, or real-user state mutation during tests.
 
+Every host environment carries the fixed `ARTIFACT_LAUNCH_TOKEN` as `THINKRAIL_LAUNCH_TOKEN`, replacing any
+inherited value, so probes can open `/ws` and the desktop smoke can expect the token in the window URL.
+The `token` query name is asserted as a literal: these probes test the shipped URL contract as a black box.
+
 The root smoke commands execute the CLI, desktop and installer entrypoints directly. Browser E2E
 orchestration stays in [[module-browser-e2e]] and imports the pure locator through this package's barrel.
 Unit tests and strict typechecking use ordinary workspace Turbo tasks; there is no package build step,

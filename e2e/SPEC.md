@@ -225,8 +225,10 @@ still valid.
 Every host the harness starts (source, restart, binary, desktop) receives the lane's deterministic
 `THINKRAIL_LAUNCH_TOKEN` (`E2E_LAUNCH_TOKEN`). Browser contexts get it through the Playwright
 `storageState` the web reads (`fixtures/launchAuth.ts`), node-side wire clients through `withE2eLaunchToken`,
-and in-page sockets read it from `localStorage`. `launch-auth.spec.ts` owns the refusal and paste-token
-coverage and opts out of the seeded state.
+and in-page sockets read it from `localStorage`. `E2E_LAUNCH_TOKEN_STORAGE_KEY` mirrors the web's private
+`LAUNCH_TOKEN_STORAGE_KEY` (`apps/web/src/transport/launchToken.ts`) because e2e may not import web internals;
+`launch-auth.spec.ts` asserts the stored key, so drift fails there. That spec owns the refusal, foreign-Origin
+and paste-token coverage and opts out of the seeded state.
 
 Different worktrees may run concurrently. Two complete E2E invocations in one worktree remain sequential;
 the lane ids are deliberately stable across runs so interrupted state is reclaimed rather than leaked.

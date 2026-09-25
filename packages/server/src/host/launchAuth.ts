@@ -78,3 +78,11 @@ export const checkLaunchAuth = (req: Request, url: URL, policy: LaunchAuthPolicy
 		? ("allowed" as const)
 		: ("bad-token" as const);
 };
+
+export const launchAuthResponse = (req: Request, url: URL, policy: LaunchAuthPolicy) => {
+	if (!isLaunchProtectedPath(url.pathname)) return null;
+	const verdict = checkLaunchAuth(req, url, policy);
+	if (verdict === "foreign-origin") return new Response("forbidden origin", { status: 403 });
+	if (verdict === "bad-token") return new Response("unauthorized", { status: 401 });
+	return url.pathname === LAUNCH_AUTH_PATH ? new Response(null, { status: 204 }) : null;
+};

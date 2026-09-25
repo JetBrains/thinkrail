@@ -4,19 +4,31 @@ import { randomId } from "../lib";
 import { storeLaunchToken, withLaunchToken } from "./launchToken";
 import { RequestError } from "./requestError";
 
-export type ConnectionStatus = "connecting" | "connected" | "disconnected" | "unauthorized";
+const LAUNCH_REFUSALS = ["unauthorized", "token-rejected", "foreign-origin"] as const;
+export type LaunchRefusal = (typeof LAUNCH_REFUSALS)[number];
+export type ConnectionStatus = "connecting" | "connected" | "disconnected" | LaunchRefusal;
+export type LaunchProbe = "ok" | "bad-token" | "foreign-origin" | "down";
 type PushHandler = (data: unknown) => void;
+
+export const isLaunchRefusal = (status: ConnectionStatus): status is LaunchRefusal =>
+	(LAUNCH_REFUSALS as readonly string[]).includes(status);
 
 export interface TransportOptions {
 	url?: string;
 	onStatus?: (status: ConnectionStatus) => void;
-	isUnauthorized?: (probeUrl: string) => Promise<boolean>;
+	probeLaunch?: (probeUrl: string) => Promise<LaunchProbe>;
 }
 
-const probeUnauthorized = (probeUrl: string) =>
+const probeVerdict = (status: number): LaunchProbe => {
+	if (status === 401) return "bad-token";
+	if (status === 403) return "foreign-origin";
+	return status < 400 ? "ok" : "down";
+};
+
+const probeLaunchAuth = (probeUrl: string) =>
 	fetch(probeUrl)
-		.then((response) => response.status === 401)
-		.catch(() => false);
+		.then((response) => probeVerdict(response.status))
+		.catch((): LaunchProbe => "down");
 
 interface TransportDispatchHooks {
 	beforeDispatch?: (message: WsServerMessage) => void;
@@ -56,7 +68,7 @@ export class WsTransport {
 	private ws: WebSocket | null = null;
 	private readonly url: string;
 	private readonly onStatus: ((status: ConnectionStatus) => void) | undefined;
-	private readonly isUnauthorized: (probeUrl: string) => Promise<boolean>;
+	private readonly probeLaunch: (probeUrl: string) => Promise<LaunchProbe>;
 	private readonly beforeDispatch: ((message: WsServerMessage) => void) | undefined;
 	private seq = 0;
 	private readonly pending = new Map<
@@ -73,11 +85,12 @@ export class WsTransport {
 	private ackQueue: string[] = [];
 	private ackScheduled = false;
 	private backoff = 500;
+	private pastedToken = false;
 
 	constructor(opts: TransportOptions = {}, dispatchHooks: TransportDispatchHooks = {}) {
 		this.url = opts.url ?? inferUrl();
 		this.onStatus = opts.onStatus;
-		this.isUnauthorized = opts.isUnauthorized ?? probeUnauthorized;
+		this.probeLaunch = opts.probeLaunch ?? probeLaunchAuth;
 		this.beforeDispatch = dispatchHooks.beforeDispatch;
 	}
 
@@ -93,11 +106,16 @@ export class WsTransport {
 
 	authorize(token: string): void {
 		storeLaunchToken(token);
-		if (this.ws === null) this.connect();
+		this.pastedToken = true;
+		if (this.ws === null) this.open();
 	}
 
 	connect(): void {
 		this.onStatus?.("connecting");
+		this.open();
+	}
+
+	private open(): void {
 		const ws = new WebSocket(withClientId(this.url));
 		this.ws = ws;
 		let opened = false;
@@ -107,6 +125,7 @@ export class WsTransport {
 				return;
 			}
 			opened = true;
+			this.pastedToken = false;
 			this.backoff = 500;
 			this.onStatus?.("connected");
 			this.ackQueue = [];
@@ -117,18 +136,30 @@ export class WsTransport {
 		ws.onclose = () => {
 			if (this.ws !== ws) return;
 			this.ws = null;
-			this.onStatus?.("disconnected");
 			if (opened) {
+				this.onStatus?.("disconnected");
 				this.scheduleReconnect();
 				return;
 			}
-			void this.isUnauthorized(this.hostUrl(LAUNCH_AUTH_PATH)).then((unauthorized) => {
+			void this.probeLaunch(this.hostUrl(LAUNCH_AUTH_PATH)).then((probe) => {
 				if (this.ws !== null) return;
-				if (unauthorized) this.onStatus?.("unauthorized");
-				else this.scheduleReconnect();
+				const refusal = this.refusalFor(probe);
+				this.pastedToken = false;
+				if (refusal !== null) {
+					this.onStatus?.(refusal);
+					return;
+				}
+				this.onStatus?.("disconnected");
+				this.scheduleReconnect();
 			});
 		};
 		ws.onerror = () => ws.close();
+	}
+
+	private refusalFor(probe: LaunchProbe): LaunchRefusal | null {
+		if (probe === "foreign-origin") return "foreign-origin";
+		if (probe !== "bad-token") return null;
+		return this.pastedToken ? "token-rejected" : "unauthorized";
 	}
 
 	private scheduleReconnect(): void {

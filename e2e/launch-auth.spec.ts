@@ -37,10 +37,16 @@ test("a page without the launch token asks for it and connects once pasted", asy
 		await page.goto("/");
 		await expect(page.getByTestId("launch-token-screen")).toBeVisible();
 		await expect(page.getByTestId("launch-token-screen")).toContainText("Re-open ThinkRail");
+		await expect(page.getByTestId("launch-token-screen")).toHaveAttribute(
+			"data-refusal",
+			"unauthorized",
+		);
+		await expect(page.getByTestId("launch-token-rejected")).toHaveCount(0);
 
 		await page.getByTestId("launch-token-input").fill("wrong-token");
 		await page.getByTestId("launch-token-submit").click();
 		await expect(page.getByTestId("launch-token-rejected")).toBeVisible();
+		await expect(page.getByTestId("shell")).toHaveCount(0);
 
 		await page.getByTestId("launch-token-input").fill(E2E_LAUNCH_TOKEN);
 		await page.getByTestId("launch-token-submit").click();

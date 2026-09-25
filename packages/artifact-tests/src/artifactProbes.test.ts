@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
-import { hostEnvironment } from "./artifactProbes";
+import { ARTIFACT_LAUNCH_TOKEN, hostEnvironment } from "./artifactProbes";
+
+const LAUNCH = { THINKRAIL_LAUNCH_TOKEN: ARTIFACT_LAUNCH_TOKEN };
 
 test("isolates both home variables without inheriting Windows case variants", () => {
 	const inherited = {
@@ -21,6 +23,7 @@ test("isolates both home variables without inheriting Windows case variants", ()
 		USERPROFILE: "isolated-home",
 		PATH: "isolated-path",
 		SystemRoot: "system-root",
+		...LAUNCH,
 	});
 	expect(inherited.UserProfile).toBe("real-profile");
 });
@@ -33,7 +36,7 @@ test("unsets inherited agent-directory case variants for the default-agent probe
 			HOME: "isolated-home",
 			USERPROFILE: "isolated-home",
 		}),
-	).toEqual({ HOME: "isolated-home", USERPROFILE: "isolated-home" });
+	).toEqual({ HOME: "isolated-home", USERPROFILE: "isolated-home", ...LAUNCH });
 });
 
 test("native UI and host modes replace inherited control seams without retaining the other mode", () => {
@@ -61,6 +64,10 @@ test("native UI and host modes replace inherited control seams without retaining
 				["THINKRAIL_DESKTOP_E2E_HOST", "THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE"],
 				inherited,
 			),
-		).toEqual({ ...overrides, HOME: "isolated-home", USERPROFILE: "isolated-home" });
+		).toEqual({ ...overrides, HOME: "isolated-home", USERPROFILE: "isolated-home", ...LAUNCH });
 	}
+});
+
+test("every artifact host gets the fixed launch token instead of an inherited one", () => {
+	expect(hostEnvironment({}, [], { thinkrail_launch_token: "real-token" })).toEqual(LAUNCH);
 });

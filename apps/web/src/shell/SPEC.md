@@ -34,8 +34,8 @@ The sibling dependency graph is: `layoutState â†’ layout`; `chatReconciliation â
 
 ## Composition
 
-While transport status is `unauthorized` (the host refused the launch token), `Shell` renders only
-`panels/LaunchTokenScreen` instead of the workbench.
+While transport status is a launch refusal (`isLaunchRefusal`: bad token, rejected pasted token, or
+foreign Origin), `Shell` renders only `panels/LaunchTokenScreen` instead of the workbench.
 
 The topbar keeps ThinkRail identity, connection state, Settings, and compact location context, and doubles
 as the **window title bar** when a native host removes its own strip ([[module-desktop]], *Native window

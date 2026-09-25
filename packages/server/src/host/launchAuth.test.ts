@@ -3,6 +3,7 @@ import {
 	isLaunchProtectedPath,
 	isLaunchTokenValid,
 	isOriginAllowed,
+	launchAuthResponse,
 	parseAllowedOrigins,
 } from "./launchAuth";
 
@@ -69,4 +70,17 @@ test("only the wire, probe, file and extension routes are protected", () => {
 	expect(isLaunchProtectedPath("/health")).toBe(false);
 	expect(isLaunchProtectedPath("/")).toBe(false);
 	expect(isLaunchProtectedPath("/assets/index.js")).toBe(false);
+});
+
+test("protected routes map to 403, 401, 204 or pass through", () => {
+	const respond = (path: string, origin?: string) => {
+		const url = new URL(`http://localhost:4000${path}`);
+		const request = new Request(url, origin ? { headers: { origin } } : {});
+		return launchAuthResponse(request, url, policy)?.status ?? null;
+	};
+	expect(respond("/auth?token=t", "https://evil.example")).toBe(403);
+	expect(respond("/ws?token=wrong")).toBe(401);
+	expect(respond("/auth?token=t")).toBe(204);
+	expect(respond("/ws?token=t")).toBeNull();
+	expect(respond("/health")).toBeNull();
 });

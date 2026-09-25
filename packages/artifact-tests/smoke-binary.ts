@@ -25,7 +25,7 @@ async function readServingUrl(stdout: ReadableStream<Uint8Array>): Promise<strin
 	for await (const chunk of stdout) {
 		buffered += decoder.decode(chunk, { stream: true });
 		const match = buffered.match(/thinkrail → (http:\/\/\S+)/);
-		if (match?.[1]) return match[1];
+		if (match?.[1]) return new URL(match[1]).origin;
 	}
 	throw new Error(`stdout closed without a serving URL: ${JSON.stringify(buffered)}`);
 }

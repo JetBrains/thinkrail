@@ -6,5 +6,6 @@ export {
 	prewarmWorkspaceSkillLoad,
 	reloadSessionResourcesWithSkillBaseline,
 } from "./skillLoad";
-export type { ConnectionStatus, TransportOptions } from "./transport";
+export type { ConnectionStatus, LaunchRefusal, TransportOptions } from "./transport";
+export { isLaunchRefusal } from "./transport";
 export { getTransport, initTransport, supportsPlanReview } from "./wireTransport";

@@ -8,6 +8,7 @@ import { runDesktopAnalyticsProbe } from "./src/analyticsProbe";
 import { locateDesktopLauncher, repoRoot } from "./src/artifact";
 import {
 	type ArtifactHostAdapter,
+	artifactLaunchPath,
 	hostEnvironment,
 	type RunningArtifactHost,
 	runArtifactHostProbes,
@@ -217,7 +218,10 @@ async function runMutedSmoke(): Promise<void> {
 		);
 		const health = await within(fetch(`${ui.origin}/health`), 10_000, "desktop UI health");
 		if (!health.ok || (await health.text()) !== "ok") throw new Error("desktop UI health failed");
-		if (ui.mode !== "ui" || ui.windowUrl !== `${ui.origin}/#/v1/projects/desktop-smoke`) {
+		if (
+			ui.mode !== "ui" ||
+			ui.windowUrl !== `${ui.origin}${artifactLaunchPath}#/v1/projects/desktop-smoke`
+		) {
 			throw new Error(`desktop native window reported an unexpected URL: ${ui.windowUrl}`);
 		}
 		const applicationMenuExpected = process.platform === "darwin" || process.platform === "win32";

@@ -105,9 +105,13 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `?token=` from the page URL into `localStorage` (`thinkrail-launch-token`, in-memory fallback) and strips
   it with `history.replaceState`; `withLaunchToken` adds it to the socket URL and to **`hostUrl(path)`**, the
   one builder for authenticated host HTTP URLs such as `/files/*`. `httpBase()` stays token-free because it
-  is also a storage identity). A socket that closes **before ever opening** probes `GET /auth`; a `401`
-  sets status **`unauthorized`** and stops reconnecting, anything else keeps the normal backoff.
-  `authorize(token)` stores a pasted token and reconnects. See [[submodule-server-host]] launch auth);
+  is also a storage identity). A socket that closes **before ever opening** probes `GET /auth` and emits
+  nothing until the answer. A `401` sets **`unauthorized`**, or **`token-rejected`** when the attempt
+  used a pasted token; a `403` sets **`foreign-origin`**. These `LaunchRefusal` statuses
+  (`isLaunchRefusal`) stop reconnecting; anything else keeps the normal backoff. `authorize(token)` stores
+  a pasted token and reconnects without emitting `connecting`, so the refusal screen stays up until the
+  host answers. The pasted flag clears on `connected`, so a later refusal (new host token) reads
+  `unauthorized` again. See [[submodule-server-host]] launch auth);
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
   string / a timeout / a thrown non-Error) into a short, display-ready line for an error turn/notice);
   `requestError.ts` (**`RequestError`** + **`wsErrorCode(err)`** — a rejection that carries the host's named

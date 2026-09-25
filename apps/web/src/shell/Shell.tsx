@@ -31,7 +31,7 @@ import {
 	readThemeHint,
 	writeThemeHint,
 } from "../themes";
-import type { ConnectionStatus } from "../transport";
+import { type ConnectionStatus, isLaunchRefusal } from "../transport";
 import { UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
@@ -47,6 +47,8 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
 	connecting: "Connecting…",
 	disconnected: "Disconnected",
 	unauthorized: "Not authorized",
+	"token-rejected": "Not authorized",
+	"foreign-origin": "Origin not allowed",
 };
 
 const STATUS_DOT: Record<ConnectionStatus, string> = {
@@ -54,6 +56,8 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 	connecting: "text-feedback-warning",
 	disconnected: "text-feedback-error",
 	unauthorized: "text-feedback-error",
+	"token-rejected": "text-feedback-error",
+	"foreign-origin": "text-feedback-error",
 };
 
 export function Shell() {
@@ -117,7 +121,7 @@ export function Shell() {
 				}
 			: {}),
 	});
-	if (status === "unauthorized") return <LaunchTokenScreen />;
+	if (isLaunchRefusal(status)) return <LaunchTokenScreen refusal={status} />;
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
 			<header

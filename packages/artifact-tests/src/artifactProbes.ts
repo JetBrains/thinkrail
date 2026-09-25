@@ -28,8 +28,14 @@ function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
 }
 
+export const ARTIFACT_LAUNCH_TOKEN = "thinkrail-artifact-launch-token";
+const LAUNCH_TOKEN_PARAM = "token";
+export const artifactLaunchPath = `/?${LAUNCH_TOKEN_PARAM}=${ARTIFACT_LAUNCH_TOKEN}`;
+
 async function connectRpc(baseUrl: string): Promise<WebSocket> {
-	const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}/ws`);
+	const url = new URL("/ws", baseUrl.replace(/^http/, "ws"));
+	url.searchParams.set(LAUNCH_TOKEN_PARAM, ARTIFACT_LAUNCH_TOKEN);
+	const socket = new WebSocket(url);
 	await new Promise<void>((resolve, reject) => {
 		socket.addEventListener("open", () => resolve(), { once: true });
 		socket.addEventListener("error", () => reject(new Error("WebSocket connection failed")), {
@@ -161,12 +167,16 @@ export function hostEnvironment(
 	unset: string[] = [],
 	env: Record<string, string | undefined> = process.env,
 ): Record<string, string> {
-	const shadowed = new Set([...Object.keys(overrides), ...unset].map((name) => name.toLowerCase()));
+	const shadowed = new Set(
+		[...Object.keys(overrides), ...unset, "THINKRAIL_LAUNCH_TOKEN"].map((name) =>
+			name.toLowerCase(),
+		),
+	);
 	const inherited: Record<string, string> = {};
 	for (const [name, value] of Object.entries(env)) {
 		if (value !== undefined && !shadowed.has(name.toLowerCase())) inherited[name] = value;
 	}
-	return { ...inherited, ...overrides };
+	return { ...inherited, THINKRAIL_LAUNCH_TOKEN: ARTIFACT_LAUNCH_TOKEN, ...overrides };
 }
 
 function createCentralExecutable(fakeBinDir: string): void {

@@ -74,7 +74,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
    an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
-   is keyed by backend profile so ids from one host are never interpreted against another.
+   is keyed by backend profile so ids from one host are never interpreted against another. A remote browser
+   also needs the host's launch token (#7), pasted from the host console. Its Origin must be allowed: a
+   wildcard bind accepts the Origin that matches the request `Host`, but a bind to one Tailscale IP opened
+   through its MagicDNS name needs that origin in `THINKRAIL_ALLOWED_ORIGINS`.
 5. **UI = panels + shell.** Layout-agnostic, store-driven panels (project→workspace nav, file tree,
    Monaco editor, changes/diff, workspace-local review, terminal, chat, composer) never know their
    arrangement. Each desktop frontend window owns one locally persisted, resource-free workbench frame: a
@@ -100,8 +103,11 @@ dependency. This keeps test process drivers outside both launchers and the serve
    the verified plan, with a compare-URL fallback when `gh`/GitHub isn't available (see
    [[submodule-server-pr]]). CI/Checks status, merge/squash from the app, and `glab` support stay V2;
    workspace-local Review is V1.
-7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
-   not a login UI.
+7. **Network auth is external; the host guards its own launch.** Tailscale ACLs / device identity are the
+   network auth; the app carries an `owner` field, not a login UI. Locally, the host mints a per-launch token
+   (or takes `THINKRAIL_LAUNCH_TOKEN`) and checks it plus an Origin allowlist on `/ws`, `/auth`, `/files`
+   and `/ext`, so other local pages and DNS-rebound sites cannot drive the agent. Launchers open the UI with
+   the token; a page without it shows a paste-token screen. Detail: [[submodule-server-host]].
 8. **Hydrate-then-stream (every client reconstructs domain state from the host).** A client never relies on
    having *witnessed* events to know domain state—on connect it **reads** current state, then **subscribes**
    to live deltas. The host exposes `project.list` / `workspace.list` / **`session.list`** /

@@ -854,9 +854,11 @@ own section. The kebab menu (`plan-menu`, a
   `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
-- **`LaunchTokenScreen`:** the full-page view `Shell` renders while transport status is `unauthorized`. It
-  tells the user to re-open ThinkRail from the CLI link and offers a paste-token input that calls
-  `getTransport().authorize(token)`. A remount after a submitted token shows "rejected".
+- **`LaunchTokenScreen({ refusal })`:** the full-page view `Shell` renders for a `LaunchRefusal` status.
+  `unauthorized` / `token-rejected` tell the user to re-open ThinkRail from the CLI link and offer a
+  paste-token input that calls `getTransport().authorize(token)`; `token-rejected` adds "rejected".
+  `foreign-origin` has no input (a token cannot fix it) and points at the printed URL or
+  `THINKRAIL_ALLOWED_ORIGINS`.
 
 ## Get right
 

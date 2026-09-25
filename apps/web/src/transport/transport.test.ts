@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
-import { WsTransport } from "./transport";
+import { type LaunchProbe, WsTransport } from "./transport";
 
 class TestWebSocket {
 	static readonly CONNECTING = 0;
@@ -287,23 +287,31 @@ describe("WsTransport response receipts", () => {
 });
 
 describe("WsTransport launch auth", () => {
-	test("a socket refused before opening with a rejected token stops reconnecting", async () => {
+	const launchTransport = (probe: () => LaunchProbe) => {
 		const statuses: string[] = [];
 		const probes: string[] = [];
 		const transport = new WsTransport({
 			url: "ws://localhost:24242/ws",
 			onStatus: (status) => statuses.push(status),
-			isUnauthorized: async (probeUrl) => {
+			probeLaunch: async (probeUrl) => {
 				probes.push(probeUrl);
-				return true;
+				return probe();
 			},
 		});
-		transport.connect();
-		TestWebSocket.instances[0]?.close();
+		return { transport, statuses, probes };
+	};
+	const refuseLatest = async () => {
+		TestWebSocket.instances.at(-1)?.close();
 		await tick(600);
+	};
+
+	test("a socket refused before opening with a rejected token stops reconnecting", async () => {
+		const { transport, statuses, probes } = launchTransport(() => "bad-token");
+		transport.connect();
+		await refuseLatest();
 
 		expect(new URL(probes[0] ?? "").pathname).toBe("/auth");
-		expect(statuses.at(-1)).toBe("unauthorized");
+		expect(statuses).toEqual(["connecting", "unauthorized"]);
 		expect(TestWebSocket.instances).toHaveLength(1);
 
 		transport.authorize(" pasted-token ");
@@ -314,18 +322,37 @@ describe("WsTransport launch auth", () => {
 		);
 	});
 
-	test("a refused socket whose token is fine keeps the normal backoff", async () => {
-		const statuses: string[] = [];
-		const transport = new WsTransport({
-			url: "ws://localhost:24242/ws",
-			onStatus: (status) => statuses.push(status),
-			isUnauthorized: async () => false,
-		});
+	test("a pasted token attempt keeps the refusal status until the host answers", async () => {
+		const { transport, statuses } = launchTransport(() => "bad-token");
 		transport.connect();
-		TestWebSocket.instances[0]?.close();
-		await tick(600);
+		await refuseLatest();
+		transport.authorize("wrong");
+		await refuseLatest();
+		expect(statuses).toEqual(["connecting", "unauthorized", "token-rejected"]);
 
-		expect(statuses).not.toContain("unauthorized");
+		transport.authorize("right");
+		TestWebSocket.instances.at(-1)?.open();
+		TestWebSocket.instances.at(-1)?.close();
+		await tick(600);
+		await refuseLatest();
+		expect(statuses.slice(3)).toEqual(["connected", "disconnected", "connecting", "unauthorized"]);
+	});
+
+	test("a foreign Origin stops reconnecting with its own status", async () => {
+		const { transport, statuses } = launchTransport(() => "foreign-origin");
+		transport.connect();
+		await refuseLatest();
+
+		expect(statuses).toEqual(["connecting", "foreign-origin"]);
+		expect(TestWebSocket.instances).toHaveLength(1);
+	});
+
+	test("a refused socket whose token is fine keeps the normal backoff", async () => {
+		const { transport, statuses } = launchTransport(() => "down");
+		transport.connect();
+		await refuseLatest();
+
+		expect(statuses).toEqual(["connecting", "disconnected", "connecting"]);
 		expect(TestWebSocket.instances).toHaveLength(2);
 	});
 });
