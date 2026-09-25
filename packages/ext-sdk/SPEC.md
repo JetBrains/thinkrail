@@ -26,11 +26,22 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
     `Disposer` runs when the generation is disposed (close watchers, sockets, …).
   - `Tr`, `Off`, `Disposer`, `SessionRef`, `ActionCtx`, `ActionHandler`, `ExtStore`, `PiEventName`,
     `PiEventOf<E>`, `PiExtensionFactory` (pi's `ExtensionFactory`, type-only).
-- `./view` (`src/view.ts`, browser side): `SurfaceProps`, `HostContext` (from contracts), and
+- `./view` (`src/view.ts` + `src/viewUi.ts`, browser side): `SurfaceProps` (contracts'
+  `ExtSurfaceProps`: `surfaceId`, `host`, optional `params` from `openSurface`, `toolCall` for a
+  `toolCard` surface, `message` for a `message` surface), `HostContext`, `ExtViewUi` + its prop types, and
   **declared** (type-only, no body) runtime values named by contracts' `EXT_VIEW_EXPORTS`: `useChannel`,
-  `useAction`, `useHostContext`, `openSurface`, `ui`, `cn`. The file emits nothing; the host's view
-  builder resolves this specifier to a shim over the web's runtime global, so the declarations only
+  `useAction`, `useHostContext`, `openSurface`, `ui`, `cn`, `remixicon`. The file emits nothing; the host's
+  view builder resolves this specifier to a shim over the web's runtime global, so the declarations only
   type-check authoring code.
+
+## View contract
+
+- `useChannel(key)` and `useAction(id)` are scoped to the surface's own extension: `key` is the same
+  unprefixed key the host half passes to `tr.publish`, `id` the one passed to `tr.action`.
+- `ui` holds the app's owned primitives named by contracts' `EXT_VIEW_UI_EXPORTS`. `ExtViewUi` types each
+  one by hand (this package cannot import `apps/web`); its mapped base keeps the key set equal to the
+  contracts list, and the web runtime's test checks the runtime object against the same list.
+- `remixicon` is the app's `@remixicon/react` module (same pinned version, from the root catalog).
 
 ## Host-half contract (`Tr`)
 
@@ -46,6 +57,6 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
 ## Boundary
 
 - **Allowed deps:** `@thinkrail/contracts` (types), `@earendil-works/pi-coding-agent` (**types only**,
-  and only from `.`).
+  and only from `.`), `@types/react` + `@remixicon/react` (**types only**, from `./view`).
 - **Forbidden:** any value import; any `@thinkrail/server`/`shared` import; any pi import from `./view`
   (it is browser-bundled).

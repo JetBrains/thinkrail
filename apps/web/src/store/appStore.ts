@@ -39,6 +39,7 @@ import {
 	DEFAULT_CONFIG,
 	isAskUserAnswersMessage,
 	isControlMessage,
+	isGenericCustomMessage,
 	isLineWidth,
 	isSubagentCompletionMessage,
 	isTerminalWindowsShell,
@@ -245,7 +246,16 @@ export type LayoutIntent =
 			navigation?: CenterNavigationStamp | null;
 			countNavigation?: boolean;
 	  }
-	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId }
+	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId; name?: string }
+	| {
+			id: string;
+			kind: "open-extension";
+			workspaceId: string;
+			extension: string;
+			surface: string;
+			name: string;
+			targetGroupId?: string;
+	  }
 	| { id: string; kind: "remove-session"; workspaceId: string; sessionId: string }
 	| {
 			id: string;
@@ -605,6 +615,22 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 							id: crypto.randomUUID(),
 							details: event.message.details,
 							text: customMessageText(event.message.content),
+						},
+					],
+				};
+			}
+			if (isGenericCustomMessage(event.message)) {
+				return {
+					...rt,
+					turns: [
+						...rt.turns,
+						{
+							kind: "custom",
+							id: crypto.randomUUID(),
+							customType: event.message.customType,
+							text: customMessageText(event.message.content),
+							details: event.message.details,
+							timestamp: event.message.timestamp,
 						},
 					],
 				};

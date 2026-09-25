@@ -1,3 +1,5 @@
+import type { ExtLayoutToolId } from "./domain";
+
 export const SURFACE_SLOTS = ["tab", "panel", "status", "toolCard", "message"] as const;
 export type SurfaceSlot = (typeof SURFACE_SLOTS)[number];
 
@@ -51,8 +53,89 @@ export const EXT_VIEW_EXPORTS = [
 	"openSurface",
 	"ui",
 	"cn",
+	"remixicon",
 ] as const;
 export type ExtViewExport = (typeof EXT_VIEW_EXPORTS)[number];
+export const EXT_VIEW_UI_EXPORTS = [
+	"Button",
+	"Textarea",
+	"Tooltip",
+	"TooltipContent",
+	"TooltipTrigger",
+	"IconTooltip",
+	"Popover",
+	"PopoverAnchor",
+	"PopoverContent",
+	"PopoverTrigger",
+	"Dialog",
+	"DialogClose",
+	"DialogContent",
+	"DialogDescription",
+	"DialogFooter",
+	"DialogHeader",
+	"DialogTitle",
+	"DialogTrigger",
+	"DropdownMenu",
+	"DropdownMenuContent",
+	"DropdownMenuGroup",
+	"DropdownMenuItem",
+	"DropdownMenuLabel",
+	"DropdownMenuSeparator",
+	"DropdownMenuTrigger",
+	"ContextMenu",
+	"ContextMenuContent",
+	"ContextMenuItem",
+	"ContextMenuSeparator",
+	"ContextMenuTrigger",
+	"Command",
+	"CommandEmpty",
+	"CommandGroup",
+	"CommandInput",
+	"CommandItem",
+	"CommandList",
+	"CommandSeparator",
+] as const;
+export type ExtViewUiExport = (typeof EXT_VIEW_UI_EXPORTS)[number];
+
+export interface ExtToolCallView {
+	toolCallId: string;
+	toolName: string;
+	args: Record<string, unknown>;
+	result: unknown;
+	status: "running" | "done" | "error";
+}
+
+export interface ExtMessageView {
+	customType: string;
+	text: string;
+	details: unknown;
+	timestamp: number;
+}
+
+export interface ExtSurfaceProps {
+	surfaceId: string;
+	host: HostContext;
+	params?: Record<string, string>;
+	toolCall?: ExtToolCallView;
+	message?: ExtMessageView;
+}
+
+const EXT_NAME = /^[a-z][a-z0-9-]*$/;
+const EXT_TOOL_PREFIX = "ext:";
+
+export const extToolId = ({ name, surfaceId }: { name: string; surfaceId: string }) =>
+	`ext:${name}:${surfaceId}` as const;
+
+export const parseExtToolId = (tool: string) => {
+	if (!tool.startsWith(EXT_TOOL_PREFIX)) return null;
+	const [name, surfaceId, ...rest] = tool.slice(EXT_TOOL_PREFIX.length).split(":");
+	if (rest.length > 0 || !name || !surfaceId || !EXT_NAME.test(name) || !EXT_NAME.test(surfaceId))
+		return null;
+	return { name, surfaceId };
+};
+
+export const isExtLayoutToolId = (tool: string): tool is ExtLayoutToolId =>
+	parseExtToolId(tool) !== null;
 export type ExtAssetKind = "js" | "css";
 
 export const extAssetPath = ({

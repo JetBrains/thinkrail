@@ -13,7 +13,7 @@ Consume arrangement-agnostic store intents for one mounted workspace and transla
 
 ## Boundary
 
-- **Owns:** stale frame/view/attention identity guards; consume-once handling; destination and navigation arbitration; open/select/close/tool/terminal/auxiliary-toggle dispatch; attention/focus calculation; and issuing at most one atomic local transition for a result.
+- **Owns:** stale frame/view/attention identity guards; consume-once handling; destination and navigation arbitration; open/select/close/tool/terminal/auxiliary-toggle dispatch (plus `open-extension`, which focuses an already placed extension tab or opens it in the target or last-focused center group); attention/focus calculation; and issuing at most one atomic local transition for a result.
 - **Public surface (`index.ts`):** the workspace intent-processing hook and narrow callback types.
 - **External deps:** store intent, attention, and navigation APIs; transport error normalization for domain requests only; React.
 - **Forbidden:** current-layout WS calls; local persistence ownership; session or terminal catalogs/lifetime; panel rendering; server/shared/pi imports; or mutable topology logic outside the pure `layout` sibling.

@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type { ExtensionInfo, ExtensionSurface, SessionEventPayload } from "@thinkrail/contracts";
 import type { ActionCtx, ExtStore, PiExtensionFactory } from "@thinkrail/ext";
 import { buildAssets, type ExtAssets } from "./build";
@@ -231,7 +233,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 		},
 		async reload(name: string): Promise<ExtensionInfo> {
 			const known = states.get(name);
-			if (!known) {
+			if (!known || !existsSync(join(known.candidate.dir, "extension.json"))) {
 				await rescan();
 				const found = states.get(name);
 				if (!found) throw new Error(`extension "${name}" not found`);

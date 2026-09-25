@@ -6,7 +6,8 @@
 		"jsx": "react-jsx",
 		"lib": ["ES2023", "DOM", "DOM.Iterable"],
 		"paths": {
-			"@/*": ["./src/*"]
+			"@/*": ["./src/*"],
+			"@ext-runtime/remixicon": ["./node_modules/@remixicon/react/index.js"]
 		}
 	},
 	"include": ["src"],

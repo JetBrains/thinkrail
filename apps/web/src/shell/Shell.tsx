@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { IconTooltip } from "../components/ui/tooltip";
+import { ExtensionStatusItems } from "../ext";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { LaunchTokenScreen } from "../panels/LaunchTokenScreen";
@@ -191,6 +192,7 @@ export function Shell() {
 							onOpen={() => useAppStore.getState().openSettings(SettingsSection.Updates)}
 						/>
 					) : null}
+					<ExtensionStatusItems />
 					<JbcentralQuotaTopbar />
 					<span
 						data-testid="connection-status"

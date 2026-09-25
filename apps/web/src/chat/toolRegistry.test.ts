@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { ToolRenderProps } from "./toolRegistry";
 import {
+	DefaultToolRenderer,
 	getToolChrome,
 	getToolRenderer,
 	getToolSummary,
@@ -90,5 +91,26 @@ describe("resolveProminence (the settings seam)", () => {
 			prominence: "routine",
 		});
 		expect(resolveProminence("bare-declared-routine").prominence).toBe("primary");
+	});
+});
+
+describe("toolRegistry runtime registrations", () => {
+	it("a disposer restores the previous renderer and ignores a stale dispose", () => {
+		const base = () => null;
+		const override = () => null;
+		registerToolRenderer("layered-tool", base);
+		const dispose = registerToolRenderer("layered-tool", override, { prominence: "primary" });
+		expect(getToolRenderer("layered-tool")).toBe(override);
+		expect(resolveProminence("layered-tool").prominence).toBe("primary");
+		dispose();
+		expect(getToolRenderer("layered-tool")).toBe(base);
+		dispose();
+		expect(getToolRenderer("layered-tool")).toBe(base);
+	});
+
+	it("disposing a first registration removes the tool", () => {
+		const dispose = registerToolRenderer("ephemeral-tool", () => null);
+		dispose();
+		expect(getToolRenderer("ephemeral-tool")).toBe(DefaultToolRenderer);
 	});
 });

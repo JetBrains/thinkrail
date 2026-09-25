@@ -211,6 +211,19 @@ describe("ext host", () => {
 		await host.dispose();
 	});
 
+	test("reloading a deleted extension unloads it", async () => {
+		const dir = writeExtension(userDir, "g1");
+		const removed: string[] = [];
+		const host = makeHost({ onRemoved: (name) => removed.push(name) });
+		await host.rescan();
+		rmSync(dir, { recursive: true, force: true });
+		expect(host.reload("demo")).rejects.toThrow('extension "demo" not found');
+		await until(() => removed.includes("demo"));
+		expect(host.get("demo")).toBeUndefined();
+		expect(host.snapshot()).toEqual({});
+		await host.dispose();
+	});
+
 	test("a successful reload disposes every registration of the old generation", async () => {
 		writeExtension(userDir, "g1");
 		const host = makeHost();

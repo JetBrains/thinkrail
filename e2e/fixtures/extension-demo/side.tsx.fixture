@@ -1,0 +1,43 @@
+import { useState } from "react";
+import { cn, remixicon, type SurfaceProps, ui, useAction, useChannel } from "@thinkrail/ext/view";
+
+const { RiAddLine } = remixicon;
+
+export default function Side({ host }: SurfaceProps) {
+	const count = useChannel<number>("count") ?? 0;
+	const bump = useAction("bump");
+	const echo = useAction("echo");
+	const [reply, setReply] = useState("none");
+	return (
+		<div data-testid="demo-side" className="flex flex-col gap-8 p-12">
+			<p data-testid="demo-version" className="tr-title-compact text-text-default">
+				Demo panel v1
+			</p>
+			<p data-testid="demo-count" className={cn("tr-text-ui", count > 0 ? "text-primary" : "text-text-muted")}>
+				count {count}
+			</p>
+			<p data-testid="demo-theme" className="tr-text-metadata text-text-muted">
+				theme {host.theme}
+			</p>
+			<ui.Button
+				data-testid="demo-bump"
+				variant="outline"
+				onClick={() => void bump(2)}
+			>
+				<RiAddLine className="size-14" /> Bump by 2
+			</ui.Button>
+			<ui.Button
+				data-testid="demo-echo"
+				variant="ghost"
+				onClick={() =>
+					void echo("ping").then((result) => setReply(JSON.stringify(result)))
+				}
+			>
+				Echo
+			</ui.Button>
+			<pre data-testid="demo-reply" className="tr-code-text text-text-muted">
+				{reply}
+			</pre>
+		</div>
+	);
+}

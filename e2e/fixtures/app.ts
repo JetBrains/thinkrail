@@ -16,6 +16,7 @@ import {
 	E2E_CENTRAL_LOG,
 	E2E_CENTRAL_STATE,
 	E2E_DATA_DIR,
+	E2E_EXTENSIONS_DIR,
 	E2E_FIXTURE_REPO,
 	E2E_PI_AGENT_DIR,
 	E2E_PI_MODELS_SEED,
@@ -48,6 +49,7 @@ export async function hideAuxiliaryWorkbench(page: Page): Promise<void> {
 function resetState(): void {
 	rmSync(join(E2E_DATA_DIR, "projects.json"), { force: true });
 	removeTree(join(E2E_DATA_DIR, "worktrees"));
+	removeTree(E2E_EXTENSIONS_DIR);
 	removeTree(join(E2E_PI_AGENT_DIR, "sessions"));
 	if (isRealCentralE2e()) {
 		preserveStagedCentralArtifact();

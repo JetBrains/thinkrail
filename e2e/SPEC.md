@@ -239,6 +239,12 @@ A sandboxed home is handed to every host as **both `HOME` and `USERPROFILE`**: `
 resolution — reads `USERPROFILE` on Windows and ignores `HOME`, so `HOME` alone would silently leak a
 Windows lane into the real profile (see `module-shared`).
 
+UI-extension scenarios (`extensions.spec.ts`) install the fixture extension `fixtures/extension-demo/`
+(sources kept as `*.fixture` so no repo tooling type-checks them) into the lane's
+`<dataDir>/extensions/e2e-demo` after the per-test reset, then load, swap, and unload it through the wire's
+`ext.reload`. The reset deletes the lane's `extensions/` directory, and the next project open rescans, so a
+crashed scenario cannot leak an extension into later tests.
+
 ## Boundary
 
 - **Owns:** browser scenarios and fixtures under `e2e/`, their Playwright configuration/runner entrypoints,

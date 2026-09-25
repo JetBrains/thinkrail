@@ -553,6 +553,24 @@ test("custom preset updates validate the complete catalog and permit empty struc
 	);
 });
 
+test("custom presets accept extension panel tool ids and reject malformed ones", () => {
+	const withTools = (tools: string[]) => ({
+		...preset(),
+		left: {
+			visible: true,
+			width: 0.2,
+			groups: [{ id: "custom-left", weight: 1, folded: false, tools }],
+		},
+	});
+	expect(validateCustomLayoutPresets([withTools(["files", "ext:timeline:panel"])])).toHaveLength(1);
+	expect(() => validateCustomLayoutPresets([withTools(["ext:Bad:panel"])])).toThrow(
+		"Malformed preset left side group",
+	);
+	expect(() => validateCustomLayoutPresets([withTools(["ext:timeline"])])).toThrow(
+		"Malformed preset left side group",
+	);
+});
+
 test("stored custom presets keep only complete current-schema entries", () => {
 	const { bottom: _bottom, ...bottomless } = preset("bottomless");
 	writeFileSync(

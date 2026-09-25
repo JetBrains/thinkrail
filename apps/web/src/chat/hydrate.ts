@@ -7,6 +7,7 @@ import {
 	customMessageText,
 	isAskUserAnswersMessage,
 	isControlMessage,
+	isGenericCustomMessage,
 	isRetriedAttempt,
 	isSubagentCompletionMessage,
 	isTodoReviewFixMessage,
@@ -88,6 +89,15 @@ export function messagesToRuntime(
 				id: turnId,
 				details: message.details,
 				text: customMessageText(message.content),
+			});
+		} else if (isGenericCustomMessage(message)) {
+			turns.push({
+				kind: "custom",
+				id: transcriptTurnId(message, index, options),
+				customType: message.customType,
+				text: customMessageText(message.content),
+				details: message.details,
+				timestamp: message.timestamp,
 			});
 		}
 		turnIdByMessageIndex.push(turnId);

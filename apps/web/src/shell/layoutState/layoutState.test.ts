@@ -4,8 +4,12 @@ import {
 	BUILTIN_LAYOUT_PRESETS,
 	closeLayoutTab,
 	collectAllGroups,
+	isLayoutUnavailable,
+	openCenterTab,
+	primaryCenterGroupId,
 	resizeBottomRegion,
 	resizeSideRegion,
+	revealTool,
 	toolTab,
 } from "../layout";
 import {
@@ -185,6 +189,45 @@ describe("frontend-local layout state", () => {
 
 		const restored = await ensureWorkspaceLayoutState("workspace");
 		expect(restored.left.width).toBe(0.31);
+	});
+
+	test("extension panels and tabs survive a reload even before the extension loads", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-ext");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const initial = await ensureWorkspaceLayoutState("workspace");
+		const revealed = revealTool(initial, "ext:demo:side", 6, 3, "Demo side");
+		if (isLayoutUnavailable(revealed)) throw new Error(revealed.reason);
+		const opened = openCenterTab(
+			revealed.document,
+			{ kind: "extension", id: "ext-tab", name: "Demo tab", extension: "demo", surface: "big" },
+			primaryCenterGroupId(revealed.document),
+			"keep",
+		);
+		if (isLayoutUnavailable(opened)) throw new Error(opened.reason);
+		await commitWorkspaceLayout("workspace", opened.document);
+
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+
+		const tabs = collectAllGroups(await ensureWorkspaceLayoutState("workspace")).flatMap(
+			(group) => group.tabs,
+		);
+		expect(tabs).toContainEqual({
+			kind: "tool",
+			id: "tool:ext:demo:side",
+			name: "Demo side",
+			tool: "ext:demo:side",
+		});
+		expect(tabs).toContainEqual({
+			kind: "extension",
+			id: "ext-tab",
+			name: "Demo tab",
+			extension: "demo",
+			surface: "big",
+		});
 	});
 
 	test("native stable preferences restore layout after the host port changes", async () => {

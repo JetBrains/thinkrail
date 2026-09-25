@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useSyncExternalStore } from "react";
+import { bumpRendererRegistry, subscribeRendererRegistry } from "./rendererRegistry";
 import { parseToolResultContent, toolValueText } from "./toolResultContent";
 import type { ToolStatus } from "./types";
 
@@ -38,12 +39,26 @@ export function registerToolRenderer(
 	toolName: string,
 	renderer: ToolRenderer,
 	options: ToolRegistrationOptions = {},
-): void {
-	registry.set(toolName, { renderer, ...options });
+): () => void {
+	const previous = registry.get(toolName);
+	const registration: ToolRegistration = { renderer, ...options };
+	registry.set(toolName, registration);
+	bumpRendererRegistry();
+	return () => {
+		if (registry.get(toolName) !== registration) return;
+		if (previous) registry.set(toolName, previous);
+		else registry.delete(toolName);
+		bumpRendererRegistry();
+	};
 }
 
 export function getToolRenderer(toolName: string): ToolRenderer {
 	return registry.get(toolName)?.renderer ?? DefaultToolRenderer;
+}
+
+export function useToolRenderer(toolName: string): ToolRenderer {
+	const read = () => getToolRenderer(toolName);
+	return useSyncExternalStore(subscribeRendererRegistry, read, read);
 }
 
 export function getToolSummary(toolName: string, props: ToolRenderProps): string {

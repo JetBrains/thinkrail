@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -8,6 +9,7 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			"@": fileURLToPath(new URL("./src", import.meta.url)),
+			"@ext-runtime/remixicon": createRequire(import.meta.url).resolve("@remixicon/react"),
 		},
 	},
 	server: {
@@ -19,6 +21,8 @@ export default defineConfig({
 				ws: true,
 			},
 			"/auth": `http://localhost:${process.env.THINKRAIL_PORT ?? 24242}`,
+			"/ext": `http://localhost:${process.env.THINKRAIL_PORT ?? 24242}`,
+			"/files": `http://localhost:${process.env.THINKRAIL_PORT ?? 24242}`,
 		},
 	},
 	build: {

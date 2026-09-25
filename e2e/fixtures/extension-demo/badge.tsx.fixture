@@ -1,0 +1,12 @@
+import { remixicon, useChannel } from "@thinkrail/ext/view";
+
+const { RiPulseLine } = remixicon;
+
+export default function Badge() {
+	const count = useChannel<number>("count") ?? 0;
+	return (
+		<span data-testid="demo-badge" className="inline-flex items-center gap-4 tr-text-ui text-text-muted">
+			<RiPulseLine className="size-14 text-primary" /> demo {count}
+		</span>
+	);
+}

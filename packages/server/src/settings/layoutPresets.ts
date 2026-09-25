@@ -1,4 +1,8 @@
-import type { LayoutPreset, LayoutToolId } from "@thinkrail/contracts";
+import {
+	type BuiltinLayoutToolId,
+	isExtLayoutToolId,
+	type LayoutPreset,
+} from "@thinkrail/contracts";
 
 const MAX_PRESETS = 32;
 const MAX_LAYOUT_BYTES = 512 * 1024;
@@ -7,7 +11,15 @@ const MAX_GROUPS = 32;
 const MAX_DEPTH = 8;
 const MAX_NAME_LENGTH = 200;
 const MAX_BOTTOM_HEIGHT = 0.7;
-const TOOL_IDS = new Set<LayoutToolId>(["projects", "specs", "files", "changes", "review"]);
+const TOOL_IDS = new Set<string>([
+	"projects",
+	"specs",
+	"files",
+	"changes",
+	"review",
+] satisfies BuiltinLayoutToolId[]);
+const isToolId = (tool: unknown) =>
+	typeof tool === "string" && (TOOL_IDS.has(tool) || isExtLayoutToolId(tool));
 
 function record(value: unknown): Record<string, unknown> | null {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -89,7 +101,7 @@ function validateGroups(value: unknown, ids: Set<string>, tools: Set<string>, la
 			!positive(group.weight) ||
 			typeof group.folded !== "boolean" ||
 			!Array.isArray(group.tools) ||
-			!group.tools.every((tool) => typeof tool === "string" && TOOL_IDS.has(tool as LayoutToolId))
+			!group.tools.every(isToolId)
 		) {
 			throw new Error(`Malformed preset ${label} group`);
 		}

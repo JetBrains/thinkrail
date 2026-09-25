@@ -51,6 +51,7 @@ import {
 } from "./nativeCommands";
 import { planGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
+import { useRendererRegistry } from "./rendererRegistry";
 import { estimateChatRowHeights, type RowHeightEstimateCache } from "./rowHeightEstimates";
 import { type ChatRow, deriveRows, projectRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
@@ -220,6 +221,7 @@ export default function ChatView({
 		thinkingLevel,
 	} = runtime;
 
+	const renderers = useRendererRegistry();
 	const currentModel = selectCatalogModel(models, sessionModel) ?? sessionModel;
 	const refreshStats = useSessionStats({
 		sessionId,
@@ -231,8 +233,8 @@ export default function ChatView({
 	});
 
 	const chronologicalRows = useMemo(
-		() => deriveRows(turns, toolResults, isStreaming, isSpec),
-		[turns, toolResults, isStreaming, isSpec],
+		() => deriveRows(turns, toolResults, isStreaming, isSpec, renderers.messageTypes),
+		[turns, toolResults, isStreaming, isSpec, renderers],
 	);
 	const rows = useMemo(
 		() => projectRows(chronologicalRows, chatMessageOrder),

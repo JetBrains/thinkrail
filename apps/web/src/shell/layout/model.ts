@@ -1,3 +1,4 @@
+import { isExtLayoutToolId, parseExtToolId } from "@thinkrail/contracts";
 import {
 	type LayoutAttention,
 	layoutResourceIdentity,
@@ -6,6 +7,7 @@ import {
 	readLayoutSelection,
 } from "../../lib";
 import type {
+	BuiltinLayoutToolId,
 	LayoutAuxiliaryRegion,
 	LayoutBottomAlignment,
 	LayoutBottomRegion,
@@ -67,7 +69,7 @@ export function createLayoutId(prefix: string): string {
 	return randomId(prefix);
 }
 
-export const LAYOUT_TOOLS: readonly LayoutToolId[] = [
+export const LAYOUT_TOOLS: readonly BuiltinLayoutToolId[] = [
 	"projects",
 	"specs",
 	"files",
@@ -75,7 +77,7 @@ export const LAYOUT_TOOLS: readonly LayoutToolId[] = [
 	"review",
 ];
 
-export const LAYOUT_TOOL_DEFAULT_SIDES: Record<LayoutToolId, LayoutSide> = {
+export const LAYOUT_TOOL_DEFAULT_SIDES: Record<BuiltinLayoutToolId, LayoutSide> = {
 	projects: "left",
 	specs: "right",
 	files: "right",
@@ -83,7 +85,7 @@ export const LAYOUT_TOOL_DEFAULT_SIDES: Record<LayoutToolId, LayoutSide> = {
 	review: "right",
 };
 
-const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
+const LAYOUT_TOOL_NAMES: Record<BuiltinLayoutToolId, string> = {
 	projects: "Projects",
 	specs: "Specs",
 	files: "Files",
@@ -91,12 +93,29 @@ const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
 	review: "Review",
 };
 
-export function layoutTabName(tab: LayoutTab): string {
-	return tab.kind === "tool" ? LAYOUT_TOOL_NAMES[tab.tool] : tab.name;
+export function isBuiltinLayoutTool(tool: string): tool is BuiltinLayoutToolId {
+	return Object.hasOwn(LAYOUT_TOOL_NAMES, tool);
 }
 
-export function toolTab(tool: LayoutToolId): LayoutToolTab {
-	return { kind: "tool", id: `tool:${tool}`, name: LAYOUT_TOOL_NAMES[tool], tool };
+export function isLayoutToolId(tool: string): tool is LayoutToolId {
+	return isBuiltinLayoutTool(tool) || isExtLayoutToolId(tool);
+}
+
+export function toolDefaultSide(tool: LayoutToolId): LayoutSide {
+	return isBuiltinLayoutTool(tool) ? LAYOUT_TOOL_DEFAULT_SIDES[tool] : "right";
+}
+
+export function layoutTabName(tab: LayoutTab): string {
+	return tab.kind === "tool" && isBuiltinLayoutTool(tab.tool)
+		? LAYOUT_TOOL_NAMES[tab.tool]
+		: tab.name;
+}
+
+export function toolTab(tool: LayoutToolId, name?: string): LayoutToolTab {
+	const fallback = isBuiltinLayoutTool(tool)
+		? LAYOUT_TOOL_NAMES[tool]
+		: (parseExtToolId(tool)?.surfaceId ?? tool);
+	return { kind: "tool", id: `tool:${tool}`, name: name ?? fallback, tool };
 }
 
 export function collectCenterGroups(node: LayoutCenterNode): LayoutCenterGroup[] {
@@ -428,8 +447,7 @@ export function unplacedToolsForSide(
 	side: LayoutSide,
 ): readonly LayoutToolId[] {
 	return unplacedTools(document).filter(
-		(tool) =>
-			(document.toolRestoreTargets[tool]?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool]) === side,
+		(tool) => (document.toolRestoreTargets[tool]?.region ?? toolDefaultSide(tool)) === side,
 	);
 }
 
@@ -620,7 +638,8 @@ export function moveTabToGroup(
 		movingTab.kind === "file" ||
 		movingTab.kind === "diff" ||
 		movingTab.kind === "chat" ||
-		movingTab.kind === "document"
+		movingTab.kind === "document" ||
+		movingTab.kind === "extension"
 	) {
 		return { reason: "The destination group no longer exists." };
 	}
@@ -966,8 +985,9 @@ export function revealTool(
 	tool: LayoutToolId,
 	maxSideGroups: number,
 	maxBottomGroups = 3,
+	name?: string,
 ): LayoutOperationResult {
-	const requestedTab = withAvailablePlacementId(document, toolTab(tool));
+	const requestedTab = withAvailablePlacementId(document, toolTab(tool, name));
 	const placedTab = resolvePlacedResource(document, requestedTab).placed;
 	const existing = placedTab ? findTabLocation(document, placedTab.id) : null;
 	if (placedTab && existing && existing.area !== "center") {
@@ -992,7 +1012,7 @@ export function revealTool(
 		};
 	}
 	const restore = document.toolRestoreTargets[tool];
-	const region: LayoutAuxiliaryRegion = restore?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool];
+	const region: LayoutAuxiliaryRegion = restore?.region ?? toolDefaultSide(tool);
 	const groups = document[region].groups;
 	const restoreGroup = restore?.groupId
 		? groups.find((group) => group.id === restore.groupId)

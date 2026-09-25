@@ -1,0 +1,10 @@
+{
+	"name": "e2e-demo",
+	"title": "E2E Demo",
+	"surfaces": [
+		{ "id": "side", "slot": "panel", "title": "Demo panel" },
+		{ "id": "board", "slot": "tab", "title": "Demo board" },
+		{ "id": "badge", "slot": "status" }
+	],
+	"permissions": ["demo"]
+}

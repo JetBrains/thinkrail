@@ -48,6 +48,9 @@ actionable one-liners with a JSON-ish path, e.g.
   made during the factory are buffered and flushed on activation; a disposed generation's `publish` is
   ignored. Disposal runs every tracked `Off` plus the factory's returned `Disposer`.
 - Loads of one extension are serialized. Generation numbers are host-global and increase per load.
+- `reload(name)` of an unknown name rescans first, so a newly written extension loads without a
+  restart; `reload` of a known extension whose `extension.json` is gone rescans too, which unloads it, and
+  then throws `not found`.
 - Unloading an extension (removed from disk, root untrusted) disposes its generation and drops its
   channel snapshots. A swap also drops the old generation's snapshots before the new one's buffered
   publishes flush, so a key the new code no longer publishes disappears.

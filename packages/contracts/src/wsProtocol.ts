@@ -356,6 +356,22 @@ export function isTodoReviewFixMessage(message: unknown): message is TodoReviewF
 	);
 }
 
+const BUILTIN_CUSTOM_TYPES: ReadonlySet<string> = new Set([
+	ASK_USER_ANSWERS_CUSTOM_TYPE,
+	SUBAGENT_COMPLETION_CUSTOM_TYPE,
+	TODO_REVIEW_FIX_CUSTOM_TYPE,
+]);
+
+export const isGenericCustomMessage = (message: {
+	role: string;
+	customType?: string;
+	display?: boolean;
+}): message is WireCustomMessage =>
+	message.role === "custom" &&
+	message.display === true &&
+	typeof message.customType === "string" &&
+	!BUILTIN_CUSTOM_TYPES.has(message.customType);
+
 export function customMessageText(content: WireCustomMessage["content"]): string {
 	if (typeof content === "string") return content;
 	return content

@@ -1,0 +1,13 @@
+import { defineExtension } from "@thinkrail/ext";
+
+export default defineExtension((tr) => {
+	let count = 0;
+	tr.publish("count", count);
+	tr.action("bump", (payload) => {
+		count += typeof payload === "number" ? payload : 1;
+		tr.publish("count", count);
+		return { count };
+	});
+	tr.action("echo", (payload, ctx) => ({ payload, workspace: ctx.workspaceId ?? null }));
+	return undefined;
+});

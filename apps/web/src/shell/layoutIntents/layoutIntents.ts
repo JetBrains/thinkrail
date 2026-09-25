@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { LayoutAttention } from "../../lib";
+import { type LayoutAttention, tupleKey } from "../../lib";
 import {
 	type EditorTab,
 	layoutOpenOptionsForNavigation,
@@ -365,8 +365,43 @@ export function useLayoutIntentProcessing(
 				break;
 			}
 			case "reveal-tool": {
-				const revealed = revealTool(document, layoutIntent.tool, maxSideGroups, maxBottomGroups);
+				const revealed = revealTool(
+					document,
+					layoutIntent.tool,
+					maxSideGroups,
+					maxBottomGroups,
+					layoutIntent.name,
+				);
 				if (!isLayoutUnavailable(revealed)) result = revealed;
+				break;
+			}
+			case "open-extension": {
+				const requested = {
+					kind: "extension" as const,
+					id: tupleKey("extension", layoutIntent.extension, layoutIntent.surface),
+					name: layoutIntent.name,
+					extension: layoutIntent.extension,
+					surface: layoutIntent.surface,
+				};
+				const placed = findPlacedResource(document, requested);
+				const location = placed ? findTabLocation(document, placed.id) : null;
+				if (placed && location) {
+					result = { document, focusGroupId: location.groupId, focusTabId: placed.id };
+					break;
+				}
+				const groupId =
+					layoutIntent.targetGroupId && findCenterGroup(document.center, layoutIntent.targetGroupId)
+						? layoutIntent.targetGroupId
+						: findCenterGroup(document.center, attention.lastFocusedCenterGroupId)
+							? attention.lastFocusedCenterGroupId
+							: primaryCenterGroupId(document);
+				const opened = openCenterTab(
+					document,
+					withAvailablePlacementId(document, requested),
+					groupId,
+					"keep",
+				);
+				if (!isLayoutUnavailable(opened)) result = opened;
 				break;
 			}
 			case "remove-session":

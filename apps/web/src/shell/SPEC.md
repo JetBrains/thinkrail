@@ -16,7 +16,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 - **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, interview-invitation, and Toaster mounts; theme application and global shortcuts; the injected Layout and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
 - **Public surface:** `Shell`.
-- **Allowed deps:** child layout modules; `updates`; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, and `themes`.
+- **Allowed deps:** child layout modules; `updates`; `ext` (slot adapters: status items, panel/tab bodies, the Extensions menu); `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, and `themes`.
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
 
 ## Internal modules
@@ -66,6 +66,11 @@ through semantic `text-primary`—with no divider before location. An active wor
 workspace use `text-text-default`, while branch/trailing metadata use `text-text-muted`, with progressive
 responsive degradation. A selected project without an active workspace shows Project Home. No selected
 project leaves the logo alone.
+
+Extension `status` surfaces ([[submodule-web-ext]]) render in the trailing action cluster just before the
+quota readout. The workbench routes extension placements to `ext`: the `extension` center tab kind to
+`ExtensionTabBody`, any non-built-in tool id to `ExtensionPanelBody` (the `renderToolBody` default branch),
+and every center group's actions end with `ExtensionMenu` for opening `tab` and `panel` surfaces.
 
 Immediately before host connection status, the topbar conditionally renders the **JetBrains recurring-quota
 readout** (protocol v59): a neutral Coins icon + locale-formatted `remaining / total credits`. It exists only

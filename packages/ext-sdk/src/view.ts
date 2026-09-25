@@ -1,11 +1,23 @@
-import type { HostContext } from "@thinkrail/contracts";
+import type * as Remixicon from "@remixicon/react";
+import type {
+	ExtMessageView,
+	ExtSurfaceProps,
+	ExtToolCallView,
+	HostContext,
+} from "@thinkrail/contracts";
+import type { ExtViewUi } from "./viewUi";
 
-export type { HostContext };
+export type {
+	ButtonProps,
+	CommandItemProps,
+	ContentProps,
+	MenuItemProps,
+	RootProps,
+	TriggerProps,
+} from "./viewUi";
+export type { ExtMessageView, ExtToolCallView, ExtViewUi, HostContext };
 
-export interface SurfaceProps {
-	surfaceId: string;
-	host: HostContext;
-}
+export type SurfaceProps = ExtSurfaceProps;
 
 export declare const useChannel: <T>(key: string) => T | undefined;
 export declare const useAction: (id: string) => (payload?: unknown) => Promise<unknown>;
@@ -15,5 +27,6 @@ export declare const openSurface: (
 	surfaceId: string,
 	params?: Record<string, string>,
 ) => void;
-export declare const ui: Readonly<Record<string, unknown>>;
+export declare const ui: ExtViewUi;
 export declare const cn: (...inputs: unknown[]) => string;
+export declare const remixicon: typeof Remixicon;

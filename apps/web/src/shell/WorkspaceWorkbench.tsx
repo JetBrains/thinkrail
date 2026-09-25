@@ -11,6 +11,7 @@ import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
 import { DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { IconTooltip } from "../components/ui/tooltip";
+import { ExtensionMenu, ExtensionPanelBody, ExtensionTabBody } from "../ext";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { DiffPane } from "../panels/DiffPane";
@@ -435,6 +436,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					</ErrorBoundary>
 				);
 			}
+			if (tab.kind === "extension") {
+				return <ExtensionTabBody extension={tab.extension} surface={tab.surface} />;
+			}
 			if (tab.kind === "terminal") {
 				const terminal = terminalByKey.get(tab.tabKey);
 				const location = document ? findTabLocation(document, tab.id) : null;
@@ -518,6 +522,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				case "review":
 					body = <ReviewPanel workspaceId={workspaceId} failed={review.failed} />;
 					break;
+				default:
+					body = <ExtensionPanelBody tool={tool} />;
 			}
 			return (
 				<ErrorBoundary label={`${tool} tool`} resetKeys={[workspaceId, tool]}>
@@ -686,6 +692,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								<SquareTerminal className="size-14" />
 							</button>
 						</IconTooltip>
+						<ExtensionMenu targetGroupId={groupId} />
 					</>
 				)}
 				renderSideMenuActions={(side, groupId) =>

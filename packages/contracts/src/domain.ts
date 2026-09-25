@@ -436,7 +436,9 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 	);
 }
 
-export type LayoutToolId = "projects" | "specs" | "files" | "changes" | "review";
+export type BuiltinLayoutToolId = "projects" | "specs" | "files" | "changes" | "review";
+export type ExtLayoutToolId = `ext:${string}:${string}`;
+export type LayoutToolId = BuiltinLayoutToolId | ExtLayoutToolId;
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 

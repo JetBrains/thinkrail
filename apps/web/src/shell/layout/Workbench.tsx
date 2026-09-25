@@ -22,7 +22,6 @@ import {
 	RiMoreLine as MoreHorizontal,
 	RiLayoutLeftLine as PanelLeftOpen,
 	RiLayoutRightLine as PanelRightOpen,
-	RiLayout2Line as PanelsTopLeft,
 	RiAddLine as Plus,
 	RiBookOpenFill,
 	RiBookOpenLine,
@@ -36,7 +35,8 @@ import {
 	RiFolder2Fill,
 	RiFolder2Line,
 	RiGitPullRequestFill,
-	RiLayout2Fill,
+	RiPuzzle2Fill,
+	RiPuzzle2Line,
 	RiTerminalBoxFill,
 	RiSearchLine as Search,
 	RiTerminalBoxLine as SquareTerminal,
@@ -392,6 +392,8 @@ function tabSearchKeywords(tab: LayoutTab): string[] {
 			return [name, tab.kind, tab.sessionId];
 		case "document":
 			return [name, tab.kind, tab.sourceId, tab.docPath];
+		case "extension":
+			return [name, tab.kind, tab.extension, tab.surface];
 		case "terminal":
 			return [name, tab.kind, tab.tabKey];
 		case "tool":
@@ -414,6 +416,8 @@ function tabIcon(tab: LayoutTab, active = false): ReactNode {
 			return active ? <RiChat2Fill className={cls} /> : <RiChat2Line className={cls} />;
 		case "document":
 			return <ListTodo className={cls} />;
+		case "extension":
+			return active ? <RiPuzzle2Fill className={cls} /> : <RiPuzzle2Line className={cls} />;
 		case "terminal":
 			return active ? <RiTerminalBoxFill className={cls} /> : <SquareTerminal className={cls} />;
 		case "tool":
@@ -429,7 +433,7 @@ function tabIcon(tab: LayoutTab, active = false): ReactNode {
 				case "review":
 					return active ? <RiDiscussFill className={cls} /> : <RiDiscussLine className={cls} />;
 				default:
-					return active ? <RiLayout2Fill className={cls} /> : <PanelsTopLeft className={cls} />;
+					return active ? <RiPuzzle2Fill className={cls} /> : <RiPuzzle2Line className={cls} />;
 			}
 	}
 }

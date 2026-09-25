@@ -283,7 +283,20 @@ the **capability** registers with the pi session server-side (custom tool or pi 
   primary card renders expanded once complete, e.g. `visualize`). Read through the single
   **`resolveProminence`** seam — where a per-user override map (settings) can plug in later.
 
-Unregistered tools fall back to `DefaultToolRenderer`. Tools needing user input mid-run either route
+Unregistered tools fall back to `DefaultToolRenderer`. `registerToolRenderer` returns a disposer that
+restores whatever registration the name had before (runtime registrants, such as extension `toolCard`
+surfaces, come and go); `ToolRendererBody` reads through `useToolRenderer`, so a mounted card switches
+renderer without a remount.
+
+**Custom-message renderers.** `rendererRegistry.ts` holds `registerMessageRenderer(customType, renderer)`
+(same disposer rule) and one registry snapshot (`useRendererRegistry`) whose identity changes on every tool or
+message registration change. Every `display: true` custom message that no built-in card claims becomes a
+`custom` turn (in `hydrate.ts` and in the live `message_end` fold); `deriveRows` keeps a `custom` turn only
+when its `customType` is in the snapshot's `messageTypes`, and `ChatView` re-derives rows when the snapshot
+changes. An unregistered type therefore renders nothing and shifts no divider. `custom` turns take no
+`turnIdByMessageIndex` slot, so history jump anchors are unchanged.
+
+Tools needing user input mid-run either route
 through the extension-UI bridge (`pi.extensionUi` → `ExtUiDialog`) or — for a rich inline card — render
 from their `toolCall` args and reply through **`ChatActions`** (see below). Worked example: the
 `ask_user_question` flow in [tools/SPEC.md](tools/SPEC.md).
@@ -1055,7 +1068,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 ## Boundary
 
-- **Public surface:** the registry API (`toolRegistry`), the shared workspace-file target canonicalizer
+- **Public surface:** the registry API (`toolRegistry`, `rendererRegistry`), the shared workspace-file target canonicalizer
   (`fileTargets`), and the renderers (incl. the presentational
   `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses the compact bubble skin (`tr-prose-chat`),

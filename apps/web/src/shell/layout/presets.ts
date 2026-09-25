@@ -1,4 +1,5 @@
 import type {
+	BuiltinLayoutToolId,
 	LayoutPreset,
 	LayoutPresetBottomRegion,
 	LayoutPresetCenterNode,
@@ -124,7 +125,7 @@ export function resolveLayoutPreset(
 	return resolved;
 }
 
-function defaultRestoreTarget(tool: LayoutToolId) {
+function defaultRestoreTarget(tool: BuiltinLayoutToolId) {
 	const side = LAYOUT_TOOL_DEFAULT_SIDES[tool];
 	return {
 		region: side,

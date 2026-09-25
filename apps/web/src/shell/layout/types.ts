@@ -1,4 +1,6 @@
-import type { GitDiffScope, LayoutPreset } from "@thinkrail/contracts";
+import type { BuiltinLayoutToolId, GitDiffScope, LayoutPreset } from "@thinkrail/contracts";
+
+export type { BuiltinLayoutToolId };
 
 export type LayoutBottomAlignment = LayoutPreset["bottom"]["alignment"];
 export type LayoutToolId = LayoutPreset["left"]["groups"][number]["tools"][number];
@@ -34,6 +36,14 @@ export interface LayoutDocumentTab {
 	docPath: string;
 }
 
+export interface LayoutExtensionTab {
+	kind: "extension";
+	id: string;
+	name: string;
+	extension: string;
+	surface: string;
+}
+
 export interface LayoutTerminalTab {
 	kind: "terminal";
 	id: string;
@@ -53,6 +63,7 @@ export type LayoutCenterTab =
 	| LayoutDiffTab
 	| LayoutChatTab
 	| LayoutDocumentTab
+	| LayoutExtensionTab
 	| LayoutTerminalTab;
 export type LayoutAuxiliaryTab = LayoutToolTab | LayoutTerminalTab;
 export type LayoutSideTab = LayoutAuxiliaryTab;

@@ -61,6 +61,8 @@ export const E2E_LAUNCH_TOKEN = createHash("sha256")
 
 export const E2E_HOME_DIR = join(E2E_DATA_DIR, "home");
 
+export const E2E_EXTENSIONS_DIR = join(E2E_DATA_DIR, "extensions");
+
 export const E2E_FAKE_BIN_DIR = join(E2E_DATA_DIR, ".bun", "bin");
 
 export const E2E_CENTRAL_EXTENSION_SOURCE = join(E2E_DATA_DIR, "synthetic-central-extension.ts");

@@ -44,7 +44,10 @@ of the host.
   from `piProtocol` (the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); from `ext`: `SURFACE_SLOTS`, `EXT_RUNTIME_GLOBAL`,
-  `EXT_RUNTIME_MODULES`, `EXT_VIEW_EXPORTS`, `extAssetPath`; `export *` (value) of `wsProtocol`
+  `EXT_RUNTIME_MODULES`, `EXT_VIEW_EXPORTS`, `EXT_VIEW_UI_EXPORTS` (the `ui` primitive names the web
+  runtime ships and ext-sdk types), `extAssetPath`, and the extension panel tool id helpers `extToolId`,
+  `parseExtToolId`, `isExtLayoutToolId` (`LayoutToolId` is the built-in ids or `ext:<name>:<surface>`, so
+  host preset validation and web layout restore read one grammar); `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, feature-introduction versions, and the
   launch-auth names `LAUNCH_TOKEN_PARAM` + `LAUNCH_AUTH_PATH` shared by host and browser).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
@@ -347,7 +350,9 @@ of the host.
   required **numeric usage field**, `durationMs`, and every present optional display field as a string,
   never just "an object is present" (PR #303 review finding). That validator is the one home for the
   shape check — the web's Agent-card reader
-  narrows through it too — plus **`customMessageText`** — the one text extraction over
+  narrows through it too — plus **`isGenericCustomMessage`** (a displayed custom message whose type is none of
+  the three built-in ones; the web turns it into a generic `custom` turn that only a registered renderer shows)
+  and **`customMessageText`** — the one text extraction over
   `WireCustomMessage.content` (string | blocks), shared by the web's event reducer and hydration so the
   completion card's text derives once.
   **history-search read DTOs** — **`HistoryScope`** (the overlay's cycle: this chat → workspace →

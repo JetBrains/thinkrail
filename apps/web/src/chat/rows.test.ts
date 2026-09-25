@@ -553,3 +553,27 @@ test("turnDivider treats every written file as a change when no classifier is su
 	expect(d?.specs).toEqual([]);
 	expect(d?.changedFiles).toEqual(["SPEC.md"]);
 });
+
+describe("custom message rows", () => {
+	const custom = (id: string, customType: string): ChatTurn => ({
+		kind: "custom",
+		id,
+		customType,
+		text: "",
+		details: null,
+		timestamp: 0,
+	});
+
+	test("only registered custom types become rows and unregistered ones leave dividers alone", () => {
+		const turns = [user("u1"), custom("c1", "known"), custom("c2", "unknown"), user("u2")];
+		const without = deriveRows(turns, {}, false);
+		expect(without.map((row) => row.kind)).toEqual(["user", "user"]);
+		const withKnown = deriveRows(turns, {}, false, undefined, new Set(["known"]));
+		const content = withKnown.filter((row) => row.kind !== "divider");
+		expect(content.map((row) => [row.kind, row.id])).toEqual([
+			["user", "u1"],
+			["custom", "c1"],
+			["user", "u2"],
+		]);
+	});
+});

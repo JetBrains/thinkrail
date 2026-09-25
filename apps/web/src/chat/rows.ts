@@ -49,6 +49,7 @@ export type ChatRow =
 	| { kind: "markdown"; id: string; text: string }
 	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
 	| { kind: "reviewFix"; id: string; details: ReviewFixDetails; text: string }
+	| Extract<ChatTurn, { kind: "custom" }>
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
 			kind: "activity";
@@ -99,12 +100,18 @@ function nestRoutineRun(steps: ActivityStep[]): ActivityStep[] {
 	return nested;
 }
 
+const NO_MESSAGE_TYPES: ReadonlySet<string> = new Set();
+
 export function deriveRows(
-	turns: ChatTurn[],
+	allTurns: ChatTurn[],
 	toolResults: Record<string, ToolResultState>,
 	isStreaming: boolean,
 	isSpec?: (path: string) => boolean,
+	messageTypes = NO_MESSAGE_TYPES,
 ): ChatRow[] {
+	const turns = allTurns.filter(
+		(turn) => turn.kind !== "custom" || messageTypes.has(turn.customType),
+	);
 	const rows: ChatRow[] = [];
 	let run: ActivityStep[] = [];
 
@@ -199,6 +206,9 @@ export function deriveRows(
 					break;
 				case "reviewFix":
 					rows.push({ kind: "reviewFix", id: turn.id, details: turn.details, text: turn.text });
+					break;
+				case "custom":
+					rows.push(turn);
 					break;
 			}
 		}

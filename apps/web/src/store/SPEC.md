@@ -479,7 +479,9 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   staleness contract in `DiffPane`, in **two** dimensions: the fs tick and the review target the two sides were
   read against, written together so neither can outlive the content it describes. The transient
   A **`reveal-tool` `LayoutIntent`** is the arrangement-agnostic request to reveal/focus a singleton
-  side tool; the shell layout integration consumes it and resolves the tool's current saved location.
+  side tool; the shell layout integration consumes it and resolves the tool's current saved location. Its
+  optional `name` labels an extension panel the first time it is placed. **`open-extension`** opens (or
+  focuses) an extension `tab` surface as a center tab; `ext` enqueues both through `enqueueLayoutIntent`.
   **`changesRequest`** and **`specRequest`** add an optional path/item target to that reveal and carry a
   browser-local request-time center destination without exposing layout concerns to feature views. Async
   resolution carries the local

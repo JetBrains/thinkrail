@@ -183,14 +183,38 @@ test("turnIdByMessageIndex maps each message's position to its own turn id, null
 		{ role: "assistant", content: [], stopReason: "error", errorMessage: "boom" },
 	] as unknown as Message[]);
 
-	expect(turns.map((t) => t.kind)).toEqual(["user", "user", "assistant", "error"]);
+	expect(turns.map((t) => t.kind)).toEqual(["user", "custom", "user", "assistant", "error"]);
 	expect(turnIdByMessageIndex).toHaveLength(5);
 	expect(turnIdByMessageIndex[0]).toBe(turns[0]?.id);
 	expect(turnIdByMessageIndex[1]).toBeNull();
 	expect(turnIdByMessageIndex[2]).toBeNull();
-	expect(turnIdByMessageIndex[3]).toBe(turns[1]?.id);
-	expect(turnIdByMessageIndex[4]).toBe(turns[2]?.id);
-	expect(turnIdByMessageIndex[4]).not.toBe(turns[3]?.id);
+	expect(turnIdByMessageIndex[3]).toBe(turns[2]?.id);
+	expect(turnIdByMessageIndex[4]).toBe(turns[3]?.id);
+	expect(turnIdByMessageIndex[4]).not.toBe(turns[4]?.id);
+});
+
+test("a displayed custom message of any other type hydrates as a generic custom turn", () => {
+	const { turns } = messagesToRuntime([
+		{
+			role: "custom",
+			customType: "railmap-drift",
+			content: [{ type: "text", text: "2 new edges" }],
+			details: { edges: 2 },
+			display: true,
+			timestamp: 7,
+		},
+		{ role: "custom", customType: "hidden-note", content: "x", display: false, timestamp: 8 },
+	] as unknown as Message[]);
+	expect(turns).toEqual([
+		{
+			kind: "custom",
+			id: expect.any(String),
+			customType: "railmap-drift",
+			text: "2 new edges",
+			details: { edges: 2 },
+			timestamp: 7,
+		},
+	]);
 });
 
 test("a subagent-completion custom message hydrates as its own subagentCompletion turn", () => {
@@ -378,7 +402,7 @@ test("an answers message with malformed details is ignored — the guard validat
 	expect(Object.keys(askAnswers)).toHaveLength(0);
 });
 
-test("unknown custom messages are ignored entirely", () => {
+test("unknown custom messages stay generic custom turns and never feed ask answers", () => {
 	const { turns, askAnswers } = messagesToRuntime([
 		{
 			role: "custom",
@@ -388,7 +412,7 @@ test("unknown custom messages are ignored entirely", () => {
 			timestamp: 1,
 		},
 	] as unknown as Message[]);
-	expect(turns).toHaveLength(0);
+	expect(turns.map((turn) => turn.kind)).toEqual(["custom"]);
 	expect(Object.keys(askAnswers)).toHaveLength(0);
 });
 

@@ -1,12 +1,12 @@
 import { ToolResultImages } from "./ToolResultImages";
-import { getToolRenderer, type ToolRenderProps } from "./toolRegistry";
+import { type ToolRenderProps, useToolRenderer } from "./toolRegistry";
 import { parseToolResultContent } from "./toolResultContent";
 
 export function ToolRendererBody({
 	imageLabel,
 	...props
 }: ToolRenderProps & { imageLabel: string }) {
-	const Renderer = getToolRenderer(props.toolName);
+	const Renderer = useToolRenderer(props.toolName);
 	const images = props.status === "running" ? [] : parseToolResultContent(props.result).images;
 	return (
 		<>

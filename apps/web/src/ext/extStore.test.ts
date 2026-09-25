@@ -1,0 +1,77 @@
+import { beforeEach, expect, test } from "bun:test";
+import type { ExtensionInfo } from "@thinkrail/contracts";
+import { selectSurface, selectSurfaces, surfaceTitle, useExtStore } from "./extStore";
+
+const info = (name: string, overrides: Partial<ExtensionInfo> = {}): ExtensionInfo => ({
+	name,
+	title: name.toUpperCase(),
+	scope: "user",
+	status: "active",
+	generation: 1,
+	build: "0123456789abcdef",
+	permissions: [],
+	surfaces: [
+		{ id: "main", slot: "panel", title: "Main" },
+		{ id: "big", slot: "tab" },
+		{ id: "bar", slot: "status" },
+	],
+	...overrides,
+});
+
+beforeEach(() => {
+	useExtStore.setState({ hydration: "idle", extensions: {}, channels: {}, params: {} });
+});
+
+test("install replaces extensions and channels and marks the store ready", () => {
+	const store = useExtStore.getState();
+	store.applyChannel("old:key", 1);
+	store.install([info("demo")], { "demo:count": 2 });
+	const state = useExtStore.getState();
+	expect(state.hydration).toBe("ready");
+	expect(Object.keys(state.extensions)).toEqual(["demo"]);
+	expect(state.channels).toEqual({ "demo:count": 2 });
+});
+
+test("removal drops the extension and only its own channel keys", () => {
+	const store = useExtStore.getState();
+	store.install([info("demo"), info("demo-two")], {
+		"demo:a": 1,
+		"demo-two:a": 2,
+	});
+	store.applyRemoved("demo");
+	const state = useExtStore.getState();
+	expect(Object.keys(state.extensions)).toEqual(["demo-two"]);
+	expect(state.channels).toEqual({ "demo-two:a": 2 });
+	store.dropChannels(["demo-two:a"]);
+	expect(useExtStore.getState().channels).toEqual({});
+});
+
+test("an unsupported host clears everything", () => {
+	useExtStore.getState().install([info("demo")], { "demo:a": 1 });
+	useExtStore.getState().markUnsupported();
+	expect(useExtStore.getState()).toMatchObject({
+		hydration: "unsupported",
+		extensions: {},
+		channels: {},
+	});
+});
+
+test("surface selectors skip extensions without a build and sort by name", () => {
+	const extensions = {
+		zeta: info("zeta"),
+		alpha: info("alpha"),
+		broken: info("broken", { build: null, status: "error" }),
+	};
+	expect(
+		selectSurfaces(extensions, ["panel"]).map(({ extension, surface }) => [
+			extension.name,
+			surface.id,
+		]),
+	).toEqual([
+		["alpha", "main"],
+		["zeta", "main"],
+	]);
+	const placed = selectSurface(extensions, "alpha", "big");
+	expect(placed && surfaceTitle(placed)).toBe("ALPHA big");
+	expect(selectSurface(extensions, "alpha", "nope")).toBeNull();
+});

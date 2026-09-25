@@ -13,8 +13,10 @@
 	},
 	"devDependencies": {
 		"@earendil-works/pi-coding-agent": "catalog:",
+		"@remixicon/react": "catalog:",
 		"@thinkrail/contracts": "workspace:*",
 		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
 		"typescript": "catalog:"
 	}
 }

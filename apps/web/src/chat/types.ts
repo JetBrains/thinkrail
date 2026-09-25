@@ -6,6 +6,7 @@ import type {
 	ReviewFixDetails,
 	UserMessage,
 } from "@thinkrail/contracts";
+import type { MessageRenderProps } from "./rendererRegistry";
 
 export interface ChatAttachment {
 	name: string;
@@ -27,6 +28,7 @@ export type ChatTurn =
 	| { kind: "error"; id: string; text: string; recovery?: FailureRecovery }
 	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
 	| { kind: "reviewFix"; id: string; details: ReviewFixDetails; text: string }
+	| ({ kind: "custom"; id: string } & MessageRenderProps)
 	| {
 			kind: "retry";
 			id: string;

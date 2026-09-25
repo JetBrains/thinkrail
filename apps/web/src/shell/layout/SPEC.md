@@ -36,6 +36,13 @@ retained-workspace remap; the store installs that result atomically through
 a tab's `name` remains non-identity metadata. Singleton tool names resolve from the current web-owned catalog
 at presentation time, so copy updates never rewrite local layout state.
 
+Extensions add two placements. A `panel` surface is a singleton tool with id `ext:<name>:<surface>`
+(contracts' `LayoutToolId` grammar); its default region is right, its tab `name` is the surface title
+captured when first revealed, and it never appears in the built-in unplaced-tool lists. A `tab` surface is a
+center resource of kind `extension` (`{ extension, surface }`, identity per extension + surface); it cannot
+move to an auxiliary region. Neither placement depends on the extension being loaded; the body shows a
+placeholder when it is not.
+
 A click that may become a browser `dblclick` waits the shared 250 ms settle window. The upgraded gesture emits
 only its final keep while retaining the leading preview-slot claim, whether content was cached or required a
 host read. It never persists an intermediate preview. Pointer/resize drafts and viewport compression remain

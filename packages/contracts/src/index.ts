@@ -33,9 +33,13 @@ export {
 	EXT_RUNTIME_GLOBAL,
 	EXT_RUNTIME_MODULES,
 	EXT_VIEW_EXPORTS,
+	EXT_VIEW_UI_EXPORTS,
 	EXT_WS_CHANNELS,
 	EXT_WS_METHODS,
 	extAssetPath,
+	extToolId,
+	isExtLayoutToolId,
+	parseExtToolId,
 	SURFACE_SLOTS,
 } from "./ext";
 export type * from "./nativeClient";

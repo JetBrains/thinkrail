@@ -29,6 +29,7 @@ import { FileChip } from "./FileChip";
 import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
 import { ReviewPackageComments } from "./ReviewPackageComments";
+import { type MessageRenderProps, useMessageRenderer } from "./rendererRegistry";
 import { parseReviewPackage, reviewFixCommentsToItems, reviewPackageLabel } from "./reviewPackage";
 import { type ChatRow, LARGE_USER_MESSAGE, type TurnDividerData } from "./rows";
 import { formatElapsed, formatTokens } from "./SessionStatsBar";
@@ -127,6 +128,8 @@ export function ChatTurnView({
 			return <SubagentCompletionCard id={row.id} details={row.details} text={row.text} />;
 		case "reviewFix":
 			return <ReviewFixCard id={row.id} details={row.details} />;
+		case "custom":
+			return <CustomMessageRow {...row} />;
 		case "tool":
 			return <ToolRow row={row} workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />;
 		case "activity":
@@ -809,6 +812,16 @@ export function TurnDivider({
 						workspaceRoot={workspaceRoot}
 					/>
 				))}
+		</div>
+	);
+}
+
+function CustomMessageRow({ customType, text, details, timestamp }: MessageRenderProps) {
+	const Renderer = useMessageRenderer(customType);
+	if (!Renderer) return null;
+	return (
+		<div data-testid="custom-message" data-custom-type={customType} className="w-full min-w-0">
+			<Renderer customType={customType} text={text} details={details} timestamp={timestamp} />
 		</div>
 	);
 }

@@ -1,0 +1,17 @@
+import { type SurfaceProps, useChannel, useHostContext } from "@thinkrail/ext/view";
+
+export default function Board({ surfaceId }: SurfaceProps) {
+	const count = useChannel<number>("count") ?? 0;
+	const host = useHostContext();
+	return (
+		<div data-testid="demo-board" className="flex h-full flex-col items-center justify-center gap-8">
+			<p className="tr-title-entity text-text-default">Demo board ({surfaceId})</p>
+			<p data-testid="demo-board-count" className="tr-text-ui text-primary">
+				count {count}
+			</p>
+			<p data-testid="demo-board-workspace" className="tr-text-metadata text-text-muted">
+				{host.workspaceId ? "workspace attached" : "no workspace"}
+			</p>
+		</div>
+	);
+}
