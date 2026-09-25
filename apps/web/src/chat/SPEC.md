@@ -1050,7 +1050,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   presentational atoms the Review panel (`panels/ReviewPanel`) reuses so both "work items in
   sections" surfaces read identically.
   **The add-nudge respects that waiting state.** A user add always stores the item (loose, at the end).
-  On protocol v67+, `session.nudge` makes the host-authoritative blocker/execution decision atomically:
+  On protocol v69+, `session.nudge` makes the host-authoritative blocker/execution decision atomically:
   needs-input no-ops, running queues, and idle prompts. Independently shipped clients retain the prior
   glance-based prompt/follow-up plus hydration fallback only for older hosts; the compatibility path skips
   an awaiting question rather than waking the agent past its blocker.
