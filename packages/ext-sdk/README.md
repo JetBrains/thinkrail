@@ -73,24 +73,31 @@ export default defineExtension((tr) => {
 - `tr.on(eventType, (event, session) => …)`: observe pi events of every top-level session. Useful types:
   `agent_start`, `turn_start`, `turn_end`, `message_end`, `tool_execution_start`,
   `tool_execution_update` (`partialResult` replaces the previous one), `tool_execution_end`,
-  `compaction_end`, `agent_settled`. A run is finished at `agent_settled`, never `agent_end` (retries and
+  `compaction_start`, `compaction_end`, `agent_settled`. A run is finished at `agent_settled`, never `agent_end` (retries and
   compaction may follow `agent_end`). `session` is `{ sessionId, workspaceId, title, isStreaming }`.
 - `tr.publish(key, value)`: push a value to views. The host keeps the last value; a view mounted later
-  gets it. Values must be JSON.
+  gets it. Values must be JSON. Per-session data goes under one key per session (`tr.publish(sessionId, …)`).
+- `tr.unpublish(key)`: forget a key's last value; open views see `undefined`. Use it for data that
+  belongs to a session that has closed, so the host does not keep it forever.
 - `tr.action(id, (payload, ctx) => result)`: a function views can call. `ctx` has `projectId`,
   `workspaceId`, `sessionId` of the calling view.
 - `tr.store.get(key)` / `tr.store.set(key, value)`: JSON that survives reloads and restarts.
-- `tr.sessions.list()`, `tr.sessions.stats(sessionId)`: live sessions and pi's own stats (tokens, cost,
-  context use). Never compute cost yourself.
+  `set(key, undefined)` deletes the key. The whole store is one file, so keep it bounded.
+- `tr.sessions.list()`, `tr.sessions.stats(sessionId)`: live sessions and pi's own stats
+  (`SessionStats`: tokens, `cost` in USD, `contextUsage.percent`). Never compute cost yourself. `stats`
+  rejects for a session that is not live.
 - `tr.every(ms, fn)`: interval timer.
 - `tr.pi((pi) => { … })`: a pi extension factory added to every top-level chat session (`pi.registerTool`,
   `pi.on("tool_call", …)`, `pi.sendMessage({ customType, content, display: true, details })` …). Sessions
   pick up a change after their current run settles.
 - Return a disposer function to close your own resources (sockets, watchers) on unload.
+- The factory may be `async` (for example, to read `tr.store` first). The host waits for it before the
+  new version goes live.
 
 Rules: the factory runs again on every reload, so do no side effects outside `tr.*` and the returned
 disposer. Keep state in closures or `tr.store`. Do not write files into the extension directory: a change
-there triggers a reload. Imports available without install: `@thinkrail/ext`, `typebox`,
+there triggers a reload. Split code into more files freely: `index.ts` and views can import relative
+modules (`./model`), and a pure module can be shared by both halves. Imports available without install: `@thinkrail/ext`, `typebox`,
 `@earendil-works/pi-coding-agent`, Node/Bun built-ins.
 
 ## Views (`<surfaceId>.tsx`)
@@ -121,6 +128,8 @@ From `@thinkrail/ext/view`:
   host adds the `<name>:` prefix), then live updates. `undefined` until the first publish.
 - `useAction(id)`: returns `(payload?) => Promise<result>`.
 - `useHostContext()`: `{ projectId?, workspaceId?, sessionId?, theme }` of the active chat, reactive.
+  `host.sessionId` in `SurfaceProps` is the same value. `useAction` sends it as `ctx`, so an action like
+  `watch` can make the host half publish data for the chat the user is looking at.
 - `openSurface(ext, surfaceId, params?)`: open a `tab`/`panel` surface; it receives `params`.
 - `SurfaceProps`: `{ surfaceId, host, params?, toolCall?, message? }`. A `toolCard` view gets
   `toolCall = { toolCallId, toolName, args, result, status }`; a `message` view gets
@@ -128,6 +137,7 @@ From `@thinkrail/ext/view`:
 - `ui`: the app's own components: `Button` (`variant`: default, destructive, outline, ghost; `size`:
   default, sm, icon), `Textarea`, `Tooltip*`, `IconTooltip`, `Popover*`, `Dialog*`, `DropdownMenu*`,
   `ContextMenu*`, `Command*`.
+- Types: `SurfaceProps`, `HostContext`, `SessionStats` (the value of a published `tr.sessions.stats`).
 - `cn(...classes)`, `remixicon` (all `@remixicon/react` icons: `Ri…Line`, `Ri…Fill`).
 - `react`, `react-dom`, `react/jsx-runtime` resolve to the app's React. Other npm deps: add them to the
   extension's own `package.json` and `bun install`; they are bundled into the view.
@@ -145,7 +155,8 @@ Tailwind v4 utilities are compiled for each view against the app's theme. Use se
   `size-14`, `size-16`. Radius: `rounded-sm`, `rounded-md`, `rounded-lg`.
 - Type: `tr-title-compact`, `tr-title-section`, `tr-text-ui`, `tr-text-metadata`, `tr-code-text`.
 
-No raw hex, no inline `style` objects for colour, no Tailwind palette names (`bg-blue-500`): they do not
+Positions and sizes computed at runtime (a bar at `left: 42%`) go in `style`; everything else is a
+class. No raw hex, no inline `style` objects for colour, no Tailwind palette names (`bg-blue-500`): they do not
 follow the theme. An unknown utility renders unstyled without an error.
 
 ## Dev loop
@@ -161,3 +172,17 @@ follow the theme. An unknown utility renders unstyled without an error.
 
 The host also reloads an extension shortly after its files change. Use `ext_reload` anyway to get the
 result. A view that crashes shows its error in place with an "Ask agent to fix" button.
+
+## Examples
+
+The ThinkRail source repo ships a full example at `.thinkrail/extensions/timeline/`: a run timeline
+panel and a topbar cost item. It shows the patterns above working together:
+
+- `model.ts`: a pure reducer from pi events to spans, shared by the host half and the views.
+- `index.ts`: `tr.on` for turns, tools, usage, and compaction; publishes at most every 150 ms with
+  `tr.every`; closes a run at `agent_settled`; publishes `cost:<sessionId>` from `tr.sessions.stats`;
+  caps spans per session; `tr.unpublish` for closed sessions; keeps settled runs in `tr.store`; a
+  `watch` action the views call when the active chat changes.
+- `timeline.tsx`, `cost.tsx`: a `panel` and a `status` surface that read the same channels, keyed by
+  `host.sessionId`.
+- `tsconfig.json`: type-checks the extension against this SDK.

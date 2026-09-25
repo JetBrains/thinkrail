@@ -25,10 +25,11 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
   - `ThinkRailExtension` — `(tr: Tr) => Disposer | undefined | Promise<Disposer | undefined>`. A returned
     `Disposer` runs when the generation is disposed (close watchers, sockets, …).
   - `Tr`, `Off`, `Disposer`, `SessionRef`, `ActionCtx`, `ActionHandler`, `ExtStore`, `PiEventName`,
-    `PiEventOf<E>`, `PiExtensionFactory` (pi's `ExtensionFactory`, type-only).
+    `PiEventOf<E>`, `PiExtensionFactory` (pi's `ExtensionFactory`, type-only), `SessionStats`.
 - `./view` (`src/view.ts` + `src/viewUi.ts`, browser side): `SurfaceProps` (contracts'
   `ExtSurfaceProps`: `surfaceId`, `host`, optional `params` from `openSurface`, `toolCall` for a
-  `toolCard` surface, `message` for a `message` surface), `HostContext`, `ExtViewUi` + its prop types, and
+  `toolCard` surface, `message` for a `message` surface), `HostContext`, `SessionStats` (the shape of a
+  published `sessions.stats`), `ExtViewUi` + its prop types, and
   **declared** (type-only, no body) runtime values named by contracts' `EXT_VIEW_EXPORTS`: `useChannel`,
   `useAction`, `useHostContext`, `openSurface`, `ui`, `cn`, `remixicon`. The file emits nothing; the host's
   view builder resolves this specifier to a shim over the web's runtime global, so the declarations only
@@ -54,9 +55,17 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
   `tr.*` calls.
 - The factory must be side-effect free outside `tr.*` and a returned `Disposer` (pi's rule for its own
   extension factories): the host may run it again on every reload.
-- `publish(key, value)` keys are auto-prefixed `<name>:`; the host keeps the last value per key.
+- `publish(key, value)` keys are auto-prefixed `<name>:`; the host keeps the last value per key until
+  `unpublish(key)` drops it (views then read `undefined`).
 - `store` persists JSON per extension; values must survive `JSON.stringify`.
 - `sessions.stats` is pi's `getSessionStats()` as ThinkRail already projects it; never recomputed.
+
+## Worked example
+
+`.thinkrail/extensions/timeline/` (repo root) is the README's second example and is written only against
+this package's public entries. `typecheck` also checks it through its own `tsconfig.json`, which maps
+`@thinkrail/ext`, `@thinkrail/ext/view`, and React types onto this package, so an SDK change that breaks
+an author's code fails here.
 
 ## Boundary
 

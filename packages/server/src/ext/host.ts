@@ -104,6 +104,11 @@ export const createExtHost = (options: ExtHostOptions) => {
 		options.onChannel?.(key, value);
 	};
 
+	const dropChannel = (name: string, key: string) => {
+		if (!channels.delete(key) || disposed) return;
+		options.onChannelsDropped?.(name, [key]);
+	};
+
 	const dropChannels = (name: string) => {
 		const keys = [...channels.keys()].filter((key) => key.startsWith(`${name}:`));
 		for (const key of keys) channels.delete(key);
@@ -142,7 +147,11 @@ export const createExtHost = (options: ExtHostOptions) => {
 		} catch (error) {
 			return { ok: false as const, errors: [`index.ts: ${errorMessage(error)}`] };
 		}
-		const generation = createGeneration({ id: generationId(), emit: emitChannel });
+		const generation = createGeneration({
+			id: generationId(),
+			emit: emitChannel,
+			drop: (key) => dropChannel(name, key),
+		});
 		const tr = createTr({
 			name,
 			dir,

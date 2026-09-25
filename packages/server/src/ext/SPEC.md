@@ -147,6 +147,8 @@ lists trusted project paths, so the section stays stable across trust changes an
   extension's log.
 - Channels: key `<name>:<key>`; `snapshot(keys?)` returns last values; `onChannel` fires per publish;
   `onChannelsDropped(name, keys)` fires when a swap or unload drops keys, so clients clear them.
+  `tr.unpublish(key)` drops one key the same way (only if it was held); during loading it discards a
+  buffered publish; a disposed generation's call is ignored. Extensions use it to bound per-session keys.
 - Actions: `invokeAction({ ext, id, payload, ctx })` runs the current generation's handler; unknown
   extension or id throws. A duplicate id within one generation throws at registration.
 - Store: `<dataDir>/ext-store/<name>.json`, loaded lazily, writes serialized per extension and
@@ -155,6 +157,14 @@ lists trusted project paths, so the section stays stable across trust changes an
   failures, and view errors the web reports (`recordError`); `logs(name, since?)`.
 - `tr.sessions`: read-only projections injected by the composition root; stats are pi's, never
   recomputed.
+
+## Example extension
+
+The repo's `.thinkrail/extensions/timeline/` is the SDK's worked example, loaded as a trusted project
+extension. `timelineExample.test.ts` loads that real directory through `createExtHost`, validates it,
+feeds pi events through `observe`, and asserts the published spans, the `agent_settled` close, the cost
+channel, persistence across hosts, and the span cap. It is the regression test for this module's public
+behaviour as an author sees it.
 
 ## Boundary
 

@@ -146,6 +146,27 @@ describe("ext host", () => {
 		expect(host.snapshot()).toEqual({});
 	});
 
+	test("unpublish drops one key from the snapshot and tells clients", async () => {
+		writeExtension(
+			userDir,
+			"g1",
+			HOST_HALF.replace(
+				'tr.publish("tag", tag);',
+				'tr.publish("tag", tag); tr.publish("early", 1); tr.unpublish("early"); tr.publish("later", 2); tr.action("forget", () => tr.unpublish("later"));',
+			),
+		);
+		const dropped: [string, string[]][] = [];
+		const host = makeHost({ onChannelsDropped: (name, keys) => dropped.push([name, keys]) });
+		await host.rescan();
+		expect(host.snapshot()).toEqual({ "demo:tag": "g1", "demo:later": 2 });
+		await host.invokeAction({ ext: "demo", id: "forget", payload: undefined, ctx: {} });
+		expect(host.snapshot()).toEqual({ "demo:tag": "g1" });
+		expect(dropped).toEqual([["demo", ["demo:later"]]]);
+		await host.invokeAction({ ext: "demo", id: "forget", payload: undefined, ctx: {} });
+		expect(dropped).toHaveLength(1);
+		await host.dispose();
+	});
+
 	test("actions round trip payload, context, and session reads", async () => {
 		writeExtension(userDir, "g1");
 		const host = makeHost();

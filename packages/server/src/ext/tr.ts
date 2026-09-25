@@ -61,6 +61,7 @@ export const createTr = ({
 		},
 		pi: (factory) => generation.addPiFactory(factory),
 		publish: (key, value) => generation.publish(`${name}:${key}`, value),
+		unpublish: (key) => generation.unpublish(`${name}:${key}`),
 		action: (id, fn) => generation.addAction(id, fn),
 		store,
 		sessions: {

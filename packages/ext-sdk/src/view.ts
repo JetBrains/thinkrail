@@ -4,6 +4,7 @@ import type {
 	ExtSurfaceProps,
 	ExtToolCallView,
 	HostContext,
+	SessionStats,
 } from "@thinkrail/contracts";
 import type { ExtViewUi } from "./viewUi";
 
@@ -15,7 +16,7 @@ export type {
 	RootProps,
 	TriggerProps,
 } from "./viewUi";
-export type { ExtMessageView, ExtToolCallView, ExtViewUi, HostContext };
+export type { ExtMessageView, ExtToolCallView, ExtViewUi, HostContext, SessionStats };
 
 export type SurfaceProps = ExtSurfaceProps;
 

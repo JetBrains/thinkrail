@@ -1,6 +1,8 @@
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import type { ExtActionContext, PiEvent, SessionStats } from "@thinkrail/contracts";
 
+export type { SessionStats };
+
 export type Off = () => void;
 export type Disposer = () => void | Promise<void>;
 export type PiExtensionFactory = ExtensionFactory;
@@ -30,6 +32,7 @@ export interface Tr {
 	on<E extends PiEventName>(event: E, fn: (event: PiEventOf<E>, session: SessionRef) => void): Off;
 	pi(factory: PiExtensionFactory): Off;
 	publish(key: string, value: unknown): void;
+	unpublish(key: string): void;
 	action(id: string, fn: ActionHandler): Off;
 	readonly store: ExtStore;
 	readonly sessions: {

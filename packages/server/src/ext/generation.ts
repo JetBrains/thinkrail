@@ -16,6 +16,7 @@ export interface Generation {
 	addTimer(start: () => Off): Off;
 	addDisposer(fn: Disposer): void;
 	publish(key: string, value: unknown): void;
+	unpublish(key: string): void;
 	activate(): void;
 	dispose(): Promise<unknown[]>;
 }
@@ -23,9 +24,11 @@ export interface Generation {
 export const createGeneration = ({
 	id,
 	emit,
+	drop,
 }: {
 	id: number;
 	emit: (key: string, value: unknown) => void;
+	drop: (key: string) => void;
 }): Generation => {
 	let phase: Phase = "loading";
 	const observers = new Map<string, Set<Observer>>();
@@ -82,6 +85,10 @@ export const createGeneration = ({
 		publish(key, value) {
 			if (phase === "active") emit(key, value);
 			else if (phase === "loading") pendingPublishes.set(key, value);
+		},
+		unpublish(key) {
+			if (phase === "active") drop(key);
+			else if (phase === "loading") pendingPublishes.delete(key);
 		},
 		activate() {
 			if (phase !== "loading") return;
