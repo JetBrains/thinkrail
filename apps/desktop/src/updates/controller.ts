@@ -1,4 +1,8 @@
-import type { NativeUpdateBridge, NativeUpdateState } from "@thinkrail/contracts";
+import type {
+	NativeUpdateBridge,
+	NativeUpdateFailedPhase,
+	NativeUpdateState,
+} from "@thinkrail/contracts";
 
 const AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const AUTO_CHECK_JITTER_RATIO = 0.1;
@@ -7,10 +11,31 @@ const MAX_ERROR_LENGTH = 1024;
 const SEMVER_PATTERN =
 	/^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
+const TRANSFER_STATUSES = new Set([
+	"download-starting",
+	"fetching-patch",
+	"downloading-patch",
+	"downloading-full-bundle",
+]);
+
+const PREPARING_STATUSES = new Set([
+	"applying-patch",
+	"extracting-version",
+	"patch-chain-complete",
+	"decompressing",
+	"preparing",
+]);
+
 type CancelSchedule = () => void;
 type StatePatch = Partial<
-	Pick<NativeUpdateState, "status" | "availableVersion" | "progress" | "error">
+	Pick<NativeUpdateState, "status" | "availableVersion" | "progress" | "error" | "failedPhase">
 >;
+
+type ActiveCheck = object;
+interface ActiveDownload {
+	version: string;
+	operation?: Promise<boolean>;
+}
 
 export interface NativeUpdaterInfo {
 	version: string;
@@ -85,13 +110,15 @@ export function createNativeUpdateController(
 		availableVersion: null,
 		progress: null,
 		error: null,
+		failedPhase: null,
 	});
 	let preparedVersion: string | null = null;
 	let started = false;
 	let disposed = false;
 	let retryIndex = 0;
 	let cancelScheduled: CancelSchedule | undefined;
-	let checkOperation: Promise<boolean> | undefined;
+	let activeCheck: ActiveCheck | undefined;
+	let activeDownload: ActiveDownload | undefined;
 	let restarting = false;
 
 	const publish = (patch: StatePatch): void => {
@@ -101,7 +128,8 @@ export function createNativeUpdateController(
 			state.status === next.status &&
 			state.availableVersion === next.availableVersion &&
 			state.progress === next.progress &&
-			state.error === next.error
+			state.error === next.error &&
+			state.failedPhase === next.failedPhase
 		) {
 			return;
 		}
@@ -115,101 +143,129 @@ export function createNativeUpdateController(
 		}
 	};
 
-	const setReady = (version: string): void => {
+	const isNewer = (info: NativeUpdaterInfo): boolean =>
+		info.updateAvailable && isStrictlyNewerVersion(state.version, info.version);
+
+	const isMatchingReady = (info: NativeUpdaterInfo, version: string): boolean =>
+		info.version === version && info.updateReady && isNewer(info);
+
+	const setReady = (version: string): boolean => {
+		if (!isStrictlyNewerVersion(state.version, version)) return false;
 		preparedVersion = version;
 		publish({
 			status: "ready",
 			availableVersion: version,
 			progress: 100,
 			error: null,
+			failedPhase: null,
 		});
+		return true;
 	};
 
-	const fail = (error: unknown): void => {
+	const fail = (phase: Exclude<NativeUpdateFailedPhase, null>, error: unknown): void => {
 		const message = errorText(error);
-		if (preparedVersion && state.status !== "installing") {
+		if (phase === "check" && preparedVersion) {
 			publish({
 				status: "ready",
 				availableVersion: preparedVersion,
 				progress: 100,
 				error: message,
+				failedPhase: phase,
 			});
 			return;
 		}
-		publish({ status: "error", progress: null, error: message });
+		publish({
+			status: "error",
+			availableVersion: preparedVersion ?? state.availableVersion,
+			progress: null,
+			error: message,
+			failedPhase: phase,
+		});
 	};
 
-	const isNewer = (info: NativeUpdaterInfo): boolean =>
-		info.updateAvailable && isStrictlyNewerVersion(state.version, info.version);
-
-	const acceptCheckedInfo = async (info: NativeUpdaterInfo): Promise<boolean> => {
+	const acceptCheckedInfo = (info: NativeUpdaterInfo): boolean => {
 		if (info.error) {
-			fail(info.error);
+			fail("check", info.error);
 			return false;
 		}
 		if (!isNewer(info)) {
-			preparedVersion = null;
+			if (preparedVersion) {
+				publish({
+					status: "ready",
+					availableVersion: preparedVersion,
+					progress: 100,
+					error: null,
+					failedPhase: null,
+				});
+				return true;
+			}
 			publish({
 				status: "idle",
 				availableVersion: null,
 				progress: null,
 				error: null,
+				failedPhase: null,
 			});
 			return true;
 		}
-		if (info.updateReady) {
-			setReady(info.version);
-			return true;
-		}
+		if (info.updateReady) return setReady(info.version);
 
 		preparedVersion = null;
 		publish({
-			status: "downloading",
+			status: "available",
 			availableVersion: info.version,
 			progress: null,
 			error: null,
+			failedPhase: null,
 		});
-		try {
-			await dependencies.updater.downloadUpdate();
-			const downloaded = dependencies.updater.updateInfo();
-			if (downloaded.error) {
-				fail(downloaded.error);
-				return false;
-			}
-			if (downloaded.updateReady && downloaded.version === info.version && isNewer(downloaded)) {
-				setReady(downloaded.version);
-				return true;
-			}
-			fail("Native update download did not complete");
-			return false;
-		} catch (error) {
-			fail(error);
-			return false;
-		}
+		return true;
 	};
 
-	const readCheckedInfo = async (
-		availableVersion = preparedVersion,
-	): Promise<NativeUpdaterInfo | null> => {
+	const performCheck = async (token: ActiveCheck): Promise<boolean> => {
+		const retainedVersion = preparedVersion ?? state.availableVersion;
 		publish({
 			status: "checking",
-			availableVersion,
-			progress: availableVersion ? 100 : null,
+			availableVersion: retainedVersion,
+			progress: preparedVersion ? 100 : null,
 			error: null,
+			failedPhase: null,
 		});
 		try {
 			const info = await dependencies.updater.checkForUpdate();
-			if (!info.error) return info;
-			fail(info.error);
+			if (disposed || activeCheck !== token) return false;
+			return acceptCheckedInfo(info);
 		} catch (error) {
-			fail(error);
+			if (!disposed && activeCheck === token) fail("check", error);
+			return false;
 		}
-		return null;
 	};
 
-	const checkAndDownload = async (): Promise<boolean> => {
-		const info = await readCheckedInfo();
-		return info ? acceptCheckedInfo(info) : false;
+	const performDownload = async (token: ActiveDownload): Promise<boolean> => {
+		publish({
+			status: "downloading",
+			availableVersion: token.version,
+			progress: null,
+			error: null,
+			failedPhase: null,
+		});
+		try {
+			await dependencies.updater.downloadUpdate();
+			if (disposed || activeDownload !== token) return false;
+			if (preparedVersion === token.version) return true;
+			const info = dependencies.updater.updateInfo();
+			if (info.error) {
+				fail("download", info.error);
+				return false;
+			}
+			if (isMatchingReady(info, token.version)) return setReady(token.version);
+			fail("download", "Native update download did not complete");
+			return false;
+		} catch (error) {
+			if (disposed || activeDownload !== token) return false;
+			if (preparedVersion === token.version) return true;
+			fail("download", error);
+			return false;
+		}
 	};
 
 	const clearScheduled = (): void => {
@@ -222,52 +278,154 @@ export function createNativeUpdateController(
 		clearScheduled();
 		cancelScheduled = schedule(delayMs, () => {
 			cancelScheduled = undefined;
-			launchCheck();
+			if (!launchCheck()) scheduleRegularCheck();
 		});
 	};
 
-	const scheduleAfterCheck = (succeeded: boolean): void => {
-		if (!started || disposed || state.status === "installing") return;
-		const retryDelay = succeeded ? undefined : RETRY_DELAYS_MS[retryIndex];
-		if (retryDelay !== undefined) {
-			retryIndex += 1;
-			scheduleCheck(retryDelay);
-			return;
-		}
+	const scheduleRegularCheck = (): void => {
+		if (!started || disposed || restarting) return;
 		retryIndex = 0;
 		const unit = Math.min(1, Math.max(0, random()));
 		const jitter = (unit * 2 - 1) * AUTO_CHECK_INTERVAL_MS * AUTO_CHECK_JITTER_RATIO;
 		scheduleCheck(Math.round(AUTO_CHECK_INTERVAL_MS + jitter));
 	};
 
-	function launchCheck(): void {
-		if (!dependencies.enabled || disposed || checkOperation || restarting) return;
-		const operation = checkAndDownload();
-		checkOperation = operation;
+	const scheduleAfterCheck = (succeeded: boolean): void => {
+		if (!started || disposed || restarting) return;
+		const retryDelay = succeeded ? undefined : RETRY_DELAYS_MS[retryIndex];
+		if (retryDelay !== undefined) {
+			retryIndex += 1;
+			scheduleCheck(retryDelay);
+			return;
+		}
+		scheduleRegularCheck();
+	};
+
+	function launchCheck(): boolean {
+		if (!dependencies.enabled || disposed || activeCheck || activeDownload || restarting) {
+			return false;
+		}
+		const token: ActiveCheck = {};
+		activeCheck = token;
+		const operation = performCheck(token);
 		void operation.then((succeeded) => {
-			checkOperation = undefined;
+			if (activeCheck !== token) return;
+			activeCheck = undefined;
 			scheduleAfterCheck(succeeded);
 		});
+		return true;
 	}
 
-	const handleStatus = (entry: NativeUpdaterStatusEntry): void => {
-		if (!dependencies.enabled || disposed) return;
+	const launchDownload = (): boolean => {
+		if (!dependencies.enabled || disposed || activeCheck || activeDownload || restarting) {
+			return false;
+		}
+		const version = state.availableVersion;
+		const retryingDownload = state.status === "error" && state.failedPhase === "download";
+		if (
+			!version ||
+			!isStrictlyNewerVersion(state.version, version) ||
+			(state.status !== "available" && !retryingDownload)
+		) {
+			return false;
+		}
+		const token: ActiveDownload = { version };
+		activeDownload = token;
+		const operation = performDownload(token);
+		token.operation = operation;
+		void operation.then(() => {
+			if (activeDownload === token) activeDownload = undefined;
+		});
+		return true;
+	};
+
+	const handleDownloadStatus = (
+		token: ActiveDownload,
+		entry: NativeUpdaterStatusEntry,
+	): boolean => {
+		if (preparedVersion === token.version) return true;
+		if (state.status === "error" && state.failedPhase === "download" && entry.status !== "error") {
+			return true;
+		}
 		if (entry.status === "download-progress") {
-			publish({ status: "downloading", progress: progressFrom(entry), error: null });
-			return;
+			const progress = progressFrom(entry);
+			if (progress === 100) {
+				const info = dependencies.updater.updateInfo();
+				if (isMatchingReady(info, token.version)) setReady(token.version);
+				else {
+					publish({
+						status: "preparing",
+						availableVersion: token.version,
+						progress: 100,
+						error: null,
+						failedPhase: null,
+					});
+				}
+				return true;
+			}
+			publish({
+				status: "downloading",
+				availableVersion: token.version,
+				progress,
+				error: null,
+				failedPhase: null,
+			});
+			return true;
+		}
+		if (TRANSFER_STATUSES.has(entry.status)) {
+			publish({
+				status: "downloading",
+				availableVersion: token.version,
+				progress: null,
+				error: null,
+				failedPhase: null,
+			});
+			return true;
+		}
+		if (PREPARING_STATUSES.has(entry.status)) {
+			if (preparedVersion !== token.version || state.status !== "ready") {
+				publish({
+					status: "preparing",
+					availableVersion: token.version,
+					progress: 100,
+					error: null,
+					failedPhase: null,
+				});
+			}
+			return true;
 		}
 		if (entry.status === "download-complete") {
 			const info = dependencies.updater.updateInfo();
-			if (info.updateReady && isNewer(info)) setReady(info.version);
-			return;
+			if (isMatchingReady(info, token.version)) setReady(token.version);
+			else {
+				publish({
+					status: "preparing",
+					availableVersion: token.version,
+					progress: 100,
+					error: null,
+					failedPhase: null,
+				});
+			}
+			return true;
 		}
 		if (entry.status === "error") {
-			fail(dependencies.updater.updateInfo().error || entry.details?.errorMessage || entry.message);
-			return;
+			fail(
+				"download",
+				dependencies.updater.updateInfo().error || entry.details?.errorMessage || entry.message,
+			);
+			return true;
 		}
-		if (entry.status === "complete" && state.status !== "installing") {
-			preparedVersion = null;
-			publish({ status: "idle", availableVersion: null, progress: null, error: null });
+		return false;
+	};
+
+	const handleStatus = (entry: NativeUpdaterStatusEntry): void => {
+		if (!dependencies.enabled || disposed) return;
+		if (activeDownload && handleDownloadStatus(activeDownload, entry)) return;
+		if (entry.status === "error" && restarting) {
+			fail(
+				"install",
+				dependencies.updater.updateInfo().error || entry.details?.errorMessage || entry.message,
+			);
 		}
 	};
 
@@ -277,33 +435,60 @@ export function createNativeUpdateController(
 		getState: async () => ({ ...state }),
 		checkForUpdates: async () => {
 			if (!dependencies.enabled || disposed) return;
-			clearScheduled();
 			retryIndex = 0;
-			launchCheck();
+			if (activeCheck) {
+				clearScheduled();
+				return;
+			}
+			if (!activeDownload && !restarting) {
+				clearScheduled();
+				launchCheck();
+			}
+		},
+		downloadUpdate: async () => {
+			launchDownload();
 		},
 		restartToUpdate: async () => {
-			if (!dependencies.enabled || disposed || restarting || !preparedVersion) return;
+			if (
+				!dependencies.enabled ||
+				disposed ||
+				restarting ||
+				activeCheck ||
+				!preparedVersion ||
+				(activeDownload !== undefined && activeDownload.version !== preparedVersion)
+			) {
+				return;
+			}
 			clearScheduled();
 			restarting = true;
 			const expectedVersion = preparedVersion;
+			const pendingDownload = activeDownload?.operation;
+			publish({
+				status: "installing",
+				availableVersion: expectedVersion,
+				progress: null,
+				error: null,
+				failedPhase: null,
+			});
 			const operation = (async () => {
-				if (checkOperation) await checkOperation;
-				const info = await readCheckedInfo(expectedVersion);
-				if (!info) return;
-				if (info.version !== expectedVersion || !info.updateReady || !isNewer(info)) {
-					await acceptCheckedInfo(info);
-					return;
-				}
-				publish({ status: "installing", progress: null, error: null });
 				try {
+					if (
+						pendingDownload &&
+						(!(await pendingDownload) || preparedVersion !== expectedVersion)
+					) {
+						return;
+					}
+					if (disposed) return;
 					await dependencies.restartToUpdate();
 				} catch (error) {
-					fail(error);
+					if (!disposed && restarting) fail("install", error);
 				}
 			})();
 			void operation.then(() => {
 				restarting = false;
-				if (state.status !== "installing") scheduleAfterCheck(state.status === "ready");
+				if (state.status === "error" && state.failedPhase === "install") {
+					scheduleRegularCheck();
+				}
 			});
 		},
 		subscribe: (listener) => {

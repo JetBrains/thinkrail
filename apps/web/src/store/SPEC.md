@@ -23,7 +23,7 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   capabilities remain unavailable between sockets and until the current socket's welcome is installed.
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
   config?, hostPlatform?, hostUpdate?)`** installs protocol + both sorted project views + optional config,
-  host platform, optional immutable host-update notice + navigation repair and then advances that readiness
+  host platform, optional host-update lifecycle snapshot + navigation repair and then advances that readiness
   edge in one Zustand write; route validation and capability reads never observe a partial welcome.
   `installProjectSnapshot` remains the project-only primitive for focused
   callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
@@ -374,8 +374,8 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider warning, and update-ready
   shell affordance can deep-link without prop-drilling. The optional Update key is navigation only. Native
-  updater snapshots/actions remain in `updates`' shell-local hook state; the optional **`hostUpdate`** notice
-  is host domain state, installed atomically from `server.welcome` or replaced by the one
+  updater snapshots/actions remain in `updates`' shell-local hook state; the optional **`hostUpdate`** lifecycle
+  snapshot is host domain state, installed atomically from `server.welcome` or replaced by the one
   `host.updateAvailable` push. It remains visible through a temporary disconnect; a later welcome replaces or
   clears it. The
   ephemeral **`interviewPromptOpen`** plus

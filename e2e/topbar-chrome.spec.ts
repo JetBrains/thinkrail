@@ -186,6 +186,69 @@ test("live safe areas on either edge preserve header and workbench geometry", as
 	}
 });
 
+test("native updates progress from explicit download through install and restart", async ({
+	page,
+}) => {
+	await page.addInitScript(() => {
+		let state: NativeUpdateState = {
+			revision: 1,
+			status: "available",
+			version: "0.1.0",
+			channel: "stable",
+			availableVersion: "0.1.1",
+			progress: null,
+			error: null,
+			failedPhase: null,
+		};
+		const listeners = new Set<(next: NativeUpdateState) => void>();
+		const publish = (next: Partial<NativeUpdateState>) => {
+			state = { ...state, ...next, revision: state.revision + 1 };
+			for (const listener of listeners) listener(state);
+		};
+		const bridge: NativeUpdateBridge = {
+			getState: async () => state,
+			checkForUpdates: async () => {},
+			downloadUpdate: async () => publish({ status: "downloading", progress: 37 }),
+			restartToUpdate: async () => publish({ status: "installing", progress: 100 }),
+			subscribe: (listener) => {
+				listeners.add(listener);
+				return () => listeners.delete(listener);
+			},
+		};
+		Object.defineProperty(globalThis, "__THINKRAIL_NATIVE_UPDATES__", { value: bridge });
+		Object.defineProperty(globalThis, "__THINKRAIL_TEST_UPDATE__", { value: publish });
+	});
+	await openAppFresh(page);
+
+	await page.getByTestId("update-ready").click();
+	await expect(page.getByTestId("settings-updates")).toBeVisible();
+	await expect(page.getByTestId("update-download")).toHaveText("Download");
+	await page.getByTestId("update-download").click();
+	await expect(page.getByText("Downloading update — 37%")).toBeVisible();
+	await page.evaluate(() => {
+		(
+			globalThis as typeof globalThis & {
+				__THINKRAIL_TEST_UPDATE__: (next: Partial<NativeUpdateState>) => void;
+			}
+		).__THINKRAIL_TEST_UPDATE__({ status: "preparing", progress: 100 });
+	});
+	await expect(page.getByText("Preparing update…")).toBeVisible();
+	await page.evaluate(() => {
+		(
+			globalThis as typeof globalThis & {
+				__THINKRAIL_TEST_UPDATE__: (next: Partial<NativeUpdateState>) => void;
+			}
+		).__THINKRAIL_TEST_UPDATE__({ status: "ready" });
+	});
+	await expect(page.getByTestId("update-restart")).toHaveText("Install & Restart");
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await expect(page.getByTestId("update-ready")).toBeVisible();
+	await page.getByTestId("update-ready").click();
+	await page.getByTestId("update-restart").click();
+	await expect(page.getByTestId("update-status")).toContainText("Installing update");
+});
+
 test("the action cluster keeps Update, quota Retry and Settings out of the drag region", async ({
 	page,
 }) => {
@@ -198,10 +261,12 @@ test("the action cluster keeps Update, quota Retry and Settings out of the drag 
 			availableVersion: "0.1.1",
 			progress: null,
 			error: null,
+			failedPhase: null,
 		};
 		const bridge: NativeUpdateBridge = {
 			getState: async () => state,
 			checkForUpdates: async () => {},
+			downloadUpdate: async () => {},
 			restartToUpdate: async () => {},
 			subscribe: () => () => {},
 		};

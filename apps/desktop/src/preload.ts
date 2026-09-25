@@ -40,6 +40,7 @@ const globals = globalThis as typeof globalThis & Record<string, unknown>;
 const updateBridge: NativeUpdateBridge = Object.freeze({
 	getState: () => rpc.request.getUpdateState(),
 	checkForUpdates: () => rpc.request.checkForUpdates(),
+	downloadUpdate: () => rpc.request.downloadUpdate(),
 	restartToUpdate: () => rpc.request.restartToUpdate(),
 	subscribe: (listener: (state: NativeUpdateState) => void) => {
 		updateListeners.add(listener);

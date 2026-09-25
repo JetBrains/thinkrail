@@ -121,6 +121,7 @@ export interface CreateServerOptions {
 	hostUpdate?: {
 		intervalMs: number;
 		check(): Promise<HostUpdateNotice | null>;
+		run(): Promise<void>;
 	};
 }
 
@@ -146,7 +147,7 @@ function clientProtocolVersion(value: string | null): number {
 	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
-function sameHostUpdateNotice(
+function sameHostUpdateRelease(
 	current: HostUpdateNotice | undefined,
 	next: HostUpdateNotice,
 ): boolean {
@@ -179,6 +180,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	let hostUpdateTimer: ReturnType<typeof setInterval> | undefined;
 	let hostUpdateActive = hostUpdate !== undefined;
 	let hostUpdateChecking = false;
+	let requestHostUpdate = (): void => {
+		throw new Error("Host update is unavailable.");
+	};
 	let stopping = false;
 	let shutdownPromise: Promise<void> | undefined;
 
@@ -322,6 +326,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 							try {
 								const result = await handleRequest(method, params, {
 									clientKey: ws.data.clientKey,
+									...(hostUpdate ? { runHostUpdate: requestHostUpdate } : {}),
 								});
 								return JSON.stringify({ id: requestId, ok: true, result });
 							} catch (err) {
@@ -361,25 +366,38 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		},
 	});
 
+	const publishHostUpdate = (notice: HostUpdateNotice): void => {
+		if (!hostUpdateActive) return;
+		hostUpdateNotice = notice;
+		server.publish(
+			WS_CHANNELS.hostUpdateAvailable,
+			JSON.stringify({ channel: WS_CHANNELS.hostUpdateAvailable, data: notice }),
+		);
+	};
+
+	const clearHostUpdateTimer = (): void => {
+		if (hostUpdateTimer !== undefined) clearInterval(hostUpdateTimer);
+		hostUpdateTimer = undefined;
+	};
+
+	const hostUpdateBlocksDiscovery = (): boolean =>
+		hostUpdateNotice?.status === "running" || hostUpdateNotice?.status === "succeeded";
+
 	const checkForHostUpdate = async (): Promise<void> => {
-		if (!hostUpdate || !hostUpdateActive || hostUpdateChecking) return;
+		if (!hostUpdate || !hostUpdateActive || hostUpdateChecking || hostUpdateBlocksDiscovery()) {
+			return;
+		}
 		hostUpdateChecking = true;
 		try {
 			const result = await hostUpdate.check();
-			if (!hostUpdateActive) return;
-			if (result && !sameHostUpdateNotice(hostUpdateNotice, result)) {
-				hostUpdateNotice = {
+			if (!hostUpdateActive || hostUpdateBlocksDiscovery()) return;
+			if (result && !sameHostUpdateRelease(hostUpdateNotice, result)) {
+				publishHostUpdate({
 					currentVersion: result.currentVersion,
 					availableVersion: result.availableVersion,
 					channel: result.channel,
-				};
-				server.publish(
-					WS_CHANNELS.hostUpdateAvailable,
-					JSON.stringify({
-						channel: WS_CHANNELS.hostUpdateAvailable,
-						data: hostUpdateNotice,
-					}),
-				);
+					status: "available",
+				});
 			}
 		} catch {
 		} finally {
@@ -387,10 +405,30 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	};
 
+	requestHostUpdate = (): void => {
+		if (!hostUpdate || !hostUpdateActive || !hostUpdateNotice) {
+			throw new Error("Host update is unavailable.");
+		}
+		if (hostUpdateNotice.status === "running" || hostUpdateNotice.status === "succeeded") {
+			return;
+		}
+		publishHostUpdate({ ...hostUpdateNotice, status: "running" });
+		void (async () => {
+			try {
+				await hostUpdate.run();
+				if (!hostUpdateActive || hostUpdateNotice?.status !== "running") return;
+				publishHostUpdate({ ...hostUpdateNotice, status: "succeeded" });
+				clearHostUpdateTimer();
+			} catch {
+				if (!hostUpdateActive || hostUpdateNotice?.status !== "running") return;
+				publishHostUpdate({ ...hostUpdateNotice, status: "failed" });
+			}
+		})();
+	};
+
 	const stopHostUpdateChecks = (): void => {
 		hostUpdateActive = false;
-		if (hostUpdateTimer !== undefined) clearInterval(hostUpdateTimer);
-		hostUpdateTimer = undefined;
+		clearHostUpdateTimer();
 	};
 
 	setTerminalPublisher((clientKey, channel, data) => {

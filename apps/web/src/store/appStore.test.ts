@@ -112,11 +112,15 @@ const emptyBottomRegion = (): WorkspaceLayoutDocument["bottom"] => ({
 	groups: [],
 });
 
-function hostNotice(availableVersion = "0.2.0"): HostUpdateNotice {
+function hostNotice(
+	availableVersion = "0.2.0",
+	status?: HostUpdateNotice["status"],
+): HostUpdateNotice {
 	return {
 		currentVersion: "0.1.0",
 		channel: "stable",
 		availableVersion,
+		...(status ? { status } : {}),
 	};
 }
 
@@ -2359,10 +2363,16 @@ test("welcome replaces and clears the synchronized host update notice", () => {
 	expect(useAppStore.getState().hostUpdate).toBeNull();
 });
 
-test("host update pushes simply replace the previous notice", () => {
-	useAppStore.getState().applyHostUpdate(hostNotice());
-	useAppStore.getState().applyHostUpdate(hostNotice("0.3.0"));
-	expect(useAppStore.getState().hostUpdate).toEqual(hostNotice("0.3.0"));
+test("host update pushes replace the same slot with each optional lifecycle snapshot", () => {
+	useAppStore.getState().applyHostUpdate(hostNotice("0.2.0", "available"));
+	useAppStore.getState().applyHostUpdate(hostNotice("0.2.0", "running"));
+	expect(useAppStore.getState().hostUpdate).toEqual(hostNotice("0.2.0", "running"));
+
+	useAppStore.getState().applyHostUpdate(hostNotice("0.2.0", "failed"));
+	expect(useAppStore.getState().hostUpdate).toEqual(hostNotice("0.2.0", "failed"));
+
+	useAppStore.getState().applyHostUpdate(hostNotice("0.3.0", "available"));
+	expect(useAppStore.getState().hostUpdate).toEqual(hostNotice("0.3.0", "available"));
 
 	useAppStore.getState().applyHostUpdate(hostNotice());
 	expect(useAppStore.getState().hostUpdate).toEqual(hostNotice());

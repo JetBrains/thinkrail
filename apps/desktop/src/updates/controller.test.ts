@@ -11,18 +11,21 @@ import { hasDesktopArtifactTestSeam, nativeUpdatesEnabled } from "./enablement";
 interface Deferred<T> {
 	promise: Promise<T>;
 	resolve(value: T): void;
+	reject(error: unknown): void;
 }
 
 function deferred<T>(): Deferred<T> {
 	let resolve = (_value: T): void => {};
-	const promise = new Promise<T>((done) => {
+	let reject = (_error: unknown): void => {};
+	const promise = new Promise<T>((done, fail) => {
 		resolve = done;
+		reject = fail;
 	});
-	return { promise, resolve };
+	return { promise, resolve, reject };
 }
 
 async function settle(): Promise<void> {
-	for (let index = 0; index < 8; index += 1) await Promise.resolve();
+	for (let index = 0; index < 12; index += 1) await Promise.resolve();
 }
 
 class FakeUpdater implements NativeUpdaterDependency {
@@ -35,6 +38,7 @@ class FakeUpdater implements NativeUpdaterDependency {
 	checkCalls = 0;
 	downloadCalls = 0;
 	checkResult: Promise<NativeUpdaterInfo> | undefined;
+	downloadResult: Promise<void> | undefined;
 	listener: ((entry: NativeUpdaterStatusEntry) => void) | null = null;
 
 	updateInfo(): NativeUpdaterInfo {
@@ -52,8 +56,11 @@ class FakeUpdater implements NativeUpdaterDependency {
 
 	async downloadUpdate(): Promise<void> {
 		this.downloadCalls += 1;
-		this.listener?.({ status: "download-progress", message: "half", details: { progress: 50 } });
-		this.info = { ...this.info, updateReady: true };
+		if (this.downloadResult) await this.downloadResult;
+	}
+
+	emit(entry: NativeUpdaterStatusEntry): void {
+		this.listener?.(entry);
 	}
 }
 
@@ -77,6 +84,29 @@ function scheduledController(updater: FakeUpdater, restartToUpdate = async () =>
 	return { controller, scheduled };
 }
 
+async function findAvailable(
+	controller: ReturnType<typeof scheduledController>["controller"],
+): Promise<void> {
+	await controller.checkForUpdates();
+	await settle();
+	expect((await controller.getState()).status).toBe("available");
+}
+
+async function prepareUpdate(
+	controller: ReturnType<typeof scheduledController>["controller"],
+	updater: FakeUpdater,
+): Promise<void> {
+	await findAvailable(controller);
+	const pendingDownload = deferred<void>();
+	updater.downloadResult = pendingDownload.promise;
+	await controller.downloadUpdate();
+	updater.info = { ...updater.info, updateReady: true };
+	updater.emit({ status: "download-complete", message: "prepared" });
+	pendingDownload.resolve(undefined);
+	await settle();
+	expect((await controller.getState()).status).toBe("ready");
+}
+
 test("enables only supported packaged production identities and blocks artifact seams", () => {
 	const enabled = {
 		isPackaged: true,
@@ -86,8 +116,16 @@ test("enables only supported packaged production identities and blocks artifact 
 		arch: "arm64",
 		artifactTestSeam: false,
 	};
-	expect(nativeUpdatesEnabled(enabled)).toBe(true);
-	expect(nativeUpdatesEnabled({ ...enabled, channel: "canary" })).toBe(true);
+	for (const channel of ["stable", "canary"]) {
+		for (const [platform, arch] of [
+			["darwin", "arm64"],
+			["win32", "x64"],
+			["linux", "x64"],
+			["linux", "arm64"],
+		] as const) {
+			expect(nativeUpdatesEnabled({ ...enabled, channel, platform, arch })).toBe(true);
+		}
+	}
 	expect(nativeUpdatesEnabled({ ...enabled, isPackaged: false })).toBe(false);
 	expect(nativeUpdatesEnabled({ ...enabled, channel: "dev" })).toBe(false);
 	expect(nativeUpdatesEnabled({ ...enabled, baseUrl: "" })).toBe(false);
@@ -99,7 +137,7 @@ test("enables only supported packaged production identities and blocks artifact 
 	expect(hasDesktopArtifactTestSeam({})).toBe(false);
 });
 
-test("checks after readiness, coalesces prompt requests, downloads, and publishes revisions", async () => {
+test("automatic and prompt checks coalesce, stop at available, and schedule the next check", async () => {
 	const updater = new FakeUpdater();
 	const pendingCheck = deferred<NativeUpdaterInfo>();
 	updater.checkResult = pendingCheck.promise;
@@ -115,23 +153,176 @@ test("checks after readiness, coalesces prompt requests, downloads, and publishe
 	await controller.checkForUpdates();
 	expect(updater.checkCalls).toBe(1);
 
-	updater.checkResult = undefined;
 	pendingCheck.resolve(updater.info);
 	await settle();
-	const ready = await controller.getState();
-	expect(updater.downloadCalls).toBe(1);
-	expect(ready).toMatchObject({
-		status: "ready",
+	expect(updater.downloadCalls).toBe(0);
+	expect(await controller.getState()).toMatchObject({
+		status: "available",
 		availableVersion: "1.1.0",
-		progress: 100,
+		progress: null,
 		error: null,
+		failedPhase: null,
 	});
 	expect(revisions.length).toBeGreaterThan(1);
 	expect(revisions).toEqual([...revisions].sort((left, right) => left - right));
 	expect(scheduled.at(-1)?.delay).toBe(6 * 60 * 60 * 1000);
 });
 
-test("keeps a prepared update when restart revalidation fails, then retries and restarts once", async () => {
+test("download is explicit and coalesced, publishes transfer then preparation, and requires matching readiness", async () => {
+	const updater = new FakeUpdater();
+	const { controller } = scheduledController(updater);
+	await findAvailable(controller);
+	const pendingDownload = deferred<void>();
+	updater.downloadResult = pendingDownload.promise;
+
+	await controller.downloadUpdate();
+	await controller.downloadUpdate();
+	expect(updater.downloadCalls).toBe(1);
+	expect((await controller.getState()).status).toBe("downloading");
+
+	updater.emit({
+		status: "download-progress",
+		message: "transferring",
+		details: { progress: 42 },
+	});
+	expect(await controller.getState()).toMatchObject({ status: "downloading", progress: 42 });
+	updater.emit({ status: "applying-patch", message: "applying first patch" });
+	expect((await controller.getState()).status).toBe("preparing");
+	updater.emit({ status: "downloading-full-bundle", message: "falling back" });
+	expect(await controller.getState()).toMatchObject({ status: "downloading", progress: null });
+	updater.emit({
+		status: "download-progress",
+		message: "transferring fallback",
+		details: { progress: 17 },
+	});
+	expect(await controller.getState()).toMatchObject({ status: "downloading", progress: 17 });
+	updater.emit({
+		status: "download-progress",
+		message: "transferred",
+		details: { progress: 100 },
+	});
+	expect(await controller.getState()).toMatchObject({ status: "preparing", progress: 100 });
+	updater.emit({ status: "decompressing", message: "decompressing" });
+	expect((await controller.getState()).status).toBe("preparing");
+
+	updater.info = { ...updater.info, version: "1.2.0", updateReady: true };
+	updater.emit({ status: "download-complete", message: "wrong package" });
+	expect((await controller.getState()).status).toBe("preparing");
+	updater.info = { ...updater.info, version: "1.1.0", updateReady: true };
+	updater.emit({ status: "download-complete", message: "prepared" });
+	expect((await controller.getState()).status).toBe("ready");
+
+	updater.emit({
+		status: "download-progress",
+		message: "late progress",
+		details: { progress: 60 },
+	});
+	updater.emit({
+		status: "error",
+		message: "late error",
+		details: { errorMessage: "late error" },
+	});
+	expect((await controller.getState()).status).toBe("ready");
+	pendingDownload.resolve(undefined);
+	await settle();
+	expect(await controller.getState()).toMatchObject({
+		status: "ready",
+		availableVersion: "1.1.0",
+		progress: 100,
+		error: null,
+		failedPhase: null,
+	});
+});
+
+test("a matching ready callback wins over a late download rejection", async () => {
+	const updater = new FakeUpdater();
+	const pendingDownload = deferred<void>();
+	updater.downloadResult = pendingDownload.promise;
+	const { controller } = scheduledController(updater);
+	await findAvailable(controller);
+
+	await controller.downloadUpdate();
+	updater.info = { ...updater.info, updateReady: true };
+	updater.emit({ status: "download-complete", message: "prepared" });
+	pendingDownload.reject(new Error("late download rejection"));
+	await settle();
+
+	expect(await controller.getState()).toMatchObject({
+		status: "ready",
+		availableVersion: "1.1.0",
+		progress: 100,
+		error: null,
+		failedPhase: null,
+	});
+});
+
+test("install clicked from updateReady waits for the coalesced download acknowledgement", async () => {
+	const updater = new FakeUpdater();
+	const pendingDownload = deferred<void>();
+	updater.downloadResult = pendingDownload.promise;
+	let restartCalls = 0;
+	const { controller } = scheduledController(updater, async () => {
+		restartCalls += 1;
+	});
+	await findAvailable(controller);
+	await controller.downloadUpdate();
+	updater.info = { ...updater.info, updateReady: true };
+	updater.emit({ status: "download-complete", message: "prepared" });
+	expect((await controller.getState()).status).toBe("ready");
+
+	await controller.restartToUpdate();
+	expect((await controller.getState()).status).toBe("installing");
+	expect(restartCalls).toBe(0);
+	updater.emit({
+		status: "download-progress",
+		message: "late progress",
+		details: { progress: 75 },
+	});
+	expect((await controller.getState()).status).toBe("installing");
+
+	pendingDownload.resolve(undefined);
+	await settle();
+	expect(restartCalls).toBe(1);
+	expect((await controller.getState()).status).toBe("installing");
+});
+
+test("check and download failures retain their retry phase", async () => {
+	const updater = new FakeUpdater();
+	const { controller } = scheduledController(updater);
+	updater.info = { ...updater.info, error: "offline" };
+	await controller.checkForUpdates();
+	await settle();
+	expect(await controller.getState()).toMatchObject({
+		status: "error",
+		error: "offline",
+		failedPhase: "check",
+	});
+
+	updater.info = { ...updater.info, error: "" };
+	await controller.checkForUpdates();
+	await settle();
+	expect((await controller.getState()).status).toBe("available");
+
+	updater.info = { ...updater.info, error: "download failed" };
+	await controller.downloadUpdate();
+	updater.emit({ status: "error", message: "download failed" });
+	updater.emit({ status: "decompressing", message: "late preparation" });
+	await settle();
+	expect(await controller.getState()).toMatchObject({
+		status: "error",
+		error: "download failed",
+		failedPhase: "download",
+		availableVersion: "1.1.0",
+	});
+
+	updater.info = { ...updater.info, error: "", updateReady: true };
+	await controller.downloadUpdate();
+	await settle();
+	expect(updater.downloadCalls).toBe(2);
+	expect((await controller.getState()).status).toBe("ready");
+});
+
+test("a prepared package survives an unrelated failed check and installs without a feed recheck", async () => {
 	const updater = new FakeUpdater();
 	const restart = deferred<void>();
 	let restartCalls = 0;
@@ -139,10 +330,8 @@ test("keeps a prepared update when restart revalidation fails, then retries and 
 		restartCalls += 1;
 		return restart.promise;
 	});
-
-	await controller.checkForUpdates();
-	await settle();
-	expect((await controller.getState()).status).toBe("ready");
+	await prepareUpdate(controller, updater);
+	const checkCallsAfterPreparation = updater.checkCalls;
 
 	updater.info = {
 		version: "",
@@ -150,35 +339,51 @@ test("keeps a prepared update when restart revalidation fails, then retries and 
 		updateReady: false,
 		error: "temporary feed failure",
 	};
-	await controller.restartToUpdate();
+	await controller.checkForUpdates();
 	await settle();
 	expect(await controller.getState()).toMatchObject({
 		status: "ready",
 		availableVersion: "1.1.0",
 		error: "temporary feed failure",
+		failedPhase: "check",
 	});
-	expect(restartCalls).toBe(0);
 
-	updater.info = {
-		version: "1.1.0",
-		updateAvailable: true,
-		updateReady: true,
-		error: "",
-	};
-	await controller.checkForUpdates();
-	await settle();
-	expect((await controller.getState()).error).toBeNull();
 	await controller.restartToUpdate();
 	await controller.restartToUpdate();
 	await settle();
-	expect(updater.checkCalls).toBe(4);
+	expect(updater.checkCalls).toBe(checkCallsAfterPreparation + 1);
 	expect(restartCalls).toBe(1);
 	expect((await controller.getState()).status).toBe("installing");
-	restart.resolve();
+	restart.resolve(undefined);
 	await settle();
 });
 
-test("rejects same and older versions and bounds automatic retries", async () => {
+test("a failed installation retains the local package and retry dispatches installation again", async () => {
+	const updater = new FakeUpdater();
+	let restartCalls = 0;
+	const { controller } = scheduledController(updater, async () => {
+		restartCalls += 1;
+		if (restartCalls === 1) throw new Error("restart was refused");
+	});
+	await prepareUpdate(controller, updater);
+	const checked = updater.checkCalls;
+
+	await controller.restartToUpdate();
+	await settle();
+	expect(await controller.getState()).toMatchObject({
+		status: "error",
+		error: "restart was refused",
+		failedPhase: "install",
+		availableVersion: "1.1.0",
+	});
+	await controller.restartToUpdate();
+	await settle();
+	expect(restartCalls).toBe(2);
+	expect(updater.checkCalls).toBe(checked);
+	expect((await controller.getState()).status).toBe("installing");
+});
+
+test("same and older versions are rejected and only checks receive bounded automatic retries", async () => {
 	expect(isStrictlyNewerVersion("0.1.0-nightly.45", "0.1.0-nightly.46")).toBe(true);
 	expect(isStrictlyNewerVersion("1.0.0", "1.0.0")).toBe(false);
 	expect(isStrictlyNewerVersion("1.0.0", "0.9.0")).toBe(false);
@@ -188,7 +393,7 @@ test("rejects same and older versions and bounds automatic retries", async () =>
 	updater.info = {
 		version: "1.0.0",
 		updateAvailable: true,
-		updateReady: false,
+		updateReady: true,
 		error: "",
 	};
 	const { controller, scheduled } = scheduledController(updater);
@@ -196,6 +401,7 @@ test("rejects same and older versions and bounds automatic retries", async () =>
 	await settle();
 	expect((await controller.getState()).status).toBe("idle");
 	expect(updater.downloadCalls).toBe(0);
+
 	updater.info = { ...updater.info, error: "offline" };
 	controller.start();
 	for (const expectedDelay of [0, 60_000, 5 * 60_000, 30 * 60_000]) {

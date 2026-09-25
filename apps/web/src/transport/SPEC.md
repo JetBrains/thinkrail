@@ -53,7 +53,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `includeDiffStats: false`, generation-fencing the result and folding only already-known rows through
   `updateWorkspace`, so a pushed full workspace snapshot missed while disconnected (including a rename)
   cannot stay stale without misrepresenting this metadata repair as membership reconciliation;
-  the immutable host-update notice via `applyHostUpdate`, project snapshots via
+  the full host-update lifecycle snapshot via `applyHostUpdate`, project snapshots via
   `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
   `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,
   `workspace.created` via `addWorkspace(workspace)`, `workspace.updated` via `updateWorkspace(workspace)`,
@@ -124,17 +124,21 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   than a caller convention).
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
-  `TransportOptions`, `supportsPlanReview`. `supportsSessionActivity` stays module-internal (this module is the
-  only one that acts on the activity capability, and its own tests import the file directly);
-  `supportsPlanReview` is exported because a sibling panel (`PlanPane`) gates the plan-review UI on it — an
+  `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`.
+  `supportsSessionActivity` stays module-internal (this module is the only one that acts on the activity
+  capability, and its own tests import the file directly); `runHostUpdate` is the typed empty host action and
+  `supportsHostUpdateRun` lets `Shell` inject it only for protocol v69+; `supportsPlanReview` is exported
+  because a sibling panel (`PlanPane`) gates the plan-review UI on it — an
   older host serves no `todo.startReview`/`reviewAll`, so the client must not offer them.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
   `SessionDeletedPayload` for `session.deleted`, `SessionActivityPayload` +
-  `ACTIVITY_PROTOCOL_VERSION` for `session.activity` and its snapshot gate, `PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION`
-  for the `supportsPlanReview` gate, `provider.changed`, the empty addressed
-  `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` + `host.updateAvailable`,
+  `ACTIVITY_PROTOCOL_VERSION` for `session.activity` and its snapshot gate,
+  `HOST_UPDATE_RUN_PROTOCOL_VERSION` + `Ack` + the typed `host.update` method for the CLI-host update action,
+  `PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION` for the `supportsPlanReview` gate, `provider.changed`, the empty
+  addressed `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` +
+  `host.updateAvailable`,
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +
   `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page

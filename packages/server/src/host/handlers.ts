@@ -206,6 +206,7 @@ const log = logger("host");
 
 export interface RequestContext {
 	clientKey: string;
+	runHostUpdate?: () => void;
 }
 
 type Handler = (params: unknown, ctx: RequestContext) => unknown | Promise<unknown>;
@@ -933,6 +934,11 @@ const handlers: Record<string, Handler> = {
 			maxAgeMs: config.jbcentralQuotaRefreshSeconds * 1_000,
 			force: (params as { force?: boolean }).force === true,
 		});
+	},
+	"host.update": (_params, ctx) => {
+		if (!ctx.runHostUpdate) throw new Error("Host update is unavailable.");
+		ctx.runHostUpdate();
+		return { ok: true } as const;
 	},
 	"settings.update": (params) => {
 		const config = (params as { config: AppConfigUpdate }).config;

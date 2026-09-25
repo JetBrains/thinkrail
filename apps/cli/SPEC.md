@@ -34,7 +34,8 @@ and process-boot logic lives in `packages/server`.
 ## Interface
 
 `bin` = `./src/index.ts` (bun runs the TS source directly). A leading `update` or `uninstall` positional
-is a **subcommand** (`thinkrail update [--channel stable|nightly] [--version X.Y.Z]`,
+is a **subcommand** (`thinkrail update [--channel stable|nightly]
+[--version X.Y.Z|X.Y.Z-nightly.N|latest]`,
 `thinkrail uninstall [--remove-data|--keep-data] [-y]`) intercepted before the launch flags — see
 *Self-update* / *Uninstall* below. The set lives in `args.ts` (`parseSubcommand`) because the compiled
 entry needs it too: a subcommand never boots the host, so it must not pay for (or, in `uninstall`'s case,
@@ -53,25 +54,30 @@ deliberately **not** parsed here — the host's analytics module is its single r
 
 ## Update advisory
 
-A compiled `stable`/`nightly` binary supplies `bootHost` with one optional periodic update-notice producer;
-source and `dev` identities do not expose the capability. After the host is ready it performs a bounded lookup
+A compiled `stable`/`nightly` binary in the supported `<prefix>/bin/thinkrail[.exe]` layout supplies `bootHost`
+with one optional periodic update-notice producer; source and `dev` identities and manually placed binaries do
+not expose the capability. After the host is ready it performs a bounded lookup
 immediately and every six hours on the baked channel with the same GitHub rules as the installers: stable reads
 `releases/latest`, while nightly selects the first `vX.Y.Z-nightly.N` tag from `releases?per_page=20`. Only a
-strictly newer version produces an immutable `{ currentVersion, availableVersion, channel }` notice; failure
-and no-update are silent, while a later still-newer release replaces the retained notice.
+strictly newer version produces `{ currentVersion, availableVersion, channel }` state; discovery failure and
+no-update are silent. A different newer release may replace available or failed state, but successful execution
+latches until host restart so the still-running old process can neither rediscover nor install another release.
 
-The shared update surface tells the user to run the fixed `thinkrail update` command on the host machine and
-then restart ThinkRail. This advisory never fetches an installer, downloads an artifact, blocks readiness,
-retries, jitters, or runs for `update`/`uninstall`/help/version exits. The host carries only the latest notice
-to current and later clients.
+The shared update surface offers **Run Update** for a compiled host and retains fixed `thinkrail update`
+guidance for older clients/hosts or a failed run. The action invokes this same installed binary's parameterless
+update subcommand asynchronously; the browser cannot select a command, path, channel, version, or URL. Bounded
+running/succeeded/failed state converges every client, and success requires the user to restart the unsupervised
+host manually rather than aborting active work. Discovery and execution remain absent from
+`update`/`uninstall`/help/version exits and all source/dev launches.
 
 ## Self-update (`thinkrail update`)
 
 `src/update.ts` ports the old repo's `thinkrail upgrade` (renamed): it re-invokes the **published
 installer** for the binary's channel — `install.sh` on macOS/Linux, `install.ps1` on Windows — so the
-installer stays the single source of the download → checksum → replace → PATH logic. Channel/prefix
-resolve the same way on both: flag > `~/.config/thinkrail/install.json` > baked channel (from
-`version.ts`; `dev` → `stable`) / `~/.local`.
+installer stays the single source of the download → checksum → replace → PATH logic. For an installed binary,
+the running `<prefix>/bin` layout is authoritative; an explicit channel flag wins, then metadata from that same
+installation, then its baked channel. A source invocation without a running binary layout may use
+`~/.config/thinkrail/install.json` and falls back to `stable` / `~/.local`.
 
 - **Unix:** `curl` the script, feed it to `bash -s -- --channel … --prefix … [--version …]`.
 - **Windows:** fetch `install.ps1`, write it to a temp `.ps1`, and run it through the first available
@@ -87,15 +93,13 @@ resolve the same way on both: flag > `~/.config/thinkrail/install.json` > baked 
 
 Any Windows failure (fetch, no PowerShell host, installer non-zero) falls back to *printing* the manual
 per-shell command (`windowsManualUpdateMessage`) with the releases page under it: cmd's `set "X=v" &&`
-and PowerShell's `$env:X='v';` are not interchangeable — one shell's syntax shown to the other silently
-re-installs the wrong build, and a dropped `THINKRAIL_PREFIX` would put a second copy under `.local`
-while the PATH-resolved exe stays stale. `resolveWindowsPrefix` owns that seam for the message (it omits
-the installer's own default as noise); `resolveWindowsInstallPrefix` is the same validation for the
-executed plan, and both refuse a metadata prefix that isn't a rooted Windows path or can't be safely
-quoted (Windows needs its own charset — `PREFIX_FORBIDDEN_RE` rejects the backslash every Windows path is
-made of). The arg parse + channel/prefix resolution are pure (`parseUpdateArgs` / `resolveUpdateChannel` /
-`resolveWindowsPrefix` / `resolveUpdatePlan` / `resolveWindowsUpdatePlan`, unit-tested); only fetch
-(`curl` / `fetch`) + run (`bash -s` / `powershell -File`) touch IO.
+and PowerShell's `$env:X='v';` are not interchangeable. Update planning binds metadata to the running
+`<prefix>/bin/thinkrail[.exe]` before trusting its prefix or channel; stale/unrelated metadata cannot update a
+different copy. Missing metadata falls back to that running layout, including normalized legacy Git-Bash
+`/c/...` and `/cygdrive/c/...` prefixes. A manual binary outside the representable layout—including a directly
+run release asset such as `thinkrail-linux-x64`—fails closed with manual guidance rather than installing under
+`.local`; that preflight also withholds the host update capability. Version/channel combinations are validated after
+resolution. The planning functions remain pure and unit-tested; only installer fetch and execution touch IO.
 `THINKRAIL_INSTALL_SCRIPT_URL` / `THINKRAIL_INSTALL_PS1_URL` override the installer URLs (testing /
 forks). See `module-ci-release` for the installers themselves.
 

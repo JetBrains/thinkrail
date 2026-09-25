@@ -9,11 +9,11 @@ tags: [desktop, updates]
 
 ## Responsibility
 
-Own the native desktop updater as one controller: forward-only eligibility, background full-package download,
-bounded retry/scheduling, state snapshots, and the explicit restart handoff. Explicit check and optional download
-results own operation transitions; the controller is the sole owner of Electrobun's status callback and uses it
-only for useful progress, errors, and completion. Electrobun single-flights each SDK operation, while the
-controller keeps only the cross-operation sequencing needed to prevent an overlapping check and download.
+Own the native desktop updater as one controller: forward-only eligibility, background checks, explicit
+full-package download, bounded check retry/scheduling, state snapshots, and the explicit install/restart handoff.
+The controller is the sole owner of Electrobun's status callback and projects it into available, transfer,
+preparation, ready, and installation phases. Electrobun single-flights each SDK operation, while the controller
+keeps only the cross-operation sequencing needed to prevent overlaps.
 
 ## Boundary
 
@@ -29,9 +29,11 @@ enable the production adapter. Packaged metadata is the sole feed authority; ren
 application feed constant are forbidden. Development and ordinary artifact seams remain disabled. Tests inject an
 updater dependency into the controller rather than altering production feed selection.
 
-Manual checks acknowledge immediately while work continues through state revisions. Checks and downloads are
-coalesced; transient failed polls do not erase a prepared update, and an error discovered while revalidating that
-prepared update stays visible while status remains ready. Electrobun's hash-based offer becomes eligible only when
-its version is strictly newer than the packaged version. Automatic checks start after desktop readiness, repeat on
-a jittered six-hour cadence, and retry transient failures within a bound. Downloaded packages are never applied
-without the explicit restart action.
+Manual actions acknowledge immediately while work continues through state revisions. Automatic checks start
+after desktop readiness, repeat on a jittered six-hour cadence, and retry transient check failures within a
+bound; they never start or retry a download. A newer unprepared offer becomes `available`, **Download** owns
+transfer and preparation, and only a matching newer `updateReady` result becomes `ready`. Transfer reaching
+100% is not readiness: Electrobun's decompression/preparation phase remains visible separately. Errors retain
+the failed phase so retry repeats the intended operation, while a prepared package survives unrelated check
+failures. **Install & Restart** applies that package without re-fetching the feed; Electrobun's native helper
+owns final payload validation during handoff.
