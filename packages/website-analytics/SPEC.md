@@ -14,10 +14,10 @@ The browser analytics policy consumed by the unified public website. It is the s
 
 ## Boundary
 
-- **Public surface:** `src/index.ts` exports the configuration/event/consent types and `createWebsiteAnalytics({ productionHostname, marketingConsent })`. The returned facade exposes a pure hostname configuration function, an idempotent browser initializer and typed event capture.
+- **Public surface:** `src/index.ts` exports the configuration/event/consent types and `createWebsiteAnalytics({ productionHostname, marketingConsent })`. The returned facade exposes a pure hostname configuration function, an idempotent browser initializer and typed capture for `content_viewed`, `install_cta_clicked`, and `download_started`. CTA locations are the closed `hero | install_section | quick_start | final_cta | blog_post` set; download platform, architecture, and artifact values are closed unions. `bridge_id` is optional on downloads until the attribution service supplies it.
 - **Dependency-free browser module.** It uses typed DOM APIs and has no runtime package or workspace dependency. It never imports a website, the application analytics sink, contracts, server, or shared.
 - **Build-time boundary.** [[module-website]] compiles this source once into its static artifact. A package change therefore triggers that site's production and PR-preview workflows.
-- **No site knowledge.** Page structure, routes, navigation, deployment provider, Cookiebot globals/events, consent UI, and the production hostname remain in the consuming website module. The package consumes only a current-value/subscription adapter.
+- **No site knowledge.** Page structure, route-to-content keys, navigation, deployment provider, Cookiebot globals/events, consent UI, and the production hostname remain in the consuming website module. The package consumes only a current-value/subscription adapter.
 
 ## Runtime contract
 
