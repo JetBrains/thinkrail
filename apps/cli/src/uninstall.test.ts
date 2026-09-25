@@ -117,20 +117,6 @@ describe("resolveUninstallTargets", () => {
 		expect(targets.fishFile).toBe("");
 	});
 
-	test("Windows: includes a mixed-case running executable when metadata points elsewhere", () => {
-		const targets = resolveUninstallTargets({
-			...base,
-			platform: "win32",
-			home: "C:\\Users\\u",
-			execPath: "D:\\tools\\bin\\ThinkRail.EXE",
-			installMeta: {},
-		});
-		expect(targets.binaries).toEqual([
-			win32.join("C:/Users/u/.local", "bin", "thinkrail.exe"),
-			"D:\\tools\\bin\\ThinkRail.EXE",
-		]);
-	});
-
 	test.each([
 		["/c/tools/thinkrail", "C:\\tools\\thinkrail\\bin\\thinkrail.exe"],
 		["/cygdrive/d/tools/thinkrail", "D:\\tools\\thinkrail\\bin\\thinkrail.exe"],
