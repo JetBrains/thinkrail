@@ -212,7 +212,8 @@ function inferRunningPrefix(input: ResolveUpdateInput): string | undefined {
 	const windows = input.platform === "win32";
 	const path = windows ? win32 : posix;
 	const exeName = windows ? "thinkrail.exe" : "thinkrail";
-	if (path.basename(input.execPath) !== exeName) return undefined;
+	const runningName = path.basename(input.execPath);
+	if ((windows ? runningName.toLowerCase() : runningName) !== exeName) return undefined;
 	const binDir = path.dirname(input.execPath);
 	const binName = path.basename(binDir);
 	if ((windows ? binName.toLowerCase() : binName) !== "bin" || !path.isAbsolute(input.execPath)) {
