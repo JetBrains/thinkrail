@@ -324,7 +324,7 @@ test("publishes only changed host update notices after welcome and on fixed repe
 		port: grabFreePort(),
 		host: "localhost",
 		portMode: "exact",
-		hostUpdate: { intervalMs: 5, check: checks.check },
+		hostUpdate: { intervalMs: 5, check: checks.check, run: async () => {} },
 	});
 	const firstCheck = await checks.waitForCheck(0);
 	const collector = await collectSocket(b.port, "updates-first");
@@ -340,18 +340,19 @@ test("publishes only changed host update notices after welcome and on fixed repe
 		channel: "stable",
 	};
 	firstCheck.resolve(firstNotice);
+	const availableFirstNotice: HostUpdateNotice = { ...firstNotice, status: "available" };
 	const firstPush = await collector.waitForFrame(
 		(frame) =>
 			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
 			(frame.data as HostUpdateNotice).availableVersion === "1.1.0",
 	);
-	expect(firstPush.data).toEqual(firstNotice);
+	expect(firstPush.data).toEqual(availableFirstNotice);
 
 	const retained = await collectSocket(b.port, "updates-retained");
 	const retainedWelcome = await retained.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
-	expect((retainedWelcome.data as ServerWelcome).hostUpdate).toEqual(firstNotice);
+	expect((retainedWelcome.data as ServerWelcome).hostUpdate).toEqual(availableFirstNotice);
 	retained.socket.close();
 
 	const secondCheck = await checks.waitForCheck(1);
@@ -392,9 +393,185 @@ test("publishes only changed host update notices after welcome and on fixed repe
 	const latestWelcome = await afterSilentChecks.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
-	expect((latestWelcome.data as ServerWelcome).hostUpdate).toEqual(newerNotice);
+	expect((latestWelcome.data as ServerWelcome).hostUpdate).toEqual({
+		...newerNotice,
+		status: "available",
+	});
 	afterSilentChecks.socket.close();
 	collector.socket.close();
+});
+
+test("host update runs are detached, single-flight, retryable, and success-latched", async () => {
+	const checks = createCheckHarness<HostUpdateNotice | null>();
+	const runs = createCheckHarness<void>();
+	const b = await boot({
+		port: grabFreePort(),
+		host: "localhost",
+		portMode: "exact",
+		hostUpdate: { intervalMs: 50, check: checks.check, run: runs.check },
+	});
+	const firstCheck = await checks.waitForCheck(0);
+	const firstClient = await collectSocket(b.port, "updates-run-first");
+	const secondClient = await collectSocket(b.port, "updates-run-second");
+	await Promise.all([
+		firstClient.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome),
+		secondClient.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome),
+	]);
+
+	firstCheck.resolve({
+		currentVersion: "1.0.0",
+		availableVersion: "1.1.0",
+		channel: "stable",
+	});
+	await Promise.all(
+		[firstClient, secondClient].map((client) =>
+			client.waitForFrame(
+				(frame) =>
+					frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+					(frame.data as HostUpdateNotice).status === "available",
+			),
+		),
+	);
+
+	firstClient.socket.send(JSON.stringify({ id: "run-first", method: "host.update", params: {} }));
+	const firstRun = await runs.waitForCheck(0);
+	const [runAck] = await Promise.all([
+		firstClient.waitForFrame((frame) => frame.id === "run-first"),
+		...([firstClient, secondClient].map((client) =>
+			client.waitForFrame(
+				(frame) =>
+					frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+					(frame.data as HostUpdateNotice).status === "running",
+			),
+		) as [Promise<SocketFrame>, Promise<SocketFrame>]),
+	]);
+	expect(runAck.ok).toBe(true);
+	secondClient.socket.send(
+		JSON.stringify({ id: "run-while-running", method: "host.update", params: {} }),
+	);
+	expect((await secondClient.waitForFrame((frame) => frame.id === "run-while-running")).ok).toBe(
+		true,
+	);
+	expect(runs.checks).toHaveLength(1);
+
+	firstRun.reject(new Error("private child diagnostic"));
+	await Promise.all(
+		[firstClient, secondClient].map((client) =>
+			client.waitForFrame(
+				(frame) =>
+					frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+					(frame.data as HostUpdateNotice).status === "failed",
+			),
+		),
+	);
+	expect(JSON.stringify(firstClient.frames)).not.toContain("private child diagnostic");
+
+	const sameReleaseCheck = await checks.waitForCheck(1);
+	sameReleaseCheck.resolve({
+		currentVersion: "1.0.0",
+		availableVersion: "1.1.0",
+		channel: "stable",
+	});
+	await sameReleaseCheck.promise;
+	const afterSameRelease = await collectSocket(b.port, "updates-run-failed-snapshot");
+	const failedWelcome = await afterSameRelease.waitForFrame(
+		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
+	);
+	expect((failedWelcome.data as ServerWelcome).hostUpdate?.status).toBe("failed");
+	afterSameRelease.socket.close();
+
+	const newerReleaseCheck = await checks.waitForCheck(2);
+	newerReleaseCheck.resolve({
+		currentVersion: "1.0.0",
+		availableVersion: "1.2.0",
+		channel: "stable",
+	});
+	await firstClient.waitForFrame(
+		(frame) =>
+			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+			(frame.data as HostUpdateNotice).availableVersion === "1.2.0" &&
+			(frame.data as HostUpdateNotice).status === "available",
+	);
+
+	firstClient.socket.send(JSON.stringify({ id: "run-retry", method: "host.update", params: {} }));
+	const retryRun = await runs.waitForCheck(1);
+	await firstClient.waitForFrame(
+		(frame) =>
+			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+			(frame.data as HostUpdateNotice).availableVersion === "1.2.0" &&
+			(frame.data as HostUpdateNotice).status === "running",
+	);
+	expect((await firstClient.waitForFrame((frame) => frame.id === "run-retry")).ok).toBe(true);
+	retryRun.resolve(undefined);
+	await Promise.all(
+		[firstClient, secondClient].map((client) =>
+			client.waitForFrame(
+				(frame) =>
+					frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+					(frame.data as HostUpdateNotice).availableVersion === "1.2.0" &&
+					(frame.data as HostUpdateNotice).status === "succeeded",
+			),
+		),
+	);
+
+	const checksAfterSuccess = checks.checks.length;
+	await Bun.sleep(120);
+	expect(checks.checks).toHaveLength(checksAfterSuccess);
+	firstClient.socket.send(
+		JSON.stringify({ id: "run-after-success", method: "host.update", params: {} }),
+	);
+	expect((await firstClient.waitForFrame((frame) => frame.id === "run-after-success")).ok).toBe(
+		true,
+	);
+	expect(runs.checks).toHaveLength(2);
+	firstClient.socket.close();
+	secondClient.socket.close();
+});
+
+test("shutdown makes a late host update run result inert", async () => {
+	const checks = createCheckHarness<HostUpdateNotice | null>();
+	const runs = createCheckHarness<void>();
+	const b = await boot({
+		port: grabFreePort(),
+		host: "localhost",
+		portMode: "exact",
+		hostUpdate: { intervalMs: 1_000, check: checks.check, run: runs.check },
+	});
+	const collector = await collectSocket(b.port, "updates-run-shutdown");
+	await collector.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome);
+	const firstCheck = await checks.waitForCheck(0);
+	firstCheck.resolve({
+		currentVersion: "1.0.0",
+		availableVersion: "1.1.0",
+		channel: "stable",
+	});
+	await collector.waitForFrame(
+		(frame) =>
+			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+			(frame.data as HostUpdateNotice).status === "available",
+	);
+	collector.socket.send(
+		JSON.stringify({ id: "run-before-stop", method: "host.update", params: {} }),
+	);
+	const run = await runs.waitForCheck(0);
+	await collector.waitForFrame(
+		(frame) =>
+			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+			(frame.data as HostUpdateNotice).status === "running",
+	);
+
+	await b.server.shutdown();
+	run.resolve(undefined);
+	await run.promise;
+	await Bun.sleep(10);
+
+	expect(
+		collector.frames.filter(
+			(frame) =>
+				frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+				(frame.data as HostUpdateNotice).status === "succeeded",
+		),
+	).toHaveLength(0);
 });
 
 test("shutdown clears periodic checks and makes a late result inert", async () => {
@@ -403,7 +580,7 @@ test("shutdown clears periodic checks and makes a late result inert", async () =
 		port: grabFreePort(),
 		host: "localhost",
 		portMode: "exact",
-		hostUpdate: { intervalMs: 5, check: checks.check },
+		hostUpdate: { intervalMs: 5, check: checks.check, run: async () => {} },
 	});
 	const collector = await collectSocket(b.port, "updates-shutdown");
 	await collector.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome);

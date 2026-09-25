@@ -9,7 +9,9 @@ export function UpdateReadyButton({
 	updates: UpdatesController;
 	onOpen(): void;
 }) {
-	const hostAvailable = updates.source === "host";
+	const hostUpdate = updates.source === "host";
+	const hostStatus = updates.source === "host" ? updates.state.status : undefined;
+	const hostRequestFailed = updates.source === "host" && updates.requestFailed;
 	const nativeState = updates.source === "native" ? updates.state : null;
 	const nativeNeedsAttention = updates.source === "native" && updates.requestError !== null;
 	const nativeActionable =
@@ -20,18 +22,33 @@ export function UpdateReadyButton({
 		nativeState?.status === "ready" ||
 		nativeState?.status === "installing" ||
 		nativeState?.status === "error";
-	if (!nativeActionable && !hostAvailable) return null;
+	if (!nativeActionable && !hostUpdate) return null;
 
 	const availableVersion = updates.state.availableVersion;
 	let label = "Update needs attention";
 	let ariaLabel = availableVersion
 		? `ThinkRail ${availableVersion} update needs attention`
 		: "A ThinkRail update needs attention";
-	if (hostAvailable) {
-		label = "Update available";
-		ariaLabel = availableVersion
-			? `ThinkRail ${availableVersion} is available`
-			: "A ThinkRail update is available";
+	if (hostUpdate) {
+		if (hostRequestFailed || hostStatus === "failed") {
+			label = "Update failed";
+			ariaLabel = "The ThinkRail host update failed";
+		} else if (hostStatus === "running") {
+			label = "Updating host";
+			ariaLabel = availableVersion
+				? `Updating the ThinkRail host to ${availableVersion}`
+				: "Updating the ThinkRail host";
+		} else if (hostStatus === "succeeded") {
+			label = "Restart host";
+			ariaLabel = availableVersion
+				? `Restart the ThinkRail host to use ${availableVersion}`
+				: "Restart the ThinkRail host to use the update";
+		} else {
+			label = "Update available";
+			ariaLabel = availableVersion
+				? `ThinkRail ${availableVersion} is available`
+				: "A ThinkRail update is available";
+		}
 	} else if (!nativeNeedsAttention && nativeState) {
 		switch (nativeState.status) {
 			case "available":
@@ -70,7 +87,7 @@ export function UpdateReadyButton({
 			size="sm"
 			data-testid="update-ready"
 			data-source={updates.source}
-			data-status={nativeState?.status}
+			data-status={nativeState?.status ?? hostStatus ?? (hostUpdate ? "legacy" : undefined)}
 			aria-label={ariaLabel}
 			onClick={onOpen}
 			className="text-primary"

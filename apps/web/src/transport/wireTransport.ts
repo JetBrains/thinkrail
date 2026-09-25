@@ -1,4 +1,5 @@
 import type {
+	Ack,
 	AppConfig,
 	ExtUiRequest,
 	HostUpdateNotice,
@@ -16,6 +17,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	ACTIVITY_PROTOCOL_VERSION,
+	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
@@ -28,6 +30,14 @@ let transport: WsTransport | null = null;
 
 export function supportsSessionActivity(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= ACTIVITY_PROTOCOL_VERSION;
+}
+
+export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= HOST_UPDATE_RUN_PROTOCOL_VERSION;
+}
+
+export function runHostUpdate(): Promise<Ack> {
+	return getTransport().request("host.update", {});
 }
 
 /** The agent plan-review capability (`todo.startReview`/`reviewAll` + the hidden review subagent) landed at

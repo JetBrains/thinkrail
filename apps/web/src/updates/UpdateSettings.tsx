@@ -69,11 +69,36 @@ function nativeStatusCopy(state: NativeUpdateState | null): { title: string; det
 	}
 }
 
-function hostNoticeCopy(state: HostUpdateNotice): { title: string; detail: string } {
-	return {
-		title: `ThinkRail ${state.availableVersion} is available`,
-		detail: "Update the CLI on the machine that is running this host.",
-	};
+function hostNoticeCopy(
+	state: HostUpdateNotice,
+	requestFailed: boolean,
+): { title: string; detail: string } {
+	if (requestFailed || state.status === "failed") {
+		return {
+			title: "The host update couldn't be completed",
+			detail: "Retry the update or use the manual command below.",
+		};
+	}
+	switch (state.status) {
+		case "running":
+			return {
+				title: `Updating ThinkRail to ${state.availableVersion}`,
+				detail: "The host remains available while the update runs.",
+			};
+		case "succeeded":
+			return {
+				title: `ThinkRail ${state.availableVersion} was installed`,
+				detail: "Restart the host manually when you're ready to use the new version.",
+			};
+		default:
+			return {
+				title: `ThinkRail ${state.availableVersion} is available`,
+				detail:
+					state.status === "available"
+						? "Run the update when you're ready. The host will keep running afterward."
+						: "Update the CLI on the machine that is running this host.",
+			};
+	}
 }
 
 function publicChannel(channel: string | undefined): string | undefined {
@@ -84,14 +109,22 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 	const nativeState = updates.source === "native" ? updates.state : null;
 	const hostNotice = updates.source === "host" ? updates.state : null;
 	const nativeRequestError = updates.source === "native" ? updates.requestError : null;
+	const hostRequestFailed = updates.source === "host" && updates.requestFailed;
 	const nativeStatus = nativeState?.status ?? "loading";
+	const hostStatus = hostNotice?.status;
 	const error = nativeRequestError?.message ?? nativeState?.error ?? null;
 	const failedAction: NativeUpdateAction | null =
 		nativeRequestError?.action ?? nativeState?.failedPhase ?? null;
-	const copy = hostNotice ? hostNoticeCopy(hostNotice) : nativeStatusCopy(nativeState);
+	const copy = hostNotice
+		? hostNoticeCopy(hostNotice, hostRequestFailed)
+		: nativeStatusCopy(nativeState);
 	const ready = nativeState?.status === "ready";
 	const nativeAvailable = nativeState?.status === "available";
-	const hostAvailable = hostNotice !== null;
+	const hostAvailable =
+		hostNotice !== null && (hostStatus === undefined || hostStatus === "available");
+	const hostRunning = hostStatus === "running";
+	const hostSucceeded = hostStatus === "succeeded";
+	const hostFailed = hostStatus === "failed" || hostRequestFailed;
 	const checking = nativeState?.status === "checking";
 	const downloading = nativeState?.status === "downloading";
 	const preparing = nativeState?.status === "preparing";
@@ -108,14 +141,17 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 			: `Downloading update — ${Math.round(progress)}%`
 		: preparing
 			? "Preparing update…"
-			: null;
-	const toneClass = error
-		? "text-feedback-error"
-		: ready || nativeAvailable || hostAvailable
-			? "text-primary"
-			: checking || downloading || preparing || installing
-				? "text-feedback-info"
-				: "text-text-muted";
+			: hostRunning
+				? "Running update…"
+				: null;
+	const toneClass =
+		error || hostFailed
+			? "text-feedback-error"
+			: ready || nativeAvailable || hostAvailable || hostSucceeded
+				? "text-primary"
+				: checking || downloading || preparing || installing || hostRunning
+					? "text-feedback-info"
+					: "text-text-muted";
 	const currentVersion = hostNotice?.currentVersion ?? nativeState?.version;
 	const channel = hostNotice?.channel ?? publicChannel(nativeState?.channel);
 	const availableVersion = hostNotice?.availableVersion ?? nativeState?.availableVersion;
@@ -127,6 +163,9 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 					? updates.downloadUpdate
 					: updates.restartToUpdate
 			: null;
+	const showHostManualGuidance =
+		hostNotice !== null &&
+		(hostStatus === undefined || hostStatus === "failed" || hostRequestFailed);
 
 	return (
 		<section data-testid="settings-updates" className="flex flex-col gap-16">
@@ -135,14 +174,14 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 				<p className="text-text-muted tr-text-metadata">
 					{updates.source === "native"
 						? "ThinkRail checks for updates in the background. Downloads and installation begin only when you choose them."
-						: "ThinkRail checks this host for new releases. Install updates from the machine running the host."}
+						: "ThinkRail checks this host for new releases. Updates run on the machine hosting ThinkRail."}
 				</p>
 			</div>
 
 			<div
 				data-testid="update-status"
 				data-source={updates.source}
-				data-status={updates.source === "native" ? nativeStatus : undefined}
+				data-status={updates.source === "native" ? nativeStatus : (hostStatus ?? "legacy")}
 				className="flex flex-col gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-12"
 			>
 				<div className="flex items-start gap-8">
@@ -175,13 +214,22 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 					</p>
 				) : null}
 
-				{hostNotice ? (
+				{showHostManualGuidance ? (
 					<p
 						data-testid="update-command-guidance"
 						className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-8 text-text-default tr-text-ui"
 					>
 						Run <code className="tr-code-text text-primary">thinkrail update</code> on the machine
 						running the host, then restart ThinkRail.
+					</p>
+				) : null}
+
+				{hostSucceeded ? (
+					<p
+						data-testid="update-host-restart-guidance"
+						className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-8 text-text-default tr-text-ui"
+					>
+						Restart the ThinkRail host manually to start using version {availableVersion}.
 					</p>
 				) : null}
 
@@ -230,6 +278,17 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 							Install &amp; Restart
 						</Button>
 					) : null}
+				</div>
+			) : updates.canRun && (hostAvailable || hostFailed) ? (
+				<div className="flex flex-wrap justify-end gap-8">
+					<Button
+						{...(hostFailed ? { variant: "outline" as const } : {})}
+						data-testid={hostFailed ? "update-retry" : "update-run-host"}
+						onClick={updates.runUpdate}
+					>
+						{hostFailed ? <Refresh className="size-14" /> : <DownloadCloud className="size-14" />}
+						{hostFailed ? "Retry" : "Run Update"}
+					</Button>
 				</div>
 			) : null}
 

@@ -5,6 +5,7 @@ import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	customMessageText,
+	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isTodoReviewFixMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	normalizeSessionTitle,
@@ -55,9 +56,11 @@ test("project template previews advance the additive wire shape to v63", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION);
 });
 
-test("host update advisories advance the protocol with an immutable notice channel", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(64);
+test("host update execution advances the additive lifecycle protocol", () => {
+	expect(HOST_UPDATE_RUN_PROTOCOL_VERSION).toBe(69);
+	expect(PROTOCOL_VERSION).toBe(HOST_UPDATE_RUN_PROTOCOL_VERSION);
 	expect(WS_CHANNELS.hostUpdateAvailable).toBe("host.updateAvailable");
+	expect(WS_METHODS.hostUpdate).toBe("host.update");
 });
 
 test("explicit analytics consent is available from protocol v65", () => {

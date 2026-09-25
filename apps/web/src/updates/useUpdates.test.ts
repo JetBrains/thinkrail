@@ -3,6 +3,7 @@ import type { HostUpdateNotice, NativeUpdateBridge, NativeUpdateState } from "@t
 import {
 	getNativeUpdateBridge,
 	hasNativeUpdateSurface,
+	runHostUpdateRequest,
 	runNativeUpdateRequest,
 	selectUpdateSource,
 	subscribeToNativeUpdates,
@@ -99,6 +100,18 @@ describe("native update shell subscription", () => {
 		);
 		await Promise.resolve();
 		expect(errors).toEqual([{ action: "download", message: "Update RPC timed out" }]);
+	});
+
+	test("host request failures collapse without exposing the transport diagnostic", async () => {
+		let failures = 0;
+		runHostUpdateRequest(
+			async () => {
+				throw new Error("private server diagnostic");
+			},
+			() => failures++,
+		);
+		await Promise.resolve();
+		expect(failures).toBe(1);
 	});
 
 	test("bridge validation requires the complete download-capable surface", () => {
