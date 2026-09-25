@@ -11,6 +11,13 @@ const MAX_ERROR_LENGTH = 1024;
 const SEMVER_PATTERN =
 	/^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
+const TRANSFER_STATUSES = new Set([
+	"download-starting",
+	"fetching-patch",
+	"downloading-patch",
+	"downloading-full-bundle",
+]);
+
 const PREPARING_STATUSES = new Set([
 	"applying-patch",
 	"extracting-version",
@@ -355,15 +362,23 @@ export function createNativeUpdateController(
 				}
 				return true;
 			}
-			if (state.status !== "preparing") {
-				publish({
-					status: "downloading",
-					availableVersion: token.version,
-					progress,
-					error: null,
-					failedPhase: null,
-				});
-			}
+			publish({
+				status: "downloading",
+				availableVersion: token.version,
+				progress,
+				error: null,
+				failedPhase: null,
+			});
+			return true;
+		}
+		if (TRANSFER_STATUSES.has(entry.status)) {
+			publish({
+				status: "downloading",
+				availableVersion: token.version,
+				progress: null,
+				error: null,
+				failedPhase: null,
+			});
 			return true;
 		}
 		if (PREPARING_STATUSES.has(entry.status)) {

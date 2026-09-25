@@ -178,6 +178,16 @@ test("download is explicit and coalesced, publishes transfer then preparation, a
 		details: { progress: 42 },
 	});
 	expect(await controller.getState()).toMatchObject({ status: "downloading", progress: 42 });
+	updater.emit({ status: "applying-patch", message: "applying first patch" });
+	expect((await controller.getState()).status).toBe("preparing");
+	updater.emit({ status: "downloading-full-bundle", message: "falling back" });
+	expect(await controller.getState()).toMatchObject({ status: "downloading", progress: null });
+	updater.emit({
+		status: "download-progress",
+		message: "transferring fallback",
+		details: { progress: 17 },
+	});
+	expect(await controller.getState()).toMatchObject({ status: "downloading", progress: 17 });
 	updater.emit({
 		status: "download-progress",
 		message: "transferred",
