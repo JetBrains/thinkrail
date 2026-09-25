@@ -286,7 +286,9 @@ export class TodoStore {
 				delete todo.summary;
 				delete todo.verification;
 				delete todo.commitSubject;
-				delete plan.summary;
+				// The plan-level summary is NOT dropped: it survives the re-open (stale) so the UI can show
+				// it as "Updating…" and the next completion can EXTEND it (cumulative contract). Display/
+				// export gating on "everything done" is the reader's job, not a disk erase.
 			}
 		}
 		if (patch.note !== undefined) {

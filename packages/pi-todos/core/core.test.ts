@@ -648,7 +648,7 @@ test("item summary/verification/commitSubject: set with done, cleared by empty s
 	}
 });
 
-test("reopening a done item clears its stale completion fields and the plan summary", () => {
+test("reopening a done item clears its stale completion fields but keeps the plan summary", () => {
 	const root = tempRoot();
 	try {
 		const s = store(root);
@@ -666,7 +666,9 @@ test("reopening a done item clears its stale completion fields and the plan summ
 		expect(s.get(todo.id)?.summary).toBeUndefined();
 		expect(s.get(todo.id)?.verification).toBeUndefined();
 		expect(s.get(todo.id)?.commitSubject).toBeUndefined();
-		expect(s.read().summary).toBeUndefined();
+		// The plan-level summary survives the re-open (stale) so the UI can show "Updating…" and the next
+		// completion can extend it; only display/export gate it out.
+		expect(s.read().summary).toBe("All tasks landed; e2e suite green.");
 
 		s.update(todo.id, {
 			status: "done",

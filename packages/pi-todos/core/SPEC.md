@@ -37,9 +37,11 @@ plan-level `summary` (`TodoFile.summary`, written by `TodoStore.setSummary`) —
 the agent writes when the whole plan completes; it is **cumulative** (everything done across the whole
 plan, extended not rewritten when a prior note survives a re-completion — the tool layer echoes the
 surviving text so the agent can build on it), never a recap of only the last step. Both are stored verbatim across later edits, with one
-invalidation rule: `update` clears an item's `summary`/`verification`, and drops the plan-level `summary`
-with it, the moment that item's `status` leaves `done` — unless the same patch also supplies fresh values
-for them, which win.
+invalidation rule: `update` clears an item's own `summary`/`verification` the moment that item's `status`
+leaves `done` — unless the same patch also supplies fresh values, which win. The **plan-level `summary`
+survives a re-open** (it is NOT dropped with the item's fields): it stays stale so a reader can show it as
+"Updating…" while the plan is being redone, and the next completion EXTENDS it rather than starting blank
+(the cumulative contract). Gating a stale note out of a display or export is the reader's job.
 
 **`commitSubject` (the git-facing title).** A third done-time field, same family and the same
 invalidation rule: the subject line the host uses verbatim when it commits the item's delta (see
@@ -50,10 +52,10 @@ history's own convention ("feat(web): add newest-first chat order"). Deriving on
 possible (the change's type/scope is knowable only from the change), so the agent authors both and the
 store just carries them. The model stays git-free: it never validates the style, never reads `git log` —
 the tool description and the todos skill carry the "match this repo's history" instruction, and the host
-falls back to `title` when the field is absent. A UI reader can gate display on "everything done", but a non-UI consumer (a generated
-PR body, a work report) has no such gate, so a reopened item's stale completion story must not survive on
-disk, not merely be hidden. `replaceAll` deliberately does **not** carry the plan summary over — a
-fresh plan is new work. Review *state* is never stored here: it is user-owned and lives in a host sidecar
+falls back to `title` when the field is absent. A reader gates the plan-level summary on "everything
+done" (the UI shows it live, marked stale while re-opened; ungated consumers like a PR body / work report
+render it only while every item is `done`), so a stale all-done story never leaks even though it survives
+on disk. `replaceAll` deliberately does **not** carry the plan summary over — a fresh plan is new work. Review *state* is never stored here: it is user-owned and lives in a host sidecar
 (see `server/src/todos`), so an agent re-plan can't flip a review decision.
 
 **Group = task.** A group models one user ask; its items are the steps. A group's lifecycle is
