@@ -251,18 +251,19 @@ export function createNativeUpdateController(
 		try {
 			await dependencies.updater.downloadUpdate();
 			if (disposed || activeDownload !== token) return false;
+			if (preparedVersion === token.version) return true;
 			const info = dependencies.updater.updateInfo();
 			if (info.error) {
 				fail("download", info.error);
 				return false;
 			}
-			if (isMatchingReady(info, token.version)) {
-				return preparedVersion === token.version ? true : setReady(token.version);
-			}
+			if (isMatchingReady(info, token.version)) return setReady(token.version);
 			fail("download", "Native update download did not complete");
 			return false;
 		} catch (error) {
-			if (!disposed && activeDownload === token) fail("download", error);
+			if (disposed || activeDownload !== token) return false;
+			if (preparedVersion === token.version) return true;
+			fail("download", error);
 			return false;
 		}
 	};

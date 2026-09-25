@@ -138,7 +138,7 @@ describe("unified update capability", () => {
 		expect(hasNativeUpdateSurface(nativeState(2, "idle"))).toBe(true);
 	});
 
-	test("host authority exists exactly when no native bridge and an immutable notice is present", () => {
+	test("host authority exists exactly when no native bridge and a host snapshot is present", () => {
 		expect(selectUpdateSource(null, hostNotice())).toBe("host");
 		expect(selectUpdateSource(null, null)).toBeNull();
 	});
