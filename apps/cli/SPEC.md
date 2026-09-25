@@ -60,10 +60,12 @@ immediately and every six hours on the baked channel with the same GitHub rules 
 strictly newer version produces an immutable `{ currentVersion, availableVersion, channel }` notice; failure
 and no-update are silent, while a later still-newer release replaces the retained notice.
 
-The shared update surface tells the user to run the fixed `thinkrail update` command on the host machine and
-then restart ThinkRail. This advisory never fetches an installer, downloads an artifact, blocks readiness,
-retries, jitters, or runs for `update`/`uninstall`/help/version exits. The host carries only the latest notice
-to current and later clients.
+The shared update surface offers **Run Update** for a compiled host and retains fixed `thinkrail update`
+guidance for older clients/hosts or a failed run. The action invokes this same installed binary's parameterless
+update subcommand asynchronously; the browser cannot select a command, path, channel, version, or URL. Bounded
+running/succeeded/failed state converges every client, and success requires the user to restart the unsupervised
+host manually rather than aborting active work. Discovery and execution remain absent from
+`update`/`uninstall`/help/version exits and all source/dev launches.
 
 ## Self-update (`thinkrail update`)
 
@@ -87,15 +89,12 @@ resolve the same way on both: flag > `~/.config/thinkrail/install.json` > baked 
 
 Any Windows failure (fetch, no PowerShell host, installer non-zero) falls back to *printing* the manual
 per-shell command (`windowsManualUpdateMessage`) with the releases page under it: cmd's `set "X=v" &&`
-and PowerShell's `$env:X='v';` are not interchangeable — one shell's syntax shown to the other silently
-re-installs the wrong build, and a dropped `THINKRAIL_PREFIX` would put a second copy under `.local`
-while the PATH-resolved exe stays stale. `resolveWindowsPrefix` owns that seam for the message (it omits
-the installer's own default as noise); `resolveWindowsInstallPrefix` is the same validation for the
-executed plan, and both refuse a metadata prefix that isn't a rooted Windows path or can't be safely
-quoted (Windows needs its own charset — `PREFIX_FORBIDDEN_RE` rejects the backslash every Windows path is
-made of). The arg parse + channel/prefix resolution are pure (`parseUpdateArgs` / `resolveUpdateChannel` /
-`resolveWindowsPrefix` / `resolveUpdatePlan` / `resolveWindowsUpdatePlan`, unit-tested); only fetch
-(`curl` / `fetch`) + run (`bash -s` / `powershell -File`) touch IO.
+and PowerShell's `$env:X='v';` are not interchangeable. Update planning binds metadata to the running
+`<prefix>/bin/thinkrail[.exe]` before trusting its prefix or channel; stale/unrelated metadata cannot update a
+different copy. Missing metadata falls back to that running layout, including normalized legacy Git-Bash
+`/c/...` and `/cygdrive/c/...` prefixes. A manual binary outside the representable layout fails closed with
+manual guidance rather than installing under `.local`. Version/channel combinations are validated after
+resolution. The planning functions remain pure and unit-tested; only installer fetch and execution touch IO.
 `THINKRAIL_INSTALL_SCRIPT_URL` / `THINKRAIL_INSTALL_PS1_URL` override the installer URLs (testing /
 forks). See `module-ci-release` for the installers themselves.
 

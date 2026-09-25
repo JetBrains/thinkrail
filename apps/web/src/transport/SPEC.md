@@ -53,7 +53,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `includeDiffStats: false`, generation-fencing the result and folding only already-known rows through
   `updateWorkspace`, so a pushed full workspace snapshot missed while disconnected (including a rename)
   cannot stay stale without misrepresenting this metadata repair as membership reconciliation;
-  the immutable host-update notice via `applyHostUpdate`, project snapshots via
+  the full host-update lifecycle snapshot via `applyHostUpdate`, project snapshots via
   `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
   `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,
   `workspace.created` via `addWorkspace(workspace)`, `workspace.updated` via `updateWorkspace(workspace)`,
