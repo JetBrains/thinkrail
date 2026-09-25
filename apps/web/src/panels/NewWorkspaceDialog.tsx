@@ -81,20 +81,24 @@ export function reconcileModel(
 const PILL =
 	"flex h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
 
+async function refreshProjectWorkspaces(projectId: string): Promise<void> {
+	useAppStore.getState().expandProject(projectId);
+	const rows = await getTransport().request("workspace.list", { projectId });
+	useAppStore.getState().setWorkspaces(projectId, rows);
+}
+
 export function NewWorkspaceDialog({
 	open,
 	projectId,
 	initialPrompt,
 	promptNote,
 	onOpenChange,
-	onCreated,
 }: {
 	open: boolean;
 	projectId: string;
 	initialPrompt?: string;
 	promptNote?: string;
 	onOpenChange: (open: boolean) => void;
-	onCreated: (workspace: Workspace) => void;
 }) {
 	const projects = useAppStore((s) => s.projects);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
@@ -368,7 +372,7 @@ export function NewWorkspaceDialog({
 
 		const store = useAppStore.getState();
 		if (target === "worktree") {
-			onCreated(workspace);
+			void refreshProjectWorkspaces(workspace.projectId).catch(() => {});
 			store.activateWorkspace(workspace);
 		}
 		onOpenChange(false);

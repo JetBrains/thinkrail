@@ -11,6 +11,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../compone
 import { IconTooltip } from "../components/ui/tooltip";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
+import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
@@ -64,6 +65,7 @@ export function Shell() {
 	const { review: openReview } = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
 	const updates = useUpdates();
+	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
@@ -112,6 +114,9 @@ export function Shell() {
 						});
 					},
 				}
+			: {}),
+		...(contextProject
+			? { onNewWorkspace: () => setNewWorkspaceProjectId(contextProject.id) }
 			: {}),
 	});
 	return (
@@ -227,6 +232,15 @@ export function Shell() {
 						) : undefined
 					}
 				/>
+				{newWorkspaceProjectId !== null ? (
+					<NewWorkspaceDialog
+						open
+						projectId={newWorkspaceProjectId}
+						onOpenChange={(isOpen) => {
+							if (!isOpen) setNewWorkspaceProjectId(null);
+						}}
+					/>
+				) : null}
 			</header>
 			{hasActiveWorkspace && activeWorkspaceId ? (
 				<div data-testid="workspace-shell-layout" className="h-full min-h-0 min-w-0">

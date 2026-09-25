@@ -34,7 +34,8 @@ Tiny UI helpers shared across components.
   `panels/`, which is what let three private twins of it accumulate), **`platformShortcutLabel()`** +
   **`hasPlatformModifier()`** (one Apple-vs-other definition for shortcut chrome and global handlers; both
   default to the browser-reported platform but accept an explicit platform string so non-browser callers and
-  tests never inherit a host runtime's synthetic `navigator` accidentally), and
+  tests never inherit a host runtime's synthetic `navigator` accidentally; the label optionally renders the
+  Alt variant — `⌥⌘N` / `Ctrl+Alt+N` — so shortcut chrome never composes modifier glyphs itself), and
   **`copyText()`**
   (clipboard write reporting whether it landed — one place for the *degradation*: an insecure context
   (plain-http remote access) or a denied permission has no clipboard, and every caller's answer is the same

@@ -211,8 +211,12 @@ export function hasPlatformModifier(
 		: event.ctrlKey && !event.metaKey;
 }
 
-export function platformShortcutLabel(key: string, platform = browserPlatform()): string {
-	return isApplePlatform(platform) ? `⌘${key}` : `Ctrl+${key}`;
+export function platformShortcutLabel(
+	key: string,
+	{ alt = false, platform = browserPlatform() }: { alt?: boolean; platform?: string } = {},
+): string {
+	if (isApplePlatform(platform)) return alt ? `⌥⌘${key}` : `⌘${key}`;
+	return alt ? `Ctrl+Alt+${key}` : `Ctrl+${key}`;
 }
 
 export function relativeTime(ms: number): string {
