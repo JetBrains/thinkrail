@@ -26,7 +26,9 @@ One `WorkbenchFrame` belongs to a frontend surface, not a workspace. It carries 
 A `WorkspaceViewState` is keyed by workspace and references frame group ids. It carries
 file/diff/chat/document/terminal membership and order plus center preview identity. The separate
 `LayoutAttention` overlay carries selection per group, last focus for center/each auxiliary region, and
-per-group navigation clocks. The mounted workbench document is a pure projection of the singular frame,
+per-group navigation clocks. Attention is keyed per workspace, but a selected singleton tool is shared
+across the window's views (a resource selection is not); the pure adoption rule lives here and its
+fan-out in `layoutState`. The mounted workbench document is a pure projection of the singular frame,
 active workspace view, and its attention; it is never stored as another authority.
 
 Pure operations return either one complete local-state result or an unavailable reason. A resource-only
