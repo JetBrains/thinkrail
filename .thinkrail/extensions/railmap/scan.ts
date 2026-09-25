@@ -1,5 +1,6 @@
+import { realpathSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { join, posix, relative, sep } from "node:path";
+import { basename, dirname, join, posix, relative, sep } from "node:path";
 import { isSpec, parseFile } from "pi-spec-graph/core";
 import ts from "typescript";
 import type { ImportRef, ScanState } from "./analyze";
@@ -22,6 +23,15 @@ const BATCH = 48;
 const MAX_CODE_FILES = 20_000;
 const MAX_WALK_FILES = 200_000;
 const EXTENSIONS_DIR = ".thinkrail/extensions";
+
+export const canonicalPath = (path: string): string => {
+	try {
+		return realpathSync(path);
+	} catch {
+		const parent = dirname(path);
+		return parent === path ? path : join(canonicalPath(parent), basename(path));
+	}
+};
 
 export const toRel = (root: string, path: string) => relative(root, path).split(sep).join("/");
 

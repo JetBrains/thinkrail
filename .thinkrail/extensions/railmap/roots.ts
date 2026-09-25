@@ -1,8 +1,8 @@
-import { realpathSync, watch } from "node:fs";
+import { watch } from "node:fs";
 import { isAbsolute, sep } from "node:path";
 import { type Analysis, analyze, emptyScan, type ScanState } from "./analyze";
 import type { RailmapChannel, RailmapGraph, RailmapStatus } from "./model";
-import { applyChanges, coldScan, isIgnored, toRel } from "./scan";
+import { applyChanges, canonicalPath, coldScan, isIgnored, toRel } from "./scan";
 
 const MAX_ROOTS = 4;
 const DEBOUNCE_MS = 150;
@@ -28,17 +28,10 @@ export interface RootsOptions {
 	log: (...args: unknown[]) => void;
 	onUpdate: (root: string) => void;
 	onEvict: (root: string) => void;
+	isPinned: (root: string) => boolean;
 	loadStale: (root: string) => Promise<RailmapGraph | undefined>;
 	saveGraph: (graph: RailmapGraph) => void;
 }
-
-export const canonicalRoot = (path: string) => {
-	try {
-		return realpathSync(path);
-	} catch {
-		return path;
-	}
-};
 
 const watchTree = (
 	root: string,
@@ -59,6 +52,7 @@ const watchTree = (
 
 export const createRoots = (options: RootsOptions) => {
 	const entries = new Map<string, RootEntry>();
+	let closed = false;
 
 	const settle = (entry: Pick<RootEntry, "root" | "analysis" | "disposed">) => {
 		if (entry.disposed || !entry.analysis) return;
@@ -97,7 +91,9 @@ export const createRoots = (options: RootsOptions) => {
 	};
 
 	const evict = () => {
-		const byAge = [...entries.values()].sort((a, b) => a.usedAt - b.usedAt);
+		const byAge = [...entries.values()]
+			.filter((entry) => !options.isPinned(entry.root))
+			.sort((a, b) => a.usedAt - b.usedAt);
 		for (const entry of byAge.slice(0, Math.max(0, entries.size - MAX_ROOTS))) {
 			dispose(entry);
 			options.onEvict(entry.root);
@@ -106,7 +102,7 @@ export const createRoots = (options: RootsOptions) => {
 
 	const build = async (entry: Omit<RootEntry, "ready" | "queue">) => {
 		entry.stale = await options.loadStale(entry.root).catch(() => undefined);
-		options.onUpdate(entry.root);
+		if (!entry.disposed) options.onUpdate(entry.root);
 		await coldScan(entry.scan, entry.root, (done, total) => {
 			entry.status = { state: "building", done, total };
 			const now = Date.now();
@@ -123,7 +119,7 @@ export const createRoots = (options: RootsOptions) => {
 	};
 
 	const ensure = (path: string) => {
-		const root = canonicalRoot(path);
+		const root = canonicalPath(path);
 		const existing = entries.get(root);
 		if (existing) {
 			existing.usedAt = Date.now();
@@ -140,16 +136,10 @@ export const createRoots = (options: RootsOptions) => {
 			progressAt: 0,
 			usedAt: Date.now(),
 			closeWatch: () => {},
-			disposed: false,
+			disposed: closed,
 		};
 		const ready = build(state);
 		const entry: RootEntry = Object.assign(state, { ready, queue: ready.catch(() => {}) });
-		entries.set(root, entry);
-		entry.closeWatch = watchTree(
-			root,
-			(rel) => queuePath(entry, rel),
-			(error) => options.log(`watch ${root} failed`, error),
-		);
 		ready.catch((error: unknown) => {
 			entry.status = {
 				state: "error",
@@ -158,6 +148,13 @@ export const createRoots = (options: RootsOptions) => {
 			options.log(`build ${root} failed`, error);
 			if (!entry.disposed) options.onUpdate(root);
 		});
+		if (closed) return entry;
+		entries.set(root, entry);
+		entry.closeWatch = watchTree(
+			root,
+			(rel) => queuePath(entry, rel),
+			(error) => options.log(`watch ${root} failed`, error),
+		);
 		evict();
 		return entry;
 	};
@@ -168,7 +165,7 @@ export const createRoots = (options: RootsOptions) => {
 			const entry = ensure(path);
 			await entry.ready;
 			for (const file of touched) {
-				const rel = isAbsolute(file) ? toRel(entry.root, file) : file;
+				const rel = isAbsolute(file) ? toRel(entry.root, canonicalPath(file)) : file;
 				if (!rel.startsWith("..")) entry.pending.add(rel);
 			}
 			await flush(entry);
@@ -187,11 +184,12 @@ export const createRoots = (options: RootsOptions) => {
 			};
 		},
 		rebuild(path: string) {
-			const entry = entries.get(canonicalRoot(path));
+			const entry = entries.get(canonicalPath(path));
 			if (entry) dispose(entry);
 			return ensure(path).root;
 		},
 		dispose() {
+			closed = true;
 			for (const entry of [...entries.values()]) dispose(entry);
 		},
 	};

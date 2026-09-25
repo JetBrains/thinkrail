@@ -93,6 +93,7 @@ export interface MayImportResult {
 export interface DriftMessageDetails {
 	root: string;
 	items: Drift[];
+	total: number;
 }
 
 export const driftCounts = (drift: readonly Drift[]) => {

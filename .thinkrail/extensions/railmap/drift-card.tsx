@@ -14,8 +14,12 @@ const isDrift = (value: unknown): value is Drift =>
 const itemsOf = (details: unknown) =>
 	isRecord(details) && Array.isArray(details.items) ? details.items.filter(isDrift) : [];
 
+const totalOf = (details: unknown, shown: number) =>
+	isRecord(details) && typeof details.total === "number" ? details.total : shown;
+
 const DriftCard = ({ message }: SurfaceProps) => {
 	const items = itemsOf(message?.details);
+	const total = totalOf(message?.details, items.length);
 	return (
 		<div
 			data-testid="railmap-drift-card"
@@ -24,7 +28,7 @@ const DriftCard = ({ message }: SurfaceProps) => {
 			<div className="flex items-center gap-8">
 				<RiGitBranchLine className="size-16 text-feedback-error" />
 				<span className="tr-title-compact text-text-default" data-testid="railmap-drift-card-title">
-					This run added {items.length} spec drift item{items.length === 1 ? "" : "s"}
+					This run added {total} spec drift item{total === 1 ? "" : "s"}
 				</span>
 				<ui.Button
 					className="ml-auto"
@@ -42,8 +46,8 @@ const DriftCard = ({ message }: SurfaceProps) => {
 					</li>
 				))}
 			</ul>
-			{items.length > SHOWN && (
-				<span className="tr-text-metadata text-text-muted">… {items.length - SHOWN} more</span>
+			{total > SHOWN && (
+				<span className="tr-text-metadata text-text-muted">… {total - SHOWN} more</span>
 			)}
 		</div>
 	);

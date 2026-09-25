@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -138,11 +138,11 @@ const capturePi = (host: Host): CapturedPi => {
 	return { tools, handlers };
 };
 
-const mayImport = async (pi: CapturedPi, from: string, to: string) => {
+const mayImport = async (pi: CapturedPi, from: string, to: string, cwd = fixture) => {
 	const tool = pi.tools.get("may_import");
 	if (!tool) throw new Error("may_import not registered");
 	const result = await tool.execute("c1", { from, to } as never, undefined, undefined, {
-		cwd: fixture,
+		cwd,
 	} as never);
 	return result.details as { verdict: string; reason: string };
 };
@@ -248,6 +248,82 @@ describe("railmap example extension", () => {
 		pi.handlers.get("agent_settled")?.({ type: "agent_settled" }, ctx);
 		start({ type: "agent_start" }, ctx);
 		expect(await settle(boundary, ctx)).toBeUndefined();
+		await host.dispose();
+	});
+
+	test("a reload drops the channel and a new watch brings it back", async () => {
+		const host = await load();
+		await watchReady(host);
+		const stale = capturePi(host);
+		await host.reload("railmap");
+		expect(channel(host)).toBeUndefined();
+		expect(await mayImport(stale, "ui", "api")).toMatchObject({ verdict: "undeclared" });
+		expect(channel(host)).toBeUndefined();
+		await watchReady(host);
+		await host.dispose();
+	});
+
+	test("never drops a watched root for other roots", async () => {
+		const host = await load();
+		await watchReady(host);
+		const pi = capturePi(host);
+		for (const name of ["o1", "o2", "o3", "o4", "o5"]) {
+			const other = join(base, name);
+			mkdirSync(join(other, "m"), { recursive: true });
+			writeFileSync(join(other, "m/SPEC.md"), spec(name));
+			writeFileSync(join(other, "m/index.ts"), "export const m = 1;\n");
+			expect(await mayImport(pi, "m", "m", other)).toMatchObject({ verdict: "allowed" });
+		}
+		expect(channel(host)?.status.state).toBe("ready");
+		await host.dispose();
+	});
+
+	test("matches touched and absolute paths under a symlinked workspace path", async () => {
+		const link = join(base, "link");
+		symlinkSync(fixture, link);
+		const host = await load(link);
+		const pi = capturePi(host);
+		const ctx = { cwd: link };
+		const settle = pi.handlers.get("agent_before_settle");
+		pi.handlers.get("agent_start")?.({ type: "agent_start" }, ctx);
+		const boundary = { type: "agent_before_settle", entries: [], continue: false };
+		expect(await settle?.(boundary, ctx)).toBeUndefined();
+		writeFixture({
+			"packages/util/index.ts": 'import { ui } from "../ui";\nexport const util = ui;\n',
+		});
+		pi.handlers.get("tool_result")?.(
+			{ type: "tool_result", toolName: "write", input: { path: "packages/util/index.ts" } },
+			ctx,
+		);
+		const result = (await settle?.(boundary, ctx)) as {
+			entries: { details: { items: Drift[]; total: number } }[];
+		};
+		expect(result.entries[0]?.details).toMatchObject({
+			total: 1,
+			items: [{ key: "undeclared:util>ui" }],
+		});
+		expect(
+			await mayImport(pi, join(link, "packages/ui/index.ts"), "../core/internal", link),
+		).toMatchObject({ verdict: "bypass" });
+		await host.dispose();
+	});
+
+	test("skips the drift baseline outside workspace checkouts", async () => {
+		const host = await load();
+		const pi = capturePi(host);
+		const ctx = { cwd: join(fixture, "packages") };
+		const settle = pi.handlers.get("agent_before_settle");
+		const boundary = { type: "agent_before_settle", entries: [], continue: false };
+		pi.handlers.get("agent_start")?.({ type: "agent_start" }, ctx);
+		expect(await settle?.(boundary, ctx)).toBeUndefined();
+		writeFixture({
+			"packages/util/index.ts": 'import { ui } from "../ui";\nexport const util = ui;\n',
+		});
+		pi.handlers.get("tool_result")?.(
+			{ type: "tool_result", toolName: "write", input: { path: "util/index.ts" } },
+			ctx,
+		);
+		expect(await settle?.(boundary, ctx)).toBeUndefined();
 		await host.dispose();
 	});
 

@@ -1,7 +1,7 @@
 import { isAbsolute, posix } from "node:path";
 import type { Analysis } from "./analyze";
 import type { MayImportResult } from "./model";
-import { toRel } from "./scan";
+import { canonicalPath, toRel } from "./scan";
 
 interface Endpoint {
 	module: string | null;
@@ -10,7 +10,7 @@ interface Endpoint {
 }
 
 const cleanPath = (root: string, input: string) => {
-	const rel = isAbsolute(input) ? toRel(root, input) : input;
+	const rel = isAbsolute(input) ? toRel(root, canonicalPath(input)) : input;
 	return posix.normalize(rel.replace(/^\.\//, "")).replace(/\/$/, "") || ".";
 };
 

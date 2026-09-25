@@ -154,6 +154,9 @@ test("railmap draws the spec graph, drills in, and lists drift", async ({ page }
 	).toContainText("railmap-demo/core/internal.ts");
 	await shot(drift, GROUP, "07-railmap-drift-panel");
 
+	expect((await reloadExtension(EXTENSION)).status).toBe("active");
+	await expect(drift.getByTestId("railmap-drift-item")).toHaveCount(3);
+
 	await drift.getByTestId("railmap-fix").first().click();
 	await expect(page.getByTestId("chat-input")).toHaveValue(/Railmap found spec drift/);
 });

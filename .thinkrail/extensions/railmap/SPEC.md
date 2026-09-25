@@ -47,7 +47,12 @@ Drift keys are stable across rebuilds, so "new drift" is a set difference.
 ## Host half
 
 - Roots are built lazily: when a view `watch`es a workspace (path from `tr.workspaces`), when `may_import`
-  runs, or when a session run starts. At most 4 roots stay live (least recently used goes first).
+  runs, or when a run starts in a session whose cwd is a `tr.workspaces` path. At most 4 roots stay live:
+  the least recently used unwatched root goes first; a watched root is never dropped.
+- Paths are compared after `realpath` (the file's nearest existing ancestor when it is gone), so
+  symlinked or `/tmp`-style workspace paths match the canonical root.
+- After the generation is disposed, a late call from a still-running session builds a one-shot graph
+  with no watcher and no stored entry.
 - **Cold build:** walk (skips `node_modules`, VCS/build output, and dot directories other than `.github`
   and `.thinkrail/extensions`), then read and scan files in batches, yielding between batches. The
   channel shows `building` with progress, and the last stored graph (stale) until it is ready. A root
@@ -57,7 +62,9 @@ Drift keys are stable across rebuilds, so "new drift" is a set difference.
   Changed paths are re-read (files) or re-walked (directories), removed ones dropped, then the graph is
   derived again from the in-memory scan (pure, milliseconds on this repo). Updates of one root are
   serialized.
-- Publishes `graph:<workspaceId>` = `{ root, status, graph?, stale? }` for watched workspaces. The graph
+- Publishes `graph:<workspaceId>` = `{ root, status, graph?, stale? }` for watched workspaces. Watches
+  do not survive a generation swap (the host drops the channels); a view sends `watch` again whenever
+  its channel is missing. The graph
   holds modules, module edges (import count, declared, structural, bypass count), and drift, not files;
   file lists and import sites come from actions.
 - `tr.store` keeps the last graph per root (4 roots max), shown stale on the next cold build.
@@ -69,9 +76,10 @@ Drift keys are stable across rebuilds, so "new drift" is a set difference.
 - Tool `may_import(from, to)`: `from` is a file, directory, or spec id; `to` is a spec id, path, package
   specifier, or an import specifier relative to the `from` file. Answers `allowed`, `undeclared`,
   `bypass` (allowed only through the barrel), or `unknown`, with the covering declaration or the fix.
-- Each session keeps a drift baseline taken at its run's first `agent_start`. At `agent_before_settle` it
+- Each session keeps a drift baseline taken at its run's first `agent_start`, only for workspace cwds
+  whose graph has at least one module; other runs get no drift message. At `agent_before_settle` it
   re-reads the files the run's `edit`/`write` calls touched (fs events can lag), and appends one
-  `railmap-drift` custom message (displayed) only when the drift has keys that are not in the baseline and
+  `railmap-drift` custom message (displayed; `details` holds up to 40 items plus `total`) only when the drift has keys that are not in the baseline and
   were not reported earlier in the run. `agent_settled` resets the baseline. Changes made while the root's
   cold build was still running count toward the baseline.
 
@@ -81,11 +89,25 @@ Drift keys are stable across rebuilds, so "new drift" is a set difference.
   children of a module → files of one module. Nodes show drift counts; edges are colored by state
   (declared, undeclared, structural, declared-but-unused dashed). Clicking a node shows its reverse
   closure ("what breaks if I touch X": every module that imports it, directly or transitively) and
-  highlights it; clicking an edge lists its import sites. Drift chips toggle a drift-only filter.
+  highlights it; clicking an edge lists its import sites. Drift chips (all kinds but `no-spec`, which has
+  no edge or module to draw and lives in the panel) toggle a drift-only filter; an aggregated edge
+  matches `unused` when any merged pair is unused.
 - `drift` (panel): drift grouped by kind; **Fix with agent** opens a new chat with a prefilled prompt
   (`startChat`); **Show** opens the graph at that module.
 - `drift-card` (message, `railmap-drift`): the new drift a run introduced.
 - `may-import` (toolCard, `may_import`): the verdict.
+
+## Boundary
+
+- Public surface: the four surfaces above, actions `watch`/`files`/`sites`/`rebuild`, the
+  `graph:<workspaceId>` channel, the `may_import` tool, and the `railmap-drift` custom message.
+- Host half: `index.ts`, `pi.ts`, `roots.ts`, `scan.ts`, `analyze.ts`, `resolve.ts`, `verdict.ts`.
+  Views: the `.tsx` files plus `hooks.ts`, `levels.ts`, `layout.ts`. `model.ts` is shared (types and pure
+  helpers, no Node imports).
+- Allowed dependencies: `@thinkrail/ext`, `@thinkrail/ext/view`, `pi-spec-graph/core`, `typescript`,
+  `typebox`, `@xyflow/react`, `elkjs`, and Node built-ins in the host half.
+- Forbidden: any ThinkRail package internals (`packages/*/src`, `apps/*`), views importing host-half
+  files, and the host half importing views.
 
 ## Dependencies
 

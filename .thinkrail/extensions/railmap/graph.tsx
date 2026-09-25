@@ -20,6 +20,8 @@ import { Empty, StatusChip } from "./parts";
 
 const { RiRefreshLine, RiArrowRightSLine } = remixicon;
 
+const FILTERABLE = DRIFT_KINDS.filter((kind) => kind !== "no-spec");
+
 type Place = { kind: "modules"; focus: string | null } | { kind: "files"; module: string };
 type Selection = { kind: "node"; id: string } | { kind: "edge"; id: string } | null;
 
@@ -43,7 +45,11 @@ const soleRoot = (graph: RailmapGraph) => {
 const filterLevel = (level: Level, filter: DriftKind | null): Level => {
 	if (filter === null) return level;
 	const edges = level.edges.filter((edge) =>
-		filter === "bypass" ? edge.bypass > 0 : edge.state === filter,
+		filter === "bypass"
+			? edge.bypass > 0
+			: filter === "unused"
+				? edge.unused
+				: edge.state === filter,
 	);
 	const keep = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
 	for (const node of level.nodes) if (node.drift > 0) keep.add(node.id);
@@ -63,6 +69,7 @@ const GraphView = ({
 	const [positions, setPositions] = useState<ReadonlyMap<string, { x: number; y: number }>>(
 		new Map(),
 	);
+	const [layoutError, setLayoutError] = useState<string>();
 	useEffect(() => {
 		setPlace({ kind: "modules", focus: initialFocus });
 		setSelection(null);
@@ -86,9 +93,15 @@ const GraphView = ({
 
 	useEffect(() => {
 		let current = true;
-		void layoutLevel(level).then((next) => {
-			if (current) setPositions(next);
-		});
+		void layoutLevel(level)
+			.then((next) => {
+				if (!current) return;
+				setPositions(next);
+				setLayoutError(undefined);
+			})
+			.catch((error: unknown) => {
+				if (current) setLayoutError(String(error));
+			});
 		return () => {
 			current = false;
 		};
@@ -184,7 +197,7 @@ const GraphView = ({
 					)}
 				</nav>
 				<div className="ml-auto flex flex-wrap items-center gap-4">
-					{DRIFT_KINDS.map((kind) => (
+					{FILTERABLE.map((kind) => (
 						<button
 							key={kind}
 							type="button"
@@ -207,7 +220,9 @@ const GraphView = ({
 			</div>
 			<div className="flex min-h-0 flex-1">
 				<div data-testid="railmap-canvas" className="relative min-w-0 flex-1">
-					{level.nodes.length === 0 ? (
+					{layoutError ? (
+						<Empty text={`Layout failed: ${layoutError}`} />
+					) : level.nodes.length === 0 ? (
 						<Empty text={files.loading ? "Loading files…" : "Nothing to show at this level."} />
 					) : (
 						<FlowCanvas

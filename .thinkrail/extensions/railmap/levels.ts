@@ -20,6 +20,7 @@ export interface LevelEdge {
 	state: EdgeState;
 	imports: number;
 	bypass: number;
+	unused: boolean;
 	pairs: [string, string][];
 }
 
@@ -135,9 +136,11 @@ export const moduleLevel = (
 			state,
 			imports: 0,
 			bypass: 0,
+			unused: false,
 			pairs: [],
 		};
 		if (STATE_RANK[state] > STATE_RANK[current.state]) current.state = state;
+		if (state === "unused") current.unused = true;
 		current.imports += edge?.imports ?? 0;
 		current.bypass += edge?.bypass ?? 0;
 		if (edge) current.pairs.push([from, to]);
@@ -206,6 +209,7 @@ export const fileLevel = (
 				state,
 				imports: 0,
 				bypass: 0,
+				unused: false,
 				pairs: [],
 			};
 			if (STATE_RANK[state] > STATE_RANK[current.state]) current.state = state;

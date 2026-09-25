@@ -11,10 +11,12 @@ import {
 export const useRailmap = (host: HostContext) => {
 	const { workspaceId } = host;
 	const watch = useAction("watch");
+	const channel = useChannel<RailmapChannel>(workspaceId ? `graph:${workspaceId}` : "");
+	const missing = channel === undefined;
 	useEffect(() => {
-		if (workspaceId) void watch().catch(() => {});
-	}, [workspaceId, watch]);
-	return useChannel<RailmapChannel>(workspaceId ? `graph:${workspaceId}` : "");
+		if (workspaceId && missing) void watch().catch(() => {});
+	}, [workspaceId, missing, watch]);
+	return channel;
 };
 
 export const useActionResult = <T>(

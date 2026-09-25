@@ -52,6 +52,16 @@ status: running | ok | error, tokens?, costUsd?, preview? }`.
   shows its detail and preview.
 - `cost` (status): `$0.42 · 38% ctx · 3 running` for the active chat; click opens the panel.
 
+## Boundary
+
+- Public surface: the `timeline` and `cost` surfaces, actions `watch`/`preview`/`clear`, and the
+  `<sessionId>` and `cost:<sessionId>` channels.
+- Host half: `index.ts`. Views: the `.tsx` files plus `hooks.ts` and `layout.ts`. `model.ts` is shared
+  (pure reducer, type-only SDK import).
+- Allowed dependencies: `@thinkrail/ext`, `@thinkrail/ext/view`, `react`.
+- Forbidden: any ThinkRail package internals (`packages/*/src`, `apps/*`), views importing `index.ts`,
+  and the host half importing views.
+
 ## Not covered
 
 Delegated child sessions (`tr.on` sees top-level sessions only) and per-provider-request spans.

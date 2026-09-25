@@ -1,7 +1,8 @@
 import { type ActionCtx, defineExtension } from "@thinkrail/ext";
 import { type ImportSite, isRecord, type ModuleFile, type RailmapGraph } from "./model";
 import { railmapPi } from "./pi";
-import { canonicalRoot, createRoots } from "./roots";
+import { createRoots } from "./roots";
+import { canonicalPath } from "./scan";
 
 const STORE_KEY = "graphs";
 const STORED_ROOTS = 4;
@@ -67,6 +68,7 @@ export default defineExtension(async (tr) => {
 					tr.unpublish(`graph:${workspaceId}`);
 				}
 		},
+		isPinned: (root) => [...watched.values()].includes(root),
 		loadStale: async (root) => graphs.get(root),
 		saveGraph: (graph) => {
 			graphs.set(graph.root, graph);
@@ -76,7 +78,12 @@ export default defineExtension(async (tr) => {
 
 	const rootOf = (ctx: ActionCtx) => {
 		const workspace = ctx.workspaceId ? tr.workspaces.get(ctx.workspaceId) : undefined;
-		return workspace ? canonicalRoot(workspace.path) : undefined;
+		return workspace ? canonicalPath(workspace.path) : undefined;
+	};
+
+	const isWorkspaceRoot = (cwd: string) => {
+		const root = canonicalPath(cwd);
+		return tr.workspaces.list().some((workspace) => canonicalPath(workspace.path) === root);
 	};
 
 	const analysisOf = async (ctx: ActionCtx) => {
@@ -88,7 +95,8 @@ export default defineExtension(async (tr) => {
 	tr.action("watch", (_payload, ctx) => {
 		const root = rootOf(ctx);
 		if (!root || !ctx.workspaceId) return { watching: false };
-		watched.set(ctx.workspaceId, roots.ensure(root));
+		watched.set(ctx.workspaceId, root);
+		roots.ensure(root);
 		publishRoot(root);
 		return { watching: true, root };
 	});
@@ -96,7 +104,8 @@ export default defineExtension(async (tr) => {
 	tr.action("rebuild", (_payload, ctx) => {
 		const root = rootOf(ctx);
 		if (!root || !ctx.workspaceId) return { rebuilding: false };
-		watched.set(ctx.workspaceId, roots.rebuild(root));
+		watched.set(ctx.workspaceId, root);
+		roots.rebuild(root);
 		publishRoot(root);
 		return { rebuilding: true };
 	});
@@ -119,7 +128,7 @@ export default defineExtension(async (tr) => {
 		return { sites: sites.slice(0, MAX_SITES), total: sites.length };
 	});
 
-	tr.pi(railmapPi(roots));
+	tr.pi(railmapPi({ roots, isWorkspaceRoot }));
 
 	return () => {
 		if (saveTimer) {

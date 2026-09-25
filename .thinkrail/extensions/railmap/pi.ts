@@ -27,7 +27,13 @@ const driftText = (items: readonly Drift[]) =>
 	].join("\n");
 
 export const railmapPi =
-	(roots: Roots): PiExtensionFactory =>
+	({
+		roots,
+		isWorkspaceRoot,
+	}: {
+		roots: Roots;
+		isWorkspaceRoot: (cwd: string) => boolean;
+	}): PiExtensionFactory =>
 	(pi) => {
 		let baseline: Promise<Set<string> | undefined> | undefined;
 		const reported = new Set<string>();
@@ -47,9 +53,14 @@ export const railmapPi =
 		});
 
 		pi.on("agent_start", (_event, ctx) => {
-			baseline ??= roots
+			if (baseline || !isWorkspaceRoot(ctx.cwd)) return;
+			baseline = roots
 				.current(ctx.cwd)
-				.then((analysis) => new Set(analysis.graph.drift.map((item) => item.key)))
+				.then((analysis) =>
+					analysis.graph.modules.length > 0
+						? new Set(analysis.graph.drift.map((item) => item.key))
+						: undefined,
+				)
 				.catch(() => undefined);
 		});
 
@@ -72,6 +83,7 @@ export const railmapPi =
 			const details: DriftMessageDetails = {
 				root: analysis.graph.root,
 				items: fresh.slice(0, MESSAGE_ITEMS),
+				total: fresh.length,
 			};
 			return {
 				entries: [
