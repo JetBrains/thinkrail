@@ -55,6 +55,10 @@ export const E2E_RESTART_PORT = PORT_BASE + 4;
 
 export const E2E_DATA_DIR = join(tmpdir(), `thinkrail-e2e-${E2E_STATE_KEY}`);
 
+export const E2E_LAUNCH_TOKEN = createHash("sha256")
+	.update(`launch-token:${E2E_STATE_KEY}`)
+	.digest("base64url");
+
 export const E2E_HOME_DIR = join(E2E_DATA_DIR, "home");
 
 export const E2E_FAKE_BIN_DIR = join(E2E_DATA_DIR, ".bun", "bin");

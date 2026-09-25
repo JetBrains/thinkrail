@@ -12,6 +12,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	FEEDBACK_INTERVIEW_PROTOCOL_VERSION,
+	LAUNCH_AUTH_PATH,
 	PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
@@ -89,6 +90,7 @@ import {
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
+import { checkLaunchAuth, createLaunchToken, isLaunchProtectedPath } from "./launchAuth";
 import { trackLoginOutcome } from "./loginAnalytics";
 import {
 	additionalAnalyticsEnabled,
@@ -114,6 +116,8 @@ export interface CreateServerOptions {
 	staticDir?: string;
 	projectPath?: string;
 	appVersion?: string;
+	launchToken?: string;
+	allowedOrigins?: readonly string[];
 	analytics?: Pick<
 		AnalyticsOptions,
 		"channel" | "build" | "posthogApiKey" | "posthogHost" | "mute"
@@ -126,6 +130,7 @@ export interface CreateServerOptions {
 
 export interface RunningServer {
 	readonly port: number;
+	readonly launchToken: string;
 	stop: () => void;
 	shutdown: () => Promise<void>;
 }
@@ -169,6 +174,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		appVersion,
 		analytics,
 		hostUpdate,
+		launchToken = createLaunchToken(),
+		allowedOrigins = [],
 	} = options;
 
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
@@ -202,6 +209,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		hostname: host,
 		async fetch(req, srv) {
 			const url = new URL(req.url);
+			if (isLaunchProtectedPath(url.pathname)) {
+				const verdict = checkLaunchAuth(req, url, {
+					token: launchToken,
+					host,
+					port: srv.port ?? port,
+					extraOrigins: allowedOrigins,
+				});
+				if (verdict === "foreign-origin") return new Response("forbidden origin", { status: 403 });
+				if (verdict === "bad-token") return new Response("unauthorized", { status: 401 });
+			}
+			if (url.pathname === LAUNCH_AUTH_PATH) return new Response(null, { status: 204 });
 			if (url.pathname === "/ws") {
 				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
 				const protocolVersion = clientProtocolVersion(url.searchParams.get("protocol"));
@@ -684,6 +702,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		get port() {
 			return server.port ?? port;
 		},
+		launchToken,
 		stop,
 		shutdown,
 	};

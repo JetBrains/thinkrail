@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { devices, type PlaywrightTestConfig } from "@playwright/test";
+import { launchStorageState } from "./fixtures/launchAuth";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
@@ -10,6 +11,7 @@ import {
 	E2E_EDITOR_LOG,
 	E2E_FAKE_BIN_DIR,
 	E2E_HOME_DIR,
+	E2E_LAUNCH_TOKEN,
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
 } from "./fixtures/paths";
@@ -21,6 +23,7 @@ export function artifactHostEnvironment(cacheDir: string): Record<string, string
 	}
 	return {
 		THINKRAIL_DATA_DIR: E2E_DATA_DIR,
+		THINKRAIL_LAUNCH_TOKEN: E2E_LAUNCH_TOKEN,
 		XDG_CACHE_HOME: cacheDir,
 		THINKRAIL_PICK_DIR: E2E_PICK_DIR_POINTER,
 		THINKRAIL_GH_OFFLINE: "1",
@@ -67,6 +70,7 @@ export function artifactPlaywrightConfig(
 			: {}),
 		use: {
 			baseURL,
+			storageState: launchStorageState(baseURL),
 			trace: "on-first-retry",
 		},
 		projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],

@@ -132,7 +132,9 @@ export function documentComponents(ctx: { workspaceId: string; path: string }): 
 		const target = isRelative ? resolveRelativePath(ctx.path, relativePathname(src)) : null;
 		const resolved = isRelative
 			? target
-				? `${getTransport().httpBase()}/files/${encodeURIComponent(ctx.workspaceId)}/${encodePath(target)}`
+				? getTransport().hostUrl(
+						`/files/${encodeURIComponent(ctx.workspaceId)}/${encodePath(target)}`,
+					)
 				: undefined
 			: src;
 		return <img src={resolved} alt={alt ?? ""} title={title} />;

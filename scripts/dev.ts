@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { randomBytes } from "node:crypto";
 import { findFreePort } from "@thinkrail/shared/freePort";
 import { printStartupMark } from "@thinkrail/shared/startupMark";
 
@@ -13,7 +14,10 @@ const webPort = await findFreePort(24269, host);
 
 const openHost = host === "0.0.0.0" || host === "::" ? "localhost" : host;
 const webUrl = `http://${openHost}:${webPort}/`;
+const launchToken = process.env.THINKRAIL_LAUNCH_TOKEN || randomBytes(32).toString("base64url");
+const launchUrl = `${webUrl}?token=${encodeURIComponent(launchToken)}`;
 printStartupMark({ status: "starting", endpoint: webUrl });
+console.log(`thinkrail dev → ${launchUrl}`);
 
 const turbo = Bun.spawn(
 	["bunx", "turbo", "run", "dev", "--filter=@thinkrail/web", "--filter=@thinkrail/server"],
@@ -22,6 +26,10 @@ const turbo = Bun.spawn(
 			...process.env,
 			THINKRAIL_PORT: String(port),
 			THINKRAIL_WEB_PORT: String(webPort),
+			THINKRAIL_LAUNCH_TOKEN: launchToken,
+			THINKRAIL_ALLOWED_ORIGINS: [openHost, "localhost", "127.0.0.1"]
+				.map((name) => `http://${name}:${webPort}`)
+				.join(","),
 		},
 		stdin: "inherit",
 		stdout: "inherit",
@@ -35,15 +43,15 @@ const stop = (): void => {
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
-void openWhenReady(webUrl);
+void openWhenReady(webUrl, launchUrl);
 
 process.exit(await turbo.exited);
 
-async function openWhenReady(url: string): Promise<void> {
+async function openWhenReady(url: string, openUrl: string): Promise<void> {
 	for (let attempt = 0; attempt < 100; attempt += 1) {
 		try {
 			await fetch(url);
-			openBrowser(url);
+			openBrowser(openUrl);
 			return;
 		} catch {
 			await new Promise((resolve) => setTimeout(resolve, 200));

@@ -53,7 +53,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	}
 
 	const hostUpdate = createCliHostUpdate(build, channel, version);
-	const { port, requested } = await bootHost({
+	const { port, requested, launchPath } = await bootHost({
 		port: options.port,
 		host: options.host,
 		portMode: "free",
@@ -73,8 +73,9 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	}
 
 	const openHost = options.host === "0.0.0.0" || options.host === "::" ? "localhost" : options.host;
-	const url = `http://${openHost}:${port}`;
-	printStartupMark({ status: "host ready", endpoint: url });
+	const endpoint = `http://${openHost}:${port}`;
+	const url = `${endpoint}${launchPath}`;
+	printStartupMark({ status: "host ready", endpoint });
 	console.log(`thinkrail → ${url}`);
 	if (options.open) openBrowser(url);
 }

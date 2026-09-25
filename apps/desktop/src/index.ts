@@ -68,6 +68,7 @@ async function start(): Promise<void> {
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const initialPreferences = preferences.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const neutral = process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
+	const windowUrl = neutral ? "about:blank" : `${origin}${host.launchPath}${initialRoute}`;
 	const updateController = await createElectrobunUpdateController({
 		isPackaged: Electrobun.app.isPackaged,
 		version,
@@ -127,7 +128,7 @@ async function start(): Promise<void> {
 			);
 	const mainWindow = new BrowserWindow({
 		title: "ThinkRail",
-		url: neutral ? "about:blank" : `${origin}/${initialRoute}`,
+		url: windowUrl,
 		preload,
 		...(neutral ? {} : { rpc }),
 		hidden:
@@ -179,7 +180,7 @@ async function start(): Promise<void> {
 				applicationMenuInstalled,
 				pid: process.pid,
 				launcherPid: Number(process.env.ELECTROBUN_LAUNCHER_PID),
-				windowUrl: neutral ? "about:blank" : `${origin}/${initialRoute}`,
+				windowUrl,
 				mode: neutral ? "host" : "ui",
 			});
 		}

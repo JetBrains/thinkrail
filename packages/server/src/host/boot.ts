@@ -3,6 +3,7 @@ import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { initializeJbcentralRuntime } from "../auth";
 import { initLogging, logger } from "../log";
 import { installCrashLog } from "./crashLog";
+import { launchPathFor, parseAllowedOrigins } from "./launchAuth";
 import { type CreateServerOptions, createServer, type RunningServer } from "./server";
 
 export interface BootHostOptions {
@@ -14,6 +15,7 @@ export interface BootHostOptions {
 	appVersion?: string;
 	analytics?: CreateServerOptions["analytics"];
 	hostUpdate?: CreateServerOptions["hostUpdate"];
+	launchToken?: string;
 	verbose?: boolean;
 }
 
@@ -22,6 +24,8 @@ const log = logger("host");
 export interface BootedHost {
 	readonly server: RunningServer;
 	readonly port: number;
+	readonly launchToken: string;
+	readonly launchPath: string;
 	readonly requested: number;
 }
 
@@ -50,6 +54,7 @@ function attachProcessSignals(server: RunningServer): RunningServer {
 		get port() {
 			return server.port;
 		},
+		launchToken: server.launchToken,
 		stop,
 		shutdown,
 	};
@@ -67,9 +72,12 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 	const requested = options.port;
 	const port =
 		options.portMode === "free" ? await findFreePort(requested, options.host) : requested;
+	const launchToken = options.launchToken ?? (process.env.THINKRAIL_LAUNCH_TOKEN || undefined);
 	const running = await createServer({
 		port,
 		host: options.host,
+		...(launchToken ? { launchToken } : {}),
+		allowedOrigins: parseAllowedOrigins(process.env.THINKRAIL_ALLOWED_ORIGINS),
 		...(options.staticDir ? { staticDir: options.staticDir } : {}),
 		...(options.projectPath ? { projectPath: options.projectPath } : {}),
 		...(options.appVersion ? { appVersion: options.appVersion } : {}),
@@ -78,5 +86,11 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 	});
 	const server = attachProcessSignals(running);
 	log.info(`listening on port ${server.port}`);
-	return { server, port: server.port, requested };
+	return {
+		server,
+		port: server.port,
+		launchToken: server.launchToken,
+		launchPath: launchPathFor(server.launchToken),
+		requested,
+	};
 }

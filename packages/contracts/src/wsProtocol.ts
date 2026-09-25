@@ -98,6 +98,8 @@ export type TemplateReadLocation =
 	| { workspaceId?: never; projectId?: never };
 
 export const PROTOCOL_VERSION = 68;
+export const LAUNCH_TOKEN_PARAM = "token";
+export const LAUNCH_AUTH_PATH = "/auth";
 export const PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION = 67;
 export const AGENT_REVIEW_SETTING_PROTOCOL_VERSION = 68;
 export const ANALYTICS_CONSENT_PROTOCOL_VERSION = 65;

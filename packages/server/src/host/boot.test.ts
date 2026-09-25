@@ -76,9 +76,9 @@ function createCheckHarness<T>(): CheckHarness<T> {
 	};
 }
 
-async function collectSocket(port: number, client: string): Promise<SocketCollector> {
+async function collectSocket(host: BootedHost, client: string): Promise<SocketCollector> {
 	const socket = new WebSocket(
-		`ws://localhost:${port}/ws?client=${client}&protocol=${PROTOCOL_VERSION}`,
+		`ws://localhost:${host.port}/ws?client=${client}&protocol=${PROTOCOL_VERSION}&token=${host.launchToken}`,
 	);
 	const frames: SocketFrame[] = [];
 	const waiters = new Set<{
@@ -297,6 +297,86 @@ test("stop() releases the port", async () => {
 	expect(await isPortFree(b.port)).toBe(true);
 });
 
+const openSocket = (url: string) =>
+	new Promise<"open" | "refused">((resolve) => {
+		const socket = new WebSocket(url);
+		socket.addEventListener("open", () => {
+			socket.close();
+			resolve("open");
+		});
+		socket.addEventListener("error", () => resolve("refused"));
+	});
+
+test("launch auth guards /ws, /auth and /files by Origin and token", async () => {
+	const b = await boot({
+		port: grabFreePort(),
+		host: "localhost",
+		portMode: "exact",
+		launchToken: "test-launch-token",
+	});
+	const base = `http://localhost:${b.port}`;
+	const ws = `ws://localhost:${b.port}/ws`;
+	const own = `http://localhost:${b.port}`;
+
+	expect(b.launchToken).toBe("test-launch-token");
+	expect((await fetch(`${base}/health`)).status).toBe(200);
+	expect((await fetch(`${base}/auth`)).status).toBe(401);
+	expect((await fetch(`${base}/auth?token=wrong`)).status).toBe(401);
+	expect((await fetch(`${base}/auth?token=test-launch-token`)).status).toBe(204);
+	expect(
+		(
+			await fetch(`${base}/auth?token=test-launch-token`, {
+				headers: { Origin: "https://evil.example" },
+			})
+		).status,
+	).toBe(403);
+	expect((await fetch(`${base}/files/ws/readme.md`)).status).toBe(401);
+	expect((await fetch(`${base}/files/ws/readme.md?token=test-launch-token`)).status).toBe(404);
+	expect((await fetch(`${base}/ext/demo/1/view.js`)).status).toBe(401);
+
+	const upgrade = (origin: string) =>
+		fetch(`${base}/ws?token=test-launch-token`, { headers: { Origin: origin } });
+	expect((await upgrade("https://evil.example")).status).toBe(403);
+	expect((await upgrade(`http://localhost:${b.port + 1}`)).status).toBe(403);
+	expect((await upgrade(own)).status).toBe(400);
+	expect((await upgrade(`http://127.0.0.1:${b.port}`)).status).toBe(400);
+
+	expect(await openSocket(ws)).toBe("refused");
+	expect(await openSocket(`${ws}?token=nope`)).toBe("refused");
+	expect(await openSocket(`${ws}?token=test-launch-token`)).toBe("open");
+});
+
+test("launch auth reads token and extra origins from the launcher environment", async () => {
+	const saved = {
+		token: process.env.THINKRAIL_LAUNCH_TOKEN,
+		origins: process.env.THINKRAIL_ALLOWED_ORIGINS,
+	};
+	process.env.THINKRAIL_LAUNCH_TOKEN = "env-launch-token";
+	process.env.THINKRAIL_ALLOWED_ORIGINS = "http://localhost:5999/";
+	try {
+		const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+		expect(b.launchToken).toBe("env-launch-token");
+		const probe = (origin: string) =>
+			fetch(`http://localhost:${b.port}/auth?token=env-launch-token`, {
+				headers: { Origin: origin },
+			});
+		expect((await probe("http://localhost:5999")).status).toBe(204);
+		expect((await probe("http://localhost:6000")).status).toBe(403);
+	} finally {
+		if (saved.token === undefined) delete process.env.THINKRAIL_LAUNCH_TOKEN;
+		else process.env.THINKRAIL_LAUNCH_TOKEN = saved.token;
+		if (saved.origins === undefined) delete process.env.THINKRAIL_ALLOWED_ORIGINS;
+		else process.env.THINKRAIL_ALLOWED_ORIGINS = saved.origins;
+	}
+});
+
+test("each launch without a supplied token mints a distinct one", async () => {
+	const first = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	const second = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	expect(first.launchToken.length).toBeGreaterThanOrEqual(32);
+	expect(first.launchToken).not.toBe(second.launchToken);
+});
+
 test("boot permits two hosts for the same data directory", async () => {
 	const first = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
 	const second = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
@@ -327,7 +407,7 @@ test("publishes only changed host update notices after welcome and on fixed repe
 		hostUpdate: { intervalMs: 5, check: checks.check },
 	});
 	const firstCheck = await checks.waitForCheck(0);
-	const collector = await collectSocket(b.port, "updates-first");
+	const collector = await collectSocket(b, "updates-first");
 	const welcomeFrame = await collector.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
@@ -347,7 +427,7 @@ test("publishes only changed host update notices after welcome and on fixed repe
 	);
 	expect(firstPush.data).toEqual(firstNotice);
 
-	const retained = await collectSocket(b.port, "updates-retained");
+	const retained = await collectSocket(b, "updates-retained");
 	const retainedWelcome = await retained.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
@@ -388,7 +468,7 @@ test("publishes only changed host update notices after welcome and on fixed repe
 	expect(
 		collector.frames.filter((frame) => frame.channel === WS_CHANNELS.hostUpdateAvailable),
 	).toHaveLength(2);
-	const afterSilentChecks = await collectSocket(b.port, "updates-after-silent-checks");
+	const afterSilentChecks = await collectSocket(b, "updates-after-silent-checks");
 	const latestWelcome = await afterSilentChecks.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
@@ -405,7 +485,7 @@ test("shutdown clears periodic checks and makes a late result inert", async () =
 		portMode: "exact",
 		hostUpdate: { intervalMs: 5, check: checks.check },
 	});
-	const collector = await collectSocket(b.port, "updates-shutdown");
+	const collector = await collectSocket(b, "updates-shutdown");
 	await collector.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome);
 	const firstCheck = await checks.waitForCheck(0);
 

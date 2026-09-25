@@ -26,7 +26,8 @@ and process-boot logic lives in `packages/server`.
    host using the same data directory does not block startup; each process serves its own endpoint.
 4. On interactive stdout render the shared recursive ThinkRail startup mark with honest `host ready`
    status + the resolved endpoint, retain the parse-stable `thinkrail → <url>` line, and open the browser
-   there (cross-platform: `open` / `start` / `xdg-open`, best-effort), unless `--no-open`. Exit-only
+   there. `<url>` is the endpoint plus `bootHost`'s `launchPath` (`/?token=…`) (see [[submodule-server-host]] launch
+   auth); the mark's endpoint omits it. A browser tab that lost the token is re-opened from this line (cross-platform: `open` / `start` / `xdg-open`, best-effort), unless `--no-open`. Exit-only
    commands and redirected output omit the mark.
 5. SIGINT / SIGTERM await the shared idempotent `server.shutdown()` before exit; they do not duplicate
    agent, analytics, or resource teardown.

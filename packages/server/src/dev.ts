@@ -89,11 +89,11 @@ const host = process.env.THINKRAIL_HOST ?? "localhost";
 const staticDir = process.env.THINKRAIL_STATIC_DIR;
 const envPort = process.env.THINKRAIL_PORT;
 
-const { port } = await bootHost({
+const { port, launchPath } = await bootHost({
 	port: envPort ? Number(envPort) : 24242,
 	host,
 	portMode: envPort ? "exact" : "free",
 	...(staticDir ? { staticDir } : {}),
 	analytics: { channel: "dev", build: "source" },
 });
-console.log(`thinkrail host: http://${host}:${port}`);
+console.log(`thinkrail host: http://${host}:${port}${launchPath}`);

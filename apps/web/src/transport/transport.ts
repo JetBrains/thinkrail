@@ -1,15 +1,22 @@
 import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { LAUNCH_AUTH_PATH, PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { randomId } from "../lib";
+import { storeLaunchToken, withLaunchToken } from "./launchToken";
 import { RequestError } from "./requestError";
 
-export type ConnectionStatus = "connecting" | "connected" | "disconnected";
+export type ConnectionStatus = "connecting" | "connected" | "disconnected" | "unauthorized";
 type PushHandler = (data: unknown) => void;
 
 export interface TransportOptions {
 	url?: string;
 	onStatus?: (status: ConnectionStatus) => void;
+	isUnauthorized?: (probeUrl: string) => Promise<boolean>;
 }
+
+const probeUnauthorized = (probeUrl: string) =>
+	fetch(probeUrl)
+		.then((response) => response.status === 401)
+		.catch(() => false);
 
 interface TransportDispatchHooks {
 	beforeDispatch?: (message: WsServerMessage) => void;
@@ -37,7 +44,7 @@ function withClientId(url: string): string {
 	const u = new URL(url);
 	u.searchParams.set("client", pageClientId());
 	u.searchParams.set("protocol", String(PROTOCOL_VERSION));
-	return u.toString();
+	return withLaunchToken(u.toString());
 }
 
 export interface RequestOptions {
@@ -49,6 +56,7 @@ export class WsTransport {
 	private ws: WebSocket | null = null;
 	private readonly url: string;
 	private readonly onStatus: ((status: ConnectionStatus) => void) | undefined;
+	private readonly isUnauthorized: (probeUrl: string) => Promise<boolean>;
 	private readonly beforeDispatch: ((message: WsServerMessage) => void) | undefined;
 	private seq = 0;
 	private readonly pending = new Map<
@@ -69,6 +77,7 @@ export class WsTransport {
 	constructor(opts: TransportOptions = {}, dispatchHooks: TransportDispatchHooks = {}) {
 		this.url = opts.url ?? inferUrl();
 		this.onStatus = opts.onStatus;
+		this.isUnauthorized = opts.isUnauthorized ?? probeUnauthorized;
 		this.beforeDispatch = dispatchHooks.beforeDispatch;
 	}
 
@@ -78,15 +87,26 @@ export class WsTransport {
 		return u.origin;
 	}
 
+	hostUrl(path: string): string {
+		return withLaunchToken(`${this.httpBase()}${path}`);
+	}
+
+	authorize(token: string): void {
+		storeLaunchToken(token);
+		if (this.ws === null) this.connect();
+	}
+
 	connect(): void {
 		this.onStatus?.("connecting");
 		const ws = new WebSocket(withClientId(this.url));
 		this.ws = ws;
+		let opened = false;
 		ws.onopen = () => {
 			if (this.ws !== ws) {
 				ws.close();
 				return;
 			}
+			opened = true;
 			this.backoff = 500;
 			this.onStatus?.("connected");
 			this.ackQueue = [];
@@ -98,10 +118,24 @@ export class WsTransport {
 			if (this.ws !== ws) return;
 			this.ws = null;
 			this.onStatus?.("disconnected");
-			setTimeout(() => this.connect(), this.backoff);
-			this.backoff = Math.min(this.backoff * 2, 10_000);
+			if (opened) {
+				this.scheduleReconnect();
+				return;
+			}
+			void this.isUnauthorized(this.hostUrl(LAUNCH_AUTH_PATH)).then((unauthorized) => {
+				if (this.ws !== null) return;
+				if (unauthorized) this.onStatus?.("unauthorized");
+				else this.scheduleReconnect();
+			});
 		};
 		ws.onerror = () => ws.close();
+	}
+
+	private scheduleReconnect(): void {
+		setTimeout(() => {
+			if (this.ws === null) this.connect();
+		}, this.backoff);
+		this.backoff = Math.min(this.backoff * 2, 10_000);
 	}
 
 	request<M extends WsMethodName>(

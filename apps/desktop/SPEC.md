@@ -68,7 +68,9 @@ another.
    producing a packaged-only `undefined`. It then calls `bootHost()` on loopback port `0` with the staged web
    directory, baked version, and `desktop` analytics provenance.
 4. Restore the valid route fragment and bounded client-preference map for
-   `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
+   `{ backendProfileId: "local", windowId: "main" }`. The window URL is the fresh origin, then the booted
+   host's `launchPath` (`/?token=…`) (see [[submodule-server-host]] launch auth), then the route;
+   the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
    before React mounts despite the changing port. Open one normal native `BrowserWindow` with the system
    renderer.

@@ -21,6 +21,7 @@ import {
 } from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
 import { createActivityHydration } from "./activityHydration";
+import { captureLaunchToken } from "./launchToken";
 import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
@@ -82,6 +83,7 @@ function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 
 export function initTransport(): WsTransport {
 	if (transport) return transport;
+	captureLaunchToken();
 	const piEvents = createPiEventBatcher((payloads) =>
 		useAppStore.getState().handlePiEvents(payloads),
 	);

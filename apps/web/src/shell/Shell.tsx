@@ -11,6 +11,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../compone
 import { IconTooltip } from "../components/ui/tooltip";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
+import { LaunchTokenScreen } from "../panels/LaunchTokenScreen";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
@@ -45,12 +46,14 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
 	connected: "Connected",
 	connecting: "Connecting…",
 	disconnected: "Disconnected",
+	unauthorized: "Not authorized",
 };
 
 const STATUS_DOT: Record<ConnectionStatus, string> = {
 	connected: "text-feedback-success",
 	connecting: "text-feedback-warning",
 	disconnected: "text-feedback-error",
+	unauthorized: "text-feedback-error",
 };
 
 export function Shell() {
@@ -114,6 +117,7 @@ export function Shell() {
 				}
 			: {}),
 	});
+	if (status === "unauthorized") return <LaunchTokenScreen />;
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
 			<header

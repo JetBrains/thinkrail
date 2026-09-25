@@ -9,6 +9,7 @@ import {
 	REAL_CENTRAL_E2E_ENV,
 } from "./e2e/fixtures/centralAgent";
 import { hermeticE2ePath, resolveBunExecutable } from "./e2e/fixtures/executables";
+import { launchStorageState } from "./e2e/fixtures/launchAuth";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
@@ -18,6 +19,7 @@ import {
 	E2E_EDITOR_LOG,
 	E2E_FAKE_BIN_DIR,
 	E2E_HOME_DIR,
+	E2E_LAUNCH_TOKEN,
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
 	E2E_PORT,
@@ -60,6 +62,7 @@ export default defineConfig({
 	globalTeardown: "./e2e/global-teardown.ts",
 	use: {
 		baseURL: `http://localhost:${PORT}`,
+		storageState: launchStorageState(`http://localhost:${PORT}`),
 		trace: "on-first-retry",
 	},
 	projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
@@ -75,6 +78,7 @@ export default defineConfig({
 			THINKRAIL_PORT: String(PORT),
 			THINKRAIL_STATIC_DIR: staticDir,
 			THINKRAIL_DATA_DIR: E2E_DATA_DIR,
+			THINKRAIL_LAUNCH_TOKEN: E2E_LAUNCH_TOKEN,
 			DISPLAY: "",
 			WAYLAND_DISPLAY: "",
 			// Stub the host's native directory picker so "Open project" is drivable headlessly. It names a

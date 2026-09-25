@@ -285,3 +285,47 @@ describe("WsTransport response receipts", () => {
 		expect(acksIn(socket?.sent ?? [])).toEqual([id ?? "", id ?? ""]);
 	});
 });
+
+describe("WsTransport launch auth", () => {
+	test("a socket refused before opening with a rejected token stops reconnecting", async () => {
+		const statuses: string[] = [];
+		const probes: string[] = [];
+		const transport = new WsTransport({
+			url: "ws://localhost:24242/ws",
+			onStatus: (status) => statuses.push(status),
+			isUnauthorized: async (probeUrl) => {
+				probes.push(probeUrl);
+				return true;
+			},
+		});
+		transport.connect();
+		TestWebSocket.instances[0]?.close();
+		await tick(600);
+
+		expect(new URL(probes[0] ?? "").pathname).toBe("/auth");
+		expect(statuses.at(-1)).toBe("unauthorized");
+		expect(TestWebSocket.instances).toHaveLength(1);
+
+		transport.authorize(" pasted-token ");
+		const retry = new URL(TestWebSocket.instances[1]?.url ?? "");
+		expect(retry.searchParams.get("token")).toBe("pasted-token");
+		expect(new URL(transport.hostUrl("/files/w/a.png")).searchParams.get("token")).toBe(
+			"pasted-token",
+		);
+	});
+
+	test("a refused socket whose token is fine keeps the normal backoff", async () => {
+		const statuses: string[] = [];
+		const transport = new WsTransport({
+			url: "ws://localhost:24242/ws",
+			onStatus: (status) => statuses.push(status),
+			isUnauthorized: async () => false,
+		});
+		transport.connect();
+		TestWebSocket.instances[0]?.close();
+		await tick(600);
+
+		expect(statuses).not.toContain("unauthorized");
+		expect(TestWebSocket.instances).toHaveLength(2);
+	});
+});

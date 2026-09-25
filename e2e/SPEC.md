@@ -222,6 +222,12 @@ worktrees: the registry claim distinguishes
 a lane's logical key while checking staleness against the real worktree path. Legacy plain-path claims are
 still valid.
 
+Every host the harness starts (source, restart, binary, desktop) receives the lane's deterministic
+`THINKRAIL_LAUNCH_TOKEN` (`E2E_LAUNCH_TOKEN`). Browser contexts get it through the Playwright
+`storageState` the web reads (`fixtures/launchAuth.ts`), node-side wire clients through `withE2eLaunchToken`,
+and in-page sockets read it from `localStorage`. `launch-auth.spec.ts` owns the refusal and paste-token
+coverage and opts out of the seeded state.
+
 Different worktrees may run concurrently. Two complete E2E invocations in one worktree remain sequential;
 the lane ids are deliberately stable across runs so interrupted state is reclaimed rather than leaked.
 No path may fall back to `~/.thinkrail`, the developer's HOME/config trees, or the real pi agent dir. The

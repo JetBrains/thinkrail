@@ -27,10 +27,12 @@ import {
 } from "./fixtures/centralAgent";
 import { hermeticE2ePath, resolveBunExecutable } from "./fixtures/executables";
 import { gitQuiet } from "./fixtures/git";
+import { withE2eLaunchToken } from "./fixtures/launchAuth";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
 	E2E_FAKE_BIN_DIR,
+	E2E_LAUNCH_TOKEN,
 	E2E_PI_AGENT_DIR,
 	E2E_RESTART_DATA_DIR,
 	E2E_RESTART_HOST_LOG,
@@ -92,6 +94,7 @@ async function startHost(): Promise<void> {
 		env: stripAmbientPiCredentials({
 			...process.env,
 			THINKRAIL_PORT: String(PORT),
+			THINKRAIL_LAUNCH_TOKEN: E2E_LAUNCH_TOKEN,
 			THINKRAIL_STATIC_DIR: staticDir,
 			THINKRAIL_DATA_DIR: DATA_DIR,
 			THINKRAIL_PICK_DIR: PICK_POINTER,
@@ -181,7 +184,7 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 	seedState();
 	await startHost();
 
-	await page.goto(BASE);
+	await page.goto(withE2eLaunchToken(`${BASE}/`));
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();

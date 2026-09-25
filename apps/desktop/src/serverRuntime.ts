@@ -12,6 +12,7 @@ export interface DesktopHost {
 		shutdown(): Promise<void>;
 	};
 	port: number;
+	launchPath: string;
 	requested: number;
 }
 

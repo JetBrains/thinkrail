@@ -47,7 +47,7 @@ test("relative links, images, and heading anchors work in the rendered markdown 
 	await expect(preview.locator("#section-two")).toHaveCount(1);
 
 	const img = preview.locator("img");
-	await expect(img).toHaveAttribute("src", /\/files\/[^/]+\/logo\.png$/);
+	await expect(img).toHaveAttribute("src", /\/files\/[^/]+\/logo\.png\?token=[^&]+$/);
 	await expect
 		.poll(async () => img.evaluate((el: HTMLImageElement) => el.naturalWidth))
 		.toBeGreaterThan(0);
