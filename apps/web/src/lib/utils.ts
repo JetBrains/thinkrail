@@ -86,6 +86,15 @@ export function userText(content: UserMessage["content"]): string {
 		.join("");
 }
 
+const PI_IMAGE_NOTE = /^\[Image[ :][^\n]*\]$/;
+
+export const isImageNoteEcho = ({ sent, delivered }: { sent: string; delivered: string }) => {
+	const prefix = `${sent}\n\n`;
+	if (!delivered.startsWith(prefix)) return false;
+	const notes = delivered.slice(prefix.length).split("\n");
+	return notes.every((line) => PI_IMAGE_NOTE.test(line));
+};
+
 export function isMarkdownPath(path: string): boolean {
 	return /\.(md|markdown)$/i.test(path);
 }

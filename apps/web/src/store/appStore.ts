@@ -58,6 +58,7 @@ import type {
 	ToolResultState,
 } from "../chat/types";
 import {
+	isImageNoteEcho,
 	type LayoutAttention,
 	layoutResourceIdentity,
 	matchesSkillInvocationCommand,
@@ -538,6 +539,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				if (last?.kind === "user") {
 					const optimisticText = userText(last.message.content);
 					if (optimisticText === text) return rt;
+					if (isImageNoteEcho({ sent: optimisticText, delivered: text })) return rt;
 					const invocation = parseSkillInvocation(text);
 					if (invocation && matchesSkillInvocationCommand(optimisticText, invocation)) {
 						return {

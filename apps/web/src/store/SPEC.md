@@ -301,7 +301,9 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   at its true position, converging live with hydrated. (Mirrors pi's own interactive mode; replaces the
   optimistic-append-for-everything model whose last-turn dedup missed whenever assistant content landed
   between the append and the echo — reproduced live as a duplicated, mispositioned queued bubble.)
-  For the idle echo: an equal Pi `message_start` echo is ignored, while Pi's canonical expanded `<skill>`
+  For the idle echo: an equal Pi `message_start` echo is ignored, and so is one that differs only by Pi's
+  appended `[Image …]` note lines (`isImageNoteEcho`; Pi 0.87+ `prompt()` resizes images and notes the
+  change in the text), keeping the echo's `attachmentNames`; while Pi's canonical expanded `<skill>`
   echo **replaces** the immediately preceding matching raw `/skill:<name> …` turn in place (same turn id),
   so live and hydrated transcripts both contain one canonical skill invocation; a malformed or mismatched
   block appends normally. **`handlePiEvent(event,

@@ -437,6 +437,24 @@ test("Pi's expanded skill echo replaces its matching optimistic slash command in
 	expect(rt("mismatch").turns.filter((turn) => turn.kind === "user")).toHaveLength(2);
 });
 
+test("Pi's image-note echo keeps the optimistic turn; other suffixes still append", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "img", null, "medium");
+	store.appendUserMessage("img", "look at this");
+	store.handlePiEvent(
+		userStart(
+			"look at this\n\n[Image omitted: could not be resized below the inline image size limit.]\n[Image converted from image/bmp to image/png.]",
+		),
+		"img",
+	);
+	expect(rt("img").turns.filter((turn) => turn.kind === "user")).toHaveLength(1);
+
+	store.openChatSession("ws1", "other", null, "medium");
+	store.appendUserMessage("other", "look at this");
+	store.handlePiEvent(userStart("look at this\n\nand something else"), "other");
+	expect(rt("other").turns.filter((turn) => turn.kind === "user")).toHaveLength(2);
+});
+
 test("an assistant turn is built (and replaced, not duplicated) from message_update partials", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
