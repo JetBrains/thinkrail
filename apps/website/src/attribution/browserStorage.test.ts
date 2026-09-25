@@ -176,6 +176,72 @@ describe("attribution browser storage", () => {
 		expect(tagged?.referrer_class).toBe("internal");
 	});
 
+	test("invalidates a download bridge when a new acquisition advances last touch", () => {
+		const storage = memoryStorage();
+		recordAttributionTouch(
+			journeyA,
+			"landing",
+			"https://thinkrail.ai/?utm_campaign=campaign-a",
+			"",
+			storage,
+			now,
+		);
+		expect(storeLatestAttributionBridge(journeyA, storage, () => bridgeA, now)).toBe(bridgeA);
+
+		const updated = recordAttributionTouch(
+			journeyA,
+			"blog/index",
+			"https://thinkrail.ai/blog/?utm_campaign=campaign-b",
+			"https://thinkrail.ai/",
+			storage,
+			now + 1,
+		);
+
+		expect(updated).toEqual({
+			first_touch: expect.objectContaining({ campaign: "campaign-a" }),
+			last_touch: expect.objectContaining({ campaign: "campaign-b" }),
+		});
+		expect(readStoredAttributionContext(storage, now + 1)?.bridge_id).toBeUndefined();
+		expect(storeLatestAttributionBridge(journeyA, storage, () => bridgeB, now + 1)).toBe(bridgeB);
+		expect(readStoredAttributionContext(storage, now + 1)?.bridge_id).toBe(bridgeB);
+	});
+
+	test("preserves a download bridge through untagged internal and direct navigation", () => {
+		const storage = memoryStorage();
+		recordAttributionTouch(
+			journeyA,
+			"landing",
+			"https://thinkrail.ai/?utm_campaign=campaign-a",
+			"",
+			storage,
+			now,
+		);
+		expect(storeLatestAttributionBridge(journeyA, storage, () => bridgeA, now)).toBe(bridgeA);
+
+		recordAttributionTouch(
+			journeyA,
+			"blog/index",
+			"https://thinkrail.ai/blog/",
+			"https://thinkrail.ai/",
+			storage,
+			now + 1,
+		);
+		recordAttributionTouch(
+			journeyA,
+			"blog/thinkrail-sdd",
+			"https://thinkrail.ai/blog/thinkrail-sdd/",
+			"",
+			storage,
+			now + 2,
+		);
+
+		const preserved = readStoredAttributionContext(storage, now + 2);
+		expect(preserved?.bridge_id).toBe(bridgeA);
+		expect(preserved?.last_touch).toEqual(
+			expect.objectContaining({ campaign: "campaign-a", touched_at: now }),
+		);
+	});
+
 	test("replaces only the latest download bridge", () => {
 		const storage = memoryStorage();
 		recordAttributionTouch(

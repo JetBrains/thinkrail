@@ -21,4 +21,4 @@ A context belongs to the current validated website journey and expires after 30 
 
 A page records its initial navigation only when a journey already exists. A journey granted later does not replay that navigation; a subsequent install CTA records the then-current touch. Known denial or withdrawal clears the context.
 
-Each consented desktop download receives a random canonical bridge ID before `download_started`; the event and stored context carry the same value. A later download replaces only the latest bridge. Bridge-less events remain valid when no journey exists and for CLI paths.
+Each consented desktop download receives a random canonical bridge ID before `download_started`; the event and stored context carry the same value. A bridge is bound to the current last acquisition touch: whenever a UTM-tagged or external search/social/referral navigation advances `last_touch`, the previous bridge is invalidated, and a later download creates a new one. Untagged internal/direct navigation preserves both `last_touch` and its bridge. A later download replaces only the latest bridge. Bridge-less events remain valid when no journey exists and for CLI paths.

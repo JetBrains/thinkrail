@@ -156,7 +156,7 @@ export function recordAttributionTouch(
 			touch.referrer_class === "referral";
 		const context: StoredAttributionContext = {
 			journey_id: journeyId,
-			...(existing?.bridge_id === undefined ? {} : { bridge_id: existing.bridge_id }),
+			...(updateLast || existing?.bridge_id === undefined ? {} : { bridge_id: existing.bridge_id }),
 			first_touch: existing?.first_touch ?? touch,
 			last_touch: updateLast ? touch : (existing?.last_touch ?? touch),
 		};

@@ -465,12 +465,17 @@ describe("website analytics", () => {
 		expect(analytics.currentJourneyId()).toBeUndefined();
 		consent.set(true);
 		expect(analytics.currentJourneyId()).toBe(existingJourneyId);
+		consent.set(undefined);
+		expect(analytics.currentJourneyId()).toBeUndefined();
+		expect(dom.values.get(journeyStorageKey)).toBe(existingJourneyId);
+		consent.set(true);
+		expect(analytics.currentJourneyId()).toBe(existingJourneyId);
 		consent.set(false);
 		expect(analytics.currentJourneyId()).toBeUndefined();
 		unsubscribe();
 		consent.set(true);
 
-		expect(observed).toEqual([existingJourneyId, undefined]);
+		expect(observed).toEqual([existingJourneyId, undefined, existingJourneyId, undefined]);
 	});
 
 	test("creates and registers a journey when consent is granted after PostHog loads", () => {
