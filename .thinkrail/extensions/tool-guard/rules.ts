@@ -1,4 +1,5 @@
 import { basename, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { pathMatcher } from "./glob";
 import {
 	type AddResult,
@@ -141,7 +142,7 @@ const PATH_BUILTINS: Builtin<"path">[] = [
 		label: ".env files",
 		description: ".env files hold secrets",
 		test: (path) => {
-			const name = basename(path);
+			const name = basename(path).toLowerCase();
 			return /^\.env(\..+)?$/.test(name) && !EXAMPLE_ENV.test(name);
 		},
 	},
@@ -151,8 +152,9 @@ const PATH_BUILTINS: Builtin<"path">[] = [
 		label: "~/.ssh",
 		description: "~/.ssh holds keys and ssh config",
 		test: (path, { home }) => {
-			const ssh = join(home, ".ssh");
-			return path === ssh || isInside(ssh, path);
+			const ssh = join(home, ".ssh").toLowerCase();
+			const lower = path.toLowerCase();
+			return lower === ssh || isInside(ssh, lower);
 		},
 	},
 ];
@@ -251,10 +253,23 @@ export const evaluateBash = ({
 	return allowedBy ? { verdict: "allow", rule: allowedBy } : { verdict: "allow" };
 };
 
+const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
+
+const fromFileUrl = (url: string) => {
+	try {
+		return fileURLToPath(url);
+	} catch {
+		return url;
+	}
+};
+
 export const resolveToolPath = (path: string, ctx: GuardContext) => {
-	const bare = path.startsWith("@") ? path.slice(1) : path;
-	const expanded = expandPath(bare, ctx.home) ?? bare;
-	return resolve(ctx.root, expanded);
+	const spaced = path.replace(UNICODE_SPACES, " ");
+	const bare = spaced.startsWith("@") ? spaced.slice(1) : spaced;
+	const expanded =
+		bare === "~" ? ctx.home : bare.startsWith("~/") ? join(ctx.home, bare.slice(2)) : bare;
+	const local = /^file:\/\//.test(expanded) ? fromFileUrl(expanded) : expanded;
+	return resolve(ctx.root, local);
 };
 
 export const evaluatePath = ({

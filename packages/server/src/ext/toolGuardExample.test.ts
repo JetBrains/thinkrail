@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import {
 	createFauxCore,
@@ -138,6 +139,18 @@ const BLOCKED: [string, Record<string, unknown>, string][] = [
 	["bash", { command: "rm -rf ." }, "rm-rf-outside"],
 	["bash", { command: 'sudo rm --recursive --force "$HOME/.cache"' }, "rm-rf-outside"],
 	["bash", { command: "bash -c 'rm -rf /etc'" }, "rm-rf-outside"],
+	["bash", { command: "sudo -u root rm -rf /" }, "rm-rf-outside"],
+	["bash", { command: "env -C / rm -rf etc" }, "rm-rf-outside"],
+	["bash", { command: "nice rm -rf /" }, "rm-rf-outside"],
+	["bash", { command: "timeout 5 rm -rf /" }, "rm-rf-outside"],
+	["bash", { command: "env -S 'rm -rf /'" }, "rm-rf-outside"],
+	["bash", { command: "pushd /tmp && rm -rf x" }, "rm-rf-outside"],
+	["bash", { command: "(cd sub/deep); rm -rf ../x" }, "rm-rf-outside"],
+	["bash", { command: "cd sub/deep | true; rm -rf ../x" }, "rm-rf-outside"],
+	["bash", { command: "{ cd /tmp; rm -rf x; }" }, "rm-rf-outside"],
+	["bash", { command: 'echo "$(rm -rf /)"' }, "rm-rf-outside"],
+	["bash", { command: "cd $(git rev-parse --show-toplevel) && rm -rf build" }, "rm-rf-outside"],
+	["bash", { command: "sudo -u me git push -f" }, "git-push-force"],
 	["bash", { command: "echo hi; git push --force origin main" }, "git-push-force"],
 	["bash", { command: "git -C sub push -f" }, "git-push-force"],
 	["bash", { command: "git push origin +main" }, "git-push-force"],
@@ -148,6 +161,13 @@ const BLOCKED: [string, Record<string, unknown>, string][] = [
 	["edit", { path: "config/.env.local", edits: [] }, "env-files"],
 	["write", { path: "~/.ssh/authorized_keys", content: "" }, "ssh-dir"],
 	["write", { path: join(homedir(), ".ssh", "config"), content: "" }, "ssh-dir"],
+	[
+		"write",
+		{ path: pathToFileURL(join(homedir(), ".ssh", "authorized_keys")).href, content: "" },
+		"ssh-dir",
+	],
+	["write", { path: join(homedir(), ".SSH", "config"), content: "" }, "ssh-dir"],
+	["write", { path: ".ENV", content: "" }, "env-files"],
 ];
 
 const ALLOWED: [string, Record<string, unknown>][] = [
@@ -155,6 +175,11 @@ const ALLOWED: [string, Record<string, unknown>][] = [
 	["bash", { command: "rm -rf ./tmp/*" }],
 	["bash", { command: "rm -r ../sibling" }],
 	["bash", { command: "rm -rf sub 2>/dev/null" }],
+	["bash", { command: "(cd sub && rm -rf build)" }],
+	["bash", { command: "pushd sub && rm -rf build" }],
+	["bash", { command: "sudo -u me rm -rf build" }],
+	["bash", { command: "env -C sub rm -rf build" }],
+	["bash", { command: "echo $(date) && rm -rf dist" }],
 	["bash", { command: "git push --force-with-lease" }],
 	["bash", { command: "git reset --soft HEAD~1" }],
 	["bash", { command: "echo 'git push --force'" }],
