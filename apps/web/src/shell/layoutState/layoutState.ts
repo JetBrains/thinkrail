@@ -453,7 +453,7 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 			);
 		}
 		if (Object.keys(documentsByWorkspace).length === 0) {
-			const frameDocument = projectWorkspaceLayout(frame, emptyWorkspaceView());
+			const frameDocument = emptyWorkspaceProjection(frame).document;
 			if (validateLayoutDocument(frameDocument, 32, 32).length > 0) return undefined;
 		}
 		return {
@@ -590,24 +590,33 @@ export function initializeLocalLayoutState(): Promise<void> {
 	return initialization;
 }
 
+export function emptyWorkspaceProjection(frame: WorkbenchFrame): {
+	view: WorkspaceViewState;
+	document: WorkspaceLayoutDocument;
+	attention: LayoutAttention;
+} {
+	const view = emptyWorkspaceView();
+	const document = projectWorkspaceLayout(frame, view);
+	return { view, document, attention: reconcileAttention(document, undefined) };
+}
+
 function installWorkspaceView(workspaceId: string): WorkspaceLayoutDocument {
 	const state = useAppStore.getState();
 	if (state.removedWorkspaceIds[workspaceId]) throw new Error("Workspace has been removed");
 	const existingDocument = state.layoutDocumentsByWorkspace[workspaceId];
 	if (existingDocument) return existingDocument;
 	if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
-	const view = emptyWorkspaceView();
-	const document = projectWorkspaceLayout(state.workbenchFrame, view);
+	const projection = emptyWorkspaceProjection(state.workbenchFrame);
 	state.applyLocalLayoutState({
 		frame: state.workbenchFrame,
-		viewsByWorkspace: { ...state.workspaceViewsByWorkspace, [workspaceId]: view },
+		viewsByWorkspace: { ...state.workspaceViewsByWorkspace, [workspaceId]: projection.view },
 		documentsByWorkspace: {
 			...state.layoutDocumentsByWorkspace,
-			[workspaceId]: document,
+			[workspaceId]: projection.document,
 		},
 		attentionByWorkspace: {
 			...state.layoutAttentionByWorkspace,
-			[workspaceId]: reconcileAttention(document, undefined),
+			[workspaceId]: projection.attention,
 		},
 		preferences: state.localLayoutPreferences,
 	});

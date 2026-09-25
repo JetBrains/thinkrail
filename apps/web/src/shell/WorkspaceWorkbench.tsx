@@ -61,7 +61,11 @@ import {
 	type WorkspaceLayoutDocument,
 } from "./layout";
 import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
-import { commitWorkspaceLayout, useWorkspaceLayoutState } from "./layoutState";
+import {
+	commitWorkspaceLayout,
+	emptyWorkspaceProjection,
+	useWorkspaceLayoutState,
+} from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
@@ -206,6 +210,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const canRenameChat = useAppStore(selectCanRenameChat);
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
 	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
+	const frame = useAppStore((state) => state.workbenchFrame);
 	const projectionEpoch = useAppStore((state) => state.layoutProjectionEpoch);
 	const layoutPreferences = useAppStore((state) => state.localLayoutPreferences);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
@@ -417,6 +422,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		() => new Map(terminals.map((tab) => [tab.tabKey, tab])),
 		[terminals],
 	);
+	const pendingProjection = useMemo(
+		() => ((document && attention) || !frame ? null : emptyWorkspaceProjection(frame)),
+		[attention, document, frame],
+	);
+	const rendered = document && attention ? { document, attention } : pendingProjection;
 
 	const renderTabBody = useCallback(
 		(tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>) => {
@@ -562,7 +572,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[changeAttention, workspaceId],
 	);
 
-	if (!document || !attention) {
+	if (!rendered) {
 		return (
 			<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
 				Restoring workspace layout…
@@ -573,8 +583,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	return (
 		<div data-testid="workspace-workbench" data-layout-status="settled" className="contents">
 			<Workbench
-				document={document}
-				attention={attention}
+				document={rendered.document}
+				attention={rendered.attention}
 				maxSideGroups={layoutPreferences.maxSideGroups}
 				maxBottomGroups={layoutPreferences.maxBottomGroups}
 				projectionEpoch={projectionEpoch}

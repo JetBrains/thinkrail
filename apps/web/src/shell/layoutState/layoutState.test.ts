@@ -12,6 +12,7 @@ import {
 	applyLayoutPresetLocally,
 	claimLayoutSurfaceId,
 	commitWorkspaceLayout,
+	emptyWorkspaceProjection,
 	ensureWorkspaceLayoutState,
 	initializeLocalLayoutState,
 	localLayoutStorageKey,
@@ -151,6 +152,24 @@ describe("frontend-local layout state", () => {
 		const document = await ensureWorkspaceLayoutState("new-workspace");
 
 		expect(useAppStore.getState().layoutDocumentsByWorkspace["new-workspace"]).toBe(document);
+	});
+
+	test("a first-visit projection matches the installed workspace view", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await initializeLocalLayoutState();
+
+		const frame = useAppStore.getState().workbenchFrame;
+		if (!frame) throw new Error("The local workbench frame is not ready");
+		const pending = emptyWorkspaceProjection(frame);
+		const installed = await ensureWorkspaceLayoutState("first-visit");
+
+		expect(installed).toEqual(pending.document);
+		expect(useAppStore.getState().layoutAttentionByWorkspace["first-visit"]).toEqual(
+			pending.attention,
+		);
 	});
 
 	test("an invalid local frame falls back directly to Balanced", async () => {

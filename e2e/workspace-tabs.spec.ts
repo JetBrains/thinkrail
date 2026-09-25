@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
+	defaultWorkspaceRow,
 	openFixtureProject,
 	openTerminal,
 	worktreeRows,
@@ -73,6 +74,17 @@ test("switching workspaces re-targets the mounted workbench instead of remountin
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toBeVisible();
 	await expect(terminalTabs).toHaveCount(terminalCount);
 
+	for (const id of ["workspace-workbench", "center-tabs", "left-nav"]) {
+		await expect(page.getByTestId(id)).toHaveAttribute("data-switch-probe", "before");
+	}
+	expect(
+		await page.evaluate(() =>
+			(window as unknown as { __switchProbe: () => number }).__switchProbe(),
+		),
+	).toBe(0);
+
+	await defaultWorkspaceRow(page).getByRole("button").first().click();
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	for (const id of ["workspace-workbench", "center-tabs", "left-nav"]) {
 		await expect(page.getByTestId(id)).toHaveAttribute("data-switch-probe", "before");
 	}
