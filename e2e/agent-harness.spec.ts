@@ -32,7 +32,7 @@ import {
 } from "./fixtures/centralAgent";
 import { resolveBunExecutable } from "./fixtures/executables";
 import { countSelectedPlaywrightTests, selectFocusedFullRunPhases } from "./fullRunPlan";
-import { signalExitCode } from "./processRunner";
+import { e2eProcessDetached, signalExitCode } from "./processRunner";
 
 function temporaryDirectory(): string {
 	return mkdtempSync(join(tmpdir(), "thinkrail-agent-harness-"));
@@ -204,6 +204,12 @@ test("focused full-run planning skips empty phases and rejects an empty selectio
 			JSON.stringify({ suites: [], errors: [{ message: "configuration failed" }] }),
 		),
 	).toThrow(/configuration failed/);
+});
+
+test("managed E2E roots preserve hidden Windows consoles and POSIX process groups", () => {
+	expect(e2eProcessDetached("win32")).toBe(false);
+	expect(e2eProcessDetached("linux")).toBe(true);
+	expect(e2eProcessDetached("darwin")).toBe(true);
 });
 
 function processExists(pid: number): boolean {
