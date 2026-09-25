@@ -628,7 +628,9 @@ a project picker, the prompt hero, and the reused
   (`plan-done-section`, always expanded — the page is the review trail) holds the completed groups then
   done loose. Both blocks share ONE `PLAN_CARD_CLASS` card shape with a `glyph + title` header — Session
   (`CircleDot`), Done (`CircleCheck`, via `PlanCardSection`) — so the plan reads as one consistent card
-  stack. The Session block header carries the plan page's **add-task control**
+  stack. **Heading scale (top-down, no inversion):** page title `tr-heading-sm` → card + group-task
+  headings `tr-title-dialog` (14/600) → item titles `tr-title-section` (14/500) → metadata
+  `tr-text-metadata` — a group heading is never smaller than the items it holds. The Session block header carries the plan page's **add-task control**
   (the plan page's only in-page way to add): a `+ Task` button (`plan-add-task`) toggles an inline
   **auto-growing textarea** (`plan-add-input`) — plain **Enter adds**, **Shift+Enter** inserts a newline
   (multi-line like the composer), Esc closes — wired to the SAME `useChatTodos.add` as the popup's

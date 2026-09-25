@@ -539,7 +539,7 @@ function GroupSection({
 	const { done, total } = groupProgress(group);
 	return (
 		<section className="mb-16" data-testid="plan-group">
-			<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
+			<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-dialog text-text-default">
 				<span className="min-w-0 flex-1 break-words">{group.title}</span>
 				<span className="shrink-0 tr-text-eyebrow text-text-subtle">
 					{done}/{total}
@@ -647,7 +647,7 @@ function PlanCardSection({
 		<section data-testid={testId} className={PLAN_CARD_CLASS}>
 			<div className="mb-8 flex items-center gap-8">
 				<Icon className={`size-14 shrink-0 ${iconClass}`} />
-				<h2 className="min-w-0 flex-1 tr-title-compact text-text-default">{label}</h2>
+				<h2 className="min-w-0 flex-1 tr-title-dialog text-text-default">{label}</h2>
 			</div>
 			{children}
 		</section>
@@ -733,7 +733,7 @@ function SessionBlock({
 		<section data-testid="plan-now-executing" className={PLAN_CARD_CLASS}>
 			<div className="mb-8 flex items-center gap-8">
 				<CircleDot className="size-14 shrink-0 text-primary" />
-				<h2 className="shrink-0 tr-title-compact text-text-default">Session</h2>
+				<h2 className="shrink-0 tr-title-dialog text-text-default">Session</h2>
 				{glance === "working" ? (
 					<button
 						type="button"
@@ -1161,7 +1161,7 @@ export default function PlanPane({
 			<div className="mx-auto max-w-[52rem] px-16 py-16">
 				<header className="mb-16 flex items-center gap-12">
 					<div className="min-w-0 flex-1">
-						<h1 className="truncate tr-title-section text-text-default">Plan · {title}</h1>
+						<h1 className="truncate tr-heading-sm text-text-default">Plan · {title}</h1>
 						<div
 							data-testid="plan-progress"
 							className="flex flex-wrap items-center gap-4 tr-text-metadata text-text-subtle"
@@ -1432,7 +1432,7 @@ export default function PlanPane({
 				) : null}
 				{adopted.length > 0 ? (
 					<section className="mb-16" data-testid="plan-adopted-commits">
-						<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
+						<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-dialog text-text-default">
 							<span className="min-w-0 flex-1 truncate">Committed outside the plan</span>
 							<span className="shrink-0 tr-text-eyebrow text-text-subtle">
 								{adopted.length} {adopted.length === 1 ? "commit" : "commits"}
@@ -1461,7 +1461,7 @@ export default function PlanPane({
 				) : null}
 				{data.unattributed && data.unattributed.length > 0 ? (
 					<section className="mb-16" data-testid="plan-unattributed">
-						<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
+						<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-dialog text-text-default">
 							<span className="min-w-0 flex-1 truncate">Outside the plan</span>
 							<span className="shrink-0 tr-text-eyebrow text-text-subtle">
 								{data.unattributed.length} {data.unattributed.length === 1 ? "file" : "files"}
