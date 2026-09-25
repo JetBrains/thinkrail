@@ -22,7 +22,7 @@ const SEMVER_RE =
 	/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 const VERSION_RE = /^(?:latest|\d+\.\d+\.\d+(?:-nightly\.\d+)?)$/;
 const UNIX_INSTALL_PREFIX_RE = /^[-A-Za-z0-9_./ ]+$/;
-const WINDOWS_PREFIX_FORBIDDEN_RE = /["%;\n\r]/;
+const WINDOWS_PREFIX_FORBIDDEN_RE = /["%!;\n\r]/;
 
 export const MANUAL_LAYOUT_UPDATE_ERROR =
 	"This ThinkRail executable is outside the supported <prefix>/bin layout and cannot self-update safely. Reinstall it with the published installer, or replace it manually from https://github.com/JetBrains/thinkrail/releases";
