@@ -442,29 +442,6 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 	});
 });
 
-test("internal reviewer sessions are excluded from owner catalogs and state", async () => {
-	const cwd = tmpCwd("trpi-reviewer-state-");
-	const created: SessionSummary[] = [];
-	setSessionCreatedPublisher((summary) => created.push(summary));
-	try {
-		const reviewer = await createSession({
-			cwd,
-			workspaceId: "ws-reviewer-state",
-			purpose: "reviewer",
-			model: toWireModel(fauxA.getModel()),
-		});
-		const workspaces = [{ id: "ws-reviewer-state", projectId: "p-reviewer-state", cwd }];
-		await initializeSessionStates(workspaces);
-		const records = await listSessionStates(workspaces);
-		expect(records.some((record) => record.sessionId === reviewer.sessionId)).toBe(false);
-		expect(await listSessions("ws-reviewer-state", cwd)).toEqual([]);
-		expect(created).toEqual([]);
-		removeSession(reviewer.sessionId);
-	} finally {
-		setSessionCreatedPublisher(() => {});
-	}
-});
-
 test("a length-truncated questionnaire is terminal and cannot be answered", async () => {
 	let releaseContinuation = (): void => {};
 	const continuationGate = new Promise<void>((resolve) => {

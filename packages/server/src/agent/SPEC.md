@@ -158,13 +158,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     completion from the decisive assistant entry, questions/dialogs from their interaction ids. Disk state
     is reconstructed from the complete active branch; a file read/parse failure fails the all-workspace
     snapshot rather than omitting a row. The first receipt initialization marks existing completion ids
-    handled but never suppresses unresolved input. Receipt/purpose writes are serialized and atomic.
-    User-visible sessions publish full state records on semantic change; internal reviewer/reflector purpose
-    is persisted before registration and excludes those sessions from owner catalogs, creation pushes, and
-    state snapshots/pushes. Pending extension dialogs retain their full request so reconnecting clients can
-    render and answer the exact blocker rather than seeing an unusable needs-input marker.
+    handled but never suppresses unresolved input. Receipt writes are serialized and atomic.
+    Sessions publish full state records on semantic change. Pending extension dialogs retain their
+    full request so reconnecting clients can render and answer the exact blocker rather than seeing an
+    unusable needs-input marker.
 
-    `listSessionStates` returns every user-visible top-level live/disk session; `acknowledgeCompletion`
+    `listSessionStates` returns every top-level live/disk session; `acknowledgeCompletion`
     compare-and-sets only the current exact unread completion; `nudgeSession` atomically skips needs-input,
     queues while running, or prompts while idle. `SessionSummary.state` and `session.state` use the same
     derivation, so a client proves the exact rendered completion by id rather than inventing lifecycle.
@@ -631,7 +630,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
   `buildAnswersMessage`/`awaitingQuestionToolCallId`); normalized-state operations
-  (`listSessionStates`/`acknowledgeCompletion`/`nudgeSession` + publisher/project/purpose seams);
+  (`listSessionStates`/`acknowledgeCompletion`/`nudgeSession` + publisher/project seams);
   `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
   (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
@@ -659,7 +658,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SessionSummary`/
   `Session*Payload`/`SlashCommandInfo`/`ExtUi*`/`AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics +
   session-lifecycle debug traces); `persistence` (`dataDir` for delegation plus the narrow session
-  receipt/purpose stores); Node.
+  receipt stores); Node.
 - **Forbidden:** `host`; sibling features other than `log` and those narrow persistence surfaces (session
   worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.

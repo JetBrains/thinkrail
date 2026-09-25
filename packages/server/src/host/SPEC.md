@@ -380,7 +380,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   low-latency event, not a durable queue: a reconnecting client's active-workspace `session.list` is the
   authoritative read-side repair for an event missed while its socket was down.
 - **Session-state composition:** before serving, the host supplies every workspace `{id,cwd}`, initializes
-  receipt/purpose metadata, and installs the workspace→project resolver. `session.stateList` returns the
+  lifecycle/receipt metadata, and installs the workspace→project resolver. `session.stateList` returns the
   complete all-workspace snapshot; `session.state` broadcasts full records; completion acknowledgement and
   nudge handlers validate workspace/session identity through the same registry. The WS open handler
   subscribes every client after welcome. `session.activityList` remains an inert `[]` compatibility method

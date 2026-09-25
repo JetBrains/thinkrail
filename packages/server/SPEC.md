@@ -120,7 +120,7 @@ the host from env via `bootHost` for dev/e2e.
   `host` installs (`agent.setReviewCommentHandler` → `reviews.resolveCommentFromAgent`)
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (the current runtime/auth facade plus candidate prepare/activate; one-way, `agent` never imports `auth`)
-- `agent` → `log`, `persistence` (`dataDir` for delegation plus session receipt/purpose load-save operations)
+- `agent` → `log`, `persistence` (`dataDir` for delegation plus session lifecycle/receipt load-save operations)
   — otherwise the pi runtime alone; auth passes desired opaque Central paths through its public generation seam
 - `persistence`, `dialog`, `history`, `templates`, `subprocess` → (leaves)
 

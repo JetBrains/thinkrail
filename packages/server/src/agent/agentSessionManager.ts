@@ -49,13 +49,10 @@ import { logger } from "../log";
 import {
 	dataDir,
 	loadSessionLifecycle,
-	loadSessionPurpose,
 	loadSessionReceipts,
 	type SessionLifecycle,
-	type SessionPurpose,
 	type SessionReceipts,
 	saveSessionLifecycle,
-	saveSessionPurpose,
 	saveSessionReceipts,
 } from "../persistence";
 import {
@@ -117,7 +114,6 @@ interface Entry {
 	registered: boolean;
 	subagentToolsRefreshPending: boolean;
 	reviewToolRefreshPending: boolean;
-	userVisible: boolean;
 	nudgePromptPending: boolean;
 	lastPublishedState: string | null;
 	askUserQuestionWaiters: AskUserQuestionWaiters;
@@ -127,15 +123,13 @@ const sessions = new Map<string, Entry>();
 
 let sessionMetadataRoot: string | null = null;
 let sessionLifecycle: SessionLifecycle | null = null;
-let sessionPurpose: SessionPurpose | null = null;
 let sessionReceipts: SessionReceipts | null | undefined;
 
 function ensureSessionMetadata(): void {
 	const root = dataDir();
-	if (sessionMetadataRoot === root && sessionLifecycle && sessionPurpose) return;
+	if (sessionMetadataRoot === root && sessionLifecycle) return;
 	sessionMetadataRoot = root;
 	sessionLifecycle = loadSessionLifecycle();
-	sessionPurpose = loadSessionPurpose();
 	sessionReceipts = loadSessionReceipts();
 }
 
@@ -145,30 +139,9 @@ function lifecycle(): SessionLifecycle {
 	return sessionLifecycle;
 }
 
-function purpose(): SessionPurpose {
-	ensureSessionMetadata();
-	if (!sessionPurpose) throw new Error("Session purpose metadata is unavailable");
-	return sessionPurpose;
-}
-
 function receipts(): SessionReceipts | null {
 	ensureSessionMetadata();
 	return sessionReceipts ?? null;
-}
-
-function isInternalSession(sessionId: string): boolean {
-	return purpose().internalSessionIds.includes(sessionId);
-}
-
-function markSessionInternal(sessionId: string): void {
-	const current = purpose();
-	if (current.internalSessionIds.includes(sessionId)) return;
-	const next: SessionPurpose = {
-		...current,
-		internalSessionIds: [...current.internalSessionIds, sessionId].sort(),
-	};
-	saveSessionPurpose(next);
-	sessionPurpose = next;
 }
 
 function omitMetadataKey<T>(record: Record<string, T>, key: string): Record<string, T> {
@@ -197,13 +170,6 @@ function removeSessionStateMetadata(sessionId: string): void {
 		saveSessionReceipts(nextReceipts);
 		sessionReceipts = nextReceipts;
 	}
-	const currentPurpose = purpose();
-	const nextPurpose: SessionPurpose = {
-		...currentPurpose,
-		internalSessionIds: currentPurpose.internalSessionIds.filter((id) => id !== sessionId),
-	};
-	saveSessionPurpose(nextPurpose);
-	sessionPurpose = nextPurpose;
 }
 
 export async function usePiRuntime<T>(
@@ -284,7 +250,7 @@ function stateFromEntry(entry: Entry): SessionState {
 }
 
 function publishEntryState(entry: Entry): void {
-	if (!entry.userVisible || sessions.get(entry.session.sessionId) !== entry) return;
+	if (sessions.get(entry.session.sessionId) !== entry) return;
 	const projectId = resolveProjectId(entry.workspaceId);
 	if (!projectId) return;
 	const state = stateFromEntry(entry);
@@ -590,12 +556,9 @@ export function buildSessionSettings(cwd: string): SettingsManager {
 	return settings;
 }
 
-export type SessionPurposeKind = "owner" | "reviewer" | "reflector";
-
 export interface CreateSessionInput {
 	cwd: string;
 	workspaceId: string;
-	purpose?: SessionPurposeKind;
 	model?: WireModel;
 	thinkingLevel?: ThinkingLevel;
 	/** True: an unresolvable `model` falls back to the default instead of throwing. */
@@ -658,7 +621,6 @@ async function prepareSessionEntry(
 		registered: false,
 		subagentToolsRefreshPending: false,
 		reviewToolRefreshPending: false,
-		userVisible: !isInternalSession(sessionId),
 		nudgePromptPending: false,
 		lastPublishedState: null,
 		askUserQuestionWaiters,
@@ -790,13 +752,12 @@ async function registerSession(
 		generation,
 		askUserQuestionWaiters,
 	);
-	prepared.entry.userVisible = !isInternalSession(session.sessionId);
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	applySubagentTools(prepared.entry);
 	applyReviewTool(prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
-	if (announceCreation && prepared.entry.userVisible) {
+	if (announceCreation) {
 		publishCreated(summaryOf(session.sessionId, prepared.entry));
 	}
 	publishEntryState(prepared.entry);
@@ -831,7 +792,6 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		...(model ? { model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
-	if (input.purpose && input.purpose !== "owner") markSessionInternal(session.sessionId);
 	return registerSession(session, input.workspaceId, generation, askUserQuestionWaiters, true);
 }
 
@@ -959,7 +919,6 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) continue;
 		const sessionFile = entry.session.sessionManager.getSessionFile();
 		if (sessionFile) liveFiles.add(resolve(sessionFile));
-		if (!entry.userVisible) continue;
 		live.push(summaryOf(sessionId, entry));
 		liveIds.add(sessionId);
 	}
@@ -967,10 +926,7 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 	const disk: SessionSummary[] = infos
 		.filter(
 			(info) =>
-				info.cwd === cwd &&
-				!liveIds.has(info.id) &&
-				!isInternalSession(info.id) &&
-				!isSessionDeleted(info.id, workspaceId),
+				info.cwd === cwd && !liveIds.has(info.id) && !isSessionDeleted(info.id, workspaceId),
 		)
 		.map((info) => ({
 			sessionId: info.id,
@@ -1004,7 +960,7 @@ async function collectSessionStates(
 	const records: SessionStateRecord[] = [];
 	const liveIds = new Set<string>();
 	for (const [sessionId, entry] of sessions) {
-		if (!entry.userVisible || isSessionDeleted(sessionId, entry.workspaceId)) continue;
+		if (isSessionDeleted(sessionId, entry.workspaceId)) continue;
 		const workspace = workspaces.find((candidate) => candidate.id === entry.workspaceId);
 		if (!workspace) continue;
 		records.push({
@@ -1022,8 +978,7 @@ async function collectSessionStates(
 				info.cwd !== workspace.cwd ||
 				liveIds.has(info.id) ||
 				sessions.has(info.id) ||
-				isSessionDeleted(info.id, workspace.id) ||
-				isInternalSession(info.id)
+				isSessionDeleted(info.id, workspace.id)
 			) {
 				continue;
 			}
@@ -1204,18 +1159,15 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 	await registerSession(session, workspaceId, generation, askUserQuestionWaiters);
 }
 
-async function ensureSessionAttachedInternal(
+export async function ensureSessionAttached(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
-	purposeKind: SessionPurposeKind,
 ): Promise<boolean> {
-	if (purposeKind !== "owner") markSessionInternal(sessionId);
 	if (isSessionDeleted(sessionId, workspaceId)) return false;
 	const live = sessions.get(sessionId);
 	if (live) {
 		if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
-		live.userVisible = !isInternalSession(sessionId);
 		return true;
 	}
 	const known = (await listSessionInfosStrict(cwd)).some(
@@ -1226,15 +1178,6 @@ async function ensureSessionAttachedInternal(
 	if (!sessions.has(sessionId))
 		throw new Error(`Session ${sessionId} was re-opened but did not register.`);
 	return true;
-}
-
-export function ensureSessionAttached(
-	sessionId: string,
-	workspaceId: string,
-	cwd: string,
-	options: { purpose?: SessionPurposeKind } = {},
-): Promise<boolean> {
-	return ensureSessionAttachedInternal(sessionId, workspaceId, cwd, options.purpose ?? "owner");
 }
 
 async function getSessionMessagesInternal(

@@ -148,34 +148,6 @@ export function saveSessionLifecycle(lifecycle: SessionLifecycle): void {
 	writeJsonAtomic("session-lifecycle.json", lifecycle);
 }
 
-export const SESSION_PURPOSE_VERSION = 1;
-
-export interface SessionPurpose {
-	version: typeof SESSION_PURPOSE_VERSION;
-	internalSessionIds: string[];
-}
-
-export function loadSessionPurpose(): SessionPurpose {
-	const path = join(dataDir(), "session-purpose.json");
-	if (!existsSync(path)) return { version: SESSION_PURPOSE_VERSION, internalSessionIds: [] };
-	const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-	if (
-		raw.version !== SESSION_PURPOSE_VERSION ||
-		!Array.isArray(raw.internalSessionIds) ||
-		!raw.internalSessionIds.every((id) => typeof id === "string")
-	) {
-		throw new Error("Invalid session purpose metadata");
-	}
-	return {
-		version: SESSION_PURPOSE_VERSION,
-		internalSessionIds: [...new Set(raw.internalSessionIds)],
-	};
-}
-
-export function saveSessionPurpose(purpose: SessionPurpose): void {
-	writeJsonAtomic("session-purpose.json", purpose);
-}
-
 export function loadProjects(): Project[] {
 	return readJson<Project[]>("projects.json", []);
 }
