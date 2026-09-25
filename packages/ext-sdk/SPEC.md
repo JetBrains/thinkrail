@@ -34,6 +34,10 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
   view builder resolves this specifier to a shim over the web's runtime global, so the declarations only
   type-check authoring code.
 
+- `./README.md`: the authoring guide an agent reads (manifest, slots, `Tr`, view API, `ui`, Tailwind
+  tokens, dev loop, where extensions live). The host text-imports it and writes it under the data dir; the
+  system-prompt pointer names that copy. Keep it in step with this spec and contracts' export lists.
+
 ## View contract
 
 - `useChannel(key)` and `useAction(id)` are scoped to the surface's own extension: `key` is the same

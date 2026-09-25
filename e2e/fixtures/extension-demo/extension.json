@@ -4,7 +4,9 @@
 	"surfaces": [
 		{ "id": "side", "slot": "panel", "title": "Demo panel" },
 		{ "id": "board", "slot": "tab", "title": "Demo board" },
-		{ "id": "badge", "slot": "status" }
+		{ "id": "badge", "slot": "status" },
+		{ "id": "probe", "slot": "toolCard", "tool": "demo_probe" },
+		{ "id": "note", "slot": "message", "customType": "e2e-demo-note" }
 	],
 	"permissions": ["demo"]
 }

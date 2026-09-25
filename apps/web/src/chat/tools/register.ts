@@ -1,5 +1,5 @@
 import { projectRelativePath } from "@/lib";
-import { registerToolRenderer } from "../toolRegistry";
+import { DefaultToolRenderer, registerToolRenderer } from "../toolRegistry";
 import { AskUserQuestionCard } from "./AskUserQuestionCard";
 import { BashCard } from "./BashCard";
 import { EditCard } from "./EditCard";
@@ -47,3 +47,9 @@ registerToolRenderer("request_review", RequestReviewCard, {
 });
 
 registerToolRenderer("ask_user_question", AskUserQuestionCard, { chrome: "bare" });
+
+for (const toolName of ["ext_validate", "ext_reload", "ext_logs"]) {
+	registerToolRenderer(toolName, DefaultToolRenderer, {
+		summary: ({ args }) => strArg(args, "name"),
+	});
+}

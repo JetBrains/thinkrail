@@ -1,0 +1,13 @@
+import type { SurfaceProps } from "@thinkrail/ext/view";
+
+export default function Probe({ toolCall }: SurfaceProps) {
+	const query = typeof toolCall?.args.query === "string" ? toolCall.args.query : "none";
+	return (
+		<div data-testid="demo-probe" className="flex gap-8 p-8 tr-text-ui text-text-default">
+			<span data-testid="demo-probe-query">probe {query}</span>
+			<span data-testid="demo-probe-status" className="text-text-muted">
+				{toolCall?.status ?? "missing"}
+			</span>
+		</div>
+	);
+}

@@ -205,6 +205,8 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   activity summary, and turns only exact standalone worktree-path tokens obtained from known successful
   result `details` shapes into preview actions; a shorter known path never links a suffix inside another
   path. `spec_delete` never links its successful deleted path. Routine.
+- **Extension dev tools** — `ext_validate`, `ext_reload`, `ext_logs` (the host's agent dev loop) keep the
+  default card and add only the extension `name` as the activity summary. Routine.
 - **`web/`** — search/fetch/stored-content renderers for `pi-web-access`; own child spec
   ([web/SPEC.md](web/SPEC.md)). Routine.
 - **The five `todo_*` tools** deliberately keep routine fallback receipts: their connected product surface

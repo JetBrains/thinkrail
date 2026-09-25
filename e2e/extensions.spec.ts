@@ -1,5 +1,6 @@
+import { appendFileSync, realpathSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import {
 	DEMO_EXTENSION,
 	demoSource,
@@ -9,13 +10,56 @@ import {
 	removeDemoExtension,
 	writeDemoFile,
 } from "./fixtures/extensions";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
+import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const GROUP = "extensions";
 const PANEL_TOOL = `ext:${DEMO_EXTENSION}:side`;
+const BASE_TS = 1_700_500_000_000;
 
-async function openDemoWorkspace(page: Page): Promise<void> {
+function seedSlotChat(name: string) {
+	const chat = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name,
+		messages: [
+			{ role: "user", text: "Probe the demo.", timestamp: BASE_TS },
+			{
+				role: "assistant",
+				content: [
+					{ type: "toolCall", id: "probe-1", name: "demo_probe", arguments: { query: "alpha" } },
+				],
+				stopReason: "toolUse",
+				timestamp: BASE_TS + 1_000,
+			},
+			{
+				role: "toolResult",
+				toolCallId: "probe-1",
+				toolName: "demo_probe",
+				content: [{ type: "text", text: "probed" }],
+				isError: false,
+				timestamp: BASE_TS + 2_000,
+			},
+		],
+	});
+	appendFileSync(
+		chat.path,
+		`${JSON.stringify({
+			type: "custom_message",
+			id: `${chat.id}-note`,
+			parentId: `${chat.id}-m2`,
+			timestamp: new Date(BASE_TS + 3_000).toISOString(),
+			customType: "e2e-demo-note",
+			content: "drift found",
+			display: true,
+			details: { level: "warn" },
+		})}\n`,
+	);
+	return chat;
+}
+
+async function openDemoWorkspace(page: Page, beforeEnter?: () => void): Promise<void> {
 	await openFixtureProject(page);
+	beforeEnter?.();
 	await enterDefaultWorkspace(page);
 	installDemoExtension();
 	expect((await reloadDemoExtension()).status).toBe("active");
@@ -129,4 +173,23 @@ test("a restored layout keeps a placeholder for an extension that is not loaded"
 	await expect(page.getByTestId(`tab-${PANEL_TOOL}`)).toBeVisible();
 	await expect(page.locator('[data-kind="extension"]')).toHaveCount(1);
 	await expect(placeholder.first()).toBeVisible();
+});
+
+test("toolCard and message surfaces render a chat's tool call and custom message", async ({
+	page,
+}) => {
+	await openDemoWorkspace(page, () => seedSlotChat("extension slot chat"));
+	await openPersistedChat(page, "extension slot chat");
+
+	const probe = page.getByTestId("demo-probe");
+	await expect(probe).toBeVisible();
+	await expect(page.getByTestId("demo-probe-query")).toHaveText("probe alpha");
+	await expect(page.getByTestId("demo-probe-status")).toHaveText("done");
+
+	const note = page.getByTestId("demo-note");
+	await expect(note).toBeVisible();
+	await expect(page.getByTestId("demo-note-text")).toHaveText("drift found");
+	await expect(page.getByTestId("demo-note-level")).toHaveText("warn");
+	await shot(probe, GROUP, "05-tool-card");
+	await shot(note, GROUP, "06-message");
 });

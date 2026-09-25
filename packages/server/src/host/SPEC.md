@@ -437,8 +437,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   including CSS `url()` assets) and one CSS file the web loads through its own tokened `<link>`. A
   request a bundle makes by itself would get `401`; the builder never emits one.
 - **UI extension wiring** (`extWiring.ts`): `installExtHost` creates the [[submodule-server-ext]] host
-  over `<dataDir>/extensions` + `<dataDir>/ext-store`, injects live-session reads from `agent`, installs
-  its `piFactories` as the agent's host-extension source, and maps `onPiFactoriesChanged` to
+  over `<dataDir>/extensions` + `<dataDir>/ext-store` with the file watcher on (300 ms debounce), injects
+  live-session reads from `agent`, installs the agent dev-loop factory (`createExtDevTools`) followed by its
+  `piFactories` as the agent's host-extension source (so dev tools reach top-level sessions only), writes
+  the SDK authoring guide (`EXT_SDK_GUIDE`, text-imported so the binary carries it) to
+  `<dataDir>/ext-sdk/README.md` when its content differs, and maps `onPiFactoriesChanged` to
   `reloadSessionsForHostExtensions`. `createServer` starts it, forwards every published session event to
   `observe`, passes trusted projects as roots on boot and on every project update, and disposes it on
   stop. It also owns the extension wire: handlers `ext.list`, `ext.snapshot`, `ext.action`, `ext.reload`,

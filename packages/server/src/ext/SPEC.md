@@ -99,6 +99,39 @@ agent's host-extension bridge, one factory injected into every top-level session
 `onPiFactoriesChanged`; the agent reloads idle sessions at once and streaming ones after
 `agent_settled`. One extension's pi factory failing is logged to that extension and never blocks the rest.
 
+## Validation (dry load)
+
+`validate(name)` runs the same steps as a load (manifest, every view build, jiti import, factory run in a
+throwaway generation) and then disposes that generation. It never swaps, never publishes, never touches
+the running generation, and does not write load errors to the log. A name the host does not know yet is
+looked up on disk (user dir, then trusted project roots) without registering it. Result:
+`{ ok: true, surfaces, build }` or `{ ok: false, errors }` with the same actionable one-liners a load reports.
+
+## File watcher
+
+With `watchDebounceMs` set, the host watches the user extensions dir and every trusted project's
+`.thinkrail/extensions` recursively. A change under `<root>/<name>/` (ignoring any `node_modules` or `.git`
+segment) reloads `<name>` after `watchDebounceMs` of quiet, per name; `reload` rescans, so a new directory
+loads and a deleted one unloads. Watches are re-armed after every scan: a root that does not exist yet is
+not watched until a later scan finds it (an `ext_reload` of a new extension rescans). The user root is created on
+start so it is always watched. `dispose()` closes every watch and pending timer.
+
+## Agent dev loop
+
+`createExtDevTools({ host, docsPath })` returns one pi extension factory, installed by
+the composition root ahead of the `tr.pi` factories in the host-extension bridge, so top-level sessions get
+it and delegated children never do. It registers:
+
+- `ext_validate(name)`: `validate` as text; errors are the actionable one-liners.
+- `ext_reload(name)`: `validate`, then (only when valid) `reload`; returns the resulting status, generation,
+  build, and error. An invalid extension is not reloaded, so its old generation keeps running.
+- `ext_logs(name, since?)`: the extension's log ring (`tr.log`, load/build errors, view errors from
+  `ext.reportError`) at or after `since` (epoch ms), passed through `redactLaunchToken`.
+
+A tool error (unknown name, invalid extension) sets `isError`. A `before_agent_start` hook adds a short
+system-prompt section naming the guide at `docsPath` (the SDK README), the extension roots (`host.roots()`), and the three
+tools; it never inlines the guide.
+
 ## Other registries
 
 - `tr.on(type, fn)`: the composition root forwards every projected session event (`observe`) —
@@ -117,12 +150,13 @@ agent's host-extension bridge, one factory injected into every top-level session
 
 ## Boundary
 
-- **Public surface (barrel):** `createExtHost(options)` → `ExtHost` (incl. `asset`); types `ExtHost`,
-  `ExtHostOptions`, `ExtLogEntry`, `ProjectRoot`; `parseManifest` + `ExtensionManifest`
-  (validation reuse); `buildSurface` (one view's JS + CSS, for validation reuse).
+- **Public surface (barrel):** `createExtHost(options)` → `ExtHost` (incl. `asset`, `validate`); types
+  `ExtHost`, `ExtHostOptions`, `ExtLogEntry`, `ProjectRoot`; `parseManifest` + `ExtensionManifest`
+  (validation reuse); `buildSurface` (one view's JS + CSS, for validation reuse); `createExtDevTools`
+  (the agent dev-loop pi factory) + `EXT_SDK_GUIDE` (the SDK README text, text-imported); `projectExtensionsDir`; type `ExtValidation`.
 - **Allowed deps:** `@thinkrail/ext` (types + the module object handed to jiti), `@thinkrail/contracts`
-  (types, `SURFACE_SLOTS`, runtime-module names), `@thinkrail/shared/paths`, `typebox`, `jiti`,
-  pi-coding-agent (types, and the module object handed to jiti), `react` + `react-dom` (export-name
+  (types, `SURFACE_SLOTS`, runtime-module names, `redactLaunchToken`), `@thinkrail/shared/paths`, `typebox`, `jiti`,
+  pi-coding-agent (types, and the module object handed to jiti), `node:fs` `watch`, `react` + `react-dom` (export-name
   enumeration only), `tailwindcss` (compiler + `theme.css` text), `Bun.build`.
 - **Forbidden:** `host`; `agent`, `persistence`, `log`, and every other feature module. Sessions, trust,
   directories, warnings, and publishing are injected by the composition root, which keeps this module testable against a fixture directory.

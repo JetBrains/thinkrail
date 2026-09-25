@@ -1,4 +1,5 @@
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import {
 	EXT_NAME_PATTERN,
 	type ExtActionContext,
@@ -14,7 +15,7 @@ import {
 	reloadSessionsForHostExtensions,
 	setHostExtensionFactorySource,
 } from "../agent";
-import { createExtHost, type ExtHost } from "../ext";
+import { createExtDevTools, createExtHost, EXT_SDK_GUIDE, type ExtHost } from "../ext";
 import { logger } from "../log";
 import { dataDir } from "../persistence";
 import { getProjects } from "../projects";
@@ -26,6 +27,7 @@ const ASSET_PATH = new RegExp(
 	`^/ext/(${EXT_NAME_PATTERN})/([0-9a-f]{16})/(${EXT_NAME_PATTERN}\\.(?:js|css))$`,
 );
 const IMMUTABLE = "private, max-age=31536000, immutable";
+const WATCH_DEBOUNCE_MS = 300;
 
 type ExtHandlers = Parameters<typeof setExtHandlers>[0];
 type ExtPublish = (channel: WsChannel, data: unknown) => void;
@@ -99,8 +101,21 @@ export const serveExtAsset = (extHost: ExtHost, req: Request, pathname: string) 
 	});
 };
 
+const writeGuide = () => {
+	const path = join(dataDir(), "ext-sdk", "README.md");
+	try {
+		if (existsSync(path) && readFileSync(path, "utf8") === EXT_SDK_GUIDE) return path;
+		mkdirSync(dirname(path), { recursive: true });
+		writeFileSync(path, EXT_SDK_GUIDE);
+	} catch (error) {
+		log.warn("extension guide write failed", error);
+	}
+	return path;
+};
+
 export const installExtHost = ({ publish }: { publish?: ExtPublish } = {}) => {
 	const extHost = createExtHost({
+		watchDebounceMs: WATCH_DEBOUNCE_MS,
 		userDir: join(dataDir(), "extensions"),
 		storeDir: join(dataDir(), "ext-store"),
 		sessions: {
@@ -115,8 +130,9 @@ export const installExtHost = ({ publish }: { publish?: ExtPublish } = {}) => {
 		onChannelsDropped: (name, keys) => publish?.(WS_CHANNELS.extChannelsDropped, { name, keys }),
 		warn: (message) => log.warn(message),
 	});
+	const devTools = createExtDevTools({ host: extHost, docsPath: writeGuide() });
 	setHostExtensionFactorySource({
-		factories: extHost.piFactories,
+		factories: () => [devTools, ...extHost.piFactories()],
 		onError: (factory, error) => {
 			const owner = extHost.piFactoryOwner(factory);
 			if (owner) extHost.recordError(owner, "pi factory failed", error);

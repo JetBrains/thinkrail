@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { projectExtensionsDir } from "../ext";
+import { EXT_SDK_GUIDE, projectExtensionsDir } from "../ext";
 import { setProjectPublisher } from "../projects";
 import { installExtHost } from "./extWiring";
 import { handleRequest } from "./handlers";
@@ -64,6 +64,15 @@ test("project.setTrust loads and unloads the project's extensions", async () => 
 		expect(published).toBeDefined();
 		await published;
 		expect(extHost.list()).toEqual([]);
+	} finally {
+		await dispose();
+	}
+});
+
+test("installing the host writes the SDK guide the agent prompt points at", async () => {
+	const { dispose } = installExtHost();
+	try {
+		expect(readFileSync(join(dataDir, "ext-sdk", "README.md"), "utf8")).toBe(EXT_SDK_GUIDE);
 	} finally {
 		await dispose();
 	}

@@ -127,6 +127,13 @@ describe("intentional bundled tool renderers", () => {
 		}
 	});
 
+	it("keeps the default card for extension dev tools and summarizes them by name", () => {
+		for (const toolName of ["ext_validate", "ext_reload", "ext_logs"]) {
+			expect(getToolRenderer(toolName)).toBe(DefaultToolRenderer);
+			expect(getToolSummary(toolName, props(toolName, { name: "hello" }, null))).toBe("hello");
+		}
+	});
+
 	it("leaves the five TODO tools on their plan-owned fallback receipts", () => {
 		for (const toolName of ["todo_list", "todo_add", "todo_update", "todo_remove", "todo_write"]) {
 			expect(getToolRenderer(toolName)).toBe(DefaultToolRenderer);

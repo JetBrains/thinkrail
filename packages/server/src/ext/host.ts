@@ -1,15 +1,21 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionInfo, ExtensionSurface, SessionEventPayload } from "@thinkrail/contracts";
 import type { ActionCtx, ExtStore, PiExtensionFactory } from "@thinkrail/ext";
 import { buildAssets, type ExtAssets } from "./build";
-import { type Candidate, discoverExtensions, type ProjectRoot } from "./discovery";
+import {
+	type Candidate,
+	discoverExtensions,
+	type ProjectRoot,
+	projectExtensionsDir,
+} from "./discovery";
 import { createGeneration, type Generation } from "./generation";
 import { importExtension } from "./loader";
 import { readManifest } from "./manifest";
 import { createExtStore } from "./store";
 import { createTr, formatLog, type SessionReads } from "./tr";
 import { errorMessage } from "./util";
+import { createExtWatcher } from "./watch";
 
 const LOG_LIMIT = 500;
 
@@ -29,7 +35,12 @@ export interface ExtHostOptions {
 	onChannel?: (key: string, value: unknown) => void;
 	onChannelsDropped?: (name: string, keys: string[]) => void;
 	warn?: (message: string) => void;
+	watchDebounceMs?: number;
 }
+
+export type ExtValidation =
+	| { ok: true; surfaces: ExtensionSurface[]; build: string }
+	| { ok: false; errors: string[] };
 
 interface ExtState {
 	candidate: Candidate;
@@ -105,29 +116,23 @@ export const createExtHost = (options: ExtHostOptions) => {
 		return run;
 	};
 
-	const loadInto = async (state: ExtState) => {
-		const { name, dir } = state.candidate;
-		const fail = (message: string) => {
-			state.error = message;
-			log(name, "error", `load failed: ${message}`);
-			options.onChanged?.(infoOf(state));
-			return infoOf(state);
-		};
+	const prepare = async (candidate: Candidate, generationId: () => number) => {
+		const { name, dir } = candidate;
 		const manifest = await readManifest(dir);
-		if (!manifest.ok) return fail(manifest.errors.join("\n"));
+		if (!manifest.ok) return { ok: false as const, errors: manifest.errors };
 		let assets: ExtAssets;
 		try {
 			assets = await buildAssets({ dir, surfaces: manifest.manifest.surfaces });
 		} catch (error) {
-			return fail(errorMessage(error));
+			return { ok: false as const, errors: [errorMessage(error)] };
 		}
 		let factory: Awaited<ReturnType<typeof importExtension>>;
 		try {
 			factory = await importExtension(dir);
 		} catch (error) {
-			return fail(`index.ts: ${errorMessage(error)}`);
+			return { ok: false as const, errors: [`index.ts: ${errorMessage(error)}`] };
 		}
-		const generation = createGeneration({ id: nextGeneration++, emit: emitChannel });
+		const generation = createGeneration({ id: generationId(), emit: emitChannel });
 		const tr = createTr({
 			name,
 			dir,
@@ -141,8 +146,21 @@ export const createExtHost = (options: ExtHostOptions) => {
 			if (typeof cleanup === "function") generation.addDisposer(cleanup);
 		} catch (error) {
 			await disposeGeneration(name, generation);
-			return fail(`factory threw: ${errorMessage(error)}`);
+			return { ok: false as const, errors: [`factory threw: ${errorMessage(error)}`] };
 		}
+		return { ok: true as const, manifest: manifest.manifest, assets, generation };
+	};
+
+	const loadInto = async (state: ExtState) => {
+		const { name } = state.candidate;
+		const prepared = await prepare(state.candidate, () => nextGeneration++);
+		if (!prepared.ok) {
+			state.error = prepared.errors.join("\n");
+			log(name, "error", `load failed: ${state.error}`);
+			options.onChanged?.(infoOf(state));
+			return infoOf(state);
+		}
+		const { manifest, assets, generation } = prepared;
 		if (disposed || states.get(name) !== state) {
 			await disposeGeneration(name, generation);
 			return infoOf(state);
@@ -152,9 +170,9 @@ export const createExtHost = (options: ExtHostOptions) => {
 		state.current = generation;
 		state.assets = assets;
 		state.error = undefined;
-		state.title = manifest.manifest.title;
-		state.surfaces = manifest.manifest.surfaces;
-		state.permissions = manifest.manifest.permissions;
+		state.title = manifest.title;
+		state.surfaces = manifest.surfaces;
+		state.permissions = manifest.permissions;
 		dropChannels(name);
 		generation.activate();
 		if (previous) await disposeGeneration(name, previous);
@@ -218,12 +236,54 @@ export const createExtHost = (options: ExtHostOptions) => {
 		await Promise.all(loads);
 	};
 
+	const roots = () => ({
+		user: options.userDir,
+		projects: projectRoots.map((root) => projectExtensionsDir(root.path)),
+	});
+
+	const watcher =
+		options.watchDebounceMs === undefined
+			? undefined
+			: createExtWatcher({
+					debounceMs: options.watchDebounceMs,
+					onChange: (name) => void reload(name).catch(() => {}),
+					...(options.warn ? { warn: options.warn } : {}),
+				});
+	if (watcher) mkdirSync(options.userDir, { recursive: true });
+
 	let scans: Promise<unknown> = Promise.resolve();
 	const rescan = () => {
-		const run = scans.then(scan);
+		const run = scans.then(scan).finally(() => {
+			const { user, projects } = roots();
+			watcher?.sync([user, ...projects]);
+		});
 		scans = run.catch(() => {});
 		return run;
 	};
+
+	const notFound = (name: string) => {
+		const { user, projects } = roots();
+		const places = [user, ...projects].map((root) => join(root, name)).join(", ");
+		return `extension "${name}" not found; looked for ${places}/extension.json (project dirs load only for trusted projects)`;
+	};
+
+	const reload = async (name: string): Promise<ExtensionInfo> => {
+		const known = states.get(name);
+		if (!known || !existsSync(join(known.candidate.dir, "extension.json"))) {
+			await rescan();
+			const found = states.get(name);
+			if (!found) throw new Error(notFound(name));
+			await found.queue;
+			return infoOf(found);
+		}
+		return serialized(known, () => loadInto(known));
+	};
+
+	const findCandidate = async (name: string) =>
+		states.get(name)?.candidate ??
+		(await discoverExtensions({ userDir: options.userDir, projectRoots })).candidates.find(
+			(candidate) => candidate.name === name,
+		);
 
 	return {
 		rescan,
@@ -231,16 +291,15 @@ export const createExtHost = (options: ExtHostOptions) => {
 			projectRoots = roots;
 			await rescan();
 		},
-		async reload(name: string): Promise<ExtensionInfo> {
-			const known = states.get(name);
-			if (!known || !existsSync(join(known.candidate.dir, "extension.json"))) {
-				await rescan();
-				const found = states.get(name);
-				if (!found) throw new Error(`extension "${name}" not found`);
-				await found.queue;
-				return infoOf(found);
-			}
-			return serialized(known, () => loadInto(known));
+		reload,
+		roots,
+		async validate(name: string): Promise<ExtValidation> {
+			const candidate = await findCandidate(name);
+			if (!candidate) return { ok: false, errors: [notFound(name)] };
+			const prepared = await prepare(candidate, () => 0);
+			if (!prepared.ok) return prepared;
+			await disposeGeneration(name, prepared.generation);
+			return { ok: true, surfaces: prepared.manifest.surfaces, build: prepared.assets.build };
 		},
 		list: () => [...states.values()].map(infoOf),
 		get: (name: string) => {
@@ -301,6 +360,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 		},
 		async dispose() {
 			disposed = true;
+			watcher?.dispose();
 			await Promise.all([...states.keys()].map(unload));
 		},
 	};

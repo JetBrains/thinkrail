@@ -243,7 +243,12 @@ UI-extension scenarios (`extensions.spec.ts`) install the fixture extension `fix
 (sources kept as `*.fixture` so no repo tooling type-checks them) into the lane's
 `<dataDir>/extensions/e2e-demo` after the per-test reset, then load, swap, and unload it through the wire's
 `ext.reload`. The reset deletes the lane's `extensions/` directory, and the next project open rescans, so a
-crashed scenario cannot leak an extension into later tests.
+crashed scenario cannot leak an extension into later tests. The `toolCard` and `message` slots render
+against a seeded transcript (a `demo_probe` tool call plus an appended `custom_message` entry), so no agent
+is needed. The host's file watcher also reloads on the fixture writes; assertions compare builds and
+statuses, never exact generation counts. `ext-dev-loop.live.spec.ts` (`@agent`) asks the real agent to
+build a panel extension through `ext_validate`/`ext_reload`, opens it, and checks its settled-run count
+grows by one on the next turn.
 
 ## Boundary
 

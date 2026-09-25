@@ -1,0 +1,13 @@
+import type { SurfaceProps } from "@thinkrail/ext/view";
+
+export default function Note({ message }: SurfaceProps) {
+	const details = message?.details as { level?: string } | undefined;
+	return (
+		<div data-testid="demo-note" className="flex gap-8 p-8 tr-text-ui text-text-default">
+			<span data-testid="demo-note-text">{message?.text ?? "missing"}</span>
+			<span data-testid="demo-note-level" className="text-feedback-warning">
+				{details?.level ?? "none"}
+			</span>
+		</div>
+	);
+}

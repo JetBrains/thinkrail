@@ -5,7 +5,8 @@
 	"type": "module",
 	"exports": {
 		".": "./src/index.ts",
-		"./view": "./src/view.ts"
+		"./view": "./src/view.ts",
+		"./README.md": "./README.md"
 	},
 	"description": "SDK for ThinkRail UI extensions: defineExtension, the host-half API types, and the view API.",
 	"scripts": {
