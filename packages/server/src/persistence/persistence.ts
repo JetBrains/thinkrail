@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +12,9 @@ import {
 	type Project,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { claimAppInstalledIn, ensureInstallationIn, type InstallationRecord } from "./installation";
+
+export type { InstallationRecord } from "./installation";
 
 export function dataDir(): string {
 	return process.env.THINKRAIL_DATA_DIR ?? join(homedir(), ".thinkrail");
@@ -131,14 +133,10 @@ export function saveConfig(config: AppConfig): void {
 	writeJson("config.json", config);
 }
 
-export interface InstallationRecord {
-	id: string;
+export function ensureInstallation(): InstallationRecord {
+	return ensureInstallationIn(dataDir());
 }
 
-export function ensureInstallation(): InstallationRecord {
-	const raw = readJson<Partial<InstallationRecord>>("installation.json", {});
-	if (typeof raw?.id === "string" && raw.id.length > 0) return { id: raw.id };
-	const record: InstallationRecord = { id: randomUUID() };
-	writeJson("installation.json", record);
-	return record;
+export function claimAppInstalled(): boolean {
+	return claimAppInstalledIn(dataDir());
 }

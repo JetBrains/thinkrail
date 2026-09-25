@@ -203,8 +203,9 @@ dismissed: the serial agent lane intentionally accumulates accepted prompts acro
 feedback coverage injects and asserts the addressed invitation channel directly. Before any fixture reset
 deletes transcript storage, it lists and disposes every live session through the public wire; disposal aborts
 and settles an unfinished provider turn first, so a test ending mid-turn cannot recreate a headerless JSONL
-behind the next scenario. Consent tests reset the choice over the real settings wire and cover drafts,
-persistence failures, reloads, cross-client convergence, prompt priority, and pre-v64 fallback.
+behind the next scenario. Consent tests reset the choice over the real settings wire and cover on-by-default preference priming,
+Done/ordinary-close acceptance, immediate off refusal, persistence failures and retries, confirmed reloads,
+cross-client convergence, prompt priority, and pre-v65 fallback.
 
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,
 desktop cache/state plus ready/control files, Playwright transform cache, restart artifacts,

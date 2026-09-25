@@ -284,11 +284,11 @@ of the host.
   wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
   tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset
-  and group limits are web-local); `analyticsEnabled` is the additional-data preference, default `false`, while
-  `analyticsConsentConfirmed` defaults `false` and records the explicit decision required before that
-  preference can authorize collection. Saved legacy preferences seed the first-launch switch, not consent.
-  `ANALYTICS_CONSENT_PROTOCOL_VERSION` pins this v65 contract so newer clients do not show a consent flow
-  against older hosts that cannot persist it. Preference and confirmation are saved atomically; an older
+  and group limits are web-local); `analyticsEnabled` is the additional-data preference and host gate,
+  default `false`, while `analyticsConsentConfirmed` defaults `false` and records completion of the initial
+  choice. `ANALYTICS_CONSENT_PROTOCOL_VERSION` pins this v65 contract so newer clients do not show a consent
+  flow against older hosts that cannot persist it. The initial dialog first writes the enabled preference
+  alone, then completion and the current preference together; Privacy Settings writes both together. An older
   client's preference-only write cannot create the new confirmation. The installation id remains entirely
   server-side; basic events are not controlled by either flag, see [[submodule-server-analytics]]) carries
   it with the **`DEFAULT_CONFIG`** fallback (persisted host-side
