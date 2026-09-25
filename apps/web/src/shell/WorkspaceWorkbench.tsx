@@ -62,9 +62,11 @@ import {
 } from "./layout";
 import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
 import {
+	applyLayoutAttention,
 	commitWorkspaceLayout,
 	emptyWorkspaceProjection,
 	useWorkspaceLayoutState,
+	workspaceProjectionReference,
 } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
@@ -295,7 +297,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		(next: LayoutAttention) => {
 			const state = useAppStore.getState();
 			if (state.removedWorkspaceIds[workspaceId]) return;
-			state.setLayoutAttention(workspaceId, next);
+			applyLayoutAttention(workspaceId, next);
 			syncLegacySelectionFromAttention(workspaceId);
 		},
 		[workspaceId],
@@ -423,8 +425,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[terminals],
 	);
 	const pendingProjection = useMemo(
-		() => ((document && attention) || !frame ? null : emptyWorkspaceProjection(frame)),
-		[attention, document, frame],
+		() =>
+			(document && attention) || !frame
+				? null
+				: emptyWorkspaceProjection(frame, workspaceProjectionReference(workspaceId)),
+		[attention, document, frame, workspaceId],
 	);
 	const rendered = document && attention ? { document, attention } : pendingProjection;
 

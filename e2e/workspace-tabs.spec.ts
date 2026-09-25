@@ -35,6 +35,62 @@ test("editor tabs are scoped to the active workspace", async ({ page }) => {
 	await expect(tabs.filter({ hasText: "README.md" })).toBeVisible();
 });
 
+test("the selected side tool follows workspace switches", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await createWorkspaceViaDialog(page);
+	const workspaces = worktreeRows(page);
+	await expect(workspaces).toHaveCount(2);
+	await workspaces.nth(0).getByRole("button").first().click();
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
+
+	const groupInfo = await page.getByTestId("tab-specs").evaluate((tab) => {
+		const group = tab.closest<HTMLElement>("[data-side][data-group-id]");
+		return { side: group?.dataset.side, groupId: group?.dataset.groupId };
+	});
+	if (!groupInfo.side || !groupInfo.groupId) throw new Error("missing Specs side group");
+	const group = page.locator(
+		`[data-side="${groupInfo.side}"][data-group-id="${groupInfo.groupId}"]`,
+	);
+
+	await page.getByTestId("tab-projects").click({ button: "right" });
+	await page
+		.getByRole("menuitem", {
+			name: `Move to ${groupInfo.side} group ${groupInfo.groupId.slice(-4)}`,
+			exact: true,
+		})
+		.click();
+	await group.getByTestId("tab-projects").click();
+	await expect(group.getByTestId("tab-projects").getByRole("tab")).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
+
+	await workspaces.nth(1).getByRole("button").first().click();
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
+	await expect(group.getByTestId("tab-projects").getByRole("tab")).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
+	await defaultWorkspaceRow(page).getByRole("button").first().click();
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	await expect(group.getByTestId("tab-projects").getByRole("tab")).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
+
+	const review = page.getByTestId("tab-review").getByRole("tab");
+	await page.getByTestId("tab-review").click();
+	await expect(review).toHaveAttribute("aria-selected", "true");
+	await workspaces.nth(0).getByRole("button").first().click();
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
+	await expect(review).toHaveAttribute("aria-selected", "true");
+	await expect(group.getByTestId("tab-projects").getByRole("tab")).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
+});
+
 test("switching workspaces re-targets the mounted workbench instead of remounting it", async ({
 	page,
 }) => {

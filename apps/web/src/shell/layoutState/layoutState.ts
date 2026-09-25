@@ -11,9 +11,11 @@ import {
 } from "../../store";
 import { errorText, getTransport } from "../../transport";
 import {
+	adoptToolSelections,
 	applyProjectedLayoutDocument,
 	applyWorkbenchPreset,
 	BUILTIN_LAYOUT_PRESETS,
+	changedToolSelections,
 	DEFAULT_LAYOUT_PRESET_ID,
 	emptyWorkspaceView,
 	ensureWorkbenchToolPlacementIds,
@@ -590,14 +592,37 @@ export function initializeLocalLayoutState(): Promise<void> {
 	return initialization;
 }
 
-export function emptyWorkspaceProjection(frame: WorkbenchFrame): {
+export function emptyWorkspaceProjection(
+	frame: WorkbenchFrame,
+	reference?: { document: WorkspaceLayoutDocument; attention: LayoutAttention },
+): {
 	view: WorkspaceViewState;
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
 } {
 	const view = emptyWorkspaceView();
 	const document = projectWorkspaceLayout(frame, view);
-	return { view, document, attention: reconcileAttention(document, undefined) };
+	const reconciled = reconcileAttention(document, undefined);
+	return {
+		view,
+		document,
+		attention: reference
+			? adoptToolSelections(reconciled, document, reference.attention, reference.document)
+			: reconciled,
+	};
+}
+
+export function workspaceProjectionReference(
+	workspaceId: string,
+): { document: WorkspaceLayoutDocument; attention: LayoutAttention } | undefined {
+	const state = useAppStore.getState();
+	for (const id of state.workspaceSelectionHistory) {
+		if (id === workspaceId || state.removedWorkspaceIds[id]) continue;
+		const document = state.layoutDocumentsByWorkspace[id];
+		const attention = state.layoutAttentionByWorkspace[id];
+		if (document && attention) return { document, attention };
+	}
+	return undefined;
 }
 
 function installWorkspaceView(workspaceId: string): WorkspaceLayoutDocument {
@@ -606,7 +631,10 @@ function installWorkspaceView(workspaceId: string): WorkspaceLayoutDocument {
 	const existingDocument = state.layoutDocumentsByWorkspace[workspaceId];
 	if (existingDocument) return existingDocument;
 	if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
-	const projection = emptyWorkspaceProjection(state.workbenchFrame);
+	const projection = emptyWorkspaceProjection(
+		state.workbenchFrame,
+		workspaceProjectionReference(workspaceId),
+	);
 	state.applyLocalLayoutState({
 		frame: state.workbenchFrame,
 		viewsByWorkspace: { ...state.workspaceViewsByWorkspace, [workspaceId]: projection.view },
@@ -700,6 +728,42 @@ function rebaseProjectedDocument(
 	};
 }
 
+export function applyLayoutAttention(workspaceId: string, next: LayoutAttention): void {
+	const state = useAppStore.getState();
+	if (state.removedWorkspaceIds[workspaceId]) return;
+	const document = state.layoutDocumentsByWorkspace[workspaceId];
+	const groups = document
+		? changedToolSelections(state.layoutAttentionByWorkspace[workspaceId], next, document)
+		: new Set<string>();
+	if (!document || groups.size === 0 || !state.workbenchFrame) {
+		state.setLayoutAttention(workspaceId, next);
+		return;
+	}
+	const attentionByWorkspace = {
+		...state.layoutAttentionByWorkspace,
+		[workspaceId]: next,
+	};
+	for (const [id, attention] of Object.entries(state.layoutAttentionByWorkspace)) {
+		if (id === workspaceId || state.removedWorkspaceIds[id]) continue;
+		const otherDocument = state.layoutDocumentsByWorkspace[id];
+		if (!otherDocument) continue;
+		attentionByWorkspace[id] = adoptToolSelections(
+			attention,
+			otherDocument,
+			next,
+			document,
+			groups,
+		);
+	}
+	state.applyLocalLayoutState({
+		frame: state.workbenchFrame,
+		viewsByWorkspace: state.workspaceViewsByWorkspace,
+		documentsByWorkspace: state.layoutDocumentsByWorkspace,
+		attentionByWorkspace,
+		preferences: state.localLayoutPreferences,
+	});
+}
+
 export async function commitWorkspaceLayout(
 	workspaceId: string,
 	document: WorkspaceLayoutDocument,
@@ -735,6 +799,23 @@ export async function commitWorkspaceLayout(
 			state.layoutAttentionByWorkspace[id],
 			state.layoutDocumentsByWorkspace[id],
 		);
+	}
+	if (frameChanged) {
+		const committingAttention = attentionByWorkspace[workspaceId];
+		const committingDocument = documentsByWorkspace[workspaceId];
+		if (committingAttention && committingDocument) {
+			for (const [id, attention] of Object.entries(attentionByWorkspace)) {
+				if (id === workspaceId) continue;
+				const otherDocument = documentsByWorkspace[id];
+				if (!otherDocument || state.removedWorkspaceIds[id]) continue;
+				attentionByWorkspace[id] = adoptToolSelections(
+					attention,
+					otherDocument,
+					committingAttention,
+					committingDocument,
+				);
+			}
+		}
 	}
 	state.applyLocalLayoutState(
 		{
