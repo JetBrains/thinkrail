@@ -1,5 +1,13 @@
 import { defineExtension } from "@thinkrail/ext";
-import { createTimeline, isTimeline, reduceTimeline, type Timeline, TRACKED_EVENTS } from "./model";
+import {
+	createTimeline,
+	isTimeline,
+	previewIn,
+	reduceTimeline,
+	type Timeline,
+	TRACKED_EVENTS,
+	withoutPreviews,
+} from "./model";
 
 const FLUSH_MS = 150;
 const SWEEP_MS = 30_000;
@@ -11,6 +19,8 @@ export default defineExtension(async (tr) => {
 	const live = new Map<string, Timeline>();
 	const archive = new Map<string, Timeline>();
 	const dirty = new Set<string>();
+	const published = new Set<string>();
+	let watched: string | undefined;
 
 	const storedIds = await tr.store.get<string[]>(INDEX_KEY);
 	for (const sessionId of Array.isArray(storedIds) ? storedIds : []) {
@@ -21,17 +31,34 @@ export default defineExtension(async (tr) => {
 	const timelineOf = (sessionId: string) =>
 		live.get(sessionId) ?? archive.get(sessionId) ?? createTimeline(sessionId);
 
+	const isOpen = (sessionId: string) =>
+		tr.sessions.list().some((session) => session.sessionId === sessionId);
+
 	const flush = (sessionId: string) => {
 		dirty.delete(sessionId);
 		const timeline = live.get(sessionId) ?? archive.get(sessionId);
-		if (timeline) tr.publish(sessionId, timeline);
+		if (!timeline) return;
+		tr.publish(sessionId, withoutPreviews(timeline));
+		published.add(sessionId);
 	};
 
-	const publishCost = (sessionId: string) =>
-		tr.sessions
+	const publishCost = (sessionId: string) => {
+		if (!isOpen(sessionId)) return;
+		void tr.sessions
 			.stats(sessionId)
-			.then((stats) => tr.publish(`cost:${sessionId}`, stats))
+			.then((stats) => {
+				if (!isOpen(sessionId)) return;
+				tr.publish(`cost:${sessionId}`, stats);
+				published.add(sessionId);
+			})
 			.catch((error: unknown) => tr.log(`stats ${sessionId} unavailable`, error));
+	};
+
+	const unpublish = (sessionId: string) => {
+		published.delete(sessionId);
+		tr.unpublish(sessionId);
+		tr.unpublish(`cost:${sessionId}`);
+	};
 
 	const persist = async (timeline: Timeline) => {
 		archive.delete(timeline.sessionId);
@@ -39,6 +66,7 @@ export default defineExtension(async (tr) => {
 		const evicted = [...archive.keys()].slice(0, Math.max(0, archive.size - ARCHIVE_SESSIONS));
 		for (const sessionId of evicted) {
 			archive.delete(sessionId);
+			if (!live.has(sessionId)) unpublish(sessionId);
 			await tr.store.set(archiveKey(sessionId), undefined);
 		}
 		await tr.store.set(archiveKey(timeline.sessionId), timeline);
@@ -51,10 +79,10 @@ export default defineExtension(async (tr) => {
 			const next = reduceTimeline(timelineOf(sessionId), event, Date.now());
 			live.set(sessionId, next);
 			dirty.add(sessionId);
-			if (event.type === "turn_end") void publishCost(sessionId);
+			if (event.type === "turn_end") publishCost(sessionId);
 			if (event.type !== "agent_settled") return;
 			flush(sessionId);
-			void publishCost(sessionId);
+			publishCost(sessionId);
 			void persist(next).catch((error: unknown) => tr.log("persist failed", error));
 		});
 
@@ -64,21 +92,31 @@ export default defineExtension(async (tr) => {
 
 	tr.every(SWEEP_MS, () => {
 		const open = new Set(tr.sessions.list().map((session) => session.sessionId));
-		for (const sessionId of [...live.keys()]) {
-			if (open.has(sessionId)) continue;
+		for (const sessionId of new Set([...live.keys(), ...published])) {
+			if (open.has(sessionId) || sessionId === watched) continue;
 			live.delete(sessionId);
 			dirty.delete(sessionId);
-			tr.unpublish(sessionId);
-			tr.unpublish(`cost:${sessionId}`);
+			unpublish(sessionId);
 		}
 	});
 
 	tr.action("watch", (_payload, ctx) => {
 		const { sessionId } = ctx;
 		if (!sessionId) return { watching: false };
+		watched = sessionId;
 		flush(sessionId);
-		void publishCost(sessionId);
+		publishCost(sessionId);
 		return { watching: true };
+	});
+
+	tr.action("preview", (payload, ctx) => {
+		const { sessionId } = ctx;
+		const spanId =
+			typeof payload === "object" && payload !== null && "spanId" in payload
+				? payload.spanId
+				: undefined;
+		if (!sessionId) return { preview: undefined };
+		return { preview: previewIn(live.get(sessionId) ?? archive.get(sessionId), spanId) };
 	});
 
 	tr.action("clear", async (_payload, ctx) => {
@@ -100,7 +138,7 @@ export default defineExtension(async (tr) => {
 
 	for (const session of tr.sessions.list()) {
 		flush(session.sessionId);
-		void publishCost(session.sessionId);
+		publishCost(session.sessionId);
 	}
 	return undefined;
 });

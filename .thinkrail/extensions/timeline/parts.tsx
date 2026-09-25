@@ -1,4 +1,5 @@
 import { cn, remixicon } from "@thinkrail/ext/view";
+import { usePreview } from "./hooks";
 import {
 	endOf,
 	flameOf,
@@ -214,43 +215,48 @@ export const SpanDetail = ({
 	span: Span;
 	now: number;
 	onClose: () => void;
-}) => (
-	<div
-		data-testid="timeline-detail"
-		className="flex max-h-[40%] shrink-0 flex-col gap-8 border-t border-border-default bg-container-elevated-bg p-12"
-	>
-		<div className="flex items-start justify-between gap-8">
-			<div className="flex min-w-0 flex-col gap-2">
-				<span className="truncate tr-title-compact text-text-default">{span.name}</span>
-				{span.label && <span className="truncate tr-code-text text-text-muted">{span.label}</span>}
+}) => {
+	const preview = usePreview(span);
+	return (
+		<div
+			data-testid="timeline-detail"
+			className="flex max-h-[40%] shrink-0 flex-col gap-8 border-t border-border-default bg-container-elevated-bg p-12"
+		>
+			<div className="flex items-start justify-between gap-8">
+				<div className="flex min-w-0 flex-col gap-2">
+					<span className="truncate tr-title-compact text-text-default">{span.name}</span>
+					{span.label && (
+						<span className="truncate tr-code-text text-text-muted">{span.label}</span>
+					)}
+				</div>
+				<button
+					type="button"
+					aria-label="Close detail"
+					onClick={onClose}
+					className="rounded-sm p-2 text-text-muted hover:bg-control-bg-hovered"
+				>
+					<RiCloseLine className="size-16" />
+				</button>
 			</div>
-			<button
-				type="button"
-				aria-label="Close detail"
-				onClick={onClose}
-				className="rounded-sm p-2 text-text-muted hover:bg-control-bg-hovered"
-			>
-				<RiCloseLine className="size-16" />
-			</button>
-		</div>
-		<div className="flex flex-wrap gap-12 tr-text-metadata text-text-muted">
-			{statusLabel(span)}
-			<span>{formatDuration(endOf(span, now) - span.start)}</span>
-			{span.tokens && (
-				<span>
-					{formatTokens(span.tokens.in)} in · {formatTokens(span.tokens.out)} out ·{" "}
-					{formatTokens(span.tokens.cacheRead)} cached
-				</span>
+			<div className="flex flex-wrap gap-12 tr-text-metadata text-text-muted">
+				{statusLabel(span)}
+				<span>{formatDuration(endOf(span, now) - span.start)}</span>
+				{span.tokens && (
+					<span>
+						{formatTokens(span.tokens.in)} in · {formatTokens(span.tokens.out)} out ·{" "}
+						{formatTokens(span.tokens.cacheRead)} cached
+					</span>
+				)}
+				{span.costUsd !== undefined && <span>{formatCost(span.costUsd)}</span>}
+			</div>
+			{preview && (
+				<pre
+					data-testid="timeline-preview"
+					className="min-h-0 overflow-auto whitespace-pre-wrap rounded-md bg-container-content-bg p-8 tr-code-text text-text-default"
+				>
+					{preview}
+				</pre>
 			)}
-			{span.costUsd !== undefined && <span>{formatCost(span.costUsd)}</span>}
 		</div>
-		{span.preview && (
-			<pre
-				data-testid="timeline-preview"
-				className="min-h-0 overflow-auto whitespace-pre-wrap rounded-md bg-container-content-bg p-8 tr-code-text text-text-default"
-			>
-				{span.preview}
-			</pre>
-		)}
-	</div>
-);
+	);
+};

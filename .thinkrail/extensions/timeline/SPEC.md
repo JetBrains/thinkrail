@@ -22,7 +22,9 @@ status: running | ok | error, tokens?, costUsd?, preview? }`.
 
 - A run opens on the first `agent_start`, `turn_start`, or tool start while no run is live, and closes only
   at `agent_settled` (never `agent_end`); spans still running then close as `ok`, or `error` when the
-  settlement stop reason is `error`/`aborted`.
+  settlement stop reason is `error`/`aborted`. `message_end`/`turn_end` outside a live run, and
+  `compaction_end` for an already closed span, change nothing, so a run that was already going at load
+  (extension reload, trust granted mid-run) cannot overwrite saved turns; its first spans are lost.
 - `turn_start`/`turn_end` make a turn span (`r<run>t<turn>`); `message_end` of an assistant message puts
   pi's own usage and cost on it. Tool spans are children of the current turn; `partialResult` replaces
   the preview, the final `result` replaces it again. Compaction start/end make a compaction span (the
@@ -32,13 +34,15 @@ status: running | ok | error, tokens?, costUsd?, preview? }`.
 
 ## Host half (`index.ts`)
 
-- Publishes `<sessionId>` (the `Timeline`) at most every 150 ms while events arrive, and at once at
-  `agent_settled`. Publishes `cost:<sessionId>` (pi's `SessionStats`) after every `turn_end` and at
+- Publishes `<sessionId>` (the `Timeline` without span previews) at most every 150 ms while events
+  arrive, and at once at `agent_settled`. Each flush still resends every span of the session (≤ 400). Publishes `cost:<sessionId>` (pi's `SessionStats`) after every `turn_end` and at
   `agent_settled`; cost is never computed here.
 - Settled timelines persist in `tr.store` for the 12 most recent sessions, so an extension reload or host
-  restart keeps history. Every 30 s, sessions no longer live are dropped from memory and unpublished.
-- Actions: `watch` (views call it when the active chat changes; republishes that session's timeline
-  and cost), `clear` (drops the session's settled spans).
+  restart keeps history. Every 30 s, every published session that is no longer open (except the last
+  watched one) is dropped from memory and unpublished; evicted archive entries are unpublished at once.
+- Actions: `watch` (views call it when the active chat changes; republishes that session's timeline,
+  and cost when the session is open), `preview` (`{ spanId }` → `{ preview }` for the detail view),
+  `clear` (drops the session's settled spans).
 
 ## Views
 

@@ -208,14 +208,14 @@ export const reduceTimeline = (timeline: Timeline, event: TrackedEvent, now: num
 			});
 		}
 		case "message_end": {
-			const id = currentTurn(timeline);
+			const id = timeline.live ? currentTurn(timeline) : undefined;
 			const usage = usageOf(event.message);
 			if (!id || !usage) return timeline;
 			const preview = previewOf(event.message);
 			return update(timeline, id, (span) => withPreview({ ...span, ...usage }, preview));
 		}
 		case "turn_end": {
-			const id = currentTurn(timeline);
+			const id = timeline.live ? currentTurn(timeline) : undefined;
 			if (!id) return timeline;
 			const usage = usageOf(event.message);
 			return update(timeline, id, (span) => ({
@@ -239,13 +239,19 @@ export const reduceTimeline = (timeline: Timeline, event: TrackedEvent, now: num
 		case "compaction_end": {
 			const id = `r${timeline.run}c${timeline.compactions}`;
 			const before = event.result?.tokensBefore;
-			return update(timeline, id, (span) => ({
-				...span,
-				end: now,
-				status: event.aborted || event.errorMessage ? "error" : "ok",
-				...(before !== undefined ? { label: `${event.reason} · ${before} tokens before` } : {}),
-				...(event.errorMessage ? { preview: event.errorMessage } : {}),
-			}));
+			return update(timeline, id, (span) =>
+				span.status !== "running"
+					? span
+					: {
+							...span,
+							end: now,
+							status: event.aborted || event.errorMessage ? "error" : "ok",
+							...(before !== undefined
+								? { label: `${event.reason} · ${before} tokens before` }
+								: {}),
+							...(event.errorMessage ? { preview: event.errorMessage } : {}),
+						},
+			);
 		}
 		case "agent_settled": {
 			const stop = event.terminal?.stopReason;
@@ -256,6 +262,14 @@ export const reduceTimeline = (timeline: Timeline, event: TrackedEvent, now: num
 			return reduceTool(timeline, event, now);
 	}
 };
+
+export const withoutPreviews = (timeline: Timeline): Timeline => ({
+	...timeline,
+	spans: timeline.spans.map(({ preview: _preview, ...span }) => span),
+});
+
+export const previewIn = (timeline: Timeline | undefined, spanId: unknown) =>
+	timeline?.spans.find((span) => span.id === spanId)?.preview;
 
 export const isTimeline = (value: unknown): value is Timeline =>
 	isRecord(value) &&

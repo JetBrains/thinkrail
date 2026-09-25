@@ -107,6 +107,16 @@ const until = async (check: () => boolean) => {
 const timelineOf = (host: Host) => read<TimelineView>(host, "timeline:s1");
 const spanOf = (host: Host, id: string) => timelineOf(host)?.spans.find((span) => span.id === id);
 
+const previewOf = async (host: Host, spanId: string) => {
+	const result = await host.invokeAction({
+		ext: "timeline",
+		id: "preview",
+		payload: { spanId },
+		ctx: { sessionId: "s1" },
+	});
+	return (result as { preview?: string }).preview;
+};
+
 const startRun = (host: Host) =>
 	feed(
 		host,
@@ -171,7 +181,9 @@ describe("timeline example extension", () => {
 	test("turns pi events into live turn and tool spans, closed only at agent_settled", async () => {
 		const host = await load();
 		startRun(host);
-		await until(() => spanOf(host, "call-1")?.preview === "second");
+		await until(() => spanOf(host, "call-1") !== undefined);
+		expect(await previewOf(host, "call-1")).toBe("second");
+		expect(spanOf(host, "call-1")?.preview).toBeUndefined();
 		expect(timelineOf(host)).toMatchObject({ live: true, run: 1 });
 		expect(spanOf(host, "r1t1")).toMatchObject({
 			kind: "turn",
@@ -190,7 +202,8 @@ describe("timeline example extension", () => {
 		finishRun(host);
 		await until(() => spanOf(host, "r1c1")?.status === "ok");
 		expect(timelineOf(host)?.live).toBe(true);
-		expect(spanOf(host, "call-1")).toMatchObject({ status: "ok", preview: "done" });
+		expect(spanOf(host, "call-1")?.status).toBe("ok");
+		expect(await previewOf(host, "call-1")).toBe("done");
 		expect(spanOf(host, "r1c1")?.label).toBe("threshold · 148000 tokens before");
 
 		feed(host, { type: "agent_settled", terminal: { stopReason: "stop" } });
@@ -228,6 +241,42 @@ describe("timeline example extension", () => {
 		await until(() => timelineOf(second)?.run === 2);
 		expect(spanOf(second, "r2t1")?.status).toBe("running");
 		await second.dispose();
+	});
+
+	test("a run already in flight at load leaves the saved turns untouched", async () => {
+		const first = await load();
+		startRun(first);
+		finishRun(first);
+		feed(first, { type: "agent_settled", terminal: { stopReason: "stop" } });
+		const storeFile = join(base, "store", "timeline.json");
+		await until(
+			() => existsSync(storeFile) && readFileSync(storeFile, "utf8").includes('"sessions"'),
+		);
+		await first.dispose();
+
+		const second = await load();
+		const saved = spanOf(second, "r1t1");
+		const savedCompaction = spanOf(second, "r1c1");
+		feed(
+			second,
+			{ type: "message_end", message: assistant("late", 9.9) },
+			{ type: "turn_end", message: assistant("late", 9.9), toolResults: [] },
+			{
+				type: "compaction_end",
+				reason: "overflow",
+				result: { tokensBefore: 1 },
+				aborted: true,
+				willRetry: false,
+			},
+			{ type: "agent_settled", terminal: { stopReason: "stop" } },
+		);
+		expect(spanOf(second, "r1t1")).toEqual(saved);
+		expect(spanOf(second, "r1c1")).toEqual(savedCompaction);
+		await second.dispose();
+
+		const third = await load();
+		expect(spanOf(third, "r1t1")).toEqual(saved);
+		await third.dispose();
 	});
 
 	test("caps spans per session even inside one long turn", async () => {
