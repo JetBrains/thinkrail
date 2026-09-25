@@ -36,13 +36,21 @@ export {
 	EXT_VIEW_EXPORTS,
 	EXT_VIEW_UI_EXPORTS,
 	EXT_WS_CHANNELS,
-	EXT_WS_METHODS,
 	extAssetPath,
+	extChannelKey,
 	extToolId,
 	isExtLayoutToolId,
+	isOwnChannelKey,
 	parseExtToolId,
 	SURFACE_SLOTS,
 } from "./ext";
+export {
+	LAUNCH_AUTH_PATH,
+	LAUNCH_TOKEN_PARAM,
+	LAUNCH_TOKEN_STORAGE_KEY,
+	launchPathFor,
+	redactLaunchToken,
+} from "./launchAuth";
 export type * from "./nativeClient";
 export type * from "./piProtocol";
 export { assistantToolCallsAreExecutable, isTranscriptMessageRole } from "./piProtocol";

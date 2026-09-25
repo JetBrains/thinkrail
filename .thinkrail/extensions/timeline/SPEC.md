@@ -64,4 +64,5 @@ status: running | ok | error, tokens?, costUsd?, preview? }`.
 
 ## Not covered
 
-Delegated child sessions (`tr.on` sees top-level sessions only) and per-provider-request spans.
+- Delegated child sessions (`tr.on` sees top-level sessions only) and per-provider-request spans.
+- A run still going when the host restarts or the extension reloads is lost; only settled runs persist.

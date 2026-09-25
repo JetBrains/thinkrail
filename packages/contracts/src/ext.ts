@@ -123,10 +123,15 @@ export interface ExtSurfaceProps {
 
 export const EXT_NAME_PATTERN = "[a-z][a-z0-9-]*";
 const EXT_NAME = new RegExp(`^${EXT_NAME_PATTERN}$`);
-const EXT_TOOL_PREFIX = "ext:";
+const EXT_TOOL_PREFIX = "ext:" as const;
 
 export const extToolId = ({ name, surfaceId }: { name: string; surfaceId: string }) =>
-	`ext:${name}:${surfaceId}` as const;
+	`${EXT_TOOL_PREFIX}${name}:${surfaceId}` as const;
+
+export const extChannelKey = (name: string, key: string) => `${name}:${key}`;
+
+export const isOwnChannelKey = (name: string, channelKey: string) =>
+	channelKey.startsWith(extChannelKey(name, ""));
 
 export const parseExtToolId = (tool: string) => {
 	if (!tool.startsWith(EXT_TOOL_PREFIX)) return null;

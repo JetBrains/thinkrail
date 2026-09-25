@@ -1,4 +1,4 @@
-import type { PiEvent, SessionStats } from "@thinkrail/contracts";
+import { extChannelKey, type PiEvent, type SessionStats } from "@thinkrail/contracts";
 import type { ExtStore, PiEventName, PiEventOf, SessionRef, Tr } from "@thinkrail/ext";
 import type { Generation } from "./generation";
 
@@ -66,8 +66,8 @@ export const createTr = ({
 			});
 		},
 		pi: (factory) => generation.addPiFactory(factory),
-		publish: (key, value) => generation.publish(`${name}:${key}`, value),
-		unpublish: (key) => generation.unpublish(`${name}:${key}`),
+		publish: (key, value) => generation.publish(extChannelKey(name, key), value),
+		unpublish: (key) => generation.unpublish(extChannelKey(name, key)),
 		action: (id, fn) => generation.addAction(id, fn),
 		store,
 		sessions: {

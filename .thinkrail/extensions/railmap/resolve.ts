@@ -120,5 +120,3 @@ export const createResolver = (
 		return target ? { target, viaPackage: true } : undefined;
 	};
 };
-
-export type Resolver = ReturnType<typeof createResolver>;

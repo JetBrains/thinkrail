@@ -18,7 +18,7 @@ import {
 	surfaceAssetUrl,
 } from "./surfaceModule";
 
-export interface ExtensionSurfaceProps {
+interface ExtensionSurfaceProps {
 	name: string;
 	surfaceId: string;
 	layout?: SurfaceLayout;

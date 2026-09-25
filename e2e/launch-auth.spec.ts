@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { E2E_LAUNCH_TOKEN_STORAGE_KEY, withE2eLaunchToken } from "./fixtures/launchAuth";
+import { LAUNCH_TOKEN_STORAGE_KEY } from "@thinkrail/contracts";
+import { withE2eLaunchToken } from "./fixtures/launchAuth";
 import { E2E_LAUNCH_TOKEN } from "./fixtures/paths";
 
 const NO_TOKEN = { storageState: { cookies: [], origins: [] } };
@@ -69,9 +70,9 @@ test("the opened URL's token is stored and removed from the address bar", async 
 		await page.goto(withE2eLaunchToken(`${baseURL}/`));
 		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 		expect(new URL(page.url()).searchParams.has("token")).toBe(false);
-		expect(
-			await page.evaluate((key) => localStorage.getItem(key), E2E_LAUNCH_TOKEN_STORAGE_KEY),
-		).toBe(E2E_LAUNCH_TOKEN);
+		expect(await page.evaluate((key) => localStorage.getItem(key), LAUNCH_TOKEN_STORAGE_KEY)).toBe(
+			E2E_LAUNCH_TOKEN,
+		);
 
 		await page.reload();
 		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");

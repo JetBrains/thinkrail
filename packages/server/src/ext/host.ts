@@ -1,6 +1,11 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { ExtensionInfo, ExtensionSurface, SessionEventPayload } from "@thinkrail/contracts";
+import {
+	type ExtensionInfo,
+	type ExtensionSurface,
+	isOwnChannelKey,
+	type SessionEventPayload,
+} from "@thinkrail/contracts";
 import type { ActionCtx, ExtStore, PiExtensionFactory } from "@thinkrail/ext";
 import { buildAssets, type ExtAssets } from "./build";
 import {
@@ -111,7 +116,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 	};
 
 	const dropChannels = (name: string) => {
-		const keys = [...channels.keys()].filter((key) => key.startsWith(`${name}:`));
+		const keys = [...channels.keys()].filter((key) => isOwnChannelKey(name, key));
 		for (const key of keys) channels.delete(key);
 		if (keys.length > 0 && !disposed) options.onChannelsDropped?.(name, keys);
 	};

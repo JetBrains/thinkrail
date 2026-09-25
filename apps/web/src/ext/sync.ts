@@ -11,7 +11,7 @@ import { getTransport } from "../transport";
 import { useExtStore } from "./extStore";
 import { syncRendererSlots } from "./rendererSlots";
 
-export const supportsExtensions = (protocolVersion: number | null) =>
+const supportsExtensions = (protocolVersion: number | null) =>
 	protocolVersion !== null && protocolVersion >= EXT_PROTOCOL_VERSION;
 
 export type SyncTransport = Pick<ReturnType<typeof getTransport>, "subscribe" | "request">;

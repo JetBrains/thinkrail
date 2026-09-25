@@ -1,15 +1,11 @@
+import type { ExtMessageView } from "@thinkrail/contracts";
 import { type ReactNode, useSyncExternalStore } from "react";
 
-export interface MessageRenderProps {
-	customType: string;
-	text: string;
-	details: unknown;
-	timestamp: number;
-}
+export type MessageRenderProps = ExtMessageView;
 
-export type MessageRenderer = (props: MessageRenderProps) => ReactNode;
+type MessageRenderer = (props: MessageRenderProps) => ReactNode;
 
-export interface RendererRegistrySnapshot {
+interface RendererRegistrySnapshot {
 	version: number;
 	messageTypes: ReadonlySet<string>;
 }

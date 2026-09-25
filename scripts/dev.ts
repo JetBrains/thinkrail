@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { randomBytes } from "node:crypto";
-import { LAUNCH_TOKEN_PARAM } from "@thinkrail/contracts";
+import { launchPathFor } from "@thinkrail/contracts";
 import { findFreePort } from "@thinkrail/shared/freePort";
 import { printStartupMark } from "@thinkrail/shared/startupMark";
 
@@ -14,9 +14,10 @@ if (port !== preferred) {
 const webPort = await findFreePort(24269, host);
 
 const openHost = host === "0.0.0.0" || host === "::" ? "localhost" : host;
-const webUrl = `http://${openHost}:${webPort}/`;
+const webOrigin = `http://${openHost}:${webPort}`;
+const webUrl = `${webOrigin}/`;
 const launchToken = process.env.THINKRAIL_LAUNCH_TOKEN || randomBytes(32).toString("base64url");
-const launchUrl = `${webUrl}?${LAUNCH_TOKEN_PARAM}=${encodeURIComponent(launchToken)}`;
+const launchUrl = `${webOrigin}${launchPathFor(launchToken)}`;
 printStartupMark({ status: "starting", endpoint: webUrl });
 console.log(`thinkrail dev → ${launchUrl}`);
 

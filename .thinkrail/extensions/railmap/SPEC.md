@@ -109,6 +109,14 @@ Drift keys are stable across rebuilds, so "new drift" is a set difference.
 - Forbidden: any ThinkRail package internals (`packages/*/src`, `apps/*`), views importing host-half
   files, and the host half importing views.
 
+## Known limitations
+
+- On this repository railmap reports about 130 `undeclared` edges, mostly between sibling server modules.
+  Those specs name the edges in the parent spec's prose, not in `depends-on`, so the count reflects the
+  frontmatter, not broken code.
+- `elkjs` does not load under Node or Bun, so layout runs only in the browser.
+- The graph re-fits when the level changes, not when the detail panel opens.
+
 ## Dependencies
 
 `@xyflow/react` and `elkjs` (views) plus `typescript` and `pi-spec-graph` (host half) are the

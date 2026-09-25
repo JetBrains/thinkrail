@@ -15,7 +15,7 @@ const lookup = (specifier: ExtRuntimeModule) =>
 		`if (!m) throw new Error(${JSON.stringify(`ThinkRail view runtime is missing "${specifier}"`)});`,
 	].join("\n");
 
-export const shimSource = (specifier: ExtRuntimeModule) =>
+const shimSource = (specifier: ExtRuntimeModule) =>
 	specifier === VIEW_MODULE
 		? [lookup(specifier), `export const { ${EXT_VIEW_EXPORTS.join(", ")} } = m;`].join("\n")
 		: [lookup(specifier), "module.exports = m;"].join("\n");

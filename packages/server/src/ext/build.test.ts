@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EXT_RUNTIME_GLOBAL } from "@thinkrail/contracts";
-import { buildSurface, createExtHost } from "./index";
+import { buildSurface } from "./build";
+import { createExtHost } from "./index";
 
 const VIEW = `
 import { useState } from "react";

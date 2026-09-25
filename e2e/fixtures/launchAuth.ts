@@ -1,14 +1,12 @@
-import { LAUNCH_TOKEN_PARAM } from "@thinkrail/contracts";
+import { LAUNCH_TOKEN_PARAM, LAUNCH_TOKEN_STORAGE_KEY } from "@thinkrail/contracts";
 import { E2E_LAUNCH_TOKEN } from "./paths";
-
-export const E2E_LAUNCH_TOKEN_STORAGE_KEY = "thinkrail-launch-token";
 
 export const launchStorageState = (baseURL: string) => ({
 	cookies: [],
 	origins: [
 		{
 			origin: new URL(baseURL).origin,
-			localStorage: [{ name: E2E_LAUNCH_TOKEN_STORAGE_KEY, value: E2E_LAUNCH_TOKEN }],
+			localStorage: [{ name: LAUNCH_TOKEN_STORAGE_KEY, value: E2E_LAUNCH_TOKEN }],
 		},
 	],
 });

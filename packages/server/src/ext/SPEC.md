@@ -92,7 +92,8 @@ means the browser never makes a relative request that lacks the launch token.
 - A build error fails the load like any other load error (old generation stays). Messages name the file
   and position: `main.tsx:3:9: Could not resolve "x"`.
 - `Bun.build` and the Tailwind compiler both run inside the compiled binary (`bun build --compile`); the
-  Tailwind theme is text-imported, so no file on disk is read.
+  Tailwind theme is text-imported, so no file on disk is read. The shared artifact probes
+  ([[module-artifact-tests]]) load a user extension in the binary and desktop hosts to prove it.
 
 ## Serving
 
@@ -182,12 +183,19 @@ way against a generated fixture repo (declared, undeclared, barrel-bypass, unuse
 incremental updates after a file write, `may_import`, the settle hook's drift diff, and smoke-builds this
 repository's own graph.
 
+## Known limitations
+
+- A duplicate extension name shows only as a host warning; `list()` never reports the skipped copy.
+- A file change followed by an `ext_reload` of the same extension can load it twice (watcher and tool). The
+  extra generation is harmless.
+- A test that writes a new file into a directory `Bun.build` just scanned, then imports it in the same
+  process, needs a fresh directory: Bun's resolver cache misses the file. Reloads are not affected.
+
 ## Boundary
 
-- **Public surface (barrel):** `createExtHost(options)` → `ExtHost` (incl. `asset`, `validate`); types
-  `ExtHost`, `ExtHostOptions`, `ExtLogEntry`, `ProjectRoot`; `parseManifest` + `ExtensionManifest`
-  (validation reuse); `buildSurface` (one view's JS + CSS, for validation reuse); `createExtDevTools`
-  (the agent dev-loop pi factory) + `EXT_SDK_GUIDE` (the SDK README text, text-imported); `projectExtensionsDir`; type `ExtValidation`.
+- **Public surface (barrel):** `createExtHost(options)` → `ExtHost` (the registry API above, incl.
+  `asset` and `validate`); `createExtDevTools` (the agent dev-loop pi factory) + `EXT_SDK_GUIDE` (the SDK
+  README text, text-imported); `projectExtensionsDir`.
 - **Allowed deps:** `@thinkrail/ext` (types + the module object handed to jiti), `@thinkrail/contracts`
   (types, `SURFACE_SLOTS`, runtime-module names), `@thinkrail/shared/paths`, `typebox`, `jiti`,
   pi-coding-agent (types, and the module object handed to jiti), `node:fs` `watch`, `tailwindcss` (compiler + `theme.css` text), `Bun.build`.

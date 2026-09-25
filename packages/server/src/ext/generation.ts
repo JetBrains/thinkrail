@@ -1,7 +1,7 @@
 import type { PiEvent } from "@thinkrail/contracts";
 import type { ActionHandler, Disposer, Off, PiExtensionFactory, SessionRef } from "@thinkrail/ext";
 
-export type Observer = (event: PiEvent, session: SessionRef) => void;
+type Observer = (event: PiEvent, session: SessionRef) => void;
 type Phase = "loading" | "active" | "disposed";
 
 export interface Generation {

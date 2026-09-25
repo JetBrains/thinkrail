@@ -76,6 +76,11 @@ an author's code fails here.
 settle hook, four slots). It is a root workspace member with its own `package.json` and `tsconfig.json`, so
 turbo's `typecheck` covers it directly.
 
+## Known limitations
+
+The package is private to this repository. An author outside it gets the README but no installable
+types; only the repo's own extensions type-check against the SDK.
+
 ## Boundary
 
 - **Allowed deps:** `@thinkrail/contracts` (types), `@earendil-works/pi-coding-agent` (**types only**,

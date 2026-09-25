@@ -30,15 +30,13 @@ const ManifestSchema = Type.Object({
 
 type RawManifest = Static<typeof ManifestSchema>;
 
-export interface ExtensionManifest extends Omit<RawManifest, "surfaces" | "title" | "permissions"> {
+interface ExtensionManifest extends Omit<RawManifest, "surfaces" | "title" | "permissions"> {
 	title: string;
 	surfaces: ExtensionSurface[];
 	permissions: string[];
 }
 
-export type ManifestResult =
-	| { ok: true; manifest: ExtensionManifest }
-	| { ok: false; errors: string[] };
+type ManifestResult = { ok: true; manifest: ExtensionManifest } | { ok: false; errors: string[] };
 
 const pathLabel = (instancePath: string) =>
 	instancePath

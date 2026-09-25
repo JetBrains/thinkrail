@@ -100,10 +100,6 @@ export type TemplateReadLocation =
 
 export const PROTOCOL_VERSION = 69;
 export const EXT_PROTOCOL_VERSION = 69;
-export const LAUNCH_TOKEN_PARAM = "token";
-const LAUNCH_TOKEN_IN_URL = new RegExp(`([?&]${LAUNCH_TOKEN_PARAM}=)[^&#\\s"'<>)]+`, "g");
-export const redactLaunchToken = (text: string) => text.replace(LAUNCH_TOKEN_IN_URL, "$1redacted");
-export const LAUNCH_AUTH_PATH = "/auth";
 export const PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION = 67;
 export const AGENT_REVIEW_SETTING_PROTOCOL_VERSION = 68;
 export const ANALYTICS_CONSENT_PROTOCOL_VERSION = 65;

@@ -107,7 +107,7 @@ const extHandlers = (extHost: ExtHost) =>
 		},
 	}) satisfies Record<keyof ExtWsMethodMap, ExtHandlers[string]>;
 
-export const serveExtAsset = (extHost: ExtHost, req: Request, pathname: string) => {
+const serveExtAsset = (extHost: ExtHost, req: Request, pathname: string) => {
 	if (req.method !== "GET" && req.method !== "HEAD")
 		return new Response("method not allowed", { status: 405 });
 	const match = ASSET_PATH.exec(pathname);

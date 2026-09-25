@@ -8,7 +8,7 @@ import { runtimeGlobalPlugin } from "./runtimeShims";
 import { ownSourcesMap } from "./sourceMap";
 import { errorMessage } from "./util";
 
-export interface ExtAsset {
+interface ExtAsset {
 	body: string;
 	contentType: string;
 }

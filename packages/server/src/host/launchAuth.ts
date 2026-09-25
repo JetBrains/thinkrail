@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { LAUNCH_AUTH_PATH, LAUNCH_TOKEN_PARAM } from "@thinkrail/contracts";
 
-export interface LaunchAuthPolicy {
+interface LaunchAuthPolicy {
 	token: string;
 	host: string;
 	port: number;
@@ -12,9 +12,6 @@ const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 const WILDCARD_HOSTS = new Set(["0.0.0.0", "::", "[::]"]);
 
 export const createLaunchToken = () => randomBytes(32).toString("base64url");
-
-export const launchPathFor = (token: string) =>
-	`/?${LAUNCH_TOKEN_PARAM}=${encodeURIComponent(token)}`;
 
 export const parseAllowedOrigins = (raw: string | undefined) =>
 	(raw ?? "").split(",").flatMap((entry) => {
@@ -67,7 +64,7 @@ export const isLaunchTokenValid = (expected: string, given: string | null) => {
 	return a.length === b.length && timingSafeEqual(a, b);
 };
 
-export const checkLaunchAuth = (req: Request, url: URL, policy: LaunchAuthPolicy) => {
+const checkLaunchAuth = (req: Request, url: URL, policy: LaunchAuthPolicy) => {
 	const originOk = isOriginAllowed({
 		origin: req.headers.get("origin"),
 		requestHost: req.headers.get("host"),

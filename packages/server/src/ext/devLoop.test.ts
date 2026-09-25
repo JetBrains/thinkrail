@@ -247,6 +247,9 @@ describe("agent dev tools", () => {
 		const running = host.get("hello");
 		const { tool } = captureDevTools(host);
 		writeFileSync(join(userDir, "hello", "main.tsx"), "export default () => <div>{</div>;\n");
+		await expect(tool("ext_validate").execute({ name: "hello" })).rejects.toThrow(
+			/hello: invalid\n- view build failed:\n {2}main\.tsx:1:\d+: /,
+		);
 		const failure = tool("ext_reload").execute({ name: "hello" });
 		await expect(failure).rejects.toThrow(
 			/hello: error \(generation \d+, build [^)]+\)\nerror:\nview build failed:\nmain\.tsx:1:\d+: /,

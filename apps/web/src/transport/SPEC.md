@@ -103,11 +103,12 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   This dispatch barrier preserves cross-message order and the store's transcript-revision fence while still
   collapsing consecutive stream frames. All subscriptions happen once at init, never in component effects);
   `launchToken.ts` (the per-launch host token: `captureLaunchToken` runs first in `initTransport`, moves a
-  `?token=` from the page URL into `localStorage` (`thinkrail-launch-token`, in-memory fallback) and strips
+  `?token=` from the page URL into `localStorage` (contracts' `LAUNCH_TOKEN_STORAGE_KEY`, in-memory fallback) and strips
   it with `history.replaceState`; `withLaunchToken` adds it to the socket URL and to **`hostUrl(path)`**, the
   one builder for authenticated host HTTP URLs such as `/files/*`. `httpBase()` stays token-free because it
   is also a storage identity). A socket that closes **before ever opening** probes `GET /auth` and emits
-  nothing until the answer. A `401` sets **`unauthorized`**, or **`token-rejected`** when the attempt
+  nothing until the answer. A socket that opened and later closes only reconnects; a host restart with a
+  new token is still caught, because that reconnect fails before opening. A `401` sets **`unauthorized`**, or **`token-rejected`** when the attempt
   used a pasted token; a `403` sets **`foreign-origin`**. These `LaunchRefusal` statuses
   (`isLaunchRefusal`) stop reconnecting; anything else keeps the normal backoff. `authorize(token)` stores
   a pasted token and reconnects without emitting `connecting`, so the refusal screen stays up until the

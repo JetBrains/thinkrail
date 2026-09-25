@@ -1,9 +1,10 @@
+import { launchPathFor } from "@thinkrail/contracts";
 import { findFreePort } from "@thinkrail/shared/freePort";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { initializeJbcentralRuntime } from "../auth";
 import { initLogging, logger } from "../log";
 import { installCrashLog } from "./crashLog";
-import { launchPathFor, parseAllowedOrigins } from "./launchAuth";
+import { parseAllowedOrigins } from "./launchAuth";
 import { type CreateServerOptions, createServer, type RunningServer } from "./server";
 
 export interface BootHostOptions {

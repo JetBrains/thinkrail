@@ -45,13 +45,16 @@ of the host.
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); from `ext`: `SURFACE_SLOTS`, `EXT_RUNTIME_GLOBAL`,
   `EXT_RUNTIME_MODULES`, `EXT_VIEW_EXPORTS`, `EXT_VIEW_UI_EXPORTS` (the `ui` primitive names the web
-  runtime ships and ext-sdk types), `extAssetPath`, `EXT_NAME_PATTERN` (the one extension/surface name
+  runtime ships and ext-sdk types), `EXT_WS_CHANNELS` (the socket subscription set), `extAssetPath`,
+  `extChannelKey` + `isOwnChannelKey` (the `<name>:<key>` channel grammar host and web share), `EXT_NAME_PATTERN` (the one extension/surface name
   grammar: manifest validation, asset routes, and tool ids all build on it), and the extension panel tool id helpers `extToolId`,
   `parseExtToolId`, `isExtLayoutToolId` (`LayoutToolId` is the built-in ids or `ext:<name>:<surface>`, so
   host preset validation and web layout restore read one grammar); `export *` (value) of `wsProtocol`
-  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, feature-introduction versions, and the
-  launch-auth names `LAUNCH_TOKEN_PARAM` + `LAUNCH_AUTH_PATH` shared by host and browser, plus
-  `redactLaunchToken`, which both sides apply to error text that may reach logs or an agent transcript).
+  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions); from
+  `launchAuth`: `LAUNCH_TOKEN_PARAM`, `LAUNCH_AUTH_PATH`, `LAUNCH_TOKEN_STORAGE_KEY` (the browser's stored
+  copy, also seeded by the e2e harness), `launchPathFor(token)` (the one launch URL path every launcher
+  prints or opens), and `redactLaunchToken`, which host and browser apply to error text that may reach logs
+  or an agent transcript.
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
 - **Deployment obligation:** wire contracts describe host behavior and compatibility, never the launcher
@@ -412,6 +415,8 @@ of the host.
   ErrorBoundary reports for `ext_logs`). Pushes: `ext.changed` (`ExtensionInfo`), `ext.removed`
   (`{ name }`), `ext.channel` (`{ key, value }`), `ext.channelsDropped` (`{ name, keys }`: a swap or unload
   dropped these keys; clear them). All enter at `EXT_PROTOCOL_VERSION` = v69.
+- **launchAuth.ts** — the launch-token names host, launchers, browser, and e2e harness share (listed under
+  the public surface). No token logic: minting, Origin checks, and comparison are the host's.
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
   update bridge exposes a monotonic state snapshot, prompt manual check, explicit restart action, and state
   subscription without granting updater authority to an ordinary browser connection.

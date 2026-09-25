@@ -21,7 +21,7 @@ const CACHE_LIMIT = 64;
 const MAX_CANDIDATE_LENGTH = 160;
 const cache = new Map<string, Promise<string>>();
 
-export const extractCandidates = (source: string) => {
+const extractCandidates = (source: string) => {
 	const found = new Set<string>();
 	for (const [token] of source.matchAll(/[^\s"'`\\<>{};]+/g))
 		if (token.length <= MAX_CANDIDATE_LENGTH && /[a-z]/.test(token)) found.add(token);

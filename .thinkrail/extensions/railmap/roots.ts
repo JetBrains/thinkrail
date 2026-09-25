@@ -24,7 +24,7 @@ interface RootEntry {
 	disposed: boolean;
 }
 
-export interface RootsOptions {
+interface RootsOptions {
 	log: (...args: unknown[]) => void;
 	onUpdate: (root: string) => void;
 	onEvict: (root: string) => void;

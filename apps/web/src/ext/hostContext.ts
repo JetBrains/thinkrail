@@ -18,8 +18,7 @@ const readAppearance = (): HostContext["theme"] =>
 		? "light"
 		: "dark";
 
-export const useThemeAppearance = () =>
-	useSyncExternalStore(onThemeSwap, readAppearance, readAppearance);
+const useThemeAppearance = () => useSyncExternalStore(onThemeSwap, readAppearance, readAppearance);
 
 export const selectHostIds = (state: HostIdsState): ExtActionContext => {
 	const workspaceId = state.activeWorkspaceId;

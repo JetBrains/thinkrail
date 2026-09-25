@@ -1,12 +1,10 @@
-import { LAUNCH_TOKEN_PARAM } from "@thinkrail/contracts";
-
-export const LAUNCH_TOKEN_STORAGE_KEY = "thinkrail-launch-token";
+import { LAUNCH_TOKEN_PARAM, LAUNCH_TOKEN_STORAGE_KEY } from "@thinkrail/contracts";
 
 let memoryToken: string | null = null;
 
 const storage = () => (typeof localStorage === "undefined" ? null : localStorage);
 
-export const readLaunchToken = () => {
+const readLaunchToken = () => {
 	try {
 		return storage()?.getItem(LAUNCH_TOKEN_STORAGE_KEY) ?? memoryToken;
 	} catch {

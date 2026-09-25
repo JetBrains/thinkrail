@@ -1,3 +1,4 @@
+import { userText } from "../lib";
 import { type ChatRow, LARGE_USER_MESSAGE } from "./rows";
 import { resolveProminence } from "./toolRegistry";
 
@@ -77,14 +78,6 @@ export function estimateMarkdownHeight(text: string): number {
 	return clampHeight(height);
 }
 
-function userText(row: Extract<ChatRow, { kind: "user" }>): string {
-	if (typeof row.message.content === "string") return row.message.content;
-	return row.message.content
-		.filter((block) => block.type === "text")
-		.map((block) => block.text)
-		.join("\n");
-}
-
 function userAttachmentCount(row: Extract<ChatRow, { kind: "user" }>): number {
 	return typeof row.message.content === "string"
 		? 0
@@ -133,7 +126,7 @@ export function estimateChatRowHeight(row: ChatRow): number {
 		case "markdown":
 			return estimateMarkdownHeight(row.text);
 		case "user": {
-			const text = userText(row);
+			const text = userText(row.message.content);
 			const attachments = userAttachmentCount(row) * 28;
 			// Large messages rest collapsed; estimate that size, not full height (see chat/SPEC.md).
 			if (text.length > LARGE_USER_MESSAGE) {

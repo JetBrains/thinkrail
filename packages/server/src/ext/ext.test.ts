@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionInfo, SessionStats } from "@thinkrail/contracts";
 import type { SessionRef } from "@thinkrail/ext";
-import { createExtHost, type ExtHostOptions, parseManifest, projectExtensionsDir } from "./index";
+import type { ExtHostOptions } from "./host";
+import { createExtHost, projectExtensionsDir } from "./index";
+import { parseManifest } from "./manifest";
 
 const SESSION: SessionRef = {
 	sessionId: "s1",

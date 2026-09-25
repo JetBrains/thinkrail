@@ -45,6 +45,8 @@ packages/pi-subagents          portable pure-pi extension: Agent + get_subagent_
                     pi-delegation (bundled into every ThinkRail parent session by packages/server)
 packages/pi-thinkrail-workflow pi extension: the workflow skill system + its always-on routing rule
                     (bundled into every session; workspace-internal, not portable)
+.thinkrail/extensions/*        this repo's own UI extensions (timeline, railmap): workspace members,
+                    loaded at runtime as trusted project extensions, never imported by a package
 ```
 
 Artifact verification is a separate source-only workspace, [[module-artifact-tests]]. It depends on
@@ -257,6 +259,20 @@ dependency. This keeps test process drivers outside both launchers and the serve
     wire mirrors only the UI-facing run details and exposes transcript reads; neither portable package
     depends on ThinkRail. Contract, semantics, and the full decision log:
     [[module-pi-delegation]], [[module-pi-subagents]], and [[submodule-server-agent]].
+17. **UI extensions are code, trusted, and hot-swapped.** An extension is a directory with a manifest,
+    a host half (`index.ts`) and one React view per declared surface. Like pi extensions, it is trusted
+    local code: the host half runs in-process with full rights, and `permissions[]` is a label, not a
+    sandbox. User extensions load from `<dataDir>/extensions`; project ones load from
+    `.thinkrail/extensions` only after the user trusts the project. The host bundles each view with
+    `Bun.build`, resolving React and `@thinkrail/ext/view` to a runtime global the web installs, and compiles
+    its Tailwind against the app's theme tokens. So `apps/web` still imports only `contracts`: views arrive
+    at runtime as immutable, content-hashed `/ext` assets behind the launch token (#7). Every load builds a new
+    generation and cuts over only on success, so a broken edit never replaces a working version. The
+    shell owns placement through five slots (`tab`, `panel`, `status`, `toolCard`, `message`). Channel
+    pushes reach every socket and clients filter them. A host half can inject pi factories into top-level
+    sessions; idle sessions reload at once, streaming ones after `agent_settled`. Top-level sessions also get the agent dev loop
+    (`ext_validate`, `ext_reload`, `ext_logs`). Detail: [[module-ext-sdk]], [[submodule-server-ext]],
+    [[submodule-web-ext]].
 
 ## Invariants
 
@@ -286,4 +302,6 @@ rule, no runtime machinery); the spec-graph **product layer** beyond the read-on
 approval, living graph) — the pi-side spec-graph *capability* ships in V1 as a bundled extension
 (`module-spec-graph`), and the V1 viewer is a read-only Specs tab over a `spec.graph` wire read;
 CI/Checks status and provider REST API integration beyond `gh`-CLI push/open/update (see
-[[submodule-server-pr]]), self-improvement, automations, per-step model routing, cost ledger.
+[[submodule-server-pr]]), self-improvement, automations, per-step model routing, cost ledger. UI
+extensions have no sandbox, no enforced capabilities, no iframe tier for other frameworks or crash
+isolation, no per-socket channel subscriptions, and no mobile shell (decision #17).

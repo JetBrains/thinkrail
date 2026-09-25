@@ -1,7 +1,7 @@
 import type { DriftKind, ModuleEdge, ModuleFile, ModuleInfo, RailmapGraph } from "./model";
 
 export type EdgeState = "undeclared" | "declared" | "structural" | "unused";
-export type NodeKind = "module" | "self" | "external" | "file";
+type NodeKind = "module" | "self" | "external" | "file";
 
 export interface LevelNode {
 	id: string;
@@ -78,7 +78,7 @@ const STATE_RANK: Record<EdgeState, number> = {
 	unused: 0,
 };
 
-export const driftByModule = (graph: RailmapGraph, kinds: ReadonlySet<DriftKind>) => {
+const driftByModule = (graph: RailmapGraph, kinds: ReadonlySet<DriftKind>) => {
 	const counts = new Map<string, number>();
 	for (const item of graph.drift)
 		if (item.from && kinds.has(item.kind)) counts.set(item.from, (counts.get(item.from) ?? 0) + 1);

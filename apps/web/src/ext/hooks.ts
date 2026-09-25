@@ -1,11 +1,11 @@
-import { extToolId } from "@thinkrail/contracts";
+import { extChannelKey, extToolId } from "@thinkrail/contracts";
 import { createContext, useCallback, useContext } from "react";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { selectSurface, surfaceTitle, useExtStore } from "./extStore";
 import { readActionContext } from "./hostContext";
 
-export interface SurfaceIdentity {
+interface SurfaceIdentity {
 	name: string;
 	surfaceId: string;
 }
@@ -20,7 +20,7 @@ const useSurfaceIdentity = (hook: string) => {
 
 export const useChannel = <T>(key: string) => {
 	const { name } = useSurfaceIdentity("useChannel");
-	return useExtStore((state) => state.channels[`${name}:${key}`]) as T | undefined;
+	return useExtStore((state) => state.channels[extChannelKey(name, key)]) as T | undefined;
 };
 
 export const useAction = (id: string) => {

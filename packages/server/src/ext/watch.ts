@@ -57,7 +57,6 @@ export const createExtWatcher = ({
 			}
 			for (const root of wanted) if (!watchers.has(root)) arm(root);
 		},
-		watched: () => [...watchers.keys()],
 		dispose() {
 			closed = true;
 			for (const watcher of watchers.values()) watcher.close();

@@ -428,8 +428,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `?token=` must equal the launch token (constant-time compare). Failure is `401`, including the `/ws`
   upgrade. `GET /auth` answers `204` for a valid token, so the browser can tell "bad token" from "host
   down" after a refused socket. `RunningServer.launchToken` / `BootedHost.launchToken` expose the token, and
-  `BootedHost.launchPath` (`/?token=…`) is what launchers append to the origin they open, so no launcher
-  knows the parameter name. Origin alone would stop cross-site pages; the token also stops DNS
+  `BootedHost.launchPath` (contracts' `launchPathFor`, `/?token=…`) is what launchers append to the origin
+  they open, so no launcher knows the parameter name. Origin alone would stop cross-site pages; the token also stops DNS
   rebinding (the attacker page's origin equals its own `Host`) and other local pages on a wildcard bind.
   `launchAuthResponse` maps the verdict to the `403` / `401` / `204` response, or `null` to continue.
   The query token rides only on URLs built through the web's `hostUrl()`, so `/ext/*` serves only

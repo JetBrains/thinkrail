@@ -32,7 +32,7 @@ const validationText = (name: string, result: ExtValidation) =>
 			? `${name}: valid (build ${result.build}; surfaces: ${
 					result.surfaces.map((surface) => `${surface.id} [${surface.slot}]`).join(", ") || "none"
 				})`
-			: `${name}: invalid\n${result.errors.map((error) => `- ${error}`).join("\n")}`,
+			: `${name}: invalid\n${result.errors.map((error) => `- ${error.replaceAll("\n", "\n  ")}`).join("\n")}`,
 		...(result.logs.length > 0 ? [`dry-run log:\n${result.logs.join("\n")}`] : []),
 	].join("\n");
 
@@ -45,7 +45,7 @@ const infoText = (info: ExtensionInfo) =>
 const logLine = (entry: ExtLogEntry) =>
 	`${new Date(entry.at).toISOString()} ${entry.at} ${entry.level} ${entry.message}`;
 
-export const promptSection = ({ docsPath, host }: { docsPath: string; host: DevHost }) => {
+const promptSection = ({ docsPath, host }: { docsPath: string; host: DevHost }) => {
 	const { user } = host.roots();
 	return [
 		"ThinkRail UI extensions: you can add panels, tabs, topbar items, tool cards, and chat message cards to this app.",

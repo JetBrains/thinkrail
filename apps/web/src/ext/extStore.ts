@@ -1,7 +1,12 @@
-import type { ExtensionInfo, ExtensionSurface, SurfaceSlot } from "@thinkrail/contracts";
+import {
+	type ExtensionInfo,
+	type ExtensionSurface,
+	isOwnChannelKey,
+	type SurfaceSlot,
+} from "@thinkrail/contracts";
 import { create } from "zustand";
 
-export type ExtHydration = "idle" | "ready" | "failed" | "unsupported";
+type ExtHydration = "idle" | "ready" | "failed" | "unsupported";
 
 export interface ExtState {
 	hydration: ExtHydration;
@@ -27,7 +32,7 @@ const withoutKeys = <T>(record: Record<string, T>, keys: Iterable<string>) => {
 };
 
 const ownedKeys = (channels: Record<string, unknown>, name: string) =>
-	Object.keys(channels).filter((key) => key.startsWith(`${name}:`));
+	Object.keys(channels).filter((key) => isOwnChannelKey(name, key));
 
 export const useExtStore = create<ExtState>((set) => ({
 	hydration: "idle",
@@ -55,7 +60,7 @@ export const useExtStore = create<ExtState>((set) => ({
 		set((state) => ({ params: { ...state.params, [surfaceKey(name, surfaceId)]: params } })),
 }));
 
-export interface PlacedSurface {
+interface PlacedSurface {
 	extension: ExtensionInfo;
 	surface: ExtensionSurface;
 }

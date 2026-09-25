@@ -104,6 +104,11 @@ the newest remaining one, then the built-in or default. Chat
 re-renders through its renderer-registry version. `ExtensionMenu` (center group actions) lists every
 `tab` and `panel` surface and opens it.
 
+## Known limitations
+
+- `ExtensionMenu` and a view's `openSurface` are the only ways to open a `tab` or `panel` surface; the
+  command palette does not list surfaces.
+
 ## Boundary
 
 - **Public surface (barrel):** `initExtensions`, `ExtensionMenu`, `ExtensionPanelBody`,

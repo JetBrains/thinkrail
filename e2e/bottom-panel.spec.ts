@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { LAUNCH_TOKEN_STORAGE_KEY } from "@thinkrail/contracts";
 import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
@@ -115,10 +116,10 @@ async function requestOverWire<T>(
 	params: Record<string, unknown>,
 ): Promise<T> {
 	return page.evaluate(
-		async ({ requestMethod, requestParams }) => {
+		async ({ requestMethod, requestParams, tokenKey }) => {
 			const protocol = location.protocol === "https:" ? "wss:" : "ws:";
 			const socket = new WebSocket(
-				`${protocol}//${location.host}/ws?token=${encodeURIComponent(localStorage.getItem("thinkrail-launch-token") ?? "")}`,
+				`${protocol}//${location.host}/ws?token=${encodeURIComponent(localStorage.getItem(tokenKey) ?? "")}`,
 			);
 			await new Promise<void>((resolve) => {
 				socket.onopen = () => resolve();
@@ -149,7 +150,7 @@ async function requestOverWire<T>(
 				socket.close();
 			}
 		},
-		{ requestMethod: method, requestParams: params },
+		{ requestMethod: method, requestParams: params, tokenKey: LAUNCH_TOKEN_STORAGE_KEY },
 	) as Promise<T>;
 }
 
@@ -182,10 +183,10 @@ async function readLocalSideWidths(page: Page): Promise<{ left: number; right: n
 }
 
 async function createWorkspaceWithoutOpening(page: Page): Promise<{ id: string; name: string }> {
-	return page.evaluate(async () => {
+	return page.evaluate(async (tokenKey) => {
 		const protocol = location.protocol === "https:" ? "wss:" : "ws:";
 		const socket = new WebSocket(
-			`${protocol}//${location.host}/ws?token=${encodeURIComponent(localStorage.getItem("thinkrail-launch-token") ?? "")}`,
+			`${protocol}//${location.host}/ws?token=${encodeURIComponent(localStorage.getItem(tokenKey) ?? "")}`,
 		);
 		await new Promise<void>((resolve) => {
 			socket.onopen = () => resolve();
@@ -216,7 +217,7 @@ async function createWorkspaceWithoutOpening(page: Page): Promise<{ id: string; 
 		});
 		socket.close();
 		return workspace;
-	});
+	}, LAUNCH_TOKEN_STORAGE_KEY);
 }
 
 test("full-height panel-header actions stay square", async ({ page }) => {
