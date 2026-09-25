@@ -135,8 +135,24 @@ nothing.
 resolves to `-webkit-app-region: drag` only when `--window-chrome-drag-region` says so, and Electrobun's
 own injected preload rewrites app-region declarations from same-origin stylesheets into a mirrored custom
 property it hit-tests against on `mousedown`. A decorated window (Windows, Linux, the neutral window)
-publishes `no-drag` and so never acquires a second, partial drag strip. Double-click-to-zoom on the header
-is not promised — the webview covers the strip, so the click reaches `NSWindow` only incidentally.
+publishes `no-drag` and so never acquires a second, partial drag strip.
+
+**Title-bar double-click.** The webview covers the native strip, so `NSWindow` never sees a header
+double-click, and Electrobun 2.0.1 implements app-region dragging only. Its native move uses pass-through
+event monitors, so the page still receives `dblclick`. The desktop preload listens for primary-button
+`dblclick` events the page did not `preventDefault` and sends a payload-free `titleBarDoubleClick` message
+when the target is a drag region by Electrobun's own hit-test input: the computed, inherited
+`--electrobun-app-region` property its stylesheet rewrite produces. Exactly the area that drags the window
+therefore also zooms it; the `window-no-drag` action cluster does neither, and the web client still has no
+desktop branch. The main process acts only under the macOS drag policy and outside native fullscreen. It
+reads `AppleActionOnDoubleClick` on every double-click (asynchronous `defaults read -g`, so a changed
+setting applies without restart) and maps it as Chromium does for custom draggable areas: unset, `Maximize`
+(Zoom) or `Fill` toggles zoom through `maximize()`/`unmaximize()` (`[NSWindow zoom:]`); `Minimize`
+miniaturizes; `None` and unknown values do nothing. `Fill` uses zoom because Apple's `_zoomFill:` is
+private and unreachable through Electrobun; this window's standard zoom frame is the screen's visible
+frame, so only tiling margins differ. A double-click arriving while the previous one is still resolving is
+dropped. An Electrobun upgrade must re-check the mirror property name and whether the framework now handles
+double-clicks itself, which would toggle twice.
 
 ## Navigation and window security
 
@@ -148,7 +164,8 @@ SDK event factories, not copied into local declarations. Detail can be a raw URL
 serialized navigation JSON; bounded decoding retains only a string URL and the HTTP/HTTPS/mailto
 allowlist. Native `navigationRules` enforce confinement: navigation-event responses cannot cancel it.
 
-A desktop preload sends typed, one-way route and local-preference messages, and is the only writer of
+A desktop preload sends typed, one-way route, local-preference, and title-bar double-click messages, and is
+the only writer of
 the window-chrome CSS properties described above. It wraps
 `history.replaceState` and `history.pushState` before page scripts and also reports initial/hash/pop
 navigation, because Electrobun's native navigation events do not observe History API route changes. The
@@ -180,7 +197,10 @@ Abrupt death relies only on operating-system process cleanup.
 Artifact tests drive this same entrypoint through opt-in environment/ready/control seams: isolated user
 data, a hidden neutral window for browser-backed tests, host/launcher ids and origin on DOM-ready, and
 normal quit. Native UI smoke can capture an external-open result and request one fixed navigation probe
-instead of launching the user's browser. These hooks need the live window; their standalone drivers and
+instead of launching the user's browser. With a title-bar probe file, the `title-bar-double-click` control
+command dispatches synthetic `dblclick`s in the live webview — first on the no-drag action cluster, then on
+the header — and the launcher records each handled double-click's preference, action, and before/after
+window state. These hooks need the live window; their standalone drivers and
 assertions live in the test package, which product code never imports.
 
 ## Build and release

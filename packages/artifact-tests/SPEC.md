@@ -44,7 +44,10 @@ the seam),
 exercise the bundled factories/skills, reach an OAuth URL without a provider turn, verify health/UI and
 transcript trash, and shut down. CLI-specific probes also check its exit-only and embedded-cache behavior.
 Native desktop smoke loads the real UI and verifies route/preload messaging plus the production external
-navigation handler. Desktop-backed Playwright uses the launcher's opt-in neutral-window seam so it is the
+navigation handler. On macOS it also drives the title-bar double-click path end to end: a no-drag
+double-click must not act, and the header double-click's recorded action and resulting window state must
+match the machine's `AppleActionOnDoubleClick` setting. Other platforms skip it because their decorated
+windows have no web drag region. Desktop-backed Playwright uses the launcher's opt-in neutral-window seam so it is the
 only hydrated client. The live-window ready/control seam remains in the launcher, never a runtime import
 of this package.
 
