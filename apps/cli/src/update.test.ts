@@ -470,10 +470,10 @@ describe("resolveWindowsUpdatePlan", () => {
 		).toThrow("suspicious install prefix");
 	});
 
-	test("targets the running Windows bin layout and ignores stale metadata", () => {
+	test("targets a mixed-case running Windows bin layout and ignores stale metadata", () => {
 		const plan = resolveWindowsUpdatePlan({
 			platform: "win32",
-			execPath: "D:\\current\\bin\\thinkrail.exe",
+			execPath: "D:\\current\\bin\\ThinkRail.exe",
 			args: { version: "latest" },
 			installMeta: { prefix: "C:\\other", channel: "nightly" },
 			baked: "stable",
@@ -523,11 +523,11 @@ describe("resolveWindowsUpdatePlan", () => {
 		expect(plan.channel).toBe("nightly");
 	});
 
-	test("fails closed for a named Windows binary outside a bin directory", () => {
+	test("fails closed for a mixed-case Windows binary outside a bin directory", () => {
 		expect(() =>
 			resolveWindowsUpdatePlan({
 				platform: "win32",
-				execPath: "D:\\manual\\thinkrail.exe",
+				execPath: "D:\\manual\\ThinkRail.exe",
 				args: { version: "latest" },
 				installMeta: {},
 				baked: "stable",
