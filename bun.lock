@@ -32,6 +32,19 @@
         "typescript": "catalog:",
       },
     },
+    ".thinkrail/extensions/project-notes": {
+      "name": "@thinkrail/ext-project-notes",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thinkrail/ext": "workspace:*",
+        "typebox": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     ".thinkrail/extensions/railmap": {
       "name": "@thinkrail/ext-railmap",
       "version": "0.0.0",
@@ -1010,6 +1023,8 @@
     "@thinkrail/ext": ["@thinkrail/ext@workspace:packages/ext-sdk"],
 
     "@thinkrail/ext-git-pulse": ["@thinkrail/ext-git-pulse@workspace:.thinkrail/extensions/git-pulse"],
+
+    "@thinkrail/ext-project-notes": ["@thinkrail/ext-project-notes@workspace:.thinkrail/extensions/project-notes"],
 
     "@thinkrail/ext-railmap": ["@thinkrail/ext-railmap@workspace:.thinkrail/extensions/railmap"],
 

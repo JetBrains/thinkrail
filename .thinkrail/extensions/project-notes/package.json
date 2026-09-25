@@ -1,0 +1,19 @@
+{
+	"name": "@thinkrail/ext-project-notes",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"description": "ThinkRail UI extension: pinned per-project notes added to the system prompt of every agent run.",
+	"scripts": {
+		"typecheck": "tsc --noEmit -p ."
+	},
+	"dependencies": {
+		"@thinkrail/ext": "workspace:*",
+		"typebox": "catalog:"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"typescript": "catalog:"
+	}
+}

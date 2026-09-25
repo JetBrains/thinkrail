@@ -40,6 +40,12 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 	ref?: Ref<HTMLButtonElement>;
 }
 
+export interface SwitchProps
+	extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onChange" | "role" | "type"> {
+	checked: boolean;
+	onCheckedChange: (checked: boolean) => void;
+}
+
 export interface CommandItemProps extends Omit<Div, "onSelect"> {
 	value?: string;
 	disabled?: boolean;
@@ -52,6 +58,7 @@ export interface ExtViewUi extends UiShape {
 	Button: ComponentType<ButtonProps>;
 	Input: ComponentType<InputHTMLAttributes<HTMLInputElement>>;
 	Textarea: ComponentType<TextareaHTMLAttributes<HTMLTextAreaElement>>;
+	Switch: ComponentType<SwitchProps>;
 	Tooltip: ComponentType<RootProps>;
 	TooltipContent: ComponentType<ContentProps>;
 	TooltipTrigger: ComponentType<TriggerProps>;

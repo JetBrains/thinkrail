@@ -155,7 +155,8 @@ From `@thinkrail/ext/view`:
   `toolCall = { toolCallId, toolName, args, result, status }`; a `message` view gets
   `message = { customType, text, details, timestamp }`.
 - `ui`: the app's own components: `Button` (`variant`: default, destructive, outline, ghost; `size`:
-  default, sm, icon), `Input` (one-line text field), `Textarea`, `Tooltip*`, `IconTooltip`, `Popover*`, `Dialog*`, `DropdownMenu*`,
+  default, sm, icon), `Input` (one-line text field), `Textarea`, `Switch`
+  (`checked`, `onCheckedChange`; give it an `aria-label`), `Tooltip*`, `IconTooltip`, `Popover*`, `Dialog*`, `DropdownMenu*`,
   `ContextMenu*`, `Command*`.
 - Types: `SurfaceProps`, `HostContext`, `SessionStats` (the value of a published `tr.sessions.stats`).
 - `cn(...classes)`, `remixicon` (all `@remixicon/react` icons: `Ri…Line`, `Ri…Fill`).
@@ -248,3 +249,17 @@ It shows:
 - A `tr.pi` tool (`run_tests({ filter? })`) that shares state with the panel: the agent's run shows in the
   panel, a call during a panel run joins it, and `onUpdate` streams the elapsed time to its `toolCard`.
 - The last result per workspace in `tr.store`, and **Fix with agent** (`startChat`) on each failure.
+
+`.thinkrail/extensions/project-notes/` pins notes per project and adds the enabled ones to every agent run.
+It shows:
+
+- **System-prompt injection**: `tr.pi` registers `pi.on("before_agent_start", …)` and sets
+  `event.systemPromptOptions.sections.project_notes`. pi wraps it in `<project_notes>` after its own
+  sections. Delete the key when there is nothing to send; do not return `systemPrompt`, which replaces
+  the whole prompt and every other extension's section.
+- Mapping a pi session to its project: `ctx.sessionManager.getSessionId()` → `tr.sessions.list()` →
+  `tr.workspaces.get(workspaceId).projectId`.
+- A size cap computed by one pure function that the hook and the views share, so the panel says exactly
+  which notes are sent.
+- A `tr.pi` tool (`add_project_note`) for "remember that …" requests, with a `toolCard`.
+- Per-project data in `tr.store`, published only while a view watches it (`tr.onWatch`), and `ui.Switch`.

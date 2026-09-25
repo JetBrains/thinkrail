@@ -14,6 +14,7 @@ export type {
 	ContentProps,
 	MenuItemProps,
 	RootProps,
+	SwitchProps,
 	TriggerProps,
 } from "./viewUi";
 export type { ExtMessageView, ExtToolCallView, ExtViewUi, HostContext, SessionStats };

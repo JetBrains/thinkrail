@@ -1,0 +1,10 @@
+{
+	"name": "project-notes",
+	"title": "Project notes",
+	"surfaces": [
+		{ "id": "notes", "slot": "panel", "title": "Project notes" },
+		{ "id": "badge", "slot": "status" },
+		{ "id": "add-project-note", "slot": "toolCard", "tool": "add_project_note" }
+	],
+	"permissions": ["pi:before_agent_start", "pi:tool"]
+}

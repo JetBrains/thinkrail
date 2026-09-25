@@ -1,4 +1,4 @@
-import { cn } from "@/lib";
+import { Switch } from "@/components/ui/switch";
 
 export function SettingsSwitch({
 	checked,
@@ -14,26 +14,12 @@ export function SettingsSwitch({
 	onChange: (checked: boolean) => void;
 }) {
 	return (
-		<button
-			type="button"
-			role="switch"
+		<Switch
+			checked={checked}
 			disabled={disabled}
-			aria-checked={checked}
 			aria-label={label}
 			data-testid={testId}
-			data-active={checked}
-			onClick={() => onChange(!checked)}
-			className={cn(
-				"relative h-20 w-36 shrink-0 rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50",
-				checked ? "bg-primary" : "bg-border-default",
-			)}
-		>
-			<span
-				className={cn(
-					"absolute top-2 left-2 size-16 rounded-full bg-container-workspace-bg transition-transform",
-					checked && "translate-x-16",
-				)}
-			/>
-		</button>
+			onCheckedChange={onChange}
+		/>
 	);
 }

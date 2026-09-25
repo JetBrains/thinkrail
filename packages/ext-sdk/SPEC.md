@@ -90,6 +90,10 @@ is wired the same way as railmap.
 `fast-xml-parser` dependency, a `tr.pi` tool sharing state with a `panel`, and a `toolCard`) is wired the
 same way.
 
+`.thinkrail/extensions/project-notes/` (a `before_agent_start` hook through `tr.pi` that owns one system-prompt
+section, per-project notes in `tr.store`, a `tr.pi` tool, `panel` / `status` / `toolCard` slots, `ui.Switch`)
+is wired the same way.
+
 ## Known limitations
 
 The package is private to this repository. An author outside it gets the README but no installable

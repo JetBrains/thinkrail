@@ -47,6 +47,7 @@ import {
 } from "../components/ui/dropdown-menu";
 import { Input } from "../components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "../components/ui/popover";
+import { Switch } from "../components/ui/switch";
 import { Textarea } from "../components/ui/textarea";
 import { IconTooltip, Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { cn } from "../lib";
@@ -58,6 +59,7 @@ export const viewUi = {
 	Button,
 	Input,
 	Textarea,
+	Switch,
 	Tooltip,
 	TooltipContent,
 	TooltipTrigger,

@@ -61,6 +61,7 @@ export const EXT_VIEW_UI_EXPORTS = [
 	"Button",
 	"Input",
 	"Textarea",
+	"Switch",
 	"Tooltip",
 	"TooltipContent",
 	"TooltipTrigger",

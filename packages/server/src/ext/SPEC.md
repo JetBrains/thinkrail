@@ -217,6 +217,13 @@ through the extension's actions: JUnit parsing with nested names and locations, 
 flag-like filter, the console fallback, one run per workspace, cancel, the store surviving a new host, and
 a real pi session on a faux provider calling `run_tests`.
 
+`.thinkrail/extensions/project-notes/` is the sixth. `projectNotesExample.test.ts` drives its actions per
+project (save, edit, toggle, remove, validation, publish only while watched, store keys), calls its
+`before_agent_start` handler directly (session and `cwd` to project mapping, the size cap, a stale section
+removed), then runs a real pi session on a faux provider: the `<project_notes>` block is in the system
+prompt the model receives, gone after the note is turned off, and an `add_project_note` call lands in the
+next run.
+
 ## Known limitations
 
 - A duplicate extension name shows only as a host warning; `list()` never reports the skipped copy.
