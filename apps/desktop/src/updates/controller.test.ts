@@ -234,6 +234,28 @@ test("download is explicit and coalesced, publishes transfer then preparation, a
 	});
 });
 
+test("a matching ready callback wins over a late download rejection", async () => {
+	const updater = new FakeUpdater();
+	const pendingDownload = deferred<void>();
+	updater.downloadResult = pendingDownload.promise;
+	const { controller } = scheduledController(updater);
+	await findAvailable(controller);
+
+	await controller.downloadUpdate();
+	updater.info = { ...updater.info, updateReady: true };
+	updater.emit({ status: "download-complete", message: "prepared" });
+	pendingDownload.reject(new Error("late download rejection"));
+	await settle();
+
+	expect(await controller.getState()).toMatchObject({
+		status: "ready",
+		availableVersion: "1.1.0",
+		progress: 100,
+		error: null,
+		failedPhase: null,
+	});
+});
+
 test("install clicked from updateReady waits for the coalesced download acknowledgement", async () => {
 	const updater = new FakeUpdater();
 	const pendingDownload = deferred<void>();
