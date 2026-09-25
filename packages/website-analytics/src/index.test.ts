@@ -316,7 +316,7 @@ describe("website analytics", () => {
 		]);
 	});
 
-	test("removes queued enrichment when consent is withdrawn before flush", () => {
+	test("removes queued journey and bridge IDs when consent is withdrawn before flush", () => {
 		const dom = installDom("site.example", { storedJourney: existingJourneyId });
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
@@ -325,7 +325,14 @@ describe("website analytics", () => {
 		});
 
 		analytics.init();
-		analytics.capture("content_viewed", contentViewed);
+		analytics.capture("download_started", {
+			content_key: "landing",
+			cta_location: "hero",
+			platform: "macos",
+			architecture: "arm64",
+			artifact: "dmg",
+			bridge_id: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		});
 		consent.set(false);
 		dom.loadPostHog();
 
@@ -333,8 +340,14 @@ describe("website analytics", () => {
 		expect(dom.storageCalls).toEqual([`get:${journeyStorageKey}`, `remove:${journeyStorageKey}`]);
 		expect(dom.vendorCalls.find(({ method }) => method === "capture")).toEqual({
 			method: "capture",
-			value: "content_viewed",
-			properties: { content_key: "landing/readme" },
+			value: "download_started",
+			properties: {
+				content_key: "landing",
+				cta_location: "hero",
+				platform: "macos",
+				architecture: "arm64",
+				artifact: "dmg",
+			},
 		});
 	});
 
@@ -356,6 +369,30 @@ describe("website analytics", () => {
 			properties: { journey_id: existingJourneyId },
 		});
 		expect(dom.vendorCalls).toContainEqual({ method: "unregister", value: "journey_id" });
+	});
+
+	test("exposes and subscribes to only the current consented journey without creating on read", () => {
+		const dom = installDom("site.example", { storedJourney: existingJourneyId });
+		const consent = createConsent(undefined);
+		const analytics = createWebsiteAnalytics({
+			productionHostname: "site.example",
+			marketingConsent: consent.adapter,
+		});
+		const observed: Array<string | undefined> = [];
+		const unsubscribe = analytics.subscribeJourney((journeyId) => observed.push(journeyId));
+
+		expect(analytics.currentJourneyId()).toBeUndefined();
+		expect(dom.storageCalls).toEqual([]);
+		analytics.init();
+		expect(analytics.currentJourneyId()).toBeUndefined();
+		consent.set(true);
+		expect(analytics.currentJourneyId()).toBe(existingJourneyId);
+		consent.set(false);
+		expect(analytics.currentJourneyId()).toBeUndefined();
+		unsubscribe();
+		consent.set(true);
+
+		expect(observed).toEqual([existingJourneyId, undefined]);
 	});
 
 	test("creates and registers a journey when consent is granted after PostHog loads", () => {
