@@ -332,3 +332,18 @@ It shows:
   which notes are sent.
 - A `tr.pi` tool (`add_project_note`) for "remember that …" requests, with a `toolCard`.
 - Per-project data in `tr.store`, published only while a view watches it (`tr.onWatch`), and `ui.Switch`.
+
+`.thinkrail/extensions/ultracode/` runs dynamic workflows: the agent writes a JavaScript script that fans
+work out to many subagents and returns one value. It shows:
+
+- `tr.agents` at scale: every `agent()` call in the script is `tr.agents.spawn` with the tool's `ctx` as
+  parent, a run-wide concurrency cap passed as `maxConcurrent`, and `handle.onEvent` progress (model,
+  activity, pi's usage) mapped onto a live run model.
+- Cancel through handles: a **Cancel** action and the tool's `signal` call `cancel()` on every live
+  handle; unloading the extension cancels running workflows.
+- Cost from pi only: each agent shows pi's per-run usage; the run total and the `maxCost` brake sum it.
+- A `tr.pi` tool (`Ultracode`) whose `onUpdate` streams a run summary to its `toolCard`, a live `tab`
+  (phases as columns, agent cards, details on click), a `panel` of runs, and a `status` item.
+- Large data kept out of `tr.store`: journals for resume live under `$THINKRAIL_DATA_DIR`, the store keeps
+  the 20 newest runs, capped.
+

@@ -235,6 +235,12 @@ removed), then runs a real pi session on a faux provider: the `<project_notes>` 
 prompt the model receives, gone after the note is turned off, and an `add_project_note` call lands in the
 next run.
 
+`.thinkrail/extensions/ultracode/` is the seventh. `ultracodeExample.test.ts` runs its `Ultracode` tool
+against a real delegation service on a faux provider: a workflow with `parallel`, `pipeline`, a schema and
+its corrective retry runs every agent as a `tr.agents` child and reports pi's usage; a resume replays every
+agent without a child; the `cancel` action and a host dispose abort all children; a bad script, an
+unenforceable schema, and an unknown resume id fail before any child runs.
+
 ## Known limitations
 
 - A duplicate extension name shows only as a host warning; `list()` never reports the skipped copy.

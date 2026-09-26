@@ -104,6 +104,10 @@ same way.
 section, per-project notes in `tr.store`, a `tr.pi` tool, `panel` / `status` / `toolCard` slots, `ui.Switch`)
 is wired the same way.
 
+`.thinkrail/extensions/ultracode/` (dynamic workflows over `tr.agents`: a script fans out subagents with
+cancel through handles and pi-reported cost; `tab` / `panel` / `toolCard` / `status` slots) is wired the
+same way.
+
 ## Known limitations
 
 The package is private to this repository. An author outside it gets the README but no installable

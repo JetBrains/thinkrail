@@ -1,0 +1,20 @@
+{
+	"name": "@thinkrail/ext-ultracode",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"description": "ThinkRail UI extension: dynamic workflows, a JS script that fans work out to many subagents, watched live.",
+	"scripts": {
+		"typecheck": "tsc --noEmit -p ."
+	},
+	"dependencies": {
+		"@thinkrail/ext": "workspace:*",
+		"typebox": "catalog:"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"typescript": "catalog:"
+	}
+}

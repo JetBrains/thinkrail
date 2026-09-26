@@ -1,0 +1,11 @@
+{
+	"name": "ultracode",
+	"title": "Ultracode",
+	"surfaces": [
+		{ "id": "run", "slot": "tab", "title": "Workflow run" },
+		{ "id": "workflows", "slot": "panel", "title": "Workflows" },
+		{ "id": "workflow-card", "slot": "toolCard", "tool": "Ultracode" },
+		{ "id": "status", "slot": "status" }
+	],
+	"permissions": ["pi:tool", "agents:spawn", "fs:write"]
+}

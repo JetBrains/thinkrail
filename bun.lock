@@ -87,6 +87,20 @@
         "typescript": "catalog:",
       },
     },
+    ".thinkrail/extensions/ultracode": {
+      "name": "@thinkrail/ext-ultracode",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thinkrail/ext": "workspace:*",
+        "typebox": "catalog:",
+      },
+      "devDependencies": {
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "apps/cli": {
       "name": "@thinkrail/cli",
       "version": "0.0.0",
@@ -1031,6 +1045,8 @@
     "@thinkrail/ext-test-runner": ["@thinkrail/ext-test-runner@workspace:.thinkrail/extensions/test-runner"],
 
     "@thinkrail/ext-tool-guard": ["@thinkrail/ext-tool-guard@workspace:.thinkrail/extensions/tool-guard"],
+
+    "@thinkrail/ext-ultracode": ["@thinkrail/ext-ultracode@workspace:.thinkrail/extensions/ultracode"],
 
     "@thinkrail/server": ["@thinkrail/server@workspace:packages/server"],
 
