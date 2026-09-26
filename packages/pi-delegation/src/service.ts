@@ -12,6 +12,7 @@ import { Semaphore } from "./semaphore";
 import { DEFAULT_SCOPE, defaultDelegationRoot, delegationSessionDir } from "./storage";
 import {
 	type ChildHandle,
+	type ConcurrencyPool,
 	type CreateChildSpec,
 	type DelegationBindings,
 	DelegationError,
@@ -43,6 +44,7 @@ interface ActiveRun {
 
 interface ChildEntry {
 	readonly record: SpawnRecord;
+	readonly concurrency: ConcurrencyPool | undefined;
 	readonly session: AgentSession;
 	readonly listeners: Set<(e: LifecycleEvent) => void>;
 	handle?: ChildHandle;
@@ -98,6 +100,13 @@ function assertV1Combination(spec: CreateChildSpec): SessionOptions {
 		throw new DelegationError(
 			"not-implemented",
 			"WorkspaceProvider has no V1 consumer — children share the parent cwd",
+		);
+	}
+	const pool = spec.concurrency;
+	if (pool && (pool.pool === "" || !Number.isInteger(pool.max) || pool.max < 1)) {
+		throw new DelegationError(
+			"invalid-combination",
+			"concurrency needs a non-empty pool name and a positive integer max",
 		);
 	}
 	return spec.session;
@@ -171,7 +180,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 
 	const children = new Map<string, ChildEntry>();
 	const byParent = new Map<string, Set<string>>();
-	const semaphores = new Map<string, Semaphore>();
+	const semaphores = new Map<string, Map<string, Semaphore>>();
 	const lifecycleListeners = new Set<(e: LifecycleEvent) => void>();
 
 	const fallbackRuntimes = new Map<
@@ -221,11 +230,20 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		return runtime;
 	}
 
-	function semaphoreFor(parentSessionId: string): Semaphore {
-		let semaphore = semaphores.get(parentSessionId);
+	function semaphoreFor(parentSessionId: string, pool: ConcurrencyPool | undefined): Semaphore {
+		let pools = semaphores.get(parentSessionId);
+		if (!pools) {
+			pools = new Map();
+			semaphores.set(parentSessionId, pools);
+		}
+		const key = pool?.pool ?? "";
+		const slots = pool?.max ?? slotsPerParent;
+		let semaphore = pools.get(key);
 		if (!semaphore) {
-			semaphore = new Semaphore(slotsPerParent);
-			semaphores.set(parentSessionId, semaphore);
+			semaphore = new Semaphore(slots);
+			pools.set(key, semaphore);
+		} else if (pool) {
+			semaphore.resize(slots);
 		}
 		return semaphore;
 	}
@@ -289,7 +307,9 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		};
 
 		const unsubscribe = session.subscribe((event) => {
-			if (event.type === "tool_execution_start") {
+			if (abortRequested && (event.type === "agent_start" || event.type === "turn_start")) {
+				void session.abort().catch(() => {});
+			} else if (event.type === "tool_execution_start") {
 				activity = event.toolName;
 				pushUpdate("running");
 			} else if (event.type === "turn_end") {
@@ -393,7 +413,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				entry,
 			);
 			const release = await acquireOrAbort(
-				semaphoreFor(entry.record.parentSessionId),
+				semaphoreFor(entry.record.parentSessionId, entry.concurrency),
 				runOpts.signal,
 			);
 			try {
@@ -611,6 +631,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		};
 		const entry: ChildEntry = {
 			record,
+			concurrency: spec.concurrency,
 			session,
 			listeners: new Set(),
 			disposed: false,

@@ -8,6 +8,7 @@ export {
 export {
 	type ChildHandle,
 	type ChildInfo,
+	type ConcurrencyPool,
 	type CreateChildSpec,
 	type DelegationBindings,
 	DelegationError,

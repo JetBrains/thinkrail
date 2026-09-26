@@ -1,11 +1,17 @@
+const assertSlots = (slots: number) => {
+	if (!Number.isInteger(slots) || slots < 1) {
+		throw new Error(`Semaphore slots must be a positive integer, got ${slots}`);
+	}
+};
+
 export class Semaphore {
 	private readonly waiters: Array<() => void> = [];
 	private available: number;
+	private slots: number;
 
 	constructor(slots: number) {
-		if (!Number.isInteger(slots) || slots < 1) {
-			throw new Error(`Semaphore slots must be a positive integer, got ${slots}`);
-		}
+		assertSlots(slots);
+		this.slots = slots;
 		this.available = slots;
 	}
 
@@ -30,7 +36,23 @@ export class Semaphore {
 		});
 	}
 
+	resize(slots: number): void {
+		assertSlots(slots);
+		this.available += slots - this.slots;
+		this.slots = slots;
+		while (this.available > 0) {
+			const next = this.waiters.shift();
+			if (!next) break;
+			this.available--;
+			next();
+		}
+	}
+
 	private release(): void {
+		if (this.available < 0) {
+			this.available++;
+			return;
+		}
 		const next = this.waiters.shift();
 		if (next) next();
 		else this.available++;

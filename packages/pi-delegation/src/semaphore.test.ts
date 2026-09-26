@@ -51,3 +51,36 @@ test("a double release does not mint an extra slot", async () => {
 test("rejects a non-positive slot count", () => {
 	expect(() => new Semaphore(0)).toThrow();
 });
+
+test("resize up grants queued waiters at once; resize down holds grants until releases repay it", async () => {
+	const semaphore = new Semaphore(1);
+	const releaseA = await semaphore.acquire();
+	let granted = 0;
+	const pendingB = semaphore.acquire().then((release) => {
+		granted++;
+		return release;
+	});
+	const pendingC = semaphore.acquire().then((release) => {
+		granted++;
+		return release;
+	});
+	semaphore.resize(3);
+	const releaseB = await pendingB;
+	const releaseC = await pendingC;
+	expect(granted).toBe(2);
+
+	semaphore.resize(1);
+	releaseA();
+	releaseB();
+	let dGranted = false;
+	const pendingD = semaphore.acquire().then((release) => {
+		dGranted = true;
+		return release;
+	});
+	await Bun.sleep(1);
+	expect(dGranted).toBe(false);
+	releaseC();
+	(await pendingD)();
+	expect(dGranted).toBe(true);
+	expect(() => semaphore.resize(0)).toThrow();
+});

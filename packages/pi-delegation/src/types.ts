@@ -49,6 +49,12 @@ export interface CreateChildSpec {
 	interactive?: boolean;
 	workspace?: WorkspaceProvider;
 	session?: SessionOptions;
+	concurrency?: ConcurrencyPool;
+}
+
+export interface ConcurrencyPool {
+	pool: string;
+	max: number;
 }
 
 export interface RunOptions {
