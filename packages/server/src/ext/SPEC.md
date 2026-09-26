@@ -185,6 +185,17 @@ lists trusted project paths, so the section stays stable across trust changes an
   recomputed.
 - `tr.workspaces`: read-only workspace refs injected by the composition root (`workspaces` option,
   default empty): open projects' workspaces with their checkout `path`.
+- `tr.agents` (`agents.ts`): the composition root injects an `AgentBackend`
+  (`serviceFor(parentSessionId)` → the parent workspace's `DelegationService`, or `undefined` when the
+  parent is not a live top-level session; default: none). Each `spawn` is one hidden, fresh
+  `createChild` with `info.createdBy = "ext:<name>"` and the concurrency pool `ext:<name>` sized by
+  `maxConcurrent` (1..16, default 4), then one `runQueued`; the child is disposed once the run settles.
+  Events map from the run: `queued` when the run is queued, `started` on the first `running` update,
+  `progress` per update, `settled` after disposal. `result` never rejects: a thrown run resolves as
+  `error`. `spawn` throws unless the generation is `active` (so a dry run never starts a model), and
+  disposes a child whose generation died while it was being created. The generation's disposer cancels
+  and awaits every unsettled child. `tr.on` stays top-level only; `tr.agents.onEvent` is how an
+  extension observes its own children.
 
 ## Example extension
 
@@ -239,6 +250,7 @@ next run.
   README text, text-imported); `projectExtensionsDir`.
 - **Allowed deps:** `@thinkrail/ext` (types + the module object handed to jiti), `@thinkrail/contracts`
   (types, `SURFACE_SLOTS`, runtime-module names), `@thinkrail/shared/paths`, `typebox`, `jiti`,
-  pi-coding-agent (types, and the module object handed to jiti), `node:fs` `watch`, `tailwindcss` (compiler + `theme.css` text), `Bun.build`.
-- **Forbidden:** `host`; `agent`, `persistence`, `log`, and every other feature module. Sessions, trust,
+  pi-coding-agent (types, and the module object handed to jiti), `pi-delegation` (types only; the
+  service is injected), `node:fs` `watch`, `tailwindcss` (compiler + `theme.css` text), `Bun.build`.
+- **Forbidden:** `host`; `agent`, `persistence`, `log`, and every other feature module. Sessions, delegation services, trust,
   directories, warnings, and publishing are injected by the composition root, which keeps this module testable against a fixture directory.

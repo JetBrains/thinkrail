@@ -27,6 +27,9 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
   - `Tr`, `Off`, `Disposer`, `SessionRef`, `ActionCtx`, `ActionHandler`, `ExtStore`, `PiEventName`,
     `PiEventOf<E>`, `PiExtensionFactory` (pi's `ExtensionFactory`, type-only), `SessionStats`,
     `WorkspaceRef` (`{ workspaceId, projectId, name, branch, path }`, what `tr.workspaces` returns).
+  - `tr.agents` types (`src/agents.ts`): `TrAgents`, `AgentSpec`, `AgentSpawnOptions`, `AgentParent`,
+    `AgentHandle`, `AgentEvent`, `AgentProgress`, `AgentResult`, `AgentUsage`, `AgentStatus`,
+    `AgentRunStatus`. Authored here, not imported from `pi-delegation` (this package may not depend on it).
 - `./view` (`src/view.ts` + `src/viewUi.ts`, browser side): `SurfaceProps` (contracts'
   `ExtSurfaceProps`: `surfaceId`, `host`, optional `params` from `openSurface`, `toolCall` for a
   `toolCard` surface, `message` for a `message` surface), `HostContext`, `SessionStats` (the shape of a
@@ -66,6 +69,13 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
 - `sessions.stats` is pi's `getSessionStats()` as ThinkRail already projects it; never recomputed.
 - `workspaces` lists the workspaces of open projects, read-only. `path` is the checkout directory; it is
   how a host half maps a view's `ctx.workspaceId` to files on disk.
+- `agents` runs subagents as hidden delegation children of a live top-level session: `spawn` → handle
+  (`status`, `progress`, never-rejecting `result`, `cancel`, `onEvent`), `run`, `list` (unsettled),
+  `onEvent` (`queued` / `started` / `progress` / `settled`). `parent` is a session id or the calling
+  tool's `ctx` (its `sessionManager.getSessionId()`); there is no implicit parent. `maxConcurrent` is
+  1..16 (default 4) per extension and parent. Usage and cost are the delegation run's pi deltas, never
+  recomputed. Each child runs one task and is closed; a generation's disposal cancels every child it
+  spawned. The README's "Subagents" section lists what is not supported.
 - `startChat(draft)` (view) opens a new chat in the active workspace with `draft` in the composer; it
   never sends.
 

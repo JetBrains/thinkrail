@@ -1,6 +1,20 @@
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import type { ExtActionContext, PiEvent, SessionStats } from "@thinkrail/contracts";
+import type { TrAgents } from "./agents";
 
+export type {
+	AgentEvent,
+	AgentHandle,
+	AgentParent,
+	AgentProgress,
+	AgentResult,
+	AgentRunStatus,
+	AgentSpawnOptions,
+	AgentSpec,
+	AgentStatus,
+	AgentUsage,
+	TrAgents,
+} from "./agents";
 export type { SessionStats };
 
 export type Off = () => void;
@@ -53,6 +67,7 @@ export interface Tr {
 		list(): WorkspaceRef[];
 		get(workspaceId: string): WorkspaceRef | undefined;
 	};
+	readonly agents: TrAgents;
 	every(ms: number, fn: () => void): Off;
 }
 

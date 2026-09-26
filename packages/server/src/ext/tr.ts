@@ -1,5 +1,6 @@
 import { extChannelKey, type PiEvent, type SessionStats } from "@thinkrail/contracts";
 import type { ExtStore, PiEventName, PiEventOf, SessionRef, Tr } from "@thinkrail/ext";
+import { type AgentBackend, createAgents } from "./agents";
 import type { Generation } from "./generation";
 
 export type WorkspaceReads = Tr["workspaces"];
@@ -34,6 +35,7 @@ export const createTr = ({
 	store,
 	sessions,
 	workspaces,
+	agents,
 	watched,
 	log,
 }: {
@@ -43,6 +45,7 @@ export const createTr = ({
 	store: ExtStore;
 	sessions: SessionReads;
 	workspaces: WorkspaceReads;
+	agents: AgentBackend;
 	watched: () => string[];
 	log: (level: "info" | "error", message: string) => void;
 }): Tr => {
@@ -85,6 +88,12 @@ export const createTr = ({
 			list: () => workspaces.list(),
 			get: (workspaceId) => workspaces.get(workspaceId),
 		},
+		agents: createAgents({
+			name,
+			backend: agents,
+			generation,
+			log: (message) => log("error", message),
+		}),
 		every(ms, fn) {
 			if (!Number.isFinite(ms) || ms < 10)
 				throw new Error(`every(${ms}): interval must be >= 10ms`);

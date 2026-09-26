@@ -10,6 +10,7 @@ import {
 	type SessionEventPayload,
 } from "@thinkrail/contracts";
 import type { ActionCtx, ExtStore, PiExtensionFactory } from "@thinkrail/ext";
+import { type AgentBackend, NO_AGENTS } from "./agents";
 import { buildAssets, type ExtAssets } from "./build";
 import {
 	type Candidate,
@@ -39,6 +40,7 @@ export interface ExtHostOptions {
 	storeDir: string;
 	sessions: SessionReads;
 	workspaces?: WorkspaceReads;
+	agents?: AgentBackend;
 	onPiFactoriesChanged?: () => void;
 	onChanged?: (info: ExtensionInfo) => void;
 	onRemoved?: (removed: ExtRemovedPush) => void;
@@ -225,6 +227,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 			store: sink.store,
 			sessions: options.sessions,
 			workspaces: options.workspaces ?? NO_WORKSPACES,
+			agents: options.agents ?? NO_AGENTS,
 			watched: () => watchedOf(name),
 			log: sink.log,
 		});

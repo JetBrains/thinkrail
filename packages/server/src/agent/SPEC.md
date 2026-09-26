@@ -726,8 +726,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
   `buildAnswersMessage`/`awaitingQuestionToolCallId`); the activity layer
   (`deriveActivityStatus`/`ActivityInputs` + `listSessionActivity`/`syncSessionActivity`/
-  `setSessionActivityPublisher`/`setActivityProjectResolver`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
-  (the delegation embedding); the skill catalog helpers
+  `setSessionActivityPublisher`/`setActivityProjectResolver`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript` +
+  `delegationServiceFor` (the delegation embedding; the last backs `tr.agents` in the composition root); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
   `isProjectSkillPath(relativePath)` (watch-classification predicate);

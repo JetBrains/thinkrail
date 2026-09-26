@@ -95,6 +95,7 @@ export default defineExtension((tr) => {
   `{ workspaceId, projectId, name, branch, path }`. `path` is the checkout on disk, so an action can turn
   `ctx.workspaceId` into the directory the user is looking at.
 - `tr.every(ms, fn)`: interval timer.
+- `tr.agents`: run subagents as ThinkRail-managed child sessions. See "Subagents" below.
 - `tr.pi((pi) => { … })`: a pi extension factory added to every top-level chat session (`pi.registerTool`,
   `pi.on("tool_call", …)`, `pi.sendMessage({ customType, content, display: true, details })` …). Sessions
   pick up a change after their current run settles.
@@ -107,6 +108,74 @@ disposer. Keep state in closures or `tr.store`. Do not write files into the exte
 there triggers a reload. Split code into more files freely: `index.ts` and views can import relative
 modules (`./model`), and a pure module can be shared by both halves. Imports available without install: `@thinkrail/ext`, `typebox`,
 `@earendil-works/pi-coding-agent`, Node/Bun built-ins.
+
+## Subagents (`tr.agents`)
+
+`tr.agents` runs a task in a hidden child session of a live chat. The child is a delegation child, the
+same kind the built-in `Agent` tool makes: it runs in-process, shares the parent's working directory,
+and its transcript is stored under the parent. Usage and cost come from pi.
+
+```ts
+import { defineExtension } from "@thinkrail/ext";
+import { Type } from "typebox";
+
+export default defineExtension((tr) => {
+	tr.agents.onEvent((event) => {
+		if (event.type === "progress") tr.publish(`agent:${event.agentId}`, event.progress);
+		if (event.type === "settled") tr.publish(`agent:${event.agentId}`, event.result);
+	});
+	tr.pi((pi) => {
+		pi.registerTool({
+			name: "review_files",
+			label: "Review files",
+			description: "Review each file with its own subagent",
+			parameters: Type.Object({ files: Type.Array(Type.String()) }),
+			async execute(_id, { files }, signal, _onUpdate, ctx) {
+				const results = await Promise.all(
+					files.map((file) =>
+						tr.agents.run(
+							{ task: `Review ${file}. Reply with findings only.`, role: "reviewer", tools: ["read", "grep"] },
+							{ parent: ctx, signal, maxConcurrent: 8 },
+						),
+					),
+				);
+				const text = results.map((r, i) => `${files[i]}: ${r.finalText ?? r.errorMessage ?? r.status}`);
+				return { content: [{ type: "text", text: text.join("\n\n") }], details: {} };
+			},
+		});
+	});
+	return undefined;
+});
+```
+
+- `tr.agents.spawn(spec, options)` resolves to a handle once the child exists: `id` (the child session
+  id), `parentSessionId`, `status` (`queued`, `running`, `completed`, `error`, `aborted`), `progress`,
+  `result` (a promise that never rejects; failures resolve with `status: "error"`), `cancel()` (aborts and
+  resolves to the result), `onEvent(fn)` (events after the call; `queued` has already fired).
+- `tr.agents.run(spec, options)`: `spawn` and await `result`.
+- `tr.agents.list()`: this extension's children that have not settled yet.
+- `tr.agents.onEvent(fn)`: `queued`, `started`, `progress` (`{ status, model, usage, durationMs, activity }`,
+  on each turn and tool start), `settled` (`{ status, finalText, errorMessage, model, usage, durationMs }`).
+  Every event carries `agentId`, `parentSessionId`, `role`. `tr.on` never sees child sessions; this is
+  how you observe your own.
+- `spec`: `task` (required), `role` (a label kept in lineage), `systemPrompt`, `tools` / `excludeTools`
+  (pi tool names; default: pi's default set), `model` (`{ provider, id }`, must be a model the parent's
+  runtime knows), `thinkingLevel`, `contextFiles` (load AGENTS.md files), `skills` (skill names to
+  keep; default none), `extensions` (load the host's curated child extensions), `maxTurns` (asks the
+  child to wrap up at the cap, then aborts).
+- `options.parent`: the tool's `ctx`, or a live top-level session id (for an action, use
+  `ctx.sessionId`). A parent that is not live rejects with `parent session <id> is not live`.
+- `options.maxConcurrent`: 1 to 16, default 4. Runs queue first in, first out in one pool per extension
+  and parent chat; the latest `spawn` sets the pool's size. The built-in `Agent` tool has its own pool.
+- `usage` is for this run only (tokens, `cost` in USD, `turns`, `contextTokens`), taken from pi. Do not
+  compute cost yourself.
+- A child runs once and is then closed. When the parent session is disposed (chat deleted, host
+  shutdown), its children are aborted. When your extension unloads or reloads, every child it started
+  is cancelled. `spawn` works only while the extension is live, so not inside the factory body.
+
+Not supported: children listed as chats in the sidebar, follow-up prompts or steering a child, a git
+worktree per child, forking the parent's history, the child seeing `tr.pi` tools, text deltas as
+events (read the settled `finalText`), and children of children.
 
 ## Dependencies
 

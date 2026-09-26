@@ -11,6 +11,7 @@ import {
 	type WsChannel,
 } from "@thinkrail/contracts";
 import {
+	delegationServiceFor,
 	getSessionStats,
 	listLiveSessionRefs,
 	reloadSessionsForHostExtensions,
@@ -157,6 +158,12 @@ export const installExtHost = ({ publish }: { publish?: ExtPublish } = {}) => {
 		workspaces: {
 			list: openWorkspaceRefs,
 			get: (workspaceId) => openWorkspaceRefs().find((ref) => ref.workspaceId === workspaceId),
+		},
+		agents: {
+			serviceFor: (parentSessionId) => {
+				const parent = listLiveSessionRefs().find((ref) => ref.sessionId === parentSessionId);
+				return parent ? delegationServiceFor(parent.workspaceId) : undefined;
+			},
 		},
 		onPiFactoriesChanged: () => void reloadSessionsForHostExtensions(),
 		onChanged: (info) => publish?.(WS_CHANNELS.extChanged, info),

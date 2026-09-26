@@ -1,7 +1,12 @@
 export { type ActivityInputs, deriveActivityStatus } from "./activity";
 export * from "./agentSessionManager";
 export * from "./askUserQuestion";
-export { type ReviewSubagentRun, readChildTranscript, runReviewSubagent } from "./delegation";
+export {
+	delegationServiceFor,
+	type ReviewSubagentRun,
+	readChildTranscript,
+	runReviewSubagent,
+} from "./delegation";
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
