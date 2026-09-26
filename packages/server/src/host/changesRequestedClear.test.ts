@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TodoStore } from "pi-todos/core";
 import { gitCommitPaths } from "../git";
-import { addComment, deleteComment, getReviewSnapshot, updateComment } from "../reviews";
+import {
+	addComment,
+	deleteComment,
+	getReviewSnapshot,
+	markCommentsSent,
+	resolveCommentFromAgent,
+	updateComment,
+} from "../reviews";
 import { recordAgentChangesRequested, todoReviewRecord } from "../todos";
 import { clearChangesRequestedIfResolved } from "./todoReview";
 
@@ -132,6 +139,35 @@ test("resolving (not just deleting) the last finding clears the verdict", async 
 	await updateComment({ workspaceId: WS, id: comment.id, status: "resolved" });
 	await clearChangesRequestedIfResolved({ workspaceId: WS, sessionId: SESSION, id });
 	expect(todoReviewRecord({ workspaceId: WS, sessionId: SESSION, id })).toBeUndefined();
+});
+
+test("the agent's own resolve_comment does NOT clear the verdict (accepted survivor, re-review re-derives)", async () => {
+	const store = new TodoStore(repo, SESSION);
+	const { id, sha } = flaggedItem(store, "step", "f.ts");
+	const comment = await addComment({
+		workspaceId: WS,
+		kind: "inline",
+		author: "agent",
+		anchor: {
+			path: "f.ts",
+			side: "worktree",
+			selectors: [{ kind: "lineRange", startLine: 1, endLine: 1 }],
+		},
+		body: "fix this",
+		origin: { todoId: id, reviewedSha: sha, sessionId: SESSION },
+	});
+	await markCommentsSent(WS, [comment.id], SESSION);
+
+	// The worker resolves its last sent finding mid-fix-cycle. Unlike the human delete/resolve paths this
+	// deliberately leaves the changes_requested record in place: the following re-review re-derives the
+	// verdict, and the record is inert meanwhile (host/SPEC.md). Locks that intentional asymmetry.
+	resolveCommentFromAgent(SESSION, comment.id);
+
+	const resolved = (await getReviewSnapshot(WS)).comments.find((c) => c.id === comment.id);
+	expect(resolved?.status).toBe("resolved");
+	expect(todoReviewRecord({ workspaceId: WS, sessionId: SESSION, id })?.state).toBe(
+		"changes_requested",
+	);
 });
 
 test("an unrelated id leaves a flagged item untouched", async () => {

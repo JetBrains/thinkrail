@@ -22,6 +22,17 @@ export function shouldRefreshTodos(event: PiEvent): boolean {
 	return event.type === "tool_execution_end" || event.type === "agent_settled";
 }
 
+// The content eligibility for an auto-drafted plan summary: every step done and no summary yet (agent- or
+// previously auto-authored). The host-capability gate (`supportsPlanSummaryGeneration`) is applied
+// separately, so the request fires only when this holds AND the connected host advertises v69+.
+export function planIsCompleteWithoutSummary(
+	plan: Pick<TodoPlan, "todos" | "groups" | "summary">,
+): boolean {
+	if (plan.summary) return false;
+	const items = [...plan.todos, ...plan.groups.flatMap((group) => group.todos)];
+	return items.length > 0 && items.every((todo) => todo.status === "done");
+}
+
 export interface ChatTodos {
 	data: TodoPlan | null;
 	failed: boolean;
@@ -135,9 +146,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	const summaryTriedRef = useRef(false);
 	useEffect(() => {
 		if (!data) return;
-		const items = [...data.todos, ...data.groups.flatMap((group) => group.todos)];
-		const allDone = items.length > 0 && items.every((todo) => todo.status === "done");
-		if (!allDone || data.summary) {
+		if (!planIsCompleteWithoutSummary(data)) {
 			summaryTriedRef.current = false;
 			return;
 		}
