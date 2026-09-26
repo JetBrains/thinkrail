@@ -5,7 +5,10 @@ import { countItems, TODO_STATUSES, type TodoPlan, type WritePlan } from "../cor
 import { consistencyNudge, formatPlan, storeFor, textResult, withNudges } from "./shared.ts";
 
 const item = Type.Object({
-	title: Type.String({ description: "The item's one-line title." }),
+	title: Type.String({
+		description:
+			'The step\'s one-line title: imperative and about the change/outcome, short and scannable — not the process ("make a plan", "read the files") and not agent bookkeeping (that goes in note).',
+	}),
 	status: Type.Optional(
 		StringEnum(TODO_STATUSES, { description: "Initial status (defaults to pending)." }),
 	),

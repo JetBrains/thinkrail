@@ -181,8 +181,9 @@ export interface TodoPlan {
 	groups: TodoGroupItem[];
 	/**
 	 * The agent's overall completion summary (`todo_plan_summary`), written when the whole plan is done.
-	 * Clients show it only while every item stays `done` — a re-opened plan hides it until the agent
-	 * rewrites it at the next completion.
+	 * The plan page keeps it visible while an item re-opens, marked stale ("updating") until the agent
+	 * rewrites it at the next completion; ungated external outputs (markdown export, PR body) still show it
+	 * only while every item stays `done`, so a stale all-done story never leaves the app.
 	 */
 	summary?: string;
 	/**

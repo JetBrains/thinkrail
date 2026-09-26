@@ -9,9 +9,11 @@ import {
 	itemChangeSet,
 	itemOpenFindings,
 	itemRevisions,
+	planChangeTotals,
 	planCompletionSummary,
 	planGlance,
 	planSections,
+	planStaleSummary,
 	planSummary,
 	reviewableItems,
 	reviewChangesRequested,
@@ -326,6 +328,22 @@ test("itemOpenFindings: counts open agent comments anchored in the item's change
 	expect(reviewChangesRequested(item("plain", "done"))).toBe(false);
 });
 
+test("planChangeTotals counts distinct files across the whole plan, deduped by path", () => {
+	const withCommit = (title: string, sha: string, paths: string[]): TodoItem => ({
+		...item(title, "done"),
+		artifacts: [
+			{ kind: "commit", sha, files: paths.map((path) => ({ path, status: "modified" })) },
+		],
+	});
+	const plan = {
+		groups: [group("g", [withCommit("a", "sha1", ["src/x.ts", "src/y.ts"])], "done")],
+		todos: [withCommit("b", "sha2", ["src/y.ts", "src/z.ts"])],
+	};
+	// x, y, z — y is shared across two steps and counts once.
+	expect(planChangeTotals(plan).files).toBe(3);
+	expect(planChangeTotals({ groups: [], todos: [] }).files).toBe(0);
+});
+
 test("planCompletionSummary shows only while every item is done", () => {
 	const done = { todos: [item("a", "done")], groups: [], summary: "All landed." };
 	expect(planCompletionSummary(done)).toBe("All landed.");
@@ -333,6 +351,17 @@ test("planCompletionSummary shows only while every item is done", () => {
 	expect(planCompletionSummary({ ...done, todos: [item("a", "done"), item("b")] })).toBeUndefined();
 	expect(planCompletionSummary({ todos: [], groups: [], summary: "x" })).toBeUndefined();
 	expect(planCompletionSummary({ todos: [item("a", "done")], groups: [] })).toBeUndefined();
+});
+
+test("planStaleSummary keeps the stored note visible only once a completed plan re-opens", () => {
+	const done = { todos: [item("a", "done")], groups: [], summary: "All landed." };
+	// All-done is the fresh case (planCompletionSummary owns it), so no stale note.
+	expect(planStaleSummary(done)).toBeUndefined();
+	// A re-opened plan surfaces the stored note as stale.
+	expect(planStaleSummary({ ...done, todos: [item("a", "done"), item("b")] })).toBe("All landed.");
+	// No stored summary, or an empty plan, never shows one.
+	expect(planStaleSummary({ todos: [item("a")], groups: [] })).toBeUndefined();
+	expect(planStaleSummary({ todos: [], groups: [], summary: "x" })).toBeUndefined();
 });
 
 test("verificationStatus: an honest 'not verified' reads unverified; a named check reads claimed", () => {

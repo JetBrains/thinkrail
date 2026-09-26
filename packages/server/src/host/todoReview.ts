@@ -1,7 +1,12 @@
 import type { ReviewComment, ReviewSnapshot } from "@thinkrail/contracts";
 import { getProjects } from "../projects";
 import { getReviewSnapshot } from "../reviews";
-import { clearAllPendingReviews, reviewedShaSuperseded } from "../todos";
+import {
+	clearAllPendingReviews,
+	dropTodoReview,
+	reviewedShaSuperseded,
+	todoReviewRecord,
+} from "../todos";
 import { listWorkspaceRecords } from "../workspaces";
 import { itemReviewActive } from "./planReviewQueue";
 
@@ -70,6 +75,18 @@ export async function itemFixFindings(p: ItemRef): Promise<ReviewComment[]> {
  * resolving is still unresolved, and only `resolve_comment`/dismiss closes one. See host/SPEC.md. */
 export async function itemOpenFindings(p: ItemRef): Promise<ReviewComment[]> {
 	return (await itemFindings(p)).filter((c) => c.status === "draft" || c.status === "sent");
+}
+
+/**
+ * A `changes_requested` verdict must not outlive its findings. Call AFTER a finding on the item was
+ * removed (deleted/resolved): if the item is still `changes_requested` and now has NO open findings,
+ * drop its review record so it reads `unreviewed` again. Only ever reached via a finding removal, so a
+ * findings-less whole-change verdict (which never had a comment to remove) is never touched.
+ */
+export async function clearChangesRequestedIfResolved(p: ItemRef): Promise<void> {
+	if (todoReviewRecord(p)?.state !== "changes_requested") return;
+	if ((await itemOpenFindings(p)).length > 0) return;
+	dropTodoReview(p);
 }
 
 /** Boot-time host-restart reconciliation — see host/SPEC.md ("reconcilePendingReviewsOnBoot"). */

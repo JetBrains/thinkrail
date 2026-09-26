@@ -37,6 +37,38 @@ test("add persists to the session file and assigns id + timestamps + pending sta
 	}
 });
 
+test("titles are flattened to one line on add, update, and group", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const todo = s.add({ title: "Wire\nthe   route", group: "Big\nTask", origin: "user" });
+		expect(todo.title).toBe("Wire the route");
+		expect(s.read().groups[0]?.title).toBe("Big Task");
+		const updated = s.update(todo.id, { title: "New\ttitle\nhere" });
+		expect(updated?.todo.title).toBe("New title here");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("replaceAll reconciles a multi-line write against the flattened stored title", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		s.add({ title: "Ship it", group: "Task" });
+		const before = s.read().groups[0]?.todos[0];
+		s.update(before?.id ?? "", { status: "done" });
+		// A re-written plan whose title only differs by whitespace must MATCH (identity preserved, status kept).
+		const plan = s.replaceAll({ groups: [{ title: "Task", todos: [{ title: "Ship\nit" }] }] });
+		const after = plan.groups[0]?.todos[0];
+		expect(after?.id).toBe(before?.id);
+		expect(after?.status).toBe("done");
+		expect(after?.title).toBe("Ship it");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 test("lists are isolated per session", () => {
 	const root = tempRoot();
 	try {
@@ -648,7 +680,7 @@ test("item summary/verification/commitSubject: set with done, cleared by empty s
 	}
 });
 
-test("reopening a done item clears its stale completion fields and the plan summary", () => {
+test("reopening a done item clears its stale completion fields but keeps the plan summary", () => {
 	const root = tempRoot();
 	try {
 		const s = store(root);
@@ -666,7 +698,9 @@ test("reopening a done item clears its stale completion fields and the plan summ
 		expect(s.get(todo.id)?.summary).toBeUndefined();
 		expect(s.get(todo.id)?.verification).toBeUndefined();
 		expect(s.get(todo.id)?.commitSubject).toBeUndefined();
-		expect(s.read().summary).toBeUndefined();
+		// The plan-level summary survives the re-open (stale) so the UI can show "Updating…" and the next
+		// completion can extend it; only display/export gate it out.
+		expect(s.read().summary).toBe("All tasks landed; e2e suite green.");
 
 		s.update(todo.id, {
 			status: "done",

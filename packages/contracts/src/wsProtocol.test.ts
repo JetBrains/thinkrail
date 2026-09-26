@@ -9,6 +9,7 @@ import {
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	normalizeSessionTitle,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
+	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
@@ -91,6 +92,12 @@ test("the plan-review subagent reshapes the review wire and advances the protoco
 test("the agent-review setting advances the protocol to v68", () => {
 	expect(AGENT_REVIEW_SETTING_PROTOCOL_VERSION).toBe(68);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(AGENT_REVIEW_SETTING_PROTOCOL_VERSION);
+});
+
+test("auto plan-summary generation advances the protocol to v69", () => {
+	expect(PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION).toBe(69);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION);
+	expect(WS_METHODS.todoGenerateSummary).toBe("todo.generateSummary");
 });
 
 describe("isTodoReviewFixMessage", () => {

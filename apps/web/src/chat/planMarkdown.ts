@@ -4,7 +4,10 @@ import {
 	flatItems,
 	groupProgress,
 	itemChangeSet,
+	planChangeTotals,
 	planCompletionSummary,
+	reviewableItems,
+	reviewSettled,
 	statusLetter,
 } from "./planView";
 
@@ -19,12 +22,22 @@ function plusMinus(added: number, removed: number): string {
 	return parts.join(" ");
 }
 
+// Collapse a possibly-multiline (Markdown bullet) field into one export line so the nested list stays
+// valid: strip leading bullet markers, drop blank lines, join with " · ".
+function flattenInline(text: string): string {
+	return text
+		.split("\n")
+		.map((line) => line.replace(/^\s*[-*]\s+/, "").trim())
+		.filter(Boolean)
+		.join(" · ");
+}
+
 function itemLines(item: TodoItem): string[] {
 	const head = `- ${checkbox(item)} ${item.title}`;
 	const summary = [
-		...(item.status === "done" && item.summary ? [`    - _${item.summary}_`] : []),
+		...(item.status === "done" && item.summary ? [`    - _${flattenInline(item.summary)}_`] : []),
 		...(item.status === "done" && item.verification
-			? [`    - Verified: ${item.verification}`]
+			? [`    - Verified: ${flattenInline(item.verification)}`]
 			: []),
 	];
 	const set = itemChangeSet(item);
@@ -50,8 +63,19 @@ export function planToMarkdown(plan: TodoPlan, title: string): string {
 	const all = flatItems(plan);
 	const done = all.filter((t) => t.status === "done").length;
 	const lines: string[] = [`# TODO — ${title}`, "", `Progress: ${done}/${all.length}`];
-	const overall = planCompletionSummary(plan);
-	if (overall) lines.push("", overall);
+	if (all.length > 0 && done === all.length) {
+		const reviewables = reviewableItems(plan);
+		const reviewed = reviewables.filter(reviewSettled).length;
+		const files = planChangeTotals(plan).files;
+		const overall = planCompletionSummary(plan);
+		// Only worth a section when it adds something over the Progress line above.
+		if (overall || files > 0 || reviewables.length > 0) {
+			const facts = [`${done} ${done === 1 ? "step" : "steps"} done`];
+			if (files > 0) facts.push(`${files} ${files === 1 ? "file" : "files"}`);
+			if (reviewables.length > 0) facts.push(`${reviewed}/${reviewables.length} reviewed`);
+			lines.push("", "## Summary", "", facts.join(" · "), ...(overall ? ["", overall] : []));
+		}
+	}
 
 	for (const group of plan.groups) {
 		const progress = groupProgress(group);

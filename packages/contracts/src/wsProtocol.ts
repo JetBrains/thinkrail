@@ -97,9 +97,10 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 68;
+export const PROTOCOL_VERSION = 69;
 export const PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION = 67;
 export const AGENT_REVIEW_SETTING_PROTOCOL_VERSION = 68;
+export const PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION = 69;
 export const ANALYTICS_CONSENT_PROTOCOL_VERSION = 65;
 export const SESSION_RENAME_PROTOCOL_VERSION = 66;
 export const SESSION_TITLE_MAX_LENGTH = 80;
@@ -201,6 +202,7 @@ export const WS_METHODS = {
 	todoRequestFix: "todo.requestFix",
 	todoStartReview: "todo.startReview",
 	todoReviewAll: "todo.reviewAll",
+	todoGenerateSummary: "todo.generateSummary",
 	gitStatus: "git.status",
 	gitDiffFile: "git.diffFile",
 	gitListCommits: "git.listCommits",
@@ -485,6 +487,10 @@ export interface WsMethodMap {
 	"todo.reviewAll": {
 		params: { workspaceId: string; sessionId: string };
 		result: { ok: true; total: number; alreadyRunning?: true };
+	};
+	"todo.generateSummary": {
+		params: { workspaceId: string; sessionId: string };
+		result: { summary: string | null };
 	};
 	"git.status": { params: { workspaceId: string; scope?: GitDiffScope }; result: GitStatus };
 	"git.diffFile": {

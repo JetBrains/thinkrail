@@ -12,11 +12,14 @@ import {
 	RiGitPullRequestLine as GitPullRequestArrow,
 	RiListCheck3 as ListChecks,
 	RiLoader4Line as Loader2,
+	RiQuestionnaireLine as MessageCircleQuestion,
 	RiChat1Line as MessageSquare,
 	RiMore2Line as MoreVertical,
+	RiAddLine as Plus,
+	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -24,6 +27,9 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AskStatesContext, deriveAskStates } from "../chat/askState";
+import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
+import { Markdown } from "../chat/Markdown";
 import { VerificationBadge, VerificationGlyph } from "../chat/planKit";
 import { planToMarkdown } from "../chat/planMarkdown";
 import {
@@ -36,14 +42,20 @@ import {
 	itemChangeSet,
 	itemOpenFindings,
 	itemRevisions,
+	lastAgentText,
+	type PlanGlance,
+	pendingAsk,
 	planCompletionSummary,
 	planSections,
+	planStaleSummary,
 	planSummary,
 	reviewableItems,
 	reviewChangesRequested,
 	reviewSettled,
+	sessionGlance,
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
+import { AskUserQuestionCard } from "../chat/tools/AskUserQuestionCard";
 import { useChatTodos } from "../chat/useChatTodos";
 import { LoadingRegion } from "../components/Skeleton";
 import { IconTooltip } from "../components/ui/tooltip";
@@ -55,6 +67,7 @@ import {
 } from "../store";
 import { errorText, getTransport, supportsPlanReview, wsErrorCode } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
+import { openChatInTab } from "./openChat";
 import { openDiffInTab } from "./openTabs";
 import { PlanCommitsMenu } from "./PlanCommitsMenu";
 import { PrComposeDialog, type PrComposeState } from "./PrComposeDialog";
@@ -149,10 +162,12 @@ function ChangeSetBlock({
 	);
 }
 
-const NEXT_ACTION_CLASS =
-	"mb-16 flex items-center gap-8 rounded-[var(--radius-md)] bg-container-elevated-bg px-12 py-8";
+// One card shape for every top-of-plan block (next-action banner, Summary, Now executing).
+const PLAN_CARD_CLASS =
+	"mb-16 rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-12";
+const NEXT_ACTION_CLASS = `${PLAN_CARD_CLASS} flex items-center gap-8`;
 const NEXT_ACTION_BUTTON_CLASS =
-	"shrink-0 rounded-[var(--radius-sm)] bg-primary px-8 py-4 tr-text-ui text-text-on-primary hover:opacity-90 disabled:opacity-50";
+	"flex h-28 shrink-0 items-center rounded-[var(--radius-sm)] bg-control-primary-bg px-8 tr-text-ui text-control-primary-text transition-colors hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text";
 
 type StageState = "done" | "active" | "pending";
 
@@ -229,6 +244,7 @@ function ItemBlock({
 	onOpenCommit,
 	onStartReview,
 	onOpenReview,
+	onRemove,
 	reviewComments,
 	startDisabled,
 	focusRequest,
@@ -239,6 +255,7 @@ function ItemBlock({
 	onOpenCommit: (sha: string) => void;
 	onStartReview: (id: string) => Promise<void>;
 	onOpenReview: () => void;
+	onRemove?: ((id: string) => void) | undefined;
 	reviewComments: ReviewComment[] | undefined;
 	startDisabled: boolean;
 	focusRequest: { id: string; tick: number } | null;
@@ -247,6 +264,9 @@ function ItemBlock({
 	const reviewing = item.review?.reviewing === true;
 	const changesRequested = reviewChangesRequested(item) && !reviewing;
 	const needsReview = item.review !== undefined && !reviewed;
+	// A done step needs no status glyph — its section (or strikethrough) already says "done"; only a
+	// warning (changes requested) or an active review keeps a leading glyph.
+	const hideStatusGlyph = item.status === "done" && !reviewing && !changesRequested;
 	const findings = changesRequested ? itemOpenFindings(item, reviewComments, sessionId) : 0;
 	const set = itemChangeSet(item);
 	const counts = set ? changeSetCounts(set) : null;
@@ -255,7 +275,7 @@ function ItemBlock({
 	const hasDetails = Boolean(
 		item.note || item.summary || item.verification || feedback || set !== null,
 	);
-	const collapsible = item.status === "done" && hasDetails;
+	const collapsible = hasDetails;
 	const [expanded, setExpanded] = useState(false);
 	const consumedFocusTick = useRef(0);
 	useEffect(() => {
@@ -276,26 +296,28 @@ function ItemBlock({
 			data-expanded={collapsible ? expanded : undefined}
 			className="group py-2"
 		>
-			<div className="flex items-start gap-8 rounded-[var(--radius-sm)] transition-colors group-hover:bg-control-bg-hovered">
+			<div className="flex items-start gap-8 rounded-[var(--radius-sm)] p-4 transition-colors group-hover:bg-control-bg-hovered">
 				<span
-					className="flex min-h-8 shrink-0 items-center"
+					className="flex min-h-24 shrink-0 items-center"
 					title={
 						reviewing
 							? "Reviewing — the reviewer agent is reading this step"
 							: changesRequested
 								? "Changes requested"
-								: reviewed
-									? "Verified"
-									: undefined
+								: undefined
 					}
 				>
-					<StatusIcon
-						status={item.status}
-						glance="working"
-						reviewed={reviewed}
-						reviewing={reviewing}
-						changesRequested={changesRequested}
-					/>
+					{hideStatusGlyph ? (
+						<span className="size-12 shrink-0" aria-hidden="true" />
+					) : (
+						<StatusIcon
+							status={item.status}
+							glance="working"
+							reviewed={reviewed}
+							reviewing={reviewing}
+							changesRequested={changesRequested}
+						/>
+					)}
 				</span>
 				<div className="flex min-w-0 flex-1 flex-col gap-2">
 					<div className="flex min-h-8 items-center gap-8">
@@ -306,17 +328,17 @@ function ItemBlock({
 								aria-expanded={expanded}
 								onClick={() => setExpanded((v) => !v)}
 								title={expanded ? "Hide this step's details" : "Show this step's details"}
-								className="flex min-w-0 flex-1 items-center gap-8 rounded-[var(--radius-sm)] px-4 py-2 text-left"
+								className="flex min-w-0 flex-1 items-center gap-8 rounded-[var(--radius-sm)] text-left"
 							>
 								<ChevronRight className="size-14 shrink-0 text-text-muted transition-transform group-data-[expanded=true]:rotate-90" />
-								<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
+								<span className="min-w-0 flex-1 break-words tr-title-section text-text-default">
 									{item.title}
 								</span>
 							</button>
 						) : (
-							<span className="flex min-w-0 flex-1 items-center gap-8 px-4">
+							<span className="flex min-w-0 flex-1 items-center gap-8">
 								<span className="size-14 shrink-0" />
-								<span className="min-w-0 flex-1 truncate tr-title-section text-text-default">
+								<span className="min-w-0 flex-1 break-words tr-title-section text-text-default">
 									{item.title}
 								</span>
 							</span>
@@ -356,10 +378,39 @@ function ItemBlock({
 							>
 								Start review
 							</button>
+						) : reviewed ? (
+							<span
+								data-testid="plan-item-verified"
+								title="This step's changes were reviewed and approved"
+								className="flex min-h-8 shrink-0 items-center gap-2 tr-text-metadata text-feedback-success"
+							>
+								<CircleCheck className="size-14" />
+								Verified
+							</span>
+						) : null}
+						{onRemove ? (
+							<IconTooltip
+								label={
+									reviewing
+										? "Reviewing… — wait for the review to finish before removing"
+										: "Remove"
+								}
+							>
+								<button
+									type="button"
+									data-testid="plan-item-remove"
+									onClick={() => onRemove(item.id)}
+									disabled={reviewing}
+									aria-label="Remove"
+									className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error focus-visible:opacity-100 group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+								>
+									<Trash2 className="size-14" />
+								</button>
+							</IconTooltip>
 						) : null}
 					</div>
 					{collapsible && (item.verification || set) ? (
-						<span className="flex items-center gap-8 px-4 tr-text-metadata text-text-subtle group-data-[expanded=true]:hidden">
+						<span className="flex items-center gap-8 tr-text-metadata text-text-subtle group-data-[expanded=true]:hidden">
 							<span className="size-14 shrink-0" />
 							{item.verification ? <VerificationGlyph verification={item.verification} /> : null}
 							{set ? (
@@ -379,7 +430,7 @@ function ItemBlock({
 			</div>
 			{hasDetails ? (
 				<div
-					className={`mt-2 ml-8 flex-col gap-2 border-border-default border-l pl-12 ${detailsClass}`}
+					className={`mt-2 ml-24 flex-col gap-2 border-border-default border-l pl-12 ${detailsClass}`}
 				>
 					{feedback ? (
 						<div
@@ -391,8 +442,8 @@ function ItemBlock({
 					) : null}
 					{item.note ? <div className="tr-text-metadata text-text-subtle">{item.note}</div> : null}
 					{item.status === "done" && item.summary ? (
-						<div data-testid="plan-item-summary" className="tr-text-metadata text-text-muted">
-							{item.summary}
+						<div data-testid="plan-item-summary">
+							<Markdown text={item.summary} className={`tr-text-metadata ${SUMMARY_PROSE}`} />
 						</div>
 					) : null}
 					{item.status === "done" && item.verification ? (
@@ -406,28 +457,59 @@ function ItemBlock({
 	);
 }
 
-function OverallSummary({ text }: { text: string }) {
+const SUMMARY_PROSE = [
+	"max-w-none break-words text-text-muted",
+	"[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+	"[&_p]:my-4 [&_strong]:text-text-default",
+	"[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2",
+	"[&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-16 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-16 [&_li]:my-2",
+].join(" ");
+
+function PlanSummary({ summary, stale = false }: { summary: string; stale?: boolean }) {
 	const [open, setOpen] = useState(false);
-	const clampable = text.length > 240;
+	const clampable = summary.length > 160;
+	const header = (
+		<>
+			<span className="tr-text-eyebrow text-text-subtle">Summary</span>
+			{stale ? (
+				<span
+					data-testid="plan-summary-stale"
+					title="Showing the last completed recap until the plan finishes again"
+					className="flex items-center gap-4 tr-text-metadata text-text-muted"
+				>
+					<Loader2 className="size-14 shrink-0 animate-spin text-text-muted" />
+					Updating…
+				</span>
+			) : null}
+		</>
+	);
 	return (
-		<div className="mb-16 rounded-[var(--radius-md)] bg-container-elevated-bg p-12">
-			<div className="mb-2 tr-text-eyebrow text-text-subtle">Summary</div>
-			<p
-				data-testid="plan-overall-summary"
-				className={`tr-text-ui text-text-muted ${clampable && !open ? "line-clamp-3" : ""}`}
-			>
-				{text}
-			</p>
+		<div className={`${PLAN_CARD_CLASS} flex flex-col gap-8`}>
 			{clampable ? (
 				<button
 					type="button"
 					data-testid="plan-overall-summary-toggle"
+					aria-expanded={open}
+					title={open ? "Collapse the summary" : "Expand the summary"}
 					onClick={() => setOpen((v) => !v)}
-					className="mt-4 tr-text-metadata text-text-subtle underline-offset-2 hover:text-text-default hover:underline"
+					className="flex w-full flex-wrap items-center gap-x-8 gap-y-2 text-left"
 				>
-					{open ? "Show less" : "Show more"}
+					{header}
+					<ChevronRight
+						className={`ml-auto size-16 shrink-0 text-text-muted transition-transform ${
+							open ? "rotate-90" : ""
+						}`}
+					/>
 				</button>
-			) : null}
+			) : (
+				<div className="flex flex-wrap items-center gap-x-8 gap-y-2">{header}</div>
+			)}
+			<div data-testid="plan-overall-summary">
+				<Markdown
+					text={summary}
+					className={`tr-text-ui ${SUMMARY_PROSE} ${clampable && !open ? "line-clamp-2" : ""}`}
+				/>
+			</div>
 		</div>
 	);
 }
@@ -439,6 +521,7 @@ function GroupSection({
 	onOpenCommit,
 	onStartReview,
 	onOpenReview,
+	onRemove,
 	reviewComments,
 	startDisabled,
 	focusRequest,
@@ -449,6 +532,7 @@ function GroupSection({
 	onOpenCommit: (sha: string) => void;
 	onStartReview: (id: string) => Promise<void>;
 	onOpenReview: () => void;
+	onRemove?: ((id: string) => void) | undefined;
 	reviewComments: ReviewComment[] | undefined;
 	startDisabled: boolean;
 	focusRequest: { id: string; tick: number } | null;
@@ -456,8 +540,8 @@ function GroupSection({
 	const { done, total } = groupProgress(group);
 	return (
 		<section className="mb-16" data-testid="plan-group">
-			<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
-				<span className="min-w-0 flex-1 truncate">{group.title}</span>
+			<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-dialog text-text-default">
+				<span className="min-w-0 flex-1 break-words">{group.title}</span>
 				<span className="shrink-0 tr-text-eyebrow text-text-subtle">
 					{done}/{total}
 				</span>
@@ -472,6 +556,7 @@ function GroupSection({
 						onOpenCommit={onOpenCommit}
 						onStartReview={onStartReview}
 						onOpenReview={onOpenReview}
+						onRemove={onRemove}
 						reviewComments={reviewComments}
 						startDisabled={startDisabled}
 						focusRequest={focusRequest}
@@ -492,6 +577,280 @@ function downloadMarkdown(markdown: string, title: string): void {
 	URL.revokeObjectURL(url);
 }
 
+// One inline textarea composer for the plan: Enter submits, Shift+Enter newlines, Esc closes (when
+// closable). Used both for adding TODOs and for the chat/steer field in the Session block.
+function PlanComposer({
+	icon: Icon,
+	placeholder,
+	testId,
+	autoFocus = false,
+	onSubmit,
+	onClose,
+}: {
+	icon: typeof Plus;
+	placeholder: string;
+	testId: string;
+	autoFocus?: boolean;
+	onSubmit: (text: string) => Promise<void> | void;
+	onClose?: (() => void) | undefined;
+}) {
+	const [draft, setDraft] = useState("");
+	const inputRef = useRef<HTMLTextAreaElement>(null);
+	useEffect(() => {
+		if (autoFocus) inputRef.current?.focus();
+	}, [autoFocus]);
+	const submit = async () => {
+		const text = draft.trim();
+		if (!text) return;
+		try {
+			await onSubmit(text);
+			setDraft("");
+		} catch {}
+	};
+	return (
+		<div className="mt-8 flex items-start gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 py-8 transition-colors focus-within:border-control-border-active">
+			<Icon className="mt-2 size-14 shrink-0 text-text-muted" />
+			<textarea
+				ref={inputRef}
+				data-testid={testId}
+				rows={1}
+				value={draft}
+				onChange={(e) => setDraft(e.target.value)}
+				onKeyDown={(e) => {
+					if (e.key === "Enter" && !e.shiftKey) {
+						e.preventDefault();
+						void submit();
+					} else if (e.key === "Escape" && onClose) {
+						onClose();
+					}
+				}}
+				placeholder={placeholder}
+				className="field-sizing-content max-h-[10rem] min-w-0 flex-1 resize-none overflow-x-hidden overflow-y-auto bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+			/>
+		</div>
+	);
+}
+
+function PlanCardSection({
+	testId,
+	label,
+	Icon,
+	iconClass,
+	children,
+}: {
+	testId: string;
+	label: string;
+	Icon: typeof CircleDot;
+	iconClass: string;
+	children: ReactNode;
+}) {
+	return (
+		<section data-testid={testId} className={PLAN_CARD_CLASS}>
+			<div className="mb-8 flex items-center gap-8">
+				<Icon className={`size-14 shrink-0 ${iconClass}`} />
+				<h2 className="min-w-0 flex-1 tr-title-dialog text-text-default">{label}</h2>
+			</div>
+			{children}
+		</section>
+	);
+}
+
+// The Session block's LIVE slot. Subscribes to the session runtime itself (isolating re-renders from
+// the heavy PlanPane). Shows the pending question as the SAME `AskUserQuestionCard` the chat uses
+// (answerable in place via a real `session.answerQuestion`, chat-only actions no-op); otherwise, when
+// no plan item is in progress (`showAgentMessage`), shows the agent's latest message so the plan stays
+// transparent about what it's doing when it isn't asking or on a step. Renders nothing when neither.
+function PlanSessionLive({
+	sessionId,
+	showAgentMessage,
+}: {
+	workspaceId: string;
+	sessionId: string;
+	showAgentMessage: boolean;
+}) {
+	const runtime = useAppStore((s) => s.sessions[sessionId]);
+	const focusScope = useRef({}).current;
+	const actions = useMemo<ChatActions>(
+		() => ({
+			answerQuestion: (toolCallId, result) =>
+				getTransport()
+					.request("session.answerQuestion", { sessionId, toolCallId, result })
+					.then(() => undefined),
+			cancelAutomaticReveal: () => {},
+			focusComposer: () => {},
+			openSubagentTranscript: () => {},
+			revealChatElement: () => {},
+		}),
+		[sessionId],
+	);
+	const askStates = useMemo(
+		() => (runtime ? deriveAskStates(runtime.turns, runtime.askAnswers, runtime.toolResults) : {}),
+		[runtime],
+	);
+	const ask = runtime ? pendingAsk(runtime) : undefined;
+	if (ask) {
+		return (
+			<ChatActionsContext.Provider value={actions}>
+				<AskStatesContext.Provider value={{ states: askStates, focusScope }}>
+					<div data-testid="plan-ask" className="mb-8">
+						<AskUserQuestionCard
+							toolCallId={ask.toolCallId}
+							toolName="ask_user_question"
+							args={ask.args}
+							result={ask.result}
+							status={ask.status}
+							streaming={ask.streaming}
+						/>
+					</div>
+				</AskStatesContext.Provider>
+			</ChatActionsContext.Provider>
+		);
+	}
+	const message = showAgentMessage && runtime ? lastAgentText(runtime) : undefined;
+	if (!message) return null;
+	return (
+		<div data-testid="plan-agent-message" className="mb-8 flex items-start gap-8 px-4">
+			<MessageSquare className="mt-2 size-14 shrink-0 text-text-muted" />
+			<div className="min-w-0 flex-1">
+				<div className="tr-text-eyebrow text-text-muted">Agent</div>
+				<Markdown text={message} className={`line-clamp-4 tr-text-metadata ${SUMMARY_PROSE}`} />
+			</div>
+		</div>
+	);
+}
+
+function SessionBlock({
+	activeGroups,
+	activeLoose,
+	pendingGroups,
+	pendingLoose,
+	allDone,
+	glance,
+	renderLive,
+	onAdd,
+	onOpenChat,
+	onSend,
+	renderGroup,
+	renderItem,
+}: {
+	activeGroups: TodoGroupItem[];
+	activeLoose: TodoItem[];
+	pendingGroups: TodoGroupItem[];
+	pendingLoose: TodoItem[];
+	allDone: boolean;
+	glance: PlanGlance;
+	renderLive: (showAgentMessage: boolean) => ReactNode;
+	onAdd: (title: string) => Promise<void>;
+	onOpenChat: () => void;
+	onSend: (text: string) => Promise<void> | void;
+	renderGroup: (group: TodoGroupItem) => ReactNode;
+	renderItem: (item: TodoItem) => ReactNode;
+}) {
+	const [adding, setAdding] = useState(false);
+	const hasActive = activeGroups.length > 0 || activeLoose.length > 0;
+	const hasPending = pendingGroups.length > 0 || pendingLoose.length > 0;
+	const hasAny = hasActive || hasPending;
+	return (
+		<section data-testid="plan-now-executing" className={PLAN_CARD_CLASS}>
+			<div className="mb-8 flex items-center gap-8">
+				<CircleDot className="size-14 shrink-0 text-primary" />
+				<h2 className="shrink-0 tr-title-dialog text-text-default">Session</h2>
+				{glance === "working" ? (
+					<button
+						type="button"
+						data-testid="plan-now-status"
+						data-glance="working"
+						onClick={onOpenChat}
+						title="Open the chat"
+						className="flex min-w-0 items-center gap-4 tr-text-metadata text-text-subtle underline-offset-2 hover:text-text-default hover:underline"
+					>
+						<Loader2 className="size-14 shrink-0 animate-spin text-primary" />
+						Working…
+					</button>
+				) : glance === "waiting_question" ? (
+					<button
+						type="button"
+						data-testid="plan-now-status"
+						data-glance="waiting_question"
+						onClick={onOpenChat}
+						title="Open the chat"
+						className="flex min-w-0 items-center gap-4 tr-text-metadata text-primary underline-offset-2 hover:underline"
+					>
+						<MessageCircleQuestion className="size-14 shrink-0" />
+						Question
+					</button>
+				) : null}
+				<button
+					type="button"
+					data-testid="plan-add-task"
+					onClick={() => setAdding((v) => !v)}
+					title="Add a task to the plan"
+					className="ml-auto flex h-24 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-action text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+				>
+					<Plus className="size-14" />
+					Task
+				</button>
+			</div>
+			{renderLive(!hasActive)}
+			{hasActive ? (
+				<>
+					{activeGroups.map(renderGroup)}
+					{activeLoose.length > 0 ? (
+						<ul className="flex flex-col">{activeLoose.map(renderItem)}</ul>
+					) : null}
+				</>
+			) : null}
+			{hasPending ? (
+				<>
+					{pendingGroups.map(renderGroup)}
+					{pendingLoose.length > 0 ? (
+						<ul className="flex flex-col">{pendingLoose.map(renderItem)}</ul>
+					) : null}
+				</>
+			) : null}
+			{glance === "waiting_question" ? null : glance === "waiting" && !hasAny && !allDone ? (
+				!adding ? (
+					<button
+						type="button"
+						data-testid="plan-now-idle"
+						data-glance="waiting"
+						onClick={() => setAdding(true)}
+						title="Add a task"
+						className="group flex w-full items-center gap-8 rounded-[var(--radius-sm)] px-4 py-2 text-left tr-text-ui text-text-subtle transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+					>
+						<span className="min-w-0 flex-1">No steps yet — add one to get started.</span>
+						<span className="flex shrink-0 items-center gap-4 text-text-muted opacity-0 transition-opacity group-hover:opacity-100">
+							<Plus className="size-14" />
+							Add a task
+						</span>
+					</button>
+				) : null
+			) : (
+				<PlanComposer
+					icon={MessageSquare}
+					testId="plan-session-chat"
+					placeholder={
+						glance === "working"
+							? "Steer the agent…  (Enter to send, Shift+Enter for a new line)"
+							: "Message the agent…  (Enter to send, Shift+Enter for a new line)"
+					}
+					onSubmit={onSend}
+				/>
+			)}
+			{adding ? (
+				<PlanComposer
+					icon={Plus}
+					testId="plan-add-input"
+					placeholder="Add a task…  (Enter to add, Shift+Enter for a new line)"
+					autoFocus
+					onSubmit={onAdd}
+					onClose={() => setAdding(false)}
+				/>
+			) : null}
+		</section>
+	);
+}
+
 export default function PlanPane({
 	workspaceId,
 	sessionId,
@@ -504,6 +863,10 @@ export default function PlanPane({
 	const pushToast = useAppStore((s) => s.pushToast);
 	const requestToolView = useAppStore((s) => s.requestToolView);
 	const workspace = useAppStore((s) => selectWorkspaceById(s, workspaceId));
+	const glance = useAppStore((s): PlanGlance => {
+		const rt = s.sessions[sessionId];
+		return rt ? sessionGlance(rt) : "waiting";
+	});
 	const connection = useAppStore((s) => s.status);
 	const hostPlatform = useAppStore((s) => s.hostPlatform);
 	const canReview = supportsPlanReview(useAppStore((s) => s.protocolVersion));
@@ -539,17 +902,10 @@ export default function PlanPane({
 	const data = plan.data;
 	const { done, total } = planSummary(data);
 	const sections = planSections(data);
-	const groups = [...sections.activeGroups, ...sections.pendingGroups, ...sections.doneGroups];
-	const loose = [...sections.activeLoose, ...sections.pendingLoose, ...sections.doneLoose];
 	const adopted = adoptedCommits(data);
-	const hasUnattributed = (data.unattributed?.length ?? 0) > 0;
-	const empty = groups.length === 0 && loose.length === 0;
-	const nothingToShow = empty && adopted.length === 0 && !hasUnattributed;
-	// Review STATE always derives from the plan; only the review ACTIONS are gated on canReview. See panels/SPEC.md.
 	const reviewables = reviewableItems(data);
 	const unsettledReviewables = reviewables.filter((t) => !reviewSettled(t));
 	const reviewedCount = reviewables.length - unsettledReviewables.length;
-	const overallSummary = planCompletionSummary(data);
 	const onOpenCommit = (sha: string) => plan.openChanges({ sha });
 	const onOpenReview = () => requestToolView(workspaceId, "review");
 	const reviewingAny = reviewables.some((t) => t.review?.reviewing === true);
@@ -567,6 +923,10 @@ export default function PlanPane({
 			?.scrollIntoView({ behavior: "smooth", block: "center" });
 	};
 	const buildDone = total > 0 && done === total;
+	const staleSummary = planStaleSummary(data);
+	// The Summary card shows ONLY the agent's prose (fresh when all-done, else the stale note). No prose
+	// → no card (the header stepper already carries the step/file/review counts).
+	const summaryProse = buildDone ? planCompletionSummary(data) : staleSummary;
 	const stages: { build: StageState; review: StageState; pr: StageState } = {
 		build: buildDone ? "done" : "active",
 		review:
@@ -759,6 +1119,36 @@ export default function PlanPane({
 			);
 	};
 	const exportMarkdown = () => planToMarkdown(data, title);
+	const renderGroup = (group: TodoGroupItem): ReactNode => (
+		<GroupSection
+			key={group.id}
+			group={group}
+			workspaceId={workspaceId}
+			sessionId={sessionId}
+			onOpenCommit={onOpenCommit}
+			onStartReview={startReview}
+			onOpenReview={onOpenReview}
+			onRemove={plan.remove}
+			reviewComments={reviewComments}
+			startDisabled={reviewingAny || !canReview}
+			focusRequest={focusRequest}
+		/>
+	);
+	const renderItem = (item: TodoItem): ReactNode => (
+		<ItemBlock
+			key={item.id}
+			item={item}
+			workspaceId={workspaceId}
+			sessionId={sessionId}
+			onOpenCommit={onOpenCommit}
+			onStartReview={startReview}
+			onOpenReview={onOpenReview}
+			onRemove={plan.remove}
+			reviewComments={reviewComments}
+			startDisabled={reviewingAny || !canReview}
+			focusRequest={focusRequest}
+		/>
+	);
 
 	return (
 		<div
@@ -792,7 +1182,7 @@ export default function PlanPane({
 			<div className="mx-auto max-w-[52rem] px-16 py-16">
 				<header className="mb-16 flex items-center gap-12">
 					<div className="min-w-0 flex-1">
-						<h1 className="truncate tr-title-section text-text-default">Plan · {title}</h1>
+						<h1 className="truncate tr-heading-sm text-text-default">Plan · {title}</h1>
 						<div
 							data-testid="plan-progress"
 							className="flex flex-wrap items-center gap-4 tr-text-metadata text-text-subtle"
@@ -851,7 +1241,7 @@ export default function PlanPane({
 							data-testid="plan-review-comments"
 							onClick={onOpenReview}
 							title="Open the Review tab — the reviewer's findings"
-							className="flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex h-32 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-ui text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<MessageSquare className="size-14" />
 							{agentComments} {agentComments === 1 ? "comment" : "comments"}
@@ -864,14 +1254,14 @@ export default function PlanPane({
 								href={openReviewUrl}
 								target="_blank"
 								rel="noopener noreferrer"
-								className="shrink-0 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex h-32 shrink-0 items-center rounded-[var(--radius-sm)] px-8 tr-text-ui text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 							>
 								{openReviewLabel(openReview)}
 							</a>
 						) : (
 							<span
 								data-testid="plan-pr-chip"
-								className="shrink-0 px-8 py-4 tr-text-ui text-text-muted"
+								className="flex h-32 shrink-0 items-center px-8 tr-text-ui text-text-muted"
 							>
 								{openReviewLabel(openReview)}
 							</span>
@@ -889,10 +1279,10 @@ export default function PlanPane({
 									? "Push new commits to the open PR and refresh its description from the plan"
 									: "Push the branch and open a PR whose description comes from this plan"
 						}
-						className={`flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui disabled:opacity-50 ${
+						className={`flex h-32 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-ui transition-colors ${
 							(planReady && !openReview) || unpushed > 0
-								? "bg-primary text-text-on-primary hover:opacity-90"
-								: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+								? "bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+								: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
 						}`}
 					>
 						{prBusy ? (
@@ -1024,57 +1414,59 @@ export default function PlanPane({
 						</button>
 					</div>
 				) : null}
-				{overallSummary ? <OverallSummary text={overallSummary} /> : null}
-				{nothingToShow ? (
-					<p className="text-text-subtle tr-text-ui">
-						No items yet — the agent adds its plan here.
-					</p>
-				) : (
-					<>
-						{groups.map((group) => (
-							<GroupSection
-								key={group.id}
-								group={group}
-								workspaceId={workspaceId}
-								sessionId={sessionId}
-								onOpenCommit={onOpenCommit}
-								onStartReview={startReview}
-								onOpenReview={onOpenReview}
-								reviewComments={reviewComments}
-								startDisabled={reviewingAny || !canReview}
-								focusRequest={focusRequest}
-							/>
-						))}
-						{loose.length > 0 ? (
-							<section className="mb-16" data-testid="plan-loose">
-								{groups.length > 0 ? (
-									<h2 className="mb-4 border-border-default border-b pb-4 tr-title-compact text-text-default">
-										Other
-									</h2>
-								) : null}
-								<ul className="flex flex-col">
-									{loose.map((item) => (
-										<ItemBlock
-											key={item.id}
-											item={item}
-											workspaceId={workspaceId}
-											sessionId={sessionId}
-											onOpenCommit={onOpenCommit}
-											onStartReview={startReview}
-											onOpenReview={onOpenReview}
-											reviewComments={reviewComments}
-											startDisabled={reviewingAny || !canReview}
-											focusRequest={focusRequest}
-										/>
-									))}
-								</ul>
-							</section>
+				{summaryProse ? <PlanSummary summary={summaryProse} stale={!buildDone} /> : null}
+				<SessionBlock
+					activeGroups={sections.activeGroups}
+					activeLoose={sections.activeLoose}
+					pendingGroups={sections.pendingGroups}
+					pendingLoose={sections.pendingLoose}
+					allDone={buildDone}
+					glance={glance}
+					renderLive={(showAgentMessage) => (
+						<PlanSessionLive
+							workspaceId={workspaceId}
+							sessionId={sessionId}
+							showAgentMessage={showAgentMessage}
+						/>
+					)}
+					onAdd={plan.add}
+					onOpenChat={() => void openChatInTab(workspaceId, sessionId)}
+					onSend={async (text) => {
+						// Mirror the chat composer (ChatView.performSend): optimistically record the user turn so
+						// the handoff to chat can't drop it, steer a running agent otherwise start a new turn, and
+						// surface a failed send as an error turn in the chat rather than swallowing it.
+						const store = useAppStore.getState();
+						const streaming = store.sessions[sessionId]?.isStreaming ?? false;
+						store.appendUserMessage(sessionId, text);
+						void openChatInTab(workspaceId, sessionId);
+						try {
+							await getTransport().request(streaming ? "session.steer" : "session.prompt", {
+								sessionId,
+								text,
+							});
+						} catch (err) {
+							useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
+						}
+					}}
+					renderGroup={renderGroup}
+					renderItem={renderItem}
+				/>
+				{sections.doneGroups.length > 0 || sections.doneLoose.length > 0 ? (
+					<PlanCardSection
+						testId="plan-done-section"
+						label="Done"
+						Icon={CircleCheck}
+						iconClass="text-feedback-success"
+					>
+						{sections.doneGroups.map(renderGroup)}
+						{sections.doneLoose.length > 0 ? (
+							<ul className="flex flex-col">{sections.doneLoose.map(renderItem)}</ul>
 						) : null}
-					</>
-				)}
+					</PlanCardSection>
+				) : null}
 				{adopted.length > 0 ? (
 					<section className="mb-16" data-testid="plan-adopted-commits">
-						<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
+						<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-dialog text-text-default">
 							<span className="min-w-0 flex-1 truncate">Committed outside the plan</span>
 							<span className="shrink-0 tr-text-eyebrow text-text-subtle">
 								{adopted.length} {adopted.length === 1 ? "commit" : "commits"}
@@ -1103,7 +1495,7 @@ export default function PlanPane({
 				) : null}
 				{data.unattributed && data.unattributed.length > 0 ? (
 					<section className="mb-16" data-testid="plan-unattributed">
-						<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
+						<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-dialog text-text-default">
 							<span className="min-w-0 flex-1 truncate">Outside the plan</span>
 							<span className="shrink-0 tr-text-eyebrow text-text-subtle">
 								{data.unattributed.length} {data.unattributed.length === 1 ? "file" : "files"}

@@ -146,6 +146,7 @@ import {
 	addTodo,
 	approveTodoReview,
 	countOpenTodos,
+	generateTodoSummary,
 	listTodos,
 	removeSessionTodoWindows,
 	removeTodo,
@@ -196,6 +197,7 @@ import { runObservation } from "./runAnalytics";
 import { taskObservation } from "./taskAnalytics";
 import {
 	claimItemFix,
+	clearChangesRequestedIfResolved,
 	isItemUnderActiveReview,
 	itemFixFindings,
 	markClientStale,
@@ -557,6 +559,8 @@ const handlers: Record<string, Handler> = {
 			return { ok: true, total: 0, alreadyRunning: true };
 		return { ok: true, total: started.length };
 	},
+	"todo.generateSummary": (params) =>
+		generateTodoSummary(params as { workspaceId: string; sessionId: string }),
 	"todo.requestFix": async (params) => {
 		const capture = additionalCapture();
 		const p = params as { workspaceId: string; sessionId: string; id: string; feedback: string };
@@ -977,12 +981,34 @@ const handlers: Record<string, Handler> = {
 			body?: string;
 			status?: ReviewCommentStatus;
 		};
-		return withReviewLock(p.workspaceId, async () => updateComment(p));
+		return withReviewLock(p.workspaceId, async () => {
+			const updated = await updateComment(p);
+			// Resolving/dismissing the item's last open finding must clear its changes_requested verdict
+			// too (no-op while findings remain), the same invariant as commentDelete.
+			if (updated.origin?.todoId)
+				await clearChangesRequestedIfResolved({
+					workspaceId: p.workspaceId,
+					sessionId: updated.origin.sessionId,
+					id: updated.origin.todoId,
+				});
+			return updated;
+		});
 	},
 	"review.commentDelete": (params) => {
 		const p = params as { workspaceId: string; id: string };
 		return withReviewLock(p.workspaceId, async () => {
+			const origin = (await getReviewSnapshot(p.workspaceId)).comments.find(
+				(c) => c.id === p.id,
+			)?.origin;
 			await deleteComment(p.workspaceId, p.id);
+			// A changes_requested verdict must not outlive its findings: if this was the item's last open
+			// finding, drop the verdict back to unreviewed.
+			if (origin?.todoId)
+				await clearChangesRequestedIfResolved({
+					workspaceId: p.workspaceId,
+					sessionId: origin.sessionId,
+					id: origin.todoId,
+				});
 			return { ok: true } as const;
 		});
 	},

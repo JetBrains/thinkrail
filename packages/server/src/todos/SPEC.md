@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: todos — a chat's per-session TODO plan (read/write)
 parent: module-server
-depends-on: [module-contracts, submodule-server-git]
+depends-on: [module-contracts, submodule-server-git, submodule-server-assist]
 references: [module-pi-todos, submodule-server-pr, submodule-web-chat]
 tags: [v2, todos]
 ---
@@ -250,6 +250,14 @@ The same `listTodos` decoration pass ships `TodoItem.review` (state, `revision` 
 `unreviewedShas` = commits appended since the watermark — the "changed since review" delta the UI
 re-reviews instead of the original diff — and the `feedback` echo) and `TodoPlan.summary` (the plan-level
 completion note, agent-authored via `todo_plan_summary`; item `summary` rides the item DTO as stored).
+
+- **`generateTodoSummary` (`todo.generateSummary`)** is the host's best-effort fallback for that note: when
+  a plan is **fully done but carries no `summary`**, the client asks the host to draft one. It returns an
+  existing agent note untouched, `null` when the plan isn't complete or the draft fails, else the freshly
+  drafted note. The slow model call (`assist.suggestPlanSummary` over the done steps' title/summary/
+  verification) runs OUTSIDE the write lock; the final re-check + `setSummary` runs inside
+  `enqueueTodoMutation` and never clobbers a note that landed meanwhile or a plan that re-opened, with one
+  in-flight generation per session. It never overwrites the agent's own `todo_plan_summary`.
 
 - **`approveTodoReview`** records `reviewed` + the watermark — the pending mark's start-time shas when
   an agent review is in flight, else the current shas (throws on unknown or non-reviewable ids →

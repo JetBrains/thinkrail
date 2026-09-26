@@ -604,10 +604,53 @@ a project picker, the prompt hero, and the reused
   after the last tab closes without introducing onboarding state. The workbench resource renderer handles
   registered **`plan`** tabs (`PlanTab`) via the lazy **`PlanPane`** — the chat plan's **live review-map
   page**. Frontend-local placement stores only the `todo-plan` resolver kind + session identity, never inline
-  plan content; another client can explicitly reopen the same host-owned page without inheriting placement. It renders the session's TODO plan document-scale
-  (groups as sections, items with status glyphs) with a **scan-first item anatomy**: the item TITLE is
+  plan content; another client can explicitly reopen the same host-owned page without inheriting placement. It renders the session's TODO plan document-scale,
+  **status-grouped** (`planSections`): a single **`Session` block** (`plan-now-executing`) holds the
+  current work — the active group(s)/loose items followed by the pending ones (no separate To-do
+  section; item status glyphs distinguish in-progress from pending). Its **live status is a clickable chip
+  in the header, right of the `Session` title** (`plan-now-status`, `data-glance`, off `sessionGlance`)
+  that **opens the chat** (`openChatInTab`) so you can jump from the plan into the conversation: `working`
+  → a `Working…` spinner, `waiting_question` → a `Question` chip. The awaiting question is ALSO
+  **answerable in place**: the Session body's **live slot** (`PlanSessionLive`, which subscribes to the
+  session runtime so its re-renders stay off the heavy PlanPane) hosts the SAME **`AskUserQuestionCard`**
+  as the chat (`plan-ask`, found via `planView.pendingAsk`) inside a minimal `ChatActionsContext` (a real
+  `session.answerQuestion`; the chat-only actions — reveal/focus/subagent — are no-ops) plus a derived
+  `AskStatesContext`, so an answer submitted from the plan flows through the identical path as the chat.
+  When there's no pending question AND no step is in progress, the same slot instead shows the **agent's
+  latest message** (`plan-agent-message`, `planView.lastAgentText` rendered Markdown, clamped, live while
+  it streams) — so the plan stays transparent about what the agent is doing when it isn't asking or on a
+  step; it renders nothing when a step is in progress or there's no message. Below the items the Session ends in a **chat/steer
+  composer** (`plan-session-chat`, a `PlanComposer` textarea that works like the chat composer — Enter
+  sends, Shift+Enter newlines) whose send adapts to the run: while the agent is streaming it **steers**
+  (`session.steer`, "Steer the agent…"), otherwise it **starts a turn** (`session.prompt`, "Message the
+  agent…"); either way it mirrors `ChatView.performSend` — it optimistically records the user turn
+  (`appendUserMessage`) before handing off to the chat (`openChatInTab`) so the message can't vanish in the
+  navigation, and surfaces a rejected send as an `appendErrorTurn` in that chat rather than swallowing it.
+  So a completed
+  plan (no open steps) turns its Session into a chat entry point rather than a dead "all steps done" line,
+  and a running plan gets an in-place steering field. The one exception is a **truly empty** plan (no items,
+  idle): there the body shows the `plan-now-idle` line (`No steps yet…`), itself a click target that opens
+  the add-task input (a hover `+ Add a task` hint) to bootstrap the plan. A **`Done` section**
+  (`plan-done-section`, always expanded — the page is the review trail) holds the completed groups then
+  done loose. Both blocks share ONE `PLAN_CARD_CLASS` card shape with a `glyph + title` header — Session
+  (`CircleDot`), Done (`CircleCheck`, via `PlanCardSection`) — so the plan reads as one consistent card
+  stack. **Heading scale (top-down, no inversion):** page title `tr-heading-sm` → card + group-task
+  headings `tr-title-dialog` (14/600) → item titles `tr-title-section` (14/500) → metadata
+  `tr-text-metadata` — a group heading is never smaller than the items it holds. The Session block header carries the plan page's **add-task control**
+  (the plan page's only in-page way to add): a `+ Task` button (`plan-add-task`) toggles an inline
+  **auto-growing textarea** (`plan-add-input`) — plain **Enter adds**, **Shift+Enter** inserts a newline
+  (multi-line like the composer), Esc closes — wired to the SAME `useChatTodos.add` as the popup's
+  `TodoAddRow` — a loose **user** item plus the agent nudge — so the two entry points stay one flow.
+  Every plan item carries a **hover Remove affordance** (`plan-item-remove` — `useChatTodos.remove`,
+  disabled while the row is under review); adopted commits (host-derived) get no remove.
+  Items keep a **scan-first item
+  anatomy**: the item TITLE is
   the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,
-  subtle/muted) — so titles never blend into prose. A **done item collapses to a compact two-line
+  subtle/muted) — so titles never blend into prose. Titles **wrap** (`break-words`, never truncated) — a
+  long title is revealed in full, not clipped. A **done item carries no leading status glyph**
+  (`hideStatusGlyph` — its section already says "done"; only an active review or a `changes_requested`
+  warning keeps a leading glyph; the slot holds a ghost spacer so titles stay aligned). A **done item
+  collapses to a compact two-line
   block**: line 1 is a LEADING chevron (matching the change-set disclosure's anatomy; non-collapsible
   rows reserve the chevron's width with a ghost spacer so every title in the list aligns) + the title,
   with the **review slot at its right edge**; line 2 is a quiet meta strip UNDER the title (the
@@ -623,14 +666,15 @@ a project picker, the prompt hero, and the reused
   touch, which has no hover) and the meta line yields to it (`group-data-[expanded=true]:hidden`);
   the chevron rotates the same way. No JS hover state — a static `<div>` with mouse/focus handlers is
   an a11y smell the lint rightly rejects. The detail block is an indented
-  left-rail (`border-l`) block holding the note, the agent's `summary`, the full `VerificationBadge`,
+  left-rail (`border-l`) block holding the note, the agent's `summary` (Markdown), the full
+  `VerificationBadge` (glyph + the verification as Markdown, so multiple checks read as bullet points),
   a changes_requested `feedback` note, the change set, **and — when the item accumulated 2+ commits
   (fix cycles) — a REVISIONS mini-timeline** (`plan-revisions`/`plan-revision`, off
   `planView.itemRevisions`): one row per commit in order (`#n` + sha chip routing the Changes panel +
   `DiffStatBadge` when the sha still resolves), the last marked *current*, and any sha in the
   review's `unreviewedShas` delta marked *unreviewed* (`data-unreviewed`) — the honest
   how-the-agent-got-here story (commit → review → fix → commit) no final-diff view can tell.
-  Non-done items keep their note inline (no toggle — they rarely carry details). Inside the details, the change set stays its own **collapsible**
+  Any item that carries details is collapsible — including a **non-done item with only a `note`**: the note is agent-facing working detail, so it stays behind the disclosure and the default human view is titles + status, never the agent's inline notes. Inside the details, the change set stays its own **collapsible**
   disclosure — a summary line (sha chip + `N files` + `DiffStatBadge`) toggling the commit's
   `GitFileChange[]` rows; the chevron/summary is the
   toggle while the sha chip stays a separate button (routing the Changes panel, never toggling). Expanded,
@@ -680,10 +724,11 @@ a project picker, the prompt hero, and the reused
   matched by `origin` provenance (path-join fallback for provenance-less ones) — the Review tab is
   the truth; the chip
   `requestToolView`s the Review tab) and the verdict's `feedback` note renders inline
-  (`plan-item-review-feedback`); approving settles the item — its status glyph upgrades to the **circled Verified check**
-  (`StatusIcon reviewed`, hover "Verified", `data-reviewed` on the row; `planView.reviewSettled` is the
+  (`plan-item-review-feedback`); approving settles the item — the plan page shows a **`Verified` label**
+  in the row's review slot, right of the title (`plan-item-verified`, `CircleCheck` + text, success tone),
+  and `data-reviewed` on the row (the popup keeps the circled `StatusIcon reviewed` glyph); `planView.reviewSettled` is the
   one derivation — approved AND no unreviewed delta, so a fresh revision drops the item back out of both
-  the glyph and the reviewed counter). **The header is a title + a lifecycle STEPPER and a kebab menu**. The stepper (`plan-progress`)
+  the label and the reviewed counter. **The header is a title + a lifecycle STEPPER and a kebab menu**. The stepper (`plan-progress`)
   renders the plan's shipping funnel — **Build (`d/t done`) → Review (`r/k reviewed`,
   `plan-review-progress`, only when the plan has reviewable items) → PR (`plan-pr-stage`,
   `data-state`)** — each stage wearing a glyph for its state: done (check), active (the stage the
@@ -709,7 +754,12 @@ a project picker, the prompt hero, and the reused
   (N unsettled reviewables → an inline **Review All** button, same `todo.reviewAll` flow as the
   kebab item, which stays) → `ship` (all done + reviewed, no open PR → an inline **Open PR**,
   same `pr.open` flow as the header button) → hidden when nothing demands action. The plan-level
-  completion note wears a `Summary` eyebrow so the report reads in labeled sections. After the item
+  completion note wears a `Summary` eyebrow so the report reads in labeled sections; when the note is
+  long it clamps to two lines and its **expand/collapse toggle lives in the card header** (a right-aligned
+  chevron on the clickable `plan-overall-summary-toggle` header, rotating on `open`) — not a trailing
+  button — so collapsing never requires scrolling past the expanded prose. The next-action
+  banner, the Summary block, and the Now-executing block share ONE card shape (`PLAN_CARD_CLASS` — same
+  elevated bg, border, radius, and padding) so the top of the plan reads as one consistent stack. After the item
 sections the page renders **`Committed outside the plan`** (`plan-adopted-commits`, only when
 `TodoPlan.adoptedCommits` is non-empty — including on an otherwise empty plan): the host-derived
 `base..HEAD` commits no item owns (derivation: [[submodule-server-todos]]), each rendered with the same
@@ -805,13 +855,18 @@ own section. The kebab menu (`plan-menu`, a
   *without* `ghProblem` (offline seam, transient gh failure) keeps the window.open + toast path.
   This dialog is unit/e2e-pinned on the server side (`isPushAuthFailure`, `ghSetupProblem`); the
   browser-side arms need a real broken push / missing gh, so they stay convention-held.
-  The agent's plan-level completion note (`plan-overall-summary`) renders **clamped to
-  3 lines** with a `Show more`/`Show less` toggle (`plan-overall-summary-toggle`, shown only for long
-  notes) — the page opens on the plan, not on a wall of prose. There is **no in-page "Review mode"** — findings live in the right-panel **Review** tab;
+  The **`Summary` card** (`plan-overall-summary`) shows ONLY the agent's plan-level note — fresh via
+  `planCompletionSummary` when every step is done, or the stale note via `planStaleSummary` while the plan
+  is being redone. It carries **no step/file/review facts** (those live in the header stepper + context
+  line, so repeating them here was noise), and it is **omitted entirely when there is no prose** (a
+  completed plan whose agent wrote no note renders no empty card). The agent's note still ships to the
+  Copy / Save-.md export via `planCompletionSummary`. There is **no in-page "Review mode"** — findings live in the right-panel **Review** tab;
   when the reviewer agent has open comments (`selectAgentReviewCommentCount` — open, `author: "agent"`) the
   header shows a **`N comments`** chip (`plan-review-comments`) that `requestToolView(ws, "review")` to
-  focus that tab. The header also shows the agent's plan-level completion note
-  (`planCompletionSummary`-gated `plan-overall-summary`). `FileRow` (`planFileRow.tsx`, its own module so plan surfaces
+  focus that tab. Once an item re-opens after a completion the Summary note
+  stays visible via `planStaleSummary`, marked stale with an `Updating…` badge (`plan-summary-stale`)
+  instead of disappearing, until the agent rewrites it at the next completion — exports stay gated on
+  `planCompletionSummary`. `FileRow` (`planFileRow.tsx`, its own module so plan surfaces
   share one row without cycles) is the shared change-set row. Live by
   construction, it reads through the same `useChatTodos` hook as the plan popup (per-mount fetch +
   `pi.event` refetch), so it cannot show a stale snapshot.
