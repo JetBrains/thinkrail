@@ -85,7 +85,7 @@ import { listAvailableEditors, openEditor, revealInFileManager } from "../editor
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
 import { readDir, readFile } from "../fs";
 import {
-	countUnpushedCommits,
+	countPushDivergence,
 	gitDiffFile,
 	gitStatus,
 	listBranches,
@@ -422,14 +422,18 @@ const handlers: Record<string, Handler> = {
 	"workspace.openReview": async (params) => {
 		const p = params as { workspaceId: string; allowCached?: boolean };
 		const ws = getWorkspace(p.workspaceId);
-		const [review, unpushed] = await Promise.all([
-			findOpenBranchReview(ws.worktreePath, ws.branch, {
-				fresh: shouldRefreshOpenReview(p.allowCached),
-			}),
-			countUnpushedCommits(ws.worktreePath, ws.branch),
+		const fresh = shouldRefreshOpenReview(p.allowCached);
+		const [review, divergence] = await Promise.all([
+			findOpenBranchReview(ws.worktreePath, ws.branch, { fresh }),
+			// Only pay the network fetch on a fresh lookup (focus / explicit refresh), not a cached activation.
+			countPushDivergence(ws.worktreePath, ws.branch, { fetch: fresh }),
 		]);
 		if (!review) return review;
-		return unpushed ? { ...review, unpushedCommits: unpushed } : review;
+		return {
+			...review,
+			...(divergence && divergence.ahead > 0 ? { unpushedCommits: divergence.ahead } : {}),
+			...(divergence && divergence.behind > 0 ? { behindCommits: divergence.behind } : {}),
+		};
 	},
 	"workspace.remove": (params) => {
 		const id = (params as { id: string }).id;

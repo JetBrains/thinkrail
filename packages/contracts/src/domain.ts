@@ -54,6 +54,12 @@ export interface OpenBranchReview {
 	url?: string;
 	/** `workspace.openReview` only: local commits origin/<branch> doesn't have yet. */
 	unpushedCommits?: number;
+	/**
+	 * `workspace.openReview` only: commits on origin/<branch> that HEAD doesn't have — the branch
+	 * diverged, so a plain push is non-fast-forward and only `--force-with-lease` will land. Present
+	 * (and > 0) only when the remote ref was fresh enough to trust (see [[submodule-server-git]]).
+	 */
+	behindCommits?: number;
 }
 
 export type GhSetupProblem = "missing" | "unauthenticated";
