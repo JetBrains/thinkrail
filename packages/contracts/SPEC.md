@@ -27,7 +27,7 @@ of the host.
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
-- **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `ext` + `nativeClient`
+- **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `ext` + `extTheme` + `nativeClient`
   (`NativeUpdateState` and `NativeUpdateBridge`, the optional shell-local desktop update capability); the
   value re-exports
   `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
@@ -46,6 +46,9 @@ of the host.
   would silently shift every later jump anchor); from `ext`: `SURFACE_SLOTS`, `EXT_RUNTIME_GLOBAL`,
   `EXT_RUNTIME_MODULES`, `EXT_VIEW_EXPORTS`, `EXT_VIEW_UI_EXPORTS` (the `ui` primitive names the web
   runtime ships and ext-sdk types), `EXT_WS_CHANNELS` (the socket subscription set), `extAssetPath`,
+  `extThemeCssPath`; from `extTheme`: `EXT_THEME_TOKEN_GROUPS`, `EXT_THEME_TOKENS`, `EXT_THEME_MODES`,
+  `extThemeKey` (`<name>/<themeId>`), `extThemeTokenGroup`, `isExtThemeToken`, `isExtThemeMode`,
+  `extThemeTokenError`, `extThemeTokensErrors`;
   `extChannelKey` + `isOwnChannelKey` (the `<name>:<key>` channel grammar host and web share), `EXT_NAME_PATTERN` (the one extension/surface name
   grammar: manifest validation, asset routes, and tool ids all build on it), and the extension panel tool id helpers `extToolId`,
   `parseExtToolId`, `isExtLayoutToolId` (`LayoutToolId` is the built-in ids or `ext:<name>:<surface>`, so
@@ -409,7 +412,17 @@ of the host.
   `EXT_RUNTIME_GLOBAL` (`"__thinkrail_runtime__"`), `EXT_RUNTIME_MODULES` (the bare specifiers the host
   shims to that global: `react`, `react/jsx-runtime`, `react/jsx-dev-runtime`, `react-dom`,
   `@thinkrail/ext/view`), `EXT_VIEW_EXPORTS` (`@thinkrail/ext/view`'s runtime names), and
-  `extAssetPath({ name, build, surfaceId, kind })` → `/ext/<name>/<build>/<surfaceId>.<js|css>`.
+  `extAssetPath({ name, build, surfaceId, kind })` → `/ext/<name>/<build>/<surfaceId>.<js|css>`,
+  `extThemeCssPath({ name, build, themeId })` → `/ext/<name>/<build>/<themeId>.theme.css`.
+  Themes (`extTheme.ts`): `ExtensionInfo.themes` is `ExtensionTheme[]` (`id`, `title`, `mode`, `tokens`,
+  `css: boolean`); `ExtThemeOverlay` (`{ mode, tokens }`) is what a view previews; `ExtViewTheme` /
+  `ExtThemePreviewResult` type the view's `useTheme()`. `EXT_THEME_TOKEN_GROUPS` (palette, role, radius,
+  font) is **generated** (`extThemeTokens.generated.ts`, by the server's `ext-theme:generate` from
+  `apps/web`'s token sources; the server's `appTheme.test.ts` fails when stale) and is the one list of
+  CSS variables an extension theme may set. `extThemeTokenError` / `extThemeTokensErrors` are the one
+  name + value validator host manifest checks and web previews share: unknown names get a nearest-name
+  hint (`--color-accent` → `--accent`); values are per group (color, length, font list) and never carry
+  `url(`, `;`, braces, `@`, `\`, or `!`.
   Wire: `EXT_WS_METHODS` / `EXT_WS_CHANNELS` (spread into `WS_METHODS` / `WS_CHANNELS`) and
   `ExtWsMethodMap` (extended by `WsMethodMap`): `ext.list` → `ExtensionInfo[]`, `ext.snapshot({ keys? })`
   → key→value record, `ext.action({ ext, id, payload?, ctx? })` → the handler's result,

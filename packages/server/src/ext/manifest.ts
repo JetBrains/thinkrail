@@ -1,9 +1,14 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, join, normalize } from "node:path";
 import {
 	EXT_NAME_PATTERN,
+	EXT_THEME_MODES,
 	type ExtensionSurface,
+	type ExtensionTheme,
+	type ExtThemeTokens,
+	extThemeTokensErrors,
+	isExtThemeMode,
 	SURFACE_SLOTS,
 	type SurfaceSlot,
 } from "@thinkrail/contracts";
@@ -26,14 +31,33 @@ const ManifestSchema = Type.Object({
 		}),
 	),
 	permissions: Type.Optional(Type.Array(Type.String())),
+	themes: Type.Optional(
+		Type.Array(
+			Type.Object({
+				id: Type.String({ pattern: NAME_PATTERN }),
+				title: Type.Optional(Type.String({ minLength: 1 })),
+				mode: Type.String(),
+				tokens: Type.Record(Type.String(), Type.Unknown()),
+				css: Type.Optional(Type.String({ minLength: 1 })),
+			}),
+		),
+	),
 });
 
 type RawManifest = Static<typeof ManifestSchema>;
 
-interface ExtensionManifest extends Omit<RawManifest, "surfaces" | "title" | "permissions"> {
+type RawTheme = NonNullable<RawManifest["themes"]>[number];
+
+export interface ManifestTheme extends ExtensionTheme {
+	cssFile?: string;
+}
+
+interface ExtensionManifest
+	extends Omit<RawManifest, "surfaces" | "title" | "permissions" | "themes"> {
 	title: string;
 	surfaces: ExtensionSurface[];
 	permissions: string[];
+	themes: ManifestTheme[];
 }
 
 type ManifestResult = { ok: true; manifest: ExtensionManifest } | { ok: false; errors: string[] };
@@ -81,6 +105,37 @@ const toSurface = (surface: RawManifest["surfaces"][number]): ExtensionSurface |
 	};
 };
 
+const CSS_FILE = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w./-]+\.css$/;
+
+const themeErrors = (themes: readonly RawTheme[]) => {
+	const errors: string[] = [];
+	const seen = new Set<string>();
+	themes.forEach((theme, index) => {
+		const at = `themes[${index}]`;
+		if (seen.has(theme.id)) errors.push(`${at}.id "${theme.id}" is duplicated`);
+		seen.add(theme.id);
+		if (!isExtThemeMode(theme.mode))
+			errors.push(`${at}.mode "${theme.mode}" unknown; allowed: ${EXT_THEME_MODES.join(", ")}`);
+		for (const { token, error } of extThemeTokensErrors(theme.tokens))
+			errors.push(`${at}.tokens["${token}"] ${error}`);
+		if (
+			theme.css !== undefined &&
+			(!CSS_FILE.test(theme.css) || normalize(theme.css) !== theme.css)
+		)
+			errors.push(`${at}.css "${theme.css}" must be a relative .css path inside the extension`);
+	});
+	return errors;
+};
+
+const toTheme = (theme: RawTheme): ManifestTheme => ({
+	id: theme.id,
+	title: theme.title ?? theme.id,
+	mode: isExtThemeMode(theme.mode) ? theme.mode : "dark",
+	tokens: theme.tokens as ExtThemeTokens,
+	css: theme.css !== undefined,
+	...(theme.css !== undefined ? { cssFile: theme.css } : {}),
+});
+
 export const parseManifest = (input: unknown): ManifestResult => {
 	if (!Value.Check(ManifestSchema, input)) {
 		const errors = [...Value.Errors(ManifestSchema, input)]
@@ -88,7 +143,7 @@ export const parseManifest = (input: unknown): ManifestResult => {
 			.map((error) => `${pathLabel(error.instancePath)}: ${error.message}`);
 		return { ok: false, errors: errors.length > 0 ? errors : ["manifest: invalid"] };
 	}
-	const errors = surfaceErrors(input.surfaces);
+	const errors = [...surfaceErrors(input.surfaces), ...themeErrors(input.themes ?? [])];
 	if (errors.length > 0) return { ok: false, errors };
 	return {
 		ok: true,
@@ -97,6 +152,7 @@ export const parseManifest = (input: unknown): ManifestResult => {
 			title: input.title ?? input.name,
 			surfaces: input.surfaces.flatMap((surface) => toSurface(surface) ?? []),
 			permissions: input.permissions ?? [],
+			themes: (input.themes ?? []).map(toTheme),
 		},
 	};
 };
@@ -118,6 +174,10 @@ export const readManifest = async (dir: string): Promise<ManifestResult> => {
 	manifest.surfaces.forEach((surface, index) => {
 		if (!existsSync(join(dir, `${surface.id}.tsx`)))
 			errors.push(`surfaces[${index}]: view file ${surface.id}.tsx is missing`);
+	});
+	manifest.themes.forEach((theme, index) => {
+		if (theme.cssFile !== undefined && !existsSync(join(dir, theme.cssFile)))
+			errors.push(`themes[${index}]: css file ${theme.cssFile} is missing`);
 	});
 	return errors.length > 0 ? { ok: false, errors } : parsed;
 };

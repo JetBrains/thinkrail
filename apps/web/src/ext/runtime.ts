@@ -52,7 +52,7 @@ import { Textarea } from "../components/ui/textarea";
 import { IconTooltip, Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
 import { cn } from "../lib";
 import { startChat } from "./askAgent";
-import { openSurface, useAction, useChannel } from "./hooks";
+import { openSurface, useAction, useChannel, useTheme } from "./hooks";
 import { useHostContext } from "./hostContext";
 
 export const viewUi = {
@@ -105,6 +105,7 @@ export const viewModule = {
 		openSurface(name, surfaceId, params);
 	},
 	startChat,
+	useTheme,
 	ui: viewUi,
 	cn,
 	remixicon,

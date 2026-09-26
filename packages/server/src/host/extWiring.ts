@@ -27,7 +27,7 @@ import { setExtHandlers } from "./handlers";
 const log = logger("ext");
 
 const ASSET_PATH = new RegExp(
-	`^/ext/(${EXT_NAME_PATTERN})/([0-9a-f]{16})/(${EXT_NAME_PATTERN}\\.(?:js|css))$`,
+	`^/ext/(${EXT_NAME_PATTERN})/([0-9a-f]{16})/(${EXT_NAME_PATTERN}\\.(?:js|css|theme\\.css))$`,
 );
 const IMMUTABLE = "private, max-age=31536000, immutable";
 const WATCH_DEBOUNCE_MS = 300;

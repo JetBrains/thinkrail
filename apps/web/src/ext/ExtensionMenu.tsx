@@ -12,7 +12,9 @@ import {
 import { IconTooltip } from "../components/ui/tooltip";
 import { selectActiveWorkspaceProjectId, useAppStore } from "../store";
 import { selectBlocked, selectSurfaces, surfaceTitle, useExtStore } from "./extStore";
+import { selectThemes } from "./extThemes";
 import { openSurface } from "./hooks";
+import { ThemeMenuItems } from "./ThemeMenuItems";
 import { TrustExtensionsDialog } from "./TrustExtensionsDialog";
 
 const SCOPES: readonly { scope: ExtensionScope; label: string }[] = [
@@ -46,6 +48,7 @@ export const ExtensionMenu = ({ targetGroupId }: { targetGroupId?: string }) => 
 	const projectId = useAppStore(selectActiveWorkspaceProjectId);
 	const project = useAppStore((state) => state.projects.find((p) => p.id === projectId));
 	const items = useMemo(() => selectSurfaces(extensions, ["tab", "panel"]), [extensions]);
+	const hasThemes = useMemo(() => selectThemes(extensions).length > 0, [extensions]);
 	const blocked = useMemo(
 		() => (project && project.trusted !== true ? selectBlocked(extensions, project.id) : []),
 		[extensions, project],
@@ -91,7 +94,7 @@ export const ExtensionMenu = ({ targetGroupId }: { targetGroupId?: string }) => 
 							project…
 						</DropdownMenuItem>
 					) : null}
-					{groups.length === 0 && blocked.length === 0 ? (
+					{groups.length === 0 && blocked.length === 0 && !hasThemes ? (
 						<EmptyState unsupported={unsupported} />
 					) : null}
 					{groups.map((group, index) => (
@@ -120,6 +123,10 @@ export const ExtensionMenu = ({ targetGroupId }: { targetGroupId?: string }) => 
 							))}
 						</Fragment>
 					))}
+					<ThemeMenuItems
+						extensions={extensions}
+						separated={groups.length > 0 || blocked.length > 0}
+					/>
 				</DropdownMenuContent>
 			</DropdownMenu>
 			{project && blocked.length > 0 ? (

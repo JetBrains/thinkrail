@@ -21,7 +21,7 @@ import {
 } from "./discovery";
 import { createGeneration, type Generation } from "./generation";
 import { importExtension } from "./loader";
-import { readManifest } from "./manifest";
+import { type ManifestTheme, readManifest } from "./manifest";
 import { createDryStore, createExtStore } from "./store";
 import { createTr, formatLog, NO_WORKSPACES, type SessionReads, type WorkspaceReads } from "./tr";
 import { errorMessage } from "./util";
@@ -64,6 +64,7 @@ interface ExtState {
 	title: string;
 	surfaces: ExtensionSurface[];
 	permissions: string[];
+	themes: ManifestTheme[];
 	current: Generation | undefined;
 	assets: ExtAssets | undefined;
 	error: string | undefined;
@@ -79,6 +80,7 @@ const infoOf = (state: ExtState): ExtensionInfo => ({
 	generation: state.current?.id ?? null,
 	surfaces: state.surfaces,
 	permissions: state.permissions,
+	themes: state.themes.map(({ cssFile: _cssFile, ...theme }) => theme),
 	build: state.assets?.build ?? null,
 	...(state.error !== undefined ? { error: state.error } : {}),
 });
@@ -95,6 +97,7 @@ const blockedInfo = async (candidate: ProjectCandidate) => {
 		generation: null,
 		surfaces: manifest?.surfaces ?? [],
 		permissions: manifest?.permissions ?? [],
+		themes: [],
 		build: null,
 	};
 };
@@ -204,7 +207,11 @@ export const createExtHost = (options: ExtHostOptions) => {
 		if (!manifest.ok) return { ok: false as const, errors: manifest.errors };
 		let assets: ExtAssets;
 		try {
-			assets = await buildAssets({ dir, surfaces: manifest.manifest.surfaces });
+			assets = await buildAssets({
+				dir,
+				surfaces: manifest.manifest.surfaces,
+				themes: manifest.manifest.themes,
+			});
 		} catch (error) {
 			return { ok: false as const, errors: [errorMessage(error)] };
 		}
@@ -264,6 +271,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 		state.title = manifest.title;
 		state.surfaces = manifest.surfaces;
 		state.permissions = manifest.permissions;
+		state.themes = manifest.themes;
 		dropChannels(name);
 		generation.activate();
 		if (previous) await disposeGeneration(previous, sink.log);
@@ -278,6 +286,7 @@ export const createExtHost = (options: ExtHostOptions) => {
 		title: candidate.name,
 		surfaces: [],
 		permissions: [],
+		themes: [],
 		current: undefined,
 		assets: undefined,
 		error: undefined,

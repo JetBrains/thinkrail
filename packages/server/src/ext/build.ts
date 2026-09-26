@@ -118,12 +118,32 @@ export const buildSurface = async ({
 	return { js, css };
 };
 
+const readThemeCss = async (dir: string, themes: readonly ThemeCss[]) =>
+	Promise.all(
+		themes.flatMap(({ id, cssFile }) =>
+			cssFile === undefined
+				? []
+				: [
+						Bun.file(join(dir, cssFile))
+							.text()
+							.then((css) => ({ id, css })),
+					],
+		),
+	);
+
+interface ThemeCss {
+	id: string;
+	cssFile?: string;
+}
+
 export const buildAssets = async ({
 	dir,
 	surfaces,
+	themes = [],
 }: {
 	dir: string;
 	surfaces: readonly ExtensionSurface[];
+	themes?: readonly ThemeCss[];
 }): Promise<ExtAssets> => {
 	const results = await Promise.allSettled(
 		surfaces.map((surface) => buildSurface({ dir, surfaceId: surface.id })),
@@ -132,8 +152,15 @@ export const buildAssets = async ({
 		result.status === "rejected" ? [errorMessage(result.reason)] : [],
 	);
 	if (failures.length > 0) throw new Error(`view build failed:\n${failures.join("\n")}`);
+	const themeCss = await readThemeCss(dir, themes).catch((error: unknown) => {
+		throw new Error(`theme css: ${errorMessage(error)}`);
+	});
 	const hash = createHash("sha256");
 	const files = new Map<string, ExtAsset>();
+	for (const { id, css } of themeCss) {
+		hash.update(`theme:${id}\0${css}\0`);
+		files.set(`${id}.theme.css`, { body: css, contentType: CSS_TYPE });
+	}
 	results.forEach((result, index) => {
 		const surface = surfaces[index];
 		if (result.status !== "fulfilled" || !surface) return;

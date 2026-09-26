@@ -26,6 +26,10 @@ module reads extension state, and `appStore` is already far over the file budget
   when the host's protocol is older than `EXT_PROTOCOL_VERSION` (every extension and channel clears).
 - `extensions` by name, `channels` by full key (`<name>:<key>`), `params` by `<name>:<surface>` (the last
   `openSurface` params, in memory only).
+- `themeSelection`: the picked extension theme key (`<name>/<themeId>`) or `null` for built-in, seeded
+  from the themes module's overlay hint. `themePreview`: one `{ name, overlay }` slot, in memory only;
+  `install`, `applyChanged`, and `applyRemoved` drop it when its extension's generation changes, it
+  becomes blocked, or it disappears.
 - Every push has one atomic action: `applyChanged`, `applyRemoved` (also drops that extension's channel
   keys), `applyChannel`, `dropChannels` (`ext.channelsDropped`), `install`. Derived lists come from pure
   selectors (`selectSurfaces`, `selectSurface`, `surfaceTitle`) called in `useMemo` over the `extensions`
@@ -43,7 +47,7 @@ ignored, so a push that races the read is never reverted. A failed read replays 
 frozen object keyed by contracts' `EXT_RUNTIME_MODULES`: the app's own `react`, `react/jsx-runtime`,
 `react/jsx-dev-runtime`, `react-dom` namespaces (the production build ships production React, matching the
 production JSX the host emits), and `@thinkrail/ext/view` = `{ useChannel, useAction, useHostContext,
-openSurface, startChat, ui, cn, remixicon }`. `ui` is exactly contracts' `EXT_VIEW_UI_EXPORTS` from
+openSurface, startChat, useTheme, ui, cn, remixicon }`. `ui` is exactly contracts' `EXT_VIEW_UI_EXPORTS` from
 `components/ui` (`satisfies` keeps the key set equal; `runtime.test.ts` checks it at runtime). The global
 is installed once and never replaced, so every view shares one React instance.
 
@@ -106,6 +110,26 @@ them, disposed when it disappears. Two surfaces claiming one name stack; removal
 the newest remaining one, then the built-in or default. Chat
 re-renders through its renderer-registry version.
 
+## Themes
+
+`extThemes.ts` owns extension themes on this client; the themes module owns how an overlay is applied.
+
+- `selectThemes(extensions)` lists every theme of a non-blocked extension with a build, keyed
+  `<name>/<themeId>`. The effective overlay is the preview if any, else the selected theme if it is
+  listed, else none (built-in).
+- `startThemeSync` (from `initExtensions`) follows the store. Before the first hydration it keeps the
+  overlay `main.tsx` applied from the hint, so a reload paints the chosen theme first. After that, every
+  change whose effective overlay differs calls the themes module's `setThemeOverlay`. A selected theme
+  with `css` adds one `<link data-ext-theme>` (the asset behind `hostUrl`); any other state removes it.
+- A refused overlay (bad tokens or unreadable text) is never left applied: a refused preview clears the
+  preview (the selection shows again) and `preview` returns the errors; a refused selection shows a
+  toast and falls back to built-in until the theme changes. The hint is written on every non-preview
+  apply: the selection plus its validated tokens, or no tokens when it is unavailable.
+- The picker is `ThemeMenuItems` inside `ExtensionMenu`: **Theme** lists **Built-in (Settings)** and
+  every listed theme (title, extension, mode). It shows only when some theme is listed.
+- `useTheme()` (view hook) is described in [[module-ext-sdk]]; `preview` validates with contracts'
+  `extThemeTokensErrors` before touching the store.
+
 ## Extensions menu and project trust
 
 `ExtensionMenu` (center group actions, the puzzle button) is always shown.
@@ -131,6 +155,10 @@ re-renders through its renderer-registry version.
 
 - `ExtensionMenu` and a view's `openSurface` are the only ways to open a `tab` or `panel` surface; the
   command palette does not list surfaces.
+- The theme choice lives in this browser only (not host-synced like the built-in theme), and the
+  Appearance settings page does not list extension themes.
+- The readability guard checks one pair (`--text-default` on `--container-workspace-bg`, 3:1). A theme
+  `css` file is trusted extension code and is not checked.
 
 ## Boundary
 
@@ -139,7 +167,7 @@ re-renders through its renderer-registry version.
 - **Allowed deps:** `contracts`; `transport` (requests, pushes, `hostUrl`, session creation); `store`
   (welcome generation, protocol version, host ids, projects + `applyProjectUpdated`, layout intents, chat
   draft, toasts); `themes`
-  (`onThemeSwap`); `chat/toolRegistry` + `chat/rendererRegistry` + `chat/blockedExtensions` (registration
+  (`onThemeSwap`, `setThemeOverlay`, the overlay hint); `chat/toolRegistry` + `chat/rendererRegistry` + `chat/blockedExtensions` (registration
   only); `components/ui`;
   `lib`; `@remixicon/react`; React; Zustand.
 - **Forbidden:** `shell`, `panels`; any `server`/`shared`/`pi` import; evaluating extension code any way

@@ -401,6 +401,7 @@ describe("ext host", () => {
 				generation: null,
 				surfaces: [{ id: "main", slot: "panel" }],
 				permissions: MANIFEST.permissions,
+				themes: [],
 				build: null,
 			},
 		]);
@@ -517,7 +518,32 @@ describe("parseManifest", () => {
 				title: "ok",
 				surfaces: [{ id: "t", slot: "toolCard", tool: "x" }],
 				permissions: [],
+				themes: [],
 			},
+		});
+	});
+
+	test("reports theme mode, token, and css path errors", () => {
+		const result = parseManifest({
+			name: "ok",
+			surfaces: [],
+			themes: [
+				{ id: "a", mode: "dusk", tokens: { "--accent": "#fff" } },
+				{ id: "a", mode: "dark", tokens: { "--color-accent": "#fff", "--radius-sm": "#fff" } },
+				{ id: "b", mode: "light", tokens: {}, css: "../outside.css" },
+			],
+		});
+		expect(result).toEqual({
+			ok: false,
+			errors: [
+				'themes[0].mode "dusk" unknown; allowed: light, dark',
+				'themes[1].id "a" is duplicated',
+				expect.stringContaining(
+					'themes[1].tokens["--color-accent"] unknown token; did you mean "--accent"?',
+				),
+				'themes[1].tokens["--radius-sm"] value "#fff" is not a length such as 6px or 0.5rem',
+				'themes[2].css "../outside.css" must be a relative .css path inside the extension',
+			],
 		});
 	});
 });

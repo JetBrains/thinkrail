@@ -18,6 +18,7 @@ const info = (generation: number): ExtensionInfo => ({
 	generation,
 	build: `${generation}`.padStart(16, "0"),
 	permissions: [],
+	themes: [],
 	surfaces: [],
 });
 

@@ -1,4 +1,5 @@
 import type { ExtLayoutToolId } from "./domain";
+import type { ExtensionTheme, ExtThemeOverlay } from "./extTheme";
 
 export const SURFACE_SLOTS = ["tab", "panel", "status", "toolCard", "message"] as const;
 export type SurfaceSlot = (typeof SURFACE_SLOTS)[number];
@@ -23,6 +24,7 @@ export interface ExtensionInfo {
 	generation: number | null;
 	surfaces: ExtensionSurface[];
 	permissions: string[];
+	themes: ExtensionTheme[];
 	build: string | null;
 	error?: string;
 }
@@ -52,6 +54,7 @@ export const EXT_VIEW_EXPORTS = [
 	"useHostContext",
 	"openSurface",
 	"startChat",
+	"useTheme",
 	"ui",
 	"cn",
 	"remixicon",
@@ -158,6 +161,25 @@ export const extAssetPath = ({
 	surfaceId: string;
 	kind: ExtAssetKind;
 }) => `/ext/${name}/${build}/${surfaceId}.${kind}`;
+
+export const extThemeCssPath = ({
+	name,
+	build,
+	themeId,
+}: {
+	name: string;
+	build: string;
+	themeId: string;
+}) => `/ext/${name}/${build}/${themeId}.theme.css`;
+
+export type ExtThemePreviewResult = { ok: true } | { ok: false; errors: string[] };
+
+export interface ExtViewTheme {
+	active: { name: string; id: string } | null;
+	previewing: boolean;
+	select: (themeId: string | null) => void;
+	preview: (overlay: ExtThemeOverlay | null) => ExtThemePreviewResult;
+}
 
 export const EXT_WS_METHODS = {
 	extList: "ext.list",

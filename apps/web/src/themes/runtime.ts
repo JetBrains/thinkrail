@@ -14,6 +14,13 @@ import {
 } from "../clientPreferences";
 import { STORAGE_PREFIX } from "../constants/branding";
 import {
+	overlayErrors,
+	parseThemeOverlay,
+	readabilityError,
+	type ThemeOverlay,
+	type ThemeOverlayResult,
+} from "./overlay";
+import {
 	ANSI_COLOR_KEYS,
 	type AnsiColorKey,
 	assertThemeManifest,
@@ -55,6 +62,7 @@ interface ColorSchemeMediaQuery {
 }
 
 const HINT_KEY = `${STORAGE_PREFIX}theme`;
+const OVERLAY_HINT_KEY = `${STORAGE_PREFIX}theme-overlay`;
 const HINT_VERSION = 1;
 const SYSTEM_QUERY = "(prefers-color-scheme: dark)";
 
@@ -105,6 +113,9 @@ export const SYNTAX_VARIABLES: Record<SyntaxColorKey, string> = {
 };
 
 let catalog: ThemeCatalog = { byId: new Map(), list: [] };
+let overlay: ThemeOverlay | null = null;
+let overlayProperties: readonly string[] = [];
+let lastPreference: ThemePreference | null = null;
 
 function compareText(a: string, b: string): number {
 	return a < b ? -1 : a > b ? 1 : 0;
@@ -315,10 +326,28 @@ function applyVariables(root: HTMLElement, theme: ThemeManifest): void {
 	root.style.setProperty("color-scheme", theme.appearance);
 }
 
-function applyResolvedTheme(theme: ThemeManifest): ThemeDescriptor {
+function overlayBase(theme: ThemeManifest): ThemeManifest {
+	return overlay && theme.appearance !== overlay.mode
+		? fallbackTheme(overlay.mode, theme.contrast)
+		: theme;
+}
+
+function applyOverlay(root: HTMLElement): void {
+	const entries = overlay ? Object.entries(overlay.tokens) : [];
+	for (const [token, value] of entries)
+		if (value !== undefined) root.style.setProperty(token, value);
+	overlayProperties = entries.map(([token]) => token);
+	if (overlay) root.dataset.themeOverlay = overlay.key;
+	else delete root.dataset.themeOverlay;
+}
+
+function applyResolvedTheme(resolved: ThemeManifest): ThemeDescriptor {
+	const theme = overlayBase(resolved);
 	if (typeof document !== "undefined") {
 		const root = document.documentElement;
+		for (const token of overlayProperties) root.style.removeProperty(token);
 		applyVariables(root, theme);
+		applyOverlay(root);
 		root.dataset.themeContrast = theme.contrast;
 		root.dataset.theme = theme.id;
 	}
@@ -330,6 +359,7 @@ export function applyTheme(id: ThemeId): ThemeDescriptor {
 }
 
 export function applyThemePreference(preference: ThemePreference): ThemeResolution {
+	lastPreference = preference;
 	const resolution = resolveThemePreference(preference);
 	applyResolvedTheme(requireResolvedTheme(resolution.theme.id));
 	return resolution;
@@ -374,7 +404,58 @@ export function onThemeSwap(onSwap: () => void): () => void {
 	const observer = new MutationObserver(onSwap);
 	observer.observe(document.documentElement, {
 		attributes: true,
-		attributeFilter: ["data-theme"],
+		attributeFilter: ["data-theme", "data-theme-overlay"],
 	});
 	return () => observer.disconnect();
+}
+
+export function setThemeOverlay(
+	next: ThemeOverlay | null,
+	{ verify = true }: { verify?: boolean } = {},
+): ThemeOverlayResult {
+	const errors = next ? overlayErrors(next) : [];
+	if (errors.length > 0) return { ok: false, errors };
+	overlay = next;
+	applyThemePreference(lastPreference ?? readThemeHint());
+	const unreadable =
+		next && verify && typeof document !== "undefined"
+			? readabilityError(document.documentElement)
+			: undefined;
+	if (!unreadable) return { ok: true };
+	overlay = null;
+	applyThemePreference(lastPreference ?? readThemeHint());
+	return { ok: false, errors: [unreadable] };
+}
+
+export interface ThemeOverlayHint {
+	readonly selected: string | null;
+	readonly overlay: ThemeOverlay | null;
+}
+
+const EMPTY_OVERLAY_HINT: ThemeOverlayHint = { selected: null, overlay: null };
+
+export function readThemeOverlayHint(): ThemeOverlayHint {
+	try {
+		const value = themeHintStorage()?.getItem(OVERLAY_HINT_KEY);
+		if (typeof value !== "string") return EMPTY_OVERLAY_HINT;
+		const parsed = JSON.parse(value) as unknown;
+		if (typeof parsed !== "object" || parsed === null) return EMPTY_OVERLAY_HINT;
+		if (Reflect.get(parsed, "version") !== HINT_VERSION) return EMPTY_OVERLAY_HINT;
+		const selected = Reflect.get(parsed, "selected");
+		if (typeof selected !== "string") return EMPTY_OVERLAY_HINT;
+		const cached = parseThemeOverlay(Reflect.get(parsed, "overlay"));
+		return { selected, overlay: cached?.key === selected ? cached : null };
+	} catch {
+		return EMPTY_OVERLAY_HINT;
+	}
+}
+
+export function writeThemeOverlayHint(hint: ThemeOverlayHint): void {
+	try {
+		const storage = themeHintStorage();
+		if (hint.selected === null) storage?.removeItem(OVERLAY_HINT_KEY);
+		else storage?.setItem(OVERLAY_HINT_KEY, JSON.stringify({ version: HINT_VERSION, ...hint }));
+	} catch {
+		return;
+	}
 }

@@ -11,6 +11,7 @@ import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { channelDemand } from "./demand";
 import { blockedTitlesByProject, useExtStore } from "./extStore";
+import { startThemeSync } from "./extThemes";
 import { syncRendererSlots } from "./rendererSlots";
 
 const supportsExtensions = (protocolVersion: number | null) =>
@@ -24,6 +25,7 @@ export const initExtensions = () => {
 	if (initialized) return;
 	initialized = true;
 	startExtensionSync(getTransport());
+	startThemeSync();
 };
 
 export const startExtensionSync = (transport: SyncTransport) => {

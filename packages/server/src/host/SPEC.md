@@ -451,7 +451,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   records the keys per `clientKey`, at most 1000, and a socket close with no replacement socket for that
   client calls `dropClient`), broadcast pushes `ext.changed`, `ext.removed`, `ext.channel`, `ext.channelsDropped` (a socket
   subscribes only when its client protocol is at least `EXT_PROTOCOL_VERSION`), and the route
-  `GET /ext/<name>/<build>/<surface>.js|.css` behind launch auth. The route answers
+  `GET /ext/<name>/<build>/<surface>.js|.css` and `<themeId>.theme.css` behind launch auth. The route answers
   `Cache-Control: private, max-age=31536000, immutable` because `<build>` is a content hash; a stale or
   unknown build is `404`, a method other than GET/HEAD is `405`.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,

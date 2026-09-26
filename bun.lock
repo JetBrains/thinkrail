@@ -75,6 +75,18 @@
         "typescript": "catalog:",
       },
     },
+    ".thinkrail/extensions/themes": {
+      "name": "@thinkrail/ext-themes",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thinkrail/ext": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     ".thinkrail/extensions/tool-guard": {
       "name": "@thinkrail/ext-tool-guard",
       "version": "0.0.0",
@@ -1043,6 +1055,8 @@
     "@thinkrail/ext-railmap": ["@thinkrail/ext-railmap@workspace:.thinkrail/extensions/railmap"],
 
     "@thinkrail/ext-test-runner": ["@thinkrail/ext-test-runner@workspace:.thinkrail/extensions/test-runner"],
+
+    "@thinkrail/ext-themes": ["@thinkrail/ext-themes@workspace:.thinkrail/extensions/themes"],
 
     "@thinkrail/ext-tool-guard": ["@thinkrail/ext-tool-guard@workspace:.thinkrail/extensions/tool-guard"],
 

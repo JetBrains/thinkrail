@@ -227,6 +227,7 @@ From `@thinkrail/ext/view`:
   default, sm, icon), `Input` (one-line text field), `Textarea`, `Switch`
   (`checked`, `onCheckedChange`; give it an `aria-label`), `Tooltip*`, `IconTooltip`, `Popover*`, `Dialog*`, `DropdownMenu*`,
   `ContextMenu*`, `Command*`.
+- `useTheme()`: the selected theme and live preview for this extension (see Themes).
 - Types: `SurfaceProps`, `HostContext`, `SessionStats` (the value of a published `tr.sessions.stats`).
 - `cn(...classes)`, `remixicon` (all `@remixicon/react` icons: `Ri…Line`, `Ri…Fill`).
 - `react`, `react-dom`, `react/jsx-runtime` resolve to the app's React. Other npm deps (see
@@ -251,6 +252,52 @@ CSS a view imports (a library's stylesheet, `import "@xyflow/react/dist/base.css
 Positions and sizes computed at runtime (a bar at `left: 42%`) go in `style`; everything else is a
 class. No raw hex, no inline `style` objects for colour, no Tailwind palette names (`bg-blue-500`): they do not
 follow the theme. An unknown utility renders unstyled without an error.
+
+## Themes
+
+An extension can ship themes in `extension.json`. The user picks one from the Extensions (puzzle icon) menu,
+under **Theme**. The choice is saved in the browser, applies without a reload, and follows hot reloads.
+
+```json
+"themes": [
+  {
+    "id": "ember",
+    "title": "Ember",
+    "mode": "light",
+    "tokens": { "--background": "#fbf5ec", "--accent": "#c2410c", "--radius-sm": "6px" },
+    "css": "ember.css"
+  }
+]
+```
+
+- `mode` picks the base: the user's built-in theme when it has that appearance, else the default
+  built-in theme of that mode. `tokens` override CSS variables on top of the base.
+- Token names are checked against the app's token list. A typo fails the load with a hint, e.g.
+  `themes[0].tokens["--color-accent"] unknown token; did you mean "--accent"?`. Four groups:
+  - **palette** (use these first): `--background`, `--header`, `--content`, `--sidebar`, `--input`,
+    `--elevated`, `--hover`, `--border`, `--border-strong`, `--text`, `--muted`, `--hint`, `--accent`,
+    `--accent-hover`, `--accent-solid`, `--on-accent`, `--bubble-accent`, `--selection`,
+    `--selection-foreground`, `--editor-selection`, `--editor-selection-foreground`, `--info`,
+    `--success`, `--danger`, `--warning`. Every role and tint derives from these, so one palette change
+    moves all of them.
+  - **role**: the semantic tokens from Styling (`--text-default`, `--container-sidebar-bg`,
+    `--primary-subtle`, ...). Setting a role changes only that role; tints derived from the palette stay.
+  - **radius**: `--radius-xs`, `--radius-sm`, `--radius-md`, `--radius-lg` (lengths: `6px`, `0.5rem`).
+  - **font**: `--tr-font-family-interface`, `--tr-font-family-code`, `--tr-font-family-brand` (font-family
+    lists; only fonts the system or the app already has).
+- Values are plain colors, lengths, or font lists. `url()`, `;`, `{}`, `@`, and `!important` are refused.
+- `css` (optional) is a stylesheet in the extension folder, loaded while the theme is active. Use it for
+  what tokens cannot express. It cannot load relative files.
+- If a theme leaves text unreadable (text on the workspace background under 3:1 contrast), the app drops
+  it and falls back to the built-in theme. Unloading the extension falls back too.
+
+`useTheme()` in a view returns `{ active, previewing, select, preview }`:
+
+- `select(themeId | null)`: select one of this extension's themes, or go back to the built-in theme.
+- `preview({ mode, tokens } | null)`: apply tokens live without saving them, for editors and pickers.
+  It returns `{ ok: false, errors }` for bad tokens or unreadable text and applies nothing. A preview is
+  in memory only; it ends on `preview(null)`, on reload of the extension, or when it unloads. Clear it
+  when the view unmounts.
 
 ## Dev loop
 
@@ -347,3 +394,11 @@ work out to many subagents and returns one value. It shows:
 - Large data kept out of `tr.store`: journals for resume live under `$THINKRAIL_DATA_DIR`, the store keeps
   the 20 newest runs, capped.
 
+
+`.thinkrail/extensions/themes/` changes how the app looks. It shows:
+
+- Three `themes` in `extension.json`: a warm light theme, a high-contrast dark theme, and a soft theme
+  with larger corners.
+- A **Theme studio** panel: color inputs and a radius slider call `useTheme().preview` on every change,
+  the three built-in themes apply with `select`, and **Copy JSON** puts a ready `themes` entry on the
+  clipboard.

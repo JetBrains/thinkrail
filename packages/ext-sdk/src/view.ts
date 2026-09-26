@@ -2,7 +2,13 @@ import type * as Remixicon from "@remixicon/react";
 import type {
 	ExtMessageView,
 	ExtSurfaceProps,
+	ExtThemeMode,
+	ExtThemeOverlay,
+	ExtThemePreviewResult,
+	ExtThemeToken,
+	ExtThemeTokens,
 	ExtToolCallView,
+	ExtViewTheme,
 	HostContext,
 	SessionStats,
 } from "@thinkrail/contracts";
@@ -17,7 +23,19 @@ export type {
 	SwitchProps,
 	TriggerProps,
 } from "./viewUi";
-export type { ExtMessageView, ExtToolCallView, ExtViewUi, HostContext, SessionStats };
+export type {
+	ExtMessageView,
+	ExtThemeMode,
+	ExtThemeOverlay,
+	ExtThemePreviewResult,
+	ExtThemeToken,
+	ExtThemeTokens,
+	ExtToolCallView,
+	ExtViewTheme,
+	ExtViewUi,
+	HostContext,
+	SessionStats,
+};
 
 export type SurfaceProps = ExtSurfaceProps;
 
@@ -30,6 +48,7 @@ export declare const openSurface: (
 	params?: Record<string, string>,
 ) => void;
 export declare const startChat: (draft: string) => Promise<void>;
+export declare const useTheme: () => ExtViewTheme;
 export declare const ui: ExtViewUi;
 export declare const cn: (...inputs: unknown[]) => string;
 export declare const remixicon: typeof Remixicon;

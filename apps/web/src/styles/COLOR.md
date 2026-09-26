@@ -171,6 +171,23 @@ hover-on-content at 1.165).
 `themes/runtime.test.ts` pins application; `themes/shiki.test.ts` pins the syntax-variable map. See [`themes/SPEC.md`](../themes/SPEC.md) for the manifest itself and
 [TYPOGRAPHY.md](./TYPOGRAPHY.md) for the parallel type system.
 
+## Extension themes: the public token contract
+
+Extension themes (see [`ext/SPEC.md`](../ext/SPEC.md)) may set exactly the variables in contracts'
+`EXT_THEME_TOKEN_GROUPS`, generated from this directory's sources by the server's
+`ext-theme:generate`. That list is public API for extension authors:
+
+- **palette**: every `theme.schema.json` colour key, kebab-cased (`--background`, `--accent`, ...). Stable
+  as long as the schema version is; the preferred way to theme, since every role derives from it.
+- **role**: every published role in the `@theme inline` map (`--text-default`, `--container-sidebar-bg`,
+  ...). A role override is a flat value; its palette-derived tints do not follow.
+- **radius**: `--radius-xs|sm|md|lg` from `tokens.css`.
+- **font**: `--tr-font-family-interface|code|brand` from `generated/typography.css`.
+
+Renaming or removing any of these is a breaking change for extensions: `ext-theme:generate` updates the
+list, and manifests naming the old token fail to load with a nearest-name hint. The unpublished roles
+(`--editor-selection-bg`, `--selection-*`), ANSI, and syntax variables are not in the contract.
+
 ## Scope: this app only
 
 `apps/website` — the public landing page — has its own stylesheet with its own hardcoded colours and

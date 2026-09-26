@@ -43,6 +43,13 @@ Each surface needs `<id>.tsx` beside the manifest, and the extension needs `inde
 actionable one-liners with a JSON-ish path, e.g.
 `surfaces[1].slot "pannel" unknown; allowed: tab, panel, status, toolCard, message`.
 
+Optional `themes[]`: `id` (name pattern, unique), optional `title`, `mode` (`light` | `dark`), `tokens`
+(CSS variable → value), optional `css` (a relative `.css` path inside the extension that must exist).
+Token names and values go through contracts' `extThemeTokensErrors`, so a typo reads
+`themes[0].tokens["--color-accent"] unknown token; did you mean "--accent"?`. The allowed names are
+contracts' `EXT_THEME_TOKEN_GROUPS`, generated from `apps/web`'s token sources (see "View build"). The
+wire `ExtensionInfo.themes` carries `css: boolean`, never the file path. A blocked entry lists no themes.
+
 ## Generations (hot swap)
 
 - A load builds a **new generation**: validate manifest, build every view (see "View build"), jiti-import `index.ts` (`moduleCache: false`,
@@ -86,13 +93,17 @@ means the browser never makes a relative request that lacks the launch token.
 - **CSS (Tailwind v4).** The host compiles one stylesheet per surface with the `tailwindcss` compiler
   against Tailwind's theme plus the app's `@theme` blocks (`appTheme.generated.ts`, produced by
   `bun run --filter @thinkrail/server ext-theme:generate` from `apps/web`'s CSS; `appTheme.test.ts`
-  fails when stale), so
+  fails when stale; the same script writes contracts' `extThemeTokens.generated.ts`: palette keys from
+  `themes/theme.schema.json`, published roles from the `@theme inline` map, `--radius-*` from
+  `tokens.css`, `--tr-font-family-*` from `generated/typography.css`), so
   extension utilities resolve to the same semantic tokens as the app. Candidates are every class-like
   token in the bundled JS. No preflight: the app already ships it. CSS a view imports is appended inside
   `@layer components`, so a library stylesheet never beats the author's utilities (layered utilities
   lose to unlayered rules otherwise). Results are cached in memory by a hash of the candidate set.
+- **Theme CSS.** A theme's `css` file is read as-is (no Tailwind pass) into the asset
+  `<themeId>.theme.css`. A read failure fails the load.
 - **Build id.** A generation's assets carry a content hash (`ExtensionInfo.build`, 16 hex) over every
-  surface's JS and CSS. It is the URL segment, so an immutable cache entry can never serve stale code,
+  surface's JS and CSS and every theme stylesheet. It is the URL segment, so an immutable cache entry can never serve stale code,
   even though generation numbers restart every boot.
 - **Assets.** Images and fonts (`png`, `jpg`, `gif`, `webp`, `svg`, `woff`, `woff2`, `ttf`, `otf`) inline
   as data URLs, both when TSX imports them and when imported CSS names them in `url()`. Resolution goes by
@@ -105,8 +116,8 @@ means the browser never makes a relative request that lacks the launch token.
 
 ## Serving
 
-`asset(name, build, file)` returns the current generation's `<surface>.js` or `<surface>.css` body and
-content type, or `undefined` for an unknown name, stale build, or unknown file. HTTP framing, launch
+`asset(name, build, file)` returns the current generation's `<surface>.js`, `<surface>.css`, or
+`<themeId>.theme.css` body and content type, or `undefined` for an unknown name, stale build, or unknown file. HTTP framing, launch
 auth, and caching headers are `host`'s job.
 
 ## `tr.pi` and live sessions
@@ -240,6 +251,12 @@ against a real delegation service on a faux provider: a workflow with `parallel`
 its corrective retry runs every agent as a `tr.agents` child and reports pi's usage; a resume replays every
 agent without a child; the `cancel` action and a host dispose abort all children; a bad script, an
 unenforceable schema, and an unknown resume id fail before any child runs.
+
+`.thinkrail/extensions/themes/` is the eighth. `themesExample.test.ts` loads it and checks the three
+themes on `ExtensionInfo` (no css path on the wire), the served `ember.theme.css`, a token typo failing
+`validate` and `reload` with a suggestion while the old generation keeps running, refused and missing
+css paths, the stored studio draft across hosts, and the studio's pure model (snippet accepted by the
+validator, accent family edits).
 
 ## Known limitations
 

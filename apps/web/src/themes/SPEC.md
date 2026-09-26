@@ -29,13 +29,15 @@ theme = adding one `bundled/*.theme.json` file** (a PR + rebuild) — no code, c
   `onSystemAppearanceChange`, `getThemes`, `onThemeSwap` (subscribe to a completed theme change — this
   module owns the `data-theme` signal, so it owns the way to observe it; Monaco/xterm/mermaid all re-read
   their palettes through it rather than each hand-rolling a MutationObserver), `readThemeHint` /
-  `writeThemeHint`, and the manifest/descriptor/preference-result types plus the Shiki registration.
+  `writeThemeHint`, the overlay slot (`setThemeOverlay`, `readThemeOverlayHint`,
+  `writeThemeOverlayHint`, `ThemeOverlay`, `ThemeOverlayResult`, `ThemeOverlayHint`), and the
+  manifest/descriptor/preference-result types plus the Shiki registration.
 - **Allowed external deps:** `@thinkrail/contracts` for the opaque ids, theme preference shapes and
   configured default; browser DOM/media/storage APIs and Vite's build-time glob; Shiki types only, to type
   the generic registration.
-- **Forbidden:** server/shared/pi; store, transport, panels, shell, or component state; runtime theme
-  registration or discovery of any kind; executable theme code; selectors/layout or arbitrary CSS
-  supplied by a manifest.
+- **Forbidden:** server/shared/pi; store, transport, panels, shell, or component state; runtime
+  registration into the bundled catalog or discovery of any kind; executable theme code; selectors/layout
+  or arbitrary CSS supplied by a manifest or an overlay.
 
 ## Manifest contract
 
@@ -142,9 +144,28 @@ selector, or editor-specific catalog entry, and a swap needs no re-highlight. Un
 wrong-appearance resolution, both fallback tiers, pair derivation, absent-signal light behavior,
 legacy/versioned hints, and media-listener cleanup.
 
+## Overlay
+
+One validated overlay may sit on top of the resolved theme; `ext` fills it from extension themes and
+view previews. It never enters the catalog, the host config, or `AppConfig.theme`.
+
+- `ThemeOverlay` is `{ key, mode, tokens }`; tokens are contracts' `EXT_THEME_TOKEN_GROUPS` names,
+  checked with `extThemeTokensErrors` (names and safe values) before anything is written.
+- Base: the preference-resolved manifest when its appearance equals `mode`, else the fallback manifest
+  of `mode` with the same contrast (the system-mode fallback rule). Application stays atomic: remove the
+  previous overlay's properties, write the base palette, write the overlay properties inline on the
+  root, set `data-theme-overlay` (removed with no overlay), then `data-theme` last. `onThemeSwap` fires
+  on either attribute, so Monaco/xterm/mermaid re-read after an overlay change too.
+- `setThemeOverlay(next, { verify })` reapplies the last preference. With `verify` (default) it then
+  measures `--text-default` on `--container-workspace-bg` (a probe element, canvas-resolved to sRGB);
+  under 3:1 it removes the overlay and returns `{ ok: false, errors }`, so a theme can never leave the
+  app unreadable. Without a canvas (unit tests) the check is skipped.
+- The overlay hint (`theme-overlay`, versioned, same storage as the theme hint) holds the selected key
+  and its last validated overlay. `main.tsx` applies it without `verify` before React mounts, because
+  stylesheets may not have loaded yet; a stored overlay that fails validation is dropped.
+
 ## Non-goals (deliberate)
 
-Users cannot add themes except through a source PR. Runtime registration, extension packaging/loading,
-hot discovery, external theme formats, operating-system contrast following, schedule/time-zone UI, and
-trust/precedence models are all out of scope; if runtime themes ever change, the seam to reintroduce is a
-validated registration path in front of the same catalog.
+Bundled themes change only through a source PR. Extensions reach the look only through the overlay
+(partial token sets on a bundled base), never by registering a full manifest. External theme formats,
+operating-system contrast following, schedule/time-zone UI, and trust/precedence models are out of scope.

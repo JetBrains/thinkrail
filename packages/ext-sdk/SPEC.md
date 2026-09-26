@@ -33,9 +33,10 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
 - `./view` (`src/view.ts` + `src/viewUi.ts`, browser side): `SurfaceProps` (contracts'
   `ExtSurfaceProps`: `surfaceId`, `host`, optional `params` from `openSurface`, `toolCall` for a
   `toolCard` surface, `message` for a `message` surface), `HostContext`, `SessionStats` (the shape of a
-  published `sessions.stats`), `ExtViewUi` + its prop types, and
+  published `sessions.stats`), `ExtViewUi` + its prop types, the theme types (`ExtViewTheme`,
+  `ExtThemeOverlay`, `ExtThemePreviewResult`, `ExtThemeMode`, `ExtThemeToken`, `ExtThemeTokens`), and
   **declared** (type-only, no body) runtime values named by contracts' `EXT_VIEW_EXPORTS`: `useChannel`,
-  `useAction`, `useHostContext`, `openSurface`, `startChat`, `ui`, `cn`, `remixicon`. The file emits nothing; the host's
+  `useAction`, `useHostContext`, `openSurface`, `startChat`, `useTheme`, `ui`, `cn`, `remixicon`. The file emits nothing; the host's
   view builder resolves this specifier to a shim over the web's runtime global, so the declarations only
   type-check authoring code.
 
@@ -78,6 +79,11 @@ host), and one `<surfaceId>.tsx` per declared surface (view files, shipped to th
   spawned. The README's "Subagents" section lists what is not supported.
 - `startChat(draft)` (view) opens a new chat in the active workspace with `draft` in the composer; it
   never sends.
+- `useTheme()` (view) is scoped to the surface's own extension: `select(themeId | null)` picks one of its
+  own manifest themes (null clears only its own selection); `preview(overlay | null)` applies tokens
+  live, in memory only, and returns `{ ok: false, errors }` without applying for bad tokens or unreadable
+  text. One preview slot exists app-wide (the newest wins); it ends on `preview(null)`, a new generation,
+  or unload.
 
 ## Worked example
 
@@ -107,6 +113,10 @@ is wired the same way.
 `.thinkrail/extensions/ultracode/` (dynamic workflows over `tr.agents`: a script fans out subagents with
 cancel through handles and pi-reported cost; `tab` / `panel` / `toolCard` / `status` slots) is wired the
 same way.
+
+`.thinkrail/extensions/themes/` (three manifest `themes`, one with a `css` file, and a **Theme studio**
+`panel` over `useTheme().preview` / `select`, a draft in `tr.store`, JSON export to the clipboard) is wired
+the same way.
 
 ## Known limitations
 

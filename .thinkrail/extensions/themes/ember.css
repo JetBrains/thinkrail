@@ -1,0 +1,8 @@
+:root[data-theme-overlay="themes/ember"] {
+	accent-color: var(--accent);
+	scrollbar-color: var(--border-strong) transparent;
+}
+
+:root[data-theme-overlay="themes/ember"] ::selection {
+	color: var(--text);
+}

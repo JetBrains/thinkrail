@@ -18,6 +18,7 @@ const info = (name: string, overrides: Partial<ExtensionInfo> = {}): ExtensionIn
 	generation: 1,
 	build: "0123456789abcdef",
 	permissions: [],
+	themes: [],
 	surfaces: [
 		{ id: "main", slot: "panel", title: "Main" },
 		{ id: "big", slot: "tab" },

@@ -40,6 +40,7 @@ export {
 	extAssetPath,
 	extChannelKey,
 	extensionKey,
+	extThemeCssPath,
 	extToolId,
 	isExtLayoutToolId,
 	isOwnChannelKey,
@@ -47,6 +48,18 @@ export {
 	removedExtensionKey,
 	SURFACE_SLOTS,
 } from "./ext";
+export type * from "./extTheme";
+export {
+	EXT_THEME_MODES,
+	EXT_THEME_TOKEN_GROUPS,
+	EXT_THEME_TOKENS,
+	extThemeKey,
+	extThemeTokenError,
+	extThemeTokenGroup,
+	extThemeTokensErrors,
+	isExtThemeMode,
+	isExtThemeToken,
+} from "./extTheme";
 export {
 	LAUNCH_AUTH_PATH,
 	LAUNCH_TOKEN_PARAM,

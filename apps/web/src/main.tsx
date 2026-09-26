@@ -8,11 +8,18 @@ import { initExtensions } from "./ext";
 import { initNavigation } from "./navigation";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
 import { Shell } from "./shell/Shell";
-import { applyThemePreference, initializeBundledThemes, readThemeHint } from "./themes";
+import {
+	applyThemePreference,
+	initializeBundledThemes,
+	readThemeHint,
+	readThemeOverlayHint,
+	setThemeOverlay,
+} from "./themes";
 import { initTransport } from "./transport";
 
 initializeBundledThemes();
 applyThemePreference(readThemeHint());
+setThemeOverlay(readThemeOverlayHint().overlay, { verify: false });
 initTransport();
 initExtensions();
 initChatPreferencesPersistence();
