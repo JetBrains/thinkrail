@@ -799,7 +799,18 @@ own section. The kebab menu (`plan-menu`, a
   **`unpushedCommits`** the label appends the count (`Push updates (N)`), the button turns
   primary-filled, and the next-action banner grows a `push` arm ("N new commits aren't in PR #N
   yet" + Push updates) so new work after the PR never sits silently local — a successful push
-  re-reads the authoritative state and clears both when the remote-tracking branch caught up. Also a **`PR #N` chip**
+  re-reads the authoritative state and clears both when the remote-tracking branch caught up. When the
+  lookup instead reports **`behindCommits`** (origin has commits HEAD lacks — the branch **diverged**, so a
+  plain push is non-fast-forward and would fail), a distinct **force-push** state takes precedence over the
+  push arm: the header button reads **Force push needed** (`data-diverged`) and, instead of pushing, copies
+  the recovery command; the next-action banner (`data-kind="force-push"`) explains the divergence and shows
+  the copyable `git push --force-with-lease origin <branch>` (`plan-force-push-command`, Copy command). The
+  app **never force-pushes from the UI** — that stays an explicit terminal action; the page only surfaces the
+  state and the exact safe command up front rather than letting Push updates fail. `behind` is trusted only
+  on a fresh lookup (the host fetches origin then; see [[submodule-server-git]]); the field is additive and
+  backward-compatible (an older host omits it → prior behavior). Divergence logic is unit-covered at
+  `countPushDivergence`; the diverged UI state isn't exercised by the browser E2E harness, which can't
+  fabricate a detected open PR (real `gh` lookup). Also a **`PR #N` chip**
   (`plan-pr-chip`) links out when the URL is known — which is now every read, since `workspace.openReview`
   carries the review's own `url` ([[submodule-server-branch-review]]); the keyed state prefers it and falls
   back to a url carried over from an earlier answer for the same review, so a chip never loses its link on

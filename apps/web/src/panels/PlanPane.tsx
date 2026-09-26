@@ -938,6 +938,29 @@ export default function PlanPane({
 		pr: openReview ? "done" : planReady ? "active" : "pending",
 	};
 	const unpushed = openReview?.unpushedCommits ?? 0;
+	// The branch diverged from origin (remote has commits HEAD lacks): a plain push is non-fast-forward, so
+	// the UI must not offer "Push updates" (it would fail). The app never force-pushes on its own; it
+	// surfaces the exact recovery command for the user to run in a terminal. See panels/SPEC.md.
+	const diverged = (openReview?.behindCommits ?? 0) > 0;
+	const forcePushCommand = `git push --force-with-lease origin ${workspace?.branch ?? ""}`;
+	const copyForcePushCommand = () => {
+		void navigator.clipboard
+			.writeText(forcePushCommand)
+			.then(() =>
+				pushToast({
+					variant: "success",
+					title: "Command copied",
+					message: "Run it in a terminal to force-push the rewritten branch.",
+				}),
+			)
+			.catch(() =>
+				pushToast({
+					variant: "error",
+					title: "Copy failed",
+					message: "Couldn't write to the clipboard.",
+				}),
+			);
+	};
 	const openPrFlow = async (draft: boolean): Promise<void> => {
 		if (openReview) {
 			await submitPr({ draft: false });
@@ -1270,17 +1293,20 @@ export default function PlanPane({
 					<button
 						type="button"
 						data-testid="plan-open-pr"
+						data-diverged={openReview && diverged ? "" : undefined}
 						disabled={prBusy || sameBranch}
-						onClick={() => void openPrFlow(false)}
+						onClick={openReview && diverged ? copyForcePushCommand : () => void openPrFlow(false)}
 						title={
 							sameBranch
 								? "This workspace's branch is its base branch — there's nothing to open a PR against."
-								: openReview
-									? "Push new commits to the open PR and refresh its description from the plan"
-									: "Push the branch and open a PR whose description comes from this plan"
+								: openReview && diverged
+									? `The branch diverged from origin — a plain push can't land. Copy: ${forcePushCommand}`
+									: openReview
+										? "Push new commits to the open PR and refresh its description from the plan"
+										: "Push the branch and open a PR whose description comes from this plan"
 						}
 						className={`flex h-32 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-ui transition-colors ${
-							(planReady && !openReview) || unpushed > 0
+							(planReady && !openReview) || unpushed > 0 || (openReview && diverged)
 								? "bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 								: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
 						}`}
@@ -1293,9 +1319,11 @@ export default function PlanPane({
 						{prBusy && (prCompose || openReview)
 							? "Pushing…"
 							: openReview
-								? unpushed > 0
-									? `Push updates (${unpushed})`
-									: "Push updates"
+								? diverged
+									? "Force push needed"
+									: unpushed > 0
+										? `Push updates (${unpushed})`
+										: "Push updates"
 								: "Open PR"}
 					</button>
 					<DropdownMenu>
@@ -1378,6 +1406,30 @@ export default function PlanPane({
 							className={NEXT_ACTION_BUTTON_CLASS}
 						>
 							Review All
+						</button>
+					</div>
+				) : openReview && diverged ? (
+					<div data-testid="plan-next-action" data-kind="force-push" className={NEXT_ACTION_CLASS}>
+						<CircleAlert className="size-16 shrink-0 text-feedback-warning" />
+						<div className="flex min-w-0 flex-1 flex-col gap-2">
+							<span className="tr-text-ui text-text-default">
+								{openReviewLabel(openReview)}'s branch diverged from origin — a plain push can't
+								land. Run this in a terminal:
+							</span>
+							<code
+								data-testid="plan-force-push-command"
+								className="truncate rounded-[var(--radius-sm)] bg-container-elevated-bg px-6 py-2 tr-code-text text-text-default"
+							>
+								{forcePushCommand}
+							</code>
+						</div>
+						<button
+							type="button"
+							data-testid="plan-next-action-go"
+							onClick={copyForcePushCommand}
+							className={NEXT_ACTION_BUTTON_CLASS}
+						>
+							Copy command
 						</button>
 					</div>
 				) : openReview && unpushed > 0 ? (
