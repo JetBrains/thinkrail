@@ -69,7 +69,7 @@ plan; the model reaches for it to say "make the plan look like this, keep the pr
 `replaceAll(plan)` reconciles rather than rebuilding from scratch:
 
 - Each written grouped item is **matched** to an existing **agent** item by the key
-  `(group title, item title)` — both compared *decoded*; the first unconsumed match wins (duplicate
+  `(group title, item title)` — both compared *decoded and one-line-flattened* (see below); the first unconsumed match wins (duplicate
   titles reconcile positionally). A **match reuses the existing item**: its `id`, `createdAt`, `status`,
   `summary`, `verification`, `commitSubject`, and `artifacts` are kept; only `note` is updated from the
   write. A `status` in the write is **ignored for a matched item** — status advances only through
@@ -90,6 +90,13 @@ and `replaceAll` only ever admits `origin: "user"` items to `resultLoose` — a 
 item (a legacy stray) is carried into a `"Completed"` group, an open one dropped. The tools also refuse a
 direct loose agent write (`todo_add` needs `group`/`after`). The invariant is robust by construction, not
 dependent on the agent's tool discipline.
+
+**Titles are one-line, normalized at the write boundary.** Item titles and group titles are the item
+bullets and `##` group headings of the markdown export, which is a shipped artifact (the plan page's
+export and the PR body). A newline — from the plan's multi-line add input or an agent escape — would
+break that list, so `flattenTitle` collapses any whitespace run to a single space (forgiving, not a
+reject) on every write path: `add`, `update`, `replaceAll` (including its reconcile key), and `sanitize`
+on load. Callers and readers can assume a title never contains a newline; there is no per-render sanitize.
 
 **Matching is title-based, by design's current increment.** Because the key is `(group title, item
 title)`, a **group rename** or a **step rename** is not followed: the old item's done work is preserved
