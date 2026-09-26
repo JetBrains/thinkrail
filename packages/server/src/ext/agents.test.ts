@@ -314,6 +314,26 @@ test("disposing the extension generation cancels every child it spawned", async 
 	expect(service.childrenOf(parent.sessionId)).toEqual([]);
 });
 
+test("disposing the extension while a spawn creates its child waits for it and leaves no child", async () => {
+	const createChild = service.createChild;
+	let entered = false;
+	let created = false;
+	service.createChild = (spec) => {
+		entered = true;
+		return createChild(spec).finally(() => {
+			created = true;
+		});
+	};
+	const spawning = action("spawn", { task: "Late.", parent: parent.sessionId }).catch(
+		(error: unknown) => error,
+	);
+	await until(() => entered);
+	await host.dispose();
+	expect(created).toBe(true);
+	expect(service.childrenOf(parent.sessionId)).toEqual([]);
+	expect(String(await spawning)).toContain("disposed while the agent was starting");
+});
+
 test("a parent that is not live fails with a clear error", async () => {
 	await expect(action("run", { task: "x", parent: "gone" })).rejects.toThrow(
 		"parent session gone is not live",

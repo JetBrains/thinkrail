@@ -201,6 +201,23 @@ test("an unknown parent rejects: unknown-parent", async () => {
 	);
 });
 
+test("a parent that closes during createChild rejects: unknown-parent, no child registered", async () => {
+	let alive = true;
+	const closing = createDelegationService({
+		resolveParent: (id) =>
+			alive && id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-closing",
+		modelRuntime: runtime,
+	});
+	const pending = closing.createChild(subagentSpec());
+	alive = false;
+	expect(await codeOf(pending)).toBe("unknown-parent");
+	expect(closing.childrenOf(parent.sessionId)).toEqual([]);
+});
+
 test("runNow rejects: not-implemented (no V1 consumer)", async () => {
 	const child = await service.createChild(subagentSpec());
 	try {

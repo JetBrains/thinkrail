@@ -86,6 +86,7 @@ export const createAgents = ({
 }): TrAgents => {
 	const live = new Map<string, AgentHandle>();
 	const listeners = new Set<(event: AgentEvent) => void>();
+	const launching = new Set<Promise<unknown>>();
 
 	const deliver = (fns: Iterable<(event: AgentEvent) => void>, event: AgentEvent) => {
 		for (const fn of fns) {
@@ -99,6 +100,7 @@ export const createAgents = ({
 
 	generation.addDisposer(async () => {
 		listeners.clear();
+		await Promise.allSettled(launching);
 		await Promise.all([...live.values()].map((handle) => handle.cancel()));
 	});
 
@@ -186,7 +188,7 @@ export const createAgents = ({
 			throw new Error(
 				`tr.agents.spawn: parent session ${parentSessionId} is not live; pass a live top-level session id or the tool's ctx`,
 			);
-		const child = await service.createChild({
+		const creating = service.createChild({
 			parent: parentSessionId,
 			info: {
 				createdBy: `ext:${name}`,
@@ -196,11 +198,13 @@ export const createAgents = ({
 			session: sessionOptionsOf(spec),
 			concurrency: { pool: `ext:${name}`, max },
 		});
-		if (generation.phase !== "active") {
+		const launch = creating.then(async (child) => {
+			if (generation.phase === "active") return start(child, spec, options.signal);
 			await child.dispose();
 			throw new Error("tr.agents.spawn: the extension was disposed while the agent was starting");
-		}
-		return start(child, spec, options.signal);
+		});
+		launching.add(launch);
+		return launch.finally(() => launching.delete(launch));
 	};
 
 	return {

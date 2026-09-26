@@ -254,7 +254,9 @@ lineage.
    (queued = only its first prompt waits), so the id is stable for cards/transcripts from birth.
    No separate run UUID.
 9. **`parent` is the only identity input** — `scope`/`cwd`/model defaults derive from the
-   live parent; inconsistent triples unrepresentable; parent must be live (`unknown-parent`).
+   live parent; inconsistent triples unrepresentable; parent must be live (`unknown-parent`),
+   re-checked after creation's awaits: a parent that closed meanwhile disposes the new session and
+   rejects the same way, so `disposeChildrenOf` never misses an in-flight child.
 10. **Run methods resolve for run failures** (`error`/`aborted` are values with details); typed
     `DelegationError` rejections only for contract misuse.
 11. **One run at a time per child**; sequential runs allowed; registry keeps the latest snapshot —

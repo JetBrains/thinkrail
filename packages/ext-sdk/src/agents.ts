@@ -19,7 +19,7 @@ export interface AgentSpec {
 
 export interface AgentSpawnOptions {
 	parent: AgentParent;
-	signal?: AbortSignal;
+	signal?: AbortSignal | undefined;
 	maxConcurrent?: number;
 }
 

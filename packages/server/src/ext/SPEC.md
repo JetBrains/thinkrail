@@ -193,8 +193,8 @@ lists trusted project paths, so the section stays stable across trust changes an
   Events map from the run: `queued` when the run is queued, `started` on the first `running` update,
   `progress` per update, `settled` after disposal. `result` never rejects: a thrown run resolves as
   `error`. `spawn` throws unless the generation is `active` (so a dry run never starts a model), and
-  disposes a child whose generation died while it was being created. The generation's disposer cancels
-  and awaits every unsettled child. `tr.on` stays top-level only; `tr.agents.onEvent` is how an
+  disposes a child whose generation died while it was being created. The generation's disposer first awaits
+  every spawn still creating its child, then cancels and awaits every unsettled child. `tr.on` stays top-level only; `tr.agents.onEvent` is how an
   extension observes its own children.
 
 ## Example extension

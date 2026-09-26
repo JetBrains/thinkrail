@@ -617,6 +617,13 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			...(options.excludeTools !== undefined ? { excludeTools: options.excludeTools } : {}),
 		});
 		if (childFactories.length > 0) await session.bindExtensions({ mode: "print" });
+		if (!bindings.resolveParent(spec.parent)) {
+			session.dispose();
+			throw new DelegationError(
+				"unknown-parent",
+				`Parent session ${spec.parent} closed while its child was being created`,
+			);
+		}
 
 		const record: SpawnRecord = {
 			sessionId: session.sessionId,
