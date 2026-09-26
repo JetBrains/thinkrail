@@ -56,7 +56,11 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   derives `agentResponded` from chronological rows (a later `markdown`/`tool`/`activity`/`divider` row
   exists after this user row, **or** it is the trailing user row while `isStreaming`) and every transcript
   integration supplies that state to the renderer. It remains client view state only, with no wire impact.
-  Below 500 chars the bubble is unchanged. The retry countdown carries a `source` (`turn` =
+  Below 500 chars the bubble is unchanged. When expanded, a large body is height-capped with an internal
+  scroll (`max-h-[60vh] overflow-y-auto`) so a huge paste never balloons the row into a multi-thousand-px
+  DOM node; and `estimateChatRowHeight` estimates a large user row at its collapsed size (the resting
+  state) rather than its full wrapped height — both prevent the virtualizer from over-reserving space and
+  stranding a phantom empty gap during streaming. The retry countdown carries a `source` (`turn` =
   pi `auto_retry_*`; `summarization` = compaction/branch-summary `summarization_retry_*`, pi ≥0.81.1) —
   the flows can overlap mid-run, each keeps exactly one indicator (re-scheduling replaces, each source's
   end event clears only its own), and `RetryIndicator` labels them apart ("Retrying" vs "Retrying
@@ -176,6 +180,17 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   self-framed card (`tools/subagent/SubagentCompletionCard`) — **the** terminal signal for a background
   run, whose `Agent` tool card froze at its ack (why + card anatomy:
   [tools/subagent/SPEC.md](tools/subagent/SPEC.md)). Never folded into activity groups.
+- `reviewFix` — a `todo-review-fix` custom message (#363): a plan-review verdict's fix request the host
+  delivers to the worker chat as **structured `ReviewFixDetails`** (not a synthetic user turn). Rendered as
+  a compact `ReviewFixCard` (`turns.tsx`, `data-testid="review-fix-card"`) — a one-line summary
+  (`Requested a fix on “<title>” · N findings`), the optional feedback note, and the findings as
+  fold-out comments via the shared `ReviewPackageComments` (`ReviewPackageComments.tsx`, the fold-out
+  row primitive), path/lines pre-resolved server-side. That shared list + the `ReviewFixComment`→
+  `ReviewPackageItem` mapping (`reviewPackage.ts`) are reused by the review-package card and the
+  `request_review` verdict card ([[submodule-chat-tools]]).
+  Distinct from the file-chat review-comments card above: that path stays a `<review …>` **user** message
+  parsed by `reviewPackage.ts` (own `review-package-*` testids); only the todo-fix path is structured.
+  Never folded into activity groups.
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
   round ends: elapsed time, tool-call count, and the round's written files as **two chips split by owning
   tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on exactly
@@ -307,11 +322,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   append-only refresh preserves row identity and manual folds instead of remounting the transcript.
   Works during the run, after completion, and after a host restart (transcripts persist on disk; only
   the in-memory registry is lost — and its absence is precisely what stops the polling).
-- **`askState`** — the questionnaire lifecycle seam: the pure `deriveAskStates(turns, askAnswers)` +
-  `AskStatesContext`/`useAskState` (provided by `ChatView`, `null` standalone). The ask tool is **ack +
-  terminate** (its tool result is just an ack; the reply arrives later as an `ask-user-answers` message),
-  so "answered / superseded / awaiting" is a fact about the transcript, not a tool status — derived once
-  per runtime snapshot and consumed by the card via context, keeping it props-driven everywhere else.
+- **`askState`** — the questionnaire lifecycle seam: the pure
+  `deriveAskStates(turns, askAnswers, toolResults)` + `AskStatesContext`/`useAskState` (provided by
+  `ChatView`, `null` standalone). A live blocking ask resolves through its native tool result; a
+  restart-repaired eligible ack resolves later through `ask-user-answers`; a stopped/error/length result is
+  terminal because Pi never executes tools from a length-truncated assistant response. "Answered /
+  superseded / stopped / awaiting" is therefore derived once from all three transcript
+  projections and consumed by the card and plan glance, keeping both props-driven everywhere else.
   The same seam supplies an opaque **per-mounted-ChatView focus scope**: an awaiting card claims attention
   once within that scope (so Virtuoso remounts cannot steal focus), while a fresh mount creates a new scope
   and may focus the still-pending question again. "Fresh mount" is broader than closing/reopening the chat:
@@ -342,7 +359,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error turn's.
   `custom` messages: `ask-user-answers` indexes into `askAnswers` (never a turn — the questionnaire card
   is its rendering); `subagent-completion` **becomes its own `subagentCompletion` turn** (the completion
-  card is transcript-positioned, so it maps its message index too); unknown customTypes are ignored. No
+  card is transcript-positioned, so it maps its message index too); `todo-review-fix` **becomes its own
+  `reviewFix` turn** (same positioning); unknown customTypes are ignored. No
   store/transport/shiki.
 - **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
   a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
@@ -375,8 +393,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   for oldest-first, top for newest-first. A freshly shown idle transcript mounts there; an already-working
   transcript reconstructs directly at Settle with only the room its active response needs. Switching order
   remounts at that order's current target because preserving a pixel position across total reversal has no
-  stable meaning. A pending jump-to-message then overrides the mount with its centered controller reveal.
-  There is no intermediate wrong-edge paint or cross-order animation. Initial virtual geometry is
+  stable meaning. Newest-first mounts at the browser's native zero scroll origin rather than arming a
+  redundant delayed Virtuoso correction that could overwrite immediate reader input; oldest-first needs
+  Virtuoso's explicit final-row placement. A pending jump-to-message then overrides the mount with its
+  centered controller reveal. There is no intermediate wrong-edge paint or cross-order animation. Initial virtual geometry is
   **row-aware**: each projected row receives a conservative estimate derived from prose wrapping, block
   breaks, and physical fenced-code lines without splitting one canonical Markdown block. Bounded pixel and
   item overscan lets nearby outliers replace estimates before coarse input exhausts a false range. Native
@@ -392,11 +412,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Reader intent and exact-edge rearm** — wheel, trackpad, touch, scrollbar, and navigation-key input
   detaches only when it can cause or has caused real viewport movement; pushing outward against the current
   physical edge is a no-op. Potential native input pauses competing controller motion without changing
-  alignment; if no movement follows, alignment resumes on the next frame. Movement into history detaches
-  once; native movement that interrupts an active alignment also detaches even when directed toward latest,
-  unless that movement itself reaches the exact edge. Explicit text selection and user-invoked
-  message/history, breadcrumb, or tool-page navigation also
-  detach. Pointer provenance survives release long enough for native scrollbar-track animation, keyboard
+  alignment. An interrupted return remains logically moving while awaiting a wheel or navigation-key default
+  action; an explicit pointer hold is stationary. If no movement follows, alignment resumes after the bounded
+  input-intent window rather than on the next frame, because an embedded webview may apply default wheel
+  scrolling after that frame. Movement into history detaches once; native movement that interrupts an active
+  alignment also detaches even when directed toward latest, unless that movement itself reaches the exact edge.
+  Explicit text selection and user-invoked message/history, breadcrumb, or tool-page navigation also detach.
+  Pointer provenance survives release long enough for native scrollbar-track animation, keyboard
   provenance covers focus-induced scrolling from interactive transcript controls, and both expire on
   scroll-end or a bounded timeout so later geometry cannot inherit them. A return gesture rearms once only
   when it reaches the physical latest edge within the shared 1px geometry tolerance; directions invert with
@@ -512,8 +534,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   live session. Pi's effective
   clamp is authoritative, with no optimistic intermediate state. A rejection is surfaced while the selector
   stays open and triggers an authoritative `session.list` pair reconciliation before the lock releases; if
-  that read also fails, the prior pair remains intact. A pre-v66 host's legacy ack—including the
-  analytics-only v65 host—instead reconciles the requested session choice. The same successful v66+ mutation
+  that read also fails, the prior pair remains intact. A pre-v69 host's legacy ack—including the
+  agent-review-only v68 host—instead reconciles the requested session choice. The same successful v69+ mutation
   also sets that workspace's future-chat starting
   pair on the host, which reaches the client as its own `workspace.updated` push rather than a local mirror
   write. No separate workspace setting
@@ -815,6 +837,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   offsets in state and applied a `translate(...)` inline style, which both violated the invariant and
   re-rendered the composer on every scrolled frame). The backdrop's **ref callback** seeds the offsets at
   mount, so a session starting in an already-scrolled composer never paints even one frame misaligned.
+- **Native `/name`** — the browser-native command catalog gains
+  `/name <title>` beside `/compact`, labelled `Pi/built-in` and reserved over an exact-name extension or
+  prompt-template collision to match pi's own command. The parser reserves both bare `/name` and
+  `/name <title>`; a valid argument bypasses the user-message echo and agent send, calls `session.rename`,
+  then clears the composer. Blank/over-limit input stays in the composer with an actionable validation error;
+  transport rejection keeps the durable title unchanged and surfaces as an in-chat error. The command is
+  hidden against a host older than the session-rename feature constant. It is the keyboard path to the same
+  domain mutation as the shell's tab/history controls—never a separate title source—and automatic generation
+  has no ChatView spinner or transcript row.
 - **Save-as-template + template management** (`TemplateEditorDialog.tsx`; `HistoryOverlay`'s save action;
   `panels/TemplatesSettings.tsx`) — one shared create/edit surface for prompt-template files, reused by two
   entry points that never talk to each other: the Settings → Templates panel (list + New/Edit/Delete, see
@@ -835,8 +866,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
     `description: 'single-quoted'` loaded into the form with literal quotes and saved back corrupted).
     Its boundary
     rule mirrors pi's own `extractFrontmatter` (`@earendil-works/pi-coding-agent`'s
-    `dist/utils/frontmatter.js` + `dist/utils/text.js`, pinned against pi v0.84.3 — the same pin
-    `packages/server/src/templates/SPEC.md` uses server-side; re-verify both on a pi version bump): strip
+    `dist/utils/frontmatter.js` + `dist/utils/text.js` of the catalog-pinned pi — the same facts
+    `packages/server/src/templates/SPEC.md` relies on server-side; re-verify both on a pi bump): strip
     one leading UTF-8 BOM, normalize newlines, then end the frontmatter block at the FIRST later `\n---`
     line; the body is everything after that fence run through `.trim()` — not a single optional `\n`.
     A prior version had two independently hand-rolled regex splitters (one per file), each consuming only
@@ -1008,13 +1039,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **The glance state** keeps the plan honest as the user's status window: `planGlance(isStreaming,
   askStates)` — derived from session state in `ChatView`, **never stored**, so the agent can't make it
   lie — renders the `in_progress` step as working (dot), **waiting for your answer**
-  (`MessageCircleQuestion` — the same glyph as the `ask_user_question` card, when the agent stopped with
-  an awaiting question), or **paused** (`CirclePause`, any other stop: turn ended, error). A stop with no
+  (`MessageCircleQuestion` — the same glyph as the `ask_user_question` card, while a live tool blocks or a
+  restart-repaired session awaits), or **paused** (`CirclePause`, any other stop: turn ended, error). A stop with no
   pending question never claims the user owes an answer. **The header strip reflects the agent's state,
   not the checkboxes** (`stripStatus`, decoupled from the `in_progress` step): it shows "waiting for
   your answer" **even when every item is done** (the earlier strip hid it whenever there was no
-  in-progress step, so an agent blocked on a question read as "finished"); "working" while it runs;
-  "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
+  in-progress step, so an agent blocked on a question read as "finished"); waiting outranks the raw live
+  run flag; "working" covers other runs; "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
   idle). The glance stays **chat-local and is not the Projects rail's authority**, even though the rail's
   host-derived `ActivityStatus` overlaps it: `askStates` exists here for a job status cannot do —
   `useAskState(toolCallId)` renders *which* questionnaire is awaiting — so `planGlance` is a one-line

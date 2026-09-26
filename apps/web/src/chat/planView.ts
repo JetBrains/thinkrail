@@ -7,7 +7,7 @@ import type {
 	TodoPlan,
 } from "@thinkrail/contracts";
 import { type AskState, deriveAskStates } from "./askState";
-import type { ChatTurn } from "./types";
+import type { ChatTurn, ToolResultState } from "./types";
 
 export type ItemChangeSet =
 	| { kind: "commit"; sha: string; files: GitFileChange[] }
@@ -116,6 +116,13 @@ export function reviewSettled(item: TodoItem): boolean {
 	return r !== undefined && r.state === "reviewed" && (r.unreviewedShas?.length ?? 0) === 0;
 }
 
+/** Ship-ready = every step done AND no reviewable step still unsettled. Derived from the plan alone so a
+ * host-version action gate can never make it read ready over an unreviewed step. See panels/SPEC.md. */
+export function isPlanReady(plan: TodoPlan): boolean {
+	const { done, total } = planSummary(plan);
+	return total > 0 && done === total && reviewableItems(plan).every(reviewSettled);
+}
+
 export function reviewChangesRequested(item: TodoItem): boolean {
 	return item.review?.state === "changes_requested";
 }
@@ -200,17 +207,20 @@ export function planSections(plan: TodoPlan): PlanSections {
 export type PlanGlance = "working" | "waiting_question" | "waiting";
 
 export function planGlance(isStreaming: boolean, askStates: Record<string, AskState>): PlanGlance {
-	if (isStreaming) return "working";
-	const awaiting = Object.values(askStates).some((s) => !s.answer && !s.superseded);
-	return awaiting ? "waiting_question" : "waiting";
+	const awaiting = Object.values(askStates).some(
+		(state) => !state.answer && !state.superseded && !state.terminal,
+	);
+	if (awaiting) return "waiting_question";
+	return isStreaming ? "working" : "waiting";
 }
 
 export function sessionGlance(rt: {
 	isStreaming: boolean;
 	turns: ChatTurn[];
 	askAnswers: Record<string, AskUserQuestionResult>;
+	toolResults: Record<string, ToolResultState>;
 }): PlanGlance {
-	return planGlance(rt.isStreaming, deriveAskStates(rt.turns, rt.askAnswers));
+	return planGlance(rt.isStreaming, deriveAskStates(rt.turns, rt.askAnswers, rt.toolResults));
 }
 
 export function shouldNudgeOnAdd(glance: PlanGlance): boolean {

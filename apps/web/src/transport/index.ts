@@ -10,5 +10,6 @@ export type { ConnectionStatus, TransportOptions } from "./transport";
 export {
 	getTransport,
 	initTransport,
+	supportsPlanReview,
 	supportsWorkspaceModelPreferences,
 } from "./wireTransport";

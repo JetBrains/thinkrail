@@ -9,6 +9,7 @@ import {
 	isControlMessage,
 	isRetriedAttempt,
 	isSubagentCompletionMessage,
+	isTodoReviewFixMessage,
 } from "@thinkrail/contracts";
 import { userText } from "../lib";
 import { assistantFailureText } from "./assistantFailure";
@@ -76,6 +77,14 @@ export function messagesToRuntime(
 			turnId = transcriptTurnId(message, index, options);
 			turns.push({
 				kind: "subagentCompletion",
+				id: turnId,
+				details: message.details,
+				text: customMessageText(message.content),
+			});
+		} else if (isTodoReviewFixMessage(message)) {
+			turnId = transcriptTurnId(message, index, options);
+			turns.push({
+				kind: "reviewFix",
 				id: turnId,
 				details: message.details,
 				text: customMessageText(message.content),

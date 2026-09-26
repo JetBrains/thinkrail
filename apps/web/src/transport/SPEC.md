@@ -123,19 +123,21 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   workspace and session, making that untrusted-response identity check one shared installation boundary rather
   than a caller convention).
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
-  skill-load-safe session request wrappers, `supportsWorkspaceModelPreferences`, `errorText`, `RequestError`,
-  `wsErrorCode`, `ConnectionStatus`, `TransportOptions`. `supportsWorkspaceModelPreferences` is the shared
-  `WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION` gate for mutation-result reconciliation: it decides whether a
-  result carries Pi's effective pair or is a pre-v66 ack—including an analytics-only v65 host—the caller must
-  reconstruct the pair around.
-  `supportsSessionActivity` stays module-internal (its own tests import the file directly) — no
-  sibling decides the activity capability, this module does.
+  skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
+  `TransportOptions`, `supportsPlanReview`, `supportsWorkspaceModelPreferences`. `supportsSessionActivity` stays
+  module-internal (this module is the only one that acts on the activity capability, and its own tests import the
+  file directly); `supportsPlanReview` is exported because a sibling panel (`PlanPane`) gates the plan-review UI on
+  it — an older host serves no `todo.startReview`/`reviewAll`, so the client must not offer them.
+  `supportsWorkspaceModelPreferences` is the shared `WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION` gate for
+  mutation-result reconciliation: it decides whether a result carries Pi's effective pair or is a pre-v69
+  ack—including the agent-review-only v68 host—the caller must reconstruct the pair around.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
   `SessionDeletedPayload` for `session.deleted`, `SessionActivityPayload` +
-  `ACTIVITY_PROTOCOL_VERSION` for `session.activity` and its snapshot gate,
-  `WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION` for model-preference reconciliation, `provider.changed`, the empty addressed
+  `ACTIVITY_PROTOCOL_VERSION` for `session.activity` and its snapshot gate, `PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION`
+  for the `supportsPlanReview` gate, `WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION` for model-preference
+  reconciliation, `provider.changed`, the empty addressed
   `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` + `host.updateAvailable`,
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +
   `settings.changed`); `store`

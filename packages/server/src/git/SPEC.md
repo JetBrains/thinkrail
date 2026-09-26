@@ -222,6 +222,13 @@ ref off the workspace-create critical path.
   **`readCommitSubject(workspaceId, sha)`** → `string | null` — a commit's subject line (`null` when the
   sha is malformed or unresolvable), the sync read behind the todos module's adopted-commit review
   resolver (`base..HEAD` commits owned by no plan item).
+  **`listCommitsSince(workspaceId, sinceSha)`** → `{ sha, subject }[]` for `sinceSha..HEAD`,
+  **oldest-first** (`git log --reverse`, capped at `COMMIT_LIST_MAX`), for the todos module's
+  work-window commit adoption ([[submodule-server-todos]]): commits a subagent/user landed while an
+  item was `in_progress`, so a `done` item claims them instead of leaking them to `adoptedCommits`.
+  `sinceSha` is the item's own baseline head (`gitHeadSha` at `in_progress`); a null/unborn head or a
+  non-hex value yields `[]`, and the sha is bracketed by `--end-of-options` regardless. A timeout/launch
+  failure throws; an unreadable range that exits normally degrades to `[]`.
   **`resolveListedCommit(workspaceId, sha)`** → `string | null` — the **canonical OID** of `sha` iff it is
   in the **same capped `base..HEAD` set `listCommits` emits** (same `COMMIT_LIST_MAX` + range), else
   `null`. Returning the canonical sha lets the adopted-commit review resolver reject an abbreviated /
@@ -230,7 +237,7 @@ ref off the workspace-create critical path.
 - **Public surface (barrel):** `git`, `gitAsync`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,
   `readBlobAt`, `readCommitSubject`,
-  `gitCommitPaths`, `gitHeadSha`, `listCommits`,
+  `gitCommitPaths`, `gitHeadSha`, `listCommits`, `listCommitsSince`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `resolveListedCommit`, `prefetchBranch`, `countUnpushedCommits`, `listRemotes`, `remoteNameOf`.

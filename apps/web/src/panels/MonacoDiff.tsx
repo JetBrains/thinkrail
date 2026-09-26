@@ -158,6 +158,7 @@ export default function MonacoDiff({
 				useInlineViewWhenSpaceIsLimited: false,
 				hideUnchangedRegions: { enabled: true },
 				ignoreTrimWhitespace: ignoreWhitespace,
+				renderOverviewRuler: false,
 			}}
 		/>
 	);

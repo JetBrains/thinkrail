@@ -17,6 +17,16 @@ export type {
 import type { AgentEvent, AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ImageContent, Message, Model, StopReason, TextContent } from "@earendil-works/pi-ai";
 
+const NON_EXECUTABLE_TOOL_CALL_STOP_REASONS: ReadonlySet<string> = new Set([
+	"error",
+	"aborted",
+	"length",
+]);
+
+export function assistantToolCallsAreExecutable(stopReason: string | undefined): boolean {
+	return stopReason === undefined || !NON_EXECUTABLE_TOOL_CALL_STOP_REASONS.has(stopReason);
+}
+
 export type WireModel = Pick<
 	Model<string>,
 	"id" | "name" | "provider" | "contextWindow" | "reasoning"

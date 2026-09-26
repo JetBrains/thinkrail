@@ -1,8 +1,14 @@
-import type { PiEvent, SessionEventPayload, TodoPlan } from "@thinkrail/contracts";
+import type {
+	PiEvent,
+	ReviewChangedPayload,
+	ReviewFailedPayload,
+	SessionEventPayload,
+	TodoPlan,
+} from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
-import { isConnectedGeneration, selectChatTitle, useAppStore } from "../store";
+import { isConnectedGeneration, selectChatTitle, toast, useAppStore } from "../store";
 import { errorText, getSessionMessagesWithSkillBaseline, getTransport } from "../transport";
 import { messagesToRuntime } from "./hydrate";
 import { sessionGlance, shouldNudgeOnAdd } from "./planView";
@@ -43,8 +49,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		},
 		[sessionId, workspaceId],
 	);
-	const reviewerRef = useRef<string | undefined>(undefined);
-
 	useEffect(() => {
 		if (status !== "connected" || connectionGeneration === 0) return;
 		let cancelled = false;
@@ -65,7 +69,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 						isConnectedGeneration(useAppStore.getState(), effectConnectionGeneration) &&
 						live(effectIdentity)
 					) {
-						reviewerRef.current = plan.reviewerSessionId;
 						setData(plan);
 						setFailed(false);
 					}
@@ -92,14 +95,31 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		};
 		const unsubscribe = getTransport().subscribe(WS_CHANNELS.piEvent, (payload) => {
 			const event = payload as SessionEventPayload;
-			if (event.sessionId !== sessionId && event.sessionId !== reviewerRef.current) return;
+			if (event.sessionId !== sessionId) return;
 			if (shouldRefreshTodos(event.event)) scheduleRefetch();
 		});
+		// A plan review runs as a hidden subagent (no piEvent for this session) and writes its verdict to the
+		// review record; the host re-broadcasts reviewChanged when it lands, so refetch the plan to show it.
+		const unsubscribeReview = getTransport().subscribe(WS_CHANNELS.reviewChanged, (payload) => {
+			if ((payload as ReviewChangedPayload).workspaceId === workspaceId) scheduleRefetch();
+		});
+		// A detached review has no chat to carry a failure; the owning plan raises it as a toast (routed by
+		// sessionId, deduped across split views by the toast body). See panels/SPEC.md.
+		const unsubscribeReviewFailed = getTransport().subscribe(
+			WS_CHANNELS.reviewFailed,
+			(payload) => {
+				const failure = payload as ReviewFailedPayload;
+				if (failure.workspaceId !== workspaceId || failure.sessionId !== sessionId) return;
+				toast.error(failure.message, `Review of “${failure.itemTitle}” failed`);
+			},
+		);
 		return () => {
 			cancelled = true;
 			readGeneration.current += 1;
 			if (refetch) clearTimeout(refetch);
 			unsubscribe();
+			unsubscribeReview();
+			unsubscribeReviewFailed();
 		};
 	}, [connectionGeneration, identity, live, sessionId, status, workspaceId]);
 
@@ -139,7 +159,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 				return reloadPlan();
 			}
 			if (readGeneration.current !== mine || !live(requestIdentity)) return false;
-			reviewerRef.current = plan.reviewerSessionId;
 			setData(plan);
 			return true;
 		} catch {

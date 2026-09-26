@@ -72,7 +72,11 @@ First-name-wins in trust order — **builtins → personal (`<agentDir>/agents/*
 shadow a built-in or personal name (decision 6 below), and project definitions load only when
 `ctx.isProjectTrusted()`. Built-ins are **TS constants** (`builtins.ts`: scout / planner / worker /
 reviewer — user-settled), not `.md` files, so they survive `bun build --compile` and get
-typechecked; user-authored definitions keep the community `.md` + frontmatter convention
+typechecked; the `worker` alone can mutate files, and its prompt forbids history/index git
+(`commit`/`add`/`stash`/`reset`/`push`): a child shares the parent's worktree and branch, so a
+self-commit fragments the parent's history and detaches the work from whatever tracks it (in
+ThinkRail, the per-plan-step commit map); the parent/host owns
+committing, git-read stays open. User-authored definitions keep the community `.md` + frontmatter convention
 (`name`, `description`, `tools`, `model`, `thinking`, `max_turns`, `inherit_project_context`,
 `skills`, `extensions`; body = system prompt). Malformed files are skipped, never fatal. All four
 builtins set `extensions: true` (the embedder's curated child set — inert under pure-pi

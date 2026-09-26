@@ -4,14 +4,13 @@ import { getTransport } from "../transport";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 export function useWorkspaceReview(workspaceId: string | null): { failed: boolean } {
-	const [failed, setFailed] = useState(false);
+	const [failedFor, setFailedFor] = useState<string | null>(null);
 	useWorkspaceRead(workspaceId, (id) => getTransport().request("review.get", { workspaceId: id }), {
 		onResult: (result, id) => {
-			setFailed(false);
+			setFailedFor(null);
 			useAppStore.getState().setWorkspaceReview(id, result);
 		},
-		onFailure: () => setFailed(true),
-		onSwitch: () => setFailed(false),
+		onFailure: (id) => setFailedFor(id),
 	});
-	return { failed };
+	return { failed: failedFor !== null && failedFor === workspaceId };
 }

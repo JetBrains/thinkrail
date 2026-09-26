@@ -68,10 +68,14 @@ function assertExternalModel(models: unknown): asserts models is Record<string, 
 			(model) =>
 				typeof model === "object" &&
 				model !== null &&
-				(model as { provider?: string; id?: string }).provider === "compiled-external" &&
-				(model as { provider?: string; id?: string }).id === "compiled-external-model",
+				(model as { provider?: string; id?: string; name?: string }).provider ===
+					"compiled-external" &&
+				(model as { provider?: string; id?: string; name?: string }).id ===
+					"compiled-external-model" &&
+				(model as { provider?: string; id?: string; name?: string }).name ===
+					"Compiled external extension model (.pi)",
 		),
-		"global external extension model is missing",
+		"global external extension model (value-importing pi) is missing",
 	);
 }
 
@@ -203,9 +207,10 @@ export async function runArtifactHostProbes(adapter: ArtifactHostAdapter): Promi
 	mkdirSync(dirname(centralArtifact), { recursive: true });
 	writeFileSync(
 		centralArtifact,
-		`const model = {
+		`import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
+const model = {
   id: "compiled-external-model",
-  name: "Compiled external extension model",
+  name: \`Compiled external extension model (\${CONFIG_DIR_NAME})\`,
   reasoning: false,
   input: ["text"],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },

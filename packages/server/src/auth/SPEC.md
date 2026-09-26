@@ -42,8 +42,13 @@ ourselves and never surface a credential value over the wire.
     or while a rebuild is outstanding, so it cannot delay a Connect or a candidate cutover.
     Assembly is a pure `buildProviderReport(sources)` over a narrow sources slice, unit-tested with
     fixture data. Its runtime reads are restricted to the generation's provider-id allowlist captured before
-    the opaque Central extension loads (after invariant host registrations): Central-owned provider objects,
-    auth capabilities, credentials, and details never become ordinary provider rows or cross the wire.
+    the opaque Central extension loads (after invariant host registrations): providers Central *introduces*
+    never become rows or cross the wire. A built-in Central *replaces* (`anthropic`, `openai`, `google-vertex`
+    in the real artifact) stays a row — the user must be able to see which providers reach them through
+    JetBrains AI — and is reported as `kind: "central"` with no `detail`, decided purely by the id's membership
+    in the generation's `opaqueProviderIds`; its `name` is the generation's pre-extension display name (pi
+    composes `extension.name ?? base.name`, so a live read would hand an artifact-chosen string to the client),
+    while `configured` and `canLogout` follow the ordinary reads and Central's `baseUrl`/`apiKey` are never read.
     - **OAuth-capable ids are first-class rows.** The id universe unions model-catalog providers,
       stored-credential providers (`listCredentials()`), **and** providers whose `Provider.auth.oauth`
       is present — an OAuth id can differ from any model-provider id (`openai-codex` ≠ `openai`), and a
@@ -56,8 +61,9 @@ ourselves and never surface a credential value over the wire.
       hand-maintained exclusion sets are gone; `openai-codex` reports `false` because pi's provider has
       no key auth, not because we said so). `canLogout` = the id has a stored
       **auth.json** credential (`credentialProviders`) — the only auth the host can remove; env / models.json-
-      keyed auth report `false` (Sign-out would no-op, so the strip hides it). Central is represented only by
-      the dedicated closed lifecycle, never inferred or attached to a provider row.
+      keyed auth report `false` (Sign-out would no-op, so the strip hides it). Central's own lifecycle is only
+      the dedicated closed `jbcentral` status, never a row; the `central` kind on a replaced built-in is an
+      identity fact, never inferred from model URLs or configuration.
   - `providerLogin` — the in-app credential **writes**, session-less (a login runs on the Welcome screen
     before any session exists), so a `loginId`-keyed sibling of `agent/webUiContext`:
     - `startLogin(providerId, type = "oauth")` → `{ loginId }` **synchronously**; `runtime.login(id,

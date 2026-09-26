@@ -204,7 +204,7 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 		);
 	await page.getByTestId("chat-send").click();
 	await expect(activeCard(page)).toBeVisible({ timeout: 90_000 });
-	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false", {
+	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "true", {
 		timeout: 30_000,
 	});
 

@@ -66,10 +66,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 
     Candidate preparation takes only the reviewed opaque Central path set, builds a fresh runtime, applies the
     composition root's invariant generation initializer (the source-mode e2e host uses it for its gated fake
-    providers), records that pre-opaque provider-id allowlist for `provider.status`, and then applies the opaque
-    extensions once through PI's public headless loader. The generation records ids introduced or replaced
-    by that loader through opaque registration-identity comparison, never configuration values; those ids
-    stay outside ordinary auth reads. Thus auth never inspects or emits Central's provider
+    providers), records that pre-opaque provider-id allowlist for `provider.status` together with each id's
+    display name at that moment, and then applies the opaque
+    extensions once through PI's public headless loader. The generation separately records ids introduced
+    or replaced by that loader (`opaqueProviderIds`) through opaque registration-identity comparison, never
+    configuration values. The allowlist stays the full pre-opaque set: a novel Central id was never in it
+    and so never becomes a row, while a replaced built-in (`anthropic`, `openai`, …) stays visible and
+    auth attributes it to Central by intersecting the two sets. (Subtracting the opaque set from the allowlist
+    — briefly done for analytics attribution — made every Central-routed provider vanish from the Providers
+    section; the two facts must stay separate.) Thus auth never inspects or emits Central's provider
     configuration, while an add/remove/replace can never drop process-local provider registrations. The
     initializer must be configured before the first generation and runs for every candidate. The path is the
     only artifact fact this module receives;
@@ -99,7 +104,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
     the web UI downsizes user-attached images itself at attach time — `apps/web`'s `chat/imageAttachment`
     caps the long edge at 1568px — and the `imageGuard` extension below is the in-context second line of
-    defense); a shared `registerSession` publishes each event
+    defense). The override is **re-applied after every `settings.reload()`**: pi's `SettingsManager.reload()`
+    rebuilds settings from disk and drops `applyOverrides`, and the resource loader reloads settings on every
+    `reload()` — including inside `createAgentSession` — so a one-shot override never reached a prompt. Since
+    pi 0.87 the same setting also governs prompt-attached and tool-result images, so the override is what keeps
+    pi from rewriting user text with `[Image omitted…]` hints (which would defeat the client's optimistic-echo
+    dedup); a shared `registerSession` publishes each event
     tagged with its id + `bindExtensions({ mode:'rpc', uiContext })`. The event projection retains the
     final `agent_end` assistant's reported terminal metadata and attaches it to `agent_settled`, so the
     wire has one authoritative automatic-work terminal even when compaction/retry happens between those
@@ -129,9 +139,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `queue_update` cannot resurrect the phantom. The counter is per live entry only (Pi's ephemeral queues
     never survive a process restart) and resets whenever `clearQueue()` empties both lanes.
 
-    **Remove this whole override on the next pi bump that ships the upstream fix.** The repo pins
-    `pi@0.84.3`; the upstream fix (earendil-works/pi#8612) is **open and unreleased** — not present in any
-    published version through `0.85.1`. Once Pi clears empty-text image deliveries natively, drop
+    **Remove this whole override on the pi bump that ships the upstream fix** (earendil-works/pi#8612,
+    still open when last checked). Once Pi clears empty-text image deliveries natively, drop
     `stuckEmptyDeliveries`, `displayedLane`, the synthesized `queue_update`, and the `effectivePendingCount`
     adjustment. The removal gate is the installed code, not the PR state: on every pi bump grep the installed
     `agent-session.js` for the `if (messageText)` guard around `this._steeringMessages.indexOf` — while that
@@ -148,10 +157,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     | # | condition | status |
     |---|---|---|
     | 1 | a pending blocking extension dialog | `waiting` |
-    | 2 | `session.isStreaming` | `running` |
-    | 3 | `session.pendingMessageCount > 0` | `queued` |
-    | 4 | an unanswered `ask_user_question` | `waiting` |
-    | 5 | the run failed (see below) | `failed` |
+    | 2 | a live `ask_user_question` in `expected` or `waiting` phase | `waiting` |
+    | 3 | `session.isStreaming` | `running` |
+    | 4 | `session.pendingMessageCount > 0` | `queued` |
+    | 5 | an unanswered restart-repaired `ask_user_question` | `waiting` |
+    | 6 | the run failed (see below) | `failed` |
     | — | otherwise | idle, i.e. `null` |
 
     **A failure is `stopReason` `error` *or* `length`.** Both are actionable faults the chat already renders
@@ -171,20 +181,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     instead of silently reading idle while the chat itself shows the failure.
 
     Every rung of that order is load-bearing and pinned by `activity.test.ts`:
-    - **A dialog outranks streaming** because pi is technically mid-turn while blocked on it, yet the person
-      is the blocker. Reporting `running` would hide a prompt waiting for an answer.
-    - **`queued` outranks `failed`** (you already sent the follow-up, so the failure is handled and nagging
-      would be wrong) **and outranks `waiting`** — a queued message supersedes a pending questionnaire, but
-      it is still in pi's queue and *not yet in the transcript*, so `assessAnswerability` cannot see it.
-      This is why supersession is not modelled as mutable "awaiting" state on the entry: `waiting` is
-      **derived from the transcript** via `awaitingQuestionToolCallId`, which reuses `assessAnswerability`
-      rather than duplicating its already-answered/superseded rules. One authority, nothing to keep in sync.
+    - **Human blockers outrank streaming.** Pi is technically mid-turn while an eligible ask is expected or
+      waiting, but reporting `running` would hide the action the person must take. The manager supplies that
+      live phase directly, so streaming deltas do not rescan the transcript.
+    - **Queued input does not supersede a live ask.** It stays in Pi's ordinary queues until the blocking
+      tool returns the person's real result. A restart-repaired ask is idle and remains transcript-derived
+      through `awaitingQuestionToolCallId` / `assessAnswerability`.
+    - **`queued` outranks `failed`** because a follow-up means the failure is already being handled.
     - **`aborted` is idle, not `failed`** — cancelling is a choice, not a fault, and a red row for every
       Escape would teach the user to ignore the signal.
-
-    The hot path costs nothing: rungs 1–2 return before the transcript scan, so the per-event sync that
-    fires during streaming never walks messages. The scan runs only at rest, and stops at the latest user
-    message.
 
     The per-session **status derivation** (`deriveActivityStatus`) is pure and never pre-rolled — collapsing
     several chats into one glyph, and the *display* precedence for that (see `apps/web/src/store/SPEC.md`),
@@ -269,8 +274,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     while the host snapshots its reconciled transient mirror first and returns complete per-message text +
     images. Pi emits the emptying `queue_update`). Its optional text-only precondition rejects before
     touching Pi whenever either tracked lane has queued images; manual compaction uses that guard, while
-    **`abortSession(..., true)`** snapshots/drains and synchronously signals abort in one manager operation,
-    then waits for idle and returns the complete queue so Stop cannot race a continuation or lose images /
+    **`abortSession(..., true)`** synchronously claims the Stop and drains the queue in one manager operation.
+    If an accepted question result is still persisting, Stop grants it a bounded grace period before signalling
+    Pi's abort; this prevents an async post-tool hook from deadlocking Stop while still preserving the normal
+    fast path. It drains once more immediately before abort and appends those late arrivals to their original
+    lanes; it then waits for idle and returns the complete ordered queue, so deferred Stop cannot race a
+    continuation or lose images /
     **`removeQueuedSession(sessionId, kind, index)`** — per-item queue removal, which Pi's
     API lacks (queues are bare string arrays, `clearQueue` is all-or-nothing): drain via the complete-content
     path, drop `lane[index]` (out-of-range → `removed: null`, everything re-queued), and re-queue each keeper
@@ -341,26 +350,39 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     provider rejects such a leaf (the chat would brick), and appending behind a live session would desync
     its in-memory state — so the missing results are paired at the one choke point every post-restart
     session passes. Repair is **tail-only and replay-aware**: pi positionally closes a pending tool batch
-    before examining the next assistant message, then drops `error` / `aborted` attempts. Failed attempts
-    therefore never contribute candidates but still close an older one; any later user, custom,
+    before examining the next assistant message, then drops `error` / `aborted` / `length` attempts. Pi never
+    executes tool calls from a length-truncated response because their arguments may be incomplete; those
+    calls therefore repair with ordinary error results, never an answerable ask ack. Failed attempts
+    never contribute candidates but still close an older one; any later user, custom,
     compaction, or assistant message makes that gap ineligible for a persisted leaf append. Only unique
     results whose call id **and tool name** match the final candidate batch may follow it, and parallel
     calls already carrying valid results are left alone. This prevents a late result from surviving
     without its omitted call and permanently poisoning OpenAI replay. Generic
-    missing calls get pi's abort convention (`isError` "Operation aborted (host restarted…)"); an
-    old-format dangling ask gets the canonical decline + a re-ask hint (`details {answers:[],
-    cancelled:true}`), so its card hydrates as the normal skipped record;
+    missing calls get pi's abort convention (`isError` "Operation aborted (host restarted…)"); a dangling
+    ask gets the canonical ack (`details {kind:"ack"}`), so its card remains answerable while the transcript
+    is provider-valid;
     **`answerQuestion(sessionId, toolCallId, result)`** — the `ask_user_question` reply path (see the
     `askUserQuestion` bullet); **`settleSessionsForShutdown(timeoutMs)`** — the polite half of shutdown:
-    abort every streaming parent, dispose every hidden child (including background children whose parent is
+    abort every streaming parent except one with a recoverable live ask phase (`expected`, `waiting`, or
+    `answer-accepted-uncommitted`), dispose every hidden child (including background children whose parent is
     idle), include cascades already pending from concurrent removal, and wait for all of them under the one
-    bound so pi can persist their "Operation aborted" tool results before `process.exit` (the launcher's
-    SIGINT/SIGTERM handler awaits it; whatever misses the window is healed by the restart repair).
-    `disposeAllSessions` remains the synchronous emergency stop, but registers its best-effort child cascades
+    bound. Shutdown atomically closes answer admission before it snapshots phases: an expected/waiting ask
+    stays dangling for ack repair, while an already accepted answer reaches its native persisted result and
+    then the continuation is aborted. A reply racing after that snapshot is rejected rather than accepted and
+    lost during disposal. Explicit user Stop synchronously claims an unanswered ask before signalling Pi; when
+    Submit already won it gives that exact result boundary a bounded grace period, then signals abort even if
+    persistence is still pending. The answer RPC resolves only when `turn_end` contains the accepted native
+    result; a replaced or missing result rejects it. Every disposal path abandons the registry before
+    unsubscribing so accepted-answer promises cannot strand.
+    `abandon()` is process-disposal plumbing, not semantic cancellation: it unblocks the in-memory tool only
+    immediately before synchronous session disposal, and real-`SessionManager` restart coverage pins that its
+    returned result is not persisted ahead of attach-time repair. `disposeAllSessions` remains the synchronous
+    emergency stop, but registers its best-effort child cascades
     in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: abort a streaming turn,
-    then dispose every live session for the workspace **unconditionally** — bypassing the per-chat delete
+    including an unanswered question—destructive workspace removal intentionally does not preserve a dialog
+    for restart—then dispose every live session for the workspace **unconditionally** — bypassing the per-chat delete
     guard that `removeSession` enforces, so a chat whose recoverable delete is mid-trash cannot abort the
     teardown loop and strand its siblings — then delete pi's on-disk transcripts rooted at
     the worktree `cwd` — pi's `SessionManager` is append-only, so purge = `list(cwd)` then `rm` the files
@@ -405,8 +427,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     entrypoint (`SKILL.md`, `index.ts`), never "Extension SKILL.md failed"; a bare
     "An extension failed." is what made #277 unreadable from the UI alone). The manager's
     `bindExtensions({onError})` wraps it in `reportExtensionError`, which does **two** things the notify
-    cannot: it writes one `warn` to the rotated host log carrying the **full** `extensionPath` and the
-    extension's own `stack` (rehydrated onto an `Error` so it lands in the structured `err` field — the
+    cannot: for a live entry, it writes one `warn` to the rotated host log carrying the **full**
+    `extensionPath` and the extension's own `stack` (rehydrated onto an `Error` so it lands in the structured `err` field — the
     chat gets the short name, the log gets the unambiguous one, and a crash stays findable after the tab
     is closed), and it **gates the client push** on `entry.registered`, the explicit flag
     `registerSession` sets when it puts the entry in the map. The event path's `sessions.get(id) === entry`
@@ -414,11 +436,16 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     stricter form would suppress the `session_start` failure #277 is about. Nor can *absence* from the map
     stand in for "not registered yet" — `disposeSession` deletes without leaving a tombstone, so a disposed
     entry is indistinguishable from an unregistered one, and a late error would be pushed at a client that
-    can never drain it. The log is never gated (a superseded session's crash is still worth recording) and
-    it attaches an `Error` **only when pi supplied a stack**: several of pi's own `emitError` sites omit it
-    (`runner.js` message_end, `agent-session.js` command/`<runtime>`), and synthesising one there would
-    record the *host's* stack — pointing the reader at `prepareSessionEntry` instead of the extension,
-    which is the opposite of why the line exists.
+    can never drain it. The log is never gated for a live entry, but an entry the host has **disposed**
+    (`entry.disposed`, set before `session.dispose()` in every teardown path) downgrades the report to a
+    single `debug` line with no stack and no client push: pi 0.87's `finishTurn` agent-loop hook outlives
+    `AgentSession.dispose()` and still dispatches `turn_end`/`context` boundaries into the runner we just
+    invalidated, so its “stale ctx” and “could not resolve the persisted assistant entry ID” reports are
+    echoes of our own teardown, not extension crashes; pi 0.86 disconnected from the agent first, so they
+    never surfaced. For a live entry, it attaches an `Error` **only when pi supplied a stack**: several of
+    pi's own `emitError` sites omit it (`runner.js` message_end, `agent-session.js` command/`<runtime>`),
+    and synthesising one there would record the *host's* stack — pointing the reader at
+    `prepareSessionEntry` instead of the extension, which is the opposite of why the line exists.
     **Members split three ways, not two.** *Untranslatable* ones are inert no-ops and rightly so — they take a
     TUI `Component` factory a web host cannot render (`setFooter`, `setHeader`, `setEditorComponent`,
     `custom`, `setWidget`'s factory overload; the string-array overload **is** rendered).
@@ -453,40 +480,42 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     is a `Proxy` that throws `Theme not initialized` until `initTheme()` runs, and `initTheme` is called
     only from pi's own CLI entrypoints, never when pi is embedded via `createAgentSession`. Every
     embedder of pi-as-a-library hits this; an upstream fix would not reach us until a deliberate pi bump.
-  - `askUserQuestion` — the host-owned **`ask_user_question`** pi custom tool (`createAskUserQuestionTool`,
-    registered on every session via the `askUserQuestionExtension` factory in `extensions`), designed
-    **ack + terminate** so a questionnaire survives host restarts: `execute` renders nothing and **awaits
-    nothing** — it guards on `ctx.hasUI`, runs the pure `validateQuestionnaire`, then immediately returns
-    the ack (`details {kind:"ack"}`) with **`terminate: true`**, ending the turn at the tool batch with no
-    further LLM call. Nothing pends in memory, the transcript is complete and provider-valid the moment
-    the ack lands, and the session is genuinely **idle** while the user thinks — restarts need no
-    question-specific handling at all. The reply arrives over `session.answerQuestion` → the manager's
-    `answerQuestion(sessionId, toolCallId, result)`: it vets the reply against the transcript with the
-    pure **`assessAnswerability`** (unknown call / already answered / `not_awaiting` legacy-final results /
-    **superseded** — a later free-form user message replaced the answer, so the card is terminal and a
-    stale answer **fails loud**, never parks), then injects **`buildAnswersMessage`** — an
-    **`ask-user-answers` custom message** (`ASK_USER_ANSWERS_CUSTOM_TYPE`, `details {toolCallId, result}`,
-    text = the same `buildQuestionnaireResponse` envelope the blocking design fed the model; a partial
-    submission lists its unanswered questions explicitly as declined) — via pi's public
-    `AgentSession.sendCustomMessage({triggerTurn: true})`, which starts a new turn when idle and steers
-    the current one when streaming. **Answering live and answering after a restart are the same code
-    path.** The questionnaire is rendered **inline** in chat by `apps/web`'s `AskUserQuestionCard`
-    (joined by tool name; lifecycle derived from the transcript — see the chat tools SPEC).
-    **Rejected alternatives** (the one place these decisions are recorded): (1) the original **blocking
-    design** — `execute` parked on an in-memory promise until the browser replied. A host restart
-    destroyed the pending promise and left a dangling `toolCall` in the transcript; providers reject
-    unpaired `tool_use`, so the chat **bricked** on every later prompt, and post-restart answers rotted in
-    a held-answers map. The shutdown handler's synchronous `process.exit` made this deterministic, and
-    questions block on human timescales — restarts during the window are the common case, not the edge.
-    (2) A **suspended-session** variant (write the real result at answer time; tolerate the dangle while
-    waiting) — needs two different answer mechanisms (resolve-blocked-promise live vs
-    heal-file-then-attach post-restart), keeps a deliberately-invalid on-disk state every consumer must
-    tiptoe around, and pi exposes no public turn-resume from a bare tool result anyway. (3) Bundling the
-    community `@juicesharp/rpiv-ask-user-question` extension — its questionnaire UI is a live pi-tui
-    component handed to the host via `ctx.ui.custom(factory)` (*code, not data*), unserializable over the
-    WS bridge; and like every blocking ask-extension it inherits the restart hole. The LLM-facing contract
-    (TypeBox schema, validation, envelope — mirroring rpiv's so the model behaves the same) stays
-    re-implemented here so we own it and avoid the package's pi-tui/i18n peer deps.
+  - `askUserQuestion` — the host-owned **`ask_user_question`** pi custom tool, registered per session with
+    a session-bound phase registry. An eligible live call is **sequential and blocking**: after validation
+    its `execute` waits for `session.answerQuestion`, then returns the person's real
+    `AskUserQuestionResult`/`buildQuestionnaireResponse` as the native tool result. Eligibility is shared:
+    an assistant stopped by `error`, `aborted`, or `length` cannot execute an ask. A `message_end` normalizer
+    makes the first ask the response's sole tool call (non-tool content stays; sibling calls are dropped for
+    the model to re-issue after the answer), avoiding Pi's sequential-abort hole where unexecuted siblings
+    receive no result. The question array has **no tool-level maximum**: one round carries every question
+    needed for the current decision, while each question retains the 2–4 option bound.
+
+    The registry tracks `expected` (eligible call observed), `waiting`, `answer-accepted-uncommitted`, and
+    `stopped` through `turn_end`. This includes Pi's real asynchronous gap from `tool_execution_start` through
+    pre-tool hooks to `execute`: graceful shutdown freezes new answer admission and preserves an expected call;
+    an answer accepted before that freeze remains authoritative and is persisted before shutdown/Stop aborts
+    its continuation. Stop-first synchronously marks an expected/waiting call stopped, so a later answer cannot
+    reverse the winner. Semantic validation still gates execution: an answer accepted in the pre-execute
+    window is acknowledged only if the real ask returned and `turn_end` contains its result; validation error
+    or a missing result rejects the answer RPC rather than hanging or claiming success. Every expected call Pi
+    does not execute is cleared at `turn_end`. Pi retains ordinary steering/follow-up queues and cannot cross the
+    answer. The answer RPC resolves the phase and acknowledges only after the matching result reaches the
+    persisted `turn_end` boundary. Explicit Stop drains the queue and aborts an unanswered phase with a stable
+    stopped error; after Submit wins, Stop defers Pi abort until the answer persists and then ends only the
+    continuation. Either ordering leaves one terminal provider-valid result.
+
+    A process restart deliberately changes only the continuation mechanism: attach-time repair writes the
+    canonical ack (`details {kind:"ack"}`) only for an eligible dangling ask before `createAgentSession`,
+    leaving the card answerable but the session idle. A length-truncated ask receives the same error repair
+    as any other non-executable tool call. With no live phase, `answerQuestion` injects the existing
+    `ask-user-answers` custom message through `sendCustomMessage({triggerTurn:true})`. Thus the question
+    survives without restoring a JavaScript promise or calling low-level `Agent.continue`; an uncommitted
+    Submit simply appears again. Queue entries remain Pi-owned and live-only by explicit scope. The card
+    derives both forms from the transcript (native live result versus repaired ack + custom answer).
+
+    Rejected alternatives: immediate ack on every live call lets Pi drain queued input and supersede the
+    unanswered card; restoring a dangling invocation exactly requires a lifecycle-safe resume API Pi does
+    not expose; a durable host queue/SQLite outbox is unnecessary when only the question must survive.
   - `sessionRepair` — `repairDanglingToolCalls(sessionManager)`: the restart safety net (rationale under
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends only missing results from the active tail batch) —
@@ -541,6 +570,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     instance is never replaced, so already-running detached children
     finish and retain completion delivery; a disabled launch is still rejected immediately by the live
     predicate even before a streaming parent's tool set can be refreshed.
+    The plan-review `request_review` tool follows the same live-toggle shape: it is always registered, but
+    `setAgentReviewEnabledResolver` (host-injected, global — no `agent` → settings edge) decides whether it
+    stays in a session's active set, and `refreshAgentReviewTool(workspaceId?)` applies a change idle-sync /
+    streaming-deferred to `agent_settled`, exactly like the subagent tools. Because `setActiveToolsByName`
+    rebuilds the system prompt from active tools' guidelines, dropping the tool drops its guidance too. Only
+    the tool is gated — the `startPlanReview` button path is a separate host seam. See `submodule-server-host-plan-review`.
     Cascades: `removeSession`/`disposeAllSessions` fire
     `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
     awaits it before `publishDeleted`/resolving** (safe: the cascade carries its own swallow, so a
@@ -663,11 +698,19 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       package's internal `new URL(…, import.meta.url)` points inside `/$bunfs/` after compilation. The
       wrapper executes an injected helper on macOS/Windows and otherwise delegates to `trash`; source mode stays on
       `trash` entirely. No platform degrades to permanent unlink.
-    The desktop server/factory bundle is staged with a `.ts` filename on purpose. PI uses that module
-    extension to select its TypeScript source-runtime Jiti configuration with bundled virtual modules;
-    Electrobun's ordinary flattened `.js` output selects built-Node aliases that do not exist inside the
-    package and rejects the Central candidate. The filename is therefore a tested artifact seam, not a
-    cosmetic build choice.
+    The desktop server/factory bundle is built with pi's `PI_BUNDLED_NODE=true` compile-time define. That
+    is pi's own switch for bundled-but-not-compiled distributions: it selects the embedded-modules extension
+    loader (jiti's static entry with Babel bundled in, plus pi's virtual modules). Without it pi treats the
+    bundle as a plain Node runtime and reaches for jiti's lazy `../dist/babel.cjs` relative to a file that
+    does not exist inside a single-file bundle, so the Central candidate fails to load (pi 0.86.0 made the
+    loader choice runtime-dependent; 0.84.x always used the static entry). The candidate loader also forces
+    jiti's transform (`JITI_TRY_NATIVE=false`, plus `JITI_REBUILD_FS_CACHE=1` so a stale transform cache
+    never survives a pi bump): with native import allowed, Bun would resolve an external extension's bare
+    `@earendil-works/pi-coding-agent` import itself — auto-installing a second pi copy, since nothing under
+    `~/.pi/agent/extensions` has `node_modules` — instead of pi's virtual-module mapping onto the bundled
+    instance. Together the define and the forced transform are the tested artifact seam (the shared artifact
+    probe's synthetic extension value-imports pi and fails closed without them); the `server-runtime.ts`
+    filename is only a name.
     In every mode, the optional Central artifact remains an external filesystem path loaded by PI's public
     Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
@@ -720,6 +763,29 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   worktree `cwd` remains an input, never a persistence lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
 
+## Session titles
+
+`agentSessionManager` is the only durable chat-title writer. Its `renameSession(sessionId,
+workspaceId, cwd, title, { onlyIfUnnamed? })` validates one non-blank, single-line title within contracts'
+length limit, resolves the session strictly inside the supplied workspace/cwd, and avoids an append when the
+normalized title is already current. A live session writes through `AgentSession.setSessionName`; a disk-only
+session opens its exact transcript with `SessionManager.open(...).appendSessionInfo(...)` without attaching an
+agent or resolving a model. Both paths publish the same `session_info_changed` Pi event, while
+`SessionSummary.title` remains the hydration projection.
+
+`getSessionName(sessionId)` exposes only a live session's current Pi name so the host can skip title-model
+work once one exists. `getSessionMessagesSnapshot(sessionId)` returns a copied, renderable-role view of that
+same live Pi transcript without attaching or awaiting; the host captures it before dispatch solely to decide,
+after acceptance, whether an earlier title-eligible prompt already consumed automatic naming. A reattached
+session therefore carries that decision through a host restart without title provenance or a sidecar.
+
+The guarded write remains authoritative across the async race. `onlyIfUnnamed` performs the check immediately
+beside the append and is the auto-title compare-and-set; the manual wire mutation is unconditional. Thus an
+async helper cannot overwrite a durable name that landed while it was running. No generated/manual provenance
+or title sidecar belongs here—the absent-vs-present pi name plus the durable transcript are sufficient because
+automatic naming gets one opportunity. The architecture's accepted no-cross-process coordination rule still
+applies.
+
 ## Get right
 
 - `prompt()` throws while a session is streaming → `promptSession` falls back to `steer()`.
@@ -727,10 +793,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 - **A re-opened disk session is repaired before it is seeded** (`repairDanglingToolCalls` between
   `SessionManager.open` and `createAgentSession`) — never append to a session file behind a live
   `AgentSession`, its in-memory context would desync.
-- **The ask tool never blocks and never holds state** — anything "pending" about a questionnaire must be
-  derivable from the transcript alone (that's what makes restarts free); reply validity is
-  `assessAnswerability`'s verdict, computed from `session.messages`, and rejections fail the WS request
-  loud.
+- **A live ask blocks only in its session-bound phase registry; restart state stays transcript-derived.**
+  The registry is forgotten on disposal and never restored. Only a tool-executable dangling ask is repaired
+  to ack before attach; `length`/`error`/`aborted` attempts are terminal. `assessAnswerability` remains the
+  one reply-validity authority; rejections fail the WS request loud.
 - Share one **current** `ModelRuntime` for pre-session reads and new sessions. Every session receives and
   retains its generation as `createAgentSession`'s `modelRuntime`; give each its own `SessionManager` and
   `dispose()` it on removal. Old runtimes remain reachable only through old live sessions and become

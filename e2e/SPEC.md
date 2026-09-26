@@ -103,7 +103,9 @@ whether credentials exist, and how an action fails are independent facts about a
 made real combinations unrepresentable, and a state that cannot be reached is a failure mode nothing asserts
 (`update --install` refusing while the host is below the minimum needs both at once). It
 materializes a test-owned synthetic PI extension written solely against PI's public API; no Central artifact,
-source fragment, output string, route, constant, binary, or secret is copied. Browser scenarios cover
+source fragment, output string, route, constant, binary, or secret is copied. Like the real artifact it both
+introduces a novel provider (never a row) and re-registers the built-in `anthropic` (a configured row
+labelled JetBrains AI with no Sign-out, gone again once the artifact is removed). Browser scenarios cover
 absent/outdated/malformed probes plus an above-minimum version staying ready, update, sign-in/retry, native
 add/remove, synchronous-action
 serialization, watched external add/change/remove, successful current-generation cutover for new chats, old
@@ -178,6 +180,13 @@ path; a **reload after seeding** exercises the **disk** path — the snapshot un
 appears while the workspace is never activated and no chat tab exists, which is the reviewer scenario a
 host restart produces. Note that **seeding must happen after `openFixtureProject`**: `openAppFresh` calls
 `resetState`, which deletes the isolated agent dir's `sessions` tree, so anything seeded earlier is wiped.
+
+**Topbar chrome** (`topbar-chrome.spec.ts`) proves the web side of the desktop title-bar contract without a
+desktop: it injects the three host-published CSS properties (`--window-chrome-inset-left|right`,
+`--window-chrome-drag-region`) from the test and asserts spacer widths, logo/action-cluster offsets, an
+unchanged 40px workbench origin, the header's resolved `-webkit-app-region`, and that Update, quota Retry
+and Settings all live inside the `no-drag` action cluster. In a plain browser the properties are unset, so
+the first scenario pins the zero-inset, `no-drag` baseline and the theme-token header colour.
 
 Workbench scenarios exercise the normalized frontend-local frame rather than only the pure model: frame
 geometry/tool placement survives workspace switches while resource tabs and attention differ; closing a final
@@ -257,9 +266,12 @@ scroll to the latest row, and legitimately virtualize the preceding user row. Ch
 multi-round transcripts and asserts both latest edges, their physical **Latest** destinations, host-qualified
 browser-local persistence, and cross-browser isolation without involving a provider. Hydrated-history
 coverage seeds one canonical giant Markdown block and drives real coarse wheel input so initial virtual
-geometry cannot clamp before the row mounts. Questionnaire paging uses a canonical persisted tool-call/ack
-fixture to pin tall-page reveal, fresh-chat restored-page reveal, visible review focus, and coarse-pointer
-focus without provider variability; desktop package tests separately pin the stable
+geometry cannot clamp before the row mounts. Chat-title coverage uses persisted Pi transcripts to prove the
+native `/name` path, open-tab and closed-history inline rename paths, keyboard focus recovery, bounded
+long-history scrolling, and reload durability without involving a provider. Questionnaire paging uses
+canonical persisted tool-call/ack fixtures to pin six-question rounds beyond four, tall-page reveal,
+fresh-chat restored-page reveal, visible review focus, and coarse-pointer focus
+without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
 `@agent` because only Pi's real row growth exercises that lifecycle. Before handoff, every app-affecting
 change runs the complete `bun run e2e` no-agent gate. Artifact-only regressions remain covered by

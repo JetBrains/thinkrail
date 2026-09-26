@@ -382,3 +382,47 @@ test("opening New Workspace prefetches a missing default tracking ref", async ({
 		.poll(() => refOid(repo, "refs/remotes/origin/main"), { timeout: 5_000 })
 		.toBe(expectedSha);
 });
+
+async function pastePngInto(page: Page, testId: string, width: number, height: number) {
+	await page.getByTestId(testId).evaluate(
+		async (el, size) => {
+			const canvas = document.createElement("canvas");
+			canvas.width = size.width;
+			canvas.height = size.height;
+			const ctx = canvas.getContext("2d");
+			if (!ctx) throw new Error("no 2d context");
+			ctx.fillStyle = "#3366aa";
+			ctx.fillRect(0, 0, size.width, size.height);
+			const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
+			if (!blob) throw new Error("toBlob failed");
+			const file = new File([blob], "pasted.png", { type: "image/png" });
+			const dt = new DataTransfer();
+			dt.items.add(file);
+			el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+		},
+		{ width, height },
+	);
+}
+
+test("a pasted image in the workspace dialog rides along into the first chat turn", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await page.getByTestId("add-workspace").first().click();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+
+	await dialog.getByTestId("ws-prompt").fill("Look at this");
+	await pastePngInto(page, "ws-prompt", 640, 480);
+	const chip = dialog.getByTestId("composer-image");
+	await expect(chip).toHaveCount(1);
+	await expect(chip).toHaveAttribute("data-width", "640");
+
+	await page.getByTestId("create-workspace").click();
+	await expect(dialog).toBeHidden();
+
+	const userMessage = page.locator('[data-testid="chat-message"][data-role="user"]').first();
+	await expect(userMessage).toBeVisible();
+	await expect(userMessage.getByTestId("chat-message-images")).toBeVisible();
+	await expect(userMessage.getByTestId("chat-attachment-chip")).toHaveCount(1);
+});

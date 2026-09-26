@@ -5,6 +5,7 @@ status: active
 title: shell — responsive frame
 parent: module-web
 tags: [v1, ui]
+references: [module-desktop]
 ---
 
 ## Responsibility
@@ -13,7 +14,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 ## Boundary
 
-- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, interview-invitation, and Toaster mounts; theme application and global shortcuts; the injected Layout and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
+- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, interview-invitation, and Toaster mounts plus the keyboard-opened Create workspace dialog; theme application and global shortcuts; the injected Layout and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
 - **Public surface:** `Shell`.
 - **Allowed deps:** child layout modules; `updates`; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, and `themes`.
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
@@ -33,14 +34,30 @@ The sibling dependency graph is: `layoutState → layout`; `chatReconciliation �
 
 ## Composition
 
-The topbar keeps ThinkRail identity, connection state, Settings, and compact location context. When the
-optional application updater reports a native `ready` package or CLI-host `available` release, a compact Update
-affordance remains beside the settings and connection chrome; it opens the injected Update section and remains
-after native Later or until capability state changes. Browsers connected to a host without the advisory render
-neither that affordance nor the section. `Shell` mounts `updates`' one capability hook and passes its normalized
-state/actions into the props-driven controls; panels receive optional React content, never a launcher or
-native-runtime check. The topbar identity is the icon-only ThinkRail mark—the same vector served as
-`public/favicon.svg`, inlined at 32×32 and rendered
+The topbar keeps ThinkRail identity, connection state, Settings, and compact location context, and doubles
+as the **window title bar** when a native host removes its own strip ([[module-desktop]], *Native window
+chrome*). It is a fixed `h-topbar-row` (`--topbar-row-height`, 40px — macOS title-bar proportions, so
+native traffic lights sit centred in it) with `px-16`, and it is host-agnostic: the only host-shaped input
+is three CSS custom properties on `<html>`. `--window-chrome-inset-left` / `--window-chrome-inset-right`
+are consumed through the `w-window-chrome-inset-*` spacing tokens by one `aria-hidden` edge spacer on each
+side (`window-chrome-inset-left|right`); unset (any browser) they resolve to `0px` and the header looks as
+before, while the desktop publishes `64px` on macOS so content starts at 80px and collapses it to `0px` in
+fullscreen. `--window-chrome-drag-region` drives the header's `window-drag` utility, which resolves to
+`no-drag` unless the host publishes `drag`, so a browser tab or a natively decorated window never gains a
+drag strip. Padding was deliberately not used for the inset: the `spacingUsage` gate lets padding utilities
+name only canonical steps, and a CSS `padding-left: max(…)` would need a gate exemption. The header is
+`select-none`; its whole trailing action cluster (`topbar-actions`) is `window-no-drag`, so any button
+placed inside it — the Update affordance, quota Retry, Settings — is excluded from dragging by
+construction, and buttons must not be placed elsewhere in the header (`topbarChrome.test.ts` gates this),
+while plain text (breadcrumb, connection label) stays draggable.
+`SettingsDialog` portals out of the header and is unaffected. Nothing in the shell names or imports the
+desktop host. When the optional application updater reports a native `ready` package or CLI-host `available`
+release, a compact Update affordance remains beside the settings and connection chrome; it opens the injected
+Update section and remains after native Later or until capability state changes. Browsers connected to a host
+without the advisory render neither that affordance nor the section. `Shell` mounts `updates`' one capability
+hook and passes its normalized state/actions into the props-driven controls; panels receive optional React
+content, never a launcher or native-runtime check. The topbar identity is the icon-only ThinkRail mark—the same
+vector served as `public/favicon.svg`, inlined at 32×32 and rendered
 through semantic `text-primary`—with no divider before location. An active workspace shows one line of
 `project / workspace  branch · from baseBranch` plus optional review metadata on `tr-text-ui`; project and
 workspace use `text-text-default`, while branch/trailing metadata use `text-text-muted`, with progressive
@@ -62,7 +79,7 @@ Retry forces completed-cache age but still joins host single-flight. Request seq
 response restoring a superseded state. The host owns health, cache, and deduplication; shell never invokes or
 interprets Central directly.
 
-With an active workspace, `Shell` mounts the workbench projection of the window's singular frame and that workspace's local view. Switching workspace changes resource contents and attention but never frame topology, Projects/Specs/Files/Changes/Review placement, side/bottom geometry, folds, visibility, or alignment. Shell-owned wrappers around Projects, Files, and Specs use `components/QuietScrollArea`, as does the Project Home navigator; Changes/Review and xterm own their internal quiet-scroll surfaces in `panels`. These primitives never receive or infer placement. `react-resizable-panels` cannot reconcile a panel-count change in place, so switching to a workspace whose default preset has a different shape (e.g. Balanced ↔ Focus) forces the aligned-row and outer `ResizablePanelGroup`s to remount; they carry `motion-safe:animate-fade-in` (an opacity-only twin of `animate-reveal` — no `transform`, since these subtrees can contain ChatView's `position: sticky` breadcrumbs) so the shape change reads as a soft cross-fade rather than a jump. Without an active workspace, Shell mounts Welcome beside the projects navigator using separate local geometry. The Settings dialog, analytics-consent window, addressed interview invitation, and Toasts each mount once above both branches. The consent window is a layout-agnostic panel shared by browser and desktop clients, gated by hydrated host configuration and protocol support; shell owns only its placement. Consent takes precedence over the automatic interview invitation so startup never stacks both prompts.
+With an active workspace, `Shell` mounts the workbench projection of the window's singular frame and that workspace's local view. Switching workspace changes resource contents and attention but never frame topology, Projects/Specs/Files/Changes/Review placement, side/bottom geometry, folds, visibility, alignment, or which singleton tool a group shows (a selected workspace resource such as a terminal stays per workspace). That is a React invariant too: `WorkspaceWorkbench` stays mounted across a switch and is re-targeted by its `workspaceId` prop, never keyed by workspace. The frame chrome—panel groups, side/bottom stacks, tab strips, the Projects tree—keeps its DOM; only resource bodies and per-workspace tool contents swap. Resource bodies are keyed by workspace as well as resource id, because some layout ids are deterministic (every workspace's initial terminal is `terminal:thinkrail-initial`): the same id must never carry one workspace's live xterm or pane into another's commit. A switch therefore paints no fade, skeleton, or empty frame for the chrome, and every hook the workbench calls must tolerate a changing `workspaceId`: state that belongs to one workspace is qualified by that id or lives in a workspace-keyed store slice, and no readiness flag computed for the previous workspace may be read for one effect pass against the next one. A first visit to a workspace whose local view has not been materialized yet does not remount either: once the frame is ready, the workbench renders the empty-view projection of that frame for the single commit before `layoutState` installs the identical view, so the frame keys never change. The "Restoring workspace layout" placeholder exists only before the local frame has hydrated. Entering or leaving Project Home swaps Shell branches and is not a workspace switch. Shell-owned wrappers around Projects, Files, and Specs use `components/QuietScrollArea`, as does the Project Home navigator; Changes/Review and xterm own their internal quiet-scroll surfaces in `panels`. These primitives never receive or infer placement. `react-resizable-panels` cannot reconcile a panel-count change in place, so a frame command that changes the shape (preset apply/reset, group add/remove, side or bottom visibility) forces the aligned-row and outer `ResizablePanelGroup`s to remount through the single frame-level projection epoch; they carry `motion-safe:animate-fade-in` (an opacity-only twin of `animate-reveal` — no `transform`, since these subtrees can contain ChatView's `position: sticky` breadcrumbs) so the shape change reads as a soft cross-fade rather than a jump. Without an active workspace, Shell mounts Welcome beside the projects navigator using separate local geometry. The Settings dialog, analytics-consent window, addressed interview invitation, and Toasts each mount once above both branches. The consent window is a layout-agnostic panel shared by browser and desktop clients, gated by hydrated host configuration and protocol support; shell owns only its placement. Consent takes precedence over the automatic interview invitation so startup never stacks both prompts.
 After `main.tsx`'s synchronous first-paint apply, Shell is the sole mounted theme side-effect owner. While `welcomeGeneration === 0` it retains the versioned preference hint; afterward it projects store's opaque fixed id + fixed/system mode + optional pair through `themes` and writes the reconciled hint. Fixed mode has no media listener. System mode owns exactly one `prefers-color-scheme` listener, reapplies the locally resolved slot on change, and cleans it up on preference/unmount; that local event never mutates store, calls the host, or changes another client. No other component mutates `[data-theme]`.
 
 ## Workbench behavior
@@ -109,6 +126,25 @@ second or two, and a retry button shown immediately reads as "this failed" for w
 stalled past a short grace window (`CHAT_RETRY_DELAY_MS`), so the retry affordance surfaces solely for the
 genuinely-stuck case it exists for.
 
+## Chat title controls
+
+A chat tab's existing context menu gains **Rename chat**, and every row in the workspace's **Recently
+closed** chat menu gains a visible pencil action. Like workspace rename, each action replaces its own label
+in place with a chrome-less single-line input carrying the same typography and geometry; the field is
+prefilled, focused, and selected. Enter or blur commits, Escape cancels, and blank, over-80-character, and
+unchanged values never issue a request. Keyboard commit/cancel restores the replacement tab or history-row
+control; pointer blur preserves the user's new focus target. The named, viewport-bounded interactive history
+popover remains open and scrollable while its row is edited. The controls render only when the welcome
+protocol supports `session.rename`.
+
+The shell injects the chat-only mutation callback into the otherwise domain-neutral Workbench tab menu rather
+than teaching the pure layout engine how sessions are persisted. A commit has no optimistic domain write: the
+inline editor returns to the prior host-owned label until the existing `session_info_changed` store fold
+updates open tabs and closed history everywhere; rejection retains that snapshot and raises the standard
+error toast. Renaming a closed chat does not open or select it; renaming an open chat does not change placement
+or focus. Automatic title arrival uses this same label fold but opens no editor, notification, or focus
+transition. ChatView's `/name` command is the independent keyboard entry point to the same wire mutation.
+
 ## Global chords
 
 `useGlobalHotkeys` remains the one capture-phase owner of app-wide chords. It routes commands through the workbench command surface rather than imperative feature-panel refs:
@@ -116,6 +152,7 @@ genuinely-stuck case it exists for.
 - `Ctrl+R` opens chat history for the locally selected chat, or the workspace's most-recent chat fallback;
 - `Mod+B` toggles the left side, restoring local group/tab attention or an eligible singleton tool;
 - `Mod+J` does the same for the right side;
-- `Mod+Shift+J` toggles bottom, restoring local bottom attention, a bottom-targeted singleton, or the terminal creation surface.
+- `Mod+Shift+J` toggles bottom, restoring local bottom attention, a bottom-targeted singleton, or the terminal creation surface;
+- `Mod+N`, and its alias `Mod+Alt+N`, open `NewWorkspaceDialog` for the context project (the active workspace's project, else the selected project). The shell owns this one keyboard-opened instance as local state — it is not store state and not the `ProjectTree`/`WelcomePanel` instances, which keep their own return-focus and prompt-seeding semantics. `Mod+N` is the canonical chord and the one shortcut chrome advertises first; the alias exists because browsers reserve Cmd/Ctrl+N for a new window and never deliver it to the page, while the desktop webview does. This is the only chord that accepts Alt.
 
-Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`. The three layout chords remain app-owned inside xterm, do not repeat, and are suppressed while a modal dialog is open. With no active workspace, right/bottom chords neither act nor swallow the browser chord; Projects remains available. Terminal `Ctrl+R` still belongs to xterm; `Ctrl+Shift+R`, macOS `Cmd+R`, F5, and browser reload remain untouched. All other arrangement operations are exposed by the layout command/menu system in [[submodule-web-shell-layout]].
+Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`. The layout and create chords remain app-owned inside xterm, do not repeat, and are suppressed while a modal dialog is open. With no active workspace, right/bottom chords neither act nor swallow the browser chord; Projects remains available. With no context project, `Mod+N` likewise neither acts nor swallows. Terminal `Ctrl+R` still belongs to xterm; `Ctrl+Shift+R`, macOS `Cmd+R`, F5, and browser reload remain untouched. All other arrangement operations are exposed by the layout command/menu system in [[submodule-web-shell-layout]].

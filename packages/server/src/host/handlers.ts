@@ -12,6 +12,7 @@ import type {
 	ReviewComment,
 	ReviewCommentKind,
 	ReviewCommentStatus,
+	ReviewFixDetails,
 	ReviewSendResult,
 	SessionModelSelection,
 	SubagentOverride,
@@ -19,6 +20,7 @@ import type {
 	TemplateScope,
 	ThinkingLevel,
 	TodoStatus,
+	TranscriptMessage,
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
@@ -36,6 +38,8 @@ import {
 	getDefaultModel,
 	getSessionCommands,
 	getSessionMessages,
+	getSessionMessagesSnapshot,
+	getSessionName,
 	getSessionStats,
 	getSessionWorkspaceId,
 	hasSession,
@@ -55,7 +59,9 @@ import {
 	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
+	renameSession,
 	resolveExtUi,
+	sendReviewFixToSession,
 	setSessionModel,
 	setSessionThinkingLevel,
 	steerSession,
@@ -104,6 +110,7 @@ import {
 } from "../projects";
 import {
 	addComment,
+	buildReviewFixDetails,
 	buildSendPackage,
 	clearReview,
 	deleteComment,
@@ -170,10 +177,12 @@ import {
 } from "../workspaces";
 import { ackSend } from "./ackSend";
 import { sessionProviderAnalytics, trackChatStarted } from "./authAnalytics";
+import { maybeAutoNameChat } from "./autoRename";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
+import { planReviewRunning } from "./planReviewQueue";
 import {
 	additionalCapture,
 	captureAdditional,
@@ -183,6 +192,7 @@ import {
 	observeSetupRead,
 	providerAvailability,
 } from "./productAnalytics";
+import { startPlanReview } from "./requestReview";
 import { withReviewLock } from "./reviewLock";
 import { runObservation } from "./runAnalytics";
 import { taskObservation } from "./taskAnalytics";
@@ -192,8 +202,6 @@ import {
 	itemFixFindings,
 	markClientStale,
 	releaseItemFix,
-	startReviewAllFlow,
-	startTodoReviewFlow,
 } from "./todoReview";
 import { workspaceSessionOptions } from "./workspaceSessionOptions";
 
@@ -215,6 +223,15 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 	}
 }
 
+function captureChatAutoNameHistory(sessionId: string): readonly TranscriptMessage[] | null {
+	if (getSessionName(sessionId) !== undefined) return null;
+	try {
+		return getSessionMessagesSnapshot(sessionId);
+	} catch {
+		return null;
+	}
+}
+
 async function sendUserMessage(
 	mode: SendMode,
 	sessionId: string,
@@ -224,7 +241,14 @@ async function sendUserMessage(
 ): Promise<{ ok: true }> {
 	const control = isControlMessage(text);
 	const provider = control ? undefined : sessionProviderAnalytics(sessionId);
+	const priorMessages = control ? null : captureChatAutoNameHistory(sessionId);
 	await ackSend(runObservation.send(sessionId, control ? "internal" : "user", operation));
+	if (!control) {
+		const workspaceId = getSessionWorkspaceId(sessionId);
+		if (workspaceId && priorMessages) {
+			void maybeAutoNameChat(sessionId, workspaceId, text, { priorMessages });
+		}
+	}
 	if (provider) {
 		track({
 			name: "message_sent",
@@ -286,13 +310,16 @@ function fireReviewPrompt(
 function fireTodoFixPrompt(
 	p: { workspaceId: string; sessionId: string; id: string },
 	pkg: string,
+	details: ReviewFixDetails,
 	previous: TodoReviewRecord | undefined,
 	requested: TodoReviewRecord,
 	findingIds: string[],
 	capture: AdditionalAnalyticsCapture | null,
 ): void {
 	void ackSend(
-		runObservation.send(p.sessionId, "internal", () => followUpSession(p.sessionId, pkg)),
+		runObservation.send(p.sessionId, "internal", () =>
+			sendReviewFixToSession(p.sessionId, pkg, details),
+		),
 	)
 		.then(
 			() => {
@@ -515,10 +542,39 @@ const handlers: Record<string, Handler> = {
 		});
 		return result;
 	},
-	"todo.startReview": (params) =>
-		startTodoReviewFlow(params as { workspaceId: string; sessionId: string; id: string }),
-	"todo.reviewAll": (params) =>
-		startReviewAllFlow(params as { workspaceId: string; sessionId: string }),
+	"todo.startReview": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string; id: string };
+		const ws = getWorkspace(p.workspaceId);
+		if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath)))
+			throw new Error("This plan's chat is no longer on disk — can't review.");
+		if (!startPlanReview(p.workspaceId, p.sessionId, p.id))
+			throw new Error("This step is already being reviewed.");
+		return { ok: true };
+	},
+	"todo.reviewAll": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string };
+		const ws = getWorkspace(p.workspaceId);
+		if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath)))
+			throw new Error("This plan's chat is no longer on disk — can't review.");
+		const plan = await listTodos({ workspaceId: p.workspaceId, sessionId: p.sessionId });
+		const items = [
+			...plan.todos,
+			...plan.groups.flatMap((g) => g.todos),
+			...(plan.adoptedCommits ?? []),
+		];
+		const targets = items.filter((it) => {
+			const r = it.review;
+			return (
+				r !== undefined &&
+				!(r.state === "reviewed" && (r.unreviewedShas?.length ?? 0) === 0) &&
+				r.reviewing !== true
+			);
+		});
+		const started = targets.filter((it) => startPlanReview(p.workspaceId, p.sessionId, it.id));
+		if (started.length === 0 && planReviewRunning(p.workspaceId, p.sessionId))
+			return { ok: true, total: 0, alreadyRunning: true };
+		return { ok: true, total: started.length };
+	},
 	"todo.requestFix": async (params) => {
 		const capture = additionalCapture();
 		const p = params as { workspaceId: string; sessionId: string; id: string; feedback: string };
@@ -532,13 +588,21 @@ const handlers: Record<string, Handler> = {
 			const prepared = await withReviewLock(p.workspaceId, async () => {
 				const request = requestTodoFix(p);
 				try {
+					const reviewId = (await getReviewSnapshot(p.workspaceId)).review.id;
 					const findings = await itemFixFindings(p);
+					const details = buildReviewFixDetails({
+						itemId: p.id,
+						itemTitle: request.itemTitle,
+						reviewId,
+						note: p.feedback.trim(),
+						comments: findings,
+					});
 					if (findings.length === 0)
-						return { ...request, fixText: request.pkg, findingIds: [] as string[] };
+						return { ...request, fixText: request.pkg, details, findingIds: [] as string[] };
 					const fixText = `${request.pkg}\n\n${await buildSendPackage(p.workspaceId, findings)}`;
 					const findingIds = findings.map((c) => c.id);
 					await markCommentsSent(p.workspaceId, findingIds, p.sessionId);
-					return { ...request, fixText, findingIds };
+					return { ...request, fixText, details, findingIds };
 				} catch (error) {
 					rollbackTodoFix(p, request.previous, request.requested);
 					throw error;
@@ -548,6 +612,7 @@ const handlers: Record<string, Handler> = {
 				fireTodoFixPrompt(
 					p,
 					prepared.fixText,
+					prepared.details,
 					prepared.previous,
 					prepared.requested,
 					prepared.findingIds,
@@ -756,6 +821,16 @@ const handlers: Record<string, Handler> = {
 		const p = params as { workspaceId: string; sessionId: string };
 		await deleteSession(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
 		await removeSessionTodoWindows(p);
+		return { ok: true } as const;
+	},
+	"session.rename": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string; title: string };
+		await renameSession(
+			p.sessionId,
+			p.workspaceId,
+			getWorkspace(p.workspaceId).worktreePath,
+			p.title,
+		);
 		return { ok: true } as const;
 	},
 	"session.setModel": async (params) => {

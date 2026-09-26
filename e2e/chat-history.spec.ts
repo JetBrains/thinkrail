@@ -78,6 +78,128 @@ test("a disk chat with unfinished work auto-opens; a finished one stays in local
 	).toBeVisible();
 });
 
+test("the native name command renames a chat durably without sending an agent turn", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	seedWorkspaceSession(repoCwd(), {
+		name: "before command rename",
+		messages: [{ role: "user", text: "existing prompt", timestamp: BASE_TS }],
+	});
+
+	await enterDefaultWorkspace(page);
+	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await expect(chatTab).toContainText("before command rename");
+	const input = page.getByTestId("chat-input");
+	await input.fill("/name Command renamed chat");
+	await input.press("Enter");
+	await expect(chatTab).toContainText("Command renamed chat");
+	await expect(input).toHaveValue("");
+	await expect(page.getByText("/name Command renamed chat", { exact: true })).toHaveCount(0);
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toContainText(
+		"Command renamed chat",
+	);
+});
+
+test("open and closed chat rename controls edit their labels inline", async ({ page }) => {
+	await openFixtureProject(page);
+	const closed = seedWorkspaceSession(repoCwd(), {
+		name: "closed before rename",
+		messages: [{ role: "user", text: "older prompt", timestamp: BASE_TS }],
+	});
+	setMtime(closed.path, BASE_TS);
+	const open = seedWorkspaceSession(repoCwd(), {
+		name: "open before rename",
+		messages: [{ role: "user", text: "newer prompt", timestamp: BASE_TS + 10_000 }],
+	});
+	setMtime(open.path, BASE_TS + 10_000);
+
+	await enterDefaultWorkspace(page);
+	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await expect(chatTab).toContainText("open before rename");
+	const startTabRename = async () => {
+		await chatTab.click({ button: "right" });
+		await page.getByRole("menuitem", { name: "Rename chat", exact: true }).click();
+		const input = chatTab.getByTestId("chat-tab-name-input");
+		await expect(input).toBeFocused();
+		return input;
+	};
+	let tabNameInput = await startTabRename();
+	await expect(tabNameInput).toHaveValue("open before rename");
+	await tabNameInput.fill("x".repeat(81));
+	await tabNameInput.press("Enter");
+	await expect(chatTab.getByRole("tab")).toBeFocused();
+	await expect(chatTab).toContainText("open before rename");
+
+	tabNameInput = await startTabRename();
+	await tabNameInput.fill("discarded tab rename");
+	await tabNameInput.press("Escape");
+	await expect(chatTab.getByRole("tab")).toBeFocused();
+	await expect(chatTab).toContainText("open before rename");
+
+	tabNameInput = await startTabRename();
+	await tabNameInput.fill("open after rename");
+	await tabNameInput.press("Enter");
+	await expect(tabNameInput).toHaveCount(0);
+	await expect(chatTab.getByRole("tab")).toBeFocused();
+	await expect(chatTab).toContainText("open after rename");
+
+	await page.getByTestId("chat-history").first().click();
+	const closedRow = page.locator(`[data-testid="closed-chat-row"][data-session-id="${closed.id}"]`);
+	const startHistoryRename = async () => {
+		await closedRow.getByTestId("closed-chat-rename").click();
+		const input = closedRow.getByTestId("closed-chat-name-input");
+		await expect(input).toBeFocused();
+		return input;
+	};
+	let historyNameInput = await startHistoryRename();
+	await expect(historyNameInput).toHaveValue("closed before rename");
+	await historyNameInput.fill("x".repeat(81));
+	await historyNameInput.press("Enter");
+	await expect(closedRow.getByTestId("closed-chat-item")).toBeFocused();
+	await expect(closedRow).toContainText("closed before rename");
+
+	historyNameInput = await startHistoryRename();
+	await historyNameInput.fill("discarded history rename");
+	await historyNameInput.press("Escape");
+	await expect(closedRow.getByTestId("closed-chat-item")).toBeFocused();
+	await expect(closedRow).toContainText("closed before rename");
+
+	historyNameInput = await startHistoryRename();
+	await historyNameInput.fill("closed after rename");
+	await historyNameInput.press("Enter");
+	await expect(historyNameInput).toHaveCount(0);
+	await expect(closedRow.getByTestId("closed-chat-item")).toBeFocused();
+	await expect(chatTab).toHaveCount(1);
+	await expect(closedRow).toContainText("closed after rename");
+});
+
+test("long chat history remains named and scrollable", async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 760 });
+	await openFixtureProject(page);
+	for (let index = 0; index < 30; index += 1) {
+		const session = seedWorkspaceSession(repoCwd(), {
+			name: `history item ${String(index).padStart(2, "0")}`,
+			messages: [{ role: "user", text: `prompt ${index}`, timestamp: BASE_TS + index * 1_000 }],
+		});
+		setMtime(session.path, BASE_TS + index * 1_000);
+	}
+
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("chat-history").first().click();
+	const popover = page.getByTestId("chat-history-popover");
+	await expect(popover).toHaveAccessibleName("Recently closed");
+	await expect
+		.poll(() => popover.evaluate((node) => node.scrollHeight > node.clientHeight))
+		.toBe(true);
+	const oldest = page.getByTestId("closed-chat-item").filter({ hasText: "history item 00" });
+	await oldest.scrollIntoViewIfNeeded();
+	await expect(oldest).toBeVisible();
+});
+
 test("coarse wheel input crosses realistic virtual geometry before a giant history row mounts", async ({
 	page,
 }) => {

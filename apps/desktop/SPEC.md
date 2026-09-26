@@ -6,7 +6,7 @@ title: Desktop launcher/client (Electrobun)
 parent: architecture
 depends-on: [module-server, module-contracts, module-shared]
 tags: [desktop, v1, launcher, packaging]
-references: [submodule-web-navigation, module-artifact-tests, module-ci-release]
+references: [submodule-web-navigation, module-artifact-tests, module-ci-release, submodule-web-shell]
 ---
 
 ## Responsibility
@@ -19,7 +19,8 @@ engine architecture.
 
 ## Boundary
 
-- **Owns:** Electrobun configuration and lifecycle; native window policy; local `bootHost()` startup;
+- **Owns:** Electrobun configuration and lifecycle; native window policy, including the per-platform
+  title-bar treatment and the window-chrome geometry it publishes to the web client; local `bootHost()` startup;
   packaged resource staging; the PI-compatible server-runtime bundle; desktop route preload/persistence;
   a bounded generic client-preference adapter under stable backend-profile/window identity; and the
   opt-in live-window test seam. Standalone artifact harnesses belong to [[module-artifact-tests]].
@@ -54,10 +55,12 @@ another.
 1. Resolve app resources and set `BUN_PTY_LIB` to the staged current-target FFI library before any server
    import. Electrobun emits an ordinary JavaScript entry, not a `bun build --compile` executable, so it
    does not embed `bun-pty`'s library.
-2. Dynamically import the separately built, unpacked `server-runtime.ts` resource. The `.ts` filename is a
-   runtime contract: PI then selects its TypeScript source-runtime Jiti path and supplies bundled virtual
-   modules to external extensions. Flattening PI into Electrobun's normal `.js` entry makes it select
-   built-Node aliases that are absent from a self-contained app and breaks Central/external extensions.
+2. Dynamically import the separately built, unpacked `server-runtime.ts` resource. That bundle is built with
+   pi's `PI_BUNDLED_NODE=true` define, which makes PI use its embedded-modules extension loader (static jiti
+   with Babel bundled, plus virtual modules) for external extensions such as Central. Without the define a
+   single-file bundle is treated as a plain Node runtime and PI's lazy Babel `require` cannot resolve inside
+   it ([[submodule-server-agent]] owns the seam). Flattening PI into Electrobun's normal entry is still
+   forbidden: it would load `bun-pty` before `BUN_PTY_LIB` is set.
 3. The runtime value-imports the five bundled extension factories and calls `registerBundledRuntime()`
    with those factories, the named `pi-web-access` factory needed by delegation children, the staged skills,
    and macOS/Windows trash helpers. The generator's key map must satisfy every key of the server-owned
@@ -71,7 +74,7 @@ another.
    renderer.
 
 The Electrobun entry bundle contains native-shell code only. A static server import there is forbidden:
-it can load `bun-pty` before `BUN_PTY_LIB` and flatten PI into the wrong extension-loader mode. Startup
+it can load `bun-pty` before `BUN_PTY_LIB` and bypass the defined server-runtime build. Startup
 failure is logged through the shared crash path, shown in a native error dialog, and exits without leaving
 a hidden host.
 
@@ -92,6 +95,49 @@ there; WebKitGTK keeps its renderer-native editing behavior. The policy is platf
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
 pins production wiring.
 
+## Native window chrome
+
+The web topbar ([[submodule-web-shell]]) is the window's title bar wherever the framework lets native
+controls survive without a native strip. Electrobun 2.0.1 exposes no caption-colour API on any platform
+(macOS and Windows only follow the system light/dark setting), so a theme-coloured title bar means
+removing the native strip and letting the web header occupy it. The policy is platform-pure
+(`windowChrome.ts`, pinned by unit tests) and spread into the main `BrowserWindow`:
+
+| platform | `titleBarStyle` | traffic lights | published left inset |
+|---|---|---|---|
+| macOS | `hiddenInset` — transparent strip, hidden title, full-size content view; native traffic lights stay | `trafficLightOffset { x: 0, y: 4 }` centres the 12px buttons in the 40px topbar (measured on a packaged build: the default position centres them at 16px, so +4 lands on 20) | `64px` — the traffic-light zone (7 + 3×12 + 2×8 = 59px on the spacing grid) |
+| Windows, Linux | `default` | — | `0px` |
+
+Windows is deferred because `hiddenInset` there strips the caption *including* minimize/maximize/close,
+which would have to be HTML controls over RPC (and Electrobun has no `HTMAXBUTTON` hit-test, so Win11
+snap layouts would not appear). Linux is not planned: `hiddenInset` is a no-op under GTK and `hidden`
+removes decorations together with WM-provided resize handles. Fully custom macOS chrome
+(`titleBarStyle: "hidden"` with drawn traffic lights) was rejected because the platform provides real
+ones.
+
+**Geometry contract.** The desktop publishes three CSS custom properties on `<html>`: the two inset
+properties plus `--window-chrome-drag-region` (`drag` | `no-drag`), which tells the page whether its
+header is the title bar. The drag flag rides only the initial preload global (it is a per-policy constant);
+geometry updates arrive as `windowChromeChanged { insetLeft, insetRight }`. The web consumes the properties
+with `0px` fallbacks, so a browser-hosted client and the neutral E2E-host window (`about:blank`, no
+preload) are unaffected and the *web client still has no desktop branch*. The preload validates geometry,
+keeps only the latest value while the document root is absent, and flushes it at `DOMContentLoaded`, so a
+pending startup write cannot overwrite a newer native state. The right inset is always `0px` today and
+exists so the Windows follow-up changes a value, not the contract.
+
+**Fullscreen.** macOS native fullscreen auto-hides the traffic lights with the menu bar, so fullscreen
+zeroes both insets. The main process publishes geometry on every webview `dom-ready` (a reload during
+fullscreen must not inherit the windowed insets) and on `resize` only when the geometry changed. The
+neutral E2E-host window (`THINKRAIL_DESKTOP_E2E_HOST=1`) keeps the default native chrome and publishes
+nothing.
+
+**Dragging.** The desktop's only contribution is the `drag` flag: the web header's `window-drag` utility
+resolves to `-webkit-app-region: drag` only when `--window-chrome-drag-region` says so, and Electrobun's
+own injected preload rewrites app-region declarations from same-origin stylesheets into a mirrored custom
+property it hit-tests against on `mousedown`. A decorated window (Windows, Linux, the neutral window)
+publishes `no-drag` and so never acquires a second, partial drag strip. Double-click-to-zoom on the header
+is not promised — the webview covers the strip, so the click reaches `NSWindow` only incidentally.
+
 ## Navigation and window security
 
 The native window permits navigation only within its exact loopback origin. User-requested external URLs
@@ -102,7 +148,8 @@ SDK event factories, not copied into local declarations. Detail can be a raw URL
 serialized navigation JSON; bounded decoding retains only a string URL and the HTTP/HTTPS/mailto
 allowlist. Native `navigationRules` enforce confinement: navigation-event responses cannot cancel it.
 
-A desktop preload sends typed, one-way route and local-preference messages. It wraps
+A desktop preload sends typed, one-way route and local-preference messages, and is the only writer of
+the window-chrome CSS properties described above. It wraps
 `history.replaceState` and `history.pushState` before page scripts and also reports initial/hash/pop
 navigation, because Electrobun's native navigation events do not observe History API route changes. The
 main process accepts messages only from the main window. Routes persist as bounded fragment strings in a
@@ -270,5 +317,6 @@ release checks described in [[module-ci-release]].
 
 ## Deferred
 
-Shared/remote backend profiles, profile selection, multi-window/deep-link routing, and CEF. The update feed
-publication described above remains release-owned.
+Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, and the Windows
+frameless title bar (HTML minimize/maximize/close over RPC behind a window-controls capability the geometry
+contract does not yet carry). The update feed publication described above remains release-owned.

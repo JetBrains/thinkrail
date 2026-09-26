@@ -29,18 +29,25 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   (capability: the server's `agent` module + `reviews` seam; see [[submodule-server-reviews]]): a ✓ +
   the resolved comment id/note. **Routine** — the review sidebar is where resolution state lives; the
   card is just the in-transcript trace.
+- **`RequestReviewCard`** — the verdict card for the host-owned `request_review` tool (capability: the
+  server's `agent`/`host` request-review seam, which spawns a read-only review subagent). Reads the
+  structured `PlanReviewResult` from the tool result's `details` (defensively, via
+  `isPlanReviewResult`), shows an approve/request-changes indicator + the reviewer's one-paragraph
+  summary, and renders findings as the shared fold-out `ReviewPackageComments` (comment→item mapping
+  and the row primitive both live in `reviewPackage.ts` + `ReviewPackageComments.tsx`, reused by the
+  `reviewFix`/review-package renderers). Registered `primary` + `defaultExpanded`; `data-verdict` +
+  `data-testid="request-review-card"` are the test hooks.
 - **`AskUserQuestionCard`** — the inline questionnaire for the host-owned `ask_user_question` tool
   (capability + rationale: the server's `agent/askUserQuestion` SPEC). Registered `"bare"`: it owns its
   full-width frame, never folds, and answers through the `ChatActions` context (correlated by
   `toolCallId`). Behaviors worth their invariants:
-  - **The lifecycle derives from the transcript, not the tool status** (the tool is ack + terminate; its
-    own result is just the ack): `useAskState(toolCallId)` supplies the reply / superseded verdict, and
-    the card resolves in order — **answered/declined** (an `ask-user-answers` reply exists → the resolved
-    record; a legacy blocking-era result or a restart-repaired decline in the tool result renders the
-    same way), **superseded** (a later free-form user message replaced the answer → a terminal compact
-    record; the host rejects late answers, matching), **dead** (owning message aborted/errored → closed
-    record), else **awaiting** — interactive now, after a reconnect, or after any number of host
-    restarts.
+  - **The lifecycle derives from the transcript across two host paths:** a live blocking call resolves with
+    the real tool result; a restarted dangling call is repaired to ack and later paired with an
+    `ask-user-answers` custom message. `useAskState(toolCallId)` supplies the restart reply / superseded
+    verdict, and the card resolves in order — **answered/declined** (either real result form),
+    **superseded** (a later free-form user message replaced a repaired idle question),
+    **stopped/error/length** (explicit Stop or a non-executable assistant result finalized the tool), else
+    **awaiting** — interactive while Pi is blocked, after reconnect, or after any number of host restarts.
   - **Controls never stream** — while args stream it shows a stable composing placeholder and the
     complete questionnaire reveals atomically at message end (rationale in the component's jsdoc).
   - **Multi-question completion is review-gated** — every question page advances with **Next**, including

@@ -43,6 +43,7 @@ import {
 	isLineWidth,
 	isSubagentCompletionMessage,
 	isTerminalWindowsShell,
+	isTodoReviewFixMessage,
 	normalizeThemePreference,
 } from "@thinkrail/contracts";
 import { create } from "zustand";
@@ -599,6 +600,20 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 					],
 				};
 			}
+			if (isTodoReviewFixMessage(event.message)) {
+				return {
+					...rt,
+					turns: [
+						...rt.turns,
+						{
+							kind: "reviewFix",
+							id: crypto.randomUUID(),
+							details: event.message.details,
+							text: customMessageText(event.message.content),
+						},
+					],
+				};
+			}
 			if (event.message.role !== "assistant" || !rt.currentAssistantId) return rt;
 			const id = rt.currentAssistantId;
 			const turn: ChatTurn = { kind: "assistant", id, message: event.message, streaming: false };
@@ -766,7 +781,7 @@ interface AppState {
 	localLayoutPreferences: LocalLayoutPreferences;
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
-	layoutProjectionEpochByWorkspace: Record<string, number>;
+	layoutProjectionEpoch: number;
 	layoutIntents: LayoutIntent[];
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
@@ -829,6 +844,7 @@ interface AppState {
 	reviewModel: WireModel | undefined;
 	reviewEffort: ThinkingLevel | undefined;
 	reviewAutoFix: boolean;
+	agentReviewEnabled: boolean;
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -861,11 +877,7 @@ interface AppState {
 	validateRouteChatTarget: (sessionId: string) => void;
 	clearRouteChatTarget: () => void;
 	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
-	applyLocalLayoutState: (
-		payload: LocalLayoutStatePayload,
-		changedWorkspaceIds: readonly string[],
-		invalidateProjection?: boolean,
-	) => void;
+	applyLocalLayoutState: (payload: LocalLayoutStatePayload, invalidateProjection?: boolean) => void;
 	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
 	setLayoutAttention: (workspaceId: string, attention: LayoutAttention) => void;
 	syncLegacySelection: (
@@ -1073,6 +1085,7 @@ function configPatch(config: AppConfig) {
 		reviewModel: config.reviewModel,
 		reviewEffort: config.reviewEffort,
 		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
+		agentReviewEnabled: config.agentReviewEnabled ?? DEFAULT_CONFIG.agentReviewEnabled,
 	};
 }
 
@@ -1664,7 +1677,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	localLayoutPreferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
 	layoutDocumentsByWorkspace: {},
 	layoutAttentionByWorkspace: {},
-	layoutProjectionEpochByWorkspace: {},
+	layoutProjectionEpoch: 0,
 	layoutIntents: [],
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
@@ -1720,6 +1733,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewModel: DEFAULT_CONFIG.reviewModel,
 	reviewEffort: DEFAULT_CONFIG.reviewEffort,
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
+	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	toasts: [],
 	setStatus: (status) =>
 		set((state) => ({
@@ -1946,24 +1960,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 						layoutStateReady: true,
 					},
 		),
-	applyLocalLayoutState: (payload, changedWorkspaceIds, invalidateProjection = false) =>
-		set((state) => {
-			const layoutProjectionEpochByWorkspace = { ...state.layoutProjectionEpochByWorkspace };
-			if (invalidateProjection) {
-				for (const workspaceId of changedWorkspaceIds) {
-					layoutProjectionEpochByWorkspace[workspaceId] =
-						(layoutProjectionEpochByWorkspace[workspaceId] ?? 0) + 1;
-				}
-			}
-			return {
-				workbenchFrame: payload.frame,
-				workspaceViewsByWorkspace: payload.viewsByWorkspace,
-				layoutDocumentsByWorkspace: payload.documentsByWorkspace,
-				layoutAttentionByWorkspace: payload.attentionByWorkspace,
-				localLayoutPreferences: payload.preferences,
-				layoutProjectionEpochByWorkspace,
-			};
-		}),
+	applyLocalLayoutState: (payload, invalidateProjection = false) =>
+		set((state) => ({
+			workbenchFrame: payload.frame,
+			workspaceViewsByWorkspace: payload.viewsByWorkspace,
+			layoutDocumentsByWorkspace: payload.documentsByWorkspace,
+			layoutAttentionByWorkspace: payload.attentionByWorkspace,
+			localLayoutPreferences: payload.preferences,
+			layoutProjectionEpoch: state.layoutProjectionEpoch + (invalidateProjection ? 1 : 0),
+		})),
 	setLocalLayoutPreferences: (preferences) => set({ localLayoutPreferences: preferences }),
 	setLayoutAttention: (workspaceId, attention) =>
 		set((state) =>
@@ -2314,7 +2319,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 				workspaceViewsByWorkspace: omitKey(s.workspaceViewsByWorkspace, workspaceId),
 				layoutDocumentsByWorkspace: omitKey(s.layoutDocumentsByWorkspace, workspaceId),
 				layoutAttentionByWorkspace: omitKey(s.layoutAttentionByWorkspace, workspaceId),
-				layoutProjectionEpochByWorkspace: omitKey(s.layoutProjectionEpochByWorkspace, workspaceId),
 				layoutIntents: s.layoutIntents.filter((intent) => intent.workspaceId !== workspaceId),
 				tabsByWorkspace: omitKey(s.tabsByWorkspace, workspaceId),
 				activeTabByWorkspace: omitKey(s.activeTabByWorkspace, workspaceId),
@@ -3004,8 +3008,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 	handlePiEvent: (event, sessionId) => get().handlePiEvents([{ event, sessionId }]),
 	handlePiEvents: (payloads) =>
 		set((s) => {
+			let state = s;
 			let sessions = s.sessions;
 			for (const { event, sessionId } of payloads) {
+				if (event.type === "session_info_changed") {
+					const title = event.name?.trim() || "Chat";
+					const renamed = renameChat(state, sessionId, title);
+					if (renamed && Object.keys(renamed).length > 0) state = { ...state, ...renamed };
+				}
 				const runtime = sessions[sessionId];
 				if (!runtime) continue;
 				if (sessions === s.sessions) sessions = { ...sessions };
@@ -3016,7 +3026,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 					statsRefreshTick: runtime.statsRefreshTick + (invalidatesSessionStats(event) ? 1 : 0),
 				};
 			}
-			return sessions === s.sessions ? s : { sessions };
+			if (sessions !== s.sessions) state = { ...state, sessions };
+			return state;
 		}),
 	setModelsForProviderVersion: (providerVersion, models) =>
 		set((s) => (s.providerVersion === providerVersion ? { models, modelsFresh: false } : s)),

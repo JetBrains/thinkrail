@@ -11,14 +11,13 @@ tags: [v1, pi, oneshot, public-surface-checked]
 ## Responsibility
 
 Small, **best-effort** agentic helpers that run a single cheap-model completion — the "ad-hoc one-shot
-task service." Each task owns its prompt, its output parsing/guards, and its graceful-degrade fallback;
-it never blocks or crashes its caller. First task: **workspace naming** from a session's first turn,
-consumed by the host's auto-rename flow (`host/autoRename` — it owns the turn gating, the flag lifecycle,
-and the rename/push; assist only turns a prompt/turn into a **display name**, never a branch — branch
-derivation belongs to `workspaces`). Naming has two halves here: the agentic `suggestWorkspaceName` (a
-cheap-model refinement) and the pure `naiveWorkspaceName` (the instant non-agentic name the host shows
-first). Both emit a human-readable name (Title Case, spaces), not a slug. PR-draft (title/body) and similar
-tasks land here next. The tasks are a **library surface** — no wire method; consumers are host-side flows.
+task service." Each task owns its prompt, output parsing/guards, and graceful-degrade fallback; it never
+blocks or crashes its caller. Current tasks name workspaces and chats. Workspace naming consumes a session's
+first clean turn and has an instant deterministic title plus cheap-model refinement. Chat naming consumes
+only the first raw text prompt and has a deterministic fallback; the host owns when either result may write.
+Assist emits human-readable display text, never a branch or slug — branch derivation belongs to
+`workspaces`. PR-draft (title/body) and similar tasks land here next. The tasks are a **library surface** —
+no wire method; consumers are host-side flows.
 
 ## Boundary
 
@@ -27,6 +26,15 @@ tasks land here next. The tasks are a **library surface** — no wire method; co
     a short (`≤5`-word) **human-readable Title Case name** or `null` (best-effort: returns `null` — never
     throws — on nothing authenticated, timeout, or unusable output, so the caller keeps its `workspace-N`
     default). Always time-boxed (`AbortSignal.timeout`) and bounded (`maxTokens`).
+  - `suggestChatTitle(firstPrompt)` → a 3–6-word durable subject/outcome from only a bounded raw prompt,
+    through the same tool-free cheap-model path, or `null`. Its prompt treats the request as untrusted data,
+    targets at most 48 characters, and excludes incidental project/workspace, workflow, model, tool, test,
+    commit, and status wording. Output normalization strips wrappers, folds whitespace, preserves useful
+    casing/punctuation, and clamps to contracts' session-title maximum. `naiveChatTitle(firstPrompt)` is the
+    pure word-boundary fallback (up to six words / 48 characters); blank or punctuation/image-only input
+    returns `null`, leaving the caller free to try a later text prompt. `hasEligibleChatTitlePrompt(messages)`
+    applies that same eligibility rule to canonical user-message text while excluding internal control
+    prompts, so the host can tell whether a durable earlier turn already consumed the one automatic attempt.
   - `toWorkspaceName(raw)` — pure model-output → safe display-name normalization (strip wrapping
     quotes/backticks, drop other punctuation to spaces, collapse whitespace, clamp words + length) that
     **preserves the model's casing** (so `Add OAuth login` survives).
@@ -44,10 +52,12 @@ tasks land here next. The tasks are a **library surface** — no wire method; co
     caller's job.
   - `setOneShotRunner(fn)` — a test seam swapping the one-shot runner (default = `agent.completeOnce`) so
     tasks unit-test against a fake with no pi/auth/network.
-- **Public surface (barrel):** `suggestWorkspaceName`, `naiveWorkspaceName`, `toWorkspaceName`,
-  `extractFirstTurn`, `setOneShotRunner`; `WorkspaceNameTurn`, `OneShotRunner`.
+- **Public surface (barrel):** `extractFirstTurn`, `hasEligibleChatTitlePrompt`, `naiveChatTitle`,
+  `naiveWorkspaceName`, `setOneShotRunner`, `suggestChatTitle`, `suggestWorkspaceName`, `toWorkspaceName`,
+  `OneShotRunner`, `WorkspaceNameTurn`.
 - **Allowed deps:** `agent` (the `completeOnce`/`OneShotRequest`/`OneShotResult` primitive, via its
-  barrel); `contracts` (`Message`/`UserMessage`/`AssistantMessage`/`TextContent`); Node.
+  barrel); `contracts` (`Message`/`UserMessage`/`AssistantMessage`/`TextContent`, session-title normalization,
+  and `isControlMessage`); Node.
 - **Forbidden:** `host`; **`@earendil-works/pi-ai` / `pi-coding-agent` directly** (model access + dispatch
   belong to `agent`); reaching into another feature's internals.
 

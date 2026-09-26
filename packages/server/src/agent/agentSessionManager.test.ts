@@ -11,9 +11,12 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+	getCurrentSystemPrompt,
+	getCurrentTools,
 	InMemoryCredentialStore,
 	type Model,
 	type ModelsRefreshResult,
+	type TranscriptContext,
 } from "@earendil-works/pi-ai";
 import {
 	createFauxCore,
@@ -24,13 +27,16 @@ import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-c
 import type {
 	ActivityStatus,
 	AgentSettlement,
+	AskUserQuestionResult,
 	ExtUiRequest,
 	ImageContent,
 	SessionSummary,
 } from "@thinkrail/contracts";
+import { isAskUserAnswersMessage } from "@thinkrail/contracts";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import {
 	abortSession,
+	answerQuestion,
 	buildSessionSettings,
 	clampThinkingForModel,
 	clearQueueSession,
@@ -49,13 +55,16 @@ import {
 	listSessionActivity,
 	listSessions,
 	promptSession,
+	refreshAgentReviewTool,
 	refreshAvailableModels,
 	refreshSubagentTools,
 	reloadSessionResources,
 	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
+	renameSession,
 	setActivityProjectResolver,
+	setAgentReviewEnabledResolver,
 	setSessionActivityPublisher,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -64,10 +73,12 @@ import {
 	setSessionPublisher,
 	setSessionThinkingLevel,
 	setSubagentsEnabledResolver,
+	settleSessionsForShutdown,
 	steerSession,
 	syncSessionActivity,
 	toWireModel,
 } from "./agentSessionManager";
+import { ASK_STOPPED_ERROR, assessAnswerability } from "./askUserQuestion";
 import { configurePiRuntime } from "./piRuntime";
 import { setTrashImplementationForTests } from "./trash";
 import { setExtUiPublisher } from "./webUiContext";
@@ -114,9 +125,19 @@ const cfg = (faux: typeof fauxA, id: string) => ({
 const events = new Map<string, unknown[]>();
 const seen = (id: string) => JSON.stringify(events.get(id) ?? []);
 
-function subagentToolState(context: { tools?: ReadonlyArray<{ name: string }> }): string {
-	const names = new Set((context.tools ?? []).map((tool) => tool.name));
+function subagentToolState(context: TranscriptContext): string {
+	const names = new Set(getCurrentTools(context.messages).map((tool) => tool.name));
 	return names.has("Agent") && names.has("get_subagent_result") ? "SUBAGENTS_ON" : "SUBAGENTS_OFF";
+}
+
+function reviewToolState(context: TranscriptContext): string {
+	const names = new Set(getCurrentTools(context.messages).map((tool) => tool.name));
+	const toolActive = names.has("request_review");
+	// The guidance must track the tool: setActiveToolsByName rebuilds the prompt from active tools only.
+	const guidanceInPrompt = getCurrentSystemPrompt(context.messages).includes("request_review");
+	if (toolActive && guidanceInPrompt) return "REVIEW_ON";
+	if (!toolActive && !guidanceInPrompt) return "REVIEW_OFF";
+	return "REVIEW_INCONSISTENT";
 }
 
 const tmpDirs: string[] = [];
@@ -124,6 +145,116 @@ function tmpCwd(prefix: string): string {
 	const dir = mkdtempSync(join(tmpdir(), prefix));
 	tmpDirs.push(dir);
 	return dir;
+}
+
+function installAskToolGate(name: string): {
+	startedPath: string;
+	release: () => void;
+	remove: () => void;
+} {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const controlDir = tmpCwd(`trpi-${name}-`);
+	const startedPath = join(controlDir, "started");
+	const releasePath = join(controlDir, "release");
+	const extensionPath = join(agentDir, "extensions", `${name}.ts`);
+	mkdirSync(dirname(extensionPath), { recursive: true });
+	writeFileSync(
+		extensionPath,
+		[
+			'import { existsSync, writeFileSync } from "node:fs";',
+			'import { setTimeout as sleep } from "node:timers/promises";',
+			'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+			"export default function (pi: ExtensionAPI) {",
+			'\tpi.on("tool_call", async (event) => {',
+			'\t\tif (event.toolName !== "ask_user_question") return;',
+			`\t\twriteFileSync(${JSON.stringify(startedPath)}, "");`,
+			`\t\twhile (!existsSync(${JSON.stringify(releasePath)})) await sleep(2);`,
+			"\t});",
+			"}",
+			"",
+		].join("\n"),
+	);
+	return {
+		startedPath,
+		release: () => writeFileSync(releasePath, ""),
+		remove: () => rmSync(extensionPath, { force: true }),
+	};
+}
+
+function installStalledAskResultHook(name: string): { startedPath: string; remove: () => void } {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const controlDir = tmpCwd(`trpi-${name}-`);
+	const startedPath = join(controlDir, "started");
+	const extensionPath = join(agentDir, "extensions", `${name}.ts`);
+	mkdirSync(dirname(extensionPath), { recursive: true });
+	writeFileSync(
+		extensionPath,
+		[
+			'import { writeFileSync } from "node:fs";',
+			'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+			"export default function (pi: ExtensionAPI) {",
+			'\tpi.on("tool_result", async (event, ctx) => {',
+			'\t\tif (event.toolName !== "ask_user_question") return;',
+			`\t\twriteFileSync(${JSON.stringify(startedPath)}, "");`,
+			"\t\tif (!ctx.signal.aborted) {",
+			"\t\t\tawait new Promise<void>((resolve) =>",
+			'\t\t\t\tctx.signal.addEventListener("abort", () => resolve(), { once: true }),',
+			"\t\t\t);",
+			"\t\t}",
+			'\t\treturn { content: [{ type: "text", text: "post-tool result replaced" }] };',
+			"\t});",
+			"}",
+			"",
+		].join("\n"),
+	);
+	return {
+		startedPath,
+		remove: () => rmSync(extensionPath, { force: true }),
+	};
+}
+
+async function waitForPath(path: string): Promise<void> {
+	for (let attempt = 0; attempt < 200; attempt++) {
+		if (existsSync(path)) return;
+		await new Promise((resolve) => setTimeout(resolve, 2));
+	}
+	throw new Error(`Timed out waiting for ${path}`);
+}
+
+function gatedQuestionAnswer(): AskUserQuestionResult {
+	return {
+		cancelled: false,
+		answers: [
+			{
+				questionIndex: 0,
+				question: "Which runtime?",
+				kind: "option",
+				answer: "Bun",
+			},
+		],
+	};
+}
+
+function gatedQuestionMessage(toolCallId: string, stopReason?: "length") {
+	const call = fauxToolCall(
+		"ask_user_question",
+		{
+			questions: [
+				{
+					question: "Which runtime?",
+					header: "Runtime",
+					options: [
+						{ label: "Bun", description: "fast" },
+						{ label: "Node", description: "compatible" },
+					],
+				},
+			],
+		},
+		{ id: toolCallId },
+	);
+	return stopReason ? fauxAssistantMessage(call, { stopReason }) : fauxAssistantMessage(call);
 }
 
 let priorAgentDir: string | undefined;
@@ -292,6 +423,56 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 	expect(hydrated.summary.lastSettlement).toEqual(settled?.terminal);
 });
 
+test("a length-truncated questionnaire never registers as a live blocker", async () => {
+	setActivityProjectResolver(() => "project-length-ask");
+	let releaseContinuation = (): void => {};
+	const continuationGate = new Promise<void>((resolve) => {
+		releaseContinuation = resolve;
+	});
+	let markContinuationStarted = (): void => {};
+	const continuationStarted = new Promise<void>((resolve) => {
+		markContinuationStarted = resolve;
+	});
+	const toolCallId = "length-question";
+	fauxA.setResponses([
+		gatedQuestionMessage(toolCallId, "length"),
+		async () => {
+			markContinuationStarted();
+			await continuationGate;
+			return fauxAssistantMessage("RECOVERED_AFTER_LENGTH");
+		},
+	]);
+	const cwd = tmpCwd("trpi-length-question-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-length-question",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask a question.");
+	try {
+		await continuationStarted;
+		expect(
+			(await listSessionActivity()).find((row) => row.sessionId === session.sessionId)?.status,
+		).toBe("running");
+		await expect(
+			answerQuestion(session.sessionId, toolCallId, { answers: [], cancelled: true }),
+		).rejects.toThrow("not awaiting an answer");
+		releaseContinuation();
+		await prompting;
+		const transcript = await getSessionMessages(session.sessionId, "ws-length-question", cwd);
+		const result = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (result?.role !== "toolResult") throw new Error("length tool result was not persisted");
+		expect(result.isError).toBe(true);
+	} finally {
+		releaseContinuation();
+		await prompting.catch(() => {});
+		removeSession(session.sessionId);
+		setActivityProjectResolver(() => null);
+	}
+});
+
 test("a disabled workspace creates chats without active subagent tools", async () => {
 	const workspaceId = "ws-subagents-initial-off";
 	setSubagentsEnabledResolver((id) => id !== workspaceId);
@@ -385,6 +566,43 @@ test("an idle chat adopts subagent policy changes, survives resource reload, and
 		expect(seen(sessionId)).toContain("SUBAGENTS_ON");
 	} finally {
 		setSubagentsEnabledResolver(() => true);
+		if (sessionId) removeSession(sessionId);
+	}
+});
+
+test("an idle chat adopts an agent-review policy change live — request_review and its guidance drop and return", async () => {
+	const workspaceId = "ws-agent-review-idle-toggle";
+	let enabled = true;
+	setAgentReviewEnabledResolver((id) => id !== workspaceId || enabled);
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-agent-review-idle-toggle-"),
+			workspaceId,
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+
+		// On by default: the tool is active and its guidance is in the (rebuilt) system prompt.
+		fauxA.setResponses([(context) => fauxAssistantMessage(reviewToolState(context))]);
+		await promptSession(sessionId, "Check enabled review tool.");
+		expect(seen(sessionId)).toContain("REVIEW_ON");
+
+		// Toggle off live: the tool leaves the active set AND its guidance leaves the rebuilt prompt.
+		enabled = false;
+		refreshAgentReviewTool(workspaceId);
+		fauxA.setResponses([(context) => fauxAssistantMessage(reviewToolState(context))]);
+		await promptSession(sessionId, "Check disabled review tool.");
+		expect(seen(sessionId)).toContain("REVIEW_OFF");
+
+		// And back on.
+		enabled = true;
+		refreshAgentReviewTool(workspaceId);
+		fauxA.setResponses([(context) => fauxAssistantMessage(reviewToolState(context))]);
+		await promptSession(sessionId, "Check re-enabled review tool.");
+		expect(seen(sessionId)).toContain("REVIEW_ON");
+	} finally {
+		setAgentReviewEnabledResolver(() => true);
 		if (sessionId) removeSession(sessionId);
 	}
 });
@@ -577,8 +795,35 @@ test("disabling an idle parent lets its running background child finish and deli
 	}
 });
 
-test("buildSessionSettings disables image autoResize (in-memory, so the read tool sends images raw)", () => {
-	expect(buildSessionSettings(tmpCwd("trpi-settings-")).getImageAutoResize()).toBe(false);
+test("buildSessionSettings disables image autoResize, and the override survives a settings.reload()", async () => {
+	const settings = buildSessionSettings(tmpCwd("trpi-settings-"));
+	expect(settings.getImageAutoResize()).toBe(false);
+	await settings.reload();
+	expect(settings.getImageAutoResize()).toBe(false);
+});
+
+test("a prompt image reaches the transcript raw — the autoResize override survives pi's loader reload", async () => {
+	fauxA.setResponses([fauxAssistantMessage("IMAGE_ACK")]);
+	const cwd = tmpCwd("trpi-raw-image-");
+	const s = await createSession({
+		cwd,
+		workspaceId: "ws-raw-image",
+		model: toWireModel(fauxA.getModel()),
+	});
+	try {
+		const rawImageData = Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64");
+		await promptSession(s.sessionId, "describe this", [
+			{ type: "image", mimeType: "image/png", data: rawImageData },
+		]);
+		const transcript = await getSessionMessages(s.sessionId, "ws-raw-image", cwd);
+		const userMessage = transcript.messages.find((message) => message.role === "user");
+		expect(userMessage?.content).toEqual([
+			{ type: "text", text: "describe this" },
+			{ type: "image", mimeType: "image/png", data: rawImageData },
+		]);
+	} finally {
+		await removeSession(s.sessionId);
+	}
 });
 
 test("listAvailableModels returns the configured (faux) models", async () => {
@@ -919,6 +1164,643 @@ test("getSessionStats + getSessionCommands read live session info (cheap wins #3
 	removeSession(s.sessionId);
 });
 
+test("graceful shutdown preserves an expected question before its tool executes", async () => {
+	const gate = installAskToolGate("ask-shutdown-gate");
+	const toolCallId = "expected-on-shutdown";
+	fauxA.setResponses([gatedQuestionMessage(toolCallId)]);
+	const cwd = tmpCwd("trpi-expected-shutdown-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-expected-shutdown",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	prompting.catch(() => {});
+	try {
+		await waitForPath(gate.startedPath);
+		await settleSessionsForShutdown(25);
+		expect(
+			(await listSessions("ws-expected-shutdown", cwd)).find(
+				(row) => row.sessionId === session.sessionId,
+			)?.isStreaming,
+		).toBe(true);
+		await expect(
+			answerQuestion(session.sessionId, toolCallId, { answers: [], cancelled: true }),
+		).rejects.toThrow("not awaiting an answer");
+		const stopping = abortSession(session.sessionId, true);
+		gate.release();
+		await stopping;
+		await prompting;
+	} finally {
+		gate.release();
+		gate.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test("graceful shutdown persists an accepted answer and aborts its continuation", async () => {
+	const gate = installAskToolGate("ask-shutdown-accepted-gate");
+	const toolCallId = "accepted-on-shutdown";
+	fauxA.setResponses([
+		gatedQuestionMessage(toolCallId),
+		fauxAssistantMessage("SHUTDOWN_CONTINUATION_RAN"),
+	]);
+	const cwd = tmpCwd("trpi-shutdown-accepted-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-shutdown-accepted",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	prompting.catch(() => {});
+	try {
+		await waitForPath(gate.startedPath);
+		const result = gatedQuestionAnswer();
+		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		const settling = settleSessionsForShutdown(1000);
+		gate.release();
+		await Promise.all([answering, settling, prompting]);
+		const transcript = await getSessionMessages(session.sessionId, "ws-shutdown-accepted", cwd);
+		const persisted = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
+		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
+		expect(seen(session.sessionId)).not.toContain("SHUTDOWN_CONTINUATION_RAN");
+	} finally {
+		gate.release();
+		gate.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test("an answer accepted before execute persists before Stop aborts the continuation", async () => {
+	const gate = installAskToolGate("ask-answer-stop-gate");
+	const toolCallId = "answer-before-stop";
+	fauxA.setResponses([
+		gatedQuestionMessage(toolCallId),
+		fauxAssistantMessage("CONTINUATION_AFTER_ACCEPTED_ANSWER"),
+	]);
+	const cwd = tmpCwd("trpi-answer-before-stop-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-answer-before-stop",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	prompting.catch(() => {});
+	try {
+		await waitForPath(gate.startedPath);
+		await steerSession(session.sessionId, "STEER_BEFORE_STOP");
+		await followUpSession(session.sessionId, "FOLLOW_UP_BEFORE_STOP");
+		const result = gatedQuestionAnswer();
+		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		let stopResolved = false;
+		const stopping = abortSession(session.sessionId, true).then((queue) => {
+			stopResolved = true;
+			return queue;
+		});
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(stopResolved).toBe(false);
+		await steerSession(session.sessionId, "STEER_DURING_STOP");
+		await followUpSession(session.sessionId, "FOLLOW_UP_DURING_STOP");
+		gate.release();
+		await answering;
+		expect(await stopping).toEqual({
+			steering: [{ text: "STEER_BEFORE_STOP" }, { text: "STEER_DURING_STOP" }],
+			followUp: [{ text: "FOLLOW_UP_BEFORE_STOP" }, { text: "FOLLOW_UP_DURING_STOP" }],
+		});
+		await prompting;
+		const transcript = await getSessionMessages(session.sessionId, "ws-answer-before-stop", cwd);
+		const persisted = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
+		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
+		expect(persisted.isError).toBe(false);
+	} finally {
+		gate.release();
+		gate.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test("Stop claims an expected question before a late answer can win", async () => {
+	const gate = installAskToolGate("ask-stop-first-gate");
+	const toolCallId = "stop-before-answer";
+	fauxA.setResponses([gatedQuestionMessage(toolCallId)]);
+	const cwd = tmpCwd("trpi-stop-before-answer-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-stop-before-answer",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	prompting.catch(() => {});
+	try {
+		await waitForPath(gate.startedPath);
+		const stopping = abortSession(session.sessionId, true);
+		await expect(
+			answerQuestion(session.sessionId, toolCallId, { answers: [], cancelled: true }),
+		).rejects.toThrow("not awaiting an answer");
+		gate.release();
+		expect(await stopping).toEqual({ steering: [], followUp: [] });
+		await prompting;
+		const transcript = await getSessionMessages(session.sessionId, "ws-stop-before-answer", cwd);
+		const persisted = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (persisted?.role !== "toolResult") throw new Error("stopped result was not persisted");
+		expect(persisted.isError).toBe(true);
+	} finally {
+		gate.release();
+		gate.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test("direct session disposal rejects an accepted answer that cannot persist", async () => {
+	const gate = installAskToolGate("ask-dispose-gate");
+	const toolCallId = "dispose-after-answer";
+	fauxA.setResponses([gatedQuestionMessage(toolCallId)]);
+	const session = await createSession({
+		cwd: tmpCwd("trpi-dispose-after-answer-"),
+		workspaceId: "ws-dispose-after-answer",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	prompting.catch(() => {});
+	try {
+		await waitForPath(gate.startedPath);
+		const answering = answerQuestion(session.sessionId, toolCallId, {
+			answers: [],
+			cancelled: true,
+		});
+		await removeSession(session.sessionId);
+		await expect(answering).rejects.toThrow("Session disposed while waiting for a question");
+	} finally {
+		gate.release();
+		gate.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test("a live question blocks continuation, preserves queue order, and acknowledges after its native result persists", async () => {
+	setActivityProjectResolver(() => "project-live-question");
+	const activityStatuses: (ActivityStatus | null)[] = [];
+	setSessionActivityPublisher(({ status }) => activityStatuses.push(status));
+	const toolCallId = "live-question";
+	const question = {
+		questions: [
+			{
+				question: "Which library?",
+				header: "Library",
+				options: [
+					{ label: "date-fns", description: "small" },
+					{ label: "luxon", description: "time zones" },
+				],
+			},
+		],
+	};
+	let continuationCalls = 0;
+	let continuationContext = "";
+	let releaseContinuation = (): void => {};
+	const continuationGate = new Promise<void>((resolve) => {
+		releaseContinuation = resolve;
+	});
+	let markContinuationStarted = (): void => {};
+	const continuationStarted = new Promise<void>((resolve) => {
+		markContinuationStarted = resolve;
+	});
+	fauxA.setResponses([
+		fauxAssistantMessage(fauxToolCall("ask_user_question", question, { id: toolCallId })),
+		async (context) => {
+			continuationCalls++;
+			continuationContext = JSON.stringify(context.messages);
+			markContinuationStarted();
+			await continuationGate;
+			return fauxAssistantMessage("QUESTION_CONTINUED");
+		},
+	]);
+	const cwd = tmpCwd("trpi-live-question-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-live-question",
+		model: toWireModel(fauxA.getModel()),
+	});
+	try {
+		const prompting = promptSession(session.sessionId, "Choose a library.");
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		expect(seen(session.sessionId)).toContain('"toolName":"ask_user_question"');
+		expect(
+			(await listSessionActivity()).find((row) => row.sessionId === session.sessionId)?.status,
+		).toBe("waiting");
+		expect(activityStatuses).toContain("waiting");
+		await steerSession(session.sessionId, "QUEUED_WHILE_ASKING");
+		await Promise.resolve();
+		expect(continuationCalls).toBe(0);
+
+		const result: AskUserQuestionResult = {
+			cancelled: false,
+			answers: [
+				{
+					questionIndex: 0,
+					question: "Which library?",
+					kind: "option",
+					answer: "luxon",
+				},
+			],
+		};
+		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		await continuationStarted;
+		await answering;
+
+		const { messages } = await getSessionMessages(session.sessionId, "ws-live-question", cwd);
+		const persistedResult = messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		expect(persistedResult).toBeDefined();
+		if (persistedResult?.role !== "toolResult") throw new Error("native result was not persisted");
+		expect(persistedResult.details).toEqual<AskUserQuestionResult>(result);
+		expect(messages.some((message) => message.role === "custom")).toBe(false);
+		expect(continuationContext.indexOf('"role":"toolResult"')).toBeLessThan(
+			continuationContext.indexOf("QUEUED_WHILE_ASKING"),
+		);
+
+		releaseContinuation();
+		await prompting;
+	} finally {
+		releaseContinuation();
+		removeSession(session.sessionId);
+		setSessionActivityPublisher(() => {});
+		setActivityProjectResolver(() => null);
+	}
+});
+
+test("an accepted answer persists and its RPC settles when Stop races before turn_end", async () => {
+	const toolCallId = "answer-stop-race";
+	const question = {
+		questions: [
+			{
+				question: "Which option?",
+				header: "Option",
+				options: [
+					{ label: "A", description: "first" },
+					{ label: "B", description: "second" },
+				],
+			},
+		],
+	};
+	fauxA.setResponses([
+		fauxAssistantMessage(fauxToolCall("ask_user_question", question, { id: toolCallId })),
+	]);
+	const cwd = tmpCwd("trpi-answer-stop-race-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-answer-stop-race",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		const result: AskUserQuestionResult = {
+			cancelled: false,
+			answers: [
+				{
+					questionIndex: 0,
+					question: "Which option?",
+					kind: "option",
+					answer: "A",
+				},
+			],
+		};
+		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		const stopping = abortSession(session.sessionId, true);
+		await Promise.all([answering, stopping, prompting]);
+
+		const transcript = await getSessionMessages(session.sessionId, "ws-answer-stop-race", cwd);
+		const persisted = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (persisted?.role !== "toolResult") throw new Error("answer result was not persisted");
+		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
+		expect(persisted.isError).toBe(false);
+		expect(transcript.messages.some((message) => isAskUserAnswersMessage(message))).toBe(false);
+	} finally {
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test("Stop bounds a stalled post-tool hook and rejects an answer that did not persist", async () => {
+	const hook = installStalledAskResultHook("stalled-ask-result");
+	const toolCallId = "stalled-answer-stop";
+	fauxA.setResponses([gatedQuestionMessage(toolCallId)]);
+	const cwd = tmpCwd("trpi-stalled-answer-stop-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-stalled-answer-stop",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before stopping.");
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		const answering = answerQuestion(session.sessionId, toolCallId, gatedQuestionAnswer());
+		await waitForPath(hook.startedPath);
+
+		const stopping = abortSession(session.sessionId, true, 25);
+		await expect(answering).rejects.toThrow("accepted answer was not persisted");
+		await Promise.all([stopping, prompting]);
+
+		const transcript = await getSessionMessages(session.sessionId, "ws-stalled-answer-stop", cwd);
+		const persisted = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (persisted?.role !== "toolResult") throw new Error("stopped result was not persisted");
+		expect(persisted.isError).toBe(false);
+		expect(persisted.details).toEqual<AskUserQuestionResult>(gatedQuestionAnswer());
+		expect(persisted.content).toEqual([{ type: "text", text: "post-tool result replaced" }]);
+	} finally {
+		hook.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+}, 20_000);
+
+test("restart repair leaves a dangling question answerable through the custom-message path", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const cwd = tmpCwd("trpi-restart-question-");
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const toolCallId = "restart-question";
+	const question = {
+		questions: [
+			{
+				question: "Which runtime?",
+				header: "Runtime",
+				options: [
+					{ label: "Bun", description: "fast" },
+					{ label: "Node", description: "compatible" },
+				],
+			},
+		],
+	};
+	const fixture = writeFixtureSession(dir, {
+		id: "restart-question-session",
+		cwd,
+		messages: [
+			{ role: "user", text: "Pick a runtime.", timestamp: 1 },
+			{
+				role: "assistant",
+				timestamp: 2,
+				stopReason: "toolUse",
+				content: [
+					{
+						type: "toolCall",
+						id: toolCallId,
+						name: "ask_user_question",
+						arguments: question,
+					},
+				],
+			},
+		],
+	});
+	try {
+		fauxA.setResponses([fauxAssistantMessage("RESTART_QUESTION_CONTINUED")]);
+		expect(await ensureSessionAttached(fixture.id, "ws-restart-question", cwd)).toBe(true);
+		const repaired = await getSessionMessages(fixture.id, "ws-restart-question", cwd);
+		const ack = repaired.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (ack?.role !== "toolResult") throw new Error("repair ack was not persisted");
+		expect(ack.details).toEqual({ kind: "ack" });
+		expect(ack.isError).toBe(false);
+
+		await answerQuestion(fixture.id, toolCallId, {
+			cancelled: false,
+			answers: [
+				{
+					questionIndex: 0,
+					question: "Which runtime?",
+					kind: "option",
+					answer: "Bun",
+				},
+			],
+		});
+		const answered = await getSessionMessages(fixture.id, "ws-restart-question", cwd);
+		expect(
+			answered.messages.some(
+				(message) => isAskUserAnswersMessage(message) && message.details.toolCallId === toolCallId,
+			),
+		).toBe(true);
+		expect(seen(fixture.id)).toContain("RESTART_QUESTION_CONTINUED");
+	} finally {
+		if (hasSession(fixture.id)) removeSession(fixture.id);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("explicit Stop restores both queues and persists a terminal ask error", async () => {
+	const toolCallId = "stopped-question";
+	const question = {
+		questions: [
+			{
+				question: "Continue?",
+				header: "Continue",
+				options: [
+					{ label: "Yes", description: "continue" },
+					{ label: "No", description: "stop" },
+				],
+			},
+		],
+	};
+	fauxA.setResponses([
+		fauxAssistantMessage(fauxToolCall("ask_user_question", question, { id: toolCallId })),
+	]);
+	const cwd = tmpCwd("trpi-stop-question-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-stop-question",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		await steerSession(session.sessionId, "RESTORED_STEER");
+		await followUpSession(session.sessionId, "RESTORED_FOLLOW_UP");
+
+		const stopping = abortSession(session.sessionId, true);
+		await settleSessionsForShutdown(1000);
+		expect(await stopping).toEqual({
+			steering: [{ text: "RESTORED_STEER" }],
+			followUp: [{ text: "RESTORED_FOLLOW_UP" }],
+		});
+		await prompting;
+
+		const transcript = await getSessionMessages(session.sessionId, "ws-stop-question", cwd);
+		const result = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (result?.role !== "toolResult") throw new Error("stopped result was not persisted");
+		expect(result.isError).toBe(true);
+		expect(JSON.stringify(result.content)).toContain(ASK_STOPPED_ERROR);
+		expect(assessAnswerability(transcript.messages, toolCallId)).toEqual({
+			ok: false,
+			reason: "not_awaiting",
+		});
+		expect(transcript.messages.filter((message) => message.role === "user")).toHaveLength(1);
+	} finally {
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test("graceful settling leaves a live question dangling for restart ack repair", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const toolCallId = "shutdown-question";
+	const cwd = tmpCwd("trpi-shutdown-question-");
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall(
+				"ask_user_question",
+				{
+					questions: [
+						{
+							question: "Wait through restart?",
+							header: "Restart",
+							options: [
+								{ label: "Yes", description: "wait" },
+								{ label: "No", description: "cancel" },
+							],
+						},
+					],
+				},
+				{ id: toolCallId },
+			),
+		),
+	]);
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-shutdown-question",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask and wait.");
+	prompting.catch(() => {});
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		await settleSessionsForShutdown(50);
+		expect(
+			(await listSessions("ws-shutdown-question", cwd)).find(
+				(row) => row.sessionId === session.sessionId,
+			)?.isStreaming,
+		).toBe(true);
+
+		disposeAllSessions();
+		await prompting;
+		expect(await ensureSessionAttached(session.sessionId, "ws-shutdown-question", cwd)).toBe(true);
+		const transcript = await getSessionMessages(session.sessionId, "ws-shutdown-question", cwd);
+		const repaired = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (repaired?.role !== "toolResult") throw new Error("restart ack was not persisted");
+		expect(repaired.details).toEqual({ kind: "ack" });
+		expect(repaired.isError).toBe(false);
+		expect(assessAnswerability(transcript.messages, toolCallId).ok).toBe(true);
+	} finally {
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("disposing a session mid-run reports pi's stale-boundary errors at debug, never as a client-visible extension crash", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const toolCallId = "dispose-mid-run-question";
+	const cwd = tmpCwd("trpi-dispose-mid-run-");
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall(
+				"ask_user_question",
+				{
+					questions: [
+						{
+							question: "Dispose while waiting?",
+							header: "Dispose",
+							options: [
+								{ label: "Yes", description: "dispose" },
+								{ label: "No", description: "keep waiting" },
+							],
+						},
+					],
+				},
+				{ id: toolCallId },
+			),
+		),
+	]);
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-dispose-mid-run",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before disposal.");
+	prompting.catch(() => {});
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((frame) => frames.push(frame));
+	const stderrChunks: string[] = [];
+	const originalStderrWrite = process.stderr.write;
+	process.stderr.write = (chunk) => {
+		stderrChunks.push(String(chunk));
+		return true;
+	};
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		const framesAtDisposal = frames.length;
+		disposeAllSessions();
+		await prompting.catch(() => {});
+		await new Promise((resolve) => setTimeout(resolve, 200));
+
+		const stderr = stderrChunks.join("");
+		expect(stderr).not.toMatch(/WARN[^\n]*This extension ctx is stale/);
+		expect(stderr).not.toMatch(/WARN[^\n]*could not resolve the persisted assistant entry ID/);
+		expect(
+			frames
+				.slice(framesAtDisposal)
+				.some(
+					(frame) =>
+						frame.sessionId === session.sessionId &&
+						frame.kind === "notify" &&
+						frame.level === "error",
+				),
+		).toBe(false);
+	} finally {
+		process.stderr.write = originalStderrWrite;
+		setExtUiPublisher(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("listSessions reports a workspace's live sessions; getSessionMessages returns its transcript", async () => {
 	fauxA.setResponses([fauxAssistantMessage("HYDRATE_REPLY")]);
 	const cwd = tmpCwd("trpi-hyd-");
@@ -941,6 +1823,110 @@ test("listSessions reports a workspace's live sessions; getSessionMessages retur
 	expect(messages.some((m) => m.role === "assistant")).toBe(true);
 	expect(messages.every((m) => ["user", "assistant", "toolResult"].includes(m.role))).toBe(true);
 	removeSession(s.sessionId);
+});
+
+test("renameSession persists a normalized live title and emits one durable title event", async () => {
+	const cwd = tmpCwd("trpi-rename-live-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-rename-live",
+		model: toWireModel(fauxA.getModel()),
+	});
+	events.set(session.sessionId, []);
+
+	expect(
+		await renameSession(session.sessionId, "ws-rename-live", cwd, "  Fix auth\r\nredirect  "),
+	).toBe(true);
+	expect(
+		(await listSessions("ws-rename-live", cwd)).find(
+			(candidate) => candidate.sessionId === session.sessionId,
+		)?.title,
+	).toBe("Fix auth redirect");
+	expect(events.get(session.sessionId)).toContainEqual({
+		type: "session_info_changed",
+		name: "Fix auth redirect",
+	});
+
+	const eventCount = events.get(session.sessionId)?.length;
+	expect(await renameSession(session.sessionId, "ws-rename-live", cwd, "Fix auth redirect")).toBe(
+		false,
+	);
+	expect(events.get(session.sessionId)).toHaveLength(eventCount ?? 0);
+	removeSession(session.sessionId);
+});
+
+test("renameSession's conditional write never replaces a durable title", async () => {
+	const cwd = tmpCwd("trpi-rename-guard-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-rename-guard",
+		model: toWireModel(fauxA.getModel()),
+	});
+	expect(await renameSession(session.sessionId, "ws-rename-guard", cwd, "Manual title")).toBe(true);
+	expect(
+		await renameSession(session.sessionId, "ws-rename-guard", cwd, "Generated title", {
+			onlyIfUnnamed: true,
+		}),
+	).toBe(false);
+	expect(
+		(await listSessions("ws-rename-guard", cwd)).find(
+			(candidate) => candidate.sessionId === session.sessionId,
+		)?.title,
+	).toBe("Manual title");
+	await expect(renameSession(session.sessionId, "ws-rename-guard", cwd, " \n ")).rejects.toThrow(
+		"Invalid session title",
+	);
+	await expect(
+		renameSession(session.sessionId, "ws-rename-guard", cwd, "x".repeat(81)),
+	).rejects.toThrow("Invalid session title");
+	await expect(
+		renameSession(session.sessionId, "ws-other", cwd, "Wrong workspace"),
+	).rejects.toThrow(`Unknown session: ${session.sessionId}`);
+	removeSession(session.sessionId);
+});
+
+test("renameSession updates a disk-only transcript without attaching an agent", async () => {
+	const cwd = tmpCwd("trpi-rename-disk-");
+	const { id, path } = writeFixtureSession(
+		defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd),
+		{
+			cwd,
+			name: "Old title",
+			messages: [{ role: "user", text: "persisted prompt", timestamp: Date.now() }],
+		},
+	);
+	events.set(id, []);
+
+	expect(await renameSession(id, "ws-rename-disk", cwd, "New disk title")).toBe(true);
+	expect(hasSession(id)).toBe(false);
+	expect(SessionManager.open(path).getSessionName()).toBe("New disk title");
+	expect(
+		(await listSessions("ws-rename-disk", cwd)).find((row) => row.sessionId === id)?.title,
+	).toBe("New disk title");
+	expect(events.get(id)).toEqual([{ type: "session_info_changed", name: "New disk title" }]);
+});
+
+test("renameSession serializes with a concurrent disk attach", async () => {
+	const cwd = tmpCwd("trpi-rename-attach-");
+	const { id } = writeFixtureSession(
+		defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd),
+		{
+			cwd,
+			name: "Before attach",
+			messages: [{ role: "user", text: "persisted prompt", timestamp: Date.now() }],
+		},
+	);
+
+	const [loaded, renamed] = await Promise.all([
+		getSessionMessages(id, "ws-rename-attach", cwd),
+		renameSession(id, "ws-rename-attach", cwd, "After attach"),
+	]);
+	expect(renamed).toBe(true);
+	expect(loaded.summary.sessionId).toBe(id);
+	expect(
+		(await listSessions("ws-rename-attach", cwd)).find((row) => row.sessionId === id)?.title,
+	).toBe("After attach");
+	removeSession(id);
 });
 
 test("listSessions ignores a live session's transient physical rewrite but stays strict for detached files", async () => {

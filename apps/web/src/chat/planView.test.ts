@@ -5,6 +5,7 @@ import {
 	adoptedCommits,
 	flatItems,
 	groupProgress,
+	isPlanReady,
 	itemChangeSet,
 	itemOpenFindings,
 	itemRevisions,
@@ -104,18 +105,20 @@ test("planSummary spans loose + groups and surfaces the current step", () => {
 	expect(summary.current?.title).toBe("a");
 });
 
-const asked = (answered: boolean, superseded = false): AskState => ({
+const asked = (answered: boolean, superseded = false, terminal = false): AskState => ({
 	...(answered ? { answer: { answers: [], cancelled: false } } : {}),
 	superseded,
+	terminal,
 });
 
-test("planGlance: streaming wins; an awaiting question beats plain waiting", () => {
+test("planGlance: an awaiting question wins even while its live tool blocks the run", () => {
 	expect(planGlance(true, {})).toBe("working");
-	expect(planGlance(true, { q1: asked(false) })).toBe("working");
+	expect(planGlance(true, { q1: asked(false) })).toBe("waiting_question");
 	expect(planGlance(false, {})).toBe("waiting");
 	expect(planGlance(false, { q1: asked(false) })).toBe("waiting_question");
 	expect(planGlance(false, { q1: asked(true) })).toBe("waiting");
 	expect(planGlance(false, { q1: asked(false, true) })).toBe("waiting");
+	expect(planGlance(false, { q1: asked(false, false, true) })).toBe("waiting");
 });
 
 test("shouldNudgeOnAdd: never wake an agent waiting on a question; wake it otherwise", () => {
@@ -134,11 +137,23 @@ test("sessionGlance derives the glance straight from a runtime (deriveAskStates 
 			content: [{ type: "toolCall", id: "q1", name: "ask_user_question", arguments: {} }],
 		} as unknown as AssistantMessage,
 	};
-	expect(sessionGlance({ isStreaming: true, turns: [askTurn], askAnswers: {} })).toBe("working");
-	expect(sessionGlance({ isStreaming: false, turns: [askTurn], askAnswers: {} })).toBe(
-		"waiting_question",
+	expect(
+		sessionGlance({ isStreaming: true, turns: [askTurn], askAnswers: {}, toolResults: {} }),
+	).toBe("waiting_question");
+	expect(
+		sessionGlance({ isStreaming: false, turns: [askTurn], askAnswers: {}, toolResults: {} }),
+	).toBe("waiting_question");
+	expect(sessionGlance({ isStreaming: false, turns: [], askAnswers: {}, toolResults: {} })).toBe(
+		"waiting",
 	);
-	expect(sessionGlance({ isStreaming: false, turns: [], askAnswers: {} })).toBe("waiting");
+	expect(
+		sessionGlance({
+			isStreaming: false,
+			turns: [askTurn],
+			askAnswers: {},
+			toolResults: { q1: { status: "error", raw: {} } },
+		}),
+	).toBe("waiting");
 });
 
 test("itemChangeSet: the LATEST resolvable commit wins; live change paths (a fallback redo) win over commits", () => {
@@ -234,6 +249,25 @@ test("itemRevisions lists the commit history in order; review derivations follow
 	const plan = { todos: [reviewable, research, approved], groups: [] };
 	expect(reviewableItems(plan).map((t) => t.id)).toEqual([reviewable.id, approved.id]);
 	expect(reviewProgress(plan)).toEqual({ reviewed: 1, total: 2 });
+});
+
+test("isPlanReady is false while a reviewable step is unsettled, true once all are reviewed", () => {
+	const done: TodoItem = {
+		...item("step", "done"),
+		artifacts: [{ kind: "commit", sha: "abc" }],
+		review: { state: "unreviewed", revision: 1 },
+	};
+	// Every step done, but the reviewable one is unsettled — the plan must NOT read ship-ready.
+	expect(isPlanReady({ todos: [done], groups: [] })).toBe(false);
+	const reviewed: TodoItem = {
+		...done,
+		review: { state: "reviewed", revision: 1, at: "2026-01-01T00:00:00Z" },
+	};
+	expect(isPlanReady({ todos: [reviewed], groups: [] })).toBe(true);
+	// An open step keeps it unready regardless of review state.
+	expect(isPlanReady({ todos: [reviewed, item("pending")], groups: [] })).toBe(false);
+	// An empty plan is not ready.
+	expect(isPlanReady({ todos: [], groups: [] })).toBe(false);
 });
 
 test("reviewableItems spans adoptedCommits, but planSummary's build count counts planned items only", () => {

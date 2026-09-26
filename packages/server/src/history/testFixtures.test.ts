@@ -39,7 +39,7 @@ describe("writeFixtureSession — pinned against pi's real SessionManager", () =
 		const dir = mkdtempSync(join(tmpdir(), "trpi-fixture-toolcall-"));
 		try {
 			const toolCallId = "ask-fixture-1";
-			const args: AskUserQuestionArgs = {
+			const args = {
 				questions: [
 					{
 						question: "Which rollout?",
@@ -50,7 +50,7 @@ describe("writeFixtureSession — pinned against pi's real SessionManager", () =
 						],
 					},
 				],
-			};
+			} satisfies AskUserQuestionArgs;
 			const ack: AskUserQuestionAckDetails = { kind: "ack" };
 			const { path } = writeFixtureSession(dir, {
 				id: "pin-toolcall-1",

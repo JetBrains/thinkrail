@@ -31,7 +31,9 @@ treatment.
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
   project `+`** — both are `Button variant="ghost" size="icon"`, so they render identically and their glyphs
-  line up on one vertical axis (both sit at the row's `pr-xs` right edge).
+  line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+` carries a
+  tooltip and accessible name naming the shell's `Mod+N` chord and its `Mod+Alt+N` browser alias through `lib`'s
+  `platformShortcutLabel` (see `submodule-web-shell` global chords); the context-menu item stays plain.
   Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
   Hover highlights the full row and the highlight remains while its **project context menu** is open.
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
@@ -336,7 +338,7 @@ a project picker, the prompt hero, and the reused
   model**: the picker reads **Default model**, the effort control is disabled (no model, no supported set),
   and creation sends neither field so the host applies its workspace/default precedence. The dialog does
   not fetch `model.default` or substitute a client-selected fallback. Choosing a model makes that pair
-  explicit; after successful session creation a v66+ host seeds the workspace from Pi's effective result, and
+  explicit; after successful session creation a v69+ host seeds the workspace from Pi's effective result, and
   that row reaches the dialog's client as `workspace.updated` — the dialog never writes it, so an older host
   simply persists nothing and needs no branch here. The session opens with its returned effective pair either
   way. The pickers' popovers portal into the dialog node (so their lists
@@ -374,10 +376,19 @@ a project picker, the prompt hero, and the reused
   *Trust project* button — the repo's skills stay withheld until granted (`project.setTrust`, which folds the
   updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
-  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active → **always open a
+  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active,
+  and the dialog itself expands the project and refreshes its authoritative `workspace.list` (fire-and-forget;
+  the `workspace.created` push is not relied on because an unloaded project list drops it) — there is no
+  `onCreated` callback, so every mount site (`ProjectTree`, `WelcomePanel`, the shell's keyboard-opened
+  instance) gets the same post-create fold → **always open a
   fresh chat** (`session.create({ workspaceId, model?, thinkingLevel? })` — a held model + effort apply even
-  without a prompt, and travel together: with none held both are omitted and pi resolves them) → a typed prompt is additionally sent as the first message (fire-and-forget
-  `prompt`); an **empty prompt leaves the just-opened composer ready** — submitting the start-working
+  without a prompt, and travel together: with none held both are omitted and pi resolves them) → the typed
+  prompt **and any attached images** are additionally sent as the first message (fire-and-forget `prompt`,
+  forwarding `images` alongside `text`, with an optimistic user turn carrying the same attachments). The
+  prompt hero accepts **image paste/drop** through the shared `usePromptImages` controller (same
+  `imageAttachment` decode/downscale + chip surface as the chat `Composer`); submit is **held while any
+  image is still decoding**, and a start with **only images and no text** is a valid kick-off. An **empty
+  prompt with no images leaves the just-opened composer ready** — submitting the start-working
   surface always lands the user in a chat, never on a bare receipt (folder mode: the same tail after
   entering Default). A **rejected** kick-off `prompt` (a bad model / missing API key — e.g. picking a
   nonexistent model) surfaces as an `error` turn in the just-opened chat via `store.appendErrorTurn` (with
@@ -390,7 +401,9 @@ a project picker, the prompt hero, and the reused
   a horizontal segmented strip): `settingsOpen`/`settingsSection` live in the store so the gear AND the
   Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app
   provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env /
-  models.json auth shows a "Managed" tag instead, since the host can't unset it); a **"Sign in with a
+  models.json auth shows a "Managed" tag instead, since the host can't unset it; a `kind: "central"` row
+  is labelled "JetBrains AI" and its Managed tag points at the JetBrains AI card, which owns that
+  connection); a **"Sign in with a
   subscription"** block of `canOAuth` providers; an **"Add an API key"** group of `canApiKey`-only
   providers (capped with a "Show N more" expander) — **both routes start `provider.loginStart`**
   (`type` `"oauth"` / `"api_key"`, issue #97) into the same store-driven `auth/LoginDialog` (open the
@@ -561,7 +574,13 @@ a project picker, the prompt hero, and the reused
   levels (fetched once from `model.default`) instead of an empty list. And an
   **auto-fix toggle** (`review-autofix-toggle`, a switch over `store.reviewAutoFix` →
   `settings.update { reviewAutoFix }`) — off means a `request_changes` verdict records findings and waits
-  (the host gates its auto-fix cycle on it, see `submodule-server-todos`). A single dimmed "General" nav item ("Soon") still signals the shell is
+  (the host gates its auto-fix cycle on it, see `submodule-server-todos`). And an **agent-review toggle**
+  (`agent-review-toggle`, a switch over `store.agentReviewEnabled` → `settings.update { agentReviewEnabled }`)
+  — off withholds the worker's in-session `request_review` tool so review happens only via the Review button
+  (the host live-toggles the tool's active set on it, see `submodule-server-host-plan-review`). It lives in
+  the props-driven `AgentReviewSettings` and is **hidden until the host negotiates v68**
+  (`AGENT_REVIEW_SETTING_PROTOCOL_VERSION`): a pre-v68 host can echo/store the unknown field while still
+  registering `request_review`, so the switch would misreport the worker's behavior. A single dimmed "General" nav item ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`AppearanceSettings`/`LineWidthSettings`/`ChatSettings`/`TemplatesSettings`/
   `PrivacySettings`/`ReviewSettings`/`FeedbackSettings` and the app-wide **`InterviewPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and
@@ -618,8 +637,9 @@ a project picker, the prompt hero, and the reused
   file rows open Monaco diff tabs at the item's `commit:{sha}` scope (`openDiffInTab`, preview intent; the
   path-list fallback opens at branch scope, no counts because they would drift), **and the review verdict
   ON the item row itself**: the row's right edge is ONE review slot rendering exactly one of, in
-  precedence order, the clickable `Reviewing…` label (`plan-item-reviewing`, off the host-derived
-  `review.reviewing`, opens the reviewer chat), the warning `Changes requested · N` chip, or the
+  precedence order, the non-clickable pulsing `Reviewing…` status (`plan-item-reviewing`, off the
+  host-derived `review.reviewing` — the review runs as a hidden subagent, so there is no chat to open),
+  the warning `Changes requested · N` chip, or the
   primary-filled `Start review` button (`plan-start-review` — the standard **small** action button:
   `h-6`/`tr-text-action`/`control-primary-bg`, the same size as `SendReviewButton`, not an oversized
   `min-h-8` block) for an unsettled reviewable item. The two **status**
@@ -631,9 +651,20 @@ a project picker, the prompt hero, and the reused
   button on the title line (the meta on line 2 frees that right edge, so the title simply shrinks for
   it — no overlap, no empty reserved slot). Still one slot, no duplicates — the change-set disclosure
   row carries NO review affordance.
-  `Start review` fires the AGENT review (`todo.startReview` — the plan's reviewer chat) and STAYS on
+  `Start review` fires the AGENT review (`todo.startReview` — a hidden review subagent) and STAYS on
   the plan page: the row's `Reviewing…` pulse and a toast are the only signals, success AND failure —
-  the detached error notice lands in a reviewer chat nobody has open, so the toast must carry it.
+  the review runs with no chat of its own, so the toast must carry the error. The verdict lands via the
+  `review.changed` broadcast (`useChatTodos` refetches the plan on it), not a `pi.event` for this
+  session — the subagent's events are hidden; a post-ack failure lands via the `review.failed` broadcast
+  (`useChatTodos` raises it as an error toast, filtered to the owning `sessionId` and deduped across split
+  views by the toast body).
+  **Plan-review STATE is always derived from the plan; only the ACTIONS are host-version-gated on
+  `transport.supportsPlanReview` (v67).** `reviewables`/`unsettledReviewables`/`planReady` come from
+  `TodoItem.review` regardless of host version — gating them to empty would let `planReady` read ship-ready
+  over an unreviewed step. Against an older host that serves no `todo.startReview`/`reviewAll`, `PlanPane`
+  only disables the mutating affordances (per-row `Start review`, both `Review All` triggers), so an
+  independently-shipped newer client never *calls* a capability the host cannot honour while still reflecting
+  the review state the host does report.
   Row controls (`plan-item-toggle`, the change-set toggle, the sha chip, the review slot, `FileRow`)
   wear `min-h-8` — the dense metadata rows stay tappable on touch. `planView.changeSetCounts` is the
   one count/stat derivation (paths → count only; commit → `changeSetStat`), shared by the row's meta
@@ -694,9 +725,9 @@ the review map instead of reading as "nothing else changed"; `chat/planMarkdown`
 own section. The kebab menu (`plan-menu`, a
   `DropdownMenu`) holding **Copy** (clipboard) / **Save .md** (browser download) — both compiling through
   `chat/planMarkdown` — and, when the plan has reviewable items, **Review All** (`plan-review-all`): fires
-  `todo.reviewAll`, the host-side queue that agent-reviews every *unsettled* reviewable item one at a time
-  (disabled when none are unsettled; a toast reports how many were queued, the per-row `Reviewing…` pulses
-  track progress), plus **Open draft PR** (`plan-open-draft-pr`, hidden once a PR exists). **The header
+  `todo.reviewAll`, which agent-reviews every *unsettled* reviewable item on the plan's serial chain, one
+  at a time (disabled when none are unsettled; a toast reports how many started, the per-row `Reviewing…`
+  pulses track progress), plus **Open draft PR** (`plan-open-draft-pr`, hidden once a PR exists). **The header
   also owns the plan's finish line — Open PR** (`plan-open-pr`, task-open-pr): a deterministic
   host-side flow (push + `gh`, NEVER an agent prompt) that, **for first-time creation only**
   (`openReview` absent), goes through the **compose dialog** (`PrComposeDialog.tsx`,
@@ -1360,7 +1391,8 @@ own section. The kebab menu (`plan-menu`, a
   `TerminalInstance` similarly rebuilds from the complete 16-slot ANSI variable set; both consume the
   nullable editor selection-foreground override when provided. `MonacoDiff` re-themes exactly like
   `MonacoEditor` — both consume `monacoSetup.ts`'s define + observer, so a palette swap lands in the
-  diff tab too.
+  diff tab too. Both editors also share the app's scrollbar geometry via `sharedEditorOptions`
+  (6px sliders, no shadow, no overview ruler) and take slider colours from the same theme tokens.
 - **Terminal renderer + font measurement.** `TerminalInstance` runs xterm's **default DOM renderer** on
   purpose — `addon-webgl` is *not* loaded, and loading it would be a regression (see `architecture.md`
   Decision #11: the DOM renderer is a prerequisite for touch, and `WebglAddon.dispose()` leaks its WebGL2

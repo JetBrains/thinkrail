@@ -11,6 +11,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../compone
 import { IconTooltip } from "../components/ui/tooltip";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
+import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
@@ -64,6 +65,7 @@ export function Shell() {
 	const { review: openReview } = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
 	const updates = useUpdates();
+	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
@@ -113,17 +115,28 @@ export function Shell() {
 					},
 				}
 			: {}),
+		...(contextProject
+			? { onNewWorkspace: () => setNewWorkspaceProjectId(contextProject.id) }
+			: {}),
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
-			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-16 py-8">
-				<div className="flex min-w-0 items-center gap-12">
+			<header
+				data-testid="topbar"
+				className="window-drag flex h-topbar-row min-w-0 select-none items-center border-b border-border-default bg-container-header-bg px-16"
+			>
+				<div
+					aria-hidden="true"
+					data-testid="window-chrome-inset-left"
+					className="w-window-chrome-inset-left shrink-0"
+				/>
+				<div className="flex min-w-0 items-center gap-12 pr-12">
 					<BrandLogo />
 					{contextProject ? (
 						<div
 							data-testid="scope-context"
 							data-context={activeWorkspace ? "workspace" : "project-home"}
-							className="flex min-w-0 items-center gap-4 leading-tight tr-text-ui"
+							className="flex min-w-0 items-center gap-4 overflow-hidden leading-tight tr-text-ui"
 						>
 							<span className="hidden min-w-0 items-center gap-4 sm:flex">
 								<span
@@ -165,7 +178,10 @@ export function Shell() {
 						</div>
 					) : null}
 				</div>
-				<div className="flex shrink-0 items-center gap-12">
+				<div
+					data-testid="topbar-actions"
+					className="window-no-drag ml-auto flex shrink-0 items-center gap-12"
+				>
 					{updates ? (
 						<UpdateReadyButton
 							updates={updates}
@@ -200,6 +216,11 @@ export function Shell() {
 						</button>
 					</IconTooltip>
 				</div>
+				<div
+					aria-hidden="true"
+					data-testid="window-chrome-inset-right"
+					className="w-window-chrome-inset-right shrink-0"
+				/>
 				<SettingsDialog
 					layoutSettings={<LayoutSettings />}
 					updateSettings={
@@ -211,10 +232,19 @@ export function Shell() {
 						) : undefined
 					}
 				/>
+				{newWorkspaceProjectId !== null ? (
+					<NewWorkspaceDialog
+						open
+						projectId={newWorkspaceProjectId}
+						onOpenChange={(isOpen) => {
+							if (!isOpen) setNewWorkspaceProjectId(null);
+						}}
+					/>
+				) : null}
 			</header>
 			{hasActiveWorkspace && activeWorkspaceId ? (
 				<div data-testid="workspace-shell-layout" className="h-full min-h-0 min-w-0">
-					<WorkspaceWorkbench key={activeWorkspaceId} workspaceId={activeWorkspaceId} />
+					<WorkspaceWorkbench workspaceId={activeWorkspaceId} />
 				</div>
 			) : (
 				<div

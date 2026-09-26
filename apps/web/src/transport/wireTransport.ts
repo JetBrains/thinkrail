@@ -16,6 +16,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	ACTIVITY_PROTOCOL_VERSION,
+	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
@@ -32,6 +33,12 @@ export function supportsSessionActivity(protocolVersion: number | null): boolean
 
 export function supportsWorkspaceModelPreferences(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION;
+}
+
+/** The agent plan-review capability (`todo.startReview`/`reviewAll` + the hidden review subagent) landed at
+ * v67. An older host serves neither, so the UI must not offer it — see [[submodule-web-transport]]. */
+export function supportsPlanReview(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION;
 }
 
 const activityHydration = createActivityHydration({

@@ -247,18 +247,20 @@ describe("deriveRows grouping", () => {
 		expect(row?.kind === "subagentCompletion" && row.text).toBe("the report");
 	});
 
-	test("steps carry dead from the owning message's stopReason (aborted calls never execute)", () => {
-		const turns = [
-			user("u1"),
-			assistant("a1", [tc("t1")]),
-			assistant("a2", [tc("t2")], { stopReason: "aborted" }),
-		];
-		const rows = deriveRows(turns, {}, false);
-		const activity = rows[1];
-		if (activity?.kind !== "activity") throw new Error("expected activity row");
-		const [s1, s2] = activity.steps;
-		expect(s1?.kind === "tool" && s1.dead).toBe(false);
-		expect(s2?.kind === "tool" && s2.dead).toBe(true);
+	test("steps are dead when the owning assistant could not execute its tool calls", () => {
+		for (const stopReason of ["aborted", "error", "length"] as const) {
+			const turns = [
+				user("u1"),
+				assistant("a1", [tc("t1")]),
+				assistant("a2", [tc("t2")], { stopReason }),
+			];
+			const rows = deriveRows(turns, {}, false);
+			const activity = rows[1];
+			if (activity?.kind !== "activity") throw new Error("expected activity row");
+			const [s1, s2] = activity.steps;
+			expect(s1?.kind === "tool" && s1.dead).toBe(false);
+			expect(s2?.kind === "tool" && s2.dead).toBe(true);
+		}
 	});
 
 	test("pairs each tool step with its result state by toolCallId", () => {

@@ -8,21 +8,32 @@ type GlobalHotkeyActions = {
 	onProjects: () => void;
 	onWorkspace?: () => void;
 	onBottom?: () => void;
+	onNewWorkspace?: () => void;
 };
 
-type PanelHotkeyCommand = "projects" | "workspace" | "bottom";
+type GlobalHotkeyCommand = "projects" | "workspace" | "bottom" | "new-workspace";
 
-type PanelHotkeyAvailability = Record<PanelHotkeyCommand, boolean>;
+type GlobalHotkeyAvailability = {
+	projects: boolean;
+	workspace: boolean;
+	bottom: boolean;
+	newWorkspace: boolean;
+};
 
-type PanelHotkeyEvent = Pick<KeyboardEvent, "altKey" | "code" | "ctrlKey" | "metaKey" | "shiftKey">;
+type GlobalHotkeyEvent = Pick<
+	KeyboardEvent,
+	"altKey" | "code" | "ctrlKey" | "metaKey" | "shiftKey"
+>;
 
-export function panelHotkeyCommand(
-	event: PanelHotkeyEvent,
-	available: PanelHotkeyAvailability,
+export function globalHotkeyCommand(
+	event: GlobalHotkeyEvent,
+	available: GlobalHotkeyAvailability,
 	modalOpen: boolean,
 	platform?: string,
-): PanelHotkeyCommand | null {
-	if (modalOpen || event.altKey || !hasPlatformModifier(event, platform)) return null;
+): GlobalHotkeyCommand | null {
+	if (modalOpen || !hasPlatformModifier(event, platform)) return null;
+	if (!event.shiftKey && event.code === "KeyN" && available.newWorkspace) return "new-workspace";
+	if (event.altKey) return null;
 	if (!event.shiftKey && event.code === "KeyB" && available.projects) return "projects";
 	if (!event.shiftKey && event.code === "KeyJ" && available.workspace) return "workspace";
 	if (event.shiftKey && event.code === "KeyJ" && available.bottom) return "bottom";
@@ -46,12 +57,13 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
-			const command = panelHotkeyCommand(
+			const command = globalHotkeyCommand(
 				event,
 				{
 					projects: true,
 					workspace: actionsRef.current.onWorkspace !== undefined,
 					bottom: actionsRef.current.onBottom !== undefined,
+					newWorkspace: actionsRef.current.onNewWorkspace !== undefined,
 				},
 				hasOpenModal(),
 			);
@@ -61,7 +73,8 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 				if (!event.repeat) {
 					if (command === "projects") actionsRef.current.onProjects();
 					else if (command === "workspace") actionsRef.current.onWorkspace?.();
-					else actionsRef.current.onBottom?.();
+					else if (command === "bottom") actionsRef.current.onBottom?.();
+					else actionsRef.current.onNewWorkspace?.();
 				}
 				return;
 			}

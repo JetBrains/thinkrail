@@ -3,6 +3,7 @@ import { awaitingQuestionToolCallId } from "./askUserQuestion";
 
 export interface ActivityInputs {
 	isStreaming: boolean;
+	hasPendingQuestion: boolean;
 	pendingMessageCount: number;
 	messages: readonly AgentMessage[];
 	lastSettlement: AgentSettlement | null | undefined;
@@ -38,7 +39,7 @@ function failed(inputs: ActivityInputs): boolean {
 }
 
 export function deriveActivityStatus(inputs: ActivityInputs): ActivityStatus | null {
-	if (inputs.hasPendingDialog) return "waiting";
+	if (inputs.hasPendingDialog || inputs.hasPendingQuestion) return "waiting";
 	if (inputs.isStreaming) return "running";
 	if (inputs.pendingMessageCount > 0) return "queued";
 	if (awaitingQuestionToolCallId(inputs.messages) !== null) return "waiting";
@@ -108,6 +109,7 @@ export function parseTranscriptTail(text: string, partialFirstLine: boolean): Ag
 export function deriveDiskActivityStatus(messages: readonly AgentMessage[]): ActivityStatus | null {
 	return deriveActivityStatus({
 		isStreaming: false,
+		hasPendingQuestion: false,
 		pendingMessageCount: 0,
 		hasPendingDialog: false,
 		lastSettlement: undefined,

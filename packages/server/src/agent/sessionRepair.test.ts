@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { Message } from "@thinkrail/contracts";
+import { ASK_ACK_TEXT } from "./askUserQuestion";
 import { repairDanglingToolCalls } from "./sessionRepair";
 
 const assistantWithCalls = (
 	calls: { id: string; name: string; args?: Record<string, unknown> }[],
-	stopReason: "toolUse" | "error" | "aborted" = "toolUse",
+	stopReason: "toolUse" | "error" | "aborted" | "length" = "toolUse",
 ): Message =>
 	({
 		role: "assistant",
@@ -73,7 +74,7 @@ test("a dangling generic tool call gets an error 'Operation aborted' result", ()
 	expect(repairDanglingToolCalls(sm)).toEqual([]);
 });
 
-test("a dangling ask_user_question (old blocking format) resolves as the canonical decline", () => {
+test("a dangling ask_user_question is repaired to the canonical answerable ack", () => {
 	const sm = SessionManager.inMemory("/tmp/repair-test");
 	sm.appendMessage(user("decide"));
 	sm.appendMessage(assistantWithCalls([{ id: "q1", name: "ask_user_question" }]));
@@ -83,10 +84,23 @@ test("a dangling ask_user_question (old blocking format) resolves as the canonic
 	const repaired = sm.buildSessionContext().messages.find((m) => m.role === "toolResult");
 	if (repaired?.role !== "toolResult") throw new Error("unreachable");
 	expect(repaired.isError).toBe(false);
-	expect(repaired.details).toEqual({ answers: [], cancelled: true });
+	expect(repaired.details).toEqual({ kind: "ack" });
 	const text = (repaired.content[0] as { text?: string }).text ?? "";
-	expect(text).toContain("User declined to answer questions");
-	expect(text).toContain("ask again if still relevant");
+	expect(text).toBe(ASK_ACK_TEXT);
+});
+
+test("a length-truncated ask is repaired as a terminal error, never an answerable ack", () => {
+	const sm = SessionManager.inMemory("/tmp/repair-test");
+	sm.appendMessage(user("decide"));
+	sm.appendMessage(assistantWithCalls([{ id: "q-length", name: "ask_user_question" }], "length"));
+	expect(repairDanglingToolCalls(sm)).toEqual([
+		{ toolCallId: "q-length", toolName: "ask_user_question" },
+	]);
+	const repaired = sm.buildSessionContext().messages.find((m) => m.role === "toolResult");
+	if (repaired?.role !== "toolResult") throw new Error("unreachable");
+	expect(repaired.isError).toBe(true);
+	expect(repaired.details).toBeUndefined();
+	expect((repaired.content[0] as { text?: string }).text).toContain("output token limit");
 });
 
 test("several orphans in one batch are all paired (mixed ask + generic)", () => {

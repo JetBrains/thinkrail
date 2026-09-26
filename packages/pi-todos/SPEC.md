@@ -23,7 +23,8 @@ plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-gr
   progressed through its exact item regardless of size. The lever is *understanding*, not prompt volume:
   **how to work with the list lives in the skill; each tool's invariants live in its own description.**
   (We tried injecting the live list into every prompt and pulled it back — the tools + skill carry it
-  instead.)
+  instead.) The rule rides as the `pi-todos` entry of pi's `systemPromptOptions.sections`, mutated in place
+  and never returned as a forced `systemPrompt` — same mechanism and rationale as [[module-spec-graph]].
 - **`core/`** — the pi-free model ([[submodule-pi-todos-core]]): the `Todo` types and the per-session
   `TodoStore` (read-modify-write `.thinkrail/context/todos/<sessionId>.json`). No `@earendil-works/*` imports, so
   the host can value-import `pi-todos/core` to power the plan viewer — reading the plan and writing the

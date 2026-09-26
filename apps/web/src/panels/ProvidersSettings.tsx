@@ -26,6 +26,7 @@ const KIND_LABEL: Record<ProviderAuthKind, string> = {
 	oauth: "OAuth subscription",
 	"api-key": "API key",
 	env: "environment",
+	central: "JetBrains AI",
 	other: "configured",
 };
 
@@ -299,11 +300,16 @@ function ConnectedCard({
 	onSignOut: () => void;
 }) {
 	const label = provider.kind ? KIND_LABEL[provider.kind] : "configured";
+	const managedTitle =
+		provider.kind === "central"
+			? "Connected through JetBrains AI"
+			: "Configured outside the app (environment / models.json)";
 	return (
 		<div
 			data-testid="provider-row"
 			data-provider={provider.id}
 			data-configured="true"
+			data-kind={provider.kind}
 			className="flex items-center gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8"
 		>
 			<span className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-feedback-success-subtle text-feedback-success">
@@ -332,7 +338,7 @@ function ConnectedCard({
 			) : (
 				<span
 					className="ml-auto flex shrink-0 items-center gap-4 text-text-muted tr-text-metadata"
-					title="Configured outside the app (environment / models.json)"
+					title={managedTitle}
 				>
 					<Lock className="size-12" />
 					Managed

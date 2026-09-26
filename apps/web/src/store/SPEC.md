@@ -118,6 +118,12 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
 
   **Workspace-local attention** is selected tab per stable frame group, last-focused center group,
   last-focused auxiliary group, and group navigation clocks. Selection/focus never mutates the frame.
+  A group's *tool* selection is nevertheless shared: singleton tools are frame placements, so a group
+  that shows a tool shows the same tool in every workspace of the window. Selecting a tool (click, reveal,
+  or the focus of a tool move) is written into every retained attention whose selection in that group is a
+  tool or absent, and a newly materialized view inherits the tool selections of the most recently active
+  workspace. A selected workspace *resource* (a terminal in a mixed auxiliary group) stays local and is
+  never overridden. `shell/layoutState` owns this fan-out in the same transaction as the local write.
   Frame replacement reconciles each workspace's attention to a surviving group/tab. Navigation clocks advance
   at request time for local focus-changing opens and explicit re-selection; the stamp travels with the intent
   so acceptance does not count twice. A slow completion is discarded when newer navigation overtakes it.
@@ -127,7 +133,14 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   resolves them against that workspace's last focus and commits local placement. Reopening an existing
   canonical resource changes attention only unless non-identity metadata changed. A late chat-title event may
   repair cache/history labels or a still-queued open, but cannot recreate a locally closed placement or steal
-  focus. `syncLegacySelection` mirrors the selected resource into temporary editor/terminal compatibility
+  focus. **The durable-title fold** routes
+  `session_info_changed` through the same one-home chat-label mutation already used by extension-UI
+  `setTitle`: normalize an absent name to the `Chat` fallback; update the cached `ChatTab`, its existing local
+  placement, any queued open, or its `closedChatsByWorkspace` row; and change no recency, runtime, placement,
+  navigation clock, or attention. The durable Pi event may supersede an extension's presentation-only title.
+  An event for a session this surface has never listed remains a no-op—`session.list`/`session.getMessages`
+  supply reconnect and later-hydration truth, so there is no title-specific event buffer.
+  `syncLegacySelection` mirrors the selected resource into temporary editor/terminal compatibility
   state without becoming placement authority; its selector includes the matched cache/catalog key so identity
   repair retriggers the mirror.
 
@@ -555,6 +568,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
 - **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`, `selectWorkspaceById` (the
   one lookup for "the workspace with this id" — `selectActiveWorkspace` is it applied to the active id, and
   `openFileInTab`/`ChatView` read the worktree root through it),
+  `selectCanRenameChat` (the one protocol-capability derivation shared by ChatView and shell controls),
   `selectWorkspaceTerminals` (the host-owned terminal catalog; the layout visibility gate derives mounted
   identities from its supplied document + local attention, while host attachment remains exclusive per terminal),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing

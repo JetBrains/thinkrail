@@ -16,7 +16,13 @@ import {
 } from "@thinkrail/contracts";
 import type { ChatTurn, FailureRecovery } from "../chat/types";
 import { userText } from "../lib";
-import type { WorkspaceLayoutDocument } from "../shell/layout";
+import {
+	BUILTIN_LAYOUT_PRESETS,
+	emptyWorkspaceView,
+	instantiateWorkbenchFrame,
+	projectWorkspaceLayout,
+	type WorkspaceLayoutDocument,
+} from "../shell/layout";
 import {
 	captureCenterNavigation,
 	chatTabId,
@@ -93,6 +99,10 @@ const userStart = (text: string) =>
 		type: "message_start",
 		message: { role: "user", content: [{ type: "text", text }], timestamp: 1 },
 	}) as unknown as PiEvent;
+const sessionTitleChanged = (name?: string): PiEvent => ({
+	type: "session_info_changed",
+	...(name !== undefined ? { name } : {}),
+});
 const assistantText = (text: string) =>
 	({
 		type: "message_update",
@@ -132,7 +142,7 @@ beforeEach(() => {
 		layoutStateReady: false,
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
-		layoutProjectionEpochByWorkspace: {},
+		layoutProjectionEpoch: 0,
 		layoutIntents: [],
 		tabsByWorkspace: {},
 		terminalsByWorkspace: {},
@@ -166,6 +176,27 @@ beforeEach(() => {
 		streamingResponseMovement: { settle: 75, trigger: 100 },
 		toasts: [],
 	});
+});
+
+test("layout projection epoch advances only when projection invalidation is requested", () => {
+	const preset = BUILTIN_LAYOUT_PRESETS.find((candidate) => candidate.id === "balanced");
+	if (!preset) throw new Error("missing Balanced preset");
+	const frame = instantiateWorkbenchFrame(preset);
+	const view = emptyWorkspaceView();
+	const payload = {
+		frame,
+		viewsByWorkspace: { workspace: view },
+		documentsByWorkspace: { workspace: projectWorkspaceLayout(frame, view) },
+		attentionByWorkspace: {},
+		preferences: useAppStore.getState().localLayoutPreferences,
+	};
+	const store = useAppStore.getState();
+	store.applyLocalLayoutState(payload);
+	expect(useAppStore.getState().layoutProjectionEpoch).toBe(0);
+	useAppStore.getState().applyLocalLayoutState(payload, true);
+	expect(useAppStore.getState().layoutProjectionEpoch).toBe(1);
+	useAppStore.getState().applyLocalLayoutState(payload);
+	expect(useAppStore.getState().layoutProjectionEpoch).toBe(1);
 });
 
 function rt(sessionId: string): SessionRuntime {
@@ -681,6 +712,55 @@ test("a subagent-completion custom message_end appends a subagentCompletion turn
 	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
 });
 
+test("a todo-review-fix custom message_end appends a reviewFix turn", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	const details = {
+		itemId: "t_1",
+		itemTitle: "Wire the login redirect",
+		reviewId: "rev_1",
+		note: "Two findings below.",
+		comments: [{ id: "c_1", kind: "inline", body: "off-by-one", path: "src/a.ts", startLine: 4 }],
+	};
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "todo-review-fix",
+				content: "Address each review comment above.",
+				display: true,
+				details,
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	const turn = rt("a").turns.at(-1);
+	expect(turn?.kind).toBe("reviewFix");
+	expect(turn?.kind === "reviewFix" && turn.details.itemId).toBe("t_1");
+	expect(turn?.kind === "reviewFix" && turn.details.comments[0]?.id).toBe("c_1");
+	expect(turn?.kind === "reviewFix" && turn.text).toContain("Address each review comment");
+
+	const reviewBefore = rt("a");
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "todo-review-fix",
+				content: "x",
+				display: true,
+				details: { itemId: "t_1" },
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	const reviewIgnored = rt("a");
+	expect(reviewIgnored.turns).toBe(reviewBefore.turns);
+	expect(reviewIgnored.eventRevision).toBe(reviewBefore.eventRevision + 1);
+});
+
 test("the tool lifecycle folds into toolResults (the status + raw the renderers read)", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
@@ -1152,12 +1232,71 @@ test("a message_update with no prior message_start still builds the turn (mid-st
 	expect(rt("a").turns.filter((t) => t.kind === "assistant")).toHaveLength(1);
 });
 
+test("a durable session title event renames an open chat without moving attention", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "named", null, "medium");
+	const before = useAppStore.getState();
+	const activeTab = before.activeTabByWorkspace.ws1;
+	const navTick = before.navTickByWorkspace.ws1;
+
+	store.handlePiEvent(sessionTitleChanged("Fix auth redirect"), "named");
+
+	const after = useAppStore.getState();
+	expect(
+		after.tabsByWorkspace.ws1?.find((tab) => tab.kind === "chat" && tab.sessionId === "named")
+			?.name,
+	).toBe("Fix auth redirect");
+	expect(after.activeTabByWorkspace.ws1).toBe(activeTab);
+	expect(after.navTickByWorkspace.ws1).toBe(navTick);
+	expect(rt("named").eventRevision).toBe(1);
+});
+
+test("a durable session title event renames closed history and restores the Chat fallback", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "closed-title", null, "medium");
+	store.closeChatToHistory("closed-title", true, "ws1");
+
+	store.handlePiEvent(sessionTitleChanged("Closed work"), "closed-title");
+	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.[0]?.title).toBe("Closed work");
+	store.handlePiEvent(sessionTitleChanged(), "closed-title");
+	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.[0]?.title).toBe("Chat");
+});
+
+test("a durable title updates a known tab without conjuring a runtime or title-event buffer", () => {
+	useAppStore.setState({
+		tabsByWorkspace: {
+			ws1: [
+				{
+					kind: "chat",
+					id: chatTabId("ws1", "tab-only-title"),
+					workspaceId: "ws1",
+					name: "Chat",
+					sessionId: "tab-only-title",
+				},
+			],
+		},
+	});
+	const sessions = useAppStore.getState().sessions;
+
+	useAppStore
+		.getState()
+		.handlePiEvent(sessionTitleChanged("Named before hydrate"), "tab-only-title");
+
+	const after = useAppStore.getState();
+	expect(after.tabsByWorkspace.ws1?.[0]?.name).toBe("Named before hydrate");
+	expect(after.sessions).toBe(sessions);
+	expect(after.extUiOrphans).toEqual([]);
+});
+
 test("an event for an unknown session is a no-op (no runtime is conjured)", () => {
-	const before = useAppStore.getState().sessions;
-	useAppStore.getState().handlePiEvent(agentStart, "ghost");
-	const after = useAppStore.getState().sessions;
-	expect(after).toBe(before);
-	expect(after.ghost).toBeUndefined();
+	const before = useAppStore.getState();
+	before.handlePiEvent(agentStart, "ghost");
+	useAppStore.getState().handlePiEvent(sessionTitleChanged("Ghost title"), "ghost");
+	const after = useAppStore.getState();
+	expect(after.sessions).toBe(before.sessions);
+	expect(after.sessions.ghost).toBeUndefined();
+	expect(after.tabsByWorkspace).toBe(before.tabsByWorkspace);
+	expect(after.extUiOrphans).toEqual([]);
 });
 
 test("closeChatRuntime drops only its own runtime", () => {

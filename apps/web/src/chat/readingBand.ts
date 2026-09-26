@@ -52,7 +52,7 @@ export interface ReadingBandController {
 	latestRowArrived: (index: number) => void;
 	contentChanged: () => void;
 	cancelMovement: () => void;
-	interruptForNativeInput: () => () => void;
+	interruptForNativeInput: (pauseState?: "stationary" | "pending") => () => void;
 	cancelReveal: () => void;
 	revealTo: (target: () => number | null, stabilize: boolean) => void;
 	stabilizeAnchor: (target: () => number | null) => void;
@@ -610,7 +610,7 @@ export function createReadingBandController(
 		return true;
 	};
 
-	const interruptForNativeInput = () => {
+	const interruptForNativeInput = (pauseState: "stationary" | "pending" = "stationary") => {
 		const paused = motion;
 		if (!paused) return () => undefined;
 		if (frame !== null) environment.cancelFrame(frame);
@@ -620,7 +620,7 @@ export function createReadingBandController(
 		motionEpoch = epoch;
 		const wasFollowing = state.following;
 		const wasStreaming = state.streaming;
-		if (state.moving) publish({ moving: false });
+		if (pauseState === "stationary" && state.moving) publish({ moving: false });
 		return () => {
 			if (
 				motionEpoch !== epoch ||

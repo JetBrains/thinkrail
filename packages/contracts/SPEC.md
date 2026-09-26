@@ -32,6 +32,7 @@ of the host.
   value re-exports
   `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
+  `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
   chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
@@ -125,6 +126,14 @@ of the host.
     the server's transcript filter and history index, whose alignment keeps a history hit's `messageIndex`
     valid against the client's `turnIdByMessageIndex` — a role added to one side but not the other would
     silently shift every later jump anchor.
+  - **Chat titles** — `SessionSummary.title` remains the non-empty read
+    projection (`Chat` while pi has no durable name). The additive `session.rename` mutation takes
+    `{ workspaceId, sessionId, title }`, rejects a title whose trimmed single-line form is blank or exceeds
+    `SESSION_TITLE_MAX_LENGTH` (80), and returns an ack; `SESSION_RENAME_PROTOCOL_VERSION` pins the
+    mutation and controls to v66 so a newer client hides them against older hosts. The existing Pi event
+    `session_info_changed { name?: string }` is the one live domain update for manual and automatic changes,
+    and `session.list`/`session.getMessages` repair a missed event. No title source/provenance, uniqueness,
+    workspace coupling, or new push channel crosses the wire; session ids remain canonical.
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
     `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel.
@@ -132,18 +141,29 @@ of the host.
     — the latter carries an optional `recommendedReason` the card renders inline as a `Why:` line under the
     option: the questions the agent authors, what the tool card reads from the `toolCall` block),
     **`AskUserQuestionResult`** (`AskUserQuestionAnswer[]` + `cancelled`: the browser's reply),
-    **`AskUserQuestionAckDetails`** (the tool result's `details` under the **ack + terminate** design —
-    the call resolves instantly; the turn ends) and **`AskUserAnswersDetails`** + the
+    **`AskUserQuestionAckDetails`** (the tool result's `details` used only when restart repair closes a
+    dangling live-blocking call before attach) and **`AskUserAnswersDetails`** + the
     **`ASK_USER_ANSWERS_CUSTOM_TYPE`** constant, **`AskUserAnswersMessage`** (the correctly-paired
     tag↔details shape the host's builder is compile-held to) and the shared **`isAskUserAnswersMessage`**
-    guard (all in `wsProtocol`, the value-bearing half): the reply travels as an `ask-user-answers`
-    custom message the card pairs by `details.toolCallId`. `WireCustomMessage.customType` itself stays
+    guard (all in `wsProtocol`, the value-bearing half): an eligible live reply becomes the native tool
+    result; a `length`/`error`/`aborted` assistant call is terminal and never answerable; after restart, the
+    reply travels as an `ask-user-answers` custom message paired by `details.toolCallId`.
+    `WireCustomMessage.customType` itself stays
     `string` — the namespace is open (any pi extension can mint custom messages and they all cross the
     wire), so strictness lives at the producer + the guard, which validates the details *shape* (wire
     data is untrusted — another process, possibly another protocol version). The capability
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the chat renders the questionnaire **inline** and replies via `session.answerQuestion`
     (correlated by the tool call id; rejected loud when the call is unknown/answered/superseded).
+  - the **todo plan-review fix** wire types — the **`TODO_REVIEW_FIX_CUSTOM_TYPE`** constant,
+    **`TodoReviewFixMessage`** (the tag↔details shape) + its **`isTodoReviewFixMessage`** guard (in
+    `wsProtocol`), and **`ReviewFixDetails`** / **`ReviewFixComment`** (in `domain`): a plan-review
+    verdict's fix request reaches the worker as a **structured custom message** (customType
+    `todo-review-fix`) instead of a synthetic user turn (#363). The message `content` stays the rendered
+    package text the agent reads; `details` (the item id/title, optional note, and slim path/line-resolved
+    findings) is what the chat card renders — the host resolves each finding's `path`/lines from its
+    anchor at send time so the client re-parses nothing. See [[submodule-server-todos]] +
+    [[submodule-web-chat]].
 - **domain.ts** — app entities: `Project` (git repo + unique `slug` + optional **`closed: true`** — the
   persisted open-rail membership bit; absence means open for backward compatibility, and closing never
   changes the project's id or deletes its workspace associations — plus the skill-trust fields **`trusted`**
@@ -193,7 +213,9 @@ of the host.
   place** — collapsing them into one field would make a re-pointed target lie about where the branch came
   from; **`ProviderStatus`/`ProviderStatusReport`**
   — the auth-provider status rows the Welcome strip renders (per-provider `configured` + auth `kind`:
-  oauth / api-key / env / other — never credential values; plus `canOAuth`/`canApiKey`/`canLogout`,
+  oauth / api-key / env / central / other — never credential values; `central` marks a built-in provider
+  whose registration the JetBrains AI (Central) extension replaced, derived from registration identity
+  alone, never from Central's configuration; plus `canOAuth`/`canApiKey`/`canLogout`,
   which gate the strip's in-app Sign-in / Sign-out affordances — `canLogout` is true only for a removable
   auth.json credential, false for env / runtime / models.json auth the host can't unset); the **in-app login wire** — **`LoginFrame`** (the streamed
   flow updates: `authUrl` / `deviceCode` / `select` / `prompt` / `progress` / `success` / `error`, which
@@ -244,10 +266,15 @@ of the host.
   latest protocol; **`JBCENTRAL_QUOTA_PROTOCOL_VERSION`** likewise pins the v59 quota read + settings;
   **`WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`** pins the v62 Windows-shell setting so a later web client
   hides it against a host that can preserve but cannot apply that config field;
+  **`PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION`** pins the v67 review reshape — the reviewer chat is gone, so
+  `TodoPlan.reviewerSessionId` and `ReviewComment.reflection` left the wire, `todo.startReview` returns
+  a bare ack, and its detached failure arrives on the additive `review.failed` push (`ReviewFailedPayload`)
+  since the review has no chat to carry it. An older client reads the dropped fields as absent, so the pin
+  is what lets a client tell "this host has no reviewer chat" from "this host is older" rather than inferring it;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
-  fileLineWidthBounded, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, subagentsEnabled,
-  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
+  fileLineWidthBounded, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, agentReviewEnabled,
+  subagentsEnabled, jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
   the wire at protocol v61 and `terminalWindowsShell` at v62. `terminalWindowsShell`
   (`"auto" | "pwsh" | "powershell" | "cmd"`, default `"auto"`) is read only by `server/terminal` on
   Windows and ignored elsewhere — see
@@ -257,7 +284,9 @@ of the host.
   without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
   and no pair, preserving both legacy configs
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
-  behavior), overridden only by `Workspace.subagentsOverride`; `customLayoutPresets` is the bounded
+  behavior), overridden only by `Workspace.subagentsOverride`; `agentReviewEnabled` (default `true`, on the
+  wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
+  tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset
   and group limits are web-local); `analyticsEnabled` is the additional-data preference, default `false`, while
   `analyticsConsentConfirmed` defaults `false` and records the explicit decision required before that
@@ -365,12 +394,12 @@ of the host.
 - **`HostUpdateNotice`** — the optional immutable host-wire advisory: current version, newer available version,
   and channel. No status, revision, error, feed URL, artifact, platform path, or shell command crosses the
   wire. Its optional welcome field plus `host.updateAvailable` change pushes enter at protocol v64.
-- Protocol v66 adds the workspace model/thinking preference fields and changes successful
+- Protocol v69 adds the workspace model/thinking preference fields and changes successful
   `session.setModel` / `session.setThinkingLevel` results to Pi's effective post-mutation
   `{ model, thinkingLevel }` pair. The changes share one protocol advance: older clients ignore the
   additive workspace fields, while independently shipped clients gate mutation-result reconciliation with
-  `WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION` so a pre-v66 `{ ok: true }` result—including the
-  analytics-only v65 host—remains safe. The persisted workspace pair reaches clients through
+  `WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION` so a pre-v69 `{ ok: true }` result—including the
+  agent-review-only v68 host—remains safe. The persisted workspace pair reaches clients through
   `workspace.list` and `workspace.updated`, never by a client rewriting the row it was just pushed.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
@@ -385,10 +414,11 @@ of the host.
   item `origin:"user"`), plus the review ops **`review`** (approve: record `reviewed` + the sha
   watermark), **`requestFix`** (record `changes_requested` + feedback, then the host fires the fix
   package into the item's own chat — detached, rolled back on a pre-turn rejection) and
-  **`startReview`** (the AGENT review: the plan's pinned reviewer chat gets the item's package; findings
-  arrive as `author: "agent"` review comments, the verdict via the reviewer-only `review_verdict` tool;
+  **`startReview`** / **`reviewAll`** (the AGENT review: a hidden review subagent gets the item's
+  package and returns a structured verdict; findings arrive as `author: "agent"` review comments;
   `TodoItem.review` carries `reviewing` while the verdict is pending and `reviewedBy` on an agent
-  approve) / **`terminal.*`** — **`reserve`** (idempotently establishes a host-catalog tab
+  approve. `reviewAll` reports the count it started, and `alreadyRunning` when the plan's serial chain
+  is still busy) / **`terminal.*`** — **`reserve`** (idempotently establishes a host-catalog tab
   without starting its PTY; `INITIAL_TERMINAL_TAB_KEY` names the one host-seeded tab that every frontend
   may place passively) / **`attach`** (idempotent get-or-create keyed by `(workspaceId, tabKey)`,
   returning `created` + the `replay` to repaint; the only way a PTY is born, and it replaced

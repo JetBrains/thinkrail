@@ -24,6 +24,7 @@ import type {
 	QueueLane,
 	RefreshedModels,
 	RemovedQueuedMessage,
+	ReviewFixDetails,
 	SessionActivity,
 	SessionActivityPayload,
 	SessionCreatedPayload,
@@ -39,7 +40,12 @@ import type {
 	TranscriptMessage,
 	WireModel,
 } from "@thinkrail/contracts";
-import { isTranscriptMessageRole } from "@thinkrail/contracts";
+import {
+	assistantToolCallsAreExecutable,
+	isTranscriptMessageRole,
+	normalizeSessionTitle,
+	TODO_REVIEW_FIX_CUSTOM_TYPE,
+} from "@thinkrail/contracts";
 import type { ParentContext } from "pi-delegation";
 import { RECURSION_GUARD_TOOLS } from "pi-subagents";
 import { logger } from "../log";
@@ -53,7 +59,15 @@ import {
 	TRANSCRIPT_TAIL_MAX_BYTES,
 	type WorkspaceActivityRow,
 } from "./activity";
-import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
+import {
+	ANSWERABILITY_ERRORS,
+	ASK_USER_QUESTION_TOOL_NAME,
+	type AskUserQuestionWaiters,
+	assessAnswerability,
+	buildAnswersMessage,
+	createAskUserQuestionWaiters,
+	hasQuestionAck,
+} from "./askUserQuestion";
 import {
 	disposeSessionChildren,
 	removeWorkspaceDelegation,
@@ -67,6 +81,7 @@ import {
 	refreshCatalogs,
 	settledAvailableModels,
 } from "./piRuntime";
+import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
 import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
@@ -97,11 +112,14 @@ interface Entry {
 	nextQueuedMessageId: number;
 	manualCompactionInProgress: boolean;
 	piCompactionInProgress: boolean;
+	disposed: boolean;
 	registered: boolean;
 	subagentToolsRefreshPending: boolean;
+	reviewToolRefreshPending: boolean;
 	publishedActivity: ActivityStatus | null;
 	rawActivity: ActivityStatus | null;
 	lastActivityMs: number;
+	askUserQuestionWaiters: AskUserQuestionWaiters;
 }
 
 const sessions = new Map<string, Entry>();
@@ -154,6 +172,7 @@ function effectivePendingCount(entry: Entry): number {
 function activityOf(entry: Entry): ActivityStatus | null {
 	return deriveActivityStatus({
 		isStreaming: entry.session.isStreaming,
+		hasPendingQuestion: entry.askUserQuestionWaiters.isWaitingForAnswer(),
 		pendingMessageCount: effectivePendingCount(entry),
 		messages: entry.session.messages,
 		lastSettlement: entry.lastSettlement,
@@ -393,6 +412,43 @@ export function refreshSubagentTools(workspaceId?: string): void {
 	}
 }
 
+// Injected by the host (never an agent → settings edge, see agent/SPEC.md); default on. Gates the
+// worker's in-session request_review tool live: `setActiveToolsByName` rebuilds the system prompt from
+// only the active tools' guidelines, so toggling the tool off also drops its guidance. The Review button
+// path (startPlanReview) is separate and unaffected.
+let agentReviewEnabledResolver: (workspaceId: string) => boolean = () => true;
+export function setAgentReviewEnabledResolver(resolver: (workspaceId: string) => boolean): void {
+	agentReviewEnabledResolver = resolver;
+}
+
+function agentReviewEnabled(workspaceId: string): boolean {
+	try {
+		return agentReviewEnabledResolver(workspaceId);
+	} catch {
+		return false;
+	}
+}
+
+function applyReviewTool(entry: Entry): void {
+	const withoutReview = entry.session
+		.getActiveToolNames()
+		.filter((name) => name !== REQUEST_REVIEW_TOOL_NAME);
+	entry.session.setActiveToolsByName(
+		agentReviewEnabled(entry.workspaceId)
+			? [...withoutReview, REQUEST_REVIEW_TOOL_NAME]
+			: withoutReview,
+	);
+	entry.reviewToolRefreshPending = false;
+}
+
+export function refreshAgentReviewTool(workspaceId?: string): void {
+	for (const entry of sessions.values()) {
+		if (workspaceId !== undefined && entry.workspaceId !== workspaceId) continue;
+		if (entry.session.isStreaming) entry.reviewToolRefreshPending = true;
+		else applyReviewTool(entry);
+	}
+}
+
 function hasDeletionTombstone(sessionId: string): boolean {
 	return deletedSessions.has(sessionId);
 }
@@ -420,6 +476,20 @@ export function getSessionRuntimeGeneration(sessionId: string): PiRuntimeGenerat
 	return hasSession(sessionId) ? sessions.get(sessionId)?.generation : undefined;
 }
 
+export function getSessionName(sessionId: string): string | undefined {
+	return sessions.get(sessionId)?.session.sessionName;
+}
+
+function transcriptMessages(session: AgentSession): TranscriptMessage[] {
+	return session.messages.filter((message) =>
+		isTranscriptMessageRole(message.role),
+	) as TranscriptMessage[];
+}
+
+export function getSessionMessagesSnapshot(sessionId: string): TranscriptMessage[] {
+	return transcriptMessages(mustGet(sessionId));
+}
+
 export async function reloadSessionResources(sessionId: string): Promise<void> {
 	const session = mustGet(sessionId);
 	if (session.isStreaming) {
@@ -430,9 +500,16 @@ export async function reloadSessionResources(sessionId: string): Promise<void> {
 	await session.reload();
 }
 
+const SESSION_SETTINGS_OVERRIDES = { images: { autoResize: false } };
+
 export function buildSessionSettings(cwd: string): SettingsManager {
 	const settings = SettingsManager.create(cwd, undefined, { projectTrusted: true });
-	settings.applyOverrides({ images: { autoResize: false } });
+	const reload = settings.reload.bind(settings);
+	settings.reload = async () => {
+		await reload();
+		settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
+	};
+	settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
 	return settings;
 }
 
@@ -487,6 +564,7 @@ async function prepareSessionEntry(
 	session: AgentSession,
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
+	askUserQuestionWaiters: AskUserQuestionWaiters,
 	lastSettlement: AgentSettlement | null | undefined = undefined,
 ): Promise<PreparedSessionEntry> {
 	const { sessionId } = session;
@@ -502,16 +580,30 @@ async function prepareSessionEntry(
 		nextQueuedMessageId: 1,
 		manualCompactionInProgress: false,
 		piCompactionInProgress: false,
+		disposed: false,
 		registered: false,
 		subagentToolsRefreshPending: false,
+		reviewToolRefreshPending: false,
 		publishedActivity: null,
 		rawActivity: null,
 		lastActivityMs: Date.now(),
+		askUserQuestionWaiters,
 	};
 	entry.rawActivity = activityOf(entry);
 	const seededRecencyMs = messagesActivityMs(session.messages);
 	if (seededRecencyMs !== null) entry.lastActivityMs = seededRecencyMs;
 	entry.unsubscribe = session.subscribe((event) => {
+		if (
+			event.type === "message_end" &&
+			event.message.role === "assistant" &&
+			assistantToolCallsAreExecutable(event.message.stopReason)
+		) {
+			for (const block of event.message.content) {
+				if (block.type === "toolCall" && block.name === ASK_USER_QUESTION_TOOL_NAME)
+					entry.askUserQuestionWaiters.expect(block.id);
+			}
+		}
+		if (event.type === "turn_end") entry.askUserQuestionWaiters.persistTurn(event.toolResults);
 		if (event.type === "message_start" && event.message.role === "user") {
 			const lane = deliveredStuckEmptyLane(entry, event.message.content);
 			if (lane) {
@@ -556,6 +648,7 @@ async function prepareSessionEntry(
 		if (event.type === "agent_settled") {
 			entry.lastSettlement = terminal;
 			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
+			if (entry.reviewToolRefreshPending) applyReviewTool(entry);
 		}
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
@@ -564,6 +657,10 @@ async function prepareSessionEntry(
 
 	const reportExtensionError = (failure: ExtensionError): void => {
 		const line = `extension ${failure.extensionPath} failed on ${failure.event}: ${failure.error}`;
+		if (entry.disposed) {
+			log.debug(line);
+			return;
+		}
 		if (failure.stack) {
 			const cause = new Error(failure.error);
 			cause.stack = failure.stack;
@@ -585,6 +682,7 @@ async function prepareSessionEntry(
 	} catch (error) {
 		cancelExtUiForSession(sessionId);
 		entry.unsubscribe();
+		entry.disposed = true;
 		session.dispose();
 		throw error;
 	}
@@ -596,12 +694,19 @@ async function registerSession(
 	session: AgentSession,
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
+	askUserQuestionWaiters: AskUserQuestionWaiters,
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
-	const prepared = await prepareSessionEntry(session, workspaceId, generation);
+	const prepared = await prepareSessionEntry(
+		session,
+		workspaceId,
+		generation,
+		askUserQuestionWaiters,
+	);
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	applySubagentTools(prepared.entry);
+	applyReviewTool(prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
 	await reconcileWorkspaceActivity(workspaceId);
@@ -611,6 +716,7 @@ async function registerSession(
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
 	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(input.cwd);
+	const askUserQuestionWaiters = createAskUserQuestionWaiters();
 	let model: Model<string> | undefined;
 	if (input.model) {
 		try {
@@ -630,11 +736,12 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 			() => skillAdmissionResolver(input.workspaceId),
 			generation.excludedSessionExtensionPaths,
 			[subagentsExtensionFor(input.workspaceId, () => subagentsEnabled(input.workspaceId))],
+			askUserQuestionWaiters,
 		),
 		...(model ? { model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
-	return registerSession(session, input.workspaceId, generation, true);
+	return registerSession(session, input.workspaceId, generation, askUserQuestionWaiters, true);
 }
 
 function summaryOf(sessionId: string, entry: Entry): SessionSummary {
@@ -786,6 +893,63 @@ export function listSessions(workspaceId: string, cwd: string): Promise<SessionS
 	return listSessionsInternal(workspaceId, cwd);
 }
 
+const sessionFileOperations = new Map<string, Promise<void>>();
+
+function serializeSessionFileOperation<T>(
+	sessionId: string,
+	operation: () => Promise<T> | T,
+): Promise<T> {
+	const previous = sessionFileOperations.get(sessionId) ?? Promise.resolve();
+	const result = previous.catch(() => {}).then(operation);
+	const settled = result.then(
+		() => undefined,
+		() => undefined,
+	);
+	sessionFileOperations.set(sessionId, settled);
+	return result.finally(() => {
+		if (sessionFileOperations.get(sessionId) === settled) sessionFileOperations.delete(sessionId);
+	});
+}
+
+export interface RenameSessionOptions {
+	onlyIfUnnamed?: boolean;
+}
+
+export function renameSession(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+	title: string,
+	options: RenameSessionOptions = {},
+): Promise<boolean> {
+	const normalized = normalizeSessionTitle(title);
+	if (!normalized) return Promise.reject(new Error("Invalid session title"));
+	return serializeSessionFileOperation(sessionId, async () => {
+		if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
+		const live = sessions.get(sessionId);
+		if (live) {
+			if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
+			const current = live.session.sessionName;
+			if ((options.onlyIfUnnamed && current !== undefined) || current === normalized) return false;
+			live.session.setSessionName(normalized);
+			return true;
+		}
+
+		const info = (await listSessionInfosStrict(cwd)).find(
+			(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
+		);
+		if (!info || hasDeletionTombstone(sessionId)) {
+			throw new Error(`Unknown session: ${sessionId}`);
+		}
+		const manager = SessionManager.open(info.path);
+		const current = manager.getSessionName();
+		if ((options.onlyIfUnnamed && current !== undefined) || current === normalized) return false;
+		manager.appendSessionInfo(normalized);
+		publish({ sessionId, event: { type: "session_info_changed", name: normalized } });
+		return true;
+	});
+}
+
 const attaching = new Map<string, Promise<void>>();
 
 function attachDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
@@ -794,9 +958,9 @@ function attachDiskSession(sessionId: string, workspaceId: string, cwd: string):
 	if (sessions.has(sessionId)) return Promise.resolve();
 	let pending = attaching.get(sessionId);
 	if (!pending) {
-		pending = openDiskSession(sessionId, workspaceId, cwd).finally(() =>
-			attaching.delete(sessionId),
-		);
+		pending = serializeSessionFileOperation(sessionId, () =>
+			openDiskSession(sessionId, workspaceId, cwd),
+		).finally(() => attaching.delete(sessionId));
 		attaching.set(sessionId, pending);
 	}
 	return pending;
@@ -823,6 +987,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(cwd);
 	const sessionManager = SessionManager.open(info.path);
+	const askUserQuestionWaiters = createAskUserQuestionWaiters();
 	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
 	let exactModel: Model<string> | undefined;
 	if (persistedModel) {
@@ -844,6 +1009,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 			() => skillAdmissionResolver(workspaceId),
 			generation.excludedSessionExtensionPaths,
 			[subagentsExtensionFor(workspaceId, () => subagentsEnabled(workspaceId))],
+			askUserQuestionWaiters,
 		),
 		...(exactModel ? { model: exactModel } : {}),
 	});
@@ -851,7 +1017,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		session.dispose();
 		return;
 	}
-	await registerSession(session, workspaceId, generation);
+	await registerSession(session, workspaceId, generation, askUserQuestionWaiters);
 }
 
 async function ensureSessionAttachedInternal(
@@ -897,10 +1063,7 @@ async function getSessionMessagesInternal(
 		entry = sessions.get(sessionId);
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
-	const messages = entry.session.messages.filter((m) =>
-		isTranscriptMessageRole(m.role),
-	) as TranscriptMessage[];
-	return { summary: summaryOf(sessionId, entry), messages };
+	return { summary: summaryOf(sessionId, entry), messages: transcriptMessages(entry.session) };
 }
 
 export function getSessionMessages(
@@ -916,10 +1079,20 @@ export async function answerQuestion(
 	toolCallId: string,
 	result: AskUserQuestionResult,
 ): Promise<void> {
-	const session = mustGet(sessionId);
-	const verdict = assessAnswerability(session.messages, toolCallId);
+	const entry = mustGetEntry(sessionId);
+	const live = entry.askUserQuestionWaiters.answer(toolCallId, result);
+	if (live.handled) {
+		syncSessionActivity(sessionId);
+		await live.persisted;
+		syncSessionActivity(sessionId);
+		return;
+	}
+	const verdict = assessAnswerability(entry.session.messages, toolCallId);
 	if (!verdict.ok) throw new Error(`${ANSWERABILITY_ERRORS[verdict.reason]}: ${toolCallId}`);
-	await session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
+	if (!hasQuestionAck(entry.session.messages, toolCallId)) {
+		throw new Error(`${ANSWERABILITY_ERRORS.not_awaiting}: ${toolCallId}`);
+	}
+	await entry.session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
 		triggerTurn: true,
 	});
 	syncSessionActivity(sessionId);
@@ -1025,6 +1198,16 @@ function queueContentOf(entry: Entry): SessionQueueContent {
 	};
 }
 
+function mergeQueueContent(
+	before: SessionQueueContent,
+	after: SessionQueueContent,
+): SessionQueueContent {
+	return {
+		steering: [...before.steering, ...after.steering],
+		followUp: [...before.followUp, ...after.followUp],
+	};
+}
+
 async function queueSessionMessage(
 	entry: Entry,
 	kind: QueueLane,
@@ -1088,6 +1271,19 @@ export async function followUpSession(
 		return;
 	}
 	await entry.session.prompt(text, images ? { images } : undefined);
+}
+
+// Callers MUST `ackSend`-wrap this: a pre-turn rejection has to roll the review record back — see submodule-server-todos.
+export async function sendReviewFixToSession(
+	sessionId: string,
+	content: string,
+	details: ReviewFixDetails,
+): Promise<void> {
+	const entry = mustGetEntry(sessionId);
+	await entry.session.sendCustomMessage(
+		{ customType: TODO_REVIEW_FIX_CUSTOM_TYPE, content, display: true, details },
+		{ deliverAs: "followUp", triggerTurn: true },
+	);
 }
 
 export async function compactSession(sessionId: string, instructions?: string): Promise<void> {
@@ -1159,12 +1355,35 @@ export async function removeQueuedSession(
 	return { removed, queue: queueStateOf(entry) };
 }
 
+const ACCEPTED_ANSWER_STOP_GRACE_MS = 1_000;
+
+async function waitForAcceptedAnswerGrace(
+	acceptedResult: Promise<void> | null,
+	timeoutMs: number,
+): Promise<void> {
+	if (!acceptedResult) return;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise<void>((resolve) => {
+		timer = setTimeout(resolve, Math.max(0, timeoutMs));
+		timer.unref?.();
+	});
+	await Promise.race([acceptedResult.catch(() => {}), timeout]);
+	if (timer) clearTimeout(timer);
+}
+
 export async function abortSession(
 	sessionId: string,
 	restoreQueue = false,
+	acceptedAnswerGraceMs = ACCEPTED_ANSWER_STOP_GRACE_MS,
 ): Promise<SessionQueueContent | undefined> {
 	const entry = mustGetEntry(sessionId);
-	const restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
+	let restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
+	const acceptedResult = entry.askUserQuestionWaiters.prepareAbort();
+	await waitForAcceptedAnswerGrace(acceptedResult, acceptedAnswerGraceMs);
+	if (sessions.get(sessionId) !== entry) return restoredQueue;
+	if (restoredQueue) {
+		restoredQueue = mergeQueueContent(restoredQueue, clearQueueSession(sessionId));
+	}
 	await entry.session.abort();
 	return restoredQueue;
 }
@@ -1306,11 +1525,13 @@ function trackCascade(workspaceId: string, cascade: Promise<void>): Promise<void
 function disposeSession(sessionId: string): Promise<void> {
 	const entry = sessions.get(sessionId);
 	if (!entry) return Promise.resolve();
+	entry.disposed = true;
 	const cascade = trackCascade(
 		entry.workspaceId,
 		disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
 	);
 	cancelExtUiForSession(sessionId);
+	entry.askUserQuestionWaiters.abandon();
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
@@ -1332,7 +1553,9 @@ export function disposeAllSessions(): void {
 			disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
 		);
 		cancelExtUiForSession(sessionId);
+		entry.askUserQuestionWaiters.abandon();
 		entry.unsubscribe();
+		entry.disposed = true;
 		entry.session.dispose();
 	}
 	sessions.clear();
@@ -1342,7 +1565,21 @@ export function disposeAllSessions(): void {
 export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void> {
 	const settling = new Set<Promise<unknown>>();
 	for (const [sessionId, entry] of sessions) {
-		if (entry.session.isStreaming) settling.add(entry.session.abort());
+		const acceptedResult = entry.askUserQuestionWaiters.prepareShutdown();
+		if (acceptedResult) {
+			settling.add(
+				acceptedResult
+					.catch(() => {})
+					.then(async () => {
+						if (sessions.get(sessionId) === entry && entry.session.isStreaming) {
+							await entry.session.abort();
+						}
+					}),
+			);
+		}
+		if (entry.session.isStreaming && !entry.askUserQuestionWaiters.hasRecoverableCall()) {
+			settling.add(entry.session.abort());
+		}
 		settling.add(
 			trackCascade(
 				entry.workspaceId,

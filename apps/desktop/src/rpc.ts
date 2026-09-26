@@ -1,4 +1,5 @@
 import type { NativeUpdateState } from "@thinkrail/contracts";
+import type { WindowChromeGeometry } from "./windowChrome";
 
 export type DesktopRpc = {
 	bun: {
@@ -17,6 +18,7 @@ export type DesktopRpc = {
 		requests: Record<string, never>;
 		messages: {
 			updateStateChanged: NativeUpdateState;
+			windowChromeChanged: WindowChromeGeometry;
 		};
 	};
 };

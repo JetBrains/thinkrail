@@ -1,8 +1,16 @@
-import type { DelegationRunDetails, UserMessage } from "@thinkrail/contracts";
+import {
+	assistantToolCallsAreExecutable,
+	type DelegationRunDetails,
+	type ReviewFixDetails,
+	type UserMessage,
+} from "@thinkrail/contracts";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { resolveProminence } from "./toolRegistry";
 import { strArg } from "./tools/toolHelpers";
 import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";
+
+// User-message collapse threshold (PlainUserTurn); also read by row height estimation.
+export const LARGE_USER_MESSAGE = 500;
 
 export interface ToolCallData {
 	toolCallId: string;
@@ -40,6 +48,7 @@ export type ChatRow =
 	  }
 	| { kind: "markdown"; id: string; text: string }
 	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
+	| { kind: "reviewFix"; id: string; details: ReviewFixDetails; text: string }
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
 			kind: "activity";
@@ -111,7 +120,7 @@ export function deriveRows(
 		if (!turn) continue;
 		if (turn.kind === "assistant") {
 			const { message } = turn;
-			const dead = message.stopReason === "aborted" || message.stopReason === "error";
+			const dead = !assistantToolCallsAreExecutable(message.stopReason);
 			for (let b = 0; b < message.content.length; b++) {
 				const block = message.content[b];
 				if (!block) continue;
@@ -187,6 +196,9 @@ export function deriveRows(
 						details: turn.details,
 						text: turn.text,
 					});
+					break;
+				case "reviewFix":
+					rows.push({ kind: "reviewFix", id: turn.id, details: turn.details, text: turn.text });
 					break;
 			}
 		}

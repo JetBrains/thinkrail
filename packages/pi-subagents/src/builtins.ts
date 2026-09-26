@@ -64,6 +64,12 @@ Do not write any code or files; the plan is your only output.`,
 ${SPEC_FIRST} Follow the codebase's existing conventions; prefer minimal, focused diffs. Run the
 project's own checks (tests, typecheck, lint) when they exist and are fast.
 
+Leave every change UNCOMMITTED. You share the parent's worktree and branch, so a commit you make
+yourself fragments the parent's history and detaches your work from whatever the parent uses to track
+it — the parent (or its host) owns committing. Never run \`git commit\`, \`git add\`, \`git stash\`,
+\`git reset\`, \`git checkout -- \`, \`git push\`, or any history/index-mutating git command; use git
+only to READ (status, diff, log). Bash stays open for tests, typecheck, and lint.
+
 Final report format: what changed (files + one line each), how it was verified, anything left open.`,
 	},
 	{

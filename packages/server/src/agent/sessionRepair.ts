@@ -1,20 +1,23 @@
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
-import { ASK_USER_QUESTION_TOOL_NAME, DECLINE_MESSAGE } from "./askUserQuestion";
+import { assistantToolCallsAreExecutable } from "@thinkrail/contracts";
+import { ASK_ACK_TEXT, ASK_USER_QUESTION_TOOL_NAME } from "./askUserQuestion";
 
 export interface RepairedToolCall {
 	toolCallId: string;
 	toolName: string;
 }
 
-const ASK_REPAIR_TEXT = `${DECLINE_MESSAGE} (the host restarted before the user answered — ask again if still relevant)`;
 const GENERIC_REPAIR_TEXT =
 	"Operation aborted (the host restarted before this tool call completed)";
+const TRUNCATED_REPAIR_TEXT =
+	"Tool call was not executed because the response hit the output token limit and its arguments may be truncated.";
 
 export function repairDanglingToolCalls(sessionManager: SessionManager): RepairedToolCall[] {
 	const { messages } = sessionManager.buildSessionContext();
 	const trailingResults = new Map<string, string>();
 	let repeatedTrailingResult = false;
 	let dangling: RepairedToolCall[] = [];
+	let danglingCallsAreExecutable = false;
 
 	for (let index = messages.length - 1; index >= 0; index--) {
 		const message = messages[index];
@@ -26,6 +29,7 @@ export function repairDanglingToolCalls(sessionManager: SessionManager): Repaire
 		}
 		if (message.role !== "assistant") break;
 		if (message.stopReason === "error" || message.stopReason === "aborted") break;
+		danglingCallsAreExecutable = assistantToolCallsAreExecutable(message.stopReason);
 		const toolCalls = message.content.filter((block) => block.type === "toolCall");
 		const toolCallNames = new Map(toolCalls.map((toolCall) => [toolCall.id, toolCall.name]));
 		if (
@@ -43,14 +47,24 @@ export function repairDanglingToolCalls(sessionManager: SessionManager): Repaire
 	}
 
 	for (const toolCall of dangling) {
-		const isAsk = toolCall.toolName === ASK_USER_QUESTION_TOOL_NAME;
+		const isAnswerableAsk =
+			danglingCallsAreExecutable && toolCall.toolName === ASK_USER_QUESTION_TOOL_NAME;
 		sessionManager.appendMessage({
 			role: "toolResult",
 			toolCallId: toolCall.toolCallId,
 			toolName: toolCall.toolName,
-			content: [{ type: "text", text: isAsk ? ASK_REPAIR_TEXT : GENERIC_REPAIR_TEXT }],
-			isError: !isAsk,
-			...(isAsk ? { details: { answers: [], cancelled: true } } : {}),
+			content: [
+				{
+					type: "text",
+					text: isAnswerableAsk
+						? ASK_ACK_TEXT
+						: danglingCallsAreExecutable
+							? GENERIC_REPAIR_TEXT
+							: TRUNCATED_REPAIR_TEXT,
+				},
+			],
+			isError: !isAnswerableAsk,
+			...(isAnswerableAsk ? { details: { kind: "ack" } } : {}),
 			timestamp: Date.now(),
 		});
 	}

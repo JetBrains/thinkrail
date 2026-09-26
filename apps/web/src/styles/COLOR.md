@@ -104,7 +104,7 @@ the remainder comes from its own built-in palette:
 
 | consumer | we set | the rest comes from |
 | --- | --- | --- |
-| Monaco | editor background/foreground, line numbers, cursor, both selection colours, and every syntax rule | `vs` / `vs-dark` / `hc-black` / `hc-light` via `inherit: true` — scrollbars, find/suggest/hover widgets, bracket match, indent guides, overview ruler |
+| Monaco | editor background/foreground, line numbers, cursor, both selection colours, scrollbar slider colours, and every syntax rule | `vs` / `vs-dark` / `hc-black` / `hc-light` via `inherit: true` — find/suggest/hover widgets, bracket match, indent guides, overview ruler |
 | xterm | background, foreground, cursor, both selection colours, all 16 ANSI | xterm defaults for `cursorAccent` and `selectionInactiveBackground` |
 | mermaid | the `themeVariables` map in `chat/tools/visualize/mermaid.ts` | mermaid's `base` theme for anything absent from that map |
 
