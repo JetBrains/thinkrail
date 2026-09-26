@@ -108,10 +108,9 @@ of the host.
     only when non-empty — the hydration seed for the client's pending strip, since `queue_update` fires only
     on changes and a client attaching mid-run would otherwise never learn of messages queued before it
     connected. The same aggregate enriches projected `queue_update` events; image bytes never ride this
-    read-side queue state. `SessionSummary` is a *hydration* read and says nothing about background work:
-  `session.list` is issued for one workspace at a time, so the cross-workspace "what is happening in there"
-  signal is the separate `ActivityStatus` layer, not a field here.
-  Destructive operations use the separate **`SessionQueueContent`** /
+    read-side queue state. `SessionSummary` is a *hydration* read and says nothing about cross-workspace
+    background work. The deletion-only compatibility release intentionally exposes no replacement signal.
+    Destructive operations use the separate **`SessionQueueContent`** /
     **`QueuedMessageContent`** shapes, which return each drained message's text and optional images exactly
     once so the composer can restore complete content without making ordinary queue broadcasts heavy.
     `session.getMessages` returns `{ summary, messages }` (the transcript is
@@ -191,8 +190,7 @@ of the host.
   **`OpenBranchReview`** (the optional open review reference for the active branch: PR vs MR + number; no status/actions),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables),
-  `FileNode` (file-tree node), **`ActivityStatus`** + **`SessionActivity`** (see below),
-  `Git*`/diff types — incl. **`GitDiffScope`** (what the Changes
+  `FileNode` (file-tree node), `Git*`/diff types — incl. **`GitDiffScope`** (what the Changes
   panel is diffing: `branch` → the workspace's work since diverging from its diff base (the range starts at
   their merge-base, never the base's tip) / `uncommitted` → worktree vs `HEAD` /
   `commit` → one commit, `sha^` vs `sha`; omitted on the wire = `branch`, so an older client is unchanged),
@@ -522,8 +520,7 @@ of the host.
   **`session.created`** (the initial `SessionSummary`, broadcast when a new host-owned session registers so
   other frontends can list it in history without opening local placement) / **`session.deleted`** (workspace +
   session id; a non-replayable domain event broadcast after permanent deletion so every client removes the chat
-  and blocks stale hydration) / **`session.activity`** (see the activity layer below) /
-  **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
+  and blocks stale hydration) / **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
   client converges) / **`feedback.interview`** (an empty, addressed invitation sent only to the host-claimed
   frontend; not broadcast, subscribed, or replayed) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
@@ -566,44 +563,12 @@ of the host.
   confirming the confirmations. This behavior is protocol-versioned — a replaying UI must never run against a
   pre-dedup host.
 
-## The activity layer
+## Retired activity compatibility
 
-`ActivityStatus` = `"running" | "waiting" | "queued" | "failed"` answers one question the hydration reads
-cannot: *what is happening in a workspace I do not have open?* `SessionSummary` is per-workspace and read
-on demand; activity is cross-workspace and pushed.
-
-**`idle` is not a member of the union.** It is represented by absence everywhere: omitted from the
-snapshot, deleted from the client's map, and drawn as nothing. Quiet is therefore the default a consumer
-gets for free rather than a value each one must remember to special-case, and the wire carries only the
-workspaces that have something to say. The single place idleness is spelled out is the push's
-`status: null`, because a *removal* has to be transmitted.
-
-- **`SessionActivity`** = `{ sessionId, workspaceId, projectId, status }` — a snapshot row.
-- **`session.activity`** push = `{ sessionId, workspaceId, projectId, status: ActivityStatus | null }`,
-  emitted when a session's derived status changes.
-- **`projectId` rides every row deliberately, even though it is derivable from `workspaceId`.** The client
-  can only make that derivation for projects whose `workspace.list` it has read, and it reads that list
-  only for *expanded* projects — so a collapsed, never-opened project would roll up to nothing, which is
-  exactly the state this feature exists to reveal. Attribution therefore travels with the row rather than
-  depending on unrelated data being loaded first.
-- **`session.activityList`** (no params) → `SessionActivity[]` for every workspace, **unioning live and
-  on-disk sessions** exactly as `session.list` does, so a host restart rebuilds the rail (architecture #8)
-  rather than hiding a waiting question in a workspace nobody has opened yet. A snapshot request
-  exists because pushes are **not** replayed on reconnect (the dedup cache covers requests only), so
-  without it a client that reconnected mid-run would show a stale or empty rail until the next transition.
-  Only `waiting`/`failed` can arrive from disk — `running` and `queued` describe a live process.
-
-The status is **per session, deliberately not pre-rolled per workspace**: how several chats collapse into
-one row is presentation policy that belongs to the client's selectors, and the host has no business
-encoding a UI precedence order. Deriving it is the host's job because only the host holds every
-workspace's sessions at once — see the `agent` module SPEC for the derivation and its two precedence
-orders.
-
-`ACTIVITY_PROTOCOL_VERSION` pins the layer, so a UI shipped ahead of its host renders no glyphs instead of
-an empty rail that looks like "nothing is running". The gate is **not** a plain early return: an older host
-can send neither a snapshot nor a retraction, so a client that has already seen a v59 host must actively
-*clear* what it holds when it reconnects to a pre-activity one — otherwise a downgraded or re-pointed
-endpoint strands glyphs that nothing can ever retire (see `apps/web/src/store/SPEC.md`).
+The multi-state activity contract is removed before its replacement is introduced. The request registry
+keeps only `session.activityList` returning the literal empty tuple `[]` for one compatibility window, so an
+already-loaded old client can clear cached markers after reconnect. There is no `ActivityStatus`, snapshot
+row, push channel, protocol capability, derivation, or client state in this release.
 
 ## Get right
 

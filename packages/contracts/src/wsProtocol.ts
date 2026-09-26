@@ -1,5 +1,4 @@
 import type {
-	ActivityStatus,
 	AppConfig,
 	AppConfigUpdate,
 	BranchList,
@@ -33,7 +32,6 @@ import type {
 	ReviewCommentStatus,
 	ReviewFixDetails,
 	ReviewSnapshot,
-	SessionActivity,
 	SpecGraphSnapshot,
 	SubagentOverride,
 	Template,
@@ -117,7 +115,6 @@ export const SUBAGENT_SETTINGS_PROTOCOL_VERSION = 57;
 export const JBCENTRAL_QUOTA_PROTOCOL_VERSION = 59;
 export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
 export const FEEDBACK_INTERVIEW_PROTOCOL_VERSION = 56;
-export const ACTIVITY_PROTOCOL_VERSION = 60;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
@@ -147,13 +144,6 @@ export type SessionCreatedPayload = SessionSummary;
 export interface SessionDeletedPayload {
 	workspaceId: string;
 	sessionId: string;
-}
-
-export interface SessionActivityPayload {
-	workspaceId: string;
-	projectId: string;
-	sessionId: string;
-	status: ActivityStatus | null;
 }
 
 export const WS_METHODS = {
@@ -274,7 +264,6 @@ export const WS_CHANNELS = {
 	piExtensionUi: "pi.extensionUi",
 	sessionCreated: "session.created",
 	sessionDeleted: "session.deleted",
-	sessionActivity: "session.activity",
 	providerLogin: "provider.login",
 	providerChanged: "provider.changed",
 	terminalData: "terminal.data",
@@ -559,7 +548,7 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"session.list": { params: { workspaceId: string }; result: SessionSummary[] };
-	"session.activityList": { params: Record<string, never>; result: SessionActivity[] };
+	"session.activityList": { params: Record<string, never>; result: [] };
 	"session.getMessages": {
 		params: { sessionId: string; workspaceId: string };
 		result: { summary: SessionSummary; messages: TranscriptMessage[] };
