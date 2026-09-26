@@ -123,7 +123,8 @@ re-renders through its renderer-registry version.
   with `css` adds one `<link data-ext-theme>` (the asset behind `hostUrl`); any other state removes it.
 - A refused overlay (bad tokens or unreadable text) is never left applied: a refused preview clears the
   preview (the selection shows again) and `preview` returns the errors; a refused selection shows a
-  toast and falls back to built-in until the theme changes. The hint is written on every non-preview
+  toast and clears the selection, so the picker and `useTheme().active` show built-in and the next load
+  does not retry it. The hint is written on every non-preview
   apply: the selection plus its validated tokens, or no tokens when it is unavailable.
 - The picker is `ThemeMenuItems` inside `ExtensionMenu`: **Theme** lists **Built-in (Settings)** and
   every listed theme (title, extension, mode). It shows only when some theme is listed.

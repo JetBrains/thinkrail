@@ -270,8 +270,8 @@ under **Theme**. The choice is saved in the browser, applies without a reload, a
 ]
 ```
 
-- `mode` picks the base: the user's built-in theme when it has that appearance, else the default
-  built-in theme of that mode. `tokens` override CSS variables on top of the base.
+- `mode` picks the base: the user's built-in theme when it has that appearance, else the built-in
+  theme of that mode with the same contrast level. `tokens` override CSS variables on top of the base.
 - Token names are checked against the app's token list. A typo fails the load with a hint, e.g.
   `themes[0].tokens["--color-accent"] unknown token; did you mean "--accent"?`. Four groups:
   - **palette** (use these first): `--background`, `--header`, `--content`, `--sidebar`, `--input`,

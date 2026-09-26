@@ -1424,7 +1424,9 @@ own section. The kebab menu (`plan-menu`, a
   live shell. PTY sizing distinguishes desired, in-flight, and
   host-acknowledged grids; only a successful `terminal.resize` advances the acknowledgement, so reconnect
   replay cannot leave a full-screen app permanently sized to a request the host never applied. The 16 ANSI
-  slots come from the theme's `--ansi-*` domain palette (never the semantic UI text tokens); on top of it
+  slots come from the theme's `--ansi-*` domain palette (never the semantic UI text tokens). On a theme
+  swap, open terminals and Monaco editors re-read colours and `--tr-font-family-code`; a terminal whose
+  font changed refits its grid. On top of the palette
   xterm runs a **`minimumContrastRatio` legibility floor** driven by the theme's contrast metadata (normal
   `4.5`, high `7`, in `panels/terminalContrast.ts`). xterm's default of `1` disables correction, which
   left colours close to the terminal background (`black` on the near-black dark canvas) with no floor; the

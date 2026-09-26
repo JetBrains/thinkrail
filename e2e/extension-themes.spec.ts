@@ -106,6 +106,17 @@ test("an extension theme applies live, persists across reload, and falls back on
 	await expectRootVar(page, "--radius-lg", "8px");
 	await expect.poll(() => overlayOf(page)).toBeNull();
 
+	setEmberBackground("#2b2118");
+	expect((await reloadExtension(EXTENSION)).status).toBe("active");
+	await pickTheme(page, "ext-theme-themes-ember");
+	await expect(page.getByText(/Theme themes\/ember was not applied/)).toBeVisible();
+	await expectRootVar(page, "--background", BUILT_IN_DARK_BACKGROUND);
+	await page.getByTestId("ext-menu").first().click();
+	await expect(page.getByTestId("ext-theme-builtin")).toHaveAttribute("data-state", "checked");
+	await page.keyboard.press("Escape");
+
+	setEmberBackground("#fff4e0");
+	expect((await reloadExtension(EXTENSION)).status).toBe("active");
 	await pickTheme(page, "ext-theme-themes-ember");
 	await expectRootVar(page, "--background", "#fff4e0");
 	await removeExtension(EXTENSION);

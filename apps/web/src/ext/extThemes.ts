@@ -102,7 +102,7 @@ export const startThemeSync = () => {
 				return;
 			}
 			toast.error(`Theme ${next.overlay.key} was not applied: ${result.errors.join("; ")}`);
-			writeThemeOverlayHint({ selected: state.themeSelection, overlay: null });
+			state.selectTheme(null);
 			return;
 		}
 		if (lastFailure?.key === next?.overlay.key) lastFailure = null;

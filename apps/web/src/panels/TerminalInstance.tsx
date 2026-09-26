@@ -349,6 +349,11 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const stopThemeWatch = onThemeSwap(() => {
 			term.options.theme = readTheme();
 			term.options.minimumContrastRatio = contrastFloor();
+			const fontFamily = cssVar("--tr-font-family-code") ?? "monospace";
+			if (term.options.fontFamily !== fontFamily) {
+				term.options.fontFamily = fontFamily;
+				scheduleFit();
+			}
 		});
 
 		return () => {
