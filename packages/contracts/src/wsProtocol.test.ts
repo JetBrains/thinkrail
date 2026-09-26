@@ -17,6 +17,7 @@ import {
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
+	WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
 } from "./wsProtocol";
@@ -63,6 +64,11 @@ test("host update advisories advance the protocol with an immutable notice chann
 test("explicit analytics consent is available from protocol v65", () => {
 	expect(ANALYTICS_CONSENT_PROTOCOL_VERSION).toBe(65);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ANALYTICS_CONSENT_PROTOCOL_VERSION);
+});
+
+test("sticky workspace model preferences advance the additive wire shape to v69", () => {
+	expect(WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION).toBe(69);
+	expect(PROTOCOL_VERSION).toBe(WORKSPACE_MODEL_PREFERENCE_PROTOCOL_VERSION);
 });
 
 test("session rename is versioned and bounded", () => {

@@ -278,13 +278,10 @@ test("model changes affect later sends but not provider/auth captured before a d
 	});
 	try {
 		await started.promise;
+		const alternateModel = toWireModel(alternate.getModel());
 		expect(
-			await handleRequest(
-				"session.setModel",
-				{ sessionId, model: toWireModel(alternate.getModel()) },
-				context,
-			),
-		).toEqual({ ok: true });
+			await handleRequest("session.setModel", { sessionId, model: alternateModel }, context),
+		).toEqual({ model: alternateModel, thinkingLevel: "off" });
 		expect(acknowledged).toBe(false);
 	} finally {
 		release.resolve();

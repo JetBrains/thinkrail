@@ -117,9 +117,10 @@ function loadPersistedWorkspaces(): Workspace[] {
 async function disposeLiveSessions(page: Page): Promise<void> {
 	const workspaces = loadPersistedWorkspaces();
 	if (workspaces.length === 0) return;
-	const health = await page.request.get("/health");
-	const hostUrl = new URL(health.url());
-	health.dispose();
+	const probe = await page.context().newPage();
+	await probe.goto("/health");
+	const hostUrl = new URL(probe.url());
+	await probe.close();
 	const port = Number(hostUrl.port) || (hostUrl.protocol === "https:" ? 443 : 80);
 	const wire = await E2eWire.connect(port);
 	try {

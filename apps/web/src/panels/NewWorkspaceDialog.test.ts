@@ -30,7 +30,7 @@ describe("reconcileModel", () => {
 		expect(reconcileModel([bedrockTwin, anthropicOriginal], held, true)).toBe(anthropicOriginal);
 	});
 
-	test("a NON-authoritative catalog never declares a model gone — it can't override the host's default", () => {
+	test("a NON-authoritative catalog never declares a held model gone", () => {
 		const stale = [wm("openai", "o9", ["off"])];
 		expect(reconcileModel(stale, wm("anthropic", "opus-6", ["off", "high"]), false)).toBeNull();
 	});

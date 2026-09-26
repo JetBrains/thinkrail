@@ -42,6 +42,8 @@ export interface Workspace {
 	diffBase?: string;
 	renamed?: boolean;
 	initialTerminalPending?: true;
+	model?: WireModel;
+	thinkingLevel?: ThinkingLevel;
 	diffStats?: DiffStats;
 	skillOverrides?: Record<string, "on" | "off">;
 	subagentsOverride?: SubagentOverride;
