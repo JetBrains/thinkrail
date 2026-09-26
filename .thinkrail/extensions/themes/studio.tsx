@@ -61,14 +61,37 @@ const Studio = () => {
 	previewRef.current = preview;
 	const snippet = useMemo(() => themeSnippet(draft), [draft]);
 
+	const pendingRef = useRef(draft);
+	const frameRef = useRef<number | null>(null);
+	const cancelFrame = () => {
+		if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+		frameRef.current = null;
+	};
+
 	useEffect(() => {
 		if (!live) return;
-		const result = preview({ mode: draft.mode, tokens: draftTokens(draft) });
-		setErrors(result.ok ? [] : result.errors);
-		if (!result.ok) setLive(false);
-	}, [draft, live, preview]);
+		pendingRef.current = draft;
+		if (frameRef.current !== null) return;
+		frameRef.current = requestAnimationFrame(() => {
+			frameRef.current = null;
+			const next = pendingRef.current;
+			const result = previewRef.current({ mode: next.mode, tokens: draftTokens(next) });
+			if (result.ok) {
+				setErrors((current) => (current.length === 0 ? current : []));
+				return;
+			}
+			setErrors(result.errors);
+			setLive(false);
+		});
+	}, [draft, live]);
 
-	useEffect(() => () => void previewRef.current(null), []);
+	useEffect(
+		() => () => {
+			if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+			previewRef.current(null);
+		},
+		[],
+	);
 
 	const edit = (next: Partial<Draft>) => {
 		setDraft((current) => ({ ...current, ...next }));
@@ -81,6 +104,7 @@ const Studio = () => {
 		setCopied(false);
 	};
 	const stop = () => {
+		cancelFrame();
 		setLive(false);
 		preview(null);
 	};

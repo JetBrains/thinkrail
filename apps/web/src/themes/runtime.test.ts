@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_CONFIG } from "@thinkrail/contracts";
 import {
+	applyThemePreference,
 	buildThemeCatalog,
 	deriveSystemThemePair,
 	installThemeCatalog,
@@ -10,6 +11,7 @@ import {
 	readSystemAppearance,
 	readThemeHint,
 	resolveThemePreference,
+	setThemeOverlay,
 	type ThemePreference,
 	writeThemeHint,
 } from "./runtime";
@@ -136,5 +138,70 @@ test("theme hints migrate legacy ids and use the native stable adapter", () => {
 		expect(readThemeHint()).toEqual({ theme: "dark", themeMode: "fixed" });
 	} finally {
 		Reflect.deleteProperty(globalThis, "__THINKRAIL_STABLE_PREFERENCES__");
+	}
+});
+
+const fakeRoot = () => {
+	const writes: string[] = [];
+	const properties = new Map<string, string>();
+	const data: Record<string, string> = {};
+	const dataset = new Proxy(data, {
+		set: (target, key, value) => {
+			writes.push(`data:${String(key)}`);
+			return Reflect.set(target, key, value);
+		},
+		deleteProperty: (target, key) => {
+			writes.push(`data:${String(key)}`);
+			return Reflect.deleteProperty(target, key);
+		},
+	});
+	const style = {
+		getPropertyValue: (name: string) => properties.get(name) ?? "",
+		setProperty: (name: string, value: string) => {
+			writes.push(name);
+			properties.set(name, value);
+		},
+		removeProperty: (name: string) => {
+			writes.push(name);
+			properties.delete(name);
+		},
+	};
+	return { writes, root: { dataset, style } };
+};
+
+test("a no-op re-apply writes nothing and an overlay token change leaves the theme attributes alone", () => {
+	installThemeCatalog(buildThemeCatalog(bundledCandidates()));
+	const { writes, root } = fakeRoot();
+	const frames: (() => void)[] = [];
+	Reflect.set(globalThis, "document", { documentElement: root });
+	Reflect.set(globalThis, "requestAnimationFrame", (run: () => void) => frames.push(run));
+	try {
+		const preference: ThemePreference = { theme: "light", themeMode: "fixed" };
+		applyThemePreference(preference);
+		expect(root.dataset.theme).toBe("light");
+		writes.length = 0;
+		applyThemePreference(preference);
+		expect(writes).toEqual([]);
+		const overlay = {
+			key: "t/warm",
+			mode: "light" as const,
+			tokens: { "--background": "#fbf5ec" },
+		};
+		setThemeOverlay(overlay, { verify: false });
+		expect(root.dataset.themeOverlay).toBe("t/warm");
+		writes.length = 0;
+		setThemeOverlay({ ...overlay, tokens: { "--background": "#fbf5ed" } }, { verify: false });
+		expect(root.style.getPropertyValue("--background")).toBe("#fbf5ed");
+		expect(writes.filter((write) => write.startsWith("data:") || write === "color-scheme")).toEqual(
+			[],
+		);
+		writes.length = 0;
+		setThemeOverlay({ ...overlay, tokens: { "--background": "#fbf5ed" } }, { verify: false });
+		expect(writes).toEqual([]);
+		setThemeOverlay(null, { verify: false });
+	} finally {
+		for (const run of frames.splice(0)) run();
+		Reflect.deleteProperty(globalThis, "document");
+		Reflect.deleteProperty(globalThis, "requestAnimationFrame");
 	}
 });

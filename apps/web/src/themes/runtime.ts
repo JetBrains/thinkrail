@@ -32,6 +32,7 @@ import {
 	type ThemeContrast,
 	type ThemeManifest,
 } from "./schema";
+import { recordThemeApplication } from "./swap";
 
 export interface ThemeDescriptor {
 	readonly id: ThemeId;
@@ -312,6 +313,14 @@ export function resolveThemePreference(
 	};
 }
 
+type ThemeDataKey = "theme" | "themeOverlay" | "themeAppearance" | "themeContrast";
+
+const setData = (root: HTMLElement, key: ThemeDataKey, value: string | undefined) => {
+	if (root.dataset[key] === value) return;
+	if (value === undefined) delete root.dataset[key];
+	else root.dataset[key] = value;
+};
+
 function applyVariables(root: HTMLElement, theme: ThemeManifest): void {
 	for (const key of THEME_COLOR_KEYS) {
 		const variable = paletteVariable(key);
@@ -322,8 +331,9 @@ function applyVariables(root: HTMLElement, theme: ThemeManifest): void {
 	for (const key of ANSI_COLOR_KEYS) root.style.setProperty(ANSI_VARIABLES[key], theme.ansi[key]);
 	for (const key of SYNTAX_COLOR_KEYS)
 		root.style.setProperty(SYNTAX_VARIABLES[key], theme.syntax[key]);
-	root.dataset.themeAppearance = theme.appearance;
-	root.style.setProperty("color-scheme", theme.appearance);
+	setData(root, "themeAppearance", theme.appearance);
+	if (root.style.getPropertyValue("color-scheme") !== theme.appearance)
+		root.style.setProperty("color-scheme", theme.appearance);
 }
 
 function overlayBase(theme: ThemeManifest): ThemeManifest {
@@ -337,19 +347,21 @@ function applyOverlay(root: HTMLElement): void {
 	for (const [token, value] of entries)
 		if (value !== undefined) root.style.setProperty(token, value);
 	overlayProperties = entries.map(([token]) => token);
-	if (overlay) root.dataset.themeOverlay = overlay.key;
-	else delete root.dataset.themeOverlay;
+	setData(root, "themeOverlay", overlay?.key);
 }
 
 function applyResolvedTheme(resolved: ThemeManifest): ThemeDescriptor {
 	const theme = overlayBase(resolved);
-	if (typeof document !== "undefined") {
+	if (
+		typeof document !== "undefined" &&
+		recordThemeApplication(JSON.stringify([theme.id, overlay]))
+	) {
 		const root = document.documentElement;
 		for (const token of overlayProperties) root.style.removeProperty(token);
 		applyVariables(root, theme);
 		applyOverlay(root);
-		root.dataset.themeContrast = theme.contrast;
-		root.dataset.theme = theme.id;
+		setData(root, "themeContrast", theme.contrast);
+		setData(root, "theme", theme.id);
 	}
 	return descriptor(theme);
 }
@@ -398,15 +410,6 @@ export function writeThemeHint(preference: ThemePreference): void {
 	} catch {
 		return;
 	}
-}
-
-export function onThemeSwap(onSwap: () => void): () => void {
-	const observer = new MutationObserver(onSwap);
-	observer.observe(document.documentElement, {
-		attributes: true,
-		attributeFilter: ["data-theme", "data-theme-overlay"],
-	});
-	return () => observer.disconnect();
 }
 
 export function setThemeOverlay(

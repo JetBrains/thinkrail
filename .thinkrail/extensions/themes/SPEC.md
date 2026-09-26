@@ -31,9 +31,10 @@ Shows how an extension changes the app's look. Written only against `@thinkrail/
   `--bubble-accent`, both selections (accent at 20% alpha), and `--accent-hover` (14% toward black in
   light mode, toward white in dark). One radius slider (0–16 px) sets `sm`; `xs` = sm/2, `md` = 1.5×,
   `lg` = 2×.
-- Every edit calls `preview`. A refused preview (for example text too close to the background) shows
-  the error and stops previewing; the app shows the selected theme again. **Stop preview** and unmount
-  call `preview(null)`.
+- Edits call `preview` at most once per animation frame with the latest draft, so a color drag applies
+  one overlay per frame while the labels update on every input. A refused preview (for example text too
+  close to the background) shows the error and stops previewing; the app shows the selected theme again.
+  **Stop preview** and unmount cancel a pending frame, then call `preview(null)`.
 - **Copy JSON** writes one `themes[]` entry (`id` slugged from the title) to the clipboard; the same text
   shows below. **Save draft** stores the draft (`saveDraft` action → `tr.store` key `draft`, published on
   `draft`); the panel starts from it, else from the current root palette.

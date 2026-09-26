@@ -35,7 +35,7 @@ export function MermaidView({
 		setSvg(null);
 		setError(null);
 		run();
-		const stopThemeWatch = onThemeSwap(run);
+		const stopThemeWatch = onThemeSwap(run, { settle: true });
 		return () => {
 			cancelled = true;
 			stopThemeWatch();

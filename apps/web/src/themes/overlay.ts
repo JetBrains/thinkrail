@@ -74,8 +74,15 @@ const contrast = (a: Rgba, b: Rgba) => {
 	return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05);
 };
 
+let probeContext: CanvasRenderingContext2D | null = null;
+
+const colorContext = () => {
+	probeContext ??= document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+	return probeContext;
+};
+
 export const readTextContrast = (root: HTMLElement) => {
-	const context = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+	const context = colorContext();
 	if (!context) return null;
 	const probe = document.createElement("span");
 	probe.style.setProperty("color", "var(--text-default)");

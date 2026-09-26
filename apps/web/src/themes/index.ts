@@ -6,7 +6,6 @@ export {
 	deriveSystemThemePair,
 	getThemes,
 	onSystemAppearanceChange,
-	onThemeSwap,
 	readSystemAppearance,
 	readThemeHint,
 	readThemeOverlayHint,
@@ -22,3 +21,4 @@ export {
 } from "./runtime";
 export type { ThemeManifest } from "./schema";
 export { THINKRAIL_SHIKI_THEME, THINKRAIL_SHIKI_THEME_NAME } from "./shiki";
+export { onThemeSwap, type ThemeSwapOptions } from "./swap";

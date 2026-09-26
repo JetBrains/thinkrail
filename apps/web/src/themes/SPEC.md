@@ -26,9 +26,9 @@ theme = adding one `bundled/*.theme.json` file** (a PR + rebuild) — no code, c
 - **Public surface:** `index.ts` only — `initializeBundledThemes` (the synchronous bootstrap),
   `applyTheme` / `resolveTheme`, preference-aware `applyThemePreference` /
   `resolveThemePreference`, `deriveSystemThemePair`, `readSystemAppearance`,
-  `onSystemAppearanceChange`, `getThemes`, `onThemeSwap` (subscribe to a completed theme change — this
-  module owns the `data-theme` signal, so it owns the way to observe it; Monaco/xterm/mermaid all re-read
-  their palettes through it rather than each hand-rolling a MutationObserver), `readThemeHint` /
+  `onSystemAppearanceChange`, `getThemes`, `onThemeSwap` / `ThemeSwapOptions` (subscribe to a completed
+  theme change — this module owns application, so it owns the way to observe it; Monaco/xterm/mermaid all
+  re-read their palettes through it rather than each hand-rolling a DOM observer), `readThemeHint` /
   `writeThemeHint`, the overlay slot (`setThemeOverlay`, `readThemeOverlayHint`,
   `writeThemeOverlayHint`, `ThemeOverlay`, `ThemeOverlayResult`, `ThemeOverlayHint`), and the
   manifest/descriptor/preference-result types plus the Shiki registration.
@@ -123,8 +123,18 @@ enable, the resolved fixed theme fills its own slot; the opposite slot chooses t
 matching contrast, then the same normal/any fallback. A persisted pair is reused on later enables.
 
 Application is atomic from consumers' perspective: write the complete variable set, `color-scheme`, and
-semantic contrast metadata, then publish the effective manifest id through `data-theme` last, so generic
-consumers (Monaco/xterm/mermaid) can rebuild after that signal without observing half a palette.
+semantic contrast metadata, then publish the effective manifest id through `data-theme` last. A re-apply
+whose effective manifest id and overlay equal the last applied ones writes nothing, and each `data-*`
+attribute and `color-scheme` is written only when its value changes.
+
+`onThemeSwap` is an in-module notifier, not a DOM observer: attributes no longer change on a token-only
+overlay update, yet consumers still read those tokens. Every changed application schedules one flush on
+the next animation frame; the flush notifies each subscriber once, and not at all when the frame ends on
+the state last notified (a no-op, or a change reverted within the frame, such as a refused overlay).
+`{ settle: true }` is for consumers that rebuild expensively (Monaco, xterm, mermaid): the first change
+runs at once, and changes arriving within 120 ms of it collapse into one trailing call after 120 ms of
+quiet, so a live preview drag does not re-theme them at frame rate. Unsubscribing cancels a pending
+trailing call.
 Selected-text foregrounds are removed when their manifest values are `null`. In system mode one media-query
 listener reapplies locally on `change`; it never writes config or affects another client, and its owner must
 clean it up when preference or component lifetime changes.
@@ -154,12 +164,13 @@ view previews. It never enters the catalog, the host config, or `AppConfig.theme
 - Base: the preference-resolved manifest when its appearance equals `mode`, else the fallback manifest
   of `mode` with the same contrast (the system-mode fallback rule). Application stays atomic: remove the
   previous overlay's properties, write the base palette, write the overlay properties inline on the
-  root, set `data-theme-overlay` (removed with no overlay), then `data-theme` last. `onThemeSwap` fires
-  on either attribute, so Monaco/xterm/mermaid re-read after an overlay change too.
+  root, set `data-theme-overlay` (removed with no overlay), then `data-theme` last. A change to the
+  overlay's tokens alone is a theme change for `onThemeSwap`, so Monaco/xterm/mermaid re-read after it.
 - `setThemeOverlay(next, { verify })` reapplies the last preference. With `verify` (default) it then
   measures `--text-default` on `--container-workspace-bg` (a probe element, canvas-resolved to sRGB);
   under 3:1 it removes the overlay and returns `{ ok: false, errors }`, so a theme can never leave the
-  app unreadable. Without a canvas (unit tests) the check is skipped.
+  app unreadable. The result is synchronous; one lazily created canvas context serves every check.
+  Without a canvas (unit tests) the check is skipped.
 - The overlay hint (`theme-overlay`, versioned, same storage as the theme hint) holds the selected key
   and its last validated overlay. `main.tsx` applies it without `verify` before React mounts, because
   stylesheets may not have loaded yet; a stored overlay that fails validation is dropped.

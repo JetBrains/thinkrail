@@ -134,10 +134,13 @@ export function defineThinkrailTheme(m: Monaco): void {
 }
 
 export function watchThemeSwap(m: Monaco, themeName: string = THEME): () => void {
-	return onThemeSwap(() => {
-		defineThinkrailTheme(m);
-		m.editor.setTheme(themeName);
-		const fontFamily = cssVar("--tr-font-family-code") ?? "monospace";
-		for (const editor of m.editor.getEditors()) editor.updateOptions({ fontFamily });
-	});
+	return onThemeSwap(
+		() => {
+			defineThinkrailTheme(m);
+			m.editor.setTheme(themeName);
+			const fontFamily = cssVar("--tr-font-family-code") ?? "monospace";
+			for (const editor of m.editor.getEditors()) editor.updateOptions({ fontFamily });
+		},
+		{ settle: true },
+	);
 }
