@@ -75,6 +75,13 @@ reads `bun.lock` and rejects any second `react` or `react-dom` version. Every Re
 packages together and repeats the mounted-chat memory stress probe before this temporary canary pin can
 return to stable.
 
+**React Compiler memoizes every component in the Vite build** (`reactCompilerPreset` through
+`@rolldown/plugin-babel` in `vite.config.ts`), so hot store paths such as live theme preview re-render only
+what changed without hand-written `useMemo` / `memo`. A component the compiler cannot prove safe (refs read in
+render, `try`/`finally`) is left uncompiled rather than failing the build. Extension bundles (`Bun.build`) are
+not compiled. The compiler caches any render-time read that no prop or state feeds, so mutable outside state
+(media queries, DOM attributes) is read through `useSyncExternalStore`, never a revision-counter rerender.
+
 ### Dependency graph
 
 - `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration
