@@ -21,6 +21,10 @@ import { RouteStore } from "./routeStore";
 import type { DesktopRpc } from "./rpc";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
 import type { DesktopServerRuntime } from "./serverRuntime";
+import {
+	createTitleBarDoubleClickHandler,
+	type TitleBarDoubleClickResult,
+} from "./titleBarDoubleClick";
 import { createElectrobunQuitCoordinator, createElectrobunUpdateController } from "./updates";
 import {
 	desktopWindowChrome,
@@ -33,6 +37,34 @@ type BeforeQuitEvent = ReturnType<typeof Electrobun.events.events.app.beforeQuit
 
 const BACKEND_PROFILE_ID = "local";
 const WINDOW_ID = "main";
+const TITLE_BAR_PROBE_TARGETS: Record<string, string[]> = {
+	"title-bar-double-click": ["topbar"],
+	"title-bar-double-click-no-drag": ["topbar-actions", "topbar"],
+};
+function titleBarProbeScript(testIds: string[]): string {
+	return `(() => {
+	const ids = ${JSON.stringify(testIds)};
+	const deadline = Date.now() + 15000;
+	const fire = (element) =>
+		element.dispatchEvent(
+			new MouseEvent("dblclick", { bubbles: true, cancelable: true, button: 0, detail: 2 }),
+		);
+	const poll = () => {
+		const header = document.querySelector('[data-testid="topbar"]');
+		const elements = ids.map((id) => document.querySelector('[data-testid="' + id + '"]'));
+		if (
+			header &&
+			elements.every((element) => element) &&
+			getComputedStyle(header).getPropertyValue("--electrobun-app-region").trim() === "drag"
+		) {
+			elements.forEach((element) => fire(element));
+		} else if (Date.now() < deadline) {
+			setTimeout(poll, 50);
+		}
+	};
+	poll();
+})();`;
+}
 let startupQuitCoordinator: ReturnType<typeof createElectrobunQuitCoordinator> | undefined;
 
 function writeReady(path: string, payload: unknown): void {
@@ -68,6 +100,14 @@ async function start(): Promise<void> {
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const initialPreferences = preferences.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const neutral = process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
+	const titleBarProbePath = neutral
+		? undefined
+		: process.env.THINKRAIL_DESKTOP_TITLE_BAR_PROBE_FILE;
+	const titleBarProbe: {
+		received: number;
+		handled: number;
+		result: TitleBarDoubleClickResult | null;
+	} = { received: 0, handled: 0, result: null };
 	const updateController = await createElectrobunUpdateController({
 		isPackaged: Electrobun.app.isPackaged,
 		version,
@@ -76,6 +116,7 @@ async function start(): Promise<void> {
 		arch: process.arch,
 		restartToUpdate: quitCoordinator.restartToUpdate,
 	});
+	let handleTitleBarDoubleClick: () => Promise<void> = async () => {};
 	const rpc = BrowserView.defineRPC<DesktopRpc>({
 		maxRequestTime: 5000,
 		handlers: {
@@ -91,6 +132,13 @@ async function start(): Promise<void> {
 				},
 			},
 			messages: {
+				titleBarDoubleClick: () => {
+					if (titleBarProbePath) {
+						titleBarProbe.received += 1;
+						writeReady(titleBarProbePath, titleBarProbe);
+					}
+					void handleTitleBarDoubleClick();
+				},
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);
 				},
@@ -145,6 +193,19 @@ async function start(): Promise<void> {
 				}),
 	});
 	if (!neutral) {
+		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
+			enabled: windowChrome.dragRegion,
+			window: mainWindow,
+			...(titleBarProbePath
+				? {
+						onHandled: (result) => {
+							titleBarProbe.handled += 1;
+							titleBarProbe.result = result;
+							writeReady(titleBarProbePath, titleBarProbe);
+						},
+					}
+				: {}),
+		});
 		installWindowChromeGeometry(
 			mainWindow,
 			() => windowChromeGeometry(windowChrome, mainWindow.isFullScreen()),
@@ -188,15 +249,24 @@ async function start(): Promise<void> {
 	const controlPath = process.env.THINKRAIL_DESKTOP_CONTROL_FILE;
 	if (controlPath) {
 		let navigationProbeStarted = false;
+		const titleBarProbeCommands = new Set<string>();
 		const poll = setInterval(() => {
 			if (!existsSync(controlPath)) return;
-			if (navigationProbePath) {
+			if (navigationProbePath || titleBarProbePath) {
 				const command = readFileSync(controlPath, "utf8");
-				if (command === "navigate" && !navigationProbeStarted) {
+				if (command === "navigate" && navigationProbePath && !navigationProbeStarted) {
 					navigationProbeStarted = true;
 					mainWindow.webview.executeJavascript(
 						'window.location.assign("https://example.invalid/thinkrail-navigation-probe");',
 					);
+				}
+				const titleBarTargets =
+					titleBarProbePath && Object.hasOwn(TITLE_BAR_PROBE_TARGETS, command)
+						? TITLE_BAR_PROBE_TARGETS[command]
+						: undefined;
+				if (titleBarTargets && !titleBarProbeCommands.has(command)) {
+					titleBarProbeCommands.add(command);
+					mainWindow.webview.executeJavascript(titleBarProbeScript(titleBarTargets));
 				}
 				if (command !== "stop") return;
 			}

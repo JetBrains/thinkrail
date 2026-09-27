@@ -8,6 +8,7 @@ import {
 } from "./preferenceAdapter";
 import { takePreloadGlobal } from "./preloadGlobals";
 import type { DesktopRpc } from "./rpc";
+import { installTitleBarDoubleClick } from "./titleBarDoubleClick";
 import { createWindowChromeStyleWriter, INITIAL_WINDOW_CHROME_GLOBAL } from "./windowChrome";
 
 interface DesktopPreferenceAdapter {
@@ -36,6 +37,7 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 	},
 });
 const electroview = new Electrobun.Electroview({ rpc });
+installTitleBarDoubleClick(window, () => electroview.rpc?.send.titleBarDoubleClick());
 const globals = globalThis as typeof globalThis & Record<string, unknown>;
 const updateBridge: NativeUpdateBridge = Object.freeze({
 	getState: () => rpc.request.getUpdateState(),

@@ -27,6 +27,85 @@ function readSettledJson(path: string): unknown {
 	}
 }
 
+async function verifyTitleBarDoubleClick(
+	controlPath: string,
+	titleBarProbePath: string,
+	exited: Promise<number>,
+	exitError: (code: number) => Error,
+): Promise<void> {
+	type WindowState = { maximized?: boolean; minimized?: boolean; frame?: unknown };
+	type TitleBarProbe = {
+		received?: number;
+		handled?: number;
+		result?: {
+			preference?: string | null;
+			action?: string;
+			before?: WindowState;
+			after?: WindowState;
+		} | null;
+	};
+	const defaults = Bun.spawnSync(["/usr/bin/defaults", "read", "-g", "AppleActionOnDoubleClick"], {
+		stdout: "pipe",
+		stderr: "ignore",
+	});
+	const stdout = defaults.stdout.toString().trim();
+	const preference = defaults.exitCode === 0 && stdout ? stdout : null;
+	const expectedAction =
+		preference === null || preference === "Maximize" || preference === "Fill"
+			? "zoom"
+			: preference === "Minimize"
+				? "minimize"
+				: "none";
+	const probe = () => readSettledJson(titleBarProbePath) as TitleBarProbe | undefined;
+	const fail = (document: TitleBarProbe | undefined, reason: string) =>
+		new Error(`native title-bar double-click ${reason}: ${JSON.stringify(document)}`);
+	const checkResult = (document: TitleBarProbe | undefined) => {
+		const result = document?.result;
+		if (result?.preference !== preference) throw fail(document, "preference did not match");
+		if (result.action !== expectedAction) {
+			throw fail(document, `action did not match ${expectedAction}`);
+		}
+		if (expectedAction === "zoom") {
+			if (
+				typeof result.before?.maximized !== "boolean" ||
+				result.after?.maximized !== !result.before.maximized
+			) {
+				throw fail(document, "did not toggle the maximized state");
+			}
+		} else if (expectedAction === "minimize") {
+			if (result.after?.minimized !== true) {
+				throw fail(document, "did not minimize the window");
+			}
+		} else if (JSON.stringify(result.before) !== JSON.stringify(result.after)) {
+			throw fail(document, "changed the window state for a no-op action");
+		}
+	};
+	const runPhase = async (command: string, expected: number) => {
+		writeFileSync(controlPath, command);
+		await pollUntil(() => (probe()?.handled ?? 0) >= expected, {
+			timeoutMs: 20_000,
+			what: `native title-bar double-click (${command})`,
+			exited,
+			exitError,
+		});
+		await Bun.sleep(500);
+		const document = probe();
+		if (document?.received !== expected || document.handled !== expected) {
+			throw fail(
+				document,
+				`expected ${expected} forwarded and handled header double-clicks after ${command}`,
+			);
+		}
+		checkResult(document);
+		return document.result;
+	};
+	const first = await runPhase("title-bar-double-click", 1);
+	const second = await runPhase("title-bar-double-click-no-drag", 2);
+	if (expectedAction === "zoom" && second?.after?.maximized !== first?.before?.maximized) {
+		throw fail(probe(), "did not restore the original maximized state");
+	}
+}
+
 function copyApplication(launcher: string): string {
 	const bundleRoot =
 		process.platform === "darwin"
@@ -64,6 +143,7 @@ async function launchDesktop(
 	const readyPath = join(root, `${id}-${label}.ready.json`);
 	const controlPath = join(root, `${id}-${label}.control`);
 	const navigationProbePath = join(root, `${id}-${label}.navigation.json`);
+	const titleBarProbePath = join(root, `${id}-${label}.title-bar.json`);
 	const userDataPath = join(root, `${id}-${label}-user-data`);
 	const restoredRoute = mode === "ui" ? "#/v1/projects/desktop-smoke" : undefined;
 	if (restoredRoute) {
@@ -81,9 +161,18 @@ async function launchDesktop(
 			THINKRAIL_DESKTOP_HIDDEN: "1",
 			...(mode === "host"
 				? { THINKRAIL_DESKTOP_E2E_HOST: "1" }
-				: { THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE: navigationProbePath }),
+				: {
+						THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE: navigationProbePath,
+						...(process.platform === "darwin"
+							? { THINKRAIL_DESKTOP_TITLE_BAR_PROBE_FILE: titleBarProbePath }
+							: {}),
+					}),
 		},
-		["THINKRAIL_DESKTOP_E2E_HOST", "THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE"],
+		[
+			"THINKRAIL_DESKTOP_E2E_HOST",
+			"THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE",
+			"THINKRAIL_DESKTOP_TITLE_BAR_PROBE_FILE",
+		],
 		env,
 	);
 	const command =
@@ -139,6 +228,9 @@ async function launchDesktop(
 					exitError: exitedEarly,
 				},
 			);
+			if (process.platform === "darwin") {
+				await verifyTitleBarDoubleClick(controlPath, titleBarProbePath, proc.exited, exitedEarly);
+			}
 			writeFileSync(controlPath, "navigate");
 			let navigation: { url?: string } | undefined;
 			await pollUntil(
@@ -198,7 +290,7 @@ const adapter: ArtifactHostAdapter = {
 
 async function runMutedSmoke(): Promise<void> {
 	const isolated = join(root, "ui");
-	mkdirSync(isolated, { recursive: true });
+	mkdirSync(join(isolated, "home"), { recursive: true });
 	let ui: Awaited<ReturnType<typeof launchDesktop>> | undefined;
 	try {
 		ui = await launchDesktop(

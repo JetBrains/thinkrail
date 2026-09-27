@@ -197,11 +197,14 @@ Abrupt death relies only on operating-system process cleanup.
 Artifact tests drive this same entrypoint through opt-in environment/ready/control seams: isolated user
 data, a hidden neutral window for browser-backed tests, host/launcher ids and origin on DOM-ready, and
 normal quit. Native UI smoke can capture an external-open result and request one fixed navigation probe
-instead of launching the user's browser. With a title-bar probe file, the `title-bar-double-click` control
-command dispatches synthetic `dblclick`s in the live webview — first on the no-drag action cluster, then on
-the header — and the launcher records each handled double-click's preference, action, and before/after
-window state. These hooks need the live window; their standalone drivers and
-assertions live in the test package, which product code never imports.
+instead of launching the user's browser. With a title-bar probe file, two control commands dispatch
+synthetic `dblclick`s in the live webview: `title-bar-double-click` on the header, and
+`title-bar-double-click-no-drag` on the no-drag action cluster followed by the header in one task. The
+launcher records how many double-click messages it received and handled, plus the last handled
+preference, action, and before/after window state. The header-only phase proves the header is
+forwarded; counting receipt as well as handling lets the second phase detect a forwarded no-drag
+click that the single-flight handler would drop. These hooks need the live window; their standalone
+drivers and assertions live in the test package, which product code never imports.
 
 ## Build and release
 

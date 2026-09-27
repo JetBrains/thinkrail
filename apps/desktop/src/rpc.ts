@@ -12,6 +12,7 @@ export type DesktopRpc = {
 			routeChanged: { hash: string };
 			preferenceWrite: { key: string; value: string };
 			preferenceRemove: { key: string };
+			titleBarDoubleClick: undefined;
 		};
 	};
 	webview: {
