@@ -71,6 +71,7 @@ export function initAttributionRecording(
 	else if (consent === true) recordCurrentAttributionTouch(contentKey, dependencies);
 
 	dependencies.subscribeJourney((journeyId) => {
-		if (journeyId === undefined) clearAttributionContext(storage);
+		if (journeyId === undefined && dependencies.currentMarketingConsent() === false)
+			clearAttributionContext(storage);
 	});
 }

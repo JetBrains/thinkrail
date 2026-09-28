@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { attributionStorageKey } from "./browserStorage";
+import { attributionStorageKey, readAttributionContext } from "./browserStorage";
 import {
 	initAttributionRecording,
 	recordCurrentAttributionTouch,
@@ -52,9 +52,9 @@ function fixture(initialJourney?: string, initialConsent?: boolean) {
 			},
 		},
 		bridgeGenerationCalls: () => bridgeGenerationCalls,
-		setJourney(value: string | undefined, consent = value !== undefined) {
+		setJourney(value: string | undefined, ...consent: [] | [boolean | undefined]) {
 			currentJourney = value;
-			currentConsent = consent;
+			currentConsent = consent.length === 0 ? value !== undefined : consent[0];
 			listener?.(value);
 		},
 		setNavigation(nextHref: string, nextReferrer: string) {
@@ -79,6 +79,24 @@ describe("attribution recording consent timing", () => {
 		expect(page.values.get(attributionStorageKey)).toContain('"source":"acted"');
 
 		page.setJourney(undefined);
+		expect(page.values.has(attributionStorageKey)).toBeFalse();
+	});
+
+	test("preserves stored attribution through unknown consent until known denial", () => {
+		const page = fixture(journeyId, true);
+		initAttributionRecording("landing", page.dependencies);
+		expect(page.values.has(attributionStorageKey)).toBeTrue();
+
+		page.setJourney(undefined, undefined);
+		expect(page.values.has(attributionStorageKey)).toBeTrue();
+
+		page.setJourney(journeyId, true);
+		expect(page.values.has(attributionStorageKey)).toBeTrue();
+		expect(readAttributionContext(journeyId, page.dependencies.storage())).toMatchObject({
+			first_touch: expect.objectContaining({ landing_content_key: "landing" }),
+		});
+
+		page.setJourney(undefined, false);
 		expect(page.values.has(attributionStorageKey)).toBeFalse();
 	});
 
