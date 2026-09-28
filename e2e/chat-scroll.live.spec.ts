@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { hideAuxiliaryWorkbench, openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
-import { readChatScrollGeometry } from "./fixtures/chatScroll";
+import { moveMouseToChatViewport, readChatScrollGeometry } from "./fixtures/chatScroll";
 
 async function openChatAndSend(
 	page: import("@playwright/test").Page,
@@ -54,6 +54,74 @@ test("the reading band clears its streaming runway when the agent settles", {
 	await page.setViewportSize({ width: 390, height: 844 });
 	await expect(chatScroll).toBeVisible();
 	await expect(page.getByTestId("chat-stream-runway")).toHaveCount(0);
+});
+
+test("a reader who scrolls away while the answer streams stays put when the agent settles", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(120_000);
+	await openWorkspaceChat(page);
+	await page.setViewportSize({ width: 1100, height: 800 });
+	await hideAuxiliaryWorkbench(page);
+	await page
+		.getByTestId("chat-input")
+		.fill(
+			"List every integer from 1 to 300, each as its own paragraph separated by a blank line, and nothing else.",
+		);
+	await page.getByTestId("chat-send").click();
+
+	const chatScroll = page.getByTestId("chat-scroll");
+	await expect(chatScroll).toHaveAttribute("data-streaming", "true");
+	await expect
+		.poll(
+			async () =>
+				chatScroll.evaluate((root) => {
+					const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+					if (!scroller) throw new Error("missing Virtuoso scroller");
+					return scroller.scrollHeight > scroller.clientHeight + 300;
+				}),
+			{ timeout: 90_000 },
+		)
+		.toBe(true);
+
+	await moveMouseToChatViewport(page, chatScroll);
+	for (let notch = 0; notch < 4; notch += 1) {
+		await page.mouse.wheel(0, -150);
+		await page.waitForTimeout(40);
+	}
+	await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+	await expect(chatScroll).toHaveAttribute("data-streaming", "true");
+	const followButton = page.getByTestId("scroll-to-bottom");
+	await expect(followButton).toContainText("Follow response");
+	const anchor = await chatScroll.evaluate((root) => {
+		const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+		if (!scroller) throw new Error("missing Virtuoso scroller");
+		const viewport = scroller.getBoundingClientRect();
+		const middle = viewport.top + viewport.height / 2;
+		const row = [...root.querySelectorAll<HTMLElement>("[data-chat-row-id]")].find((candidate) => {
+			const rect = candidate.getBoundingClientRect();
+			return rect.top <= middle && rect.bottom >= middle;
+		});
+		if (!row) throw new Error("no chat row intersects the viewport middle");
+		const id = row.getAttribute("data-chat-row-id");
+		if (!id) throw new Error("viewport row has no chat row id");
+		return { id, top: row.getBoundingClientRect().top - viewport.top };
+	});
+
+	await expect(chatScroll).toHaveAttribute("data-streaming", "false", { timeout: 90_000 });
+	await page.waitForTimeout(1_500);
+	await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+	await expect(followButton).toHaveText("Latest");
+	const settledTop = await chatScroll.evaluate((root, rowId) => {
+		const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+		if (!scroller) throw new Error("missing Virtuoso scroller");
+		const row = [...root.querySelectorAll<HTMLElement>("[data-chat-row-id]")].find(
+			(candidate) => candidate.getAttribute("data-chat-row-id") === rowId,
+		);
+		if (!row) throw new Error(`chat row ${rowId} left the rendered transcript`);
+		return row.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+	}, anchor.id);
+	expect(Math.abs(settledTop - anchor.top)).toBeLessThanOrEqual(2);
 });
 
 test("the outer activity run reveals a thinking subtree that owns its following tools", {

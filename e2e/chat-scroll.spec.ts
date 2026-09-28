@@ -1,6 +1,6 @@
 import { realpathSync, rmSync, utimesSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import { enterDefaultWorkspace, hideAuxiliaryWorkbench, openFixtureProject } from "./fixtures/app";
 import { moveMouseToChatViewport, readChatScrollGeometry } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -42,28 +42,126 @@ async function selectMessageOrder(page: Page, order: MessageOrder): Promise<void
 	await page.keyboard.press("Escape");
 }
 
-function seedTallChat(name: string) {
+function seededRandom(seed: number): () => number {
+	let state = seed >>> 0;
+	return () => {
+		state = (state + 0x6d2b79f5) >>> 0;
+		let value = state;
+		value = Math.imul(value ^ (value >>> 15), value | 1);
+		value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+		return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+	};
+}
+
+const HISTORY_TERMS = [
+	"viewport",
+	"scrolling",
+	"transcript",
+	"measurement",
+	"response",
+	"history",
+	"reader",
+	"layout",
+	"anchor",
+	"stream",
+	"geometry",
+	"message",
+	"alignment",
+	"rendering",
+	"boundary",
+	"browser",
+	"stable",
+	"incremental",
+	"deterministic",
+	"preserved",
+	"bounded",
+	"careful",
+	"reliable",
+	"visible",
+	"native",
+	"settled",
+	"content",
+	"selection",
+	"virtual",
+	"section",
+	"position",
+	"reconciled",
+];
+
+function historyProse(random: () => number, section: number, paragraph: number): string {
+	const count = 38 + Math.floor(random() * 48);
+	const words = Array.from({ length: count }, (_, index) => {
+		const term = HISTORY_TERMS[Math.floor(random() * HISTORY_TERMS.length)] ?? "transcript";
+		return index === 0 ? `${term[0]?.toUpperCase()}${term.slice(1)}` : term;
+	});
+	words[words.length - 1] = `${words.at(-1)}.`;
+	return `Section ${section}, paragraph ${paragraph}, records ${words.join(" ")}`;
+}
+
+function historyAnswer(section: number, random: () => number): string {
+	const blocks = [`## History section ${section}: Reproducible transcript geometry`];
+	const paragraphs = 3 + Math.floor(random() * 4);
+	for (let index = 1; index <= paragraphs; index += 1) {
+		blocks.push(historyProse(random, section, index));
+	}
+	if (section % 3 === 0) {
+		blocks.push(
+			[
+				"The reader-facing invariants remain explicit:",
+				"- A stable anchor does not depend on approximate proximity.",
+				"- Measurements can settle without stealing manual input.",
+				"- New response content remains part of the same transcript.",
+			].join("\n"),
+		);
+	}
+	const codeLines = 10 + Math.floor(random() * 51);
+	blocks.push(
+		`\`\`\`ts\n${Array.from({ length: codeLines }, (_, line) => `const history${line + 1} = { section: ${section}, line: ${line + 1}, measured: true };`).join("\n")}\n\`\`\``,
+	);
+	return blocks.join("\n\n");
+}
+
+function historyMessages() {
+	const random = seededRandom(0x80c0ffee);
+	return Array.from({ length: 80 }, (_, pair) => [
+		{
+			role: "user" as const,
+			text: `Review long scroll history item ${String(pair + 1).padStart(2, "0")}.`,
+			timestamp: BASE_TS + pair * 2_000,
+		},
+		{
+			role: "assistant" as const,
+			text: historyAnswer(pair + 1, random),
+			timestamp: BASE_TS + pair * 2_000 + 1_000,
+		},
+	]).flat();
+}
+
+function seedTallChat(
+	name: string,
+	messages = Array.from({ length: 40 }, (_, index) => [
+		{
+			role: "user" as const,
+			text: `request ${index + 1}: inspect the deterministic scrolling fixture`,
+			timestamp: BASE_TS + index * 2_000,
+		},
+		{
+			role: "assistant" as const,
+			text: `answer ${index + 1}: the deterministic scrolling fixture is complete`,
+			timestamp: BASE_TS + index * 2_000 + 1_000,
+		},
+	]).flat(),
+) {
 	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name,
-		messages: Array.from({ length: 40 }, (_, index) => [
-			{
-				role: "user" as const,
-				text: `request ${index + 1}: inspect the deterministic scrolling fixture`,
-				timestamp: BASE_TS + index * 2_000,
-			},
-			{
-				role: "assistant" as const,
-				text: `answer ${index + 1}: the deterministic scrolling fixture is complete`,
-				timestamp: BASE_TS + index * 2_000 + 1_000,
-			},
-		]).flat(),
+		messages,
 	});
 	utimesSync(session.path, new Date(BASE_TS + 100_000), new Date(BASE_TS + 100_000));
 	return session;
 }
 
-async function waitForScrollStability(chatScroll: Locator): Promise<void> {
-	await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
+async function waitForScrollStability(chatScroll: Locator, timeoutMs = 5_000): Promise<void> {
+	await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false", { timeout: timeoutMs });
 	await chatScroll.evaluate(async (root) => {
 		const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
 		if (!scroller) throw new Error("missing Virtuoso scroller");
@@ -84,7 +182,7 @@ async function waitForScrollStability(chatScroll: Locator): Promise<void> {
 		}
 		throw new Error("chat scroll did not stabilize");
 	});
-	await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
+	await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false", { timeout: timeoutMs });
 }
 
 function latestDistance(
@@ -110,14 +208,23 @@ async function moveIntoStableHistory(
 	throw new Error("chat did not remain positioned in history");
 }
 
-async function openTallChat(page: Page, order: MessageOrder) {
+async function openTallChat(
+	page: Page,
+	order: MessageOrder,
+	messages?: Parameters<typeof seedTallChat>[1],
+	stabilityTimeoutMs = 5_000,
+) {
 	await openFixtureProject(page);
-	const session = seedTallChat(`${order} deterministic scrolling`);
+	const session = messages
+		? seedTallChat(`${order} deterministic scrolling`, messages)
+		: seedTallChat(`${order} deterministic scrolling`);
 	await selectMessageOrder(page, order);
 	await enterDefaultWorkspace(page);
 	const chatScroll = page.getByTestId("chat-scroll");
 	await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
-	await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
+	await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false", {
+		timeout: stabilityTimeoutMs,
+	});
 	await expect
 		.poll(async () => {
 			const geometry = await readChatScrollGeometry(chatScroll);
@@ -574,3 +681,98 @@ for (const testCase of orderCases) {
 		}
 	});
 }
+
+test("scrolling up through variable-height history never jumps visible content", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1280, height: 900 });
+	const { session, chatScroll } = await openTallChat(
+		page,
+		"oldest-first",
+		historyMessages(),
+		10_000,
+	);
+	try {
+		await hideAuxiliaryWorkbench(page);
+		await waitForScrollStability(chatScroll, 10_000);
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+		const start = await readChatScrollGeometry(chatScroll);
+		await chatScroll.evaluate((root) => {
+			const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+			if (!scroller) throw new Error("missing Virtuoso scroller");
+			const documentRoot = document.documentElement;
+			const shifts: number[] = [];
+			let previous = new Map<string, number>();
+			const channel = new MessageChannel();
+			const measure = () => {
+				if (documentRoot.dataset.chatVisualRecorderStopped === "true") {
+					channel.port1.close();
+					channel.port2.close();
+					return;
+				}
+				const viewport = scroller.getBoundingClientRect();
+				const current = new Map<string, number>();
+				for (const row of root.querySelectorAll<HTMLElement>("[data-chat-row-id]")) {
+					const rect = row.getBoundingClientRect();
+					if (rect.bottom <= viewport.top || rect.top >= viewport.bottom) continue;
+					const id = row.getAttribute("data-chat-row-id");
+					if (id) current.set(id, rect.top - viewport.top);
+				}
+				const differences = [...current].flatMap(([id, top]) => {
+					const previousTop = previous.get(id);
+					return previousTop === undefined ? [] : [top - previousTop];
+				});
+				if (differences.length > 0) {
+					differences.sort((left, right) => left - right);
+					const middle = Math.floor(differences.length / 2);
+					const median =
+						differences.length % 2 === 0
+							? (differences[middle - 1] + differences[middle]) / 2
+							: differences[middle];
+					shifts.push(median);
+					documentRoot.dataset.chatVisualShifts = JSON.stringify(shifts);
+				}
+				previous = current;
+				requestAnimationFrame(() => channel.port2.postMessage("measure"));
+			};
+			channel.port1.onmessage = measure;
+			channel.port1.start();
+			documentRoot.dataset.chatVisualShifts = "[]";
+			requestAnimationFrame(() => channel.port2.postMessage("measure"));
+		});
+
+		await moveMouseToChatViewport(page, chatScroll);
+		for (let notch = 0; notch < 80; notch += 1) {
+			await page.mouse.wheel(0, -150);
+			await page.waitForTimeout(40);
+		}
+		await page.waitForTimeout(1_000);
+		const shifts = await chatScroll.evaluate(() => {
+			document.documentElement.dataset.chatVisualRecorderStopped = "true";
+			const serialized = document.documentElement.dataset.chatVisualShifts;
+			if (!serialized) throw new Error("visual shift recorder did not collect measurements");
+			const parsed: unknown = JSON.parse(serialized);
+			if (!Array.isArray(parsed))
+				throw new Error("visual shift recorder returned invalid measurements");
+			const numeric = parsed.filter((shift): shift is number => typeof shift === "number");
+			if (numeric.length !== parsed.length) {
+				throw new Error("visual shift recorder returned a non-numeric measurement");
+			}
+			return numeric;
+		});
+		const end = await readChatScrollGeometry(chatScroll);
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+		expect(end.scrollTop).toBeLessThan(start.scrollTop);
+		expect(shifts.length).toBeGreaterThan(20);
+		for (const shift of shifts) {
+			if (Math.abs(shift) <= 1) continue;
+			const notches = Math.round(shift / 150);
+			expect(notches).toBeGreaterThan(0);
+			expect(Math.abs(shift - notches * 150)).toBeLessThanOrEqual(1);
+		}
+		const visualDistance = shifts.reduce((total, shift) => total + shift, 0);
+		expect(Math.abs(visualDistance - 80 * 150)).toBeLessThanOrEqual(20);
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
