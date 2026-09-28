@@ -405,7 +405,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   and why `projectId` rides each row are in [[module-contracts]].
 - **CLI update lifecycle:** a launcher may supply one optional asynchronous notice producer, fixed interval,
   and parameterless update runner. `createServer` starts checks after listening without awaiting them and never
-  overlaps checks. A newer release becomes the retained `available` snapshot in later welcomes. The v69
+  overlaps checks. A newer release becomes the retained `available` snapshot in later welcomes. The v70
   `host.update` request acknowledges after starting one detached, server-single-flighted run; running,
   succeeded, and failed are full replacements on `host.updateAvailable` for every client. Success latches until
   host restart and does not shut down or relaunch the unsupervised process; failure permits retry and exposes no

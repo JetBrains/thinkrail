@@ -391,7 +391,7 @@ of the host.
   ready, and installing are distinct states.
 - **`HostUpdateNotice`** — the optional host-wire CLI lifecycle: current version, newer available version,
   channel, and an optional closed `available | running | succeeded | failed` status (absent means the legacy
-  v64 advisory). `host.updateAvailable` publishes full replacements. Protocol v69 adds parameterless
+  v64 advisory). `host.updateAvailable` publishes full replacements. Protocol v70 adds parameterless
   `host.update`; no output, arbitrary diagnostic, feed URL, artifact, platform path, or shell command crosses
   the wire.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
@@ -519,7 +519,7 @@ of the host.
   (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
   offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from
   the browser / **`host.updateAvailable`** — the backward-compatible full CLI-update snapshot: initially
-  published when a launcher finds a newer release, then replaced as a v69 host-run moves through
+  published when a launcher finds a newer release, then replaced as a v70 host-run moves through
   running/succeeded/failed; absent on discovery failure/no-update / **`project.updated`** — the
   full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
   atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
