@@ -34,8 +34,10 @@ with explicit captured diagnostic evidence, never silently truncated; actual sta
 history boundary remain durable. This does not invalidate a separately captured declared result.
 The latest attempt retains its narrow child handle for continuation;
 this also preserves a fresh session interrupted before pi has written its first assistant entry.
-Retry and invalidation retire old handles outside the state queue. Recovery faithfully reopens saved
-births; missing transcripts never cause replacement sessions. Outstanding jobs finish outside the
+Retry, skip and graph edits enqueue retained-child retirement only after their invalidation snapshot
+commits, for every affected descendant; idempotent disposal may overlap target reassembly outside the
+state queue. Recovery faithfully reopens saved births; missing transcripts never cause replacement
+sessions. Outstanding jobs finish outside the
 state queue. If an interrupted activation has no finalized assistant evidence, its frozen payload
 is included in continuation: pi may not have appended the original user message during preflight.
 An already queued answer is preserved, with optional continuation instructions appended rather than

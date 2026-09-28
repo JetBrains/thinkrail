@@ -845,6 +845,7 @@ class Engine implements D.DagService {
 						D.fail("forbidden", "Unreleased outputs of another node cannot seed a retry");
 				}
 				D.invalidate(state, affected);
+				for (const id of affected) effects.push(() => this.retire(owned, id));
 				node.cancelled = false;
 				node.held = false;
 				node.retryOutputs = structuredClone(command.previousOutputs ?? []);
@@ -857,6 +858,7 @@ class Engine implements D.DagService {
 				const affected = D.descendants(state.definitionValue, node.id);
 				for (const id of affected) this.quiet(this.node(state, id));
 				D.invalidate(state, affected);
+				for (const id of affected) effects.push(() => this.retire(owned, id));
 				node.skipped = decision(command.reason);
 				node.held = false;
 				node.cancelled = false;

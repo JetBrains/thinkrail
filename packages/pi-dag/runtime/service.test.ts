@@ -20,7 +20,11 @@ import {
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { type ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import { createDelegationService, type DelegationService } from "pi-delegation";
+import {
+	createDelegationService,
+	type DelegationService,
+	type ResourceChildHandle,
+} from "pi-delegation";
 import {
 	createDagService,
 	type DagClient,
@@ -117,6 +121,39 @@ function noticeSink() {
 		},
 	};
 }
+function trackedChildDisposal() {
+	let count = 0;
+	const wrap = (child: ResourceChildHandle): ResourceChildHandle => {
+		let disposed = false;
+		return {
+			...child,
+			async dispose() {
+				if (!disposed) {
+					disposed = true;
+					count++;
+				}
+				await child.dispose();
+			},
+		};
+	};
+	const decorate = (core: DelegationService): DelegationService => ({
+		...core,
+		async registerResource(id, context, options) {
+			const resource = await core.registerResource(id, context, options);
+			return {
+				...resource,
+				async createChild(spec) {
+					return wrap(await resource.createChild(spec));
+				},
+				async reopenChild(spec) {
+					return wrap(await resource.reopenChild(spec));
+				},
+			};
+		},
+	});
+	return { decorate, count: () => count };
+}
+
 function pauseFirstInput() {
 	const entered = latch(),
 		proceed = latch();
@@ -546,6 +583,41 @@ test("retry can revise its own unapproved output but cross-node seeds require re
 	const consumed = done.nodes[1]?.payload;
 	if (!consumed) throw new Error("Missing seeded payload");
 	expect(readFileSync(consumed.localPath, "utf8")).toContain("REVISED");
+});
+
+test("skip retires the invalidated worker handle after durable commit", async () => {
+	const tracked = trackedChildDisposal();
+	const { owner } = fixture(tracked.decorate);
+	faux.setResponses([fauxAssistantMessage("No explicit result")]);
+	const dagId = await start(owner);
+	await until(owner, dagId, (state) => state.nodes[0]?.status === "needs-attention");
+	await command(owner, dagId, { kind: "skip", nodeId: "work", reason: "No result needed" });
+	for (let n = 0; n < 100 && tracked.count() === 0; n++) await Bun.sleep(5);
+	expect(tracked.count()).toBe(1);
+	expect(value(await owner.getDag({ dagId })).nodes[0]?.status).toBe("skipped");
+});
+
+test("retry retires invalidated descendant handles before their later retry", async () => {
+	const tracked = trackedChildDisposal();
+	const { owner } = fixture(tracked.decorate);
+	const graph = definition(["source", "consumer"]);
+	graph.connections = [
+		{ id: "source-first", kind: "control", from: "source", to: "consumer", allowSkipped: false },
+	];
+	faux.setResponses([result("SOURCE"), result("CONSUMER")]);
+	const dagId = await start(owner, graph);
+	await until(owner, dagId, (state) => state.nodes.every((node) => node.status === "completed"));
+	expect(tracked.count()).toBe(0);
+	faux.setResponses([result("RETRIED_SOURCE")]);
+	await command(owner, dagId, { kind: "retry", target: { nodeId: "source", attempt: 1 } });
+	await until(
+		owner,
+		dagId,
+		(state) => state.nodes[0]?.attempt === 2 && state.nodes[0]?.status === "completed",
+	);
+	for (let n = 0; n < 100 && tracked.count() < 2; n++) await Bun.sleep(5);
+	expect(tracked.count()).toBe(2);
+	expect(value(await owner.getDag({ dagId })).nodes[1]?.status).toBe("stale");
 });
 
 test("mixed worker batches commit no protocol evidence and failure does not block independent branches", async () => {
