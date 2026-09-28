@@ -25,6 +25,7 @@ import {
 	minimumSideGroupLimit,
 	projectWorkspaceLayout,
 	reconcileAttention,
+	sameWorkbenchFrameShape,
 	validateLayoutDocument,
 	type WorkbenchFrame,
 	type WorkspaceLayoutDocument,
@@ -825,7 +826,7 @@ export async function commitWorkspaceLayout(
 			attentionByWorkspace,
 			preferences: state.localLayoutPreferences,
 		},
-		frameChanged,
+		frameChanged && !sameWorkbenchFrameShape(frame, state.workbenchFrame),
 	);
 	return useAppStore.getState().layoutDocumentsByWorkspace[workspaceId] ?? document;
 }

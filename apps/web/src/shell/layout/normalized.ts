@@ -410,6 +410,26 @@ export function sameWorkbenchFrame(first: WorkbenchFrame, second: WorkbenchFrame
 	return JSON.stringify(first) === JSON.stringify(second);
 }
 
+function withoutFrameGeometry(frame: WorkbenchFrame): unknown {
+	const center = (node: WorkbenchCenterNode): unknown =>
+		node.kind === "group" ? node : { ...node, weights: null, children: node.children.map(center) };
+	const groups = (values: readonly WorkbenchAuxiliaryGroup[]) =>
+		values.map((group) => ({ ...group, weight: null }));
+	return {
+		...frame,
+		center: center(frame.center),
+		left: { ...frame.left, width: null, groups: groups(frame.left.groups) },
+		right: { ...frame.right, width: null, groups: groups(frame.right.groups) },
+		bottom: { ...frame.bottom, height: null, groups: groups(frame.bottom.groups) },
+	};
+}
+
+export function sameWorkbenchFrameShape(first: WorkbenchFrame, second: WorkbenchFrame): boolean {
+	return (
+		JSON.stringify(withoutFrameGeometry(first)) === JSON.stringify(withoutFrameGeometry(second))
+	);
+}
+
 export function sameWorkspaceView(first: WorkspaceViewState, second: WorkspaceViewState): boolean {
 	return JSON.stringify(first) === JSON.stringify(second);
 }
