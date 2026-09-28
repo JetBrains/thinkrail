@@ -2,12 +2,14 @@ import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
 	constants,
+	mkdirSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
 	realpathSync,
 	renameSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import * as fs from "node:fs/promises";
@@ -888,6 +890,60 @@ test("a restored attached chat receives durable pending notices without claiming
 	expect(value(await reader.getDag({ dagId })).executionOwner).toBe("none");
 	controller.abort();
 	expect(sink.listeners.size).toBe(0);
+});
+
+test("artifact capture rejects an intermediate directory swapped outside the workspace", async () => {
+	const { owner } = fixture();
+	const directory = join(root, `artifact-dir-${serial++}`);
+	const displaced = `${directory}-inside`;
+	const outside = mkdtempSync(join(tmpdir(), "dag-artifact-outside-"));
+	mkdirSync(directory);
+	const file = "evidence.txt";
+	const path = join(directory, file);
+	writeFileSync(path, "INSIDE");
+	writeFileSync(join(outside, file), "OUTSIDE");
+	const canonicalPath = realpathSync(path);
+	const graph = definition();
+	const node = graph.nodes[0];
+	if (!node) throw new Error("Missing node");
+	node.outputs = { result: { kind: "artifact" } };
+	faux.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("dag_submit_result", {
+				outputs: {
+					result: {
+						kind: "artifact",
+						path: `${basename(directory)}/${file}`,
+					},
+				},
+			}),
+		),
+	]);
+	const originalOpen = fs.open;
+	let swapped = false;
+	const opened = spyOn(fs, "open").mockImplementation(async (candidate, flags, mode) => {
+		if (!swapped && String(candidate) === canonicalPath) {
+			renameSync(directory, displaced);
+			symlinkSync(outside, directory, "dir");
+			swapped = true;
+		}
+		return originalOpen(candidate, flags, mode);
+	});
+	try {
+		const dagId = await start(owner, graph);
+		const settled = await until(owner, dagId, (state) =>
+			["completed", "needs-attention"].includes(state.nodes[0]?.status ?? ""),
+		);
+		expect(settled.nodes[0]?.status).toBe("needs-attention");
+		expect(settled.nodes[0]?.proposalId).toBeUndefined();
+	} finally {
+		opened.mockRestore();
+		if (swapped) {
+			rmSync(directory);
+			renameSync(displaced, directory);
+		}
+		rmSync(outside, { recursive: true, force: true });
+	}
 });
 
 test("artifact capture rejects same-size mutation observed through the open descriptor", async () => {

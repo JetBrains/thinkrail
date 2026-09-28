@@ -51,8 +51,10 @@ recheck that exact job before commit. Worker tools reject mixed assistant batche
 session and activation, not model-supplied identities. Invocation receipts prevent repeat capture of
 changed workspace files under a retried tool call. Artifact paths are opened nonblocking and checked
 through the descriptor before reading, so special files cannot hold the serialized command queue.
-Two positioned reads plus before/after descriptor identity and nanosecond metadata reject same-size
-mutation instead of persisting torn evidence. A later sole-batch proposal within the same active
+Post-open realpath/lstat checks before and after reading require the live contained path to identify
+the opened descriptor, rejecting intermediate-directory replacement. Two positioned reads plus
+before/after descriptor identity and nanosecond metadata reject same-size mutation instead of
+persisting torn evidence. A later sole-batch proposal within the same active
 pi invocation supersedes its predecessor; queued steering/recovery can continue pi after a protocol
 result requests termination. An input gate cannot be replaced this way: answering it requires the
 configured authority. Large submitted bodies and error details are files;

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { open, realpath } from "node:fs/promises";
+import { lstat, open, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import type * as Core from "pi-delegation";
 import { DelegationError } from "pi-delegation";
@@ -45,6 +45,16 @@ const uid = (prefix: string) => `${prefix}-${randomUUID()}`;
 const text = (bytes: Uint8Array) => new TextDecoder("utf8", { fatal: true }).decode(bytes);
 const sameTarget = (a: D.ActivationRef, b: D.ActivationRef) =>
 	a.nodeId === b.nodeId && a.attempt === b.attempt && a.activation === b.activation;
+const assertArtifactPath = (root: string, full: string): void => {
+	const subpath = relative(root, full);
+	if (
+		!subpath ||
+		subpath === ".." ||
+		subpath.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) ||
+		isAbsolute(subpath)
+	)
+		D.fail("forbidden", "Artifacts must be regular workspace files");
+};
 const attachmentKey = (caller: D.DagCaller): string => {
 	if (caller.kind === "controller") return `conversation:${caller.sessionId}`;
 	if (caller.kind === "human")
@@ -1429,17 +1439,18 @@ class Engine implements D.DagService {
 	private async artifact(state: D.DagState, path: string): Promise<D.StoredFile> {
 		const root = await realpath(state.profile.cwd);
 		const full = await realpath(resolve(root, path));
-		const subpath = relative(root, full);
-		if (
-			!subpath ||
-			subpath === ".." ||
-			subpath.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) ||
-			isAbsolute(subpath)
-		)
-			D.fail("forbidden", "Artifacts must be regular workspace files");
+		assertArtifactPath(root, full);
 		const file = await open(full, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
 		try {
 			const before = await file.stat({ bigint: true });
+			const verifyPath = async (descriptor: typeof before) => {
+				const current = await realpath(full);
+				assertArtifactPath(root, current);
+				const linked = await lstat(full, { bigint: true });
+				if (!linked.isFile() || linked.dev !== descriptor.dev || linked.ino !== descriptor.ino)
+					D.fail("forbidden", "Artifact path changed during capture");
+			};
+			await verifyPath(before);
 			if (!before.isFile() || before.size > BigInt(D.LIMITS.valueBytes))
 				D.fail("limit-exceeded", "Artifact must be a regular file within the value quota");
 			const expectedSize = Number(before.size);
@@ -1456,6 +1467,7 @@ class Engine implements D.DagService {
 			const captured = await readPass();
 			const verified = await readPass();
 			const after = await file.stat({ bigint: true });
+			await verifyPath(after);
 			if (
 				captured.size !== expectedSize ||
 				verified.size !== expectedSize ||
