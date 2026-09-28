@@ -818,6 +818,55 @@ test("a restored attached chat receives durable pending notices without claiming
 	expect(sink.listeners.size).toBe(0);
 });
 
+test("artifact capture rejects same-size mutation observed through the open descriptor", async () => {
+	const { owner } = fixture();
+	const file = `racy-artifact-${serial++}.txt`;
+	const path = join(root, file);
+	writeFileSync(path, "AAAAAAAA");
+	const canonicalPath = realpathSync(path);
+	const graph = definition();
+	const node = graph.nodes[0];
+	if (!node) throw new Error("Missing node");
+	node.outputs = { result: { kind: "artifact" } };
+	faux.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("dag_submit_result", {
+				outputs: { result: { kind: "artifact", path: file } },
+			}),
+		),
+	]);
+	const originalOpen = fs.open;
+	const opened = spyOn(fs, "open").mockImplementation(async (candidate, flags, mode) => {
+		const handle = await originalOpen(candidate, flags, mode);
+		if (String(candidate) === canonicalPath) {
+			const read = handle.read.bind(handle);
+			let changed = false;
+			Object.defineProperty(handle, "read", {
+				configurable: true,
+				async value(buffer: Uint8Array, offset: number, length: number, position: number) {
+					const result = await read(buffer, offset, length, position);
+					if (!changed) {
+						changed = true;
+						writeFileSync(path, "BBBBBBBB");
+					}
+					return result;
+				},
+			});
+		}
+		return handle;
+	});
+	try {
+		const dagId = await start(owner, graph);
+		const settled = await until(owner, dagId, (state) =>
+			["completed", "needs-attention"].includes(state.nodes[0]?.status ?? ""),
+		);
+		expect(settled.nodes[0]?.status).toBe("needs-attention");
+		expect(settled.nodes[0]?.proposalId).toBeUndefined();
+	} finally {
+		opened.mockRestore();
+	}
+});
+
 test("artifact inputs retain captured bytes and continuation refreshes path hints after storage relocation", async () => {
 	const { scope, delegation, execution, signal } = fixture();
 	const storageRoot = join(root, `artifact-storage-${serial++}`),

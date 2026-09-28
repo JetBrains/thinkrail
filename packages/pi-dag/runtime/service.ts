@@ -1437,18 +1437,35 @@ class Engine implements D.DagService {
 			D.fail("forbidden", "Artifacts must be regular workspace files");
 		const file = await open(full, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
 		try {
-			const stat = await file.stat();
-			if (!stat.isFile() || stat.size > D.LIMITS.valueBytes)
+			const before = await file.stat({ bigint: true });
+			if (!before.isFile() || before.size > BigInt(D.LIMITS.valueBytes))
 				D.fail("limit-exceeded", "Artifact must be a regular file within the value quota");
-			const bytes = new Uint8Array(stat.size + 1);
-			let size = 0;
-			while (size < bytes.length) {
-				const read = await file.read(bytes, size, bytes.length - size, null);
-				if (!read.bytesRead) break;
-				size += read.bytesRead;
-			}
-			if (size !== stat.size) D.fail("invalid-command", "Artifact changed during capture");
-			return this.store.put(state.dagId, bytes.subarray(0, size));
+			const expectedSize = Number(before.size);
+			const readPass = async () => {
+				const bytes = new Uint8Array(expectedSize + 1);
+				let size = 0;
+				while (size < bytes.length) {
+					const read = await file.read(bytes, size, bytes.length - size, size);
+					if (!read.bytesRead) break;
+					size += read.bytesRead;
+				}
+				return { bytes, size };
+			};
+			const captured = await readPass();
+			const verified = await readPass();
+			const after = await file.stat({ bigint: true });
+			if (
+				captured.size !== expectedSize ||
+				verified.size !== expectedSize ||
+				Buffer.compare(captured.bytes, verified.bytes) !== 0 ||
+				after.dev !== before.dev ||
+				after.ino !== before.ino ||
+				after.size !== before.size ||
+				after.mtimeNs !== before.mtimeNs ||
+				after.ctimeNs !== before.ctimeNs
+			)
+				D.fail("invalid-command", "Artifact changed during capture");
+			return this.store.put(state.dagId, captured.bytes.subarray(0, captured.size));
 		} finally {
 			await file.close();
 		}

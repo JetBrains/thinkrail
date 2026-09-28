@@ -48,7 +48,9 @@ provider ids are not invocation identity. Capture the active job before asynchro
 recheck that exact job before commit. Worker tools reject mixed assistant batches before persistence. Their callbacks identify the actual
 session and activation, not model-supplied identities. Invocation receipts prevent repeat capture of
 changed workspace files under a retried tool call. Artifact paths are opened nonblocking and checked
-through the descriptor before reading, so special files cannot hold the serialized command queue. A later sole-batch proposal within the same active
+through the descriptor before reading, so special files cannot hold the serialized command queue.
+Two positioned reads plus before/after descriptor identity and nanosecond metadata reject same-size
+mutation instead of persisting torn evidence. A later sole-batch proposal within the same active
 pi invocation supersedes its predecessor; queued steering/recovery can continue pi after a protocol
 result requests termination. An input gate cannot be replaced this way: answering it requires the
 configured authority. Large submitted bodies and error details are files;
