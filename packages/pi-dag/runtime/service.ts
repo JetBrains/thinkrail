@@ -733,13 +733,20 @@ class Engine implements D.DagService {
 							D.fail("stale-target", "Completed work requires retry to change");
 						continue;
 					}
+					const current = D.latest(node);
+					if (!current) {
+						if (target.kind === "dag") continue;
+						D.fail(
+							"stale-target",
+							"Node has no admitted attempt to cancel; use skip to suppress pending work",
+						);
+					}
 					node.held = true;
 					delete node.continuation;
-					const current = D.latest(node);
-					if (current) current.activation.interrupted = true;
+					current.activation.interrupted = true;
 					if (command.kind !== "interrupt") {
 						node.cancelled = true;
-						if (current) this.supersede(state, targetOf(node));
+						this.supersede(state, targetOf(node));
 					}
 					const job = owned.jobs.get(node.id);
 					if (job)

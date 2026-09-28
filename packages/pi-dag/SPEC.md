@@ -91,7 +91,9 @@ unrelated edits do not recreate the same gate.
 
 Create is paused. Resume permits admission; pause stops new admission without aborting running work.
 Interrupt cooperatively stops queued/active work and holds it for continuation; cancel requires retry.
-Dispose is terminal but retains readable history. Restart restores paused; uncertain dispatches need
+DAG-wide controls leave never-admitted nodes pending because they have no attempt to continue/retry;
+an exact cancel of such a node rejects and directs callers to explicit skip. Dispose is terminal but
+retains readable history. Restart restores paused; uncertain dispatches need
 explicit reconciliation proving old work is no longer live before continue/retry. No blind replay.
 
 Steering is literal, active-invocation-only and best-effort. An observed enqueue before a proposal may

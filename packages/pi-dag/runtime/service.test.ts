@@ -634,6 +634,46 @@ test("cancel does not turn a human input gate into permission to skip or remove 
 	expect(done.nodes[0]?.sessionId).not.toBe(waiting.nodes[0]?.sessionId);
 });
 
+test("DAG cancel leaves never-admitted descendants pending and exact cancel directs callers to skip", async () => {
+	const { entered, proceed, decorate } = pauseFirstInput();
+	const { owner } = fixture(decorate);
+	const graph = definition(["source", "downstream"]);
+	graph.connections = [
+		{ id: "after-source", kind: "control", from: "source", to: "downstream", allowSkipped: false },
+	];
+	faux.setResponses([result("RETRIED_SOURCE"), result("DOWNSTREAM")]);
+	const dagId = await start(owner, graph);
+	await entered.promise;
+	try {
+		await expect(
+			command(owner, dagId, {
+				kind: "cancel",
+				target: { kind: "node", nodeId: "downstream" },
+			}),
+		).rejects.toThrow("no admitted attempt");
+		await command(owner, dagId, { kind: "cancel", target: { kind: "dag" } });
+	} finally {
+		proceed.release();
+	}
+	const cancelled = await until(
+		owner,
+		dagId,
+		(state) => state.nodes[0]?.status === "cancelled" && state.nodes[1]?.status === "pending",
+	);
+	expect(cancelled.nodes[1]).toMatchObject({
+		status: "pending",
+		held: false,
+		cancelled: false,
+	});
+	expect(cancelled.nodes[1]?.attempt).toBeUndefined();
+	await command(owner, dagId, { kind: "retry", target: { nodeId: "source", attempt: 1 } });
+	await command(owner, dagId, { kind: "resume" });
+	const done = await until(owner, dagId, (state) =>
+		state.nodes.every((node) => node.status === "completed"),
+	);
+	expect(done.nodes.map((node) => node.attempt)).toEqual([2, 1]);
+});
+
 test("revoking the controller does not stop work; non-enqueued steering requires explicit resolution", async () => {
 	const { entered, proceed, decorate } = pauseFirstInput();
 	const { owner, service, execution } = fixture(decorate);

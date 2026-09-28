@@ -25,6 +25,8 @@ materialized payload and immutable child birth are committed before `runQueued`.
 connects controls to that invocation, never a future run. The scheduler bounds concurrent assembly
 and uses delegation's run admission/settlement. It never starts another provider loop.
 
+DAG-wide interrupt/cancel affects only nodes with admitted attempts; untouched pending nodes remain
+recoverable, while exact cancellation of attemptless work rejects in favor of explicit skip.
 Settlement observes the actual outcome, retains exact history boundaries, captures export evidence
 when needed and evaluates positive acceptance. Preparation failures have separate captured evidence,
 not fabricated pi outcomes. Terminal commentary/error text beyond the captured-body quota is omitted
