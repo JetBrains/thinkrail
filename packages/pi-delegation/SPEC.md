@@ -10,10 +10,11 @@ tags: [pi-package, delegation, subagents]
 
 ## Responsibility
 
-`pi-delegation` is the **portable, pure-pi delegation core**: the framework for creating agent
-sessions *from* agent sessions. One creation primitive (`createChild`) with orthogonal axes; a
-handle that owns the run loop (per-parent FIFO pacing, turn caps, usage aggregation); lineage as
-the storage layout; an in-memory run registry; and lifecycle events. The contract itself lives on
+`pi-delegation` is the **portable, pure-pi delegation core**: the session fabric for controlled
+children owned by either live parent sessions or independent resources. One creation primitive
+(`createChild`) with orthogonal axes; a handle that owns the run loop (per-parent FIFO pacing, turn
+caps, usage aggregation); lineage as the storage layout; an in-memory run registry; and lifecycle
+events. The contract itself lives on
 the barrel (`src/types.ts`, every type documented in place); this SPEC records the semantics, the
 boundary, and the decision log.
 
@@ -81,24 +82,29 @@ creation after source-chat disposal, unchanged parent behavior, and zero-worker 
 - Resource concurrency defaults to the service's parent limit (4 unless bound otherwise), with
   independent FIFO slots per resource. Resource-local factories augment the service curated set;
   the existing `session.extensions` opt-in and tool allowlist still apply. Resource handles and
-  records never appear in parent lookups, collections, events or disposal cascades. Records and
-  their `info` values are frozen copies.
+  records never appear in parent lookups, collections, events or disposal cascades. Child specs,
+  model refs and nested configuration are detached before admission can await; records and their
+  `info` values are frozen copies.
 - Release closes all admission synchronously, signals every child before awaiting any teardown,
   settles in-flight assembly, emits/awaits each resource child's `session_shutdown`, disposes
   sessions, then removes registration/context/pacing references. Concurrent release/disposal
   share their existing settlement promises; borrowed runtimes are never disposed.
 - Capture serializes one v3 header and exactly the selected ancestor path. `null` is an explicit
   empty branch (`[]`, not `getBranch(null)`). Validation checks identity, shape, ancestry, cuts,
-  SHA-256/UTF-8 length and compaction ancestor references, including label entries. Pi's public
-  `buildSessionContext` supplies compaction-aware replay; `scanReplayTools` supplies tool closure
+  SHA-256/UTF-8 length, current v3 system/usage/context-edit records and compaction references,
+  including retain-none compactions and label entries. Pi's public `buildSessionContext` supplies
+  compaction-aware replay; `scanReplayTools` supplies tool closure
   checks and the host repair path's unchanged conservative trailing repair candidates. Failed and
   aborted assistant attempts do not invent missing successful results. Capture never repairs.
   Stored capture reads validated bytes directly and invokes no runtime or mutable SDK file open.
 - Forks use an internal private temporary seed with native `SessionManager.forkFrom`, cleaning
-  that seed on either result. Actual child model and clamped thinking changes are appended to the
-  child branch without changing source history or global settings. Captured strings are consumer-
-  retained immutable input, not a core history store. Capture materializes the branch; no byte quota
-  is added in this bounded extension. Admission-limit policy remains a follow-up.
+  that seed on either result. Before changing prompt, tools or model, the child appends context edits
+  that hide Anthropic/Claude signed or redacted thinking: those signatures bind the preceding prefix
+  and are not portable to a new child. Canonical captured bytes and raw entries remain unchanged;
+  unsigned and other-provider reasoning remains visible. Actual child model and clamped thinking
+  changes are appended without changing source history or global settings. Captured strings are
+  consumer-retained immutable input, not a core history store. Capture materializes the branch; no
+  byte quota is added in this bounded extension. Admission-limit policy remains a follow-up.
 - Resource prompt preflight uses literal extension-source input; guarded steering synchronously
   calls public `session.agent.steer` with the unchanged user message. Preflight cancellation is
   checked immediately before pi starts its run, and cancellation is reapplied at agent start.
@@ -111,9 +117,10 @@ creation after source-chat disposal, unchanged parent behavior, and zero-worker 
 
 Regression suites use only local synthetic providers. They cover parent compatibility and captured
 parent forks; zero-worker/borrowed/registry/native-provider retention; strict stored capture/reopen;
-canonical cuts, digest/closure/compaction validation; source-independent fan-out; resource-local
-factories and FIFO isolation; literal steering and stale-queue cleanup; queued/preflight cancellation;
-pending assembly/shutdown release barriers; and finalized outcomes after a shrinking compaction.
+canonical cuts, current v3 entries, digest/closure/compaction validation; source-independent fan-out
+with provider-bound thinking sanitization; detached admission inputs; resource-local factories and FIFO
+isolation; literal steering and stale-queue cleanup; queued/preflight cancellation; pending assembly/
+shutdown release barriers; and finalized outcomes after a shrinking compaction.
 
 ## Public surface (the barrel, `index.ts`)
 
