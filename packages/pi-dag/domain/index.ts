@@ -26,6 +26,7 @@ export {
 	DecisionSchema,
 	DefinitionSchema,
 	EditSchema,
+	gateAllowsCallerKind,
 	IdSchema,
 	JsonSchema,
 	LIMITS,

@@ -309,6 +309,12 @@ export type DagControl = Static<typeof ControlSchema>;
 export type DagDecision = Static<typeof DecisionSchema>;
 export type DagReadQuery = Static<typeof ReadQuerySchema>;
 export type GateAuthority = Static<typeof AuthoritySchema>;
+export function gateAllowsCallerKind(
+	authority: GateAuthority,
+	kind: "controller" | "human" | "owner",
+): boolean {
+	return kind === "human" || (authority === "human-or-controller" && kind === "controller");
+}
 export type AttemptRef = Static<typeof AttemptRefSchema>;
 export type ActivationRef = Static<typeof ActivationRefSchema>;
 export type DagSubmission = Static<typeof SubmissionSchema>;

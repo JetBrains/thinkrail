@@ -264,6 +264,56 @@ test("historical approval gates retain the evidence scope they actually decided"
 	expect(() => decodeState(state)).not.toThrow();
 });
 
+test("persisted gate decisions must satisfy the gate's stored authority", () => {
+	for (const kind of ["approval", "input"] as const) {
+		const { state, activation } = fixture();
+		const target = { nodeId: "worker", attempt: 1, activation: 1 };
+		const decision = {
+			actor: { kind: "controller" as const, sessionId: "controller" },
+			reason: "not authorized",
+			at: "now",
+		};
+		if (kind === "approval") {
+			state.proposals.proposal = {
+				id: "proposal",
+				createdVersion: 1,
+				target,
+				outputs: {},
+				createdAt: "now",
+				disposition: "pending",
+			};
+			activation.proposalId = "proposal";
+			state.gates.gate = {
+				id: "gate",
+				kind,
+				target,
+				authority: "human",
+				question: file,
+				questionPreview: "Approve?",
+				proposalId: "proposal",
+				disposition: "approved",
+				decision,
+			};
+		} else {
+			activation.gateId = "gate";
+			state.gates.gate = {
+				id: "gate",
+				kind,
+				target,
+				authority: "human",
+				question: file,
+				questionPreview: "Answer?",
+				disposition: "answered",
+				decision,
+				answer: file,
+			};
+		}
+		expect(() => decodeState(state)).toThrow(DagError);
+		state.gates.gate.decision = { ...decision, actor };
+		expect(() => decodeState(state)).not.toThrow();
+	}
+});
+
 test("continuations retain legacy snapshot compatibility without accepting malformed metadata", () => {
 	const { state, node } = fixture();
 	Object.assign(node, { continuation: { payload: file } });

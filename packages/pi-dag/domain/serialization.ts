@@ -6,6 +6,7 @@ import {
 	ActivationRefSchema,
 	AuthoritySchema,
 	DefinitionSchema,
+	gateAllowsCallerKind,
 	IdSchema,
 	LIMITS,
 } from "./schemas.ts";
@@ -472,6 +473,8 @@ export function decodeState(value: unknown): DagState {
 		if (item.answer) storedFileIdentity(item.answer);
 		if (item.historyCaptureId && !value.captures[item.historyCaptureId])
 			fail("corrupt-state", "Missing gate history capture");
+		if (item.decision && !gateAllowsCallerKind(item.authority, item.decision.actor.kind))
+			fail("corrupt-state", "Gate decision actor does not satisfy its authority");
 		const guardedProposal = item.proposalId ? value.proposals[item.proposalId] : undefined;
 		if (item.kind === "approval") {
 			if (

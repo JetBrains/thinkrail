@@ -1,6 +1,12 @@
 import { canonicalJson, DagError, fail } from "./errors.ts";
 import { affectedNodes, applyEdits, endpoints } from "./graph.ts";
-import type { ActivationRef, DagDefinition, GateAuthority, GraphEdit } from "./schemas.ts";
+import {
+	type ActivationRef,
+	type DagDefinition,
+	type GateAuthority,
+	type GraphEdit,
+	gateAllowsCallerKind,
+} from "./schemas.ts";
 import type {
 	Activation,
 	Attempt,
@@ -133,8 +139,7 @@ export function readyInputs(
 }
 
 export function authorizeGate(caller: DagCaller, authority: GateAuthority): void {
-	if (caller.kind === "human") return;
-	if (authority === "human-or-controller" && caller.kind === "controller") return;
+	if (gateAllowsCallerKind(authority, caller.kind)) return;
 	fail(
 		"forbidden",
 		authority === "human"

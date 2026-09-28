@@ -14,7 +14,8 @@ readiness, stale propagation and authorization. Graph/command and persisted-reco
 from their validation schemas; public read projections stay distinct. Persisted records distinguish
 versions, attempts, activations, proposals and gates. Decoding requires self-consistent artifact
 identities and resolves every evidence target, worker-call receipt and output selection; dispositions
-must carry the decisions/files their meaning requires. Delegation birth metadata is checked against
+must carry the decisions/files their meaning requires, and each gate decision actor is re-authorized
+against its stored policy. Delegation birth metadata is checked against
 the same stored birth schema before entering state; the broader delegation contract is not duplicated.
 
 ## Boundary
