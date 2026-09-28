@@ -372,28 +372,43 @@ describe("install.sh controlled installation", () => {
 		).toEqual([]);
 	});
 
-	test("records Git Bash installs under USERPROFILE with a native prefix", () => {
+	test("installs under a Unix prefix containing Unicode and safe punctuation", () => {
+		const fixture = makeFixture();
+		const prefix = join(fixture.root, "José+dev@example");
+		const result = runInstaller(fixture, [
+			"--version",
+			"1.2.3",
+			"--prefix",
+			shellPath(prefix),
+			"--no-modify-path",
+		]);
+		expect(result.exitCode).toBe(0);
+		expect(readFileSync(join(prefix, "bin", "thinkrail"), "utf8")).toBe(binaryBody);
+	});
+
+	test("records Git Bash installs with a native Unicode prefix", () => {
 		const fixture = makeFixture();
 		const profile = join(fixture.root, "native-profile");
+		const prefix = join(fixture.root, "José+dev@example");
 		mkdirSync(profile, { recursive: true });
 		const result = runInstaller(
 			fixture,
-			["--version", "1.2.3", "--prefix", shellPath(fixture.prefix), "--no-modify-path"],
+			["--version", "1.2.3", "--prefix", shellPath(prefix), "--no-modify-path"],
 			{
 				FAKE_UNAME_S: "MINGW64_NT-10.0",
 				FAKE_ASSET_NAME: "thinkrail-windows-x64.exe",
 				USERPROFILE: "C:/isolated/profile",
 				FAKE_USERPROFILE_POSIX: shellPath(profile),
-				FAKE_NATIVE_PREFIX: "C:/isolated/thinkrail",
+				FAKE_NATIVE_PREFIX: "C:/Users/José+dev@example/thinkrail",
 			},
 		);
 		expect(result.exitCode).toBe(0);
-		expect(existsSync(join(fixture.prefix, "bin", "thinkrail.exe"))).toBe(true);
+		expect(existsSync(join(prefix, "bin", "thinkrail.exe"))).toBe(true);
 		const metadata = JSON.parse(
 			readFileSync(join(profile, ".config", "thinkrail", "install.json"), "utf8"),
 		);
 		expect(metadata).toMatchObject({
-			prefix: "C:/isolated/thinkrail",
+			prefix: "C:/Users/José+dev@example/thinkrail",
 			path_entry_added: false,
 		});
 		expect(existsSync(join(fixture.home, ".config", "thinkrail", "install.json"))).toBe(false);

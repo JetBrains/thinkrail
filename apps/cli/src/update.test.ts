@@ -223,6 +223,15 @@ describe("createCliHostUpdate", () => {
 		await expect(updates.check()).rejects.toThrow(RELEASE_ERROR_RE);
 	});
 
+	test("keeps discovery available for a safe Unicode install layout", () => {
+		expect(
+			createCliHostUpdateImpl("binary", "stable", "1.2.3", {
+				platform: "linux",
+				execPath: "/home/José+dev@example/bin/thinkrail",
+			}),
+		).toBeDefined();
+	});
+
 	test("disables discovery for source, desktop, dev, unsupported channels, and unsafe layouts", () => {
 		expect(createCliHostUpdate("source", "stable", "1.2.3")).toBeUndefined();
 		expect(createCliHostUpdate("desktop", "stable", "1.2.3")).toBeUndefined();
@@ -387,6 +396,21 @@ describe("resolveUpdatePlan", () => {
 		});
 		expect(missing.prefix).toBe("/opt/current");
 		expect(missing.channel).toBe("nightly");
+	});
+
+	test("targets an installed prefix containing Unicode and safe punctuation", () => {
+		const prefix = "/home/José+dev@example/thinkrail";
+		const plan = resolveUpdatePlan({
+			build: "binary",
+			platform: "linux",
+			execPath: `${prefix}/bin/thinkrail`,
+			args: { version: "latest" },
+			installMeta: { prefix, channel: "stable" },
+			baked: "stable",
+			home,
+		});
+		expect(plan.prefix).toBe(prefix);
+		expect(plan.bashArgs).toEqual(["-s", "--", "--channel", "stable", "--prefix", prefix]);
 	});
 
 	test("trusts a matching metadata channel, while an explicit channel still wins", () => {

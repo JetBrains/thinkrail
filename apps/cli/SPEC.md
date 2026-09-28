@@ -96,10 +96,12 @@ per-shell command (`windowsManualUpdateMessage`) with the releases page under it
 and PowerShell's `$env:X='v';` are not interchangeable. Update planning binds metadata to the running
 `<prefix>/bin/thinkrail[.exe]` before trusting its prefix or channel; stale/unrelated metadata cannot update a
 different copy. Missing metadata falls back to that running layout, including normalized legacy Git-Bash
-`/c/...` and `/cygdrive/c/...` prefixes. A manual binary outside the representable layout—including a directly
-run release asset such as `thinkrail-linux-x64`—fails closed with manual guidance rather than installing under
-`.local`; that preflight also withholds the host update capability. Version/channel combinations are validated after
-resolution. The planning functions remain pure and unit-tested; only installer fetch and execution touch IO.
+`/c/...` and `/cygdrive/c/...` prefixes. Prefix representability follows [[module-ci-release]] rather than an
+ASCII-only path policy: Unicode and benign punctuation remain valid. A manual binary outside the representable
+layout—including a directly run release asset such as `thinkrail-linux-x64`—fails closed with manual guidance
+rather than installing under `.local`; that preflight also withholds the host update capability. Version/channel
+combinations are validated after resolution. The planning functions remain pure and unit-tested; only installer
+fetch and execution touch IO.
 `THINKRAIL_INSTALL_SCRIPT_URL` / `THINKRAIL_INSTALL_PS1_URL` override the installer URLs (testing /
 forks). See `module-ci-release` for the installers themselves.
 

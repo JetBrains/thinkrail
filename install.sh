@@ -52,6 +52,19 @@ missing_value() {
     exit 1
 }
 
+UNIX_PREFIX_FORBIDDEN_CHARS=$'!"#$%&\'()*,:;<=>?[\\]^`{|}~'
+WINDOWS_PREFIX_FORBIDDEN_CHARS=$'"%!;'
+
+prefix_has_forbidden_char() {
+    local value="$1" forbidden="$2" index character
+    [[ "$value" =~ [[:cntrl:]] ]] && return 0
+    for ((index = 0; index < ${#forbidden}; index += 1)); do
+        character="${forbidden:index:1}"
+        [[ "$value" == *"$character"* ]] && return 0
+    done
+    return 1
+}
+
 while [ $# -gt 0 ]; do
     case "$1" in
         --channel)
@@ -154,7 +167,7 @@ OS=$(detect_os)
 METADATA_PREFIX="$PREFIX"
 CONFIG_HOME="$HOME"
 if [ "$OS" = "windows" ]; then
-    if [[ ! "$PREFIX" =~ ^[-A-Za-z0-9_./:\ \\]+$ ]]; then
+    if prefix_has_forbidden_char "$PREFIX" "$WINDOWS_PREFIX_FORBIDDEN_CHARS"; then
         echo "Error: --prefix contains unsafe characters." >&2
         exit 1
     fi
@@ -183,9 +196,8 @@ if [ "$OS" = "windows" ]; then
         exit 1
     }
 else
-    if [[ ! "$PREFIX" =~ ^[-A-Za-z0-9_./\ ]+$ ]]; then
+    if prefix_has_forbidden_char "$PREFIX" "$UNIX_PREFIX_FORBIDDEN_CHARS"; then
         echo "Error: --prefix contains characters that are unsafe to write into shell rc files." >&2
-        echo "Allowed: letters, digits, and '_' '-' '.' '/' space." >&2
         exit 1
     fi
     if [[ "$PREFIX" != /* ]]; then

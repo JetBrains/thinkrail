@@ -21,8 +21,22 @@ const NIGHTLY_RELEASE_TAG_RE = /^v(\d+\.\d+\.\d+-nightly\.\d+)$/;
 const SEMVER_RE =
 	/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 const VERSION_RE = /^(?:latest|\d+\.\d+\.\d+(?:-nightly\.\d+)?)$/;
-const UNIX_INSTALL_PREFIX_RE = /^[-A-Za-z0-9_./ ]+$/;
+const UNIX_INSTALL_PREFIX_FORBIDDEN_ASCII = new Set("!\"#$%&'()*,:;<=>?[\\]^`{|}~");
 const WINDOWS_PREFIX_FORBIDDEN_RE = /["%!;\n\r]/;
+
+function hasForbiddenUnixInstallPrefixCharacter(value: string): boolean {
+	for (const character of value) {
+		const codeUnit = character.charCodeAt(0);
+		if (
+			codeUnit < 0x20 ||
+			codeUnit === 0x7f ||
+			UNIX_INSTALL_PREFIX_FORBIDDEN_ASCII.has(character)
+		) {
+			return true;
+		}
+	}
+	return false;
+}
 
 export const MANUAL_LAYOUT_UPDATE_ERROR =
 	"This ThinkRail executable is outside the supported <prefix>/bin layout and cannot self-update safely. Reinstall it with the published installer, or replace it manually from https://github.com/JetBrains/thinkrail/releases";
@@ -240,13 +254,13 @@ function inferRunningPrefix(input: UpdateRuntime & { build: string }): string | 
 		}
 		return normalized;
 	}
-	if (!UNIX_INSTALL_PREFIX_RE.test(prefix)) throw new Error(MANUAL_LAYOUT_UPDATE_ERROR);
+	if (hasForbiddenUnixInstallPrefixCharacter(prefix)) throw new Error(MANUAL_LAYOUT_UPDATE_ERROR);
 	return prefix;
 }
 
 function unixMetadataPrefix(value: unknown, home: string): string {
 	const prefix = typeof value === "string" && value ? value : posix.join(home, ".local");
-	if (!UNIX_INSTALL_PREFIX_RE.test(prefix) || !posix.isAbsolute(prefix)) {
+	if (hasForbiddenUnixInstallPrefixCharacter(prefix) || !posix.isAbsolute(prefix)) {
 		throw new Error(`Refusing suspicious install prefix from metadata: ${prefix}`);
 	}
 	return prefix;

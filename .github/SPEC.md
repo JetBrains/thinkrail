@@ -154,9 +154,11 @@ regressions and the existing public artifact-output contract tests; no dedicated
 Root `install.sh` and `install.ps1` remain CLI-only consumers: validate channel/version identity, resolve the
 requested release, validate its tag against the selected channel's exact grammar before constructing any
 artifact URL, download the native CLI plus `SHA256SUMS`, verify it, and stage replacement in the
-destination directory before an atomic rename. Git Bash writes native-readable Windows metadata; malformed
-shell PATH blocks are preserved rather than rewritten. CLI self-update binds metadata to the running executable
-and invokes these installers rather than duplicating download/checksum logic. Controlled script tests own these
+destination directory before an atomic rename. Prefix checks are representation-based rather than ASCII-only:
+Unicode and benign `@`/`+` components remain valid, while each platform rejects characters that would corrupt
+metadata or startup-shell syntax. Git Bash writes native-readable Windows metadata; malformed shell PATH blocks
+are preserved rather than rewritten. CLI self-update binds metadata to the running executable and invokes these
+installers rather than duplicating download/checksum logic. Controlled script tests own these
 regressions; finalized Windows PowerShell/Git-Bash and custom-volume behavior remains release qualification.
 
 Website deployment contains no signing credentials. CODEOWNERS and the main-branch rules protect the
