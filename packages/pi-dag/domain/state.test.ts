@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
 	type Activation,
+	authorizeGate,
 	type DagState,
 	decodeBirth,
 	decodeState,
@@ -122,6 +123,18 @@ test("continuations retain legacy snapshot compatibility without accepting malfo
 		Object.assign(node, { continuation: { payload: file, ...invalid } });
 		expect(() => decodeState(state)).toThrow("snapshot");
 	}
+});
+
+test("gate authority admits only the caller kinds named by the policy", () => {
+	const human = { kind: "human", operatorId: "operator" } as const;
+	const controller = { kind: "controller", sessionId: "session" } as const;
+	const owner = { kind: "owner", ownerId: "host" } as const;
+	expect(() => authorizeGate(human, "human")).not.toThrow();
+	expect(() => authorizeGate(controller, "human")).toThrow("human");
+	expect(() => authorizeGate(owner, "human")).toThrow("human");
+	expect(() => authorizeGate(human, "human-or-controller")).not.toThrow();
+	expect(() => authorizeGate(controller, "human-or-controller")).not.toThrow();
+	expect(() => authorizeGate(owner, "human-or-controller")).toThrow("human or controller");
 });
 
 test("default human input policy is protected before the first gate", () => {

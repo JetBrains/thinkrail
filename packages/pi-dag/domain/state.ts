@@ -133,8 +133,14 @@ export function readyInputs(
 }
 
 export function authorizeGate(caller: DagCaller, authority: GateAuthority): void {
-	if (authority === "human" && caller.kind !== "human")
-		fail("forbidden", "This gate requires a human decision");
+	if (caller.kind === "human") return;
+	if (authority === "human-or-controller" && caller.kind === "controller") return;
+	fail(
+		"forbidden",
+		authority === "human"
+			? "This gate requires a human decision"
+			: "This gate requires a human or controller decision",
+	);
 }
 
 export function unresolvedGates(state: DagState) {

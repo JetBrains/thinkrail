@@ -29,7 +29,8 @@ Validate the full graph before commit: safe unique ids, acyclic connections, dec
 ports with exactly one producer, one explicit fork base, and no skipped fork source. Required inputs
 need producers. Readiness consumes accepted, current, authorized evidence, not terminal status alone.
 Affected descendants include waiting/paused work. Authorization is trusted binding provenance;
-owner callbacks are not human approvals. Cancellation does not decide a gate: unresolved current-attempt
+`human-or-controller` is exhaustive, so owner callbacks satisfy neither caller kind and decide no gate.
+Cancellation does not decide a gate: unresolved current-attempt
 gates still protect skip and dependency edits, even when their execution was cancelled. Explicit retry
 supersedes that attempt but preserves the node's release/input policy. Omitted `inputAuthority`
 means human-only, even before the first input gate: weakening that policy or removing the node
