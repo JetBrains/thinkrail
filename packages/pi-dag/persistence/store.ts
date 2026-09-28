@@ -17,6 +17,7 @@ import {
 	directory,
 	guarded,
 	hasCode,
+	isSafeId,
 	json,
 	publishExclusive,
 	readRegular,
@@ -222,8 +223,16 @@ export function createDagStore(options: { storageRoot: string; scope: string }):
 			return guarded(async () => {
 				if (!(await directory(root))) return [];
 				const summaries: DagSummary[] = [];
-				for (const dagId of (await readdir(root)).sort()) {
-					safeId(dagId, "corrupt-state");
+				const entries = (await readdir(root, { withFileTypes: true })).sort((left, right) =>
+					left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
+				);
+				for (const entry of entries) {
+					const dagId = entry.name;
+					if (!isSafeId(dagId)) continue;
+					if (!entry.isDirectory()) {
+						if (entry.isSymbolicLink()) fail("corrupt-state", "Symlinked DAG directory");
+						continue;
+					}
 					const state = await readSnapshot(dagDirectory(dagId), scope, dagId);
 					if (!state) continue;
 					const {

@@ -197,6 +197,24 @@ describe("DAG snapshots", () => {
 		await lease.release();
 	});
 
+	test("listing skips foreign root entries but still rejects DAG-shaped corruption", async () => {
+		const { store, storageRoot, dir } = await fixture();
+		const lease = await store.claim("dag");
+		await lease.save(await snapshot(store, scope), undefined);
+		const scopeRoot = join(storageRoot, scopeHash);
+		await writeFile(join(scopeRoot, ".DS_Store"), "finder metadata");
+		await writeFile(join(scopeRoot, "notes"), "foreign regular file");
+		await mkdir(join(scopeRoot, ".foreign"));
+		expect((await store.list()).map((item) => item.dagId)).toEqual(["dag"]);
+		await symlink(dir, join(scopeRoot, "linked"));
+		await failure(store.list(), "corrupt-state");
+		await rm(join(scopeRoot, "linked"));
+		await mkdir(join(scopeRoot, "broken"));
+		await writeFile(join(scopeRoot, "broken", "state.json"), "{");
+		await failure(store.list(), "corrupt-state");
+		await lease.release();
+	});
+
 	test("scope namespaces are hashed and unsafe ids cannot traverse", async () => {
 		const { store, storageRoot } = await fixture();
 		const lease = await store.claim("dag");

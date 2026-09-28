@@ -39,12 +39,15 @@ export function canonicalRoot(path: string): string {
 	}
 }
 
+export function isSafeId(id: string): boolean {
+	return id.length <= 128 && /^[a-zA-Z0-9]/.test(id) && !/[^a-zA-Z0-9._-]/.test(id);
+}
+
 export function safeId(
 	id: string,
 	code: "invalid-command" | "corrupt-state" = "invalid-command",
 ): void {
-	if (id.length > 128 || !/^[a-zA-Z0-9]/.test(id) || /[^a-zA-Z0-9._-]/.test(id))
-		fail(code, "Unsafe DAG id");
+	if (!isSafeId(id)) fail(code, "Unsafe DAG id");
 }
 
 export async function directory(path: string, create = false): Promise<boolean> {

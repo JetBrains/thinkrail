@@ -31,8 +31,9 @@ size, never absolute paths. The storage tree is local and service-managed, not a
 against a concurrent privileged actor replacing its ancestors between filesystem calls.
 
 `read` opens exactly one committed snapshot and decodes it; absence is undefined, corruption or an
-unknown schema is an explicit error. `list` enumerates committed snapshots, ignores directories
-without one and propagates corrupt-resource errors. Neither read acquires ownership or exports
+unknown schema is an explicit error. `list` enumerates committed snapshots and ignores foreign
+unsafe-name or non-directory root entries plus directories without a snapshot. A safe-id symlink or
+DAG directory with corrupt committed state still fails closed. Neither read acquires ownership or exports
 private snapshots as public payloads. No global resource index or database is maintained.
 
 ## Ownership
