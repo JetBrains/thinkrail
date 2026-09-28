@@ -95,6 +95,12 @@ there; WebKitGTK keeps its renderer-native editing behavior. The policy is platf
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
 pins production wiring.
 
+## Native page zoom
+
+The desktop preload claims Command/Ctrl-`+` (`=`), `-`, and `0` before page handlers and sends a typed
+one-way request to the main process. The main process applies bounded, per-window-lifetime browser-style
+factors through Electrobun's native page-zoom API; the web app owns no duplicate shortcut or zoom state.
+
 ## Native window chrome
 
 The web topbar ([[submodule-web-shell]]) is the window's title bar wherever the framework lets native
