@@ -39,11 +39,10 @@ No tool accepts an actor or elevates to human. Operator results are passive cust
 Notice sinks check captured identity, current lifetime and isIdle before submitting a custom
 `dag-notice` message with triggerTurn:false. agent_settled wakes readiness listeners; agent_end does
 not. Revocation removes listeners and all retained context closures. Backend bind restores notices
-by read-only scans; attaching does not claim execution ownership. This requires runtime attachment
-identity to unify a controller's sessionId with a human's explicit conversationId. The current runtime
-uses distinct session:/human: keys; until its owner reconciles that contract, operator-created or
-operator-attached notices cannot reach the single controller notice binding. The adapter does not
-invent a second observer or a hidden attach command to mask that service boundary gap.
+by read-only scans; attaching does not claim execution ownership. Runtime attachment identity maps a
+controller session and a human's explicit matching conversation id to one conversation key while
+keeping their caller objects—and therefore command authority—distinct. Humans without a conversation
+and owners retain separate attachment identities; no second observer or hidden attach path exists.
 
 ## Standalone owners
 

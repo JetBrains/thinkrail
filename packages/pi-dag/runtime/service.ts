@@ -45,6 +45,14 @@ const uid = (prefix: string) => `${prefix}-${randomUUID()}`;
 const text = (bytes: Uint8Array) => new TextDecoder("utf8", { fatal: true }).decode(bytes);
 const sameTarget = (a: D.ActivationRef, b: D.ActivationRef) =>
 	a.nodeId === b.nodeId && a.attempt === b.attempt && a.activation === b.activation;
+const attachmentKey = (caller: D.DagCaller): string => {
+	if (caller.kind === "controller") return `conversation:${caller.sessionId}`;
+	if (caller.kind === "human")
+		return caller.conversationId
+			? `conversation:${caller.conversationId}`
+			: `human:${caller.operatorId}`;
+	return `owner:${caller.ownerId}`;
+};
 const targetOf = (node: D.NodeRecord): D.ActivationRef => {
 	const current = D.latest(node);
 	if (!current) return D.fail("stale-target", "Node has no current attempt");
@@ -84,12 +92,7 @@ class Engine implements D.DagService {
 
 	bind(value: D.DagCallerBinding): D.DagClient {
 		const caller = structuredClone(value.caller);
-		const key =
-			caller.kind === "controller"
-				? `session:${caller.sessionId}`
-				: caller.kind === "human"
-					? `human:${caller.conversationId ?? caller.operatorId}`
-					: `owner:${caller.ownerId}`;
+		const key = attachmentKey(caller);
 		const binding: Binding = { value: { ...value, caller }, key, delivered: new Set() };
 		if (value.notices && !value.signal.aborted && !this.closed)
 			this.attachNoticeSink({

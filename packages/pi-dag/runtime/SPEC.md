@@ -55,7 +55,8 @@ admission decisions, rejected execution, uncertainty, interventions and releases
 credentials or a second telemetry database. Notices carry bounded target/gate/proposal identities so
 delivery can recheck current relevance, not merely attachment membership. Binding/readiness scans may
 read saved notices without acquiring ownership or execution dependencies; live commits use the same
-delivery predicate. Revocation and close remove readiness observers.
+delivery predicate. Controller and explicit human conversation bindings share one attachment identity
+without sharing authority. Revocation and close remove readiness observers.
 
 ## Reads and restoration
 

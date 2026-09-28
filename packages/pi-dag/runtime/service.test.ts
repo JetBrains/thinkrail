@@ -703,22 +703,30 @@ test("disposal commits intent before settlement, releases workers and keeps evid
 	).toBe(true);
 });
 
-test("deferred notices recheck gate relevance and release observers on revocation", async () => {
+test("operator-created attachments deliver to the same conversation notice sink", async () => {
 	const { service, owner, execution } = fixture();
 	const sink = noticeSink(),
 		binding = new AbortController();
-	const origin = service.bind({
+	service.bind({
 		caller: { kind: "controller", sessionId: "notice-chat" },
 		signal: binding.signal,
-		execution,
 		notices: sink.sink,
+	});
+	const human = service.bind({
+		caller: {
+			kind: "human",
+			operatorId: "operator",
+			conversationId: "notice-chat",
+		},
+		signal: binding.signal,
+		execution,
 	});
 	const graph = definition();
 	const node = graph.nodes[0];
 	if (!node) throw new Error("Missing node");
 	node.approval = { authority: "human", question: "Release?" };
 	faux.setResponses([result("DONE")]);
-	const { dagId } = await create(origin, graph);
+	const { dagId } = await create(human, graph);
 	await command(owner, dagId, { kind: "resume" });
 	const waiting = await until(
 		owner,
@@ -727,10 +735,6 @@ test("deferred notices recheck gate relevance and release observers on revocatio
 	);
 	const gate = waiting.gates[0];
 	if (!gate) throw new Error("Missing gate");
-	const human = service.bind({
-		caller: { kind: "human", operatorId: "operator" },
-		signal: binding.signal,
-	});
 	await command(human, dagId, { kind: "approve", gateId: gate.id, reason: "Reviewed" });
 	expect(sink.received).toEqual([]);
 	sink.ready();
