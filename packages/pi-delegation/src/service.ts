@@ -10,6 +10,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { captureBranch, captureSession, forkCaptured } from "./history";
+import { scanReplayTools } from "./replayTools";
 import { Semaphore } from "./semaphore";
 import {
 	assertSegment,
@@ -88,6 +89,28 @@ interface ChildEntry {
 	activeRun?: ActiveRun;
 	teardown?: Promise<void>;
 	disposed: boolean;
+}
+
+function repairResourceTranscript(manager: SessionManager): void {
+	const initial = scanReplayTools(manager.buildSessionContext().messages);
+	for (const call of initial.danglingTail) {
+		manager.appendMessage({
+			role: "toolResult",
+			toolCallId: call.toolCallId,
+			toolName: call.toolName,
+			content: [
+				{
+					type: "text",
+					text: "Operation aborted (the resource owner restarted before this tool call completed)",
+				},
+			],
+			isError: true,
+			timestamp: Date.now(),
+		});
+	}
+	const replay = scanReplayTools(manager.buildSessionContext().messages);
+	if (replay.issues.length)
+		throw new DelegationError("invalid-child-transcript", replay.issues.join("; "));
 }
 
 function abortActiveRun(entry: ChildEntry): Promise<void> {
@@ -996,6 +1019,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 					"Transcript identity changed while reopening",
 				);
 			}
+			repairResourceTranscript(manager);
 		} else manager = newManager(spec, context.cwd, dir);
 		const session = await assemble(
 			options,

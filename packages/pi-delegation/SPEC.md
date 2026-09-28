@@ -49,8 +49,10 @@ by capture/reopen, not an arbitrary file importer.
 
 `reopenChild` consumes the saved immutable birth record excluding its path, plus saved declarative
 session configuration. It validates owner/scope/file identity and preserves birth metadata, resolving
-only a new access path. Missing files never create replacement sessions. Fork assembly persists the
-actual model and pi-clamped thinking in the child branch; source metadata/global defaults stay intact.
+only a new access path. Missing files never create replacement sessions. A crash-dangling final tool
+batch receives generic error results before pi replay; a non-tail or malformed gap fails closed because
+no positional repair is safe. Fork assembly persists the actual model and pi-clamped thinking in the
+child branch; source metadata/global defaults stay intact.
 Pi reloads opted-in resources on reopen; saved configuration is not a frozen rendered prompt.
 
 `RunOutcome` gains invocation-local `stopReason` and terminal `historyEntryId`. Finalized-message
@@ -71,7 +73,8 @@ creation after source-chat disposal, unchanged parent behavior, and zero-worker 
   Scope/resource/session segments are validated; capture and reopen share an identity-checked
   locator that rejects ambiguous files, symlinks, non-regular files and malformed v3 history.
   Reopen never uses a caller-supplied path, never manufactures a missing transcript, and treats
-  the saved birth record as authoritative for delegation metadata not present in pi's header.
+  the saved birth record as authoritative for delegation metadata not present in pi's header. It
+  repairs only replay-safe missing results at the active tail before constructing the session.
 - Registration reserves the identity immediately, prepares context before returning, and does
   not create a session. Duplicate registration fails with `resource-exists`. Effective model
   references must resolve exactly (`model-unavailable`); resource creation never falls back to
@@ -116,7 +119,8 @@ creation after source-chat disposal, unchanged parent behavior, and zero-worker 
   including metadata/compaction entries, not proof of successful completion.
 
 Regression suites use only local synthetic providers. They cover parent compatibility and captured
-parent forks; zero-worker/borrowed/registry/native-provider retention; strict stored capture/reopen;
+parent forks; zero-worker/borrowed/registry/native-provider retention; strict stored capture/reopen
+with crash-tail repair and non-tail rejection;
 canonical cuts, current v3 entries, digest/closure/compaction validation; source-independent fan-out
 with provider-bound thinking sanitization; detached admission inputs; resource-local factories and FIFO
 isolation; literal steering and stale-queue cleanup; queued/preflight cancellation; pending assembly/

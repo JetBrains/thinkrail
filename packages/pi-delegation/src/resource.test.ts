@@ -17,6 +17,7 @@ import {
 	createFauxCore,
 	fauxAssistantMessage,
 	fauxProvider,
+	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import {
 	createAgentSession,
@@ -33,6 +34,7 @@ import {
 	type DelegationErrorCode,
 	type ResourceChildBirth,
 	type SessionOptions,
+	scanReplayTools,
 } from "../index";
 
 const root = mkdtempSync(join(tmpdir(), "delegation-resource-"));
@@ -433,6 +435,49 @@ test("faithful reopen retains birth authority, reloads factories at current cwd 
 	});
 	expect(SessionManager.open(sessionFile).buildSessionContext().thinkingLevel).toBe("off");
 	await resource.release();
+});
+
+test("reopen repairs a crash-dangling tool batch before provider replay", async () => {
+	const core = service();
+	let owner = await core.registerResource("repair", context());
+	const child = await owner.createChild(spec);
+	faux.setResponses([fauxAssistantMessage("BEFORE_CRASH")]);
+	await child.runQueued("persist a transcript");
+	const { sessionFile, ...birth } = child.record;
+	await child.dispose();
+	const dangling = SessionManager.open(sessionFile);
+	dangling.appendMessage(fauxAssistantMessage(fauxToolCall("dag_submit_result", { outputs: {} })));
+	expect(scanReplayTools(dangling.buildSessionContext().messages).danglingTail).toHaveLength(1);
+	await owner.release();
+	owner = await core.registerResource("repair", context());
+	const reopened = await owner.reopenChild({ birth, session: sessionOptions });
+	const replay = SessionManager.open(sessionFile).buildSessionContext().messages;
+	expect(scanReplayTools(replay).issues).toEqual([]);
+	expect(replay.at(-1)).toMatchObject({
+		role: "toolResult",
+		toolName: "dag_submit_result",
+		isError: true,
+	});
+	faux.setResponses([fauxAssistantMessage("AFTER_REPAIR")]);
+	expect((await reopened.runQueued("continue")).finalText).toBe("AFTER_REPAIR");
+	await owner.release();
+});
+
+test("reopen rejects a non-tail replay gap that cannot be repaired positionally", async () => {
+	const core = service();
+	let owner = await core.registerResource("replay-gap", context());
+	const child = await owner.createChild(spec);
+	faux.setResponses([fauxAssistantMessage("STORED")]);
+	await child.runQueued("persist");
+	const { sessionFile, ...birth } = child.record;
+	await child.dispose();
+	const manager = SessionManager.open(sessionFile);
+	manager.appendMessage(fauxAssistantMessage(fauxToolCall("read", { path: "missing" })));
+	manager.appendMessage({ role: "user", content: "later message", timestamp: Date.now() });
+	await owner.release();
+	owner = await core.registerResource("replay-gap", context());
+	await code(owner.reopenChild({ birth, session: sessionOptions }), "invalid-child-transcript");
+	await owner.release();
 });
 
 test("strict resource lookup fails closed for missing, cross-owner, corrupt, ambiguous and linked transcripts", async () => {
