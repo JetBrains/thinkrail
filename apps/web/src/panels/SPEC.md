@@ -623,10 +623,12 @@ a project picker, the prompt hero, and the reused
   composer** (`plan-session-chat`, a `PlanComposer` textarea that works like the chat composer — Enter
   sends, Shift+Enter newlines) whose send adapts to the run: while the agent is streaming it **steers**
   (`session.steer`, "Steer the agent…"), otherwise it **starts a turn** (`session.prompt`, "Message the
-  agent…"); either way it mirrors `ChatView.performSend` — it optimistically records the user turn
-  (`appendUserMessage`) before handing off to the chat (`openChatInTab`) so the message can't vanish in the
-  navigation, and surfaces a rejected send as an `appendErrorTurn` in that chat rather than swallowing it.
-  So a completed
+  agent…"). It mirrors `ChatView.performSend`: it first awaits `openChatInTab`, so the mode comes from the
+  **hydrated** runtime (a restored Plan tab may have no local runtime while the host streams) and a failed
+  hydration keeps the draft; a prompt then optimistically records the user turn (`appendUserMessage`; a steer
+  does not, it arrives with the delivered message), and a rejected send surfaces as an `appendErrorTurn` in
+  that chat rather than being swallowed. `PlanComposer` ignores a submit while the previous one is in flight,
+  so a repeated Enter can't add or send the same draft twice. So a completed
   plan (no open steps) turns its Session into a chat entry point rather than a dead "all steps done" line,
   and a running plan gets an in-place steering field. The one exception is a **truly empty** plan (no items,
   idle): there the body shows the `plan-now-idle` line (`No steps yet…`), itself a click target that opens
@@ -805,8 +807,9 @@ own section. The kebab menu (`plan-menu`, a
   arm and treats it as a **sync conflict, not a force-push cue**: the header button reads **Branch diverged**
   (`data-diverged`) and the next-action banner (`data-kind="diverged"`) explain that origin has commits the
   checkout lacks and must be integrated first — a plain push can't land, and force-pushing would **drop the
-  remote's commits**. Both copy the safe `git pull --rebase origin <branch>` (`plan-integrate-command`), NOT a
-  force command. This is deliberate: `behind > 0` only proves divergence, **not** that this checkout rewrote
+  remote's commits**. Both copy the safe `git pull --rebase` (`plan-integrate-command`), NOT a
+  force command; it names no branch, so repository-controlled text never reaches shell text the user runs
+  (the PR push sets the upstream). This is deliberate: `behind > 0` only proves divergence, **not** that this checkout rewrote
   history (another checkout may have simply pushed), and the host's own fresh fetch has already moved the
   `--force-with-lease` baseline — so inferring a force-push from divergence could silently delete another
   checkout's work. A genuine rewrite stays an explicit terminal action the app never initiates nor hands a

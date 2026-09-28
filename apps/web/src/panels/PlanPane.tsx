@@ -59,7 +59,6 @@ import { AskUserQuestionCard } from "../chat/tools/AskUserQuestionCard";
 import { useChatTodos } from "../chat/useChatTodos";
 import { LoadingRegion } from "../components/Skeleton";
 import { IconTooltip } from "../components/ui/tooltip";
-import { posixShellQuote } from "../lib/utils";
 import {
 	selectAgentReviewCommentCount,
 	selectChatTitle,
@@ -578,8 +577,6 @@ function downloadMarkdown(markdown: string, title: string): void {
 	URL.revokeObjectURL(url);
 }
 
-// One inline textarea composer for the plan: Enter submits, Shift+Enter newlines, Esc closes (when
-// closable). Used both for adding TODOs and for the chat/steer field in the Session block.
 function PlanComposer({
 	icon: Icon,
 	placeholder,
@@ -597,16 +594,21 @@ function PlanComposer({
 }) {
 	const [draft, setDraft] = useState("");
 	const inputRef = useRef<HTMLTextAreaElement>(null);
+	const submitting = useRef(false);
 	useEffect(() => {
 		if (autoFocus) inputRef.current?.focus();
 	}, [autoFocus]);
 	const submit = async () => {
 		const text = draft.trim();
-		if (!text) return;
+		if (!text || submitting.current) return;
+		submitting.current = true;
 		try {
 			await onSubmit(text);
 			setDraft("");
-		} catch {}
+		} catch {
+		} finally {
+			submitting.current = false;
+		}
 	};
 	return (
 		<div className="mt-8 flex items-start gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 py-8 transition-colors focus-within:border-control-border-active">
@@ -939,13 +941,8 @@ export default function PlanPane({
 		pr: openReview ? "done" : planReady ? "active" : "pending",
 	};
 	const unpushed = openReview?.unpushedCommits ?? 0;
-	// origin has commits HEAD lacks (behindCommits > 0): the branch and remote diverged, so a plain push is
-	// non-fast-forward and would fail. This is a SYNC CONFLICT, not proof this checkout rewrote history —
-	// another checkout may have simply pushed. The UI must not infer a force-push: force-with-lease here would
-	// delete the remote's commits (and our own fresh fetch already moved the lease baseline, defeating its
-	// safety). So surface the safe integrate command; a deliberate rewrite stays an explicit terminal action.
 	const diverged = (openReview?.behindCommits ?? 0) > 0;
-	const integrateCommand = `git pull --rebase origin ${posixShellQuote(workspace?.branch ?? "")}`;
+	const integrateCommand = "git pull --rebase";
 	const copyIntegrateCommand = () => {
 		void navigator.clipboard
 			.writeText(integrateCommand)
@@ -1488,13 +1485,12 @@ export default function PlanPane({
 					onAdd={plan.add}
 					onOpenChat={() => void openChatInTab(workspaceId, sessionId)}
 					onSend={async (text) => {
-						// Mirror the chat composer (ChatView.performSend): optimistically record the user turn so
-						// the handoff to chat can't drop it, steer a running agent otherwise start a new turn, and
-						// surface a failed send as an error turn in the chat rather than swallowing it.
+						await openChatInTab(workspaceId, sessionId);
 						const store = useAppStore.getState();
-						const streaming = store.sessions[sessionId]?.isStreaming ?? false;
-						store.appendUserMessage(sessionId, text);
-						void openChatInTab(workspaceId, sessionId);
+						const runtime = store.sessions[sessionId];
+						if (!runtime) throw new Error("chat not available");
+						const streaming = runtime.isStreaming;
+						if (!streaming) store.appendUserMessage(sessionId, text);
 						try {
 							await getTransport().request(streaming ? "session.steer" : "session.prompt", {
 								sessionId,
