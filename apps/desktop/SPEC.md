@@ -151,8 +151,11 @@ setting applies without restart) and maps it as Chromium does for custom draggab
 miniaturizes; `None` and unknown values do nothing. `Fill` uses zoom because Apple's `_zoomFill:` is
 private and unreachable through Electrobun; this window's standard zoom frame is the screen's visible
 frame, so only tiling margins differ. A double-click arriving while the previous one is still resolving is
-dropped. An Electrobun upgrade must re-check the mirror property name and whether the framework now handles
-double-clicks itself, which would toggle twice.
+dropped. This workaround exists only because Electrobun lacks the behavior, tracked upstream in
+[electrobun#561](https://github.com/blackboardsh/electrobun/issues/561). An Electrobun upgrade must
+re-check the mirror property name and that issue: once the framework handles drag-region double-clicks
+itself, remove the preload listener, `titleBarDoubleClick` message, and handler, or the window toggles
+twice.
 
 ## Navigation and window security
 
