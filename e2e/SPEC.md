@@ -55,8 +55,9 @@ descendant PIDs through PowerShell's `Get-CimInstance Win32_Process`, gracefully
 and uses `taskkill /T` before a root fallback; force targets every retained PID with `taskkill /T /F`. Managed
 roots are process-group leaders only on POSIX. On Windows they remain non-detached with `windowsHide: true`,
 so their ordinary Playwright, host, and build descendants inherit a nonvisual console instead of allocating
-visible console windows; Windows tree termination does not depend on detachment. This guarantee does not
-extend to the separate binary or desktop artifact runners. Tests for primary-modifier
+visible console windows; Windows tree termination does not depend on detachment. Unit coverage pins only
+this platform-to-detachment selection; native window visibility is verified with a manual Windows console
+probe. This guarantee does not extend to the separate binary or desktop artifact runners. Tests for primary-modifier
 chords read the page's browser-reported platform through one fixture helper and inject Meta on Apple or
 Control elsewhere; hard-coding the runner host's modifier would exercise the wrong product branch under
 browser/platform emulation.
