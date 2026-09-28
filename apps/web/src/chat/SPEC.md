@@ -416,12 +416,16 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   person took over.
 - **Reader intent and exact-edge rearm** — wheel, trackpad, touch, scrollbar, and navigation-key input
   detaches only when it can cause or has caused real viewport movement; pushing outward against the current
-  physical edge is a no-op. Potential native input pauses competing controller motion without changing
-  alignment. An interrupted return remains logically moving while awaiting a wheel or navigation-key default
-  action; an explicit pointer hold is stationary. If no movement follows, alignment resumes after the bounded
-  input-intent window rather than on the next frame, because an embedded webview may apply default wheel
-  scrolling after that frame. Movement into history detaches once; native movement that interrupts an active
-  alignment also detaches even when directed toward latest, unless that movement itself reaches the exact edge.
+  physical edge is a no-op for a following reader, while a detached reader already exactly at that edge
+  (reader-preserving room can leave nothing to scroll) rearms on the same push. Potential native input
+  pauses competing controller motion, and blocks new automatic motion until it resolves, without changing
+  alignment (continuous following writes nearly every frame, so a write landing between the reader's
+  gesture and its scroll would otherwise swallow it). An interrupted return remains logically moving while
+  awaiting a wheel or navigation-key default action; an explicit pointer hold is stationary. If no movement
+  follows, alignment resumes after the bounded input-intent window rather than on the next frame, because an
+  embedded webview may apply default wheel scrolling after that frame. Movement into history detaches once;
+  native movement that interrupts an active alignment also detaches even when directed toward latest, unless
+  that movement itself reaches the exact edge.
   Explicit text selection and user-invoked message/history, breadcrumb, or tool-page navigation also detach.
   Pointer provenance survives release long enough for native scrollbar-track animation, keyboard
   provenance covers focus-induced scrolling from interactive transcript controls, and both expire on
@@ -446,13 +450,19 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   stable. Oldest-first therefore needs at most the lower `100% - Settle` band; newest-first uses older
   projected content where available and keeps any synthetic remainder after the oldest group. Synthetic room
   never splits a reversed request/answer group. A new own or queued turn restarts the fill phase;
-  **Follow response** and an exact-edge return resume holding at Settle immediately.
+  **Follow response** and an exact-edge return resume holding at Settle immediately. Reader takeover never
+  moves the reader: room shrinks only as far as the reader's current position allows (the document may end
+  exactly at their viewport bottom), and later growth or upward reading consumes the rest. A reveal that
+  releases room (tool attention, jump-to-message, breadcrumb) also suspends holding for the rest of that
+  response, because it is about to place the viewport itself. A settlement that lands while native input is
+  still pending defers its return until that input resolves, and drops the return if the input detached.
 - **Settlement never moves a reader who took over** — every `agent_settled`, never `agent_end`, ends
   response movement and removes remaining synthetic room. A following reader makes one smooth move to the
   order's physical latest edge; a detached reader's visible content stays exactly where it is and only the
   affordance changes from **Follow response** to **Latest**. Returning detached readers at settlement was
-  the largest measured yank (tens of thousands of px) and contradicted reader-wins. The store exposes a monotonic per-session settlement
-  tick alongside `isStreaming`, so a start and settlement coalesced into one React render cannot strand an
+  the largest measured yank (tens of thousands of px) and contradicted reader-wins. The store exposes a
+  monotonic per-session settlement tick alongside `isStreaming`, so a start and settlement coalesced into one
+  React render cannot strand an
   optimistic turn inset or runway. Delayed virtual measurements retarget that same bounded return rather
   than creating a hard-pin loop. If reader input intersects settlement, either idle reattach path carries
   the partial room-to-zero leg forward instead of leaking hidden runway. A rejected immediate prompt likewise
@@ -488,9 +498,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   shifted a reader's content by the 48–80px inset on detach where no anchoring compensates (WebKit).
   Synthetic room reconciles before paint in the same frame as an item-list resize, so the scroll range and
   scrollbar never flap between frames. Virtuoso's resize handling runs without its animation-frame deferral,
-  so above-viewport measurement corrections land before paint. Reader-input listeners are passive and never
-  block native scrolling, and a streaming delta re-renders only the rows whose content changed, so the main
-  thread stays available to scrolling.
+  so above-viewport measurement corrections land before paint. The wheel listener stays non-passive: a
+  passive one lets Chromium apply the scroll before the wheel event reaches the hook, so the movement arrives
+  without reader intent and neither detach nor exact-edge rearm fires. Scrolling stays responsive because a
+  streaming delta re-renders only the rows whose content changed, keeping the main thread free.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in

@@ -16,7 +16,6 @@ import {
 	createReadingBandController,
 	headerHeightScrollTarget,
 	initialReadingBandSnapshot,
-	markerBottomWithoutHeader,
 	type ReadingBandController,
 	type ReadingBandLatestEdge,
 	type ReadingBandScrollBounds,
@@ -43,7 +42,6 @@ export interface ChatScroll {
 	handleScrollerRef: (element: HTMLElement | Window | null) => void;
 	headerRef: RefCallback<HTMLDivElement>;
 	streamEdgeRef: RefCallback<HTMLDivElement>;
-	runwayEdgeRef: RefCallback<HTMLDivElement>;
 	runwayRef: RefCallback<HTMLDivElement>;
 	scrollerElement: HTMLElement | null;
 	showScrollButton: boolean;
@@ -145,6 +143,22 @@ function canScrollBy(scroller: HTMLElement, deltaY: number): boolean {
 	return false;
 }
 
+function descendantConsumesWheel(event: WheelEvent, scroller: HTMLElement): boolean {
+	let current = event.target instanceof Element ? nearestHtmlElement(event.target) : null;
+	while (current && current !== scroller) {
+		const { overflowY } = getComputedStyle(current);
+		if (
+			(overflowY === "auto" || overflowY === "scroll") &&
+			current.scrollHeight > current.clientHeight + 1 &&
+			canScrollBy(current, event.deltaY)
+		) {
+			return true;
+		}
+		current = current.parentElement;
+	}
+	return false;
+}
+
 function mountedChatRow(scroller: HTMLElement, rowId: string): HTMLElement | null {
 	return (
 		Array.from(scroller.querySelectorAll<HTMLElement>("[data-chat-row-id]")).find(
@@ -184,7 +198,6 @@ export function useChatScroll(
 	const scrollerRef = useRef<HTMLElement | null>(null);
 	const headerElementRef = useRef<HTMLDivElement | null>(null);
 	const edgeRef = useRef<HTMLDivElement | null>(null);
-	const runwayEdgeElementRef = useRef<HTMLDivElement | null>(null);
 	const runwayElementRef = useRef<HTMLDivElement | null>(null);
 	const runwayHeightRef = useRef(0);
 	const measuredHeaderHeight = useRef(0);
@@ -219,7 +232,6 @@ export function useChatScroll(
 	const [scrollerElement, setScrollerElement] = useState<HTMLElement | null>(null);
 	const [headerElement, setHeaderElement] = useState<HTMLDivElement | null>(null);
 	const [streamEdgeElement, setStreamEdgeElement] = useState<HTMLDivElement | null>(null);
-	const [runwayEdgeElement, setRunwayEdgeElement] = useState<HTMLDivElement | null>(null);
 	const recordProgrammaticScrollPosition = useCallback(() => {
 		const scroller = scrollerRef.current;
 		if (!scroller) return;
@@ -237,31 +249,13 @@ export function useChatScroll(
 				readGeometry: () => {
 					const scroller = scrollerRef.current;
 					if (!scroller) return null;
-					const currentEdge = latestEdgeRef.current;
 					const edgeElement = edgeRef.current;
-					const runwayEdgeElement =
-						currentEdge === "top" ? runwayEdgeElementRef.current : edgeElement;
 					const viewportTop = scroller.getBoundingClientRect().top;
-					const headerHeight =
-						currentEdge === "top"
-							? (headerElementRef.current?.getBoundingClientRect().height ?? 0)
-							: 0;
 					return {
 						...scrollBounds(scroller),
 						viewportHeight: scroller.clientHeight,
 						edgeBottom: edgeElement
-							? markerBottomWithoutHeader(
-									edgeElement.getBoundingClientRect().bottom,
-									viewportTop,
-									0,
-								)
-							: null,
-						runwayBottom: runwayEdgeElement
-							? markerBottomWithoutHeader(
-									runwayEdgeElement.getBoundingClientRect().bottom,
-									viewportTop,
-									headerHeight,
-								)
+							? edgeElement.getBoundingClientRect().bottom - viewportTop
 							: null,
 					};
 				},
@@ -556,10 +550,10 @@ export function useChatScroll(
 	}, [controller, edge, isStreaming, latestRow, latestUserRow?.id]);
 
 	useLayoutEffect(() => {
-		if (!scrollerElement || (!streamEdgeElement && !runwayEdgeElement)) return;
+		if (!scrollerElement || !streamEdgeElement) return;
 		if (isStreaming) controller.reconstructActiveStream();
 		controller.contentChanged();
-	}, [controller, isStreaming, runwayEdgeElement, scrollerElement, streamEdgeElement]);
+	}, [controller, isStreaming, scrollerElement, streamEdgeElement]);
 
 	useLayoutEffect(() => {
 		if (!headerElement || edge !== "top") return;
@@ -619,6 +613,7 @@ export function useChatScroll(
 			}
 			programmaticScrollTop.current = null;
 			if (delta === 0) return;
+			controller.reconcileRoom();
 			const now = performance.now();
 			if (returnIntentUntil.current <= now) returnIntentUntil.current = 0;
 			if (pointerIntentUntil.current <= now) pointerIntentUntil.current = 0;
@@ -746,11 +741,6 @@ export function useChatScroll(
 		setStreamEdgeElement(element);
 	}, []);
 
-	const runwayEdgeRef = useCallback<RefCallback<HTMLDivElement>>((element) => {
-		runwayEdgeElementRef.current = element;
-		setRunwayEdgeElement(element);
-	}, []);
-
 	const runwayRef = useCallback<RefCallback<HTMLDivElement>>(
 		(element) => {
 			runwayElementRef.current = element;
@@ -786,7 +776,7 @@ export function useChatScroll(
 			cancelRowReveal();
 			if (options.provenance === "user-navigation") readerLeft();
 			else clearReturnIntent();
-			if (options.runway === "release") controller.releaseRunway(false);
+			if (options.runway === "release") controller.releaseRunway();
 			controller.revealTo(() => {
 				if (!scroller.contains(target)) return null;
 				const viewportRect = scroller.getBoundingClientRect();
@@ -817,7 +807,7 @@ export function useChatScroll(
 			cancelRowReveal();
 			readerLeft();
 			rowRevealCompletion.current = onComplete;
-			controller.releaseRunway(false);
+			controller.releaseRunway();
 			const scroller = scrollerRef.current;
 			if (!scroller) {
 				rowRevealCompletion.current = null;
@@ -927,6 +917,15 @@ export function useChatScroll(
 		cancelRowReveal();
 		controller.returnToEdge();
 	}, [cancelRowReveal, clearReturnIntent, controller]);
+	const rearmDetachedReaderAtEdge = useCallback(() => {
+		const scroller = scrollerRef.current;
+		if (!scroller || controller.getSnapshot().following || !reachedLatestEdge(scroller, edge)) {
+			return;
+		}
+		clearReturnIntent();
+		cancelRowReveal();
+		controller.readerReachedEdge();
+	}, [cancelRowReveal, clearReturnIntent, controller, edge]);
 	const handleContentHeight = useCallback(() => controller.contentChanged(), [controller]);
 
 	const onPointerDown = useCallback<PointerEventHandler>(
@@ -1015,7 +1014,14 @@ export function useChatScroll(
 	useEffect(() => {
 		if (!scrollerElement) return;
 		const onWheel = (event: WheelEvent) => {
-			if (event.deltaY === 0 || !canScrollBy(scrollerElement, event.deltaY)) return;
+			if (event.deltaY === 0) return;
+			if (!canScrollBy(scrollerElement, event.deltaY)) {
+				const towardLatest = edge === "bottom" ? event.deltaY > 0 : event.deltaY < 0;
+				if (towardLatest && !descendantConsumesWheel(event, scrollerElement)) {
+					rearmDetachedReaderAtEdge();
+				}
+				return;
+			}
 			pointerIntentUntil.current = 0;
 			keyboardIntentUntil.current = 0;
 			programmaticScrollTop.current = null;
@@ -1028,7 +1034,7 @@ export function useChatScroll(
 		};
 		scrollerElement.addEventListener("wheel", onWheel, { capture: true, passive: false });
 		return () => scrollerElement.removeEventListener("wheel", onWheel, { capture: true });
-	}, [edge, pauseForNativeInput, scheduleTouchSettle, scrollerElement]);
+	}, [edge, pauseForNativeInput, rearmDetachedReaderAtEdge, scheduleTouchSettle, scrollerElement]);
 
 	const onKeyDown = useCallback(
 		(event: KeyboardEvent) => {
@@ -1067,7 +1073,11 @@ export function useChatScroll(
 			}
 			const scroller = scrollerRef.current;
 			const deltaY = movesTowardTop ? -1 : 1;
-			if (!scroller || !canScrollBy(scroller, deltaY)) return;
+			if (!scroller) return;
+			if (!canScrollBy(scroller, deltaY)) {
+				if (movesTowardLatest) rearmDetachedReaderAtEdge();
+				return;
+			}
 			pointerIntentUntil.current = 0;
 			wheelIntentUntil.current = 0;
 			programmaticScrollTop.current = null;
@@ -1076,7 +1086,7 @@ export function useChatScroll(
 			pauseForNativeInput("pending");
 			scheduleTouchSettle(NATIVE_SCROLL_INTENT_MS);
 		},
-		[edge, pauseForNativeInput, scheduleTouchSettle, scrollToLatest],
+		[edge, pauseForNativeInput, rearmDetachedReaderAtEdge, scheduleTouchSettle, scrollToLatest],
 	);
 
 	useEffect(() => {
@@ -1091,7 +1101,6 @@ export function useChatScroll(
 		handleScrollerRef,
 		headerRef,
 		streamEdgeRef,
-		runwayEdgeRef,
 		runwayRef,
 		scrollerElement,
 		showScrollButton: snapshot.buttonLabel !== null,
