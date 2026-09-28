@@ -273,6 +273,65 @@ test("capture fork fan-out is source-independent and persists independent effect
 	await owner.release();
 });
 
+test("captured forks hide Anthropic-bound thinking while retaining immutable source evidence", async () => {
+	const core = service();
+	const source = SessionManager.inMemory(cwd);
+	source.appendMessage({ role: "user", content: "source", timestamp: Date.now() });
+	source.appendMessage({
+		...fauxAssistantMessage("unused"),
+		api: "anthropic-messages",
+		provider: "anthropic",
+		model: "claude-sonnet-4-5",
+		content: [
+			{ type: "thinking", thinking: "bound", thinkingSignature: "signed-anthropic" },
+			{ type: "thinking", thinking: "redacted", thinkingSignature: "encrypted", redacted: true },
+			{ type: "thinking", thinking: "portable" },
+			{ type: "text", text: "answer" },
+		],
+	});
+	source.appendMessage({ role: "user", content: "next", timestamp: Date.now() });
+	source.appendMessage({
+		...fauxAssistantMessage("unused"),
+		api: "openai-responses",
+		provider: "openai",
+		model: "gpt-5",
+		content: [
+			{ type: "thinking", thinking: "other provider", thinkingSignature: "signed-openai" },
+			{ type: "text", text: "second answer" },
+		],
+	});
+	const history = await core.captureHistory({
+		kind: "session",
+		sessionId: source.getSessionId(),
+		sessionManager: source,
+		cut: { kind: "at-entry", entryId: source.getLeafId() },
+	});
+	const owner = await core.registerResource("signed-thinking", context());
+	const child = await owner.createChild({
+		...spec,
+		origin: { kind: "fork-captured", history },
+	});
+	const manager = SessionManager.open(child.record.sessionFile);
+	const messages = JSON.stringify(manager.buildSessionContext().messages);
+	expect(messages).not.toContain("signed-anthropic");
+	expect(messages).not.toContain("encrypted");
+	expect(messages).toContain("portable");
+	expect(messages).toContain("signed-openai");
+	const stored = readFileSync(child.record.sessionFile, "utf8");
+	expect(stored).toContain("signed-anthropic");
+	expect(stored).toContain('"type":"context_edit"');
+	faux.setResponses([
+		(providerContext) => {
+			const replay = JSON.stringify(providerContext.messages);
+			expect(replay).not.toContain("signed-anthropic");
+			expect(replay).toContain("signed-openai");
+			return fauxAssistantMessage("SAFE_FORK");
+		},
+	]);
+	expect((await child.runQueued("continue safely")).finalText).toBe("SAFE_FORK");
+	await owner.release();
+});
+
 test("faithful reopen retains birth authority, reloads factories at current cwd and clamps max thinking without the source", async () => {
 	const core = service();
 	const startedCwds: string[] = [];

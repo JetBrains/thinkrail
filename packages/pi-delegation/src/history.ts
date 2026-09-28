@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import {
 	buildSessionContext,
 	type SessionEntry,
@@ -402,6 +403,31 @@ export function captureSession(
 	return captureBranch(parseTranscript(jsonl, source.sessionId), entryId);
 }
 
+function isAnthropicFamily(message: AssistantMessage): boolean {
+	return (
+		message.provider.toLowerCase() === "anthropic" ||
+		message.api.toLowerCase() === "anthropic-messages" ||
+		/claude/i.test(message.model)
+	);
+}
+
+function removeBoundThinking(manager: SessionManager): void {
+	for (const { sourceEntry, messages } of manager.buildSessionProjection().entries) {
+		if (sourceEntry.type !== "message" || sourceEntry.message.role !== "assistant") continue;
+		const message = messages.find(
+			(candidate): candidate is AssistantMessage => candidate.role === "assistant",
+		);
+		if (!message || !isAnthropicFamily(message)) continue;
+		const content = message.content.filter(
+			(block) =>
+				block.type !== "thinking" ||
+				(block.redacted !== true && !nonempty(block.thinkingSignature)),
+		);
+		if (content.length !== message.content.length)
+			manager.appendContextEdit(sourceEntry.id, { content });
+	}
+}
+
 export function forkCaptured(
 	history: CapturedHistory,
 	cwd: string,
@@ -412,7 +438,9 @@ export function forkCaptured(
 	try {
 		const file = join(dir, "seed.jsonl");
 		writeFileSync(file, history.jsonl, { mode: 0o600, flag: "wx" });
-		return SessionManager.forkFrom(file, cwd, sessionDir);
+		const manager = SessionManager.forkFrom(file, cwd, sessionDir);
+		removeBoundThinking(manager);
+		return manager;
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
