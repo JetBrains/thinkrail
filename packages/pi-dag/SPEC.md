@@ -52,7 +52,8 @@ owner's `close` settles only its resources and preserves resumable state and unr
 ## Commands and evidence
 
 Mutation identity is caller-supplied `commandId`; non-create requests also name `dagId` and
-`expectedVersion`. Authorize, deduplicate, then check version/targets. Changed payload under an
+`expectedVersion`. Receipt lookup rechecks its stored authority, then deduplicates before validating or
+authorizing the replacement payload and before version/target checks. Changed payload under an
 accepted id fails. Replay recovers the original receipt before touching new execution/history inputs.
 After process ownership is acquired, the service rechecks receipts before version checks because the
 previous owner may have committed between the passive read and its death; deterministic create follows

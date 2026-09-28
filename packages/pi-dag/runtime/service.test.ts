@@ -1153,7 +1153,7 @@ test("edit preparation cannot cross an ownership handoff with a predicted versio
 	}
 });
 
-test("creation replay crossing owner death returns the acquired receipt", async () => {
+test("changed creation replay crossing owner death returns id-reused before graph validation", async () => {
 	const { owner, service, signal, scope, delegation } = fixture();
 	const other = createDagService({ storageRoot: join(root, "dags"), scope, delegation });
 	services.push(other);
@@ -1161,11 +1161,20 @@ test("creation replay crossing owner death returns the acquired receipt", async 
 		caller: { kind: "controller", sessionId: "create-handoff-chat" },
 		signal,
 	});
-	const request: DagCommandRequest = {
+	const acceptedRequest: DagCommandRequest = {
 		commandId: "handoff-create",
 		command: { kind: "create", definition: definition() },
 	};
-	const dagId = `dag-${createHash("sha256").update(`${scope}\0${request.commandId}`).digest("hex")}`;
+	const changedDefinition = definition(["first", "second"]);
+	changedDefinition.connections = [
+		{ id: "forward", kind: "control", from: "first", to: "second", allowSkipped: false },
+		{ id: "back", kind: "control", from: "second", to: "first", allowSkipped: false },
+	];
+	const changedRequest: DagCommandRequest = {
+		commandId: acceptedRequest.commandId,
+		command: { kind: "create", definition: changedDefinition },
+	};
+	const dagId = `dag-${createHash("sha256").update(`${scope}\0${acceptedRequest.commandId}`).digest("hex")}`;
 	const scopeId = createHash("sha256").update(scope).digest("hex");
 	await fs.mkdir(join(root, "dags", scopeId, dagId), { recursive: true });
 	const captured = latch(),
@@ -1187,12 +1196,12 @@ test("creation replay crossing owner death returns the acquired receipt", async 
 	});
 	let pending: Promise<DagResult<DagReceipt>> | undefined;
 	try {
-		pending = controller.execute(request);
+		pending = controller.execute(changedRequest);
 		await captured.promise;
-		const accepted = value(await owner.execute(request));
+		value(await owner.execute(acceptedRequest));
 		await service.close();
 		proceed.release();
-		expect(value(await pending)).toEqual(accepted);
+		expect(await pending).toMatchObject({ ok: false, error: { code: "id-reused" } });
 	} finally {
 		proceed.release();
 		spy.mockRestore();
@@ -1200,7 +1209,7 @@ test("creation replay crossing owner death returns the acquired receipt", async 
 	}
 });
 
-test("an identical replay crossing owner death returns the acquired receipt before version checks", async () => {
+test("changed replay crossing owner death returns id-reused before semantic preparation", async () => {
 	const { owner, service, execution, signal, scope, delegation } = fixture();
 	const created = await create(owner);
 	const other = createDagService({ storageRoot: join(root, "dags"), scope, delegation });
@@ -1210,11 +1219,15 @@ test("an identical replay crossing owner death returns the acquired receipt befo
 		signal,
 		execution,
 	});
-	const request: DagCommandRequest = {
+	const acceptedRequest: DagCommandRequest = {
 		commandId: "handoff-replay",
 		dagId: created.dagId,
 		expectedVersion: created.version,
 		command: { kind: "pause" },
+	};
+	const changedRequest: DagCommandRequest = {
+		...acceptedRequest,
+		command: { kind: "edit", edits: [{ kind: "remove-node", nodeId: "missing" }] },
 	};
 	const captured = latch(),
 		proceed = latch(),
@@ -1235,12 +1248,12 @@ test("an identical replay crossing owner death returns the acquired receipt befo
 	});
 	let pending: Promise<DagResult<DagReceipt>> | undefined;
 	try {
-		pending = controller.execute(request);
+		pending = controller.execute(changedRequest);
 		await captured.promise;
-		const accepted = value(await owner.execute(request));
+		value(await owner.execute(acceptedRequest));
 		await service.close();
 		proceed.release();
-		expect(value(await pending)).toEqual(accepted);
+		expect(await pending).toMatchObject({ ok: false, error: { code: "id-reused" } });
 	} finally {
 		proceed.release();
 		spy.mockRestore();

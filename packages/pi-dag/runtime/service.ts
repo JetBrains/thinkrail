@@ -490,16 +490,16 @@ class Engine implements D.DagService {
 			if (replay) return replay;
 			if (!("dagId" in request)) return this.create(binding, id, request, fingerprint);
 			if (!stored) return D.fail("not-found", "Unknown DAG");
-			if (stored.lifecycle !== "active" && request.command.kind !== "dispose")
+			const owned = await this.own(id);
+			const acquiredReplay = this.replay(owned.state, binding, request.commandId, fingerprint);
+			if (acquiredReplay) return acquiredReplay;
+			if (owned.state.lifecycle !== "active" && request.command.kind !== "dispose")
 				return D.fail("closed", "DAG has been disposed");
 			const prepared: Command =
 				request.command.kind === "edit"
 					? { kind: "edit", ...D.prepareEdit(stored, request.command.edits, binding.value.caller) }
 					: request.command;
 			const authority = this.authorize(stored, prepared, binding.value.caller);
-			const owned = await this.own(id);
-			const acquiredReplay = this.replay(owned.state, binding, request.commandId, fingerprint);
-			if (acquiredReplay) return acquiredReplay;
 			if (stored.version !== owned.state.version || request.expectedVersion !== owned.state.version)
 				throw new D.DagError({
 					code: "stale-version",
@@ -560,7 +560,6 @@ class Engine implements D.DagService {
 		request: Extract<D.DagCommandRequest, { command: { kind: "create" } }>,
 		fingerprint: string,
 	): Promise<D.DagReceipt> {
-		D.validateDefinition(request.command.definition);
 		const lease = await this.store.claim(id);
 		let owned: Owned | undefined;
 		try {
@@ -571,6 +570,7 @@ class Engine implements D.DagService {
 				await lease.release();
 				return replay;
 			}
+			D.validateDefinition(request.command.definition);
 			const execution = binding.value.execution;
 			if (!execution)
 				return D.fail(

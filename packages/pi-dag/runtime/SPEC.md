@@ -77,10 +77,12 @@ uncommitted candidate state. Close rejects successful completion if live work or
 
 ## Authority
 
-Owner bindings can manage lifecycle but cannot impersonate a human. Authorization precedes receipt
-replay; replay precedes version/runtime/history access. Acquisition rechecks the now-owned snapshot so
-a command committed between the passive read and prior-owner death still replays instead of degrading
-to a stale-version error; create does the same before publishing a replacement. Receipts retain their
+Owner bindings can manage lifecycle but cannot impersonate a human. A stored receipt's own authority
+is rechecked before its fingerprint; successful replay precedes semantic validation/authorization of
+the replacement payload and all version/runtime/history access. Acquisition rechecks the now-owned
+snapshot so a command committed between the passive read and prior-owner death still replays instead
+of degrading to a stale-version error; create does the same before graph validation, execution-context
+requirements or publication. Receipts retain their
 original required gate authority so replay never reapplies an old edit against a later graph or transfers human authority. Human-only gates bind exact proposals and
 history exports. Manual acceptance records an override without rewriting execution success or bypassing
 gates. Retry may use its own prior proposals as revision evidence without releasing them. Cross-node
