@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
 	type Activation,
 	authorizeGate,
+	DagError,
 	type DagState,
 	decodeBirth,
 	decodeState,
@@ -106,11 +107,122 @@ test("worker births use the stored schema without broadening delegation modes", 
 		info: { createdBy: "dag" },
 		interactive: false,
 		visibility: "hidden",
-		createdAt: "now",
+		createdAt: "2026-01-02T03:04:05.000Z",
 	} as const;
 	expect(decodeBirth(birth)).toEqual(birth);
-	for (const invalid of [{ originKind: "seeded" }, { interactive: true }, { visibility: "listed" }])
+	for (const invalid of [
+		{ originKind: "seeded" },
+		{ originKind: "fresh", entryId: "cut" },
+		{ entryId: "" },
+		{ sessionId: "" },
+		{ resourceId: "../dag" },
+		{ createdAt: "not-a-date" },
+		{ interactive: true },
+		{ visibility: "listed" },
+	])
 		expect(() => decodeBirth({ ...birth, ...invalid })).toThrow("birth");
+});
+
+test("strict snapshots reject dangling evidence, impossible outcomes and mismatched artifacts", () => {
+	const corruptions: Array<(state: DagState) => void> = [
+		(state) => {
+			const worker = state.nodes.worker;
+			if (!worker) throw new Error("Missing worker");
+			worker.taskFile = { ...worker.taskFile, sha256: "b".repeat(64) };
+		},
+		(state) => {
+			state.proposals.proposal = {
+				id: "proposal",
+				createdVersion: 1,
+				target: { nodeId: "worker", attempt: 2, activation: 1 },
+				outputs: {},
+				createdAt: "now",
+				disposition: "pending",
+			};
+		},
+		(state) => {
+			state.proposals.key = {
+				id: "different",
+				createdVersion: 1,
+				target: { nodeId: "worker", attempt: 1, activation: 1 },
+				outputs: {},
+				createdAt: "now",
+				disposition: "pending",
+			};
+		},
+		(state) => {
+			const worker = state.nodes.worker;
+			const activation = worker?.attempts[0]?.activations[0];
+			if (!activation) throw new Error("Missing activation");
+			activation.calls = {
+				["c".repeat(64)]: {
+					fingerprint: "f".repeat(64),
+					id: "missing",
+					kind: "proposal",
+				},
+			};
+		},
+		(state) => {
+			const activation = state.nodes.worker?.attempts[0]?.activations[0];
+			if (!activation) throw new Error("Missing activation");
+			const target = { nodeId: "worker", attempt: 1, activation: 1 };
+			state.proposals.proposal = {
+				id: "proposal",
+				createdVersion: 1,
+				target,
+				outputs: {},
+				createdAt: "now",
+				disposition: "pending",
+			};
+			state.gates.approval = {
+				id: "approval",
+				kind: "approval",
+				target,
+				authority: "human",
+				question: file,
+				questionPreview: "Approve",
+				proposalId: "proposal",
+				disposition: "pending",
+			};
+			activation.calls = {
+				["c".repeat(64)]: {
+					fingerprint: "f".repeat(64),
+					id: "approval",
+					kind: "input",
+				},
+			};
+		},
+		(state) => {
+			const outcome = state.nodes.worker?.attempts[0]?.activations[0]?.outcome;
+			if (!outcome) throw new Error("Missing outcome");
+			outcome.details.status = "running";
+		},
+		(state) => {
+			const activation = state.nodes.worker?.attempts[0]?.activations[0];
+			if (!activation) throw new Error("Missing activation");
+			state.proposals.proposal = {
+				id: "proposal",
+				createdVersion: 1,
+				target: { nodeId: "worker", attempt: 1, activation: 1 },
+				outputs: {},
+				createdAt: "now",
+				disposition: "accepted",
+			};
+			activation.proposalId = "proposal";
+		},
+	];
+	for (const corrupt of corruptions) {
+		const { state } = fixture();
+		corrupt(state);
+		try {
+			decodeState(state);
+			throw new Error("Expected corrupt state rejection");
+		} catch (error) {
+			expect(error).toBeInstanceOf(DagError);
+			if (!(error instanceof DagError)) throw error;
+			expect(error.failure.code).toBe("corrupt-state");
+		}
+	}
 });
 
 test("continuations retain legacy snapshot compatibility without accepting malformed metadata", () => {

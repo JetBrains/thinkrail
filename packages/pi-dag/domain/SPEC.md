@@ -12,8 +12,10 @@ tags: [backend, dag]
 Own typed graph/command schemas, public DTOs, persisted domain evidence and pure graph validation,
 readiness, stale propagation and authorization. Graph/command and persisted-record types are inferred
 from their validation schemas; public read projections stay distinct. Persisted records distinguish
-versions, attempts, activations, proposals and gates. Delegation birth metadata is checked against the
-same stored birth schema before entering state; the broader delegation contract is not duplicated.
+versions, attempts, activations, proposals and gates. Decoding requires self-consistent artifact
+identities and resolves every evidence target, worker-call receipt and output selection; dispositions
+must carry the decisions/files their meaning requires. Delegation birth metadata is checked against
+the same stored birth schema before entering state; the broader delegation contract is not duplicated.
 
 ## Boundary
 
