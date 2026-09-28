@@ -249,7 +249,8 @@ may inject the same narrow string-storage adapter under its stable backend-profi
 dynamic loopback port cannot erase the preference on restart. It never enters `AppConfig`, so choosing
 newest-first cannot change another browser, device, host, or native window. The same persistence seam owns
 **Streaming response movement**, one `{ settle, trigger }` client-local preference rather than a second
-adapter/subscription path: both values use 5-point steps, Settle is 25–90, Trigger is 35–100, the gap is at
+adapter/subscription path (Trigger is where following starts; Settle is the line a followed response edge is
+held at): both values use 5-point steps, Settle is 25–90, Trigger is 35–100, the gap is at
 least 10 points, and the default is `{ settle: 75, trigger: 100 }`. Invalid storage falls back atomically to
 the default pair. It likewise never enters `AppConfig` or crosses the wire.
 
@@ -432,17 +433,25 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   destination while following, and leaves a detached reader's visible anchor fixed. An own Send deliberately
   reattaches and places its user row at 10% of transcript height clamped to 48–80px; a queued/background
   continuation preserves a detached reader when it starts.
-- **Streaming response movement exists only during work** — while following, the active response grows to
-  Trigger (default 100%), then the sole motion owner places it at Settle (default 75%); each later crossing
-  repeats the same sparse advance. Immediately before a move the controller adds only the scroll-range
-  deficit needed to reach Settle, then removes that room one-for-one as real response growth fills it.
-  Oldest-first therefore needs at most the lower `100% - Settle` band; newest-first uses older projected
-  content where available, keeps any synthetic remainder after the oldest group, and measures consumption
-  from the latest group's stable trailing edge. Synthetic room never splits a reversed request/answer group.
-  **Follow response** reconstructs the needed room, moves to Settle, and rearms the cycle.
-- **Settlement always returns to physical latest** — every `agent_settled`, never `agent_end`, ends response
-  movement, removes remaining synthetic room, reattaches even a manually detached reader, and makes one
-  smooth move to the order's physical latest edge. The store exposes a monotonic per-session settlement
+- **Streaming response movement exists only during work, and it is continuous** — while following, the
+  active response first fills the space after its prompt without any motion. When its edge first reaches
+  Trigger (default 100%) following begins: the edge glides to Settle (default 75%) and is then **held** at
+  Settle while the response keeps growing. The sole motion owner recomputes the Settle destination from live
+  geometry every frame and closes the gap with frame-rate-independent exponential smoothing, so bursts of
+  growth read as steady motion; it never overshoots, and a destination that stops changing converges
+  exactly. Sparse Trigger→Settle steps were removed on purpose: a 25%-viewport jump every step moved the
+  line being read, which users reported as content jumping under them. Synthetic room is **derived, never
+  accumulated**: while holding, the room is exactly the part of the Settle destination beyond the natural
+  scroll range, recomputed with that destination, so response growth leaves both room and scroll range
+  stable. Oldest-first therefore needs at most the lower `100% - Settle` band; newest-first uses older
+  projected content where available and keeps any synthetic remainder after the oldest group. Synthetic room
+  never splits a reversed request/answer group. A new own or queued turn restarts the fill phase;
+  **Follow response** and an exact-edge return resume holding at Settle immediately.
+- **Settlement never moves a reader who took over** — every `agent_settled`, never `agent_end`, ends
+  response movement and removes remaining synthetic room. A following reader makes one smooth move to the
+  order's physical latest edge; a detached reader's visible content stays exactly where it is and only the
+  affordance changes from **Follow response** to **Latest**. Returning detached readers at settlement was
+  the largest measured yank (tens of thousands of px) and contradicted reader-wins. The store exposes a monotonic per-session settlement
   tick alongside `isStreaming`, so a start and settlement coalesced into one React render cannot strand an
   optimistic turn inset or runway. Delayed virtual measurements retarget that same bounded return rather
   than creating a hard-pin loop. If reader input intersects settlement, either idle reattach path carries
@@ -465,13 +474,23 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   cancellation or compete with settlement. Size-aware `nearest` keeps a
   tall target's useful leading edge visible.
 - **One cancellable, retargetable motion owner** — renderers and projections never scroll themselves.
-  New-turn placement, Trigger→Settle advances, contextual-button returns, settlement, and explicit reveals
+  New-turn placement, Settle holding, contextual-button returns, settlement, and explicit reveals
   share one non-overlapping channel whose destination can retarget as Virtuoso measurements, status geometry,
   or runway changes land. Corrections continue the current motion instead of launching overlapping eases or
   alternating hard writes. The first real reader movement cancels it synchronously and native physics win.
   Newest-first header deltas preserve a detached historical anchor; viewport resize reevaluates the live
   percentages without moving a below-Trigger response. Initial/order placement is direct, and reduced motion
   makes every programmatic destination immediate while preserving identical state and final geometry.
+- **No hidden motion owners** — nothing but the controller and the reader may move the viewport. The
+  transcript scroller opts out of browser scroll anchoring (`overflow-anchor: none`): Virtuoso excludes its
+  items, but Chromium otherwise anchors to the header/footer and counter-scrolls a reader while the response
+  grows below them. The oldest-first top inset is constant rather than toggling with synthetic room; toggling
+  shifted a reader's content by the 48–80px inset on detach where no anchoring compensates (WebKit).
+  Synthetic room reconciles before paint in the same frame as an item-list resize, so the scroll range and
+  scrollbar never flap between frames. Virtuoso's resize handling runs without its animation-frame deferral,
+  so above-viewport measurement corrections land before paint. Reader-input listeners are passive and never
+  block native scrolling, and a streaming delta re-renders only the rows whose content changed, so the main
+  thread stays available to scrolling.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
