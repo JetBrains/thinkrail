@@ -561,22 +561,6 @@ class Engine implements D.DagService {
 		fingerprint: string,
 	): Promise<D.DagReceipt> {
 		D.validateDefinition(request.command.definition);
-		const execution = binding.value.execution;
-		if (!execution)
-			return D.fail(
-				"context-required",
-				"Creating a DAG requires explicit execution context, even while paused",
-			);
-		const definition = structuredClone(request.command.definition);
-		definition.defaults = {
-			...definition.defaults,
-			...(definition.defaults.model
-				? {}
-				: execution.model
-					? { model: structuredClone(execution.model) }
-					: {}),
-			thinkingLevel: definition.defaults.thinkingLevel ?? execution.thinkingLevel ?? "off",
-		};
 		const lease = await this.store.claim(id);
 		let owned: Owned | undefined;
 		try {
@@ -587,6 +571,22 @@ class Engine implements D.DagService {
 				await lease.release();
 				return replay;
 			}
+			const execution = binding.value.execution;
+			if (!execution)
+				return D.fail(
+					"context-required",
+					"Creating a DAG requires explicit execution context, even while paused",
+				);
+			const definition = structuredClone(request.command.definition);
+			definition.defaults = {
+				...definition.defaults,
+				...(definition.defaults.model
+					? {}
+					: execution.model
+						? { model: structuredClone(execution.model) }
+						: {}),
+				thinkingLevel: definition.defaults.thinkingLevel ?? execution.thinkingLevel ?? "off",
+			};
 			const now = new Date().toISOString();
 			const definitionFile = await this.store.put(
 				id,

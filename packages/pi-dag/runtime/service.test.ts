@@ -1154,13 +1154,12 @@ test("edit preparation cannot cross an ownership handoff with a predicted versio
 });
 
 test("creation replay crossing owner death returns the acquired receipt", async () => {
-	const { owner, service, execution, signal, scope, delegation } = fixture();
+	const { owner, service, signal, scope, delegation } = fixture();
 	const other = createDagService({ storageRoot: join(root, "dags"), scope, delegation });
 	services.push(other);
 	const controller = other.bind({
 		caller: { kind: "controller", sessionId: "create-handoff-chat" },
 		signal,
-		execution,
 	});
 	const request: DagCommandRequest = {
 		commandId: "handoff-create",
