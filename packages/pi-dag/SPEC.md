@@ -54,7 +54,9 @@ owner's `close` settles only its resources and preserves resumable state and unr
 Mutation identity is caller-supplied `commandId`; non-create requests also name `dagId` and
 `expectedVersion`. Authorize, deduplicate, then check version/targets. Changed payload under an
 accepted id fails. Replay recovers the original receipt before touching new execution/history inputs.
-A receipt acknowledges durable intent, not dispatch, consumption or completion. Actual tool-call ids
+After process ownership is acquired, the service rechecks receipts before version checks because the
+previous owner may have committed between the passive read and its death; deterministic create follows
+the same rule. A receipt acknowledges durable intent, not dispatch, consumption or completion. Actual tool-call ids
 are provenance. Expected failures are typed result values; ambiguous I/O requires identical replay.
 
 One node has immutable numbered attempts; each attempt owns one real pi session and numbered

@@ -461,6 +461,19 @@ class Engine implements D.DagService {
 		}
 		return undefined;
 	}
+	private replay(
+		state: D.DagState | undefined,
+		binding: Binding,
+		commandId: string,
+		fingerprint: string,
+	): D.DagReceipt | undefined {
+		const prior = state?.receipts[commandId];
+		if (!prior) return undefined;
+		if (prior.authority) D.authorizeGate(binding.value.caller, prior.authority);
+		if (prior.fingerprint !== fingerprint)
+			return D.fail("id-reused", "Command id was already accepted with another payload");
+		return structuredClone(prior.receipt);
+	}
 	private async execute(binding: Binding, input: D.DagCommandRequest): Promise<D.DagReceipt> {
 		const encoded = D.canonicalJson(input);
 		if (!Check(D.RequestSchema, input)) return D.fail("invalid-command", "Invalid DAG command");
@@ -473,13 +486,8 @@ class Engine implements D.DagService {
 		return this.serial(id, async () => {
 			this.guard(binding);
 			const stored = await this.store.read(id);
-			const prior = stored?.receipts[request.commandId];
-			if (prior) {
-				if (prior.authority) D.authorizeGate(binding.value.caller, prior.authority);
-				if (prior.fingerprint !== fingerprint)
-					return D.fail("id-reused", "Command id was already accepted with another payload");
-				return structuredClone(prior.receipt);
-			}
+			const replay = this.replay(stored, binding, request.commandId, fingerprint);
+			if (replay) return replay;
 			if (!("dagId" in request)) return this.create(binding, id, request, fingerprint);
 			if (!stored) return D.fail("not-found", "Unknown DAG");
 			if (stored.lifecycle !== "active" && request.command.kind !== "dispose")
@@ -490,6 +498,8 @@ class Engine implements D.DagService {
 					: request.command;
 			const authority = this.authorize(stored, prepared, binding.value.caller);
 			const owned = await this.own(id);
+			const acquiredReplay = this.replay(owned.state, binding, request.commandId, fingerprint);
+			if (acquiredReplay) return acquiredReplay;
 			if (stored.version !== owned.state.version || request.expectedVersion !== owned.state.version)
 				throw new D.DagError({
 					code: "stale-version",
@@ -570,6 +580,13 @@ class Engine implements D.DagService {
 		const lease = await this.store.claim(id);
 		let owned: Owned | undefined;
 		try {
+			const existing = await this.store.read(id);
+			if (existing) {
+				const replay = this.replay(existing, binding, request.commandId, fingerprint);
+				if (!replay) D.fail("id-reused", "DAG id already exists without this creation receipt");
+				await lease.release();
+				return replay;
+			}
 			const now = new Date().toISOString();
 			const definitionFile = await this.store.put(
 				id,

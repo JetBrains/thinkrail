@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
+import { createHash } from "node:crypto";
 import {
 	constants,
 	mkdtempSync,
@@ -27,6 +28,7 @@ import {
 	type DagDefinition,
 	type DagNotice,
 	type DagNoticeSink,
+	type DagReceipt,
 	type DagResult,
 	type DagService,
 	type DagSnapshot,
@@ -1027,6 +1029,102 @@ test("edit preparation cannot cross an ownership handoff with a predicted versio
 	} finally {
 		proceed.release();
 		spy.mockRestore();
+	}
+});
+
+test("creation replay crossing owner death returns the acquired receipt", async () => {
+	const { owner, service, execution, signal, scope, delegation } = fixture();
+	const other = createDagService({ storageRoot: join(root, "dags"), scope, delegation });
+	services.push(other);
+	const controller = other.bind({
+		caller: { kind: "controller", sessionId: "create-handoff-chat" },
+		signal,
+		execution,
+	});
+	const request: DagCommandRequest = {
+		commandId: "handoff-create",
+		command: { kind: "create", definition: definition() },
+	};
+	const dagId = `dag-${createHash("sha256").update(`${scope}\0${request.commandId}`).digest("hex")}`;
+	const scopeId = createHash("sha256").update(scope).digest("hex");
+	await fs.mkdir(join(root, "dags", scopeId, dagId), { recursive: true });
+	const captured = latch(),
+		proceed = latch(),
+		open = fs.open;
+	let first = true;
+	const spy = spyOn(fs, "open").mockImplementation(async (path, flags, mode) => {
+		if (first && basename(String(path)) === "state.json") {
+			first = false;
+			try {
+				return await open(path, flags, mode);
+			} catch (error) {
+				captured.release();
+				await proceed.promise;
+				throw error;
+			}
+		}
+		return open(path, flags, mode);
+	});
+	let pending: Promise<DagResult<DagReceipt>> | undefined;
+	try {
+		pending = controller.execute(request);
+		await captured.promise;
+		const accepted = value(await owner.execute(request));
+		await service.close();
+		proceed.release();
+		expect(value(await pending)).toEqual(accepted);
+	} finally {
+		proceed.release();
+		spy.mockRestore();
+		await pending;
+	}
+});
+
+test("an identical replay crossing owner death returns the acquired receipt before version checks", async () => {
+	const { owner, service, execution, signal, scope, delegation } = fixture();
+	const created = await create(owner);
+	const other = createDagService({ storageRoot: join(root, "dags"), scope, delegation });
+	services.push(other);
+	const controller = other.bind({
+		caller: { kind: "controller", sessionId: "handoff-chat" },
+		signal,
+		execution,
+	});
+	const request: DagCommandRequest = {
+		commandId: "handoff-replay",
+		dagId: created.dagId,
+		expectedVersion: created.version,
+		command: { kind: "pause" },
+	};
+	const captured = latch(),
+		proceed = latch(),
+		open = fs.open;
+	let first = true;
+	const spy = spyOn(fs, "open").mockImplementation(async (path, flags, mode) => {
+		const file = await open(path, flags, mode);
+		if (first && basename(String(path)) === "state.json") {
+			first = false;
+			const close = file.close.bind(file);
+			file.close = async () => {
+				await close();
+				captured.release();
+				await proceed.promise;
+			};
+		}
+		return file;
+	});
+	let pending: Promise<DagResult<DagReceipt>> | undefined;
+	try {
+		pending = controller.execute(request);
+		await captured.promise;
+		const accepted = value(await owner.execute(request));
+		await service.close();
+		proceed.release();
+		expect(value(await pending)).toEqual(accepted);
+	} finally {
+		proceed.release();
+		spy.mockRestore();
+		await pending;
 	}
 });
 
