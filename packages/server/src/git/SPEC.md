@@ -155,15 +155,15 @@ ref off the workspace-create critical path.
   previously valid list; **`countPushDivergence(worktreePath, branch, {fetch?})`** (async — the sync twin would block the shared
   event loop on every window-focus refetch) → `{ ahead, behind }` via one `rev-list --left-right --count
   origin/<branch>...HEAD`: **`ahead`** = local commits origin lacks (unpushed), **`behind`** = commits on
-  origin the branch lacks. `behind > 0` means the branch **diverged** — a plain push is non-fast-forward,
-  only `--force-with-lease` lands. `null` only when the remote ref doesn't exist (never pushed);
+  origin the branch lacks. `behind > 0` means the branch **diverged** — a plain push is non-fast-forward and
+  the histories must be reconciled (the plan page treats this as a sync conflict, not a force cue). `null` only when the remote ref doesn't exist (never pushed);
   timeout/launch failures throw, and a normal nonzero with a still-present ref throws instead of
   impersonating absence. With **`fetch`** it best-effort refreshes `origin/<branch>` first so `behind` reflects
   the *real* remote (offline falls back to the last-known ref rather than failing the whole lookup); the host's
   `workspace.openReview` passes `fetch` **only on a fresh lookup** (focus / explicit refresh, not a cached
   activation) and composes `ahead`→`unpushedCommits` and `behind`→`behindCommits` onto an open review (in
   parallel with the gh lookup, not after it) so the plan page can flag commits the PR doesn't have yet and
-  the diverged "force push needed" state — the `origin/` here is the second
+  the diverged sync-conflict state — the `origin/` here is the second
   deliberate survivor of the all-remotes sweep, because it asks where *this* workspace's own branch was
   pushed, not which remote a base was branched from; `listBranches(projectId)` → `{ local, remote,
   remoteGroups?, defaultBranch }` (local `refs/heads`; canonical `remote` = every direct full ref under

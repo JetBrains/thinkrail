@@ -938,19 +938,21 @@ export default function PlanPane({
 		pr: openReview ? "done" : planReady ? "active" : "pending",
 	};
 	const unpushed = openReview?.unpushedCommits ?? 0;
-	// The branch diverged from origin (remote has commits HEAD lacks): a plain push is non-fast-forward, so
-	// the UI must not offer "Push updates" (it would fail). The app never force-pushes on its own; it
-	// surfaces the exact recovery command for the user to run in a terminal. See panels/SPEC.md.
+	// origin has commits HEAD lacks (behindCommits > 0): the branch and remote diverged, so a plain push is
+	// non-fast-forward and would fail. This is a SYNC CONFLICT, not proof this checkout rewrote history —
+	// another checkout may have simply pushed. The UI must not infer a force-push: force-with-lease here would
+	// delete the remote's commits (and our own fresh fetch already moved the lease baseline, defeating its
+	// safety). So surface the safe integrate command; a deliberate rewrite stays an explicit terminal action.
 	const diverged = (openReview?.behindCommits ?? 0) > 0;
-	const forcePushCommand = `git push --force-with-lease origin ${workspace?.branch ?? ""}`;
-	const copyForcePushCommand = () => {
+	const integrateCommand = `git pull --rebase origin ${workspace?.branch ?? ""}`;
+	const copyIntegrateCommand = () => {
 		void navigator.clipboard
-			.writeText(forcePushCommand)
+			.writeText(integrateCommand)
 			.then(() =>
 				pushToast({
 					variant: "success",
 					title: "Command copied",
-					message: "Run it in a terminal to force-push the rewritten branch.",
+					message: "Run it in a terminal to integrate the remote changes, then push.",
 				}),
 			)
 			.catch(() =>
@@ -1295,12 +1297,12 @@ export default function PlanPane({
 						data-testid="plan-open-pr"
 						data-diverged={openReview && diverged ? "" : undefined}
 						disabled={prBusy || sameBranch}
-						onClick={openReview && diverged ? copyForcePushCommand : () => void openPrFlow(false)}
+						onClick={openReview && diverged ? copyIntegrateCommand : () => void openPrFlow(false)}
 						title={
 							sameBranch
 								? "This workspace's branch is its base branch — there's nothing to open a PR against."
 								: openReview && diverged
-									? `The branch diverged from origin — a plain push can't land. Copy: ${forcePushCommand}`
+									? `The branch and origin diverged — integrate the remote changes first. Copy: ${integrateCommand}`
 									: openReview
 										? "Push new commits to the open PR and refresh its description from the plan"
 										: "Push the branch and open a PR whose description comes from this plan"
@@ -1320,7 +1322,7 @@ export default function PlanPane({
 							? "Pushing…"
 							: openReview
 								? diverged
-									? "Force push needed"
+									? "Branch diverged"
 									: unpushed > 0
 										? `Push updates (${unpushed})`
 										: "Push updates"
@@ -1409,24 +1411,25 @@ export default function PlanPane({
 						</button>
 					</div>
 				) : openReview && diverged ? (
-					<div data-testid="plan-next-action" data-kind="force-push" className={NEXT_ACTION_CLASS}>
+					<div data-testid="plan-next-action" data-kind="diverged" className={NEXT_ACTION_CLASS}>
 						<CircleAlert className="size-16 shrink-0 text-feedback-warning" />
 						<div className="flex min-w-0 flex-1 flex-col gap-2">
 							<span className="tr-text-ui text-text-default">
-								{openReviewLabel(openReview)}'s branch diverged from origin — a plain push can't
-								land. Run this in a terminal:
+								{openReviewLabel(openReview)}'s branch and origin diverged — origin has commits you
+								don't have. Integrate them before pushing (a plain push can't land; force-pushing
+								would drop them). Run in a terminal:
 							</span>
 							<code
-								data-testid="plan-force-push-command"
+								data-testid="plan-integrate-command"
 								className="truncate rounded-[var(--radius-sm)] bg-container-elevated-bg px-6 py-2 tr-code-text text-text-default"
 							>
-								{forcePushCommand}
+								{integrateCommand}
 							</code>
 						</div>
 						<button
 							type="button"
 							data-testid="plan-next-action-go"
-							onClick={copyForcePushCommand}
+							onClick={copyIntegrateCommand}
 							className={NEXT_ACTION_BUTTON_CLASS}
 						>
 							Copy command
