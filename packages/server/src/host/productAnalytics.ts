@@ -3,6 +3,7 @@ import type {
 	JbcentralConnectResult,
 	OpenPrResult,
 	ProviderStatusReport,
+	ReviewComment,
 } from "@thinkrail/contracts";
 import { isJbcentralConnected } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
@@ -11,6 +12,9 @@ import {
 	type AdditionalAnalyticsCapture,
 	type AdditionalAnalyticsEvent,
 	getAdditionalAnalyticsCapture,
+	type PlanActionSource,
+	type ReviewCommentActor,
+	type ReviewResolveOutcome,
 } from "../analytics";
 import { listProjects } from "../projects";
 
@@ -39,6 +43,46 @@ export function captureAdditional(
 	try {
 		capture?.(event);
 	} catch {}
+}
+
+// The grant is captured at the operation's synchronous entry and passed in (never re-read here): a
+// pre-consent action finishing after enablement must not emit through the new grant. The grant
+// closure self-guards, so a stale token is inert after revoke/re-enable (see analytics/SPEC.md).
+export function captureReviewCommentAdded(
+	capture: AdditionalAnalyticsCapture | null,
+	comment: ReviewComment,
+): void {
+	captureAdditional(capture, {
+		name: "review_comment_added",
+		params: {
+			author: comment.author === "agent" ? "agent" : "user",
+			kind: comment.kind,
+		},
+	});
+}
+
+/** One event per comment (not per send action), so added→sent→resolved is a countable funnel. */
+export function captureReviewCommentsSent(
+	capture: AdditionalAnalyticsCapture | null,
+	comments: readonly ReviewComment[],
+): void {
+	for (const comment of comments) {
+		captureAdditional(capture, {
+			name: "review_comment_sent",
+			params: { outdated: comment.anchorState === "outdated" ? "yes" : "no" },
+		});
+	}
+}
+
+export function captureReviewCommentResolved(
+	capture: AdditionalAnalyticsCapture | null,
+	actor: ReviewCommentActor,
+	outcome: ReviewResolveOutcome,
+): void {
+	captureAdditional(capture, {
+		name: "review_comment_resolved",
+		params: { actor, outcome },
+	});
 }
 
 export function failureReason(error: unknown): FailureReason {
@@ -188,6 +232,7 @@ export function centralConnectOutcome(
 
 export async function observePrAction(
 	operation: () => Promise<OpenPrResult>,
+	source: PlanActionSource = "other",
 ): Promise<OpenPrResult> {
 	const capture = additionalCapture();
 	let result: OpenPrResult;
@@ -196,7 +241,7 @@ export async function observePrAction(
 	} catch (error) {
 		captureAdditional(capture, {
 			name: "pr_action_finished",
-			params: { action: "unknown", outcome: "failed", reason: failureReason(error) },
+			params: { action: "unknown", outcome: "failed", reason: failureReason(error), source },
 		});
 		throw error;
 	}
@@ -215,6 +260,7 @@ export async function observePrAction(
 								? "unsupported"
 								: "auth"
 							: "none",
+					source,
 				},
 			});
 		} catch {}

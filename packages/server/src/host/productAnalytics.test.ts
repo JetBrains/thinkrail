@@ -2,12 +2,18 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { OpenPrResult, ProviderStatusReport, Workspace } from "@thinkrail/contracts";
+import type {
+	OpenPrResult,
+	ProviderStatusReport,
+	ReviewComment,
+	Workspace,
+} from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { TodoStore } from "pi-todos/core";
 import {
 	type AdditionalAnalyticsCapture,
 	type AdditionalAnalyticsEvent,
+	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
 	resetAnalyticsForTests,
 	setAdditionalAnalyticsEnabled,
@@ -21,6 +27,9 @@ import { dropLogin, recordLoginStart, trackLoginOutcome } from "./loginAnalytics
 import {
 	additionalAnalyticsEnabled,
 	captureAdditional,
+	captureReviewCommentAdded,
+	captureReviewCommentResolved,
+	captureReviewCommentsSent,
 	centralConnectOutcome,
 	failureReason,
 	observeCurrentSetup,
@@ -266,7 +275,10 @@ test("PR created, updated, push and compare are distinct; an unrefreshed update 
 			ghProblem: "unauthenticated",
 		},
 	];
-	for (const result of results) expect(await observePrAction(async () => result)).toBe(result);
+	for (let i = 0; i < results.length; i++) {
+		const result = results[i] as OpenPrResult;
+		expect(await observePrAction(async () => result, i === 0 ? "plan_page" : "other")).toBe(result);
+	}
 	await expect(
 		observePrAction(async () => {
 			throw new CodedError("PUSH_AUTH_FAILED", "private credentials");
@@ -278,14 +290,15 @@ test("PR created, updated, push and compare are distinct; an unrefreshed update 
 			event.properties.action,
 			event.properties.outcome,
 			event.properties.reason,
+			event.properties.source,
 		]),
 	).toEqual([
-		["created", "succeeded", "none"],
-		["updated", "succeeded", "none"],
-		["updated", "failed", "unknown"],
-		["pushed", "succeeded", "none"],
-		["compare", "succeeded", "auth"],
-		["unknown", "failed", "auth"],
+		["created", "succeeded", "none", "plan_page"],
+		["updated", "succeeded", "none", "other"],
+		["updated", "failed", "unknown", "other"],
+		["pushed", "succeeded", "none", "other"],
+		["compare", "succeeded", "auth", "other"],
+		["unknown", "failed", "auth", "other"],
 	]);
 	expect(JSON.stringify(sent)).not.toContain("private");
 	expect(events.every((event) => !("dirtyFiles" in event.properties))).toBe(true);
@@ -389,6 +402,71 @@ test("host handlers exclude Default provisioning and hydration; observing a muta
 			.map((event) => [event.properties.actor, event.properties.verdict]),
 	).toEqual([["user", "approved"]]);
 	expect(JSON.stringify(sent)).not.toContain("private");
+});
+
+test("review-comment analytics distinguish author/actor and stay per-comment with no content", async () => {
+	const { workspace, ctx } = await taskFixture();
+	const workspaceId = workspace.id;
+	const review = (await handleRequest(
+		"review.commentAdd",
+		{ workspaceId, kind: "review", anchor: null, body: "private remark" },
+		ctx,
+	)) as ReviewComment;
+	await handleRequest(
+		"review.commentUpdate",
+		{ workspaceId, id: review.id, status: "dismissed" },
+		ctx,
+	);
+	// Agent-authored find + agent resolve + the per-comment send fan-out go through the host helpers,
+	// each carrying the grant captured at its operation's synchronous entry.
+	const grant = getAdditionalAnalyticsCapture();
+	captureReviewCommentAdded(grant, { author: "agent", kind: "inline" } as ReviewComment);
+	captureReviewCommentResolved(grant, "agent", "resolved");
+	captureReviewCommentsSent(grant, [
+		{ anchorState: "anchored" } as ReviewComment,
+		{ anchorState: "outdated" } as ReviewComment,
+	]);
+	await shutdownAnalytics();
+	expect(
+		sent
+			.filter((event) => event.event === "review_comment_added")
+			.map((event) => [event.properties.author, event.properties.kind]),
+	).toEqual([
+		["user", "review"],
+		["agent", "inline"],
+	]);
+	expect(
+		sent
+			.filter((event) => event.event === "review_comment_resolved")
+			.map((event) => [event.properties.actor, event.properties.outcome]),
+	).toEqual([
+		["user", "dismissed"],
+		["agent", "resolved"],
+	]);
+	expect(
+		sent
+			.filter((event) => event.event === "review_comment_sent")
+			.map((event) => event.properties.outdated),
+	).toEqual(["no", "yes"]);
+	expect(JSON.stringify(sent)).not.toContain("private");
+});
+
+test("plan_opened rides an explicit todo.list open; plan_item_added rides todo.add; refetches stay silent", async () => {
+	const { ref, ctx } = await taskFixture();
+	await handleRequest("todo.list", ref, ctx); // a plain refetch — no plan_opened
+	await handleRequest("todo.list", { ...ref, opened: "page" }, ctx);
+	await handleRequest("todo.list", { ...ref, opened: "popup" }, ctx);
+	await handleRequest("todo.add", { ...ref, title: "user step", surface: "chat" }, ctx);
+	await handleRequest("todo.add", { ...ref, title: "defaulted step" }, ctx);
+	await shutdownAnalytics();
+	expect(
+		sent.filter((event) => event.event === "plan_opened").map((event) => event.properties.surface),
+	).toEqual(["page", "popup"]);
+	expect(
+		sent
+			.filter((event) => event.event === "plan_item_added")
+			.map((event) => event.properties.surface),
+	).toEqual(["chat", "chat"]);
 });
 
 test("canonical TODO mutation observation waits for the real artifact reconciliation", async () => {

@@ -447,6 +447,7 @@ export interface WsMethodMap {
 			titleEdited?: boolean;
 			body?: string;
 			draft?: boolean;
+			source?: "plan_page";
 		};
 		result: OpenPrResult;
 	};
@@ -454,11 +455,17 @@ export interface WsMethodMap {
 	"fs.readFile": { params: { workspaceId: string; path: string }; result: { content: string } };
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
 	"todo.list": {
-		params: { workspaceId: string; sessionId: string };
+		params: { workspaceId: string; sessionId: string; opened?: "page" | "popup" };
 		result: TodoPlan;
 	};
 	"todo.add": {
-		params: { workspaceId: string; sessionId: string; title: string; note?: string };
+		params: {
+			workspaceId: string;
+			sessionId: string;
+			title: string;
+			note?: string;
+			surface?: "chat" | "page";
+		};
 		result: TodoItem;
 	};
 	"todo.update": {

@@ -823,7 +823,13 @@ export default function ChatView({
 					data-message-order={chatMessageOrder}
 					className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
 				>
-					<Popover open={planOpen} onOpenChange={setPlanOpen}>
+					<Popover
+						open={planOpen}
+						onOpenChange={(next) => {
+							if (next && !planOpen) plan.notifyOpened("popup");
+							setPlanOpen(next);
+						}}
+					>
 						<PopoverAnchor asChild>
 							<div className="shrink-0">
 								<ChatHeader
