@@ -27,8 +27,11 @@ Below it, SHA-256(scope)/dagId contains `state.json`, `payloads/` and `owners/`.
 become path components. DAG ids are safe bounded path components. Descendant directories and files
 must not be symlinks; content must be regular files. Files use private permissions. Root relocation
 is supported by opening a new store at the moved root: persisted references contain only digest and
-size, never absolute paths. The storage tree is local and service-managed, not a security boundary
-against a concurrent privileged actor replacing its ancestors between filesystem calls.
+size, never absolute paths. Files are synced before publication and containing directories are synced
+where the platform permits it. Node/Bun on Windows rejects directory `fsync` with `EPERM`; that one
+platform result is tolerated, so atomic link/rename still applies but namespace power-loss durability
+cannot claim the POSIX directory barrier. The storage tree is local and service-managed, not a
+security boundary against a concurrent privileged actor replacing its ancestors between calls.
 
 `read` opens exactly one committed snapshot and decodes it; absence is undefined, corruption or an
 unknown schema is an explicit error. `list` enumerates committed snapshots and ignores foreign
@@ -75,7 +78,7 @@ check cleans the temporary file without publishing. Once replacement has been is
 does not roll back a possibly committed command.
 
 Snapshot bytes are canonically encoded into an exclusive temporary file, synced and closed, then
-atomically renamed over `state.json`; the containing directory is synced before success. Pending
+atomically renamed over `state.json`; the containing directory follows the platform rule above. Pending
 temporary files are cleaned on failure. No in-memory state cache or speculative publication exists.
 Errors before replacement are definite failures; errors after replacement, or ambiguous rename
 errors, are `commit-unknown`, requiring a read/identical command replay at the runtime boundary.

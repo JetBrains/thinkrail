@@ -21,6 +21,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { canonicalJson, DagError, type DagFailureCode, LIMITS } from "../domain/index.ts";
+import { syncDirectory } from "./files.ts";
 import { snapshot } from "./fixtures.ts";
 import { createDagStore } from "./index.ts";
 
@@ -417,6 +418,27 @@ describe("ownership", () => {
 });
 
 describe("containment and failure handling", () => {
+	test("directory durability tolerates only Windows' unsupported directory fsync", async () => {
+		const { root } = await fixture();
+		const probe = await fs.open(root, "r");
+		const prototype: { sync(): Promise<void> } = Object.getPrototypeOf(probe);
+		await probe.close();
+		let code = "EPERM";
+		const blocked = spyOn(prototype, "sync").mockImplementation(async () => {
+			throw Object.assign(new Error(`directory sync ${code}`), { code });
+		});
+		const platform = process.platform;
+		Object.defineProperty(process, "platform", { value: "win32" });
+		try {
+			await expect(syncDirectory(root)).resolves.toBeUndefined();
+			code = "EIO";
+			await expect(syncDirectory(root)).rejects.toHaveProperty("code", "EIO");
+		} finally {
+			Object.defineProperty(process, "platform", { value: platform });
+			blocked.mockRestore();
+		}
+	});
+
 	test("rejects symlink directories, snapshot links and nonregular snapshot files", async () => {
 		const { store, dir, root } = await fixture();
 		const lease = await store.claim("dag");

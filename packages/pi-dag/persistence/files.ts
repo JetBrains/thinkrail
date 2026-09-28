@@ -139,7 +139,11 @@ export async function syncDirectory(path: string): Promise<void> {
 	if ((await realpath(path)) !== path) fail("corrupt-state", "Symlinked storage directory");
 	const file = await open(path, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
 	try {
-		await file.sync();
+		try {
+			await file.sync();
+		} catch (error) {
+			if (process.platform !== "win32" || !hasCode(error, "EPERM")) throw error;
+		}
 	} finally {
 		await file.close();
 	}
