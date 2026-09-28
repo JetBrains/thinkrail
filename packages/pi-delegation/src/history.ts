@@ -31,6 +31,28 @@ function timestamp(value: unknown): boolean {
 	return text(value) && Number.isFinite(Date.parse(value));
 }
 
+function optional(value: unknown, check: (candidate: unknown) => boolean): boolean {
+	return value === undefined || check(value);
+}
+
+function finite(value: unknown): boolean {
+	return typeof value === "number" && Number.isFinite(value);
+}
+
+function usage(value: unknown): boolean {
+	if (!object(value) || !object(value.cost)) return false;
+	return (
+		["input", "output", "cacheRead", "cacheWrite", "totalTokens"].every((key) =>
+			finite(value[key]),
+		) &&
+		["input", "output", "cacheRead", "cacheWrite", "total"].every(
+			(key) => object(value.cost) && finite(value.cost[key]),
+		) &&
+		optional(value.cacheWrite1h, finite) &&
+		optional(value.reasoning, finite)
+	);
+}
+
 function content(value: unknown, kinds: readonly string[] = ["text", "image"]): boolean {
 	return (
 		Array.isArray(value) &&
@@ -38,13 +60,23 @@ function content(value: unknown, kinds: readonly string[] = ["text", "image"]): 
 			if (!object(block) || !kinds.includes(String(block.type))) return false;
 			switch (block.type) {
 				case "text":
-					return text(block.text);
+					return text(block.text) && optional(block.textSignature, text);
 				case "thinking":
-					return text(block.thinking);
+					return (
+						text(block.thinking) &&
+						optional(block.thinkingSignature, text) &&
+						optional(block.redacted, (candidate) => typeof candidate === "boolean")
+					);
 				case "image":
 					return text(block.data) && nonempty(block.mimeType);
 				case "toolCall":
-					return nonempty(block.id) && nonempty(block.name) && object(block.arguments);
+					return (
+						nonempty(block.id) &&
+						nonempty(block.name) &&
+						object(block.arguments) &&
+						optional(block.thoughtSignature, text) &&
+						optional(block.namespace, text)
+					);
 				default:
 					return false;
 			}
@@ -52,22 +84,55 @@ function content(value: unknown, kinds: readonly string[] = ["text", "image"]): 
 	);
 }
 
+function tool(value: unknown): boolean {
+	if (!object(value)) return false;
+	const constrained = value.constrainedSampling;
+	return (
+		nonempty(value.name) &&
+		text(value.description) &&
+		object(value.parameters) &&
+		(constrained === undefined || constrained === false || object(constrained))
+	);
+}
+
+function systemMessage(value: Record<string, unknown>): boolean {
+	return (
+		value.role === "system" &&
+		(text(value.content) || content(value.content, ["text"])) &&
+		optional(
+			value.sections,
+			(candidate) =>
+				object(candidate) &&
+				Object.values(candidate).every((section) => section === null || text(section)),
+		) &&
+		optional(value.toolsAdded, (candidate) => Array.isArray(candidate) && candidate.every(tool)) &&
+		optional(
+			value.toolsRemoved,
+			(candidate) =>
+				Array.isArray(candidate) &&
+				candidate.every((reference) => object(reference) && nonempty(reference.name)),
+		)
+	);
+}
+
 function message(value: unknown): boolean {
-	if (!object(value) || typeof value.timestamp !== "number") return false;
+	if (!object(value) || !finite(value.timestamp)) return false;
+	if (value.role === "system") return systemMessage(value);
 	if (value.role === "user") return text(value.content) || content(value.content);
 	if (value.role === "toolResult") {
 		return (
 			nonempty(value.toolCallId) &&
 			nonempty(value.toolName) &&
 			content(value.content) &&
-			typeof value.isError === "boolean"
+			typeof value.isError === "boolean" &&
+			optional(value.usage, usage)
 		);
 	}
 	if (value.role === "bashExecution")
 		return (
 			text(value.command) &&
 			text(value.output) &&
-			(value.exitCode === undefined || typeof value.exitCode === "number") &&
+			optional(value.exitCode, finite) &&
 			typeof value.cancelled === "boolean" &&
 			typeof value.truncated === "boolean"
 		);
@@ -78,8 +143,7 @@ function message(value: unknown): boolean {
 			typeof value.display === "boolean"
 		);
 	if (value.role === "branchSummary") return text(value.summary) && nonempty(value.fromId);
-	if (value.role === "compactionSummary")
-		return text(value.summary) && typeof value.tokensBefore === "number";
+	if (value.role === "compactionSummary") return text(value.summary) && finite(value.tokensBefore);
 	if (value.role !== "assistant" || !content(value.content, ["text", "thinking", "toolCall"]))
 		return false;
 	if (!nonempty(value.api) || !nonempty(value.provider) || !nonempty(value.model)) return false;
@@ -89,16 +153,43 @@ function message(value: unknown): boolean {
 		)
 	)
 		return false;
-	const usage = value.usage;
-	if (!object(usage) || !object(usage.cost)) return false;
 	return (
-		["input", "output", "cacheRead", "cacheWrite", "totalTokens"].every(
-			(key) => typeof usage[key] === "number",
+		usage(value.usage) &&
+		["responseModel", "responseId", "providerThinkingLevel", "errorMessage", "rawStopReason"].every(
+			(key) => optional(value[key], text),
 		) &&
-		["input", "output", "cacheRead", "cacheWrite", "total"].every(
-			(key) => object(usage.cost) && typeof usage.cost[key] === "number",
+		optional(value.endTurn, (candidate) => typeof candidate === "boolean") &&
+		optional(value.diagnostics, Array.isArray) &&
+		optional(
+			value.deferred,
+			(candidate) =>
+				object(candidate) &&
+				nonempty(candidate.provider) &&
+				nonempty(candidate.modelId) &&
+				nonempty(candidate.api) &&
+				nonempty(candidate.id) &&
+				optional(candidate.expiresAt, finite) &&
+				optional(candidate.pollAfterMs, finite),
 		)
 	);
+}
+
+function contextEditContent(target: SessionEntry, replacement: unknown): boolean {
+	if (replacement === null) return true;
+	if (!object(replacement)) return false;
+	if (
+		target.type === "custom_message" ||
+		(target.type === "message" && target.message.role === "user")
+	)
+		return text(replacement.content) || content(replacement.content);
+	if (target.type !== "message") return false;
+	if (target.message.role === "assistant")
+		return (
+			text(replacement.content) || content(replacement.content, ["text", "thinking", "toolCall"])
+		);
+	if (target.message.role === "toolResult")
+		return text(replacement.content) || content(replacement.content);
+	return false;
 }
 
 function entryShape(entry: Record<string, unknown>): boolean {
@@ -111,14 +202,30 @@ function entryShape(entry: Record<string, unknown>): boolean {
 			return ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(
 				String(entry.thinkingLevel),
 			);
+		case "usage":
+			return (
+				nonempty(entry.kind) &&
+				nonempty(entry.provider) &&
+				nonempty(entry.model) &&
+				usage(entry.usage) &&
+				optional(entry.note, text)
+			);
 		case "compaction":
 			return (
 				text(entry.summary) &&
 				nonempty(entry.firstKeptEntryId) &&
-				typeof entry.tokensBefore === "number"
+				finite(entry.tokensBefore) &&
+				optional(entry.usage, usage) &&
+				optional(entry.fromHook, (candidate) => typeof candidate === "boolean") &&
+				optional(entry.systemMessage, (candidate) => object(candidate) && message(candidate))
 			);
 		case "branch_summary":
-			return text(entry.summary) && nonempty(entry.fromId);
+			return (
+				text(entry.summary) &&
+				nonempty(entry.fromId) &&
+				optional(entry.usage, usage) &&
+				optional(entry.fromHook, (candidate) => typeof candidate === "boolean")
+			);
 		case "label":
 			return nonempty(entry.targetId) && (entry.label === undefined || text(entry.label));
 		case "session_info":
@@ -131,6 +238,8 @@ function entryShape(entry: Record<string, unknown>): boolean {
 				(text(entry.content) || content(entry.content)) &&
 				typeof entry.display === "boolean"
 			);
+		case "context_edit":
+			return nonempty(entry.targetId) && (entry.replacement === null || object(entry.replacement));
 		default:
 			return false;
 	}
@@ -178,12 +287,21 @@ export function parseTranscript(jsonl: string, sessionId: string): Transcript {
 			invalid("Invalid entry, duplicate id or broken ancestry");
 		}
 		const entry = value as unknown as SessionEntry;
-		if (entry.type === "compaction") {
+		if (entry.type === "compaction" && entry.firstKeptEntryId !== entry.id) {
 			let ancestor = entry.parentId === null ? undefined : byId.get(entry.parentId);
 			while (ancestor && ancestor.id !== entry.firstKeptEntryId) {
 				ancestor = ancestor.parentId === null ? undefined : byId.get(ancestor.parentId);
 			}
 			if (!ancestor) invalid("Compaction firstKeptEntryId is not on its ancestor path");
+		}
+		if (entry.type === "context_edit") {
+			const target = byId.get(entry.targetId);
+			let ancestor = entry.parentId === null ? undefined : byId.get(entry.parentId);
+			while (ancestor && ancestor.id !== entry.targetId) {
+				ancestor = ancestor.parentId === null ? undefined : byId.get(ancestor.parentId);
+			}
+			if (!target || !ancestor || !contextEditContent(target, entry.replacement))
+				invalid("Context edit target or replacement is invalid");
 		}
 		byId.set(entry.id, entry);
 		entries.push(entry);

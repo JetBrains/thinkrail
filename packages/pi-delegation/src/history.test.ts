@@ -64,6 +64,73 @@ test("session capture detaches the selected branch, max thinking and canonical U
 	expect(manager.getBranch().at(-1)?.type).toBe("custom");
 });
 
+test("capture accepts current system, usage and context-edit entries", async () => {
+	const manager = SessionManager.inMemory("/synthetic");
+	manager.appendMessage({
+		role: "system",
+		content: "",
+		sections: { preamble: "Current prompt", removed: null },
+		timestamp: Date.now(),
+	});
+	const user = manager.appendMessage({ role: "user", content: "original", timestamp: Date.now() });
+	manager.appendMessage(assistant());
+	manager.appendUsage("cache_warm", "faux", "worker", {
+		input: 1,
+		output: 2,
+		cacheRead: 3,
+		cacheWrite: 4,
+		totalTokens: 10,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+	});
+	manager.appendContextEdit(user, { content: "edited" });
+	const history = await capture(manager);
+	expect(history.jsonl).toContain('"role":"system"');
+	expect(history.jsonl).toContain('"type":"usage"');
+	expect(history.jsonl).toContain('"type":"context_edit"');
+});
+
+test("capture accepts a retain-none compaction that points to itself", async () => {
+	const manager = SessionManager.inMemory("/synthetic");
+	manager.appendMessage({ role: "user", content: "summarized", timestamp: Date.now() });
+	const compaction = manager.appendCompaction("complete summary", null, 100);
+	const history = await capture(manager);
+	expect(history.entryId).toBe(compaction);
+	expect(history.jsonl).toContain(`"firstKeptEntryId":"${compaction}"`);
+});
+
+test("capture rejects malformed provider-facing content metadata", async () => {
+	const manager = SessionManager.inMemory("/synthetic");
+	const entryId = manager.appendMessage(assistant());
+	const entry = manager.getLeafEntry();
+	if (entry?.type !== "message" || entry.message.role !== "assistant")
+		throw new Error("Missing assistant fixture");
+	manager.getBranch = () =>
+		JSON.parse(
+			JSON.stringify([
+				{
+					...entry,
+					message: {
+						...entry.message,
+						content: [
+							{ type: "thinking", thinking: "summary", thinkingSignature: { invalid: true } },
+						],
+					},
+				},
+			]),
+		);
+	await code(capture(manager, entryId), "invalid-history");
+});
+
+test("capture rejects a context edit whose content cannot replace its target role", async () => {
+	const manager = SessionManager.inMemory("/synthetic");
+	const target = manager.appendMessage(assistant());
+	manager.appendContextEdit(
+		target,
+		JSON.parse('{"content":[{"type":"image","data":"aGVsbG8=","mimeType":"image/png"}]}'),
+	);
+	await code(capture(manager), "invalid-history");
+});
+
 test("null is an empty prefix and never calls the readonly getBranch with null", async () => {
 	const manager = SessionManager.inMemory("/synthetic");
 	manager.appendMessage(assistant());
