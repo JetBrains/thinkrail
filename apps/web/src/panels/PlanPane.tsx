@@ -59,6 +59,7 @@ import { AskUserQuestionCard } from "../chat/tools/AskUserQuestionCard";
 import { useChatTodos } from "../chat/useChatTodos";
 import { LoadingRegion } from "../components/Skeleton";
 import { IconTooltip } from "../components/ui/tooltip";
+import { posixShellQuote } from "../lib/utils";
 import {
 	selectAgentReviewCommentCount,
 	selectChatTitle,
@@ -944,7 +945,7 @@ export default function PlanPane({
 	// delete the remote's commits (and our own fresh fetch already moved the lease baseline, defeating its
 	// safety). So surface the safe integrate command; a deliberate rewrite stays an explicit terminal action.
 	const diverged = (openReview?.behindCommits ?? 0) > 0;
-	const integrateCommand = `git pull --rebase origin ${workspace?.branch ?? ""}`;
+	const integrateCommand = `git pull --rebase origin ${posixShellQuote(workspace?.branch ?? "")}`;
 	const copyIntegrateCommand = () => {
 		void navigator.clipboard
 			.writeText(integrateCommand)
@@ -1421,7 +1422,7 @@ export default function PlanPane({
 							</span>
 							<code
 								data-testid="plan-integrate-command"
-								className="truncate rounded-[var(--radius-sm)] bg-container-elevated-bg px-6 py-2 tr-code-text text-text-default"
+								className="truncate rounded-[var(--radius-sm)] bg-container-elevated-bg px-4 py-2 tr-code-text text-text-default"
 							>
 								{integrateCommand}
 							</code>
