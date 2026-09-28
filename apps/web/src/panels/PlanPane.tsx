@@ -56,9 +56,10 @@ import {
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
 import { AskUserQuestionCard } from "../chat/tools/AskUserQuestionCard";
-import { useChatTodos } from "../chat/useChatTodos";
+import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
 import { LoadingRegion } from "../components/Skeleton";
 import { IconTooltip } from "../components/ui/tooltip";
+import { isShellInert } from "../lib";
 import {
 	selectAgentReviewCommentCount,
 	selectChatTitle,
@@ -871,6 +872,11 @@ export default function PlanPane({
 		return rt ? sessionGlance(rt) : "waiting";
 	});
 	const connection = useAppStore((s) => s.status);
+	const hasRuntime = useAppStore((s) => s.sessions[sessionId] !== undefined);
+	useEffect(() => {
+		if (connection !== "connected" || hasRuntime) return;
+		hydrateSessionRuntime(workspaceId, sessionId).catch(() => {});
+	}, [connection, hasRuntime, workspaceId, sessionId]);
 	const hostPlatform = useAppStore((s) => s.hostPlatform);
 	const canReview = supportsPlanReview(useAppStore((s) => s.protocolVersion));
 	const {
@@ -942,8 +948,10 @@ export default function PlanPane({
 	};
 	const unpushed = openReview?.unpushedCommits ?? 0;
 	const diverged = (openReview?.behindCommits ?? 0) > 0;
-	const integrateCommand = "git pull --rebase";
+	const branch = workspace?.branch ?? "";
+	const integrateCommand = isShellInert(branch) ? `git pull --rebase origin ${branch}` : null;
 	const copyIntegrateCommand = () => {
+		if (!integrateCommand) return;
 		void navigator.clipboard
 			.writeText(integrateCommand)
 			.then(() =>
@@ -1294,13 +1302,15 @@ export default function PlanPane({
 						type="button"
 						data-testid="plan-open-pr"
 						data-diverged={openReview && diverged ? "" : undefined}
-						disabled={prBusy || sameBranch}
+						disabled={prBusy || sameBranch || (!!openReview && diverged && !integrateCommand)}
 						onClick={openReview && diverged ? copyIntegrateCommand : () => void openPrFlow(false)}
 						title={
 							sameBranch
 								? "This workspace's branch is its base branch — there's nothing to open a PR against."
 								: openReview && diverged
-									? `The branch and origin diverged — integrate the remote changes first. Copy: ${integrateCommand}`
+									? integrateCommand
+										? `The branch and origin diverged — integrate the remote changes first. Copy: ${integrateCommand}`
+										: `The branch and origin diverged — integrate origin/${branch} in a terminal first.`
 									: openReview
 										? "Push new commits to the open PR and refresh its description from the plan"
 										: "Push the branch and open a PR whose description comes from this plan"
@@ -1415,23 +1425,30 @@ export default function PlanPane({
 							<span className="tr-text-ui text-text-default">
 								{openReviewLabel(openReview)}'s branch and origin diverged — origin has commits you
 								don't have. Integrate them before pushing (a plain push can't land; force-pushing
-								would drop them). Run in a terminal:
+								would drop them).{" "}
+								{integrateCommand
+									? "Run in a terminal:"
+									: `Integrate origin/${branch} in a terminal — its name has shell-special characters, so no command is offered.`}
 							</span>
-							<code
-								data-testid="plan-integrate-command"
-								className="truncate rounded-[var(--radius-sm)] bg-container-elevated-bg px-4 py-2 tr-code-text text-text-default"
-							>
-								{integrateCommand}
-							</code>
+							{integrateCommand ? (
+								<code
+									data-testid="plan-integrate-command"
+									className="truncate rounded-[var(--radius-sm)] bg-container-elevated-bg px-4 py-2 tr-code-text text-text-default"
+								>
+									{integrateCommand}
+								</code>
+							) : null}
 						</div>
-						<button
-							type="button"
-							data-testid="plan-next-action-go"
-							onClick={copyIntegrateCommand}
-							className={NEXT_ACTION_BUTTON_CLASS}
-						>
-							Copy command
-						</button>
+						{integrateCommand ? (
+							<button
+								type="button"
+								data-testid="plan-next-action-go"
+								onClick={copyIntegrateCommand}
+								className={NEXT_ACTION_BUTTON_CLASS}
+							>
+								Copy command
+							</button>
+						) : null}
 					</div>
 				) : openReview && unpushed > 0 ? (
 					<div data-testid="plan-next-action" data-kind="push" className={NEXT_ACTION_CLASS}>

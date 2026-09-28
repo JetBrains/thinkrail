@@ -280,6 +280,44 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	};
 }
 
+const runtimeHydration = new Map<string, Promise<void>>();
+
+export function hydrateSessionRuntime(workspaceId: string, sessionId: string): Promise<void> {
+	const state = useAppStore.getState();
+	if (
+		state.sessions[sessionId] ||
+		state.removedWorkspaceIds[workspaceId] ||
+		state.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
+	) {
+		return Promise.resolve();
+	}
+	const connectionGeneration = state.connectionGeneration;
+	const key = tupleKey("session-runtime", workspaceId, sessionId, String(connectionGeneration));
+	const existing = runtimeHydration.get(key);
+	if (existing) return existing;
+	const request = getSessionMessagesWithSkillBaseline({ sessionId, workspaceId })
+		.then(({ result: { summary, messages }, syncedTick }) => {
+			const current = useAppStore.getState();
+			if (
+				!isConnectedGeneration(current, connectionGeneration) ||
+				current.removedWorkspaceIds[workspaceId] ||
+				current.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
+			) {
+				return;
+			}
+			current.hydrateSession(
+				summary,
+				messagesToRuntime(messages, summary.lastSettlement),
+				false,
+				summary.live ? undefined : syncedTick,
+				{ activate: false },
+			);
+		})
+		.finally(() => runtimeHydration.delete(key));
+	runtimeHydration.set(key, request);
+	return request;
+}
+
 async function nudgeAgent(workspaceId: string, sessionId: string, title: string): Promise<void> {
 	const initial = useAppStore.getState();
 	if (
@@ -299,24 +337,7 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 		});
 	} catch {
 		try {
-			const {
-				result: { summary, messages },
-				syncedTick,
-			} = await getSessionMessagesWithSkillBaseline({ sessionId, workspaceId });
-			const current = useAppStore.getState();
-			if (
-				current.removedWorkspaceIds[workspaceId] ||
-				current.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
-			) {
-				return;
-			}
-			current.hydrateSession(
-				summary,
-				messagesToRuntime(messages, summary.lastSettlement),
-				false,
-				summary.live ? undefined : syncedTick,
-				{ activate: false },
-			);
+			await hydrateSessionRuntime(workspaceId, sessionId);
 			const hydrated = useAppStore.getState();
 			const recovered = hydrated.sessions[sessionId];
 			if (

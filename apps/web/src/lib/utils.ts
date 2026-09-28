@@ -229,6 +229,10 @@ export function relativeTime(ms: number): string {
 	return `${Math.floor(h / 24)}d ago`;
 }
 
+export function isShellInert(value: string): boolean {
+	return /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(value);
+}
+
 export async function copyText(text: string): Promise<boolean> {
 	try {
 		await navigator.clipboard.writeText(text);

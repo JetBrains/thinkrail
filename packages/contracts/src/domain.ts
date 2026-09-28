@@ -55,9 +55,9 @@ export interface OpenBranchReview {
 	/** `workspace.openReview` only: local commits origin/<branch> doesn't have yet. */
 	unpushedCommits?: number;
 	/**
-	 * `workspace.openReview` only: commits on origin/<branch> that HEAD doesn't have — the branch
-	 * diverged, so a plain push is non-fast-forward and only `--force-with-lease` will land. Present
-	 * (and > 0) only when the remote ref was fresh enough to trust (see [[submodule-server-git]]).
+	 * `workspace.openReview` only: last-known commits on origin/<branch> that HEAD doesn't have (the
+	 * tracking ref may be cached when the fetch fails). A plain push must wait until they're integrated;
+	 * this does not imply the checkout rewrote history or that a force-push is appropriate.
 	 */
 	behindCommits?: number;
 }
