@@ -1502,20 +1502,26 @@ export default function PlanPane({
 					onAdd={plan.add}
 					onOpenChat={() => void openChatInTab(workspaceId, sessionId)}
 					onSend={async (text) => {
-						await openChatInTab(workspaceId, sessionId);
-						const store = useAppStore.getState();
-						const runtime = store.sessions[sessionId];
-						if (!runtime) throw new Error("chat not available");
-						const streaming = runtime.isStreaming;
-						if (!streaming) store.appendUserMessage(sessionId, text);
 						try {
-							await getTransport().request(streaming ? "session.steer" : "session.prompt", {
-								sessionId,
-								text,
-							});
+							await hydrateSessionRuntime(workspaceId, sessionId);
+							const store = useAppStore.getState();
+							const runtime = store.sessions[sessionId];
+							if (!runtime) throw new Error("The chat could not be loaded.");
+							if (runtime.isStreaming) {
+								await getTransport().request("session.steer", { sessionId, text });
+							} else {
+								store.appendUserMessage(sessionId, text);
+								void getTransport()
+									.request("session.prompt", { sessionId, text })
+									.catch((err) =>
+										useAppStore.getState().appendErrorTurn(sessionId, errorText(err)),
+									);
+							}
 						} catch (err) {
-							useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
+							pushToast({ variant: "error", title: "Couldn't send", message: errorText(err) });
+							throw err;
 						}
+						void openChatInTab(workspaceId, sessionId);
 					}}
 					renderGroup={renderGroup}
 					renderItem={renderItem}

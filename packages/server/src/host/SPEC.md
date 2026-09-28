@@ -250,8 +250,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   **inverse also holds, a `changes_requested` verdict must not outlive its findings:** both human paths
   that close a finding reconcile via `clearChangesRequestedIfResolved` — `review.commentDelete` (deletion)
   and `review.commentUpdate` (resolve/dismiss). When the closed finding was the item's LAST open one
-  (`itemOpenFindings` empty) and the item is still `changes_requested`, its review record is dropped
-  (`dropTodoReview`) back to `unreviewed`; the check is a no-op while any finding stays open, so a
+  (`itemOpenFindings` empty) and the item is still `changes_requested`, its verdict record is dropped
+  (`dropTodoReviewVerdict`) back to `unreviewed` — ONLY the record: an in-flight review's pending mark
+  (its start-SHA watermark) and the auto-cycle count stay, so closing the last finding mid-review/fix can
+  neither watermark commits the reviewer never saw nor reset the one-cycle cap; the check is a no-op while any finding stays open, so a
   whole-change verdict that never had an inline finding is never touched. The agent's `resolve_comment`
   path (`applyAgentResolution`) is deliberately NOT reconciled here — it lands inside a fix cycle whose
   following re-review re-derives the verdict, and the record is inert either way (the Open-PR gate counts

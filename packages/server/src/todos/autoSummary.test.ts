@@ -117,3 +117,22 @@ test("returns null (no model call) when the plan is not fully done", async () =>
 	expect(called).toBe(false);
 	expect(new TodoStore(repo, SESSION).read().summary).toBeUndefined();
 });
+
+test("a concurrent request shares the in-flight draft instead of getting null", async () => {
+	let calls = 0;
+	setOneShotRunner(async () => {
+		calls += 1;
+		await Bun.sleep(10);
+		return { text: "One shared draft.", model: { provider: "p", id: "m" } };
+	});
+	const store = new TodoStore(repo, SESSION);
+	seedDone(store);
+
+	const [chat, plan] = await Promise.all([
+		generateTodoSummary({ workspaceId: "w1", sessionId: SESSION }),
+		generateTodoSummary({ workspaceId: "w1", sessionId: SESSION }),
+	]);
+	expect(chat.summary).toBe("One shared draft.");
+	expect(plan.summary).toBe("One shared draft.");
+	expect(calls).toBe(1);
+});

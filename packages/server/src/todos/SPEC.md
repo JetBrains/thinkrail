@@ -257,7 +257,8 @@ completion note, agent-authored via `todo_plan_summary`; item `summary` rides th
   drafted note. The slow model call (`assist.suggestPlanSummary` over the done steps' title/summary/
   verification) runs OUTSIDE the write lock; the final re-check + `setSummary` runs inside
   `enqueueTodoMutation` and never clobbers a note that landed meanwhile or a plan that re-opened, with one
-  in-flight generation per session. It never overwrites the agent's own `todo_plan_summary`.
+  in-flight generation per session — a concurrent caller (the chat and the Plan page both ask) awaits and
+  shares that generation's result rather than getting `null`, so no surface is left summary-less. It never overwrites the agent's own `todo_plan_summary`.
 
 - **`approveTodoReview`** records `reviewed` + the watermark — the pending mark's start-time shas when
   an agent review is in flight, else the current shas (throws on unknown or non-reviewable ids →

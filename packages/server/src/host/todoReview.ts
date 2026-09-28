@@ -3,7 +3,7 @@ import { getProjects } from "../projects";
 import { getReviewSnapshot } from "../reviews";
 import {
 	clearAllPendingReviews,
-	dropTodoReview,
+	dropTodoReviewVerdict,
 	reviewedShaSuperseded,
 	todoReviewRecord,
 } from "../todos";
@@ -86,7 +86,7 @@ export async function itemOpenFindings(p: ItemRef): Promise<ReviewComment[]> {
 export async function clearChangesRequestedIfResolved(p: ItemRef): Promise<void> {
 	if (todoReviewRecord(p)?.state !== "changes_requested") return;
 	if ((await itemOpenFindings(p)).length > 0) return;
-	dropTodoReview(p);
+	dropTodoReviewVerdict(p);
 }
 
 /** Boot-time host-restart reconciliation — see host/SPEC.md ("reconcilePendingReviewsOnBoot"). */

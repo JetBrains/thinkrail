@@ -12,7 +12,13 @@ import {
 	resolveCommentFromAgent,
 	updateComment,
 } from "../reviews";
-import { recordAgentChangesRequested, todoReviewRecord } from "../todos";
+import {
+	readReviewMeta,
+	recordAgentChangesRequested,
+	startTodoReview,
+	todoReviewAutoCycles,
+	todoReviewRecord,
+} from "../todos";
 import { clearChangesRequestedIfResolved } from "./todoReview";
 
 // A changes_requested verdict must not outlive its findings: deleting the item's last open finding
@@ -89,6 +95,17 @@ test("a changes_requested item with no open findings is dropped to unreviewed", 
 
 	await clearChangesRequestedIfResolved({ workspaceId: WS, sessionId: SESSION, id });
 	expect(todoReviewRecord({ workspaceId: WS, sessionId: SESSION, id })).toBeUndefined();
+});
+
+test("dropping the verdict keeps an in-flight review's watermark and the auto-cycle cap", async () => {
+	const store = new TodoStore(repo, SESSION);
+	const { id, sha } = flaggedItem(store, "step", "f.ts");
+	startTodoReview({ workspaceId: WS, sessionId: SESSION, id });
+
+	await clearChangesRequestedIfResolved({ workspaceId: WS, sessionId: SESSION, id });
+	expect(todoReviewRecord({ workspaceId: WS, sessionId: SESSION, id })).toBeUndefined();
+	expect(readReviewMeta(repo, SESSION).pending[id]?.shas).toEqual([sha]);
+	expect(todoReviewAutoCycles({ workspaceId: WS, sessionId: SESSION, id })).toBe(2);
 });
 
 test("keeps the verdict while a finding remains, drops it once the last one is deleted", async () => {

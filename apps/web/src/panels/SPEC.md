@@ -626,11 +626,12 @@ a project picker, the prompt hero, and the reused
   agent…"). A Plan tab restored without its Chat has no local runtime, and chat reconciliation only
   hydrates placed Chat tabs, so `PlanPane` itself calls `hydrateSessionRuntime` (background, no tab
   placement) whenever it is connected without one — the live slot, status, and in-plan ask card need it.
-  The composer mirrors `ChatView.performSend`: it first awaits `openChatInTab`, so the mode comes from the
-  **hydrated** runtime (a restored Plan tab may have no local runtime while the host streams) and a failed
-  hydration keeps the draft; a prompt then optimistically records the user turn (`appendUserMessage`; a steer
-  does not, it arrives with the delivered message), and a rejected send surfaces as an `appendErrorTurn` in
-  that chat rather than being swallowed. `PlanComposer` ignores a submit while the previous one is in flight,
+  The composer keeps `ChatView.performSend`'s semantics: it first awaits `hydrateSessionRuntime`, so the
+  mode comes from the **hydrated** runtime. A **prompt** is recorded before it is sent (`appendUserMessage`)
+  and not awaited — `session.prompt` resolves only when the run ends — so a rejection surfaces as an
+  `appendErrorTurn` in that chat and nothing is lost. A **steer** is not recorded (it arrives with the
+  delivered message), so it is awaited: a failed hydration or a rejected steer toasts and rethrows, and the
+  draft stays in the plan. Only a delivered/recorded send opens the chat (`openChatInTab`). `PlanComposer` ignores a submit while the previous one is in flight,
   so a repeated Enter can't add or send the same draft twice. So a completed
   plan (no open steps) turns its Session into a chat entry point rather than a dead "all steps done" line,
   and a running plan gets an in-place steering field. The one exception is a **truly empty** plan (no items,
