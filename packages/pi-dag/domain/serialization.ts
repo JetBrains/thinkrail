@@ -477,7 +477,6 @@ export function decodeState(value: unknown): DagState {
 			if (
 				!guardedProposal ||
 				!sameTarget(guardedProposal.target, item.target) ||
-				guardedProposal.historyCaptureId !== item.historyCaptureId ||
 				item.answer ||
 				item.disposition === "answered"
 			)

@@ -225,6 +225,45 @@ test("strict snapshots reject dangling evidence, impossible outcomes and mismatc
 	}
 });
 
+test("historical approval gates retain the evidence scope they actually decided", () => {
+	const { state, activation } = fixture();
+	const captureId = "b".repeat(64);
+	const captureFile: StoredFile = { artifactId: captureId, sha256: captureId, sizeBytes: 10 };
+	const target = { nodeId: "worker", attempt: 1, activation: 1 };
+	const decision = { actor, reason: "approved output", at: "now" };
+	state.captures[captureId] = {
+		format: "pi-session-branch-v1",
+		sourceSessionId: "worker",
+		entryId: null,
+		sha256: captureId,
+		sizeBytes: captureFile.sizeBytes,
+		file: captureFile,
+	};
+	state.proposals.proposal = {
+		id: "proposal",
+		createdVersion: 1,
+		target,
+		outputs: {},
+		createdAt: "now",
+		disposition: "accepted",
+		acceptance: decision,
+		historyCaptureId: captureId,
+	};
+	activation.proposalId = "proposal";
+	state.gates.output = {
+		id: "output",
+		kind: "approval",
+		target,
+		authority: "human",
+		question: file,
+		questionPreview: "Release output?",
+		proposalId: "proposal",
+		disposition: "approved",
+		decision,
+	};
+	expect(() => decodeState(state)).not.toThrow();
+});
+
 test("continuations retain legacy snapshot compatibility without accepting malformed metadata", () => {
 	const { state, node } = fixture();
 	Object.assign(node, { continuation: { payload: file } });
