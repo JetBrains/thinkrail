@@ -131,7 +131,10 @@ test("resource-only zero-worker retention, duplicate admission, validation and r
 		],
 	});
 	expect(loaded).toBe(0);
-	await resource.validateModels([model]);
+	const requestedModel = { ...model };
+	const validating = resource.validateModels([requestedModel]);
+	requestedModel.id = "mutated-after-admission";
+	await validating;
 	await code(
 		resource.validateModels([{ provider: "missing", id: "missing" }]),
 		"model-unavailable",
@@ -144,6 +147,48 @@ test("resource-only zero-worker retention, duplicate admission, validation and r
 	const replacement = await core.registerResource("graph", context());
 	await replacement.release();
 	expect(runtime.getModel(model.provider, model.id)).toBeDefined();
+});
+
+test("resource child admission snapshots create and reopen inputs before awaiting", async () => {
+	const core = service();
+	const owner = await core.registerResource("snapshots", context());
+	const mutable = {
+		visibility: "hidden" as const,
+		info: { createdBy: "admitted" },
+		session: {
+			...sessionOptions,
+			model: { ...model },
+			tools: [] as string[],
+		},
+	};
+	const creating = owner.createChild(mutable);
+	mutable.info.createdBy = "mutated";
+	mutable.session.model.id = "missing";
+	mutable.session.systemPrompt = "MUTATED_CREATE";
+	mutable.session.tools.push("late-tool");
+	const child = await creating;
+	expect(child.record.info.createdBy).toBe("admitted");
+	faux.setResponses([fauxAssistantMessage("CREATED")]);
+	expect((await child.runQueued("first")).finalText).toBe("CREATED");
+	const { sessionFile, ...birth } = child.record;
+	await child.dispose();
+	const restore = {
+		...sessionOptions,
+		model: { ...model },
+		tools: [] as string[],
+	};
+	const reopening = owner.reopenChild({ birth, session: restore });
+	restore.model.id = "missing";
+	restore.systemPrompt = "MUTATED_REOPEN";
+	restore.tools.push("late-tool");
+	const reopened = await reopening;
+	faux.setResponses([fauxAssistantMessage("REOPENED")]);
+	expect((await reopened.runQueued("second")).finalText).toBe("REOPENED");
+	const stored = readFileSync(sessionFile, "utf8");
+	expect(stored).not.toContain("MUTATED_CREATE");
+	expect(stored).not.toContain("MUTATED_REOPEN");
+	expect(stored).not.toContain("late-tool");
+	await owner.release();
 });
 
 test("retains exact borrowed runtime after source chat disposal, isolated from parent APIs", async () => {

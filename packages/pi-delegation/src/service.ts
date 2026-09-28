@@ -104,6 +104,49 @@ function abortActiveRun(entry: ChildEntry): Promise<void> {
 	return activeRun.sessionAbort;
 }
 
+function snapshotSessionOptions(options: SessionOptions): SessionOptions {
+	return {
+		...(options.model ? { model: { ...options.model } } : {}),
+		...(options.thinkingLevel !== undefined ? { thinkingLevel: options.thinkingLevel } : {}),
+		...(options.tools ? { tools: [...options.tools] } : {}),
+		...(options.excludeTools ? { excludeTools: [...options.excludeTools] } : {}),
+		...(options.systemPrompt !== undefined ? { systemPrompt: options.systemPrompt } : {}),
+		...(options.contextFiles !== undefined ? { contextFiles: options.contextFiles } : {}),
+		...(options.skills ? { skills: [...options.skills] } : {}),
+		...(options.extensions !== undefined ? { extensions: options.extensions } : {}),
+	};
+}
+
+function snapshotChildSpec(spec: Omit<CreateChildSpec, "parent">): Omit<CreateChildSpec, "parent"> {
+	let origin: CreateChildSpec["origin"];
+	switch (spec.origin?.kind) {
+		case "fresh":
+			origin = { kind: "fresh" };
+			break;
+		case "fork":
+			origin = {
+				kind: "fork",
+				sourceSessionId: spec.origin.sourceSessionId,
+				...(spec.origin.entryId !== undefined ? { entryId: spec.origin.entryId } : {}),
+			};
+			break;
+		case "fork-captured":
+			origin = { kind: "fork-captured", history: { ...spec.origin.history } };
+			break;
+		case "seeded":
+			origin = { kind: "seeded", digest: spec.origin.digest };
+			break;
+	}
+	return {
+		visibility: spec.visibility,
+		info: { ...spec.info },
+		...(origin ? { origin } : {}),
+		...(spec.interactive !== undefined ? { interactive: spec.interactive } : {}),
+		...(spec.workspace ? { workspace: spec.workspace } : {}),
+		...(spec.session ? { session: snapshotSessionOptions(spec.session) } : {}),
+	};
+}
+
 function assertV1Combination(spec: Omit<CreateChildSpec, "parent">): SessionOptions {
 	if (spec.visibility === "hidden" && spec.interactive === true) {
 		throw new DelegationError(
@@ -726,15 +769,17 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		};
 	}
 
-	async function createChild(spec: CreateChildSpec): Promise<ChildHandle> {
+	async function createChild(input: CreateChildSpec): Promise<ChildHandle> {
+		const parentSessionId = input.parent;
+		const spec = snapshotChildSpec(input);
 		const options = assertV1Combination(spec);
-		const parent = bindings.resolveParent?.(spec.parent);
+		const parent = bindings.resolveParent?.(parentSessionId);
 		if (!parent)
 			throw new DelegationError(
 				"unknown-parent",
-				`Parent session ${spec.parent} is not live — children derive their defaults from a live parent`,
+				`Parent session ${parentSessionId} is not live — children derive their defaults from a live parent`,
 			);
-		const runtime = parent.modelRuntime ?? (await getFallbackRuntime(spec.parent, parent));
+		const runtime = parent.modelRuntime ?? (await getFallbackRuntime(parentSessionId, parent));
 		const model = options.model
 			? runtime.getModel(options.model.provider, options.model.id)
 			: parent.model;
@@ -745,7 +790,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		const manager = newManager(
 			spec,
 			parent.cwd,
-			delegationSessionDir(delegationRoot, scope, spec.parent),
+			delegationSessionDir(delegationRoot, scope, parentSessionId),
 		);
 		const session = await assemble(
 			options,
@@ -758,22 +803,22 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		);
 		const record: SpawnRecord = Object.freeze({
 			...birthFields(spec, session),
-			parentSessionId: spec.parent,
+			parentSessionId,
 		});
 		const entry: ChildEntry = {
 			record,
 			session,
-			semaphore: semaphoreFor(spec.parent),
+			semaphore: semaphoreFor(parentSessionId),
 			listeners: new Set(),
 			disposed: false,
 		};
 		const handle = makeHandle(entry);
 		entry.handle = handle;
 		children.set(record.sessionId, entry);
-		let siblings = byParent.get(spec.parent);
+		let siblings = byParent.get(parentSessionId);
 		if (!siblings) {
 			siblings = new Set();
-			byParent.set(spec.parent, siblings);
+			byParent.set(parentSessionId, siblings);
 		}
 		siblings.add(record.sessionId);
 		emit({ type: "child-created", record }, entry);
@@ -922,9 +967,10 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 
 	async function createResourceChild(
 		resource: ResourceState,
-		spec: Omit<CreateChildSpec, "parent">,
+		input: Omit<CreateChildSpec, "parent">,
 		birth?: ResourceChildBirth,
 	): Promise<ResourceChildHandle> {
+		const spec = snapshotChildSpec(input);
 		const options = assertV1Combination(spec);
 		validateSessionOptions(options);
 		if (
@@ -1042,12 +1088,14 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			throw error;
 		}
 		return {
-			validateModels: async (models) =>
-				track(resource, async () => {
+			validateModels: async (models) => {
+				const admitted = models.map((model) => ({ ...model }));
+				return track(resource, async () => {
 					const context = await preparedContext(resource);
 					assertOpen(resource);
-					for (const model of models) checkModel(context, model);
-				}),
+					for (const model of admitted) checkModel(context, model);
+				});
+			},
 			createChild: async (spec) => track(resource, () => createResourceChild(resource, spec)),
 			reopenChild: async ({ birth: inputBirth, session }) =>
 				track(resource, async () => {

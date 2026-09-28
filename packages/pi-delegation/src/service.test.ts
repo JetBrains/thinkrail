@@ -210,6 +210,27 @@ test("runNow rejects: not-implemented (no V1 consumer)", async () => {
 	}
 });
 
+test("parent child admission snapshots caller-owned inputs before awaiting", async () => {
+	const mutable = subagentSpec();
+	const creating = service.createChild(mutable);
+	mutable.parent = "mutated-parent";
+	mutable.info.createdBy = "mutated";
+	mutable.session.systemPrompt = "MUTATED_PARENT";
+	mutable.session.tools.push("late-tool");
+	const child = await creating;
+	try {
+		expect(child.record.parentSessionId).toBe(parent.sessionId);
+		expect(child.record.info.createdBy).toBe("tool:Agent");
+		faux.setResponses([fauxAssistantMessage("SNAPSHOT")]);
+		expect((await child.runQueued("run")).finalText).toBe("SNAPSHOT");
+		const stored = Bun.file(child.record.sessionFile);
+		expect(await stored.text()).not.toContain("MUTATED_PARENT");
+		expect(await stored.text()).not.toContain("late-tool");
+	} finally {
+		await child.dispose();
+	}
+});
+
 test("a foreground run completes: outcome, registry, lineage storage, lifecycle events", async () => {
 	events.length = 0;
 	faux.setResponses([fauxAssistantMessage("CHILD_DONE")]);
