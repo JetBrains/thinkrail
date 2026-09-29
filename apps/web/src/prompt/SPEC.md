@@ -5,7 +5,7 @@ status: active
 title: prompt — shared command-aware input behavior
 parent: module-web
 depends-on: [module-contracts]
-tags: [v1, ui, prompts]
+tags: [ui, prompts]
 ---
 
 ## Responsibility

@@ -5,7 +5,7 @@ runs `pi` and bridges it to a rich UI; `pi` owns models, skills, compaction, cos
 
 ## Read context proportionally
 
-- Use `goal-and-requirements.md` for product scope and V1/V2 decisions.
+- Use `goal-and-requirements.md` for the product's goal, principles, capabilities, and non-goals.
 - Use `architecture.md` for system topology, cross-module decisions, and repo-wide invariants.
 - Read the owning `SPEC.md` when work is governed by or may alter a module boundary, contract,
   invariant, documented behavior, or architecture decision.

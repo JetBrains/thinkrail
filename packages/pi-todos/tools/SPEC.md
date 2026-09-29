@@ -5,7 +5,7 @@ status: draft
 title: pi-todos tools (pi wrappers)
 parent: module-pi-todos
 depends-on: [submodule-pi-todos-core]
-tags: [pi-extension, todos, v2]
+tags: [pi-extension, todos]
 ---
 
 ## Responsibility

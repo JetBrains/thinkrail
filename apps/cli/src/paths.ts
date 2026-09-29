@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, win32 } from "node:path";
 
 export interface InstallMeta {
 	channel?: unknown;
@@ -8,6 +8,29 @@ export interface InstallMeta {
 	tag?: unknown;
 	prefix?: unknown;
 	path_entry_added?: unknown;
+}
+
+export function normalizeWindowsInstallPrefix(value: unknown): string | undefined {
+	if (typeof value !== "string" || value.length === 0) return undefined;
+	let prefix = value.replace(/\\/g, "/");
+	const cygdrive = prefix.match(/^\/cygdrive\/([A-Za-z])(?:\/(.*))?$/);
+	if (cygdrive) {
+		prefix = `${cygdrive[1]?.toUpperCase()}:/${cygdrive[2] ?? ""}`;
+	} else {
+		const gitBash = prefix.match(/^\/([A-Za-z])(?:\/(.*))?$/);
+		if (gitBash) prefix = `${gitBash[1]?.toUpperCase()}:/${gitBash[2] ?? ""}`;
+	}
+	if (!/^(?:[A-Za-z]:\/|\/\/[^/]+\/[^/]+(?:\/|$))/.test(prefix)) return undefined;
+	const normalized = win32.normalize(prefix).replace(/\\/g, "/");
+	return /^[A-Za-z]:/.test(normalized)
+		? `${normalized[0]?.toUpperCase()}${normalized.slice(1)}`
+		: normalized;
+}
+
+export function sameWindowsPath(a: string, b: string): boolean {
+	const normalized = (value: string) =>
+		win32.normalize(value).replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
+	return normalized(a) === normalized(b);
 }
 
 export function installConfigDir(home: string): string {

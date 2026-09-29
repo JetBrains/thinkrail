@@ -5,7 +5,7 @@ status: active
 title: analytics — basic events and consented product insights
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1, analytics, privacy]
+tags: [analytics, privacy]
 ---
 
 ## Responsibility and boundary

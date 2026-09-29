@@ -6,7 +6,7 @@ title: JetBrains AI via the Central CLI — cross-module lifecycle
 parent: architecture
 depends-on: [module-shared, submodule-server-auth, submodule-server-agent, module-contracts, submodule-web-panels, submodule-server-settings, submodule-web-shell, submodule-web-store]
 covers: [central-lifecycle, central-liveness, central-trust-boundary, central-artifact, central-quota]
-tags: [v1, providers, central]
+tags: [providers, central]
 ---
 
 ## Drivers

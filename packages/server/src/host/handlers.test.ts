@@ -72,9 +72,25 @@ test("open-review cache reuse is opt-in so older clients remain fresh", () => {
 
 test("request diagnostics expose only registered method names", async () => {
 	expect(requestMethodDiagnostic("workspace.list")).toBe("workspace.list");
+	expect(requestMethodDiagnostic("host.update")).toBe("host.update");
 	expect(requestMethodDiagnostic("secret prompt value")).toBe("unknown method");
 	expect(requestMethodDiagnostic("toString")).toBe("unknown method");
 	await expect(handleRequest("toString", undefined, CTX)).rejects.toThrow("Unknown method");
+});
+
+test("host.update invokes only the context-injected parameterless operation", async () => {
+	let runs = 0;
+	expect(
+		await handleRequest(
+			"host.update",
+			{ command: "private-command", version: "99.0.0" },
+			{ clientKey: "test-client", runHostUpdate: () => runs++ },
+		),
+	).toEqual({ ok: true });
+	expect(runs).toBe(1);
+	await expect(handleRequest("host.update", {}, CTX)).rejects.toThrow(
+		"Host update is unavailable.",
+	);
 });
 
 test("template reads resolve a project's current checkout and reject ambiguous locations", async () => {

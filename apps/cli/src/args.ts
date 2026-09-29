@@ -24,7 +24,7 @@ export function parseSubcommand(argv: readonly string[]): Subcommand | undefined
 }
 
 export const USAGE = `Usage: thinkrail [options] [project-dir]
-       thinkrail update [--channel stable|nightly] [--version X.Y.Z]
+       thinkrail update [--channel stable|nightly] [--version X.Y.Z|X.Y.Z-nightly.N|latest]
        thinkrail uninstall [--remove-data|--keep-data] [-y]
 
 Boots the ThinkRail engine host in-process and opens the browser to the app.

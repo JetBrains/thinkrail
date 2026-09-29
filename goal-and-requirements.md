@@ -3,76 +3,110 @@ id: goal-and-requirements
 type: goal-and-requirements
 status: active
 title: ThinkRail — product goal and scope
-covers: [product-goal, v1-scope, v2-scope, engine-decision]
+covers: [product-goal, product-audience, product-principles, product-capabilities, product-non-goals, engine-decision]
 tags: [product, scope]
 ---
 
 ## Goal
 
-ThinkRail is a ThinkRail-branded desktop-and-mobile client for the `pi` coding agent. The product
-is a thin host that bridges `pi` to a rich UI and, over time, layers spec-driven workflows on top.
+ThinkRail is a desktop-and-mobile client for the `pi` coding agent: a thin host that runs `pi` and
+bridges it to a rich UI, so agent work is approachable without a terminal and stays isolated,
+reviewable, and grounded in specs — building with agents without losing control.
 
-## Engine
+This document describes the product as it is and why it exists, and changes with it: a capability that
+lands is added here, a decision that changes is rewritten here. It holds no versions or roadmap.
 
-PI agent only. No second runtime (no `claude-agent-sdk`), in V1 or V2. `pi` owns the model registry,
-system prompt, skills/extensions, compaction, and cost. Every feature influences the agent by what we
-**feed** `pi` — prompt context, files, `pi`'s own skills/extensions — and which flags we spawn it
-with, never by assembling the prompt ourselves.
+## Problem
 
-## V1 — Worktree IDE + cheap wins
+`pi` is a deliberately minimal, extensible harness. That flexibility costs time: newcomers spend long
+learning to drive it, and experienced users still find the terminal clumsy for the work around the agent.
 
-A ThinkRail git-worktree IDE shipped through two additive local launchers: a native Electrobun desktop
-app and the retained CLI that opens the browser UI. Both embed the same host and serve the same client;
-the shell is built first, `pi` connected last:
+- **Parallel agents collide** in one working tree — with each other and with the user's own edits.
+- **Agent changes are hard to review** from a CLI: reading diffs, commenting on exact lines, and
+  handing that feedback back to the agent.
+- **Intent evaporates.** Decisions made in a chat end with the session; the next one re-derives or
+  contradicts them.
 
-- **Projects → workspaces**: open a git repo as a project; a workspace is a `git worktree` (own branch +
-  cwd) under `~/.thinkrail/worktrees` — plus one built-in, non-removable **Default workspace** per
-  project (the project folder itself), offered as an explicit choice on the project's Welcome so
-  newcomers aren't lost in the worktree model, and any **existing worktree** the user attaches in place
-  from the project menu (ThinkRail uses its cwd, never touches its checkout).
-- **Desktop workbench**: a recursively splittable center for files, diffs, registered documents, chats, and terminals,
-  bounded to four visible groups; Projects / Specs / Files / Changes / Review and terminals may occupy
-  movable auxiliary groups—vertical stacks at left/right and a horizontally grouped, alignable bottom panel.
-  New workspaces place one terminal in that bottom panel by default. Each frontend window owns one locally
-  persisted, resource-free frame—topology, tool placement, visibility, and geometry—reused across all of its
-  opened workspaces. Open resources, previews, selection, and focus remain local per workspace and window;
-  current layout never synchronizes through the host. Only custom layout presets are shared across clients.
-- A workspace-local **Review** surface for the current worktree: GitHub-style anchored file/diff drafts
-  are collected without starting the agent, then sent as structured context into per-file `pi` chats;
-  sent records persist and the agent can resolve them. This is local review, not PR-provider integration.
-- A plan-header **Open PR** action (`task-open-pr`, deterministic host-side — never agent-routed):
-  pushes the workspace branch and opens or updates its GitHub PR through the user's own `gh` CLI (no
-  stored tokens, no provider REST API), with the PR body rendered from the verified plan; falls back to
-  a prefilled compare URL when `gh` is missing or the forge isn't GitHub. Re-press pushes updates to the
-  SAME PR, never a second one. CI/Checks status, merge/squash from the app, and `glab` support are not
-  part of this slice. See `packages/server/src/pr`.
-- Cheap wins `pi` already emits: per-session model pick (#1), token/cost display (#3), and skill
-  catalog/autocomplete (#2), including read-through reuse of portable Agent Skills a user already keeps
-  for major coding agents — Pi remains the parser/runtime; no copying or vendor-semantic emulation. A
-  repo's **committed** skill aliases load only after an explicit **per-project trust** grant (a clone's are
-  attacker-controlled); personal + bundled skills load regardless.
-- Multiple chat sessions per workspace, streaming concurrently (#5).
-- A bundled **spec-graph** pi extension (`pi-spec-graph`): the agent searches, navigates, and manages
-  the project's specs via `spec_*` tools + a skill.
-- A read-only **Specs** side tool: the active worktree's spec-graph rendered as its `parent` tree, backed
-  by the same `pi-spec-graph` core model host-side;
-  opening a node opens the spec file as an editor tab. Viewer only — no editing, drift detection, or
-  graph canvas.
-- ThinkRail branding: **green accent** (`#8dff4f` on the dark-family themes, `#2e7d16` on the light
-  ones — inverse by appearance so it clears AA on both), Darcula background, **Orbitron** for the brand
-  display role, Geist / JetBrains Mono for UI and code.
-- On-disk state under `~/.thinkrail`.
+## Who it's for
 
-V1 is explicitly **not**: the workflow **product layer** (a runtime/engine, configurable pipelines —
-the skill-based workflow *system*, skills + an always-on rule with no runtime machinery, ships as the
-bundled `pi-thinkrail-workflow` extension); the spec-graph **product layer** beyond the read-only viewer
-(drift detection, pre-build approval, living graph — the pi-side spec capability ships as the bundled
-extension above); PR/Checks automation beyond push + open/update via `gh` (CI/checks status, merge or
-squash from the app, provider REST API integration, `glab` — see `packages/server/src/pr`'s Out of
-scope), self-improvement, automations, per-step model routing, cost ledger.
+People who build with `pi` on real git repositories — newcomers who want a visual on-ramp, experienced
+users who want an IDE around the agent without giving up pi's depth, and agent-first builders who want
+to move fast without losing control of what the agent did.
 
-## V2 — the product
+## Value
 
-Workflow layer (#8), spec layer (#9: pre-build approval → drift detection → living spec graph, building
-on the V1 spec-graph extension), self-improvement (#4), configurable automations (#6), remote/phone over
-Tailscale (#7), and deepened parallelism / cost ledger / per-step routing.
+- **Isolation by default.** A workspace ThinkRail creates is a git worktree with its own branch and cwd:
+  agents run in parallel and the main branch stays clean until the user merges. Working directly in the
+  project folder (the Default workspace) is an explicit choice, never the default.
+- **A real IDE around the agent.** Editor, diffs, terminals, and review in one workbench, so the user
+  sees and steers the agent's work instead of reconstructing it from a scrollback.
+- **Specs as ground truth.** The project's intent lives in a spec graph beside the code that the agent
+  reads, searches, and maintains, so intent survives the session.
+- **All of pi, nothing hidden.** Models, skills, extensions, and session state stay pi's; ThinkRail adds
+  a surface, not a second agent.
+
+## Principles
+
+Durable decisions every feature follows; [[architecture]] carries the structure that enforces them.
+
+- **pi is the only engine**, run in-process — no second runtime (no `claude-agent-sdk`). `pi` owns the
+  model registry, system prompt, skills/extensions, compaction, cost, and session state.
+- **Influence by feeding, never by assembling.** Features shape the agent only through what they feed
+  `pi` — prompt context, files, pi's own skills/extensions — and the flags a session starts with.
+- **Expose, don't recompute.** The host shows what `pi` reports rather than deriving its own copy.
+- **The user's own tools and credentials.** Git, GitHub, and model access go through the user's `git`,
+  `gh`, `central` CLI, and pi's provider auth; ThinkRail keeps no accounts or tokens of its own.
+- **Trust is explicit.** What a cloned repository could inject into the agent — its committed skill
+  aliases — loads only after a per-project trust grant.
+- **Spec-first.** ThinkRail is built spec-first and helps the projects it opens work the same way.
+
+## Capabilities
+
+What ThinkRail does, at product level; the linked spec owns the detail.
+
+- **Two launchers, one app** — a native desktop app and the `thinkrail` CLI that opens the same UI in a
+  browser, both embedding the same host; state lives under `~/.thinkrail` ([[module-desktop]],
+  [[module-cli]]).
+- **Projects → workspaces** — a git repo is a project; a workspace is a git worktree, plus the built-in
+  Default workspace (the project folder itself) and existing worktrees attached in place
+  ([[submodule-server-workspaces]]).
+- **Workbench** — a splittable layout of files, diffs, documents, chats, and terminals with movable side
+  and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]).
+- **Chats** — concurrent `pi` sessions per workspace, each with its own model, pi-reported token/cost,
+  steering and follow-ups mid-run, skill and prompt-template autocomplete, and history search
+  ([[submodule-web-chat]], [[submodule-server-agent]]).
+- **Existing skills reused** — portable Agent Skills kept for other coding agents are read in place;
+  `pi` stays the parser and runtime ([[submodule-server-agent]]).
+- **Plans with per-step review** — a shared TODO plan the agent works and the user edits; a completed step
+  is committed on its own when its changes are provably its own, and can be reviewed by an independent
+  reviewer ([[module-pi-todos]], [[submodule-server-todos]],
+  [[submodule-server-host-plan-review]]).
+- **Subagents** — delegation to isolated child sessions, in the foreground, in parallel, or in the
+  background ([[module-pi-subagents]]).
+- **Review** — anchored comments on files and diffs, collected without starting the agent and sent as
+  structured context to chats that can resolve them; local review, not a forge integration
+  ([[submodule-server-reviews]]).
+- **Open PR** — push the workspace branch and open or update its GitHub PR through the user's `gh`,
+  falling back to a prefilled compare URL ([[submodule-server-pr]]).
+- **Specs** — the agent searches, navigates, and maintains the spec graph through `spec_*` tools; the
+  read-only Specs tool renders it as a tree ([[module-spec-graph]], [[submodule-server-spec]]).
+- **Workflows** — bundled workflow skills for project setup, design brainstorming, and shipping a PR
+  ([[module-thinkrail-workflow]]).
+- **Providers** — in-app sign-in and API keys through pi's auth, and JetBrains AI through the user's
+  `central` CLI ([[submodule-server-auth]], [[central-integration]]).
+- **Agent tools** — web research and inline diagrams and comparisons in chat
+  ([[submodule-web-chat-tools-web]], [[pi-visualize-module]]).
+- **Around the workspace** — open a worktree in an installed editor or IDE, and keep the app itself up
+  to date ([[submodule-server-editors]], [[submodule-web-updates]]).
+- **Brand** — ThinkRail green accent (bright on dark themes, deepened on light ones so it clears AA on
+  both), a Darcula-family dark background, Orbitron for the brand display role, Geist and JetBrains Mono
+  for UI and code ([[submodule-web-themes]], [[web-typography]]).
+
+## Non-goals
+
+Only these are excluded by decision. Anything neither listed above nor excluded here is open, not
+forbidden.
+
+- **A second agent runtime**, or any host-side agent loop or prompt assembly (see Principles).
+- **ThinkRail accounts or a login UI.** Who may reach a host is decided by the network — Tailscale ACLs
+  and device identity ([[architecture]]).

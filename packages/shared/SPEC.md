@@ -6,7 +6,7 @@ title: Shared server-side utilities
 parent: architecture
 depends-on: [module-contracts]
 references: [central-integration]
-tags: [v1, host]
+tags: [host]
 ---
 
 ## Responsibility

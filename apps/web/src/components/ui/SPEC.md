@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: components/ui — shadcn primitives
 parent: module-web
-tags: [v1, ui]
+tags: [ui]
 ---
 
 ## Responsibility

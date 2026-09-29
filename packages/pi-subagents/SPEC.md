@@ -104,7 +104,7 @@ extensions that set holds is the **embedder's** choice, never this package's.
 - **Allowed deps:** `pi-delegation` (through its barrel only); the pi SDK + `typebox` as
   **peerDependencies**; `node:*`.
 - **Forbidden:** any `@thinkrail/*` package (must work under vanilla pi); `@earendil-works/pi-tui`
-  (pure-pi V1 bar is default rendering); `pi-delegation/src/*` internals.
+  (the pure-pi bar is default rendering); `pi-delegation/src/*` internals.
 - The web card / transcript view are the *presentation* side, joined by tool name
   (`registerToolRenderer("Agent", …)`) — they live in `apps/web` (`chat/tools/subagent`), never here.
 
@@ -133,8 +133,8 @@ commit/CI gate.
    bindings. It must load and work in pure pi (the core SPEC's pure-pi bar). *Supersedes the original "host-owned bundled extension" decision — reversed in the PR #261
    review round; research + rationale: core decision log #17–21.*
 2. **Tool naming: Claude Code style** — `Agent` (spawn; models are trained on the convention) +
-   `get_subagent_result` (collect detached results). `steer_subagent` deferred to V2.
-3. **V1 scope: foreground + parallel fan-out + background runs.** Parallel fan-out = several
+   `get_subagent_result` (collect detached results). No `steer_subagent`.
+3. **Scope: foreground + parallel fan-out + background runs.** Parallel fan-out = several
    `Agent` calls in one message (pi runs a batch's tool calls concurrently; the core's semaphore
    paces them) — no `tasks[]`/chain DSL, the model sequences chains itself.
 4. **Transcripts persisted, openable anytime** — children are hidden pi sessions on disk; the web
@@ -150,7 +150,7 @@ commit/CI gate.
    pi-native `.pi` resources); no separate admission gate (earlier user decision).
 7. **Child context: narrow by default, per-definition opt-ins.** A child sees the definition body
    + the env block (contents: The mapping above) + the task; opt-ins: `inherit_project_context`
-   (worktree AGENTS.md), `skills:` (explicit list). No parent-conversation inheritance in V1;
+   (worktree AGENTS.md), `skills:` (explicit list). No parent-conversation inheritance;
    fork-mode inheritance is the recorded growth path (core `origin: fork`). Basis (2026-08,
    source-verified): the reference implementations split between narrow-by-default with opt-ins
    (nicobailon — most adopted at 3.1k★ / 56k dl/wk — gotgenes-replace, tintinweb) and

@@ -24,8 +24,11 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	const argv = Bun.argv.slice(2);
 	const subcommand = parseSubcommand(argv);
 	if (subcommand) {
-		const run = subcommand === "update" ? runUpdate : runUninstall;
-		process.exit(await run(argv.slice(1), process.env));
+		const exitCode =
+			subcommand === "update"
+				? await runUpdate(argv.slice(1), process.env, build)
+				: await runUninstall(argv.slice(1), process.env);
+		process.exit(exitCode);
 	}
 
 	let options: CliOptions;
@@ -52,7 +55,10 @@ async function bootstrap(build: BuildKind): Promise<void> {
 		console.warn(`Web app not found at ${staticDir} — run \`bun run build:web\` to build the UI.`);
 	}
 
-	const hostUpdate = createCliHostUpdate(build, channel, version);
+	const hostUpdate = createCliHostUpdate(build, channel, version, {
+		platform: process.platform,
+		execPath: process.execPath,
+	});
 	const { port, requested } = await bootHost({
 		port: options.port,
 		host: options.host,

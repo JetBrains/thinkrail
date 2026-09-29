@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: Spec-graph core (pi-free model)
 parent: module-spec-graph
-tags: [spec-graph, pi-extension, v1]
+tags: [spec-graph, pi-extension]
 ---
 
 ## Responsibility

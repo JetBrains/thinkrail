@@ -71,7 +71,8 @@ A skipped/declined question is not a blocker: record the assumption inline in th
 
 Save with the spec tools as you go (`spec_create` per node, `edit` for prose). Order:
 
-1. **`goal-and-requirements.md`** (`type: goal-and-requirements`) — the goal + scope. This is the graph
+1. **`goal-and-requirements.md`** (`type: goal-and-requirements`) — what the product is and why, in the
+   goal-doc shape `writing-specs` sets; capabilities are what the code already does. This is the graph
    root; the confirmed intent lives here.
 2. **`architecture.md`** (`type: architecture-design`, `parent: <goal id>`) — topology, the module
    boundaries, the real dependency edges (a small DAG only if it carries real information), and the

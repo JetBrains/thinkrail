@@ -5,7 +5,6 @@ status: active
 title: settings — server-synced app config
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1]
 ---
 
 ## Responsibility

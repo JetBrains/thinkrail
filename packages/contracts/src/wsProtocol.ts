@@ -97,7 +97,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 69;
+export const PROTOCOL_VERSION = 70;
+export const HOST_UPDATE_RUN_PROTOCOL_VERSION = 70;
 export const PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION = 67;
 export const AGENT_REVIEW_SETTING_PROTOCOL_VERSION = 68;
 export const PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION = 69;
@@ -122,10 +123,13 @@ export const ACTIVITY_PROTOCOL_VERSION = 60;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
+export type HostUpdateStatus = "available" | "running" | "succeeded" | "failed";
+
 export interface HostUpdateNotice {
 	currentVersion: string;
 	availableVersion: string;
 	channel: string;
+	status?: HostUpdateStatus;
 }
 
 export interface ServerWelcome {
@@ -252,6 +256,7 @@ export const WS_METHODS = {
 	providerJbcentralLogin: "provider.jbcentralLogin",
 	providerJbcentralUpdate: "provider.jbcentralUpdate",
 	providerJbcentralQuota: "provider.jbcentralQuota",
+	hostUpdate: "host.update",
 	settingsUpdate: "settings.update",
 	feedbackRespond: "feedback.respond",
 	historySearch: "history.search",
@@ -598,6 +603,7 @@ export interface WsMethodMap {
 	"provider.jbcentralLogin": { params: Record<string, never>; result: JbcentralLoginResult };
 	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
 	"provider.jbcentralQuota": { params: { force?: boolean }; result: JbcentralQuotaSnapshot };
+	"host.update": { params: Record<string, never>; result: Ack };
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
 	"history.search": {

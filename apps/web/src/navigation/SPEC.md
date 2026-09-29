@@ -5,7 +5,7 @@ status: active
 title: navigation — client-local routes and restoration
 parent: module-web
 depends-on: [module-contracts]
-tags: [v1, ui, navigation, multi-client]
+tags: [ui, navigation, multi-client]
 references: [architecture, module-desktop]
 ---
 

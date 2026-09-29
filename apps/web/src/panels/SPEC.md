@@ -6,7 +6,7 @@ title: panels — feature views
 parent: module-web
 depends-on: [module-contracts]
 references: [central-integration]
-tags: [v1, ui]
+tags: [ui]
 ---
 
 ## Responsibility
@@ -739,7 +739,7 @@ a project picker, the prompt hero, and the reused
   `plan-review-progress`, only when the plan has reviewable items) → PR (`plan-pr-stage`,
   `data-state`)** — each stage wearing a glyph for its state: done (check), active (the stage the
   plan is currently at), pending (muted). The PR stage reads the same `useOpenBranchReview` lookup
-  as the button and shows `PR #N` once one is open; "merged" is unknowable in V1 (the lookup only
+  as the button and shows `PR #N` once one is open; "merged" is unknowable (the lookup only
   sees OPEN reviews), so the funnel honestly ends at PR-open. Under the stepper sits the **work
   CONTEXT line** (`plan-context`): `baseBranch ← branch · N commits · +A −R` — the arrow points at the
   merge TARGET (base ← head, the GitHub PR convention: changes flow from the workspace branch into
@@ -1014,7 +1014,7 @@ own section. The kebab menu (`plan-menu`, a
   discards drafts, replaces the active review, and publishes the fresh empty snapshot, so the initiating
   and sibling clients all converge through `review.changed`. The empty body distinguishes the two empties:
   **records remain but every file is done** ("…finished — Clear to archive…") vs a **truly empty** review
-  ("No review comments yet…"). V1 has no archive browser. The review-level
+  ("No review comments yet…"). There is no archive browser. The review-level
   (overall-note) composer was removed for
   now (the `review` comment kind stays in the model, UI-less). The `review.get` hydration read is **owned by
   the workbench tool integration**, outside the conditionally mounted Review body (`useWorkspaceReview`, the

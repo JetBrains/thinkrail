@@ -5,7 +5,7 @@ status: active
 title: Engine host (server library)
 parent: architecture
 depends-on: [module-contracts, module-shared]
-tags: [v1, host]
+tags: [host]
 references: [module-artifact-tests]
 ---
 
@@ -168,4 +168,4 @@ reevaluation after either mutation. No feature imports a sibling to derive the p
 
 ## Later
 
-Persistence behind a data layer (V2), `owner` threading.
+Persistence behind a data layer, `owner` threading.

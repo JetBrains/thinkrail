@@ -5,7 +5,6 @@ status: active
 title: persistence — JSON app state
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1]
 ---
 
 ## Responsibility

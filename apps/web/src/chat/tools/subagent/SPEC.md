@@ -6,7 +6,7 @@ title: subagent renderers (Agent / get_subagent_result / completion card)
 parent: submodule-web-chat-tools
 depends-on: [module-contracts]
 references: [module-pi-subagents]
-tags: [v1, chat, subagents]
+tags: [chat, subagents]
 ---
 
 ## Responsibility

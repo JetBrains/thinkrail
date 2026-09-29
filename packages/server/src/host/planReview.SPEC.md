@@ -6,7 +6,7 @@ title: plan review — a hidden delegation subagent, not a reviewer chat
 parent: submodule-server-host
 depends-on: [submodule-server-host, submodule-server-todos, module-pi-delegation]
 references: [submodule-server-todos, submodule-server-reviews, submodule-server-agent]
-tags: [v1, host, review]
+tags: [host, review]
 ---
 
 ## Responsibility
