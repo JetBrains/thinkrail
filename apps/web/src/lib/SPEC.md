@@ -57,7 +57,8 @@ Tiny UI helpers shared across components.
   `normalizePath`, `isAbsolutePath`, `projectRelativePath` (canonical worktree-relative POSIX identity;
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
-  `shallowEqualArrays`, `userText`, `parseSkillInvocation`, `matchesSkillInvocationCommand`,
+  `shallowEqualArrays`, `userText`, `isShellInert` (a value made only of characters that stay literal in POSIX, PowerShell,
+  and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,
   `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `copyText`, `randomId`,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
   `readLayoutSelection`, `readLayoutNavigationClock`, and the `LayoutAttention` type.

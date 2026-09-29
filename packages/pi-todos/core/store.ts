@@ -83,6 +83,13 @@ function decodeIfAgent(s: string, origin: TodoOrigin): string {
 	return origin === "agent" ? decodeEscapes(s) : s;
 }
 
+// Titles are single-line by contract (item bullets and `##` group headings in the markdown export). A
+// newline from the plan's multi-line add input or an agent escape would break that list, so collapse any
+// whitespace run to one space at the write boundary rather than sanitizing on every render.
+function flattenTitle(s: string): string {
+	return s.replace(/\s+/g, " ").trim();
+}
+
 function sanitizeArtifacts(raw: unknown, origin: TodoOrigin): TodoArtifact[] | undefined {
 	if (!Array.isArray(raw)) return undefined;
 	const out: TodoArtifact[] = [];
@@ -109,7 +116,7 @@ function sanitize(raw: unknown): Todo | null {
 	const origin: TodoOrigin = isOrigin(o.origin) ? o.origin : "agent";
 	const todo: Todo = {
 		id: o.id,
-		title: decodeIfAgent(o.title, origin),
+		title: flattenTitle(decodeIfAgent(o.title, origin)),
 		status: isStatus(o.status) ? o.status : "pending",
 		origin,
 		createdAt: typeof o.createdAt === "string" ? o.createdAt : now,
@@ -136,7 +143,7 @@ function sanitizeGroup(raw: unknown): TodoGroup | null {
 	if (todos.length === 0) return null;
 	return {
 		id: typeof o.id === "string" ? o.id : freshId("g"),
-		title: decodeEscapes(o.title),
+		title: flattenTitle(decodeEscapes(o.title)),
 		todos,
 	};
 }
@@ -153,7 +160,7 @@ function makeTodo(
 	const now = nowIso();
 	const todo: Todo = {
 		id: freshId("t"),
-		title: decodeIfAgent(title, origin),
+		title: flattenTitle(decodeIfAgent(title, origin)),
 		status,
 		origin,
 		createdAt: now,
@@ -240,7 +247,7 @@ export class TodoStore {
 			this.write(plan);
 			return todo;
 		}
-		const groupTitle = input.group ? decodeEscapes(input.group) : undefined;
+		const groupTitle = input.group ? flattenTitle(decodeEscapes(input.group)) : undefined;
 		if (groupTitle) {
 			let group = plan.groups.find((g) => g.title === groupTitle);
 			if (!group) {
@@ -277,7 +284,8 @@ export class TodoStore {
 		const todo = all.find((t) => t.id === id);
 		if (!todo) return undefined;
 		let paused: Todo[] = [];
-		if (patch.title !== undefined) todo.title = decodeIfAgent(patch.title, todo.origin);
+		if (patch.title !== undefined)
+			todo.title = flattenTitle(decodeIfAgent(patch.title, todo.origin));
 		if (patch.status !== undefined) {
 			const wasDone = todo.status === "done";
 			todo.status = patch.status;
@@ -286,7 +294,9 @@ export class TodoStore {
 				delete todo.summary;
 				delete todo.verification;
 				delete todo.commitSubject;
-				delete plan.summary;
+				// The plan-level summary is NOT dropped: it survives the re-open (stale) so the UI can show
+				// it as "Updating…" and the next completion can EXTEND it (cumulative contract). Display/
+				// export gating on "everything done" is the reader's job, not a disk erase.
 			}
 		}
 		if (patch.note !== undefined) {
@@ -340,7 +350,7 @@ export class TodoStore {
 		const consumed = new Set<string>();
 		const reconcile = (groupTitle: string, w: WriteItem): Todo => {
 			const hit = existingByKey
-				.get(`${groupTitle}\u0000${decodeEscapes(w.title)}`)
+				.get(`${groupTitle}\u0000${flattenTitle(decodeEscapes(w.title))}`)
 				?.find((t) => !consumed.has(t.id));
 			if (!hit) {
 				return makeTodo(
@@ -364,7 +374,7 @@ export class TodoStore {
 			return merged;
 		};
 		const freshGroups: TodoGroup[] = (plan.groups ?? []).map((g) => {
-			const title = decodeEscapes(g.title);
+			const title = flattenTitle(decodeEscapes(g.title));
 			return { id: freshId("g"), title, todos: g.todos.map((w) => reconcile(title, w)) };
 		});
 		const resultLoose = current.todos.filter((t) => t.origin === "user");

@@ -17,6 +17,7 @@ import type {
 import {
 	ACTIVITY_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
+	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
@@ -34,6 +35,12 @@ export function supportsSessionActivity(protocolVersion: number | null): boolean
  * v67. An older host serves neither, so the UI must not offer it — see [[submodule-web-transport]]. */
 export function supportsPlanReview(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION;
+}
+
+/** Host-side auto plan-summary drafting (`todo.generateSummary`) landed at v69. An older host serves no
+ * such method, so the client must not issue the request. See [[submodule-web-transport]]. */
+export function supportsPlanSummaryGeneration(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION;
 }
 
 const activityHydration = createActivityHydration({

@@ -207,7 +207,8 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	// The settled step: circled Verified glyph, no review affordance anywhere on the row.
 	const reviewedItem = pane.getByTestId("plan-item").filter({ hasText: "Implement retry policy" });
 	await expect(reviewedItem).toHaveAttribute("data-reviewed", "true");
-	await expect(reviewedItem.locator('[data-reviewed="true"][class*="remixicon"]')).toBeVisible();
+	// The settled step wears a "Verified" label to the right of its title (no leading status glyph).
+	await expect(reviewedItem.getByTestId("plan-item-verified")).toContainText("Verified");
 	await expect(reviewedItem.getByTestId("plan-start-review")).toHaveCount(0);
 
 	// The changes-requested step wears the warning ON the collapsed row: alert glyph + the
@@ -269,4 +270,300 @@ test("a branch commit no step owns shows under 'Committed outside the plan' and 
 	await expect(adopted.getByTestId("plan-start-review")).toHaveCount(1);
 	await expect(pane.getByTestId("plan-progress")).toContainText("0/0 done");
 	await expect(pane.getByTestId("plan-review-progress")).toContainText("0/1 reviewed");
+});
+
+test("the plan page groups items into a Session block and Done, and adds a task inline", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const sessionId = await page
+		.locator('[data-testid="editor-tab"][data-kind="chat"]')
+		.first()
+		.getAttribute("data-session-id");
+	if (!sessionId) throw new Error("chat tab exposes no session id");
+	const iso = "2026-01-01T00:00:00Z";
+	const todosDir = join(workspace.worktreePath, ".thinkrail", "context", "todos");
+	mkdirSync(todosDir, { recursive: true });
+	writeFileSync(
+		join(todosDir, `${sessionId}.json`),
+		JSON.stringify({
+			version: 6,
+			todos: [],
+			groups: [
+				{
+					id: "g_active",
+					title: "Build the feature",
+					todos: [
+						{
+							id: "a1",
+							title: "Scaffold",
+							status: "done",
+							origin: "agent",
+							createdAt: iso,
+							updatedAt: iso,
+						},
+						{
+							id: "a2",
+							title: "Wire the API",
+							status: "in_progress",
+							origin: "agent",
+							createdAt: iso,
+							updatedAt: iso,
+						},
+					],
+				},
+				{
+					id: "g_pending",
+					title: "Polish the UI",
+					todos: [
+						{
+							id: "p1",
+							title: "Empty states",
+							status: "pending",
+							origin: "agent",
+							createdAt: iso,
+							updatedAt: iso,
+						},
+					],
+				},
+				{
+					id: "g_done",
+					title: "Set up",
+					todos: [
+						{
+							id: "d1",
+							title: "Init repo",
+							status: "done",
+							origin: "agent",
+							createdAt: iso,
+							updatedAt: iso,
+						},
+					],
+				},
+			],
+		}),
+	);
+
+	await page.getByTestId("chat-plan-toggle").click();
+	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	const pane = page.getByTestId("plan-pane");
+	await expect(pane).toBeVisible();
+
+	// The Session block holds both the active and the pending items; done lives under Done. There is no
+	// separate To-do section anymore.
+	const now = pane.getByTestId("plan-now-executing");
+	await expect(now).toContainText("Session");
+	await expect(pane.getByTestId("plan-todo-section")).toHaveCount(0);
+	await expect(now.getByTestId("plan-item").filter({ hasText: "Wire the API" })).toBeVisible();
+	await expect(now.getByTestId("plan-item").filter({ hasText: "Empty states" })).toBeVisible();
+	await expect(
+		pane.getByTestId("plan-done-section").getByTestId("plan-item").filter({ hasText: "Init repo" }),
+	).toBeVisible();
+
+	// The add-task control: button reveals an inline input; Enter adds the task, which appears in the
+	// Session block.
+	await expect(pane.getByTestId("plan-add-input")).toHaveCount(0);
+	await now.getByTestId("plan-add-task").click();
+	const input = pane.getByTestId("plan-add-input");
+	await expect(input).toBeVisible();
+	await input.fill("Write the changelog");
+	await input.press("Enter");
+	await expect(
+		now.getByTestId("plan-item").filter({ hasText: "Write the changelog" }),
+	).toBeVisible();
+});
+
+test("plan items can be removed, and the add box takes multi-line input (Enter adds, Shift+Enter wraps)", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const sessionId = await page
+		.locator('[data-testid="editor-tab"][data-kind="chat"]')
+		.first()
+		.getAttribute("data-session-id");
+	if (!sessionId) throw new Error("chat tab exposes no session id");
+	const todosDir = join(workspace.worktreePath, ".thinkrail", "context", "todos");
+	mkdirSync(todosDir, { recursive: true });
+	writeFileSync(
+		join(todosDir, `${sessionId}.json`),
+		JSON.stringify({
+			version: 6,
+			todos: [
+				{
+					id: "t1",
+					title: "A task I added from the plan",
+					status: "pending",
+					origin: "user",
+					createdAt: "2026-01-01T00:00:00Z",
+					updatedAt: "2026-01-01T00:00:00Z",
+				},
+			],
+			groups: [],
+		}),
+	);
+
+	await page.getByTestId("chat-plan-toggle").click();
+	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	const pane = page.getByTestId("plan-pane");
+	await expect(pane).toBeVisible();
+
+	// Multi-line add: Shift+Enter inserts a newline (no submit), plain Enter submits.
+	await pane.getByTestId("plan-add-task").click();
+	const input = pane.getByTestId("plan-add-input");
+	await input.click();
+	await input.type("first line");
+	await input.press("Shift+Enter");
+	await input.type("second line");
+	await expect(input).toHaveValue("first line\nsecond line");
+	await input.press("Enter");
+	await expect(pane.getByTestId("plan-item").filter({ hasText: "second line" })).toBeVisible();
+
+	// Remove: the hover affordance deletes the item.
+	const item = pane.getByTestId("plan-item").filter({ hasText: "A task I added" });
+	await item.hover();
+	await item.getByTestId("plan-item-remove").click();
+	await expect(pane.getByTestId("plan-item").filter({ hasText: "A task I added" })).toHaveCount(0);
+});
+
+test("an empty plan's idle line is a click target that opens the add input", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const sessionId = await page
+		.locator('[data-testid="editor-tab"][data-kind="chat"]')
+		.first()
+		.getAttribute("data-session-id");
+	if (!sessionId) throw new Error("chat tab exposes no session id");
+	const todosDir = join(workspace.worktreePath, ".thinkrail", "context", "todos");
+	mkdirSync(todosDir, { recursive: true });
+	writeFileSync(
+		join(todosDir, `${sessionId}.json`),
+		JSON.stringify({ version: 6, todos: [], groups: [] }),
+	);
+
+	await page.getByTestId("chat-plan-toggle").click();
+	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	const pane = page.getByTestId("plan-pane");
+	await expect(pane).toBeVisible();
+	const idle = pane.getByTestId("plan-now-idle");
+	await expect(idle).toContainText("No steps yet");
+	await idle.click();
+	await expect(pane.getByTestId("plan-add-input")).toBeVisible();
+	await expect(idle).toHaveCount(0);
+});
+
+test("a completed plan turns the Session into a chat composer instead of an idle line", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const sessionId = await page
+		.locator('[data-testid="editor-tab"][data-kind="chat"]')
+		.first()
+		.getAttribute("data-session-id");
+	if (!sessionId) throw new Error("chat tab exposes no session id");
+	const todosDir = join(workspace.worktreePath, ".thinkrail", "context", "todos");
+	mkdirSync(todosDir, { recursive: true });
+	writeFileSync(
+		join(todosDir, `${sessionId}.json`),
+		JSON.stringify({
+			version: 6,
+			todos: [
+				{
+					id: "d1",
+					title: "Done thing",
+					status: "done",
+					origin: "agent",
+					createdAt: "2026-01-01T00:00:00Z",
+					updatedAt: "2026-01-01T00:00:00Z",
+				},
+			],
+			groups: [],
+		}),
+	);
+
+	await page.getByTestId("chat-plan-toggle").click();
+	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	const pane = page.getByTestId("plan-pane");
+	await expect(pane).toBeVisible();
+	await expect(pane.getByTestId("plan-session-chat")).toBeVisible();
+	await expect(pane.getByTestId("plan-now-idle")).toHaveCount(0);
+
+	// Sending from the plan composer optimistically records the user turn and hands off to the chat
+	// (mirrors ChatView.performSend), so the typed message survives the navigation.
+	await pane.getByTestId("plan-session-chat").fill("hello from the plan");
+	await pane.getByTestId("plan-session-chat").press("Enter");
+	await expect(
+		page
+			.locator('[data-testid="chat-message"][data-role="user"]')
+			.filter({ hasText: "hello from the plan" }),
+	).toBeVisible();
+});
+
+test("a re-opened plan keeps the completion note on the page, marked stale, but out of the export", async ({
+	page,
+	context,
+}) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const sessionId = await page
+		.locator('[data-testid="editor-tab"][data-kind="chat"]')
+		.first()
+		.getAttribute("data-session-id");
+	if (!sessionId) throw new Error("chat tab exposes no session id");
+
+	// The state a completed plan leaves behind, then re-opened: one step went back to work, so the plan
+	// is no longer all-done, but the stored plan-level note from the last completion is still on disk.
+	const todosDir = join(workspace.worktreePath, ".thinkrail", "context", "todos");
+	mkdirSync(todosDir, { recursive: true });
+	writeFileSync(
+		join(todosDir, `${sessionId}.json`),
+		JSON.stringify({
+			version: 6,
+			todos: [],
+			summary: "Everything shipped; suite green.",
+			groups: [
+				{
+					id: "g_1",
+					title: "Ship the feature",
+					todos: [
+						{
+							id: "t_a",
+							title: "First step",
+							status: "done",
+							origin: "agent",
+							createdAt: "2026-01-01T00:00:00Z",
+							updatedAt: "2026-01-01T00:00:00Z",
+						},
+						{
+							id: "t_b",
+							title: "Second step",
+							status: "in_progress",
+							origin: "agent",
+							createdAt: "2026-01-01T00:00:00Z",
+							updatedAt: "2026-01-01T00:00:00Z",
+						},
+					],
+				},
+			],
+		}),
+	);
+
+	await page.getByTestId("chat-plan-toggle").click();
+	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	const pane = page.getByTestId("plan-pane");
+	await expect(pane).toBeVisible();
+
+	// The plan is not all-done, yet the note stays visible — marked stale ("updating") instead of gone.
+	await expect(pane.getByTestId("plan-progress")).toContainText("1/2 done");
+	await expect(pane.getByTestId("plan-overall-summary")).toContainText("Everything shipped");
+	await expect(pane.getByTestId("plan-summary-stale")).toBeVisible();
+
+	// The ungated export still gates on completion: the stale note never leaves the app.
+	await pane.getByTestId("plan-menu").click();
+	await page.getByTestId("plan-copy-markdown").click();
+	const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+	expect(clipboard).not.toContain("Everything shipped");
 });

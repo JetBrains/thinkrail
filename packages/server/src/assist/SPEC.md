@@ -12,7 +12,7 @@ tags: [v1, pi, oneshot, public-surface-checked]
 
 Small, **best-effort** agentic helpers that run a single cheap-model completion — the "ad-hoc one-shot
 task service." Each task owns its prompt, output parsing/guards, and graceful-degrade fallback; it never
-blocks or crashes its caller. Current tasks name workspaces and chats. Workspace naming consumes a session's
+blocks or crashes its caller. Current tasks name workspaces and chats, and draft a completed plan's summary when the agent wrote none. Workspace naming consumes a session's
 first clean turn and has an instant deterministic title plus cheap-model refinement. Chat naming consumes
 only the first raw text prompt and has a deterministic fallback; the host owns when either result may write.
 Assist emits human-readable display text, never a branch or slug — branch derivation belongs to
@@ -52,9 +52,15 @@ no wire method; consumers are host-side flows.
     caller's job.
   - `setOneShotRunner(fn)` — a test seam swapping the one-shot runner (default = `agent.completeOnce`) so
     tasks unit-test against a fake with no pi/auth/network.
+  - `suggestPlanSummary(steps)` \u2192 a short **Markdown** handoff note for a COMPLETED plan, drafted from its
+    finished steps (`{ title, summary?, verification? }[]`, built by the caller \u2014 assist reads no store),
+    through the same tool-free cheap-model path, or `null` (best-effort: `null`, never throws, on no auth /
+    timeout / no usable steps / empty output). `toPlanSummary(raw)` is the pure output guard (strip a code
+    fence and a leading `Summary:` label, clamp length; `null` when empty). The host persists the result
+    only when non-null; it never overwrites an agent-authored `plan.summary`.
 - **Public surface (barrel):** `extractFirstTurn`, `hasEligibleChatTitlePrompt`, `naiveChatTitle`,
-  `naiveWorkspaceName`, `setOneShotRunner`, `suggestChatTitle`, `suggestWorkspaceName`, `toWorkspaceName`,
-  `OneShotRunner`, `WorkspaceNameTurn`.
+  `naiveWorkspaceName`, `setOneShotRunner`, `suggestChatTitle`, `suggestPlanSummary`, `suggestWorkspaceName`,
+  `toPlanSummary`, `toWorkspaceName`, `OneShotRunner`, `PlanSummaryStep`, `WorkspaceNameTurn`.
 - **Allowed deps:** `agent` (the `completeOnce`/`OneShotRequest`/`OneShotResult` primitive, via its
   barrel); `contracts` (`Message`/`UserMessage`/`AssistantMessage`/`TextContent`, session-title normalization,
   and `isControlMessage`); Node.

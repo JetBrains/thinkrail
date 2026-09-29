@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import { changedFileArgs, diffBaseRef, resolveDiffRange } from "./diffScope";
 import {
-	countUnpushedCommits,
+	countPushDivergence,
 	gitCommitPaths,
 	gitDiffFile,
 	gitHeadSha,
@@ -911,21 +911,35 @@ test("gitCommitPaths refuses to commit over a conflicted index (unmerged entries
 	expect(gitHeadSha("w1")).toBe(head ?? "");
 });
 
-test("countUnpushedCommits distinguishes an absent remote ref from a failed count", async () => {
+test("countPushDivergence distinguishes an absent remote ref from a failed measure", async () => {
 	git(repo, "update-ref", "refs/remotes/origin/main", "HEAD");
 	failGitSubcommand("rev-list");
 
-	await expect(countUnpushedCommits(repo, "main")).rejects.toThrow(/forced rev-list failure/);
+	await expect(countPushDivergence(repo, "main")).rejects.toThrow(/forced rev-list failure/);
 });
 
-test("countUnpushedCommits counts what origin/<branch> lacks; null without the remote ref", async () => {
-	expect(await countUnpushedCommits(repo, "main")).toBeNull();
+test("countPushDivergence reports ahead/behind; null without the remote ref", async () => {
+	expect(await countPushDivergence(repo, "main")).toBeNull();
 	git(dataDir, "init", "--bare", "origin.git");
 	git(repo, "remote", "add", "origin", join(dataDir, "origin.git"));
 	git(repo, "push", "-u", "origin", "main");
-	expect(await countUnpushedCommits(repo, "main")).toBe(0);
+	expect(await countPushDivergence(repo, "main")).toEqual({ ahead: 0, behind: 0 });
 	writeFileSync(join(repo, "next.txt"), "next\n");
 	git(repo, "add", "-A");
 	git(repo, "commit", "-m", "next");
-	expect(await countUnpushedCommits(repo, "main")).toBe(1);
+	expect(await countPushDivergence(repo, "main")).toEqual({ ahead: 1, behind: 0 });
+});
+
+test("countPushDivergence reports behind when the branch was rewritten (force-push needed)", async () => {
+	git(dataDir, "init", "--bare", "origin.git");
+	git(repo, "remote", "add", "origin", join(dataDir, "origin.git"));
+	writeFileSync(join(repo, "a.txt"), "a\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "a");
+	git(repo, "push", "-u", "origin", "main");
+	// Rewrite the last commit locally: HEAD now lacks the pushed commit and adds a new one → diverged.
+	git(repo, "commit", "--amend", "-m", "a (amended)");
+	const divergence = await countPushDivergence(repo, "main");
+	expect(divergence?.ahead).toBe(1);
+	expect(divergence?.behind).toBe(1);
 });

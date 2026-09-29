@@ -85,7 +85,7 @@ import { listAvailableEditors, openEditor, revealInFileManager } from "../editor
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
 import { readDir, readFile } from "../fs";
 import {
-	countUnpushedCommits,
+	countPushDivergence,
 	gitDiffFile,
 	gitStatus,
 	listBranches,
@@ -146,6 +146,7 @@ import {
 	addTodo,
 	approveTodoReview,
 	countOpenTodos,
+	generateTodoSummary,
 	listTodos,
 	removeSessionTodoWindows,
 	removeTodo,
@@ -196,6 +197,7 @@ import { runObservation } from "./runAnalytics";
 import { taskObservation } from "./taskAnalytics";
 import {
 	claimItemFix,
+	clearChangesRequestedIfResolved,
 	isItemUnderActiveReview,
 	itemFixFindings,
 	markClientStale,
@@ -420,14 +422,18 @@ const handlers: Record<string, Handler> = {
 	"workspace.openReview": async (params) => {
 		const p = params as { workspaceId: string; allowCached?: boolean };
 		const ws = getWorkspace(p.workspaceId);
-		const [review, unpushed] = await Promise.all([
-			findOpenBranchReview(ws.worktreePath, ws.branch, {
-				fresh: shouldRefreshOpenReview(p.allowCached),
-			}),
-			countUnpushedCommits(ws.worktreePath, ws.branch),
+		const fresh = shouldRefreshOpenReview(p.allowCached);
+		const [review, divergence] = await Promise.all([
+			findOpenBranchReview(ws.worktreePath, ws.branch, { fresh }),
+			// Only pay the network fetch on a fresh lookup (focus / explicit refresh), not a cached activation.
+			countPushDivergence(ws.worktreePath, ws.branch, { fetch: fresh }),
 		]);
 		if (!review) return review;
-		return unpushed ? { ...review, unpushedCommits: unpushed } : review;
+		return {
+			...review,
+			...(divergence && divergence.ahead > 0 ? { unpushedCommits: divergence.ahead } : {}),
+			...(divergence && divergence.behind > 0 ? { behindCommits: divergence.behind } : {}),
+		};
 	},
 	"workspace.remove": (params) => {
 		const id = (params as { id: string }).id;
@@ -557,6 +563,8 @@ const handlers: Record<string, Handler> = {
 			return { ok: true, total: 0, alreadyRunning: true };
 		return { ok: true, total: started.length };
 	},
+	"todo.generateSummary": (params) =>
+		generateTodoSummary(params as { workspaceId: string; sessionId: string }),
 	"todo.requestFix": async (params) => {
 		const capture = additionalCapture();
 		const p = params as { workspaceId: string; sessionId: string; id: string; feedback: string };
@@ -977,12 +985,34 @@ const handlers: Record<string, Handler> = {
 			body?: string;
 			status?: ReviewCommentStatus;
 		};
-		return withReviewLock(p.workspaceId, async () => updateComment(p));
+		return withReviewLock(p.workspaceId, async () => {
+			const updated = await updateComment(p);
+			// Resolving/dismissing the item's last open finding must clear its changes_requested verdict
+			// too (no-op while findings remain), the same invariant as commentDelete.
+			if (updated.origin?.todoId)
+				await clearChangesRequestedIfResolved({
+					workspaceId: p.workspaceId,
+					sessionId: updated.origin.sessionId,
+					id: updated.origin.todoId,
+				});
+			return updated;
+		});
 	},
 	"review.commentDelete": (params) => {
 		const p = params as { workspaceId: string; id: string };
 		return withReviewLock(p.workspaceId, async () => {
+			const origin = (await getReviewSnapshot(p.workspaceId)).comments.find(
+				(c) => c.id === p.id,
+			)?.origin;
 			await deleteComment(p.workspaceId, p.id);
+			// A changes_requested verdict must not outlive its findings: if this was the item's last open
+			// finding, drop the verdict back to unreviewed.
+			if (origin?.todoId)
+				await clearChangesRequestedIfResolved({
+					workspaceId: p.workspaceId,
+					sessionId: origin.sessionId,
+					id: origin.todoId,
+				});
 			return { ok: true } as const;
 		});
 	},

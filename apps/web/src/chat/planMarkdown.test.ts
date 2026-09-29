@@ -78,6 +78,10 @@ test("a committed done item renders sha + summary + status-lettered file rows wi
 			"",
 			"Progress: 1/1",
 			"",
+			"## Summary",
+			"",
+			"1 step done · 2 files",
+			"",
 			"- [x] Implement foo — `abc1234` · 2 files · +40 −3",
 			"    - `M` src/foo.ts · +28 −3",
 			"    - `A` src/bar baz.ts · +12",
@@ -92,7 +96,40 @@ test("a fallback done item (change artifacts, no commit) lists bare paths — no
 		artifacts: [{ kind: "change", path: "src/bar.ts" }],
 	};
 	expect(planToMarkdown({ todos: [done], groups: [] }, "c")).toBe(
-		["# TODO — c", "", "Progress: 1/1", "", "- [x] Fix bar", "    - src/bar.ts", ""].join("\n"),
+		[
+			"# TODO — c",
+			"",
+			"Progress: 1/1",
+			"",
+			"## Summary",
+			"",
+			"1 step done · 1 file",
+			"",
+			"- [x] Fix bar",
+			"    - src/bar.ts",
+			"",
+		].join("\n"),
+	);
+});
+
+test("multiline (bullet) summary and verification flatten to one export line each", () => {
+	const done: TodoItem = {
+		...item("Rework ranking", "done"),
+		summary: "Switched to Expected Value.\n\n- EV = P_accept × value\n- Added feature logging",
+		verification:
+			"- alembic upgrade head applies f3a5\n- pytest → 3 pass\n- ruff + pyright → clean",
+	};
+	expect(planToMarkdown({ todos: [done], groups: [] }, "c")).toBe(
+		[
+			"# TODO — c",
+			"",
+			"Progress: 1/1",
+			"",
+			"- [x] Rework ranking",
+			"    - _Switched to Expected Value. · EV = P_accept × value · Added feature logging_",
+			"    - Verified: alembic upgrade head applies f3a5 · pytest → 3 pass · ruff + pyright → clean",
+			"",
+		].join("\n"),
 	);
 });
 
@@ -103,6 +140,30 @@ test("a commit artifact without decorated files (unresolvable sha) degrades to a
 	};
 	expect(planToMarkdown({ todos: [done], groups: [] }, "c")).toBe(
 		["# TODO — c", "", "Progress: 1/1", "", "- [x] Old step", ""].join("\n"),
+	);
+});
+
+test("a completed plan's agent summary exports under a ## Summary heading with a facts line", () => {
+	const plan: TodoPlan = {
+		todos: [item("a", "done")],
+		groups: [],
+		summary: "Shipped the whole thing end to end.",
+	};
+	expect(planToMarkdown(plan, "c")).toBe(
+		[
+			"# TODO — c",
+			"",
+			"Progress: 1/1",
+			"",
+			"## Summary",
+			"",
+			"1 step done",
+			"",
+			"Shipped the whole thing end to end.",
+			"",
+			"- [x] a",
+			"",
+		].join("\n"),
 	);
 });
 

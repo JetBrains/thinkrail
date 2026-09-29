@@ -324,7 +324,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   the in-memory registry is lost — and its absence is precisely what stops the polling).
 - **`askState`** — the questionnaire lifecycle seam: the pure
   `deriveAskStates(turns, askAnswers, toolResults)` + `AskStatesContext`/`useAskState` (provided by
-  `ChatView`, `null` standalone). A live blocking ask resolves through its native tool result; a
+  `ChatView`, and also by the plan page's `PlanAskQuestion` so the SAME `AskUserQuestionCard` can be
+  answered from the plan — see `panels/SPEC.md`; `null` standalone). A live blocking ask resolves through its native tool result; a
   restart-repaired eligible ack resolves later through `ask-user-answers`; a stopped/error/length result is
   terminal because Pi never executes tools from a length-truncated assistant response. "Answered /
   superseded / stopped / awaiting" is therefore derived once from all three transcript
@@ -952,6 +953,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
+  **auto-summary trigger** (a fully-done plan with no agent `summary` fires one best-effort
+  `todo.generateSummary` that folds a host-drafted note in — re-armed if the plan re-opens or its summary
+  clears, never overwriting an existing note) + the **review-snapshot refetch** (the plan's review
+  decoration is host-derived, so a change to the workspace's review comments, e.g. deleting a finding that
+  clears a step's `changes_requested`, re-reads the plan) + the
   `openMarkdown` snapshot action; tool completion refreshes immediately and `agent_settled` supplies the
   final refresh; overlapping list reads are latest-wins and connection-generation stamped, accepted adds
   fold by item id, and a failed optimistic removal re-reads authority rather than restoring a stale whole-plan
@@ -969,8 +975,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (todoId + optional sessionId) when stamped, falling back to the change-set path join only for
   provenance-less comments, so two steps touching one file don't count each other's findings; the
   Review tab is the truth), and
-  `planCompletionSummary` (the plan-level note gated on "everything done", so a re-opened plan never
-  shows a stale all-done note). `itemChangeSet`'s precedence: live `change` paths win (a fallback redo's
+  `planCompletionSummary` (the agent's plan-level note gated on "everything done", so a re-opened plan
+  never leaks a stale all-done note into ungated outputs — it feeds the markdown export; the plan page also
+  shows a derived one-line recap, see `panels/SPEC.md`) and its plan-page-only companion `planStaleSummary`
+  (the same stored note surfaced, marked stale, once an item re-opens after a completion, so the recap
+  persists on the page instead of vanishing until the agent rewrites it) and `planChangeTotals` (the whole-plan distinct-file count
+  behind that recap). `itemChangeSet`'s precedence: live `change` paths win (a fallback redo's
   latest delta), else the NEWEST resolvable commit. A group's *status* is
   **not** derived here — the host computes it and ships it on `TodoGroupItem.status`, so the rule has one
   home; a user edit therefore re-reads the plan rather than patching it locally, see `useChatTodos`), `TodoList` (the
@@ -984,11 +994,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (no separate "Your requests" header — they're placed by status). **The compact list is title-only**
   (status glyph + title + the change-set chip) — a row's `note`, a done item's agent-authored `summary`,
   and its `verification` are **not** shown here, so a long plan reads at a glance without overloading;
-  the **full plan page** (`PlanPane`) is where those surface: the `summary` as a clamped muted line
-  (`todo-summary`) and the `verification` as the shared **`VerificationBadge`** (`planKit`; the
-  "Tests ✓" element — check glyph for a named check, warning glyph for an honest "not verified", the
-  split derived by `planView.verificationStatus`, ONE home; the badge's title labels it self-reported —
-  never a host-run gate). The plan page has no in-page review list
+  the **full plan page** (`PlanPane`) is where those surface: the `summary` as **Markdown** (a muted
+  structured note — lead + bullets) and the `verification` as the shared **`VerificationBadge`**
+  (`planKit`; a status glyph — check for a named check, warning for an honest "not verified", the split
+  derived by `planView.verificationStatus`, ONE home — beside the verification rendered as **Markdown**,
+  so several checks read as bullet points instead of one run-on line; the badge's title labels it
+  self-reported — never a host-run gate). The plan page has no in-page review list
   — its header kebab offers **Review All** (host-side queue, `todo.reviewAll`) and a comment chip that
   focuses the right-panel Review tab (see `panels/SPEC.md`). A row whose review is **settled** (`planView.reviewSettled` — approved and
   nothing landed since) upgrades its done check to the **circled Verified glyph**

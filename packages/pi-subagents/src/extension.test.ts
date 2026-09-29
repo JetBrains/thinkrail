@@ -272,16 +272,13 @@ test("a disable during asynchronous child creation disposes it before provider w
 		signalChildCreated = resolve;
 	});
 	const gatedService: DelegationService = {
+		...service,
 		async createChild(spec) {
 			const child = await service.createChild(spec);
 			signalChildCreated();
 			await childGate;
 			return child;
 		},
-		findChild: (sessionId) => service.findChild(sessionId),
-		childrenOf: (parentSessionId) => service.childrenOf(parentSessionId),
-		onLifecycle: (listener) => service.onLifecycle(listener),
-		disposeChildrenOf: (parentSessionId) => service.disposeChildrenOf(parentSessionId),
 	};
 	const session = await makeSession(() => enabled, gatedService);
 	const childCallsBefore = fauxB.state.callCount;

@@ -34,18 +34,24 @@ the host wire still use loose items):
   `consistencyNudge` when open items exist but none is `in_progress`; a `todo_update` → `done` names
   the group's next open step instead (suggest-only, never auto-started); auto-demoted items are
   reported as `(paused: …)`. A `done` that leaves **no open item anywhere** additionally nudges
-  `todo_plan_summary` — the overall completion summary is asked for at exactly the moment it becomes due.
+  `todo_plan_summary` — the overall completion summary is asked for at exactly the moment it becomes due;
+  when a summary from an earlier completion still survives on the plan (the add-new-work path never drops
+  it), the nudge **echoes that text and asks the agent to extend it** rather than rewrite from scratch, so
+  the note stays cumulative over everything done instead of narrowing to the last step.
 - **Completion summaries (the review trail):** `todo_update` takes optional `summary` (what/why — the
-  decisions the diff can't show, plus any scope drift), **`commitSubject`** (the git-facing subject line
+  decisions the diff can't show, plus any scope drift; **structured Markdown** — lead + bullets),
+  **`commitSubject`** (the git-facing subject line
   for the step's delta, written in the host repository's own commit style — the schema description is
   where the "read `git log` and match it" instruction lives, since the tools are the agent's only
-  contact with this field) and **`verification`** (the exact check run +
-  result, or "not verified" — a separate field so the UI renders it as a status badge and a vague or
-  missing line is visible at a glance) — all three set together with `status: done` (skill-mandated for
+  contact with this field) and **`verification`** (the exact check(s) run +
+  result, or "not verified" — a separate field so the UI badges it with a status glyph; **Markdown**, so
+  several checks render as a bullet list rather than one `;`-crammed line, and a vague or missing line is
+  visible at a glance) — all three set together with `status: done` (skill-mandated for
   code-changing steps, never a tool gate: the tool can't know whether the step changed code — git
   lives host-side). `todo_plan_summary` sets the plan-level handoff note
-  (`TodoStore.setSummary`); it accepts an early call but flags how many items are still open (the UI
-  shows the note only once everything is done).
+  (`TodoStore.setSummary`) — a **cumulative** recap of everything done across the whole plan (every task,
+  every completion), extended not rewritten when an earlier note survives; it accepts an early call but
+  flags how many items are still open (the UI shows the note only once everything is done).
 - **Group-first output:** `formatPlan` renders each group under `formatGroupHeader` — `▸ <title>
   [<derived status> <done>/<total>]` — with its steps indented, **then the loose lane (the user's own
   adds) last** under a `Your requests:` header. The user's lane is last on purpose: a request added
