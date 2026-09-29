@@ -1,0 +1,14 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "thinkrail-website",
+	"compatibility_date": "2026-08-22",
+	"pages_build_output_dir": "./dist",
+	"d1_databases": [
+		{
+			"binding": "ATTRIBUTION_DB",
+			"database_name": "thinkrail-attribution",
+			"database_id": "51b090ae-0075-4b0d-b684-5560fbe8d51e",
+			"migrations_dir": "migrations"
+		}
+	]
+}

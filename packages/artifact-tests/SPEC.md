@@ -51,10 +51,11 @@ of this package.
 Normal artifact children set `CI=1` to mute every analytics tier without changing the production runtime mode; `THINKRAIL_NO_ANALYTICS`
 alone suppresses only additional events. `bun run smoke:desktop --analytics [launcher]` instead runs a
 controlled hidden-host probe against a loopback PostHog collector, never the vendor endpoint. It removes
-inherited CI/test/optional mutes and proxies for human-mode launches, checks baseline-only `app_started`
-with desktop/release/platform provenance and one UUID across restarts (including additional opt-out), then
-proves CI and test mutes independently. No UI action or consent is simulated; delivery is checked after
-normal host shutdown. The expected release identity is the shared identity used to build the artifact.
+inherited CI/test/optional mutes and proxies for human-mode launches, checks first packaged initialization
+emits `app_installed` before `app_started`, checks restart emits only `app_started`, and pins standard
+desktop/release/platform provenance plus one UUID across both (including additional opt-out). It then proves
+CI and test mutes independently. No UI action or confirmation is simulated; delivery is checked after normal
+host shutdown. The expected release identity is the shared identity used to build the artifact.
 
 Every host owns isolated home, data, agent and cache directories; environment overrides respect Windows'
 case-insensitive keys. Readiness polling owns a finite deadline and observes early root exit; because the launcher writes its ready, route and navigation-probe documents non-atomically, the smoke treats a missing or half-written JSON file as "not yet" and keeps polling rather than failing on a torn read. When a live

@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +12,29 @@ import {
 	type Project,
 	type Workspace,
 } from "@thinkrail/contracts";
+import {
+	claimBrowserAttributionAttemptIn,
+	readAcquisitionIn,
+	replaceAcquisitionWithTerminalMarkerIn,
+	saveAcquisitionIn,
+} from "./attribution";
+import type { AcquisitionRecord } from "./attributionProtocol";
+import { claimAppInstalledIn, ensureInstallationIn, type InstallationRecord } from "./installation";
+
+export {
+	type AcquisitionRecord,
+	ATTRIBUTION_LIFETIME_MS,
+	ATTRIBUTION_MAX_POLLS,
+	ATTRIBUTION_ORIGIN,
+	ATTRIBUTION_POLL_INTERVAL_MS,
+	type AttributionTouch,
+	claimIdPattern,
+	hasExactKeys,
+	isRecord,
+	parseRedeemedAttribution,
+	type RedeemedAttribution,
+} from "./attributionProtocol";
+export type { InstallationRecord } from "./installation";
 
 export function dataDir(): string {
 	return process.env.THINKRAIL_DATA_DIR ?? join(homedir(), ".thinkrail");
@@ -131,14 +153,26 @@ export function saveConfig(config: AppConfig): void {
 	writeJson("config.json", config);
 }
 
-export interface InstallationRecord {
-	id: string;
+export function ensureInstallation(): InstallationRecord {
+	return ensureInstallationIn(dataDir());
 }
 
-export function ensureInstallation(): InstallationRecord {
-	const raw = readJson<Partial<InstallationRecord>>("installation.json", {});
-	if (typeof raw?.id === "string" && raw.id.length > 0) return { id: raw.id };
-	const record: InstallationRecord = { id: randomUUID() };
-	writeJson("installation.json", record);
-	return record;
+export function claimAppInstalled(): boolean {
+	return claimAppInstalledIn(dataDir());
+}
+
+export function readAcquisition(now = Date.now()): AcquisitionRecord | undefined {
+	return readAcquisitionIn(dataDir(), now);
+}
+
+export function claimBrowserAttributionAttempt(): boolean {
+	return claimBrowserAttributionAttemptIn(dataDir());
+}
+
+export function saveAcquisition(record: AcquisitionRecord): void {
+	saveAcquisitionIn(dataDir(), record);
+}
+
+export function replaceAcquisitionWithTerminalMarker(): void {
+	replaceAcquisitionWithTerminalMarkerIn(dataDir());
 }
