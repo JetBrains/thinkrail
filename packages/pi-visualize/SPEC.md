@@ -66,7 +66,7 @@ configuration. This validates syntax, not SVG/layout; web renderers retain their
    host (TUI, piped output, a UI without a custom renderer). For `diagram`, a fenced ```mermaid block; for
    `comparison`, a sectioned list.
 2. **`renderResult` (TUI)** — **deferred.** A tier-2 renderer using pi-tui's `Markdown` component would
-   render the fallback more nicely in pi's terminal. Deferred from V1: it's TUI-only polish, sourcing a
+   render the fallback more nicely in pi's terminal. Deferred: it's TUI-only polish, sourcing a
    `MarkdownTheme` is unconfirmed, and tier-1 already degrades acceptably. Adding it later touches only
    this file and adds a `@earendil-works/pi-tui` peer dep.
 3. **Web renderer** — *not here*; lives in `apps/web` and renders mermaid → SVG + styled cards.

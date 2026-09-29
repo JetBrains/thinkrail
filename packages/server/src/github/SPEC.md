@@ -5,7 +5,7 @@ status: active
 title: github — local gh auth status
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1, public-surface-checked]
+tags: [public-surface-checked]
 ---
 
 ## Responsibility

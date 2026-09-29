@@ -6,7 +6,7 @@ title: agent — in-process pi sessions
 parent: module-server
 depends-on: [module-contracts, module-pi-delegation, module-pi-subagents]
 references: [module-spec-graph, central-integration]
-tags: [v1, pi]
+tags: [pi]
 ---
 
 ## Responsibility

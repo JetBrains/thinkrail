@@ -5,7 +5,7 @@ status: active
 title: web tool renderers (search / fetch / stored content)
 parent: submodule-web-chat-tools
 depends-on: [module-contracts]
-tags: [v1, chat, web-tools]
+tags: [chat, web-tools]
 ---
 
 ## Responsibility

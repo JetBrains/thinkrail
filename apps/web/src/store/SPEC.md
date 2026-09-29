@@ -5,7 +5,6 @@ status: active
 title: store — Zustand app state
 parent: module-web
 depends-on: [module-contracts]
-tags: [v1]
 ---
 
 ## Responsibility

@@ -5,7 +5,7 @@ status: active
 title: Web UI client
 parent: architecture
 depends-on: [module-contracts]
-tags: [v1, ui]
+tags: [ui]
 ---
 
 ## Responsibility

@@ -5,7 +5,7 @@ status: active
 title: Spec-Graph pi extension
 parent: architecture
 depends-on: []
-tags: [spec-graph, pi-extension, v1]
+tags: [spec-graph, pi-extension]
 ---
 
 ## Responsibility

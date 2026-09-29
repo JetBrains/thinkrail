@@ -5,7 +5,7 @@ status: active
 title: CLI host launcher
 parent: architecture
 depends-on: [module-server, module-shared]
-tags: [v1, host]
+tags: [host]
 references: [module-artifact-tests]
 ---
 
@@ -320,7 +320,7 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   port to open the URL — so scan upward from the requested port to the first free one, then open the
   resolved origin. (`Bun.serve` won't surface `EADDRINUSE` for a busy port, so the free port is found by
   probing, not by catching a bind error — see `@thinkrail/shared/freePort`.)
-- The browser is the V1 client, not a fallback — the same UI can point at a remote host (the V2 path).
+- The browser is a first-class client, not a fallback — the same UI can point at a remote host.
 - The agent runs in this process — a fatal fault takes the app down (the accepted in-process tradeoff).
 - `resolveShellEnv()` runs once, before any `AgentSession`.
 - The startup mark is a presentation of the resolved launch result, never a second readiness signal:
@@ -328,5 +328,5 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
 
 ## Later
 
-A headless `serve` mode (always-on host for remote/automations, V2). The shipped desktop sibling swaps
+A headless `serve` mode (always-on host for remote/automations). The shipped desktop sibling swaps
 "open a browser" for "open a native webview" over the same `bootHost()` lifecycle.

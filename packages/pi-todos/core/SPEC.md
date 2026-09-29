@@ -4,7 +4,7 @@ type: submodule-design
 status: draft
 title: pi-todos core (pi-free model)
 parent: module-pi-todos
-tags: [pi-extension, todos, v2]
+tags: [pi-extension, todos]
 ---
 
 ## Responsibility

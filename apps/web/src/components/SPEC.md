@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: components — shared UI primitives
 parent: module-web
-tags: [v1, ui, resilience]
+tags: [ui, resilience]
 ---
 
 ## Responsibility

@@ -6,7 +6,7 @@ title: pi-todos extension — the chat TODO list
 parent: architecture
 depends-on: []
 references: [module-spec-graph, submodule-web-chat]
-tags: [pi-extension, todos, v2]
+tags: [pi-extension, todos]
 ---
 
 ## Responsibility

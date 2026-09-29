@@ -4,7 +4,6 @@ type: submodule-design
 status: active
 title: dialog — native folder picker
 parent: module-server
-tags: [v1]
 ---
 
 ## Responsibility

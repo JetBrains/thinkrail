@@ -5,7 +5,7 @@ status: active
 title: host — the browser↔host wire
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1, host, public-surface-checked]
+tags: [host, public-surface-checked]
 ---
 
 ## Responsibility
@@ -485,7 +485,7 @@ from the auto-fix set. The client badge rides a **server-derived, non-persisted
 the `review.changed` broadcast) — the host is the only ring that can, since staleness joins a finding's
 `origin` (reviews) to its step's commits (todos). `stale` is never a persisted field.
 
-Preserving the *original* reviewed code was considered and rejected for V1: reconstructing it after the
+Preserving the *original* reviewed code was considered and rejected: reconstructing it after the
 fact from `reviewedSha` is unsound (the finding's textQuote came from the add-time worktree, which is not
 guaranteed to equal that blob), and add-time snapshotting is real storage cost for low value (a finding
 whose code was overwritten is usually moot; its prose body survives regardless). If ever needed, the only

@@ -6,7 +6,7 @@ title: pr — push the workspace branch and open/update its GitHub PR
 parent: module-server
 depends-on: [submodule-server-branch-review, submodule-server-todos, submodule-server-github]
 implements: [task-open-pr]
-tags: [github, pull-request, v1, public-surface-checked]
+tags: [github, pull-request, public-surface-checked]
 ---
 
 ## Responsibility
@@ -34,7 +34,7 @@ previewed draft and the pushed PR can never diverge). The call opens with **`ass
 adopted/external worktree branches are stored verbatim from git (only created workspaces pass
 `toBranch`), so an option-shaped branch from an untrusted repo (`--repo=x` is creatable via
 `git update-ref`) must be rejected before it reaches any git/gh argv. It then rejects a **non-origin
-remote base before the dirty-file read or push**: V1 pushes and opens against `origin`; silently treating
+remote base before the dirty-file read or push**: it pushes and opens against `origin` only; silently treating
 `upstream/main` as a branch in that repository would first publish the workspace branch and only later
 fail to identify its PR target. A remote-tracking ref that outlived its remote configuration is rejected
 on the same side. The error directs the user to open it manually or create from a local/`origin` base;

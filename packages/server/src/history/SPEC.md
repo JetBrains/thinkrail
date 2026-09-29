@@ -5,7 +5,7 @@ status: active
 title: history — chat-history search index
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1, history]
+tags: [history]
 ---
 
 ## Responsibility
@@ -45,7 +45,7 @@ to preserve).
   recall inserts and what the overlay's preview presents as the whole prompt, so a cap would silently
   corrupt recall of long pasted-log prompts and make terms past the cutoff unsearchable (the memory
   precedent is pi itself: `SessionInfo.allMessagesText` holds every session's full text in memory). Tool
-  results/thinking not indexed (V1).
+  results/thinking are not indexed.
 - `historyIndex.ts` — `HistoryIndex`: cold build on first search (async per-file IO yields the event loop;
   blocks the search up to a budget, then returns partial with `indexing: true`). Discovery is its own
   async enumeration (see "pi file format" below for the pinned layout): a custom `sessionDir` is a flat,

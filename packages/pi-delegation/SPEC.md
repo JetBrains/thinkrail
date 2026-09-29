@@ -174,7 +174,7 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
 
 | Pattern | Spec | Driven by |
 |---|---|---|
-| **Subagent** (V1) | `{origin: fresh, visibility: hidden, interactive: false, info: {createdBy: "tool:Agent", roleName, roleSource}, session: from definition}` | `runQueued(task)` — awaited (foreground) or not (background) |
+| **Subagent** | `{origin: fresh, visibility: hidden, interactive: false, info: {createdBy: "tool:Agent", roleName, roleSource}, session: from definition}` | `runQueued(task)` — awaited (foreground) or not (background) |
 | Interactive subsession | `{origin: fresh \| fork, visibility: listed, interactive: true, info: {createdBy: "user"}}` | the user, via the manager — never a run method |
 | Branch | `{origin: fork(current, entryId), visibility: listed, interactive: true, info: {createdBy: "user"}}` (no `session`) | the user |
 | Workflow step | `{interactive: false, info: {createdBy: "workflow:<name>"}}` | `runQueued`/`runNow` by an engine |
@@ -239,7 +239,7 @@ stateDiagram-v2
   `~/.thinkrail/delegation` with `scope = workspaceId`; pure pi defaults to
   `<piAgentDir>/delegation` with `scope = "default"`. Hidden by construction: session listings
   scan only the default root.
-- **V1 lineage = the storage layout.** The directory structure *is* the parent edge; the
+- **Lineage = the storage layout.** The directory structure *is* the parent edge; the
   transcript path derives from `(scope, parentSessionId, childSessionId)` with no index file. A
   persisted `SpawnRecord` index becomes real when `listed` visibility lands (the type exists now,
   the file does not).
@@ -249,12 +249,12 @@ stateDiagram-v2
   children (no graph traversal); a join is engine control flow, not a session.
 - **Retention is the embedder's:** ThinkRail ties child lifetime to the **workspace** (archival
   deletes; closing a tab deletes nothing — mechanics: [[submodule-server-agent]]). Pure pi: no GC.
-  No per-parent GC anywhere in V1.
+  No per-parent GC anywhere.
 - `listed` children (future) ride everything that exists — manager registration → tabs, WS
   streaming, hydration, restart repair; the wire's `SessionSummary` grows optional lineage fields
   then, not now.
 
-## V1 child assembly (what the core owns, consumers never see)
+## Child assembly (what the core owns, consumers never see)
 
 The child's resource loader is **narrow by default**: no discovered extensions, no prompt
 templates, no themes; context files, skills, and the embedder's curated extension set
@@ -305,10 +305,10 @@ extension constructs it with defaults. Everything host-specific enters through t
 default except the live-parent lookup when session-parent creation is used** — `resolveParent` is
 optional for resource-only services; the embedder owns the session-parent lookup (ThinkRail: the manager; pure pi: the consuming extension's own `ctx`).
 
-**Pure-pi V1 bar (user-settled):** the consuming extension loads and runs correctly under vanilla
-pi with pi's **default tool rendering** — no pi-tui widget in V1 (the rich live card is the web
+**Pure-pi bar (user-settled):** the consuming extension loads and runs correctly under vanilla
+pi with pi's **default tool rendering** — no pi-tui widget (the rich live card is the web
 renderer's job). Verified on demand by `bun run smoke:subagents` (described in
-[[module-pi-subagents]]). npm publication stays possible; not a V1 goal.
+[[module-pi-subagents]]). npm publication stays possible; not a goal.
 
 ## Scope & readiness rules (user-settled)
 
@@ -350,7 +350,7 @@ lineage.
    not creation (per-run: a chain reuses a child with different caps).
 5. **Pacing = two explicit methods** (user round; supersedes a `pacing` option and its brief
    deletion): a `run()` that silently parks on a queue is hidden policy — the call site must say
-   which it wants. `runNow` loud-rejects in V1 (no consumer), consistent with the readiness rule.
+   which it wants. `runNow` loud-rejects while it has no consumer, consistent with the readiness rule.
 6. **`visibility` required, no default** (user round) — same call-site transparency rule. It stays
    a *core* axis because its consequences (storage root, manager registration) are creation-time
    actions only the core may perform, and it is not derivable from `interactive`.
@@ -398,8 +398,8 @@ lineage.
     posture keeps `web → contracts`-only intact and the package host-free. (Rejected: authoring
     the type in the package and re-exporting through `contracts` — `contracts` imports no
     extension packages.)
-21. **Pure-pi V1 bar: loads + works under default rendering** (user-settled) — no pi-tui widget in
-    V1; the rich live card ships web-side.
+21. **Pure-pi bar: loads + works under default rendering** (user-settled) — no pi-tui widget; the
+    rich live card ships web-side.
 22. **`collectResult()` added to `ChildHandle`** (implementation round): the `collected` flag needs
     a maintainer, and a side-effectful `snapshot` getter was the only alternative — `snapshot`
     stays a pure read; collection is the explicit act.

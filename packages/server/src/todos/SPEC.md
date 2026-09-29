@@ -6,7 +6,7 @@ title: todos — a chat's per-session TODO plan (read/write)
 parent: module-server
 depends-on: [module-contracts, submodule-server-git, submodule-server-assist]
 references: [module-pi-todos, submodule-server-pr, submodule-web-chat]
-tags: [v2, todos]
+tags: [todos]
 ---
 
 ## Responsibility
@@ -29,8 +29,8 @@ wire response stays a bare `TodoItem` — the UI re-reads the whole plan on chan
 with the next `todo.list`.
 
 This module does **not** push: a user edit isn't broadcast to other clients. The acting client updates
-optimistically; a second viewer reconciles on the next `pi.event`-driven refetch. Fine for single-owner
-V1 (the chat-plan UX this feeds: [[submodule-web-chat]]'s "Chat TODO plan").
+optimistically; a second viewer reconciles on the next `pi.event`-driven refetch. Fine for a single-owner
+host (the chat-plan UX this feeds: [[submodule-web-chat]]'s "Chat TODO plan").
 
 **Change artifacts (`artifacts.ts`) — a commit-based review map.** Status stays agent-owned, but the host
 *observes* the transitions to attach an item's code changes, so the plan becomes a durable review map.

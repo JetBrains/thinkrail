@@ -5,7 +5,7 @@ status: active
 title: chat — pi conversation UI primitives
 parent: module-web
 depends-on: [module-contracts]
-tags: [v1, chat]
+tags: [chat]
 ---
 
 ## Responsibility

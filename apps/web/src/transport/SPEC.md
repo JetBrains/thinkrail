@@ -5,7 +5,6 @@ status: active
 title: transport — WS client to the host
 parent: module-web
 depends-on: [module-contracts]
-tags: [v1]
 ---
 
 ## Responsibility

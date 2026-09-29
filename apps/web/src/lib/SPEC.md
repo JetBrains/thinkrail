@@ -4,7 +4,6 @@ type: submodule-design
 status: active
 title: lib — UI helpers
 parent: module-web
-tags: [v1]
 ---
 
 ## Responsibility

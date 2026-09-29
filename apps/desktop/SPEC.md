@@ -5,13 +5,13 @@ status: active
 title: Desktop launcher/client (Electrobun)
 parent: architecture
 depends-on: [module-server, module-contracts, module-shared]
-tags: [desktop, v1, launcher, packaging]
+tags: [desktop, launcher, packaging]
 references: [submodule-web-navigation, module-artifact-tests, module-ci-release, submodule-web-shell]
 ---
 
 ## Responsibility
 
-The native Electrobun launcher/client over the existing web UI and wire. The V1 local-host profile embeds
+The native Electrobun launcher/client over the existing web UI and wire. The local-host profile embeds
 the server in the Electrobun Bun process, serves the packaged web artifact on one loopback origin, and
 opens that origin in a native system webview. `apps/cli` remains the sibling browser launcher and release
 rollback. A later shared-client profile may dial an existing host without introducing another UI, wire, or
@@ -37,9 +37,9 @@ engine architecture.
   storing one active location on the backend; or bundling CEF without a new acceptance failure that
   justifies it. Native shell, lifecycle, and packaging concerns are the only desktop-specific behavior.
 
-## V1 profile and topology
+## Profile and topology
 
-V1 ships only the local-host profile. One Electrobun Bun process owns the native shell and server on the
+Only the local-host profile ships. One Electrobun Bun process owns the native shell and server on the
 same event loop; the accepted in-process crash trade-off is unchanged. The host binds loopback port `0`
 and its actual port forms the window origin. The packaged `web/dist`, `/ws`, `/files`, and SPA fallback
 therefore remain same-origin and the web client has no desktop branch. A dynamic loopback port is never

@@ -5,7 +5,6 @@ parent: module-server
 status: active
 title: terminal — workspace PTYs
 depends-on: [module-contracts]
-tags: [v1]
 ---
 
 ## Responsibility

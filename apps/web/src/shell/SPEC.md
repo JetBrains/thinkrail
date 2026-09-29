@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: shell — responsive frame
 parent: module-web
-tags: [v1, ui]
+tags: [ui]
 references: [module-desktop]
 ---
 
