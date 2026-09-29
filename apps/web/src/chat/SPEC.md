@@ -1053,7 +1053,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   idle). The glance's working/waiting lifecycle comes from the normalized host `SessionState`; `askStates`
   remains only to identify and render the exact questionnaire/recap. `ChatView` records unobscured
   conversation pointer intent; workbench integration records deliberate tab/group selection; history
-  surfaces record direct history/search opens; and the store records workspace entry that reveals the
+  surfaces record direct history/search opens; the Review and Plan panels' explicit open-chat actions record
+  their open; and the store records workspace entry that reveals the
   selected chat. Neither passive mount/background restoration nor incidental history-overlay interaction
   counts. Activation captures the exact current unread completion id (plus its local
   clock), while exact-row rendering gates the actual acknowledgement: deliberate navigation may occur

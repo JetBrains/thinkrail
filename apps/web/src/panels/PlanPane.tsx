@@ -1500,7 +1500,10 @@ export default function PlanPane({
 						/>
 					)}
 					onAdd={plan.add}
-					onOpenChat={() => void openChatInTab(workspaceId, sessionId)}
+					onOpenChat={() => {
+						useAppStore.getState().noteDirectChatActivation(sessionId);
+						void openChatInTab(workspaceId, sessionId);
+					}}
 					onSend={async (text) => {
 						try {
 							await hydrateSessionRuntime(workspaceId, sessionId);

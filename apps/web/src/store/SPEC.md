@@ -247,7 +247,8 @@ selected-log state belong to chat integration, not domain persistence. See
     focus. Deliberate workspace entry also activates its already-selected chat once that chat is visible and
     unobscured, so entering the workspace and reading does not require a second click on the chat. Passive
     mount/visibility and background layout restoration never advance activation; chat-tab/group selection,
-    direct history/search open, workspace entry, and unobscured conversation pointer intent do. Workspace
+    direct history/search open, an explicit Review/Plan-panel open-chat action, workspace entry, and
+    unobscured conversation pointer intent do. Workspace
     entry arms one pending activation only until the first selected center tab converges; competing
     navigation or any connection transition expires it, so a later background restore cannot inherit an
     old read gesture. Incidental interactions inside an obscuring history overlay do not.

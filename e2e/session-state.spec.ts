@@ -1,5 +1,6 @@
-import { realpathSync, rmSync } from "node:fs";
-import { expect, type Locator, test } from "@playwright/test";
+import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { AskUserQuestionArgs } from "@thinkrail/contracts";
 import {
 	defaultWorkspaceRow,
@@ -7,8 +8,9 @@ import {
 	openFixtureProject,
 	openPersistedChat,
 } from "./fixtures/app";
-import { E2E_FIXTURE_REPO } from "./fixtures/paths";
+import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
+import { E2eWire } from "./fixtures/wire";
 
 const BASE_TS = 1_704_000_000_000;
 
@@ -23,6 +25,36 @@ async function expectAttentionDot(row: Locator): Promise<void> {
 	const dot = row.getByTestId("attention-dot");
 	await expect(dot).toHaveAttribute("aria-label", "Needs attention");
 	await expect(dot.locator('[aria-hidden="true"]')).toHaveClass(/bg-primary/);
+}
+
+async function seedSentReviewComment(page: Page, sessionId: string): Promise<void> {
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		const [project] = await wire.request("project.list", {});
+		if (!project) throw new Error("No fixture project to attach the review comment to");
+		const workspaces = await wire.request("workspace.list", { projectId: project.id });
+		const workspace = workspaces.find((candidate) => candidate.kind === "default");
+		if (!workspace) throw new Error("No default workspace for the review comment");
+		const review = await wire.request("review.get", { workspaceId: workspace.id });
+		const file = join(E2E_DATA_DIR, "reviews", `${workspace.id}.json`);
+		const snapshot = JSON.parse(readFileSync(file, "utf8"));
+		snapshot.comments.push({
+			id: "rc_e2e_sent_attention",
+			reviewId: review.review.id,
+			kind: "review",
+			anchor: null,
+			body: "Open the finished review result.",
+			status: "sent",
+			sentAt: BASE_TS,
+			sessionId,
+			anchorState: "anchored",
+			createdAt: BASE_TS,
+		});
+		snapshot.review.fileSessions = { ...snapshot.review.fileSessions, "": sessionId };
+		writeFileSync(file, JSON.stringify(snapshot, null, 2));
+	} finally {
+		wire.close();
+	}
 }
 
 test("an unresolved persisted question is level-triggered in project and workspace state", async ({
@@ -141,6 +173,70 @@ test("an unread finished result clears only after direct chat activation renders
 		await expect(peerProject).not.toHaveAttribute("data-attention", /.+/);
 		await peer.close();
 	} finally {
+		rmSync(session.path, { force: true });
+		rmSync(quietSibling.path, { force: true });
+	}
+});
+
+test("opening a chat from a sent review comment clears its unread result", async ({ page }) => {
+	await openFixtureProject(page);
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "sent review attention receipt",
+		messages: [
+			{ role: "user", text: "Finish this review run.", timestamp: BASE_TS + 20 },
+			{ role: "assistant", text: "Review-opened finished result.", timestamp: BASE_TS + 21 },
+		],
+	});
+	const quietSibling = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "quiet sent review sibling",
+		messages: [],
+	});
+	let peer: Page | undefined;
+	try {
+		await reconnectWithSeed(page);
+		const workspace = defaultWorkspaceRow(page);
+		await expectAttentionDot(workspace);
+
+		peer = await page.context().newPage();
+		await peer.goto("/");
+		await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		const peerProject = peer.getByTestId("project-item").first();
+		const peerExpand = peerProject.getByTestId("project-expand");
+		if ((await peerExpand.getAttribute("data-expanded")) === "true") await peerExpand.click();
+		await expectAttentionDot(peerProject);
+
+		await seedSentReviewComment(page, session.id);
+		await enterDefaultWorkspace(page);
+		const targetChatTab = page.locator(
+			`[data-testid="editor-tab"][data-kind="chat"][data-session-id="${session.id}"]`,
+		);
+		await expect(targetChatTab).toHaveCount(0);
+		await expect(
+			page.getByTestId("chat-message").filter({ hasText: "Review-opened finished result." }),
+		).toHaveCount(0);
+		await expectAttentionDot(peerProject);
+
+		await page.getByTestId("tab-review").click();
+		await expect(page.getByTestId("review-panel")).toBeVisible();
+		const section = page
+			.getByTestId("review-file-section")
+			.filter({ has: page.getByTestId("review-file-row").filter({ hasText: "Whole change set" }) });
+		if ((await section.getAttribute("data-expanded")) !== "true") {
+			await section.getByTestId("review-file-row").click();
+		}
+		const sentComment = page
+			.getByTestId("review-comment")
+			.filter({ hasText: "Open the finished review result." });
+		await expect(sentComment).toHaveAttribute("data-status", "sent");
+		await sentComment.getByTestId("review-comment-open").click();
+
+		await expect(targetChatTab).toHaveAttribute("data-active", "true", { timeout: 30_000 });
+		await expect(
+			page.getByTestId("chat-message").filter({ hasText: "Review-opened finished result." }),
+		).toBeVisible({ timeout: 30_000 });
+		await expect(peerProject.getByTestId("attention-dot")).toHaveCount(0, { timeout: 30_000 });
+	} finally {
+		await peer?.close();
 		rmSync(session.path, { force: true });
 		rmSync(quietSibling.path, { force: true });
 	}
