@@ -45,14 +45,15 @@ binary.
 - **One static Astro artifact plus same-project claim functions, with a route-local framework exception.**
   The landing and blog retain vanilla TypeScript + hand-written CSS: no React island and no Tailwind
   stylesheet or runtime reaches those routes. [[submodule-website-attribution]] alone adds Pages Functions
-  and D1; [[submodule-website-vibecoding]] alone may use one React island and Tailwind v4. Astro's
-  React integration and Tailwind Vite plugin are build-wide tooling, but generated page references are
-  the runtime boundary; package build validation fails if unrelated routes reference the island renderer,
-  component chunks, or vibecoding stylesheet. The browser analytics workspace module is compiled into
-  the static output. The `@fontsource-variable/*` packages are build-time asset sources: the build emits
-  their woff2 files into `dist/`. They are shared with `apps/web`, so they come from the root
-  `workspaces.catalog` — one pin for both apps, which is what keeps the site's faces identical to the
-  app's.
+  and D1; only `/vibecoding/` and `/agentic-development/` may use the shared React island and Tailwind
+  v4. Astro's React integration and Tailwind Vite plugin are build-wide tooling, but generated page
+  references are the runtime boundary; build validation checks every generated HTML page, requires one
+  island in each allowed route output, and rejects it everywhere else. It also fails if unrelated routes
+  reference the island renderer, component chunks, or vibecoding stylesheet. The browser analytics
+  workspace module is compiled into the static output. The `@fontsource-variable/*` packages are
+  build-time asset sources whose woff2 files are emitted into `dist/`. Shared with `apps/web`, they
+  come from the root `workspaces.catalog` — one pin for both apps that keeps the site's faces
+  identical to the app's.
   - *Why Astro (decision, 2026-08):* the blog + planned docs fired the "bespoke SSG" tripwires
     (RSS, OG, typed frontmatter, content DX). Astro is Vite underneath — the landing page ported
     verbatim, `bun test` suites unchanged — and React 19 islands are available only where a route needs
@@ -174,7 +175,11 @@ slug; invalid paths emit no content or action events. Query and fragment strings
 `pathname`; dotted `index.html` paths are not route aliases. New pages and posts need no analytics code
 change. Only pages composed with Analytics load it: the authored `src/pages/404.astro` is a standalone,
 analytics-free page served for unknown URLs, and the standalone `/attribution/claim/` page remains
-analytics-free. Each valid document emits one explicit `content_viewed` with its derived key.
+analytics-free. Each valid document emits one explicit `content_viewed` with its derived key. Build
+validation recursively checks every emitted `.html` document for exactly one PostHog and GTM loader,
+except the explicit analytics-free `404.html` and `/attribution/claim/` outputs, which must contain
+neither loader nor browser analytics. Local output references are checked for every emitted HTML page;
+route-specific layout, artifact, and SEO checks remain focused on their owning routes.
 
 At initialization, the current page touch is recorded only when a consented journey already exists;
 journey appearance after initialization does not replay the page URL or referrer, and journey removal

@@ -19,6 +19,9 @@ const desktopDownloadUrls = [
 	"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-arm64.tar.gz",
 ] as const;
 
+const analyticsFreePages = new Set(["404.html", "attribution/claim/index.html"]);
+const reactIslandPages = new Set(["vibecoding/index.html", "agentic-development/index.html"]);
+
 function occurrences(content: string, value: string): number {
 	return content.split(value).length - 1;
 }
@@ -67,6 +70,38 @@ async function outputPathExists(distDirectory: string, url: string): Promise<boo
 	return (await Promise.all(candidates.map((path) => Bun.file(path).exists()))).some(Boolean);
 }
 
+export function validateAnalyticsPages(
+	pages: readonly { path: string; runtimeContent: string }[],
+): string[] {
+	const failures: string[] = [];
+	for (const { path, runtimeContent } of pages) {
+		const expectedLoaders = analyticsFreePages.has(path) ? 0 : 1;
+		if (occurrences(runtimeContent, "data-posthog-project") !== expectedLoaders) {
+			failures.push(`${path}: expected ${expectedLoaders} PostHog loaders`);
+		}
+		if (occurrences(runtimeContent, "data-gtm-container") !== expectedLoaders) {
+			failures.push(`${path}: expected ${expectedLoaders} GTM loaders`);
+		}
+		if (
+			expectedLoaders === 0 &&
+			(runtimeContent.includes("content_viewed") || runtimeContent.includes("attribution_claimed"))
+		) {
+			failures.push(`${path}: browser analytics leaked`);
+		}
+	}
+	return failures;
+}
+
+export function validateReactIslandPages(pages: ReadonlyMap<string, string>): string[] {
+	const failures: string[] = [];
+	for (const [path, html] of pages) {
+		if (!reactIslandPages.has(path) && html.includes("<astro-island")) {
+			failures.push(`${path}: React island leaked`);
+		}
+	}
+	return failures;
+}
+
 export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`) {
 	const failures: string[] = [];
 	const glob = new Bun.Glob("**/*.{html,css,js,svg,txt,xml}");
@@ -77,18 +112,26 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		}
 	}
 
+	const htmlPages = new Map<string, string>();
+	const htmlGlob = new Bun.Glob("**/*.html");
+	for await (const path of htmlGlob.scan({ cwd: distDirectory, onlyFiles: true })) {
+		htmlPages.set(path, await Bun.file(`${distDirectory}/${path}`).text());
+	}
+	const requiredPage = (path: string): string => {
+		const html = htmlPages.get(path);
+		if (html === undefined) throw new Error(`Missing website HTML output: ${path}`);
+		return html;
+	};
+	requiredPage("404.html");
 	const pages = {
-		landing: await Bun.file(`${distDirectory}/index.html`).text(),
-		blog: await Bun.file(`${distDirectory}/blog/index.html`).text(),
-		introducingThinkRail: await Bun.file(
-			`${distDirectory}/blog/introducing-thinkrail/index.html`,
-		).text(),
-		vibecoding: await Bun.file(`${distDirectory}/vibecoding/index.html`).text(),
-		agenticDevelopment: await Bun.file(`${distDirectory}/agentic-development/index.html`).text(),
-		claim: await Bun.file(`${distDirectory}/attribution/claim/index.html`).text(),
+		landing: requiredPage("index.html"),
+		blog: requiredPage("blog/index.html"),
+		introducingThinkRail: requiredPage("blog/introducing-thinkrail/index.html"),
+		vibecoding: requiredPage("vibecoding/index.html"),
+		agenticDevelopment: requiredPage("agentic-development/index.html"),
+		claim: requiredPage("attribution/claim/index.html"),
 	};
 	const islandPages = ["vibecoding", "agenticDevelopment"] as const;
-	const staticPages = ["landing", "blog", "introducingThinkRail", "claim"] as const;
 	const installPages = [
 		{ name: "landing", html: pages.landing, expectedDownloads: 2 },
 		{
@@ -188,35 +231,22 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		}
 	}
 
-	for (const [name, html] of Object.entries(pages)) {
-		const runtimeContent = await pageRuntimeContent(distDirectory, html);
-		const expectedLoaders = name === "claim" ? 0 : 1;
-		if (occurrences(runtimeContent, "data-posthog-project") !== expectedLoaders) {
-			failures.push(`${name}: expected ${expectedLoaders} PostHog loaders`);
-		}
-		if (occurrences(runtimeContent, "data-gtm-container") !== expectedLoaders) {
-			failures.push(`${name}: expected ${expectedLoaders} GTM loaders`);
-		}
-		if (
-			name === "claim" &&
-			(runtimeContent.includes("content_viewed") || runtimeContent.includes("attribution_claimed"))
-		) {
-			failures.push("claim: browser analytics leaked");
-		}
+	const analyticsPages: { path: string; runtimeContent: string }[] = [];
+	for (const [path, html] of htmlPages) {
+		analyticsPages.push({ path, runtimeContent: await pageRuntimeContent(distDirectory, html) });
 		for (const url of new Set(
 			attributeValues(html, ["src", "href", "component-url", "renderer-url"]).filter((value) =>
 				value.startsWith("/"),
 			),
 		)) {
 			if (!(await outputPathExists(distDirectory, url))) {
-				failures.push(`${name}: missing local output for ${url}`);
+				failures.push(`${path}: missing local output for ${url}`);
 			}
 		}
 	}
+	failures.push(...validateAnalyticsPages(analyticsPages));
+	failures.push(...validateReactIslandPages(htmlPages));
 
-	for (const name of staticPages) {
-		if (pages[name].includes("<astro-island")) failures.push(`${name}: React island leaked`);
-	}
 	for (const name of islandPages) {
 		if (occurrences(pages[name], "<astro-island") !== 1) {
 			failures.push(`${name}: expected one React island`);
