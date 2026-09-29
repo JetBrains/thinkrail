@@ -61,7 +61,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 
 	const markdown = isMarkdownPath(tab.path);
 	const view = tab.view ?? "split";
-	const rendered = markdown && (tab.rendered ?? false);
+	const rendered = markdown && (tab.rendered ?? true);
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
 	const { dir, base } = splitPath(tab.path);
 	const copy = async () => {
