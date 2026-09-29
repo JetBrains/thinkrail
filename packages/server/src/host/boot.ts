@@ -50,6 +50,7 @@ function attachProcessSignals(server: RunningServer): RunningServer {
 		get port() {
 			return server.port;
 		},
+		startAttributionClaim: () => server.startAttributionClaim(),
 		stop,
 		shutdown,
 	};

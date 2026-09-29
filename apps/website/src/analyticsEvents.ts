@@ -3,6 +3,11 @@ import type {
 	WebsiteInstallCtaClickedProperties,
 } from "@thinkrail/website-analytics";
 import { captureAnalytics } from "./analytics";
+import {
+	initAttributionRecording,
+	recordCurrentAttributionTouch,
+	recordCurrentDownloadBridge,
+} from "./attribution";
 
 export const contentRoutes = {
 	"/": "landing",
@@ -36,6 +41,8 @@ type CliDisclosure = {
 };
 
 type AnalyticsCapture = typeof captureAnalytics;
+type AttributionRecorder = (contentKey: WebsiteContentKey) => void;
+type DownloadBridgeRecorder = (contentKey: WebsiteContentKey) => string | undefined;
 
 type AnalyticsDocument = object & {
 	addEventListener(type: string, listener: EventListener, options?: boolean): void;
@@ -194,6 +201,9 @@ export function initAnalyticsEvents(
 	analyticsDocument: AnalyticsDocument = document,
 	pathname = window.location.pathname,
 	capture: AnalyticsCapture = captureAnalytics,
+	initializeAttribution: AttributionRecorder = initAttributionRecording,
+	recordAttribution: AttributionRecorder = recordCurrentAttributionTouch,
+	recordDownloadBridge: DownloadBridgeRecorder = recordCurrentDownloadBridge,
 ): void {
 	if (initializedDocuments.has(analyticsDocument)) return;
 	initializedDocuments.add(analyticsDocument);
@@ -201,6 +211,7 @@ export function initAnalyticsEvents(
 	const contentKey = contentKeyForPathname(pathname);
 	if (contentKey === undefined) return;
 
+	initializeAttribution(contentKey);
 	capture("content_viewed", { content_key: contentKey });
 
 	const captureDesktopClick = (event: Event): void => {
@@ -215,8 +226,14 @@ export function initAnalyticsEvents(
 		if (ctaLocation === undefined || url === null) return;
 		const events = desktopClickEvents(contentKey, ctaLocation, url);
 		if (events === undefined) return;
+		recordAttribution(contentKey);
 		capture("install_cta_clicked", events[0].properties);
-		capture("download_started", events[1].properties);
+		recordAttribution(contentKey);
+		const bridgeId = recordDownloadBridge(contentKey);
+		capture("download_started", {
+			...events[1].properties,
+			...(bridgeId === undefined ? {} : { bridge_id: bridgeId }),
+		});
 	};
 
 	analyticsDocument.addEventListener("click", captureDesktopClick);
@@ -226,7 +243,10 @@ export function initAnalyticsEvents(
 		(event) => {
 			if (!isCliDisclosure(event.target)) return;
 			const opened = cliDisclosureOpenedEvent(contentKey, event.target);
-			if (opened !== undefined) capture(opened.event, opened.properties);
+			if (opened !== undefined) {
+				recordAttribution(contentKey);
+				capture(opened.event, opened.properties);
+			}
 		},
 		true,
 	);
