@@ -29,6 +29,11 @@ function AdditionalAnalyticsSettings() {
 				<p className="text-text-muted tr-text-metadata">{ANALYTICS_DESCRIPTION}</p>
 			</div>
 			<AnalyticsPreferences enabled={enabled} disabled={pending} onChange={save} />
+			<p className="text-text-muted tr-text-metadata">
+				When additional sharing is on, a one-time journey/bridge link and normalized campaign source
+				may connect how you found ThinkRail to usage for 30 days. Turning sharing off removes
+				attribution from future events.
+			</p>
 			{error && (
 				<p role="alert" className="tr-text-metadata text-feedback-error">
 					{error}

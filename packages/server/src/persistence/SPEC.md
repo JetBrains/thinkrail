@@ -10,19 +10,13 @@ tags: [v1]
 
 ## Responsibility
 
-Durable host state—projects, workspaces, cross-frontend app config, terminal catalogs, and installation identity—as JSON under the data dir. Current workbench frame and workspace placement are frontend-local and have no host persistence.
+Durable host state—projects, workspaces, cross-frontend app config, terminal catalogs, installation identity, and server-only acquisition state—as JSON under the data dir. Current workbench frame and workspace placement are frontend-local and have no host persistence.
 
 ## Boundary
 
-- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; and installation state in server-only `installation.json` (`{ id, appInstalled?: true }`). `id` is the non-rotating per-install UUID and is never wire-broadcast; the optional marker is shared by binary and desktop analytics initialization.
-- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations,
-  `ensureInstallation()` returning only `{ id }`, and narrow `claimAppInstalled()` marker persistence.
-  Initial ID creation writes a complete sibling temporary file, publishes it via an atomic no-overwrite
-  hard link, and rereads a concurrent winner; malformed existing records are preserved rather than overwritten. A fixed, exclusive claim marker permits only one packaged host to emit
-  `app_installed` across processes. The complete JSON record is atomically replaced from a unique sibling
-  temporary file; a caught replacement failure removes the marker and temporary file for retry. A process
-  crash after claiming can consume the event without emitting it, but cannot authorize a second claimant.
-  Legacy records already marked installed remain claimed. Other state has no cross-process lock.
+- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations and fieldwise validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; server-only `installation.json` (`{ id, appInstalled?: true }`) and campaign-only `attribution.json`. The non-rotating install UUID never crosses the wire.
+- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, `ensureInstallation()` returning only `{ id }`, narrow install/browser claim operations, and strict acquisition read/save. Initial ID creation publishes a complete sibling temp via atomic no-overwrite hard link and rereads a concurrent winner; malformed existing records are preserved. An exclusive install-claim marker elects one packaged host across processes. The complete installation JSON is atomically replaced; caught replacement failures remove the marker and temp for retry, while a crash after claiming may consume the event without emission. Legacy installed records remain claimed.
+- **Browser attempt:** `attribution.json` exclusively creates its first `{ browserClaimAttempted: true }` marker with `wx`. Redeem atomically replaces it with strict first/last campaign fields; failed network or replacement work leaves the attempt terminal. Retention is 30 days after `last_touch`: expired or invalid records become terminal. The persisted schema rejects claim/verifier/challenge/URL, journey/bridge IDs, IP, and user agent. Other state has no cross-process lock.
 - **Allowed deps:** `contracts` (`Project`, `Workspace`, `AppConfig`, `LayoutPreset`, `DEFAULT_CONFIG`,
   `isTerminalWindowsShell`); Node `fs`/`os`/`path`.
 - **Forbidden:** importing feature siblings or `host`; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys or old schemas; or reading, rewriting, or deleting old host layout snapshots.
