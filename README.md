@@ -224,7 +224,7 @@ The first-run dialog shows its switch on and saves that preference when it opens
 start before you press Done or dismiss the dialog. Switching it off saves that choice immediately. Done
 or dismissal records completion of the dialog, not the start of delivery. Change the preference later in
 **Settings → Privacy**. With website Marketing consent and optional sharing on in a packaged build,
-ThinkRail opens its blog in your browser once and notes which website link or campaign brought you there
+ThinkRail may open its blog in your browser once and note which website link or campaign brought you there
 (source, medium, campaign, content and a coarse referrer type — never the full URL or page). That note
 enriches usage data for up to 30 days. `--no-analytics` or `THINKRAIL_NO_ANALYTICS=1` suppresses
 additional events for that run only; basic reporting remains on.

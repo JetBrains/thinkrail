@@ -30,9 +30,9 @@ function AdditionalAnalyticsSettings() {
 			</div>
 			<AnalyticsPreferences enabled={enabled} disabled={pending} onChange={save} />
 			<p className="text-text-muted tr-text-metadata">
-				When additional sharing is on, ThinkRail opens its blog in your browser once so it can note
-				which website link or campaign brought you here. It is added to usage reports for up to 30
-				days. Turning sharing off stops it.
+				When additional sharing is on, ThinkRail may open its blog in your browser once so it can
+				note which website link or campaign brought you here. It is added to usage reports for up to
+				30 days. Turning sharing off stops it.
 			</p>
 			{error && (
 				<p role="alert" className="tr-text-metadata text-feedback-error">
