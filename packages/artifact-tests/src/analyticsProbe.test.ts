@@ -77,13 +77,20 @@ test("analytics probe refuses non-loopback collection", () => {
 	}
 });
 
-test("desktop launch assertion pins baseline-only personless provenance", () => {
-	expect(assertDesktopLaunch([launch], expected)).toBe(launch.distinct_id);
-	for (const event of ["app_installed", "setup_state_observed"]) {
-		expect(() => assertDesktopLaunch([launch, { ...launch, event }], expected)).toThrow(
-			"only app_started",
-		);
-	}
+test("desktop launch assertion pins first-install and restart personless provenance", () => {
+	const installed = { ...launch, event: "app_installed" };
+	expect(assertDesktopLaunch([installed, launch], expected, true)).toBe(launch.distinct_id);
+	expect(assertDesktopLaunch([launch], expected, false)).toBe(launch.distinct_id);
+	expect(() => assertDesktopLaunch([launch], expected, true)).toThrow(
+		"app_installed then app_started",
+	);
+	expect(() =>
+		assertDesktopLaunch(
+			[installed, launch, { ...launch, event: "setup_state_observed" }],
+			expected,
+			true,
+		),
+	).toThrow("app_installed then app_started");
 	for (const key of [
 		"app_version",
 		"channel",
@@ -97,17 +104,19 @@ test("desktop launch assertion pins baseline-only personless provenance", () => 
 			assertDesktopLaunch(
 				[{ ...launch, properties: { ...launch.properties, [key]: "wrong" } }],
 				expected,
+				false,
 			),
 		).toThrow();
 	}
-	expect(() => assertDesktopLaunch([], expected)).toThrow("only app_started");
-	expect(() => assertDesktopLaunch([{ ...launch, distinct_id: "not-a-uuid" }], expected)).toThrow(
-		"UUID",
-	);
+	expect(() => assertDesktopLaunch([], expected, false)).toThrow("app_started");
+	expect(() =>
+		assertDesktopLaunch([{ ...launch, distinct_id: "not-a-uuid" }], expected, false),
+	).toThrow("UUID");
 	expect(() =>
 		assertDesktopLaunch(
 			[{ ...launch, properties: { ...launch.properties, path: "private" } }],
 			expected,
+			false,
 		),
 	).toThrow("properties");
 });

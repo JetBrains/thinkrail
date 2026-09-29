@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getBuiltinModels } from "@earendil-works/pi-ai/providers/all";
-import { ensureInstallation } from "../persistence";
+import { ATTRIBUTION_LIFETIME_MS, ensureInstallation } from "../persistence";
 import {
 	type AdditionalAnalyticsEvent,
 	type AnalyticsEvent,
@@ -17,12 +17,13 @@ import {
 import {
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
+	initializeAnalyticsWithSinkFactoryForTests,
 	resetAnalyticsForTests,
 	setAdditionalAnalyticsEnabled,
 	shutdownAnalytics,
 	track,
 } from "./service";
-import { POSTHOG_PROJECT_KEY } from "./sink";
+import { type OutgoingEvent, POSTHOG_PROJECT_KEY } from "./sink";
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
@@ -78,6 +79,7 @@ function boot(
 }
 
 const BASIC_EVENTS = {
+	app_installed: { name: "app_installed" },
 	app_started: { name: "app_started" },
 	chat_started: {
 		name: "chat_started",
@@ -101,7 +103,33 @@ const RUN = {
 	provider: "openai",
 	model: "custom",
 } as const;
+const CAMPAIGN = {
+	first_touch_source: "newsletter",
+	first_touch_medium: "email",
+	first_touch_campaign: "launch",
+	first_touch_content: "hero",
+	first_touch_referrer_class: "referral",
+	first_touch_landing_content_key: "landing",
+	first_touch_touched_at: 1_700_000_000_000,
+	first_touch_policy_version: 1,
+	last_touch_source: "search",
+	last_touch_medium: "organic",
+	last_touch_campaign: "launch",
+	last_touch_content: "article",
+	last_touch_referrer_class: "search",
+	last_touch_landing_content_key: "blog/index",
+	last_touch_touched_at: 1_700_000_100_000,
+	last_touch_policy_version: 1,
+} as const;
 const ADDITIONAL_EVENTS = {
+	acquisition_linked: {
+		name: "acquisition_linked",
+		params: {
+			journey_id: "123e4567-e89b-42d3-a456-426614174000",
+			bridge_id: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+			...CAMPAIGN,
+		},
+	},
 	setup_state_observed: {
 		name: "setup_state_observed",
 		params: { provider_available: "yes", model_available: "yes", project_present: "no" },
@@ -136,11 +164,14 @@ const ADDITIONAL_EVENTS = {
 
 const ENV_KEYS = ["app_version", "channel", "os", "arch", "build"];
 const RUN_KEYS = ["origin", "workspace_kind", "provider", "model"];
+const CAMPAIGN_KEYS = Object.keys(CAMPAIGN);
 const EXPECTED_KEYS: Record<AnalyticsEvent["name"], string[]> = {
+	app_installed: ENV_KEYS,
 	app_started: ENV_KEYS,
 	chat_started: [...ENV_KEYS, "provider", "model", "auth_method"],
 	message_sent: [...ENV_KEYS, "mode", "provider", "auth_method"],
 	provider_login: [...ENV_KEYS, "provider", "method", "auth_method"],
+	acquisition_linked: [...ENV_KEYS, "journey_id", "bridge_id", ...CAMPAIGN_KEYS],
 	setup_state_observed: [...ENV_KEYS, "provider_available", "model_available", "project_present"],
 	setup_action_finished: [...ENV_KEYS, "action", "outcome", "reason"],
 	agent_run_started: [...ENV_KEYS, ...RUN_KEYS],
@@ -166,7 +197,7 @@ test("every event has exactly its closed properties plus personless transport fr
 	for (const event of Object.values(ADDITIONAL_EVENTS)) capture?.(event);
 	await shutdownAnalytics();
 	const entries = allEntries(sent);
-	expect(entries).toHaveLength(1 + Object.keys(EXPECTED_KEYS).length);
+	expect(entries).toHaveLength(2 + Object.keys(EXPECTED_KEYS).length);
 	for (const entry of entries) {
 		const expected = EXPECTED_KEYS[entry.event as AnalyticsEvent["name"]];
 		expect(expected).toBeDefined();
@@ -189,6 +220,7 @@ test.each([
 	for (const event of Object.values(BASIC_EVENTS)) track(event);
 	await shutdownAnalytics();
 	expect(allEntries(sent).map((e) => e.event)).toEqual([
+		"app_installed",
 		"app_started",
 		...Object.keys(BASIC_EVENTS),
 	]);
@@ -211,7 +243,9 @@ test.each([
 		params: { provider: "anthropic", method: "oauth", auth_method },
 	});
 	await shutdownAnalytics();
-	const entries = allEntries(sent).filter((entry) => entry.event !== "app_started");
+	const entries = allEntries(sent).filter(
+		(entry) => entry.event !== "app_installed" && entry.event !== "app_started",
+	);
 	expect(entries).toHaveLength(3);
 	expect(entries.every((entry) => entry.properties.auth_method === auth_method)).toBe(true);
 });
@@ -222,7 +256,80 @@ test("there is no additional capture before consent and no replay when enabled",
 	expect(getAdditionalAnalyticsCapture()).toBeNull();
 	setAdditionalAnalyticsEnabled(true);
 	await shutdownAnalytics();
-	expect(allEntries(sent).map((e) => e.event)).toEqual(["app_started"]);
+	expect(allEntries(sent).map((e) => e.event)).toEqual(["app_installed", "app_started"]);
+});
+
+test("startup terminalizes expired acquisition even when additional sharing is off", async () => {
+	const now = Date.now();
+	writeFileSync(
+		join(dataDir, "attribution.json"),
+		JSON.stringify({
+			first_touch: {
+				referrer_class: "direct",
+				landing_content_key: "landing",
+				touched_at: now - ATTRIBUTION_LIFETIME_MS - 2_000,
+				policy_version: 1,
+			},
+			last_touch: {
+				referrer_class: "search",
+				landing_content_key: "blog/index",
+				touched_at: now - ATTRIBUTION_LIFETIME_MS - 1_000,
+				policy_version: 1,
+			},
+		}),
+	);
+	const sent: SentPayload[] = [];
+	boot(sent, { additionalEnabled: false });
+	await shutdownAnalytics();
+	expect(JSON.parse(readFileSync(join(dataDir, "attribution.json"), "utf8"))).toEqual({
+		browserClaimAttempted: true,
+	});
+});
+
+test("a long-lived process drops expired enrichment and atomically terminalizes disk before capture", async () => {
+	const sent: SentPayload[] = [];
+	const now = 1_800_000_000_000;
+	const clock = spyOn(Date, "now").mockReturnValue(now);
+	try {
+		const record = {
+			first_touch: {
+				source: "newsletter",
+				referrer_class: "referral",
+				landing_content_key: "landing",
+				touched_at: now - ATTRIBUTION_LIFETIME_MS - 10_000,
+				policy_version: 1,
+			},
+			last_touch: {
+				source: "search",
+				referrer_class: "search",
+				landing_content_key: "blog/index",
+				touched_at: now - ATTRIBUTION_LIFETIME_MS + 1_000,
+				policy_version: 1,
+			},
+		};
+		writeFileSync(join(dataDir, "attribution.json"), JSON.stringify(record));
+		boot(sent, { additionalEnabled: true });
+		track(BASIC_EVENTS.message_sent);
+		clock.mockReturnValue(now + 1_001);
+		track(BASIC_EVENTS.message_sent);
+		track(BASIC_EVENTS.chat_started);
+		await shutdownAnalytics();
+
+		const messages = allEntries(sent).filter((entry) => entry.event === "message_sent");
+		expect(messages).toHaveLength(2);
+		expect(messages[0]?.properties.first_touch_source).toBe("newsletter");
+		expect(messages[1]?.properties).not.toHaveProperty("first_touch_source");
+		const chat = allEntries(sent).find((entry) => entry.event === "chat_started");
+		expect(chat?.properties).not.toHaveProperty("first_touch_source");
+		expect(JSON.parse(readFileSync(join(dataDir, "attribution.json"), "utf8"))).toEqual({
+			browserClaimAttempted: true,
+		});
+		expect(Array.from(new Bun.Glob(".attribution.json.*.tmp").scanSync({ cwd: dataDir }))).toEqual(
+			[],
+		);
+	} finally {
+		clock.mockRestore();
+	}
 });
 
 test("a grant stays stable until revoked, and old captures never revive", async () => {
@@ -244,7 +351,7 @@ test("a grant stays stable until revoked, and old captures never revive", async 
 		allEntries(sent)
 			.map((e) => e.event)
 			.sort(),
-	).toEqual(["app_started", "message_sent", "review_decided"]);
+	).toEqual(["app_installed", "app_started", "message_sent", "review_decided"]);
 });
 
 test.each([
@@ -288,6 +395,116 @@ test.each([
 	expect(events).not.toContain("task_completed");
 });
 
+test("campaign-enriched basics use the revocable grant sink across 503 retry and regrant", async () => {
+	const now = Date.now();
+	const touch = {
+		source: "newsletter",
+		referrer_class: "referral",
+		landing_content_key: "landing",
+		touched_at: now,
+		policy_version: 1,
+	};
+	writeFileSync(
+		join(dataDir, "attribution.json"),
+		JSON.stringify({ first_touch: touch, last_touch: { ...touch, touched_at: now + 1 } }),
+	);
+
+	let attempts = 0;
+	const sent: SentPayload[] = [];
+	const fetchImpl: typeof fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+		const body = JSON.parse(String(init?.body)) as { api_key: string; batch: BatchEntry[] };
+		if (
+			body.batch.some(
+				(entry) => entry.event === "chat_started" && entry.properties.first_touch_source,
+			)
+		) {
+			attempts++;
+			if (attempts === 1) {
+				setAdditionalAnalyticsEnabled(false);
+				track(BASIC_EVENTS.provider_login);
+				setAdditionalAnalyticsEnabled(true);
+				return new Response("{}", { status: 503, headers: { "Retry-After": "0" } });
+			}
+		}
+		sent.push({ url: String(url), body });
+		return new Response("{}", { status: 200 });
+	}) as typeof fetch;
+	boot(sent, { additionalEnabled: true, fetchImpl });
+	track(BASIC_EVENTS.chat_started);
+	const deadline = Date.now() + 2_000;
+	while (!attempts && Date.now() < deadline) await Bun.sleep(5);
+	expect(attempts).toBe(1);
+	await Bun.sleep(3_500);
+	getAdditionalAnalyticsCapture()?.(ADDITIONAL_EVENTS.task_completed);
+	await shutdownAnalytics();
+
+	expect(attempts).toBe(1);
+	const entries = allEntries(sent);
+	const installed = entries.filter((entry) => entry.event === "app_installed");
+	expect(installed).toHaveLength(1);
+	expect(installed[0]?.properties).not.toHaveProperty("first_touch_source");
+	const plainBasic = entries.filter((entry) => entry.event === "provider_login");
+	expect(plainBasic).toHaveLength(1);
+	expect(plainBasic[0]?.properties).not.toHaveProperty("first_touch_source");
+	const linkedAdditional = entries.find((entry) => entry.event === "task_completed");
+	expect(linkedAdditional?.properties).toMatchObject({
+		change_evidence: "commit",
+		verification_recorded: "yes",
+		first_touch_source: "newsletter",
+	});
+});
+
+test("campaign-enriched basics stay on the current grant sink while plain basics remain permanent", async () => {
+	const touch = {
+		source: "newsletter",
+		referrer_class: "referral",
+		landing_content_key: "landing",
+		touched_at: Date.now() - 1_000,
+		policy_version: 1,
+	};
+	writeFileSync(
+		join(dataDir, "attribution.json"),
+		JSON.stringify({ first_touch: touch, last_touch: touch }),
+	);
+	const sinks: Array<{ deliveries: OutgoingEvent[]; sending: boolean }> = [];
+	initializeAnalyticsWithSinkFactoryForTests(
+		{ build: "binary", additionalEnabled: true, env: {} },
+		() => {
+			const sink = { deliveries: [] as OutgoingEvent[], sending: true };
+			sinks.push(sink);
+			return {
+				send(_clientId, events) {
+					sink.deliveries.push(...events);
+				},
+				setSending(enabled) {
+					sink.sending = enabled;
+				},
+				async shutdown() {},
+			};
+		},
+	);
+	track(BASIC_EVENTS.chat_started);
+	setAdditionalAnalyticsEnabled(false);
+	track(BASIC_EVENTS.message_sent);
+	setAdditionalAnalyticsEnabled(true);
+	track(BASIC_EVENTS.chat_started);
+	getAdditionalAnalyticsCapture()?.(ADDITIONAL_EVENTS.task_completed);
+	await shutdownAnalytics();
+
+	expect(sinks.map((sink) => sink.deliveries.map((event) => event.name))).toEqual([
+		["app_installed", "message_sent"],
+		["app_started", "chat_started"],
+		["chat_started", "task_completed"],
+	]);
+	expect(
+		sinks[0]?.deliveries.every((event) => !Object.hasOwn(event.params, "first_touch_source")),
+	).toBe(true);
+	expect(sinks[1]?.sending).toBe(false);
+	expect(
+		sinks[2]?.deliveries.every((event) => event.params.first_touch_source === "newsletter"),
+	).toBe(true);
+});
+
 test("failed additional requests do not retry on the network after revoke/regrant", async () => {
 	let attempts = 0;
 	const sent: SentPayload[] = [];
@@ -322,7 +539,7 @@ test.each([
 	boot(sent, { build, channel: "dev", additionalEnabled: true });
 	getAdditionalAnalyticsCapture()?.(ADDITIONAL_EVENTS.task_completed);
 	await shutdownAnalytics();
-	expect(allEntries(sent)).toHaveLength(2);
+	expect(allEntries(sent)).toHaveLength(build === "source" ? 2 : 3);
 	for (const entry of allEntries(sent)) {
 		expect(entry.properties).toMatchObject({ app_version: "1.2.3", channel: "dev", build });
 		expect(entry.properties.os).toBe(
@@ -336,11 +553,26 @@ test.each([
 	}
 });
 
-test("first launch replaces install announcements and identity survives CLI to desktop and consent changes", async () => {
-	writeFileSync(
-		join(dataDir, "installation.json"),
-		JSON.stringify({ id: "existing-install", announced: true }),
+test("a basic sink construction failure does not consume the install marker", async () => {
+	const target = join(dataDir, "installation.json");
+	const oldContents = JSON.stringify({ id: "existing-install" });
+	writeFileSync(target, oldContents);
+	initializeAnalyticsWithSinkFactoryForTests(
+		{ build: "binary", additionalEnabled: false, env: {} },
+		() => {
+			throw new Error("sink construction failed");
+		},
 	);
+	expect(readFileSync(target, "utf8")).toBe(oldContents);
+
+	const retry: SentPayload[] = [];
+	boot(retry);
+	await shutdownAnalytics();
+	expect(allEntries(retry).map((entry) => entry.event)).toEqual(["app_installed", "app_started"]);
+});
+
+test("existing installs emit app_installed once across binary and desktop", async () => {
+	writeFileSync(join(dataDir, "installation.json"), JSON.stringify({ id: "existing-install" }));
 	const first: SentPayload[] = [];
 	boot(first);
 	setAdditionalAnalyticsEnabled(true);
@@ -355,17 +587,55 @@ test("first launch replaces install announcements and identity survives CLI to d
 			(e) => e.distinct_id === "existing-install",
 		),
 	).toBe(true);
+	expect(allEntries(first).map((e) => e.event)).toEqual([
+		"app_installed",
+		"app_started",
+		"task_completed",
+	]);
 	expect(allEntries(desktop).map((e) => e.event)).toEqual(["app_started"]);
+	expect(JSON.parse(readFileSync(join(dataDir, "installation.json"), "utf8"))).toEqual({
+		id: "existing-install",
+		appInstalled: true,
+	});
 });
 
-test("new identity has no announcement marker", async () => {
-	const sent: SentPayload[] = [];
-	boot(sent);
+test("a failed app_installed delivery keeps the marker claimed and does not retry next boot", async () => {
+	let installAttempts = 0;
+	const failedFetch: typeof fetch = (async (
+		_url: Parameters<typeof fetch>[0],
+		init?: RequestInit,
+	) => {
+		const body = JSON.parse(String(init?.body)) as { batch: BatchEntry[] };
+		if (body.batch.some((entry) => entry.event === "app_installed")) installAttempts++;
+		return new Response("{}", { status: 503 });
+	}) as typeof fetch;
+	boot([], { fetchImpl: failedFetch });
 	await shutdownAnalytics();
-	const record = JSON.parse(readFileSync(join(dataDir, "installation.json"), "utf8"));
-	expect(Object.keys(record)).toEqual(["id"]);
-	expect(record.id).toMatch(/^[0-9a-f-]{36}$/);
-	expect(allEntries(sent)[0]?.distinct_id).toBe(record.id);
+	expect(installAttempts).toBeGreaterThan(0);
+	expect(JSON.parse(readFileSync(join(dataDir, "installation.json"), "utf8"))).toMatchObject({
+		appInstalled: true,
+	});
+
+	const restart: SentPayload[] = [];
+	boot(restart);
+	await shutdownAnalytics();
+	expect(allEntries(restart).map((entry) => entry.event)).toEqual(["app_started"]);
+});
+
+test("source builds neither consume nor emit the packaged-install marker", async () => {
+	const source: SentPayload[] = [];
+	boot(source, { build: "source" });
+	await shutdownAnalytics();
+	let record = JSON.parse(readFileSync(join(dataDir, "installation.json"), "utf8"));
+	expect(record).toEqual({ id: expect.any(String) });
+	expect(allEntries(source).map((event) => event.event)).toEqual(["app_started"]);
+
+	const binary: SentPayload[] = [];
+	boot(binary);
+	await shutdownAnalytics();
+	record = JSON.parse(readFileSync(join(dataDir, "installation.json"), "utf8"));
+	expect(record).toEqual({ id: expect.any(String), appInstalled: true });
+	expect(allEntries(binary).map((event) => event.event)).toEqual(["app_installed", "app_started"]);
 });
 
 test("EU destination and project key are shared, with an injectable endpoint", async () => {
@@ -392,6 +662,7 @@ test.each([
 	expect(getAdditionalAnalyticsCapture()).toBeNull();
 	await shutdownAnalytics();
 	expect(sent).toEqual([]);
+	expect(existsSync(join(dataDir, "installation.json"))).toBe(false);
 });
 
 test.each([
@@ -404,7 +675,7 @@ test.each([
 	expect(getAdditionalAnalyticsCapture()).toBeNull();
 	for (const event of Object.values(BASIC_EVENTS)) track(event);
 	await shutdownAnalytics();
-	expect(allEntries(sent)).toHaveLength(1 + Object.keys(BASIC_EVENTS).length);
+	expect(allEntries(sent)).toHaveLength(2 + Object.keys(BASIC_EVENTS).length);
 });
 
 test("shutdown drains both tiers once and prevents later capture/re-enabling", async () => {
@@ -430,7 +701,7 @@ test("shutdown drains both tiers once and prevents later capture/re-enabling", a
 		allEntries(sent)
 			.map((e) => e.event)
 			.sort(),
-	).toEqual(["app_started", "task_completed"]);
+	).toEqual(["app_installed", "app_started", "task_completed"]);
 });
 
 test("transport failure never throws into capture", async () => {

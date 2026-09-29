@@ -88,7 +88,11 @@ export async function startDesktopHost(options) {
     portMode: "exact",
     staticDir: options.staticDir,
     appVersion: options.appVersion,
-    analytics: { channel: options.channel, build: "desktop" },
+    analytics: {
+      channel: options.channel,
+      build: "desktop",
+      ...(options.openExternal ? { openExternal: options.openExternal } : {}),
+    },
   });
 }
 `,
