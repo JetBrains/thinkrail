@@ -193,7 +193,7 @@ flowchart LR
 |---|---|---|---|
 | `brainstorming` | worker — decision-bearing change → validated task-spec | `choosing-a-workflow` (root) | active; revised trigger and single-review flow unverified by use; the previous route-in, a mid-flow round-trip, and a full run were observed (2026-07) |
 | `setting-up-a-project` | router (sub) — dispatcher: detect the workspace's state (specs present / empty / code-only) and route | `choosing-a-workflow` (root) + self-trigger + the app's `/skill:setting-up-a-project` seed | active; empty → starting and code → importing were observed green; the revised specced → review/extend offer is unverified by use |
-| `starting-a-new-project` | worker — inception interview (empty repo → goal-and-requirements) | `setting-up-a-project` + narrow self-trigger | active; route-in observed by the routing suite; the interview itself unverified by use (rule 14 suspended — a slice-3 candidate via the user simulator) |
+| `starting-a-new-project` | worker — inception interview (empty repo → goal-and-requirements) | `setting-up-a-project` + narrow self-trigger | active; route-in observed by the routing suite; the interview itself and its living-doc template (2026-09) unverified by use (rule 14 suspended — a slice-3 candidate via the user simulator) |
 | `importing-a-codebase` | worker — existing codebase → first spec graph (derive + adopt existing docs + minimal interview) | `setting-up-a-project` + narrow self-trigger | active; covered by a tagged `@agent` e2e; route-in also observed by the routing suite; the doc-adoption offer observed green by the harness's importing suite (2026-07: adoption + no-candidates regression scenarios; the pre-change skill run red against the same scenario as the before/after control) |
 | `asking-user-questions` | concept — `ask_user_question` rounds, options, inference confirmation, degradation | — (reached by name, rule 4) | active; observed by use (2026-07 manual: loaded through brainstorming's reference, a round composed + resolved) |
 | `writing-specs` | concept — the spec quality bar (short / honest / on-rails) for every spec-producing flow | — (reached by name, rule 4) | active; observed by use (2026-07 manual: self-triggered for a spec revision and applied) |
@@ -278,6 +278,12 @@ follows is only the rationale the skill bodies don't state:
   triggers (rule 5), inlined question norms replaced by pointers to `asking-user-questions` (rule 7),
   endings made explicit (rule 6), the drifting copies of the spec bar later extracted into
   `writing-specs` (rules 3/7) — the flows themselves are untouched.
+  `starting-a-new-project`'s saved shape was later revised (2026-09): the V1-features and MVP-scope
+  (`In v1` / `Out of v1`) sections gave way to Capabilities + Non-goals, and finalizing flips
+  `draft → active` instead of `done`. A version-split goal doc goes stale the moment work ships:
+  ThinkRail's own V1/V2 goal doc accumulated "ships in V1 as …" carve-outs, and agents read its "not in
+  V1" list as a prohibition against work being built. MVP discipline survives as elicitation (smallest
+  useful first build); what is cut goes back to the user rather than into a later-list.
 - **`asking-user-questions`** carries the family's `ask_user_question` norms once: rounds, option
   design, the inference-confirmation pattern, and skip/headless degradation. Callers keep the *when* —
   and say where assumptions get recorded.
@@ -315,4 +321,5 @@ follows is only the rationale the skill bodies don't state:
   *mechanics* (frontmatter, link kinds, the `spec_*` tools) stay with the spec-graph skill
   ([[module-spec-graph]]); this concept is the bar the workflows hold on top of them. Extracted per
   rules 3/7 when the setup trio carried three drifting copies of the bar (and the dispatcher — a
-  router — carried norms it shouldn't, per rule 2).
+  router — carried norms it shouldn't, per rule 2). The goal-doc shape (a living product record with no
+  versions or roadmap) lives here, not in either setup worker, because both draft the graph root.

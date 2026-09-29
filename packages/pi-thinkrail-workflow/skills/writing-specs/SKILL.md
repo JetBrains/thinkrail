@@ -23,7 +23,8 @@ and is where the family's rules for specs and the spec graph accrue.
   hasn't been settled simply doesn't exist yet.
 - Anything inferred rather than confirmed is marked unconfirmed, inline, where it stands.
 - New and inferred specs are `status: draft` until the user has reviewed them — the flip out of
-  `draft` follows the user's review, never the drafting agent's own judgment.
+  `draft` follows the user's review, never the drafting agent's own judgment. A reviewed durable spec
+  goes `active`, never `done`: it stays in force and evolves with the project.
 
 ## On-rails
 
@@ -35,3 +36,17 @@ and is where the family's rules for specs and the spec graph accrue.
 - Say each thing once: link by `id` instead of restating; the dependency edges *between* sibling
   modules live in the parent's spec, not in each leaf.
 - One spec per *genuine* boundary — not per directory, not per file.
+
+## The goal doc describes the product, not a plan
+
+`goal-and-requirements` is the living record of what the product is and why: its goal, problem,
+audience, capabilities, and non-goals, plus any durable principles.
+
+- No versions, releases, phases, MVP/v1/v2 splits, or "later" lists. Sequencing is not a spec's job:
+  an idea cut from scope goes back to the user to track wherever they plan work, and never into the doc.
+- **Capabilities** state what the product does, or for a new project what its smallest useful first
+  build will do.
+- **Non-goals** hold only what is excluded by decision. Something neither listed nor excluded is open,
+  not forbidden.
+- It evolves with the product: a change that adds a capability or overturns a principle updates the goal
+  doc in the same change.

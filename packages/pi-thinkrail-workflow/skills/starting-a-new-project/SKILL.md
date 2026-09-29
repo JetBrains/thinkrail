@@ -5,12 +5,12 @@ description: "Use when the workspace is empty, has no code, and the user brings 
 
 # Starting a new project
 
-The workspace is empty: no code, no decisions. Turn the user's idea into one clear, buildable document —
-`goal-and-requirements.md` — then use `brainstorming` only for later features that still require a
-product or design choice.
+The workspace is empty: no code, no decisions. Turn the user's idea into one clear, living product
+document — `goal-and-requirements.md` — then use `brainstorming` only for later features that still
+require a product or design choice.
 
 **Hold the writing-specs bar.** Read that concept skill before saving anything — it carries the
-short / honest / on-rails rules every section you save must meet.
+short / honest / on-rails rules and the goal-doc shape every section you save must meet.
 
 ## Method
 
@@ -18,7 +18,8 @@ short / honest / on-rails rules every section you save must meet.
 2. **Infer, then confirm** — propose a concrete draft and let the user correct it; a suggestion beats an
    open question. Compose `ask_user_question` rounds per the **asking-user-questions** concept skill
    (read it before the first round — it carries the option, confirmation, and degradation norms).
-3. **MVP first.** The right v1 is smaller than the user expects. Every v1 capability must justify itself.
+3. **Smallest useful first build.** It is smaller than the user expects; every capability in it must
+   justify itself. Ideas cut from it are handed back to the user, not saved (see writing-specs).
 4. **Save incrementally.** Create the file as soon as the first section is settled, then add each
    confirmed section in template order. Don't batch; don't invent unconfirmed content.
 5. A skipped question is not a blocker — proceed on the current model and note real gaps inline.
@@ -59,20 +60,20 @@ alternatives research (below).
 
 ### Personal spec (sections)
 
-`# Title` + one-line tagline · **Overview** · **Problem** · **V1 Features** (only capabilities the tool is
-useless without) · **Tech Notes** (stack, or TBD).
+`# Title` + one-line tagline · **Overview** · **Problem** · **Capabilities** (only what the tool is useless
+without) · **Tech Notes** (the stack, once chosen).
 
 ### PRD (sections)
 
 `# Title` + tagline · **Overview** · **Problem Statement** · **Target Users** (roles, not demographics) ·
 **Jobs to Be Done** ("When [situation], I want [motivation], so I can [outcome]") · **Key User Story**
 (one concrete scenario) · **Goals** (verb-first, measurable) · **Non-Goals** · **Success Metrics** /
-**Done Conditions** · **MVP Scope** (`In v1` — each item justified against a Goal/Success condition; `Out
-of v1`) · **Non-Functional Requirements** (only if they exist) · **Technology** (Aspect | Choice |
+**Success Conditions** · **Capabilities** (each justified against a Goal or success condition) ·
+**Non-Functional Requirements** (only if they exist) · **Technology** (Aspect | Choice |
 Rationale).
 
 Skip any section the model already answers or that `depth` doesn't warrant (`light` → skip Goals/NFRs,
-binary Done Conditions instead of metrics). Reject vague goals inline: "'Better UX' isn't a goal —
+binary Success Conditions instead of metrics). Reject vague goals inline: "'Better UX' isn't a goal —
 'first result in under 30s' is."
 
 ## Saving
@@ -80,11 +81,11 @@ binary Done Conditions instead of metrics). Reject vague goals inline: "'Better 
 - `spec_create` once, `path: "goal-and-requirements.md"`, a slug `id`, `type: "goal-and-requirements"`,
   `title`, `status: "draft"`; replace the scaffold with the chosen template + the sections settled so far.
 - `edit` to add each confirmed section in template order.
-- `spec_update` `status: draft → done` once finalized.
+- `spec_update` `status: draft → active` once the user approves the reviewed draft.
 
 ## Next
 
-State plainly that the spec is saved. Suggest the natural next step — sketch `architecture.md`, then
-use `brainstorming` only when a feature still requires choosing scope, user-visible behavior, or
-architecture. Fully specified work proceeds directly. There is no board/ticket hand-off — say it and
+State plainly that the spec is saved and evolves with the project. Suggest the natural next step —
+sketch `architecture.md`, then use `brainstorming` only when a feature still requires choosing scope,
+user-visible behavior, or architecture. Fully specified work proceeds directly. There is no board/ticket hand-off — say it and
 stop: **this workflow ends here**.
