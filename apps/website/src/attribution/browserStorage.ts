@@ -1,5 +1,4 @@
 import {
-	type AttributionContentKey,
 	type AttributionContext,
 	type AttributionTouch,
 	attributionLifetimeMs,
@@ -59,7 +58,6 @@ function normalizedParameter(url: URL, name: string, limit: number): string | un
 export function touchFromNavigation(
 	href: string,
 	referrer: string,
-	contentKey: AttributionContentKey,
 	now: number,
 ): AttributionTouch | undefined {
 	let url: URL;
@@ -78,7 +76,6 @@ export function touchFromNavigation(
 		...(campaign === undefined ? {} : { campaign }),
 		...(content === undefined ? {} : { content }),
 		referrer_class: classifyReferrer(referrer),
-		landing_content_key: contentKey,
 		touched_at: now,
 		policy_version: attributionPolicyVersion,
 	};
@@ -131,14 +128,13 @@ function hasCampaignParameter(href: string): boolean {
 
 export function recordAttributionTouch(
 	journeyId: string,
-	contentKey: AttributionContentKey,
 	href: string,
 	referrer: string,
 	storage: AttributionStorage,
 	now = Date.now(),
 ): AttributionContext | undefined {
 	if (!journeyIdPattern.test(journeyId)) return undefined;
-	const touch = touchFromNavigation(href, referrer, contentKey, now);
+	const touch = touchFromNavigation(href, referrer, now);
 	if (touch === undefined) return undefined;
 	try {
 		let existing: StoredAttributionContext | undefined;

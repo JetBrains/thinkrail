@@ -220,7 +220,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
 14. **The public website is one origin and production deployment.** `apps/website` owns `/`, `/blog/`,
     and `/vibecoding/` in one static Astro build deployed with same-project Cloudflare Pages Functions.
     D1-backed [[submodule-website-attribution]] provides short-lived browser claims under that deployment;
-    it is not a second product host or identity owner. React and Tailwind are permitted only inside
+    it transfers bounded campaign/referrer touch data, not page identity, and is not a second product host
+    or identity owner. React and Tailwind are permitted only inside
     [[submodule-website-vibecoding]]; unrelated routes retain their vanilla runtime and hand-written
     stylesheet. Browser analytics and consent initialize once on the exact `thinkrail.ai` origin. The
     retired `vibecoding.thinkrail.ai` hostname is an edge redirect that preserves path and query, never a

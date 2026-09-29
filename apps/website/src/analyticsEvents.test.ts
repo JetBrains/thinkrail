@@ -309,13 +309,13 @@ describe("analytics event initialization", () => {
 	test("records a live attribution touch before an open-only CLI disclosure event", () => {
 		const document = new FakeDocument();
 		const log = captureLog();
-		const touches: string[] = [];
+		const touches: number[] = [];
 		initAnalyticsEvents(
 			document,
 			"/",
 			log.capture,
 			() => {},
-			(key) => touches.push(key),
+			() => touches.push(1),
 		);
 		log.events.length = 0;
 
@@ -326,7 +326,7 @@ describe("analytics event initialization", () => {
 			target: disclosure(true, "details.install-reference"),
 		});
 
-		expect(touches).toEqual(["landing"]);
+		expect(touches).toEqual([1]);
 		expect(log.events).toEqual([
 			{
 				event: "install_cta_clicked",

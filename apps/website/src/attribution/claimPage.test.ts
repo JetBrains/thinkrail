@@ -8,13 +8,11 @@ const context: BindClaimRequest = {
 	journey_id: journeyId,
 	first_touch: {
 		referrer_class: "direct",
-		landing_content_key: "landing",
 		touched_at: 1,
 		policy_version: 1,
 	},
 	last_touch: {
 		referrer_class: "internal",
-		landing_content_key: "blog/index",
 		touched_at: 2,
 		policy_version: 1,
 	},

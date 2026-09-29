@@ -55,7 +55,6 @@ describe("desktop download bridge correlation", () => {
 		const recordTouch = () => {
 			recordAttributionTouch(
 				journeyId,
-				"landing",
 				"https://thinkrail.ai/?utm_source=newsletter",
 				"",
 				storage,

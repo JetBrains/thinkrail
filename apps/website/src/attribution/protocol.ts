@@ -12,24 +12,12 @@ export const journeyIdPattern =
 export const referrerClasses = ["direct", "internal", "search", "social", "referral"] as const;
 export type ReferrerClass = (typeof referrerClasses)[number];
 
-export const attributionContentKeys = [
-	"landing",
-	"blog/index",
-	"blog/introducing-thinkrail",
-	"blog/thinkrail-workspaces",
-	"blog/thinkrail-sdd",
-	"vibecoding",
-	"agentic-development",
-] as const;
-export type AttributionContentKey = (typeof attributionContentKeys)[number];
-
 export type AttributionTouch = {
 	source?: string;
 	medium?: string;
 	campaign?: string;
 	content?: string;
 	referrer_class: ReferrerClass;
-	landing_content_key: AttributionContentKey;
 	touched_at: number;
 	policy_version: typeof attributionPolicyVersion;
 };
@@ -58,7 +46,6 @@ const campaignBounds = {
 	content: 128,
 } as const;
 const referrerClassSet = new Set<string>(referrerClasses);
-const contentKeySet = new Set<string>(attributionContentKeys);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -94,7 +81,7 @@ function optionalNormalizedString(
 
 export function parseAttributionTouch(value: unknown, now: number): AttributionTouch | undefined {
 	if (!isRecord(value)) return undefined;
-	const requiredKeys = ["referrer_class", "landing_content_key", "touched_at", "policy_version"];
+	const requiredKeys = ["referrer_class", "touched_at", "policy_version"];
 	const allowedKeys = [...requiredKeys, ...Object.keys(campaignBounds)];
 	if (Object.keys(value).some((key) => !allowedKeys.includes(key))) return undefined;
 	if (requiredKeys.some((key) => !Object.hasOwn(value, key))) return undefined;
@@ -107,12 +94,6 @@ export function parseAttributionTouch(value: unknown, now: number): AttributionT
 		return undefined;
 	}
 	if (typeof value.referrer_class !== "string" || !referrerClassSet.has(value.referrer_class)) {
-		return undefined;
-	}
-	if (
-		typeof value.landing_content_key !== "string" ||
-		!contentKeySet.has(value.landing_content_key)
-	) {
 		return undefined;
 	}
 	if (
@@ -131,7 +112,6 @@ export function parseAttributionTouch(value: unknown, now: number): AttributionT
 		...(campaign === undefined ? {} : { campaign }),
 		...(content === undefined ? {} : { content }),
 		referrer_class: value.referrer_class as ReferrerClass,
-		landing_content_key: value.landing_content_key as AttributionContentKey,
 		touched_at: value.touched_at,
 		policy_version: attributionPolicyVersion,
 	};

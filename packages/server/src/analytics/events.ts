@@ -64,7 +64,6 @@ export type AcquisitionCampaignProperties = {
 	first_touch_campaign?: string;
 	first_touch_content?: string;
 	first_touch_referrer_class: AttributionTouch["referrer_class"];
-	first_touch_landing_content_key: AttributionTouch["landing_content_key"];
 	first_touch_touched_at: number;
 	first_touch_policy_version: 1;
 	last_touch_source?: string;
@@ -72,7 +71,6 @@ export type AcquisitionCampaignProperties = {
 	last_touch_campaign?: string;
 	last_touch_content?: string;
 	last_touch_referrer_class: AttributionTouch["referrer_class"];
-	last_touch_landing_content_key: AttributionTouch["landing_content_key"];
 	last_touch_touched_at: number;
 	last_touch_policy_version: 1;
 };
@@ -138,7 +136,6 @@ function touchProperties(prefix: "first_touch" | "last_touch", touch: Attributio
 		...(touch.campaign === undefined ? {} : { [`${prefix}_campaign`]: touch.campaign }),
 		...(touch.content === undefined ? {} : { [`${prefix}_content`]: touch.content }),
 		[`${prefix}_referrer_class`]: touch.referrer_class,
-		[`${prefix}_landing_content_key`]: touch.landing_content_key,
 		[`${prefix}_touched_at`]: touch.touched_at,
 		[`${prefix}_policy_version`]: touch.policy_version,
 	};

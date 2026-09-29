@@ -15,14 +15,12 @@ function fixture() {
 		first_touch: {
 			source: "newsletter",
 			referrer_class: "referral" as const,
-			landing_content_key: "landing" as const,
 			touched_at: now - 2,
 			policy_version: 1 as const,
 		},
 		last_touch: {
 			medium: "organic",
 			referrer_class: "search" as const,
-			landing_content_key: "blog/index" as const,
 			touched_at: now - 1,
 			policy_version: 1 as const,
 		},

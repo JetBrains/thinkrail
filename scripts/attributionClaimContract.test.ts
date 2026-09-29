@@ -105,7 +105,6 @@ test("website HTTP, browser claim, server client, and product persistence share 
 		const storage = memoryStorage();
 		recordAttributionTouch(
 			journeyId,
-			"landing",
 			"https://thinkrail.ai/?utm_source=google&utm_medium=cpc&utm_campaign=agentic-launch&utm_content=hero",
 			"https://www.google.com/search?q=thinkrail",
 			storage,
@@ -113,7 +112,6 @@ test("website HTTP, browser claim, server client, and product persistence share 
 		);
 		recordAttributionTouch(
 			journeyId,
-			"blog/introducing-thinkrail",
 			"https://thinkrail.ai/blog/introducing-thinkrail/?utm_source=newsletter&utm_medium=email&utm_campaign=agentic-launch&utm_content=article",
 			"https://www.linkedin.com/company/thinkrail",
 			storage,

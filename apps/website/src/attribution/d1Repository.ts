@@ -27,7 +27,6 @@ type ClaimRow = {
 	first_campaign: string | null;
 	first_content: string | null;
 	first_referrer_class: ReferrerClass | null;
-	first_landing_content_key: AttributionTouch["landing_content_key"] | null;
 	first_touched_at: number | null;
 	first_policy_version: 1 | null;
 	last_source: string | null;
@@ -35,7 +34,6 @@ type ClaimRow = {
 	last_campaign: string | null;
 	last_content: string | null;
 	last_referrer_class: ReferrerClass | null;
-	last_landing_content_key: AttributionTouch["landing_content_key"] | null;
 	last_touched_at: number | null;
 	last_policy_version: 1 | null;
 };
@@ -43,21 +41,15 @@ type ClaimRow = {
 const returnedColumns = `
 	claim_id, challenge, created_at, expires_at, bridge_id, journey_id,
 	first_source, first_medium, first_campaign, first_content, first_referrer_class,
-	first_landing_content_key, first_touched_at, first_policy_version,
+	first_touched_at, first_policy_version,
 	last_source, last_medium, last_campaign, last_content, last_referrer_class,
-	last_landing_content_key, last_touched_at, last_policy_version`;
+	last_touched_at, last_policy_version`;
 
 function touchFromRow(row: ClaimRow, prefix: "first" | "last"): AttributionTouch | undefined {
 	const referrerClass = row[`${prefix}_referrer_class`];
-	const landingContentKey = row[`${prefix}_landing_content_key`];
 	const touchedAt = row[`${prefix}_touched_at`];
 	const policyVersion = row[`${prefix}_policy_version`];
-	if (
-		referrerClass === null ||
-		landingContentKey === null ||
-		touchedAt === null ||
-		policyVersion !== 1
-	) {
+	if (referrerClass === null || touchedAt === null || policyVersion !== 1) {
 		return undefined;
 	}
 	const source = row[`${prefix}_source`];
@@ -70,7 +62,6 @@ function touchFromRow(row: ClaimRow, prefix: "first" | "last"): AttributionTouch
 		...(campaign === null ? {} : { campaign }),
 		...(content === null ? {} : { content }),
 		referrer_class: referrerClass,
-		landing_content_key: landingContentKey,
 		touched_at: touchedAt,
 		policy_version: 1,
 	};
@@ -104,7 +95,6 @@ function touchValues(touch: AttributionTouch): unknown[] {
 		touch.campaign ?? null,
 		touch.content ?? null,
 		touch.referrer_class,
-		touch.landing_content_key,
 		touch.touched_at,
 		touch.policy_version,
 	];
@@ -161,9 +151,9 @@ export class D1ClaimRepository implements ClaimRepository {
 			.prepare(`UPDATE attribution_claims SET
 			bridge_id = ?, journey_id = ?, bound_at = ?,
 			first_source = ?, first_medium = ?, first_campaign = ?, first_content = ?,
-			first_referrer_class = ?, first_landing_content_key = ?, first_touched_at = ?, first_policy_version = ?,
+			first_referrer_class = ?, first_touched_at = ?, first_policy_version = ?,
 			last_source = ?, last_medium = ?, last_campaign = ?, last_content = ?,
-			last_referrer_class = ?, last_landing_content_key = ?, last_touched_at = ?, last_policy_version = ?
+			last_referrer_class = ?, last_touched_at = ?, last_policy_version = ?
 			WHERE claim_id = ? AND bridge_id IS NULL AND expires_at > ?`)
 			.bind(
 				bridgeId,

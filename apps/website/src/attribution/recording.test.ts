@@ -68,14 +68,14 @@ describe("attribution recording consent timing", () => {
 	test("does not record the initialization navigation when a journey appears later", () => {
 		const page = fixture();
 		page.values.set(attributionStorageKey, "stale");
-		initAttributionRecording("landing", page.dependencies);
+		initAttributionRecording(page.dependencies);
 		expect(page.values.has(attributionStorageKey)).toBeTrue();
 		page.calls.length = 0;
 
 		page.setJourney(journeyId);
 		expect(page.calls).toEqual([]);
 		page.setNavigation("https://thinkrail.ai/?utm_source=acted", "https://example.com/article");
-		recordCurrentAttributionTouch("landing", page.dependencies);
+		recordCurrentAttributionTouch(page.dependencies);
 		expect(page.values.get(attributionStorageKey)).toContain('"source":"acted"');
 
 		page.setJourney(undefined);
@@ -84,7 +84,7 @@ describe("attribution recording consent timing", () => {
 
 	test("preserves stored attribution through unknown consent until known denial", () => {
 		const page = fixture(journeyId, true);
-		initAttributionRecording("landing", page.dependencies);
+		initAttributionRecording(page.dependencies);
 		expect(page.values.has(attributionStorageKey)).toBeTrue();
 
 		page.setJourney(undefined, undefined);
@@ -93,7 +93,7 @@ describe("attribution recording consent timing", () => {
 		page.setJourney(journeyId, true);
 		expect(page.values.has(attributionStorageKey)).toBeTrue();
 		expect(readAttributionContext(journeyId, page.dependencies.storage())).toMatchObject({
-			first_touch: expect.objectContaining({ landing_content_key: "landing" }),
+			first_touch: expect.objectContaining({ referrer_class: "direct" }),
 		});
 
 		page.setJourney(undefined, false);
@@ -104,7 +104,7 @@ describe("attribution recording consent timing", () => {
 		const page = fixture(undefined, false);
 		page.values.set(attributionStorageKey, "stale");
 
-		initAttributionRecording("landing", page.dependencies);
+		initAttributionRecording(page.dependencies);
 
 		expect(page.values.has(attributionStorageKey)).toBeFalse();
 	});
@@ -112,7 +112,7 @@ describe("attribution recording consent timing", () => {
 	test("does not generate or store a download bridge without a consented journey", () => {
 		const page = fixture(undefined, false);
 
-		expect(recordCurrentDownloadBridge("landing", page.dependencies)).toBeUndefined();
+		expect(recordCurrentDownloadBridge(page.dependencies)).toBeUndefined();
 		expect(page.bridgeGenerationCalls()).toBe(0);
 		expect(page.calls).toEqual([]);
 	});
@@ -120,7 +120,7 @@ describe("attribution recording consent timing", () => {
 	test("records at initialization only when a journey already exists", () => {
 		const page = fixture(journeyId, true);
 		page.setNavigation("https://thinkrail.ai/?utm_campaign=returning", "");
-		initAttributionRecording("landing", page.dependencies);
+		initAttributionRecording(page.dependencies);
 
 		expect(page.values.get(attributionStorageKey)).toContain('"campaign":"returning"');
 	});

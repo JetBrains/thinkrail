@@ -109,7 +109,6 @@ const CAMPAIGN = {
 	first_touch_campaign: "launch",
 	first_touch_content: "hero",
 	first_touch_referrer_class: "referral",
-	first_touch_landing_content_key: "landing",
 	first_touch_touched_at: 1_700_000_000_000,
 	first_touch_policy_version: 1,
 	last_touch_source: "search",
@@ -117,7 +116,6 @@ const CAMPAIGN = {
 	last_touch_campaign: "launch",
 	last_touch_content: "article",
 	last_touch_referrer_class: "search",
-	last_touch_landing_content_key: "blog/index",
 	last_touch_touched_at: 1_700_000_100_000,
 	last_touch_policy_version: 1,
 } as const;
@@ -266,13 +264,11 @@ test("startup terminalizes expired acquisition even when additional sharing is o
 		JSON.stringify({
 			first_touch: {
 				referrer_class: "direct",
-				landing_content_key: "landing",
 				touched_at: now - ATTRIBUTION_LIFETIME_MS - 2_000,
 				policy_version: 1,
 			},
 			last_touch: {
 				referrer_class: "search",
-				landing_content_key: "blog/index",
 				touched_at: now - ATTRIBUTION_LIFETIME_MS - 1_000,
 				policy_version: 1,
 			},
@@ -295,14 +291,12 @@ test("a long-lived process drops expired enrichment and atomically terminalizes 
 			first_touch: {
 				source: "newsletter",
 				referrer_class: "referral",
-				landing_content_key: "landing",
 				touched_at: now - ATTRIBUTION_LIFETIME_MS - 10_000,
 				policy_version: 1,
 			},
 			last_touch: {
 				source: "search",
 				referrer_class: "search",
-				landing_content_key: "blog/index",
 				touched_at: now - ATTRIBUTION_LIFETIME_MS + 1_000,
 				policy_version: 1,
 			},
@@ -400,7 +394,6 @@ test("campaign-enriched basics use the revocable grant sink across 503 retry and
 	const touch = {
 		source: "newsletter",
 		referrer_class: "referral",
-		landing_content_key: "landing",
 		touched_at: now,
 		policy_version: 1,
 	};
@@ -458,7 +451,6 @@ test("campaign-enriched basics stay on the current grant sink while plain basics
 	const touch = {
 		source: "newsletter",
 		referrer_class: "referral",
-		landing_content_key: "landing",
 		touched_at: Date.now() - 1_000,
 		policy_version: 1,
 	};

@@ -172,7 +172,10 @@ routes. The route classifier is closed: `/` → `landing`, `/blog/` → `blog/in
 
 At initialization, the current page touch is recorded only when a consented journey already exists;
 journey appearance after initialization does not replay the page URL or referrer, and journey removal
-clears attribution context. Document-level `click`, middle-button `auxclick`, and disclosure `toggle`
+clears attribution context. Touches carry only bounded UTM values, referrer class, timestamp, and policy
+version; they do not transfer a page key. Website events retain their `content_key` and journey identity,
+so PostHog joins those events to the app's `acquisition_linked.journey_id` for landing/last-page analysis.
+Document-level `click`, middle-button `auxclick`, and disclosure `toggle`
 delegation instruments the static install controls without changing their navigation or no-JS behavior.
 Before each post-initialization install CTA, download, or CLI event, the current navigation touch is
 attempted so consent granted on the page can affect only a subsequent action. Only the four exact stable

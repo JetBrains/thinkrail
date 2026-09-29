@@ -190,13 +190,11 @@ export async function runLocalD1Smoke(): Promise<void> {
 					bridge_id: sharedBridgeId,
 					first_touch: {
 						referrer_class: "direct",
-						landing_content_key: "landing",
 						touched_at: touchedAt,
 						policy_version: 1,
 					},
 					last_touch: {
 						referrer_class: "direct",
-						landing_content_key: "landing",
 						touched_at: touchedAt,
 						policy_version: 1,
 					},

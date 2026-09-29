@@ -11,14 +11,12 @@ const context: BindClaimRequest = {
 	first_touch: {
 		source: "newsletter",
 		referrer_class: "direct",
-		landing_content_key: "landing",
 		touched_at: now - 1,
 		policy_version: 1,
 	},
 	last_touch: {
 		medium: "email",
 		referrer_class: "internal",
-		landing_content_key: "blog/index",
 		touched_at: now,
 		policy_version: 1,
 	},

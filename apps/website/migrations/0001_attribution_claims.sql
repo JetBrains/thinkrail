@@ -24,9 +24,6 @@ CREATE TABLE attribution_claims (
   first_campaign TEXT CHECK (first_campaign IS NULL OR (length(first_campaign) BETWEEN 1 AND 128 AND first_campaign = trim(first_campaign))),
   first_content TEXT CHECK (first_content IS NULL OR (length(first_content) BETWEEN 1 AND 128 AND first_content = trim(first_content))),
   first_referrer_class TEXT CHECK (first_referrer_class IN ('direct','internal','search','social','referral')),
-  first_landing_content_key TEXT CHECK (first_landing_content_key IN (
-    'landing','blog/index','blog/introducing-thinkrail','blog/thinkrail-workspaces','blog/thinkrail-sdd','vibecoding','agentic-development'
-  )),
   first_touched_at INTEGER CHECK (first_touched_at >= 0),
   first_policy_version INTEGER CHECK (first_policy_version = 1),
 
@@ -35,22 +32,19 @@ CREATE TABLE attribution_claims (
   last_campaign TEXT CHECK (last_campaign IS NULL OR (length(last_campaign) BETWEEN 1 AND 128 AND last_campaign = trim(last_campaign))),
   last_content TEXT CHECK (last_content IS NULL OR (length(last_content) BETWEEN 1 AND 128 AND last_content = trim(last_content))),
   last_referrer_class TEXT CHECK (last_referrer_class IN ('direct','internal','search','social','referral')),
-  last_landing_content_key TEXT CHECK (last_landing_content_key IN (
-    'landing','blog/index','blog/introducing-thinkrail','blog/thinkrail-workspaces','blog/thinkrail-sdd','vibecoding','agentic-development'
-  )),
   last_touched_at INTEGER CHECK (last_touched_at >= 0),
   last_policy_version INTEGER CHECK (last_policy_version = 1),
 
   CHECK (
     (bridge_id IS NULL AND journey_id IS NULL AND bound_at IS NULL
       AND first_source IS NULL AND first_medium IS NULL AND first_campaign IS NULL AND first_content IS NULL
-      AND first_referrer_class IS NULL AND first_landing_content_key IS NULL AND first_touched_at IS NULL AND first_policy_version IS NULL
+      AND first_referrer_class IS NULL AND first_touched_at IS NULL AND first_policy_version IS NULL
       AND last_source IS NULL AND last_medium IS NULL AND last_campaign IS NULL AND last_content IS NULL
-      AND last_referrer_class IS NULL AND last_landing_content_key IS NULL AND last_touched_at IS NULL AND last_policy_version IS NULL)
+      AND last_referrer_class IS NULL AND last_touched_at IS NULL AND last_policy_version IS NULL)
     OR
     (bridge_id IS NOT NULL AND journey_id IS NOT NULL AND bound_at IS NOT NULL
-      AND first_referrer_class IS NOT NULL AND first_landing_content_key IS NOT NULL AND first_touched_at IS NOT NULL AND first_policy_version = 1
-      AND last_referrer_class IS NOT NULL AND last_landing_content_key IS NOT NULL AND last_touched_at IS NOT NULL AND last_policy_version = 1
+      AND first_referrer_class IS NOT NULL AND first_touched_at IS NOT NULL AND first_policy_version = 1
+      AND last_referrer_class IS NOT NULL AND last_touched_at IS NOT NULL AND last_policy_version = 1
       AND first_touched_at <= last_touched_at)
   )
 );

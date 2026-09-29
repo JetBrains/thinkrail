@@ -41,8 +41,8 @@ type CliDisclosure = {
 };
 
 type AnalyticsCapture = typeof captureAnalytics;
-type AttributionRecorder = (contentKey: WebsiteContentKey) => void;
-type DownloadBridgeRecorder = (contentKey: WebsiteContentKey) => string | undefined;
+type AttributionRecorder = () => void;
+type DownloadBridgeRecorder = () => string | undefined;
 
 type AnalyticsDocument = object & {
 	addEventListener(type: string, listener: EventListener, options?: boolean): void;
@@ -211,7 +211,7 @@ export function initAnalyticsEvents(
 	const contentKey = contentKeyForPathname(pathname);
 	if (contentKey === undefined) return;
 
-	initializeAttribution(contentKey);
+	initializeAttribution();
 	capture("content_viewed", { content_key: contentKey });
 
 	const captureDesktopClick = (event: Event): void => {
@@ -226,10 +226,10 @@ export function initAnalyticsEvents(
 		if (ctaLocation === undefined || url === null) return;
 		const events = desktopClickEvents(contentKey, ctaLocation, url);
 		if (events === undefined) return;
-		recordAttribution(contentKey);
+		recordAttribution();
 		capture("install_cta_clicked", events[0].properties);
-		recordAttribution(contentKey);
-		const bridgeId = recordDownloadBridge(contentKey);
+		recordAttribution();
+		const bridgeId = recordDownloadBridge();
 		capture("download_started", {
 			...events[1].properties,
 			...(bridgeId === undefined ? {} : { bridge_id: bridgeId }),
@@ -244,7 +244,7 @@ export function initAnalyticsEvents(
 			if (!isCliDisclosure(event.target)) return;
 			const opened = cliDisclosureOpenedEvent(contentKey, event.target);
 			if (opened !== undefined) {
-				recordAttribution(contentKey);
+				recordAttribution();
 				capture(opened.event, opened.properties);
 			}
 		},

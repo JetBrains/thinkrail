@@ -8,7 +8,6 @@ const touch = {
 	campaign: "launch",
 	content: "hero",
 	referrer_class: "referral",
-	landing_content_key: "landing",
 	touched_at: now - 1_000,
 	policy_version: 1,
 } as const;
@@ -30,7 +29,7 @@ test("the mirrored acquisition protocol accepts only its closed normalized schem
 		{ ...redeemed, first_touch: { ...touch, source: "x".repeat(65) } },
 		{ ...redeemed, first_touch: { ...touch, campaign: "x".repeat(129) } },
 		{ ...redeemed, first_touch: { ...touch, referrer_class: "advertising" } },
-		{ ...redeemed, first_touch: { ...touch, landing_content_key: "/private" } },
+		{ ...redeemed, first_touch: { ...touch, unexpected: "/private" } },
 		{ ...redeemed, first_touch: { ...touch, touched_at: now + 60_001 } },
 		{ ...redeemed, first_touch: { ...touch, policy_version: 2 } },
 		{ ...redeemed, first_touch: { ...touch, touched_at: now + 1 } },
@@ -45,7 +44,6 @@ test("campaign values are Unicode-code-point bounded and optional without wideni
 		first_touch: { ...touch, source: bounded },
 		last_touch: {
 			referrer_class: "direct" as const,
-			landing_content_key: "agentic-development" as const,
 			touched_at: now,
 			policy_version: 1 as const,
 		},

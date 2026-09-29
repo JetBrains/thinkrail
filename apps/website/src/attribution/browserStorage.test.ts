@@ -44,7 +44,6 @@ describe("attribution touch normalization", () => {
 		const touch = touchFromNavigation(
 			`https://thinkrail.ai/?utm_source=%20News%00Letter%20&utm_medium=email&utm_campaign=${"x".repeat(140)}&utm_content=hero&utm_term=secret&gclid=raw`,
 			"https://www.google.com/search?q=thinkrail",
-			"landing",
 			now,
 		);
 
@@ -54,7 +53,6 @@ describe("attribution touch normalization", () => {
 			campaign: "x".repeat(128),
 			content: "hero",
 			referrer_class: "search",
-			landing_content_key: "landing",
 			touched_at: now,
 			policy_version: 1,
 		});
@@ -83,17 +81,9 @@ describe("attribution browser storage", () => {
 
 	test("keeps first touch, advances last touch, and resets on journey change", () => {
 		const storage = memoryStorage();
-		recordAttributionTouch(
-			journeyA,
-			"landing",
-			"https://thinkrail.ai/?utm_source=first",
-			"",
-			storage,
-			now,
-		);
+		recordAttributionTouch(journeyA, "https://thinkrail.ai/?utm_source=first", "", storage, now);
 		const context = recordAttributionTouch(
 			journeyA,
-			"blog/index",
 			"https://thinkrail.ai/blog/?utm_source=last",
 			"https://thinkrail.ai/",
 			storage,
@@ -102,17 +92,18 @@ describe("attribution browser storage", () => {
 		expect(context?.first_touch.source).toBe("first");
 		expect(context?.last_touch.source).toBe("last");
 
-		recordAttributionTouch(
-			journeyB,
-			"vibecoding",
-			"https://thinkrail.ai/vibecoding/",
-			"",
-			storage,
-			now + 2,
-		);
+		recordAttributionTouch(journeyB, "https://thinkrail.ai/vibecoding/", "", storage, now + 2);
 		const reset = readAttributionContext(journeyB, storage, now + 2);
-		expect(reset?.first_touch.landing_content_key).toBe("vibecoding");
-		expect(reset?.last_touch.landing_content_key).toBe("vibecoding");
+		expect(reset?.first_touch).toEqual({
+			referrer_class: "direct",
+			touched_at: now + 2,
+			policy_version: 1,
+		});
+		expect(reset?.last_touch).toEqual({
+			referrer_class: "direct",
+			touched_at: now + 2,
+			policy_version: 1,
+		});
 		expect(storage.values.get(attributionStorageKey)).not.toContain(journeyA);
 	});
 
@@ -120,7 +111,6 @@ describe("attribution browser storage", () => {
 		const storage = memoryStorage();
 		recordAttributionTouch(
 			journeyA,
-			"landing",
 			"https://thinkrail.ai/?utm_source=newsletter",
 			"https://example.com/article",
 			storage,
@@ -128,7 +118,6 @@ describe("attribution browser storage", () => {
 		);
 		recordAttributionTouch(
 			journeyA,
-			"blog/index",
 			"https://thinkrail.ai/blog/",
 			"https://thinkrail.ai/",
 			storage,
@@ -136,7 +125,6 @@ describe("attribution browser storage", () => {
 		);
 		recordAttributionTouch(
 			journeyA,
-			"blog/thinkrail-sdd",
 			"https://thinkrail.ai/blog/thinkrail-sdd/",
 			"",
 			storage,
@@ -150,10 +138,9 @@ describe("attribution browser storage", () => {
 
 	test("updates last touch for external and UTM-tagged navigation", () => {
 		const storage = memoryStorage();
-		recordAttributionTouch(journeyA, "landing", "https://thinkrail.ai/", "", storage, now);
+		recordAttributionTouch(journeyA, "https://thinkrail.ai/", "", storage, now);
 		recordAttributionTouch(
 			journeyA,
-			"blog/index",
 			"https://thinkrail.ai/blog/",
 			"https://www.google.com/search?q=thinkrail",
 			storage,
@@ -165,7 +152,6 @@ describe("attribution browser storage", () => {
 
 		recordAttributionTouch(
 			journeyA,
-			"vibecoding",
 			"https://thinkrail.ai/vibecoding/?utm_campaign=launch",
 			"https://thinkrail.ai/blog/",
 			storage,
@@ -180,7 +166,6 @@ describe("attribution browser storage", () => {
 		const storage = memoryStorage();
 		recordAttributionTouch(
 			journeyA,
-			"landing",
 			"https://thinkrail.ai/?utm_campaign=campaign-a",
 			"",
 			storage,
@@ -190,7 +175,6 @@ describe("attribution browser storage", () => {
 
 		const updated = recordAttributionTouch(
 			journeyA,
-			"blog/index",
 			"https://thinkrail.ai/blog/?utm_campaign=campaign-b",
 			"https://thinkrail.ai/",
 			storage,
@@ -210,7 +194,6 @@ describe("attribution browser storage", () => {
 		const storage = memoryStorage();
 		recordAttributionTouch(
 			journeyA,
-			"landing",
 			"https://thinkrail.ai/?utm_campaign=campaign-a",
 			"",
 			storage,
@@ -220,7 +203,6 @@ describe("attribution browser storage", () => {
 
 		recordAttributionTouch(
 			journeyA,
-			"blog/index",
 			"https://thinkrail.ai/blog/",
 			"https://thinkrail.ai/",
 			storage,
@@ -228,7 +210,6 @@ describe("attribution browser storage", () => {
 		);
 		recordAttributionTouch(
 			journeyA,
-			"blog/thinkrail-sdd",
 			"https://thinkrail.ai/blog/thinkrail-sdd/",
 			"",
 			storage,
@@ -246,7 +227,6 @@ describe("attribution browser storage", () => {
 		const storage = memoryStorage();
 		recordAttributionTouch(
 			journeyA,
-			"landing",
 			"https://thinkrail.ai/?utm_source=newsletter",
 			"",
 			storage,
@@ -266,7 +246,7 @@ describe("attribution browser storage", () => {
 
 	test("reads a validated unexpired stored context without a separate journey source", () => {
 		const storage = memoryStorage();
-		recordAttributionTouch(journeyA, "landing", "https://thinkrail.ai/", "", storage, now);
+		recordAttributionTouch(journeyA, "https://thinkrail.ai/", "", storage, now);
 		expect(readStoredAttributionContext(storage, now)).toEqual({
 			journey_id: journeyA,
 			first_touch: expect.any(Object),
@@ -283,7 +263,7 @@ describe("attribution browser storage", () => {
 
 	test("expires and removes context after thirty days", () => {
 		const storage = memoryStorage();
-		recordAttributionTouch(journeyA, "landing", "https://thinkrail.ai/", "", storage, now);
+		recordAttributionTouch(journeyA, "https://thinkrail.ai/", "", storage, now);
 		expect(
 			readAttributionContext(journeyA, storage, now + attributionLifetimeMs + 1),
 		).toBeUndefined();

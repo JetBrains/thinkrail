@@ -7,7 +7,6 @@ import {
 	recordAttributionTouch,
 	storeLatestAttributionBridge,
 } from "./browserStorage";
-import type { AttributionContentKey } from "./protocol";
 
 type AttributionRecordingDependencies = {
 	currentJourneyId(): string | undefined;
@@ -37,7 +36,6 @@ const browserDependencies: AttributionRecordingDependencies = {
 };
 
 export function recordCurrentAttributionTouch(
-	contentKey: AttributionContentKey,
 	dependencies: AttributionRecordingDependencies = browserDependencies,
 ): void {
 	const journeyId = dependencies.currentJourneyId();
@@ -46,11 +44,10 @@ export function recordCurrentAttributionTouch(
 	const href = dependencies.href();
 	const referrer = dependencies.referrer();
 	if (storage === undefined || href === undefined || referrer === undefined) return;
-	recordAttributionTouch(journeyId, contentKey, href, referrer, storage);
+	recordAttributionTouch(journeyId, href, referrer, storage);
 }
 
 export function recordCurrentDownloadBridge(
-	_contentKey: AttributionContentKey,
 	dependencies: AttributionRecordingDependencies = browserDependencies,
 ): string | undefined {
 	const journeyId = dependencies.currentJourneyId();
@@ -61,14 +58,13 @@ export function recordCurrentDownloadBridge(
 }
 
 export function initAttributionRecording(
-	contentKey: AttributionContentKey,
 	dependencies: AttributionRecordingDependencies = browserDependencies,
 ): void {
 	const storage = dependencies.storage();
 	if (storage === undefined) return;
 	const consent = dependencies.currentMarketingConsent();
 	if (consent === false) clearAttributionContext(storage);
-	else if (consent === true) recordCurrentAttributionTouch(contentKey, dependencies);
+	else if (consent === true) recordCurrentAttributionTouch(dependencies);
 
 	dependencies.subscribeJourney((journeyId) => {
 		if (journeyId === undefined && dependencies.currentMarketingConsent() === false)

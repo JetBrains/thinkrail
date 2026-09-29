@@ -224,7 +224,9 @@ The first-run dialog shows its switch on and saves that preference when it opens
 start before you press Done or dismiss the dialog. Switching it off saves that choice immediately. Done
 or dismissal records completion of the dialog, not the start of delivery. Change the preference later in
 **Settings → Privacy**. With website Marketing consent and optional sharing on in a packaged build,
-a separate browser confirmation can link limited campaign tags to product usage for up to 30 days. `--no-analytics` or
+a separate browser confirmation can link bounded campaign/referrer touch data to product usage for up to
+30 days. The landing page is not transferred; PostHog joins website events to the app's
+`acquisition_linked` event by `journey_id` for page analysis. `--no-analytics` or
 `THINKRAIL_NO_ANALYTICS=1` suppresses additional events for that run only; basic reporting remains on.
 
 Neither tier collects prompts, code, transcripts, file/repository names or paths, credentials, or token/cost

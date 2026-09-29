@@ -55,9 +55,9 @@ bounded browser-derived strings, never resource identities or arbitrary product 
 | `acquisition_linked` | One successful browser-claim redemption, carrying the transient journey/bridge ids and normalized first/last acquisition fields. |
 
 The acquisition touch schema is a strict server-side mirror of [[submodule-website-attribution]]: bounded
-normalized source/medium/campaign/content strings, closed referrer class and landing-content key, timestamp,
-and policy version.
-The website and server copies change together; product packages never import website code. While the
+normalized UTM source/medium/campaign/content strings, closed referrer class, timestamp, and policy version.
+The website and server copies change together; product packages never import website code. The landing page
+is not transferred; PostHog joins website events to `acquisition_linked` through `journey_id`. While the
 additional grant is active, persisted campaign-only first/last fields enrich later basic and additional
 events except `app_installed`; enriched basics use only the current grant's revocable sink, while
 unenriched basics stay on the permanent basic sink. Revocation therefore drops queued/retrying enriched
