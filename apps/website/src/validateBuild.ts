@@ -92,11 +92,42 @@ export function validateAnalyticsPages(
 	return failures;
 }
 
+function isVibecodingStylesheet(url: string): boolean {
+	return /(?:^|\/)vibecoding(?:\.[^/?#]*)?\.css(?:[?#]|$)/i.test(url);
+}
+
+function isReactRuntime(url: string): boolean {
+	return /(?:^|\/)react(?:[-.][^/?#]*)?\.js(?:[?#]|$)/i.test(url);
+}
+
 export function validateReactIslandPages(pages: ReadonlyMap<string, string>): string[] {
 	const failures: string[] = [];
+	const islandAssets = new Set(
+		[...reactIslandPages].flatMap((path) => {
+			const html = pages.get(path);
+			return html === undefined ? [] : attributeValues(html, ["component-url", "renderer-url"]);
+		}),
+	);
+
 	for (const [path, html] of pages) {
-		if (!reactIslandPages.has(path) && html.includes("<astro-island")) {
-			failures.push(`${path}: React island leaked`);
+		if (reactIslandPages.has(path)) continue;
+		if (html.includes("<astro-island")) failures.push(`${path}: React island leaked`);
+		for (const reference of new Set(attributeValues(html, ["component-url", "renderer-url"]))) {
+			failures.push(`${path}: React renderer/component reference leaked: ${reference}`);
+		}
+		const stylesheetReferences = new Set([
+			...stylesheetUrls(html),
+			...attributeValues(html, ["href"]).filter(isVibecodingStylesheet),
+		]);
+		for (const reference of stylesheetReferences) {
+			if (isVibecodingStylesheet(reference)) {
+				failures.push(`${path}: vibecoding stylesheet leaked: ${reference}`);
+			}
+		}
+		for (const reference of new Set(attributeValues(html, ["src", "href"]))) {
+			if (isReactRuntime(reference) || islandAssets.has(reference)) {
+				failures.push(`${path}: React runtime leaked: ${reference}`);
+			}
 		}
 	}
 	return failures;
