@@ -33,7 +33,9 @@ Manual actions acknowledge immediately while work continues through state revisi
 after desktop readiness, repeat on a jittered six-hour cadence, and retry transient check failures within a
 bound; they never start or retry a download. A newer unprepared offer becomes `available`, **Download** owns
 transfer and preparation, and only a matching newer `updateReady` result becomes `ready`. Transfer reaching
-100% is not readiness: Electrobun's decompression/preparation phase remains visible separately. Errors retain
-the failed phase so retry repeats the intended operation, while a prepared package survives unrelated check
-failures. **Install & Restart** applies that package without re-fetching the feed; Electrobun's native helper
-owns final payload validation during handoff.
+100% is not readiness: Electrobun's decompression/preparation phase remains visible separately. Electrobun
+2.0.1 exposes no operation to cancel an in-flight download or discard a prepared package, so while the app
+remains running, transfer and preparation continue to completion or error; closing Settings only defers
+installation. The UI must not claim cancellation while native work continues. Errors retain the failed phase so retry repeats the intended
+operation, while a prepared package survives unrelated check failures. **Install & Restart** applies that package
+without re-fetching the feed; Electrobun's native helper owns final payload validation during handoff.
