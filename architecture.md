@@ -5,14 +5,14 @@ status: active
 title: ThinkRail — top-level architecture
 parent: goal-and-requirements
 covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state, frontend-local-workbench-frame, client-local-navigation, central-integration]
-tags: [v1, architecture]
+tags: [architecture]
 ---
 
 ## Drivers
 
-The product is built around the `pi` agent, run **in-process** (`createAgentSession`). V1 has two
-additive launchers over the same host library: the retained CLI boots the engine host and opens a browser,
-while Electrobun packages that host with a native system-webview shell. The desktop V1 profile is local
+The product is built around the `pi` agent, run **in-process** (`createAgentSession`). Two additive
+launchers share the same host library: the retained CLI boots the engine host and opens a browser,
+while Electrobun packages that host with a native system-webview shell. The desktop profile is local
 only; a later shared-client profile can dial an existing host. The UI ships independently of the host and
 dials it over the network; a phone reaches the selected host over Tailscale.
 
@@ -29,7 +29,7 @@ dials it over the network; a phone reaches the selected host over Tailscale.
 ```
 apps/cli        browser host launcher: boot server + open browser ── depends on ─▶ packages/server
 apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts
-apps/desktop    Electrobun local-host launcher (V1)                ── depends on ─▶ packages/server, packages/contracts, packages/shared
+apps/desktop    Electrobun local-host launcher                     ── depends on ─▶ packages/server, packages/contracts, packages/shared
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/pi-delegation, packages/pi-subagents
@@ -40,8 +40,8 @@ packages/spec-graph portable pi extension: spec_* tools + skill (bundled into ev
 packages/pi-visualize          portable pi extension: the visualize tool (bundled into every session)
 packages/pi-delegation         portable pure-pi package: the delegation core — controlled child sessions
                     for live session parents or independent resource owners
-packages/pi-dag               portable durable backend DAGs over pi-delegation; host-owned resources,
-                    not bundled V1 workflow UI or a second pi runtime
+packages/pi-dag               portable durable backend DAGs over pi-delegation; host-owned resources;
+                    not bundled into ThinkRail, no workflow UI, not a second pi runtime
 packages/pi-subagents          portable pure-pi extension: Agent + get_subagent_result tools over
                     pi-delegation (bundled into every ThinkRail parent session by packages/server)
 packages/pi-thinkrail-workflow pi extension: the workflow skill system + its always-on routing rule
@@ -87,7 +87,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
    defaulting one terminal to bottom. Another window never rearranges this one. A future mobile shell may
    project the same panels differently; desktop docking does not define that projection. Detail:
    [[submodule-web-shell-layout]].
-6. **Workspaces are git worktrees (V1).** project (git repo) → workspace (`git worktree` on its own
+6. **Workspaces are git worktrees.** project (git repo) → workspace (`git worktree` on its own
    branch/cwd, under `~/.thinkrail/worktrees`) → {chats, files, terminals}. **Two deliberate
    exceptions, both `kind`-marked on the wire and both *user-owned* — never renamed or reclaimed by
    ThinkRail:** every project carries exactly one built-in **Default workspace** (`kind: "default"`)
@@ -97,11 +97,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
    worktree model; and an **existing worktree** the user explicitly attaches in place
    (`kind: "external"`), which ThinkRail may forget but never mutates (see
    [[submodule-server-workspaces]]). The shell is built first,
-   `pi` connected last. **Open PR is V1**: a deterministic, host-side push + open/update of the branch's
+   `pi` connected last. **Open PR** is a deterministic, host-side push + open/update of the branch's
    GitHub PR through the user's own `gh` CLI (no stored tokens, no provider REST API), body rendered from
    the verified plan, with a compare-URL fallback when `gh`/GitHub isn't available (see
-   [[submodule-server-pr]]). CI/Checks status, merge/squash from the app, and `glab` support stay V2;
-   workspace-local Review is V1.
+   [[submodule-server-pr]]).
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
    not a login UI.
 8. **Hydrate-then-stream (every client reconstructs domain state from the host).** A client never relies on
@@ -261,13 +260,14 @@ dependency. This keeps test process drivers outside both launchers and the serve
     [[module-pi-delegation]], [[module-pi-subagents]], and [[submodule-server-agent]].
 
 17. **Durable DAGs are host-owned resources, not parent chats.** [[module-pi-dag]] is a separately
-    scoped portable consumer of [[module-pi-delegation]], not a dependency of subagents or the V1
+    scoped portable consumer of [[module-pi-delegation]], not a dependency of subagents or the
     workflow skill system. Delegation owns canonical history capture/forking, retained resource
     execution contexts, child assembly/reopen and the existing run loop; DAG owns persistence,
     scheduling, gates and recovery. ThinkRail's selected future composition is workspace-owned,
     with an explicit host runtime, so no heading session is required. Embedders may apply different
     lifetime policies through trusted lifecycle controls without another scheduler or human-gate
-    bypass. Restore paused; one process controls each DAG. UI/wire/bundling remain separate work.
+    bypass. Restore paused; one process controls each DAG. ThinkRail neither bundles it nor exposes it
+    over the wire or in the UI.
 
 ## Invariants
 
@@ -288,13 +288,3 @@ dependency. This keeps test process drivers outside both launchers and the serve
   `@thinkrail/shared/spawn`; bespoke bounded runners set the option directly. Exempt: spawns that inherit
   an existing terminal's stdio (the `update`/`uninstall` CLI subcommands, the build script) and shell
   probes that are no-ops on win32 (`shellEnv`).
-
-## Out of scope (V1)
-
-The workflow **product layer** (a runtime/engine, configurable pipelines) — the skill-based workflow
-*system* ships in V1 as a bundled extension (`module-thinkrail-workflow`: skills + one always-on
-rule, no runtime machinery); the spec-graph **product layer** beyond the read-only viewer (drift detection, pre-build
-approval, living graph) — the pi-side spec-graph *capability* ships in V1 as a bundled extension
-(`module-spec-graph`), and the V1 viewer is a read-only Specs tab over a `spec.graph` wire read;
-CI/Checks status and provider REST API integration beyond `gh`-CLI push/open/update (see
-[[submodule-server-pr]]), self-improvement, automations, per-step model routing, cost ledger.

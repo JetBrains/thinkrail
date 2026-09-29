@@ -11,7 +11,7 @@ editor, and the wire.
 and the [vibecoder-focused experience](https://thinkrail.ai/vibecoding/) (see
 [`apps/website`](apps/website)).
 
-**V1 is a Worktree IDE:** open a git repo as a project, spin up workspaces as `git worktree`s (each its
+**ThinkRail is a Worktree IDE:** open a git repo as a project, spin up workspaces as `git worktree`s (each its
 own branch and cwd), and work across a tabbed Monaco editor, git Changes view, terminals, a read-only
 spec-graph viewer, and multiple concurrent `pi` chat sessions — all scoped to the active worktree.
 
@@ -124,7 +124,7 @@ bun run dev
 unstamped builds expose no Updates UI. Running `thinkrail update` from source installs a published binary; it
 does not pull, install dependencies, or rebuild the checkout.
 
-To run the V1 launchers:
+To run the launchers:
 
 ```bash
 bun run --filter @thinkrail/cli dev  # browser launcher
@@ -162,7 +162,7 @@ the canonical product and design specs.
 
 ```
 apps/
-  cli/        V1 entrypoint: boot host + open browser
+  cli/        browser launcher: boot host + open browser
   web/        mobile-first UI client
   desktop/    Electrobun local-host launcher + native packaging
   website/    public landing + blog + vibecoding site (Cloudflare Pages)
