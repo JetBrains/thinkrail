@@ -3,6 +3,11 @@
 	"name": "thinkrail-website",
 	"compatibility_date": "2026-08-22",
 	"pages_build_output_dir": "./dist",
+	"env": {
+		"preview": {
+			"d1_databases": []
+		}
+	},
 	"d1_databases": [
 		{
 			"binding": "ATTRIBUTION_DB",

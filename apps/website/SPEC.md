@@ -205,9 +205,9 @@ activation gate, claim protocol, and framing protections.
 
 Cloudflare Pages project `thinkrail-website` owns production and previews for the static artifact and
 claim Functions. Pinned Wrangler `4.124.0` deploys from `apps/website` so its configuration,
-`functions/`, D1 binding, and `dist` artifact form one deployment; production applies committed
-attribution migrations before deploy, while preview hosts cannot mutate attribution state. The build
-compiles the Functions, and a local Pages/D1 smoke starts Pages from the checked-in configuration,
+`functions/`, and `dist` artifact form one deployment. The top-level `ATTRIBUTION_DB` serves production
+and local Pages/D1 workflows; production applies committed attribution migrations before deploy. The
+build compiles the Functions, and a local Pages/D1 smoke starts Pages from the checked-in configuration,
 applies the actual migration, and exercises create, bind, and redeem. `.github/workflows/site.yml` runs
 `bun run --filter @thinkrail/website build` (`astro check`, the Functions typecheck and build, `astro
 build`, and artifact validation) on pushes that
@@ -222,10 +222,12 @@ second hosting pipeline.
 ### PR preview deploys
 
 `.github/workflows/site-preview.yml` runs the same build command and uploads to branch `pr-<number>` in
-`thinkrail-website`. The deterministic alias `https://pr-<number>.thinkrail-website.pages.dev` is
-surfaced as one sticky PR comment and one `Website preview` commit status covering `/`, `/blog/`,
-`/vibecoding/`, and `/agentic-development/`. It waits for all of those routes to serve before
-publishing the URL.
+`thinkrail-website`. The Wrangler `env.preview` override gives preview deployments no D1 binding;
+the production-origin guard independently continues to return not-found for preview attribution
+requests before D1 access. The deterministic alias
+`https://pr-<number>.thinkrail-website.pages.dev` is surfaced as one sticky PR comment and one
+`Website preview` commit status covering `/`, `/blog/`, `/vibecoding/`, and `/agentic-development/`.
+It waits for all of those routes to serve before publishing the URL.
 
 Same-repository PRs only receive previews; fork PRs skip because Cloudflare credentials never cross the
 repository boundary. Preview URLs are public and analytics-silent while their PR is open. A separate
