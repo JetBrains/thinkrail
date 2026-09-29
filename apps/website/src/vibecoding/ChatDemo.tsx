@@ -1,6 +1,7 @@
 import { ArrowUp, Check, HelpCircle, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { EffortSelect, ModelSelect } from "./ComposerSelects";
+import type { Positioning } from "./positioning";
 
 type Choice = { label: string; desc: string; rec?: boolean };
 
@@ -11,19 +12,16 @@ type Block =
 	| { type: "widget"; chip: string; title: string; options: Choice[] }
 	| { type: "done" };
 
-const SCRIPT: Block[] = [
-	{ type: "user", text: "What is ThinkRail? Keep it brief." },
-	{ type: "activity", text: "read README · specs" },
-	{
-		type: "says",
-		text: "ThinkRail is a worktree IDE for the pi coding agent. It lets you run isolated coding sessions across worktrees, with the editor, terminal, diffs, and specs in one interface.",
-	},
+const worktreeExchange: Block[] = [
 	{ type: "user", text: "What is a worktree, and why does ThinkRail use them?" },
 	{ type: "activity", text: "read architecture.md · workspace spec" },
 	{
 		type: "says",
 		text: "A worktree is an isolated working directory connected to the same Git repository. ThinkRail uses worktrees so each task can have its own branch, files, terminal, and agent session without interfering with other work.",
 	},
+];
+
+const featureExchange: Block[] = [
 	{ type: "user", text: "How should I start a new feature in ThinkRail?" },
 	{ type: "activity", text: "read specs/ · project graph" },
 	{
@@ -51,18 +49,54 @@ const SCRIPT: Block[] = [
 			{ label: "Explore the codebase first", desc: "read before deciding" },
 		],
 	},
-	{
-		type: "says",
-		text: "I'll inspect the relevant specs and code, propose a scoped plan, and wait for your approval before implementation.",
-	},
-	{ type: "done" },
 ];
 
-const completedChoices = Object.fromEntries(
-	SCRIPT.flatMap((block, index) =>
-		block.type === "widget" && block.options[0] ? [[index, block.options[0].label]] : [],
-	),
-);
+const SCRIPTS: Record<Positioning, Block[]> = {
+	control: [
+		{ type: "user", text: "What is ThinkRail? Keep it brief." },
+		{ type: "activity", text: "read README · specs" },
+		{
+			type: "says",
+			text: "ThinkRail is a worktree IDE for the pi coding agent. It lets you run isolated coding sessions across worktrees, with the editor, terminal, diffs, and specs in one interface.",
+		},
+		...worktreeExchange,
+		...featureExchange,
+		{
+			type: "says",
+			text: "I'll inspect the relevant specs and code, propose a scoped plan, and wait for your approval before implementation.",
+		},
+		{ type: "done" },
+	],
+	compounding: [
+		{ type: "user", text: "What is ThinkRail? Keep it brief." },
+		{ type: "activity", text: "read README · specs" },
+		{
+			type: "says",
+			text: "ThinkRail is an agentic IDE built around the pi coding agent — isolated workspaces for every task, and project memory in living specs and reusable skills. The longer we work together, the sharper I get.",
+		},
+		...worktreeExchange,
+		{ type: "user", text: "How do you get better over time?" },
+		{ type: "activity", text: "read specs/ · skills/" },
+		{
+			type: "says",
+			text: "Your project teaches me. Decisions land in living specs I check before touching code, and workflows I repeat become skills. Extensions are next — I'll build the tools your project needs.",
+		},
+		...featureExchange,
+		{
+			type: "says",
+			text: "I'll check the specs, propose a scoped plan, and save the approved design to your spec graph before writing code.",
+		},
+		{ type: "done" },
+	],
+};
+
+function completedChoicesFor(script: Block[]) {
+	return Object.fromEntries(
+		script.flatMap((block, index) =>
+			block.type === "widget" && block.options[0] ? [[index, block.options[0].label]] : [],
+		),
+	);
+}
 
 function Bubble({ children }: { children: React.ReactNode }) {
 	return (
@@ -157,7 +191,8 @@ function QuestionCard({
 	);
 }
 
-export function ChatDemo() {
+export function ChatDemo({ positioning }: { positioning: Positioning }) {
+	const script = SCRIPTS[positioning];
 	const ref = useRef<HTMLDivElement>(null);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const [started, setStarted] = useState(false);
@@ -171,8 +206,8 @@ export function ChatDemo() {
 		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
 			setReduced(true);
 			setStarted(true);
-			setChoices(completedChoices);
-			setRevealed(SCRIPT.length);
+			setChoices(completedChoicesFor(script));
+			setRevealed(script.length);
 			return;
 		}
 		let timer: ReturnType<typeof setTimeout>;
@@ -193,27 +228,27 @@ export function ChatDemo() {
 			obs.disconnect();
 			clearTimeout(timer);
 		};
-	}, []);
+	}, [script]);
 
 	useEffect(() => {
 		if (!started) return;
-		const next = SCRIPT[revealed];
+		const next = script[revealed];
 		if (!next) return;
 		if (next.type === "user") return;
-		const prev = SCRIPT[revealed - 1];
+		const prev = script[revealed - 1];
 		if (prev?.type === "widget" && !choices[revealed - 1]) return;
 		const t = setTimeout(() => setRevealed((r) => r + 1), next.type === "says" ? 1000 : 650);
 		return () => clearTimeout(t);
-	}, [started, revealed, choices]);
+	}, [started, revealed, choices, script]);
 
 	useEffect(() => {
 		const el = scrollRef.current;
 		if (el) el.scrollTo({ top: el.scrollHeight, behavior: reduced ? "auto" : "smooth" });
 	}, [revealed, choices, reduced]);
 
-	const nextBlock = SCRIPT[revealed];
+	const nextBlock = script[revealed];
 	const pendingUser = started && nextBlock?.type === "user" ? nextBlock.text : null;
-	const finished = started && revealed >= SCRIPT.length;
+	const finished = started && revealed >= script.length;
 
 	const send = () => {
 		if (!pendingUser) return;
@@ -222,8 +257,8 @@ export function ChatDemo() {
 
 	const replay = () => {
 		if (reduced) {
-			setChoices(completedChoices);
-			setRevealed(SCRIPT.length);
+			setChoices(completedChoicesFor(script));
+			setRevealed(script.length);
 			return;
 		}
 		setChoices({});
@@ -246,7 +281,7 @@ export function ChatDemo() {
 						ref={scrollRef}
 						className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 sm:p-5"
 					>
-						{SCRIPT.slice(0, revealed).map((b, i) => {
+						{script.slice(0, revealed).map((b, i) => {
 							if (b.type === "user") return <Bubble key={i}>{b.text}</Bubble>;
 							if (b.type === "activity") return <Activity key={i}>{b.text}</Activity>;
 							if (b.type === "says") return <Says key={i}>{b.text}</Says>;

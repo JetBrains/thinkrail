@@ -6,6 +6,7 @@ import { ChatDemo } from "./ChatDemo";
 import { Hero } from "./Hero";
 import { Orchestration } from "./Orchestration";
 import { Principles } from "./Principles";
+import type { Positioning } from "./positioning";
 import { SectionDivider } from "./SectionDivider";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader } from "./SiteHeader";
@@ -13,8 +14,10 @@ import { Isolation, SpecFirst } from "./Workflow";
 
 export function Landing({
 	heroTitle = "Vibe code without losing control.",
+	positioning = "control",
 }: {
 	heroTitle?: string;
+	positioning?: Positioning;
 }) {
 	useEffect(() => {
 		document.documentElement.dataset.landingReady = "true";
@@ -24,21 +27,21 @@ export function Landing({
 		<div className="min-h-screen bg-background">
 			<SiteHeader />
 			<main>
-				<Hero title={heroTitle} />
+				<Hero title={heroTitle} positioning={positioning} />
 				<SectionDivider />
-				<ChatDemo />
+				<ChatDemo positioning={positioning} />
 				<SectionDivider />
-				<Principles />
+				<Principles positioning={positioning} />
 				<SectionDivider />
-				<Capabilities />
+				<Capabilities positioning={positioning} />
 				<SectionDivider />
 				<Orchestration />
 				<SectionDivider />
-				<SpecFirst />
+				<SpecFirst positioning={positioning} />
 				<SectionDivider />
 				<Isolation />
 				<SectionDivider />
-				<CallToAction />
+				<CallToAction positioning={positioning} />
 			</main>
 			<SiteFooter />
 		</div>

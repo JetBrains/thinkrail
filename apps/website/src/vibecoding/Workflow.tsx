@@ -1,5 +1,19 @@
+import type { Positioning } from "./positioning";
 import { Reveal } from "./Reveal";
 import { Subtitle } from "./Subtitle";
+
+const specFirstCopy: Record<Positioning, { heading: string; subtitle: string }> = {
+	control: {
+		heading: "Spec-first architecture.",
+		subtitle:
+			"Before touching code, your agent records requirements, boundaries, and expected outcomes in the project spec graph. Once approved, implementation follows that design and is checked against focused tests and repository gates.",
+	},
+	compounding: {
+		heading: "Living specs.",
+		subtitle:
+			"Requirements, boundaries, and expected outcomes go into the spec graph before any code. The design stays with the project — checked before every change, never left to rot.",
+	},
+};
 
 function CodePanel({ children }: { children: React.ReactNode }) {
 	return (
@@ -9,20 +23,17 @@ function CodePanel({ children }: { children: React.ReactNode }) {
 	);
 }
 
-export function SpecFirst() {
+export function SpecFirst({ positioning }: { positioning: Positioning }) {
+	const copy = specFirstCopy[positioning];
 	return (
 		<section id="workflow" className="scroll-mt-16 border-b border-border-muted">
 			<div className="mx-auto grid max-w-[1200px] items-start gap-12 px-6 py-12 sm:py-24 md:grid-cols-2">
 				<Reveal>
 					<p className="label-mono">01 / Development strategy</p>
 					<h2 className="font-display mt-5 text-2xl leading-tight font-normal sm:text-3xl">
-						Spec-first architecture.
+						{copy.heading}
 					</h2>
-					<Subtitle className="mt-6">
-						Before touching code, your agent records requirements, boundaries, and expected outcomes
-						in the project spec graph. Once approved, implementation follows that design and is
-						checked against focused tests and repository gates.
-					</Subtitle>
+					<Subtitle className="mt-6">{copy.subtitle}</Subtitle>
 				</Reveal>
 				<Reveal delay={90}>
 					<CodePanel>
