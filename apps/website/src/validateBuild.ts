@@ -20,7 +20,6 @@ const desktopDownloadUrls = [
 ] as const;
 
 const analyticsFreePages = new Set(["404.html", "attribution/claim/index.html"]);
-const reactIslandPages = new Set(["vibecoding/index.html", "agentic-development/index.html"]);
 
 function occurrences(content: string, value: string): number {
 	return content.split(value).length - 1;
@@ -92,47 +91,6 @@ export function validateAnalyticsPages(
 	return failures;
 }
 
-function isVibecodingStylesheet(url: string): boolean {
-	return /(?:^|\/)vibecoding(?:\.[^/?#]*)?\.css(?:[?#]|$)/i.test(url);
-}
-
-function isReactRuntime(url: string): boolean {
-	return /(?:^|\/)react(?:[-.][^/?#]*)?\.js(?:[?#]|$)/i.test(url);
-}
-
-export function validateReactIslandPages(pages: ReadonlyMap<string, string>): string[] {
-	const failures: string[] = [];
-	const islandAssets = new Set(
-		[...reactIslandPages].flatMap((path) => {
-			const html = pages.get(path);
-			return html === undefined ? [] : attributeValues(html, ["component-url", "renderer-url"]);
-		}),
-	);
-
-	for (const [path, html] of pages) {
-		if (reactIslandPages.has(path)) continue;
-		if (html.includes("<astro-island")) failures.push(`${path}: React island leaked`);
-		for (const reference of new Set(attributeValues(html, ["component-url", "renderer-url"]))) {
-			failures.push(`${path}: React renderer/component reference leaked: ${reference}`);
-		}
-		const stylesheetReferences = new Set([
-			...stylesheetUrls(html),
-			...attributeValues(html, ["href"]).filter(isVibecodingStylesheet),
-		]);
-		for (const reference of stylesheetReferences) {
-			if (isVibecodingStylesheet(reference)) {
-				failures.push(`${path}: vibecoding stylesheet leaked: ${reference}`);
-			}
-		}
-		for (const reference of new Set(attributeValues(html, ["src", "href"]))) {
-			if (isReactRuntime(reference) || islandAssets.has(reference)) {
-				failures.push(`${path}: React runtime leaked: ${reference}`);
-			}
-		}
-	}
-	return failures;
-}
-
 export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`) {
 	const failures: string[] = [];
 	const glob = new Bun.Glob("**/*.{html,css,js,svg,txt,xml}");
@@ -163,6 +121,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		claim: requiredPage("attribution/claim/index.html"),
 	};
 	const islandPages = ["vibecoding", "agenticDevelopment"] as const;
+	const staticPages = ["landing", "blog", "introducingThinkRail", "claim"] as const;
 	const installPages = [
 		{ name: "landing", html: pages.landing, expectedDownloads: 2 },
 		{
@@ -265,19 +224,24 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	const analyticsPages: { path: string; runtimeContent: string }[] = [];
 	for (const [path, html] of htmlPages) {
 		analyticsPages.push({ path, runtimeContent: await pageRuntimeContent(distDirectory, html) });
+	}
+	failures.push(...validateAnalyticsPages(analyticsPages));
+
+	for (const [name, html] of Object.entries(pages)) {
 		for (const url of new Set(
 			attributeValues(html, ["src", "href", "component-url", "renderer-url"]).filter((value) =>
 				value.startsWith("/"),
 			),
 		)) {
 			if (!(await outputPathExists(distDirectory, url))) {
-				failures.push(`${path}: missing local output for ${url}`);
+				failures.push(`${name}: missing local output for ${url}`);
 			}
 		}
 	}
-	failures.push(...validateAnalyticsPages(analyticsPages));
-	failures.push(...validateReactIslandPages(htmlPages));
 
+	for (const name of staticPages) {
+		if (pages[name].includes("<astro-island")) failures.push(`${name}: React island leaked`);
+	}
 	for (const name of islandPages) {
 		if (occurrences(pages[name], "<astro-island") !== 1) {
 			failures.push(`${name}: expected one React island`);

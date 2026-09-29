@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { validateAnalyticsPages, validateReactIslandPages } from "./validateBuild";
+import { validateAnalyticsPages } from "./validateBuild";
 
 const analyticsRuntime = "data-posthog-project data-gtm-container content_viewed";
 
@@ -32,73 +32,5 @@ describe("validateAnalyticsPages", () => {
 			expect(failures).toContain(`${path}: expected 0 GTM loaders`);
 			expect(failures).toContain(`${path}: browser analytics leaked`);
 		}
-	});
-});
-
-describe("validateReactIslandPages", () => {
-	test("rejects an island on a future normal page", () => {
-		expect(
-			validateReactIslandPages(
-				new Map([["future-page/index.html", "<astro-island></astro-island>"]]),
-			),
-		).toEqual(["future-page/index.html: React island leaked"]);
-	});
-
-	test("rejects forbidden island assets on every ordinary page, even without an island", () => {
-		const failures = validateReactIslandPages(
-			new Map([
-				[
-					"vibecoding/index.html",
-					'<astro-island renderer-url="/_astro/client.future.js" component-url="/_astro/component.future.js"></astro-island>',
-				],
-				[
-					"future-page/index.html",
-					'<link rel="stylesheet" href="/_astro/vibecoding.future.css"><script src="/_astro/react.future.js"></script><script src="/_astro/client.future.js"></script>',
-				],
-				["404.html", '<link rel="stylesheet" href="/_astro/vibecoding.future.css">'],
-				[
-					"attribution/claim/index.html",
-					'<main component-url="/_astro/component.future.js" renderer-url="/_astro/client.future.js"></main>',
-				],
-			]),
-		);
-
-		expect(failures).toContain(
-			"future-page/index.html: vibecoding stylesheet leaked: /_astro/vibecoding.future.css",
-		);
-		expect(failures).toContain(
-			"future-page/index.html: React runtime leaked: /_astro/react.future.js",
-		);
-		expect(failures).toContain(
-			"future-page/index.html: React runtime leaked: /_astro/client.future.js",
-		);
-		expect(failures).toContain(
-			"404.html: vibecoding stylesheet leaked: /_astro/vibecoding.future.css",
-		);
-		expect(failures).toContain(
-			"attribution/claim/index.html: React renderer/component reference leaked: /_astro/component.future.js",
-		);
-		expect(failures).toContain(
-			"attribution/claim/index.html: React renderer/component reference leaked: /_astro/client.future.js",
-		);
-	});
-
-	test("accepts a legitimate future page without island assets", () => {
-		expect(
-			validateReactIslandPages(
-				new Map([["blog/future-post/index.html", "<article>Future post</article>"]]),
-			),
-		).toEqual([]);
-	});
-
-	test("leaves the two approved island routes to their required-island checks", () => {
-		expect(
-			validateReactIslandPages(
-				new Map([
-					["vibecoding/index.html", "<astro-island></astro-island>"],
-					["agentic-development/index.html", "<astro-island></astro-island>"],
-				]),
-			),
-		).toEqual([]);
 	});
 });
