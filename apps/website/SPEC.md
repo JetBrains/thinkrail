@@ -165,10 +165,16 @@ state stays cookieless and carries no journey ID. Localhost, `astro dev`, every 
 `jetbrains.github.io` address, and sibling subdomains send nothing.
 
 `src/components/Analytics.astro` initializes that facade and then the idempotent site event delegation
-once per document; it remains the only analytics composition point for the IDE-shell and vibecoding
-routes. The route classifier is closed: `/` → `landing`, `/blog/` → `blog/index`, each published post →
-`blog/<slug>`, `/vibecoding/` → `vibecoding`, and `/agentic-development/` →
-`agentic-development`. Each document emits one explicit `content_viewed` with that key.
+once per document; it remains the analytics composition point for the IDE-shell and vibecoding routes.
+Content keys derive from `window.location.pathname`: `/` → `landing`, `/blog/` → `blog/index`, and
+other paths containing only lowercase safe characters become the path without outer slashes (so
+`/blog/<slug>/` → `blog/<slug>`). Keys allow only lowercase letters, digits, hyphens, and path
+separators and are limited to 105 characters, enough for `blog/` plus the maximum 100-character post
+slug; invalid paths emit no content or action events. Query and fragment strings are absent from
+`pathname`; dotted `index.html` paths are not route aliases. New pages and posts need no analytics code
+change. Only pages composed with Analytics load it: the authored `src/pages/404.astro` is a standalone,
+analytics-free page served for unknown URLs, and the standalone `/attribution/claim/` page remains
+analytics-free. Each valid document emits one explicit `content_viewed` with its derived key.
 
 At initialization, the current page touch is recorded only when a consented journey already exists;
 journey appearance after initialization does not replay the page URL or referrer, and journey removal

@@ -9,17 +9,8 @@ import {
 	recordCurrentDownloadBridge,
 } from "./attribution";
 
-export const contentRoutes = {
-	"/": "landing",
-	"/blog/": "blog/index",
-	"/blog/introducing-thinkrail/": "blog/introducing-thinkrail",
-	"/blog/thinkrail-workspaces/": "blog/thinkrail-workspaces",
-	"/blog/thinkrail-sdd/": "blog/thinkrail-sdd",
-	"/vibecoding/": "vibecoding",
-	"/agentic-development/": "agentic-development",
-} as const;
+const maxContentKeyLength = 105;
 
-export type WebsiteContentKey = (typeof contentRoutes)[keyof typeof contentRoutes];
 export type WebsiteCtaLocation = WebsiteInstallCtaClickedProperties["cta_location"];
 
 type DesktopArtifact = Pick<
@@ -124,8 +115,15 @@ function isCliDisclosure(value: unknown): value is CliDisclosure {
 	);
 }
 
-export function contentKeyForPathname(pathname: string): WebsiteContentKey | undefined {
-	return hasOwn(contentRoutes, pathname) ? contentRoutes[pathname] : undefined;
+export function contentKeyForPathname(pathname: string): string | undefined {
+	if (pathname === "/") return "landing";
+
+	const path = pathname.replace(/^\//, "").replace(/\/$/, "");
+	if (path === "blog") return "blog/index";
+	if (path.length > maxContentKeyLength || !/^[a-z0-9-]+(?:\/[a-z0-9-]+)*$/.test(path)) {
+		return undefined;
+	}
+	return path;
 }
 
 export function desktopArtifactForUrl(url: string): DesktopArtifact | undefined {
@@ -148,7 +146,7 @@ export function cliDisclosureLocation(
 }
 
 export function cliDisclosureOpenedEvent(
-	contentKey: WebsiteContentKey,
+	contentKey: string,
 	disclosure: CliDisclosure,
 ): DesktopClickEvents[0] | undefined {
 	if (!disclosure.open) return undefined;
@@ -165,7 +163,7 @@ export function cliDisclosureOpenedEvent(
 }
 
 export function desktopClickEvents(
-	contentKey: WebsiteContentKey,
+	contentKey: string,
 	ctaLocation: WebsiteCtaLocation,
 	url: string,
 ): DesktopClickEvents | undefined {

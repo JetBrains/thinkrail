@@ -3,12 +3,10 @@ import type { WebsiteAnalyticsEventProperties } from "@thinkrail/website-analyti
 import {
 	cliDisclosureOpenedEvent,
 	contentKeyForPathname,
-	contentRoutes,
 	ctaLocationForElement,
 	desktopArtifactForUrl,
 	desktopClickEvents,
 	initAnalyticsEvents,
-	type WebsiteContentKey,
 } from "./analyticsEvents";
 
 const stableDesktopAliases = {
@@ -101,49 +99,38 @@ function disclosure(open: boolean, selector: string) {
 	};
 }
 
-describe("website content routes", () => {
-	test("pins every static document to one closed content key", () => {
-		expect(contentRoutes).toEqual({
-			"/": "landing",
-			"/blog/": "blog/index",
-			"/blog/introducing-thinkrail/": "blog/introducing-thinkrail",
-			"/blog/thinkrail-workspaces/": "blog/thinkrail-workspaces",
-			"/blog/thinkrail-sdd/": "blog/thinkrail-sdd",
-			"/vibecoding/": "vibecoding",
-			"/agentic-development/": "agentic-development",
-		});
-		for (const [pathname, contentKey] of Object.entries(contentRoutes)) {
-			expect(contentKeyForPathname(pathname)).toBe(contentKey);
-		}
+describe("website content keys", () => {
+	test.each([
+		["/", "landing"],
+		["/blog/", "blog/index"],
+		["/blog/introducing-thinkrail/", "blog/introducing-thinkrail"],
+		["/blog/thinkrail-workspaces/", "blog/thinkrail-workspaces"],
+		["/blog/thinkrail-sdd/", "blog/thinkrail-sdd"],
+		["/vibecoding/", "vibecoding"],
+		["/agentic-development/", "agentic-development"],
+	] as const)("keeps %s mapped to %s", (pathname, contentKey) => {
+		expect(contentKeyForPathname(pathname)).toBe(contentKey);
 	});
 
-	test("covers every authored blog slug", async () => {
-		const files = await Array.fromAsync(
-			new Bun.Glob("*/index.md").scan({
-				cwd: `${import.meta.dir}/../content/blog`,
-				onlyFiles: true,
-			}),
-		);
-		const authoredPaths = await Promise.all(
-			files.map(async (file) => {
-				const source = await Bun.file(`${import.meta.dir}/../content/blog/${file}`).text();
-				const slug = source.match(/^slug:\s*(.+)$/m)?.[1]?.trim();
-				expect(slug).toBeDefined();
-				return `/blog/${slug}/`;
-			}),
-		);
-		const classifiedPostPaths = Object.keys(contentRoutes).filter(
-			(pathname) => pathname.startsWith("/blog/") && pathname !== "/blog/",
-		);
-		expect(classifiedPostPaths.sort()).toEqual(authoredPaths.sort());
+	test("derives a content key for a newly authored path", () => {
+		expect(contentKeyForPathname("/blog/some-new-post/")).toBe("blog/some-new-post");
+		expect(contentKeyForPathname("/docs/setup/")).toBe("docs/setup");
+	});
+
+	test("accepts 100-character blog slugs but rejects 101-character slugs", () => {
+		const maximumSlug = "a".repeat(100);
+		expect(contentKeyForPathname(`/blog/${maximumSlug}/`)).toBe(`blog/${maximumSlug}`);
+		expect(contentKeyForPathname(`/blog/${maximumSlug}a/`)).toBeUndefined();
 	});
 
 	test.each([
-		"/blog",
-		"/blog/unknown/",
-		"/docs/",
+		"/Blog/new-post/",
+		"/blog/new.post/",
+		"/blog/new%2dpost/",
+		`/${"a".repeat(106)}/`,
+		"/docs//setup/",
 		"https://thinkrail.ai/",
-	])("rejects the unknown pathname %s", (pathname) => {
+	])("rejects an unsafe pathname %s", (pathname) => {
 		expect(contentKeyForPathname(pathname)).toBeUndefined();
 	});
 });
@@ -181,7 +168,7 @@ describe("CTA classification", () => {
 	});
 
 	test("captures CLI disclosures only when they open", () => {
-		const contentKey: WebsiteContentKey = "landing";
+		const contentKey = "landing";
 		expect(
 			cliDisclosureOpenedEvent(contentKey, disclosure(false, "details.cli-disclosure")),
 		).toBeUndefined();
@@ -233,6 +220,41 @@ describe("analytics event initialization", () => {
 				},
 			},
 		]);
+	});
+
+	test("captures a view for a new blog post without a route registration", () => {
+		const document = new FakeDocument();
+		const log = captureLog();
+		let attributionInitializations = 0;
+
+		initAnalyticsEvents(document, "/blog/some-new-post/", log.capture, () => {
+			attributionInitializations += 1;
+		});
+
+		expect(log.events).toEqual([
+			{ event: "content_viewed", properties: { content_key: "blog/some-new-post" } },
+		]);
+		expect(attributionInitializations).toBe(1);
+		expect([...document.listeners.keys()]).toEqual(["click", "auxclick", "toggle"]);
+	});
+
+	test.each([
+		"/Blog/new-post/",
+		"/blog/new.post/",
+		"/blog/new%2dpost/",
+		`/blog/${"a".repeat(101)}/`,
+	])("does not initialize events for an unsafe pathname %s", (pathname) => {
+		const document = new FakeDocument();
+		const log = captureLog();
+		let attributionInitializations = 0;
+
+		initAnalyticsEvents(document, pathname, log.capture, () => {
+			attributionInitializations += 1;
+		});
+
+		expect(log.events).toEqual([]);
+		expect(document.listeners.size).toBe(0);
+		expect(attributionInitializations).toBe(0);
 	});
 
 	test("is idempotent for content and delegated listeners", () => {
