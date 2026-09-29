@@ -35,8 +35,9 @@ to move fast without losing control of what the agent did.
 
 ## Value
 
-- **Isolation by default.** Every workspace is a git worktree with its own branch and cwd: agents run
-  in parallel and the main branch stays clean until the user merges.
+- **Isolation by default.** A workspace ThinkRail creates is a git worktree with its own branch and cwd:
+  agents run in parallel and the main branch stays clean until the user merges. Working directly in the
+  project folder (the Default workspace) is an explicit choice, never the default.
 - **A real IDE around the agent.** Editor, diffs, terminals, and review in one workbench, so the user
   sees and steers the agent's work instead of reconstructing it from a scrollback.
 - **Specs as ground truth.** The project's intent lives in a spec graph beside the code that the agent
@@ -76,8 +77,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   ([[submodule-web-chat]], [[submodule-server-agent]]).
 - **Existing skills reused** — portable Agent Skills kept for other coding agents are read in place;
   `pi` stays the parser and runtime ([[submodule-server-agent]]).
-- **Plans with per-step review** — a shared TODO plan the agent works and the user edits; each completed
-  step is committed and reviewed by an independent reviewer ([[module-pi-todos]],
+- **Plans with per-step review** — a shared TODO plan the agent works and the user edits; a completed step
+  is committed on its own when its changes are provably its own, and can be reviewed by an independent
+  reviewer ([[module-pi-todos]], [[submodule-server-todos]],
   [[submodule-server-host-plan-review]]).
 - **Subagents** — delegation to isolated child sessions, in the foreground, in parallel, or in the
   background ([[module-pi-subagents]]).
