@@ -490,23 +490,45 @@ export async function listCommitsSince(
 	return commits;
 }
 
-export async function countUnpushedCommits(
+export interface PushDivergence {
+	/** Local commits origin/<branch> lacks (a plain push would deliver these). */
+	ahead: number;
+	/** Commits on origin/<branch> that HEAD lacks; > 0 means a plain push is non-fast-forward. */
+	behind: number;
+}
+
+/**
+ * How the local branch stands against origin/<branch>: `ahead` (unpushed commits) and `behind` (remote
+ * commits HEAD lacks). `behind > 0` means the branch diverged, so only `--force-with-lease` will land.
+ * `null` when there is no remote ref yet. With `fetch`, best-effort refreshes origin/<branch> first so the
+ * comparison reflects the real remote; offline falls back to the last-known ref rather than failing.
+ */
+export async function countPushDivergence(
 	worktreePath: string,
 	branch: string,
-): Promise<number | null> {
+	opts?: { fetch?: boolean },
+): Promise<PushDivergence | null> {
+	if (opts?.fetch && isSafeRef(branch)) {
+		await gitAsync(worktreePath, ["fetch", "origin", "--", branch], { network: true });
+	}
 	const counted = await gitAsync(worktreePath, [
 		"rev-list",
+		"--left-right",
 		"--count",
 		"--end-of-options",
-		`origin/${branch}..HEAD`,
+		`origin/${branch}...HEAD`,
 		"--",
 	]);
 	if (counted.failure)
-		throw new Error(`Could not count unpushed commits: ${counted.err || "git failed"}`);
+		throw new Error(`Could not measure push divergence: ${counted.err || "git failed"}`);
 	if (!counted.ok) {
 		if (remoteRefOid(worktreePath, `origin/${branch}`) === null) return null;
-		throw new Error(`Could not count unpushed commits: ${counted.err || "git failed"}`);
+		throw new Error(`Could not measure push divergence: ${counted.err || "git failed"}`);
 	}
-	const count = Number(counted.out);
-	return Number.isSafeInteger(count) && count >= 0 ? count : null;
+	const [behindStr, aheadStr] = counted.out.split(/\s+/);
+	const behind = Number(behindStr);
+	const ahead = Number(aheadStr);
+	if (!Number.isSafeInteger(ahead) || !Number.isSafeInteger(behind) || ahead < 0 || behind < 0)
+		return null;
+	return { ahead, behind };
 }

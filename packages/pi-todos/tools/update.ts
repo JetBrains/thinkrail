@@ -19,18 +19,23 @@ const parameters = Type.Object({
 				"New lifecycle status: pending | in_progress | done. Setting in_progress auto-returns any other in_progress item to pending (one step in work at a time).",
 		}),
 	),
-	title: Type.Optional(Type.String({ description: "New title." })),
+	title: Type.Optional(
+		Type.String({
+			description:
+				'New title. Keep the step contract: imperative and about the change/outcome, short and scannable — not the process ("make a plan", "look into X") and not agent bookkeeping (that goes in note).',
+		}),
+	),
 	note: Type.Optional(Type.String({ description: "New note (empty string clears it)." })),
 	summary: Type.Optional(
 		Type.String({
 			description:
-				"Completion summary, set together with status=done when the step changed code: 1–3 short sentences — what changed, why (decisions not visible in the diff), and any scope drift (things touched beyond this step). Verification goes in the separate verification field, not here. Empty string clears it.",
+				"Completion summary, set together with status=done when the step changed code. Rendered as Markdown on the plan page — write it structured: a short lead sentence plus a bullet list when it has parts (what changed, why — decisions not visible in the diff — and any scope drift), NOT one run-on paragraph. Do NOT restate the title — add what the title can't show. Verification goes in the separate verification field, not here. Empty string clears it.",
 		}),
 	),
 	verification: Type.Optional(
 		Type.String({
 			description:
-				'Verification line, set together with status=done: the EXACT check you ran and its result ("bun test src/todos — 34 pass", "typecheck green") — or "not verified" when you ran nothing. Never claim a check you did not run. Empty string clears it.',
+				'Verification, set together with status=done: each check in the normalized shape `check → result` — the EXACT check you ran and its outcome ("bun test src/todos → 34 pass", "typecheck → green"). Rendered as Markdown on the plan page: when you ran several checks write them as a Markdown bullet list (one `- check → result` per line), not one run-on line; a single check stays one line. Write exactly "not verified" when you ran nothing. No prose, no summary restatement. Never claim a check you did not run. Empty string clears it.',
 		}),
 	),
 	commitSubject: Type.Optional(
@@ -46,11 +51,15 @@ function nextOpenStep(plan: TodoPlan, id: string): Todo | undefined {
 	return group?.todos.find((t) => t.status !== "done");
 }
 
-/** Plan-complete nudge: every item everywhere is done — ask for the overall summary, once per flip. */
+/** Plan-complete nudge: every item everywhere is done — ask for the cumulative overall summary, once per flip. */
 function planCompleteNudge(plan: TodoPlan): string | undefined {
 	const items = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
 	if (items.length === 0 || items.some((t) => t.status !== "done")) return undefined;
-	return "plan complete — write a short overall summary with todo_plan_summary (what was done, across all tasks).";
+	const existing = plan.summary?.trim();
+	if (existing) {
+		return `plan complete — a summary from an earlier completion is still here; EXTEND it with todo_plan_summary so it keeps covering EVERYTHING done across the whole plan (carry the earlier points forward, add the new work) — do not rewrite it down to only the latest step. Current summary to build on:\n${existing}`;
+	}
+	return "plan complete — write a cumulative overall summary with todo_plan_summary covering EVERYTHING done across all tasks, not just the last step.";
 }
 
 export function registerTodoUpdate(pi: ExtensionAPI): void {

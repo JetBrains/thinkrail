@@ -29,14 +29,19 @@ the `commit` kind, `5` added the `summary` fields, `6` added `commitSubject`); a
 and is upgraded on the next write.
 
 **Summaries (the review trail).** An item may carry `summary` — the agent's completion note (what/why,
-the decisions the diff can't show) — and **`verification`**, a separate field for the exact check run +
-result (or the honest "not verified"), kept apart from the prose so the UI renders it as a status badge
-and a missing line is visible at a glance; both set via `TodoPatch` when the item flips `done`; the plan itself may carry a
+the decisions the diff can't show, written as structured Markdown) — and **`verification`**, a separate
+field for the exact check(s) run + result (or the honest "not verified"), kept apart from the prose so
+the UI can badge it with a status glyph; both are **Markdown** (several checks read as a bullet list, not
+one run-on line), and a missing verification line is visible at a glance; both set via `TodoPatch` when the item flips `done`; the plan itself may carry a
 plan-level `summary` (`TodoFile.summary`, written by `TodoStore.setSummary`) — the overall handoff note
-the agent writes when the whole plan completes. Both are stored verbatim across later edits, with one
-invalidation rule: `update` clears an item's `summary`/`verification`, and drops the plan-level `summary`
-with it, the moment that item's `status` leaves `done` — unless the same patch also supplies fresh values
-for them, which win.
+the agent writes when the whole plan completes; it is **cumulative** (everything done across the whole
+plan, extended not rewritten when a prior note survives a re-completion — the tool layer echoes the
+surviving text so the agent can build on it), never a recap of only the last step. Both are stored verbatim across later edits, with one
+invalidation rule: `update` clears an item's own `summary`/`verification` the moment that item's `status`
+leaves `done` — unless the same patch also supplies fresh values, which win. The **plan-level `summary`
+survives a re-open** (it is NOT dropped with the item's fields): it stays stale so a reader can show it as
+"Updating…" while the plan is being redone, and the next completion EXTENDS it rather than starting blank
+(the cumulative contract). Gating a stale note out of a display or export is the reader's job.
 
 **`commitSubject` (the git-facing title).** A third done-time field, same family and the same
 invalidation rule: the subject line the host uses verbatim when it commits the item's delta (see
@@ -47,10 +52,10 @@ history's own convention ("feat(web): add newest-first chat order"). Deriving on
 possible (the change's type/scope is knowable only from the change), so the agent authors both and the
 store just carries them. The model stays git-free: it never validates the style, never reads `git log` —
 the tool description and the todos skill carry the "match this repo's history" instruction, and the host
-falls back to `title` when the field is absent. A UI reader can gate display on "everything done", but a non-UI consumer (a generated
-PR body, a work report) has no such gate, so a reopened item's stale completion story must not survive on
-disk, not merely be hidden. `replaceAll` deliberately does **not** carry the plan summary over — a
-fresh plan is new work. Review *state* is never stored here: it is user-owned and lives in a host sidecar
+falls back to `title` when the field is absent. A reader gates the plan-level summary on "everything
+done" (the UI shows it live, marked stale while re-opened; ungated consumers like a PR body / work report
+render it only while every item is `done`), so a stale all-done story never leaks even though it survives
+on disk. `replaceAll` deliberately does **not** carry the plan summary over — a fresh plan is new work. Review *state* is never stored here: it is user-owned and lives in a host sidecar
 (see `server/src/todos`), so an agent re-plan can't flip a review decision.
 
 **Group = task.** A group models one user ask; its items are the steps. A group's lifecycle is
@@ -64,7 +69,7 @@ plan; the model reaches for it to say "make the plan look like this, keep the pr
 `replaceAll(plan)` reconciles rather than rebuilding from scratch:
 
 - Each written grouped item is **matched** to an existing **agent** item by the key
-  `(group title, item title)` — both compared *decoded*; the first unconsumed match wins (duplicate
+  `(group title, item title)` — both compared *decoded and one-line-flattened* (see below); the first unconsumed match wins (duplicate
   titles reconcile positionally). A **match reuses the existing item**: its `id`, `createdAt`, `status`,
   `summary`, `verification`, `commitSubject`, and `artifacts` are kept; only `note` is updated from the
   write. A `status` in the write is **ignored for a matched item** — status advances only through
@@ -85,6 +90,13 @@ and `replaceAll` only ever admits `origin: "user"` items to `resultLoose` — a 
 item (a legacy stray) is carried into a `"Completed"` group, an open one dropped. The tools also refuse a
 direct loose agent write (`todo_add` needs `group`/`after`). The invariant is robust by construction, not
 dependent on the agent's tool discipline.
+
+**Titles are one-line, normalized at the write boundary.** Item titles and group titles are the item
+bullets and `##` group headings of the markdown export, which is a shipped artifact (the plan page's
+export and the PR body). A newline — from the plan's multi-line add input or an agent escape — would
+break that list, so `flattenTitle` collapses any whitespace run to a single space (forgiving, not a
+reject) on every write path: `add`, `update`, `replaceAll` (including its reconcile key), and `sanitize`
+on load. Callers and readers can assume a title never contains a newline; there is no per-render sanitize.
 
 **Matching is title-based, by design's current increment.** Because the key is `(group title, item
 title)`, a **group rename** or a **step rename** is not followed: the old item's done work is preserved

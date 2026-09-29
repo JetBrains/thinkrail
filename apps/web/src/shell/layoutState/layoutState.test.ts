@@ -401,6 +401,28 @@ describe("frontend-local layout state", () => {
 		expect(current?.left.width).toBe(0.31);
 	});
 
+	test("geometry-only frame commits keep the projection epoch while shape changes advance it", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const base = await ensureWorkspaceLayoutState("workspace");
+		const epoch = useAppStore.getState().layoutProjectionEpoch;
+
+		const resized = await commitWorkspaceLayout(
+			"workspace",
+			resizeBottomRegion(resizeSideRegion(base, "left", 0.31), 0.4),
+		);
+		expect(resized.left.width).toBe(0.31);
+		expect(useAppStore.getState().layoutProjectionEpoch).toBe(epoch);
+
+		await commitWorkspaceLayout("workspace", {
+			...resized,
+			left: { ...resized.left, visible: false },
+		});
+		expect(useAppStore.getState().layoutProjectionEpoch).toBe(epoch + 1);
+	});
+
 	test("a newly shown singleton tool cannot collide with a hidden workspace resource", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();

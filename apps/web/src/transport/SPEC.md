@@ -124,10 +124,12 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   than a caller convention).
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
-  `TransportOptions`, `supportsPlanReview`. `supportsSessionActivity` stays module-internal (this module is the
-  only one that acts on the activity capability, and its own tests import the file directly);
-  `supportsPlanReview` is exported because a sibling panel (`PlanPane`) gates the plan-review UI on it — an
-  older host serves no `todo.startReview`/`reviewAll`, so the client must not offer them.
+  `TransportOptions`, `supportsPlanReview`, `supportsPlanSummaryGeneration`. `supportsSessionActivity` stays
+  module-internal (this module is the only one that acts on the activity capability, and its own tests import
+  the file directly); `supportsPlanReview` is exported because a sibling panel (`PlanPane`) gates the
+  plan-review UI on it — an older host serves no `todo.startReview`/`reviewAll`, so the client must not
+  offer them; `supportsPlanSummaryGeneration` (v69) is exported because `chat/useChatTodos` gates the
+  auto-summary `todo.generateSummary` request on it — an older host has no such method.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,

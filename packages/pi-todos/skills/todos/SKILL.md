@@ -11,8 +11,10 @@ description: "Use when the user asks for a shared plan, a task needs at least th
   panel; lives with the session (not committed to the repo).
 - **Group = task, item = step.** One user ask = one group; its title is the *outcome* ("Fix login
   redirect"), not the process. The steps inside are the items — each has a **title**, a **status**
-  (`pending` → `in_progress` → `done`), and an optional **note** (put the done-criterion there, e.g.
-  "login e2e green"). A task's own status is never stored — it derives from its steps.
+  (`pending` → `in_progress` → `done`), and an optional **note**. The note is **agent-facing working
+  detail** — the human's default plan view shows titles + status and keeps notes behind a disclosure —
+  so it's where your own tracking, reminders, and the done-criterion live (e.g. "login e2e green"),
+  never a place the user must read to follow along. A task's own status is never stored — it derives from its steps.
 - **Loose items are the user's lane — and they sit at the END of the plan.** They hold what the
   **user** adds from the UI; you work them, but never group, rewrite, or drop them. `todo_list` renders
   them **last**, after every group, on purpose: a request the user adds mid-task queues *after* your
@@ -36,6 +38,18 @@ description: "Use when the user asks for a shared plan, a task needs at least th
 | more than ~10 steps | those are tasks, not steps — split into several groups |
 
 Steps are **verifiable** and ≈ commit-sized: "easy to check off as you go", not "phase 1".
+
+**A step is a substantive, human-meaningful outcome — not your bookkeeping.** The plan is the user's
+status window, so every step must be something the *user* cares to see done. Process/meta chatter that
+only keeps *you* oriented is not a step: "make a plan", "read the files", "think about the approach",
+"review my changes" — don't mint items for these. Keep the plan to the real, checkable outcomes; put
+any working memory you need in the step's `note` (agent-facing), not as its own item.
+
+**Each field answers one question, in one shape — don't let them blur:** the **title** is what the step
+does (imperative, about the change/outcome, not the process); the **`note`** is your private working
+detail; the **`summary`** is what changed and *why* (it must NOT restate the title — add the decision
+or constraint the title can't show); the **`verification`** is how it was proven, in the normalized
+shape `check → result` (or the honest "not verified").
 
 ## Working with it
 
@@ -72,14 +86,17 @@ everything the diff cannot show — intent, decisions, and honesty about verific
 reviewer, not for yourself.
 
 - **A step that changed code gets a summary AND a verification when you mark it done** — pass both
-   on the same `todo_update` call that sets `status: done`. `summary`: 1–3 short sentences covering
-   **what changed** and **why** — especially decisions that are NOT visible in the diff (a rejected
-   alternative, a constraint you worked around). Research/analysis/verification-only steps that
-   produced no code changes need neither.
-- **Verification is its own field, named, never claimed.** Pass `verification` with the exact check
-   you ran and its result ("`bun test src/todos` — 34 pass", "typecheck green") — or the honest
-   **"not verified"**; the UI renders it as a status badge on the review card, so a vague or missing
-   line is visible at a glance. Never write "tests pass" for tests you didn't run. And never make a
+   on the same `todo_update` call that sets `status: done`. `summary` is **Markdown, written structured**
+   (a short lead sentence + a bullet list when it has parts), covering **what changed** and **why** —
+   especially decisions that are NOT visible in the diff (a rejected alternative, a constraint you worked
+   around) — not one run-on paragraph. Research/analysis/verification-only steps that produced no code
+   changes need neither.
+- **Verification is its own field, named, never claimed.** Pass `verification` as one or more checks in
+   the normalized shape `check → result` — the exact check you ran and its outcome ("`bun test src/todos`
+   → 34 pass", "typecheck → green") — or the honest **"not verified"**. It renders as **Markdown** on the
+   plan page, so when you ran several checks write them as a **bullet list** (one `- check → result` per
+   line), not one run-on line crammed with `;` separators; a single check stays one line. The UI shows it
+   as a status badge on the review card, so a vague or missing line is visible at a glance. Never write "tests pass" for tests you didn't run. And never make a
    check pass by weakening it — if you changed, skipped, or deleted a test as part of the step, the
    summary must say so explicitly: a reviewer who finds it themselves stops trusting every other
    summary.
@@ -98,9 +115,17 @@ reviewer, not for yourself.
    contract/API change, tricky concurrency, an area you're least sure of — name it in one clause
    ("closest look: the rollback path").
 - **When the last open item flips done, write the overall plan summary** with `todo_plan_summary`
-   (the `todo_update` result nudges you at exactly that moment): 2–4 sentences across all tasks — a
-   handoff note, not a step list. Include what was verified end-to-end and anything left undone or
-   deferred — an omission here reads as "nothing left", so say it if something is.
+   (the `todo_update` result nudges you at exactly that moment): a handoff note across all tasks, not a
+   step list. It is **cumulative — it covers EVERYTHING done across the whole plan**, not the last step
+   alone. When the plan gained new work and finished again, a summary from the earlier completion is
+   still there (the done-flip nudge surfaces it): **extend that text — carry every earlier point forward
+   and add the new work — never rewrite it down to only the most recent step.** Include what was verified
+   end-to-end and anything left undone or deferred — an omission here reads as "nothing left", so say it
+   if something is. **The plan view renders this as Markdown, so
+   write it structured, not one dense paragraph:** a lead sentence, then a short bulleted breakdown (e.g.
+   what shipped / what was verified / what's left), using `**bold**`, lists, and `code` where they aid
+   scanning. The per-item `summary` renders as Markdown too — a tight sentence or two, bulleted only
+   when it genuinely has parts. Keep both scannable, never a wall of text.
 - **Fix requests re-open the SAME item.** When the user asks for a fix on a reviewed step (you'll
    receive the original step, its summary, its change set, and their feedback), flip **that exact item**
    (by id) back to `in_progress`, make the fix, and mark it `done` with a **fresh summary** and a

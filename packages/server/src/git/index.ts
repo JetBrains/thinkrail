@@ -7,7 +7,7 @@ export {
 } from "./diffScope";
 export {
 	canonicalPath,
-	countUnpushedCommits,
+	countPushDivergence,
 	currentBranch,
 	gitCommitPaths,
 	gitDiffFile,

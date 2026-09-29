@@ -1,5 +1,6 @@
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import { assistantToolCallsAreExecutable } from "@thinkrail/contracts";
+import { scanReplayTools } from "pi-delegation";
 import { ASK_ACK_TEXT, ASK_USER_QUESTION_TOOL_NAME } from "./askUserQuestion";
 
 export interface RepairedToolCall {
@@ -14,37 +15,10 @@ const TRUNCATED_REPAIR_TEXT =
 
 export function repairDanglingToolCalls(sessionManager: SessionManager): RepairedToolCall[] {
 	const { messages } = sessionManager.buildSessionContext();
-	const trailingResults = new Map<string, string>();
-	let repeatedTrailingResult = false;
-	let dangling: RepairedToolCall[] = [];
-	let danglingCallsAreExecutable = false;
-
-	for (let index = messages.length - 1; index >= 0; index--) {
-		const message = messages[index];
-		if (!message) continue;
-		if (message.role === "toolResult") {
-			if (trailingResults.has(message.toolCallId)) repeatedTrailingResult = true;
-			trailingResults.set(message.toolCallId, message.toolName);
-			continue;
-		}
-		if (message.role !== "assistant") break;
-		if (message.stopReason === "error" || message.stopReason === "aborted") break;
-		danglingCallsAreExecutable = assistantToolCallsAreExecutable(message.stopReason);
-		const toolCalls = message.content.filter((block) => block.type === "toolCall");
-		const toolCallNames = new Map(toolCalls.map((toolCall) => [toolCall.id, toolCall.name]));
-		if (
-			!repeatedTrailingResult &&
-			toolCallNames.size === toolCalls.length &&
-			[...trailingResults].every(
-				([toolCallId, toolName]) => toolCallNames.get(toolCallId) === toolName,
-			)
-		) {
-			dangling = toolCalls
-				.filter((toolCall) => !trailingResults.has(toolCall.id))
-				.map((toolCall) => ({ toolCallId: toolCall.id, toolName: toolCall.name }));
-		}
-		break;
-	}
+	const { danglingTail: dangling } = scanReplayTools(messages);
+	const assistant = messages.findLast((message) => message.role === "assistant");
+	const danglingCallsAreExecutable =
+		!!assistant && assistantToolCallsAreExecutable(assistant.stopReason);
 
 	for (const toolCall of dangling) {
 		const isAnswerableAsk =

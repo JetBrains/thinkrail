@@ -210,6 +210,27 @@ test("runNow rejects: not-implemented (no V1 consumer)", async () => {
 	}
 });
 
+test("parent child admission snapshots caller-owned inputs before awaiting", async () => {
+	const mutable = subagentSpec();
+	const creating = service.createChild(mutable);
+	mutable.parent = "mutated-parent";
+	mutable.info.createdBy = "mutated";
+	mutable.session.systemPrompt = "MUTATED_PARENT";
+	mutable.session.tools.push("late-tool");
+	const child = await creating;
+	try {
+		expect(child.record.parentSessionId).toBe(parent.sessionId);
+		expect(child.record.info.createdBy).toBe("tool:Agent");
+		faux.setResponses([fauxAssistantMessage("SNAPSHOT")]);
+		expect((await child.runQueued("run")).finalText).toBe("SNAPSHOT");
+		const stored = Bun.file(child.record.sessionFile);
+		expect(await stored.text()).not.toContain("MUTATED_PARENT");
+		expect(await stored.text()).not.toContain("late-tool");
+	} finally {
+		await child.dispose();
+	}
+});
+
 test("a foreground run completes: outcome, registry, lineage storage, lifecycle events", async () => {
 	events.length = 0;
 	faux.setResponses([fauxAssistantMessage("CHILD_DONE")]);
@@ -904,4 +925,35 @@ test("disposeChildrenOf cascades: children disposed, steer rejects disposed", as
 	expect(service.childrenOf(parent.sessionId)).toEqual([]);
 	expect(await codeOf(child.steer("hello?"))).toBe("disposed");
 	expect(await codeOf(child.runQueued("again?"))).toBe("disposed");
+});
+
+test("parent-owned children can opt into captured history without inheriting its model or changing collection", async () => {
+	const source = SessionManager.inMemory(parentCwd);
+	source.appendModelChange("unavailable-source", "old");
+	source.appendThinkingLevelChange("xhigh");
+	source.appendMessage({ role: "user", content: "captured knowledge", timestamp: Date.now() });
+	const history = await service.captureHistory({
+		kind: "session",
+		sessionId: source.getSessionId(),
+		sessionManager: source,
+		cut: { kind: "at-entry", entryId: source.getLeafId() },
+	});
+	const child = await service.createChild(
+		subagentSpec({ origin: { kind: "fork-captured", history } }),
+	);
+	try {
+		expect(child.record.originKind).toBe("fork");
+		expect(child.record.entryId).toBe(history.entryId ?? undefined);
+		const manager = SessionManager.open(child.record.sessionFile);
+		expect(manager.buildSessionContext().model).toEqual({ provider: "faux", modelId: "faux" });
+		expect(manager.buildSessionContext().thinkingLevel).toBe("off");
+		faux.setResponses([fauxAssistantMessage("CAPTURED_PARENT")]);
+		const outcome = await child.runQueued("continue");
+		expect(outcome.finalText).toBe("CAPTURED_PARENT");
+		expect(outcome.stopReason).toBe("stop");
+		expect(service.findChild(child.sessionId)).toBe(child);
+		expect(child.collectResult()?.collected).toBe(true);
+	} finally {
+		await child.dispose();
+	}
 });
