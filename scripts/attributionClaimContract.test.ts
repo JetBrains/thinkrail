@@ -9,7 +9,7 @@ import {
 	recordAttributionTouch,
 	storeLatestAttributionBridge,
 } from "../apps/website/src/attribution/browserStorage";
-import { mountClaimPage } from "../apps/website/src/attribution/claim";
+import { runClaimPage } from "../apps/website/src/attribution/claim";
 import type { BindClaimRequest } from "../apps/website/src/attribution/protocol";
 import {
 	type AttributionEnvironment,
@@ -176,46 +176,25 @@ test("website HTTP, browser claim, server client, and product persistence share 
 			openExternal(url) {
 				opened.push(url);
 				const claimUrl = new URL(url);
-				let contextReads = 0;
-				let activateClaim: (() => Promise<void>) | undefined;
-				mountClaimPage(
-					{
-						readContext: () => {
-							contextReads++;
-							return readStoredAttributionContext(storage, now);
-						},
-						search: claimUrl.search,
-						requestTimeoutMs: 1_000,
-						request(path, init) {
-							const headers = new Headers(init.headers);
-							headers.set("Host", host);
-							headers.set("Origin", endpoint);
-							return dispatch(
-								new Request(new URL(path, endpoint), {
-									...init,
-									headers,
-								}),
-							);
-						},
-						replace(path) {
-							replacements.push(path);
-						},
+				browserTask = runClaimPage({
+					readContext: () => readStoredAttributionContext(storage, now),
+					search: claimUrl.search,
+					requestTimeoutMs: 1_000,
+					request(path, init) {
+						const headers = new Headers(init.headers);
+						headers.set("Host", host);
+						headers.set("Origin", endpoint);
+						return dispatch(
+							new Request(new URL(path, endpoint), {
+								...init,
+								headers,
+							}),
+						);
 					},
-					{
-						confirmButton: {
-							disabled: false,
-							addEventListener(_type, listener) {
-								activateClaim = () =>
-									Promise.resolve(listener({ isTrusted: true, preventDefault() {} }));
-							},
-						},
-						notNowLink: null,
+					replace(path) {
+						replacements.push(path);
 					},
-				);
-				expect(contextReads).toBe(0);
-				expect(repository.record?.context).toBeUndefined();
-				if (!activateClaim) throw new Error("claim confirmation was not mounted");
-				browserTask = activateClaim();
+				});
 				return browserTask;
 			},
 			async sleep() {

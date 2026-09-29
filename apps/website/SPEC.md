@@ -208,8 +208,8 @@ PostHog/GTM, journey and capture contracts. The shared contract deliberately has
 dependency, pasted bootstrap, or static GTM `noscript` iframe.
 
 The non-indexed `/attribution/claim/` route belongs to [[submodule-website-attribution]]; its
-analytics-free confirmation page is separate from the site's ordinary route shells. That module owns the
-activation gate, claim protocol, and framing protections.
+analytics-free page silently attempts the claim bind on load and then navigates to `/blog/`. That module
+owns the claim protocol and framing protections.
 
 ## Deploy
 

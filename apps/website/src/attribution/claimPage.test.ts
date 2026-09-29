@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mountClaimPage } from "./claimPage";
+import { runClaimPage } from "./claimPage";
 import type { BindClaimRequest } from "./protocol";
 
 const claimId = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -18,51 +18,21 @@ const context: BindClaimRequest = {
 	},
 };
 
-type ClickEvent = Pick<Event, "isTrusted" | "preventDefault">;
-type ClickListener = (event: ClickEvent) => void | Promise<void>;
-
-class FakeClickTarget {
-	private listeners: ClickListener[] = [];
-
-	addEventListener(type: "click", listener: ClickListener): void {
-		if (type !== "click") throw new Error(`Unexpected event: ${type}`);
-		this.listeners.push(listener);
-	}
-
-	async activate(isTrusted = true): Promise<void> {
-		let defaultPrevented = false;
-		const event: ClickEvent = {
-			isTrusted,
-			preventDefault() {
-				defaultPrevented = true;
-			},
-		};
-		await Promise.all(this.listeners.map((listener) => listener(event)));
-		expect(defaultPrevented).toBe(true);
-	}
-}
-
-class FakeConfirmButton extends FakeClickTarget {
-	disabled = false;
-
-	override async activate(isTrusted = true): Promise<void> {
-		if (this.disabled) return;
-		await super.activate(isTrusted);
-	}
-}
-
 function fixture(
-	options: { claimSearch?: string; context?: BindClaimRequest; response?: Response } = {},
+	options: {
+		claimSearch?: string;
+		context?: BindClaimRequest;
+		readContext?: () => BindClaimRequest | undefined;
+		response?: Response;
+	} = {},
 ) {
 	const requests: Array<{ url: string; init: RequestInit }> = [];
 	const replacements: string[] = [];
 	let contextReads = 0;
-	const confirmation = new FakeConfirmButton();
-	const notNow = new FakeClickTarget();
 	const dependencies = {
 		readContext() {
 			contextReads += 1;
-			return options.context;
+			return options.readContext ? options.readContext() : options.context;
 		},
 		async request(url: string, init: RequestInit) {
 			requests.push({ url, init });
@@ -74,36 +44,18 @@ function fixture(
 		search: options.claimSearch ?? `?id=${claimId}`,
 		requestTimeoutMs: 20,
 	};
-	mountClaimPage(dependencies, { confirmButton: confirmation, notNowLink: notNow });
 	return {
 		requests,
 		replacements,
 		dependencies,
-		confirmation,
-		notNow,
 		contextReads: () => contextReads,
 	};
 }
 
 describe("attribution claim page", () => {
-	test("mounting does not read context or bind", () => {
+	test("binds on load with valid context and navigates to the blog", async () => {
 		const page = fixture({ context });
-		expect(page.contextReads()).toBe(0);
-		expect(page.requests).toHaveLength(0);
-		expect(page.replacements).toHaveLength(0);
-	});
-
-	test("synthetic activation does not read context or bind", async () => {
-		const page = fixture({ context });
-		await page.confirmation.activate(false);
-		expect(page.contextReads()).toBe(0);
-		expect(page.requests).toHaveLength(0);
-		expect(page.replacements).toHaveLength(0);
-	});
-
-	test("confirmation reads context and binds at most once before replacing without identifiers", async () => {
-		const page = fixture({ context });
-		await Promise.all([page.confirmation.activate(), page.confirmation.activate()]);
+		await runClaimPage(page.dependencies);
 		expect(page.contextReads()).toBe(1);
 		expect(page.requests).toHaveLength(1);
 		expect(page.requests[0]).toEqual({
@@ -118,60 +70,51 @@ describe("attribution claim page", () => {
 				signal: expect.any(AbortSignal),
 			},
 		});
-		expect(page.confirmation.disabled).toBe(true);
-		expect(page.replacements).toEqual(["/blog/"]);
-	});
-
-	test("Not now never reads context or binds and replaces the location", async () => {
-		const page = fixture({ context });
-		await page.notNow.activate();
-		expect(page.contextReads()).toBe(0);
-		expect(page.requests).toHaveLength(0);
-		expect(page.replacements).toEqual(["/blog/"]);
-		await page.confirmation.activate();
-		expect(page.requests).toHaveLength(0);
 		expect(page.replacements).toEqual(["/blog/"]);
 	});
 
 	test.each([
-		{ name: "missing acquisition context", options: {}, expectedContextReads: 1 },
+		{ name: "missing context", options: {} },
+		{ name: "invalid context", options: { readContext: () => undefined } },
+		{ name: "invalid claim id", options: { context, claimSearch: "?id=bad" } },
 		{
-			name: "invalid claim id",
-			options: { context, claimSearch: "?id=bad" },
-			expectedContextReads: 0,
-		},
-		{
-			name: "duplicate query keys",
+			name: "duplicate claim ids",
 			options: { context, claimSearch: `?id=${claimId}&id=${claimId}` },
-			expectedContextReads: 0,
 		},
-	])("does not bind with $name and replaces after confirmation", async ({
-		options,
-		expectedContextReads,
-	}) => {
+	])("does not bind with $name and still navigates to the blog", async ({ options }) => {
 		const page = fixture(options);
-		await page.confirmation.activate();
-		expect(page.contextReads()).toBe(expectedContextReads);
+		await runClaimPage(page.dependencies);
 		expect(page.requests).toHaveLength(0);
 		expect(page.replacements).toEqual(["/blog/"]);
 	});
 
-	test("never retries a failed bind", async () => {
+	test("a context read failure does not bind and still navigates to the blog", async () => {
+		const page = fixture({
+			readContext() {
+				throw new Error("storage unavailable");
+			},
+		});
+		await runClaimPage(page.dependencies);
+		expect(page.requests).toHaveLength(0);
+		expect(page.replacements).toEqual(["/blog/"]);
+	});
+
+	test("a failed bind is attempted once and still navigates to the blog", async () => {
 		const page = fixture({ context, response: new Response(null, { status: 409 }) });
-		await page.confirmation.activate();
+		await runClaimPage(page.dependencies);
 		expect(page.requests).toHaveLength(1);
 		expect(page.replacements).toEqual(["/blog/"]);
 	});
 
-	test("bounds a stalled bind before replacing", async () => {
+	test("a timed-out bind still navigates to the blog", async () => {
 		const page = fixture({ context });
-		page.dependencies.request = async (_url, init) => {
-			page.requests.push({ url: _url, init });
+		page.dependencies.request = async (url, init) => {
+			page.requests.push({ url, init });
 			return await new Promise<Response>((_resolve, reject) => {
 				init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
 			});
 		};
-		await page.confirmation.activate();
+		await runClaimPage(page.dependencies);
 		expect(page.requests).toHaveLength(1);
 		expect(page.replacements).toEqual(["/blog/"]);
 	});
