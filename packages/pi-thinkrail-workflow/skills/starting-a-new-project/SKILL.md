@@ -39,8 +39,10 @@ multiple user types → a full PRD. It can only grow during the conversation, ne
 
 If the request already reads like a spec (several headings or a multi-section brief), parse it, treat those
 sections as **confirmed**, save them immediately, and only pursue what's genuinely missing and required by
-`depth`. Don't ask the user to confirm what they already wrote. The one always-offered extra is
-alternatives research (below).
+`depth`. Don't ask the user to confirm what they already wrote. Save in the goal-doc shape, not the
+brief's: a version or roadmap split (`MVP` / `v1` / `v2` / later) becomes Capabilities for what is in
+scope and Non-Goals only for what the brief rules out by decision; the rest goes back to the user
+unsaved (writing-specs). The one always-offered extra is alternatives research (below).
 
 ## Flow
 
