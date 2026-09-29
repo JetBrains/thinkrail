@@ -1,7 +1,7 @@
 import { SettingsSwitch } from "./SettingsSwitch";
 
 export const ANALYTICS_DESCRIPTION =
-	"Basic reporting is always on. You choose whether to share additional usage data.";
+	"Share anonymous product usage and how you found ThinkRail. We never collect prompts, code, files, credentials, or account identity.";
 
 interface AnalyticsPreferenceProps {
 	enabled: boolean;
@@ -36,9 +36,8 @@ export function AnalyticsPreferences(props: AnalyticsPreferenceProps) {
 	return (
 		<div className="flex flex-col gap-16 tr-text-metadata text-text-muted">
 			<p>
-				<span className="tr-text-emphasis text-text-default">Always-on basics:</span> app launches,
-				chat starts (provider and model), message sends (mode and provider), and provider
-				connections, including their authentication category.
+				<span className="tr-text-emphasis text-text-default">Always-on basics:</span> first packaged
+				install, app launches, chat starts, message sends, and provider connections.
 			</p>
 			<AnalyticsSharingSwitch
 				{...props}

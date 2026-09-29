@@ -118,7 +118,7 @@ export function parseAttributionTouch(value: unknown, now: number): AttributionT
 	if (
 		typeof value.touched_at !== "number" ||
 		!Number.isSafeInteger(value.touched_at) ||
-		value.touched_at < now - attributionLifetimeMs ||
+		value.touched_at < 0 ||
 		value.touched_at > now + 60_000 ||
 		value.policy_version !== attributionPolicyVersion
 	) {
@@ -155,7 +155,12 @@ export function parseAttributionContext(
 	const firstTouch = parseAttributionTouch(value.first_touch, now);
 	const lastTouch = parseAttributionTouch(value.last_touch, now);
 	if (firstTouch === undefined || lastTouch === undefined) return undefined;
-	if (firstTouch.touched_at > lastTouch.touched_at) return undefined;
+	if (
+		firstTouch.touched_at > lastTouch.touched_at ||
+		lastTouch.touched_at < now - attributionLifetimeMs
+	) {
+		return undefined;
+	}
 	return {
 		...(hasBridgeId ? { bridge_id: value.bridge_id as string } : {}),
 		first_touch: firstTouch,

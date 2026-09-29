@@ -1,0 +1,1 @@
+export { mountClaimPage } from "./claimPage";
