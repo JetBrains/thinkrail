@@ -30,7 +30,7 @@ test("privacy controls additional data without disabling basics and persists acr
 		"Setup, agent runs, task completions, reviews, and pull-request outcomes.",
 	);
 	await expect(dialog).toContainText(
-		"When additional sharing is on, a one-time journey/bridge link and normalized campaign source may connect how you found ThinkRail to usage for 30 days. Turning sharing off removes attribution from future events.",
+		"When additional sharing is on, ThinkRail opens its blog in your browser once so it can note which website link or campaign brought you here. This note is kept with usage data for up to 30 days. Turning sharing off stops it.",
 	);
 
 	await page.reload();
