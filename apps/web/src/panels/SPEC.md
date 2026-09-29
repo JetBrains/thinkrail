@@ -558,7 +558,7 @@ a project picker, the prompt hero, and the reused
   product-usage copy and shared switch; Settings also lists always-on basics, optional outcomes, report
   dimensions, and excluded content. One compact Settings-only paragraph says that when additional sharing
   is on, ThinkRail opens its blog in the browser once to note which website link or campaign brought the
-  user there; the note is kept with usage data for up to 30 days, and switching off stops it. Older hosts
+  user there; the note is added to later usage reports for up to 30 days, and switching off stops it. Older hosts
   retain their legacy privacy control without the new
   consent dialog.
   **`FeedbackSettings`** is the final
