@@ -38,22 +38,29 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - run: bun run --filter @thinkrail/website build
+      - run: bun run --filter @thinkrail/website smoke:attribution
       - name: Deploy to Cloudflare Pages
+        working-directory: apps/website
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: >
-          bunx wrangler@4.124.0 pages deploy apps/website/dist
+          bunx wrangler@4.124.0 pages deploy dist
           --project-name=thinkrail-website
           --branch="pr-${{ github.event.pull_request.number }}"
       - name: Wait for preview to serve
         run: |
           for attempt in $(seq 1 18); do
             ready=true
-            for path in / /blog/ /vibecoding/ /agentic-development/; do
+            for path in / /blog/ /vibecoding/ /agentic-development/ /attribution/claim/; do
               code=$(curl --connect-timeout 5 --max-time 15 -s -o /dev/null -w '%{http_code}' "$PREVIEW_URL$path" || true)
               [ "$code" = "200" ] || ready=false
             done
+            guard_code=$(curl --connect-timeout 5 --max-time 15 -s -o /dev/null -w '%{http_code}' \
+              -X POST -H 'Content-Type: application/json' \
+              --data '{"challenge":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}' \
+              "$PREVIEW_URL/api/attribution/claims" || true)
+            [ "$guard_code" = "404" ] || ready=false
             [ "$ready" = "true" ] && exit 0
             echo "attempt $attempt: preview not ready"
             sleep 5

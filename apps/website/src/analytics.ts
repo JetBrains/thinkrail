@@ -37,5 +37,8 @@ const websiteAnalytics = createWebsiteAnalytics({
 });
 
 export const analyticsConfig = websiteAnalytics.configurationForHostname;
+export const currentMarketingConsent = marketingConsent.current;
 export const initAnalytics = websiteAnalytics.init;
 export const captureAnalytics = websiteAnalytics.capture;
+export const currentJourneyId = websiteAnalytics.currentJourneyId;
+export const subscribeJourney = websiteAnalytics.subscribeJourney;

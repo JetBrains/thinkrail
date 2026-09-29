@@ -41,17 +41,17 @@ export type WebsiteContentViewedProperties = {
 
 export type WebsiteInstallCtaClickedProperties = {
 	content_key: string;
-	cta_location: "hero" | "install_section" | "quick_start" | "final_cta";
+	cta_location: "hero" | "install_section" | "quick_start" | "final_cta" | "blog_post";
 	install_method: "desktop" | "cli";
 };
 
 export type WebsiteDownloadStartedProperties = {
 	content_key: string;
-	cta_location: "hero" | "install_section" | "quick_start" | "final_cta";
+	cta_location: "hero" | "install_section" | "quick_start" | "final_cta" | "blog_post";
 	platform: "macos" | "windows" | "linux";
 	architecture: "arm64" | "x64";
 	artifact: "dmg" | "zip" | "tar.gz";
-	bridge_id: string;
+	bridge_id?: string;
 };
 
 export type WebsiteAnalyticsEventProperties = {
@@ -69,6 +69,8 @@ export type WebsiteAnalytics = {
 		event: EventName,
 		properties: WebsiteAnalyticsEventProperties[EventName],
 	): void;
+	currentJourneyId(): string | undefined;
+	subscribeJourney(listener: (journeyId: string | undefined) => void): () => void;
 };
 
 export type WebsiteAnalyticsOptions = {
@@ -169,6 +171,7 @@ export function createWebsiteAnalytics({
 	let journeyId: string | undefined;
 	let postHogReady = false;
 	let postHogFailed = false;
+	const journeyListeners = new Set<(journeyId: string | undefined) => void>();
 	const captureQueue: Array<{
 		event: WebsiteAnalyticsEventName;
 		properties: Record<string, unknown>;
@@ -206,20 +209,36 @@ export function createWebsiteAnalytics({
 		}
 	}
 
+	function notifyJourneyIfChanged(
+		previousJourneyId: string | undefined,
+		previousConsent: boolean | undefined,
+	): void {
+		if (previousJourneyId === journeyId && previousConsent === consentGranted) return;
+		for (const listener of journeyListeners) {
+			try {
+				listener(journeyId);
+			} catch {}
+		}
+	}
+
 	function setConsent(granted: boolean | undefined): void {
 		if (granted === consentGranted) return;
-		const wasGranted = consentGranted === true;
+		const previousJourneyId = journeyId;
+		const previousConsent = consentGranted;
 		consentGranted = granted;
 		if (granted === undefined) {
-			if (!wasGranted) return;
 			journeyId = undefined;
-			unregisterJourney();
-			clearQueuedIdentity();
+			if (previousConsent === true) {
+				unregisterJourney();
+				clearQueuedIdentity();
+			}
+			notifyJourneyIfChanged(previousJourneyId, previousConsent);
 			return;
 		}
 		if (granted) {
 			journeyId = storedOrNewJourneyId();
 			registerJourney();
+			notifyJourneyIfChanged(previousJourneyId, previousConsent);
 			return;
 		}
 
@@ -227,6 +246,7 @@ export function createWebsiteAnalytics({
 		removeStoredJourneyId();
 		unregisterJourney();
 		clearQueuedIdentity();
+		notifyJourneyIfChanged(previousJourneyId, previousConsent);
 	}
 
 	function refreshConsent(): void {
@@ -305,5 +325,15 @@ export function createWebsiteAnalytics({
 		} catch {}
 	}
 
-	return { configurationForHostname, init, capture };
+	function currentJourneyId(): string | undefined {
+		if (!enabledInCurrentWindow() || consentGranted !== true) return undefined;
+		return journeyId;
+	}
+
+	function subscribeJourney(listener: (currentJourneyId: string | undefined) => void): () => void {
+		journeyListeners.add(listener);
+		return () => journeyListeners.delete(listener);
+	}
+
+	return { configurationForHostname, init, capture, currentJourneyId, subscribeJourney };
 }
