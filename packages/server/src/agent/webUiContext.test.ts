@@ -47,11 +47,15 @@ test("theme: pi's Theme contract is implemented and every method yields plain te
 	expect(theme).toBeInstanceOf(Theme);
 	for (const name of Object.getOwnPropertyNames(Theme.prototype)) {
 		if (name === "constructor") continue;
+		if (Object.getOwnPropertyDescriptor(Theme.prototype, name)?.get) continue;
 		expect(typeof Reflect.get(theme, name)).toBe("function");
 	}
 
 	expect(theme.fg("accent", "Theme works")).toBe("Theme works");
 	expect(theme.bg("selectedBg", "Theme works")).toBe("Theme works");
+	expect(theme.style("Theme works", { fg: "accent", bg: "selectedBg", bold: true })).toBe(
+		"Theme works",
+	);
 	for (const decorate of [
 		theme.bold,
 		theme.italic,
@@ -78,6 +82,7 @@ test("theme: nothing the theme renders carries terminal escapes", () => {
 	const rendered = [
 		theme.fg("accent", "x"),
 		theme.bg("selectedBg", "x"),
+		theme.style("x", { fg: { kind: "rgb", r: 255, g: 0, b: 0 }, italic: true }),
 		theme.bold("x"),
 		theme.italic("x"),
 		theme.underline("x"),

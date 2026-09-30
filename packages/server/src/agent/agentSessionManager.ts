@@ -1214,7 +1214,7 @@ async function queueSessionMessage(
 	kind: QueueLane,
 	text: string,
 	images: ImageContent[] | undefined,
-	send: () => Promise<void>,
+	send: () => Promise<unknown>,
 ): Promise<void> {
 	const tracked: TrackedQueuedMessage = {
 		id: entry.nextQueuedMessageId++,

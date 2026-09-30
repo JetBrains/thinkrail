@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionToolContext } from "@earendil-works/pi-coding-agent";
 import type {
 	AgentMessage,
 	AskUserQuestionArgs,
@@ -39,7 +39,7 @@ const args = (over: Partial<AskUserQuestionArgs> = {}): AskUserQuestionArgs => (
 const textOf = (r: { content: { type: string; text?: string }[] }): string =>
 	r.content.map((c) => c.text ?? "").join("");
 
-const ctx = (hasUI = true): ExtensionContext => ({ hasUI }) as unknown as ExtensionContext;
+const ctx = (hasUI = true): ExtensionToolContext => ({ hasUI }) as unknown as ExtensionToolContext;
 
 const run = (hasUI = true, params: AskUserQuestionArgs = args()) =>
 	createAskUserQuestionTool(createAskUserQuestionWaiters()).execute(
