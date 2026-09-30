@@ -291,15 +291,15 @@ test("retired chat message order is stripped from disk and stale updates", () =>
 	expect(onDisk).not.toHaveProperty("chatMessageOrder");
 });
 
-test("reviewAutoFix defaults on; an old config without it loads the default; toggling off round-trips", () => {
-	expect(DEFAULT_CONFIG.reviewAutoFix).toBe(true);
+test("reviewAutoFix defaults off; an old config without it loads the default; toggling on round-trips", () => {
+	expect(DEFAULT_CONFIG.reviewAutoFix).toBe(false);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
 	resetConfigCache();
-	expect(getConfig().reviewAutoFix).toBe(true);
-	const next = updateConfig({ reviewAutoFix: false });
-	expect(next.reviewAutoFix).toBe(false);
-	resetConfigCache();
 	expect(getConfig().reviewAutoFix).toBe(false);
+	const next = updateConfig({ reviewAutoFix: true });
+	expect(next.reviewAutoFix).toBe(true);
+	resetConfigCache();
+	expect(getConfig().reviewAutoFix).toBe(true);
 });
 
 test("agentReviewEnabled defaults off; an old config loads the default; toggling on round-trips; non-boolean rejected", () => {

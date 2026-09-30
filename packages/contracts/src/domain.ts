@@ -579,7 +579,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	chatLineWidthBounded: true,
 	fileLineWidthBounded: true,
 	customLayoutPresets: [],
-	reviewAutoFix: true,
+	reviewAutoFix: false,
 	agentReviewEnabled: false,
 	subagentsEnabled: true,
 	jbcentralQuotaEnabled: true,

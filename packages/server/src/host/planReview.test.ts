@@ -100,6 +100,9 @@ beforeEach(() => {
 	worktree = mkdtempSync(join(tmpdir(), "planreview-wt-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 	resetConfigCache();
+	// Auto-fix is off by default; these tests exercise the auto-fix-on delivery path unless a case
+	// overrides it back to false explicitly.
+	updateConfig({ reviewAutoFix: true });
 	writeFileSync(join(worktree, "a.ts"), "const a = 1;\nconst b = 2;\n");
 	saveWorkspaces([
 		{
