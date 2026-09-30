@@ -35,10 +35,6 @@ export function AnalyticsSharingSwitch({
 export function AnalyticsPreferences(props: AnalyticsPreferenceProps) {
 	return (
 		<div className="flex flex-col gap-16 tr-text-metadata text-text-muted">
-			<p>
-				<span className="tr-text-emphasis text-text-default">Always-on basics:</span> first packaged
-				install, app launches, chat starts, message sends, and provider connections.
-			</p>
 			<AnalyticsSharingSwitch
 				{...props}
 				description="Setup, agent runs, task completions, reviews, and pull-request outcomes."

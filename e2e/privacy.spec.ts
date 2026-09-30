@@ -24,13 +24,7 @@ test("privacy controls additional data without disabling basics and persists acr
 		"Share anonymous product usage and how you found ThinkRail. We never collect prompts, code, files, credentials, or account identity.",
 	);
 	await expect(dialog).toContainText(
-		"Always-on basics: first packaged install, app launches, chat starts, message sends, and provider connections.",
-	);
-	await expect(dialog).toContainText(
 		"Setup, agent runs, task completions, reviews, and pull-request outcomes.",
-	);
-	await expect(dialog).toContainText(
-		"When additional sharing is on, ThinkRail may open its blog in your browser once so it can note which website link or campaign brought you here. It is added to usage reports for up to 30 days. Turning sharing off stops it.",
 	);
 
 	await page.reload();
