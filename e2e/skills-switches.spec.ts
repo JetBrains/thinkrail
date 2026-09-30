@@ -48,11 +48,15 @@ test("Skills renders existing controls as explicit switches without making rows 
 		)
 		.toBe(before === "true" ? "off" : "on");
 
-	const group = row.locator('xpath=ancestor::*[@data-testid="skill-group"]');
+	const groupKey = await row
+		.locator('xpath=ancestor::*[@data-testid="skill-group"]')
+		.getAttribute("data-group");
+	const group = page.locator(`[data-testid="skill-group"][data-group="${groupKey}"]`);
 	const parentSwitch = group.getByTestId("group-toggle");
+	const fixedSkillSwitch = group.locator(`[data-testid="skill-row"][data-skill="${skillName}"]`).getByTestId("skill-toggle");
 	await parentSwitch.click();
 	await expect(parentSwitch).toHaveAttribute("aria-checked", "false");
-	await expect(group.getByTestId("skill-toggle").first()).toBeDisabled();
+	await expect(fixedSkillSwitch).toBeDisabled();
 	await parentSwitch.click();
 	await expect(parentSwitch).toHaveAttribute("aria-checked", "true");
 
