@@ -45,8 +45,8 @@ binary.
 - **One static Astro artifact plus same-project claim functions, with a route-local framework exception.**
   The landing and blog retain vanilla TypeScript + hand-written CSS: no React island and no Tailwind
   stylesheet or runtime reaches those routes. [[submodule-website-attribution]] alone adds Pages Functions
-  and D1; only `/vibecoding/` and `/agentic-development/` may use the shared React island and Tailwind
-  v4. Astro's React integration and Tailwind Vite plugin are build-wide tooling; build validation
+  and D1; only `/vibecoding/`, `/agentic-development/`, and `/agentic-ide/` may use the shared React
+  island and Tailwind v4. Astro's React integration and Tailwind Vite plugin are build-wide tooling; build validation
   requires one island in each allowed route output and rejects islands in the fixed landing, blog,
   article, and claim outputs. The browser analytics
   workspace module is compiled into the static output. The `@fontsource-variable/*` packages are
