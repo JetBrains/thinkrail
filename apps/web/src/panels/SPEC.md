@@ -1336,8 +1336,9 @@ own section. The kebab menu (`plan-menu`, a
   first; keeping them also avoids leaking a model pair per closed diff tab (regression-pinned in
   `e2e/changes.spec.ts`)). **A markdown diff has exactly two
   views** instead, via a **Source | Rendered** toggle (`diff-toggle-source`/`diff-toggle-rendered`,
-  per-tab `DiffTab.rendered` via `store.setDiffTabRendered`, gated on `lib.isMarkdownPath`; Source is
-  the default — no Split|Inline segment for markdown). **Source** = the basic Monaco split diff.
+  per-tab `DiffTab.rendered` via `store.setDiffTabRendered`, gated on `lib.isMarkdownPath`; **Rendered is
+  the default** (`tab.rendered ?? true`), matching rendered-by-default markdown file tabs — no
+  Split|Inline segment for markdown). **Source** = the basic Monaco split diff.
   **Rendered** is a **real rich diff**, not plain previews (see [[task-rendered-markdown-diff]]): the
   lazy `RenderedDiff` renders **both sides** through the same document pipeline as `MarkdownPreview`
   (the shared `MarkdownDocument` — prose skin, alerts, heading ids, frontmatter stripped) to static
