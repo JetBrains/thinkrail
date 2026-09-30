@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createPageZoomController, handlePageZoomShortcut, type PageZoomAction } from "./pageZoom";
+import { handlePageZoomShortcut, nextPageZoom, type PageZoomAction } from "./pageZoom";
 
 function shortcut(
 	platform: string,
@@ -49,21 +49,24 @@ test("maps browser zoom keys and claims only matching chords", () => {
 	}
 });
 
-test("steps through browser zoom factors from 100 percent", () => {
-	const zoom = createPageZoomController();
-	expect(zoom("in")).toBe(1.1);
-	expect(zoom("in")).toBe(1.25);
-	expect(zoom("out")).toBe(1.1);
-	expect(zoom("out")).toBe(1);
-	expect(zoom("out")).toBe(0.9);
+test("steps from the webview's current zoom to the adjacent browser factor", () => {
+	expect(nextPageZoom(1, "in")).toBe(1.1);
+	expect(nextPageZoom(1.1, "in")).toBe(1.25);
+	expect(nextPageZoom(1.25, "out")).toBe(1.1);
+	expect(nextPageZoom(1, "out")).toBe(0.9);
+});
+
+test("steps from zoom changed outside the shortcuts", () => {
+	expect(nextPageZoom(0.75, "in")).toBe(0.8);
+	expect(nextPageZoom(0.75, "out")).toBe(0.67);
+	expect(nextPageZoom(3, "out")).toBe(2);
+	expect(nextPageZoom(1.0999999, "in")).toBe(1.25);
+	expect(nextPageZoom(1.1000001, "out")).toBe(1);
 });
 
 test("resets and clamps page zoom", () => {
-	const zoom = createPageZoomController();
-	zoom("in");
-	expect(zoom("reset")).toBe(1);
-	for (let index = 0; index < 20; index += 1) zoom("out");
-	expect(zoom("out")).toBe(0.5);
-	for (let index = 0; index < 20; index += 1) zoom("in");
-	expect(zoom("in")).toBe(2);
+	expect(nextPageZoom(1.75, "reset")).toBe(1);
+	expect(nextPageZoom(2, "in")).toBe(2);
+	expect(nextPageZoom(0.5, "out")).toBe(0.5);
+	expect(nextPageZoom(3, "in")).toBe(3);
 });

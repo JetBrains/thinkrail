@@ -11,7 +11,7 @@ import Electrobun, {
 } from "electrobun/main";
 import { installDesktopApplicationMenu } from "./applicationMenu";
 import { installExternalNavigation } from "./externalNavigation";
-import { createPageZoomController } from "./pageZoom";
+import { nextPageZoom } from "./pageZoom";
 import {
 	injectInitialDesktopPreferences,
 	readDesktopPreferenceRemove,
@@ -69,7 +69,6 @@ async function start(): Promise<void> {
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const initialPreferences = preferences.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const neutral = process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
-	const pageZoom = createPageZoomController();
 	let mainWindow: BrowserWindow;
 	const updateController = await createElectrobunUpdateController({
 		isPackaged: Electrobun.app.isPackaged,
@@ -95,7 +94,7 @@ async function start(): Promise<void> {
 			},
 			messages: {
 				pageZoomRequested: ({ action }) => {
-					mainWindow.setPageZoom(pageZoom(action));
+					mainWindow.setPageZoom(nextPageZoom(mainWindow.getPageZoom(), action));
 				},
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);

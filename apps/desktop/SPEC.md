@@ -98,8 +98,9 @@ pins production wiring.
 ## Native page zoom
 
 The desktop preload claims Command/Ctrl-`+` (`=`), `-`, and `0` before page handlers and sends a typed
-one-way request to the main process. The main process applies bounded, per-window-lifetime browser-style
-factors through Electrobun's native page-zoom API; the web app owns no duplicate shortcut or zoom state.
+one-way request to the main process. The main process steps from the webview's current native zoom to the
+adjacent bounded browser-style factor, so zoom changed outside the shortcuts (WebView2's Ctrl+wheel) cannot
+desync it; the web app owns no duplicate shortcut or zoom state.
 
 ## Native window chrome
 

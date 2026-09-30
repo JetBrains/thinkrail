@@ -7,7 +7,7 @@ type PageZoomShortcutEvent = Readonly<
 
 const APPLE_PLATFORM = /Mac|iPhone|iPad|iPod/;
 const PAGE_ZOOM_FACTORS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2] as const;
-const DEFAULT_PAGE_ZOOM_INDEX = PAGE_ZOOM_FACTORS.indexOf(1);
+const PAGE_ZOOM_TOLERANCE = 0.001;
 
 function pageZoomActionForShortcut(
 	event: PageZoomShortcutEvent,
@@ -34,18 +34,11 @@ export function handlePageZoomShortcut(
 	request(action);
 }
 
-function pageZoomFactor(index: number): number {
-	const factor = PAGE_ZOOM_FACTORS[index];
-	if (factor === undefined) throw new RangeError("Invalid page zoom index");
-	return factor;
-}
-
-export function createPageZoomController(): (action: PageZoomAction) => number {
-	let index = DEFAULT_PAGE_ZOOM_INDEX;
-	return (action) => {
-		if (action === "reset") index = DEFAULT_PAGE_ZOOM_INDEX;
-		else if (action === "in") index = Math.min(index + 1, PAGE_ZOOM_FACTORS.length - 1);
-		else index = Math.max(index - 1, 0);
-		return pageZoomFactor(index);
-	};
+export function nextPageZoom(current: number, action: PageZoomAction): number {
+	if (action === "reset") return 1;
+	const next =
+		action === "in"
+			? PAGE_ZOOM_FACTORS.find((factor) => factor > current + PAGE_ZOOM_TOLERANCE)
+			: PAGE_ZOOM_FACTORS.findLast((factor) => factor < current - PAGE_ZOOM_TOLERANCE);
+	return next ?? current;
 }
