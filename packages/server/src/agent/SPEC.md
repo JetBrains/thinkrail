@@ -115,7 +115,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     wire has one authoritative automatic-work terminal even when compaction/retry happens between those
     events; it forwards rather than re-derives pi's result. A `compaction_end` is separately projected to
     a **fresh allowlisted event**: its `result` carries only `tokensBefore` and optional
-    `estimatedTokensAfter`, never pi's summary, entry id, usage, or extension details. The live entry retains
+    `estimatedTokensAfter`, never pi's summary, entry id, usage, or extension details. Tool
+    `tool_execution_end` / `tool_execution_update` frames drop `structuredContent` from the (partial)
+    result: pi's value for programmatic callers (bash puts up to 1 MiB of raw output there), never
+    persisted and never rendered, so forwarding it would only grow every live frame and the browser
+    store. The live entry retains
     that settlement in `SessionSummary.lastSettlement` for reconnect after Pi removed a failed attempt from its rebuilt
     context; a new `agent_start` exposes explicit `null` (no current terminal) so an older persisted failure
     cannot reappear mid-run, while disk sessions remain transcript-authoritative. A live summary also
@@ -451,17 +455,20 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     call loses one feature, an unimplemented theme kills the whole extension on its first line. `getAllThemes: []` / `getTheme: undefined` match pi's own
     rpc mode; `setTheme`'s `{success:true}` is a known lie, tracked separately — a web host has no TUI
     theme to switch to, so pi's rpc-mode form (`{success:false}`) is the honest answer.
-    `plainTextTheme` subclasses pi's `Theme` and overrides `fg`/`bg`/`bold`/`italic`/`underline`/
+    `plainTextTheme` subclasses pi's `Theme` and overrides `fg`/`bg`/`style`/`bold`/`italic`/`underline`/
     `inverse`/`strikethrough`/`getFgAnsi`/`getBgAnsi`; `getThinkingBorderColor` /
     `getBashModeBorderColor` stay plain only because pi routes them through `this.fg` — an inherited
-    guarantee, so `webUiContext.test.ts` pins them explicitly. **`getColorMode` is the one member left
-    answering for the terminal** (`truecolor`, from the constructor): pi's `ColorMode` is
-    `"truecolor" | "256color"` with no "renders no colour" value, so no honest answer exists to give. It
-    costs nothing while an extension colours *through* the theme — every such path returns plain text —
-    and only bites one that reads the mode and then emits ANSI on its own, which is the unsanitised-bridge
-    gap tracked outside this module. Its colour table exists **only** to satisfy
-    the constructor signature: every method that would look a colour up in it is overridden, and the one
-    member that still answers for the terminal reads the constructor's *mode* argument, not the table. A pi
+    guarantee, so `webUiContext.test.ts` pins them explicitly. **Three inherited members still answer for
+    the terminal, as data rather than escapes:** `getColorMode` (`truecolor`, from the constructor — pi's
+    `ColorMode` is `"truecolor" | "256color"` with no "renders no colour" value), and the `colors` /
+    `appearance` getters, which resolve every `""` token to pi's guessed terminal defaults (for example
+    `colors.accent` is an RGB value) and report pi's detected light/dark appearance. No honest plain
+    answer exists for any of them. They cost nothing while an extension colours *through* the theme —
+    every such path returns plain text — and only bite one that reads a mode or colour and then emits ANSI
+    on its own, which is the unsanitised-bridge gap tracked outside this module. Its colour table exists
+    **only** to satisfy the constructor signature: every method that would turn a colour into an escape is
+    overridden, and the members that still answer for the terminal read the constructor's *mode* or pi's
+    terminal guesses, never an escape. A pi
     bump that changes the palette breaks the build as a *notice that the theme surface moved*, not as a
     defect.
     **Rejected alternatives** (the one place these decisions are recorded): (1) `{} as
@@ -712,14 +719,17 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool),
     `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), **and the
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
-    value-imported so dev and the compiled binary take the same path.
+    value-imported so dev and the compiled binary take the same path. pi's own built-in extensions
+    (`llama.cpp`, `codemode`, `tool-search`, `mcp`) are loaded only by pi's CLI; an SDK host opts in per
+    factory, and ThinkRail appends none of them, so MCP servers and codemode are not available here yet.
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
   `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload`;
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
   closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams and the
-  pre-bootstrap `configurePiRuntimeGenerationInitializer` composition seam;
+  pre-bootstrap `configurePiRuntimeGenerationInitializer` composition seam; `piLoginOptions` (pi login options
+  carrying the lazily created installation device id, for `auth`);
   `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
