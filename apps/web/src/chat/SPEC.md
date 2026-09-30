@@ -544,8 +544,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   grouped by source with **sticky section headers** — the first-party **ThinkRail** and **Pi** groups lead
   (above the All-plugins master, which governs only the plugin groups), then Personal / **a group per
   installed Claude plugin** / the repo's Project skills last — each with its admission verdict,
-  project-trust, re-confirm-new, a **per-group on/off** toggle + an **All-plugins** master, and per-skill
-  toggles. It runs in **two modes** via an optional `workspace` prop: chat (`skills.state`, per-workspace
+  project-trust, re-confirm-new, a per-group track/thumb **switch** + an **All-plugins** master, and per-skill
+  switches. Switch position plus semantic colour carries state without visible On/Off text; the switch target
+  alone mutates, while unavailable controls keep the existing trust/parent explanation and acknowledgement
+  behavior. It runs in **two modes** via an optional `workspace` prop: chat (`skills.state`, per-workspace
   skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,
   disabled while streaming) or project (`project.skills`, per-project-baseline toggles, no session) — the
   latter reused by `panels` pre-session). All props-driven; behavior detail lives in the components' jsdoc.

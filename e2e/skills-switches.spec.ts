@@ -53,7 +53,9 @@ test("Skills renders existing controls as explicit switches without making rows 
 		.getAttribute("data-group");
 	const group = page.locator(`[data-testid="skill-group"][data-group="${groupKey}"]`);
 	const parentSwitch = group.getByTestId("group-toggle");
-	const fixedSkillSwitch = group.locator(`[data-testid="skill-row"][data-skill="${skillName}"]`).getByTestId("skill-toggle");
+	const fixedSkillSwitch = group
+		.locator(`[data-testid="skill-row"][data-skill="${skillName}"]`)
+		.getByTestId("skill-toggle");
 	await parentSwitch.click();
 	await expect(parentSwitch).toHaveAttribute("aria-checked", "false");
 	await expect(fixedSkillSwitch).toBeDisabled();
