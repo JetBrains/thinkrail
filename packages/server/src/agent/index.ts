@@ -21,6 +21,7 @@ export {
 	type PiRuntimeGeneration,
 	type PiRuntimeGenerationInitializer,
 	type PreparePiRuntimeGenerationResult,
+	piLoginOptions,
 	preparePiRuntimeGeneration,
 	settledAvailableModels,
 } from "./piRuntime";
