@@ -580,7 +580,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	fileLineWidthBounded: true,
 	customLayoutPresets: [],
 	reviewAutoFix: true,
-	agentReviewEnabled: true,
+	agentReviewEnabled: false,
 	subagentsEnabled: true,
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
