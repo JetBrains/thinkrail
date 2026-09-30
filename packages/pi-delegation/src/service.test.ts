@@ -750,6 +750,7 @@ test("a child prepared across parent teardown never registers after the cleanup 
 	const entered = gate();
 	const finish = gate();
 	let live = true;
+	let shutdowns = 0;
 	const scoped = createDelegationService({
 		resolveParent: () =>
 			live
@@ -768,6 +769,9 @@ test("a child prepared across parent teardown never registers after the cleanup 
 					entered.open();
 					await finish.opened;
 				});
+				pi.on("session_shutdown", () => {
+					shutdowns++;
+				});
 			},
 		],
 	});
@@ -777,14 +781,68 @@ test("a child prepared across parent teardown never registers after the cleanup 
 	try {
 		await entered.opened;
 		live = false;
-		await scoped.disposeChildrenOf(parent.sessionId);
+		const disposing = scoped.disposeChildrenOf(parent.sessionId);
+		let disposed = false;
+		void disposing.then(() => {
+			disposed = true;
+		});
+		await Bun.sleep(0);
+		expect(disposed).toBe(false);
 		finish.open();
+		await disposing;
 		await expect(creating).rejects.toMatchObject({ code: "unknown-parent" });
+		expect(shutdowns).toBe(1);
 		expect(scoped.childrenOf(parent.sessionId)).toEqual([]);
 		expect(lifecycle).toEqual([]);
 	} finally {
 		finish.open();
 		await creating.catch(() => undefined);
+		await scoped.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test("a stale preparation cannot register into a replacement parent lifetime", async () => {
+	const entered = gate();
+	const finish = gate();
+	const scoped = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? {
+						cwd: parentCwd,
+						model: parent.model,
+						thinkingLevel: parent.thinkingLevel,
+						modelRuntime: runtime,
+					}
+				: undefined,
+		delegationRoot,
+		scope: "replacement-preparation",
+		childExtensionFactories: [
+			(pi) => {
+				pi.on("session_start", async () => {
+					entered.open();
+					await finish.opened;
+				});
+			},
+		],
+	});
+	const lifecycle: LifecycleEvent[] = [];
+	scoped.onLifecycle((event) => lifecycle.push(event));
+	const creating = scoped.createChild(
+		subagentSpec({ session: { extensions: true, systemPrompt: "old" } }),
+	);
+	creating.catch(() => {});
+	await entered.opened;
+	const disposing = scoped.disposeChildrenOf(parent.sessionId);
+	const replacement = await scoped.createChild(subagentSpec());
+	try {
+		finish.open();
+		await expect(creating).rejects.toMatchObject({ code: "unknown-parent" });
+		await disposing;
+		expect(scoped.childrenOf(parent.sessionId)).toEqual([replacement]);
+		expect(lifecycle).toMatchObject([{ type: "child-created", record: replacement.record }]);
+	} finally {
+		finish.open();
+		await Promise.allSettled([creating, disposing, replacement.dispose()]);
 		await scoped.disposeChildrenOf(parent.sessionId);
 	}
 });
@@ -1027,6 +1085,42 @@ test("concurrent child and parent disposal share one teardown and both await it"
 	} finally {
 		await Promise.allSettled([childDisposal, run]);
 		await paced.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test("a replacement parent lineage survives an older cascade settling", async () => {
+	const scoped = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-replacement-lineage",
+		modelRuntime: runtime,
+	});
+	const started = gate();
+	const finish = gate();
+	faux.setResponses([
+		async () => {
+			started.open();
+			await finish.opened;
+			return fauxAssistantMessage("OLD_DONE");
+		},
+	]);
+	const oldChild = await scoped.createChild(subagentSpec());
+	const oldRun = oldChild.runQueued("Old generation.");
+	await started.opened;
+	const oldCascade = scoped.disposeChildrenOf(parent.sessionId);
+	const replacement = await scoped.createChild(subagentSpec());
+	try {
+		finish.open();
+		await oldCascade;
+		await oldRun;
+		expect(scoped.childrenOf(parent.sessionId)).toEqual([replacement]);
+	} finally {
+		finish.open();
+		await Promise.allSettled([oldCascade, oldRun, replacement.dispose()]);
+		await scoped.disposeChildrenOf(parent.sessionId);
 	}
 });
 

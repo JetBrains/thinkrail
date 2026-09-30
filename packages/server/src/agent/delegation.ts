@@ -20,6 +20,7 @@ import { canUseSessionResources, liveParentContext } from "./agentSessionManager
 import { publishSessionResourcesChanged } from "./chatResources";
 import { childExtensionFactories } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
+import { isHostResourceId, isPiSessionId } from "./resourceIdentity";
 
 export function delegationRootDir(): string {
 	return join(dataDir(), "delegation");
@@ -75,10 +76,12 @@ export function removeWorkspaceDelegation(workspaceId: string): void {
 	rmSync(join(delegationRootDir(), workspaceId), { recursive: true, force: true });
 }
 
-function assertPathSegment(value: string, label: string): void {
-	if (value.length === 0 || value.includes("/") || value.includes("\\") || value.includes("..")) {
-		throw new Error(`Invalid ${label}: not a plain id`);
-	}
+function assertWorkspaceStorageId(value: string): void {
+	if (!isHostResourceId(value)) throw new Error("Invalid workspaceId: not a plain id");
+}
+
+function assertSessionId(value: string, label: string): void {
+	if (!isPiSessionId(value)) throw new Error(`Invalid ${label}: not a Pi session id`);
 }
 
 export function readChildTranscript(
@@ -86,9 +89,9 @@ export function readChildTranscript(
 	parentSessionId: string,
 	childSessionId: string,
 ): { messages: TranscriptMessage[]; status?: DelegationRunStatus } {
-	assertPathSegment(workspaceId, "workspaceId");
-	assertPathSegment(parentSessionId, "parentSessionId");
-	assertPathSegment(childSessionId, "childSessionId");
+	assertWorkspaceStorageId(workspaceId);
+	assertSessionId(parentSessionId, "parentSessionId");
+	assertSessionId(childSessionId, "childSessionId");
 	const path = deriveChildSessionFile(
 		delegationRootDir(),
 		workspaceId,

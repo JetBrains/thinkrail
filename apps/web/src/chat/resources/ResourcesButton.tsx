@@ -9,10 +9,14 @@ export function ResourcesButton({
 	open,
 	className,
 	...props
-}: ComponentProps<typeof Button> & { activeCount: number; open: boolean }) {
+}: ComponentProps<typeof Button> & { activeCount: number | null; open: boolean }) {
 	const Icon = open ? RiStackFill : RiStackLine;
+	const countLabel = activeCount === null ? "active count unavailable" : `${activeCount} active`;
 	return (
-		<IconTooltip label="Resources" wrapTrigger>
+		<IconTooltip
+			label={activeCount === null ? "Resources — active count unavailable" : "Resources"}
+			wrapTrigger
+		>
 			<Button
 				variant="ghost"
 				size="sm"
@@ -21,13 +25,13 @@ export function ResourcesButton({
 					className,
 				)}
 				data-testid="resources-trigger"
-				data-active-count={activeCount}
-				aria-label={`Resources, ${activeCount} active`}
+				data-active-count={activeCount ?? "unknown"}
+				aria-label={`Resources, ${countLabel}`}
 				{...props}
 			>
 				<Icon className="size-14" />
 				<span className="hidden @[480px]:inline">Resources</span>
-				<span>{activeCount}</span>
+				<span>{activeCount ?? "—"}</span>
 			</Button>
 		</IconTooltip>
 	);

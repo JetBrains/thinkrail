@@ -109,9 +109,11 @@ export function stopSubagent(
 	childSessionId: string,
 	cwd: string,
 ): Promise<void> {
-	return withSessionResources(workspaceId, parentSessionId, cwd, () =>
-		childFor(workspaceId, parentSessionId, childSessionId).abort("user"),
-	);
+	return withSessionResources(workspaceId, parentSessionId, cwd, () => {
+		void childFor(workspaceId, parentSessionId, childSessionId)
+			.abort("user")
+			.catch(() => {});
+	});
 }
 
 export function stopAllSubagents(
@@ -128,8 +130,7 @@ export function stopAllSubagents(
 					child.record.parentSessionId === parentSessionId &&
 					(child.snapshot?.status === "queued" || child.snapshot?.status === "running"),
 			);
-		const settling = children.map((child) => child.abort("user"));
-		await Promise.all(settling);
+		for (const child of children) void child.abort("user").catch(() => {});
 		return children.length;
 	});
 }

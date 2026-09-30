@@ -44,6 +44,8 @@ import {
 	getSessionStats,
 	getSessionWorkspaceId,
 	hasSession,
+	isHostResourceId,
+	isPiSessionId,
 	listAvailableModels,
 	listProjectAliasSkillNames,
 	listSessionActivity,
@@ -389,7 +391,8 @@ function resourceParams<K extends string>(params: unknown, keys: K[]): Record<K,
 	const result = {} as Record<K, string>;
 	for (const key of keys) {
 		const value: unknown = Reflect.get(params, key);
-		if (typeof value !== "string" || !/^[a-zA-Z0-9_-]{1,200}$/.test(value))
+		const sessionId = key === "sessionId" || key === "parentSessionId" || key === "childSessionId";
+		if (typeof value !== "string" || !(sessionId ? isPiSessionId(value) : isHostResourceId(value)))
 			throw new Error("Invalid resource ids");
 		result[key] = value;
 	}

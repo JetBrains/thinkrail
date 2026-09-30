@@ -370,6 +370,132 @@ test("persisted parent attachment does not recover command handles from transcri
 	});
 });
 
+test("resource reads fail closed while a prior parent generation tears down", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const p = await parent();
+	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd));
+	faux.setResponses([fauxAssistantMessage("PERSISTED")]);
+	await promptSession(p.sessionId, "Persist this parent.");
+	const service = delegationServiceFor(p.workspaceId);
+	const gate = deferred();
+	faux.setResponses([
+		async () => {
+			await gate.promise;
+			return fauxAssistantMessage("OLD_CHILD_DONE");
+		},
+	]);
+	const child = await service.createChild({
+		parent: p.sessionId,
+		visibility: "hidden",
+		info: { createdBy: "test" },
+		session: {},
+	});
+	const run = child.runQueued("Hold teardown open.");
+	await waitFor(async () => child.snapshot?.status === "running");
+	const removing = removeSession(p.sessionId);
+	try {
+		await expect(getSessionResources(p.workspaceId, p.sessionId, p.cwd)).rejects.toMatchObject({
+			code: "RESOURCE_UNAVAILABLE",
+		});
+	} finally {
+		gate.resolve();
+	}
+	await Promise.all([removing, run]);
+	expect(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).toEqual({
+		workspaceId: p.workspaceId,
+		sessionId: p.sessionId,
+		commands: [],
+		subagents: [],
+	});
+	await removeSession(p.sessionId);
+});
+
+test("workspace archive stops existing resources before awaiting parent preparation", async () => {
+	const cwd = mkdtempSync(join(root, "archive-preparation-"));
+	const workspaceId = `archive-preparation-${++sequence}`;
+	const existing = await createSession({ cwd, workspaceId });
+	const marker = join(cwd, "existing-command");
+	await launch(
+		{ cwd, workspaceId, sessionId: existing.sessionId },
+		`while :; do printf x >> '${marker}'; sleep 0.02; done`,
+	);
+	await waitFor(async () => existsSync(marker));
+	const original = AgentSession.prototype.bindExtensions;
+	const entered = deferred();
+	const release = deferred();
+	let sessionId: string | undefined;
+	AgentSession.prototype.bindExtensions = async function (bindings) {
+		await original.call(this, bindings);
+		sessionId = this.sessionId;
+		entered.resolve();
+		await release.promise;
+	};
+	const creating = createSession({ cwd, workspaceId });
+	creating.catch(() => {});
+	try {
+		await entered.promise;
+		const archiving = removeWorkspaceSessions(workspaceId, cwd);
+		let archived = false;
+		void archiving.then(() => {
+			archived = true;
+		});
+		await Bun.sleep(40);
+		expect(archived).toBe(false);
+		const markerSize = readFileSync(marker).length;
+		await Bun.sleep(80);
+		expect(readFileSync(marker).length).toBe(markerSize);
+		release.resolve();
+		await archiving;
+		await expect(creating).rejects.toThrow("Unknown session");
+		expect(sessionId && hasSession(sessionId)).toBe(false);
+	} finally {
+		release.resolve();
+		AgentSession.prototype.bindExtensions = original;
+		await creating.catch(() => {});
+		if (sessionId && hasSession(sessionId)) await removeSession(sessionId);
+		if (hasSession(existing.sessionId)) await removeSession(existing.sessionId);
+	}
+});
+
+test("workspace archive fences an in-flight persisted-parent attachment", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const p = await parent();
+	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd));
+	faux.setResponses([fauxAssistantMessage("PERSISTED_FOR_ARCHIVE")]);
+	await promptSession(p.sessionId, "Persist before attachment.");
+	await removeSession(p.sessionId);
+	const original = AgentSession.prototype.bindExtensions;
+	const entered = deferred();
+	const release = deferred();
+	AgentSession.prototype.bindExtensions = async function (bindings) {
+		await original.call(this, bindings);
+		if (this.sessionId !== p.sessionId) return;
+		entered.resolve();
+		await release.promise;
+	};
+	const attaching = getSessionResources(p.workspaceId, p.sessionId, p.cwd);
+	attaching.catch(() => {});
+	try {
+		await entered.promise;
+		const archiving = removeWorkspaceSessions(p.workspaceId, p.cwd);
+		let archived = false;
+		void archiving.then(() => {
+			archived = true;
+		});
+		await Bun.sleep(0);
+		expect(archived).toBe(false);
+		release.resolve();
+		await expect(attaching).rejects.toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
+		await archiving;
+		expect(hasSession(p.sessionId)).toBe(false);
+	} finally {
+		release.resolve();
+		AgentSession.prototype.bindExtensions = original;
+		await attaching.catch(() => {});
+		if (hasSession(p.sessionId)) await removeSession(p.sessionId);
+	}
+});
+
 test("direct child projection keeps every active and latest twenty terminal records without disposal", async () => {
 	const p = await parent();
 	const service = delegationServiceFor(p.workspaceId);
@@ -411,7 +537,7 @@ test("direct child projection keeps every active and latest twenty terminal reco
 	}
 });
 
-test("stop-all signals running and queued direct siblings before awaiting any and preserves parent/handles", async () => {
+test("stop-all acknowledges after signalling every sibling without awaiting settlement", async () => {
 	const p = await parent();
 	const service = delegationServiceFor(p.workspaceId);
 	const gate = deferred();
@@ -436,7 +562,13 @@ test("stop-all signals running and queued direct siblings before awaiting any an
 	await waitFor(async () => children.filter((c) => c.snapshot?.status === "running").length === 4);
 	expect(children.filter((c) => c.snapshot?.status === "queued")).toHaveLength(2);
 	const stopped = stopAllSubagents(p.workspaceId, p.sessionId, p.cwd);
+	let acknowledged: number | undefined;
+	void stopped.then((count) => {
+		acknowledged = count;
+	});
 	try {
+		await Bun.sleep(0);
+		expect(acknowledged).toBe(6);
 		await waitFor(async () => children.slice(4).every((c) => c.snapshot?.status === "aborted"));
 		expect(children.slice(4).every((c) => c.snapshot?.details.abortReason === "user")).toBe(true);
 		expect((await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents).toHaveLength(
@@ -445,7 +577,7 @@ test("stop-all signals running and queued direct siblings before awaiting any an
 	} finally {
 		gate.resolve();
 	}
-	expect(await stopped).toBe(6);
+	await stopped;
 	await Promise.all(runs);
 	expect(
 		children.every(
@@ -539,6 +671,12 @@ test("user stop of a detached Agent child does not wake its idle parent", async 
 		const child = (await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents[0];
 		if (!child) throw new Error("missing child");
 		const stopping = stopSubagent(p.workspaceId, p.sessionId, child.childSessionId, p.cwd);
+		let acknowledged = false;
+		void stopping.then(() => {
+			acknowledged = true;
+		});
+		await Bun.sleep(0);
+		expect(acknowledged).toBe(true);
 		gate.resolve();
 		await stopping;
 		await waitFor(async () =>
@@ -553,6 +691,82 @@ test("user stop of a detached Agent child does not wake its idle parent", async 
 	} finally {
 		gate.resolve();
 		setSessionPublisher(() => {});
+	}
+});
+
+test("a non-waking command completion persists only after an unrelated parent tool result", async () => {
+	const p = await parent();
+	const commandId = await launch(p, "sleep 30");
+	const parentGate = join(p.cwd, "parent-tool-finish");
+	const parentToolStarted = deferred();
+	setSessionPublisher(({ sessionId, event }) => {
+		if (
+			sessionId === p.sessionId &&
+			event.type === "tool_execution_start" &&
+			event.toolName === "bash"
+		)
+			parentToolStarted.resolve();
+	});
+	faux.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("bash", {
+				command: `while ! test -f '${parentGate}'; do sleep 0.02; done`,
+			}),
+		),
+		fauxAssistantMessage("PARENT_DONE"),
+	]);
+	const parentRun = promptSession(p.sessionId, "Run the gated parent tool.");
+	try {
+		await parentToolStarted.promise;
+		await stopBackgroundCommand(p.workspaceId, p.sessionId, commandId, p.cwd);
+		await waitFor(
+			async () =>
+				(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).commands[0]?.status ===
+				"stopped",
+		);
+		const waiting = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
+		expect(waiting.summary.isStreaming).toBe(true);
+		expect(
+			waiting.messages.some(
+				(message) =>
+					message.role === "custom" && message.customType === "background-command-completion",
+			),
+		).toBe(false);
+
+		writeFileSync(parentGate, "done");
+		await parentRun;
+		await waitFor(async () => {
+			const { messages } = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
+			return messages.some(
+				(message) =>
+					message.role === "custom" && message.customType === "background-command-completion",
+			);
+		});
+		const settled = await getSessionMessages(p.sessionId, p.workspaceId, p.cwd);
+		const assistant = settled.messages.findLast(
+			(message) =>
+				message.role === "assistant" &&
+				message.content.some((block) => block.type === "toolCall" && block.name === "bash"),
+		);
+		if (assistant?.role !== "assistant") throw new Error("missing parent tool call");
+		const toolCall = assistant.content.find(
+			(block) => block.type === "toolCall" && block.name === "bash",
+		);
+		if (toolCall?.type !== "toolCall") throw new Error("missing parent bash call");
+		const resultIndex = settled.messages.findIndex(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCall.id,
+		);
+		const completionIndex = settled.messages.findIndex(
+			(message) =>
+				message.role === "custom" && message.customType === "background-command-completion",
+		);
+		expect(resultIndex).toBeGreaterThan(-1);
+		expect(completionIndex).toBeGreaterThan(resultIndex);
+	} finally {
+		writeFileSync(parentGate, "done");
+		setSessionPublisher(() => {});
+		await Promise.allSettled([parentRun]);
+		await removeSession(p.sessionId);
 	}
 });
 
@@ -1000,6 +1214,11 @@ test.each([
 			const stopping = stopSubagent(p.workspaceId, p.sessionId, job.child.sessionId, p.cwd);
 			childGate.resolve();
 			await stopping;
+			await waitFor(
+				async () =>
+					(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents[0]?.status ===
+					"aborted",
+			);
 			expect(
 				(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents,
 			).toMatchObject([

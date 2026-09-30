@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import type { BackgroundCommandSummary } from "@thinkrail/contracts";
 import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import * as resources from "./index";
 
 const command: BackgroundCommandSummary = {
@@ -43,6 +44,35 @@ test("resource primitives keep their props-only import boundary", () => {
 		}
 		expect(source).not.toMatch(/store|transport|xterm|dangerouslySetInnerHTML|Markdown/);
 	}
+});
+
+test("resource trigger distinguishes an authoritative count from an unknown count", () => {
+	const current = renderToStaticMarkup(
+		<TooltipProvider>
+			<resources.ResourcesButton activeCount={3} open={false} />
+		</TooltipProvider>,
+	);
+	expect(current).toContain('data-active-count="3"');
+	expect(current).toContain('aria-label="Resources, 3 active"');
+	expect(current).toContain(">3</span>");
+
+	const unknown = renderToStaticMarkup(
+		<TooltipProvider>
+			<resources.ResourcesButton activeCount={null} open={false} />
+		</TooltipProvider>,
+	);
+	expect(unknown).toContain('data-active-count="unknown"');
+	expect(unknown).toContain('aria-label="Resources, active count unavailable"');
+	expect(unknown).toContain(">—</span>");
+	expect(unknown).not.toContain("null active");
+});
+
+test("ChatView labels and retires resource-only layers", () => {
+	const source = readFileSync(`${import.meta.dir}/../ChatView.tsx`, "utf8");
+	expect(source).toContain('aria-label="Resources"');
+	expect(source).toContain("if (!resources.knownUnsupported) return;");
+	expect(source).toContain("setCommandDetail(null);");
+	expect(source).toContain("min-w-0 max-w-full truncate");
 });
 
 test("active rows preserve native statuses, action hooks and escaped source text; finished rows start collapsed", () => {

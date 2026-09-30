@@ -1252,7 +1252,7 @@ test.each([
 			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
 		);
 		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
-		expect(persisted.details).toEqual(result);
+		expect(JSON.stringify(persisted.details)).toBe(JSON.stringify(result));
 		expect(messages.filter((message) => message.role === "user")).toHaveLength(1);
 		expect(seen(session.sessionId)).not.toContain("REMOVAL_CONTINUATION_RAN");
 		expect(hasSession(session.sessionId)).toBe(false);
@@ -1995,7 +1995,7 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 			model: fauxA.getModel() as any,
 		});
 		await promptSession(s.sessionId, "persist me");
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 
 		const fromDisk = (await listSessions("ws-disk", cwd)).find((x) => x.sessionId === s.sessionId);
 		expect(fromDisk).toBeDefined();
@@ -2009,7 +2009,7 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 		const { summary, messages } = await getSessionMessages(s.sessionId, "ws-disk", cwd);
 		expect(summary.live).toBe(true);
 		expect(messages.some((m) => m.role === "user")).toBe(true);
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 
 		const [a, b] = await Promise.all([
 			getSessionMessages(s.sessionId, "ws-disk", cwd),
@@ -2019,7 +2019,7 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 		expect(
 			(await listSessions("ws-disk", cwd)).filter((x) => x.sessionId === s.sessionId),
 		).toHaveLength(1);
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 	} finally {
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
@@ -2301,7 +2301,7 @@ test("ensureSessionAttached: a detached-but-persisted session comes back live; a
 			model: toWireModel(fauxA.getModel()),
 		});
 		await promptSession(s.sessionId, "the review package");
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 		expect(hasSession(s.sessionId)).toBe(false);
 
 		expect(await ensureSessionAttached(s.sessionId, "ws-reattach", cwd)).toBe(true);
@@ -2309,7 +2309,7 @@ test("ensureSessionAttached: a detached-but-persisted session comes back live; a
 		expect(await ensureSessionAttached(s.sessionId, "ws-reattach", cwd)).toBe(true);
 
 		expect(await ensureSessionAttached("no-such-session", "ws-reattach", cwd)).toBe(false);
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 	} finally {
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
@@ -2326,13 +2326,13 @@ test("followUpSession on an IDLE session runs the turn — pi's follow-up queue 
 			model: toWireModel(fauxA.getModel()),
 		});
 		await promptSession(s.sessionId, "batch one");
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 		expect(await ensureSessionAttached(s.sessionId, "ws-followup", cwd)).toBe(true);
 
 		fauxA.appendResponses([fauxAssistantMessage("SECOND_BATCH")]);
 		await followUpSession(s.sessionId, "batch two");
 		expect(seen(s.sessionId)).toContain("SECOND_BATCH");
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 	} finally {
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}

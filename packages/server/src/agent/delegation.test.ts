@@ -183,7 +183,7 @@ function gatedChildResponse(): { release: () => void } {
 	return { release };
 }
 
-test("owned children remain inspectable before Pi writes their first transcript file", async () => {
+test("owned children remain inspectable before and during their first provider response", async () => {
 	const cwd = tmpDir("trdel-prefile-");
 	const workspaceId = "ws-prefile";
 	const { sessionId } = await createSession({ cwd, workspaceId });
@@ -209,9 +209,14 @@ test("owned children remain inspectable before Pi writes their first transcript 
 	const run = child.runQueued("Wait for the provider.");
 	try {
 		await waitFor(() => child.snapshot?.status === "running");
-		expect(existsSync(child.record.sessionFile)).toBe(false);
-		expect(readChildTranscript(workspaceId, sessionId, child.sessionId)).toEqual({
-			messages: [],
+		expect(existsSync(child.record.sessionFile)).toBe(true);
+		expect(readChildTranscript(workspaceId, sessionId, child.sessionId)).toMatchObject({
+			messages: [
+				{
+					role: "user",
+					content: [{ type: "text", text: "Wait for the provider." }],
+				},
+			],
 			status: "running",
 		});
 	} finally {
@@ -380,7 +385,10 @@ test("children follow their parent's retained runtime generation across a flip",
 	}
 });
 
-test("transcript reads reject path-like ids — wire strings never escape the delegation root", () => {
+test("transcript reads accept canonical dotted session ids and reject path-like ids", () => {
+	expect(() => readChildTranscript("ws", "parent..session", "child..session")).toThrow(
+		"No transcript found",
+	);
 	expect(() => readChildTranscript("../../etc", "p", "c")).toThrow("Invalid workspaceId");
 	expect(() => readChildTranscript("ws", "..", "c")).toThrow("Invalid parentSessionId");
 	expect(() => readChildTranscript("ws", "p", "x/../y")).toThrow("Invalid childSessionId");

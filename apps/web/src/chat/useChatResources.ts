@@ -79,6 +79,10 @@ export function startChatResourceSync(
 
 export type ResourceActionState = Record<string, { pending: boolean; error: string | null }>;
 
+export function isChatResourcesKnownUnsupported(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && !supportsChatResources(protocolVersion);
+}
+
 const EMPTY_RESOURCE_ACTIONS: ResourceActionState = {};
 
 export function createChatResourceControls(
@@ -153,6 +157,7 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 	const protocol = useAppStore((state) => state.protocolVersion);
 	const alive = useAppStore((state) => isChatResourceScopeAlive(state, scope));
 	const supported = supportsChatResources(protocol);
+	const knownUnsupported = isChatResourcesKnownUnsupported(protocol);
 	const groups = useMemo(
 		() => selectChatResourceGroups(projection?.snapshot),
 		[projection?.snapshot],
@@ -210,6 +215,7 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 		loading,
 		stale,
 		authoritative,
+		knownUnsupported,
 		projection,
 		groups,
 		actions,

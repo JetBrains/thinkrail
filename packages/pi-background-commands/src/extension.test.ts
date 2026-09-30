@@ -27,6 +27,11 @@ import backgroundCommandsExtension, {
 import { controlledOperations, waitFor } from "./test-support";
 
 const cwd = mkdtempSync(join(tmpdir(), "pi-background-"));
+
+function environmentPathKey(env: NodeJS.ProcessEnv): string {
+	return Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
+}
+
 let priorAgentDir: string | undefined;
 let priorOffline: string | undefined;
 let runtime: ModelRuntime;
@@ -170,12 +175,16 @@ test("injected jobs survive resource reload; a completion in the gap replays onc
 			fauxAssistantMessage("REPLAYED"),
 		]);
 		await session.prompt("Start.");
-		await session.extensionRunner.emit({ type: "session_shutdown", reason: "reload" });
-		expect(executor.call().options.signal?.aborted).toBe(false);
-		executor.call().resolve({ exitCode: 0 });
-		await waitFor(() => service.list()[0]?.status === "completed");
-		expect(JSON.stringify(session.messages)).not.toContain(BACKGROUND_COMMAND_COMPLETION_MESSAGE);
-		await session.reload();
+		await session.reload({
+			beforeSessionStart: async () => {
+				expect(executor.call().options.signal?.aborted).toBe(false);
+				executor.call().resolve({ exitCode: 0 });
+				await waitFor(() => service.list()[0]?.status === "completed");
+				expect(JSON.stringify(session.messages)).not.toContain(
+					BACKGROUND_COMMAND_COMPLETION_MESSAGE,
+				);
+			},
+		});
 		await waitFor(() => JSON.stringify(session.messages).includes("REPLAYED"));
 		await session.reload();
 		expect(
@@ -207,7 +216,8 @@ test("current shell env matches Pi bash including managed-bin PATH, stale marker
 		"PI_REASONING_LEVEL",
 	];
 	const saved = stale.map((key) => [key, process.env[key]] as const);
-	const previousPath = process.env.PATH;
+	const processPathKey = environmentPathKey(process.env);
+	const previousPath = process.env[processPathKey];
 	const executor = controlledOperations();
 	let launchContext: BackgroundCommandContext = { cwd };
 	const service = createBackgroundCommands(
@@ -217,7 +227,7 @@ test("current shell env matches Pi bash including managed-bin PATH, stale marker
 	try {
 		if (!context) throw new Error("Missing context");
 		for (const key of stale) process.env[key] = "stale-other-session";
-		process.env.PATH = `/unrelated${delimiter}${previousPath ?? ""}`;
+		process.env[processPathKey] = `/unrelated${delimiter}${previousPath ?? ""}`;
 		session.setThinkingLevel("high");
 		let nativeEnv: NodeJS.ProcessEnv | undefined;
 		const bash = createBashToolDefinition(cwd, {
@@ -228,7 +238,13 @@ test("current shell env matches Pi bash including managed-bin PATH, stale marker
 				},
 			},
 		});
-		await bash.execute("parity", { command: "ignored" }, undefined, undefined, context);
+		await bash.execute(
+			"parity",
+			{ command: "ignored" },
+			undefined,
+			undefined,
+			session.extensionRunner.createToolContext("parity", undefined),
+		);
 		launchContext = {
 			cwd,
 			model: context.model,
@@ -237,13 +253,20 @@ test("current shell env matches Pi bash including managed-bin PATH, stale marker
 		};
 		service.start({ command: "first" });
 		expect(executor.call().options.env).toEqual(nativeEnv);
-		expect(executor.call().options.env?.PATH?.split(delimiter)[0]).toBe(join(cwd, "bin"));
+		const firstEnv = executor.call().options.env;
+		expect(firstEnv?.[environmentPathKey(firstEnv)]?.split(delimiter)[0]).toBe(join(cwd, "bin"));
 		expect(executor.call().options.env?.PI_REASONING_LEVEL).toBe("high");
 		expect(executor.call().options.env?.PI_SESSION_FILE).toBeUndefined();
 		executor.call().resolve({ exitCode: 0 });
-		process.env.PATH = `${join(cwd, "bin")}${delimiter}${previousPath ?? ""}`;
+		process.env[processPathKey] = `${join(cwd, "bin")}${delimiter}${previousPath ?? ""}`;
 		session.setThinkingLevel("low");
-		await bash.execute("parity2", { command: "ignored" }, undefined, undefined, context);
+		await bash.execute(
+			"parity2",
+			{ command: "ignored" },
+			undefined,
+			undefined,
+			session.extensionRunner.createToolContext("parity2", undefined),
+		);
 		launchContext = { cwd, model: context.model, thinkingLevel: context.thinkingLevel };
 		service.start({ command: "second" });
 		expect(executor.call(1).options.env).toEqual(nativeEnv);
@@ -259,7 +282,13 @@ test("current shell env matches Pi bash including managed-bin PATH, stale marker
 				},
 			},
 		});
-		await privateBash.execute("private", { command: "ignored" }, undefined, undefined, context);
+		await privateBash.execute(
+			"private",
+			{ command: "ignored" },
+			undefined,
+			undefined,
+			session.extensionRunner.createToolContext("private", undefined),
+		);
 		service.start({ command: "private" });
 		expect(executor.call(2).options.env).toEqual(nativeEnv);
 		executor.call(2).resolve({ exitCode: 0 });
@@ -268,8 +297,8 @@ test("current shell env matches Pi bash including managed-bin PATH, stale marker
 			if (value === undefined) delete process.env[key];
 			else process.env[key] = value;
 		}
-		if (previousPath === undefined) delete process.env.PATH;
-		else process.env.PATH = previousPath;
+		if (previousPath === undefined) delete process.env[processPathKey];
+		else process.env[processPathKey] = previousPath;
 		await service.dispose();
 		await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
 		session.dispose();

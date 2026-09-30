@@ -597,11 +597,13 @@ test.each([
 					entry.type === "custom_message" && entry.customType === SUBAGENT_COMPLETION_MESSAGE,
 			);
 		expect(completions).toHaveLength(1);
-		expect(completions[0]).toMatchObject({
+		const completion = completions[0];
+		if (completion?.type !== "custom_message") throw new Error("missing completion");
+		expect(completion).toMatchObject({
 			display: true,
-			content: expect.stringContaining("aborted:"),
 			details: child.snapshot?.details,
 		});
+		expect(completion.content).toContain("aborted:");
 
 		if (reason === "user") {
 			expect(fauxA.getPendingResponseCount()).toBe(1);

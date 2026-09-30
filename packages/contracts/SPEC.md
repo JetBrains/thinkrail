@@ -20,8 +20,9 @@ of the host.
 
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
   registries, and the protocol version. Including **`WsErrorCode`** — the closed set of failures the *host
-  names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`, and
-  `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is `subagent.getTranscript`'s **permanent** miss, the
+  names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`,
+  `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
+  `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling. A known child whose first transcript file is not
   written yet instead returns empty messages with its current status, so a live run remains pollable;
   transport blips stay plain-`error` transients worth retrying), so a client can react to one specific failure
@@ -282,7 +283,7 @@ of the host.
   without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
   and no pair, preserving both legacy configs
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
-  behavior), overridden only by `Workspace.subagentsOverride`; `agentReviewEnabled` (default `true`, on the
+  behavior), overridden only by `Workspace.subagentsOverride`; `agentReviewEnabled` (default `false`, on the
   wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
   tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset
@@ -574,8 +575,8 @@ of the host.
 ## Chat Resources
 
 The current-chat resource view is a projection of two existing capability owners, not a generic
-process API. `CHAT_RESOURCES_PROTOCOL_VERSION` (67) gates its methods and affordances; hosts through
-v66 must not receive these requests. No native Pi background-task protocol is implied. The command DTOs mirror [[module-pi-background-commands]]
+process API. `CHAT_RESOURCES_PROTOCOL_VERSION` (71) gates its methods and affordances; hosts through
+v70 must not receive these requests. No native Pi background-task protocol is implied. The command DTOs mirror [[module-pi-background-commands]]
 without importing that package. Subagents retain their Pi child session ids and delegation statuses.
 
 - `session.resources({workspaceId, sessionId})` returns separate command and subagent summaries:
@@ -595,8 +596,10 @@ without importing that package. Subagents retain their Pi child session ids and 
   share the `RESOURCE_UNAVAILABLE` error code. Unavailable parent sessions use that same code.
   A successful `Ack` acknowledges intent, not observed termination.
 - `subagent.stopAll({workspaceId, parentSessionId})` captures the currently active direct children,
-  requests every cancellation before awaiting settlement, and returns `Ack & {targeted: number}`. It does
-  not stop the parent, remove child records, or disable future launches.
+  requests every cancellation before returning `Ack & {targeted: number}`, and never waits for child
+  settlement. The individual subagent stop follows the same intent-only acknowledgement rule. Neither
+  operation stops the parent, removes child records, or disables future launches; lifecycle invalidations
+  report eventual settlement.
 - `session.resourcesChanged` is a scoped `{workspaceId, sessionId}` invalidation on membership or
   lifecycle changes. Clients reread the snapshot; output bytes do not ride a broadcast or transcript
   tool update after the start acknowledgement. Existing `subagent.getTranscript` remains unchanged.
@@ -612,7 +615,9 @@ plain-text diagnostic excerpt and truncation flag. The conversation may render t
 but must never infer current resource authority from it; logs and controls still use scoped reads.
 
 Every read/control validates workspace membership and parent lineage, not merely a syntactically
-valid id. The start capability stays agent-facing; there is no browser shell-execution method.
+valid id. Parent and child session ids use Pi's canonical grammar, including internal dots; workspace,
+command, and transcript authority still comes from their owning registries rather than the spelling of
+an opaque id. The start capability stays agent-facing; there is no browser shell-execution method.
 Reconnection invalidates old control authority until hydration completes; transient read failure
 must not become a successful empty snapshot. Unsupported hosts clear earlier resource projections.
 Recent command output is ephemeral; completed-message excerpts and child transcripts have their

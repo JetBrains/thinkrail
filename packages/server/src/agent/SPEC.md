@@ -369,7 +369,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     stays dangling for ack repair, while an already accepted answer reaches its native persisted result and
     then the continuation is aborted. A reply racing after that snapshot is rejected rather than accepted and
     lost during disposal. Destructive teardown drains both Pi input queues before abort/disposal, including
-    recoverable chat deletion, workspace archive, polite shutdown and emergency disposal. Pi 0.84.3's
+    recoverable chat deletion, workspace archive, polite shutdown and emergency disposal. Pi's
     `abort()` only signals the current core run and waits for session idle; post-run handling can continue
     queued input with a fresh abort controller, so abort alone can restart work and strand disposal.
     Removal/archive/deletion reuse Stop's entry-based drain and bounded accepted-answer grace, draining
@@ -390,9 +390,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     emergency stop, but registers its best-effort child cascades
     in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
-    **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: abort a streaming turn,
-    including an unanswered question—destructive workspace removal intentionally does not preserve a dialog
-    for restart—then dispose every live session for the workspace **unconditionally** — bypassing the per-chat delete
+    **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: close session admission for
+    the workspace before its first await, capture every registered parent, synchronously close its resource
+    owners, and start parent abort/removal while concurrently draining preparations from the retired
+    workspace generation. A preparation that finishes afterward disposes its unregistered owners/session
+    instead of publishing into the archived workspace. An unanswered question is not preserved for restart
+    during destructive removal. After both barriers settle, dispose every live session for the workspace
+    **unconditionally** — bypassing the per-chat delete
     guard that `removeSession` enforces, so a chat whose recoverable delete is mid-trash cannot abort the
     teardown loop and strand its siblings — then delete pi's on-disk transcripts rooted at
     the worktree `cwd` — pi's `SessionManager` is append-only, so purge = `list(cwd)` then `rm` the files
@@ -834,12 +838,17 @@ outcomes; stopped state is not synthesized from an acknowledged RPC.
 
 User subagent controls supply the `"user"` cancellation reason defined by [[module-pi-delegation]];
 completion delivery belongs to [[module-pi-subagents]], not a host suppression set. Stop-all signals
-its captured active children before awaiting any settlement and never uses `disposeChildrenOf` as
-a substitute.
+all captured active children before returning its target count; individual and bulk controls acknowledge
+intent without awaiting provider/tool settlement. Their detached abort promises always carry rejection
+handlers, lifecycle invalidations remain terminal authority, and neither control uses `disposeChildrenOf`
+as a substitute.
 
 Command services outlive view placement and parent-turn cancellation. Actual session disposal and
 workspace archive close command admission and signal command/child work before awaiting teardown
-under the existing host shutdown budget. Resource closure runs for every captured workspace parent before
+under the existing host shutdown budget. A per-session teardown tombstone prevents a persisted parent
+from reattaching until its previous resource cascade settles. Workspace archive closes a generation and
+awaits in-flight parent preparation before removing delegation/transcript storage, so stale preparation
+cannot register after teardown. Resource closure runs for every captured workspace parent before
 any parent abort is awaited; individual removal likewise signals resources before waiting for the main turn.
 Streaming destructive removal reuses the manager's queue-draining Stop path, discarding the drained
 input while retaining the same bounded accepted-answer persistence grace before the parent is disposed.

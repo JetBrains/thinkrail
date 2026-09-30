@@ -9,6 +9,7 @@ import { RequestError } from "@/transport";
 import type { DetailPollScheduler } from "./detailPolling";
 import {
 	createChatResourceControls,
+	isChatResourcesKnownUnsupported,
 	type ResourceActionState,
 	startChatResourceSync,
 	startCommandLogPolling,
@@ -53,6 +54,12 @@ function deferred<T>() {
 	});
 	return { promise, resolve, reject };
 }
+
+test("only a known older protocol retires resource-only UI", () => {
+	expect(isChatResourcesKnownUnsupported(null)).toBe(false);
+	expect(isChatResourcesKnownUnsupported(CHAT_RESOURCES_PROTOCOL_VERSION)).toBe(false);
+	expect(isChatResourcesKnownUnsupported(CHAT_RESOURCES_PROTOCOL_VERSION - 1)).toBe(true);
+});
 
 beforeEach(() => {
 	useAppStore.setState({

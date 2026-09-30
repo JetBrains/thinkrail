@@ -316,6 +316,7 @@ export default function ChatView({
 			setTranscriptSelection(childSessionId ? { workspaceId, sessionId, childSessionId } : null),
 		[workspaceId, sessionId],
 	);
+	const composerRef = useRef<ComposerHandle>(null);
 	const resources = useChatResources(workspaceId, sessionId);
 	const resourcesTrigger = useRef<HTMLButtonElement>(null);
 	const resourceDetailOpening = useRef(false);
@@ -336,8 +337,20 @@ export default function ChatView({
 	const returnToResources = (event: Event) => {
 		event.preventDefault();
 		resourceDetailOpening.current = false;
-		resourcesTrigger.current?.focus();
+		if (resourcesTrigger.current) resourcesTrigger.current.focus();
+		else composerRef.current?.refocus();
 	};
+	useEffect(() => {
+		if (!resources.knownUnsupported) return;
+		setResourcesOpen(false);
+		setStopAllOpen(false);
+		setCommandDetail(null);
+		resourceDetailOpening.current = false;
+		if (resourceTranscript.current) {
+			resourceTranscript.current = false;
+			setTranscriptChildId(null);
+		}
+	}, [resources.knownUnsupported, setTranscriptChildId]);
 
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const latestUserRow = useMemo(() => {
@@ -420,7 +433,6 @@ export default function ChatView({
 			streamEdgeRef,
 		],
 	);
-	const composerRef = useRef<ComposerHandle>(null);
 	const askFocusScope = useRef<object>({}).current;
 
 	const {
@@ -878,12 +890,15 @@ export default function ChatView({
 												<PopoverTrigger asChild>
 													<ResourcesButton
 														ref={resourcesTrigger}
-														activeCount={resources.groups.activeCount}
+														activeCount={
+															resources.authoritative ? resources.groups.activeCount : null
+														}
 														open={resourcesOpen}
 													/>
 												</PopoverTrigger>
 												<PopoverContent
 													data-testid="resources-popover"
+													aria-label="Resources"
 													align="end"
 													className="max-h-[min(70vh,var(--radix-popover-content-available-height))] w-[360px] max-w-[calc(100vw-24px)] overflow-y-auto"
 													onCloseAutoFocus={(event) => {
@@ -1144,7 +1159,12 @@ export default function ChatView({
 								className="h-[75vh] max-h-[720px] max-w-3xl"
 								onCloseAutoFocus={returnToResources}
 							>
-								<DialogTitle className="pr-24">{selectedCommand.name} — Logs</DialogTitle>
+								<DialogTitle
+									className="min-w-0 max-w-full truncate pr-24"
+									title={`${selectedCommand.name} — Logs`}
+								>
+									{selectedCommand.name} — Logs
+								</DialogTitle>
 								<DialogDescription>
 									Read-only command output. Closing this view does not stop the command.
 								</DialogDescription>

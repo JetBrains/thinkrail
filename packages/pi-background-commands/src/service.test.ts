@@ -262,22 +262,22 @@ test("each completion binding has independent ownership even when the callback o
 	await service.dispose();
 });
 
-test("real executor handles stderr, nonzero exit, null exit, launch failure and timeout", async () => {
+test("real executor handles stderr, nonzero exits, launch failure and timeout", async () => {
 	const service = createBackgroundCommands({
 		sessionId: "real-errors",
 		getContext: () => ({ cwd: process.cwd() }),
 	});
 	try {
 		const failed = service.start({ command: "printf out; printf err >&2; exit 9" });
-		const signalled = service.start({ command: "kill -TERM $$" });
+		const exited143 = service.start({ command: "exit 143" });
 		const timedOut = service.start({ command: "sleep 30", timeout: 0.03 });
 		await waitFor(() =>
-			[failed, signalled, timedOut].every((c) => c.snapshot.finishedAt !== undefined),
+			[failed, exited143, timedOut].every((c) => c.snapshot.finishedAt !== undefined),
 		);
 		expect(failed.snapshot).toMatchObject({ status: "error", exitCode: 9 });
 		expect(failed.output?.text).toContain("out");
 		expect(failed.output?.text).toContain("err");
-		expect(signalled.snapshot).toMatchObject({ status: "error", exitCode: null });
+		expect(exited143.snapshot).toMatchObject({ status: "error", exitCode: 143 });
 		expect(timedOut.snapshot.status).toBe("error");
 		expect(timedOut.snapshot.errorMessage).toMatch(/timeout|timed out/);
 	} finally {

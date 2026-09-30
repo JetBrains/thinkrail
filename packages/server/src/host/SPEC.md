@@ -402,9 +402,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   low-latency event, not a durable queue: a reconnecting client's active-workspace `session.list` is the
   authoritative read-side repair for an event missed while its socket was down.
 - **Chat Resources:** the scoped resource read, command output/stop and direct-child stop/stop-all
-  handlers resolve workspace membership and pass only validated opaque ids plus the registry-owned cwd
-  to the agent barrel. Missing parents/resources use `RESOURCE_UNAVAILABLE`; output's missing-command
-  result is `available:false` only after validating its parent. No client path/PID is accepted.
+  handlers enforce each request's exact key set before resolving workspace membership and passing ids plus
+  the registry-owned cwd to the agent barrel. Parent/child ids follow Pi's canonical session grammar
+  (including internal dots); workspace and command ids retain their owner-specific grammar and authority.
+  Missing parents/resources use `RESOURCE_UNAVAILABLE`; output's missing-command result is
+  `available:false` only after validating its parent. No client path/PID field is accepted.
   The agent's resource publisher maps to `session.resourcesChanged`, subscribed in the WS open handler;
   this is a catalog invalidation, never an output broadcast. Resource ownership and teardown stay in agent.
 - **Activity fan-out:** `createServer` installs the agent module's activity publisher and broadcasts each

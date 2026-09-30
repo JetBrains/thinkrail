@@ -30,9 +30,12 @@ or workbench tab.
 ## Presentation
 
 The header button reads **Resources** plus the count of active commands and queued/running
-subagents. Stopping commands remain active until confirmed terminal. A parent being idle does not
-hide its resources. At narrow widths the label may collapse, but the control/count and accessible
-name remain available; header status text gives way before the action is clipped.
+subagents only while the snapshot is authoritative. Before the first read, during reconnect, or after
+refresh failure, it shows an explicit unavailable-count mark and matching accessible label rather than
+claiming zero or presenting a stale count as current. Stopping commands remain active until confirmed
+terminal. A parent being idle does not hide its resources. At narrow widths the label may collapse, but
+the control/count state and accessible name remain available; header status text gives way before the
+action is clipped.
 
 The popover puts active **Commands** and **Subagents** first, followed by a collapsed **Finished**
 section containing recent terminal entries. Each row shows its name/task and source-reported state.
@@ -45,9 +48,10 @@ does not distinguish detachment, and queued/running must never be used to guess 
 version has no recursive tree, workspace/global scope, restart/steer actions, artifacts, or arbitrary
 shell-process discovery. Ordinary workspace terminal tabs do not appear.
 
-Logs open a read-only dialog over this chat; transcripts reuse the existing subagent transcript
-viewer. Opening a detail closes the popover rather than stacking two active popovers. Command
-output is plain monospaced text, not an interactive terminal or interpreted markup. Show when only
+The Resources popover has an explicit accessible name. Logs open a read-only dialog over this chat;
+transcripts reuse the existing subagent transcript viewer. Opening a detail closes the popover rather
+than stacking two active popovers. Command-log titles stay one bounded line while preserving the full
+name as hover text. Command output is plain monospaced text, not an interactive terminal or interpreted markup. Show when only
 a bounded tail remains, and distinguish empty output, loading, transient read failure and permanently
 unavailable/evicted output. The history limit is runtime history, not a promise of retained logs after
 host restart. Control errors stay visible beside the relevant action.
@@ -59,8 +63,13 @@ controls until it has current authority, and an old-host connection hides the un
 rather than displaying an empty list as proof nothing is running.
 
 Closing the popover, log dialog or chat placement never stops work. Keyboard focus returns to the
-header trigger after details close, since the invoking row unmounts with the popover. Use existing Radix primitives, token-only
-styling and visible text alongside status icons; color and animation are not the sole status signals.
+header trigger after details close, since the invoking row unmounts with the popover; if a known older
+host removes that trigger, focus returns to the composer instead. A supported-to-known-unsupported
+welcome retires the popover, command log, Stop-all confirmation, and only a transcript opened from
+Resources; ordinary card-opened transcripts remain independent. A transient reconnect with unknown
+protocol support preserves the stale detail instead of misclassifying the host. Use existing Radix
+primitives, token-only styling and visible text alongside status icons; color and animation are not the
+sole status signals.
 
 ## Verification obligations
 

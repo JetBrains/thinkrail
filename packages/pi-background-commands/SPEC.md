@@ -149,8 +149,9 @@ lifecycle changes, not every byte of output; output is read separately while ins
 Exercise admission and eviction, bounded multibyte output, natural/nonzero/null exits, launch errors,
 per-job stop isolation, parent-abort independence, duplicate stop, notification/reload races and
 bounded disposal. Integration checks use real local commands and Pi's public executor; provider-driven
-coverage verifies tool use and completion through a real Pi session. Windows tree termination and
-hidden-shell behavior need native evidence, not a Unix-only claim. The package suite uses Bun tests,
-controlled executor settlement, real local shell commands, and Pi AgentSessions driven by the SDK's
-faux provider. Live-provider host E2E remains the embedder's acceptance check, distinct from these
-in-package tests.
+coverage verifies tool use and completion through a real Pi session. Windows CI runs the package
+suite natively, including the descendant marker used by shutdown/process-tree coverage; visible-console
+behavior still needs a native visual probe rather than a Unix-only claim. The package suite uses Bun
+tests, controlled executor settlement, real local shell commands, and Pi AgentSessions driven by the
+SDK's faux provider. Live-provider host E2E remains the embedder's acceptance check, distinct from
+these in-package tests.

@@ -336,7 +336,7 @@ test("resource handlers scope every read/control to a registered workspace and a
 			allowModelNetwork: false,
 		}),
 	);
-	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd));
+	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd, { id: "release.1" }));
 	try {
 		const workspace = (await handleRequest(
 			"workspace.create",

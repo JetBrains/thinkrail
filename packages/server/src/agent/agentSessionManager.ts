@@ -131,6 +131,53 @@ interface Entry {
 }
 
 const sessions = new Map<string, Entry>();
+let sessionLifecycleGeneration = 0;
+const workspaceLifecycleGenerations = new Map<string, number>();
+const closingWorkspaces = new Map<string, number>();
+const pendingSessionPreparations = new Map<string, Set<Promise<unknown>>>();
+const sessionTeardowns = new Map<string, Promise<void>>();
+
+interface WorkspaceLifecycleToken {
+	global: number;
+	workspace: number;
+}
+
+function captureWorkspaceLifecycle(workspaceId: string): WorkspaceLifecycleToken {
+	return {
+		global: sessionLifecycleGeneration,
+		workspace: workspaceLifecycleGenerations.get(workspaceId) ?? 0,
+	};
+}
+
+function workspaceAcceptsSessions(workspaceId: string, token: WorkspaceLifecycleToken): boolean {
+	return (
+		token.global === sessionLifecycleGeneration &&
+		token.workspace === (workspaceLifecycleGenerations.get(workspaceId) ?? 0) &&
+		!closingWorkspaces.has(workspaceId)
+	);
+}
+
+function trackSessionPreparation<T>(
+	workspaceId: string,
+	token: WorkspaceLifecycleToken,
+	operation: () => Promise<T>,
+): Promise<T> {
+	if (!workspaceAcceptsSessions(workspaceId, token))
+		return Promise.reject(new Error(`Workspace is unavailable: ${workspaceId}`));
+	const pending = operation();
+	let preparations = pendingSessionPreparations.get(workspaceId);
+	if (!preparations) {
+		preparations = new Set();
+		pendingSessionPreparations.set(workspaceId, preparations);
+	}
+	const scope = preparations;
+	scope.add(pending);
+	return pending.finally(() => {
+		scope.delete(pending);
+		if (scope.size === 0 && pendingSessionPreparations.get(workspaceId) === scope)
+			pendingSessionPreparations.delete(workspaceId);
+	});
+}
 
 export async function usePiRuntime<T>(
 	operation: (
@@ -148,6 +195,18 @@ const deletingSessions = new Map<string, { workspaceId: string; done: Promise<vo
 
 function isSessionDeleted(sessionId: string, workspaceId: string): boolean {
 	return deletedSessions.get(sessionId) === workspaceId;
+}
+
+function sessionIsTearingDown(sessionId: string): boolean {
+	return sessionTeardowns.has(sessionId);
+}
+
+function sessionCanAttach(sessionId: string, workspaceId: string): boolean {
+	return (
+		!isSessionDeleted(sessionId, workspaceId) &&
+		!sessionIsTearingDown(sessionId) &&
+		!closingWorkspaces.has(workspaceId)
+	);
 }
 
 export type { SessionEventPayload };
@@ -697,7 +756,7 @@ async function prepareSessionEntry(
 			uiContext: createWebUiContext(sessionId),
 			onError: reportExtensionError,
 		});
-		if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
+		if (!sessionCanAttach(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 	} catch (error) {
 		cancelExtUiForSession(sessionId);
 		entry.askUserQuestionWaiters.abandon();
@@ -727,6 +786,7 @@ async function registerSession(
 	commands: BackgroundCommands,
 	subagents: Subagents,
 	askUserQuestionWaiters: AskUserQuestionWaiters,
+	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
 	const prepared = await prepareSessionEntry(
@@ -737,6 +797,11 @@ async function registerSession(
 		subagents,
 		askUserQuestionWaiters,
 	);
+	if (
+		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
+		sessionIsTearingDown(session.sessionId)
+	)
+		throw new Error(`Workspace is unavailable: ${workspaceId}`);
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	applySubagentTools(prepared.entry);
@@ -750,6 +815,7 @@ async function registerSession(
 }
 
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
+	const lifecycleToken = captureWorkspaceLifecycle(input.workspaceId);
 	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(input.cwd);
 	let model: Model<string> | undefined;
@@ -770,18 +836,37 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		},
 		input.workspaceId,
 		generation,
+		lifecycleToken,
 		true,
 	);
 }
 
-async function createParentSession(
-	options: CreateAgentSessionOptions & {
-		cwd: string;
-		sessionManager: SessionManager;
-		settingsManager: SettingsManager;
-	},
+type ParentSessionOptions = CreateAgentSessionOptions & {
+	cwd: string;
+	sessionManager: SessionManager;
+	settingsManager: SettingsManager;
+};
+
+function createParentSession(
+	options: ParentSessionOptions,
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
+	lifecycleToken: WorkspaceLifecycleToken,
+	announceCreation = false,
+): Promise<CreateSessionResult> {
+	const sessionId = options.sessionManager.getSessionId();
+	if (sessionIsTearingDown(sessionId))
+		return Promise.reject(new Error(`Unknown session: ${sessionId}`));
+	return trackSessionPreparation(workspaceId, lifecycleToken, () =>
+		createParentSessionInternal(options, workspaceId, generation, lifecycleToken, announceCreation),
+	);
+}
+
+async function createParentSessionInternal(
+	options: ParentSessionOptions,
+	workspaceId: string,
+	generation: PiRuntimeGeneration,
+	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
 	const { sessionManager, settingsManager, cwd } = options;
@@ -833,6 +918,7 @@ async function createParentSession(
 			commands,
 			subagents,
 			askUserQuestionWaiters,
+			lifecycleToken,
 			announceCreation,
 		);
 	} catch (error) {
@@ -861,6 +947,7 @@ export function canUseSessionResources(sessionId: string, workspaceId: string): 
 		entry.registered &&
 		!entry.resourcesClosing &&
 		entry.workspaceId === workspaceId &&
+		sessionCanAttach(sessionId, workspaceId) &&
 		!hasDeletionTombstone(sessionId)
 	);
 }
@@ -1097,14 +1184,22 @@ export function renameSession(
 
 const attaching = new Map<string, Promise<void>>();
 
-function attachDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
-	if (isSessionDeleted(sessionId, workspaceId))
+function attachDiskSession(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+	lifecycleToken: WorkspaceLifecycleToken,
+): Promise<void> {
+	if (
+		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
+		!sessionCanAttach(sessionId, workspaceId)
+	)
 		return Promise.reject(new Error(`Unknown session: ${sessionId}`));
 	if (sessions.has(sessionId)) return Promise.resolve();
 	let pending = attaching.get(sessionId);
 	if (!pending) {
 		pending = serializeSessionFileOperation(sessionId, () =>
-			openDiskSession(sessionId, workspaceId, cwd),
+			openDiskSession(sessionId, workspaceId, cwd, lifecycleToken),
 		).finally(() => attaching.delete(sessionId));
 		attaching.set(sessionId, pending);
 	}
@@ -1122,8 +1217,17 @@ function persistedSessionModelRef(model: unknown): { provider: string; id: strin
 	return { provider, id };
 }
 
-async function openDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
-	if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
+async function openDiskSession(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+	lifecycleToken: WorkspaceLifecycleToken,
+): Promise<void> {
+	if (
+		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
+		!sessionCanAttach(sessionId, workspaceId)
+	)
+		throw new Error(`Unknown session: ${sessionId}`);
 	const info = (await listSessionInfosStrict(cwd)).find(
 		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
 	);
@@ -1151,6 +1255,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		},
 		workspaceId,
 		generation,
+		lifecycleToken,
 	);
 }
 
@@ -1159,7 +1264,12 @@ async function ensureSessionAttachedInternal(
 	workspaceId: string,
 	cwd: string,
 ): Promise<boolean> {
-	if (isSessionDeleted(sessionId, workspaceId)) return false;
+	const lifecycleToken = captureWorkspaceLifecycle(workspaceId);
+	if (
+		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
+		!sessionCanAttach(sessionId, workspaceId)
+	)
+		return false;
 	const live = sessions.get(sessionId);
 	if (live) {
 		if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
@@ -1168,8 +1278,8 @@ async function ensureSessionAttachedInternal(
 	const known = (await listSessionInfosStrict(cwd)).some(
 		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
 	);
-	if (!known) return false;
-	await attachDiskSession(sessionId, workspaceId, cwd);
+	if (!known || !workspaceAcceptsSessions(workspaceId, lifecycleToken)) return false;
+	await attachDiskSession(sessionId, workspaceId, cwd, lifecycleToken);
 	if (!sessions.has(sessionId))
 		throw new Error(`Session ${sessionId} was re-opened but did not register.`);
 	return true;
@@ -1188,12 +1298,17 @@ async function getSessionMessagesInternal(
 	workspaceId: string,
 	cwd: string,
 ): Promise<{ summary: SessionSummary; messages: TranscriptMessage[] }> {
-	if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
+	const lifecycleToken = captureWorkspaceLifecycle(workspaceId);
+	if (
+		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
+		!sessionCanAttach(sessionId, workspaceId)
+	)
+		throw new Error(`Unknown session: ${sessionId}`);
 	let entry = sessions.get(sessionId);
 	if (entry && entry.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
 	if (!entry) {
-		await attachDiskSession(sessionId, workspaceId, cwd);
-		if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
+		await attachDiskSession(sessionId, workspaceId, cwd, lifecycleToken);
+		if (!sessionCanAttach(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 		entry = sessions.get(sessionId);
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
@@ -1670,11 +1785,24 @@ function closeSessionResources(entry: Entry, timeoutMs?: number): Promise<void> 
 	return entry.resourceCascade;
 }
 
+function trackSessionTeardown(sessionId: string, cascade: Promise<void>): Promise<void> {
+	const current = sessionTeardowns.get(sessionId);
+	if (current) return current;
+	let done: Promise<void>;
+	done = cascade.finally(() => {
+		if (sessionTeardowns.get(sessionId) === done) sessionTeardowns.delete(sessionId);
+	});
+	sessionTeardowns.set(sessionId, done);
+	return done;
+}
+
 function disposeSession(sessionId: string): Promise<void> {
+	const pending = sessionTeardowns.get(sessionId);
+	if (pending) return pending;
 	const entry = sessions.get(sessionId);
 	if (!entry) return Promise.resolve();
 	entry.disposed = true;
-	const cascade = closeSessionResources(entry);
+	const cascade = trackSessionTeardown(sessionId, closeSessionResources(entry));
 	cancelExtUiForSession(sessionId);
 	entry.askUserQuestionWaiters.abandon();
 	entry.unsubscribe();
@@ -1691,6 +1819,8 @@ function disposeSession(sessionId: string): Promise<void> {
 
 export function removeSession(sessionId: string): Promise<void> {
 	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
+	const pending = sessionTeardowns.get(sessionId);
+	if (pending) return pending;
 	const entry = sessions.get(sessionId);
 	if (!entry) return Promise.resolve();
 	closeSessionResources(entry);
@@ -1702,7 +1832,12 @@ export function removeSession(sessionId: string): Promise<void> {
 }
 
 export function disposeAllSessions(): void {
-	for (const entry of sessions.values()) void closeSessionResources(entry);
+	sessionLifecycleGeneration++;
+	workspaceLifecycleGenerations.clear();
+	closingWorkspaces.clear();
+	for (const [sessionId, entry] of sessions) {
+		void trackSessionTeardown(sessionId, closeSessionResources(entry));
+	}
 	for (const [sessionId, entry] of sessions) {
 		cancelExtUiForSession(sessionId);
 		entry.askUserQuestionWaiters.abandon();
@@ -1756,17 +1891,30 @@ export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void>
 }
 
 async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string): Promise<void> {
-	const entries = [...sessions].filter(([, entry]) => entry.workspaceId === workspaceId);
-	for (const [, entry] of entries) void closeSessionResources(entry);
-	await Promise.all(
-		entries.map(async ([sessionId, entry]) => {
+	workspaceLifecycleGenerations.set(
+		workspaceId,
+		(workspaceLifecycleGenerations.get(workspaceId) ?? 0) + 1,
+	);
+	closingWorkspaces.set(workspaceId, (closingWorkspaces.get(workspaceId) ?? 0) + 1);
+	try {
+		const entries = [...sessions].filter(([, entry]) => entry.workspaceId === workspaceId);
+		for (const [, entry] of entries) void closeSessionResources(entry);
+		const removals = entries.map(async ([sessionId, entry]) => {
 			if (entry.session.isStreaming) await abortEntry(entry, true).catch(() => {});
 			await disposeSession(sessionId);
-		}),
-	);
-	await Promise.all([...(pendingCascades.get(workspaceId) ?? [])]);
-	removeWorkspaceDelegation(workspaceId);
-	if (cwd) await purgeDiskSessions(cwd);
+		});
+		await Promise.all([
+			Promise.allSettled([...(pendingSessionPreparations.get(workspaceId) ?? [])]),
+			Promise.all(removals),
+		]);
+		await Promise.all([...(pendingCascades.get(workspaceId) ?? [])]);
+		removeWorkspaceDelegation(workspaceId);
+		if (cwd) await purgeDiskSessions(cwd);
+	} finally {
+		const remainingClosures = (closingWorkspaces.get(workspaceId) ?? 1) - 1;
+		if (remainingClosures === 0) closingWorkspaces.delete(workspaceId);
+		else closingWorkspaces.set(workspaceId, remainingClosures);
+	}
 }
 
 export function removeWorkspaceSessions(workspaceId: string, cwd?: string): Promise<void> {

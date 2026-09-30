@@ -1085,8 +1085,10 @@ read-only view; the module never loads xterm.
 The hook hydrates on mount/current welcome, subscribes to `session.resourcesChanged`, and coalesces
 invalidations behind one in-flight read. An invalidation during a read requires a fresh pass;
 [[submodule-web-store]] owns generation/revision-fenced snapshot installation and failure handling.
-Metadata remains current while the popover is closed. Command logs refresh only while that command's
-detail is open. The shared `detailPolling` loop handles command output and subagent transcript reads:
+Metadata remains current while the popover is closed; the header count is numeric only for an
+authoritative snapshot and explicitly unknown otherwise. A welcome that proves the host predates the
+capability clears resource-only detail state, while an unknown protocol during reconnect merely makes it
+stale. Command logs refresh only while that command's detail is open. The shared `detailPolling` loop handles command output and subagent transcript reads:
 single-flight replacement snapshots, stopping on terminal/permanently unavailable results, and capped
 transient backoff with visibly retryable failures. Resource controls keep pending/error state scoped
 to their action and current connection; acknowledgement and detail-close focus semantics belong to
