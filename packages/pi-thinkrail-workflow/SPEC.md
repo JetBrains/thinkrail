@@ -50,7 +50,7 @@ dispatcher to load rather than relying on description-matching (see [[module-web
 ## Boundary
 
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (**types only** — `ExtensionAPI`/`ExtensionFactory`),
-  as a `peerDependency`. No `typebox` in v1: this package registers no custom tool, only a
+  as a `peerDependency`. No `typebox`: this package registers no custom tool, only a
   `before_agent_start` rule and skill content.
 - **Forbidden:** any `@thinkrail/*` package, `apps/web`, `packages/server` internals — reached only by
   tool *name* (`ask_user_question`, `spec_*`), never by import.

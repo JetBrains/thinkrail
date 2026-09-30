@@ -5,7 +5,7 @@ status: active
 title: Spec-graph tools (pi wrappers)
 parent: module-spec-graph
 depends-on: [submodule-spec-graph-core]
-tags: [spec-graph, pi-extension, v1]
+tags: [spec-graph, pi-extension]
 ---
 
 ## Responsibility

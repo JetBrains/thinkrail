@@ -6,7 +6,7 @@ title: auth — in-app provider login UI
 parent: module-web
 depends-on: []
 references: [submodule-web-store, submodule-web-chat]
-tags: [v1, ui, auth]
+tags: [ui, auth]
 ---
 
 ## Responsibility

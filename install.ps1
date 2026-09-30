@@ -6,14 +6,15 @@
 #
 # Options are env vars (the one syntax cmd and PowerShell share) -- set before running:
 #   THINKRAIL_CHANNEL         stable|nightly   (default: stable)
-#   THINKRAIL_VERSION         X.Y.Z|latest     (default: latest)
+#   THINKRAIL_VERSION         X.Y.Z|X.Y.Z-nightly.N|latest
+#                                             (default: latest)
 #   THINKRAIL_PREFIX          DIR              (default: %USERPROFILE%\.local; binary lands at <prefix>\bin\thinkrail.exe)
 #   THINKRAIL_NO_MODIFY_PATH  1                don't touch the user PATH; just print advice
 #
 #   PowerShell:  $env:THINKRAIL_CHANNEL='nightly'; irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex
 #   cmd:         set "THINKRAIL_CHANNEL=nightly" && powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"
 #
-# A saved copy also takes params: .\install.ps1 -Channel nightly -Version 0.2.0 -Prefix D:\tools -NoModifyPath
+# A saved copy also takes params: .\install.ps1 -Channel nightly -Version 0.2.0-nightly.4 -Prefix D:\tools -NoModifyPath
 #
 # After install, run `thinkrail`. To update later, run `thinkrail update` (it re-runs this installer for
 # you, replacing the running exe); to remove it, run `thinkrail uninstall`.
@@ -32,7 +33,7 @@ param(
 
 function Resolve-ThinkRailTag {
     param([string]$Repo, [string]$Channel, [string]$Version)
-    if ($Version -ne 'latest') { return 'v' + ($Version -replace '^[vV]', '') }
+    if ($Version -cne 'latest') { return 'v' + $Version }
     $headers = @{ Accept = 'application/vnd.github+json' }
     try {
         if ($Channel -eq 'stable') {
@@ -193,21 +194,27 @@ function Install-ThinkRail {
 
     # cmd's `set X=value && ...` embeds the space before && into the value -- trim every input.
     $channel = $Channel.Trim()
-    if (@('stable', 'nightly') -notcontains $channel) {
+    if (@('stable', 'nightly') -cnotcontains $channel) {
         throw "Invalid channel: $channel (expected: stable or nightly)"
     }
     $version = $Version.Trim()
-    if ($version -ne 'latest' -and $version -notmatch '^[vV]?\d+\.\d+\.\d+(-nightly\.\d+)?$') {
+    if ($version -cne 'latest' -and $version -cnotmatch '^\d+\.\d+\.\d+(-nightly\.\d+)?$') {
         throw "Invalid version: $version (expected: X.Y.Z, X.Y.Z-nightly.N, or latest)"
+    }
+    if ($version -cne 'latest') {
+        $nightlyVersion = $version -cmatch '-nightly\.\d+$'
+        if (($channel -ceq 'nightly') -ne $nightlyVersion) {
+            throw "Version $version does not belong to the $channel channel"
+        }
     }
     $prefix = $Prefix.Trim()
     if (-not $prefix) {
         if (-not $env:USERPROFILE) { throw 'USERPROFILE is not set; pass -Prefix or set THINKRAIL_PREFIX' }
         $prefix = Join-Path $env:USERPROFILE '.local'
     }
-    # The prefix is written into the ';'-delimited PATH registry value -- reject its structural chars.
-    if ($prefix -match "[;`"`r`n]") {
-        throw "Invalid prefix: must not contain ';', double quotes, or newlines"
+    # The prefix is written into the ';'-delimited PATH registry value and printed in cmd guidance.
+    if ($prefix -match "[%!;`"`r`n]") {
+        throw "Invalid prefix: must not contain '%', '!', ';', double quotes, or newlines"
     }
     if (-not [System.IO.Path]::IsPathRooted($prefix)) {
         throw "Invalid prefix: must be an absolute path (got: $prefix)"
@@ -220,6 +227,14 @@ function Install-ThinkRail {
     $tag = Resolve-ThinkRailTag -Repo $repo -Channel $channel -Version $version
     if (-not $tag) {
         throw "Failed to resolve a $channel release. Has one been published yet?"
+    }
+    $tagPattern = if ($channel -ceq 'stable') {
+        '^v\d+\.\d+\.\d+$'
+    } else {
+        '^v\d+\.\d+\.\d+-nightly\.\d+$'
+    }
+    if ($tag -cnotmatch $tagPattern) {
+        throw "Invalid resolved tag for the $channel channel: $tag"
     }
     Write-Host "  -> $tag"
 
@@ -325,7 +340,17 @@ function Install-ThinkRail {
     }
     # WriteAllText writes UTF-8 without BOM (PS 5.1's Set-Content -Encoding UTF8 adds one, which
     # breaks the JSON.parse in `thinkrail update`).
-    [System.IO.File]::WriteAllText($metaFile, ($meta | ConvertTo-Json))
+    $metaTemp = Join-Path $configDir ('.install.json.' + [System.IO.Path]::GetRandomFileName() + '.tmp')
+    try {
+        [System.IO.File]::WriteAllText($metaTemp, ($meta | ConvertTo-Json))
+        if (Test-Path -LiteralPath $metaFile) {
+            [System.IO.File]::Replace($metaTemp, $metaFile, $null)
+        } else {
+            [System.IO.File]::Move($metaTemp, $metaFile)
+        }
+    } finally {
+        Remove-Item -LiteralPath $metaTemp -Force -ErrorAction SilentlyContinue
+    }
 
     if ($pathAdvice) { Write-Host "Add to PATH:    $pathAdvice" }
     Write-Host 'Run:            thinkrail'

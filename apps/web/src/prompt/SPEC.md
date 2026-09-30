@@ -5,7 +5,7 @@ status: active
 title: prompt — shared command-aware input behavior
 parent: module-web
 depends-on: [module-contracts]
-tags: [v1, ui, prompts]
+tags: [ui, prompts]
 ---
 
 ## Responsibility
@@ -21,7 +21,7 @@ geometry, and submit actions; this module makes those inputs behave the same onc
   frontmatter stripping/template assembly; placeholder parsing, editing, mirroring, highlighting, and finalization;
   the template-pick controller that refuses to overwrite a draft changed after selection.
 - **Public surface:** `index.ts` is the only import path and re-exports the command-completion, template-text,
-  template-pick, and template-slot APIs.
+  template-pick, template-slot, and caret/selection-restoration (`usePendingSelection`) APIs.
 - **Allowed deps:** `contracts` types, React, and `lib` presentation helpers.
 - **Forbidden:** store or transport access; workspace/session/project lookup; deciding which commands exist in a
   lifecycle; sending a prompt; importing `chat` or `panels`.

@@ -5,7 +5,7 @@ status: active
 title: tools — built-in tool renderers
 parent: submodule-web-chat
 depends-on: [module-contracts]
-tags: [v1, chat]
+tags: [chat]
 ---
 
 ## Responsibility

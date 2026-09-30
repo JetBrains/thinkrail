@@ -6,7 +6,7 @@ title: auth — provider status + in-app login
 parent: module-server
 depends-on: [module-contracts, module-shared]
 references: [submodule-server-agent, central-integration]
-tags: [v1, auth, pi]
+tags: [auth, pi]
 ---
 
 ## Responsibility

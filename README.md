@@ -11,7 +11,7 @@ editor, and the wire.
 and the [vibecoder-focused experience](https://thinkrail.ai/vibecoding/) (see
 [`apps/website`](apps/website)).
 
-**V1 is a Worktree IDE:** open a git repo as a project, spin up workspaces as `git worktree`s (each its
+**ThinkRail is a Worktree IDE:** open a git repo as a project, spin up workspaces as `git worktree`s (each its
 own branch and cwd), and work across a tabbed Monaco editor, git Changes view, terminals, a read-only
 spec-graph viewer, and multiple concurrent `pi` chat sessions — all scoped to the active worktree.
 
@@ -42,6 +42,12 @@ Ayatana AppIndicator 3, and librsvg 2. On Ubuntu 24.04:
 sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
 ```
 
+Eligible packaged stable and nightly desktop builds check for updates in the background. An update follows the
+classic consent-driven flow in **Settings → Updates**: **Download** → **Downloading** → **Preparing update** →
+**Install & Restart**. Closing Settings or quitting normally defers it; only **Install & Restart** applies the
+prepared release. The updater appears only when the package carries a valid HTTPS feed identity. Existing
+installations that predate that identity need one manual installation before in-app updates are available.
+
 ### CLI / browser
 
 The CLI installer downloads the right binary, verifies its SHA-256 checksum, and puts `thinkrail` on
@@ -62,29 +68,37 @@ powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/in
 Nightly builds and pinned versions:
 
 ```bash
-# macOS / Linux
+# macOS / Linux — a pinned version must belong to the selected channel
 curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly
-curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --version 0.2.0
+curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel stable --version 0.1.2
+curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly --version 0.2.0-nightly.10
 ```
 
 ```powershell
 # Windows — options are env vars (THINKRAIL_CHANNEL, THINKRAIL_VERSION, THINKRAIL_PREFIX, THINKRAIL_NO_MODIFY_PATH)
 $env:THINKRAIL_CHANNEL='nightly'; irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex   # PowerShell
-set "THINKRAIL_VERSION=0.2.0" && powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"   # cmd
+set "THINKRAIL_CHANNEL=stable" && set "THINKRAIL_VERSION=0.1.2" && powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"   # cmd
 ```
 
-Then run `thinkrail` (add a git repo path to open it as a project: `thinkrail ~/code/my-repo`). To update
-later, run `thinkrail update` on any platform — it re-runs the installer for your channel (on Windows it
-replaces the running `thinkrail.exe` in place). To remove it, run `thinkrail uninstall`: it takes out the
-executable, the PATH entry the installer added, and the install metadata, and asks whether to delete your
-`~/.thinkrail` app state (kept by default — pass `--remove-data` to delete it, `-y` to skip the
-questions). `thinkrail --help` lists the flags; `thinkrail --version` prints the build.
+Then run `thinkrail` (add a git repo path to open it as a project: `thinkrail ~/code/my-repo`). Installed
+stable/nightly CLI hosts periodically offer **Run Update** in **Settings → Updates**. That action runs the host
+machine's parameterless `thinkrail update` in the background; the current host stays alive, and a successful
+update asks you to restart it manually. This is also true when the UI is open in a browser on another machine.
+
+You can run `thinkrail update` directly on any platform. It re-runs the installer for the installed channel and
+replaces the current `<prefix>/bin/thinkrail[.exe]`; use `--channel` or `--version` only for an explicit terminal
+override. To remove it, run `thinkrail uninstall`: it takes out the executable, the PATH entry the installer
+added, and the install metadata, and asks whether to delete your `~/.thinkrail` app state (kept by default —
+pass `--remove-data` to delete it, `-y` to skip the questions). `thinkrail --help` lists the flags;
+`thinkrail --version` prints the build.
 
 **Prebuilt platforms:** macOS (Apple Silicon), Linux arm64 + x64, Windows x64 (`.exe`). Intel macOS isn't
 prebuilt — use Apple Silicon or build from source.
 
-> Prefer a manual CLI install? Download a binary + `SHA256SUMS` from the releases page, verify the
-> checksum, `chmod +x`, and move it onto your PATH.
+> Prefer a manual CLI install? Download a binary + `SHA256SUMS` from the releases page and verify the
+> checksum. For safe self-update, rename it to `thinkrail` (`thinkrail.exe` on Windows) and place it at
+> `<prefix>/bin/thinkrail[.exe]`. A binary kept under its release filename or another arbitrary location must
+> be replaced manually or reinstalled with the script; it will not update a different hidden copy.
 
 **Runtime prerequisites:** `git` on PATH, and an authenticated `pi` provider (the agent runs against your
 real provider credentials). App state lives under `~/.thinkrail`.
@@ -106,9 +120,11 @@ bun install
 bun run dev
 ```
 
-`bun run dev` boots the host and the web client together. Press `Ctrl+C` to stop.
+`bun run dev` boots the host and the web client together. Press `Ctrl+C` to stop. Source/dev and locally
+unstamped builds expose no Updates UI. Running `thinkrail update` from source installs a published binary; it
+does not pull, install dependencies, or rebuild the checkout.
 
-To run the V1 launchers:
+To run the launchers:
 
 ```bash
 bun run --filter @thinkrail/cli dev  # browser launcher
@@ -119,8 +135,9 @@ bun run desktop:build                # package without opening it
 
 Desktop commands use the standard Electrobun CLI/configuration. Its pre-build hook builds the shared UI
 and stages ThinkRail's PI/native resources; Electrobun owns preload bundling and installer creation.
-Create host-native installers with `bun run desktop:package:stable` or `bun run desktop:package:canary`.
-Native/installer smoke and shared CLI/desktop probes live in `packages/artifact-tests`, outside the
+Create host-native installers with `bun run desktop:package:stable` or `bun run desktop:package:canary`;
+`canary` is Electrobun's internal name for the public **nightly** channel. Native/installer smoke and shared
+CLI/desktop probes live in `packages/artifact-tests`, outside the
 application packages. Run `bun run smoke:desktop` after a dev build; installer smoke takes an artifact
 path and channel via `bun run smoke:desktop:installer <path> <stable|canary>`.
 
@@ -145,7 +162,7 @@ the canonical product and design specs.
 
 ```
 apps/
-  cli/        V1 entrypoint: boot host + open browser
+  cli/        browser launcher: boot host + open browser
   web/        mobile-first UI client
   desktop/    Electrobun local-host launcher + native packaging
   website/    public landing + blog + vibecoding site (Cloudflare Pages)
@@ -197,15 +214,20 @@ spec in the same change. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
 
 ThinkRail sends basic usage events to [PostHog EU](https://posthog.com): launches, chat creation,
 accepted message sends, and provider connections. These are always on in desktop, CLI, and source runs;
-CI and automated tests are silent. Events include a random installation ID, version/channel, build kind,
-OS/architecture, send mode, catalog-bucketed provider/model names, and the observed authentication
-category (API key, subscription sign-in, OAuth, Central, or other/unknown)—never credential values or
-account/plan details. First observed launch measures first use, not a completed OS installation.
+a packaged desktop or binary build also attempts one first-install event per installation. CI and automated
+tests are silent. Events include a random installation ID, version/channel, build kind, OS/architecture,
+send mode, catalog-bucketed provider/model names, and the observed authentication category (API key,
+subscription sign-in, OAuth, Central, or other/unknown)—never credential values or account/plan details.
 
-Additional setup, run-outcome, task, review, and PR statistics require explicit consent in the first-launch
-window. Its switch starts from your saved analytics preference; confirming records your choice. Change it
-later in **Settings → Privacy**. `--no-analytics` or `THINKRAIL_NO_ANALYTICS=1` suppresses additional events
-for that run only; basic reporting remains on.
+Additional setup, run-outcome, task, review, and PR statistics follow an optional sharing preference.
+The first-run dialog shows its switch on and saves that preference when it opens; additional events can
+start before you press Done or dismiss the dialog. Switching it off saves that choice immediately. Done
+or dismissal records completion of the dialog, not the start of delivery. Change the preference later in
+**Settings → Privacy**. With website Marketing consent and optional sharing on in a packaged build,
+ThinkRail may open its blog in your browser once and note which website link or campaign brought you there
+(source, medium, campaign, content and a coarse referrer type; the link carries no URL or page). That note
+enriches usage data for up to 30 days. `--no-analytics` or `THINKRAIL_NO_ANALYTICS=1` suppresses
+additional events for that run only; basic reporting remains on.
 
 Neither tier collects prompts, code, transcripts, file/repository names or paths, credentials, or token/cost
 counts. The installation ID links usage over time, but no person profiles are created and GeoIP enrichment

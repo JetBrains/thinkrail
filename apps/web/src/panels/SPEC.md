@@ -6,7 +6,7 @@ title: panels — feature views
 parent: module-web
 depends-on: [module-contracts]
 references: [central-integration]
-tags: [v1, ui]
+tags: [ui]
 ---
 
 ## Responsibility
@@ -546,16 +546,17 @@ a project picker, the prompt hero, and the reused
   carries the discoverability half (`chat/SPEC.md`: a `slash-templates-empty` footer nudge deep-linking
   here when no template exists anywhere), since this offer is otherwise two clicks deep in a dialog. **This
   project**'s empty state is unchanged (still the bare text) — the offer is Global-only, since it only
-  ever seeds global files. No server change. **`PrivacySettings`** manages additional-data consent and briefly
-  distinguishes it from always-on basics; the event contract belongs to [[submodule-server-analytics]].
-  **`AnalyticsConsentDialog`** mounts once through shell after a capable host's config hydrates. Its draft
-  switch uses the saved preference (absent → off); confirmation atomically saves preference plus
-  `analyticsConsentConfirmed`, while dismissal saves off/confirmed. A preselection never grants consent.
-  Failed persistence leaves the choice available with an error; broadcast closes it across clients.
-  Saved decisions survive restarts and change later through Settings. The startup window focuses on optional
-  sharing with brief anonymous/no-personal-data copy and the shared switch; its footer has only **Save choice**,
-  while Close, Escape, and backdrop remain dismissals. Full reporting details stay in Settings. Older hosts
-  retain their legacy privacy control without the new consent dialog.
+  ever seeds global files. No server change. **`PrivacySettings`** manages the additional-data preference and
+  confirmation together; the event contract belongs to [[submodule-server-analytics]].
+  **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates.
+  It initializes the draft switch on and immediately persists `{ analyticsEnabled: true }`; persistence and
+  broadcast activate the host gate while the dialog stays open. **Done**, Close, Escape, and backdrop persist
+  the current draft with `analyticsConsentConfirmed: true`, so the ordinary result is on. Switching off
+  immediately persists off/confirmed and the resulting config broadcast closes the dialog. Confirmed on/off
+  configurations never mount or prime. Failed persistence leaves the draft and error visible for retry. Saved
+  decisions survive restarts and change later through Settings. The dialog keeps only the short
+  product-usage copy and shared switch; Settings adds the optional outcomes, report dimensions, and
+  excluded content. Older hosts retain their legacy privacy control without the new consent dialog.
   **`FeedbackSettings`** is the final
   live section after Privacy: the same interview copy as the automatic prompt, stating that joining a user
   interview to discuss the participant's ThinkRail experience earns 100 bonus credits in Central
@@ -739,7 +740,7 @@ a project picker, the prompt hero, and the reused
   `plan-review-progress`, only when the plan has reviewable items) → PR (`plan-pr-stage`,
   `data-state`)** — each stage wearing a glyph for its state: done (check), active (the stage the
   plan is currently at), pending (muted). The PR stage reads the same `useOpenBranchReview` lookup
-  as the button and shows `PR #N` once one is open; "merged" is unknowable in V1 (the lookup only
+  as the button and shows `PR #N` once one is open; "merged" is unknowable (the lookup only
   sees OPEN reviews), so the funnel honestly ends at PR-open. Under the stepper sits the **work
   CONTEXT line** (`plan-context`): `baseBranch ← branch · N commits · +A −R` — the arrow points at the
   merge TARGET (base ← head, the GitHub PR convention: changes flow from the workspace branch into
@@ -1014,7 +1015,7 @@ own section. The kebab menu (`plan-menu`, a
   discards drafts, replaces the active review, and publishes the fresh empty snapshot, so the initiating
   and sibling clients all converge through `review.changed`. The empty body distinguishes the two empties:
   **records remain but every file is done** ("…finished — Clear to archive…") vs a **truly empty** review
-  ("No review comments yet…"). V1 has no archive browser. The review-level
+  ("No review comments yet…"). There is no archive browser. The review-level
   (overall-note) composer was removed for
   now (the `review` comment kind stays in the model, UI-less). The `review.get` hydration read is **owned by
   the workbench tool integration**, outside the conditionally mounted Review body (`useWorkspaceReview`, the
@@ -1336,8 +1337,9 @@ own section. The kebab menu (`plan-menu`, a
   first; keeping them also avoids leaking a model pair per closed diff tab (regression-pinned in
   `e2e/changes.spec.ts`)). **A markdown diff has exactly two
   views** instead, via a **Source | Rendered** toggle (`diff-toggle-source`/`diff-toggle-rendered`,
-  per-tab `DiffTab.rendered` via `store.setDiffTabRendered`, gated on `lib.isMarkdownPath`; Source is
-  the default — no Split|Inline segment for markdown). **Source** = the basic Monaco split diff.
+  per-tab `DiffTab.rendered` via `store.setDiffTabRendered`, gated on `lib.isMarkdownPath`; **Rendered is
+  the default** (`tab.rendered ?? true`), matching rendered-by-default markdown file tabs — no
+  Split|Inline segment for markdown). **Source** = the basic Monaco split diff.
   **Rendered** is a **real rich diff**, not plain previews (see [[task-rendered-markdown-diff]]): the
   lazy `RenderedDiff` renders **both sides** through the same document pipeline as `MarkdownPreview`
   (the shared `MarkdownDocument` — prose skin, alerts, heading ids, frontmatter stripped) to static

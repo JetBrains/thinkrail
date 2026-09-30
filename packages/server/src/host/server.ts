@@ -39,8 +39,8 @@ import {
 import {
 	type AnalyticsOptions,
 	initializeAnalytics,
-	setAdditionalAnalyticsEnabled,
 	shutdownAnalytics,
+	startAttributionClaim,
 	track,
 } from "../analytics";
 import {
@@ -91,8 +91,9 @@ import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import {
-	additionalAnalyticsEnabled,
 	additionalCapture,
+	applyAdditionalAnalyticsSettings,
+	initialAdditionalAnalyticsEnabled,
 	observeCurrentSetup,
 	setupObservation,
 } from "./productAnalytics";
@@ -116,16 +117,31 @@ export interface CreateServerOptions {
 	appVersion?: string;
 	analytics?: Pick<
 		AnalyticsOptions,
-		"channel" | "build" | "posthogApiKey" | "posthogHost" | "mute"
+		| "channel"
+		| "build"
+		| "posthogApiKey"
+		| "posthogHost"
+		| "mute"
+		| "env"
+		| "fetchImpl"
+		| "openExternal"
+		| "attributionEndpoint"
+		| "attributionFetch"
+		| "attributionSleep"
+		| "attributionSchedule"
+		| "attributionRequestTimeoutMs"
+		| "attributionDeadlineMs"
 	>;
 	hostUpdate?: {
 		intervalMs: number;
 		check(): Promise<HostUpdateNotice | null>;
+		run(): Promise<void>;
 	};
 }
 
 export interface RunningServer {
 	readonly port: number;
+	startAttributionClaim: () => void;
 	stop: () => void;
 	shutdown: () => Promise<void>;
 }
@@ -146,7 +162,7 @@ function clientProtocolVersion(value: string | null): number {
 	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
-function sameHostUpdateNotice(
+function sameHostUpdateRelease(
 	current: HostUpdateNotice | undefined,
 	next: HostUpdateNotice,
 ): boolean {
@@ -179,6 +195,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	let hostUpdateTimer: ReturnType<typeof setInterval> | undefined;
 	let hostUpdateActive = hostUpdate !== undefined;
 	let hostUpdateChecking = false;
+	let requestHostUpdate = (): void => {
+		throw new Error("Host update is unavailable.");
+	};
 	let stopping = false;
 	let shutdownPromise: Promise<void> | undefined;
 
@@ -322,6 +341,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 							try {
 								const result = await handleRequest(method, params, {
 									clientKey: ws.data.clientKey,
+									...(hostUpdate ? { runHostUpdate: requestHostUpdate } : {}),
 								});
 								return JSON.stringify({ id: requestId, ok: true, result });
 							} catch (err) {
@@ -361,25 +381,38 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		},
 	});
 
+	const publishHostUpdate = (notice: HostUpdateNotice): void => {
+		if (!hostUpdateActive) return;
+		hostUpdateNotice = notice;
+		server.publish(
+			WS_CHANNELS.hostUpdateAvailable,
+			JSON.stringify({ channel: WS_CHANNELS.hostUpdateAvailable, data: notice }),
+		);
+	};
+
+	const clearHostUpdateTimer = (): void => {
+		if (hostUpdateTimer !== undefined) clearInterval(hostUpdateTimer);
+		hostUpdateTimer = undefined;
+	};
+
+	const hostUpdateBlocksDiscovery = (): boolean =>
+		hostUpdateNotice?.status === "running" || hostUpdateNotice?.status === "succeeded";
+
 	const checkForHostUpdate = async (): Promise<void> => {
-		if (!hostUpdate || !hostUpdateActive || hostUpdateChecking) return;
+		if (!hostUpdate || !hostUpdateActive || hostUpdateChecking || hostUpdateBlocksDiscovery()) {
+			return;
+		}
 		hostUpdateChecking = true;
 		try {
 			const result = await hostUpdate.check();
-			if (!hostUpdateActive) return;
-			if (result && !sameHostUpdateNotice(hostUpdateNotice, result)) {
-				hostUpdateNotice = {
+			if (!hostUpdateActive || hostUpdateBlocksDiscovery()) return;
+			if (result && !sameHostUpdateRelease(hostUpdateNotice, result)) {
+				publishHostUpdate({
 					currentVersion: result.currentVersion,
 					availableVersion: result.availableVersion,
 					channel: result.channel,
-				};
-				server.publish(
-					WS_CHANNELS.hostUpdateAvailable,
-					JSON.stringify({
-						channel: WS_CHANNELS.hostUpdateAvailable,
-						data: hostUpdateNotice,
-					}),
-				);
+					status: "available",
+				});
 			}
 		} catch {
 		} finally {
@@ -387,10 +420,30 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	};
 
+	requestHostUpdate = (): void => {
+		if (!hostUpdate || !hostUpdateActive || !hostUpdateNotice) {
+			throw new Error("Host update is unavailable.");
+		}
+		if (hostUpdateNotice.status === "running" || hostUpdateNotice.status === "succeeded") {
+			return;
+		}
+		publishHostUpdate({ ...hostUpdateNotice, status: "running" });
+		void (async () => {
+			try {
+				await hostUpdate.run();
+				if (!hostUpdateActive || hostUpdateNotice?.status !== "running") return;
+				publishHostUpdate({ ...hostUpdateNotice, status: "succeeded" });
+				clearHostUpdateTimer();
+			} catch {
+				if (!hostUpdateActive || hostUpdateNotice?.status !== "running") return;
+				publishHostUpdate({ ...hostUpdateNotice, status: "failed" });
+			}
+		})();
+	};
+
 	const stopHostUpdateChecks = (): void => {
 		hostUpdateActive = false;
-		if (hostUpdateTimer !== undefined) clearInterval(hostUpdateTimer);
-		hostUpdateTimer = undefined;
+		clearHostUpdateTimer();
 	};
 
 	setTerminalPublisher((clientKey, channel, data) => {
@@ -525,18 +578,23 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	installRequestReviewSeam();
 	reconcilePendingReviewsOnBoot();
 
-	setSettingsPublisher((config) => {
+	setSettingsPublisher((config, appliedUpdate) => {
 		server.publish(
 			WS_CHANNELS.settingsChanged,
 			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
 		);
-		const previousGrant = additionalCapture();
-		setAdditionalAnalyticsEnabled(additionalAnalyticsEnabled(config));
-		if (additionalCapture() !== previousGrant) {
+		if (applyAdditionalAnalyticsSettings(config, appliedUpdate)) {
 			setupObservation.clear();
 			runObservation.clear();
 			taskObservation.clear();
 			void observeCurrentSetup();
+		}
+		if (
+			config.analyticsEnabled &&
+			config.analyticsConsentConfirmed &&
+			(appliedUpdate.analyticsEnabled === true || appliedUpdate.analyticsConsentConfirmed === true)
+		) {
+			startAttributionClaim();
 		}
 		refreshSubagentTools();
 		refreshAgentReviewTool();
@@ -622,12 +680,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	});
 
+	const initialConfig = getConfig();
 	initializeAnalytics({
 		...(appVersion ? { appVersion } : {}),
 		...(analytics ?? {}),
-		additionalEnabled: additionalAnalyticsEnabled(getConfig()),
+		additionalEnabled: initialAdditionalAnalyticsEnabled(initialConfig),
 	});
-
 	reviveTerminalSessions();
 	for (const workspace of loadWorkspaces()) provisionInitialTerminal(workspace);
 
@@ -680,10 +738,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		hostUpdateTimer = setInterval(() => void checkForHostUpdate(), hostUpdate.intervalMs);
 	}
 
+	const startAttributionClaimWhenReady = (): void => {
+		const config = getConfig();
+		if (config.analyticsEnabled && config.analyticsConsentConfirmed) startAttributionClaim();
+	};
+
 	return {
 		get port() {
 			return server.port ?? port;
 		},
+		startAttributionClaim: startAttributionClaimWhenReady,
 		stop,
 		shutdown,
 	};

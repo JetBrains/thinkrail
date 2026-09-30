@@ -17,9 +17,14 @@ import {
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
-import { PromptImageChips, usePromptImages } from "@/chat/promptImages";
+import {
+	imagePasteDropHandlers,
+	PROMPT_IMAGE_CHIPS_PADDING,
+	PromptImageChips,
+	usePromptImages,
+} from "@/chat/promptImages";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
@@ -57,6 +62,7 @@ import {
 	TemplateSlotHint,
 	type TemplateSlotSessionState,
 	templateToSlashCommand,
+	usePendingSelection,
 	useSlashCommandCompletion,
 	useTemplateCommandPicker,
 } from "@/prompt";
@@ -118,10 +124,6 @@ export function NewWorkspaceDialog({
 	const [trusting, setTrusting] = useState(false);
 	const [manageSkills, setManageSkills] = useState(false);
 	const promptRef = useRef<HTMLTextAreaElement>(null);
-	const [pendingPromptSelection, setPendingPromptSelection] = useState<{
-		start: number;
-		end: number;
-	} | null>(null);
 	const hostDefaultAsked = useRef(false);
 	const targetGroupName = useId();
 	const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
@@ -133,19 +135,7 @@ export function NewWorkspaceDialog({
 		[],
 	);
 
-	const focusPromptSelection = useCallback((start: number, end: number = start) => {
-		setPendingPromptSelection({ start, end });
-	}, []);
-
-	useLayoutEffect(() => {
-		if (!pendingPromptSelection) return;
-		const input = promptRef.current;
-		if (input) {
-			input.focus();
-			input.setSelectionRange(pendingPromptSelection.start, pendingPromptSelection.end);
-		}
-		setPendingPromptSelection(null);
-	}, [pendingPromptSelection]);
+	const focusPromptSelection = usePendingSelection(promptRef);
 
 	const supportsProjectTemplatePreview =
 		protocolVersion !== null && protocolVersion >= PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION;
@@ -546,25 +536,17 @@ export function NewWorkspaceDialog({
 							<span>{promptNote}</span>
 						</p>
 					) : null}
-					<PromptImageChips controller={attachedImages} testId="ws-prompt-images" />
+					<PromptImageChips
+						controller={attachedImages}
+						testId="ws-prompt-images"
+						className={PROMPT_IMAGE_CHIPS_PADDING.dialog}
+					/>
 					<Textarea
 						ref={promptRef}
 						data-testid="ws-prompt"
 						value={prompt}
 						disabled={creating}
-						onPaste={(e) => {
-							const files = [...e.clipboardData.files];
-							if (files.length > 0) {
-								e.preventDefault();
-								attachedImages.addFiles(files);
-							}
-						}}
-						onDrop={(e) => {
-							if (e.dataTransfer.files.length > 0) {
-								e.preventDefault();
-								attachedImages.addFiles([...e.dataTransfer.files]);
-							}
-						}}
+						{...imagePasteDropHandlers(attachedImages)}
 						onChange={(e) => {
 							const next = e.target.value;
 							const nextSlotSession = slotSession

@@ -5,7 +5,7 @@ status: active
 title: templates — file CRUD over pi's prompt-template dirs
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1, templates, public-surface-checked]
+tags: [templates, public-surface-checked]
 ---
 
 ## Responsibility

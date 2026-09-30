@@ -5,7 +5,7 @@ status: active
 title: subprocess — bounded child processes
 parent: module-server
 depends-on: []
-tags: [v1, host, public-surface-checked]
+tags: [host, public-surface-checked]
 ---
 
 ## Responsibility
@@ -99,7 +99,7 @@ never what a particular child's output means.
   open `/dev/tty` to prompt, which is what turns issue #209 from a 55s wait into an immediate
   `Permission denied (publickey)` for most users; `SSH_ASKPASS` is unaffected (no-tty is exactly its
   trigger), which is why the caller's budget still has to be sized for a human at a dialog. **What it costs
-  is real:** V1's entrypoint is a `thinkrail` bin launched from a terminal that stays in the foreground, and
+  is real:** the CLI entrypoint is a `thinkrail` bin launched from a terminal that stays in the foreground, and
   a user sitting there could until now *see* `ssh`'s `Enter passphrase for key …` on `/dev/tty` (ssh reads
   the tty directly, so our piped stdio never hid it) and type it. They no longer can. Accepted because the
   UI is a browser client and a hidden terminal prompt is not a flow it can ever show, wait on, or report —

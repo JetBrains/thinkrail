@@ -5,24 +5,24 @@ status: active
 title: persistence — JSON app state
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1]
 ---
 
 ## Responsibility
 
-Durable host state—projects, workspaces, cross-frontend app config, terminal catalogs, and installation identity—as JSON under the data dir. Current workbench frame and workspace placement are frontend-local and have no host persistence.
+Durable host state—projects, workspaces, cross-frontend app config, terminal catalogs, installation identity, and server-only acquisition state—as JSON under the data dir. Current workbench frame and workspace placement are frontend-local and have no host persistence.
 
 ## Boundary
 
-- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; and installation identity in `installation.json` (`{ id }`, the non-rotating per-install UUID, server-only and never wire-broadcast). The former announcement marker is ignored: first observed launch defines first use, not a stored event-sent bit. JSON remains tab-indented.
-- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, and installation identity operations.
+- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations and fieldwise validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; server-only `installation.json` (`{ id, appInstalled?: true }`) and campaign-only `attribution.json`. The non-rotating install UUID never crosses the wire.
+- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, `ensureInstallation()` returning only `{ id }`, narrow install/browser claim operations, and strict acquisition read/save. Initial ID creation publishes a complete sibling temp via atomic no-overwrite hard link and rereads a concurrent winner; malformed existing records are preserved. An exclusive install-claim marker elects one packaged host across processes. The complete installation JSON is atomically replaced; caught replacement failures remove the marker and temp for retry, while a crash after claiming may consume the event without emission. Legacy installed records remain claimed.
+- **Browser attempt:** `attribution.json` exclusively creates its first `{ browserClaimAttempted: true }` marker with `wx`. Redeem atomically replaces it with strict first/last touch fields (bounded UTM values, referrer class, timestamp, and policy version); failed network or replacement work leaves the attempt terminal. Retention is 30 days after `last_touch`: expired or invalid records become terminal. The persisted schema rejects claim/verifier/challenge/URL, journey/bridge IDs, IP, and user agent. Other state has no cross-process lock.
 - **Allowed deps:** `contracts` (`Project`, `Workspace`, `AppConfig`, `LayoutPreset`, `DEFAULT_CONFIG`,
   `isTerminalWindowsShell`); Node `fs`/`os`/`path`.
 - **Forbidden:** importing feature siblings or `host`; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys or old schemas; or reading, rewriting, or deleting old host layout snapshots.
 
-Analytics config preserves a saved boolean preference and a valid explicit `analyticsConsentConfirmed`
-boolean independently; absent/malformed values default false. A legacy true preference never implies
-expanded consent. The preference seeds the consent window; settings owns explicit confirmation writes.
+Analytics config preserves a saved boolean preference and a valid `analyticsConsentConfirmed` boolean
+independently; absent/malformed values default false. A preference-only write never implies completion.
+Settings owns initial preference priming and preference-plus-confirmation writes.
 
 Config validation normalizes the closed theme mode plus complete opaque system pair, the closed
 composer-growth preference, the closed Windows terminal-shell preference (invalid/absent →

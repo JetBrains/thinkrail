@@ -5,7 +5,6 @@ status: active
 title: store — Zustand app state
 parent: module-web
 depends-on: [module-contracts]
-tags: [v1]
 ---
 
 ## Responsibility
@@ -23,7 +22,7 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   capabilities remain unavailable between sockets and until the current socket's welcome is installed.
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
   config?, hostPlatform?, hostUpdate?)`** installs protocol + both sorted project views + optional config,
-  host platform, optional immutable host-update notice + navigation repair and then advances that readiness
+  host platform, optional host-update lifecycle snapshot + navigation repair and then advances that readiness
   edge in one Zustand write; route validation and capability reads never observe a partial welcome.
   `installProjectSnapshot` remains the project-only primitive for focused
   callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
@@ -380,8 +379,8 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider warning, and update-ready
   shell affordance can deep-link without prop-drilling. The optional Update key is navigation only. Native
-  updater snapshots/actions remain in `updates`' shell-local hook state; the optional **`hostUpdate`** notice
-  is host domain state, installed atomically from `server.welcome` or replaced by the one
+  updater snapshots/actions remain in `updates`' shell-local hook state; the optional **`hostUpdate`** lifecycle
+  snapshot is host domain state, installed atomically from `server.welcome` or replaced by the one
   `host.updateAvailable` push. It remains visible through a temporary disconnect; a later welcome replaces or
   clears it. The
   ephemeral **`interviewPromptOpen`** plus
@@ -410,9 +409,9 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `DEFAULT_CONFIG.terminalWindowsShell`; `TerminalSettings` consumes both terminal fields, while terminal
   spawning remains server-owned — the Terminal, Line width, Chat, shared Layout catalog, Privacy, provider
   controls, and shell quota read sides. Analytics preference and confirmation default independently to false;
-  the store never upgrades a legacy true preference to consent. A selector combines host capability,
-  hydrated configuration, and absent confirmation to drive the one first-launch prompt. Persisted updates
-  converge through `applyConfig`; a draft switch in the prompt is not a store/host write.
+  the store never upgrades a preference to confirmation. A selector combines host capability, hydrated
+  configuration, and absent confirmation to drive the one first-launch prompt. Persisted preference priming
+  and final choice updates converge through `applyConfig`; the dialog's visual draft remains component-local.
   **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
   StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by
   the chat preference seam from host-qualified browser localStorage or the native shell's injected

@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: editors — host editor/IDE integration
 parent: module-server
-tags: [v1, public-surface-checked]
+tags: [public-surface-checked]
 ---
 
 ## Responsibility

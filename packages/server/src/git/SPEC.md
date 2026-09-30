@@ -5,7 +5,7 @@ status: active
 title: git — runner + worktree status/diff
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1, public-surface-checked]
+tags: [public-surface-checked]
 ---
 
 ## Responsibility

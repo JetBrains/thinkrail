@@ -5,13 +5,13 @@ status: active
 title: Desktop launcher/client (Electrobun)
 parent: architecture
 depends-on: [module-server, module-contracts, module-shared]
-tags: [desktop, v1, launcher, packaging]
+tags: [desktop, launcher, packaging]
 references: [submodule-web-navigation, module-artifact-tests, module-ci-release, submodule-web-shell]
 ---
 
 ## Responsibility
 
-The native Electrobun launcher/client over the existing web UI and wire. The V1 local-host profile embeds
+The native Electrobun launcher/client over the existing web UI and wire. The local-host profile embeds
 the server in the Electrobun Bun process, serves the packaged web artifact on one loopback origin, and
 opens that origin in a native system webview. `apps/cli` remains the sibling browser launcher and release
 rollback. A later shared-client profile may dial an existing host without introducing another UI, wire, or
@@ -37,9 +37,9 @@ engine architecture.
   storing one active location on the backend; or bundling CEF without a new acceptance failure that
   justifies it. Native shell, lifecycle, and packaging concerns are the only desktop-specific behavior.
 
-## V1 profile and topology
+## Profile and topology
 
-V1 ships only the local-host profile. One Electrobun Bun process owns the native shell and server on the
+Only the local-host profile ships. One Electrobun Bun process owns the native shell and server on the
 same event loop; the accepted in-process crash trade-off is unchanged. The host binds loopback port `0`
 and its actual port forms the window origin. The packaged `web/dist`, `/ws`, `/files`, and SPA fallback
 therefore remain same-origin and the web client has no desktop branch. A dynamic loopback port is never
@@ -66,7 +66,11 @@ another.
    and macOS/Windows trash helpers. The generator's key map must satisfy every key of the server-owned
    `BundledExtensions` contract, so adding a required launcher field fails desktop typecheck instead of
    producing a packaged-only `undefined`. It then calls `bootHost()` on loopback port `0` with the staged web
-   directory, baked version, and `desktop` analytics provenance.
+   directory, baked version, `desktop` analytics provenance, and, only when packaged, the launcher-supplied
+   `Utils.openExternal` callback used by the host's one-shot browser attribution claim. The callback passes through
+   `DesktopHostOptions` and the generated runtime. The first native-window `dom-ready` explicitly calls the
+   proxied `host.server.startAttributionClaim()` readiness method; host boot and elapsed time do not start a
+   saved-choice claim. No deep-link or RPC surface is added.
 4. Restore the valid route fragment and bounded client-preference map for
    `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
@@ -281,30 +285,20 @@ CI-only and are never shipped as user configuration.
 
 ## Auto-update policy
 
-Desktop updates check after window readiness and then on a jittered six-hour schedule with bounded retries.
-Checks and full-package downloads run in the background without blocking startup. Manual checks acknowledge
-promptly and state converges asynchronously through monotonic revisions. The one native controller owns the
-SDK's single status callback, coalesces concurrent work, reconciles returned errors as well as thrown ones,
-and retains a prepared newer version across transient poll failures. Electrobun's hash inequality alone is
-not eligibility: same-version and downgrade manifests are not downloaded or offered.
+Desktop updates check after window readiness and on a jittered six-hour schedule, but stop at an available
+release. Downloading and installation each require an explicit user action; closing Settings or quitting
+normally installs nothing. Same-version and downgrade manifests are ineligible.
 
 Production checks are enabled only in packaged supported stable/canary applications whose stamped release
-metadata supplies a nonempty HTTPS updater base URL. That packaged metadata is the sole feed authority;
-development and standard artifact-test seams stay disabled and cannot select a feed. Installation requires an
-explicit **Restart to Update** action; **Later** preserves the
-running app, and ordinary quit does not silently install. A cross-platform in-app control exposes manual
-checking, progress, the available version and retry; native menus are supplementary because this SDK has no
-Linux application menu. Installations stay on their packaged channel; CLI and remote-host updates are outside
-this capability. Release scope and manual-first acceptance belong to [[module-ci-release]].
+metadata supplies a nonempty HTTPS updater base URL. That metadata is the sole feed authority; development
+and standard artifact-test seams expose no updater. Installations stay on their packaged channel, while the UI
+calls Electrobun's canary channel **nightly**. Release qualification belongs to [[module-ci-release]].
 
-Electrobun calls, updater scheduling and update lifecycle stay behind the bounded desktop `updates` module;
-update controls stay in the web client and graceful host shutdown stays in server. The frozen optional
-`__THINKRAIL_NATIVE_UPDATES__` preload capability carries `getState`, prompt `checkForUpdates` and
-`restartToUpdate` requests, plus state subscription over the typed native RPC. Web imports no desktop SDK,
-and an ordinary browser connection acquires no host-update operation. An update restarts the entire local
-host: active agents may be aborted and PTYs terminate. **Restart to Update** is the sole confirmation and
-uses the existing ordinary-quit shutdown. There is no additional warning dialog, update-specific draft
-saving, or renderer-preparation handshake.
+Electrobun calls and lifecycle state stay behind the desktop `updates` module; controls stay in the web client
+and graceful host shutdown stays in server. The frozen optional `__THINKRAIL_NATIVE_UPDATES__` preload bridge
+exposes typed state, check/download/install actions, and subscription without importing the desktop SDK into
+web code. **Install & Restart** applies the prepared release through the existing quit coordinator; active
+agents and PTYs may terminate, with no second confirmation or renderer-preparation handshake.
 
 Quit coordination preserves its completion action. Electrobun 2.0.1's first `applyUpdate()` returns on the
 asynchronous `before-quit` veto before arming its replacement helper. The update intent waits for the same

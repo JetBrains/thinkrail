@@ -24,10 +24,9 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 	await expect(diffTab).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("diff-pane")).toContainText("edited by e2e");
 
-	await expect(page.getByTestId("diff-toggle-source")).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("diff-toggle-split")).toHaveCount(0);
-	await page.getByTestId("diff-toggle-rendered").click();
+	// Markdown diffs open in the Rendered view by default (no Split|Inline segment).
 	await expect(page.getByTestId("diff-toggle-rendered")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("diff-toggle-split")).toHaveCount(0);
 	const renderedDiff = page.getByTestId("rendered-diff");
 	await expect(renderedDiff.locator("h1")).toHaveText("sample-project");
 	await expect(renderedDiff.locator("ins")).toContainText("edited by e2e");
@@ -64,9 +63,9 @@ test("Rendered markdown diff of a large repetitive file never blocks the main th
 	writeFileSync(join(worktree, "LARGE.md"), largeRepetitiveMarkdownEdited());
 
 	await page.getByTestId("tab-changes").click();
-	await page.getByTestId("change-item").filter({ hasText: "LARGE.md" }).click();
-	await expect(page.getByTestId("diff-pane")).toBeVisible();
 
+	// Markdown diffs render by default, so the htmldiff merge kicks off on open:
+	// install the long-task observer before opening the diff to measure it.
 	await page.evaluate(() => {
 		const w = window as unknown as { __maxLongTask: number };
 		w.__maxLongTask = 0;
@@ -76,7 +75,8 @@ test("Rendered markdown diff of a large repetitive file never blocks the main th
 		}).observe({ type: "longtask" });
 	});
 
-	await page.getByTestId("diff-toggle-rendered").click();
+	await page.getByTestId("change-item").filter({ hasText: "LARGE.md" }).click();
+	await expect(page.getByTestId("diff-pane")).toBeVisible();
 	await expect(page.getByTestId("rendered-diff-loading")).toBeVisible();
 	const renderedDiff = page.getByTestId("rendered-diff");
 	await expect(renderedDiff.locator("ins").filter({ hasText: "EDITED" }).first()).toBeVisible({
@@ -99,12 +99,11 @@ test("Rendered markdown diff shows an error placeholder when the merge worker fa
 	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited by e2e\n");
 
+	// Rendered is the default view, so abort the merge worker before opening the diff.
+	await page.route(/htmldiff\.worker/, (route) => route.abort());
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
 	await expect(page.getByTestId("diff-pane")).toBeVisible();
-
-	await page.route(/htmldiff\.worker/, (route) => route.abort());
-	await page.getByTestId("diff-toggle-rendered").click();
 	await expect(page.getByTestId("rendered-diff-error")).toBeVisible();
 	await expect(page.getByTestId("rendered-diff-error")).toContainText("Source");
 
@@ -123,7 +122,6 @@ test("Rendered markdown diff follows live edits on disk (stale merge cancelled, 
 
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
-	await page.getByTestId("diff-toggle-rendered").click();
 	const renderedDiff = page.getByTestId("rendered-diff");
 	await expect(renderedDiff.locator("ins").filter({ hasText: "first edit by e2e" })).toBeVisible();
 

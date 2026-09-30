@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: feedback — host-scoped interview invitations
 parent: module-server
-tags: [v1, feedback, research]
+tags: [feedback, research]
 depends-on: [module-contracts]
 ---
 

@@ -6,7 +6,7 @@ title: reviews — draft comments on files/diffs + review sessions
 parent: module-server
 depends-on: [module-contracts]
 references: [task-review-comments]
-tags: [v1, review]
+tags: [review]
 ---
 
 ## Responsibility
@@ -43,7 +43,7 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
   first persists the current review's non-draft records as a closed snapshot under
   `reviews/archive/<workspaceId>/<reviewId>.json`, then replaces the active snapshot with a fresh open
   review and publishes only that fresh snapshot — clients never converge on an intermediate closed copy.
-  Drafts are discarded; sent/resolved/dismissed records survive. V1 keeps no archive browser, but an
+  Drafts are discarded; sent/resolved/dismissed records survive. There is no archive browser, but an
   in-flight agent can still resolve a sent archived comment by id. `Review.fileSessions` pins each review KEY to
   its chat (key → sessionId): one chat per file for the review's life — the file's first send creates
   it, every later send (single or batch) follows up into it. The key is the comment's path, or the
@@ -78,8 +78,8 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
   rollback of worktree changes (the old `git.revertFile` Reject is gone); the way
   to push back on a change is to say so in the comment.
 - **`ReviewAnchor` = `path` + `side` + `contentHash` + an ordered `selectors` fallback chain**
-  (`lineRange`, `textQuote` with exact/prefix/suffix, `structural` as a V2 slot; the `diffHunk` member
-  exists in the union but V1 authors don't populate it — `textQuote` carries re-anchoring). The
+  (`lineRange`, `textQuote` with exact/prefix/suffix, `structural` as a reserved slot; the `diffHunk` member
+  exists in the union but no author populates it — `textQuote` carries re-anchoring). The
   `anchorState` axis (`anchored`/`moved`/`outdated`) is **orthogonal to `status`**: "was it discussed"
   and "is the anchor alive" never overwrite each other.
 - **The two diff sides are two anchor spaces.** A `side: "worktree"` anchor is captured from the

@@ -45,7 +45,7 @@ for (const preference of [true, false, undefined, "true", null, 1]) {
 	}
 }
 
-test("legacy saved true seeds a draft without granting consent", () => {
+test("an unconfirmed saved true preference remains unconfirmed and opens the prompt", () => {
 	const { analyticsConsentConfirmed: _confirmation, ...legacy } = DEFAULT_CONFIG;
 	useAppStore.getState().installWelcomeSnapshot(ANALYTICS_CONSENT_PROTOCOL_VERSION, [], [], {
 		...legacy,

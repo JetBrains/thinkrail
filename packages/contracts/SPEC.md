@@ -6,7 +6,7 @@ title: Wire contracts (types-only)
 parent: architecture
 depends-on: []
 references: [central-integration]
-tags: [v1, wire]
+tags: [wire]
 ---
 
 ## Responsibility
@@ -52,8 +52,9 @@ of the host.
   Separate type-only native client capabilities describe an optional shell-local bridge, not host WS
   methods: `NativeUpdateState` and `NativeUpdateBridge` carry update presentation and explicit local
   actions. The same web bundle discovers that capability without importing a native SDK. An optional
-  `HostUpdateNotice` is advisory only: an ordinary browser receives fixed update guidance but acquires no
-  check, download, install, restart, feed-selection, or host-command authority.
+  `HostUpdateNotice` carries a closed CLI-host update lifecycle; protocol-gated `host.update` is an empty
+  request that can start only the launcher's pre-bound updater. The browser never supplies a command, path,
+  channel, version, URL, restart, or feed authority.
 - **Forbidden:** any *value* import of a `pi` package; **any** import (even `type`) of
   `@earendil-works/pi-coding-agent` (pulls `node:fs`); the pi-ai **provider / API subpaths**
   (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
@@ -284,11 +285,11 @@ of the host.
   wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
   tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset
-  and group limits are web-local); `analyticsEnabled` is the additional-data preference, default `false`, while
-  `analyticsConsentConfirmed` defaults `false` and records the explicit decision required before that
-  preference can authorize collection. Saved legacy preferences seed the first-launch switch, not consent.
-  `ANALYTICS_CONSENT_PROTOCOL_VERSION` pins this v65 contract so newer clients do not show a consent flow
-  against older hosts that cannot persist it. Preference and confirmation are saved atomically; an older
+  and group limits are web-local); `analyticsEnabled` is the additional-data preference and host gate,
+  default `false`, while `analyticsConsentConfirmed` defaults `false` and records completion of the initial
+  choice. `ANALYTICS_CONSENT_PROTOCOL_VERSION` pins this v65 contract so newer clients do not show a consent
+  flow against older hosts that cannot persist it. The initial dialog first writes the enabled preference
+  alone, then completion and the current preference together; Privacy Settings writes both together. An older
   client's preference-only write cannot create the new confirmation. The installation id remains entirely
   server-side; basic events are not controlled by either flag, see [[submodule-server-analytics]]) carries
   it with the **`DEFAULT_CONFIG`** fallback (persisted host-side
@@ -366,8 +367,8 @@ of the host.
   inline/diff/file/review; `status` draft/sent/resolved/
   dismissed — orthogonal to **`anchorState`** anchored/moved/outdated; per-comment `sessionId` — the
   chat it was sent into), **`ReviewAnchor`** (`path` + `side` + `contentHash` + an ordered **`ReviewSelector`**
-  fallback chain: `lineRange` / `textQuote` / `diffHunk` / `structural` — the last two are forward
-  slots V1 authors don't populate; a `side: "base"` anchor additionally carries **`baseRef`**, the ref
+  fallback chain: `lineRange` / `textQuote` / `diffHunk` / `structural` — the last two are reserved
+  slots no author populates; a `side: "base"` anchor additionally carries **`baseRef`**, the ref
   its lines and fragment were captured against, since the two diff sides are two line spaces, plus the
   **`scope`** it was captured in — the diff identity that reopens the one surface rendering that blob),
   **`ReviewSnapshot`** (`{ review, comments }` — the `review.get`
@@ -385,11 +386,14 @@ of the host.
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
-  update bridge exposes a monotonic state snapshot, prompt manual check, explicit restart action, and state
-  subscription without granting updater authority to an ordinary browser connection.
-- **`HostUpdateNotice`** — the optional immutable host-wire advisory: current version, newer available version,
-  and channel. No status, revision, error, feed URL, artifact, platform path, or shell command crosses the
-  wire. Its optional welcome field plus `host.updateAvailable` change pushes enter at protocol v64.
+  update bridge exposes a monotonic state snapshot, prompt check/download/install actions, failed-operation
+  identity, and state subscription without exposing feed selection. Available, byte-transfer, preparation,
+  ready, and installing are distinct states.
+- **`HostUpdateNotice`** — the optional host-wire CLI lifecycle: current version, newer available version,
+  channel, and an optional closed `available | running | succeeded | failed` status (absent means the legacy
+  v64 advisory). `host.updateAvailable` publishes full replacements. Protocol v70 adds parameterless
+  `host.update`; no output, arbitrary diagnostic, feed URL, artifact, platform path, or shell command crosses
+  the wire.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered
@@ -514,9 +518,9 @@ of the host.
   **`hostUpdate: HostUpdateNotice`** and **`hostPlatform`**
   (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
   offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from
-  the browser / **`host.updateAvailable`** — an immutable notice published only when a launcher's periodic
-  background lookup first finds a newer release or later finds a different newer release; absent on
-  failure/no-update / **`project.updated`** — the
+  the browser / **`host.updateAvailable`** — the backward-compatible full CLI-update snapshot: initially
+  published when a launcher finds a newer release, then replaced as a v70 host-run moves through
+  running/succeeded/failed; absent on discovery failure/no-update / **`project.updated`** — the
   full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
   atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
   **`session.created`** (the initial `SessionSummary`, broadcast when a new host-owned session registers so

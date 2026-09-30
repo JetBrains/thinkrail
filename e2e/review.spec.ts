@@ -608,6 +608,8 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
 	await expect(page.getByTestId("diff-pane")).toContainText("renamed");
+	// Markdown diffs render by default; this test anchors on the Monaco source split.
+	await page.getByTestId("diff-toggle-source").click();
 	await expect(page.getByTestId("diff-toggle-source")).toHaveAttribute("data-active", "true");
 
 	const original = page.locator(".editor.original");
@@ -663,6 +665,7 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-active="true"][data-kind="diff"]'),
 	).toContainText("README.md");
+	await page.getByTestId("diff-toggle-source").click();
 	await expect(page.locator(".editor.original").getByTestId("review-thread")).toHaveCount(1);
 
 	execSync(`git -C "${worktree()}" commit -am "land the rename"`, { stdio: "ignore" });
@@ -677,6 +680,7 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-active="true"][data-kind="diff"]'),
 	).toContainText("README.md");
+	await page.getByTestId("diff-toggle-source").click();
 	await expect(page.locator(".editor.original")).toContainText("# sample-project");
 	await expect(page.locator(".editor.original")).not.toContainText("renamed");
 	await expect(page.locator(".editor.original").getByTestId("review-thread")).toHaveCount(1);

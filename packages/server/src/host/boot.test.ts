@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -8,7 +8,11 @@ import type { HostUpdateNotice, ServerWelcome } from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { isPortFree } from "@thinkrail/shared/freePort";
 import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
-import { initializeAnalytics, resetAnalyticsForTests } from "../analytics";
+import {
+	getAdditionalAnalyticsCapture,
+	initializeAnalytics,
+	resetAnalyticsForTests,
+} from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
 import { resetConfigCache, updateConfig } from "../settings";
 import { type BootedHost, bootHost } from "./boot";
@@ -203,6 +207,103 @@ test("confirming consent observes current setup without another client read or p
 	}
 });
 
+test("the dialog prime enables ordinary additional events but schedules attribution only after confirmation", async () => {
+	const scheduled: Array<() => void> = [];
+	await boot({
+		port: 0,
+		host: "127.0.0.1",
+		portMode: "exact",
+		analytics: {
+			build: "binary",
+			env: {},
+			fetchImpl: (async () => new Response("{}")) as unknown as typeof fetch,
+			attributionEndpoint: "http://127.0.0.1:4567",
+			attributionFetch: (async () => {
+				throw new Error("scheduled attribution must not run in this host test");
+			}) as unknown as typeof fetch,
+			openExternal: () => {},
+			attributionSchedule: (run) => scheduled.push(run),
+		},
+	});
+
+	updateConfig({ analyticsEnabled: true });
+	expect(getAdditionalAnalyticsCapture()).not.toBeNull();
+	expect(scheduled).toEqual([]);
+	updateConfig({ theme: "light" });
+	expect(getAdditionalAnalyticsCapture()).not.toBeNull();
+	expect(scheduled).toEqual([]);
+	updateConfig({ analyticsEnabled: true, analyticsConsentConfirmed: true });
+	expect(scheduled).toHaveLength(1);
+});
+
+test("a saved confirmed-on choice waits beyond one second for explicit launcher readiness", async () => {
+	const dir = process.env.THINKRAIL_DATA_DIR;
+	if (!dir) throw new Error("missing fixture data directory");
+	writeFileSync(
+		join(dir, "config.json"),
+		JSON.stringify({ analyticsEnabled: true, analyticsConsentConfirmed: true }),
+	);
+	const scheduled: Array<() => void> = [];
+	let opens = 0;
+	const host = await boot({
+		port: 0,
+		host: "127.0.0.1",
+		portMode: "exact",
+		analytics: {
+			build: "desktop",
+			env: {},
+			fetchImpl: (async () => new Response("{}")) as unknown as typeof fetch,
+			attributionEndpoint: "http://127.0.0.1:4567",
+			attributionFetch: (async () => {
+				throw new Error("scheduled attribution must not run in this host test");
+			}) as unknown as typeof fetch,
+			openExternal: () => {
+				opens++;
+			},
+			attributionSchedule: (run) => scheduled.push(run),
+		},
+	});
+	await Bun.sleep(1_100);
+	expect(scheduled).toEqual([]);
+	expect(opens).toBe(0);
+	expect(existsSync(join(dir, "attribution.json"))).toBe(false);
+	host.server.startAttributionClaim();
+	expect(scheduled).toHaveLength(1);
+	expect(opens).toBe(0);
+	expect(existsSync(join(dir, "attribution.json"))).toBe(false);
+});
+
+test("launcher readiness cannot start attribution before an unconfirmed prime is resolved", async () => {
+	const dir = process.env.THINKRAIL_DATA_DIR;
+	if (!dir) throw new Error("missing fixture data directory");
+	writeFileSync(
+		join(dir, "config.json"),
+		JSON.stringify({ analyticsEnabled: true, analyticsConsentConfirmed: false }),
+	);
+	const scheduled: Array<() => void> = [];
+	const host = await boot({
+		port: 0,
+		host: "127.0.0.1",
+		portMode: "exact",
+		analytics: {
+			build: "desktop",
+			env: {},
+			fetchImpl: (async () => new Response("{}")) as unknown as typeof fetch,
+			attributionEndpoint: "http://127.0.0.1:4567",
+			attributionFetch: (async () => {
+				throw new Error("scheduled attribution must not run in this host test");
+			}) as unknown as typeof fetch,
+			openExternal: () => {},
+			attributionSchedule: (run) => scheduled.push(run),
+		},
+	});
+
+	host.server.startAttributionClaim();
+	expect(scheduled).toEqual([]);
+	updateConfig({ analyticsEnabled: true, analyticsConsentConfirmed: true });
+	expect(scheduled).toHaveLength(1);
+});
+
 test("the host forwards successful login generation metadata into the basic event", async () => {
 	await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
 	const events: { event: string; properties: Record<string, unknown> }[] = [];
@@ -324,7 +425,7 @@ test("publishes only changed host update notices after welcome and on fixed repe
 		port: grabFreePort(),
 		host: "localhost",
 		portMode: "exact",
-		hostUpdate: { intervalMs: 5, check: checks.check },
+		hostUpdate: { intervalMs: 5, check: checks.check, run: async () => {} },
 	});
 	const firstCheck = await checks.waitForCheck(0);
 	const collector = await collectSocket(b.port, "updates-first");
@@ -340,18 +441,19 @@ test("publishes only changed host update notices after welcome and on fixed repe
 		channel: "stable",
 	};
 	firstCheck.resolve(firstNotice);
+	const availableFirstNotice: HostUpdateNotice = { ...firstNotice, status: "available" };
 	const firstPush = await collector.waitForFrame(
 		(frame) =>
 			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
 			(frame.data as HostUpdateNotice).availableVersion === "1.1.0",
 	);
-	expect(firstPush.data).toEqual(firstNotice);
+	expect(firstPush.data).toEqual(availableFirstNotice);
 
 	const retained = await collectSocket(b.port, "updates-retained");
 	const retainedWelcome = await retained.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
-	expect((retainedWelcome.data as ServerWelcome).hostUpdate).toEqual(firstNotice);
+	expect((retainedWelcome.data as ServerWelcome).hostUpdate).toEqual(availableFirstNotice);
 	retained.socket.close();
 
 	const secondCheck = await checks.waitForCheck(1);
@@ -392,9 +494,185 @@ test("publishes only changed host update notices after welcome and on fixed repe
 	const latestWelcome = await afterSilentChecks.waitForFrame(
 		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
 	);
-	expect((latestWelcome.data as ServerWelcome).hostUpdate).toEqual(newerNotice);
+	expect((latestWelcome.data as ServerWelcome).hostUpdate).toEqual({
+		...newerNotice,
+		status: "available",
+	});
 	afterSilentChecks.socket.close();
 	collector.socket.close();
+});
+
+test("host update runs are detached, single-flight, retryable, and success-latched", async () => {
+	const checks = createCheckHarness<HostUpdateNotice | null>();
+	const runs = createCheckHarness<void>();
+	const b = await boot({
+		port: grabFreePort(),
+		host: "localhost",
+		portMode: "exact",
+		hostUpdate: { intervalMs: 50, check: checks.check, run: runs.check },
+	});
+	const firstCheck = await checks.waitForCheck(0);
+	const firstClient = await collectSocket(b.port, "updates-run-first");
+	const secondClient = await collectSocket(b.port, "updates-run-second");
+	await Promise.all([
+		firstClient.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome),
+		secondClient.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome),
+	]);
+
+	firstCheck.resolve({
+		currentVersion: "1.0.0",
+		availableVersion: "1.1.0",
+		channel: "stable",
+	});
+	await Promise.all(
+		[firstClient, secondClient].map((client) =>
+			client.waitForFrame(
+				(frame) =>
+					frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+					(frame.data as HostUpdateNotice).status === "available",
+			),
+		),
+	);
+
+	firstClient.socket.send(JSON.stringify({ id: "run-first", method: "host.update", params: {} }));
+	const firstRun = await runs.waitForCheck(0);
+	const [runAck] = await Promise.all([
+		firstClient.waitForFrame((frame) => frame.id === "run-first"),
+		...([firstClient, secondClient].map((client) =>
+			client.waitForFrame(
+				(frame) =>
+					frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+					(frame.data as HostUpdateNotice).status === "running",
+			),
+		) as [Promise<SocketFrame>, Promise<SocketFrame>]),
+	]);
+	expect(runAck.ok).toBe(true);
+	secondClient.socket.send(
+		JSON.stringify({ id: "run-while-running", method: "host.update", params: {} }),
+	);
+	expect((await secondClient.waitForFrame((frame) => frame.id === "run-while-running")).ok).toBe(
+		true,
+	);
+	expect(runs.checks).toHaveLength(1);
+
+	firstRun.reject(new Error("private child diagnostic"));
+	await Promise.all(
+		[firstClient, secondClient].map((client) =>
+			client.waitForFrame(
+				(frame) =>
+					frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+					(frame.data as HostUpdateNotice).status === "failed",
+			),
+		),
+	);
+	expect(JSON.stringify(firstClient.frames)).not.toContain("private child diagnostic");
+
+	const sameReleaseCheck = await checks.waitForCheck(1);
+	sameReleaseCheck.resolve({
+		currentVersion: "1.0.0",
+		availableVersion: "1.1.0",
+		channel: "stable",
+	});
+	await sameReleaseCheck.promise;
+	const afterSameRelease = await collectSocket(b.port, "updates-run-failed-snapshot");
+	const failedWelcome = await afterSameRelease.waitForFrame(
+		(frame) => frame.channel === WS_CHANNELS.serverWelcome,
+	);
+	expect((failedWelcome.data as ServerWelcome).hostUpdate?.status).toBe("failed");
+	afterSameRelease.socket.close();
+
+	const newerReleaseCheck = await checks.waitForCheck(2);
+	newerReleaseCheck.resolve({
+		currentVersion: "1.0.0",
+		availableVersion: "1.2.0",
+		channel: "stable",
+	});
+	await firstClient.waitForFrame(
+		(frame) =>
+			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+			(frame.data as HostUpdateNotice).availableVersion === "1.2.0" &&
+			(frame.data as HostUpdateNotice).status === "available",
+	);
+
+	firstClient.socket.send(JSON.stringify({ id: "run-retry", method: "host.update", params: {} }));
+	const retryRun = await runs.waitForCheck(1);
+	await firstClient.waitForFrame(
+		(frame) =>
+			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+			(frame.data as HostUpdateNotice).availableVersion === "1.2.0" &&
+			(frame.data as HostUpdateNotice).status === "running",
+	);
+	expect((await firstClient.waitForFrame((frame) => frame.id === "run-retry")).ok).toBe(true);
+	retryRun.resolve(undefined);
+	await Promise.all(
+		[firstClient, secondClient].map((client) =>
+			client.waitForFrame(
+				(frame) =>
+					frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+					(frame.data as HostUpdateNotice).availableVersion === "1.2.0" &&
+					(frame.data as HostUpdateNotice).status === "succeeded",
+			),
+		),
+	);
+
+	const checksAfterSuccess = checks.checks.length;
+	await Bun.sleep(120);
+	expect(checks.checks).toHaveLength(checksAfterSuccess);
+	firstClient.socket.send(
+		JSON.stringify({ id: "run-after-success", method: "host.update", params: {} }),
+	);
+	expect((await firstClient.waitForFrame((frame) => frame.id === "run-after-success")).ok).toBe(
+		true,
+	);
+	expect(runs.checks).toHaveLength(2);
+	firstClient.socket.close();
+	secondClient.socket.close();
+});
+
+test("shutdown makes a late host update run result inert", async () => {
+	const checks = createCheckHarness<HostUpdateNotice | null>();
+	const runs = createCheckHarness<void>();
+	const b = await boot({
+		port: grabFreePort(),
+		host: "localhost",
+		portMode: "exact",
+		hostUpdate: { intervalMs: 1_000, check: checks.check, run: runs.check },
+	});
+	const collector = await collectSocket(b.port, "updates-run-shutdown");
+	await collector.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome);
+	const firstCheck = await checks.waitForCheck(0);
+	firstCheck.resolve({
+		currentVersion: "1.0.0",
+		availableVersion: "1.1.0",
+		channel: "stable",
+	});
+	await collector.waitForFrame(
+		(frame) =>
+			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+			(frame.data as HostUpdateNotice).status === "available",
+	);
+	collector.socket.send(
+		JSON.stringify({ id: "run-before-stop", method: "host.update", params: {} }),
+	);
+	const run = await runs.waitForCheck(0);
+	await collector.waitForFrame(
+		(frame) =>
+			frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+			(frame.data as HostUpdateNotice).status === "running",
+	);
+
+	await b.server.shutdown();
+	run.resolve(undefined);
+	await run.promise;
+	await Bun.sleep(10);
+
+	expect(
+		collector.frames.filter(
+			(frame) =>
+				frame.channel === WS_CHANNELS.hostUpdateAvailable &&
+				(frame.data as HostUpdateNotice).status === "succeeded",
+		),
+	).toHaveLength(0);
 });
 
 test("shutdown clears periodic checks and makes a late result inert", async () => {
@@ -403,7 +681,7 @@ test("shutdown clears periodic checks and makes a late result inert", async () =
 		port: grabFreePort(),
 		host: "localhost",
 		portMode: "exact",
-		hostUpdate: { intervalMs: 5, check: checks.check },
+		hostUpdate: { intervalMs: 5, check: checks.check, run: async () => {} },
 	});
 	const collector = await collectSocket(b.port, "updates-shutdown");
 	await collector.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome);

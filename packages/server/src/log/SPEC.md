@@ -5,7 +5,7 @@ status: active
 title: log — leveled diagnostics to stderr + rotated support files
 parent: module-server
 depends-on: [submodule-server-persistence]
-tags: [v1, public-surface-checked]
+tags: [public-surface-checked]
 ---
 
 ## Responsibility

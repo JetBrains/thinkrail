@@ -5,6 +5,7 @@ import { spawnDetached } from "@thinkrail/shared/spawn";
 import { printStartupMark } from "@thinkrail/shared/startupMark";
 import { channel, version } from "@thinkrail/shared/version";
 import { type CliOptions, parseArgs, parseSubcommand, USAGE } from "./args";
+import { openUiThenStartAttribution } from "./attributionReadiness";
 import { runUninstall } from "./uninstall";
 import { createCliHostUpdate, runUpdate } from "./update";
 
@@ -24,8 +25,11 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	const argv = Bun.argv.slice(2);
 	const subcommand = parseSubcommand(argv);
 	if (subcommand) {
-		const run = subcommand === "update" ? runUpdate : runUninstall;
-		process.exit(await run(argv.slice(1), process.env));
+		const exitCode =
+			subcommand === "update"
+				? await runUpdate(argv.slice(1), process.env, build)
+				: await runUninstall(argv.slice(1), process.env);
+		process.exit(exitCode);
 	}
 
 	let options: CliOptions;
@@ -52,8 +56,11 @@ async function bootstrap(build: BuildKind): Promise<void> {
 		console.warn(`Web app not found at ${staticDir} — run \`bun run build:web\` to build the UI.`);
 	}
 
-	const hostUpdate = createCliHostUpdate(build, channel, version);
-	const { port, requested } = await bootHost({
+	const hostUpdate = createCliHostUpdate(build, channel, version, {
+		platform: process.platform,
+		execPath: process.execPath,
+	});
+	const { server, port, requested } = await bootHost({
 		port: options.port,
 		host: options.host,
 		portMode: "free",
@@ -64,6 +71,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 			channel,
 			build,
 			mute: options.noAnalytics,
+			...(options.open ? { openExternal: openBrowser } : {}),
 		},
 		...(hostUpdate ? { hostUpdate } : {}),
 		...(options.projectDir ? { projectPath: resolve(process.cwd(), options.projectDir) } : {}),
@@ -76,7 +84,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	const url = `http://${openHost}:${port}`;
 	printStartupMark({ status: "host ready", endpoint: url });
 	console.log(`thinkrail → ${url}`);
-	if (options.open) openBrowser(url);
+	openUiThenStartAttribution(options.open, url, openBrowser, server.startAttributionClaim);
 }
 
 export async function launch(build: BuildKind): Promise<void> {

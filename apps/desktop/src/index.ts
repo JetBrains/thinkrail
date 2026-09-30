@@ -10,6 +10,7 @@ import Electrobun, {
 	Utils,
 } from "electrobun/main";
 import { installDesktopApplicationMenu } from "./applicationMenu";
+import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { installExternalNavigation } from "./externalNavigation";
 import { nextPageZoom } from "./pageZoom";
 import {
@@ -56,6 +57,9 @@ async function start(): Promise<void> {
 		staticDir: join(PATHS.VIEWS_FOLDER, "web"),
 		appVersion: version,
 		channel,
+		...(Electrobun.app.isPackaged
+			? { openExternal: (url: string) => Utils.openExternal(url) }
+			: {}),
 	});
 	const quitCoordinator = createElectrobunQuitCoordinator(() => host.server.shutdown());
 	startupQuitCoordinator = quitCoordinator;
@@ -85,6 +89,10 @@ async function start(): Promise<void> {
 				getUpdateState: () => updateController.getState(),
 				checkForUpdates: async () => {
 					await updateController.checkForUpdates();
+					return undefined;
+				},
+				downloadUpdate: async () => {
+					await updateController.downloadUpdate();
 					return undefined;
 				},
 				restartToUpdate: async () => {
@@ -172,9 +180,13 @@ async function start(): Promise<void> {
 	updateController.subscribe((state) => rpc.send.updateStateChanged(state));
 
 	let ready = false;
+	const startAttributionClaim = attributionClaimOnFirstReadiness(() =>
+		host.server.startAttributionClaim(),
+	);
 	mainWindow.webview.on("dom-ready", () => {
 		if (ready) return;
 		ready = true;
+		startAttributionClaim();
 		updateController.start();
 		const readyPath = process.env.THINKRAIL_DESKTOP_READY_FILE;
 		if (readyPath) {

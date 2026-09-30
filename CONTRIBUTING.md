@@ -18,8 +18,8 @@ bug reports, include:
 
 ## Development setup
 
-**Prerequisites:** [Bun](https://bun.sh) ≥ 1.3, Node.js ≥ 22.19 (required by the
-in-process `pi` engine), and an authenticated `pi` provider for agent work.
+**Prerequisites:** [Bun](https://bun.sh) 1.4.0 (the repository's pinned package manager and runtime),
+Node.js ≥ 22.19 (required by the in-process `pi` engine), and an authenticated `pi` provider for agent work.
 
 ```bash
 git clone <repo-url>
@@ -28,8 +28,9 @@ bun install
 bun run dev
 ```
 
-`bun run dev` boots the host and the web client together and cleans up on `Ctrl+C`.
-On-disk app state lives under `~/.thinkrail`.
+`bun run dev` boots the host and the web client together and cleans up on `Ctrl+C`. Source/dev runs expose
+no application updater: update a checkout with Git and rebuild it. On-disk app state lives under
+`~/.thinkrail`.
 
 ## Testing and linting
 

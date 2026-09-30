@@ -5,7 +5,7 @@ status: active
 title: fs — worktree file reads
 parent: module-server
 depends-on: [module-contracts]
-tags: [v1, public-surface-checked]
+tags: [public-surface-checked]
 ---
 
 ## Responsibility
