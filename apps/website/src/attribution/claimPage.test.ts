@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { runClaimPage } from "./claimPage";
+import { marketingGrantedFromCookie, runClaimPage } from "./claimPage";
 import type { BindClaimRequest } from "./protocol";
 
 const claimId = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -24,12 +24,17 @@ function fixture(
 		context?: BindClaimRequest;
 		readContext?: () => BindClaimRequest | undefined;
 		response?: Response;
+		cookie?: string;
 	} = {},
 ) {
 	const requests: Array<{ url: string; init: RequestInit }> = [];
 	const replacements: string[] = [];
 	let contextReads = 0;
 	const dependencies = {
+		marketingGranted: () =>
+			marketingGrantedFromCookie(
+				options.cookie ?? `CookieConsent=${encodeURIComponent("{marketing:true}")}`,
+			),
 		readContext() {
 			contextReads += 1;
 			return options.readContext ? options.readContext() : options.context;
@@ -53,8 +58,11 @@ function fixture(
 }
 
 describe("attribution claim page", () => {
-	test("binds on load with valid context and navigates to the blog", async () => {
-		const page = fixture({ context });
+	test("binds on load with a granted Cookiebot cookie and navigates to the blog", async () => {
+		const page = fixture({
+			context,
+			cookie: `CookieConsent=${encodeURIComponent("{stamp:'…',necessary:true,marketing:true,region:'…'}")}`,
+		});
 		await runClaimPage(page.dependencies);
 		expect(page.contextReads()).toBe(1);
 		expect(page.requests).toHaveLength(1);
@@ -86,6 +94,50 @@ describe("attribution claim page", () => {
 		await runClaimPage(page.dependencies);
 		expect(page.requests).toHaveLength(0);
 		expect(page.replacements).toEqual(["/blog/"]);
+	});
+
+	test.each([
+		{
+			name: "marketing denied",
+			cookie: `CookieConsent=${encodeURIComponent("{marketing:false}")}`,
+		},
+		{ name: "missing consent cookie", cookie: "" },
+		{ name: "malformed consent cookie", cookie: "CookieConsent=%not-valid%" },
+		{
+			name: "other cookie name",
+			cookie: `XCookieConsent=${encodeURIComponent("{marketing:true}")}`,
+		},
+		{
+			name: "marketing embedded in another field name",
+			cookie: `CookieConsent=${encodeURIComponent("{notmarketing:true}")}`,
+		},
+	])("does not read or bind with $name consent and still navigates to the blog", async ({
+		cookie,
+	}) => {
+		const page = fixture({ context, cookie });
+		await runClaimPage(page.dependencies);
+		expect(page.contextReads()).toBe(0);
+		expect(page.requests).toHaveLength(0);
+		expect(page.replacements).toEqual(["/blog/"]);
+	});
+
+	test("binds when Cookiebot records that consent is not required", async () => {
+		const page = fixture({ context, cookie: "CookieConsent=-1" });
+		await runClaimPage(page.dependencies);
+		expect(page.contextReads()).toBe(1);
+		expect(page.requests).toHaveLength(1);
+		expect(page.replacements).toEqual(["/blog/"]);
+	});
+
+	test("matches CookieConsent as a complete cookie name", () => {
+		expect(
+			marketingGrantedFromCookie(
+				`Other=1; CookieConsent=${encodeURIComponent("{marketing:true}")}; Final=2`,
+			),
+		).toBe(true);
+		expect(
+			marketingGrantedFromCookie(`XCookieConsent=${encodeURIComponent("{marketing:true}")}`),
+		).toBe(false);
 	});
 
 	test("a context read failure does not bind and still navigates to the blog", async () => {

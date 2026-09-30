@@ -3,7 +3,29 @@ import { type BindClaimRequest, claimIdPattern } from "./protocol";
 
 const bindTimeoutMs = 1_500;
 
+export function marketingGrantedFromCookie(cookieHeader: string): boolean {
+	const cookie = cookieHeader
+		.split(";")
+		.map((pair) => pair.trim())
+		.find((pair) => {
+			const separator = pair.indexOf("=");
+			return separator >= 0 && pair.slice(0, separator).trim() === "CookieConsent";
+		});
+	if (cookie === undefined) return false;
+
+	const separator = cookie.indexOf("=");
+	let value: string;
+	try {
+		value = decodeURIComponent(cookie.slice(separator + 1));
+	} catch {
+		return false;
+	}
+	if (value === "-1") return true;
+	return /(?:^|[{,])\s*marketing\s*:\s*true\s*(?:[,}]|$)/.test(value);
+}
+
 type ClaimPageDependencies = {
+	marketingGranted(): boolean;
 	readContext(): BindClaimRequest | undefined;
 	request(url: string, init: RequestInit): Promise<Response>;
 	replace(url: string): void;
@@ -20,6 +42,9 @@ function claimIdFromSearch(search: string): string | undefined {
 
 export async function runClaimPage(
 	dependencies: ClaimPageDependencies = {
+		marketingGranted() {
+			return marketingGrantedFromCookie(typeof document === "undefined" ? "" : document.cookie);
+		},
 		readContext() {
 			try {
 				return readStoredAttributionContext(window.localStorage);
@@ -35,7 +60,7 @@ export async function runClaimPage(
 ): Promise<void> {
 	try {
 		const claimId = claimIdFromSearch(dependencies.search);
-		if (claimId === undefined) return;
+		if (claimId === undefined || !dependencies.marketingGranted()) return;
 		const context = dependencies.readContext();
 		if (context === undefined) return;
 

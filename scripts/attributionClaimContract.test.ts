@@ -177,6 +177,7 @@ test("website HTTP, browser claim, server client, and product persistence share 
 				opened.push(url);
 				const claimUrl = new URL(url);
 				browserTask = runClaimPage({
+					marketingGranted: () => true,
 					readContext: () => readStoredAttributionContext(storage, now),
 					search: claimUrl.search,
 					requestTimeoutMs: 1_000,

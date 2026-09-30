@@ -6,6 +6,7 @@ import {
 	recordAttributionTouch,
 	storeLatestAttributionBridge,
 } from "./browserStorage";
+import { runClaimPage } from "./claimPage";
 import type { BindClaimRequest } from "./protocol";
 import { type ClaimRecord, type ClaimRepository, ClaimService } from "./service";
 
@@ -127,10 +128,23 @@ describe("desktop download bridge correlation", () => {
 			challengeForVerifier: async (verifier) => `challenge:${verifier}`,
 		});
 
-		expect(await service.bind(claimId, storedContext)).toEqual({
-			status: "ok",
-			value: { bridge_id: bridgeId },
+		const replacements: string[] = [];
+		await runClaimPage({
+			marketingGranted: () => true,
+			readContext: () => storedContext,
+			search: `?id=${claimId}`,
+			requestTimeoutMs: 100,
+			async request(_url, init) {
+				const body = JSON.parse(String(init.body)) as BindClaimRequest;
+				const result = await service.bind(claimId, body);
+				if (result.status !== "ok") return new Response(null, { status: 409 });
+				return new Response(JSON.stringify(result.value), { status: 200 });
+			},
+			replace(path) {
+				replacements.push(path);
+			},
 		});
+		expect(replacements).toEqual(["/blog/"]);
 		expect(await service.redeem(claimId, "correct")).toEqual({
 			status: "ok",
 			value: { ...storedContext, bridge_id: bridgeId },
