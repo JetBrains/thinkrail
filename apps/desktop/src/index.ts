@@ -12,6 +12,7 @@ import Electrobun, {
 import { installDesktopApplicationMenu } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { installExternalNavigation } from "./externalNavigation";
+import { nextPageZoom } from "./pageZoom";
 import {
 	injectInitialDesktopPreferences,
 	readDesktopPreferenceRemove,
@@ -72,6 +73,7 @@ async function start(): Promise<void> {
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const initialPreferences = preferences.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const neutral = process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
+	let mainWindow: BrowserWindow;
 	const updateController = await createElectrobunUpdateController({
 		isPackaged: Electrobun.app.isPackaged,
 		version,
@@ -99,6 +101,9 @@ async function start(): Promise<void> {
 				},
 			},
 			messages: {
+				pageZoomRequested: ({ action }) => {
+					mainWindow.setPageZoom(nextPageZoom(mainWindow.getPageZoom(), action));
+				},
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);
 				},
@@ -133,7 +138,7 @@ async function start(): Promise<void> {
 				windowChrome.geometry,
 				windowChrome.dragRegion,
 			);
-	const mainWindow = new BrowserWindow({
+	mainWindow = new BrowserWindow({
 		title: "ThinkRail",
 		url: neutral ? "about:blank" : `${origin}/${initialRoute}`,
 		preload,

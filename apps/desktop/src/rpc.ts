@@ -1,4 +1,5 @@
 import type { NativeUpdateState } from "@thinkrail/contracts";
+import type { PageZoomAction } from "./pageZoom";
 import type { WindowChromeGeometry } from "./windowChrome";
 
 export type DesktopRpc = {
@@ -13,6 +14,7 @@ export type DesktopRpc = {
 			routeChanged: { hash: string };
 			preferenceWrite: { key: string; value: string };
 			preferenceRemove: { key: string };
+			pageZoomRequested: { action: PageZoomAction };
 		};
 	};
 	webview: {
