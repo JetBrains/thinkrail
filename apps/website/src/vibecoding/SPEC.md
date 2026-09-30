@@ -24,8 +24,11 @@ improves with use (living specs, reusable skills, upcoming extensions) rather th
 framing. Under `compounding`, the hero subtitle, chat-demo script (one added "how do you get better
 over time" exchange; the worktree exchange stays), principles, capabilities (plus a coming-soon
 "Extensions" card), spec-first heading/subtitle, and CTA swap; every other section is shared, and
-copy variants live beside their components, keyed by `Positioning`. A full module copy was rejected
-(2026-02): ~25 duplicated files that would drift, against the repo's no-duplication rule.
+copy variants live beside their components, keyed by `Positioning`. Analytics tells the cells apart
+only by the parent's path-derived `content_key` (`agentic-ide` versus `vibecoding` /
+`agentic-development`); the variant adds no event property, analytics import, or CTA location. A
+full module copy was rejected (2026-02): ~25 duplicated files that would drift, against the repo's
+no-duplication rule.
 
 The agentic-development and agentic-ide routes reuse the vibecoding identity wholesale: same
 `siteMetadata` title/description, same `/vibecoding/` favicon, OG image, and wordmark asset URLs,
