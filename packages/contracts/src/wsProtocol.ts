@@ -97,7 +97,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 70;
+export const PROTOCOL_VERSION = 71;
+export const DEFAULT_MODEL_PROTOCOL_VERSION = 71;
 export const HOST_UPDATE_RUN_PROTOCOL_VERSION = 70;
 export const PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION = 67;
 export const AGENT_REVIEW_SETTING_PROTOCOL_VERSION = 68;
@@ -244,6 +245,7 @@ export const WS_METHODS = {
 	modelList: "model.list",
 	modelRefresh: "model.refresh",
 	modelDefault: "model.default",
+	modelSetDefault: "model.setDefault",
 	modelClampThinking: "model.clampThinking",
 	providerStatus: "provider.status",
 	providerLoginStart: "provider.loginStart",
@@ -378,6 +380,47 @@ export interface ReviewSendResult {
 
 export interface WorkspaceWatchReadyResult {
 	startupNudge: boolean;
+}
+
+export type WireModelRef = Pick<WireModel, "provider" | "id">;
+
+export interface ModelDefault {
+	model: WireModel | null;
+	thinkingLevel: ThinkingLevel;
+	defaultThinkingLevel: ThinkingLevel;
+}
+
+export type SetDefaultModelParams =
+	| { model: WireModelRef; thinkingLevel?: ThinkingLevel }
+	| { model?: never; thinkingLevel: ThinkingLevel };
+
+export const THINKING_LEVELS = [
+	"off",
+	"minimal",
+	"low",
+	"medium",
+	"high",
+	"xhigh",
+	"max",
+] as const satisfies readonly ThinkingLevel[];
+
+export function isSetDefaultModelParams(value: unknown): value is SetDefaultModelParams {
+	if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+	const params = value as { model?: unknown; thinkingLevel?: unknown };
+	const hasModel = params.model !== undefined;
+	const hasThinkingLevel = params.thinkingLevel !== undefined;
+	if (!hasModel && !hasThinkingLevel) return false;
+	if (
+		hasModel &&
+		(!params.model ||
+			typeof params.model !== "object" ||
+			typeof (params.model as { provider?: unknown }).provider !== "string" ||
+			typeof (params.model as { id?: unknown }).id !== "string")
+	)
+		return false;
+	if (hasThinkingLevel && !THINKING_LEVELS.some((level) => level === params.thinkingLevel))
+		return false;
+	return true;
 }
 
 export interface WsMethodMap {
@@ -585,10 +628,8 @@ export interface WsMethodMap {
 		result: { level: ThinkingLevel };
 	};
 	"model.refresh": { params: { force?: boolean }; result: RefreshedModels };
-	"model.default": {
-		params: Record<string, never>;
-		result: { model: WireModel | null; thinkingLevel: ThinkingLevel };
-	};
+	"model.default": { params: Record<string, never>; result: ModelDefault };
+	"model.setDefault": { params: SetDefaultModelParams; result: ModelDefault };
 	"provider.status": { params: Record<string, never>; result: ProviderStatusReport };
 	"provider.loginStart": {
 		params: { providerId: string; type?: "oauth" | "api_key" };

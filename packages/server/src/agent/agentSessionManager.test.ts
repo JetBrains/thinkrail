@@ -65,6 +65,7 @@ import {
 	renameSession,
 	setActivityProjectResolver,
 	setAgentReviewEnabledResolver,
+	setDefaultModel,
 	setSessionActivityPublisher,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -912,6 +913,79 @@ test("model.clampThinking refuses a model ref the host can't resolve", async () 
 	);
 });
 
+test("model.setDefault writes selected fields and returns the disk-backed default", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const settingsPath = join(agentDir, "settings.json");
+	const model = (await listAvailableModels()).find((candidate) => candidate.provider === "fauxa");
+	if (!model) throw new Error("faux model missing");
+	try {
+		const result = await setDefaultModel({ model, thinkingLevel: "high" });
+		expect(result.model?.provider).toBe("fauxa");
+		expect(result.model?.id).toBe("fauxa");
+		expect(result.defaultThinkingLevel).toBe("high");
+		expect(result.thinkingLevel).toBe("off");
+		expect(JSON.parse(readFileSync(settingsPath, "utf8"))).toMatchObject({
+			defaultProvider: "fauxa",
+			defaultModel: "fauxa",
+			defaultThinkingLevel: "high",
+		});
+	} finally {
+		rmSync(settingsPath, { force: true });
+	}
+});
+
+test("model.setDefault rejects an unknown model without writing settings", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const settingsPath = join(agentDir, "settings.json");
+	const original = `${JSON.stringify({ defaultThinkingLevel: "low" })}\n`;
+	writeFileSync(settingsPath, original);
+	try {
+		await expect(
+			setDefaultModel({ model: { provider: "missing", id: "missing" } }),
+		).rejects.toThrow(/Unknown or unavailable model/);
+		expect(readFileSync(settingsPath, "utf8")).toBe(original);
+	} finally {
+		rmSync(settingsPath, { force: true });
+	}
+});
+
+test("model.setDefault surfaces Pi settings write errors", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const settingsPath = join(agentDir, "settings.json");
+	mkdirSync(settingsPath);
+	try {
+		await expect(setDefaultModel({ thinkingLevel: "high" })).rejects.toThrow(
+			/Failed to write Pi default settings/,
+		);
+	} finally {
+		rmSync(settingsPath, { recursive: true, force: true });
+	}
+});
+
+test("model.setDefault ignores a malformed project settings file in the host cwd", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const cwd = tmpCwd("trpi-default-bad-project-");
+	mkdirSync(join(cwd, ".pi"), { recursive: true });
+	writeFileSync(join(cwd, ".pi", "settings.json"), "{not json");
+	const settingsPath = join(agentDir, "settings.json");
+	const originalCwd = process.cwd();
+	try {
+		process.chdir(cwd);
+		const result = await setDefaultModel({ thinkingLevel: "high" });
+		expect(result.defaultThinkingLevel).toBe("high");
+		expect(JSON.parse(readFileSync(settingsPath, "utf8"))).toMatchObject({
+			defaultThinkingLevel: "high",
+		});
+	} finally {
+		process.chdir(originalCwd);
+		rmSync(settingsPath, { force: true });
+	}
+});
+
 test("model.default clamps the saved thinking level onto the pinned model's support set", async () => {
 	const agentDir = process.env.PI_CODING_AGENT_DIR;
 	if (!agentDir) throw new Error("agent dir not isolated");
@@ -929,8 +1003,37 @@ test("model.default clamps the saved thinking level onto the pinned model's supp
 		expect(d.model?.id).toBe("fauxa");
 		expect(d.model?.thinkingLevels).toEqual(["off"]);
 		expect(d.thinkingLevel).toBe("off");
+		expect(d.defaultThinkingLevel).toBe("high");
 	} finally {
 		rmSync(settingsPath, { force: true });
+	}
+});
+
+test("model.default reports only global settings when project settings override them", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const cwd = tmpCwd("trpi-default-project-");
+	mkdirSync(join(cwd, ".pi"), { recursive: true });
+	const globalSettingsPath = join(agentDir, "settings.json");
+	writeFileSync(
+		globalSettingsPath,
+		`${JSON.stringify({ defaultProvider: "fauxa", defaultModel: "fauxa", defaultThinkingLevel: "high" })}\n`,
+	);
+	writeFileSync(
+		join(cwd, ".pi", "settings.json"),
+		`${JSON.stringify({ defaultProvider: "fauxb", defaultModel: "fauxb", defaultThinkingLevel: "low" })}\n`,
+	);
+	const originalCwd = process.cwd();
+	try {
+		process.chdir(cwd);
+		const result = await getDefaultModel();
+		expect(result.model?.provider).toBe("fauxa");
+		expect(result.model?.id).toBe("fauxa");
+		expect(result.thinkingLevel).toBe("off");
+		expect(result.defaultThinkingLevel).toBe("high");
+	} finally {
+		process.chdir(originalCwd);
+		rmSync(globalSettingsPath, { force: true });
 	}
 });
 
@@ -944,6 +1047,22 @@ test("model.default names NO model when nothing is pinned — pi's resolver is t
 		const d = await getDefaultModel();
 		expect(d.model).toBeNull();
 		expect(d.thinkingLevel).toBe("high");
+	} finally {
+		rmSync(settingsPath, { force: true });
+	}
+});
+
+test("model.default uses Pi's medium fallback when no global thinking level is saved", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const settingsPath = join(agentDir, "settings.json");
+	rmSync(settingsPath, { force: true });
+	try {
+		expect(await getDefaultModel()).toMatchObject({
+			model: null,
+			thinkingLevel: "medium",
+			defaultThinkingLevel: "medium",
+		});
 	} finally {
 		rmSync(settingsPath, { force: true });
 	}

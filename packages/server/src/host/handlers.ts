@@ -23,7 +23,7 @@ import type {
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
-import { isControlMessage } from "@thinkrail/contracts";
+import { isControlMessage, isSetDefaultModelParams } from "@thinkrail/contracts";
 import {
 	abortSession,
 	answerQuestion,
@@ -61,6 +61,7 @@ import {
 	renameSession,
 	resolveExtUi,
 	sendReviewFixToSession,
+	setDefaultModel,
 	setSessionModel,
 	setSessionThinkingLevel,
 	steerSession,
@@ -903,6 +904,10 @@ const handlers: Record<string, Handler> = {
 	},
 	"model.default": () =>
 		observeSetupRead(getDefaultModel, (result) => (result.model ? { model_available: "yes" } : {})),
+	"model.setDefault": async (params) => {
+		if (!isSetDefaultModelParams(params)) throw new Error("Set a default model or thinking level");
+		return setDefaultModel(params);
+	},
 	"provider.status": () =>
 		observeSetupRead(getProviderStatus, (report) => ({
 			provider_available: providerAvailability(report),

@@ -5,7 +5,9 @@ import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	customMessageText,
+	DEFAULT_MODEL_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	isSetDefaultModelParams,
 	isTodoReviewFixMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	normalizeSessionTitle,
@@ -101,6 +103,20 @@ test("auto plan-summary generation advances the protocol to v69", () => {
 	expect(PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION).toBe(69);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION);
 	expect(WS_METHODS.todoGenerateSummary).toBe("todo.generateSummary");
+});
+
+test("default model writes are pinned to v71", () => {
+	expect(PROTOCOL_VERSION).toBe(71);
+	expect(DEFAULT_MODEL_PROTOCOL_VERSION).toBe(71);
+	expect(WS_METHODS.modelSetDefault).toBe("model.setDefault");
+});
+
+test("model.setDefault requires a model ref or thinking level", () => {
+	expect(isSetDefaultModelParams({})).toBe(false);
+	expect(isSetDefaultModelParams({ model: { provider: "p", id: "m" } })).toBe(true);
+	expect(isSetDefaultModelParams({ thinkingLevel: "high" })).toBe(true);
+	expect(isSetDefaultModelParams({ thinkingLevel: "invalid" })).toBe(false);
+	expect(isSetDefaultModelParams({ model: { provider: "p" } })).toBe(false);
 });
 
 describe("isTodoReviewFixMessage", () => {

@@ -419,7 +419,14 @@ of the host.
   **`close`** (by `tabKey`, refusing a busy shell unless `force`) / `model.list` + **`model.refresh`** (awaits the host's
   single-flighted catalog refresh and returns **`RefreshedModels`** — the post-refresh list plus
   **`complete`**, whether that pass settled inside the host's capped wait, since only a settled list is
-  authoritative; `force` bypasses pi's 4h freshness throttle, so a user-initiated refresh actually fetches) / **`model.clampThinking`** (pi's
+  authoritative; `force` bypasses pi's 4h freshness throttle, so a user-initiated refresh actually fetches) /
+  **`model.default`** (the pinned model + compatible thinking level, plus additive `defaultThinkingLevel`
+  for the raw saved global level, unclamped) /
+  **`model.setDefault`** (`{ model?: WireModelRef; thinkingLevel?: ThinkingLevel }`, at least one field;
+  result is the `model.default` shape; with `defaultThinkingLevel` it is pinned by
+  `DEFAULT_MODEL_PROTOCOL_VERSION` = v71, and clients hide the default-model Settings section against older
+  hosts) /
+  **`model.clampThinking`** (pi's
   `clampThinkingLevel` for a `{model, level}` pair — the pre-session picker's effort adjustment, so no
   client re-derives pi's policy) / **`provider.status`**
 (the auth-provider status report; every read revalidates host-side) / the **`provider.*` in-app login**

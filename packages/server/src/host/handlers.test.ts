@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
 	Template,
 	TemplateInfo,
@@ -10,6 +11,7 @@ import type {
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
+import { configurePiRuntime } from "../agent/piRuntime";
 import { recordAcceptedMessage, resetFeedbackForTests, setFeedbackPublisher } from "../feedback";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import { addComment, getReviewSnapshot } from "../reviews";
@@ -23,6 +25,24 @@ const CTX = { clientKey: "test-client" };
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+
+async function setupDefaultModelRuntime(): Promise<() => void> {
+	const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
+	const agentDir = join(dataDir, "agent");
+	mkdirSync(agentDir);
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	const runtime = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	configurePiRuntime(runtime);
+	return () => {
+		configurePiRuntime(null);
+		if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+	};
+}
 
 function git(cwd: string, ...args: string[]): void {
 	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
@@ -125,6 +145,42 @@ test("template reads resolve a project's current checkout and reject ambiguous l
 	} finally {
 		if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 		else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+	}
+});
+
+test("model.setDefault rejects empty params", async () => {
+	await expect(handleRequest("model.setDefault", {}, CTX)).rejects.toThrow(
+		/Set a default model or thinking level/,
+	);
+});
+
+test("model.setDefault delegates successful Pi settings writes and returns the saved default", async () => {
+	const cleanup = await setupDefaultModelRuntime();
+	try {
+		const result = await handleRequest("model.setDefault", { thinkingLevel: "high" }, CTX);
+		expect(result).toMatchObject({
+			model: null,
+			thinkingLevel: "high",
+			defaultThinkingLevel: "high",
+		});
+		expect(JSON.parse(readFileSync(join(dataDir, "agent", "settings.json"), "utf8"))).toEqual({
+			defaultThinkingLevel: "high",
+		});
+	} finally {
+		cleanup();
+	}
+});
+
+test("model.setDefault surfaces Pi write failures", async () => {
+	const cleanup = await setupDefaultModelRuntime();
+	const settingsPath = join(dataDir, "agent", "settings.json");
+	mkdirSync(settingsPath);
+	try {
+		await expect(handleRequest("model.setDefault", { thinkingLevel: "high" }, CTX)).rejects.toThrow(
+			/Failed to write Pi default settings/,
+		);
+	} finally {
+		cleanup();
 	}
 });
 

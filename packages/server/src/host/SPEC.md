@@ -148,7 +148,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   registry, including `workspace.rename` as the direct manual door into
   `renameWorkspace(id, name, { lock: true, renameBranch: false })` — the workspaces module changes only the
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
-  separately — and the **Skills-manager set**: `skill.list` / `skills.state` / `project.skills` build
+  separately. `model.setDefault` delegates the Pi-settings write to `agent` and returns its result — and
+  the **Skills-manager set**: `skill.list` / `skills.state` / `project.skills` build
   the admission context from `projects` (+ the
   workspace's `skillOverrides` when workspace-scoped) and pass it into agent's `listSkillCommands`/
   `listSkillCatalog`; `session.list` decorates agent's `listSessions` summaries with

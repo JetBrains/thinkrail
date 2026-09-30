@@ -19,6 +19,7 @@ import type {
 	AskUserQuestionResult,
 	ImageContent,
 	Model,
+	ModelDefault,
 	PiEvent,
 	QueuedMessageContent,
 	QueueLane,
@@ -34,6 +35,7 @@ import type {
 	SessionQueueState,
 	SessionStats,
 	SessionSummary,
+	SetDefaultModelParams,
 	SlashCommandInfo,
 	ThinkingLevel,
 	TranscriptMessage,
@@ -1451,10 +1453,7 @@ function readAvailableWireModels(runtime: Awaited<ReturnType<typeof getPiRuntime
 	return settledAvailableModels(runtime).map((m) => toWireModel(m as unknown as Model<string>));
 }
 
-export interface DefaultModelResult {
-	model: WireModel | null;
-	thinkingLevel: ThinkingLevel;
-}
+export type DefaultModelResult = ModelDefault;
 
 export async function clampThinkingForModel(
 	ref: Pick<WireModel, "provider" | "id">,
@@ -1464,19 +1463,47 @@ export async function clampThinkingForModel(
 	return clampThinkingLevel(resolveWireModel(generation.runtime, ref), level);
 }
 
+function globalPiSettings(): SettingsManager {
+	return SettingsManager.create(process.cwd(), undefined, { projectTrusted: false });
+}
+
 export async function getDefaultModel(): Promise<DefaultModelResult> {
 	const available = settledAvailableModels(await getPiRuntime());
-	const settings = SettingsManager.create(process.cwd());
-	const provider = settings.getDefaultProvider();
-	const modelId = settings.getDefaultModel();
+	const globalSettings = globalPiSettings().getGlobalSettings();
+	const provider = globalSettings.defaultProvider;
+	const modelId = globalSettings.defaultModel;
 	const pinned =
 		provider && modelId
 			? available.find((model) => model.provider === provider && model.id === modelId)
 			: undefined;
 	const resolved = (pinned ?? null) as Model<string> | null;
-	const saved = settings.getDefaultThinkingLevel() ?? "medium";
-	const thinkingLevel = resolved ? clampThinkingLevel(resolved, saved) : saved;
-	return { model: resolved ? toWireModel(resolved) : null, thinkingLevel };
+	const defaultThinkingLevel = globalSettings.defaultThinkingLevel ?? "medium";
+	const thinkingLevel = resolved
+		? clampThinkingLevel(resolved, defaultThinkingLevel)
+		: defaultThinkingLevel;
+	return {
+		model: resolved ? toWireModel(resolved) : null,
+		thinkingLevel,
+		defaultThinkingLevel,
+	};
+}
+
+export async function setDefaultModel(params: SetDefaultModelParams): Promise<DefaultModelResult> {
+	const generation = await getPiRuntimeGeneration();
+	const settings = globalPiSettings();
+	if (params.model) {
+		const model = resolveWireModel(generation.runtime, params.model);
+		settings.setDefaultModelAndProvider(model.provider, model.id);
+	}
+	if (params.thinkingLevel !== undefined) settings.setDefaultThinkingLevel(params.thinkingLevel);
+	await settings.flush();
+	const errors = settings.drainErrors();
+	if (errors.length > 0) {
+		throw new Error(
+			`Failed to write Pi default settings: ${errors.map(({ error }) => error.message).join("; ")}`,
+		);
+	}
+	return getDefaultModel();
 }
 
 export function isSessionStreaming(sessionId: string): boolean {

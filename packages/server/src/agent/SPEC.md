@@ -305,7 +305,23 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     send a `fallbacks` field, a 400 on an Anthropic proxy without the server-side-fallback beta, while a new
     chat in the same worktree worked. Pi publishes no pre-session resolver (`findInitialModel` and
     `defaultModelPerProvider` are not re-exported from the package root and its `exports` map blocks the deep
-    import), and copying its provider-default table here would recompute what `pi` owns. **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
+    import), and copying its provider-default table here would recompute what `pi` owns.
+
+    **Persisting Pi's default** (`model.setDefault`) resolves any supplied `{provider,id}` against
+    `settledAvailableModels` (unknown → error), writes the provided fields with
+    `setDefaultModelAndProvider` / `setDefaultThinkingLevel` through a Pi `SettingsManager` that never loads
+    project settings (`projectTrusted: false`, so a broken host-cwd `.pi/settings.json` cannot fail a global
+    save), then calls `flush()`;
+    errors returned by `drainErrors()` are thrown. Pi remains the sole owner—ThinkRail keeps no copy—and live
+    `setModel` / `setThinkingLevel` remain non-persisting. New chats still omit model/effort unless
+    explicitly chosen, leaving resolution to Pi. Pi 0.87.1 exposes no public clear setter, so a saved model
+    cannot be cleared to Automatic; Pi `/settings` per-model `modelThinkingLevels` overrides win at
+    session start and are not reported; concurrent writes are last-writer-wins. `model.default` reports Pi's
+    **global** settings only (`getGlobalSettings()`), never the merged project view: the host cwd is not any
+    workspace's cwd, so its `.pi/settings.json` would mislabel the saved default. A workspace's project
+    override still wins at its session start and is not reported.
+
+    **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
     `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl`, `headers`, extension/provider
     routing data, and any other field are excluded by
     default — and the inbound side re-resolves the ref by `{provider,id}` via `resolveWireModel` against
