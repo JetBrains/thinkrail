@@ -565,6 +565,14 @@ a project picker, the prompt hero, and the reused
   eligibility, and credit fulfillment stay outside the app. This proactive Settings link is always
   available and deliberately does not call `feedback.respond`, alter automatic-popup state, or claim that
   booking alone earns credits.
+  **`ModelsSettings`** is the **Default model** section, visible only at protocol v71 or newer. It re-reads
+  `model.default` on open, whenever the live catalog changes (empty included), and after every save — the
+  host resolves the saved model and its effort levels against its settled catalog, so a vanished or changed
+  model never offers stale levels; only the latest read applies, and a failed read replaces the controls
+  with a retry — and writes the global Pi model/effort through `model.setDefault`; Pi's global
+  settings also serve the pi terminal app, while a project's `.pi/settings.json` may override them. There
+  is no clear-to-automatic control because Pi has no setter for clearing a saved model. Both triggers are
+  disabled, and choices in an already-open picker are ignored, while a save or re-read is in flight.
   **`ReviewSettings`** is the
   **plan-review policy** section: the reviewer **model + effort** (`ModelSelector`/`ThinkingSelector` over
   `useModelCatalog`, written as `settings.update { reviewModel | reviewEffort }`; unset ⇒ default). The
@@ -583,7 +591,7 @@ a project picker, the prompt hero, and the reused
   (`AGENT_REVIEW_SETTING_PROTOCOL_VERSION`): a pre-v68 host can echo/store the unknown field while still
   registering `request_review`, so the switch would misreport the worker's behavior. A single dimmed "General" nav item ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`AppearanceSettings`/`LineWidthSettings`/`ChatSettings`/`TemplatesSettings`/
-  `PrivacySettings`/`ReviewSettings`/`FeedbackSettings` and the app-wide **`InterviewPromptDialog`** are the
+  `PrivacySettings`/`ReviewSettings`/`ModelsSettings`/`FeedbackSettings` and the app-wide **`InterviewPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and
   fixed Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
   middle-button booking activation open Calendar immediately and record `book`; close, Escape, and backdrop record `postpone`; permanent

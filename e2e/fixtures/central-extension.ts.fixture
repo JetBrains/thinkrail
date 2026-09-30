@@ -1,7 +1,7 @@
 const model = {
 	id: "e2e-central-model",
 	name: "Synthetic JetBrains AI model",
-	reasoning: false,
+	reasoning: true,
 	input: ["text"],
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 	contextWindow: 100000,

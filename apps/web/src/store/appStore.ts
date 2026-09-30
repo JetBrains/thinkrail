@@ -271,6 +271,7 @@ export type LayoutIntentInput = LayoutIntent extends infer Intent
 
 export const SettingsSection = {
 	Providers: "providers",
+	Models: "models",
 	Github: "github",
 	Appearance: "appearance",
 	LineWidth: "line-width",

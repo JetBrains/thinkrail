@@ -375,7 +375,7 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`LineWidth`/`Chat`/`Layout`/`Updates`/`Terminal`/`Templates`/`Review`/`Privacy`/`Feedback`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Github`/`Appearance`/`LineWidth`/`Chat`/`Layout`/`Updates`/`Terminal`/`Templates`/`Review`/`Privacy`/`Feedback`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider warning, and update-ready
   shell affordance can deep-link without prop-drilling. The optional Update key is navigation only. Native
