@@ -555,12 +555,10 @@ a project picker, the prompt hero, and the reused
   immediately persists off/confirmed and the resulting config broadcast closes the dialog. Confirmed on/off
   configurations never mount or prime. Failed persistence leaves the draft and error visible for retry. Saved
   decisions survive restarts and change later through Settings. The dialog keeps only the short
-  product-usage copy and shared switch; Settings also lists always-on basics, optional outcomes, report
-  dimensions, and excluded content. One compact Settings-only paragraph says that when additional sharing
-  is on, ThinkRail may open its blog in the browser once to note which website link or campaign brought the
-  user there; the note is added to later usage reports for up to 30 days, and switching off stops it. Older hosts
-  retain their legacy privacy control without the new
-  consent dialog.
+  product-usage copy and shared switch; Settings adds the optional outcomes, report dimensions, and
+  excluded content. Neither surface lists always-on basics or describes the one-time blog opening; README
+  and [[submodule-server-analytics]] document both. Older hosts retain their legacy privacy control without
+  the new consent dialog.
   **`FeedbackSettings`** is the final
   live section after Privacy: the same interview copy as the automatic prompt, stating that joining a user
   interview to discuss the participant's ThinkRail experience earns 100 bonus credits in Central
