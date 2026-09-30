@@ -1,9 +1,9 @@
 export type PageZoomAction = "in" | "out" | "reset";
 
 type PageZoomShortcutEvent = Readonly<
-	Pick<KeyboardEvent, "altKey" | "ctrlKey" | "key" | "metaKey">
+	Pick<KeyboardEvent, "altKey" | "ctrlKey" | "defaultPrevented" | "key" | "metaKey">
 > &
-	Pick<KeyboardEvent, "preventDefault" | "stopImmediatePropagation">;
+	Pick<KeyboardEvent, "preventDefault">;
 
 const APPLE_PLATFORM = /Mac|iPhone|iPad|iPod/;
 const PAGE_ZOOM_FACTORS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2] as const;
@@ -27,10 +27,10 @@ export function handlePageZoomShortcut(
 	platform: string,
 	request: (action: PageZoomAction) => void,
 ): void {
+	if (event.defaultPrevented) return;
 	const action = pageZoomActionForShortcut(event, platform);
 	if (!action) return;
 	event.preventDefault();
-	event.stopImmediatePropagation();
 	request(action);
 }
 

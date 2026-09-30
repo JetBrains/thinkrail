@@ -4,7 +4,9 @@ import { handlePageZoomShortcut, nextPageZoom, type PageZoomAction } from "./pag
 function shortcut(
 	platform: string,
 	key: string,
-	modifiers: Partial<Pick<KeyboardEvent, "altKey" | "ctrlKey" | "metaKey">> = {},
+	modifiers: Partial<
+		Pick<KeyboardEvent, "altKey" | "ctrlKey" | "defaultPrevented" | "metaKey">
+	> = {},
 ): { actions: PageZoomAction[]; calls: string[] } {
 	const actions: PageZoomAction[] = [];
 	const calls: string[] = [];
@@ -14,8 +16,8 @@ function shortcut(
 			altKey: false,
 			ctrlKey: false,
 			metaKey: false,
+			defaultPrevented: false,
 			preventDefault: () => calls.push("preventDefault"),
-			stopImmediatePropagation: () => calls.push("stopImmediatePropagation"),
 			...modifiers,
 		},
 		platform,
@@ -35,7 +37,7 @@ test("maps browser zoom keys and claims only matching chords", () => {
 	for (const key of ["+", "="]) {
 		expect(shortcut("Win32", key, { ctrlKey: true })).toEqual({
 			actions: ["in"],
-			calls: ["preventDefault", "stopImmediatePropagation"],
+			calls: ["preventDefault"],
 		});
 	}
 	expect(shortcut("Win32", "-", { ctrlKey: true }).actions).toEqual(["out"]);
@@ -47,6 +49,17 @@ test("maps browser zoom keys and claims only matching chords", () => {
 	]) {
 		expect(input).toEqual({ actions: [], calls: [] });
 	}
+});
+
+test("yields zoom chords a page handler already claimed", () => {
+	expect(shortcut("MacIntel", "0", { metaKey: true, defaultPrevented: true })).toEqual({
+		actions: [],
+		calls: [],
+	});
+	expect(shortcut("Win32", "-", { ctrlKey: true, defaultPrevented: true })).toEqual({
+		actions: [],
+		calls: [],
+	});
 });
 
 test("steps from the webview's current zoom to the adjacent browser factor", () => {

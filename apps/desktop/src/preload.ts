@@ -37,13 +37,10 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 	},
 });
 const electroview = new Electrobun.Electroview({ rpc });
-window.addEventListener(
-	"keydown",
-	(event) =>
-		handlePageZoomShortcut(event, navigator.platform, (action) => {
-			electroview.rpc?.send.pageZoomRequested({ action });
-		}),
-	{ capture: true },
+window.addEventListener("keydown", (event) =>
+	handlePageZoomShortcut(event, navigator.platform, (action) => {
+		electroview.rpc?.send.pageZoomRequested({ action });
+	}),
 );
 const globals = globalThis as typeof globalThis & Record<string, unknown>;
 const updateBridge: NativeUpdateBridge = Object.freeze({

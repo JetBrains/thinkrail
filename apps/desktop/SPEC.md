@@ -97,10 +97,12 @@ pins production wiring.
 
 ## Native page zoom
 
-The desktop preload claims Command/Ctrl-`+` (`=`), `-`, and `0` before page handlers and sends a typed
-one-way request to the main process. The main process steps from the webview's current native zoom to the
-adjacent bounded browser-style factor, so zoom changed outside the shortcuts (WebView2's Ctrl+wheel) cannot
-desync it; the web app owns no duplicate shortcut or zoom state.
+Command/Ctrl-`+` (`=`), `-`, and `0` zoom as a browser's default action: the desktop preload listens after
+page handlers and yields any chord a handler already claimed with `preventDefault` (Monaco's `Mod+K` folding
+chords end on these keys), then sends a typed one-way request to the main process. A handler that only stops
+propagation also keeps the chord, so zoom is inert while such an input has focus. The main process steps from
+the webview's current native zoom to the adjacent bounded browser-style factor, so zoom changed outside the
+shortcuts (WebView2's Ctrl+wheel) cannot desync it; the web app owns no duplicate shortcut or zoom state.
 
 ## Native window chrome
 
