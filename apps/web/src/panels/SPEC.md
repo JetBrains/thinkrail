@@ -185,9 +185,10 @@ treatment.
   band, including the trailing menu slot; its inner open-file button remains transparent so that band
   cannot look clipped before the menu),
   `FilePane` and `DiffPane` as resource-registry dispatchers, the bundled lazy renderers under
-  `panels/resources`, plus lazy `TerminalInstance`. Monaco's desktop-file plumbing — worker wiring, the
-  local loader, sole token-driven `EDITOR_THEME`, and `[data-theme]` re-theme observer — lives once in
-  `monacoSetup.ts`; Pierre's lazy workbench provider owns its shared worker pool and CSS-variable theme.
+  `panels/resources`, plus lazy `TerminalInstance`. Monaco's desktop-file plumbing — editor worker, curated
+  reader contributions, Shiki adapter/languages, local loader, sole token-driven `EDITOR_THEME`, and
+  `[data-theme]` re-theme observer — lives once in `monacoSetup.ts`; Pierre's lazy workbench provider owns its
+  shared worker pool and CSS-variable theme.
   The slim header view-toggle segment (the ordered resource
   candidates, `Split|Inline`, `List|Tree`) is the shared `ToggleSegment` — whose active segment reuses the tab
   grammar's `control-bg-selected` (below), never a container surface, so the selected fill survives the
@@ -1426,17 +1427,32 @@ own section. The kebab menu (`plan-menu`, a
   the selected column with horizontal scrolling in a narrower pane. Broadcast changes update a mounted
   desktop file editor. Pierre diffs and phone files own horizontal overflow and do not consume this Monaco
   preference. Rendered Markdown and rendered Markdown diffs retain their separate ~78ch reading measure.
-- **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` defines the sole
-  `EDITOR_THEME` from live workspace-surface and semantic syntax variables and chooses its normal/high-
-  contrast base from manifest appearance/contrast metadata—never from a known id—then redefines it after the
-  theme module's atomic `[data-theme]` signal. Reads are canonicalized to hex (`lib.cssColorToHex`;
-  unparseable values are dropped), and a bad value degrades to Monaco's base palette rather than crashing the
-  panel. Pierre's one registered `thinkrail` CSS-variable Shiki theme emits variable references instead of
-  catalog colours; inherited `--diffs-*` properties map foreground/syntax to `--code-*`, canvases to the
-  workspace/content roles, and addition/deletion paint to feedback roles, so a theme swap needs no
-  re-highlight. `TerminalInstance` similarly rebuilds from the complete 16-slot ANSI variable set. Monaco
-  and xterm consume the nullable editor selection-foreground override when provided. The desktop file editor
-  keeps the shared 6px scrollbar geometry, no shadow, and no overview ruler.
+- **The desktop Monaco surface is a reader, not a language workstation.** Its file-only options keep the
+  configured wrapping, generated code typography, minimap/overview-ruler removal and 6px shadowless scrollbar,
+  and add read-only messaging, the path as its accessible label, an 8px top inset, three-character line-number
+  gutter, full active-line paint, smooth scrolling, active bracket-pair + indentation guides, single-file
+  occurrence highlighting, and ambiguous-Unicode suppression. Opaque `viewState` is restored only after its
+  editor-state shape is validated and is saved on unmount, so tab switches round-trip scroll and folding.
+  Monaco is imported from `editor.api` with only the reading contributions (find, folding, bracket matching,
+  context menu/copy, links, hover, word highlighting, sticky scroll, go-to-line/command palette, read-only
+  messaging and Unicode highlighting); keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML
+  language-service contributions and their workers are absent, so this viewer emits no language-service
+  diagnostics by construction.
+- **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` has the sole `EDITOR_THEME`.
+  Themes own one TextMate scope definition: chat uses its live CSS-variable form, while Monaco resolves that
+  same definition plus its complete editor/widget/menu/input colour map to hex, loads it into a dedicated
+  JS-regex Shiki highlighter, and installs `@shikijs/monaco` once per page. Its curated language catalog is
+  shared with the chat highlighter and extended for the desktop file formats; missing Monaco language ids are
+  registered with their file associations before Shiki installs providers. A theme swap replaces the
+  highlighter theme under the same name, redefines Monaco, and selects `EDITOR_THEME`. The normal/high-contrast
+  base comes from manifest appearance/contrast metadata—never a known id—and remains inherited for specialist
+  colours outside the explicit map. Reads pass through `lib.cssColorToHex`; an absent or unparseable token is
+  omitted so the selected base palette wins rather than crashing the panel. Pierre's one registered
+  `thinkrail` CSS-variable Shiki theme emits variable references instead of catalog colours; inherited
+  `--diffs-*` properties map foreground/syntax to `--code-*`, canvases to the workspace/content roles, and
+  addition/deletion paint to feedback roles, so a theme swap needs no re-highlight. `TerminalInstance`
+  similarly rebuilds from the complete 16-slot ANSI variable set. Monaco and xterm consume the nullable
+  editor selection-foreground override when provided.
 - **Terminal renderer + font measurement.** `TerminalInstance` runs xterm's **default DOM renderer** on
   purpose — `addon-webgl` is *not* loaded, and loading it would be a regression (see `architecture.md`
   Decision #11: the DOM renderer is a prerequisite for touch, and `WebglAddon.dispose()` leaks its WebGL2

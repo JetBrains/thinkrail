@@ -65,6 +65,7 @@ equals `border-default` is not a second weight, it is a second name).
 | Feedback | `feedback-{info,success,warning,error}` + the `-subtle` / `-muted` steps in use | a solid border is the solid colour, so there is no `-border` tier |
 | Chat bubble | `bubble-user-bg` · `bubble-user-border` | tinted from the manifest's own `bubbleAccent`, which every bundled theme currently ships **equal to its `accent`** — the user bubble wears the brand colour. The separate key is the knob (per `themes/SPEC.md`): a theme that wants the bubble to read as "you" rather than "the product" re-points it without touching a component |
 | Effects | `overlay` · `sunken` | written per light/dark by the theme engine |
+| Strict-consumer editor roles | `editor-selection-bg` · `editor-selection-text` · `editor-selection-highlight-bg` · `editor-find-match-bg` · `widget-shadow` | `publish: false`; Monaco/xterm read them directly and no Tailwind utility is emitted |
 
 There is no `text-strong` and no `text-link` utility: they duplicate other tokens, and `--text-link`
 exists as a variable for `global.css`'s bare-anchor fallback alone. That fallback lives in the CSS base
@@ -95,11 +96,13 @@ inherits one `.pierre-code-surface` custom-property bridge: its CSS-variable Shi
 `--diffs-token-*` to the existing `--code-*` syntax roles, while `--diffs-bg*`, number foregrounds, and
 addition/deletion bases map to the workspace/content canvas, muted text, and feedback success/error roles.
 Those values remain live variable references, so Pierre needs neither a per-theme registration nor a
-re-highlight after a swap. All consumers therefore name the same semantic tokens everything else does,
-with one name per value.
+re-highlight after a swap. Monaco and chat share the single `THINKRAIL_SHIKI_THEME` TextMate definition;
+chat keeps its live CSS-variable form, while Monaco resolves the same variables to hex for its strict theme
+API. All consumers therefore name the same semantic tokens everything else does, with one name per value.
 The roles these consumers *share* with components (`--container-*-bg`, `--text-muted`) stay published and
-mapped in `@theme inline`; the ones **only** they read (`--editor-selection-bg` / `-text`) are
-`publish: false` and unmapped — a utility nothing can use is dead weight. Values that strict JS consumers
+mapped in `@theme inline`; the ones **only** they read (`--editor-selection-*`,
+`--editor-find-match-bg`, and `--widget-shadow`) are `publish: false` and unmapped — a utility nothing can
+use is dead weight. Values that strict JS consumers
 need reach them canonicalised to hex via `cssColorToHex` (`lib/utils.ts`), because the built CSS is minified
 and Monaco/xterm accept hex only.
 
@@ -108,7 +111,7 @@ the remainder comes from its own built-in palette:
 
 | consumer | we set | the rest comes from |
 | --- | --- | --- |
-| Monaco | desktop file background/foreground, line numbers, cursor, both selection colours, scrollbar slider colours, and every syntax rule | `vs` / `vs-dark` / `hc-black` / `hc-light` via `inherit: true` — find/suggest/hover widgets, bracket match, and indent guides |
+| Monaco | desktop file canvas/foreground/gutter; active + inactive line numbers; cursor + both selection colours; current-line fill/border; indent guides; bracket match + six bracket-pair colours; word/selection/find highlights; sticky-scroll canvas/shadow; fold/whitespace paint; editor + hover widgets; menu, quick-input and input surfaces/states; focus border; widget/scrollbar shadows + slider states; every TextMate syntax rule | `vs` / `vs-dark` / `hc-black` / `hc-light` via `inherit: true` — suggest/peek/debug, minimap and other unlisted specialist surfaces |
 | Pierre | file/diff canvas and gutter, foreground/line numbers/selection, syntax variables, success additions, error deletions, separator/annotation surfaces, code family/size | Pierre core layout/effects for properties not bridged; no `@pierre/theme` preset is applied |
 | xterm | background, foreground, cursor, both selection colours, all 16 ANSI | xterm defaults for `cursorAccent` and `selectionInactiveBackground` |
 | mermaid | the `themeVariables` map in `chat/tools/visualize/mermaid.ts` | mermaid's `base` theme for anything absent from that map |

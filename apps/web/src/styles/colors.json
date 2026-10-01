@@ -143,6 +143,24 @@
 			"from": "editorSelectionForeground",
 			"publish": false,
 			"note": "read by Monaco and xterm through getComputedStyle; a utility would be dead weight"
+		},
+		"editor-selection-highlight-bg": {
+			"from": "editorSelection",
+			"alpha": "soft",
+			"publish": false,
+			"note": "Monaco's secondary matches of the active selection"
+		},
+		"editor-find-match-bg": {
+			"from": "warning",
+			"alpha": "muted",
+			"publish": false,
+			"note": "Monaco's active find match"
+		},
+		"widget-shadow": {
+			"from": "text",
+			"alpha": "soft",
+			"publish": false,
+			"note": "Monaco widget, sticky-scroll, and scrollbar shadows"
 		}
 	},
 

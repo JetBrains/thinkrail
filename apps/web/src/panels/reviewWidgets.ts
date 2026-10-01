@@ -3,7 +3,7 @@ import {
 	RiSendPlaneLine as Send,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
-import * as monaco from "monaco-editor";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { AnchorDraft, ReviewThread, ReviewThreadActions } from "@/resources";

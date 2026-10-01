@@ -21,15 +21,17 @@ theme = adding one `bundled/*.theme.json` file** (a PR + rebuild) — no code, c
 - **Owns:** the versioned `ThemeManifest` contract + JSON schema; the bundled manifest set; catalog
   construction and fixed/system resolution; deterministic pair derivation and same-appearance fallback;
   operating-system color-scheme reads/subscription; atomic CSS-custom-property application; the versioned
-  first-paint preference hint; the semantic syntax-variable contract, and Shiki's generic CSS-variable
-  TextMate scope map (Monaco consumes the same palette through its fixed adapter).
+  first-paint preference hint; the semantic syntax-variable contract; Shiki's generic CSS-variable TextMate
+  scope map; and the hex resolver + Monaco colour-key map that adapt that same definition for the strict
+  desktop editor API.
 - **Public surface:** `index.ts` only — `initializeBundledThemes` (the synchronous bootstrap),
   `applyTheme` / `resolveTheme`, preference-aware `applyThemePreference` /
   `resolveThemePreference`, `deriveSystemThemePair`, `readSystemAppearance`,
   `onSystemAppearanceChange`, `getThemes`, `onThemeSwap` (subscribe to a completed theme change — this
   module owns the `data-theme` signal, so it owns the way to observe it; Monaco/xterm/mermaid all re-read
   their palettes through it rather than each hand-rolling a MutationObserver), `readThemeHint` /
-  `writeThemeHint`, and the manifest/descriptor/preference-result types plus the Shiki registration.
+  `writeThemeHint`, and the manifest/descriptor/preference-result types plus the Shiki registration and its
+  `resolveThinkrailShikiTheme` strict-consumer adapter.
 - **Allowed external deps:** `@thinkrail/contracts` for the opaque ids, theme preference shapes and
   configured default; browser DOM/media/storage APIs and Vite's build-time glob; Shiki types only, to type
   the generic registration.
@@ -136,11 +138,15 @@ the native shell's already-injected stable preference adapter when present and l
 which survives Electrobun's changing loopback origins without giving the launcher theme semantics.
 
 Shiki uses one web-only TextMate registration whose colors are semantic CSS variables (an explicitly
-supported Shiki mode); Monaco reads the same semantic palette and picks its base from
-appearance/contrast metadata, never a known theme id. Thus adding a theme never adds a Shiki import, CSS
-selector, or editor-specific catalog entry, and a swap needs no re-highlight. Unit coverage pins exact and
-wrong-appearance resolution, both fallback tiers, pair derivation, absent-signal light behavior,
-legacy/versioned hints, and media-listener cleanup.
+supported Shiki mode). Chat consumes that registration directly and needs no re-highlight. Monaco passes the
+same registration through `resolveThinkrailShikiTheme`, which canonicalizes every available CSS variable to
+hex, omits an unavailable value so Monaco's inherited base remains usable, and attaches the token-owned editor
+UI map; the panel supplies `cssColorToHex` so themes retain no dependency back into `lib`. Monaco picks its
+base from appearance/contrast metadata, never a known theme id, and replaces the resolved registration under
+one fixed name after an atomic theme swap. Thus adding a theme never adds a Shiki import, CSS selector, or
+editor-specific catalog entry. Unit coverage pins exact and wrong-appearance resolution, both fallback tiers,
+pair derivation, absent-signal light behavior, legacy/versioned hints, media-listener cleanup, and complete
+hex resolution of the shared syntax map.
 
 ## Non-goals (deliberate)
 

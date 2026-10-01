@@ -33,6 +33,7 @@ const CSS_FILES = FILES.filter((f) => f.endsWith(".css"));
 
 const GENERATED_CSS = join(SRC, "styles/generated/colors.css");
 const GENERATED_TYPE_CSS = join(SRC, "styles/generated/typography.css");
+const GENERATED_SPACING_CSS = join(SRC, "styles/generated/spacing.css");
 
 const THEME_ENTRY = /^\s*--color-([a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)/gm;
 const PUBLISHED_TARGET = new Map(
@@ -43,7 +44,7 @@ const PUBLISHED_TARGET = new Map(
 const PUBLISHED = new Set(PUBLISHED_TARGET.keys());
 
 const DECLARED_VARS = new Set(
-	[...CSS_FILES, GENERATED_CSS, GENERATED_TYPE_CSS].flatMap((f) =>
+	[...CSS_FILES, GENERATED_CSS, GENERATED_TYPE_CSS, GENERATED_SPACING_CSS].flatMap((f) =>
 		[...read(f).matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((m) => m[1]),
 	),
 );

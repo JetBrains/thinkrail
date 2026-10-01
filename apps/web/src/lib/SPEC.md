@@ -46,8 +46,9 @@ Tiny UI helpers shared across components.
   own-property-safe `readLayoutSelection()` / `readLayoutNavigationClock()` accessors for untrusted
   tuple-keyed maps. Also the shared
   Shiki highlighter, **kept out of the barrel** so the eager `@/lib` import stays shiki-free:
-  `highlighter.ts` loads the curated grammars + JS regex engine and renders with `themes`' one generic
-  CSS-variable registration. It is imported per-file (`@/lib/highlighter`) from lazy chunks only; theme
+  `highlighter.ts` owns the curated grammar/id/file-association catalog shared by chat and the desktop
+  Monaco renderer; its chat subset uses the JS regex engine and `themes`' one generic CSS-variable
+  registration. It is imported per-file (`@/lib/highlighter`) from lazy chunks only; theme
   identity/palettes never live in `lib`. Collision-safe browser identity composition lives here too:
   **`tupleKey()`** length-prefixes independent strings, **`parseTupleKey()`** reads only its requested
   namespace, and **`layoutResourceIdentity()`** gives every frontend-local placement/cache alias one

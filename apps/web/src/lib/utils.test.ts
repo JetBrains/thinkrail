@@ -74,6 +74,11 @@ test("cssColorToHex expands short hex and passes full hex through", () => {
 	expect(cssColorToHex(" #2b2b2b ")).toBe("#2b2b2b");
 });
 
+test("cssColorToHex canonicalizes serialized sRGB colors", () => {
+	expect(cssColorToHex("color(srgb 1 0.5 0 / 20%)")).toBe("#ff800033");
+	expect(cssColorToHex("color(srgb 0.2 0.4 0.6)")).toBe("#336699");
+});
+
 test("cssColorToHex reads unparseable values as unset", () => {
 	expect(cssColorToHex("")).toBe("");
 	expect(cssColorToHex("not-a-color")).toBe("");

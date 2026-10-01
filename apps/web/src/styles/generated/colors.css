@@ -56,6 +56,9 @@
 	--selection-bg-muted: color-mix(in srgb, var(--selection) 40%, transparent); /* the content canvas's ::selection (markdown preview): translucent, so the unselected remainder of a line box reads as a soft edge, not a black hole punched in an opaque wash */
 	--editor-selection-bg: var(--editor-selection);
 	--editor-selection-text: var(--editor-selection-foreground); /* read by Monaco and xterm through getComputedStyle; a utility would be dead weight */
+	--editor-selection-highlight-bg: color-mix(in srgb, var(--editor-selection) 20%, transparent); /* Monaco's secondary matches of the active selection */
+	--editor-find-match-bg: color-mix(in srgb, var(--warning) 40%, transparent); /* Monaco's active find match */
+	--widget-shadow: color-mix(in srgb, var(--text) 20%, transparent); /* Monaco widget, sticky-scroll, and scrollbar shadows */
 }
 
 /* Appearance-level effects. The theme engine stamps `data-theme-appearance` before React mounts, so

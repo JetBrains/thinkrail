@@ -1,14 +1,15 @@
-import MonacoReact, { type BeforeMount, type OnMount } from "@monaco-editor/react";
-import type { editor } from "monaco-editor";
-import { useCallback, useEffect, useRef } from "react";
+import MonacoReact, { type OnMount } from "@monaco-editor/react";
+import type { editor } from "monaco-editor/esm/vs/editor/editor.api.js";
+import { use, useCallback, useEffect, useRef } from "react";
 import type { ResourceViewProps, SurfaceReview } from "@/resources";
 import { LoadingRegion } from "../components/Skeleton";
 import { useAppStore } from "../store";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
-	defineThinkrailTheme,
 	EDITOR_THEME,
-	sharedEditorOptions,
+	fileEditorOptions,
+	languageForPath,
+	monacoSetup,
 	watchThemeSwap,
 } from "./monacoSetup";
 import {
@@ -16,8 +17,6 @@ import {
 	attachReviewCommenting,
 	attachReviewThreads,
 } from "./reviewWidgets";
-
-const beforeMount: BeforeMount = (monaco) => defineThinkrailTheme(monaco);
 
 function focusLine(review: SurfaceReview): number | null {
 	const range = review.focus?.anchor.selectors.find((selector) => selector.kind === "lineRange");
@@ -36,6 +35,7 @@ export default function MonacoEditor({
 	viewState,
 	onViewState,
 }: ResourceViewProps) {
+	use(monacoSetup);
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
@@ -60,8 +60,8 @@ export default function MonacoEditor({
 		decorationsRef.current = applied.decorations;
 	}, []);
 
-	const onMount: OnMount = (codeEditor, monaco) => {
-		stopThemeWatchRef.current = watchThemeSwap(monaco, EDITOR_THEME);
+	const onMount: OnMount = (codeEditor) => {
+		stopThemeWatchRef.current = watchThemeSwap();
 		editorRef.current = codeEditor;
 		menuIconsRef.current = decorateEditorContextMenus(codeEditor);
 		if (isEditorViewState(viewState)) codeEditor.restoreViewState(viewState);
@@ -118,11 +118,11 @@ export default function MonacoEditor({
 			height="100%"
 			path={resource.path}
 			value={text}
+			language={languageForPath(resource.path)}
 			theme={EDITOR_THEME}
-			beforeMount={beforeMount}
 			onMount={onMount}
 			loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
-			options={sharedEditorOptions(fileLineWidth, fileLineWidthBounded)}
+			options={fileEditorOptions(fileLineWidth, fileLineWidthBounded, resource.path)}
 		/>
 	);
 }
