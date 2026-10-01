@@ -4,9 +4,11 @@ import {
 	ACTIVITY_PROTOCOL_VERSION,
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	CHAT_RESOURCES_PROTOCOL_VERSION,
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	isBackgroundCommandCompletionMessage,
 	isSetDefaultModelParams,
 	isTodoReviewFixMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
@@ -105,9 +107,9 @@ test("auto plan-summary generation advances the protocol to v69", () => {
 	expect(WS_METHODS.todoGenerateSummary).toBe("todo.generateSummary");
 });
 
-test("default model writes are pinned to v71", () => {
-	expect(PROTOCOL_VERSION).toBe(71);
-	expect(DEFAULT_MODEL_PROTOCOL_VERSION).toBe(71);
+test("default model writes are pinned to v72", () => {
+	expect(PROTOCOL_VERSION).toBe(72);
+	expect(DEFAULT_MODEL_PROTOCOL_VERSION).toBe(72);
 	expect(WS_METHODS.modelSetDefault).toBe("model.setDefault");
 });
 
@@ -170,4 +172,59 @@ describe("customMessageText", () => {
 			]),
 		).toBe("ab");
 	});
+});
+
+test("command completion guards accept displayed terminal notices, not malformed or hidden details", () => {
+	const details = {
+		id: "command",
+		sessionId: "parent",
+		name: "build",
+		status: "completed",
+		startedAt: 1,
+		finishedAt: 2,
+		exitCode: 0,
+		output: { text: "<script>plain output</script>", truncated: false },
+	};
+	const message = {
+		role: "custom",
+		customType: "background-command-completion",
+		display: true,
+		content: "Finished",
+		details,
+	};
+	expect(isBackgroundCommandCompletionMessage(message)).toBe(true);
+	for (const status of ["stopped", "error"]) {
+		expect(
+			isBackgroundCommandCompletionMessage({
+				...message,
+				details: { ...details, status, exitCode: null, errorMessage: "diagnostic" },
+			}),
+		).toBe(true);
+	}
+	for (const invalid of [
+		{ ...message, display: false },
+		{ ...message, customType: "unrelated" },
+		{ ...message, details: { ...details, status: "running" } },
+		{ ...message, details: { ...details, finishedAt: undefined } },
+		{ ...message, details: { ...details, startedAt: Number.NaN } },
+		{ ...message, details: { ...details, name: {} } },
+		{ ...message, details: { ...details, exitCode: "0" } },
+		{ ...message, details: { ...details, errorMessage: [] } },
+		{ ...message, details: { ...details, output: { text: "log", truncated: "false" } } },
+		{ ...message, details: { ...details, output: { text: [] } } },
+		null,
+	])
+		expect(isBackgroundCommandCompletionMessage(invalid)).toBe(false);
+});
+
+test("chat resources introduce scoped reads and cancellation, never browser command execution", () => {
+	expect(CHAT_RESOURCES_PROTOCOL_VERSION).toBe(71);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CHAT_RESOURCES_PROTOCOL_VERSION);
+	expect(WS_CHANNELS.sessionResourcesChanged).toBe("session.resourcesChanged");
+	expect(WS_METHODS.sessionResources).toBe("session.resources");
+	expect(WS_METHODS.backgroundCommandOutput).toBe("backgroundCommand.output");
+	expect(WS_METHODS.backgroundCommandStop).toBe("backgroundCommand.stop");
+	expect(WS_METHODS.subagentStop).toBe("subagent.stop");
+	expect(WS_METHODS.subagentStopAll).toBe("subagent.stopAll");
+	expect(Object.values(WS_METHODS)).not.toContain("backgroundCommand.start");
 });

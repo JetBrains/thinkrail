@@ -14,7 +14,8 @@ The shadcn/ui primitives (Radix), copied in and owned here, themed with our desi
 ## Boundary
 
 - **Owns:** `button` (React-19 ref pass-through; `default`/`destructive`/`outline`/`ghost` variants —
-  `destructive` is the red confirm for irreversible actions), `dialog` (with an optional `hideClose` for
+  `destructive` is the red confirm for irreversible actions), `switch` (native-disabled track/thumb control;
+  state is exposed by `role="switch"` + `aria-checked`, never visible On/Off text), `dialog` (with an optional `hideClose` for
   chromeless dialogs), `dropdown-menu`, `context-menu` (sharing private `menu-styles` geometry/token
   classes), `popover` (with an optional `container` portal target — pass the host Dialog node so a popover
   inside a

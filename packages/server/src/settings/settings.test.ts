@@ -291,26 +291,26 @@ test("retired chat message order is stripped from disk and stale updates", () =>
 	expect(onDisk).not.toHaveProperty("chatMessageOrder");
 });
 
-test("reviewAutoFix defaults on; an old config without it loads the default; toggling off round-trips", () => {
-	expect(DEFAULT_CONFIG.reviewAutoFix).toBe(true);
+test("reviewAutoFix defaults off; an old config without it loads the default; toggling on round-trips", () => {
+	expect(DEFAULT_CONFIG.reviewAutoFix).toBe(false);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
-	resetConfigCache();
-	expect(getConfig().reviewAutoFix).toBe(true);
-	const next = updateConfig({ reviewAutoFix: false });
-	expect(next.reviewAutoFix).toBe(false);
 	resetConfigCache();
 	expect(getConfig().reviewAutoFix).toBe(false);
+	const next = updateConfig({ reviewAutoFix: true });
+	expect(next.reviewAutoFix).toBe(true);
+	resetConfigCache();
+	expect(getConfig().reviewAutoFix).toBe(true);
 });
 
-test("agentReviewEnabled defaults on; an old config loads the default; toggling off round-trips; non-boolean rejected", () => {
-	expect(DEFAULT_CONFIG.agentReviewEnabled).toBe(true);
+test("agentReviewEnabled defaults off; an old config loads the default; toggling on round-trips; non-boolean rejected", () => {
+	expect(DEFAULT_CONFIG.agentReviewEnabled).toBe(false);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
 	resetConfigCache();
-	expect(getConfig().agentReviewEnabled).toBe(true);
-	const next = updateConfig({ agentReviewEnabled: false });
-	expect(next.agentReviewEnabled).toBe(false);
-	resetConfigCache();
 	expect(getConfig().agentReviewEnabled).toBe(false);
+	const next = updateConfig({ agentReviewEnabled: true });
+	expect(next.agentReviewEnabled).toBe(true);
+	resetConfigCache();
+	expect(getConfig().agentReviewEnabled).toBe(true);
 	const invalid = { agentReviewEnabled: "nope" } as unknown as AppConfigUpdate;
 	expect(() => updateConfig(invalid)).toThrow("agentReviewEnabled must be a boolean");
 });

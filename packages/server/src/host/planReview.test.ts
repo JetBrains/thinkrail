@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import {
-	type ExtensionContext,
+	type ExtensionToolContext,
 	ModelRuntime,
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
@@ -100,6 +100,9 @@ beforeEach(() => {
 	worktree = mkdtempSync(join(tmpdir(), "planreview-wt-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 	resetConfigCache();
+	// Auto-fix is off by default; these tests exercise the auto-fix-on delivery path unless a case
+	// overrides it back to false explicitly.
+	updateConfig({ reviewAutoFix: true });
 	writeFileSync(join(worktree, "a.ts"), "const a = 1;\nconst b = 2;\n");
 	saveWorkspaces([
 		{
@@ -346,7 +349,9 @@ test("a tool request_review queues behind a button review of another step on the
 	};
 
 	installRequestReviewSeam(serialRunner);
-	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+	const ctx = {
+		sessionManager: { getSessionId: () => sessionId },
+	} as unknown as ExtensionToolContext;
 
 	// Button review on `first` and the worker's request_review tool on `second`, kicked off together:
 	// without the shared plan chain both hidden children would stream at once.
@@ -552,7 +557,9 @@ test("the tool path awaits artifact reconciliation before it snapshots the chang
 	installRequestReviewSeam(verdictRunner(approve));
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
-	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+	const ctx = {
+		sessionManager: { getSessionId: () => sessionId },
+	} as unknown as ExtensionToolContext;
 
 	// The reviewing snapshot must be taken only after the reconciliation barrier settles — request_review
 	// fires right after todo_update, so a snapshot before the barrier can miss the just-committed change set.
@@ -587,7 +594,9 @@ test("the tool path marks findings sent to the worker so resolve_comment can clo
 	installRequestReviewSeam(verdictRunner(requestChanges));
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
-	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+	const ctx = {
+		sessionManager: { getSessionId: () => sessionId },
+	} as unknown as ExtensionToolContext;
 	const out = await createRequestReviewTool().execute(
 		"tc",
 		{ itemId: id } as never,
@@ -615,7 +624,9 @@ test("the tool path deletes the just-filed drafts when the mark-sent transaction
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
 	const ref = { workspaceId: WS, sessionId, id };
-	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+	const ctx = {
+		sessionManager: { getSessionId: () => sessionId },
+	} as unknown as ExtensionToolContext;
 
 	// Filing succeeds but the mark-sent step throws (a concurrent clear / non-draft collision). The
 	// compensation must remove the just-filed drafts so no open finding is stranded whose canonical id
@@ -652,7 +663,9 @@ test("the tool path deletes the first filed draft when a later finding fails to 
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
 	const ref = { workspaceId: WS, sessionId, id };
-	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+	const ctx = {
+		sessionManager: { getSessionId: () => sessionId },
+	} as unknown as ExtensionToolContext;
 
 	// The first finding persists; the second addComment throws (a mid-loop store fault). fileFindings
 	// must compensate its own partial success so the first draft is deleted, leaving no stranded open
@@ -773,7 +786,9 @@ test("the tool path rolls back and deletes the findings when the cycle record fa
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
 	const ref = { workspaceId: WS, sessionId, id };
-	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+	const ctx = {
+		sessionManager: { getSessionId: () => sessionId },
+	} as unknown as ExtensionToolContext;
 
 	// Findings file and mark `sent`, then the todo-review sidecar write throws. The transaction must roll
 	// the sent findings back to draft and delete them so the cancelled review leaves nothing open whose
@@ -850,7 +865,9 @@ test("a request_review that fails before the review starts releases its claim, s
 	const sessionId = await workerSession();
 	// No change set yet: startTodoReview throws, and the claim must not outlive the failed call.
 	const id = new TodoStore(worktree, sessionId).add({ title: "not yet committed" }).id;
-	const ctx = { sessionManager: { getSessionId: () => sessionId } } as unknown as ExtensionContext;
+	const ctx = {
+		sessionManager: { getSessionId: () => sessionId },
+	} as unknown as ExtensionToolContext;
 	const run = () =>
 		createRequestReviewTool().execute("tc", { itemId: id } as never, undefined, undefined, ctx);
 

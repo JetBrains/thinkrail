@@ -67,10 +67,12 @@ ourselves and never surface a credential value over the wire.
   - `providerLogin` — the in-app credential **writes**, session-less (a login runs on the Welcome screen
     before any session exists), so a `loginId`-keyed sibling of `agent/webUiContext`:
     - `startLogin(providerId, type = "oauth")` → `{ loginId }` **synchronously**; `runtime.login(id,
-      type, interaction)` runs **detached** (a flow can take minutes — awaiting it would blow the client
+      type, interaction, piLoginOptions)` runs **detached** (a flow can take minutes — awaiting it would blow the client
       request timeout and block the WS pump). **One bridge, both auth types** (issue #97): `"oauth"` and
       `"api_key"` (the provider-owned interactive key entry — one secret prompt for most providers,
-      multi-prompt for azure/vertex-style creds). pi's `AuthInteraction` is wired to `LoginFrame` pushes
+      multi-prompt for azure/vertex-style creds). `piLoginOptions` (agent barrel) supplies pi's stable
+      installation `deviceId` from the global settings, which pi's openai "Sign in with ChatGPT" flow
+      requires (it throws without one); like pi's CLI it is created on first use, never for other flows. pi's `AuthInteraction` is wired to `LoginFrame` pushes
       on the `provider.login` channel: `notify` `auth_url`→`authUrl`, `device_code`→`deviceCode`,
       `progress`/`info`→`progress` (info links appended as plain URLs); `prompt`
       `select`→a parked `select` frame, `text`/`secret`/`manual_code`→a parked `prompt` frame awaiting a

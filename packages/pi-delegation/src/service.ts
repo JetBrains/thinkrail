@@ -54,6 +54,7 @@ interface ActiveRun {
 	readonly controller: AbortController;
 	readonly settled: Promise<void>;
 	readonly resolveSettled: () => void;
+	abortReason?: string;
 	sessionAbort?: Promise<void>;
 }
 
@@ -113,10 +114,15 @@ function repairResourceTranscript(manager: SessionManager): void {
 		throw new DelegationError("invalid-child-transcript", replay.issues.join("; "));
 }
 
-function abortActiveRun(entry: ChildEntry): Promise<void> {
+function abortActiveRun(entry: ChildEntry, reason?: string): Promise<void> {
 	const activeRun = entry.activeRun;
-	if (!activeRun) return Promise.resolve();
-	activeRun.controller.abort();
+	if (!activeRun || (entry.snapshot?.status !== "queued" && entry.snapshot?.status !== "running")) {
+		return Promise.resolve();
+	}
+	if (!activeRun.controller.signal.aborted) {
+		if (reason !== undefined) activeRun.abortReason = reason;
+		activeRun.controller.abort();
+	}
 	if (entry.resource) {
 		entry.session.clearQueue();
 		entry.session.abortCompaction();
@@ -272,11 +278,57 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 	const byParent = new Map<string, Set<string>>();
 	const semaphores = new Map<string, Semaphore>();
 	const lifecycleListeners = new Set<(e: LifecycleEvent) => void>();
+	const parentLifetimes = new Map<string, object>();
+	const pendingParentPreparations = new Map<object, Set<Promise<void>>>();
 
 	const fallbackRuntimes = new Map<
 		string,
 		{ runtime: Promise<ModelRuntime>; mirroredProviderIds: Set<string> }
 	>();
+
+	function parentLifetimeFor(parentSessionId: string): object {
+		let lifetime = parentLifetimes.get(parentSessionId);
+		if (!lifetime) {
+			lifetime = {};
+			parentLifetimes.set(parentSessionId, lifetime);
+		}
+		return lifetime;
+	}
+
+	function beginParentPreparation(parentSessionId: string): {
+		lifetime: object;
+		complete(): void;
+	} {
+		const lifetime = parentLifetimeFor(parentSessionId);
+		let finish = () => {};
+		const settled = new Promise<void>((resolve) => {
+			finish = resolve;
+		});
+		let pending = pendingParentPreparations.get(lifetime);
+		if (!pending) {
+			pending = new Set();
+			pendingParentPreparations.set(lifetime, pending);
+		}
+		const scope = pending;
+		scope.add(settled);
+		let completed = false;
+		return {
+			lifetime,
+			complete() {
+				if (completed) return;
+				completed = true;
+				finish();
+				scope.delete(settled);
+				if (scope.size === 0) pendingParentPreparations.delete(lifetime);
+				if (
+					parentLifetimes.get(parentSessionId) === lifetime &&
+					!byParent.has(parentSessionId) &&
+					!pendingParentPreparations.has(lifetime)
+				)
+					parentLifetimes.delete(parentSessionId);
+			},
+		};
+	}
 
 	function synchronizeRegisteredProviders(
 		runtime: ModelRuntime,
@@ -393,6 +445,9 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			},
 			durationMs: Date.now() - startedAt,
 			...(activity !== undefined ? { activity } : {}),
+			...(entry.activeRun?.abortReason !== undefined
+				? { abortReason: entry.activeRun.abortReason }
+				: {}),
 		};
 	}
 
@@ -446,7 +501,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			} else if (event.type === "turn_start") {
 				if (cap !== undefined && turns > cap) {
 					abortRequested = true;
-					void (entry.resource ? abortActiveRun(entry) : session.abort()).catch(() => {});
+					void abortActiveRun(entry).catch(() => {});
 				}
 			}
 		});
@@ -666,9 +721,9 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				}
 				await entry.session.steer(text);
 			},
-			abort: async () => {
+			abort: async (reason) => {
 				if (entry.disposed) return;
-				await abortActiveRun(entry);
+				await abortActiveRun(entry, reason);
 			},
 			dispose: () => disposeChild(entry),
 			onEvent: (listener) => {
@@ -793,6 +848,18 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 	}
 
 	async function createChild(input: CreateChildSpec): Promise<ChildHandle> {
+		const preparation = beginParentPreparation(input.parent);
+		try {
+			return await createChildInLifetime(input, preparation.lifetime);
+		} finally {
+			preparation.complete();
+		}
+	}
+
+	async function createChildInLifetime(
+		input: CreateChildSpec,
+		parentLifetime: object,
+	): Promise<ChildHandle> {
 		const parentSessionId = input.parent;
 		const spec = snapshotChildSpec(input);
 		const options = assertV1Combination(spec);
@@ -824,6 +891,20 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			bindings.childExtensionFactories ?? [],
 			manager,
 		);
+		if (
+			parentLifetimes.get(parentSessionId) !== parentLifetime ||
+			!bindings.resolveParent?.(parentSessionId)
+		) {
+			try {
+				await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+			} finally {
+				session.dispose();
+			}
+			throw new DelegationError(
+				"unknown-parent",
+				`Parent session ${parentSessionId} closed during child preparation`,
+			);
+		}
 		const record: SpawnRecord = Object.freeze({
 			...birthFields(spec, session),
 			parentSessionId,
@@ -1202,16 +1283,32 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			return () => lifecycleListeners.delete(listener);
 		},
 		disposeChildrenOf: async (parentSessionId) => {
-			const entries = [...(byParent.get(parentSessionId) ?? [])].flatMap((id) => {
+			const retiringLifetime = parentLifetimes.get(parentSessionId);
+			const replacementLifetime = {};
+			parentLifetimes.set(parentSessionId, replacementLifetime);
+			const preparations = retiringLifetime
+				? [...(pendingParentPreparations.get(retiringLifetime) ?? [])]
+				: [];
+			const lineage = byParent.get(parentSessionId);
+			byParent.delete(parentSessionId);
+			semaphores.delete(parentSessionId);
+			fallbackRuntimes.delete(parentSessionId);
+			const entries = [...(lineage ?? [])].flatMap((id) => {
 				const entry = children.get(id);
 				return entry ? [entry] : [];
 			});
 			for (const entry of entries) entry.disposed = true;
 			for (const entry of entries) void abortActiveRun(entry).catch(() => {});
-			await Promise.all(entries.map(disposeChild));
-			byParent.delete(parentSessionId);
-			semaphores.delete(parentSessionId);
-			fallbackRuntimes.delete(parentSessionId);
+			try {
+				await Promise.all([...entries.map(disposeChild), ...preparations]);
+			} finally {
+				if (
+					parentLifetimes.get(parentSessionId) === replacementLifetime &&
+					!byParent.has(parentSessionId) &&
+					!pendingParentPreparations.has(replacementLifetime)
+				)
+					parentLifetimes.delete(parentSessionId);
+			}
 		},
 	};
 }

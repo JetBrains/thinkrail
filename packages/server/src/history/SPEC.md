@@ -83,7 +83,8 @@ to preserve).
 - **`message` entries:** `{ type: "message", ..., message: { role: "system"|"user"|"assistant"|"toolResult", content: string|array, timestamp: ms-number } }`.
   System messages carry prompt `sections` and/or `toolsAdded`/`toolsRemoved`; the first request persists the
   full system message and later prompt/tool changes persist patches. `isTranscriptMessageRole` excludes system,
-  so it renders no transcript row and consumes no `messageIndex` slot.
+  so it renders no transcript row and consumes no `messageIndex` slot. A `toolResult` whose tool ran nested
+  calls (`ctx.executeTool`) carries a bounded `nestedCalls` record; it is not a transcript row of its own.
 - **`usage` entries:** `{ type: "usage", ..., kind, provider, model, usage, note? }`; they are hidden from the
   conversation tree and context, but pi includes their token/cost data in session totals. Compaction entries may
   carry a `systemMessage` snapshot alongside their summary.
@@ -104,6 +105,8 @@ Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify 
   and symlinks, then their direct `.jsonl` children. Unreadable or broken symlink targets contribute no files. Each cwd
   directory is `--<resolved cwd with a leading slash removed and slash/backslash/colon replaced by `-`>--`; `getDefaultSessionDirPath`
   is private, while `getDefaultSessionDir` is not exported from the package root. `defaultSessionDirFor` replicates it.
+- **When a file appears:** a new session's file is first written once it holds a user or assistant message
+  (setup-only sessions leave no file), so a prompt whose first turn never completes is still on disk.
 - **Environment:** `getAgentDir()` reads `PI_CODING_AGENT_DIR` when called, so changing that variable before a SessionManager
   discovery call changes the root used by pi.
 

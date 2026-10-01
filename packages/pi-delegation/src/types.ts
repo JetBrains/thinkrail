@@ -109,6 +109,7 @@ export interface DelegationRunDetails {
 	};
 	durationMs: number;
 	activity?: string;
+	abortReason?: string;
 }
 
 export type LifecycleEvent =
@@ -152,7 +153,8 @@ export interface ChildHandle {
 	runQueued(task: string, opts?: RunOptions): Promise<RunOutcome>;
 	runNow(task: string, opts?: RunOptions): Promise<RunOutcome>;
 	steer(text: string): Promise<void>;
-	abort(): Promise<void>;
+	/** Installs cancellation synchronously; the promise may await active-run settlement. */
+	abort(reason?: string): Promise<void>;
 	dispose(): Promise<void>;
 	onEvent(l: (e: LifecycleEvent) => void): () => void;
 	collectResult(): RunSnapshot | undefined;

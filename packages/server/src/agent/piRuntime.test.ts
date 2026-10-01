@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, jest, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ModelsRefreshOptions, ModelsRefreshResult } from "@earendil-works/pi-ai";
@@ -10,6 +10,7 @@ import {
 	configurePiRuntime,
 	configurePiRuntimeGenerationInitializer,
 	getPiRuntime,
+	piLoginOptions,
 	preparePiRuntimeGeneration,
 	refreshCatalogs,
 	refreshCatalogsDetached,
@@ -392,4 +393,27 @@ test("PI_OFFLINE disables the refresh entirely", () => {
 	const { runtime, calls } = fakeRuntime();
 	refreshCatalogsDetached(runtime);
 	expect(calls.length).toBe(0);
+});
+
+test("login options supply pi's per-installation device id from the global settings", async () => {
+	const agentDir = mkdtempSync(join(tmpdir(), "trpi-device-id-"));
+	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	try {
+		const first = piLoginOptions.getDeviceId?.();
+		expect(first).toMatch(/^[0-9a-f-]{36}$/);
+		const persisted = () => {
+			try {
+				return JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8")).deviceId;
+			} catch {
+				return undefined;
+			}
+		};
+		for (let i = 0; i < 100 && persisted() === undefined; i++) await Bun.sleep(10);
+		expect(persisted()).toBe(first);
+	} finally {
+		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+		rmSync(agentDir, { recursive: true, force: true });
+	}
 });

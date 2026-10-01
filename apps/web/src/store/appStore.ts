@@ -19,6 +19,7 @@ import type {
 	SessionActivityPayload,
 	SessionEventPayload,
 	SessionQueueState,
+	SessionResources,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
@@ -38,6 +39,7 @@ import {
 	customMessageText,
 	DEFAULT_CONFIG,
 	isAskUserAnswersMessage,
+	isBackgroundCommandCompletionMessage,
 	isControlMessage,
 	isLineWidth,
 	isSubagentCompletionMessage,
@@ -77,13 +79,22 @@ import type {
 } from "../shell/layout";
 import type { ConnectionStatus } from "../transport";
 import {
+	type ChatResourceRead,
+	type ChatResourceScope,
+	type ChatResourceSnapshots,
+	staleChatResources,
+} from "./chatResources";
+import {
 	type HistoryTarget,
+	isChatResourceReadCurrent,
+	isChatResourceScopeAlive,
 	selectActiveWorkspaceProjectId,
 	selectLayoutResourcePlacement,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
 	selectWorkspaceTick,
+	supportsChatResources,
 } from "./selectors";
 
 export interface StreamingResponseMovement {
@@ -582,6 +593,19 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				const { toolCallId, result } = event.message.details;
 				return { ...rt, askAnswers: { ...rt.askAnswers, [toolCallId]: result } };
 			}
+			if (isBackgroundCommandCompletionMessage(event.message)) {
+				return {
+					...rt,
+					turns: [
+						...rt.turns,
+						{
+							kind: "backgroundCommandCompletion",
+							id: crypto.randomUUID(),
+							details: event.message.details,
+						},
+					],
+				};
+			}
 			if (isSubagentCompletionMessage(event.message)) {
 				return {
 					...rt,
@@ -753,6 +777,12 @@ function reduceExtUi(
 }
 
 interface AppState {
+	resourceSnapshots: ChatResourceSnapshots;
+	resourceRevision: number;
+	invalidateChatResources: (scope: ChatResourceScope) => void;
+	installChatResources: (read: ChatResourceRead, snapshot: SessionResources) => void;
+	failChatResources: (read: ChatResourceRead, error: string) => void;
+	clearChatResources: (scope: ChatResourceScope) => void;
 	status: ConnectionStatus;
 	connectionGeneration: number;
 	welcomeGeneration: number;
@@ -1379,6 +1409,7 @@ function withoutChat(
 	const closed = s.closedChatsByWorkspace[workspaceId] ?? [];
 	const inHistory = closed.some((chat) => chat.sessionId === sessionId);
 	const hasRuntime = s.sessions[sessionId] !== undefined;
+	const hasResources = s.resourceSnapshots[workspaceId]?.[sessionId] !== undefined;
 	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
 	const hasActivity = s.activityByWorkspace[workspaceId]?.sessions[sessionId] !== undefined;
 	const targetsLocation =
@@ -1396,6 +1427,7 @@ function withoutChat(
 		!hasActivity &&
 		!inHistory &&
 		!hasRuntime &&
+		!hasResources &&
 		!hasSkillBaseline &&
 		!targetsLocation &&
 		!targetsRoute &&
@@ -1461,6 +1493,14 @@ function withoutChat(
 				}
 			: {}),
 		...(hasRuntime ? { sessions: omitKey(s.sessions, sessionId) } : {}),
+		...(hasResources
+			? {
+					resourceSnapshots: {
+						...s.resourceSnapshots,
+						[workspaceId]: omitKey(s.resourceSnapshots[workspaceId] ?? {}, sessionId),
+					},
+				}
+			: {}),
 		...(hasActivity ? withoutSessionActivity(s, workspaceId, sessionId) : {}),
 		...(hasSkillBaseline
 			? { skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId) }
@@ -1728,10 +1768,88 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	toasts: [],
+	resourceSnapshots: {},
+	resourceRevision: 0,
+	invalidateChatResources: (scope) =>
+		set((state) => {
+			if (
+				!isChatResourceScopeAlive(state, scope) ||
+				!supportsChatResources(state.protocolVersion) ||
+				state.status !== "connected"
+			)
+				return {};
+			const previous = state.resourceSnapshots[scope.workspaceId]?.[scope.sessionId];
+			const revision = state.resourceRevision + 1;
+			return {
+				resourceRevision: revision,
+				resourceSnapshots: {
+					...state.resourceSnapshots,
+					[scope.workspaceId]: {
+						...state.resourceSnapshots[scope.workspaceId],
+						[scope.sessionId]: {
+							snapshot: previous?.snapshot ?? null,
+							connectionGeneration: previous?.connectionGeneration ?? null,
+							revision,
+							fresh: false,
+							error: null,
+						},
+					},
+				},
+			};
+		}),
+	installChatResources: (read, snapshot) =>
+		set((state) => {
+			if (
+				!isChatResourceReadCurrent(state, read) ||
+				snapshot.workspaceId !== read.workspaceId ||
+				snapshot.sessionId !== read.sessionId
+			)
+				return {};
+			return {
+				resourceSnapshots: {
+					...state.resourceSnapshots,
+					[read.workspaceId]: {
+						...state.resourceSnapshots[read.workspaceId],
+						[read.sessionId]: {
+							snapshot,
+							connectionGeneration: read.connectionGeneration,
+							revision: read.revision,
+							fresh: true,
+							error: null,
+						},
+					},
+				},
+			};
+		}),
+	failChatResources: (read, error) =>
+		set((state) => {
+			const previous = state.resourceSnapshots[read.workspaceId]?.[read.sessionId];
+			if (!previous || !isChatResourceReadCurrent(state, read)) return {};
+			return {
+				resourceSnapshots: {
+					...state.resourceSnapshots,
+					[read.workspaceId]: {
+						...state.resourceSnapshots[read.workspaceId],
+						[read.sessionId]: { ...previous, fresh: false, error },
+					},
+				},
+			};
+		}),
+	clearChatResources: (scope) =>
+		set((state) => ({
+			resourceSnapshots: {
+				...state.resourceSnapshots,
+				[scope.workspaceId]: omitKey(
+					state.resourceSnapshots[scope.workspaceId] ?? {},
+					scope.sessionId,
+				),
+			},
+		})),
 	setStatus: (status) =>
 		set((state) => ({
 			status,
 			protocolVersion: null,
+			resourceSnapshots: staleChatResources(state.resourceSnapshots),
 			connectionGeneration:
 				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
 		})),
@@ -1747,6 +1865,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
 			return {
 				protocolVersion,
+				resourceSnapshots: supportsChatResources(protocolVersion)
+					? staleChatResources(state.resourceSnapshots)
+					: {},
 				projects: openProjects,
 				recentProjects: sortProjects(recentProjects),
 				hostPlatform: hostPlatform ?? null,
@@ -1841,6 +1962,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				),
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
 				activityByWorkspace: omitKey(state.activityByWorkspace, workspaceId),
+				resourceSnapshots: omitKey(state.resourceSnapshots, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
@@ -2309,6 +2431,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				delete skillsSyncedTickBySession[sessionId];
 			}
 			return {
+				resourceSnapshots: omitKey(s.resourceSnapshots, workspaceId),
 				workspaceViewsByWorkspace: omitKey(s.workspaceViewsByWorkspace, workspaceId),
 				layoutDocumentsByWorkspace: omitKey(s.layoutDocumentsByWorkspace, workspaceId),
 				layoutAttentionByWorkspace: omitKey(s.layoutAttentionByWorkspace, workspaceId),

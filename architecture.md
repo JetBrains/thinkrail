@@ -32,7 +32,7 @@ apps/web        UI client (mobile-first)                           ── depend
 apps/desktop    Electrobun local-host launcher                     ── depends on ─▶ packages/server, packages/contracts, packages/shared
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
-packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/pi-delegation, packages/pi-subagents
+packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/pi-background-commands, packages/pi-delegation, packages/pi-subagents
 packages/contracts  the wire (types-only)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
@@ -42,6 +42,8 @@ packages/pi-delegation         portable pure-pi package: the delegation core —
                     for live session parents or independent resource owners
 packages/pi-dag               portable durable backend DAGs over pi-delegation; host-owned resources;
                     not bundled into ThinkRail, no workflow UI, not a second pi runtime
+packages/pi-background-commands portable explicit session-owned background commands over Pi's executor
+                    (bundled into every ThinkRail parent session by packages/server)
 packages/pi-subagents          portable pure-pi extension: Agent + get_subagent_result tools over
                     pi-delegation (bundled into every ThinkRail parent session by packages/server)
 packages/pi-thinkrail-workflow pi extension: the workflow skill system + its always-on routing rule
@@ -271,6 +273,15 @@ dependency. This keeps test process drivers outside both launchers and the serve
     lifetime policies through trusted lifecycle controls without another scheduler or human-gate
     bypass. Restore paused; one process controls each DAG. ThinkRail neither bundles it nor exposes it
     over the wire or in the UI.
+
+18. **Chat Resources projects capability owners; it is not a generic resource runtime.**
+    [[module-pi-background-commands]] supplies explicit, session-owned log-only commands over Pi's
+    public executor; normal Bash and workspace PTYs stay unchanged. `packages/server` embeds that
+    portable package through `agent` and projects it beside direct [[module-pi-delegation]] children
+    into the current-chat Resources view. Parent session entries own injected command services and
+    retained subagent completion delivery across extension reload; scoped reads, controls, and
+    invalidations are composed through the agent barrel. Detailed integration belongs to
+    [[submodule-server-agent]], and command lifetime/retention to [[module-pi-background-commands]].
 
 ## Invariants
 

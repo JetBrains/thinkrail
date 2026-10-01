@@ -1,6 +1,6 @@
 import type { AuthInteraction, AuthPrompt, AuthType } from "@earendil-works/pi-ai";
 import type { LoginFrame, LoginPush, LoginReply } from "@thinkrail/contracts";
-import { type PiRuntimeGeneration, usePiRuntime } from "../agent";
+import { type PiRuntimeGeneration, piLoginOptions, usePiRuntime } from "../agent";
 
 let publish: (push: LoginPush, generation?: PiRuntimeGeneration) => void = () => {};
 export function setLoginPublisher(
@@ -103,7 +103,7 @@ export function startLogin(providerId: string, type: AuthType = "oauth"): { logi
 	};
 
 	void usePiRuntime(async (runtime, generation) => {
-		await runtime.login(providerId, type, interaction);
+		await runtime.login(providerId, type, interaction, piLoginOptions);
 		return generation;
 	})
 		.then((generation) => {

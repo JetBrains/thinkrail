@@ -565,7 +565,7 @@ a project picker, the prompt hero, and the reused
   eligibility, and credit fulfillment stay outside the app. This proactive Settings link is always
   available and deliberately does not call `feedback.respond`, alter automatic-popup state, or claim that
   booking alone earns credits.
-  **`ModelsSettings`** is the **Default model** section, visible only at protocol v71 or newer. It re-reads
+  **`ModelsSettings`** is the **Default model** section, visible only at protocol v72 or newer. It re-reads
   `model.default` on open, whenever the live catalog changes (empty included), and after every save — the
   host resolves the saved model and its effort levels against its settled catalog, so a vanished or changed
   model never offers stale levels; only the latest read applies, and a failed read replaces the controls

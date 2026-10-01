@@ -8,8 +8,10 @@ export {
 	parseAgentDefinition,
 } from "./src/definitions";
 export {
+	createSubagents,
 	createSubagentsExtension,
 	SUBAGENT_COMPLETION_MESSAGE,
+	type Subagents,
 	type SubagentsExtensionOptions,
 } from "./src/extension";
 export {

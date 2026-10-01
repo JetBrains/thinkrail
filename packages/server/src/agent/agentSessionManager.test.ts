@@ -349,6 +349,68 @@ test("two sessions in two worktrees stream independently; disposing one leaves t
 	expect((events.get(a.sessionId) ?? []).length).toBe(aEventsBefore);
 });
 
+test.each([
+	"removeSession",
+	"removeWorkspaceSessions",
+	"deleteSession",
+	"settleSessionsForShutdown",
+	"disposeAllSessions",
+])("%s cannot restart a queued continuation after aborting a native tool", async (teardown) => {
+	const cwd = tmpCwd("trpi-teardown-queue-");
+	const workspaceId = `ws-teardown-queue-${teardown}`;
+	const startedPath = join(cwd, "started");
+	const releasePath = join(cwd, "release");
+	let continuationCalls = 0;
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("bash", {
+				command: `touch '${startedPath}'; while ! test -f '${releasePath}'; do sleep 0.02; done`,
+			}),
+		),
+		() => {
+			continuationCalls++;
+			return fauxAssistantMessage("QUEUED_CONTINUATION_RAN");
+		},
+	]);
+	setSessionManagerFactory((sessionCwd) => SessionManager.inMemory(sessionCwd));
+	const session = await createSession({ cwd, workspaceId, model: toWireModel(fauxA.getModel()) });
+	const prompting = promptSession(session.sessionId, "Wait in the native tool.");
+	prompting.catch(() => {});
+	try {
+		await waitForPath(startedPath);
+		await followUpSession(session.sessionId, "QUEUED_FOLLOW_UP");
+		expect((await getSessionMessages(session.sessionId, workspaceId, cwd)).summary).toMatchObject({
+			isStreaming: true,
+			queue: { steering: [], followUp: ["QUEUED_FOLLOW_UP"] },
+		});
+		switch (teardown) {
+			case "removeSession":
+				await removeSession(session.sessionId);
+				break;
+			case "removeWorkspaceSessions":
+				await removeWorkspaceSessions(workspaceId);
+				break;
+			case "deleteSession":
+				await deleteSession(session.sessionId, workspaceId, cwd);
+				break;
+			case "settleSessionsForShutdown":
+				await settleSessionsForShutdown();
+				break;
+			case "disposeAllSessions":
+				disposeAllSessions();
+				break;
+		}
+		await prompting;
+		expect(continuationCalls).toBe(0);
+		expect(seen(session.sessionId)).not.toContain("QUEUED_CONTINUATION_RAN");
+	} finally {
+		writeFileSync(releasePath, "");
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("agent_settled carries the final attempt's terminal metadata", async () => {
 	fauxA.setResponses([
 		fauxAssistantMessage("incomplete", {
@@ -1239,9 +1301,11 @@ test("graceful shutdown persists an accepted answer and aborts its continuation"
 	prompting.catch(() => {});
 	try {
 		await waitForPath(gate.startedPath);
+		await followUpSession(session.sessionId, "QUEUED_BEFORE_SHUTDOWN");
 		const result = gatedQuestionAnswer();
 		const answering = answerQuestion(session.sessionId, toolCallId, result);
 		const settling = settleSessionsForShutdown(1000);
+		await followUpSession(session.sessionId, "QUEUED_DURING_SHUTDOWN");
 		gate.release();
 		await Promise.all([answering, settling, prompting]);
 		const transcript = await getSessionMessages(session.sessionId, "ws-shutdown-accepted", cwd);
@@ -1251,11 +1315,72 @@ test("graceful shutdown persists an accepted answer and aborts its continuation"
 		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
 		expect(persisted.details).toEqual<AskUserQuestionResult>(result);
 		expect(seen(session.sessionId)).not.toContain("SHUTDOWN_CONTINUATION_RAN");
+		expect(transcript.messages.filter((message) => message.role === "user")).toHaveLength(1);
 	} finally {
 		gate.release();
 		gate.remove();
 		await prompting.catch(() => {});
 		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test.each([
+	"removeSession",
+	"removeWorkspaceSessions",
+	"archiveDuringDelete",
+])("%s drains queued input while allowing an accepted answer to persist", async (teardown) => {
+	const gate = installAskToolGate(`ask-${teardown}-accepted-gate`);
+	const toolCallId = `accepted-on-${teardown}`;
+	const cwd = tmpCwd("trpi-removal-accepted-");
+	const manager = SessionManager.inMemory(cwd);
+	setSessionManagerFactory(() => manager);
+	fauxA.setResponses([
+		gatedQuestionMessage(toolCallId),
+		fauxAssistantMessage("REMOVAL_CONTINUATION_RAN"),
+	]);
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-removal-accepted",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	prompting.catch(() => {});
+	try {
+		await waitForPath(gate.startedPath);
+		await followUpSession(session.sessionId, "QUEUED_BEFORE_REMOVAL");
+		const result = gatedQuestionAnswer();
+		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		const removing =
+			teardown === "removeSession"
+				? removeSession(session.sessionId)
+				: teardown === "removeWorkspaceSessions"
+					? removeWorkspaceSessions("ws-removal-accepted")
+					: Promise.all([
+							deleteSession(session.sessionId, "ws-removal-accepted", cwd),
+							removeWorkspaceSessions("ws-removal-accepted"),
+						]);
+		if (teardown === "archiveDuringDelete") {
+			await expect(abortSession(session.sessionId, true)).rejects.toThrow("Unknown session");
+		} else {
+			await followUpSession(session.sessionId, "QUEUED_DURING_REMOVAL");
+		}
+		gate.release();
+		await Promise.all([answering, removing, prompting]);
+		const messages = manager.buildSessionContext().messages;
+		const persisted = messages.find(
+			(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+		);
+		if (persisted?.role !== "toolResult") throw new Error("native result was not persisted");
+		expect(JSON.stringify(persisted.details)).toBe(JSON.stringify(result));
+		expect(messages.filter((message) => message.role === "user")).toHaveLength(1);
+		expect(seen(session.sessionId)).not.toContain("REMOVAL_CONTINUATION_RAN");
+		expect(hasSession(session.sessionId)).toBe(false);
+	} finally {
+		gate.release();
+		gate.remove();
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
+		await prompting.catch(() => {});
+		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });
 
@@ -1346,7 +1471,7 @@ test("Stop claims an expected question before a late answer can win", async () =
 	}
 });
 
-test("direct session disposal rejects an accepted answer that cannot persist", async () => {
+test("emergency session disposal rejects an accepted answer that cannot persist", async () => {
 	const gate = installAskToolGate("ask-dispose-gate");
 	const toolCallId = "dispose-after-answer";
 	fauxA.setResponses([gatedQuestionMessage(toolCallId)]);
@@ -1363,7 +1488,7 @@ test("direct session disposal rejects an accepted answer that cannot persist", a
 			answers: [],
 			cancelled: true,
 		});
-		await removeSession(session.sessionId);
+		disposeAllSessions();
 		await expect(answering).rejects.toThrow("Session disposed while waiting for a question");
 	} finally {
 		gate.release();
@@ -1989,7 +2114,7 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 			model: fauxA.getModel() as any,
 		});
 		await promptSession(s.sessionId, "persist me");
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 
 		const fromDisk = (await listSessions("ws-disk", cwd)).find((x) => x.sessionId === s.sessionId);
 		expect(fromDisk).toBeDefined();
@@ -2003,7 +2128,7 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 		const { summary, messages } = await getSessionMessages(s.sessionId, "ws-disk", cwd);
 		expect(summary.live).toBe(true);
 		expect(messages.some((m) => m.role === "user")).toBe(true);
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 
 		const [a, b] = await Promise.all([
 			getSessionMessages(s.sessionId, "ws-disk", cwd),
@@ -2013,7 +2138,7 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 		expect(
 			(await listSessions("ws-disk", cwd)).filter((x) => x.sessionId === s.sessionId),
 		).toHaveLength(1);
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 	} finally {
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
@@ -2295,7 +2420,7 @@ test("ensureSessionAttached: a detached-but-persisted session comes back live; a
 			model: toWireModel(fauxA.getModel()),
 		});
 		await promptSession(s.sessionId, "the review package");
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 		expect(hasSession(s.sessionId)).toBe(false);
 
 		expect(await ensureSessionAttached(s.sessionId, "ws-reattach", cwd)).toBe(true);
@@ -2303,7 +2428,7 @@ test("ensureSessionAttached: a detached-but-persisted session comes back live; a
 		expect(await ensureSessionAttached(s.sessionId, "ws-reattach", cwd)).toBe(true);
 
 		expect(await ensureSessionAttached("no-such-session", "ws-reattach", cwd)).toBe(false);
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 	} finally {
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
@@ -2320,13 +2445,13 @@ test("followUpSession on an IDLE session runs the turn — pi's follow-up queue 
 			model: toWireModel(fauxA.getModel()),
 		});
 		await promptSession(s.sessionId, "batch one");
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 		expect(await ensureSessionAttached(s.sessionId, "ws-followup", cwd)).toBe(true);
 
 		fauxA.appendResponses([fauxAssistantMessage("SECOND_BATCH")]);
 		await followUpSession(s.sessionId, "batch two");
 		expect(seen(s.sessionId)).toContain("SECOND_BATCH");
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 	} finally {
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}

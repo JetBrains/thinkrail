@@ -544,8 +544,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   grouped by source with **sticky section headers** — the first-party **ThinkRail** and **Pi** groups lead
   (above the All-plugins master, which governs only the plugin groups), then Personal / **a group per
   installed Claude plugin** / the repo's Project skills last — each with its admission verdict,
-  project-trust, re-confirm-new, a **per-group on/off** toggle + an **All-plugins** master, and per-skill
-  toggles. It runs in **two modes** via an optional `workspace` prop: chat (`skills.state`, per-workspace
+  project-trust, re-confirm-new, a per-group track/thumb **switch** + an **All-plugins** master, and per-skill
+  switches. Switch position plus semantic colour carries state without visible On/Off text; the switch target
+  alone mutates, while unavailable controls keep the existing trust/parent explanation and acknowledgement
+  behavior. It runs in **two modes** via an optional `workspace` prop: chat (`skills.state`, per-workspace
   skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,
   disabled while streaming) or project (`project.skills`, per-project-baseline toggles, no session) — the
   latter reused by `panels` pre-session). All props-driven; behavior detail lives in the components' jsdoc.
@@ -1067,6 +1069,37 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   just queues and is picked up on the agent's next natural turn (when the user answers, or a later idle
   nudge). `working` rides a `followUp`, plain `waiting`/idle a `prompt`, unchanged.
 
+## Chat Resources
+
+[[submodule-web-chat-resources]] owns the selected header-popover presentation. `ChatView` composes
+its barrel with a `useChatResources` integration hook and the existing `SubagentTranscriptDialog`;
+no new shell pane, workbench resource kind or terminal attachment is involved. Tool/command
+completion rendering remains in the conversation primitives, joined through tool/custom-message
+names rather than imports of the capability packages.
+
+The dependency edges are `ChatView`/`useChatResources` → `resources`, `store`, `transport`, and
+`ChatView` → the existing transcript dialog. The `resources` child stays props-only and imports no
+sibling tool implementation. Command logs are fetched by the integration hook and passed into its
+read-only view; the module never loads xterm.
+
+The hook hydrates on mount/current welcome, subscribes to `session.resourcesChanged`, and coalesces
+invalidations behind one in-flight read. An invalidation during a read requires a fresh pass;
+[[submodule-web-store]] owns generation/revision-fenced snapshot installation and failure handling.
+Metadata remains current while the popover is closed; the header count is numeric only for an
+authoritative snapshot and explicitly unknown otherwise. A welcome that proves the host predates the
+capability clears resource-only detail state, while an unknown protocol during reconnect merely makes it
+stale. Command logs refresh only while that command's detail is open. The shared `detailPolling` loop handles command output and subagent transcript reads:
+single-flight replacement snapshots, stopping on terminal/permanently unavailable results, and capped
+transient backoff with visibly retryable failures. Resource controls keep pending/error state scoped
+to their action and current connection; acknowledgement and detail-close focus semantics belong to
+[[submodule-web-chat-resources]]. No per-token subagent progress or tool-result rewriting is needed
+for the header count.
+
+`backgroundCommandCompletion` is a fold-breaking historical row, recognized by the contracts guard
+in both live reduction and hydration. `BackgroundCommandCompletion` is props-only and renders the
+terminal summary and bounded output as escaped monospaced plain text, never Markdown or live authority.
+Unknown custom messages retain their existing behavior.
+
 ## Boundary
 
 - **Public surface:** the registry API (`toolRegistry`), the shared workspace-file target canonicalizer
@@ -1092,7 +1125,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
   is `ChatView.tsx`, `chatPreferences.ts` (the client-local persistence adapter), plus the hooks and dialogs
   it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
-  `useModelCatalog.ts`, **`useSessionStats.ts`** (generation/revision-fenced authoritative telemetry reads),
+  `useModelCatalog.ts`, **`useChatResources.ts`** (the Resources hydration/control/log-read seam),
+  **`useSessionStats.ts`** (generation/revision-fenced authoritative telemetry reads),
   **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical transcript
   reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`,
   `SubagentTranscriptDialog.tsx`. `useModelCatalog` is the shared

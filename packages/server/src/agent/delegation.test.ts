@@ -183,6 +183,67 @@ function gatedChildResponse(): { release: () => void } {
 	return { release };
 }
 
+test("owned children remain inspectable before and during their first provider response", async () => {
+	const cwd = tmpDir("trdel-prefile-");
+	const workspaceId = "ws-prefile";
+	const { sessionId } = await createSession({ cwd, workspaceId });
+	const service = delegationServiceFor(workspaceId);
+	const child = await service.createChild({
+		parent: sessionId,
+		info: { createdBy: "test" },
+		visibility: "hidden",
+		session: {},
+	});
+	expect(existsSync(child.record.sessionFile)).toBe(false);
+	expect(readChildTranscript(workspaceId, sessionId, child.sessionId)).toEqual({
+		messages: [],
+		status: "queued",
+	});
+	for (const [workspace, parent, id] of [
+		["foreign-workspace", sessionId, child.sessionId],
+		[workspaceId, "foreign-parent", child.sessionId],
+		[workspaceId, sessionId, "unknown-child"],
+	] as const)
+		expect(() => readChildTranscript(workspace, parent, id)).toThrow("No transcript found");
+	const { release } = gatedChildResponse();
+	const run = child.runQueued("Wait for the provider.");
+	try {
+		await waitFor(() => child.snapshot?.status === "running");
+		expect(existsSync(child.record.sessionFile)).toBe(true);
+		expect(readChildTranscript(workspaceId, sessionId, child.sessionId)).toMatchObject({
+			messages: [
+				{
+					role: "user",
+					content: [{ type: "text", text: "Wait for the provider." }],
+				},
+			],
+			status: "running",
+		});
+	} finally {
+		release();
+		await run;
+	}
+	expect(JSON.stringify(readChildTranscript(workspaceId, sessionId, child.sessionId))).toContain(
+		"GATED_DONE",
+	);
+	const canceled = await service.createChild({
+		parent: sessionId,
+		info: { createdBy: "test" },
+		visibility: "hidden",
+		session: {},
+	});
+	await canceled.runQueued("Never sent.", { signal: AbortSignal.abort() });
+	expect(existsSync(canceled.record.sessionFile)).toBe(false);
+	expect(readChildTranscript(workspaceId, sessionId, canceled.sessionId)).toEqual({
+		messages: [],
+		status: "aborted",
+	});
+	await removeSession(sessionId);
+	expect(() => readChildTranscript(workspaceId, sessionId, canceled.sessionId)).toThrow(
+		"No transcript found",
+	);
+});
+
 test("deleteSession resolves only after its child cascade settles", async () => {
 	const cwd = tmpDir("trdel-await-");
 	const { sessionId } = await createSession({ cwd, workspaceId: "ws-await" });
@@ -324,7 +385,10 @@ test("children follow their parent's retained runtime generation across a flip",
 	}
 });
 
-test("transcript reads reject path-like ids — wire strings never escape the delegation root", () => {
+test("transcript reads accept canonical dotted session ids and reject path-like ids", () => {
+	expect(() => readChildTranscript("ws", "parent..session", "child..session")).toThrow(
+		"No transcript found",
+	);
 	expect(() => readChildTranscript("../../etc", "p", "c")).toThrow("Invalid workspaceId");
 	expect(() => readChildTranscript("ws", "..", "c")).toThrow("Invalid parentSessionId");
 	expect(() => readChildTranscript("ws", "p", "x/../y")).toThrow("Invalid childSessionId");

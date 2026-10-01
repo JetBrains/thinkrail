@@ -2,7 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import type { AuthInteraction, AuthType } from "@earendil-works/pi-ai";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { LoginPush } from "@thinkrail/contracts";
-import { activatePiRuntimeGeneration, configurePiRuntime, getPiRuntimeGeneration } from "../agent";
+import {
+	activatePiRuntimeGeneration,
+	configurePiRuntime,
+	getPiRuntimeGeneration,
+	piLoginOptions,
+} from "../agent";
 import {
 	cancelAllLogins,
 	cancelLogin,
@@ -23,6 +28,7 @@ interface Harness {
 	logoutCalls: () => string[];
 	lastSignal: () => AbortSignal | undefined;
 	lastInteraction: () => AuthInteraction | undefined;
+	lastOptions: () => unknown;
 }
 
 function install(loginImpl: LoginImpl): Harness {
@@ -37,10 +43,12 @@ function install(loginImpl: LoginImpl): Harness {
 	const logout: string[] = [];
 	let signal: AbortSignal | undefined;
 	let interaction: AuthInteraction | undefined;
+	let options: unknown;
 
 	const runtime = {
-		login: (providerId: string, type: AuthType, i: AuthInteraction) => {
+		login: (providerId: string, type: AuthType, i: AuthInteraction, o?: unknown) => {
 			logins.push([providerId, type]);
+			options = o;
 			signal = i.signal;
 			interaction = i;
 			return loginImpl(providerId, i);
@@ -58,6 +66,7 @@ function install(loginImpl: LoginImpl): Harness {
 		logoutCalls: () => logout,
 		lastSignal: () => signal,
 		lastInteraction: () => interaction,
+		lastOptions: () => options,
 	};
 }
 
@@ -108,6 +117,13 @@ describe("startLogin", () => {
 		expect(h.publications.slice(0, 2)).toEqual(h.frames.slice(0, 2).map((push) => [push]));
 		expect(h.publications.at(-1)?.[1]).toBe(originalGeneration);
 		expect(replacement.loginCalls()).toEqual([]);
+	});
+
+	test("passes pi's login options so flows that need a device id (ChatGPT) can run", async () => {
+		const h = install(async () => {});
+		startLogin("openai");
+		await tick();
+		expect(h.lastOptions()).toBe(piLoginOptions);
 	});
 
 	test("device-code flow: pushes deviceCode, then success (as an oauth login)", async () => {
