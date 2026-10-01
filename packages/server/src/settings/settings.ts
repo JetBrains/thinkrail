@@ -69,6 +69,8 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		throw new Error("analytics consent must include the sharing preference");
 	}
 	const {
+		defaultModel,
+		defaultEffort,
 		reviewModel,
 		reviewEffort,
 		customLayoutPresets,
@@ -134,6 +136,14 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 			? {}
 			: { customLayoutPresets: validateCustomLayoutPresets(customLayoutPresets) }),
 	};
+	if (defaultModel !== undefined) {
+		if (defaultModel === null) delete next.defaultModel;
+		else next.defaultModel = defaultModel;
+	}
+	if (defaultEffort !== undefined) {
+		if (defaultEffort === null) delete next.defaultEffort;
+		else next.defaultEffort = defaultEffort;
+	}
 	if (reviewModel !== undefined) {
 		if (reviewModel === null) delete next.reviewModel;
 		else next.reviewModel = reviewModel;

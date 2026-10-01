@@ -120,6 +120,15 @@ export function isExactE2eModel(
 	return model?.provider === target.provider && model.id === target.id;
 }
 
+export async function seedE2eDefaultModel(wire: Pick<E2eWire, "request">): Promise<void> {
+	const target = resolveE2eModel();
+	const models = await wire.request("model.list", {});
+	const model = models.find((candidate) => isExactE2eModel(candidate, target)) ?? models[0];
+	await wire.request("settings.update", {
+		config: { ...(model ? { defaultModel: model } : {}), defaultEffort: "low" },
+	});
+}
+
 export async function waitForCentralTarget(
 	wire: Pick<E2eWire, "request">,
 	timeoutMs = 60_000,
@@ -145,6 +154,14 @@ export async function waitForCentralTarget(
 			"The isolated host did not activate the staged Central extension. Verify Central is installed and retry.",
 		);
 	}
+	const models = await wire.request("model.list", {});
+	const model = models.find((candidate) => isExactE2eModel(candidate, target));
+	if (!model) {
+		throw new CentralSetupError(
+			"THINKRAIL_E2E_MODEL is not available in the isolated Central catalog. Choose an exact model exposed by the authorized Central extension, then retry.",
+		);
+	}
+	await wire.request("settings.update", { config: { defaultModel: model, defaultEffort: "low" } });
 	const selected = await wire.request("model.default", {});
 	if (!isExactE2eModel(selected.model, target)) {
 		throw new CentralSetupError(

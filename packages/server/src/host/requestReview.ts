@@ -7,7 +7,6 @@ import type {
 import { isPlanReviewResult } from "@thinkrail/contracts";
 import type { Todo } from "pi-todos/core";
 import {
-	getDefaultModel,
 	getSessionWorkspaceId,
 	notifyExtUi,
 	runReviewSubagent,
@@ -37,6 +36,7 @@ import {
 	todoReviewAutoCycles,
 } from "../todos";
 import { ackSend } from "./ackSend";
+import { resolveNewChatModel } from "./newChatModel";
 import {
 	claimItemReview,
 	enqueuePlanReview,
@@ -404,10 +404,10 @@ async function runReview(
 	runSubagent: ReviewRunner,
 ): Promise<PlanReviewResult> {
 	const cfg = getConfig();
-	// Pinned reviewer model + effort, else the user's default for each — never the worker's silently
+	// Pinned reviewer model + effort, else the host's new-chat defaults — never the worker's silently
 	// inherited model or effort. `thinkingLevel` is passed unconditionally so pi-delegation cannot fall
 	// back to the parent worker's effort when reviewEffort is unset. See planReview.SPEC.md.
-	const def = await getDefaultModel();
+	const def = await resolveNewChatModel({});
 	const model = cfg.reviewModel ?? def.model;
 	const thinkingLevel = cfg.reviewEffort ?? def.thinkingLevel;
 	const run = await runSubagent(

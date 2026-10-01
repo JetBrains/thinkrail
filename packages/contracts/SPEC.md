@@ -272,9 +272,12 @@ of the host.
   is what lets a client tell "this host has no reviewer chat" from "this host is older" rather than inferring it;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
-  fileLineWidthBounded, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix, agentReviewEnabled,
-  subagentsEnabled, jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
-  the wire at protocol v61 and `terminalWindowsShell` at v62. `terminalWindowsShell`
+  fileLineWidthBounded, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
+  reviewAutoFix, agentReviewEnabled, subagentsEnabled, jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
+  the wire at protocol v61 and `terminalWindowsShell` at v62. **`DEFAULT_MODEL_PROTOCOL_VERSION`** pins
+  v72's AppConfig `defaultModel`/`defaultEffort` and host-side default resolution; the Settings controls are
+  hidden against older hosts. `defaultModel` is a full allowlisted `WireModel`, `defaultEffort` is an optional
+  `ThinkingLevel`, and `settings.update` accepts `null` to clear either optional value. `terminalWindowsShell`
   (`"auto" | "pwsh" | "powershell" | "cmd"`, default `"auto"`) is read only by `server/terminal` on
   Windows and ignored elsewhere — see
   `submodule-server-terminal`'s shell-selection decision for what each value spawns.
@@ -296,7 +299,9 @@ of the host.
   server-side; basic events are not controlled by either flag, see [[submodule-server-analytics]]) carries
   it with the **`DEFAULT_CONFIG`** fallback (persisted host-side
   as `config.json`, delivered in
-  `server.welcome`, mutated via `settings.update`).
+  `server.welcome`, mutated via `settings.update`). Every new user chat receives the resolved model and
+  effort explicitly, so the session agrees with `model.default`; explicit request fields win individually,
+  while an effort-only request uses the configured or fallback model. Plan-review subagents keep their own model policy.
   **`InterviewResponse`** is the closed `"book" | "postpone" | "never"` action accepted from the automatic
   feedback popup. No usage count, eligibility, dismissal state, or client identity crosses the wire.
   Contracts deliberately exports no theme catalog enum/list/labels: a future manifest can mint an id
@@ -422,12 +427,9 @@ of the host.
   single-flighted catalog refresh and returns **`RefreshedModels`** — the post-refresh list plus
   **`complete`**, whether that pass settled inside the host's capped wait, since only a settled list is
   authoritative; `force` bypasses pi's 4h freshness throttle, so a user-initiated refresh actually fetches) /
-  **`model.default`** (the pinned model + compatible thinking level, plus additive `defaultThinkingLevel`
-  for the raw saved global level, unclamped) /
-  **`model.setDefault`** (`{ model?: WireModelRef; thinkingLevel?: ThinkingLevel }`, at least one field;
-  result is the `model.default` shape; with `defaultThinkingLevel` it is pinned by
-  `DEFAULT_MODEL_PROTOCOL_VERSION` = v72, and clients hide the default-model Settings section against older
-  hosts) /
+  **`model.default`** (the host-resolved model and compatible effort: AppConfig's default model when
+  available, otherwise the first model in the host's settled available list, otherwise `null`; effort is
+  `defaultEffort ?? "medium"`, clamped with Pi's `clampThinkingLevel` when a model exists) /
   **`model.clampThinking`** (pi's
   `clampThinkingLevel` for a `{model, level}` pair — the pre-session picker's effort adjustment, so no
   client re-derives pi's policy) / **`provider.status`**

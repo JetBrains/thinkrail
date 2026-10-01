@@ -448,41 +448,30 @@ test("a re-review approve does NOT settle the step while an earlier finding is s
 });
 
 test("integration: a real reviewer child requests changes, the fix resolves, and re-review approves", async () => {
-	const agentDir = process.env.PI_CODING_AGENT_DIR;
-	if (!agentDir) throw new Error("agent dir not isolated");
-	const settingsPath = join(agentDir, "settings.json");
-	writeFileSync(
-		settingsPath,
-		`${JSON.stringify({ defaultProvider: "faux-worker", defaultModel: "faux-worker-model" })}\n`,
-	);
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId, "real-child step");
 	const ref = { workspaceId: WS, sessionId, id };
-	try {
-		// Round 1: the REAL delegated reviewer (default runner → runReviewSubagent, faux model) requests changes.
-		faux.setResponses([fauxAssistantMessage(requestChanges)]);
-		expect(startPlanReview(WS, sessionId, id)).toBe(true);
-		await settle(sessionId, id);
+	// Round 1: the REAL delegated reviewer (default runner → runReviewSubagent, faux model) requests changes.
+	faux.setResponses([fauxAssistantMessage(requestChanges)]);
+	expect(startPlanReview(WS, sessionId, id)).toBe(true);
+	await settle(sessionId, id);
 
-		expect(todoReviewRecord(ref)?.state).toBe("changes_requested");
-		const finding = (await getReviewSnapshot(WS)).comments.find((c) => c.origin?.todoId === id);
-		expect(finding?.status).toBe("sent");
-		expect(finding?.sessionId).toBe(sessionId);
-		expect(finding?.body).toContain("loop bound is wrong");
+	expect(todoReviewRecord(ref)?.state).toBe("changes_requested");
+	const finding = (await getReviewSnapshot(WS)).comments.find((c) => c.origin?.todoId === id);
+	expect(finding?.status).toBe("sent");
+	expect(finding?.sessionId).toBe(sessionId);
+	expect(finding?.body).toContain("loop bound is wrong");
 
-		// The worker resolves the delivered finding by its canonical id.
-		reviews.resolveCommentFromAgent(sessionId, finding?.id ?? "");
+	// The worker resolves the delivered finding by its canonical id.
+	reviews.resolveCommentFromAgent(sessionId, finding?.id ?? "");
 
-		// Round 2: the real reviewer approves; with the finding resolved, the step settles reviewed.
-		faux.setResponses([fauxAssistantMessage(approve)]);
-		expect(startPlanReview(WS, sessionId, id)).toBe(true);
-		await settle(sessionId, id);
+	// Round 2: the real reviewer approves; with the finding resolved, the step settles reviewed.
+	faux.setResponses([fauxAssistantMessage(approve)]);
+	expect(startPlanReview(WS, sessionId, id)).toBe(true);
+	await settle(sessionId, id);
 
-		expect(todoReviewRecord(ref)?.state).toBe("reviewed");
-		expect(todoReviewRecord(ref)?.reviewedBy).toBe("agent");
-	} finally {
-		rmSync(settingsPath, { force: true });
-	}
+	expect(todoReviewRecord(ref)?.state).toBe("reviewed");
+	expect(todoReviewRecord(ref)?.reviewedBy).toBe("agent");
 });
 
 test("a post-ack review failure publishes an actionable UI error, not just a warning", async () => {
@@ -506,14 +495,8 @@ test("a post-ack review failure publishes an actionable UI error, not just a war
 	expect(itemReviewActive(sessionId, id)).toBe(false);
 });
 
-test("an unset reviewer model resolves the user's default, not the worker's inherited model", async () => {
-	const agentDir = process.env.PI_CODING_AGENT_DIR;
-	if (!agentDir) throw new Error("agent dir not isolated");
-	const settingsPath = join(agentDir, "settings.json");
-	writeFileSync(
-		settingsPath,
-		`${JSON.stringify({ defaultProvider: "faux-worker", defaultModel: "faux-worker-model" })}\n`,
-	);
+test("an unset reviewer model resolves the host's new-chat default, not the worker's inherited model", async () => {
+	updateConfig({ defaultModel: toWireModel(faux.getModel()) });
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
 	let captured: { provider: string; id: string } | undefined;
@@ -521,22 +504,13 @@ test("an unset reviewer model resolves the user's default, not the worker's inhe
 		captured = role.model;
 		return { childSessionId: "child", status: "completed" as const, finalText: approve };
 	};
-	try {
-		startPlanReview(WS, sessionId, id, capturingRunner);
-		await settle(sessionId, id);
-	} finally {
-		rmSync(settingsPath, { force: true });
-	}
+	startPlanReview(WS, sessionId, id, capturingRunner);
+	await settle(sessionId, id);
 	expect(captured).toEqual({ provider: "faux-worker", id: "faux-worker-model" });
 });
 
-test("an unset reviewer effort resolves the user's default, not the worker's inherited effort", async () => {
-	const agentDir = process.env.PI_CODING_AGENT_DIR;
-	if (!agentDir) throw new Error("agent dir not isolated");
-	const settingsPath = join(agentDir, "settings.json");
-	// No pinned reviewEffort; the user's default thinking level is "high", while the worker session runs
-	// on the faux model at its own effort. The reviewer must run at the resolved default, never inherit.
-	writeFileSync(settingsPath, `${JSON.stringify({ defaultThinkingLevel: "high" })}\n`);
+test("an unset reviewer effort resolves the host's new-chat default, not the worker's inherited effort", async () => {
+	updateConfig({ defaultEffort: "off" });
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
 	let captured: string | undefined;
@@ -544,13 +518,9 @@ test("an unset reviewer effort resolves the user's default, not the worker's inh
 		captured = role.thinkingLevel;
 		return { childSessionId: "child", status: "completed" as const, finalText: approve };
 	};
-	try {
-		startPlanReview(WS, sessionId, id, capturingRunner);
-		await settle(sessionId, id);
-	} finally {
-		rmSync(settingsPath, { force: true });
-	}
-	expect(captured).toBe("high");
+	startPlanReview(WS, sessionId, id, capturingRunner);
+	await settle(sessionId, id);
+	expect(captured).toBe("off");
 });
 
 test("the tool path awaits artifact reconciliation before it snapshots the change set", async () => {

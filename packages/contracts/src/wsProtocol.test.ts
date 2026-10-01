@@ -9,7 +9,6 @@ import {
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
-	isSetDefaultModelParams,
 	isTodoReviewFixMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	normalizeSessionTitle,
@@ -107,18 +106,11 @@ test("auto plan-summary generation advances the protocol to v69", () => {
 	expect(WS_METHODS.todoGenerateSummary).toBe("todo.generateSummary");
 });
 
-test("default model writes are pinned to v72", () => {
+test("host-owned new-chat defaults are pinned to v72", () => {
 	expect(PROTOCOL_VERSION).toBe(72);
 	expect(DEFAULT_MODEL_PROTOCOL_VERSION).toBe(72);
-	expect(WS_METHODS.modelSetDefault).toBe("model.setDefault");
-});
-
-test("model.setDefault requires a model ref or thinking level", () => {
-	expect(isSetDefaultModelParams({})).toBe(false);
-	expect(isSetDefaultModelParams({ model: { provider: "p", id: "m" } })).toBe(true);
-	expect(isSetDefaultModelParams({ thinkingLevel: "high" })).toBe(true);
-	expect(isSetDefaultModelParams({ thinkingLevel: "invalid" })).toBe(false);
-	expect(isSetDefaultModelParams({ model: { provider: "p" } })).toBe(false);
+	expect(WS_METHODS.modelDefault).toBe("model.default");
+	expect(WS_METHODS).not.toHaveProperty("modelSetDefault");
 });
 
 describe("isTodoReviewFixMessage", () => {

@@ -334,12 +334,12 @@ empty by default); while the prompt is non-empty (worktree mode), a secondary hi
 and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
 a project picker, the prompt hero, and the reused
-  `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected to the host's **pinned**
-  default via `model.default` so the exact model shows when there is one (values held in dialog state,
-  applied at create time). With **no pinned default the host answers `model: null`** and the dialog holds
-  none: the picker reads **Default model**, the effort control is disabled (no model, no supported set), and
-  create sends neither — so pi resolves both exactly as it does for a new chat tab. The dialog must not
-  substitute a model of its own choosing here; one resolver, pi's, see `submodule-agent`. The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
+  `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected from the host's
+  `model.default` result, which is the saved default when available or the first available model. Values
+  are held in dialog state and applied at create time. Only when no model is available does the host return
+  `model: null`; the effort control is disabled and create omits the model. The dialog does not choose a
+  competing default: its display and newly-created session share the host resolver (see `submodule-server-agent`).
+  The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
   lock). Their catalog is the shared one — `chat/useModelCatalog`, so the dialog and the chat composer
   cannot drift — which means it is **live**: the picker's Refresh row can replace the list underneath a
   held selection. The dialog therefore reconciles the held model against it on every change via the pure
@@ -350,9 +350,9 @@ a project picker, the prompt hero, and the reused
   current-but-unsettled list, which is no basis for a verdict), dropped by the next `model.list` install from any consumer (whose
   handler answers from before the detached refresh it starts) *and* dropped up front by any consumer
   activating. On a fresh catalog it returns **`"unavailable"`** — a verdict, not a replacement: the dialog
-  then asks **`model.default`** (the host's pinned default or none, plus a consistent effort) exactly as it
-  does for the preselect, through **one** `applyHostDefault` — so no client-side copy of the host's default
-  policy exists here. Asked at most once per opening, so a still-missing model can't spin the effect. Effort is a separate concern: one effect keeps the held level
+  then asks **`model.default`** (the host's saved default or first-available fallback, plus its consistent
+  effort) exactly as it does for the preselect, through **one** `applyHostDefault` — so no client-side copy
+  of the host's default policy exists here. Asked at most once per opening, so a still-missing model can't spin the effect. Effort is a separate concern: one effect keeps the held level
   runnable by the held model by asking the host for pi's clamp (**`model.clampThinking`**) rather than
   deciding locally, so an explicit switch and a refresh that shrank a model's set resolve the same way
   pi would. `model.default` needs no adjustment: the host already returns a self-consistent pair.
@@ -382,7 +382,8 @@ a project picker, the prompt hero, and the reused
   `onCreated` callback, so every mount site (`ProjectTree`, `WelcomePanel`, the shell's keyboard-opened
   instance) gets the same post-create fold → **always open a
   fresh chat** (`session.create({ workspaceId, model?, thinkingLevel? })` — a held model + effort apply even
-  without a prompt, and travel together: with none held both are omitted and pi resolves them) → the typed
+  without a prompt, and travel together; with no held model the host still applies the saved/fallback
+  defaults, explicitly passing the resolved pair whenever a model is available) → the typed
   prompt **and any attached images** are additionally sent as the first message (fire-and-forget `prompt`,
   forwarding `images` alongside `text`, with an optimistic user turn carrying the same attachments). The
   prompt hero accepts **image paste/drop** through the shared `usePromptImages` controller (same
@@ -569,10 +570,11 @@ a project picker, the prompt hero, and the reused
   `model.default` on open, whenever the live catalog changes (empty included), and after every save — the
   host resolves the saved model and its effort levels against its settled catalog, so a vanished or changed
   model never offers stale levels; only the latest read applies, and a failed read replaces the controls
-  with a retry — and writes the global Pi model/effort through `model.setDefault`; Pi's global
-  settings also serve the pi terminal app, while a project's `.pi/settings.json` may override them. There
-  is no clear-to-automatic control because Pi has no setter for clearing a saved model. Both triggers are
-  disabled, and choices in an already-open picker are ignored, while a save or re-read is in flight.
+  with a retry — and writes `defaultModel` / `defaultEffort` through `settings.update`, with an error toast
+  if persistence fails. The host's `model.default` result is the displayed effective choice, including the
+  first-available fallback when a saved model is missing; supported effort levels and the displayed effort
+  come from that same resolved, Pi-clamped model. Both triggers are disabled, and choices in an already-open
+  picker are ignored, while a save or re-read is in flight.
   **`ReviewSettings`** is the
   **plan-review policy** section: the reviewer **model + effort** (`ModelSelector`/`ThinkingSelector` over
   `useModelCatalog`, written as `settings.update { reviewModel | reviewEffort }`; unset ⇒ default). The

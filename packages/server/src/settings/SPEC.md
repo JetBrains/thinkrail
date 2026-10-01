@@ -10,12 +10,14 @@ depends-on: [module-contracts]
 ## Responsibility
 
 The server-synchronized app config: opaque fixed-theme selection, fixed/system mode and optional light/dark
-pair, additional-analytics preference and first-run dialog completion marker, terminal replay budget and Windows shell preference, chat composer growth preset,
-chat/file visual line widths
-plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota display/cadence, the
-host-wide subagent default, and plan-review policy. `reviewModel` /
-`reviewEffort` select the reviewer runtime (unset means pi
-default); `reviewAutoFix: false` records a `request_changes` verdict and waits instead of auto-sending a fix.
+pair, additional-analytics preference and first-run dialog completion marker, host-owned new-chat model and
+effort defaults, terminal replay budget and Windows shell preference, chat composer growth preset, chat/file
+visual line widths plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota
+display/cadence, the host-wide subagent default, and plan-review policy. `defaultModel` / `defaultEffort`
+select the defaults every new chat receives (unset model means first available; unset effort means medium);
+`reviewModel` / `reviewEffort`
+select the reviewer runtime (unset means the pi default); `reviewAutoFix: false` records a `request_changes`
+verdict and waits instead of auto-sending a fix.
 The module reads, normalizes, persists, caches, and broadcasts values that intentionally follow the owner
 across frontends.
 
@@ -54,4 +56,4 @@ interval (`1–3600`, default 30), because those values govern host process cade
   default-on preference alone; a preference-only write never infers completion. Confirmation without a
   preference is rejected, and changing a confirmed decision writes both fields. The delivery gate belongs to
   [[submodule-server-analytics]]; the dialog lifecycle belongs to [[submodule-web-panels]].
-- `null` clears optional `reviewModel`/`reviewEffort` overrides; it is a wire-only sentinel and never persists.
+- `null` clears optional `defaultModel`/`defaultEffort` and `reviewModel`/`reviewEffort` overrides; it is a wire-only sentinel and never persists.

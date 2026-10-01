@@ -420,6 +420,7 @@ selected-log state belong to chat integration, not domain persistence. See
   **`terminalWindowsShell: TerminalWindowsShell`**, **`composerGrowthLimit: ComposerGrowthLimit`**,
   **`chatLineWidth` / `fileLineWidth`**, their independent **`chatLineWidthBounded` /
   `fileLineWidthBounded`** switches, **`customLayoutPresets: LayoutPreset[]`**,
+  optional **`defaultModel: WireModel` / `defaultEffort: ThinkingLevel`** for new chats,
   **`analyticsEnabled: boolean`**, **`analyticsConsentConfirmed: boolean`**,
   **`subagentsEnabled: boolean`**, **`jbcentralQuotaEnabled: boolean`**,
   and **`jbcentralQuotaRefreshSeconds: number`** ride the same `applyConfig` fold (host-owned, fieldwise

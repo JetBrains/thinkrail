@@ -1,15 +1,17 @@
-import { type ModelDefault, THINKING_LEVELS, type ThinkingLevel } from "@thinkrail/contracts";
+import type { ModelDefault, ThinkingLevel, WireModel } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
 import { useModelCatalog } from "@/chat/useModelCatalog";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/store";
+import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 
 export function ModelsSettings() {
+	const defaultModel = useAppStore((s) => s.defaultModel);
+	const defaultEffort = useAppStore((s) => s.defaultEffort);
 	const { models, refreshing, refresh } = useModelCatalog(true);
-	const [state, setState] = useState<ModelDefault | null>(null);
+	const [resolvedDefault, setResolvedDefault] = useState<ModelDefault | null>(null);
 	const [loadFailed, setLoadFailed] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [reading, setReading] = useState(true);
@@ -21,7 +23,7 @@ export function ModelsSettings() {
 		try {
 			const next = await getTransport().request("model.default", {});
 			if (seq !== readSeq.current) return;
-			setState(next);
+			setResolvedDefault(next);
 			setLoadFailed(false);
 		} catch {
 			if (seq === readSeq.current) setLoadFailed(true);
@@ -32,38 +34,39 @@ export function ModelsSettings() {
 
 	useEffect(() => {
 		void readDefault();
-	}, [models, readDefault]);
+	}, [models, defaultModel, defaultEffort, readDefault]);
 
-	const saveDefault = async (
-		params: { model: { provider: string; id: string } } | { thinkingLevel: ThinkingLevel },
+	const saveConfig = async (
+		config: { defaultModel?: WireModel | null; defaultEffort?: ThinkingLevel | null },
 		message: string,
 	) => {
 		if (saving || reading) return;
 		setSaving(true);
 		try {
-			await getTransport().request("model.setDefault", params);
+			await getTransport().request("settings.update", { config });
+			await readDefault();
 		} catch {
 			toast.error(message);
+		} finally {
+			setSaving(false);
 		}
-		await readDefault();
-		setSaving(false);
 	};
 
-	const setDefaultModel = (model: { provider: string; id: string }) => {
-		void saveDefault({ model }, "Couldn't save the default model");
-	};
-
-	const setDefaultThinkingLevel = (thinkingLevel: ThinkingLevel) => {
-		void saveDefault({ thinkingLevel }, "Couldn't save the default effort");
-	};
+	const configuredModel = defaultModel
+		? (models.find(
+				(model) => model.provider === defaultModel.provider && model.id === defaultModel.id,
+			) ?? null)
+		: null;
+	const model = resolvedDefault ? resolvedDefault.model : configuredModel;
+	const level = resolvedDefault?.thinkingLevel ?? defaultEffort ?? "medium";
 
 	return (
 		<section data-testid="settings-models" className="flex flex-col gap-16">
 			<div className="flex flex-col gap-4">
 				<h3 className="tr-title-section text-text-default">Default model</h3>
 				<p className="text-text-muted tr-text-metadata">
-					The model and effort new chats start with. Saved in Pi's settings, so the pi terminal app
-					uses it too. A project's .pi/settings.json can override it.
+					The model and effort new chats start with. If it's unavailable, new chats use the first
+					available model.
 				</p>
 			</div>
 			{loadFailed ? (
@@ -73,21 +76,25 @@ export function ModelsSettings() {
 						Retry
 					</Button>
 				</div>
-			) : state ? (
+			) : resolvedDefault || !reading ? (
 				<div className="flex flex-wrap items-center gap-8">
 					<ModelSelector
 						models={models}
-						current={state.model}
+						current={model}
 						refreshing={refreshing}
 						onRefresh={refresh}
-						onSelect={setDefaultModel}
-						placeholder="Pi chooses automatically"
+						onSelect={(selected) =>
+							void saveConfig({ defaultModel: selected }, "Couldn't save the default model")
+						}
+						placeholder="First available model"
 						disabled={saving || reading}
 					/>
 					<ThinkingSelector
-						level={state.model ? state.thinkingLevel : state.defaultThinkingLevel}
-						levels={state.model?.thinkingLevels ?? THINKING_LEVELS}
-						onSelect={setDefaultThinkingLevel}
+						level={level}
+						levels={model?.thinkingLevels ?? []}
+						onSelect={(defaultEffort) =>
+							void saveConfig({ defaultEffort }, "Couldn't save the default effort")
+						}
 						disabled={saving || reading}
 					/>
 				</div>

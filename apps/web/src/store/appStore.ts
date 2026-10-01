@@ -865,6 +865,8 @@ interface AppState {
 	fileLineWidthBounded: boolean;
 	chatMessageOrder: ChatMessageOrder;
 	streamingResponseMovement: StreamingResponseMovement;
+	defaultModel: WireModel | undefined;
+	defaultEffort: ThinkingLevel | undefined;
 	reviewModel: WireModel | undefined;
 	reviewEffort: ThinkingLevel | undefined;
 	reviewAutoFix: boolean;
@@ -1105,6 +1107,8 @@ function configPatch(config: AppConfig) {
 				? config.fileLineWidthBounded
 				: DEFAULT_CONFIG.fileLineWidthBounded,
 		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
+		defaultModel: config.defaultModel,
+		defaultEffort: config.defaultEffort,
 		reviewModel: config.reviewModel,
 		reviewEffort: config.reviewEffort,
 		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
@@ -1763,6 +1767,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	chatMessageOrder: "oldest-first",
 	streamingResponseMovement: { ...DEFAULT_STREAMING_RESPONSE_MOVEMENT },
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
+	defaultModel: DEFAULT_CONFIG.defaultModel,
+	defaultEffort: DEFAULT_CONFIG.defaultEffort,
 	reviewModel: DEFAULT_CONFIG.reviewModel,
 	reviewEffort: DEFAULT_CONFIG.reviewEffort,
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,

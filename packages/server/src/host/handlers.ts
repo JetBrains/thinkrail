@@ -23,7 +23,7 @@ import type {
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
-import { isControlMessage, isSetDefaultModelParams } from "@thinkrail/contracts";
+import { isControlMessage } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	abortSession,
@@ -35,7 +35,6 @@ import {
 	deleteSession,
 	ensureSessionAttached,
 	followUpSession,
-	getDefaultModel,
 	getSessionCommands,
 	getSessionMessages,
 	getSessionMessagesSnapshot,
@@ -65,7 +64,6 @@ import {
 	renameSession,
 	resolveExtUi,
 	sendReviewFixToSession,
-	setDefaultModel,
 	setSessionModel,
 	setSessionThinkingLevel,
 	steerSession,
@@ -189,6 +187,7 @@ import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
+import { resolveNewChatModel } from "./newChatModel";
 import { planReviewRunning } from "./planReviewQueue";
 import {
 	additionalCapture,
@@ -364,11 +363,12 @@ async function sendToFileChat(
 		);
 	}
 	ensureWorkspaceScratchDir(ws);
+	const defaults = await resolveNewChatModel(opts);
 	const created = await createSession({
 		cwd: ws.worktreePath,
 		workspaceId,
-		...(opts.model ? { model: opts.model } : {}),
-		...(opts.thinkingLevel ? { thinkingLevel: opts.thinkingLevel } : {}),
+		...(defaults.model ? { model: defaults.model } : {}),
+		thinkingLevel: defaults.thinkingLevel,
 	});
 	trackChatStarted(created);
 	await markCommentsSent(workspaceId, ids, created.sessionId);
@@ -781,11 +781,12 @@ const handlers: Record<string, Handler> = {
 		};
 		const ws = getWorkspace(p.workspaceId);
 		ensureWorkspaceScratchDir(ws);
+		const defaults = await resolveNewChatModel(p);
 		const created = await createSession({
 			cwd: ws.worktreePath,
 			workspaceId: p.workspaceId,
-			...(p.model ? { model: p.model } : {}),
-			...(p.thinkingLevel ? { thinkingLevel: p.thinkingLevel } : {}),
+			...(defaults.model ? { model: defaults.model } : {}),
+			thinkingLevel: defaults.thinkingLevel,
 		});
 		trackChatStarted(created);
 		return created;
@@ -975,11 +976,10 @@ const handlers: Record<string, Handler> = {
 		);
 	},
 	"model.default": () =>
-		observeSetupRead(getDefaultModel, (result) => (result.model ? { model_available: "yes" } : {})),
-	"model.setDefault": async (params) => {
-		if (!isSetDefaultModelParams(params)) throw new Error("Set a default model or thinking level");
-		return setDefaultModel(params);
-	},
+		observeSetupRead(
+			() => resolveNewChatModel({}),
+			(result) => (result.model ? { model_available: "yes" } : {}),
+		),
 	"provider.status": () =>
 		observeSetupRead(getProviderStatus, (report) => ({
 			provider_available: providerAvailability(report),

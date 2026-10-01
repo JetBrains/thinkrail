@@ -3,10 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
 	Template,
 	TemplateInfo,
+	WireModel,
 	Workspace,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
@@ -40,6 +42,24 @@ async function setupDefaultModelRuntime(): Promise<() => void> {
 		credentials: new InMemoryCredentialStore(),
 		modelsPath: null,
 		allowModelNetwork: false,
+	});
+	const model = {
+		id: "handler-model",
+		name: "Handler model",
+		api: "faux",
+		reasoning: false,
+		input: ["text"] as ("text" | "image")[],
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		contextWindow: 100_000,
+		maxTokens: 4_096,
+	};
+	const faux = createFauxCore({ provider: "handler", api: "faux", models: [model] });
+	runtime.registerProvider("handler", {
+		api: "faux",
+		baseUrl: "http://faux.local",
+		apiKey: "faux",
+		streamSimple: faux.streamSimple,
+		models: [model],
 	});
 	configurePiRuntime(runtime);
 	return () => {
@@ -153,38 +173,39 @@ test("template reads resolve a project's current checkout and reject ambiguous l
 	}
 });
 
-test("model.setDefault rejects empty params", async () => {
-	await expect(handleRequest("model.setDefault", {}, CTX)).rejects.toThrow(
-		/Set a default model or thinking level/,
-	);
-});
-
-test("model.setDefault delegates successful Pi settings writes and returns the saved default", async () => {
+test("model.default and new session creation share the AppConfig default resolution", async () => {
 	const cleanup = await setupDefaultModelRuntime();
+	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd, { id: "default-resolution" }));
 	try {
-		const result = await handleRequest("model.setDefault", { thinkingLevel: "high" }, CTX);
-		expect(result).toMatchObject({
-			model: null,
-			thinkingLevel: "high",
-			defaultThinkingLevel: "high",
-		});
-		expect(JSON.parse(readFileSync(join(dataDir, "agent", "settings.json"), "utf8"))).toEqual({
-			defaultThinkingLevel: "high",
-		});
-	} finally {
-		cleanup();
-	}
-});
-
-test("model.setDefault surfaces Pi write failures", async () => {
-	const cleanup = await setupDefaultModelRuntime();
-	const settingsPath = join(dataDir, "agent", "settings.json");
-	mkdirSync(settingsPath);
-	try {
-		await expect(handleRequest("model.setDefault", { thinkingLevel: "high" }, CTX)).rejects.toThrow(
-			/Failed to write Pi default settings/,
+		const models = (await handleRequest("model.list", {}, CTX)) as WireModel[];
+		const selected = models.find((model) => model.provider === "handler");
+		if (!selected) throw new Error("handler test model was not available");
+		await handleRequest(
+			"settings.update",
+			{ config: { defaultModel: selected, defaultEffort: "high" } },
+			CTX,
 		);
+		const resolved = (await handleRequest("model.default", {}, CTX)) as {
+			model: WireModel | null;
+			thinkingLevel: string;
+		};
+		expect(resolved).toEqual({ model: selected, thinkingLevel: "off" });
+
+		const workspace = (await handleRequest(
+			"workspace.create",
+			{ projectId: "p1" },
+			CTX,
+		)) as Workspace;
+		const created = (await handleRequest(
+			"session.create",
+			{ workspaceId: workspace.id },
+			CTX,
+		)) as CreateSessionResult;
+		expect(created).toMatchObject({ model: selected, thinkingLevel: "off" });
 	} finally {
+		disposeAllSessions();
+		configurePiRuntime(null);
+		setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 		cleanup();
 	}
 });
