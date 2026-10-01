@@ -139,7 +139,12 @@ async function verifyWindowControls(
 			},
 			{ timeoutMs: 20_000, what: `native window controls (${command})`, exited, exitError },
 		);
-		if (JSON.stringify(probe()?.requests) !== JSON.stringify(requests)) {
+		await Bun.sleep(500);
+		const document = probe();
+		if (
+			JSON.stringify(document?.requests) !== JSON.stringify(requests) ||
+			document?.state?.maximized !== maximized
+		) {
 			throw fail(`expected requests ${JSON.stringify(requests)} after ${command}`);
 		}
 	};
