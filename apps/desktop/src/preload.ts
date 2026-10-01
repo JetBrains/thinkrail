@@ -9,6 +9,7 @@ import {
 } from "./preferenceAdapter";
 import { takePreloadGlobal } from "./preloadGlobals";
 import type { DesktopRpc } from "./rpc";
+import { installTitleBarDoubleClick } from "./titleBarDoubleClick";
 import { createWindowChromeStyleWriter, INITIAL_WINDOW_CHROME_GLOBAL } from "./windowChrome";
 
 interface DesktopPreferenceAdapter {
@@ -37,6 +38,7 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 	},
 });
 const electroview = new Electrobun.Electroview({ rpc });
+installTitleBarDoubleClick(window, () => electroview.rpc?.send.titleBarDoubleClick());
 window.addEventListener("keydown", (event) =>
 	handlePageZoomShortcut(event, navigator.platform, (action) => {
 		electroview.rpc?.send.pageZoomRequested({ action });

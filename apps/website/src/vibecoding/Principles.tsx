@@ -1,35 +1,72 @@
 import { BookOpenText, ListTodo, ListTree, View } from "lucide-react";
+import type { Positioning } from "./positioning";
 import { Reveal } from "./Reveal";
 import { Subtitle } from "./Subtitle";
 
-const principles = [
-	{
-		n: "01",
-		Icon: View,
-		title: "See what your agents are doing",
-		body: "No black boxes. Every terminal prompt, source code lookup, and tool invocation is rendered in real-time. Know exactly what your agents are exploring.",
-	},
-	{
-		n: "02",
-		Icon: ListTodo,
-		title: "Clarify requirements before building",
-		body: "Agents write a dry-run plan and architectural outline before writing code. Review the approach, adjust the constraints, and authorize with confidence.",
-	},
-	{
-		n: "03",
-		Icon: ListTree,
-		title: "Run multiple agents without the mess",
-		body: "Each task runs inside its own isolated Git worktree. Run five distinct features in parallel without dealing with lock files, dirty indexes, or branch switching.",
-	},
-	{
-		n: "04",
-		Icon: BookOpenText,
-		title: "Keep your project's memory",
-		body: "Keep requirements, module boundaries, and architecture decisions in a linked spec graph that future sessions can search before changing code.",
-	},
-];
+const transparency = {
+	n: "01",
+	Icon: View,
+	title: "See what your agents are doing",
+	body: "No black boxes. Every terminal prompt, source code lookup, and tool invocation is rendered in real-time. Know exactly what your agents are exploring.",
+};
 
-export function Principles() {
+const parallelism = {
+	n: "03",
+	Icon: ListTree,
+	title: "Run multiple agents without the mess",
+	body: "Each task runs inside its own isolated Git worktree. Run five distinct features in parallel without dealing with lock files, dirty indexes, or branch switching.",
+};
+
+const COPY: Record<
+	Positioning,
+	{ heading: string; subtitle: string; principles: (typeof transparency)[] }
+> = {
+	control: {
+		heading: "Designed for high-trust development",
+		subtitle:
+			"We do not believe in fully-autonomous software engineering.\u00a0\nWe believe in automated agent orchestration backed by strict human gatekeeping.",
+		principles: [
+			transparency,
+			{
+				n: "02",
+				Icon: ListTodo,
+				title: "Clarify requirements before building",
+				body: "Agents write a dry-run plan and architectural outline before writing code. Review the approach, adjust the constraints, and authorize with confidence.",
+			},
+			parallelism,
+			{
+				n: "04",
+				Icon: BookOpenText,
+				title: "Keep your project's memory",
+				body: "Keep requirements, module boundaries, and architecture decisions in a linked spec graph that future sessions can search before changing code.",
+			},
+		],
+	},
+	compounding: {
+		heading: "Designed to compound",
+		subtitle:
+			"Most agents forget everything between sessions.\u00a0\nThinkRail remembers — and what it learns today makes it faster tomorrow.",
+		principles: [
+			transparency,
+			{
+				n: "02",
+				Icon: ListTodo,
+				title: "Plan first — keep the plan",
+				body: "Agents draft a plan before touching code. Approved designs land in living specs and stay with the project.",
+			},
+			parallelism,
+			{
+				n: "04",
+				Icon: BookOpenText,
+				title: "Living specs, not stale docs",
+				body: "Requirements, boundaries, and decisions in a linked graph the agent reads before every change — and updates as the code evolves.",
+			},
+		],
+	},
+};
+
+export function Principles({ positioning }: { positioning: Positioning }) {
+	const copy = COPY[positioning];
 	return (
 		<section
 			id="features"
@@ -39,16 +76,12 @@ export function Principles() {
 				<Reveal>
 					<p className="label-mono">Foundational principles</p>
 					<h2 className="font-display mt-4 text-2xl font-normal sm:text-3xl lg:whitespace-nowrap">
-						Designed for high-trust development
+						{copy.heading}
 					</h2>
-					<Subtitle className="subtitle-wide mt-5">
-						{
-							"We do not believe in fully-autonomous software engineering.\u00a0\nWe believe in automated agent orchestration backed by strict human gatekeeping."
-						}
-					</Subtitle>
+					<Subtitle className="subtitle-wide mt-5">{copy.subtitle}</Subtitle>
 				</Reveal>
 				<div className="mt-8 grid grid-cols-1 gap-4 sm:mt-16 sm:grid-cols-2 lg:grid-cols-4">
-					{principles.map((p, i) => (
+					{copy.principles.map((p, i) => (
 						<Reveal key={p.n} delay={i * 70} className="h-full">
 							<article className="h-full rounded-lg border border-border bg-container-card-bg p-5">
 								<p.Icon className="text-primary" size={24} strokeWidth={1.5} aria-hidden="true" />

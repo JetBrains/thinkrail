@@ -108,6 +108,7 @@ describe("website content keys", () => {
 		["/blog/thinkrail-sdd/", "blog/thinkrail-sdd"],
 		["/vibecoding/", "vibecoding"],
 		["/agentic-development/", "agentic-development"],
+		["/agentic-ide/", "agentic-ide"],
 	] as const)("keeps %s mapped to %s", (pathname, contentKey) => {
 		expect(contentKeyForPathname(pathname)).toBe(contentKey);
 	});

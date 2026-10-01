@@ -14,6 +14,7 @@ export default defineConfig({
 		sitemap({
 			filter: (page) =>
 				page !== "https://thinkrail.ai/agentic-development/" &&
+				page !== "https://thinkrail.ai/agentic-ide/" &&
 				page !== "https://thinkrail.ai/attribution/claim/",
 		}),
 	],

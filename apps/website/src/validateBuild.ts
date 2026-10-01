@@ -118,9 +118,10 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		introducingThinkRail: requiredPage("blog/introducing-thinkrail/index.html"),
 		vibecoding: requiredPage("vibecoding/index.html"),
 		agenticDevelopment: requiredPage("agentic-development/index.html"),
+		agenticIde: requiredPage("agentic-ide/index.html"),
 		claim: requiredPage("attribution/claim/index.html"),
 	};
-	const islandPages = ["vibecoding", "agenticDevelopment"] as const;
+	const islandPages = ["vibecoding", "agenticDevelopment", "agenticIde"] as const;
 	const staticPages = ["landing", "blog", "introducingThinkRail", "claim"] as const;
 	const installPages = [
 		{ name: "landing", html: pages.landing, expectedDownloads: 2 },
@@ -159,6 +160,26 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		'<meta name="referrer" content="no-referrer">',
 	]) {
 		if (!pages.claim.includes(required)) failures.push(`claim: missing ${required}`);
+	}
+	if (!pages.agenticIde.includes("The agentic IDE that gets better every time you use it.")) {
+		failures.push("agenticIde: missing hero title");
+	}
+	if (pages.agenticIde.includes("Vibe code without losing control.")) {
+		failures.push("agenticIde: hero title fell back to the vibecoding default");
+	}
+	for (const [name, marker] of [
+		["agenticIde", "Designed to compound"],
+		["vibecoding", "Designed for high-trust development"],
+		["agenticDevelopment", "Designed for high-trust development"],
+	] as const) {
+		if (!pages[name].includes(marker)) {
+			failures.push(`${name}: missing positioning copy: ${marker}`);
+		}
+	}
+	for (const name of ["vibecoding", "agenticDevelopment"] as const) {
+		if (pages[name].includes("Designed to compound")) {
+			failures.push(`${name}: compounding positioning copy leaked into the control variant`);
+		}
 	}
 
 	for (const url of desktopDownloadUrls) {
@@ -264,6 +285,9 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	}
 	if (sitemap.includes("https://thinkrail.ai/agentic-development/")) {
 		failures.push("sitemap lists the non-canonical agentic-development route");
+	}
+	if (sitemap.includes("https://thinkrail.ai/agentic-ide/")) {
+		failures.push("sitemap lists the non-canonical agentic-ide route");
 	}
 	if (sitemap.includes("https://thinkrail.ai/attribution/claim/")) {
 		failures.push("sitemap lists the non-indexed attribution claim route");

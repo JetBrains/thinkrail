@@ -5,6 +5,7 @@ const directPaths = [
 	"/blog/",
 	"/vibecoding/",
 	"/agentic-development/",
+	"/agentic-ide/",
 	"/robots.txt",
 	"/sitemap-index.xml",
 ];

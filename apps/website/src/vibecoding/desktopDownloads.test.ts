@@ -81,7 +81,12 @@ describe("desktop CTA", () => {
 describe("server-rendered install controls", () => {
 	test("keeps every desktop link discoverable without command-line controls or a second picker", () => {
 		const markup = renderToStaticMarkup(
-			createElement("div", null, createElement(HeroQuickStart), createElement(CallToAction)),
+			createElement(
+				"div",
+				null,
+				createElement(HeroQuickStart),
+				createElement(CallToAction, { positioning: "control" }),
+			),
 		);
 
 		for (const platform of installPlatforms) {

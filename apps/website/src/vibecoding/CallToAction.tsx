@@ -4,8 +4,22 @@ import {
 	type InstallPlatform,
 } from "./desktopDownloads";
 import { CompactDownloadAction, useDetectedInstallPlatform } from "./InstallPicker";
+import type { Positioning } from "./positioning";
 import { Reveal } from "./Reveal";
 import { Subtitle } from "./Subtitle";
+
+const COPY: Record<Positioning, { heading: string; subtitle: string }> = {
+	control: {
+		heading: "Give your AI agents a system.",
+		subtitle:
+			"Move from disconnected prompts to a clear, predictable, and fully visible environment for automated code generation.",
+	},
+	compounding: {
+		heading: "Stop starting from zero.",
+		subtitle:
+			"Every session leaves your project smarter — decisions in specs, workflows in skills. Download ThinkRail and let it learn.",
+	},
+};
 
 export function desktopCtaAction(platform: InstallPlatform | null | undefined) {
 	if (!platform) {
@@ -26,7 +40,8 @@ export function desktopCtaAction(platform: InstallPlatform | null | undefined) {
 	};
 }
 
-export function CallToAction() {
+export function CallToAction({ positioning }: { positioning: Positioning }) {
+	const copy = COPY[positioning];
 	const action = desktopCtaAction(useDetectedInstallPlatform());
 
 	return (
@@ -38,12 +53,9 @@ export function CallToAction() {
 				<Reveal>
 					<p className="label-mono">Next step</p>
 					<h2 className="font-display mx-auto mt-6 max-w-3xl text-3xl font-normal sm:text-4xl">
-						Give your AI agents a system.
+						{copy.heading}
 					</h2>
-					<Subtitle className="mx-auto mt-6">
-						Move from disconnected prompts to a clear, predictable, and fully visible environment
-						for automated code generation.
-					</Subtitle>
+					<Subtitle className="mx-auto mt-6">{copy.subtitle}</Subtitle>
 
 					<div className="mt-10 flex flex-wrap items-center justify-center gap-x-4 gap-y-3">
 						<CompactDownloadAction

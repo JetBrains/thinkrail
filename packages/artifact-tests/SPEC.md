@@ -44,7 +44,11 @@ the seam),
 exercise the bundled factories/skills, reach an OAuth URL without a provider turn, verify health/UI and
 transcript trash, and shut down. CLI-specific probes also check its exit-only and embedded-cache behavior.
 Native desktop smoke loads the real UI and verifies route/preload messaging plus the production external
-navigation handler. Desktop-backed Playwright uses the launcher's opt-in neutral-window seam so it is the
+navigation handler. On macOS it also drives the title-bar double-click path end to end: a no-drag
+double-click must not act, and the header double-click's recorded action and resulting window state must
+match the machine's `AppleActionOnDoubleClick` setting mapped as [[module-desktop]] documents (unset,
+`Maximize` and `Fill` zoom). Other platforms skip it because their decorated
+windows have no web drag region. Desktop-backed Playwright uses the launcher's opt-in neutral-window seam so it is the
 only hydrated client. The live-window ready/control seam remains in the launcher, never a runtime import
 of this package.
 
@@ -58,7 +62,8 @@ CI and test mutes independently. No UI action or confirmation is simulated; deli
 host shutdown. The expected release identity is the shared identity used to build the artifact.
 
 Every host owns isolated home, data, agent and cache directories; environment overrides respect Windows'
-case-insensitive keys. Readiness polling owns a finite deadline and observes early root exit; because the launcher writes its ready, route and navigation-probe documents non-atomically, the smoke treats a missing or half-written JSON file as "not yet" and keeps polling rather than failing on a torn read. When a live
+case-insensitive keys. The native UI launch pre-creates its home directory: on macOS the window never
+reaches DOM-ready when `XDG_CACHE_HOME` is set while `HOME` names a missing directory. Readiness polling owns a finite deadline and observes early root exit; because the launcher writes its ready, route and navigation-probe documents non-atomically, the smoke treats a missing or half-written JSON file as "not yet" and keeps polling rather than failing on a torn read. When a live
 launched root or validated ready-document app/launcher PIDs need failure cleanup, teardown is bounded and
 awaited before shared retrying removal of the temporary installation root. A setup root may exit successfully
 before its app handoff is ready; after that exit, the harness does not infer or discover descendants from the

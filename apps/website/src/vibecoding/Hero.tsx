@@ -1,12 +1,20 @@
 import { ActionButton } from "./ActionButton";
 import { GithubIcon } from "./GithubIcon";
 import { HeroQuickStart } from "./HeroQuickStart";
+import type { Positioning } from "./positioning";
 import { Reveal } from "./Reveal";
 
 import { Subtitle } from "./Subtitle";
 import { VerticalBars } from "./VerticalBars";
 
-export function Hero({ title }: { title: string }) {
+const subtitles: Record<Positioning, string> = {
+	control:
+		"ThinkRail gives every AI agent a clear plan, a separate place to work, and a visible trail of progress. Run multiple agents at once while your project knowledge stays organized.",
+	compounding:
+		"Built around the Pi coding agent. Every task gets its own workspace, every decision lands in a living spec, every workflow becomes a reusable skill.",
+};
+
+export function Hero({ title, positioning }: { title: string; positioning: Positioning }) {
 	return (
 		<section
 			id="top"
@@ -34,9 +42,7 @@ export function Hero({ title }: { title: string }) {
 
 						<Reveal delay={140}>
 							<Subtitle className="mt-7 text-center sm:text-left">
-								ThinkRail gives every AI agent a clear plan, a separate place to work, and a visible
-								trail of progress. Run multiple agents at once while your project knowledge stays
-								organized.
+								{subtitles[positioning]}
 							</Subtitle>
 						</Reveal>
 
