@@ -83,8 +83,8 @@ re-anchoring, and package rendering.
   `anchorState` axis (`anchored`/`moved`/`outdated`) is **orthogonal to `status`**: "was it discussed"
   and "is the anchor alive" never overwrite each other.
   **`contentHash` is sha-256 over the resource's bytes** (`fs.hashBytes`) and capture follows the
-  resource, not the comment: a **text** side (`fs.classifyBytes` — no NUL byte in the first 8 KiB and a
-  strict UTF-8 decode, a BOM is text)
+  resource, not the comment: a **text** side (`fs.classifyBytes` — no recognized binary magic number, no
+  NUL byte in the first 8 KiB, and a strict UTF-8 decode; a BOM is text, an SVG is text)
   derives `textQuote` from `lineRange` as before, while a **byte-only** side hashes the bytes and keeps
   the renderer's selectors **as given**, never a derived quote — there is no text to quote. `addComment`
   **narrows the wire's selectors** before either capture — every element an object of a known `kind`

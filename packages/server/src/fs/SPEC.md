@@ -30,11 +30,13 @@ bytes are** — the one byte-level classification every content read in the host
   own `lstat` can reject even an escaping leaf symlink without following it. This module owns the path
   safety; its callers own the streaming and the writing.
   **Content classification** (`content.ts`, pure, no dependency): `CONTENT_SNIFF_BYTES` names the shared
-  8 KiB bounded-head size; `classifyBytes(bytes)` → `{ text, mime? }` — **text** is "no NUL byte in the
-  first 8 KiB and a strict UTF-8 decode" (a BOM is
-  text), **mime** is what the *bytes* prove (magic numbers for png/jpeg/gif/webp/bmp/ico/pdf/zip/gzip/
-  woff/woff2, plus `image/svg+xml` for text whose root element is `<svg>`, directly or behind an XML
-  prolog — a prolog alone is not an image); `hashBytes(bytes)` → the sha-256 hex that **is** a
+  8 KiB bounded-head size; `classifyBytes(bytes)` → `{ text, mime? }` — **mime** is what the *bytes*
+  prove (magic numbers for png/jpeg/gif/webp/bmp/ico/pdf/zip/gzip/woff/woff2, plus `image/svg+xml` for
+  text whose root element is `<svg>`, directly or behind an XML prolog — a prolog alone is not an
+  image); **text** is "no recognized binary magic number, no NUL byte in the first 8 KiB, and a strict
+  UTF-8 decode" (a BOM is text; an SVG is text because `image/svg+xml` is inferred from text, never
+  from a magic number). A magic number wins over decodability: an uncompressed PDF is valid ASCII, yet
+  it is a document the PDF renderer owns, not source the code renderer may claim; `hashBytes(bytes)` → the sha-256 hex that **is** a
   resource's identity on the wire (`ResourceMeta.hash`, `ReviewAnchor.contentHash`, the `change.*`
   compare-and-swap); `decodeText(bytes)` → the one UTF-8 decode (BOM retained, because the BOM is part
   of the bytes the hash covers); `mimeFromPath(path)` owns the filename fallback no byte inspection can

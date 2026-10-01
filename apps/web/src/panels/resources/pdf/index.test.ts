@@ -11,6 +11,7 @@ import { denormalizeRegion, normalizeRegion } from "../regionReview";
 import { pdfRenderer } from ".";
 import { PdfRenderQueue } from "./pdfLoader";
 import {
+	pdfCurrentPage,
 	pdfFocusPending,
 	pdfPageContentStamp,
 	pdfPageReleasePlan,
@@ -193,4 +194,9 @@ test("PDF URLs hash-bust mutable file routes and view state is bounded", () => {
 	);
 	expect(pdfSourceUrl("/blob/ws/oid/report.pdf", "hash")).toBe("/blob/ws/oid/report.pdf");
 	expect(pdfViewState({ page: 4, zoom: 99 })).toEqual({ page: 4, zoom: 3 });
+});
+
+test("the current page is the first visible page and falls back to the navigation target", () => {
+	expect(pdfCurrentPage(new Set([41, 39, 40]), 1)).toBe(39);
+	expect(pdfCurrentPage(new Set(), 7)).toBe(7);
 });

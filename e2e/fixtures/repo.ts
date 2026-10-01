@@ -150,6 +150,7 @@ export function seedFixtureRepo(): void {
 			"base64",
 		),
 	);
+	writeFileSync(join(E2E_FIXTURE_REPO, "RENDERERS.pdf"), asciiPdf("RENDERERS PDF FIXTURE"));
 	writeFileSync(
 		join(E2E_FIXTURE_REPO, "SPEC.md"),
 		"---\nid: sample-root\ntype: goal-and-requirements\ntitle: Sample Project\n---\n\n## Goal\n\nA throwaway fixture project for the thinkrail e2e suite. It carries the token SPECGRAPHPROBE so spec_grep has a deterministic match to find.\n",
@@ -178,4 +179,24 @@ export function largeRepetitiveMarkdownEdited(): string {
 	const lines = largeRepetitiveMarkdown().split("\n");
 	lines[400] = "- EDITED replacement row";
 	return `${lines.join("\n")}- appended row by e2e\n`;
+}
+
+export function asciiPdf(text: string): string {
+	const stream = `BT /F1 24 Tf 30 100 Td (${text}) Tj ET`;
+	const objects = [
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+		`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+	];
+	let body = "%PDF-1.4\n";
+	const offsets: number[] = [];
+	objects.forEach((object, index) => {
+		offsets.push(body.length);
+		body += `${index + 1} 0 obj\n${object}\nendobj\n`;
+	});
+	const xref = body.length;
+	const entries = offsets.map((offset) => `${String(offset).padStart(10, "0")} 00000 n `);
+	return `${body}xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${entries.join("\n")}\ntrailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
 }

@@ -73,9 +73,10 @@ function isSvg(bytes: Uint8Array): boolean {
 }
 
 export function classifyBytes(bytes: Uint8Array): { text: boolean; mime?: string } {
+	const magic = sniffMagic(bytes);
+	if (magic !== undefined) return { text: false, mime: magic };
 	const text = isTextBytes(bytes);
-	const mime = sniffMagic(bytes) ?? (text && isSvg(bytes) ? "image/svg+xml" : undefined);
-	return mime === undefined ? { text } : { text, mime };
+	return text && isSvg(bytes) ? { text, mime: "image/svg+xml" } : { text };
 }
 
 export function hashBytes(bytes: Uint8Array): string {

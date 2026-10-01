@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { asciiPdf } from "./fixtures/repo";
 
 test("opens a file in a center Monaco tab, focuses on re-open, and closes", async ({ page }) => {
 	await openFixtureProject(page);
@@ -120,6 +121,42 @@ test("opens an HTML preview with active content disabled", async ({ page }) => {
 	await expect(page.getByTestId("html-disabled-notice")).toContainText(
 		"Scripts and external resources are disabled",
 	);
+});
+
+test("opens an uncompressed PDF in the PDF renderer and its change in the PDF diff", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+
+	await page.getByTestId("file-node").filter({ hasText: "RENDERERS.pdf" }).dblclick();
+	await expect(page.getByTestId("view-toggle-pdf")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("view-toggle-binary")).toBeVisible();
+	const firstPage = page.getByTestId("pdf-view").locator("canvas").first();
+	await expect(firstPage).toBeVisible();
+	await expect
+		.poll(() =>
+			firstPage.evaluate((element) => {
+				const canvas = element as HTMLCanvasElement;
+				const pixels = canvas
+					.getContext("2d")
+					?.getImageData(0, 0, canvas.width, canvas.height).data;
+				if (!pixels) return 0;
+				let drawn = 0;
+				for (let index = 0; index < pixels.length; index += 4) {
+					if (pixels[index] < 240) drawn += 1;
+				}
+				return drawn;
+			}),
+		)
+		.toBeGreaterThan(100);
+
+	writeFileSync(join(workspace.worktreePath, "RENDERERS.pdf"), asciiPdf("CHANGED PDF FIXTURE"));
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("change-item").filter({ hasText: "RENDERERS.pdf" }).click();
+	await expect(page.getByTestId("pdf-diff")).toBeVisible();
+	await expect(page.getByTestId("pdf-diff-page")).toHaveCount(1);
 });
 
 test("renders a PNG and opens its changed version in the 2-up image diff", async ({ page }) => {

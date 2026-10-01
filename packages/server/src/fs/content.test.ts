@@ -21,7 +21,7 @@ test("a NUL byte or invalid UTF-8 is bytes; UTF-8 (BOM allowed) and emptiness ar
 test("magic bytes name the media type before any filename is consulted", () => {
 	expect(classifyBytes(PNG)).toEqual({ text: false, mime: "image/png" });
 	expect(classifyBytes(BYTES.encode("%PDF-1.7\n"))).toEqual({
-		text: true,
+		text: false,
 		mime: "application/pdf",
 	});
 	expect(classifyBytes(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00]))).toEqual({

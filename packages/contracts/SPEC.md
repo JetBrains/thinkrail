@@ -203,7 +203,8 @@ of the host.
   `FileNode` (file-tree node),
   **`ResourceMeta`** (what a resource's bytes *are*, host-decided and pinned by
   `RESOURCE_META_PROTOCOL_VERSION` = v75: sha-256 `hash` + `byteLength`, both `null` when the resource is
-  absent; `text` = valid UTF-8, BOM-aware; optional `mime`, sniffed from magic bytes first and the
+  absent; `text` = valid UTF-8, BOM-aware, and not claimed by a recognized binary magic number (an ASCII
+  PDF is a byte-only document; an SVG is text); optional `mime`, sniffed from magic bytes first and the
   filename second. It rides `fs.readFile` and both sides of `git.diffFile`, whose `content` is `""`
   whenever `text` is false and whose `originalOid` is the resolved range start used to address the immutable
   `/blob` side — the host refuses to send a decoded binary, so a client renders byte-only resources from the

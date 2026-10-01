@@ -51,6 +51,12 @@ export function pdfReviewForPage(
 	};
 }
 
+export function pdfCurrentPage(visiblePages: ReadonlySet<number>, fallback: number): number {
+	let current: number | null = null;
+	for (const page of visiblePages) if (current === null || page < current) current = page;
+	return current ?? fallback;
+}
+
 export function updatePdfPageSet(
 	current: ReadonlySet<number>,
 	page: number,

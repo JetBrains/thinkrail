@@ -6,6 +6,7 @@ import { PdfToolbar } from "./PdfToolbar";
 import { PdfRenderQueue } from "./pdfLoader";
 import {
 	clampPdfZoom,
+	pdfCurrentPage,
 	pdfFocusPending,
 	pdfPageOfAnchor,
 	pdfPageReleasePlan,
@@ -36,6 +37,11 @@ export default function PdfView({
 	const queue = useMemo(() => new PdfRenderQueue(2), [loaded.identity]);
 	const pageRefs = useRef(new Map<number, HTMLElement>());
 	const placementReportedRef = useRef(false);
+	const currentPage = pdfCurrentPage(visiblePages, page);
+	const latestViewStateRef = useRef({ page: currentPage, zoom });
+	latestViewStateRef.current = { page: currentPage, zoom };
+	const onViewStateRef = useRef(onViewState);
+	onViewStateRef.current = onViewState;
 	const pageCount = loaded.document?.numPages ?? null;
 	const requestedFocusPage = review?.focus ? pdfPageOfAnchor(review.focus.anchor) : null;
 	const focusResolution = resolvePdfPage(requestedFocusPage, pageCount);
@@ -81,6 +87,13 @@ export default function PdfView({
 		[onPlacedThreadIds],
 	);
 
+	useEffect(
+		() => () => {
+			onViewStateRef.current?.(latestViewStateRef.current);
+		},
+		[],
+	);
+
 	useEffect(() => {
 		if (focusPage === null) return;
 		setPage(focusPage);
@@ -116,18 +129,15 @@ export default function PdfView({
 		setPage(bounded);
 		setVisiblePages(new Set([bounded]));
 		pageRefs.current.get(bounded)?.scrollIntoView({ block: "start" });
-		onViewState?.({ page: bounded, zoom });
 	};
 	const changeZoom = (nextZoom: number) => {
-		const bounded = clampPdfZoom(nextZoom);
-		setZoom(bounded);
-		onViewState?.({ page, zoom: bounded });
+		setZoom(clampPdfZoom(nextZoom));
 	};
 
 	return (
 		<div data-testid="pdf-view" className="flex h-full min-h-0 flex-col bg-container-content-bg">
 			<PdfToolbar
-				page={page}
+				page={currentPage}
 				pageCount={document.numPages}
 				zoom={zoom}
 				onPage={goToPage}

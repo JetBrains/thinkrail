@@ -136,8 +136,8 @@ ref off the workspace-create critical path.
   `gitStatus(workspaceId, scope?)` — changed files over the range plus untracked (only when the range ends at
   the worktree), each carrying per-file `added`/`removed` line counts (`git diff --numstat`, its rename-mangled paths resolved
   via `numstatPath` to match `--name-status`; binary rows dropped; untracked files count their whole
-  content as added only when `fs.classifyBytes` agrees it is text, so invalid UTF-8 and NUL-bearing
-  untracked files omit counts exactly as their `ResourceMeta` does) for the Changes tree's `+/−` badges;
+  content as added only when `fs.classifyBytes` agrees it is text, so invalid UTF-8, NUL-bearing, and
+  magic-typed untracked files omit counts exactly as their `ResourceMeta` does) for the Changes tree's `+/−` badges;
   `gitDiffFile(workspaceId, path, scope?)` → `{ original, modified, originalOid, meta: { original, modified } }` — `originalOid` is the range's resolved immutable start (or `null`) and both
   sides of one file's change for the center diff tab (`original` = the file at the range's start ref, raw,
   empty when absent there —

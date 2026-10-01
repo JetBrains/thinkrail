@@ -1372,8 +1372,10 @@ own section. The kebab menu (`plan-menu`, a
   page exists, independent of whether that page currently owns a canvas. A focused page is forced into the
   render window and focus is consumed only after its region card mounts. The render window is the visible
   pages plus two pages on each side. Work leaving it is cancelled; canvases and bitmaps are released, and
-  diff object URLs are revoked. Composer identity uses document identity plus page, never zoom. Page
-  navigation and zoom remain tab view state. PDF diffs use one synchronized page sequence: each page pair
+  diff object URLs are revoked. Composer identity uses document identity plus page, never zoom. The toolbar's
+  current page is the first visible page (the navigation target until any page reports visibility), so it
+  follows scrolling as well as navigation; that page and the zoom are written to tab view state when the
+  view unmounts, like the other scroll-restoring renderers. PDF diffs use one synchronized page sequence: each page pair
   starts in 2-up and can switch among the shared swipe, onion, and difference modes, with an absent side
   represented by an explicit empty page frame.
 
