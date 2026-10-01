@@ -638,7 +638,7 @@ request), nullable latest `completion` (stable id and explicit
 owner-global `completionUnread` receipt projection. `SessionStateRecord` adds session/workspace/project
 attribution; `SessionSummary.state` carries the exact attached session's state.
 
-`session.stateList` is an authoritative all-workspace snapshot of every user-visible top-level session and
+`session.stateList` is an authoritative all-workspace snapshot of every top-level live or disk session and
 fails rather than returning an incomplete scan. `session.state` pushes a full record after the causative Pi
 event. `session.acknowledgeCompletion` compare-and-sets one exact completion id; needs-input is never
 acknowledgeable. `session.nudge` atomically no-ops for needs-input, queues during running work, and prompts
