@@ -168,8 +168,17 @@ test("anchor labels cover line ranges, structural references, regions, and whole
 	expect(anchorLabel(anchor([{ kind: "lineRange", startLine: 3, endLine: 3 }]))).toBe("L3");
 	expect(anchorLabel(anchor([{ kind: "lineRange", startLine: 3, endLine: 7 }]))).toBe("L3–7");
 	expect(anchorLabel(anchor([{ kind: "structural", scheme: "ipynb-cell", ref: "cell-7" }]))).toBe(
-		"ipynb-cell cell-7",
+		"cell cell-7",
 	);
+	expect(anchorLabel(anchor([{ kind: "structural", scheme: "ipynb-cell", ref: "index:6" }]))).toBe(
+		"cell 7",
+	);
+	expect(
+		anchorLabel(
+			anchor([{ kind: "structural", scheme: "ipynb-cell", ref: "stable-id" }]),
+			new Map([["stable-id", 4]]),
+		),
+	).toBe("cell 4");
 	expect(
 		anchorLabel(
 			anchor([
@@ -187,6 +196,9 @@ test("anchor labels cover line ranges, structural references, regions, and whole
 		),
 	).toBe("/a~1b/0");
 	expect(anchorLabel(anchor([{ kind: "region", x: 0, y: 0, width: 1, height: 1 }]))).toBe("region");
+	expect(anchorLabel(anchor([{ kind: "region", x: 0, y: 0, width: 1, height: 1, page: 3 }]))).toBe(
+		"p3 region",
+	);
 	expect(anchorLabel(anchor([]))).toBe("file");
 });
 

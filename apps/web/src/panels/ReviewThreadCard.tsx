@@ -26,6 +26,7 @@ export function ReviewThreadCard({
 		if (draftText === syncedBody) setDraftText(thread.body);
 	}
 	const editRef = useRef<HTMLTextAreaElement>(null);
+	const cancelledRef = useRef(false);
 	const run = (action: (id: string) => Promise<void>) => {
 		setBusy(true);
 		action(thread.id).catch(() => setBusy(false));
@@ -35,6 +36,10 @@ export function ReviewThreadCard({
 		if (el && el.value === draftText) grow(el);
 	}, [draftText]);
 	const saveEdit = () => {
+		if (cancelledRef.current) {
+			cancelledRef.current = false;
+			return;
+		}
 		const next = draftText.trim();
 		if (!next || next === thread.body) {
 			setDraftText(thread.body);
@@ -114,6 +119,7 @@ export function ReviewThreadCard({
 					onBlur={saveEdit}
 					onKeyDown={(e) => {
 						if (e.key === "Escape") {
+							cancelledRef.current = true;
 							setDraftText(thread.body);
 							editRef.current?.blur();
 						}

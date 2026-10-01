@@ -22,8 +22,10 @@ selector has a geometry the renderer advertises for the requested view or diff i
 is the shared compact reference. A diff renderer may report the thread ids it actually placed through
 `ResourceViewProps.onPlacedThreadIds` or `ResourceDiffProps.onPlacedThreadIds`; the pane treats
 capability-matching ids omitted from that set as unplaced too, covering renderer-local geometry such as a
-removed JSON pointer, deleted table cell, or collapsed context. A renderer with no anchor capability for its
-intent may ignore its review prop; the pane keeps those threads in its unplaced strip instead.
+removed JSON pointer, deleted table cell, or collapsed context. A virtualized paged renderer reports against
+known page-count geometry rather than transient canvas residency, so releasing an off-screen page does not
+make its thread unplaced. A renderer with no anchor capability for its intent may ignore its review prop; the
+pane keeps those threads in its unplaced strip instead.
 
 `HunkActions` is the mutation boundary between a diff engine and its pane. A renderer reports only the
 engine-neutral original/modified `LineSpan` pair it computed: `revert` applies that one block,
@@ -47,5 +49,8 @@ control rather than emulate one.
 Registration owns no content or tab state. Panes own transport URLs, review integration, selected renderer,
 and opaque per-tab view state. `anchorLabel` prefers a structural locator over its mandatory text fallback:
 `table-cell` is `R<row>C<column>`, `json-pointer` is the pointer itself, and unknown schemes retain
-`<scheme> <ref>`; line, region, and file labels keep their existing forms. Active renderers remain a sandbox
-boundary; registration metadata may name that capability but this module never mounts one.
+`<scheme> <ref>`; `ipynb-cell` is `cell <n>` for legacy `index:<zero-based>` refs and `cell <id>` for
+stable ids, with an optional renderer-supplied id-to-ordinal map producing the local `cell <ordinal>` label.
+Paged regions are `p<page> region`; unpaged regions, lines, and files keep their existing forms. Active
+renderers remain a sandbox boundary; registration metadata may name that capability but this module never
+mounts one.

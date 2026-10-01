@@ -1346,6 +1346,40 @@ own section. The kebab menu (`plan-menu`, a
   use the modified document and `review.worktree`. Invalid source renders no tree, leaving Source as the
   alternate candidate.
 
+  `thinkrail/notebook` accepts nbformat-4 JSON and reuses the tolerant positional JSON scanner to bind every
+  rendered cell to its raw cell-object line range. Nbformat 4.5 ids are the `ipynb-cell` structural ref;
+  older notebooks use `index:<zero-based>`. Markdown cells use the shared Markdown parser without raw HTML.
+  Its notebook component map permits only `data:` images and renders links plus blocked image URLs as inert
+  text. Notebook language metadata must resolve through the shared Shiki catalog; missing metadata defaults
+  to Python and unknown values render as plain text. ANSI is removed from stream and error output. MIME
+  bundles choose image (PNG, JPEG, GIF, SVG), HTML, JSON, then plain text. SVG output stays a data image.
+  HTML output uses the same sanitized empty-capability document as the HTML renderer. Cell review emits both
+  the raw line range and structural ref, keeps cards below the resolved cell, reports only actual placements,
+  and hash-stamps an open composer. Diffs align ids first and exact normalized source second. Remaining runs
+  are aligned in order by bounded line-token similarity; no character-level all-pairs diff is used. Changed
+  source uses one provider-backed unified Pierre cell diff, image output reuses visual comparison modes, text
+  output uses Pierre, and HTML/JSON output stays side-by-side. Original cell selectors remain in `review.base`;
+  neither side is translated.
+
+  `thinkrail/pdf` matches byte PDFs and lazy-loads both pdf.js and its Vite-emitted worker. Placement is not
+  reported until page-count metadata is known. A page-region thread is placeable exactly when its one-based
+  page exists, independent of whether that page currently owns a canvas. A focused page is forced into the
+  render window and focus is consumed only after its region card mounts. The render window is the visible
+  pages plus two pages on each side. Work leaving it is cancelled; canvases and bitmaps are released, and
+  diff object URLs are revoked. Composer identity uses document identity plus page, never zoom. Page
+  navigation and zoom remain tab view state. PDF diffs use one synchronized page sequence: each page pair
+  starts in 2-up and can switch among the shared swipe, onion, and difference modes, with an absent side
+  represented by an explicit empty page frame.
+
+  `thinkrail/html` parses source into a document before previewing it in an empty-capability `sandbox=""`
+  iframe. The sanitizer removes active, navigational, embedding, and form elements; strips event handlers and
+  non-`data:` resource URLs; and turns anchors into inert text-bearing elements. Styles remain. Notebook HTML
+  output uses this same sanitizer. The injected CSP is exactly `default-src 'none'; img-src data: blob:;
+  style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src
+  'none'; child-src 'none'`. The diff is the shared visual frame constrained to 2-up sandboxed documents only.
+  It advertises no anchor geometry, so HTML threads remain in the pane-owned unplaced strip and Source is the
+  only authoring candidate.
+
   Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,
   uses the `thinkrail` CSS-variable Shiki theme, word-level inline changes, collapsed unchanged regions with
   line-info hunk separators, and split/unified layout; phone-class viewports force unified. A diff whose

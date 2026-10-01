@@ -14,6 +14,7 @@ const MODES: readonly { mode: VisualDiffMode; label: string }[] = [
 	{ mode: "onion", label: "Onion skin" },
 	{ mode: "difference", label: "Difference" },
 ];
+const ALL_MODES = MODES.map(({ mode }) => mode);
 
 export interface VisualDiffSide {
 	present: boolean;
@@ -44,10 +45,10 @@ function frameStyle(size: Size | null, maximumHeight: 58 | 68): React.CSSPropert
 		: undefined;
 }
 
-function EmptyFrame() {
+function EmptyFrame({ label }: { label: string }) {
 	return (
 		<div className="flex h-full min-h-40 w-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
-			No image
+			{label}
 		</div>
 	);
 }
@@ -57,11 +58,13 @@ function SideSurface({
 	side,
 	regionLabel,
 	contentStamp,
+	emptyLabel,
 }: {
 	label: string;
 	side: VisualDiffSide;
 	regionLabel: string;
 	contentStamp: string;
+	emptyLabel: string;
 }) {
 	return (
 		<div className="flex min-w-0 flex-col gap-4">
@@ -77,7 +80,7 @@ function SideSurface({
 				label={regionLabel}
 				{...(side.draftForRegion ? { draftForRegion: side.draftForRegion } : {})}
 			>
-				{side.present ? side.content : <EmptyFrame />}
+				{side.present ? side.content : <EmptyFrame label={emptyLabel} />}
 			</RegionReviewSurface>
 		</div>
 	);
@@ -93,8 +96,10 @@ export function VisualDiff({
 	onPlacedThreadIds,
 	initialMode,
 	onViewState,
+	modes = ALL_MODES,
+	emptyLabel = "No image",
 }: {
-	prefix: "image" | "svg";
+	prefix: "image" | "svg" | "html";
 	noun: string;
 	regionLabel: string;
 	original: VisualDiffSide;
@@ -103,6 +108,8 @@ export function VisualDiff({
 	onPlacedThreadIds?: ((ids: ReadonlySet<string>) => void) | undefined;
 	initialMode: VisualDiffMode;
 	onViewState?: ((state: unknown) => void) | undefined;
+	modes?: readonly VisualDiffMode[] | undefined;
+	emptyLabel?: string | undefined;
 }) {
 	const [mode, setMode] = useState<VisualDiffMode>(initialMode);
 	const [activeSide, setActiveSide] = useState<"base" | "worktree">("worktree");
@@ -111,6 +118,7 @@ export function VisualDiff({
 	const layeredRef = useRef<HTMLDivElement>(null);
 	const active = activeSide === "base" ? original : modified;
 	const inactive = activeSide === "base" ? modified : original;
+	const availableModes = MODES.filter(({ mode: candidate }) => modes.includes(candidate));
 	const placedThreadIds = useMemo(() => {
 		const ids = new Set<string>();
 		for (const side of [original, modified]) {
@@ -153,35 +161,37 @@ export function VisualDiff({
 			data-testid={`${prefix}-diff`}
 			className="flex h-full min-h-0 flex-col bg-container-content-bg"
 		>
-			<div className="flex shrink-0 flex-wrap items-center gap-4 border-border-default border-b bg-container-header-bg px-8 py-4">
-				<div data-testid="image-diff-mode" className="flex items-center gap-2">
-					{MODES.map((candidate) => (
-						<ToggleSegment
-							key={candidate.mode}
-							testid={`${prefix}-diff-${candidate.mode}`}
-							label={candidate.label}
-							active={mode === candidate.mode}
-							onClick={() => selectMode(candidate.mode)}
-						/>
-					))}
-				</div>
-				{mode !== "2-up" ? (
-					<div data-testid={`${prefix}-diff-side`} className="ml-auto flex items-center gap-2">
-						<ToggleSegment
-							testid={`${prefix}-diff-side-base`}
-							label="Comment on old"
-							active={activeSide === "base"}
-							onClick={() => setActiveSide("base")}
-						/>
-						<ToggleSegment
-							testid={`${prefix}-diff-side-worktree`}
-							label="Comment on new"
-							active={activeSide === "worktree"}
-							onClick={() => setActiveSide("worktree")}
-						/>
+			{availableModes.length > 1 ? (
+				<div className="flex shrink-0 flex-wrap items-center gap-4 border-border-default border-b bg-container-header-bg px-8 py-4">
+					<div data-testid="image-diff-mode" className="flex items-center gap-2">
+						{availableModes.map((candidate) => (
+							<ToggleSegment
+								key={candidate.mode}
+								testid={`${prefix}-diff-${candidate.mode}`}
+								label={candidate.label}
+								active={mode === candidate.mode}
+								onClick={() => selectMode(candidate.mode)}
+							/>
+						))}
 					</div>
-				) : null}
-			</div>
+					{mode !== "2-up" ? (
+						<div data-testid={`${prefix}-diff-side`} className="ml-auto flex items-center gap-2">
+							<ToggleSegment
+								testid={`${prefix}-diff-side-base`}
+								label="Comment on old"
+								active={activeSide === "base"}
+								onClick={() => setActiveSide("base")}
+							/>
+							<ToggleSegment
+								testid={`${prefix}-diff-side-worktree`}
+								label="Comment on new"
+								active={activeSide === "worktree"}
+								onClick={() => setActiveSide("worktree")}
+							/>
+						</div>
+					) : null}
+				</div>
+			) : null}
 			<div className="min-h-0 flex-1 overflow-auto p-12">
 				{mode === "2-up" ? (
 					<div className="grid min-h-full grid-cols-1 gap-12 md:grid-cols-2">
@@ -190,12 +200,14 @@ export function VisualDiff({
 							side={original}
 							regionLabel={regionLabel}
 							contentStamp={contentStamp}
+							emptyLabel={emptyLabel}
 						/>
 						<SideSurface
 							label="New"
 							side={modified}
 							regionLabel={regionLabel}
 							contentStamp={contentStamp}
+							emptyLabel={emptyLabel}
 						/>
 					</div>
 				) : (
@@ -221,7 +233,7 @@ export function VisualDiff({
 							{...(active.draftForRegion ? { draftForRegion: active.draftForRegion } : {})}
 						>
 							<div ref={layeredRef} className="relative h-full w-full">
-								{original.present ? original.content : <EmptyFrame />}
+								{original.present ? original.content : <EmptyFrame label={emptyLabel} />}
 								<div
 									className={`absolute inset-0 ${mode === "difference" ? "mix-blend-difference" : ""}`}
 									style={
@@ -232,7 +244,7 @@ export function VisualDiff({
 												: undefined
 									}
 								>
-									{modified.present ? modified.content : <EmptyFrame />}
+									{modified.present ? modified.content : <EmptyFrame label={emptyLabel} />}
 								</div>
 								{mode === "swipe" ? (
 									<button

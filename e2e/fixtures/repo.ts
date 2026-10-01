@@ -34,6 +34,38 @@ export function seedFixtureRepo(): void {
 		join(E2E_FIXTURE_REPO, "sample.csv"),
 		"name,kind,enabled\nTree,renderer,true\nTable,renderer,true\n",
 	);
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "sample.ipynb"),
+		JSON.stringify(
+			{
+				nbformat: 4,
+				nbformat_minor: 5,
+				metadata: { kernelspec: { language: "python" } },
+				cells: [
+					{
+						cell_type: "markdown",
+						id: "intro",
+						metadata: {},
+						source: ["# Notebook fixture\n", "Rendered markdown cell"],
+					},
+					{
+						cell_type: "code",
+						id: "run",
+						metadata: {},
+						execution_count: 1,
+						source: ['print("notebook-output")'],
+						outputs: [{ output_type: "stream", name: "stdout", text: "notebook-output\n" }],
+					},
+				],
+			},
+			null,
+			2,
+		),
+	);
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "sample.html"),
+		'<!doctype html><html><body><h1>HTML fixture</h1><script>document.body.textContent="script-ran"</script></body></html>',
+	);
 	writeFileSync(join(E2E_FIXTURE_REPO, "LONG_LINE.txt"), LONG_LINE);
 	writeFileSync(
 		join(E2E_FIXTURE_REPO, "ALERTS.md"),

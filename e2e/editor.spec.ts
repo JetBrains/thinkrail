@@ -97,6 +97,31 @@ test("opens CSV with Table and Source candidates, defaulting to Table", async ({
 	await expect(page.getByTestId("csv-view")).toContainText("Table");
 });
 
+test("opens a notebook with Notebook and Source candidates", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+
+	await page.getByTestId("file-node").filter({ hasText: "sample.ipynb" }).dblclick();
+	await expect(page.getByTestId("view-toggle-notebook")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("view-toggle-code")).toBeVisible();
+	await expect(page.getByTestId("notebook-view")).toContainText("Notebook fixture");
+	await expect(page.getByTestId("notebook-view")).toContainText("notebook-output");
+});
+
+test("opens an HTML preview with active content disabled", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+
+	await page.getByTestId("file-node").filter({ hasText: "sample.html" }).dblclick();
+	await expect(page.getByTestId("view-toggle-html")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("view-toggle-code")).toBeVisible();
+	await expect(page.getByTestId("html-disabled-notice")).toContainText(
+		"Scripts and external resources are disabled",
+	);
+});
+
 test("renders a PNG and opens its changed version in the 2-up image diff", async ({ page }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);

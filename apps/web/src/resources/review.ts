@@ -1,7 +1,10 @@
 import type { ReviewAnchor } from "@thinkrail/contracts";
 import type { ResourceIntent, ResourceRenderer } from "./types";
 
-export function anchorLabel(anchor: ReviewAnchor): string {
+export function anchorLabel(
+	anchor: ReviewAnchor,
+	ipynbCellOrdinals?: ReadonlyMap<string, number>,
+): string {
 	const structural = anchor.selectors.find((selector) => selector.kind === "structural");
 	if (structural?.kind === "structural") {
 		if (structural.scheme === "table-cell") {
@@ -9,6 +12,12 @@ export function anchorLabel(anchor: ReviewAnchor): string {
 			if (cell) return `R${cell[1]}C${cell[2]}`;
 		}
 		if (structural.scheme === "json-pointer") return structural.ref;
+		if (structural.scheme === "ipynb-cell") {
+			const index = /^index:(\d+)$/.exec(structural.ref);
+			if (index) return `cell ${Number(index[1]) + 1}`;
+			const ordinal = ipynbCellOrdinals?.get(structural.ref);
+			return `cell ${ordinal ?? structural.ref}`;
+		}
 		return `${structural.scheme} ${structural.ref}`;
 	}
 	const line = anchor.selectors.find((selector) => selector.kind === "lineRange");
@@ -17,7 +26,10 @@ export function anchorLabel(anchor: ReviewAnchor): string {
 			? `L${line.startLine}`
 			: `L${line.startLine}–${line.endLine}`;
 	}
-	if (anchor.selectors.some((selector) => selector.kind === "region")) return "region";
+	const region = anchor.selectors.find((selector) => selector.kind === "region");
+	if (region?.kind === "region") {
+		return region.page === undefined ? "region" : `p${region.page} region`;
+	}
 	return "file";
 }
 

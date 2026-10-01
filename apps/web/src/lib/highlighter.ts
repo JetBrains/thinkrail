@@ -242,12 +242,17 @@ export const SHIKI_FILE_LANGUAGES: readonly ShikiFileLanguage[] = [
 	},
 ];
 
-const CHAT_SHIKI_LANGUAGES = SHIKI_FILE_LANGUAGES.filter((language) => language.chat);
-const CHAT_LANGUAGE_BY_ALIAS = new Map(
-	CHAT_SHIKI_LANGUAGES.flatMap((language) =>
+const SHIKI_LANGUAGE_BY_ALIAS = new Map(
+	SHIKI_FILE_LANGUAGES.flatMap((language) =>
 		[language.id, ...language.aliases].map((alias) => [alias.toLowerCase(), language.id] as const),
 	),
 );
+const CHAT_SHIKI_LANGUAGES = SHIKI_FILE_LANGUAGES.filter((language) => language.chat);
+const CHAT_LANGUAGE_IDS = new Set(CHAT_SHIKI_LANGUAGES.map((language) => language.id));
+
+export function shikiLanguageId(value: string): string | null {
+	return SHIKI_LANGUAGE_BY_ALIAS.get(value.trim().toLowerCase()) ?? null;
+}
 
 let highlighterPromise: Promise<HighlighterCore> | null = null;
 function getHighlighter(): Promise<HighlighterCore> {
@@ -260,8 +265,8 @@ function getHighlighter(): Promise<HighlighterCore> {
 }
 
 export async function highlightCode(code: string, lang: string): Promise<string | null> {
-	const canonical = CHAT_LANGUAGE_BY_ALIAS.get(lang.toLowerCase());
-	if (!canonical) return null;
+	const canonical = shikiLanguageId(lang);
+	if (!canonical || !CHAT_LANGUAGE_IDS.has(canonical)) return null;
 	try {
 		const hl = await getHighlighter();
 		return hl.codeToHtml(code, { lang: canonical, theme: THINKRAIL_SHIKI_THEME_NAME });
