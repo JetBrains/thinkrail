@@ -12,9 +12,11 @@ function grow(el: HTMLTextAreaElement): void {
 export function ReviewThreadCard({
 	thread,
 	actions,
+	onActivate,
 }: {
 	thread: ReviewThread;
 	actions: ReviewThreadActions;
+	onActivate?: (() => void) | undefined;
 }) {
 	const [busy, setBusy] = useState(false);
 	const [draftText, setDraftText] = useState(thread.body);
@@ -51,11 +53,22 @@ export function ReviewThreadCard({
 				<span
 					className={`review-thread-dot rounded-full review-thread-dot-${thread.status === "sent" ? "sent" : "draft"}`}
 				/>
-				<span
-					className={`review-thread-label tr-text-eyebrow${thread.stale ? " text-feedback-warning" : ""}`}
-				>
-					{threadLabel(thread)}
-				</span>
+				{onActivate ? (
+					<button
+						type="button"
+						data-testid="review-thread-anchor"
+						className={`review-thread-label rounded-[var(--radius-sm)] tr-text-eyebrow outline-none focus-visible:ring-2 focus-visible:ring-primary${thread.stale ? " text-feedback-warning" : ""}`}
+						onClick={onActivate}
+					>
+						{threadLabel(thread)}
+					</button>
+				) : (
+					<span
+						className={`review-thread-label tr-text-eyebrow${thread.stale ? " text-feedback-warning" : ""}`}
+					>
+						{threadLabel(thread)}
+					</span>
+				)}
 				{thread.status === "draft" && (
 					<span className="review-thread-actions">
 						<IconTooltip label="Send this comment to the file's review chat" wrapTrigger>

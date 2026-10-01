@@ -54,6 +54,9 @@ const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
 	jpeg: "image/jpeg",
 	gif: "image/gif",
 	webp: "image/webp",
+	bmp: "image/bmp",
+	ico: "image/x-icon",
+	avif: "image/avif",
 	svg: "image/svg+xml",
 	pdf: "application/pdf",
 };
@@ -64,6 +67,10 @@ function extension(path: string): string {
 	return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
 }
 
+export function inferredMime(path: string): string | undefined {
+	return MIME_BY_EXTENSION[extension(path)];
+}
+
 export function describeResource(
 	workspaceId: string,
 	path: string,
@@ -71,7 +78,7 @@ export function describeResource(
 	scope?: GitDiffScope,
 ): ResourceDescriptor {
 	const ext = extension(path);
-	const mime = meta.mime ?? MIME_BY_EXTENSION[ext];
+	const mime = meta.mime ?? inferredMime(path);
 	return {
 		workspaceId,
 		path: normalizePath(path),

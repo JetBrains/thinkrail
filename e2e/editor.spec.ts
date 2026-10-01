@@ -1,3 +1,5 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
@@ -71,4 +73,43 @@ test("opens a non-markdown file straight to Monaco with no rendered-view toggle"
 	await expect(page.getByTestId("editor-pane")).toContainText("plain-text-fixture");
 	await expect(page.getByTestId("resource-view-toggle")).toHaveCount(0);
 	await expect(page.getByTestId("markdown-preview")).toHaveCount(0);
+});
+
+test("opens JSON with Tree and Source candidates, defaulting to Tree", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+
+	await page.getByTestId("file-node").filter({ hasText: "sample.json" }).dblclick();
+	await expect(page.getByTestId("view-toggle-json")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("view-toggle-code")).toBeVisible();
+	await expect(page.getByTestId("json-view")).toContainText("sample-project");
+});
+
+test("opens CSV with Table and Source candidates, defaulting to Table", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+
+	await page.getByTestId("file-node").filter({ hasText: "sample.csv" }).dblclick();
+	await expect(page.getByTestId("view-toggle-csv")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("view-toggle-code")).toBeVisible();
+	await expect(page.getByTestId("csv-view")).toContainText("Table");
+});
+
+test("renders a PNG and opens its changed version in the 2-up image diff", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+
+	await page.getByTestId("file-node").filter({ hasText: "RENDERERS.png" }).dblclick();
+	await expect(page.getByTestId("view-toggle-image")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("image-resource")).toBeVisible();
+
+	const imagePath = join(workspace.worktreePath, "RENDERERS.png");
+	writeFileSync(imagePath, Buffer.concat([readFileSync(imagePath), Buffer.from("changed")]));
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("change-item").filter({ hasText: "RENDERERS.png" }).click();
+	await expect(page.getByTestId("image-diff-mode")).toBeVisible();
+	await expect(page.getByTestId("image-diff-2-up")).toHaveAttribute("data-active", "true");
 });

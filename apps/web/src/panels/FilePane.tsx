@@ -1,4 +1,12 @@
-import { type ComponentType, type LazyExoticComponent, lazy, Suspense, useMemo } from "react";
+import {
+	type ComponentType,
+	type LazyExoticComponent,
+	lazy,
+	Suspense,
+	useCallback,
+	useMemo,
+	useState,
+} from "react";
 import { LoadingRegion } from "../components/Skeleton";
 import { isPhoneViewport, usePhoneViewport } from "../lib";
 import {
@@ -59,6 +67,12 @@ function RendererView({
 	return <Component {...props} />;
 }
 
+function sameIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+	if (left.size !== right.size) return false;
+	for (const id of left) if (!right.has(id)) return false;
+	return true;
+}
+
 export function FilePane({ tab }: { tab: FileTab }) {
 	const mobile = usePhoneViewport();
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
@@ -92,6 +106,23 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	);
 	const renderer = selectResourceRenderer(candidates, tab.rendererId, tab.path);
 	const implementationKey = rendererImplementationKey(renderer.id, mobile);
+	const [placement, setPlacement] = useState<{
+		implementationKey: string;
+		ids: ReadonlySet<string>;
+	} | null>(null);
+	const onPlacedThreadIds = useCallback(
+		(ids: ReadonlySet<string>) => {
+			setPlacement((current) => {
+				if (current?.implementationKey === implementationKey && sameIds(current.ids, ids)) {
+					return current;
+				}
+				return { implementationKey, ids: new Set(ids) };
+			});
+		},
+		[implementationKey],
+	);
+	const placedThreadIds =
+		placement?.implementationKey === implementationKey ? placement.ids : undefined;
 	useResetViewStateOnImplementationChange(tab.workspaceId, tab.id, implementationKey);
 	const content = contentFor(tab);
 	const reviews = [review.worktree];
@@ -137,6 +168,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 				renderer={renderer}
 				intent="view"
 				candidates={candidates}
+				{...(placedThreadIds ? { placedThreadIds } : {})}
 				onSelectRenderer={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
 			/>
 			<div className="min-h-0 flex-1">
@@ -148,6 +180,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 						resource={resource}
 						content={content}
 						review={review.worktree}
+						onPlacedThreadIds={onPlacedThreadIds}
 						viewState={tab.viewState}
 						onViewState={saveViewState}
 					/>

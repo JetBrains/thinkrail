@@ -1301,6 +1301,51 @@ own section. The kebab menu (`plan-menu`, a
   in Source. It is selected by registry match rather than a path branch in the pane. Scopes whose modified
   side is historical receive no review surface or mutation actions.
 
+  `thinkrail/image` renders host-backed byte URLs with fit, natural-size, button/wheel zoom, intrinsic
+  dimensions, and byte size. A drag over the rendered intrinsic box produces one normalized `region`
+  selector; placed threads project that selector back to outlined rectangles and numbered markers, with
+  cards below the image. Its diff defaults to 2-up and also offers swipe, onion-skin, and difference-blend
+  modes. Two-up anchors directly to the side drawn on; overlaid modes expose the active old/new anchor space
+  explicitly, so base and worktree coordinates are never translated. An absent side is a labelled empty
+  frame. Image zoom, rendered intrinsic aspect bounds, region rectangles, swipe clipping/divider position,
+  and onion opacity are measured geometry and therefore the bounded exception to the no-inline-style rule:
+  those values alone are inline,
+  while every colour, border, spacing, and control skin remains a token utility.
+
+  `thinkrail/svg` is the higher-ranked SVG candidate while Source remains available through
+  `thinkrail/code`. Its `sandbox=""` iframe receives a minimal `srcdoc` document whose only image is a
+  percent-encoded `data:image/svg+xml` URL; SVG source never enters the document's HTML stream. The frame
+  has no script or same-origin capability and a CSP of `default-src 'none'; img-src data:; style-src
+  'unsafe-inline'`, so SVG scripts and external references remain inert. The document receives only
+  resolved workspace/content background and foreground semantic token values and is rebuilt after
+  `themes.onThemeSwap`. Transparent in-process region overlays continue to place existing region threads.
+  SVG element source spans are not mapped yet, so authoring refuses positional geometry and offers a
+  clearly labelled whole-file draft (`selectors: []`, label `file`) rather than attaching a whole-document
+  line range. Its diff uses the same four visual modes and two anchor spaces as raster images; each side's
+  overlays project through its own object-contain rectangle, and only measured aspect bounds plus
+  swipe/divider/opacity overlay geometry use inline values.
+
+  `thinkrail/csv` parses CSV/TSV locally with an RFC-4180 state machine, including escaped quotes, CRLF, and
+  quoted fields spanning source lines. The view keeps the header fixed and virtualizes data rows with
+  `react-virtuoso`. A selected cell or shift-extended rectangle emits the selected rows' raw-file
+  `lineRange` plus `structural { scheme: "table-cell", ref: "<row>:<column>" }`, with header row zero; a
+  missing cell, or a coordinate whose row no longer intersects the host-reanchored line range, is omitted
+  from actual placement rather than guessed. The unified diff aligns complete raw-row keys with
+  `diffArrays`, pairs equal-length remove/add runs as changed rows, and highlights only differing cells;
+  unmatched rows use success/error subtle surfaces. Diff selections use modified source lines except removed
+  rows, which remain in the base anchor space.
+
+  `thinkrail/json` currently matches JSON and JSONC only. Its tolerant scanner accepts comments and trailing
+  commas while building the parsed value and an RFC-6901 pointer-to-source-line index in one pass; duplicate
+  object keys resolve to the last occurrence, matching JSON value semantics. Selecting a non-root node emits
+  its mandatory `lineRange` plus `structural { scheme: "json-pointer", ref }`; a pointer absent after an edit,
+  or one now naming a node outside the host-reanchored line range, is reported unplaced. The collapsible
+  unified diff comes from a `jsondiffpatch` instance with move detection
+  and stable object hashes, tinting added/removed/changed/moved nodes and showing primitive replacements as
+  old → new. Removed nodes and comments stay on `review.base` with base scanner lines; all other selections
+  use the modified document and `review.worktree`. Invalid source renders no tree, leaving Source as the
+  alternate candidate.
+
   Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,
   uses the `thinkrail` CSS-variable Shiki theme, word-level inline changes, collapsed unchanged regions with
   line-info hunk separators, and split/unified layout; phone-class viewports force unified. A diff whose

@@ -26,6 +26,14 @@ export function seedFixtureRepo(): void {
 	git("config", "commit.gpgsign", "false");
 	writeFileSync(join(E2E_FIXTURE_REPO, "README.md"), "# sample-project\n");
 	writeFileSync(join(E2E_FIXTURE_REPO, "notes.txt"), "plain-text-fixture\n");
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "sample.json"),
+		'{\n  "project": "sample-project",\n  "features": ["tree", "anchors"]\n}\n',
+	);
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "sample.csv"),
+		"name,kind,enabled\nTree,renderer,true\nTable,renderer,true\n",
+	);
 	writeFileSync(join(E2E_FIXTURE_REPO, "LONG_LINE.txt"), LONG_LINE);
 	writeFileSync(
 		join(E2E_FIXTURE_REPO, "ALERTS.md"),
@@ -98,6 +106,13 @@ export function seedFixtureRepo(): void {
 	);
 	writeFileSync(
 		join(E2E_FIXTURE_REPO, "logo.png"),
+		Buffer.from(
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMCAoGB9x0AAAAASUVORK5CYII=",
+			"base64",
+		),
+	);
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "RENDERERS.png"),
 		Buffer.from(
 			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMCAoGB9x0AAAAASUVORK5CYII=",
 			"base64",

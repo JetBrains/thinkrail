@@ -84,7 +84,7 @@ test("lineRef uses the shared anchor labels and stays empty for review-level com
 				},
 			}),
 		),
-	).toBe("json-pointer /name");
+	).toBe("/name");
 	expect(lineRef(comment({ kind: "review", anchor: null }))).toBe("");
 });
 

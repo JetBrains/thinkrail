@@ -1,3 +1,4 @@
+import { inferredMime } from "./describe";
 import type {
 	ResourceDescriptor,
 	ResourceEnvironment,
@@ -43,7 +44,8 @@ function matchesDescriptor(renderer: ResourceRenderer, descriptor: ResourceDescr
 	if (match.text !== undefined && match.text !== descriptor.text) return false;
 	if (match.glob && !match.glob.some((pattern) => matchesGlob(descriptor.path, pattern)))
 		return false;
-	if (match.mime && !matchesPattern(descriptor.mime, match.mime)) return false;
+	if (match.mime && !matchesPattern(descriptor.mime ?? inferredMime(descriptor.path), match.mime))
+		return false;
 	if (match.language && !matchesPattern(descriptor.language, match.language)) return false;
 	return true;
 }

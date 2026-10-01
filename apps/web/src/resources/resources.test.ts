@@ -170,6 +170,22 @@ test("anchor labels cover line ranges, structural references, regions, and whole
 	expect(anchorLabel(anchor([{ kind: "structural", scheme: "ipynb-cell", ref: "cell-7" }]))).toBe(
 		"ipynb-cell cell-7",
 	);
+	expect(
+		anchorLabel(
+			anchor([
+				{ kind: "lineRange", startLine: 3, endLine: 3 },
+				{ kind: "structural", scheme: "table-cell", ref: "2:4" },
+			]),
+		),
+	).toBe("R2C4");
+	expect(
+		anchorLabel(
+			anchor([
+				{ kind: "lineRange", startLine: 3, endLine: 3 },
+				{ kind: "structural", scheme: "json-pointer", ref: "/a~1b/0" },
+			]),
+		),
+	).toBe("/a~1b/0");
 	expect(anchorLabel(anchor([{ kind: "region", x: 0, y: 0, width: 1, height: 1 }]))).toBe("region");
 	expect(anchorLabel(anchor([]))).toBe("file");
 });

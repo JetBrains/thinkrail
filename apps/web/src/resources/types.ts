@@ -58,6 +58,7 @@ export interface ResourceViewProps {
 	resource: ResourceDescriptor;
 	content: ResourceContent;
 	review?: SurfaceReview;
+	onPlacedThreadIds?(ids: ReadonlySet<string>): void;
 	viewState?: unknown;
 	onViewState?(state: unknown): void;
 }

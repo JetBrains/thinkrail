@@ -113,6 +113,7 @@ export interface SurfaceReview {                 // replaces SideReview; rendere
 export interface ResourceViewProps {
   resource: ResourceDescriptor; content: ResourceContent;
   review?: SurfaceReview;                        // absent → read-only, no authoring
+  onPlacedThreadIds?(ids: ReadonlySet<string>): void;
   viewState?: unknown; onViewState?(state: unknown): void;   // scroll / fold / zoom, persisted per tab
 }
 export interface ResourceDiffProps {
@@ -179,9 +180,9 @@ export function resolveRenderers(d: ResourceDescriptor, intent: "view" | "diff",
 | `thinkrail/code` | `text: true` | **Monaco** (desktop) · **Pierre `File`** (mobile), read-only | **Pierre `FileDiff`** — split/unified, word-level, collapsed unchanged, hunk toolbar | `line` / `line` | Monaco no · Pierre yes |
 | `thinkrail/markdown` | `*.md`, `*.mdx`, `text: true` | `MarkdownPreview` | `RenderedDiff` (htmldiff) | `line` / — | yes |
 | `thinkrail/image` | `image/*` | fit / zoom / 1:1 | 2-up · swipe · onion skin · difference | `region` / `region` | yes |
-| `thinkrail/svg` | `image/svg+xml` | sandboxed render | render both + source diff via `code` | `region` / `line` | yes |
+| `thinkrail/svg` | `image/svg+xml` | sandboxed render | 2-up · swipe · onion skin · difference; source diff via `code` | `region` / `region` | yes |
 | `thinkrail/csv` | `*.csv`, `*.tsv` | table | row/cell diff (daff-style alignment) | `line`, `structural:table-cell` / same | yes |
-| `thinkrail/json` | `*.json`, `*.yaml`, `*.yml`, `*.toml` | collapsible tree | structural diff (`jsondiffpatch`, move detection) | `line`, `structural:json-pointer` / same | yes |
+| `thinkrail/json` | `*.json`, `*.jsonc` | collapsible tree | structural diff (`jsondiffpatch`, move detection) | `line`, `structural:json-pointer` / same | yes |
 | `thinkrail/notebook` | `*.ipynb` | cells: markdown + Shiki code + outputs (outputs sandboxed) | cell-aligned diff (ids, then source similarity); per-cell `code` diff; image-output diff | `line`, `structural:ipynb-cell` / same | yes |
 | `thinkrail/pdf` | `application/pdf` | pdf.js pages | side-by-side pages | `region` (+ `page`) / same | yes |
 | `thinkrail/html` | `*.html` | sandboxed preview | sandboxed both sides | `line` / `line` (via `code`) | yes |
