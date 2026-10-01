@@ -1403,7 +1403,14 @@ own section. The kebab menu (`plan-menu`, a
   Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,
   uses the `thinkrail` CSS-variable Shiki theme, word-level inline changes, collapsed unchanged regions with
   line-info hunk separators, and split/unified layout; phone-class viewports force unified and hide the
-  Split/Inline segments, so no control promises a layout the viewport refuses. A diff whose
+  Split/Inline segments, so no control promises a layout the viewport refuses. The collapse threshold
+  (`COLLAPSED_CONTEXT_THRESHOLD`, 3 lines) is git's own default hunk context (`-U3`), so what Pierre
+  keeps visible around a change is what a reviewer already expects from `git diff`, and the same number
+  feeds `renderedDiffLineNumbers`, which decides whether a thread's end line is on screen or parked in the
+  unplaced strip — one constant, so the two can never disagree. The focus reveal (`usePierreFocus`)
+  installs a subtree `MutationObserver` plus a `ResizeObserver` only while a focus request is pending
+  and disconnects both the moment the card is revealed; it is not a standing listener, so Pierre
+  re-rendering on every annotation change costs nothing once focus has settled. A diff whose
   two sides are identical (a file that left the change set after an out-of-band commit) shows an explicit
   `diff-empty` notice above Pierre's surface instead of a blank pane. The lazy Pierre
   file/diff modules mount `WorkerPoolContextProvider` only when their surface renders; Pierre's internal
