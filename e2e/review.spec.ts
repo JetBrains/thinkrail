@@ -272,6 +272,36 @@ test("sidebar: an accordion — the active reviewed file's section auto-unfolds;
 	await expect(page.getByTestId("send-review-button")).toContainText("Send review (2)");
 });
 
+test("a selection spanning both sides of a unified diff is blocked instead of re-pointed", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	writeFileSync(join(worktree(), "README.md"), "# renamed\n");
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
+	await page.getByTestId("view-toggle-code").click();
+	await page.getByTestId("diff-toggle-inline").click();
+	const diff = page.getByTestId("diff-view");
+	await expect(diff.getByText("renamed", { exact: false }).last()).toBeVisible();
+
+	await selectPierreLine(diff, "sample-project", "first");
+	await expect(page.getByTestId("review-composer")).toContainText("Line 1");
+	await selectPierreLine(diff, "renamed", "last", ["Shift"]);
+	const blocked = page.getByTestId("review-selection-blocked");
+	await expect(blocked).toContainText("one side of the diff");
+	await expect(page.getByTestId("review-composer")).toHaveCount(0);
+	await page.getByTestId("review-selection-blocked-close").click();
+	await expect(blocked).toHaveCount(0);
+
+	await selectPierreLine(diff, "renamed");
+	await expect(page.getByTestId("review-composer")).toContainText("Line 1");
+	await page.getByTestId("review-composer-input").fill("On the new text only.");
+	await page.getByTestId("review-composer-save").click();
+	const [comment] = await persistedComments(page);
+	expect(comment?.anchor?.side).toBe("worktree");
+});
+
 test("Pierre line selection opens one inline composer", async ({ page }) => {
 	await openDiff(page);
 	await selectLine(page, "two = 2");

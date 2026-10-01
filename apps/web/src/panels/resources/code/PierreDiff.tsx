@@ -13,7 +13,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IconTooltip } from "@/components/ui/tooltip";
 import type {
-	AnchorDraft,
 	ResourceContent,
 	ResourceDiffProps,
 	ReviewThread,
@@ -27,10 +26,12 @@ import { type AnnotationSlot, reconcileAnnotationSlots } from "./annotationSlots
 import { type ChangeBlock, changeBlockId, computeActionBlocks } from "./changeBlocks";
 import PierreProvider from "./PierreProvider";
 import {
+	type BlockedSelection,
 	COLLAPSED_CONTEXT_THRESHOLD,
 	composerLineLabel,
 	diffPlacedThreadIds,
-	draftLineLabel,
+	type OpenComposer,
+	selectionComposer,
 	threadLineRange,
 	usePierreFocus,
 } from "./pierreReview";
@@ -41,16 +42,6 @@ type DiffAnnotationMetadata =
 	| { kind: "hunk"; id: string };
 
 const NO_PLACED_THREADS: ReadonlySet<string> = new Set();
-
-interface OpenComposer {
-	id: number;
-	side: AnnotationSide;
-	lineNumber: number;
-	draft: AnchorDraft;
-	label: string;
-	initialText?: string;
-	notice?: string;
-}
 
 function textSide(content: ResourceContent): string | null {
 	return content.kind === "text" ? content.text : null;
@@ -65,37 +56,6 @@ function surfaceForSide(
 	side: AnnotationSide,
 ): SurfaceReview {
 	return side === "deletions" ? review.base : review.worktree;
-}
-
-function selectionComposer(range: SelectedLineRange, id: number): OpenComposer {
-	const startSide = range.side ?? "additions";
-	const endSide = range.endSide ?? startSide;
-	if (startSide !== endSide) {
-		const lineNumber = startSide === "additions" ? range.start : range.end;
-		return {
-			id,
-			side: "additions",
-			lineNumber,
-			draft: {
-				selectors: [{ kind: "lineRange", startLine: lineNumber, endLine: lineNumber }],
-				label: draftLineLabel(lineNumber, lineNumber),
-			},
-			label: composerLineLabel(lineNumber, lineNumber),
-			notice: "Selection crossed both sides; commenting on the additions side.",
-		};
-	}
-	const startLine = Math.min(range.start, range.end);
-	const endLine = Math.max(range.start, range.end);
-	return {
-		id,
-		side: startSide,
-		lineNumber: endLine,
-		draft: {
-			selectors: [{ kind: "lineRange", startLine, endLine }],
-			label: draftLineLabel(startLine, endLine),
-		},
-		label: composerLineLabel(startLine, endLine),
-	};
 }
 
 function actionAnnotation(block: ChangeBlock): DiffLineAnnotation<DiffAnnotationMetadata> {
@@ -277,7 +237,7 @@ function PierreDiffSurface({
 		() => (hunkActions ? blocks.map(actionAnnotation) : []),
 		[blocks, hunkActions],
 	);
-	const [composer, setComposer] = useState<OpenComposer | null>(null);
+	const [composer, setComposer] = useState<OpenComposer | BlockedSelection | null>(null);
 	const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(null);
 	const nextComposerId = useRef(0);
 	const reviewRef = useRef(review);
@@ -287,15 +247,15 @@ function PierreDiffSurface({
 	const openSelection = useCallback((range: SelectedLineRange | null) => {
 		if (!range || !reviewRef.current) return;
 		const next = selectionComposer(range, ++nextComposerId.current);
-		setSelectedLines({
-			start:
-				next.draft.selectors[0]?.kind === "lineRange"
-					? next.draft.selectors[0].startLine
-					: range.start,
-			end:
-				next.draft.selectors[0]?.kind === "lineRange" ? next.draft.selectors[0].endLine : range.end,
-			side: next.side,
-		});
+		setSelectedLines(
+			next.kind === "composer" && next.draft.selectors[0]?.kind === "lineRange"
+				? {
+						start: next.draft.selectors[0].startLine,
+						end: next.draft.selectors[0].endLine,
+						side: next.side,
+					}
+				: range,
+		);
 		setComposer(next);
 	}, []);
 	const openGutterComposer = useCallback(
@@ -322,6 +282,7 @@ function PierreDiffSurface({
 				: null,
 		);
 		setComposer({
+			kind: "composer",
 			id,
 			side: "additions",
 			lineNumber,
@@ -440,6 +401,25 @@ function PierreDiffSurface({
 						) : null;
 					}
 					if (!composer || composer.id !== metadata.id || !review) return null;
+					if (composer.kind === "blocked") {
+						return (
+							<div
+								key={composer.id}
+								data-testid="review-selection-blocked"
+								className="review-composer review-composer-flow flex items-center gap-8"
+							>
+								<span className="tr-text-metadata text-text-muted">{composer.message}</span>
+								<button
+									type="button"
+									data-testid="review-selection-blocked-close"
+									className="tr-text-metadata text-text-default underline-offset-2 hover:underline"
+									onClick={closeComposer}
+								>
+									Dismiss
+								</button>
+							</div>
+						);
+					}
 					return (
 						<ReviewComposer
 							key={composer.id}

@@ -1,6 +1,6 @@
-import type { AnnotationSide, FileDiffMetadata, Hunk } from "@pierre/diffs";
+import type { AnnotationSide, FileDiffMetadata, Hunk, SelectedLineRange } from "@pierre/diffs";
 import { type RefObject, useEffect } from "react";
-import type { ResourceDiffProps, ReviewThread, SurfaceReview } from "@/resources";
+import type { AnchorDraft, ResourceDiffProps, ReviewThread, SurfaceReview } from "@/resources";
 
 export const COLLAPSED_CONTEXT_THRESHOLD = 3;
 
@@ -24,6 +24,58 @@ export function draftLineLabel(startLine: number, endLine: number): string {
 
 export function composerLineLabel(startLine: number, endLine: number): string {
 	return startLine === endLine ? `Line ${startLine}` : `Lines ${startLine}–${endLine}`;
+}
+
+export interface OpenComposer {
+	kind: "composer";
+	id: number;
+	side: AnnotationSide;
+	lineNumber: number;
+	draft: AnchorDraft;
+	label: string;
+	initialText?: string;
+	notice?: string;
+}
+
+export interface BlockedSelection {
+	kind: "blocked";
+	id: number;
+	side: AnnotationSide;
+	lineNumber: number;
+	message: string;
+}
+
+export const CROSS_SIDE_MESSAGE =
+	"A comment anchors to one side of the diff. Select lines in either the original or the new text.";
+
+export function selectionComposer(
+	range: SelectedLineRange,
+	id: number,
+): OpenComposer | BlockedSelection {
+	const startSide = range.side ?? "additions";
+	const endSide = range.endSide ?? startSide;
+	if (startSide !== endSide) {
+		return {
+			kind: "blocked",
+			id,
+			side: endSide,
+			lineNumber: range.end,
+			message: CROSS_SIDE_MESSAGE,
+		};
+	}
+	const startLine = Math.min(range.start, range.end);
+	const endLine = Math.max(range.start, range.end);
+	return {
+		kind: "composer",
+		id,
+		side: startSide,
+		lineNumber: endLine,
+		draft: {
+			selectors: [{ kind: "lineRange", startLine, endLine }],
+			label: draftLineLabel(startLine, endLine),
+		},
+		label: composerLineLabel(startLine, endLine),
+	};
 }
 
 export function renderedDiffLineNumbers(

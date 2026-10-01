@@ -1042,8 +1042,11 @@ own section. The kebab menu (`plan-menu`, a
   review pushes. Because Pierre 1.5.1 keys React annotation wrappers by array index, each mount keeps
   append-only comment-id slots with tombstones and reserves the always-present first slot for the composer.
   Line-number selection and the gutter utility open a composer on that exact side. A
-  selection crossing both side spaces deliberately degrades to the additions/worktree endpoint and the
-  composer says so rather than inventing a coordinate translation. Focus requests scroll the matching
+  selection crossing both side spaces (unified view, a drag from a deleted line into an added one) opens
+  **no composer**: the composer slot shows `review-selection-blocked` — "a comment anchors to one side
+  of the diff" — with the user's own selection still highlighted and a Dismiss, because an anchor on a
+  side the user did not choose would be a silent re-pointing, and a coordinate translation between the
+  two side spaces does not exist. Focus requests scroll the matching
   annotation into view before `onFocusHandled`; a thread without `lineRange`, or whose endpoint is hidden
   in Pierre's initially collapsed unchanged context, never enters Pierre and remains in the pane-level
   unplaced strip, which consumes any focus request for it. Pierre `File` applies the same annotation, selection, focus,

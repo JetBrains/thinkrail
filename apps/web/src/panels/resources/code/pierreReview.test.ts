@@ -2,7 +2,12 @@ import { expect, test } from "bun:test";
 import { parseDiffFromFile } from "@pierre/diffs";
 import type { ResourceRenderer, ReviewThread, SurfaceReview } from "@/resources";
 import { focusedUnplacedEntry, unplacedReviewEntries } from "../../UnplacedReviewStrip";
-import { diffPlacedThreadIds, renderedDiffLineNumbers } from "./pierreReview";
+import {
+	CROSS_SIDE_MESSAGE,
+	diffPlacedThreadIds,
+	renderedDiffLineNumbers,
+	selectionComposer,
+} from "./pierreReview";
 
 function thread(id: string, line: number): ReviewThread {
 	return {
@@ -85,4 +90,28 @@ test("a focus request on a collapsed line is routed to the unplaced strip", () =
 	const entries = unplacedReviewEntries([worktree], renderer, "diff", ids);
 
 	expect(focusedUnplacedEntry(entries)?.thread.id).toBe(collapsed.id);
+});
+
+test("a one-sided selection opens a composer on that side; a cross-side selection is blocked, not moved", () => {
+	expect(selectionComposer({ start: 7, end: 3, side: "deletions" }, 1)).toMatchObject({
+		kind: "composer",
+		side: "deletions",
+		lineNumber: 7,
+		draft: { selectors: [{ kind: "lineRange", startLine: 3, endLine: 7 }], label: "L3–7" },
+		label: "Lines 3–7",
+	});
+	expect(selectionComposer({ start: 2, end: 2 }, 2)).toMatchObject({
+		kind: "composer",
+		side: "additions",
+		label: "Line 2",
+	});
+	expect(
+		selectionComposer({ start: 4, end: 9, side: "deletions", endSide: "additions" }, 3),
+	).toEqual({
+		kind: "blocked",
+		id: 3,
+		side: "additions",
+		lineNumber: 9,
+		message: CROSS_SIDE_MESSAGE,
+	});
 });
