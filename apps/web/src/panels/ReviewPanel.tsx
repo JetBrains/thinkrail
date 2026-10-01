@@ -28,6 +28,7 @@ import {
 	commentSurface,
 	fileSummaries,
 	lineRef,
+	outdatedReason,
 	type ReviewFileSummary,
 	type ReviewSurface,
 	reviewFileSurface,
@@ -416,7 +417,12 @@ function CommentRow({
 							</span>
 						) : (
 							comment.anchorState === "outdated" && (
-								<span className="tr-text-eyebrow text-text-subtle">outdated</span>
+								<span
+									className="tr-text-eyebrow text-text-subtle"
+									title={outdatedReason(comment.anchor)}
+								>
+									outdated
+								</span>
 							)
 						)}
 					</span>

@@ -124,7 +124,15 @@ Recomputed on every snapshot read and before any send (`reanchorWorkspace`), aga
    a **positioned** anchor — any `lineRange`/`structural`/`region` selector — is `outdated`, because a
    re-pin needs evidence and a changed image or notebook offers none; a **whole-file** anchor (no
    selectors, the `file` comment kind) stays `moved` with a refreshed hash, because the remark is about
-   the file and not a position in it.
+   the file and not a position in it. This is deliberate, and it is strict on purpose: a re-encoded or
+   metadata-touched PNG with the same dimensions *probably* still has the remark's subject under the same
+   normalized region, but "same dimensions" is not evidence that the pixels there are the same, and
+   the whole point of `outdated` is "look again before you trust this position". A
+   dimensions-preserved → `moved` rule was considered and rejected because the host would be asserting
+   a visual fact it cannot check — the diff viewer (2-up, swipe, onion, difference) is where that check
+   belongs, and an `outdated` thread is still drawn at its region, still sendable, and still carries its
+   creation-time snapshot. The client's UI copy names the reason (`outdatedReason`): text that was not
+   found again, bytes that changed under a position, or a file that is gone.
 `side: "base"` anchors are never re-anchored: `baseRef` is a commit oid, so the blob it names is
 immutable and there is nothing to drift — and re-anchoring them against the *worktree* would be the very re-pointing the
 per-side capture exists to prevent.

@@ -2,7 +2,7 @@ import { RiSendPlaneLine as Send, RiDeleteBin6Line as Trash2 } from "@remixicon/
 import { useEffect, useRef, useState } from "react";
 import { IconTooltip } from "../components/ui/tooltip";
 import type { ReviewThread, ReviewThreadActions } from "../resources";
-import { threadLabel } from "./reviewModel";
+import { outdatedReason, threadLabel } from "./reviewModel";
 
 function grow(el: HTMLTextAreaElement): void {
 	el.style.height = "auto";
@@ -64,12 +64,14 @@ export function ReviewThreadCard({
 						data-testid="review-thread-anchor"
 						className={`review-thread-label rounded-[var(--radius-sm)] tr-text-eyebrow outline-none focus-visible:ring-2 focus-visible:ring-primary${thread.stale ? " text-feedback-warning" : ""}`}
 						onClick={onActivate}
+						{...(thread.anchorState === "outdated" ? { title: outdatedReason(thread.anchor) } : {})}
 					>
 						{threadLabel(thread)}
 					</button>
 				) : (
 					<span
 						className={`review-thread-label tr-text-eyebrow${thread.stale ? " text-feedback-warning" : ""}`}
+						{...(thread.anchorState === "outdated" ? { title: outdatedReason(thread.anchor) } : {})}
 					>
 						{threadLabel(thread)}
 					</span>

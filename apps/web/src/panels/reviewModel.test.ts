@@ -8,6 +8,7 @@ import {
 	fileThreads,
 	groupComments,
 	lineRef,
+	outdatedReason,
 	reviewFileSurface,
 	reviewFlags,
 	statusLabel,
@@ -205,4 +206,32 @@ test("fileSummaries: a fully-resolved file stays listed until marked done; a new
 	const overall = comment({ id: "rc_3", kind: "review", anchor: null, status: "resolved" });
 	expect(fileSummaries([overall], [""])).toEqual([]);
 	expect(fileSummaries([overall])).toEqual([{ path: null, total: 0, drafts: 0, resolved: 1 }]);
+});
+
+test("an outdated anchor explains itself by what it could have re-found", () => {
+	const anchor = (
+		selectors: ReviewComment["anchor"] extends infer A
+			? A extends { selectors: infer S }
+				? S
+				: never
+			: never,
+	) => ({
+		path: "a.png",
+		side: "modified" as const,
+		contentHash: "h",
+		selectors,
+	});
+	expect(
+		outdatedReason(
+			anchor([
+				{ kind: "textQuote", exact: "x" },
+				{ kind: "lineRange", startLine: 1, endLine: 1 },
+			]),
+		),
+	).toMatch(/text was not found again/);
+	expect(outdatedReason(anchor([{ kind: "region", x: 0, y: 0, width: 1, height: 1 }]))).toMatch(
+		/bytes changed .* cannot be re-verified/,
+	);
+	expect(outdatedReason(anchor([]))).toMatch(/is gone/);
+	expect(outdatedReason(null)).toMatch(/is gone/);
 });
