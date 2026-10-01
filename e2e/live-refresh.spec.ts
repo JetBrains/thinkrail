@@ -41,9 +41,14 @@ test("worktree changes on disk appear live in Specs, Files, Changes, and an open
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited live by e2e\n");
 	await fsExpect(readmeRow).toHaveAttribute("data-status", "modified");
 	await readmeRow.click();
-	await expect(page.getByTestId("diff-pane")).toContainText("edited live by e2e");
+	await page.getByTestId("view-toggle-code").click();
+	await expect(
+		page.getByTestId("diff-view").getByText("edited live by e2e", { exact: false }).last(),
+	).toBeVisible();
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited twice by e2e\n");
-	await fsExpect(page.getByTestId("diff-pane")).toContainText("edited twice by e2e");
+	await fsExpect(
+		page.getByTestId("diff-view").getByText("edited twice by e2e", { exact: false }).last(),
+	).toBeVisible();
 
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();

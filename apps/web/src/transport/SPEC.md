@@ -111,17 +111,20 @@ batches high-frequency Pi events without allowing later wire messages to overtak
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
-  `supportsPlanSummaryGeneration`. `runHostUpdate` is the typed empty host action and `supportsHostUpdateRun`
-  lets `Shell` inject it only for protocol v70+; `supportsPlanReview` is exported because a sibling panel
-  (`PlanPane`) gates the plan-review UI on it — an older host serves no `todo.startReview`/`reviewAll`, so the
-  client must not offer them; `supportsPlanSummaryGeneration` (v69) is exported because `chat/useChatTodos`
-  gates the auto-summary `todo.generateSummary` request on it — an older host has no such method.
+  `supportsPlanSummaryGeneration`, `supportsChangeMutations`. `runHostUpdate` is the typed empty host action
+  and `supportsHostUpdateRun` lets `Shell` inject it only for protocol v70+; `supportsPlanReview` is exported
+  because a sibling panel (`PlanPane`) gates the plan-review UI on it — an older host serves no
+  `todo.startReview`/`reviewAll`, so the client must not offer them; `supportsPlanSummaryGeneration` (v69) is
+  exported because `chat/useChatTodos` gates the auto-summary `todo.generateSummary` request on it — an older
+  host has no such method; `supportsChangeMutations` is exported because `DiffPane` must withhold every
+  `change.*` affordance before that protocol lands.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
   `SessionDeletedPayload` for `session.deleted`,
   `HOST_UPDATE_RUN_PROTOCOL_VERSION` + `Ack` + the typed `host.update` method for the CLI-host update action,
-  `PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION` for the `supportsPlanReview` gate, `provider.changed`, the empty
+  `PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION` for the `supportsPlanReview` gate,
+  `CHANGE_MUTATIONS_PROTOCOL_VERSION` for the diff-mutation gate, `provider.changed`, the empty
   addressed `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` +
   `host.updateAvailable`,
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +

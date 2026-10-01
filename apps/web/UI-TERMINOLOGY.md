@@ -172,11 +172,11 @@ Tab-body components:
 
 | Canonical name | Implementation | Tab kind | Responsibility |
 |---|---|---|---|
-| File Pane | `panels/FilePane.tsx` → `FilePane` | `FileTab` | File viewer; markdown gets a Preview\|Source toggle |
-| — Code Editor | `panels/MonacoEditor.tsx` → `MonacoEditor` (lazy) | — | Read-only Monaco source view |
+| File Pane | `panels/FilePane.tsx` → `FilePane` | `FileTab` | Registry-dispatched file viewer; richer formats get renderer toggles |
+| — Code File | `panels/MonacoEditor.tsx` / `panels/resources/code/PierreFile.tsx` (lazy) | — | Read-only Monaco source on desktop, Pierre source on phones |
 | — Markdown Preview | `panels/MarkdownPreview.tsx` → `MarkdownPreview` (lazy) | — | Rendered markdown (document skin) |
 | Diff Pane | `panels/DiffPane.tsx` → `DiffPane` | `DiffTab` | File diff; Split\|Inline or Source\|Rendered toggle |
-| — Monaco Diff | `panels/MonacoDiff.tsx` → `MonacoDiff` (lazy) | — | Read-only two-side diff |
+| — Source Diff | `panels/resources/code/PierreDiff.tsx` (lazy) | — | Read-only Pierre split/unified source diff with review and hunk actions |
 | — Rendered Diff | `panels/RenderedDiff.tsx` → `RenderedDiff` (lazy) | — | Rich markdown diff (`<ins>`/`<del>`) |
 | Chat View | `chat/ChatView.tsx` → `ChatView` (lazy) | `chat` | The agent conversation (its own section below) |
 | Document Pane | `WorkspaceWorkbench` reference renderer | `document` | Rehydratable virtual documents such as TODO plans |
@@ -488,7 +488,7 @@ its alternatives in parentheses.
 - **Center Group**, **Group Header**, **Tab Strip**, **Tab**, **Tab Close**, **Split Separator**.
 - Tab kinds: **File tab**, **Chat tab**, **Diff tab**, **Document tab**, **Terminal tab**.
 - **Editor Pane**, **Workspace-Ready Receipt**.
-- **File Pane** (**Code Editor** / **Markdown Preview**), **Diff Pane** (**Monaco Diff** /
+- **File Pane** (**Code File** / **Markdown Preview**), **Diff Pane** (**Source Diff** /
   **Rendered Diff**), **Document Pane**, **Terminal Body**.
 - **Chat-History Menu**, **New-Chat Button**.
 

@@ -3575,7 +3575,7 @@ test("dismissToast for an unknown id is a no-op (same array ref, no churn)", () 
 	expect(useAppStore.getState().toasts).toBe(before);
 });
 
-test("pushToast coalesces an identical live toast (same variant/title/message) into the existing id", () => {
+test("pushToast coalesces an identical live actionless toast", () => {
 	const store = useAppStore.getState();
 	const id1 = store.pushToast({ variant: "error", message: "boom", title: "Failed" });
 	const twin = store.pushToast({ variant: "error", message: "boom", title: "Failed" });
@@ -3592,7 +3592,49 @@ test("pushToast coalesces an identical live toast (same variant/title/message) i
 	expect(useAppStore.getState().toasts).toHaveLength(3);
 });
 
-test("pushToast caps the queue, dropping the oldest", () => {
+test("actionable toasts retain their inverse and never coalesce", () => {
+	const store = useAppStore.getState();
+	let calls = 0;
+	const first = store.pushToast({
+		variant: "success",
+		message: "Reverted hunk",
+		durationMs: 8000,
+		action: { label: "Undo", onClick: () => calls++ },
+	});
+	const second = store.pushToast({
+		variant: "success",
+		message: "Reverted hunk",
+		durationMs: 8000,
+		action: { label: "Undo", onClick: () => calls++ },
+	});
+	expect(second).not.toBe(first);
+	expect(useAppStore.getState().toasts).toHaveLength(2);
+	useAppStore.getState().toasts[0]?.action?.onClick();
+	expect(calls).toBe(1);
+});
+
+test("six revert receipts keep all Undo actions and cap a seventh actionless toast", () => {
+	const store = useAppStore.getState();
+	for (let index = 0; index < 6; index++) {
+		store.pushToast({
+			variant: "success",
+			message: `Reverted hunk ${index}`,
+			durationMs: 8000,
+			action: { label: "Undo", onClick: () => {} },
+		});
+	}
+	expect(useAppStore.getState().toasts).toHaveLength(6);
+	expect(
+		useAppStore.getState().toasts.every((candidate) => candidate.action?.label === "Undo"),
+	).toBe(true);
+
+	store.pushToast({ variant: "info", message: "Actionless" });
+	const toasts = useAppStore.getState().toasts;
+	expect(toasts).toHaveLength(6);
+	expect(toasts.some((candidate) => candidate.message === "Actionless")).toBe(false);
+});
+
+test("pushToast caps actionless notifications, dropping the oldest", () => {
 	const store = useAppStore.getState();
 	const first = store.pushToast({ variant: "error", message: "toast 0" });
 	for (let i = 1; i <= 5; i++) store.pushToast({ variant: "error", message: `toast ${i}` });

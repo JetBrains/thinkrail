@@ -8,30 +8,55 @@ import {
 } from "@/resources";
 import { ReviewThreadCard } from "./ReviewThreadCard";
 
+export interface UnplacedReviewEntry {
+	review: SurfaceReview;
+	thread: SurfaceReview["threads"][number];
+}
+
+export function unplacedReviewEntries(
+	reviews: readonly SurfaceReview[],
+	renderer: ResourceRenderer,
+	intent: ResourceIntent,
+	placedThreadIds?: ReadonlySet<string>,
+): UnplacedReviewEntry[] {
+	return reviews.flatMap((review) =>
+		review.threads
+			.filter(
+				(thread) =>
+					!isPlaceable(renderer, intent, thread.anchor) ||
+					(placedThreadIds !== undefined && !placedThreadIds.has(thread.id)),
+			)
+			.map((thread) => ({ review, thread })),
+	);
+}
+
+export function focusedUnplacedEntry(
+	entries: readonly UnplacedReviewEntry[],
+): UnplacedReviewEntry | undefined {
+	return entries.find(({ review, thread }) => review.focus?.id === thread.id);
+}
+
 export function UnplacedReviewStrip({
 	reviews,
 	renderer,
 	intent,
 	candidates,
+	placedThreadIds,
 	onSelectRenderer,
 }: {
 	reviews: readonly SurfaceReview[];
 	renderer: ResourceRenderer;
 	intent: ResourceIntent;
 	candidates: readonly ResourceRenderer[];
+	placedThreadIds?: ReadonlySet<string>;
 	onSelectRenderer: (rendererId: string) => void;
 }) {
 	const rootRef = useRef<HTMLDivElement>(null);
 	const entries = useMemo(
-		() =>
-			reviews.flatMap((review) =>
-				review.threads
-					.filter((thread) => !isPlaceable(renderer, intent, thread.anchor))
-					.map((thread) => ({ review, thread })),
-			),
-		[reviews, renderer, intent],
+		() => unplacedReviewEntries(reviews, renderer, intent, placedThreadIds),
+		[reviews, renderer, intent, placedThreadIds],
 	);
-	const focus = entries.find(({ review, thread }) => review.focus?.id === thread.id);
+	const focus = focusedUnplacedEntry(entries);
 	useEffect(() => {
 		if (!focus) return;
 		const card = [

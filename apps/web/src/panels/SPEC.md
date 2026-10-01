@@ -180,14 +180,15 @@ treatment.
   and the chat header, not a value pinned here — that says **what** is being diffed via the
   **`ChangesScopeMenu`** scope pill + the shared **`BranchPicker`** target-branch pill, plus the
   **List | Tree** toggle (`store.changesView`, app-wide) switching a flat list and a folder
-  **`ChangesTree`**; clicking a file in either opens/focuses its **center Monaco diff tab**, and every file
+  **`ChangesTree`**; clicking a file in either opens/focuses its **center resource diff tab**, and every file
   row carries the shared **`ChangeRowActions`** menu. The row wrapper paints the complete hover/selected
   band, including the trailing menu slot; its inner open-file button remains transparent so that band
   cannot look clipped before the menu),
   `FilePane` and `DiffPane` as resource-registry dispatchers, the bundled lazy renderers under
-  `panels/resources`, plus lazy `TerminalInstance`. The Monaco plumbing the code renderer's editors share —
-  worker wiring, the local loader, the token-driven `thinkrail` theme + the `[data-theme]` re-theme
-  observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (the ordered resource
+  `panels/resources`, plus lazy `TerminalInstance`. Monaco's desktop-file plumbing — worker wiring, the
+  local loader, sole token-driven `EDITOR_THEME`, and `[data-theme]` re-theme observer — lives once in
+  `monacoSetup.ts`; Pierre's lazy workbench provider owns its shared worker pool and CSS-variable theme.
+  The slim header view-toggle segment (the ordered resource
   candidates, `Split|Inline`, `List|Tree`) is the shared `ToggleSegment` — whose active segment reuses the tab
   grammar's `control-bg-selected` (below), never a container surface, so the selected fill survives the
   high-contrast themes where `container-elevated-bg` collapses onto the toolbar surface.
@@ -677,7 +678,7 @@ a project picker, the prompt hero, and the reused
   disclosure — a summary line (sha chip + `N files` + `DiffStatBadge`) toggling the commit's
   `GitFileChange[]` rows; the chevron/summary is the
   toggle while the sha chip stays a separate button (routing the Changes panel, never toggling). Expanded,
-  file rows open Monaco diff tabs at the item's `commit:{sha}` scope (`openDiffInTab`, preview intent; the
+  file rows open registry-dispatched diff tabs at the item's `commit:{sha}` scope (`openDiffInTab`, preview intent; the
   path-list fallback opens at branch scope, no counts because they would drift), **and the review verdict
   ON the item row itself**: the row's right edge is ONE review slot rendering exactly one of, in
   precedence order, the non-clickable pulsing `Reviewing…` status (`plan-item-reviewing`, off the
@@ -1022,70 +1023,39 @@ own section. The kebab menu (`plan-menu`, a
   `useWorkspaceSpecs` pattern — the read also re-anchors server-side): tab flags and the Review badge need
   the snapshot even while the panel body is unmounted.
   Every client converges on `review.changed` pushes folded into the store; nothing here
-  mutates optimistically. Comment *authoring* is **selection-triggered, no mode toggle**. Renderer
-  implementations project `SurfaceReview` anchors; Monaco's projection lives in `reviewWidgets.ts`, where selecting text shows a floating
-  **comment icon right of the selection** (a Monaco content widget; the rendered preview's icon
-  follows the selection live but stays mouse-transparent until the drag ends — a clickable node under
-  the moving cursor is one the native selection extends into, repainting the document tail). The
-  preview icon's position/visibility are **imperative DOM (refs + custom properties + `data-visible`),
-  never React state**: the markdown components are per-render-typed, so a state flip mid-drag remounts
-  the text nodes under the LIVE selection, which Chrome "restores" by flooding whole blocks — a few
-  selected words painted the entire bullet. Outside React, these widgets cannot reach the root
-  `TooltipProvider`, so their buttons keep native `title`. Clicking it opens an **inline
-  composer under the selection** (a view zone: textarea + Save draft / Send now / Esc cancels). In
-  Monaco surfaces the same action also sits in the editor's **right-click context menu** ("Comment on
-  selection", right after Copy, `Cmd/Ctrl+Shift+M`; `editorHasSelection` precondition) — the «+» and
-  the menu entry are one action pair into one composer (which is why `attachReviewCommenting` takes
-  an `IStandaloneCodeEditor` — `addAction` lives only there). The menu's rows wear the app's Remix Icon
-  icons via `monacoMenuIcons.ts`: Monaco's standalone menu is label-only (`action.class` icons are a
-  workbench feature `addAction` can't reach), so `decorateEditorContextMenus` — installed on EVERY
-  Monaco surface, review or not (`MonacoEditor` + both of `MonacoDiff`'s inner editors) — decorates
-  the open menu's DOM: each row gets a fixed-width `.editor-menu-icon` slot (labels stay aligned), known
-  English labels get their glyph, unknown/restructured rows stay label-only (a Monaco bump can only
-  lose icons, never break the menu); submenu popups (Peek ▸) stay undecorated. The rendered preview's
-  context menu is the browser's own and stays unextended. Save sends an `AnchorDraft`; Monaco and the
-  markdown preview produce a raw-file `lineRange`, while an unlocatable preview selection produces an empty
-  selector set and therefore a whole-file comment. `useFileReview` combines that draft with path and the
-  surface's **side** (the host fills `contentHash` + the drift-tolerant `textQuote`); Send now additionally fires
-  `review.sendComment` and opens the created chat. Commented
-  lines render as decorations (`review-comment-line`). Review attaches only for scopes whose modified
-  side IS the worktree (branch / uncommitted — never a `commit` scope, whose content is historical).
-  **A diff's two editors are two anchor spaces, each carrying the full surface** (decorations,
-  in-flow cards, composer): the modified editor holds `side: "worktree"` comments, the original editor
-  holds `side: "base"` ones (`useFileReview` returns independent `worktree` and `base` surfaces;
-  `MonacoDiff` wires both through one `wireSide`, and the tab's `scope` rides along so the host resolves the
-  very blob the original editor shows). An original-side selection is **never remapped onto modified line numbers** — the two sides
-  say different things at the same numbers, so a remark on a deleted or rewritten line would silently
-  re-point at whatever now sits there, and that is what the send package would hand the agent. A focus
-  deep link likewise resolves **per side** (`SurfaceReview.focus` carries the full anchor), so a surface
-  only ever reveals geometry it actually renders. The **rendered markdown file view comments too**
-  (`PreviewCommenting` — the React sibling of `reviewWidgets`, same icon/composer skin, overlays
-  positioned in the scroller's content coordinates so they travel with the document): the rendered
-  selection is mapped back to SOURCE lines by the pure `previewAnchor` (head/tail phrase search over
-  marker-stripped source lines, shrinking phrases at line straddles, never a lone-word fallback for a
-  longer selection); an unmappable selection degrades to a **whole-file** comment — the composer says
-  so — never to wrong lines. **Saved comments sit IN the document flow, directly below their anchor**
-  (the inline-edit-v0 branch's presentation principle, worn in OUR chat-input-family skin —
-  `ReviewThreadCard` / its Monaco DOM twin: **the composer's component minus the buttons row** — the
-  same card chrome (`border2`/`radius-md`/`bg-dark`, same paddings), no accent bars of its own. A
-  DRAFT's body is **editable in place** until it's sent — the same input surface as the composer's
-  field (`--input-bg`, primary focus ring; blur / Cmd+Enter saves via `review.commentUpdate`, Esc
-  reverts, empty reverts — never deletes) — and carries Send + Delete (draft-only); sent/outdated cards are
-  passive read-only markers (plain text, no field). Status shows as the head dot (primary draft / info
-  sent).
-  **Monaco**: `attachReviewThreads` view zones below the anchor lines — Monaco pushes the following
-  lines apart; zone heights track the rendered card via a **ResizeObserver**, not a one-shot measure:
-  Monaco keeps an off-viewport zone's node at `display:none`, so a card below the fold at `setThreads`
-  time (the markdown tab's rendered→source switch mounts exactly this way) measures 0 and a one-shot
-  measure would leave its zone at the placeholder height — the card then paints OVER the following
-  lines when scrolled in. The observer re-measures when a card gains real geometry or grows (in-card
-  editing), so long comments never overflow. `setThreads` **reconciles zones by comment id** rather
-  than tearing every one down and back up on each snapshot: a card whose rendered content is unchanged
-  (a `status`/`anchorState`/line-range/`body` signature) keeps its exact DOM, so a draft the user is
-  mid-edit survives an unrelated push (another client's comment, a re-anchor/resolve elsewhere) with
-  its textarea value, focus and selection intact — only changed cards rebuild, gone ones drop, new ones
-  add. Threads without a `lineRange` never enter Monaco zones or decorations: the widget returns them as
-  unplaced and the pane-level strip keeps them visible without changing `anchorState`. **Rendered preview**:
+  mutates optimistically. Comment authoring is **selection-triggered, no mode toggle**. Renderer
+  implementations project `SurfaceReview` anchors and never rewrite them. The shared React
+  `ReviewComposer` owns the textarea, Save draft / Send now / Cancel actions, busy state, focus, and
+  cursor placement; `PreviewCommenting`, Pierre `FileDiff`, and Pierre `File` place that same component
+  in their own geometry. A saved draft carries a raw-file `lineRange`; an unlocatable rendered-preview
+  selection produces an empty selector set and therefore a whole-file comment. `useFileReview` combines
+  the draft with path, scope, and the surface's **side** (the host fills `contentHash` and the
+  drift-tolerant `textQuote`); Send now additionally fires `review.sendComment` and opens the created
+  chat.
+
+  **Pierre owns every diff and every phone-class code file.** Threads with a `lineRange` become
+  `lineAnnotations` at the range's end line (`base` → `deletions`, `worktree` → `additions`) and render
+  `ReviewThreadCard`; annotation metadata and arrays preserve comment-id identity across unrelated
+  review pushes. Because Pierre 1.5.1 keys React annotation wrappers by array index, each mount keeps
+  append-only comment-id slots with tombstones and reserves the always-present first slot for the composer.
+  Line-number selection and the gutter utility open a composer on that exact side. A
+  selection crossing both side spaces deliberately degrades to the additions/worktree endpoint and the
+  composer says so rather than inventing a coordinate translation. Focus requests scroll the matching
+  annotation into view before `onFocusHandled`; a thread without `lineRange`, or whose endpoint is hidden
+  in Pierre's initially collapsed unchanged context, never enters Pierre and remains in the pane-level
+  unplaced strip, which consumes any focus request for it. Pierre `File` applies the same annotation, selection, focus,
+  and unplaced rules on phones. Review attaches only where the modified side is the worktree (`branch`,
+  `uncommitted`, or `pinned`); commit scopes are historical and receive neither review authoring nor hunk
+  mutations. A diff's deletion and addition columns remain two authoritative anchor spaces: original-side
+  selections create `side: "base"`, modified-side selections create `side: "worktree"`, and neither is
+  remapped to the other side's line numbers.
+
+  **Monaco renders desktop files only.** `reviewWidgets.ts` keeps its content-widget selection affordance,
+  context-menu action, decorations, and comment-card view zones for that one surface. Zone heights follow
+  card geometry through `ResizeObserver`, and `setThreads` reconciles by comment id so an unrelated push
+  cannot replace a draft textarea being edited. Threads without a `lineRange` stay in the same unplaced
+  strip. `monacoMenuIcons.ts` decorates Monaco's standalone file-editor menu; no diff editor or diff-side
+  branch remains. **Rendered preview**:
   `MarkdownPreview` splits the stripped document at each insert's
   anchor and splices it between the markdown segments (`splicedSegments` — the inline-edit split
   pattern; a cut **never divides a multi-line construct**: an anchor inside a fenced code block or a
@@ -1139,7 +1109,7 @@ own section. The kebab menu (`plan-menu`, a
   **Sidebar navigation goes to the surface the anchor is READABLE on** (one derivation,
   `reviewModel`'s `ReviewSurface`: `commentSurface` for a row, `reviewFileSurface` for a file row —
   which picks the diff only when *every* unresolved comment on that file is base-side): a `base`
-  anchor's lines index the pre-change blob, which only the diff's ORIGINAL editor renders and only it
+  anchor's lines index the pre-change blob, which only Pierre's deletion side renders and only it
   mounts `base` threads, so it reopens a **pinned diff on the anchor's own `baseRef`**
   (`GitDiffScope.kind: "pinned"`, wire v30: worktree vs one immutable commit) — never the scope it was
   captured in, which re-resolves against the current fork point/`HEAD` and moves out from under the
@@ -1322,14 +1292,41 @@ own section. The kebab menu (`plan-menu`, a
   registry returns more than one. Renderer choice replaces the old markdown-only `rendered` state; layout
   and whitespace remain independent diff state.
 
-  Bundled candidates are registered once from `panels/resources/register.ts`: `thinkrail/code` is the text
-  fallback (Monaco diff in this step), `thinkrail/markdown` supplies `RenderedDiff`, and
+  Bundled candidates are registered once from `panels/resources/register.ts`: `thinkrail/code` renders
+  every source diff with Pierre `FileDiff`, `thinkrail/markdown` supplies `RenderedDiff`, and
   `thinkrail/binary` reports both sides' byte sizes. `RenderedDiff` keeps its worker-isolated htmldiff merge,
   loading/error states, and token styling, but advertises no diff anchors: both sides' threads stay in the
   pane's unplaced strip, **Show in Source** selects the code renderer, and diff authoring is available only
   in Source. It is selected by registry match rather than a path branch in the pane. Scopes whose modified
-  side is historical receive no review surface; `hunkActions` remains absent
-  for every scope until the mutation step wires it.
+  side is historical receive no review surface or mutation actions.
+
+  Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,
+  uses the `thinkrail` CSS-variable Shiki theme, word-level inline changes, collapsed unchanged regions with
+  line-info hunk separators, and split/unified layout; phone-class viewports force unified. The lazy Pierre
+  file/diff modules mount `WorkerPoolContextProvider` only when their surface renders; Pierre's internal
+  module singleton keeps one pool across those providers and creates module workers from
+  `@pierre/diffs/worker/worker.js`. The phone code-file implementation is Pierre `File` with the same theme
+  and review grammar; desktop files alone load Monaco.
+
+  Mutable scopes (`branch`, `uncommitted`, `pinned`) receive `hunkActions` only after the current welcome
+  advertises `CHANGE_MUTATIONS_PROTOCOL_VERSION` and the diff metadata carrying both hashes has landed.
+  Change blocks are independent of
+  Pierre's hunk model: `diff@8` `structuredPatch` with zero context and the same whitespace policy produces
+  the original/modified `LineSpan` pair sent to `change.revert`. Each block gets a slim annotation toolbar
+  above its first changed line with **Revert** (`hunk-revert`) and **Ask agent** (`hunk-ask-agent`); pure deletions anchor that toolbar on the
+  deletion side, while an absent modified side suppresses every block toolbar and leaves only header-level
+  Revert file. A running session adds the quiet “the agent is working in this workspace” notice but CAS,
+  not disabling, protects the action. Ask agent opens the worktree composer with the modified `lineRange`,
+  an exact `diffHunk` header, and `Please revise this change: ` at the cursor; a pure deletion anchors to the
+  preceding existing worktree line (line 1 at the top) and says it refers to removed lines, while an empty
+  worktree emits only `diffHunk` and therefore a whole-file comment. It then uses ordinary
+  `review.worktree.commenting.onSend`. The fixed header adds **Revert file** (`diff-revert-file`).
+
+  `DiffPane` sends both rendered hashes with every range/file revert. Success raises an eight-second toast
+  whose **Undo** action sends `change.undo` with the receipt id and `receipt.after.hash`; a trashed whole file
+  says it moved to the trash. `STALE_VIEW` immediately uses `useLiveTabContent.reload()` and says “This file
+  changed since you opened it — review the new diff”; every other named or unnamed failure uses
+  `errorText`. Commit scopes never receive `hunkActions`, so neither the toolbar nor Revert file can render.
 - **Changes: List | Tree.** A header toggle (`store.changesView`, app-wide — persisted in the store, not
   per workspace, so it survives workspace switches) switches the flat **List** and a folder **Tree**
   (`ChangesTree`), both built from the same `git.status` list. The Tree is styled exactly like the
@@ -1421,22 +1418,23 @@ own section. The kebab menu (`plan-menu`, a
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
   (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
-- **Source lines wrap at the synchronized file column.** Every ordinary `MonacoEditor` and both inner
-  editors of `MonacoDiff` use `fileLineWidth` as `wordWrapColumn` (40–240, default 120). The independent
-  `fileLineWidthBounded` default maps to Monaco `wordWrap: "bounded"`, wrapping sooner at each mounted
-  editor pane; off maps to `"wordWrapColumn"`, preserving the selected column with horizontal scrolling in
-  a narrower pane. Broadcast changes update mounted editors. Rendered Markdown and rendered Markdown diffs
-  retain their separate ~78ch reading measure; no bytes, ruler, extension mask, or no-wrap mode is involved.
-- **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` defines the `thinkrail`
-  theme from live surface + semantic syntax variables and chooses its normal/high-contrast base from
-  manifest appearance/contrast metadata—never from a known id—then redefines it after the theme module's
-  atomic `[data-theme]` signal. Reads are canonicalized to hex (`lib.cssColorToHex`; unparseable values
-  are dropped), and a bad value degrades to Monaco's base palette rather than crashing the panel.
-  `TerminalInstance` similarly rebuilds from the complete 16-slot ANSI variable set; both consume the
-  nullable editor selection-foreground override when provided. `MonacoDiff` re-themes exactly like
-  `MonacoEditor` — both consume `monacoSetup.ts`'s define + observer, so a palette swap lands in the
-  diff tab too. Both editors also share the app's scrollbar geometry via `sharedEditorOptions`
-  (6px sliders, no shadow, no overview ruler) and take slider colours from the same theme tokens.
+- **Desktop file source wraps at the synchronized file column.** `MonacoEditor` uses `fileLineWidth` as
+  `wordWrapColumn` (40–240, default 120). The independent `fileLineWidthBounded` default maps to Monaco
+  `wordWrap: "bounded"`, wrapping sooner at the mounted file pane; off maps to `"wordWrapColumn"`, preserving
+  the selected column with horizontal scrolling in a narrower pane. Broadcast changes update a mounted
+  desktop file editor. Pierre diffs and phone files own horizontal overflow and do not consume this Monaco
+  preference. Rendered Markdown and rendered Markdown diffs retain their separate ~78ch reading measure.
+- **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` defines the sole
+  `EDITOR_THEME` from live workspace-surface and semantic syntax variables and chooses its normal/high-
+  contrast base from manifest appearance/contrast metadata—never from a known id—then redefines it after the
+  theme module's atomic `[data-theme]` signal. Reads are canonicalized to hex (`lib.cssColorToHex`;
+  unparseable values are dropped), and a bad value degrades to Monaco's base palette rather than crashing the
+  panel. Pierre's one registered `thinkrail` CSS-variable Shiki theme emits variable references instead of
+  catalog colours; inherited `--diffs-*` properties map foreground/syntax to `--code-*`, canvases to the
+  workspace/content roles, and addition/deletion paint to feedback roles, so a theme swap needs no
+  re-highlight. `TerminalInstance` similarly rebuilds from the complete 16-slot ANSI variable set. Monaco
+  and xterm consume the nullable editor selection-foreground override when provided. The desktop file editor
+  keeps the shared 6px scrollbar geometry, no shadow, and no overview ruler.
 - **Terminal renderer + font measurement.** `TerminalInstance` runs xterm's **default DOM renderer** on
   purpose — `addon-webgl` is *not* loaded, and loading it would be a regression (see `architecture.md`
   Decision #11: the DOM renderer is a prerequisite for touch, and `WebglAddon.dispose()` leaks its WebGL2

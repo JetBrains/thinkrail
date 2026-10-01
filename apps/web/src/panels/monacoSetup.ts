@@ -28,7 +28,6 @@ window.MonacoEnvironment = {
 
 loader.config({ monaco });
 
-export const THEME = "thinkrail";
 export const EDITOR_THEME = "thinkrail-editor";
 
 const languageByPath = new Map<string, string>();
@@ -128,25 +127,16 @@ export function defineThinkrailTheme(m: Monaco): void {
 			: light
 				? "vs"
 				: "vs-dark";
-	const withBackground = (bg: string): Record<string, string> =>
-		bg ? { ...colors, "editor.background": bg } : colors;
-	const contentBg = token("--container-content-bg");
 	const workspaceBg = token("--container-workspace-bg");
+	if (workspaceBg) colors["editor.background"] = workspaceBg;
 	try {
-		m.editor.defineTheme(THEME, { base, inherit: true, rules, colors: withBackground(contentBg) });
-		m.editor.defineTheme(EDITOR_THEME, {
-			base,
-			inherit: true,
-			rules,
-			colors: withBackground(workspaceBg),
-		});
+		m.editor.defineTheme(EDITOR_THEME, { base, inherit: true, rules, colors });
 	} catch {
-		m.editor.defineTheme(THEME, { base, inherit: true, rules: [], colors: {} });
 		m.editor.defineTheme(EDITOR_THEME, { base, inherit: true, rules: [], colors: {} });
 	}
 }
 
-export function watchThemeSwap(m: Monaco, themeName: string = THEME): () => void {
+export function watchThemeSwap(m: Monaco, themeName: string = EDITOR_THEME): () => void {
 	return onThemeSwap(() => {
 		defineThinkrailTheme(m);
 		m.editor.setTheme(themeName);

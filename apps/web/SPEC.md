@@ -80,7 +80,7 @@ return to stable.
 - `shell` → children `shell/layout` + `shell/layoutState`, `updates` (one optional-capability hook + props-driven Settings content and durable status affordance), `panels`, `chat` (app-integration render/hydration only), `store`, `transport` (domain hydration + endpoint identity), `contracts` (type-only), `components/ui`, `components` (`ErrorBoundary` around each mounted region + `QuietScrollArea` around shell-owned tool bodies), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of catalog/media resolution and atomic theme application, driven by the hydrated store preference or pre-hydration hint)
 - `shell/layout` → `contracts` (`LayoutPreset` + `GitDiffScope` types only), `lib` (attention/id primitives), and React / `react-resizable-panels` / `@dnd-kit/core`; `shell/layoutState` → `shell/layout`, `store`, `transport` (browser endpoint identity + error normalization), `clientPreferences` (native-stable persistence), `contracts` (`LayoutPreset` type only), `lib`, and React. The parent injects store state and feature renderers, so the pure layout child has no feature-module runtime edge
 - `updates` → `contracts` (native bridge + host notice types), `store` (host notice), `components/ui`, React, and Remix Icon; native snapshots remain shell-local
-- `panels` → `resources`, `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector`+`useModelCatalog` — these are shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping)
+- `panels` → `resources`, `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector`+`useModelCatalog` — these are shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping), `@pierre/diffs` (all diffs + phone code files), and `diff` (engine-neutral mutation blocks)
 - `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `prompt` (shared slash/template behavior), `lib`, `clientPreferences`; `store` + `transport`
   (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)
 - `prompt` → `contracts` (slash/template types only), `lib`, and React; it has no lifecycle integration dependency
@@ -95,6 +95,13 @@ return to stable.
 - leaves (`clientPreferences`, `constants`, `utils`, `styles`) → none internal
 
 Rules: a panel never imports another panel sideways; nothing imports `shell` (it's the composition root).
+
+`@pierre/diffs` and `diff` are exact-pinned runtime dependencies. Pierre, its Shiki language/theme graph,
+its worker entry, and Monaco remain behind resource-loader dynamic imports. Only lazy Pierre renderer modules
+mount the provider, and every mounted surface acquires Pierre's module-singleton worker pool; an ordinary
+workspace therefore neither loads Pierre nor initializes its pool. Renderer metadata and loaders are the only
+eager edge. A production build must retain distinct Pierre diff, Pierre file, worker-pool, and Monaco chunks,
+with none of their implementation code in the entry chunk.
 
 The module set: `transport` / `store` / branded `shell` + its headless `shell/layout` child;
 layout-agnostic Project/File/Specs/Changes/Review renderers; registry-dispatched resource bodies and lazy xterm terminal
@@ -191,8 +198,10 @@ themselves.
 - **Every code surface is catalog-agnostic.** xterm and Monaco rebuild from generic variables after the
   atomic `[data-theme]` signal, including an optional selected-text foreground. Monaco chooses
   `vs`/`vs-dark` or the corresponding high-contrast base from manifest appearance/contrast metadata,
-  never a theme id. Shiki uses one code-owned TextMate scope map whose colors are semantic CSS variables, so it needs
-  no per-theme import/selector or re-highlight. Mermaid re-derives from the same variables. Reads for
+  never a theme id. Shiki uses code-owned semantic CSS-variable themes: the shared highlighter's TextMate
+  map and Pierre's `thinkrail` registration both emit live variable references, so neither needs a
+  per-theme import/selector or re-highlight. Pierre's own inherited diff variables carry semantic feedback
+  and canvas colours into its Shadow DOM. Mermaid re-derives from the same variables. Reads for
   strict consumers still pass through `lib.cssColorToHex`. Data-driven tests enforce the existing
   contrast floor (body/muted ≥ 4.5:1 and hint ≥ 3:1 on the primary declared surfaces) for every discovered
   manifest.
@@ -218,9 +227,10 @@ themselves.
   class a component names is one the generator actually emits (an unknown class is dropped silently by
   Tailwind, so the element renders unstyled while the class list claims otherwise).
 - **A primitive font family may only be named for a documented third-party integration.** Monaco
-  (`panels/monacoSetup.ts`) reads the code family, `s11`, and the default line-height; xterm
+  (`panels/monacoSetup.ts`) reads the code family, `s11`, and the default line-height; Pierre receives the
+  same primitives through the `.pierre-code-surface` custom-property bridge in `index.css`; xterm
   (`panels/TerminalInstance.tsx`) reads the code family + `s13` and owns its row height; mermaid
-  (`chat/tools/visualize/mermaid.ts`) reads the code family. These JS-option integrations are the exhaustive
+  (`chat/tools/visualize/mermaid.ts`) reads the code family. These third-party integrations are the exhaustive
   allowlist in `styles/typographyUsage.test.ts`. Everywhere else a class is required, and
   `<pre>` / `<code>` must carry one even inside a container that has one: preflight targets those elements
   directly, and a directly-matching rule beats an inherited family. Note that the bare arbitrary value

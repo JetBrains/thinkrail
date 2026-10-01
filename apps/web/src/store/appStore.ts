@@ -308,6 +308,8 @@ export interface Toast {
 	variant: "error" | "success" | "info";
 	message: string;
 	title?: string;
+	durationMs?: number;
+	action?: { label: string; onClick: () => void };
 }
 
 const MAX_TOASTS = 5;
@@ -3727,11 +3729,27 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	pushToast: (toast) => {
 		const twin = get().toasts.find(
-			(t) => t.variant === toast.variant && t.title === toast.title && t.message === toast.message,
+			(t) =>
+				!t.action &&
+				!toast.action &&
+				t.variant === toast.variant &&
+				t.title === toast.title &&
+				t.message === toast.message &&
+				t.durationMs === toast.durationMs,
 		);
 		if (twin) return twin.id;
 		const id = crypto.randomUUID();
-		set((s) => ({ toasts: [...s.toasts, { ...toast, id }].slice(-MAX_TOASTS) }));
+		set((s) => {
+			const next = [...s.toasts, { ...toast, id }];
+			let actionlessToDrop = Math.max(0, next.length - MAX_TOASTS);
+			return {
+				toasts: next.filter((candidate) => {
+					if (candidate.action || actionlessToDrop === 0) return true;
+					actionlessToDrop -= 1;
+					return false;
+				}),
+			};
+		});
 		return id;
 	},
 	dismissToast: (id) =>

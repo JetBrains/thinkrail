@@ -432,10 +432,14 @@ selected-log state belong to chat integration, not domain persistence. See
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React
   call site — a `.catch` in a fire-and-forget wire call — can fire one) — lives here so any surface can raise
-  a transient notification; the `panels/Toaster` renders + times them out (errors persist until dismissed).
-  `pushToast` **coalesces an identical live toast** (same variant/title/message — a retried failure returns
-  the existing id instead of stacking a twin) and **caps the queue at 5** (oldest drop — the viewport doesn't
-  scroll, so the newest must stay visible).
+  a transient notification. A toast may additionally carry `durationMs` and one `{ label, onClick }` action;
+  `panels/Toaster` renders that action through Radix `ToastAction` and otherwise owns timeout/swipe closure
+  (errors persist until dismissed). `pushToast` **coalesces an identical actionless live toast** (same
+  variant/title/message/duration — a retried failure returns the existing id instead of stacking a twin),
+  never coalesces actionable receipts whose callbacks name different inverses, and applies the **5-toast cap
+  only by evicting the oldest actionless notifications**. Actionable receipts remain until their own bounded
+  duration closes them or the user dismisses them; if actions already exceed five, a new actionless toast is
+  the cap's eviction candidate rather than an Undo receipt.
   It's the home for a **rejected wire call with no better place to land** (no chat tab to host an error turn),
   complementing `appendErrorTurn` (which handles the in-chat case).
   The host-wide **`templatesVersion: number`** counter + **`bumpTemplatesVersion()`** (increment) is a bare

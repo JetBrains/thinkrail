@@ -65,7 +65,12 @@ export interface ResourceViewProps {
 export interface HunkActions {
 	revert(range: { original: LineSpan; modified: LineSpan }): Promise<void>;
 	revertFile(): Promise<void>;
-	askAgent(range: { original: LineSpan; modified: LineSpan }): void;
+	askAgent(range: { original: LineSpan; modified: LineSpan }): {
+		draft: AnchorDraft;
+		initialText: string;
+		notice?: string;
+	};
+	agentWorking?: boolean;
 }
 
 export interface ResourceDiffProps {
@@ -76,6 +81,7 @@ export interface ResourceDiffProps {
 	ignoreWhitespace: boolean;
 	review?: { worktree: SurfaceReview; base: SurfaceReview };
 	hunkActions?: HunkActions;
+	onPlacedThreadIds?(ids: ReadonlySet<string>): void;
 	viewState?: unknown;
 	onViewState?(state: unknown): void;
 }

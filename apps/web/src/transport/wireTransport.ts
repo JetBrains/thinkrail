@@ -16,6 +16,7 @@ import type {
 	WorkspaceRemoved,
 } from "@thinkrail/contracts";
 import {
+	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
@@ -30,6 +31,10 @@ let transport: WsTransport | null = null;
 
 export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= HOST_UPDATE_RUN_PROTOCOL_VERSION;
+}
+
+export function supportsChangeMutations(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= CHANGE_MUTATIONS_PROTOCOL_VERSION;
 }
 
 export function runHostUpdate(): Promise<Ack> {

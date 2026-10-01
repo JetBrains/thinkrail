@@ -42,7 +42,7 @@ export function ReviewThreadCard({
 	};
 	return (
 		<div
-			data-testid="review-thread"
+			data-testid="review-thread-card"
 			data-comment-id={thread.id}
 			data-status={thread.status}
 			className="review-thread"

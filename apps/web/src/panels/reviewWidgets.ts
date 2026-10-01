@@ -290,7 +290,7 @@ export function attachReviewThreads(
 	const cardFor = (thread: ReviewThread): HTMLElement => {
 		const card = document.createElement("div");
 		card.className = "review-thread";
-		card.dataset.testid = "review-thread";
+		card.dataset.testid = "review-thread-card";
 		card.dataset.commentId = thread.id;
 		card.dataset.status = thread.status;
 

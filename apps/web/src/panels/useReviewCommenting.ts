@@ -102,6 +102,18 @@ function resolveFocus(
 	return thread ? { id: thread.id, anchor: thread.anchor } : null;
 }
 
+export function commentKindForDraft(
+	kind: "inline" | "diff",
+	draft: AnchorDraft,
+): "file" | "inline" | "diff" {
+	return draft.selectors.some(
+		(selector) =>
+			selector.kind === "lineRange" || selector.kind === "structural" || selector.kind === "region",
+	)
+		? kind
+		: "file";
+}
+
 function sideCommenting(
 	workspaceId: string,
 	path: string,
@@ -112,7 +124,7 @@ function sideCommenting(
 	const add = (draft: AnchorDraft, body: string) =>
 		getTransport().request("review.commentAdd", {
 			workspaceId,
-			kind: draft.selectors.length === 0 ? "file" : kind,
+			kind: commentKindForDraft(kind, draft),
 			anchor: { path, side, selectors: draft.selectors },
 			body,
 			...(scope ? { scope } : {}),

@@ -41,7 +41,7 @@
 		"container-content-bg": {
 			"from": "content",
 			"publish": true,
-			"note": "the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): the Changes diff (Monaco THEME), rendered diffs, Shiki code blocks, and the center-column backdrop behind them"
+			"note": "the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): Pierre source diffs, rendered diffs, Shiki code blocks, and the center-column backdrop behind them"
 		},
 		"container-elevated-bg": {
 			"from": "elevated",

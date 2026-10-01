@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
@@ -7,6 +8,7 @@ import {
 } from "@thinkrail/contracts";
 import {
 	mergeSessionStateRecords,
+	supportsChangeMutations,
 	supportsHostUpdateRun,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
@@ -17,6 +19,13 @@ test("host update execution is offered only by a host at or beyond the v70 capab
 	expect(supportsHostUpdateRun(HOST_UPDATE_RUN_PROTOCOL_VERSION + 1)).toBe(true);
 	expect(supportsHostUpdateRun(HOST_UPDATE_RUN_PROTOCOL_VERSION - 1)).toBe(false);
 	expect(supportsHostUpdateRun(null)).toBe(false);
+});
+
+test("change mutations are offered only by a host at or beyond their capability version", () => {
+	expect(supportsChangeMutations(CHANGE_MUTATIONS_PROTOCOL_VERSION)).toBe(true);
+	expect(supportsChangeMutations(CHANGE_MUTATIONS_PROTOCOL_VERSION + 1)).toBe(true);
+	expect(supportsChangeMutations(CHANGE_MUTATIONS_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsChangeMutations(null)).toBe(false);
 });
 
 test("plan review is offered only by a host at or beyond the v67 capability", () => {

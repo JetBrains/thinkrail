@@ -1,10 +1,13 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Locator, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 import { gitQuiet } from "./fixtures/git";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { largeRepetitiveMarkdownEdited } from "./fixtures/repo";
+
+const diffText = (page: Page, text: string) =>
+	page.getByTestId("diff-view").getByText(text, { exact: false }).last();
 
 test("Changes tab shows the active worktree's diff and swaps per workspace", async ({ page }) => {
 	await openFixtureProject(page);
@@ -22,11 +25,11 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 	const diffTab = page.locator('[data-testid="editor-tab"][data-kind="diff"]');
 	await expect(diffTab).toHaveCount(1);
 	await expect(diffTab).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("diff-pane")).toContainText("edited by e2e");
+	const renderedDiff = page.getByTestId("rendered-diff");
+	await expect(renderedDiff).toContainText("edited by e2e");
 
 	await expect(page.getByTestId("view-toggle-markdown")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
-	const renderedDiff = page.getByTestId("rendered-diff");
 	await expect(renderedDiff.locator("h1")).toHaveText("sample-project");
 	await expect(renderedDiff.locator("ins")).toContainText("edited by e2e");
 
@@ -39,12 +42,12 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 
 	writeFileSync(join(worktree, "script.ts"), "export const edited = true;\n");
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
-	await expect(page.getByTestId("diff-pane")).toContainText("edited = true");
+	await expect(diffText(page, "edited = true")).toBeVisible();
 	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("view-toggle-markdown")).toHaveCount(0);
 	await page.getByTestId("diff-toggle-inline").click();
 	await expect(page.getByTestId("diff-toggle-inline")).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("diff-pane")).toContainText("edited = true");
+	await expect(diffText(page, "edited = true")).toBeVisible();
 
 	await createWorkspaceViaDialog(page);
 	await expect(worktreeRows(page)).toHaveCount(2);
@@ -75,7 +78,6 @@ test("Rendered markdown diff of a large repetitive file never blocks the main th
 	});
 
 	await page.getByTestId("change-item").filter({ hasText: "LARGE.md" }).click();
-	await expect(page.getByTestId("diff-pane")).toBeVisible();
 	await expect(page.getByTestId("rendered-diff-loading")).toBeVisible();
 	const renderedDiff = page.getByTestId("rendered-diff");
 	await expect(renderedDiff.locator("ins").filter({ hasText: "EDITED" }).first()).toBeVisible({
@@ -102,12 +104,11 @@ test("Rendered markdown diff shows an error placeholder when the merge worker fa
 	await page.route(/htmldiff\.worker/, (route) => route.abort());
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
-	await expect(page.getByTestId("diff-pane")).toBeVisible();
 	await expect(page.getByTestId("rendered-diff-error")).toBeVisible();
 	await expect(page.getByTestId("rendered-diff-error")).toContainText("Source");
 
 	await page.getByTestId("view-toggle-code").click();
-	await expect(page.getByTestId("diff-pane")).toContainText("edited by e2e");
+	await expect(diffText(page, "edited by e2e")).toBeVisible();
 });
 
 test("Rendered markdown diff follows live edits on disk (stale merge cancelled, fresh one lands)", async ({
@@ -163,7 +164,7 @@ test("Changes has a List|Tree toggle; Tree groups files into folders with +/- co
 	await fileNode.click();
 	const diffTab = page.locator('[data-testid="editor-tab"][data-kind="diff"]');
 	await expect(diffTab).toHaveCount(1);
-	await expect(page.getByTestId("diff-pane")).toContainText("three");
+	await expect(page.getByTestId("rendered-diff")).toContainText("three");
 
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("tab-changes").click();
@@ -190,6 +191,34 @@ function seedCommitAndDirtyEdit(): string {
 	);
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\ndirty edit by e2e\n");
 	return worktree;
+}
+
+function seedMutableHunks(): { path: string; base: string; modified: string } {
+	const path = join(worktreeDir(), "mutable.ts");
+	const base = [
+		"export const one = 1;",
+		"export const two = 2;",
+		"export const three = 3;",
+		"export const four = 4;",
+		"export const five = 5;",
+		"export const six = 6;",
+		"",
+	].join("\n");
+	writeFileSync(path, base);
+	gitQuiet(worktreeDir(), "add", "mutable.ts");
+	gitQuiet(
+		worktreeDir(),
+		"-c",
+		"user.email=e2e@thinkrail.test",
+		"-c",
+		"user.name=ThinkRail E2E",
+		"commit",
+		"-m",
+		"mutable hunk fixture",
+	);
+	const modified = base.replace("two = 2", "two = 200").replace("five = 5", "five = 500");
+	writeFileSync(path, modified);
+	return { path, base, modified };
 }
 
 test("Changes scope selector filters by commit / uncommitted; each scope is its own diff tab", async ({
@@ -245,10 +274,8 @@ test("Uncommitted scope converges when HEAD moves out-of-band (a commit in a ter
 	await expect(dirtyRow).toHaveCount(1);
 
 	await dirtyRow.dblclick();
-	const dirtyLineCount = async () => {
-		const text = ((await page.getByTestId("diff-pane").textContent()) ?? "").replace(/\s+/g, " ");
-		return (text.match(/dirty line by e2e/g) ?? []).length;
-	};
+	const dirtyLineCount = () =>
+		page.getByTestId("diff-view").locator("[data-line]", { hasText: "dirty line by e2e" }).count();
 	await expect.poll(dirtyLineCount, { timeout: 15_000 }).toBe(1);
 
 	await new Promise((r) => setTimeout(r, 1500));
@@ -353,7 +380,7 @@ test("A change row's action menu opens from the ⌄ button and from right-click;
 	await expect(page.getByTestId("change-row-actions")).toBeVisible();
 	await page.getByTestId("change-action-view").click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="diff"]')).toHaveCount(1);
-	await expect(page.getByTestId("diff-pane")).toContainText("two");
+	await expect(page.getByTestId("rendered-diff")).toContainText("two");
 
 	await page.getByTestId("changes-toggle-tree").click();
 	const fileNode = page.getByTestId("change-node").filter({ hasText: "notes.md" });
@@ -397,10 +424,9 @@ test("The diff viewer collapses unchanged context and has a per-tab hide-whitesp
 	await page.getByTestId("changes-scope-uncommitted").click();
 	await page.getByTestId("change-item").filter({ hasText: "long.ts" }).click();
 	await expect(page.getByTestId("diff-path")).toHaveText("long.ts");
-	await expect(page.getByTestId("diff-pane").locator(".diff-hidden-lines").first()).toHaveText(
-		/\d+ hidden lines/,
-	);
-	await expect(page.getByTestId("diff-pane")).toContainText("6000");
+	const diff = page.getByTestId("diff-view");
+	await expect(diff.locator("[data-unmodified-lines]").first()).toHaveText(/\d+ unmodified lines/);
+	await expect(diff.getByText("6000", { exact: false }).last()).toBeVisible();
 
 	const whitespace = page.getByTestId("diff-toggle-whitespace");
 	await expect(whitespace).toHaveAttribute("data-active", "false");
@@ -411,6 +437,64 @@ test("The diff viewer collapses unchanged context and has a per-tab hide-whitesp
 	expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(
 		"export const v60 = 6000;",
 	);
+});
+
+test("revert hunk changes only that range and Undo restores it", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const fixture = seedMutableHunks();
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "mutable.ts" }).click();
+	await expect(diffText(page, "two = 200")).toBeVisible();
+	await expect(page.getByTestId("hunk-revert")).toHaveCount(2);
+	await expect(page.getByTestId("hunk-ask-agent")).toHaveCount(2);
+	await expect(page.getByTestId("diff-revert-file")).toBeVisible();
+	await page.getByTestId("hunk-ask-agent").first().click();
+	await expect(page.getByTestId("review-composer-input")).toHaveValue(
+		"Please revise this change: ",
+	);
+	await page.getByTestId("review-composer-cancel").click();
+
+	await page.getByTestId("hunk-revert").first().click();
+	await expect(
+		page.getByTestId("toast").filter({ hasText: "Reverted hunk in mutable.ts" }),
+	).toBeVisible();
+	await expect
+		.poll(() => readFileSync(fixture.path, "utf8").split("\n")[1])
+		.toBe(fixture.base.split("\n")[1]);
+	expect(readFileSync(fixture.path, "utf8")).toContain("five = 500");
+
+	await page.getByTestId("toast-action").click();
+	await expect.poll(() => readFileSync(fixture.path, "utf8")).toBe(fixture.modified);
+});
+
+test("a stale hunk view refreshes instead of overwriting the newer file", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const fixture = seedMutableHunks();
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "mutable.ts" }).click();
+	await expect(diffText(page, "two = 200")).toBeVisible();
+	const revert = page.getByTestId("hunk-revert").first();
+	const revertBox = await revert.boundingBox();
+	if (!revertBox) throw new Error("Hunk revert button has no box");
+
+	const newer = fixture.modified.replace("two = 200", "two = 201");
+	writeFileSync(fixture.path, newer);
+	await page.mouse.click(revertBox.x + revertBox.width / 2, revertBox.y + revertBox.height / 2);
+	await expect(
+		page
+			.getByTestId("toast")
+			.filter({ hasText: "This file changed since you opened it — review the new diff" }),
+	).toBeVisible();
+	await expect(diffText(page, "two = 201")).toBeVisible();
+	expect(readFileSync(fixture.path, "utf8")).toBe(newer);
 });
 
 test("Change rows stay one aligned, fully-highlighted row — menu slot included, long names truncated", async ({
@@ -504,9 +588,10 @@ test("The diff header keeps its controls on a narrow pane, however long the file
 
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "diffScopeResolver" }).click();
-	await expect(page.getByTestId("diff-pane")).toBeVisible();
+	await expect(page.getByTestId("diff-view")).toBeVisible();
 
 	await page.setViewportSize({ width: 620, height: 800 });
+	await expect(page.getByTestId("diff-toggle-inline")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("diff-toggle-whitespace")).toBeVisible();
 	await expect(page.getByTestId("diff-copy")).toBeVisible();
 	await expect(page.getByTestId("diff-toggle-split")).toBeVisible();
@@ -580,23 +665,27 @@ test("Re-pointing the target branch re-reads an open branch-scope diff tab — a
 	await page.getByTestId("tab-changes").click();
 	const committedRow = page.getByTestId("change-item").filter({ hasText: "committed.txt" });
 	await committedRow.dblclick();
-	const diffPane = page.getByTestId("diff-pane");
-	await expect(diffPane).toContainText("revised by the workspace");
-	await expect(diffPane).not.toContainText("committed by e2e");
+	const sourceDiff = page.getByTestId("diff-view");
+	await expect(
+		sourceDiff.getByText("revised by the workspace", { exact: false }).last(),
+	).toBeVisible();
+	await expect(sourceDiff.getByText("committed by e2e", { exact: false })).toHaveCount(0);
 
 	await page.getByTestId("changes-target-picker").click();
 	await page.locator('[data-testid="branch-option"][data-branch="e2e-target"]').click();
-	await expect(diffPane).toContainText("committed by e2e");
+	await expect(sourceDiff.getByText("committed by e2e", { exact: false }).last()).toBeVisible();
 
 	const readmeTab = page.getByTestId("change-item").filter({ hasText: "README.md" });
 	await readmeTab.click();
-	await expect(diffPane).toContainText("dirty edit by e2e");
+	await expect(page.getByTestId("rendered-diff")).toContainText("dirty edit by e2e");
 	await page.getByTestId("changes-target-picker").click();
 	await page.locator('[data-testid="branch-option"][data-branch="main"]').first().click();
 
 	await committedRow.click();
-	await expect(diffPane).toContainText("revised by the workspace");
-	await expect(diffPane).not.toContainText("committed by e2e");
+	await expect(
+		sourceDiff.getByText("revised by the workspace", { exact: false }).last(),
+	).toBeVisible();
+	await expect(sourceDiff.getByText("committed by e2e", { exact: false })).toHaveCount(0);
 });
 
 test("A commit scope whose commit is rewritten away falls back to All changes with a toast", async ({
@@ -655,18 +744,7 @@ test("A failed read says so — it never renders as an empty (clean) change set"
 	await expect(page.getByTestId("changes-error")).toHaveCount(0);
 });
 
-test("Closing a diff tab disposes Monaco cleanly — no 'TextModel got disposed' assertion", async ({
-	page,
-}) => {
-	const monacoErrors: string[] = [];
-	const record = (text: string) => {
-		if (/TextModel got disposed before DiffEditorWidget/.test(text)) monacoErrors.push(text);
-	};
-	page.on("pageerror", (err) => record(err.message));
-	page.on("console", (msg) => {
-		if (msg.type() === "error") record(msg.text());
-	});
-
+test("Closing a diff tab removes its Pierre surface", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	const worktree = worktreeDir();
@@ -676,10 +754,9 @@ test("Closing a diff tab disposes Monaco cleanly — no 'TextModel got disposed'
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
 	const diffTab = page.locator('[data-testid="editor-tab"][data-kind="diff"]');
 	await expect(diffTab).toHaveCount(1);
-	await expect(page.getByTestId("diff-pane")).toContainText("edited = true");
+	await expect(diffText(page, "edited = true")).toBeVisible();
 
 	await diffTab.getByTestId("editor-tab-close").click();
 	await expect(diffTab).toHaveCount(0);
-	await page.waitForTimeout(100);
-	expect(monacoErrors).toEqual([]);
+	await expect(page.getByTestId("diff-view")).toHaveCount(0);
 });

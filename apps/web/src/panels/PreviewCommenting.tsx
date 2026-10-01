@@ -1,8 +1,9 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { AnchorDraft, ReviewThread, SurfaceReview } from "@/resources";
+import type { ReviewThread, SurfaceReview } from "@/resources";
 import { mapPreviewSelection } from "./previewAnchor";
+import { ReviewComposer } from "./ReviewComposer";
 import { markReviewRegions, type SourceLineRange, stampedSelectionLines } from "./sourceLines";
 import { useScrollViewState } from "./useScrollViewState";
 
@@ -45,15 +46,8 @@ export function PreviewCommenting({
 	const draggingRef = useRef(false);
 	const [selection, setSelection] = useState<SourceLineRange | null>(null);
 	const [composing, setComposing] = useState(false);
-	const [text, setText] = useState("");
-	const [busy, setBusy] = useState(false);
 	const selectedTextRef = useRef("");
-	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const { commenting, threads } = review;
-
-	useEffect(() => {
-		if (composing) inputRef.current?.focus();
-	}, [composing]);
 
 	const focusId = review.focus?.id ?? null;
 	useEffect(() => {
@@ -157,29 +151,11 @@ export function PreviewCommenting({
 			stampedSelectionLines(scroller) ?? mapPreviewSelection(source, selectedTextRef.current);
 		setSelection(resolved);
 		setComposing(true);
-		setText("");
 	};
 
 	const close = () => {
 		setComposing(false);
 		setSelection(null);
-		setText("");
-		setBusy(false);
-	};
-
-	const submit = (action: SurfaceReview["commenting"]["onSave"]) => {
-		if (!composing || !text.trim()) return;
-		const draft: AnchorDraft = selection
-			? {
-					selectors: [{ kind: "lineRange", ...selection }],
-					label:
-						selection.startLine === selection.endLine
-							? `L${selection.startLine}`
-							: `L${selection.startLine}–${selection.endLine}`,
-				}
-			: { selectors: [], label: "file" };
-		setBusy(true);
-		action(draft, text.trim()).then(close, () => setBusy(false));
 	};
 
 	const label = selection
@@ -188,58 +164,27 @@ export function PreviewCommenting({
 			: `Lines ${selection.startLine}–${selection.endLine}`
 		: "Whole file (couldn't locate the fragment)";
 
+	const draft = selection
+		? {
+				selectors: [{ kind: "lineRange" as const, ...selection }],
+				label:
+					selection.startLine === selection.endLine
+						? `L${selection.startLine}`
+						: `L${selection.startLine}–${selection.endLine}`,
+			}
+		: { selectors: [], label: "file" };
 	const composerInsert: ComposerInsert | null = composing
 		? {
 				line: selection?.endLine ?? Number.MAX_SAFE_INTEGER,
 				node: (
-					<div
+					<ReviewComposer
 						key="review-composer"
-						data-testid="review-composer"
-						className="review-composer review-composer-flow"
-					>
-						<span className="review-composer-label tr-code-text">{label}</span>
-						<textarea
-							ref={inputRef}
-							data-testid="review-composer-input"
-							className="review-composer-input tr-text-ui"
-							placeholder="Leave a review comment…"
-							value={text}
-							disabled={busy}
-							onChange={(e) => setText(e.target.value)}
-							onKeyDown={(e) => {
-								if (e.key === "Escape") close();
-								if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(commenting.onSave);
-							}}
-						/>
-						<div className="review-composer-row">
-							<button
-								type="button"
-								data-testid="review-composer-save"
-								className="review-composer-btn tr-text-action"
-								disabled={busy || !text.trim()}
-								onClick={() => submit(commenting.onSave)}
-							>
-								Save draft
-							</button>
-							<button
-								type="button"
-								data-testid="review-composer-send"
-								className="review-composer-btn review-composer-btn-primary tr-text-action"
-								disabled={busy || !text.trim()}
-								onClick={() => submit(commenting.onSend)}
-							>
-								Send now
-							</button>
-							<button
-								type="button"
-								data-testid="review-composer-cancel"
-								className="review-composer-btn review-composer-btn-quiet tr-text-action"
-								onClick={close}
-							>
-								Cancel
-							</button>
-						</div>
-					</div>
+						draft={draft}
+						label={label}
+						commenting={commenting}
+						onClose={close}
+						className="review-composer-flow"
+					/>
 				),
 			}
 		: null;

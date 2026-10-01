@@ -21,7 +21,7 @@ The shadcn/ui primitives (Radix), copied in and owned here, themed with our desi
   inside a
   Dialog stays wheel-scrollable under its scroll lock), `command` (cmdk combobox body), `textarea`,
   `tooltip` (+ the `IconTooltip` convenience; one root `TooltipProvider` sets the delay), `resizable`, `toast` (Radix Toast primitives — `ToastProvider`/`Toast`/`ToastViewport`/`Title`/
-  `Description`/`Close` + the `error`/`success`/`info` `toastVariants`; a left accent bar carries severity.
+  `Description`/`Action`/`Close` + the `error`/`success`/`info` `toastVariants`; a left accent bar carries severity.
   Presentational only — the store owns the queue; `panels/Toaster` composes these against it).
 - **Public surface:** each primitive imported directly via `@/components/ui/<name>` (no barrel — preserves
   tree-shaking and the shadcn per-primitive convention).

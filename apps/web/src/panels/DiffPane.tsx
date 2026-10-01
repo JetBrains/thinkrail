@@ -2,13 +2,15 @@ import {
 	RiCheckLine as Check,
 	RiFileCopyLine as Copy,
 	RiParagraph as Pilcrow,
+	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
-import type { ResourceMeta } from "@thinkrail/contracts";
+import type { ChangeReceipt, ResourceMeta } from "@thinkrail/contracts";
 import {
 	type ComponentType,
 	type LazyExoticComponent,
 	lazy,
 	Suspense,
+	useCallback,
 	useMemo,
 	useState,
 } from "react";
@@ -16,6 +18,7 @@ import { IconTooltip } from "@/components/ui/tooltip";
 import { copyText, isPhoneViewport, usePhoneViewport } from "@/lib";
 import {
 	describeResource,
+	type HunkActions,
 	type ResourceContent,
 	type ResourceDiffProps,
 	type ResourceRenderer,
@@ -23,8 +26,9 @@ import {
 } from "@/resources";
 import { LoadingRegion } from "../components/Skeleton";
 import type { DiffTab } from "../store";
-import { selectDiffTabTargetRef, useAppStore } from "../store";
-import { getTransport } from "../transport";
+import { selectDiffTabTargetRef, selectWorkspaceIsRunning, toast, useAppStore } from "../store";
+import { errorText, getTransport, wsErrorCode } from "../transport";
+import { canOfferChangeMutations, scopeHasMutableModifiedSide } from "./changeMutationAvailability";
 import { splitPath } from "./changesModel";
 import {
 	encodeResourcePath,
@@ -34,6 +38,7 @@ import {
 	selectResourceRenderer,
 	useResetViewStateOnImplementationChange,
 } from "./resourcePane";
+import { createAskAgentRequest } from "./resources/code/changeBlocks";
 import { SendReviewButton } from "./SendReviewButton";
 import { ToggleSegment } from "./ToggleSegment";
 import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
@@ -88,17 +93,40 @@ function RendererDiff({
 	return <Component {...props} />;
 }
 
+function sameIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+	if (left.size !== right.size) return false;
+	for (const id of left) if (!right.has(id)) return false;
+	return true;
+}
+
 export function DiffPane({ tab }: { tab: DiffTab }) {
 	const mobile = usePhoneViewport();
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const setDiffTabView = useAppStore((state) => state.setDiffTabView);
 	const setDiffTabIgnoreWhitespace = useAppStore((state) => state.setDiffTabIgnoreWhitespace);
 	const [copied, setCopied] = useState(false);
-	const reviewable = tab.scope.kind !== "commit";
+	const protocolVersion = useAppStore((state) => state.protocolVersion);
+	const mutationExpect = useMemo(
+		() =>
+			tab.meta
+				? {
+						originalHash: tab.meta.original.hash,
+						modifiedHash: tab.meta.modified.hash,
+					}
+				: null,
+		[tab.meta],
+	);
+	const reviewable = scopeHasMutableModifiedSide(tab.scope);
+	const mutationsAvailable = canOfferChangeMutations(
+		tab.scope,
+		protocolVersion,
+		mutationExpect !== null,
+	);
 	const review = useFileReview(tab.workspaceId, tab.path, "diff", tab.scope);
 	const targetRef = useAppStore((state) => selectDiffTabTargetRef(state, tab));
+	const agentWorking = useAppStore((state) => selectWorkspaceIsRunning(state, tab.workspaceId));
 
-	useLiveTabContent(
+	const { reload } = useLiveTabContent(
 		tab,
 		{
 			read: () =>
@@ -149,6 +177,23 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 	);
 	const renderer = selectResourceRenderer(candidates, tab.rendererId, tab.path);
 	const implementationKey = rendererImplementationKey(renderer.id, mobile);
+	const [placement, setPlacement] = useState<{
+		implementationKey: string;
+		ids: ReadonlySet<string>;
+	} | null>(null);
+	const onPlacedThreadIds = useCallback(
+		(ids: ReadonlySet<string>) => {
+			setPlacement((current) => {
+				if (current?.implementationKey === implementationKey && sameIds(current.ids, ids)) {
+					return current;
+				}
+				return { implementationKey, ids: new Set(ids) };
+			});
+		},
+		[implementationKey],
+	);
+	const placedThreadIds =
+		placement?.implementationKey === implementationKey ? placement.ids : undefined;
 	useResetViewStateOnImplementationChange(tab.workspaceId, tab.id, implementationKey);
 
 	const view = mobile ? "inline" : (tab.view ?? "split");
@@ -164,7 +209,114 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 		tab.meta?.modified,
 		bytesUrl(tab.workspaceId, tab.path, modifiedOid),
 	);
+	const modifiedText = modified.kind === "text" ? modified.text : "";
 	const { dir, base } = splitPath(tab.path);
+	const handleMutationError = useCallback(
+		(error: unknown, title: string) => {
+			if (wsErrorCode(error) === "STALE_VIEW") {
+				reload();
+				toast.info("This file changed since you opened it — review the new diff");
+				return;
+			}
+			toast.error(errorText(error), title);
+		},
+		[reload],
+	);
+	const undoReceipt = useCallback(
+		async (receipt: ChangeReceipt) => {
+			try {
+				await getTransport().request("change.undo", {
+					workspaceId: tab.workspaceId,
+					receiptId: receipt.id,
+					expect: { modifiedHash: receipt.after.hash },
+				});
+			} catch (error) {
+				handleMutationError(error, "Couldn't undo the revert");
+			}
+		},
+		[handleMutationError, tab.workspaceId],
+	);
+	const showUndoToast = useCallback(
+		(receipt: ChangeReceipt, message: string) => {
+			useAppStore.getState().pushToast({
+				variant: "success",
+				message,
+				durationMs: 8000,
+				action: {
+					label: "Undo",
+					onClick: () => {
+						void undoReceipt(receipt);
+					},
+				},
+			});
+		},
+		[undoReceipt],
+	);
+	const revertBlock = useCallback<HunkActions["revert"]>(
+		async (block) => {
+			try {
+				if (!mutationExpect) throw new Error("Change metadata is not ready");
+				const { receipt } = await getTransport().request("change.revert", {
+					workspaceId: tab.workspaceId,
+					path: tab.path,
+					scope: tab.scope,
+					target: { kind: "range", original: block.original, modified: block.modified },
+					expect: mutationExpect,
+				});
+				showUndoToast(receipt, `Reverted hunk in ${base}`);
+			} catch (error) {
+				handleMutationError(error, "Couldn't revert the hunk");
+			}
+		},
+		[
+			base,
+			handleMutationError,
+			mutationExpect,
+			showUndoToast,
+			tab.path,
+			tab.scope,
+			tab.workspaceId,
+		],
+	);
+	const revertFile = useCallback(async () => {
+		try {
+			if (!mutationExpect) throw new Error("Change metadata is not ready");
+			const { receipt } = await getTransport().request("change.revert", {
+				workspaceId: tab.workspaceId,
+				path: tab.path,
+				scope: tab.scope,
+				target: { kind: "file" },
+				expect: mutationExpect,
+			});
+			showUndoToast(receipt, receipt.trashed ? `Moved ${base} to the trash` : `Reverted ${base}`);
+		} catch (error) {
+			handleMutationError(error, "Couldn't revert the file");
+		}
+	}, [
+		base,
+		handleMutationError,
+		mutationExpect,
+		showUndoToast,
+		tab.path,
+		tab.scope,
+		tab.workspaceId,
+	]);
+	const askAgent = useCallback<HunkActions["askAgent"]>(
+		(block) => createAskAgentRequest(block, modifiedText),
+		[modifiedText],
+	);
+	const hunkActions = useMemo<HunkActions | undefined>(
+		() =>
+			mutationsAvailable
+				? {
+						revert: revertBlock,
+						revertFile,
+						askAgent,
+						agentWorking,
+					}
+				: undefined,
+		[agentWorking, askAgent, mutationsAvailable, revertBlock, revertFile],
+	);
 	const copy = async () => {
 		if (!(await copyText(tab.modified))) return;
 		setCopied(true);
@@ -210,6 +362,15 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 					</span>
 				</span>
 				<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
+				{hunkActions ? (
+					<HeaderIconButton
+						testid="diff-revert-file"
+						label="Revert file"
+						onClick={() => void hunkActions.revertFile()}
+					>
+						<Revert className="size-14" />
+					</HeaderIconButton>
+				) : null}
 				<HeaderIconButton
 					testid="diff-toggle-whitespace"
 					label="Hide whitespace changes"
@@ -254,6 +415,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 				renderer={renderer}
 				intent="diff"
 				candidates={candidates}
+				{...(placedThreadIds ? { placedThreadIds } : {})}
 				onSelectRenderer={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
 			/>
 			<div className="min-h-0 flex-1">
@@ -268,6 +430,8 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 						layout={view === "split" ? "split" : "unified"}
 						ignoreWhitespace={ignoreWhitespace}
 						{...(reviewable ? { review } : {})}
+						{...(hunkActions ? { hunkActions } : {})}
+						onPlacedThreadIds={onPlacedThreadIds}
 						viewState={tab.viewState}
 						onViewState={saveViewState}
 					/>

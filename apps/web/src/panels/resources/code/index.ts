@@ -14,6 +14,6 @@ export const codeRenderer: ResourceRenderer = {
 		active: false,
 	},
 	trust: "bundled",
-	loadView: () => (isPhoneViewport() ? import("./PlainCodeView") : import("../../MonacoEditor")),
-	loadDiff: () => import("../../MonacoDiff"),
+	loadView: () => (isPhoneViewport() ? import("./PierreFile") : import("../../MonacoEditor")),
+	loadDiff: () => import("./PierreDiff"),
 };
