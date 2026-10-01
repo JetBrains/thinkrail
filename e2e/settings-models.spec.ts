@@ -1,54 +1,72 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import type { AppConfig, ModelDefault } from "@thinkrail/contracts";
 import { openWorkspaceChat } from "./fixtures/app";
 import { connectCentral, openProviders, waitForCentralState } from "./fixtures/jbcentral";
-import { E2E_DATA_DIR, E2E_SCREENSHOT_DIR } from "./fixtures/paths";
+import { E2E_SCREENSHOT_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
 
-const CONFIG_PATH = join(E2E_DATA_DIR, "config.json");
 const SCREENSHOT_PATH = join(E2E_SCREENSHOT_DIR, "models-settings", "default-model.png");
 
 type SavedDefaults = Pick<AppConfig, "defaultModel" | "defaultEffort">;
 
-function snapshot(path: string): Buffer | undefined {
-	return existsSync(path) ? readFileSync(path) : undefined;
+async function withHostWire<T>(page: Page, run: (wire: E2eWire) => Promise<T>): Promise<T> {
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		return await run(wire);
+	} finally {
+		wire.close();
+	}
 }
 
-function savedDefaults(contents: Buffer | undefined): SavedDefaults {
-	if (!contents) return {};
-	const config = JSON.parse(contents.toString("utf8")) as Partial<AppConfig>;
+async function readDefaults(page: Page): Promise<SavedDefaults> {
+	const config = await withHostWire(page, (wire) =>
+		wire.request("settings.update", { config: {} }),
+	);
 	return {
 		...(config.defaultModel ? { defaultModel: config.defaultModel } : {}),
 		...(config.defaultEffort ? { defaultEffort: config.defaultEffort } : {}),
 	};
 }
 
-async function restoreDefaults(defaults: SavedDefaults): Promise<void> {
-	const wire = await E2eWire.connect();
-	try {
-		await wire.request("settings.update", {
+async function restoreDefaults(page: Page, defaults: SavedDefaults): Promise<void> {
+	await withHostWire(page, (wire) =>
+		wire.request("settings.update", {
 			config: {
 				defaultModel: defaults.defaultModel ?? null,
 				defaultEffort: defaults.defaultEffort ?? null,
 			},
-		});
-	} finally {
-		wire.close();
-	}
+		}),
+	);
+}
+
+async function connectFixtureProvider(page: Page): Promise<void> {
+	await openProviders(page);
+	await waitForCentralState(page, "supported");
+	await connectCentral(page);
+	await waitForCentralState(page, "configured");
+}
+
+async function disconnectFixtureProvider(page: Page): Promise<void> {
+	await openProviders(page);
+	await page.getByTestId("jetbrains-disconnect").click();
+	await waitForCentralState(page, "supported");
+}
+
+async function openFreshChat(page: Page): Promise<void> {
+	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	const previousChatCount = await chatTabs.count();
+	await page.getByTestId("new-chat").first().click();
+	await expect(chatTabs).toHaveCount(previousChatCount + 1);
 }
 
 test("Models settings save host defaults and apply them to a fresh chat", async ({ page }) => {
-	const configSnapshot = snapshot(CONFIG_PATH);
-	const defaults = savedDefaults(configSnapshot);
+	await openWorkspaceChat(page);
+	const defaults = await readDefaults(page);
 
 	try {
-		await openWorkspaceChat(page);
-		await openProviders(page);
-		await waitForCentralState(page, "supported");
-		await connectCentral(page);
-		await waitForCentralState(page, "configured");
+		await connectFixtureProvider(page);
 		const dialog = page.getByTestId("settings-dialog");
 		await expect(dialog).toBeVisible();
 		await page.getByTestId("settings-nav-models").click();
@@ -82,86 +100,67 @@ test("Models settings save host defaults and apply them to a fresh chat", async 
 		await effortOption.click();
 		await expect(effortSelector).toContainText("high");
 
-		const persisted = JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as Record<string, unknown>;
-		expect(persisted.defaultModel).toMatchObject({ provider: "e2e-central", id: modelId });
-		expect(persisted.defaultEffort).toBe("high");
-		const wire = await E2eWire.connect();
-		try {
-			expect(await wire.request("model.default", {})).toMatchObject({
-				model: { provider: "e2e-central", id: modelId },
-				thinkingLevel: "high",
+		await expect
+			.poll(() => readDefaults(page))
+			.toMatchObject({
+				defaultModel: { provider: "e2e-central", id: modelId },
+				defaultEffort: "high",
 			});
-		} finally {
-			wire.close();
-		}
+		expect(await withHostWire(page, (wire) => wire.request("model.default", {}))).toMatchObject({
+			model: { provider: "e2e-central", id: modelId },
+			thinkingLevel: "high",
+		});
 
 		mkdirSync(dirname(SCREENSHOT_PATH), { recursive: true });
 		await section.screenshot({ path: SCREENSHOT_PATH, animations: "disabled" });
 
 		await page.keyboard.press("Escape");
-		const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
-		const previousChatCount = await chatTabs.count();
-		await page.getByTestId("new-chat").first().click();
-		await expect(chatTabs).toHaveCount(previousChatCount + 1);
+		await openFreshChat(page);
 		const freshChatModel = page.getByTestId("model-selector").last();
 		await expect(freshChatModel).toBeVisible();
 		await expect(freshChatModel).toContainText(modelName);
 		await expect(page.getByTestId("thinking-selector").last()).toContainText("high");
 
-		await openProviders(page);
-		await page.getByTestId("jetbrains-disconnect").click();
-		await waitForCentralState(page, "supported");
+		await disconnectFixtureProvider(page);
 	} finally {
-		await restoreDefaults(defaults);
-		if (configSnapshot === undefined) rmSync(CONFIG_PATH, { force: true });
-		else writeFileSync(CONFIG_PATH, configSnapshot);
+		await restoreDefaults(page, defaults);
 	}
 });
 
 test("without saved defaults, Settings and a fresh chat use the first available model and clamped medium effort", async ({
 	page,
 }) => {
-	const configSnapshot = snapshot(CONFIG_PATH);
-	const defaults = savedDefaults(configSnapshot);
+	await openWorkspaceChat(page);
+	const defaults = await readDefaults(page);
 
 	try {
-		await openWorkspaceChat(page);
-		const wire = await E2eWire.connect();
-		let resolved: ModelDefault;
-		try {
-			await wire.request("settings.update", {
+		await connectFixtureProvider(page);
+		await page.keyboard.press("Escape");
+		const resolved = await withHostWire(page, async (wire): Promise<ModelDefault> => {
+			const config = await wire.request("settings.update", {
 				config: { defaultModel: null, defaultEffort: null },
 			});
-			resolved = await wire.request("model.default", {});
-		} finally {
-			wire.close();
-		}
+			expect(config).not.toHaveProperty("defaultModel");
+			expect(config).not.toHaveProperty("defaultEffort");
+			return wire.request("model.default", {});
+		});
 		expect(resolved.model).not.toBeNull();
-		const hostConfig = JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as Record<string, unknown>;
-		expect(hostConfig).not.toHaveProperty("defaultModel");
-		expect(hostConfig).not.toHaveProperty("defaultEffort");
+		const modelName = resolved.model?.name ?? "";
+		const effortLevel = resolved.thinkingLevel;
 
 		await openProviders(page);
 		await page.getByTestId("settings-nav-models").click();
 		const section = page.getByTestId("settings-models");
-		const modelSelector = section.getByTestId("model-selector");
-		await expect(modelSelector).toContainText(resolved.model?.name ?? "");
-		const effortLevel = resolved.thinkingLevel;
-		const effortSelector = section.getByTestId("thinking-selector");
-		await expect(effortSelector).toContainText(effortLevel);
+		await expect(section.getByTestId("model-selector")).toContainText(modelName);
+		await expect(section.getByTestId("thinking-selector")).toContainText(effortLevel);
 
 		await page.keyboard.press("Escape");
-		const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
-		const previousChatCount = await chatTabs.count();
-		await page.getByTestId("new-chat").first().click();
-		await expect(chatTabs).toHaveCount(previousChatCount + 1);
-		await expect(page.getByTestId("model-selector").last()).toContainText(
-			resolved.model?.name ?? "",
-		);
+		await openFreshChat(page);
+		await expect(page.getByTestId("model-selector").last()).toContainText(modelName);
 		await expect(page.getByTestId("thinking-selector").last()).toContainText(effortLevel);
+
+		await disconnectFixtureProvider(page);
 	} finally {
-		await restoreDefaults(defaults);
-		if (configSnapshot === undefined) rmSync(CONFIG_PATH, { force: true });
-		else writeFileSync(CONFIG_PATH, configSnapshot);
+		await restoreDefaults(page, defaults);
 	}
 });

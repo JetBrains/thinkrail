@@ -108,7 +108,8 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 
 	const baseURL = config?.projects[0]?.use.baseURL;
 	if (!centralMode) {
-		return E2eWire.connect()
+		if (!baseURL) return undefined;
+		return E2eWire.connect(Number(new URL(baseURL).port))
 			.then(async (wire) => {
 				try {
 					await seedE2eDefaultModel(wire);
@@ -116,9 +117,8 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 					wire.close();
 				}
 			})
-			.then(() =>
-				baseURL ? seedAnalyticsConsent(baseURL, false, true).then(() => undefined) : undefined,
-			);
+			.then(() => seedAnalyticsConsent(baseURL, false, true))
+			.then(() => undefined);
 	}
 	return E2eWire.connect()
 		.then(async (wire) => {
