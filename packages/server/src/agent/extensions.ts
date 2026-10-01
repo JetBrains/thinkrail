@@ -29,6 +29,7 @@ import {
 	candidateCompatibilitySkillRoots,
 	discoverCompatibilitySkillSources,
 } from "./skillSources";
+import { setTitleExtension } from "./titleTool";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "./trash";
 
 export type BundledExtensionFactory = ExtensionFactory;
@@ -201,6 +202,7 @@ export async function buildResourceLoader(
 		askUserQuestionExtension(askUserQuestionWaiters),
 		reviewToolExtension,
 		requestReviewExtension,
+		setTitleExtension,
 		oversizedImageGuard,
 		...extraFactories,
 	];

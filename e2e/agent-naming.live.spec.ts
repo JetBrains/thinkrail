@@ -10,7 +10,7 @@ function persistedWorkspaces(): Workspace[] {
 	return JSON.parse(readFileSync(join(E2E_DATA_DIR, "workspaces.json"), "utf8")) as Workspace[];
 }
 
-test("turn start names the workspace instantly, then the settled turn refines it: name, branch, live push", {
+test("the agent names the workspace once via set_title: name, ASCII branch, lock, live push", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(150_000);
@@ -26,11 +26,8 @@ test("turn start names the workspace instantly, then the settled turn refines it
 
 	await page
 		.getByTestId("chat-input")
-		.fill("Plan how to add a login form to this project. Answer in one short sentence, no tools.");
+		.fill("Add a one-line description of this project to the top of README.md.");
 	await page.getByTestId("chat-send").click();
-
-	await expect(name).toHaveText("Plan How To Add A", { timeout: 20_000 });
-	await expect(branchLine).toHaveText(/^plan-how-to-add-a(-\d+)?$/, { timeout: 20_000 });
 
 	const done = page
 		.locator('[data-testid="chat-message"][data-role="system"]')
@@ -39,14 +36,7 @@ test("turn start names the workspace instantly, then the settled turn refines it
 
 	const isFlagged = (): boolean =>
 		persistedWorkspaces().find((w) => w.id === before.id)?.renamed === true;
-	try {
-		await expect.poll(isFlagged, { timeout: 20_000 }).toBe(true);
-	} catch {
-		await page.getByTestId("chat-input").fill("Thanks — reply with the single word: ok");
-		await page.getByTestId("chat-send").click();
-		await expect(done).toHaveCount(2, { timeout: 80_000 });
-		await expect.poll(isFlagged, { timeout: 30_000 }).toBe(true);
-	}
+	await expect.poll(isFlagged, { timeout: 20_000 }).toBe(true);
 
 	const renamed = persistedWorkspaces().find((w) => w.id === before.id);
 	const displayName = renamed?.name ?? "";

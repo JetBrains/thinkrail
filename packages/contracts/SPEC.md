@@ -180,9 +180,8 @@ of the host.
   walk), **`ProjectPathStatus`** (a
   candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a
   `git init`, or shows an error), `Workspace` (git worktree; its
-  optional **`renamed`** flag is the naming lifecycle — absent = **not yet locked** (either pristine
-  `workspace-N`, or a *provisional* non-agentic name the host applied from the first prompt), so still
-  eligible for the agentic auto-rename; `true` = deliberately named (agentic or user), never auto-touched
+  optional **`renamed`** flag is the naming lifecycle — absent = **not yet named** (a fresh `workspace-N`, or a
+  record an older host's provisional pass left unlocked), so the agent's `set_title` may still name it; `true` = named (automatically or by the user), never auto-touched
   again; its optional **`kind: "default"`** marks the built-in per-project **Default workspace** — the
   project folder itself as a workspace, exactly one per project, pinned first in `workspace.list`,
   non-removable and non-renamable server-side; **`kind: "external"`** marks an explicitly attached,
@@ -554,8 +553,8 @@ of the host.
   / **`workspace.updated`** / **`workspace.removed`** — registry membership changes fanned out to every
   client so it stays shared domain state (architecture #9), all emitted by the server's `workspaces`
   publisher (never a per-client optimistic mutation). `created`/`updated` carry the **full persisted
-  `Workspace` snapshot** (idempotent under the transport's last-value replay, so e.g. the auto-rename's
-  naive-then-agentic pair merges by `id` — never a delta); `removed` carries a **`WorkspaceRemoved`** id
+  `Workspace` snapshot** (idempotent under the transport's last-value replay, so e.g. an agent rename
+  racing a manual one merges by `id` — never a delta); `removed` carries a **`WorkspaceRemoved`** id
   pair (`{ projectId, id }` — the record is already gone) / **`review.changed`** — a workspace's review
   state changed (emitted by the server's `reviews` publisher on every mutation — UI edits, agent
   `resolve_comment` calls, re-anchoring — so all clients converge, same pattern as the trio) /

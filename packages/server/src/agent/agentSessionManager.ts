@@ -543,18 +543,10 @@ export function getSessionRuntimeGeneration(sessionId: string): PiRuntimeGenerat
 	return hasSession(sessionId) ? sessions.get(sessionId)?.generation : undefined;
 }
 
-export function getSessionName(sessionId: string): string | undefined {
-	return sessions.get(sessionId)?.session.sessionName;
-}
-
 function transcriptMessages(session: AgentSession): TranscriptMessage[] {
 	return session.messages.filter((message) =>
 		isTranscriptMessageRole(message.role),
 	) as TranscriptMessage[];
-}
-
-export function getSessionMessagesSnapshot(sessionId: string): TranscriptMessage[] {
-	return transcriptMessages(mustGet(sessionId));
 }
 
 export async function reloadSessionResources(sessionId: string): Promise<void> {

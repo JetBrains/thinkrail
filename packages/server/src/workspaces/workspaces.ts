@@ -47,13 +47,19 @@ function emit(event: WorkspaceLifecycleEvent): void {
 	publishLifecycle?.(event);
 }
 
+const MAX_BRANCH_SLUG = 60;
+
+function branchSlug(name: string): string {
+	return name
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+/, "")
+		.slice(0, MAX_BRANCH_SLUG)
+		.replace(/-+$/, "");
+}
+
 function toBranch(name: string): string {
-	return (
-		name
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, "-")
-			.replace(/^-+|-+$/g, "") || "workspace"
-	);
+	return branchSlug(name) || "workspace";
 }
 
 const MAX_DISPLAY_NAME = 60;
@@ -384,10 +390,8 @@ export function refreshUserOwnedWorkspace(workspaceId: string): void {
 export function renameWorkspace(
 	id: string,
 	requestedName: string,
-	opts: { lock?: boolean; renameBranch?: boolean } = {},
+	opts: { branch?: string } = {},
 ): Workspace {
-	const lock = opts.lock ?? true;
-	const renameBranch = opts.renameBranch ?? true;
 	const ws = loadWorkspaces().find((w) => w.id === id);
 	if (!ws) throw new Error(`Unknown workspace: ${id}`);
 	const project = getProjects().find((p) => p.id === ws.projectId);
@@ -398,8 +402,8 @@ export function renameWorkspace(
 		throw new Error("An existing worktree cannot be renamed by ThinkRail");
 	const displayName = toDisplayName(requestedName);
 	if (!displayName) throw new Error(`Invalid workspace name: ${requestedName}`);
-	const wanted = renameBranch ? toBranch(displayName) : ws.branch;
-	const branch = wanted === ws.branch ? ws.branch : uniqueBranch(project, wanted);
+	const wanted = opts.branch === undefined ? "" : branchSlug(opts.branch);
+	const branch = !wanted || wanted === ws.branch ? ws.branch : uniqueBranch(project, wanted);
 	const branchChanged = branch !== ws.branch;
 	if (branchChanged) {
 		const moved = git(project.path, ["branch", "-m", ws.branch, branch]);
@@ -423,7 +427,7 @@ export function renameWorkspace(
 	}
 	target.name = displayName;
 	target.branch = branch;
-	if (lock) target.renamed = true;
+	target.renamed = true;
 	saveWorkspaces(all);
 	emit({ kind: "updated", workspace: target });
 	for (const w of repointed) emit({ kind: "updated", workspace: w });

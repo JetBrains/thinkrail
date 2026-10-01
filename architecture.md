@@ -125,13 +125,15 @@ dependency. This keeps test process drivers outside both launchers and the serve
 
    **Chat-title contract.** A workspace display name, its Git branch/cwd,
    and each chat title are independent identities; no rename cascades between them. A chat title is pi's
-   durable session name (`session_info`), never browser view state or a host sidecar. An unnamed chat gets
-   one best-effort title from its first accepted text prompt through a bounded, tool-free one-shot completion
-   running in parallel with the agent; unavailable or unusable generation falls back to deterministic
-   prompt-derived text and can never delay or fail the message send. The write is conditional on the pi name
-   still being absent, so any durable manual name always wins. Later turns never retitle automatically;
-   scope drift is handled by manual rename (with explicit user-triggered regeneration a possible later
-   feature). Clients hydrate `SessionSummary.title`, converge live on `session_info_changed`, and continue to
+   durable session name (`session_info`), never browser view state or a host sidecar. **The main agent names
+   its chat and workspace** through the `set_title` tool once the task is clear: it has the context and
+   the tools to read a linked PR/issue/ticket (`Review #567 <title>`), in any tracker. No helper model,
+   first-words heuristic, or host-side link parsing names anything: each of those produced names users
+   wanted to fix. Every write is conditional on the target still being unnamed, so any manual name always
+   wins and the first name is final — nothing retitles automatically. While a target is unnamed, each
+   turn's system prompt says so; guidelines alone were measurably skipped. One call may name both chat and
+   workspace so they agree, but they stay independent identities written separately — not a cascade. If
+   the agent never calls the tool, the target stays unnamed (accepted). Clients hydrate `SessionSummary.title`, converge live on `session_info_changed`, and continue to
    route by session id, so duplicate human titles are legal.
 9. **Domain state, frontend-local frame, and workspace-local views.** *Domain* state — projects,
    workspaces, **sessions + their transcripts**, terminal catalogs/PTYs, and git — is backend-owned, shared,

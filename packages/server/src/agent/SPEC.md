@@ -386,7 +386,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     returned result is not persisted ahead of attach-time repair. `disposeAllSessions` remains the synchronous
     emergency stop, but registers its best-effort child cascades
     in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
-    lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
+    lookup the host's `set_title` handler keys on); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: close session admission for
     the workspace before its first await, capture every registered parent, synchronously close its resource
     owners, and start parent abort/removal while concurrently draining preparations from the retired
@@ -428,7 +428,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `streamSimple` (extension-registered ones). `pickModel(tier)` = the model choice: `cheap` prefers a
     curated small/fast allowlist ∩ the authenticated set, else the cheapest by per-token cost; `default`
     = first available; `null` when nothing is authenticated. This is the primitive the `assist` tasks
-    (workspace naming, PR drafting) run on — the only place model **dispatch** happens outside a session.
+    (plan summaries, PR drafting) run on — the only place model **dispatch** happens outside a session.
   - `webUiContext` — `createWebUiContext(sessionId)` builds the `ExtensionUIContext` pi calls (dialogs
     round-trip to the browser, fire-and-forget methods push); `setExtUiPublisher`
     (server→client push seam), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose),
@@ -591,6 +591,22 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     streaming-deferred to `agent_settled`, exactly like the subagent tools. Because `setActiveToolsByName`
     rebuilds the system prompt from active tools' guidelines, dropping the tool drops its guidance too. Only
     the tool is gated — the `startPlanReview` button path is a separate host seam. See `submodule-server-host-plan-review`.
+    The **`set_title`** tool (`titleTool.ts`) is how chats and workspaces get named: the main agent calls it
+    with `chat_title?` / `workspace_name?` / `branch?` (English kebab slug). It is always registered and
+    active, and listed via `promptSnippet`; toggling it off after naming would rebuild the system prompt
+    mid-session and bust the prompt cache. Its `promptGuidelines` carry the naming rules: once per
+    conversation, as the **first action** of the first turn with a concrete task, even for a one-line answer
+    (or right after reading a linked PR/issue/ticket). Names are in the user's language, and a PR/issue/ticket
+    uses `<Verb> #<n> <title verbatim>`. Guidelines alone proved too weak (live e2e, Claude Opus: named 1 of
+    3 real-task turns; 0 of 3 when the prompt asked for a one-sentence answer). So while the chat (pi session
+    name) or its workspace is still unnamed, a `before_agent_start` hook adds a state-specific
+    **`pending-naming`** system-prompt section ("this chat has no title yet … call set_title before your other
+    tool calls … otherwise ignore this note"); with it the same real-task turn named 3 of 3. Its wording is
+    deliberately low-pressure: an earlier "first action … even when the answer is one sentence" made the model
+    add narration preambles on unrelated tool-only turns. The section disappears once both are named, which
+    costs one prompt-cache miss per chat, early in it. The write policy and the workspace half of that state are
+    not here: the host injects both through `setTitleToolHost({ apply, workspaceNeedsName })`, because naming
+    composes `agent` + `workspaces`.
     Cascades: `removeSession`/`disposeAllSessions` fire
     `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
     awaits it before `publishDeleted`/resolving** (safe: the cascade carries its own swallow, so a
@@ -762,6 +778,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   wires `workspaceId` → the admission context); the subagent-policy seams
   **`setSubagentsEnabledResolver`** + **`refreshSubagentTools`** (host resolves the effective global default
   plus workspace override; manager owns live-session activation timing);
+  the `set_title` seam (`setTitleToolHost` + `TitleToolHost`/`SET_TITLE_TOOL_NAME`/`SetTitleParams`);
   the bundled-artifact seam (`registerBundledRuntime` +
   `BundledExtensions`/`BundledExtensionFactory`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
@@ -796,18 +813,12 @@ session opens its exact transcript with `SessionManager.open(...).appendSessionI
 agent or resolving a model. Both paths publish the same `session_info_changed` Pi event, while
 `SessionSummary.title` remains the hydration projection.
 
-`getSessionName(sessionId)` exposes only a live session's current Pi name so the host can skip title-model
-work once one exists. `getSessionMessagesSnapshot(sessionId)` returns a copied, renderable-role view of that
-same live Pi transcript without attaching or awaiting; the host captures it before dispatch solely to decide,
-after acceptance, whether an earlier title-eligible prompt already consumed automatic naming. A reattached
-session therefore carries that decision through a host restart without title provenance or a sidecar.
-
 The guarded write remains authoritative across the async race. `onlyIfUnnamed` performs the check immediately
-beside the append and is the auto-title compare-and-set; the manual wire mutation is unconditional. Thus an
-async helper cannot overwrite a durable name that landed while it was running. No generated/manual provenance
-or title sidecar belongs here—the absent-vs-present pi name plus the durable transcript are sufficient because
-automatic naming gets one opportunity. The architecture's accepted no-cross-process coordination rule still
-applies.
+beside the append and is the compare-and-set the `set_title` handler uses (its `false` return is how the
+handler learns the chat was already named); the manual wire mutation is unconditional. So an agent title can
+never overwrite a durable name, and the first name is final. No generated/manual provenance or title sidecar
+belongs here: the absent-vs-present pi name is sufficient. The architecture's accepted no-cross-process
+coordination rule still applies.
 
 ## Chat Resources integration
 

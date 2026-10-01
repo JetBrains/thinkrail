@@ -34,6 +34,7 @@ import {
 	setSessionResourcesPublisher,
 	setSkillAdmissionResolver,
 	setSubagentsEnabledResolver,
+	setTitleToolHost,
 	settleSessionsForShutdown,
 	syncSessionActivity,
 } from "../agent";
@@ -81,12 +82,6 @@ import {
 	stopAllWatches,
 } from "../watch";
 import { getWorkspace, refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
-import {
-	isPromptCommitted,
-	isSettledTurn,
-	maybeAutoRenameWorkspace,
-	maybeNaiveNameWorkspace,
-} from "./autoRename";
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -108,6 +103,7 @@ import { runObservation } from "./runAnalytics";
 import { resolveSubagentsEnabled } from "./subagentPolicy";
 import { taskObservation } from "./taskAnalytics";
 import { terminalDeliveryForSendStatus } from "./terminalSend";
+import { titleToolHost } from "./titleTool";
 import { markClientStale, reconcilePendingReviewsOnBoot } from "./todoReview";
 
 export interface CreateServerOptions {
@@ -578,6 +574,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		resolvedBody: resolveCommentFromAgent(sessionId, commentId, note).body,
 	}));
 	installRequestReviewSeam();
+	setTitleToolHost(titleToolHost);
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config, appliedUpdate) => {
@@ -644,13 +641,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			WS_CHANNELS.piEvent,
 			JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload }),
 		);
-		if (isPromptCommitted(payload.event)) {
-			const workspaceId = getSessionWorkspaceId(payload.sessionId);
-			if (workspaceId) void maybeNaiveNameWorkspace(payload.sessionId, workspaceId);
-		} else if (isSettledTurn(payload.event)) {
-			const workspaceId = getSessionWorkspaceId(payload.sessionId);
-			if (workspaceId) void maybeAutoRenameWorkspace(payload.sessionId, workspaceId);
-		}
 		if (isTodoToolEnd(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			const observeCompletion = taskObservation.toolFinished(payload.sessionId, payload.event);

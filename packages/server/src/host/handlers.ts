@@ -19,7 +19,6 @@ import type {
 	TemplateScope,
 	ThinkingLevel,
 	TodoStatus,
-	TranscriptMessage,
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
@@ -37,11 +36,8 @@ import {
 	followUpSession,
 	getSessionCommands,
 	getSessionMessages,
-	getSessionMessagesSnapshot,
-	getSessionName,
 	getSessionResources,
 	getSessionStats,
-	getSessionWorkspaceId,
 	hasSession,
 	isHostResourceId,
 	isPiSessionId,
@@ -182,7 +178,6 @@ import {
 } from "../workspaces";
 import { ackSend } from "./ackSend";
 import { sessionProviderAnalytics, trackChatStarted } from "./authAnalytics";
-import { maybeAutoNameChat } from "./autoRename";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -230,15 +225,6 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 	}
 }
 
-function captureChatAutoNameHistory(sessionId: string): readonly TranscriptMessage[] | null {
-	if (getSessionName(sessionId) !== undefined) return null;
-	try {
-		return getSessionMessagesSnapshot(sessionId);
-	} catch {
-		return null;
-	}
-}
-
 async function sendUserMessage(
 	mode: SendMode,
 	sessionId: string,
@@ -248,14 +234,7 @@ async function sendUserMessage(
 ): Promise<{ ok: true }> {
 	const control = isControlMessage(text);
 	const provider = control ? undefined : sessionProviderAnalytics(sessionId);
-	const priorMessages = control ? null : captureChatAutoNameHistory(sessionId);
 	await ackSend(runObservation.send(sessionId, control ? "internal" : "user", operation));
-	if (!control) {
-		const workspaceId = getSessionWorkspaceId(sessionId);
-		if (workspaceId && priorMessages) {
-			void maybeAutoNameChat(sessionId, workspaceId, text, { priorMessages });
-		}
-	}
 	if (provider) {
 		track({
 			name: "message_sent",
@@ -444,7 +423,7 @@ const handlers: Record<string, Handler> = {
 	},
 	"workspace.rename": (params) => {
 		const p = params as { id: string; name: string };
-		return renameWorkspace(p.id, p.name, { lock: true, renameBranch: false });
+		return renameWorkspace(p.id, p.name);
 	},
 	"workspace.list": async (params) => {
 		const p = params as { projectId: string; includeDiffStats?: boolean };

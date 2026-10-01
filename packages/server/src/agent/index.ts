@@ -48,4 +48,10 @@ export {
 export * from "./sessionRepair";
 export type { SkillAdmissionContext, SkillDecision, SkillFacts } from "./skillAdmission";
 export { isProjectSkillPath } from "./skillSources";
+export {
+	SET_TITLE_TOOL_NAME,
+	type SetTitleParams,
+	setTitleToolHost,
+	type TitleToolHost,
+} from "./titleTool";
 export * from "./webUiContext";

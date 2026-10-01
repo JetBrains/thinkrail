@@ -382,7 +382,7 @@ test("createWorkspace marks a user-named workspace renamed; an auto-named one st
 
 test("renameWorkspace moves the branch in place: record + git follow, the worktree dir does not", async () => {
 	const ws = await createWorkspace("p1");
-	const renamed = renameWorkspace(ws.id, "add login flow");
+	const renamed = renameWorkspace(ws.id, "add login flow", { branch: "add login flow" });
 
 	expect(renamed.name).toBe("add login flow");
 	expect(renamed.branch).toBe("add-login-flow");
@@ -396,7 +396,7 @@ test("renameWorkspace moves the branch in place: record + git follow, the worktr
 	expect((await worktrees())[0]?.branch).toBe("add-login-flow");
 });
 
-test("renameWorkspace with renameBranch:false changes only the display name", async () => {
+test("renameWorkspace without a branch slug changes only the display name", async () => {
 	const ws = await createWorkspace("p1");
 	const sibling = await createWorkspace("p1", undefined, ws.branch);
 	git(repo, "branch", "release");
@@ -405,10 +405,7 @@ test("renameWorkspace with renameBranch:false changes only the display name", as
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((event) => events.push(event));
 
-	const renamed = renameWorkspace(ws.id, "Published Workspace", {
-		lock: true,
-		renameBranch: false,
-	});
+	const renamed = renameWorkspace(ws.id, "Published Workspace");
 
 	expect(renamed).toMatchObject({
 		name: "Published Workspace",
@@ -428,26 +425,27 @@ test("renameWorkspace with renameBranch:false changes only the display name", as
 	expect(listed.find((workspace) => workspace.id === sibling.id)?.baseBranch).toBe(ws.branch);
 });
 
-test("renameWorkspace with lock:false renames name + branch but leaves renamed unset (provisional)", async () => {
+test("renameWorkspace keeps any-script display names and derives the branch only from the slug", async () => {
 	const ws = await createWorkspace("p1");
-	const renamed = renameWorkspace(ws.id, "add login flow", { lock: false });
+	const renamed = renameWorkspace(ws.id, "Ревью #567: Добавить зум", {
+		branch: "Review 567 add zoom",
+	});
+	expect(renamed).toMatchObject({
+		name: "Ревью #567: Добавить зум",
+		branch: "review-567-add-zoom",
+		renamed: true,
+	});
+	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe("review-567-add-zoom");
 
-	expect(renamed.name).toBe("add login flow");
-	expect(renamed.branch).toBe("add-login-flow");
-	expect(renamed.renamed).toBeUndefined();
-	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe("add-login-flow");
-	expect((await worktrees())[0]?.renamed).toBeUndefined();
-
-	const locked = renameWorkspace(ws.id, "final name");
-	expect(locked.name).toBe("final name");
-	expect(locked.branch).toBe("final-name");
-	expect(locked.renamed).toBe(true);
+	const other = await createWorkspace("p1");
+	const kept = renameWorkspace(other.id, "Только имя", { branch: "Ёжик" });
+	expect(kept).toMatchObject({ name: "Только имя", branch: other.branch, renamed: true });
 });
 
 test("renameWorkspace suffixes on collision with an existing branch", async () => {
 	git(repo, "branch", "add-login-flow");
 	const ws = await createWorkspace("p1");
-	const renamed = renameWorkspace(ws.id, "add login flow");
+	const renamed = renameWorkspace(ws.id, "add login flow", { branch: "add login flow" });
 	expect(renamed.branch).toBe("add-login-flow-2");
 	expect(renamed.name).toBe("add login flow");
 });
@@ -457,7 +455,7 @@ test("renameWorkspace re-points siblings basing their diff on the old branch", a
 	const dependent = await createWorkspace("p1", "on top", first.branch);
 	expect(dependent.baseBranch).toBe(first.branch);
 
-	renameWorkspace(first.id, "core work");
+	renameWorkspace(first.id, "core work", { branch: "core work" });
 	const after = await listWorkspaces("p1");
 	expect(after.find((w) => w.id === dependent.id)?.baseBranch).toBe("core-work");
 	expect(after.find((w) => w.id === first.id)?.branch).toBe("core-work");
@@ -532,7 +530,7 @@ test("renameWorkspace re-points a sibling whose diff TARGET was the renamed bran
 	const dependent = await createWorkspace("p1");
 	setWorkspaceDiffBase(dependent.id, first.branch);
 
-	renameWorkspace(first.id, "core work");
+	renameWorkspace(first.id, "core work", { branch: "core work" });
 	expect(listWorkspaceRecords("p1").find((w) => w.id === dependent.id)?.diffBase).toBe("core-work");
 });
 
@@ -545,7 +543,7 @@ test("renameWorkspace broadcasts every record it re-pointed, not only the target
 
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((e) => events.push(e));
-	renameWorkspace(first.id, "core work");
+	renameWorkspace(first.id, "core work", { branch: "core work" });
 
 	const updated = events.filter((e) => e.kind === "updated").map((e) => e.workspace);
 	expect(updated.map((w) => w.id).sort()).toEqual([first.id, basedOn.id, targeting.id].sort());
@@ -590,10 +588,10 @@ test("renameWorkspace throws on an unknown workspace", async () => {
 
 test("renameWorkspace also suffixes when the candidate's worktree dir is occupied (branch free)", async () => {
 	const first = await createWorkspace("p1");
-	renameWorkspace(first.id, "real name");
+	renameWorkspace(first.id, "real name", { branch: "real name" });
 
 	const second = await createWorkspace("p1");
-	const renamed = renameWorkspace(second.id, "workspace 1");
+	const renamed = renameWorkspace(second.id, "workspace 1", { branch: "workspace 1" });
 	expect(renamed.branch).toBe("workspace-1-2");
 	expect(renamed.name).toBe("workspace 1");
 });
@@ -601,7 +599,7 @@ test("renameWorkspace also suffixes when the candidate's worktree dir is occupie
 test("creating after a rename skips the freed name whose worktree dir is still occupied", async () => {
 	const ws = await createWorkspace("p1");
 	expect(ws.branch).toBe("workspace-1");
-	renameWorkspace(ws.id, "real name");
+	renameWorkspace(ws.id, "real name", { branch: "real name" });
 
 	const next = await createWorkspace("p1");
 	expect(next.branch).toBe("workspace-2");
@@ -631,7 +629,7 @@ test("membership mutations emit lifecycle events through the injected publisher"
 	setWorkspacePublisher((e) => events.push(e));
 
 	const ws = await createWorkspace("p1");
-	renameWorkspace(ws.id, "my feature");
+	renameWorkspace(ws.id, "my feature", { branch: "my feature" });
 	expect(forgetWorkspace(ws.id)).not.toBeNull();
 	expect(forgetWorkspace(ws.id)).toBeNull();
 

@@ -72,21 +72,21 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   scannable by the spec tools (the path convention lives in `@thinkrail/shared/paths`; see
   [[submodule-workflow-skills]]'s artifacts rules); a **user-supplied name is the display name** (casing +
   punctuation preserved via `toDisplayName`; the branch is derived from it) and **sets `renamed: true`** at
-  create — the user already chose, so the auto-namer never touches it; auto-`workspace-N` leaves it unset,
+  create — the user already chose, so automatic naming never touches it; auto-`workspace-N` leaves it unset,
   where `name === branch`; **re-reads the registry after the awaited fallback fetch** before appending —
   the pre-await snapshot is stale by then, and saving it would clobber a concurrent list's Default-ensure
   (same discipline as `renameWorkspace`'s re-load after its git subprocess)),
-  `renameWorkspace` (**sync**; sets the sanitized, casing-preserved display `name`; `opts.lock` defaults
-  `true` and sets `renamed: true`, marking the choice deliberate so auto-naming never touches it again.
-  **`opts.renameBranch` defaults `true`** for the existing provisional + agentic auto-rename callers: the
-  branch is derived via `toBranch`, uniqued against refs + worktree dirs, and moved with `git branch -m` while
-  the **worktree dir never moves** (pi keys sessions and terminals/tabs by that exact cwd). The branch-moving
-  path re-points sibling records whose `baseBranch` or `diffBase` named the old branch, re-loads the registry
-  after the Git subprocess so a concurrent removal is not resurrected, saves once, and emits `updated` for
-  every changed record. The host's provisional naive pass combines `lock: false` with this default so the
-  settled-turn agentic pass can still refine it. The manual wire method instead passes
-  **`{ lock: true, renameBranch: false }`**: it changes only the display label, keeps `branch`, `worktreePath`,
-  `baseBranch`, and `diffBase` untouched, performs no Git mutation, and emits one full-snapshot `updated`.
+  `renameWorkspace` (**sync**; sets the sanitized, casing- and script-preserving display `name` and always
+  sets `renamed: true`, so automatic naming never touches it again. **`opts.branch`** is the agent's English
+  slug from `set_title`: when present, the branch becomes the slug's ASCII kebab form, clamped to 60 (the display name
+  may be any script, so the branch is never derived from it), uniqued against refs + worktree dirs, and moved with
+  `git branch -m`, while the **worktree dir never moves** (pi keys sessions and terminals/tabs by that exact
+  cwd); a slug that sanitizes to nothing keeps the current branch. The branch-moving path re-points sibling
+  records whose `baseBranch` or `diffBase` named the old branch, re-loads the registry after the Git
+  subprocess so a concurrent removal is not resurrected, saves once, and emits `updated` for every changed
+  record. Without `opts.branch` — the manual wire method — only the display label changes: `branch`,
+  `worktreePath`, `baseBranch`, and `diffBase` stay untouched, no Git mutation runs, and one full-snapshot
+  `updated` is emitted.
   **`name` and `branch` deliberately differ** after such a rename — the name is display-only and may repeat;
   the branch shown beneath it disambiguates (see [[submodule-web-panels]]). Unknown/default/external ids and
   invalid names still throw; callers decide presentation),
@@ -175,8 +175,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   the module's persist-then-publish order everywhere else. **Non-removable + non-renamable,
   enforced here, not just hidden in the UI:** `forgetWorkspace` and `renameWorkspace` **throw** on
   `kind: "default"` — forget would hand the archive teardown's `rm -rf` fallback the project folder,
-  rename would `git branch -m` the user's real branch; the record carries `renamed: true` so both
-  auto-rename passes stay away as belt-and-suspenders.
+  rename would `git branch -m` the user's real branch; the record carries `renamed: true` so
+  `set_title` stays away as belt-and-suspenders.
 - **Initial-terminal provisioning is a durable host handshake.** Every workspace record first persisted by
   `createWorkspace`, `openExistingWorktree`, or Default ensure carries optional literal
   `initialTerminalPending: true`. `host` idempotently reserves the deterministic process-free terminal tab,
@@ -198,12 +198,12 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   existing (possibly tracked, possibly customized) file is theirs to keep, and `O_EXCL` never follows
   a (possibly dangling) symlink; seeding fills the gap, never overwrites (pinned by regression tests).
 - **Lifecycle events:** every membership mutation — `createWorkspace` (`created`), `renameWorkspace`
-  (`updated`, both the naive and agentic auto-rename passes since both go through it), `forgetWorkspace`
+  (`updated`, the agent's `set_title` included since it goes through it), `forgetWorkspace`
   (`removed`) — emits a `WorkspaceLifecycleEvent` through an **injected publisher** (`setWorkspacePublisher`,
   the same inversion `terminal`/`agent`/`auth` use; `null` in unit tests / the e2e reset → silent no-op).
   The module stays ignorant of WS channels: it emits a domain event (`created`/`updated` carry the record,
   `removed` carries `{ projectId, id }`) and the host maps `kind` → `workspace.*` channel. This makes the
-  module the **single source of workspace lifecycle pushes** (the auto-rename tee no longer pushes — rename
+  module the **single source of workspace lifecycle pushes** (the naming handler never pushes — rename
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
 - **Public surface (barrel):** `createWorkspace`, `listExistingWorktrees`, `openExistingWorktree`,
   `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,
