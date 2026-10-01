@@ -10,6 +10,7 @@ import {
 	parseTupleKey,
 	platformShortcutLabel,
 	projectRelativePath,
+	relativeTime,
 	shallowEqualArrays,
 	stripFrontmatter,
 	tupleKey,
@@ -171,4 +172,12 @@ test("shallowEqualArrays compares element-wise and treats absent as unequal", ()
 	expect(shallowEqualArrays([Number.NaN], [Number.NaN])).toBe(true);
 	expect(shallowEqualArrays(undefined, [])).toBe(false);
 	expect(shallowEqualArrays(undefined, undefined)).toBe(true);
+});
+
+test("relativeTime measures against the given now, not the clock", () => {
+	const now = 1_000_000_000_000;
+	expect(relativeTime(now - 59_000, now)).toBe("just now");
+	expect(relativeTime(now - 5 * 60_000, now)).toBe("5m ago");
+	expect(relativeTime(now - 3 * 3_600_000, now)).toBe("3h ago");
+	expect(relativeTime(now - 2 * 86_400_000, now)).toBe("2d ago");
 });
