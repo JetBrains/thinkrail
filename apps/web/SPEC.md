@@ -99,6 +99,9 @@ these conventions:
 - A default parameter never reads a member expression (`caret = text.length`); resolve it in the body.
 - A closure never applies `++`/`--` to a variable it captures; write `attempts += 1`.
 - A `useMemo`/`useCallback` lists every dependency it reads, or the compiler cannot preserve it.
+- A `useMemo` dependency the callback does not read is dropped, so a memo cannot reset on a key it ignores
+  (`useMemo(() => new Map(), [key])` builds one map per mount). Reset through state keyed on the value instead
+  (`ChatView`'s row-height estimate cache).
 - Render never reads a value the compiler cannot see change — `matchMedia`, storage, `Date.now`, a module
   singleton. It arrives through `useSyncExternalStore` or state: `AppearanceSettings` subscribes with
   `onSystemAppearanceChange`, and relative-time labels take `now` from `components/useNow`.

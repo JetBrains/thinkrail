@@ -310,9 +310,15 @@ export default function ChatView({
 			if (retry) clearTimeout(retry);
 		};
 	}, [directActivationTick, readyCompletionId, sessionId]);
-	const rowHeightEstimateCache = useMemo(() => new Map<string, number>(), [chatMessageOrder]);
+	const [rowHeightEstimateCache, setRowHeightEstimateCache] = useState(() => ({
+		messageOrder: chatMessageOrder,
+		heights: new Map<string, number>(),
+	}));
+	if (rowHeightEstimateCache.messageOrder !== chatMessageOrder) {
+		setRowHeightEstimateCache({ messageOrder: chatMessageOrder, heights: new Map() });
+	}
 	const rowHeightEstimates = useMemo(
-		() => estimateChatRowHeights(rows, rowHeightEstimateCache),
+		() => estimateChatRowHeights(rows, rowHeightEstimateCache.heights),
 		[rows, rowHeightEstimateCache],
 	);
 	const visibleAnchorRowId = useRef<string | null>(null);
