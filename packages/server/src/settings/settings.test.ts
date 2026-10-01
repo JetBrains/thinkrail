@@ -9,7 +9,13 @@ import {
 	type LayoutPreset,
 } from "@thinkrail/contracts";
 import { validateCustomLayoutPresets } from "./layoutPresets";
-import { getConfig, resetConfigCache, setSettingsPublisher, updateConfig } from "./settings";
+import {
+	getConfig,
+	resetConfigCache,
+	type SettingsPublisher,
+	setSettingsPublisher,
+	updateConfig,
+} from "./settings";
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
@@ -226,11 +232,12 @@ test("invalid theme updates are rejected and a legacy theme choice exits system 
 	expect(fixed.systemThemePair).toEqual(pair);
 });
 
-test("updateConfig broadcasts the new config through the injected publisher", () => {
-	const seen: string[] = [];
-	setSettingsPublisher((c) => seen.push(c.theme));
-	updateConfig({ theme: "acme.broadcast" });
-	expect(seen).toEqual(["acme.broadcast"]);
+test("updateConfig publishes both the merged config and the successful applied update", () => {
+	const seen: Array<{ config: AppConfig; update: AppConfigUpdate }> = [];
+	const publisher: SettingsPublisher = (config, update) => seen.push({ config, update });
+	setSettingsPublisher(publisher);
+	const config = updateConfig({ theme: "acme.broadcast" });
+	expect(seen).toEqual([{ config, update: { theme: "acme.broadcast" } }]);
 });
 
 test("a null publisher makes updates silent no-ops (still persisted)", () => {
@@ -284,26 +291,26 @@ test("retired chat message order is stripped from disk and stale updates", () =>
 	expect(onDisk).not.toHaveProperty("chatMessageOrder");
 });
 
-test("reviewAutoFix defaults on; an old config without it loads the default; toggling off round-trips", () => {
-	expect(DEFAULT_CONFIG.reviewAutoFix).toBe(true);
+test("reviewAutoFix defaults off; an old config without it loads the default; toggling on round-trips", () => {
+	expect(DEFAULT_CONFIG.reviewAutoFix).toBe(false);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
-	resetConfigCache();
-	expect(getConfig().reviewAutoFix).toBe(true);
-	const next = updateConfig({ reviewAutoFix: false });
-	expect(next.reviewAutoFix).toBe(false);
 	resetConfigCache();
 	expect(getConfig().reviewAutoFix).toBe(false);
+	const next = updateConfig({ reviewAutoFix: true });
+	expect(next.reviewAutoFix).toBe(true);
+	resetConfigCache();
+	expect(getConfig().reviewAutoFix).toBe(true);
 });
 
-test("agentReviewEnabled defaults on; an old config loads the default; toggling off round-trips; non-boolean rejected", () => {
-	expect(DEFAULT_CONFIG.agentReviewEnabled).toBe(true);
+test("agentReviewEnabled defaults off; an old config loads the default; toggling on round-trips; non-boolean rejected", () => {
+	expect(DEFAULT_CONFIG.agentReviewEnabled).toBe(false);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
 	resetConfigCache();
-	expect(getConfig().agentReviewEnabled).toBe(true);
-	const next = updateConfig({ agentReviewEnabled: false });
-	expect(next.agentReviewEnabled).toBe(false);
-	resetConfigCache();
 	expect(getConfig().agentReviewEnabled).toBe(false);
+	const next = updateConfig({ agentReviewEnabled: true });
+	expect(next.agentReviewEnabled).toBe(true);
+	resetConfigCache();
+	expect(getConfig().agentReviewEnabled).toBe(true);
 	const invalid = { agentReviewEnabled: "nope" } as unknown as AppConfigUpdate;
 	expect(() => updateConfig(invalid)).toThrow("agentReviewEnabled must be a boolean");
 });

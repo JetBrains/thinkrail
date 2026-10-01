@@ -230,6 +230,18 @@ stateDiagram-v2
 | Abort / dispose | `signal` in `RunOptions` (tool abort, engine fail-fast) and `ChildHandle.abort()` both cancel the active run through one run-scoped signal. The handle path must cancel a run that is still **queued**, not merely call `abort()` on its idle pi session: queued cancellation resolves immediately while the eventual slot grant is handed straight back, and no provider work starts (PR #302 review finding, regression-pinned). A running cancellation aborts the pi session. `ChildHandle.dispose()` first marks the child disposed, cancels through that same signal, and awaits the run's terminal settlement before disposing the pi session and removing the child; a queued run therefore cannot hang behind a sibling or emit terminal lifecycle work after `child-disposed` (follow-up PR #302 review finding, regression-pinned). Every child owns one shared teardown promise: concurrent handle disposal and parent disposal both await it, so `disposed` means admission is closed rather than teardown is already complete. Parent dispose → `disposeChildrenOf` cascade, which includes already-disposing children still registered to that parent, then **marks every captured child disposed and signals every active run synchronously before awaiting any shared teardown**; it cannot return while child work is still settling (second follow-up PR #302 review finding, regression-pinned). Aborting a running child frees its semaphore slot, and an unmarked or uncancelled queued sibling could otherwise issue provider work or remain pending during the cascade. A mid-turn parent abort kills only awaited (foreground) runs via their signals; detached runs survive turn aborts. |
 | Restart | Foreground dangling toolCalls → healed by the embedder's generic transcript repair (ThinkRail: `repairDanglingToolCalls`). Registry is in-memory: detached runs are lost (accepted); transcripts remain on disk and stay openable. |
 
+A parent id has a replaceable in-memory lifetime. `disposeChildrenOf(parent)` rotates that lifetime
+synchronously, detaches its child set, semaphore and fallback runtime, signals every admitted child,
+and awaits both those children and child preparations that started in the retired lifetime. A later
+parent with the same id receives a fresh lifetime immediately; cleanup from the retired one cannot
+remove or admit children into the replacement. A preparation rechecks its captured lifetime after
+assembly and disposes the unregistered session before rejecting when stale.
+
+`ChildHandle.abort(reason?)` installs cancellation intent synchronously, including for queued work;
+its promise may remain pending while Pi settles an active provider/tool run. Callers that acknowledge
+intent rather than settlement may detach that promise, but must attach a rejection handler and continue
+to treat lifecycle snapshots as terminal authority.
+
 ### Storage & lineage
 
 - **Hidden children persist under the embedder-bound delegation root, never pi's default sessions
@@ -330,6 +342,24 @@ sequencing (`prepare` names the child id, which exists only after creation) is p
 consumer, the ThinkRail worktree provider. Report-back from a subsession to its parent (when
 subsessions land) is pi-native (`sendMessage`/`followUp`) — no core provision needed beyond
 lineage.
+
+## User cancellation
+
+`ChildHandle.abort(reason?: string)` records its optional plain-string reason in the active run's
+`DelegationRunDetails.abortReason`, preserved in snapshots, outcomes and terminal events. The first
+accepted cancellation wins, including one with no reason; caller signals, disposal and turn caps
+participate in that ordering without adding a reason. Terminal runs are unchanged, and each new run
+resets both the cancellation latch and reason. Reasons are metadata, not lifecycle statuses.
+
+Child creation revalidates parent liveness after asynchronous session/extension preparation, before
+registering the handle. If the embedder closed that parent during preparation, the unregistered child
+is disposed and creation fails with `unknown-parent`. This prevents an in-flight birth from escaping
+a parent's already-captured teardown list without introducing a second pending-child registry.
+
+The host uses `"user"` for explicit user cancellation; [[module-pi-subagents]] owns its completion
+policy. No UI dependency or second registry is involved. Queued cancellation settles immediately,
+returns any eventual slot grant and starts no provider work; running cancellation uses the existing
+run-scoped signal. Non-user paths retain their behavior.
 
 ## Decision log (how the contract got its shape)
 

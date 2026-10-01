@@ -1,5 +1,6 @@
 import type { NativeUpdateBridge, NativeUpdateState } from "@thinkrail/contracts";
 import Electrobun, { Electroview } from "electrobun/view";
+import { handlePageZoomShortcut } from "./pageZoom";
 import {
 	INITIAL_DESKTOP_PREFERENCES_GLOBAL,
 	isDesktopPreferenceKey,
@@ -38,6 +39,11 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 });
 const electroview = new Electrobun.Electroview({ rpc });
 installTitleBarDoubleClick(window, () => electroview.rpc?.send.titleBarDoubleClick());
+window.addEventListener("keydown", (event) =>
+	handlePageZoomShortcut(event, navigator.platform, (action) => {
+		electroview.rpc?.send.pageZoomRequested({ action });
+	}),
+);
 const globals = globalThis as typeof globalThis & Record<string, unknown>;
 const updateBridge: NativeUpdateBridge = Object.freeze({
 	getState: () => rpc.request.getUpdateState(),

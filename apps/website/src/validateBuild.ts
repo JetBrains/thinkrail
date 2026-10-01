@@ -19,6 +19,8 @@ const desktopDownloadUrls = [
 	"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-arm64.tar.gz",
 ] as const;
 
+const analyticsFreePages = new Set(["404.html", "attribution/claim/index.html"]);
+
 function occurrences(content: string, value: string): number {
 	return content.split(value).length - 1;
 }
@@ -36,6 +38,28 @@ function stylesheetUrls(content: string): Set<string> {
 	);
 }
 
+async function pageRuntimeContent(distDirectory: string, html: string): Promise<string> {
+	const pending = attributeValues(html, ["src"]).filter(
+		(value) => value.startsWith("/") && value.endsWith(".js"),
+	);
+	const visited = new Set<string>();
+	const scripts: string[] = [];
+	while (pending.length > 0) {
+		const url = pending.pop();
+		if (url === undefined || visited.has(url)) continue;
+		visited.add(url);
+		const content = await Bun.file(`${distDirectory}/${url.replace(/^\/+/, "")}`).text();
+		scripts.push(content);
+		for (const match of content.matchAll(/(?:from|import)\s*["']([^"']+\.js)["']/g)) {
+			const imported = match[1];
+			if (imported === undefined) continue;
+			const importedUrl = new URL(imported, `https://thinkrail.ai${url}`).pathname;
+			if (!visited.has(importedUrl)) pending.push(importedUrl);
+		}
+	}
+	return [html, ...scripts].join("\n");
+}
+
 async function outputPathExists(distDirectory: string, url: string): Promise<boolean> {
 	const pathname = new URL(url, "https://thinkrail.ai").pathname;
 	const relativePath = pathname.replace(/^\/+/, "");
@@ -43,6 +67,28 @@ async function outputPathExists(distDirectory: string, url: string): Promise<boo
 		? [`${distDirectory}/${relativePath}index.html`]
 		: [`${distDirectory}/${relativePath}`, `${distDirectory}/${relativePath}/index.html`];
 	return (await Promise.all(candidates.map((path) => Bun.file(path).exists()))).some(Boolean);
+}
+
+export function validateAnalyticsPages(
+	pages: readonly { path: string; runtimeContent: string }[],
+): string[] {
+	const failures: string[] = [];
+	for (const { path, runtimeContent } of pages) {
+		const expectedLoaders = analyticsFreePages.has(path) ? 0 : 1;
+		if (occurrences(runtimeContent, "data-posthog-project") !== expectedLoaders) {
+			failures.push(`${path}: expected ${expectedLoaders} PostHog loaders`);
+		}
+		if (occurrences(runtimeContent, "data-gtm-container") !== expectedLoaders) {
+			failures.push(`${path}: expected ${expectedLoaders} GTM loaders`);
+		}
+		if (
+			expectedLoaders === 0 &&
+			(runtimeContent.includes("content_viewed") || runtimeContent.includes("attribution_claimed"))
+		) {
+			failures.push(`${path}: browser analytics leaked`);
+		}
+	}
+	return failures;
 }
 
 export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`) {
@@ -55,17 +101,27 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		}
 	}
 
+	const htmlPages = new Map<string, string>();
+	const htmlGlob = new Bun.Glob("**/*.html");
+	for await (const path of htmlGlob.scan({ cwd: distDirectory, onlyFiles: true })) {
+		htmlPages.set(path, await Bun.file(`${distDirectory}/${path}`).text());
+	}
+	const requiredPage = (path: string): string => {
+		const html = htmlPages.get(path);
+		if (html === undefined) throw new Error(`Missing website HTML output: ${path}`);
+		return html;
+	};
+	requiredPage("404.html");
 	const pages = {
-		landing: await Bun.file(`${distDirectory}/index.html`).text(),
-		blog: await Bun.file(`${distDirectory}/blog/index.html`).text(),
-		introducingThinkRail: await Bun.file(
-			`${distDirectory}/blog/introducing-thinkrail/index.html`,
-		).text(),
-		vibecoding: await Bun.file(`${distDirectory}/vibecoding/index.html`).text(),
-		agenticDevelopment: await Bun.file(`${distDirectory}/agentic-development/index.html`).text(),
+		landing: requiredPage("index.html"),
+		blog: requiredPage("blog/index.html"),
+		introducingThinkRail: requiredPage("blog/introducing-thinkrail/index.html"),
+		vibecoding: requiredPage("vibecoding/index.html"),
+		agenticDevelopment: requiredPage("agentic-development/index.html"),
+		claim: requiredPage("attribution/claim/index.html"),
 	};
 	const islandPages = ["vibecoding", "agenticDevelopment"] as const;
-	const staticPages = ["landing", "blog", "introducingThinkRail"] as const;
+	const staticPages = ["landing", "blog", "introducingThinkRail", "claim"] as const;
 	const installPages = [
 		{ name: "landing", html: pages.landing, expectedDownloads: 2 },
 		{
@@ -97,6 +153,12 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	}
 	if (pages.agenticDevelopment.includes("Vibe code without losing control.")) {
 		failures.push("agenticDevelopment: hero title fell back to the vibecoding default");
+	}
+	for (const required of [
+		'<meta name="robots" content="noindex, nofollow, noarchive">',
+		'<meta name="referrer" content="no-referrer">',
+	]) {
+		if (!pages.claim.includes(required)) failures.push(`claim: missing ${required}`);
 	}
 
 	for (const url of desktopDownloadUrls) {
@@ -152,13 +214,13 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		}
 	}
 
+	const analyticsPages: { path: string; runtimeContent: string }[] = [];
+	for (const [path, html] of htmlPages) {
+		analyticsPages.push({ path, runtimeContent: await pageRuntimeContent(distDirectory, html) });
+	}
+	failures.push(...validateAnalyticsPages(analyticsPages));
+
 	for (const [name, html] of Object.entries(pages)) {
-		if (occurrences(html, "data-posthog-project") !== 1) {
-			failures.push(`${name}: expected one PostHog loader`);
-		}
-		if (occurrences(html, "data-gtm-container") !== 1) {
-			failures.push(`${name}: expected one GTM loader`);
-		}
 		for (const url of new Set(
 			attributeValues(html, ["src", "href", "component-url", "renderer-url"]).filter((value) =>
 				value.startsWith("/"),
@@ -202,6 +264,20 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	}
 	if (sitemap.includes("https://thinkrail.ai/agentic-development/")) {
 		failures.push("sitemap lists the non-canonical agentic-development route");
+	}
+	if (sitemap.includes("https://thinkrail.ai/attribution/claim/")) {
+		failures.push("sitemap lists the non-indexed attribution claim route");
+	}
+	const headers = await Bun.file(`${distDirectory}/_headers`).text();
+	for (const required of [
+		"/attribution/claim/*",
+		"Cache-Control: no-store",
+		"Referrer-Policy: no-referrer",
+		"X-Robots-Tag: noindex, nofollow, noarchive",
+		"Content-Security-Policy: frame-ancestors 'none'",
+		"X-Frame-Options: DENY",
+	]) {
+		if (!headers.includes(required)) failures.push(`headers: missing ${required}`);
 	}
 
 	if (failures.length > 0) {

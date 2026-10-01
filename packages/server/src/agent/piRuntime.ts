@@ -3,6 +3,7 @@ import {
 	DefaultResourceLoader,
 	getAgentDir,
 	ModelRuntime,
+	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { logger } from "../log";
 
@@ -23,6 +24,10 @@ export type PreparePiRuntimeGenerationResult =
 	| { outcome: "failed"; reason: "candidate-failed" };
 
 export type PiRuntimeGenerationInitializer = (runtime: ModelRuntime) => void | Promise<void>;
+
+export const piLoginOptions: NonNullable<Parameters<ModelRuntime["login"]>[3]> = {
+	getDeviceId: () => SettingsManager.create(process.cwd()).getOrCreateDeviceId(),
+};
 
 let nextGenerationId = 1;
 let activeGeneration: Promise<PiRuntimeGeneration> | null = null;

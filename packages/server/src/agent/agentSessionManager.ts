@@ -5,6 +5,7 @@ import { createInterface } from "node:readline";
 import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
+	type CreateAgentSessionOptions,
 	createAgentSession,
 	type ExtensionError,
 	getAgentDir,
@@ -45,8 +46,14 @@ import {
 	normalizeSessionTitle,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
+import {
+	type BackgroundCommands,
+	createBackgroundCommands,
+	createBackgroundCommandsExtension,
+} from "pi-background-commands";
 import type { ParentContext } from "pi-delegation";
-import { RECURSION_GUARD_TOOLS } from "pi-subagents";
+import { RECURSION_GUARD_TOOLS, type Subagents } from "pi-subagents";
 import { logger } from "../log";
 import {
 	deriveActivityStatus,
@@ -67,11 +74,8 @@ import {
 	createAskUserQuestionWaiters,
 	hasQuestionAck,
 } from "./askUserQuestion";
-import {
-	disposeSessionChildren,
-	removeWorkspaceDelegation,
-	subagentsExtensionFor,
-} from "./delegation";
+import { publishSessionResourcesChanged } from "./chatResources";
+import { disposeSessionChildren, removeWorkspaceDelegation, subagentsFor } from "./delegation";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
 import {
 	getPiRuntime,
@@ -101,6 +105,11 @@ interface TrackedQueuedMessage {
 }
 
 interface Entry {
+	subagents: Subagents;
+	commands: BackgroundCommands;
+	unsubscribeCommands: () => void;
+	resourceCascade?: Promise<void>;
+	resourcesClosing: boolean;
 	session: AgentSession;
 	generation: PiRuntimeGeneration;
 	unsubscribe: () => void;
@@ -122,6 +131,53 @@ interface Entry {
 }
 
 const sessions = new Map<string, Entry>();
+let sessionLifecycleGeneration = 0;
+const workspaceLifecycleGenerations = new Map<string, number>();
+const closingWorkspaces = new Map<string, number>();
+const pendingSessionPreparations = new Map<string, Set<Promise<unknown>>>();
+const sessionTeardowns = new Map<string, Promise<void>>();
+
+interface WorkspaceLifecycleToken {
+	global: number;
+	workspace: number;
+}
+
+function captureWorkspaceLifecycle(workspaceId: string): WorkspaceLifecycleToken {
+	return {
+		global: sessionLifecycleGeneration,
+		workspace: workspaceLifecycleGenerations.get(workspaceId) ?? 0,
+	};
+}
+
+function workspaceAcceptsSessions(workspaceId: string, token: WorkspaceLifecycleToken): boolean {
+	return (
+		token.global === sessionLifecycleGeneration &&
+		token.workspace === (workspaceLifecycleGenerations.get(workspaceId) ?? 0) &&
+		!closingWorkspaces.has(workspaceId)
+	);
+}
+
+function trackSessionPreparation<T>(
+	workspaceId: string,
+	token: WorkspaceLifecycleToken,
+	operation: () => Promise<T>,
+): Promise<T> {
+	if (!workspaceAcceptsSessions(workspaceId, token))
+		return Promise.reject(new Error(`Workspace is unavailable: ${workspaceId}`));
+	const pending = operation();
+	let preparations = pendingSessionPreparations.get(workspaceId);
+	if (!preparations) {
+		preparations = new Set();
+		pendingSessionPreparations.set(workspaceId, preparations);
+	}
+	const scope = preparations;
+	scope.add(pending);
+	return pending.finally(() => {
+		scope.delete(pending);
+		if (scope.size === 0 && pendingSessionPreparations.get(workspaceId) === scope)
+			pendingSessionPreparations.delete(workspaceId);
+	});
+}
 
 export async function usePiRuntime<T>(
 	operation: (
@@ -139,6 +195,18 @@ const deletingSessions = new Map<string, { workspaceId: string; done: Promise<vo
 
 function isSessionDeleted(sessionId: string, workspaceId: string): boolean {
 	return deletedSessions.get(sessionId) === workspaceId;
+}
+
+function sessionIsTearingDown(sessionId: string): boolean {
+	return sessionTeardowns.has(sessionId);
+}
+
+function sessionCanAttach(sessionId: string, workspaceId: string): boolean {
+	return (
+		!isSessionDeleted(sessionId, workspaceId) &&
+		!sessionIsTearingDown(sessionId) &&
+		!closingWorkspaces.has(workspaceId)
+	);
 }
 
 export type { SessionEventPayload };
@@ -490,13 +558,16 @@ export function getSessionMessagesSnapshot(sessionId: string): TranscriptMessage
 }
 
 export async function reloadSessionResources(sessionId: string): Promise<void> {
-	const session = mustGet(sessionId);
+	const entry = mustGetEntry(sessionId);
+	const { session } = entry;
 	if (session.isStreaming) {
 		throw new Error(
 			"Can't reload skills while the session is streaming — try again after the turn.",
 		);
 	}
 	await session.reload();
+	entry.commands.flushCompletions();
+	entry.subagents.flushCompletions();
 }
 
 const SESSION_SETTINGS_OVERRIDES = { images: { autoResize: false } };
@@ -557,12 +628,18 @@ async function prepareSessionEntry(
 	session: AgentSession,
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
+	commands: BackgroundCommands,
+	subagents: Subagents,
 	askUserQuestionWaiters: AskUserQuestionWaiters,
 	lastSettlement: AgentSettlement | null | undefined = undefined,
 ): Promise<PreparedSessionEntry> {
 	const { sessionId } = session;
 	let terminal: AgentSettlement | null = null;
 	const entry: Entry = {
+		commands,
+		subagents,
+		resourcesClosing: false,
+		unsubscribeCommands: () => {},
 		session,
 		generation,
 		unsubscribe: () => {},
@@ -582,6 +659,10 @@ async function prepareSessionEntry(
 		lastActivityMs: Date.now(),
 		askUserQuestionWaiters,
 	};
+	entry.unsubscribeCommands = commands.onChange(() => {
+		if (canUseSessionResources(sessionId, workspaceId))
+			publishSessionResourcesChanged(workspaceId, sessionId);
+	});
 	entry.rawActivity = activityOf(entry);
 	const seededRecencyMs = messagesActivityMs(session.messages);
 	if (seededRecencyMs !== null) entry.lastActivityMs = seededRecencyMs;
@@ -596,7 +677,11 @@ async function prepareSessionEntry(
 					entry.askUserQuestionWaiters.expect(block.id);
 			}
 		}
-		if (event.type === "turn_end") entry.askUserQuestionWaiters.persistTurn(event.toolResults);
+		if (event.type === "turn_end") {
+			entry.askUserQuestionWaiters.persistTurn(event.toolResults);
+			entry.commands.flushCompletions();
+			entry.subagents.flushCompletions();
+		}
 		if (event.type === "message_start" && event.message.role === "user") {
 			const lane = deliveredStuckEmptyLane(entry, event.message.content);
 			if (lane) {
@@ -671,11 +756,15 @@ async function prepareSessionEntry(
 			uiContext: createWebUiContext(sessionId),
 			onError: reportExtensionError,
 		});
-		if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
+		if (!sessionCanAttach(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 	} catch (error) {
 		cancelExtUiForSession(sessionId);
+		entry.askUserQuestionWaiters.abandon();
 		entry.unsubscribe();
+		entry.unsubscribeCommands();
 		entry.disposed = true;
+		void closeSessionResources(entry);
+		clearEntryQueue(entry);
 		session.dispose();
 		throw error;
 	}
@@ -694,19 +783,31 @@ async function registerSession(
 	session: AgentSession,
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
+	commands: BackgroundCommands,
+	subagents: Subagents,
 	askUserQuestionWaiters: AskUserQuestionWaiters,
+	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
 	const prepared = await prepareSessionEntry(
 		session,
 		workspaceId,
 		generation,
+		commands,
+		subagents,
 		askUserQuestionWaiters,
 	);
+	if (
+		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
+		sessionIsTearingDown(session.sessionId)
+	)
+		throw new Error(`Workspace is unavailable: ${workspaceId}`);
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	applySubagentTools(prepared.entry);
 	applyReviewTool(prepared.entry);
+	commands.flushCompletions();
+	subagents.flushCompletions();
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
 	await reconcileWorkspaceActivity(workspaceId);
@@ -714,9 +815,9 @@ async function registerSession(
 }
 
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
+	const lifecycleToken = captureWorkspaceLifecycle(input.workspaceId);
 	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(input.cwd);
-	const askUserQuestionWaiters = createAskUserQuestionWaiters();
 	let model: Model<string> | undefined;
 	if (input.model) {
 		try {
@@ -725,23 +826,153 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 			if (!input.modelOptional) throw err;
 		}
 	}
-	const { session } = await createAgentSession({
-		cwd: input.cwd,
-		modelRuntime: generation.runtime,
-		sessionManager: sessionManagerFactory(input.cwd),
-		settingsManager,
-		resourceLoader: await buildResourceLoader(
-			input.cwd,
+	return createParentSession(
+		{
+			cwd: input.cwd,
+			sessionManager: sessionManagerFactory(input.cwd),
 			settingsManager,
-			() => skillAdmissionResolver(input.workspaceId),
-			generation.excludedSessionExtensionPaths,
-			[subagentsExtensionFor(input.workspaceId, () => subagentsEnabled(input.workspaceId))],
-			askUserQuestionWaiters,
-		),
-		...(model ? { model } : {}),
-		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
+			...(model ? { model } : {}),
+			...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
+		},
+		input.workspaceId,
+		generation,
+		lifecycleToken,
+		true,
+	);
+}
+
+type ParentSessionOptions = CreateAgentSessionOptions & {
+	cwd: string;
+	sessionManager: SessionManager;
+	settingsManager: SettingsManager;
+};
+
+function createParentSession(
+	options: ParentSessionOptions,
+	workspaceId: string,
+	generation: PiRuntimeGeneration,
+	lifecycleToken: WorkspaceLifecycleToken,
+	announceCreation = false,
+): Promise<CreateSessionResult> {
+	const sessionId = options.sessionManager.getSessionId();
+	if (sessionIsTearingDown(sessionId))
+		return Promise.reject(new Error(`Unknown session: ${sessionId}`));
+	return trackSessionPreparation(workspaceId, lifecycleToken, () =>
+		createParentSessionInternal(options, workspaceId, generation, lifecycleToken, announceCreation),
+	);
+}
+
+async function createParentSessionInternal(
+	options: ParentSessionOptions,
+	workspaceId: string,
+	generation: PiRuntimeGeneration,
+	lifecycleToken: WorkspaceLifecycleToken,
+	announceCreation = false,
+): Promise<CreateSessionResult> {
+	const { sessionManager, settingsManager, cwd } = options;
+	const sessionId = sessionManager.getSessionId();
+	const askUserQuestionWaiters = createAskUserQuestionWaiters();
+	const canDeliverCompletion = () =>
+		canUseSessionResources(sessionId, workspaceId) && !askUserQuestionWaiters.hasRecoverableCall();
+	let session: AgentSession | undefined;
+	const subagents = subagentsFor(
+		workspaceId,
+		() => subagentsEnabled(workspaceId),
+		() => sessions.get(sessionId)?.subagents === subagents && canDeliverCompletion(),
+	);
+	const commands = createBackgroundCommands({
+		sessionId,
+		getContext: () => {
+			if (!session || hasDeletionTombstone(sessionId))
+				throw new Error("Session resources unavailable");
+			return {
+				cwd: session.sessionManager.getCwd(),
+				sessionFile: session.sessionManager.getSessionFile(),
+				model: session.model,
+				thinkingLevel: session.thinkingLevel,
+				shellPath: settingsManager.getShellPath(),
+				commandPrefix: settingsManager.getShellCommandPrefix(),
+			};
+		},
+		canDeliverCompletion: () =>
+			sessions.get(sessionId)?.commands === commands && canDeliverCompletion(),
 	});
-	return registerSession(session, input.workspaceId, generation, askUserQuestionWaiters, true);
+	try {
+		const result = await createAgentSession({
+			...options,
+			modelRuntime: generation.runtime,
+			resourceLoader: await buildResourceLoader(
+				cwd,
+				settingsManager,
+				() => skillAdmissionResolver(workspaceId),
+				generation.excludedSessionExtensionPaths,
+				[subagents.extension, createBackgroundCommandsExtension({ service: commands })],
+				askUserQuestionWaiters,
+			),
+		});
+		session = result.session;
+		return await registerSession(
+			session,
+			workspaceId,
+			generation,
+			commands,
+			subagents,
+			askUserQuestionWaiters,
+			lifecycleToken,
+			announceCreation,
+		);
+	} catch (error) {
+		if (sessions.get(sessionId)?.commands === commands) {
+			try {
+				await disposeSession(sessionId);
+			} catch {}
+		} else {
+			subagents.dispose();
+			void trackCascade(
+				workspaceId,
+				commands.dispose().catch(() => {}),
+			);
+			session?.clearQueue();
+			askUserQuestionWaiters.abandon();
+			session?.dispose();
+		}
+		throw error;
+	}
+}
+
+export function canUseSessionResources(sessionId: string, workspaceId: string): boolean {
+	const entry = sessions.get(sessionId);
+	return (
+		!!entry &&
+		entry.registered &&
+		!entry.resourcesClosing &&
+		entry.workspaceId === workspaceId &&
+		sessionCanAttach(sessionId, workspaceId) &&
+		!hasDeletionTombstone(sessionId)
+	);
+}
+
+export async function withSessionResources<T>(
+	workspaceId: string,
+	sessionId: string,
+	cwd: string,
+	operation: (commands: BackgroundCommands) => T | Promise<T>,
+): Promise<T> {
+	if (!sessions.has(sessionId) && !hasDeletionTombstone(sessionId)) {
+		try {
+			await ensureSessionAttached(sessionId, workspaceId, cwd);
+		} catch {
+			throw new CodedError("RESOURCE_UNAVAILABLE", "Session resources unavailable");
+		}
+	}
+	const entry = sessions.get(sessionId);
+	if (
+		!entry ||
+		!canUseSessionResources(sessionId, workspaceId) ||
+		entry.session.sessionManager.getCwd() !== cwd
+	)
+		throw new CodedError("RESOURCE_UNAVAILABLE", "Session resources unavailable");
+	return operation(entry.commands);
 }
 
 function summaryOf(sessionId: string, entry: Entry): SessionSummary {
@@ -953,14 +1184,22 @@ export function renameSession(
 
 const attaching = new Map<string, Promise<void>>();
 
-function attachDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
-	if (isSessionDeleted(sessionId, workspaceId))
+function attachDiskSession(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+	lifecycleToken: WorkspaceLifecycleToken,
+): Promise<void> {
+	if (
+		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
+		!sessionCanAttach(sessionId, workspaceId)
+	)
 		return Promise.reject(new Error(`Unknown session: ${sessionId}`));
 	if (sessions.has(sessionId)) return Promise.resolve();
 	let pending = attaching.get(sessionId);
 	if (!pending) {
 		pending = serializeSessionFileOperation(sessionId, () =>
-			openDiskSession(sessionId, workspaceId, cwd),
+			openDiskSession(sessionId, workspaceId, cwd, lifecycleToken),
 		).finally(() => attaching.delete(sessionId));
 		attaching.set(sessionId, pending);
 	}
@@ -978,8 +1217,17 @@ function persistedSessionModelRef(model: unknown): { provider: string; id: strin
 	return { provider, id };
 }
 
-async function openDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
-	if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
+async function openDiskSession(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+	lifecycleToken: WorkspaceLifecycleToken,
+): Promise<void> {
+	if (
+		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
+		!sessionCanAttach(sessionId, workspaceId)
+	)
+		throw new Error(`Unknown session: ${sessionId}`);
 	const info = (await listSessionInfosStrict(cwd)).find(
 		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
 	);
@@ -988,7 +1236,6 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(cwd);
 	const sessionManager = SessionManager.open(info.path);
-	const askUserQuestionWaiters = createAskUserQuestionWaiters();
 	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
 	let exactModel: Model<string> | undefined;
 	if (persistedModel) {
@@ -999,26 +1246,17 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		}
 	}
 	repairDanglingToolCalls(sessionManager);
-	const { session } = await createAgentSession({
-		cwd,
-		modelRuntime: generation.runtime,
-		sessionManager,
-		settingsManager,
-		resourceLoader: await buildResourceLoader(
+	await createParentSession(
+		{
 			cwd,
+			sessionManager,
 			settingsManager,
-			() => skillAdmissionResolver(workspaceId),
-			generation.excludedSessionExtensionPaths,
-			[subagentsExtensionFor(workspaceId, () => subagentsEnabled(workspaceId))],
-			askUserQuestionWaiters,
-		),
-		...(exactModel ? { model: exactModel } : {}),
-	});
-	if (sessions.has(sessionId)) {
-		session.dispose();
-		return;
-	}
-	await registerSession(session, workspaceId, generation, askUserQuestionWaiters);
+			...(exactModel ? { model: exactModel } : {}),
+		},
+		workspaceId,
+		generation,
+		lifecycleToken,
+	);
 }
 
 async function ensureSessionAttachedInternal(
@@ -1026,7 +1264,12 @@ async function ensureSessionAttachedInternal(
 	workspaceId: string,
 	cwd: string,
 ): Promise<boolean> {
-	if (isSessionDeleted(sessionId, workspaceId)) return false;
+	const lifecycleToken = captureWorkspaceLifecycle(workspaceId);
+	if (
+		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
+		!sessionCanAttach(sessionId, workspaceId)
+	)
+		return false;
 	const live = sessions.get(sessionId);
 	if (live) {
 		if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
@@ -1035,8 +1278,8 @@ async function ensureSessionAttachedInternal(
 	const known = (await listSessionInfosStrict(cwd)).some(
 		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
 	);
-	if (!known) return false;
-	await attachDiskSession(sessionId, workspaceId, cwd);
+	if (!known || !workspaceAcceptsSessions(workspaceId, lifecycleToken)) return false;
+	await attachDiskSession(sessionId, workspaceId, cwd, lifecycleToken);
 	if (!sessions.has(sessionId))
 		throw new Error(`Session ${sessionId} was re-opened but did not register.`);
 	return true;
@@ -1055,12 +1298,17 @@ async function getSessionMessagesInternal(
 	workspaceId: string,
 	cwd: string,
 ): Promise<{ summary: SessionSummary; messages: TranscriptMessage[] }> {
-	if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
+	const lifecycleToken = captureWorkspaceLifecycle(workspaceId);
+	if (
+		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
+		!sessionCanAttach(sessionId, workspaceId)
+	)
+		throw new Error(`Unknown session: ${sessionId}`);
 	let entry = sessions.get(sessionId);
 	if (entry && entry.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
 	if (!entry) {
-		await attachDiskSession(sessionId, workspaceId, cwd);
-		if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
+		await attachDiskSession(sessionId, workspaceId, cwd, lifecycleToken);
+		if (!sessionCanAttach(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 		entry = sessions.get(sessionId);
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
@@ -1214,7 +1462,7 @@ async function queueSessionMessage(
 	kind: QueueLane,
 	text: string,
 	images: ImageContent[] | undefined,
-	send: () => Promise<void>,
+	send: () => Promise<unknown>,
 ): Promise<void> {
 	const tracked: TrackedQueuedMessage = {
 		id: entry.nextQueuedMessageId++,
@@ -1310,14 +1558,17 @@ function queueStateOf(entry: Entry): SessionQueueState {
 }
 
 export function clearQueueSession(sessionId: string, requireTextOnly = false): SessionQueueContent {
-	const entry = mustGetEntry(sessionId);
+	return clearEntryQueue(mustGetEntry(sessionId), requireTextOnly);
+}
+
+function clearEntryQueue(entry: Entry, requireTextOnly = false): SessionQueueContent {
 	const content = queueContentOf(entry);
 	if (requireTextOnly && hasQueuedImages(entry)) {
 		throw new Error("Cannot restore queued image messages as text");
 	}
 	entry.session.clearQueue();
 	entry.stuckEmptyDeliveries = { steering: 0, followUp: 0 };
-	syncSessionActivity(sessionId);
+	syncSessionActivity(entry.session.sessionId);
 	return content;
 }
 
@@ -1377,13 +1628,20 @@ export async function abortSession(
 	restoreQueue = false,
 	acceptedAnswerGraceMs = ACCEPTED_ANSWER_STOP_GRACE_MS,
 ): Promise<SessionQueueContent | undefined> {
-	const entry = mustGetEntry(sessionId);
-	let restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
+	return abortEntry(mustGetEntry(sessionId), restoreQueue, acceptedAnswerGraceMs);
+}
+
+async function abortEntry(
+	entry: Entry,
+	restoreQueue: boolean,
+	acceptedAnswerGraceMs = ACCEPTED_ANSWER_STOP_GRACE_MS,
+): Promise<SessionQueueContent | undefined> {
+	let restoredQueue = restoreQueue ? clearEntryQueue(entry) : undefined;
 	const acceptedResult = entry.askUserQuestionWaiters.prepareAbort();
 	await waitForAcceptedAnswerGrace(acceptedResult, acceptedAnswerGraceMs);
-	if (sessions.get(sessionId) !== entry) return restoredQueue;
+	if (sessions.get(entry.session.sessionId) !== entry) return restoredQueue;
 	if (restoredQueue) {
-		restoredQueue = mergeQueueContent(restoredQueue, clearQueueSession(sessionId));
+		restoredQueue = mergeQueueContent(restoredQueue, clearEntryQueue(entry));
 	}
 	await entry.session.abort();
 	return restoredQueue;
@@ -1485,7 +1743,7 @@ export function isSessionStreaming(sessionId: string): boolean {
 
 export function liveParentContext(sessionId: string): ParentContext | undefined {
 	const entry = sessions.get(sessionId);
-	if (!entry) return undefined;
+	if (!entry || !canUseSessionResources(sessionId, entry.workspaceId)) return undefined;
 	const { session } = entry;
 	return {
 		cwd: session.sessionManager.getCwd(),
@@ -1514,40 +1772,79 @@ function trackCascade(workspaceId: string, cascade: Promise<void>): Promise<void
 	return tracked;
 }
 
+function closeSessionResources(entry: Entry, timeoutMs?: number): Promise<void> {
+	if (entry.resourceCascade) return entry.resourceCascade;
+	entry.resourcesClosing = true;
+	entry.subagents.dispose();
+	const closing = entry.commands.dispose(timeoutMs === undefined ? undefined : { timeoutMs });
+	const children = disposeSessionChildren(entry.workspaceId, entry.session.sessionId);
+	entry.resourceCascade = trackCascade(
+		entry.workspaceId,
+		Promise.allSettled([closing, children]).then(() => {}),
+	);
+	return entry.resourceCascade;
+}
+
+function trackSessionTeardown(sessionId: string, cascade: Promise<void>): Promise<void> {
+	const current = sessionTeardowns.get(sessionId);
+	if (current) return current;
+	let done: Promise<void>;
+	done = cascade.finally(() => {
+		if (sessionTeardowns.get(sessionId) === done) sessionTeardowns.delete(sessionId);
+	});
+	sessionTeardowns.set(sessionId, done);
+	return done;
+}
+
 function disposeSession(sessionId: string): Promise<void> {
+	const pending = sessionTeardowns.get(sessionId);
+	if (pending) return pending;
 	const entry = sessions.get(sessionId);
 	if (!entry) return Promise.resolve();
 	entry.disposed = true;
-	const cascade = trackCascade(
-		entry.workspaceId,
-		disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
-	);
+	const cascade = trackSessionTeardown(sessionId, closeSessionResources(entry));
 	cancelExtUiForSession(sessionId);
 	entry.askUserQuestionWaiters.abandon();
 	entry.unsubscribe();
+	entry.unsubscribeCommands();
+	clearEntryQueue(entry);
 	entry.session.dispose();
 	sessions.delete(sessionId);
 	if (entry.publishedActivity !== null) retractActivity(sessionId, entry.workspaceId);
 	applyWorkspaceActivity(entry.workspaceId);
+	publishSessionResourcesChanged(entry.workspaceId, sessionId);
 	log.debug(`session ${sessionId} disposed`);
 	return cascade;
 }
 
 export function removeSession(sessionId: string): Promise<void> {
 	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
+	const pending = sessionTeardowns.get(sessionId);
+	if (pending) return pending;
+	const entry = sessions.get(sessionId);
+	if (!entry) return Promise.resolve();
+	closeSessionResources(entry);
+	if (entry.session.isStreaming)
+		return abortEntry(entry, true)
+			.catch(() => {})
+			.then(() => disposeSession(sessionId));
 	return disposeSession(sessionId);
 }
 
 export function disposeAllSessions(): void {
+	sessionLifecycleGeneration++;
+	workspaceLifecycleGenerations.clear();
+	closingWorkspaces.clear();
 	for (const [sessionId, entry] of sessions) {
-		void trackCascade(
-			entry.workspaceId,
-			disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
-		);
+		void trackSessionTeardown(sessionId, closeSessionResources(entry));
+	}
+	for (const [sessionId, entry] of sessions) {
 		cancelExtUiForSession(sessionId);
 		entry.askUserQuestionWaiters.abandon();
 		entry.unsubscribe();
+		entry.unsubscribeCommands();
 		entry.disposed = true;
+		clearEntryQueue(entry);
 		entry.session.dispose();
 	}
 	sessions.clear();
@@ -1556,7 +1853,9 @@ export function disposeAllSessions(): void {
 
 export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void> {
 	const settling = new Set<Promise<unknown>>();
+	for (const entry of sessions.values()) settling.add(closeSessionResources(entry, timeoutMs));
 	for (const [sessionId, entry] of sessions) {
+		clearEntryQueue(entry);
 		const acceptedResult = entry.askUserQuestionWaiters.prepareShutdown();
 		if (acceptedResult) {
 			settling.add(
@@ -1564,6 +1863,7 @@ export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void>
 					.catch(() => {})
 					.then(async () => {
 						if (sessions.get(sessionId) === entry && entry.session.isStreaming) {
+							clearEntryQueue(entry);
 							await entry.session.abort();
 						}
 					}),
@@ -1572,36 +1872,49 @@ export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void>
 		if (entry.session.isStreaming && !entry.askUserQuestionWaiters.hasRecoverableCall()) {
 			settling.add(entry.session.abort());
 		}
-		settling.add(
-			trackCascade(
-				entry.workspaceId,
-				disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
-			),
-		);
 	}
 	for (const pending of pendingCascades.values()) {
 		for (const cascade of pending) settling.add(cascade);
 	}
 	if (settling.size === 0) return;
-	await Promise.race([
-		Promise.allSettled(settling),
-		new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
-	]);
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		await Promise.race([
+			Promise.allSettled(settling),
+			new Promise<void>((resolve) => {
+				timer = setTimeout(resolve, timeoutMs);
+			}),
+		]);
+	} finally {
+		clearTimeout(timer);
+	}
 }
 
 async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string): Promise<void> {
-	const ids = [...sessions]
-		.filter(([, entry]) => entry.workspaceId === workspaceId)
-		.map(([sessionId]) => sessionId);
-	for (const sessionId of ids) {
-		const entry = sessions.get(sessionId);
-		if (!entry) continue;
-		if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
-		await disposeSession(sessionId);
+	workspaceLifecycleGenerations.set(
+		workspaceId,
+		(workspaceLifecycleGenerations.get(workspaceId) ?? 0) + 1,
+	);
+	closingWorkspaces.set(workspaceId, (closingWorkspaces.get(workspaceId) ?? 0) + 1);
+	try {
+		const entries = [...sessions].filter(([, entry]) => entry.workspaceId === workspaceId);
+		for (const [, entry] of entries) void closeSessionResources(entry);
+		const removals = entries.map(async ([sessionId, entry]) => {
+			if (entry.session.isStreaming) await abortEntry(entry, true).catch(() => {});
+			await disposeSession(sessionId);
+		});
+		await Promise.all([
+			Promise.allSettled([...(pendingSessionPreparations.get(workspaceId) ?? [])]),
+			Promise.all(removals),
+		]);
+		await Promise.all([...(pendingCascades.get(workspaceId) ?? [])]);
+		removeWorkspaceDelegation(workspaceId);
+		if (cwd) await purgeDiskSessions(cwd);
+	} finally {
+		const remainingClosures = (closingWorkspaces.get(workspaceId) ?? 1) - 1;
+		if (remainingClosures === 0) closingWorkspaces.delete(workspaceId);
+		else closingWorkspaces.set(workspaceId, remainingClosures);
 	}
-	await Promise.all([...(pendingCascades.get(workspaceId) ?? [])]);
-	removeWorkspaceDelegation(workspaceId);
-	if (cwd) await purgeDiskSessions(cwd);
 }
 
 export function removeWorkspaceSessions(workspaceId: string, cwd?: string): Promise<void> {
@@ -1659,7 +1972,7 @@ async function runDeleteTransaction(
 		let path: string | undefined;
 		if (entry) {
 			liveEntry = entry;
-			if (entry.session.isStreaming) await entry.session.abort();
+			if (entry.session.isStreaming) await abortEntry(entry, true);
 			const manager = entry.session.sessionManager;
 			if (manager.getSessionId() !== sessionId || manager.getCwd() !== cwd) {
 				throw new Error(`Session transcript scope mismatch: ${sessionId}`);
@@ -1678,6 +1991,9 @@ async function runDeleteTransaction(
 		if (installedTombstone) {
 			deletedSessions.delete(sessionId);
 			syncSessionActivity(sessionId);
+			sessions.get(sessionId)?.commands.flushCompletions();
+			sessions.get(sessionId)?.subagents.flushCompletions();
+			publishSessionResourcesChanged(workspaceId, sessionId);
 		}
 		throw error;
 	}

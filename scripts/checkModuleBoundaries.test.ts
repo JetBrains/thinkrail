@@ -11,6 +11,7 @@ const modules = {
 	"packages/contracts": "@thinkrail/contracts",
 	"packages/shared": "@thinkrail/shared",
 	"packages/pi-delegation": "pi-delegation",
+	"packages/pi-background-commands": "pi-background-commands",
 	"packages/pi-subagents": "pi-subagents",
 	"packages/pi-dag": "pi-dag",
 	"packages/server": "@thinkrail/server",
@@ -45,6 +46,7 @@ function fixture(): string {
 			"@thinkrail/contracts": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
 			"pi-delegation": "workspace:*",
+			"pi-background-commands": "workspace:*",
 			"pi-subagents": "workspace:*",
 		},
 		"apps/web": { "@thinkrail/contracts": "workspace:*" },
@@ -78,7 +80,7 @@ test("accepts the declared package rings and thin launcher edges", () => {
 	write(
 		root,
 		"packages/server/src/value.ts",
-		'import "pi-delegation"; import "pi-subagents"; export * from "@thinkrail/contracts";',
+		'import "pi-delegation"; import "pi-subagents"; import "pi-background-commands"; export * from "@thinkrail/contracts";',
 	);
 	write(root, "apps/web/src/value.tsx", 'import type { Project } from "@thinkrail/contracts";');
 	write(root, "apps/cli/src/value.ts", 'import { bootHost } from "@thinkrail/server";');
@@ -108,6 +110,22 @@ test("keeps DAG orchestration portable and out of delegation and the unbundled h
 		'packages/pi-dag/leak.ts: import "pi-subagents" creates forbidden packages/pi-dag -> packages/pi-subagents edge',
 		'packages/pi-delegation/leak.ts: import "pi-dag" creates forbidden packages/pi-delegation -> packages/pi-dag edge',
 		'packages/server/dag.ts: import "pi-dag" creates forbidden packages/server -> packages/pi-dag edge',
+	]);
+});
+
+test("keeps background commands portable and out of browser imports", () => {
+	const root = fixture();
+	write(root, "packages/pi-background-commands/src/leak.ts", 'import "@thinkrail/server";');
+	write(root, "packages/pi-background-commands/src/delegation.ts", 'import "pi-delegation";');
+	write(
+		root,
+		"apps/web/src/commandLeak.ts",
+		'import type { Command } from "pi-background-commands";',
+	);
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'apps/web/src/commandLeak.ts: import "pi-background-commands" creates forbidden apps/web -> packages/pi-background-commands edge',
+		'packages/pi-background-commands/src/delegation.ts: import "pi-delegation" creates forbidden packages/pi-background-commands -> packages/pi-delegation edge',
+		'packages/pi-background-commands/src/leak.ts: import "@thinkrail/server" creates forbidden packages/pi-background-commands -> packages/server edge',
 	]);
 });
 

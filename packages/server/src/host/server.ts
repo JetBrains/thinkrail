@@ -31,6 +31,7 @@ import {
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionPublisher,
+	setSessionResourcesPublisher,
 	setSkillAdmissionResolver,
 	setSubagentsEnabledResolver,
 	settleSessionsForShutdown,
@@ -39,8 +40,8 @@ import {
 import {
 	type AnalyticsOptions,
 	initializeAnalytics,
-	setAdditionalAnalyticsEnabled,
 	shutdownAnalytics,
+	startAttributionClaim,
 	track,
 } from "../analytics";
 import {
@@ -91,8 +92,9 @@ import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import {
-	additionalAnalyticsEnabled,
 	additionalCapture,
+	applyAdditionalAnalyticsSettings,
+	initialAdditionalAnalyticsEnabled,
 	observeCurrentSetup,
 	setupObservation,
 } from "./productAnalytics";
@@ -116,7 +118,20 @@ export interface CreateServerOptions {
 	appVersion?: string;
 	analytics?: Pick<
 		AnalyticsOptions,
-		"channel" | "build" | "posthogApiKey" | "posthogHost" | "mute"
+		| "channel"
+		| "build"
+		| "posthogApiKey"
+		| "posthogHost"
+		| "mute"
+		| "env"
+		| "fetchImpl"
+		| "openExternal"
+		| "attributionEndpoint"
+		| "attributionFetch"
+		| "attributionSleep"
+		| "attributionSchedule"
+		| "attributionRequestTimeoutMs"
+		| "attributionDeadlineMs"
 	>;
 	hostUpdate?: {
 		intervalMs: number;
@@ -127,6 +142,7 @@ export interface CreateServerOptions {
 
 export interface RunningServer {
 	readonly port: number;
+	startAttributionClaim: () => void;
 	stop: () => void;
 	shutdown: () => Promise<void>;
 }
@@ -240,6 +256,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.sessionCreated);
 				ws.subscribe(WS_CHANNELS.sessionDeleted);
 				ws.subscribe(WS_CHANNELS.sessionActivity);
+				ws.subscribe(WS_CHANNELS.sessionResourcesChanged);
 				ws.subscribe(WS_CHANNELS.providerLogin);
 				ws.subscribe(WS_CHANNELS.providerChanged);
 				ws.subscribe(WS_CHANNELS.projectUpdated);
@@ -563,18 +580,23 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	installRequestReviewSeam();
 	reconcilePendingReviewsOnBoot();
 
-	setSettingsPublisher((config) => {
+	setSettingsPublisher((config, appliedUpdate) => {
 		server.publish(
 			WS_CHANNELS.settingsChanged,
 			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
 		);
-		const previousGrant = additionalCapture();
-		setAdditionalAnalyticsEnabled(additionalAnalyticsEnabled(config));
-		if (additionalCapture() !== previousGrant) {
+		if (applyAdditionalAnalyticsSettings(config, appliedUpdate)) {
 			setupObservation.clear();
 			runObservation.clear();
 			taskObservation.clear();
 			void observeCurrentSetup();
+		}
+		if (
+			config.analyticsEnabled &&
+			config.analyticsConsentConfirmed &&
+			(appliedUpdate.analyticsEnabled === true || appliedUpdate.analyticsConsentConfirmed === true)
+		) {
+			startAttributionClaim();
 		}
 		refreshSubagentTools();
 		refreshAgentReviewTool();
@@ -593,6 +615,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		server.publish(
 			WS_CHANNELS.sessionDeleted,
 			JSON.stringify({ channel: WS_CHANNELS.sessionDeleted, data: payload }),
+		);
+	});
+
+	setSessionResourcesPublisher((payload) => {
+		server.publish(
+			WS_CHANNELS.sessionResourcesChanged,
+			JSON.stringify({ channel: WS_CHANNELS.sessionResourcesChanged, data: payload }),
 		);
 	});
 
@@ -660,12 +689,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	});
 
+	const initialConfig = getConfig();
 	initializeAnalytics({
 		...(appVersion ? { appVersion } : {}),
 		...(analytics ?? {}),
-		additionalEnabled: additionalAnalyticsEnabled(getConfig()),
+		additionalEnabled: initialAdditionalAnalyticsEnabled(initialConfig),
 	});
-
 	reviveTerminalSessions();
 	for (const workspace of loadWorkspaces()) provisionInitialTerminal(workspace);
 
@@ -718,10 +747,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		hostUpdateTimer = setInterval(() => void checkForHostUpdate(), hostUpdate.intervalMs);
 	}
 
+	const startAttributionClaimWhenReady = (): void => {
+		const config = getConfig();
+		if (config.analyticsEnabled && config.analyticsConsentConfirmed) startAttributionClaim();
+	};
+
 	return {
 		get port() {
 			return server.port ?? port;
 		},
+		startAttributionClaim: startAttributionClaimWhenReady,
 		stop,
 		shutdown,
 	};

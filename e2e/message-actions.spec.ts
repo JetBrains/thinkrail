@@ -1,8 +1,22 @@
 import { realpathSync } from "node:fs";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
+
+async function restoreChatWidthBounded(page: Page): Promise<void> {
+	if (page.isClosed()) return;
+	if (!(await page.getByTestId("settings-dialog").isVisible())) {
+		await page.getByTestId("open-settings").click();
+	}
+	await page.getByTestId("settings-nav-line-width").click();
+	const bounded = page.getByTestId("chat-line-width-bounded");
+	if ((await bounded.getAttribute("data-active")) !== "true") {
+		await bounded.click();
+		await expect(bounded).toHaveAttribute("data-active", "true");
+	}
+	await page.keyboard.press("Escape");
+}
 
 const BASE_TS = 1_700_910_000_000;
 
@@ -85,6 +99,55 @@ test("a huge message expands into a bounded, scrollable body instead of a giant 
 	expect(box.height).toBeLessThanOrEqual(viewport.height);
 	const scrollable = await body.evaluate((el) => el.scrollHeight > el.clientHeight + 1);
 	expect(scrollable).toBe(true);
+});
+
+test("an unbounded transcript keeps the user message within the visible pane", async ({ page }) => {
+	// Unbounded chat width fixes the transcript row to the measure, wider than a narrow pane. A
+	// right-aligned user message used to be pushed to the far edge of that row and clip on the left;
+	// it must stay within the horizontally-scrollable viewport (readable without scrolling right).
+	const pasted = `Refactoring of our own escaped react-markdown output ${"same risk class as the shiki path in chat/Markdown ".repeat(
+		6,
+	)}`;
+	await openFixtureProject(page);
+	seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "unbounded paste chat",
+		messages: [
+			{ role: "user", text: pasted, timestamp: BASE_TS },
+			{ role: "assistant", text: "On it.", timestamp: BASE_TS + 1_000 },
+		],
+	});
+
+	await page.setViewportSize({ width: 620, height: 900 });
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
+	await enterDefaultWorkspace(page);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+
+	try {
+		await page.getByTestId("open-settings").click();
+		await page.getByTestId("settings-nav-line-width").click();
+		const bounded = page.getByTestId("chat-line-width-bounded");
+		await expect(bounded).toHaveAttribute("data-active", "true");
+		await bounded.click();
+		await expect(bounded).toHaveAttribute("data-active", "false");
+		await page.keyboard.press("Escape");
+
+		const scroll = page.getByTestId("chat-transcript-scroll");
+		// The row is wider than the pane (unbounded still scrolls horizontally for wide content).
+		await expect.poll(() => scroll.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+
+		const message = page.locator('[data-testid="chat-message"][data-role="user"]').last();
+		await expect(message).toBeVisible();
+		const [scrollBox, messageBox] = await Promise.all([
+			scroll.boundingBox(),
+			message.boundingBox(),
+		]);
+		if (!scrollBox || !messageBox) throw new Error("scroll/message not measurable");
+		// Without scrolling right, the whole user message is within the horizontal viewport.
+		expect(messageBox.x).toBeGreaterThanOrEqual(scrollBox.x - 1);
+		expect(messageBox.x + messageBox.width).toBeLessThanOrEqual(scrollBox.x + scrollBox.width + 1);
+	} finally {
+		await restoreChatWidthBounded(page).catch(() => {});
+	}
 });
 
 test("a large user message with no agent reply stays expanded", async ({ page }) => {

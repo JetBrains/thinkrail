@@ -214,15 +214,20 @@ spec in the same change. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
 
 ThinkRail sends basic usage events to [PostHog EU](https://posthog.com): launches, chat creation,
 accepted message sends, and provider connections. These are always on in desktop, CLI, and source runs;
-CI and automated tests are silent. Events include a random installation ID, version/channel, build kind,
-OS/architecture, send mode, catalog-bucketed provider/model names, and the observed authentication
-category (API key, subscription sign-in, OAuth, Central, or other/unknown)—never credential values or
-account/plan details. First observed launch measures first use, not a completed OS installation.
+a packaged desktop or binary build also attempts one first-install event per installation. CI and automated
+tests are silent. Events include a random installation ID, version/channel, build kind, OS/architecture,
+send mode, catalog-bucketed provider/model names, and the observed authentication category (API key,
+subscription sign-in, OAuth, Central, or other/unknown)—never credential values or account/plan details.
 
-Additional setup, run-outcome, task, review, and PR statistics require explicit consent in the first-launch
-window. Its switch starts from your saved analytics preference; confirming records your choice. Change it
-later in **Settings → Privacy**. `--no-analytics` or `THINKRAIL_NO_ANALYTICS=1` suppresses additional events
-for that run only; basic reporting remains on.
+Additional setup, run-outcome, task, review, and PR statistics follow an optional sharing preference.
+The first-run dialog shows its switch on and saves that preference when it opens; additional events can
+start before you press Done or dismiss the dialog. Switching it off saves that choice immediately. Done
+or dismissal records completion of the dialog, not the start of delivery. Change the preference later in
+**Settings → Privacy**. With website Marketing consent and optional sharing on in a packaged build,
+ThinkRail may open its blog in your browser once and note which website link or campaign brought you there
+(source, medium, campaign, content and a coarse referrer type; the link carries no URL or page). That note
+enriches usage data for up to 30 days. `--no-analytics` or `THINKRAIL_NO_ANALYTICS=1` suppresses
+additional events for that run only; basic reporting remains on.
 
 Neither tier collects prompts, code, transcripts, file/repository names or paths, credentials, or token/cost
 counts. The installation ID links usage over time, but no person profiles are created and GeoIP enrichment

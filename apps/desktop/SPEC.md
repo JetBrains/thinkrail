@@ -66,7 +66,11 @@ another.
    and macOS/Windows trash helpers. The generator's key map must satisfy every key of the server-owned
    `BundledExtensions` contract, so adding a required launcher field fails desktop typecheck instead of
    producing a packaged-only `undefined`. It then calls `bootHost()` on loopback port `0` with the staged web
-   directory, baked version, and `desktop` analytics provenance.
+   directory, baked version, `desktop` analytics provenance, and, only when packaged, the launcher-supplied
+   `Utils.openExternal` callback used by the host's one-shot browser attribution claim. The callback passes through
+   `DesktopHostOptions` and the generated runtime. The first native-window `dom-ready` explicitly calls the
+   proxied `host.server.startAttributionClaim()` readiness method; host boot and elapsed time do not start a
+   saved-choice claim. No deep-link or RPC surface is added.
 4. Restore the valid route fragment and bounded client-preference map for
    `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
@@ -94,6 +98,15 @@ Edit role menu. Linux skips registration because Electrobun 2.0.1 does not suppo
 there; WebKitGTK keeps its renderer-native editing behavior. The policy is platform-pure and the packaged
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
 pins production wiring.
+
+## Native page zoom
+
+Command/Ctrl-`+` (`=`), `-`, and `0` zoom as a browser's default action: the desktop preload listens after
+page handlers and yields any chord a handler already claimed with `preventDefault` (Monaco's `Mod+K` folding
+chords end on these keys), then sends a typed one-way request to the main process. A handler that only stops
+propagation also keeps the chord, so zoom is inert while such an input has focus. The main process steps from
+the webview's current native zoom to the adjacent bounded browser-style factor, so zoom changed outside the
+shortcuts (WebView2's Ctrl+wheel) cannot desync it; the web app owns no duplicate shortcut or zoom state.
 
 ## Native window chrome
 
@@ -167,9 +180,8 @@ SDK event factories, not copied into local declarations. Detail can be a raw URL
 serialized navigation JSON; bounded decoding retains only a string URL and the HTTP/HTTPS/mailto
 allowlist. Native `navigationRules` enforce confinement: navigation-event responses cannot cancel it.
 
-A desktop preload sends typed, one-way route, local-preference, and title-bar double-click messages, and is
-the only writer of
-the window-chrome CSS properties described above. It wraps
+A desktop preload sends typed, one-way route, local-preference, page-zoom, and title-bar double-click
+messages, and is the only writer of the window-chrome CSS properties described above. It wraps
 `history.replaceState` and `history.pushState` before page scripts and also reports initial/hash/pop
 navigation, because Electrobun's native navigation events do not observe History API route changes. The
 main process accepts messages only from the main window. Routes persist as bounded fragment strings in a

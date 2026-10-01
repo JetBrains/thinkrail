@@ -199,7 +199,7 @@ async function tool<T>(
 		args,
 		signal,
 		undefined,
-		session.extensionRunner.createContext(),
+		session.extensionRunner.createToolContext(id, signal),
 	);
 	expect(result.content).toEqual([{ type: "text", text: JSON.stringify(result.details, null, 2) }]);
 	return result.details as DagResult<T>;

@@ -11,6 +11,7 @@ import {
 	type DelegationService,
 	defaultDelegationRoot,
 	deriveChildSessionFile,
+	type RunOutcome,
 	type RunStatus,
 } from "pi-delegation";
 import { Type } from "typebox";
@@ -26,6 +27,13 @@ export interface SubagentsExtensionOptions {
 	delegationRoot?: string;
 	scope?: string;
 	isEnabled?: () => boolean;
+	canDeliverCompletion?: () => boolean;
+}
+
+export interface Subagents {
+	extension: ExtensionFactory;
+	flushCompletions(): void;
+	dispose(): void;
 }
 
 function discoverFor(ctx: ExtensionContext): AgentDefinition[] {
@@ -61,12 +69,61 @@ export function boundedText(run: {
 export function createSubagentsExtension(
 	options: SubagentsExtensionOptions = {},
 ): ExtensionFactory {
-	return (pi: ExtensionAPI) => {
+	return (pi) => createOwner(options, false).extension(pi);
+}
+
+export function createSubagents(
+	options: SubagentsExtensionOptions & { service: DelegationService },
+): Subagents {
+	return createOwner(options, true);
+}
+
+function createOwner(options: SubagentsExtensionOptions, retained: boolean): Subagents {
+	let parentSessionId: string | undefined;
+	let sender: { send: ExtensionAPI["sendMessage"] } | undefined;
+	let closed = false;
+	let flushing = false;
+	const pending = new Set<{ outcome: RunOutcome; roleName: string; childSessionId: string }>();
+
+	function dispose(): void {
+		closed = true;
+		sender = undefined;
+		pending.clear();
+	}
+
+	function flushCompletions(): void {
+		if (flushing || closed) return;
+		flushing = true;
+		try {
+			for (const completion of [...pending]) {
+				if (closed || !sender || !(options.canDeliverCompletion?.() ?? true)) break;
+				pending.delete(completion);
+				const { outcome, roleName, childSessionId } = completion;
+				try {
+					sender.send(
+						{
+							customType: SUBAGENT_COMPLETION_MESSAGE,
+							content: `Subagent "${roleName}" (${childSessionId}) ${outcome.status}:\n\n${boundedText(outcome)}`,
+							display: true,
+							details: outcome.details,
+						},
+						{ deliverAs: "followUp", triggerTurn: outcome.details.abortReason !== "user" },
+					);
+				} catch {
+					if (!closed) pending.add(completion);
+					break;
+				}
+			}
+		} finally {
+			flushing = false;
+		}
+	}
+
+	const extension: ExtensionFactory = (pi) => {
+		const binding = { send: pi.sendMessage };
 		const delegationRoot = options.delegationRoot ?? defaultDelegationRoot();
 		const scope = options.scope ?? DEFAULT_SCOPE;
-		const isEnabled = () => options.isEnabled?.() ?? true;
-
-		let shuttingDown = false;
+		const isEnabled = () => !closed && (options.isEnabled?.() ?? true);
 		const erroredRunDetails = new Map<string, DelegationRunDetails>();
 		pi.on("tool_result", (event) => {
 			const details = erroredRunDetails.get(event.toolCallId);
@@ -78,8 +135,9 @@ export function createSubagentsExtension(
 			erroredRunDetails.clear();
 			registerAgentTool(ctx);
 		});
-		pi.on("session_shutdown", async (_event, ctx) => {
-			shuttingDown = true;
+		pi.on("session_shutdown", async (event, ctx) => {
+			if (sender === binding) sender = undefined;
+			if (!retained || event.reason !== "reload") dispose();
 			erroredRunDetails.clear();
 			const service = fallbackService;
 			if (!service) return;
@@ -90,6 +148,8 @@ export function createSubagentsExtension(
 		let latestCtx: ExtensionContext | undefined;
 		let fallbackService: DelegationService | undefined;
 		function serviceFor(ctx: ExtensionContext): DelegationService {
+			if (closed || parentSessionId !== ctx.sessionManager.getSessionId())
+				throw new Error("Subagent session is unavailable");
 			latestCtx = ctx;
 			if (options.service) return options.service;
 			fallbackService ??= createDelegationService({
@@ -180,16 +240,13 @@ ${known}`,
 					if (params.run_in_background) {
 						run
 							.then((outcome) => {
-								if (shuttingDown) return;
-								pi.sendMessage(
-									{
-										customType: SUBAGENT_COMPLETION_MESSAGE,
-										content: `Subagent "${definition.name}" (${child.sessionId}) ${outcome.status}:\n\n${boundedText(outcome)}`,
-										display: true,
-										details: outcome.details,
-									},
-									{ deliverAs: "followUp", triggerTurn: true },
-								);
+								if (closed) return;
+								pending.add({
+									outcome,
+									roleName: definition.name,
+									childSessionId: child.sessionId,
+								});
+								flushCompletions();
 							})
 							.catch(() => {});
 						const details = child.snapshot?.details;
@@ -227,6 +284,11 @@ ${known}`,
 		});
 
 		pi.on("session_start", (_event, sessionCtx) => {
+			const sessionId = sessionCtx.sessionManager.getSessionId();
+			if (parentSessionId !== undefined && parentSessionId !== sessionId)
+				throw new Error("Subagents belong to a different session");
+			parentSessionId ??= sessionId;
+			if (!closed) sender = binding;
 			registerAgentTool(sessionCtx);
 			pi.registerTool({
 				name: "get_subagent_result",
@@ -294,6 +356,8 @@ ${known}`,
 						.filter((name) => !RECURSION_GUARD_TOOLS.some((toolName) => toolName === name)),
 				);
 			}
+			flushCompletions();
 		});
 	};
+	return { extension, flushCompletions, dispose };
 }

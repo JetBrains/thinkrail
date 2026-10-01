@@ -13,7 +13,7 @@ import { join } from "node:path";
 import type {
 	AgentToolResult,
 	ExtensionAPI,
-	ExtensionContext,
+	ExtensionToolContext,
 	ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import {
@@ -54,7 +54,7 @@ function run(
 	if (!tool) throw new Error(`missing tool: ${name}`);
 	return tool.execute("call-1", params, undefined, undefined, {
 		cwd,
-	} as unknown as ExtensionContext);
+	} as unknown as ExtensionToolContext);
 }
 
 function isError(result: AgentToolResult<unknown>): boolean {

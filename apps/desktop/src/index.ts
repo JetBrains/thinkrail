@@ -10,7 +10,9 @@ import Electrobun, {
 	Utils,
 } from "electrobun/main";
 import { installDesktopApplicationMenu } from "./applicationMenu";
+import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { installExternalNavigation } from "./externalNavigation";
+import { nextPageZoom } from "./pageZoom";
 import {
 	injectInitialDesktopPreferences,
 	readDesktopPreferenceRemove,
@@ -87,6 +89,9 @@ async function start(): Promise<void> {
 		staticDir: join(PATHS.VIEWS_FOLDER, "web"),
 		appVersion: version,
 		channel,
+		...(Electrobun.app.isPackaged
+			? { openExternal: (url: string) => Utils.openExternal(url) }
+			: {}),
 	});
 	const quitCoordinator = createElectrobunQuitCoordinator(() => host.server.shutdown());
 	startupQuitCoordinator = quitCoordinator;
@@ -108,6 +113,7 @@ async function start(): Promise<void> {
 		handled: number;
 		result: TitleBarDoubleClickResult | null;
 	} = { received: 0, handled: 0, result: null };
+	let mainWindow: BrowserWindow;
 	const updateController = await createElectrobunUpdateController({
 		isPackaged: Electrobun.app.isPackaged,
 		version,
@@ -143,6 +149,9 @@ async function start(): Promise<void> {
 					}
 					void handleTitleBarDoubleClick();
 				},
+				pageZoomRequested: ({ action }) => {
+					mainWindow.setPageZoom(nextPageZoom(mainWindow.getPageZoom(), action));
+				},
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);
 				},
@@ -177,7 +186,7 @@ async function start(): Promise<void> {
 				windowChrome.geometry,
 				windowChrome.dragRegion,
 			);
-	const mainWindow = new BrowserWindow({
+	mainWindow = new BrowserWindow({
 		title: "ThinkRail",
 		url: neutral ? "about:blank" : `${origin}/${initialRoute}`,
 		preload,
@@ -232,9 +241,13 @@ async function start(): Promise<void> {
 	updateController.subscribe((state) => rpc.send.updateStateChanged(state));
 
 	let ready = false;
+	const startAttributionClaim = attributionClaimOnFirstReadiness(() =>
+		host.server.startAttributionClaim(),
+	);
 	mainWindow.webview.on("dom-ready", () => {
 		if (ready) return;
 		ready = true;
+		startAttributionClaim();
 		updateController.start();
 		const readyPath = process.env.THINKRAIL_DESKTOP_READY_FILE;
 		if (readyPath) {

@@ -21,8 +21,9 @@ e2e).
 - **Owns:** the HTTP+WS server, static serving, the WS dispatch registry, server-side feature services
   (project/workspace/git/fs/terminal + the in-process `AgentSession` manager), and `~/.thinkrail`
   persistence.
-- **Public surface:** `createServer(options) → Promise<RunningServer>` (`{ port, stop, shutdown }`) —
-  `stop()` is synchronous resource disposal for low-level tests while `shutdown()` is the idempotent,
+- **Public surface:** `createServer(options) → Promise<RunningServer>`
+  (`{ port, startAttributionClaim, stop, shutdown }`) — saved-choice attribution waits for the launcher's
+  explicit UI-readiness call; `stop()` is synchronous resource disposal for low-level tests while `shutdown()` is the idempotent,
   bounded production lifecycle (settle sessions + drain analytics and dispose sockets/PTYS/watchers)
   every launcher must await — the public
   factory starts Central artifact watching and applies the initial current PI runtime before binding a socket
@@ -83,7 +84,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `agent` | in-process pi sessions + current/retained runtime generations + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
 | `auth` | provider status/login plus native JetBrains Central lifecycle and quota orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
-| `analytics` | always-on basic events + explicitly consented product insights → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
+| `analytics` | always-on basic events + preference-controlled optional insights → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
 | `feedback` | host-scoped usage count + addressed product-interview invitation lifecycle | [feedback/SPEC.md](src/feedback/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
 | `editors` | detect installed editors/IDEs, launch one at a worktree, reveal a worktree in the file manager | [editors/SPEC.md](src/editors/SPEC.md) |
@@ -131,7 +132,8 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 `setSessionPublisher` + `setSessionCreatedPublisher` + `setSessionDeletedPublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
 `project.updated` lifecycle, `workspaces`' `setWorkspacePublisher` for the
 `workspace.created`/`updated`/`removed` lifecycle trio, `settings`' `setSettingsPublisher` for
-`settings.changed`, `feedback`'s addressed invitation publisher, and auth's Central action analytics +
+`settings.changed` (full merged config plus the successful applied update for host-side explicit-field effects),
+`feedback`'s addressed invitation publisher, and auth's Central action analytics +
 `provider.changed` invalidation publishers) that
 `host` installs at `createServer`—so channel/analytics wiring lives only in `host`. Current layout has no
 host module, persistence, method, or publisher.
@@ -148,8 +150,15 @@ registry-free too — it takes a plain `cwd`, never a `workspaceId`; the `templa
 
 Analytics is host-mediated the same way: **every capture call site lives in `host`**. Host translates
 existing boot, session, setup, task, review and PR observations into the closed event vocabulary and
-syncs additional-data consent from the settings publisher. Correlation stays host-local and clears on
-consent changes. `analytics` has no `settings` edge and no feature module knows analytics exists.
+syncs the additional-data delivery gate from applied updates that explicitly contain `analyticsEnabled`;
+unrelated settings broadcasts preserve the current preference. Correlation stays host-local and clears when
+sharing is disabled. `analytics` has no `settings` edge and no feature module knows analytics exists.
+
+The Chat Resources integration adds `agent` → `pi-background-commands` as an external
+package edge, alongside its existing delegation packages. `host` continues to compose the wire
+through the `agent` barrel; there is no new resource-manager sibling or `agent` → `terminal` /
+`subprocess` / `settings` edge. Command lifecycle and bounded output belong to the portable package,
+while the manager owns its association with an actual parent session.
 
 Subagent availability is also host-mediated: `settings` owns the global default, `workspaces` owns the
 optional local override, and `host` injects their effective value into `agent` plus requests live-session
@@ -158,9 +167,10 @@ reevaluation after either mutation. No feature imports a sibling to derive the p
 ## Get right
 
 - **No process isolation** — a fatal agent/provider fault takes the whole host down (accepted tradeoff).
-- **No cross-process state coordination** — `bootHost` permits multiple hosts to use the same data
-  directory. Each host owns only its in-process services and event stream; shared persistence has no
-  transaction, locking, or convergence guarantee, so concurrent writes may be last-writer-wins.
+- **No general cross-process state coordination** — `bootHost` permits multiple hosts to use the same data
+  directory. Installation identity, its one-time event claim, and browser-attribution attempts use narrow
+  exclusive filesystem operations; other shared persistence has no general lock, transaction, or
+  convergence guarantee, so concurrent writes may be last-writer-wins.
 - **One graceful shutdown per host** — launchers await `RunningServer.shutdown()`; repeated calls share one
   promise, while abrupt death relies on operating-system process cleanup.
 - **WS commands return values directly**; only events + extension-UI use push channels.

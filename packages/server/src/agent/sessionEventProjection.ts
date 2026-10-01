@@ -23,5 +23,17 @@ export function projectSessionEvent(
 			...(event.errorMessage !== undefined ? { errorMessage: event.errorMessage } : {}),
 		};
 	}
+	if (event.type === "tool_execution_end")
+		return { ...event, result: withoutStructured(event.result) };
+	if (event.type === "tool_execution_update") {
+		return { ...event, partialResult: withoutStructured(event.partialResult) };
+	}
 	return event as PiEvent;
+}
+
+function withoutStructured(result: unknown): unknown {
+	if (typeof result !== "object" || result === null || !("structuredContent" in result))
+		return result;
+	const { structuredContent: _structuredContent, ...rest } = result;
+	return rest;
 }

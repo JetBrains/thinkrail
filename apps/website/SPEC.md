@@ -40,18 +40,19 @@ binary.
 ## Boundary
 
 - **Independently deployed leaf.** Its only workspace dependency is [[module-website-analytics]]; it
-  must never import contracts, server, shared, or web. It is not on the wire and has no protocol
-  knowledge.
-- **One static Astro artifact, with a route-local framework exception.** The landing and blog retain
-  vanilla TypeScript + hand-written CSS: no React island and no Tailwind stylesheet or runtime reaches
-  those routes. [[submodule-website-vibecoding]] alone may use one React island and Tailwind v4. Astro's
-  React integration and Tailwind Vite plugin are build-wide tooling, but generated page references are
-  the runtime boundary; package build validation fails if unrelated routes reference the island renderer,
-  component chunks, or vibecoding stylesheet. The browser analytics workspace module is compiled into
-  the static output. The `@fontsource-variable/*` packages are build-time asset sources: the build emits
-  their woff2 files into `dist/`. They are shared with `apps/web`, so they come from the root
-  `workspaces.catalog` — one pin for both apps, which is what keeps the site's faces identical to the
-  app's.
+  must never import contracts, server, shared, or web. It never joins the product host wire;
+  [[submodule-website-attribution]] alone owns an independent, bounded HTTP claim protocol and D1 state.
+- **One static Astro artifact plus same-project claim functions, with a route-local framework exception.**
+  The landing and blog retain vanilla TypeScript + hand-written CSS: no React island and no Tailwind
+  stylesheet or runtime reaches those routes. [[submodule-website-attribution]] alone adds Pages Functions
+  and D1; only `/vibecoding/` and `/agentic-development/` may use the shared React island and Tailwind
+  v4. Astro's React integration and Tailwind Vite plugin are build-wide tooling; build validation
+  requires one island in each allowed route output and rejects islands in the fixed landing, blog,
+  article, and claim outputs. The browser analytics
+  workspace module is compiled into the static output. The `@fontsource-variable/*` packages are
+  build-time asset sources whose woff2 files are emitted into `dist/`. Shared with `apps/web`, they
+  come from the root `workspaces.catalog` — one pin for both apps that keeps the site's faces
+  identical to the app's.
   - *Why Astro (decision, 2026-08):* the blog + planned docs fired the "bespoke SSG" tripwires
     (RSS, OG, typed frontmatter, content DX). Astro is Vite underneath — the landing page ported
     verbatim, `bun test` suites unchanged — and React 19 islands are available only where a route needs
@@ -157,26 +158,70 @@ landing + blog shells                      ──▶ src/components/Analytics.as
 ## Analytics and consent
 
 `src/analytics.ts` is the site-local facade over [[module-website-analytics]]. It supplies the exact
-production hostname `thinkrail.ai`; the shared module owns the PostHog and GTM identifiers, privacy
-configuration, and typed script loaders. Localhost, `astro dev`, every `pages.dev` deployment, the
+production hostname `thinkrail.ai` and adapts Cookiebot's response-aware Marketing state plus
+consent-ready/accept/decline events to the shared current-value/subscription contract; the shared module owns the PostHog and GTM identifiers,
+journey persistence, typed capture, privacy configuration, and script loaders. Unknown or denied Marketing
+state stays cookieless and carries no journey ID. Localhost, `astro dev`, every `pages.dev` deployment, the
 `jetbrains.github.io` address, and sibling subdomains send nothing.
 
-`src/components/Analytics.astro` initializes that facade once per document and is the only analytics
-composition point for the IDE-shell and vibecoding routes. No page or child module carries vendor
-configuration or another loader. The existing GTM container remains Cookiebot's control plane; route-
-specific downstream tags use a `thinkrail.ai` hostname condition plus Page Path, never another GTM
-container. Sharing the exact apex origin means Cookiebot scans and browser consent state apply to all
-three route families.
+`src/components/Analytics.astro` initializes that facade and then the idempotent site event delegation
+once per document; it remains the analytics composition point for the IDE-shell and vibecoding routes.
+Content keys derive from `window.location.pathname`: `/` → `landing`, `/blog/` → `blog/index`, and
+other paths containing only lowercase safe characters become the path without outer slashes (so
+`/blog/<slug>/` → `blog/<slug>`). Keys allow only lowercase letters, digits, hyphens, and path
+separators and are limited to 105 characters, enough for `blog/` plus the maximum 100-character post
+slug; invalid paths emit no content or action events. Query and fragment strings are absent from
+`pathname`; dotted `index.html` paths are not route aliases. New pages and posts need no analytics code
+change. Only pages composed with Analytics load it: the authored `src/pages/404.astro` is a standalone,
+analytics-free page served for unknown URLs, and the standalone `/attribution/claim/` page remains
+analytics-free. Each valid document emits one explicit `content_viewed` with its derived key. Build
+validation recursively checks every emitted `.html` document for exactly one PostHog and GTM loader,
+except the explicit analytics-free `404.html` and `/attribution/claim/` outputs, which must contain
+neither loader nor browser analytics. Route-specific layout, artifact, and SEO checks remain focused
+on their owning routes.
 
-The site test pins its production-host identity and disabled hosts, while the shared package tests the
-common PostHog/GTM contract. The shared contract deliberately has no `posthog-js` dependency, pasted
-bootstrap, or static GTM `noscript` iframe; its spec owns the cookieless behavior and consent caveat.
+At initialization, the current page touch is recorded only when a consented journey already exists;
+journey appearance after initialization does not replay the page URL or referrer, and journey removal
+clears attribution context. Touches carry only bounded UTM values, referrer class, timestamp, and policy
+version; they do not transfer a page key. Website events retain their `content_key` and journey identity,
+so PostHog joins those events to the app's `acquisition_linked.journey_id` for landing/last-page analysis.
+Document-level `click`, middle-button `auxclick`, and disclosure `toggle`
+delegation instruments the static install controls without changing their navigation or no-JS behavior.
+Before each post-initialization install CTA, download, or CLI event, the current navigation touch is
+attempted so consent granted on the page can affect only a subsequent action. Only the four exact stable
+GitHub desktop aliases are downloads. Their CTA location comes from the containing hero, install
+section, quick start, final CTA, or blog post; one recognized activation emits `install_cta_clicked`
+(`desktop`) followed by `download_started`. When a consented journey context is available, the activation
+creates and stores a canonical per-download bridge ID before `download_started`, and that event carries
+the same ID. A later desktop download replaces only the stored latest bridge ID; a download without
+consent remains bridge-less. Opening either landing command-line disclosure emits only
+`install_cta_clicked` (`cli`); closing it does not. No page or child module carries analytics imports,
+vendor configuration, or another loader.
+
+The existing GTM container remains Cookiebot's control plane; route-specific downstream tags use a
+`thinkrail.ai` hostname condition plus Page Path, never another GTM container. Sharing the exact apex
+origin means Cookiebot scans and browser consent state apply to all three route families.
+
+Site tests pin production-host identity, disabled hosts, the Cookiebot adapter, every route key and
+stable desktop alias, event derivation, and initializer idempotence. The shared package tests the
+PostHog/GTM, journey and capture contracts. The shared contract deliberately has no `posthog-js`
+dependency, pasted bootstrap, or static GTM `noscript` iframe.
+
+The non-indexed `/attribution/claim/` route belongs to [[submodule-website-attribution]]; its
+analytics-free page silently attempts the claim bind on load only when the current Cookiebot
+`CookieConsent` cookie records a Marketing grant or `-1`, then navigates to `/blog/`. That module owns
+the claim protocol and framing protections.
 
 ## Deploy
 
-Cloudflare Pages project `thinkrail-website` owns production and previews for the one static artifact.
-`.github/workflows/site.yml` runs `bun run --filter @thinkrail/website build` (`astro check && astro
-build` plus artifact validation) and direct-uploads `apps/website/dist` to branch `main` on pushes that
+Cloudflare Pages project `thinkrail-website` owns production and previews for the static artifact and
+claim Functions. Pinned Wrangler `4.124.0` deploys from `apps/website` so its configuration,
+`functions/`, and `dist` artifact form one deployment. The top-level `ATTRIBUTION_DB` serves production
+and local Pages/D1 workflows; production applies committed attribution migrations before deploy. The
+build compiles the Functions, and a local Pages/D1 smoke starts Pages from the checked-in configuration,
+applies the actual migration, and exercises create, bind, and redeem. `.github/workflows/site.yml` runs
+`bun run --filter @thinkrail/website build` (`astro check`, the Functions typecheck and build, `astro
+build`, and artifact validation) on pushes that
 touch this module, [[module-website-analytics]], the root package manifest, or the lockfile (plus manual
 dispatch). It verifies the provider URL before succeeding. `thinkrail.ai` is the project's custom apex
 domain; provider URLs are deployment probes, not product identities.
@@ -188,10 +233,12 @@ second hosting pipeline.
 ### PR preview deploys
 
 `.github/workflows/site-preview.yml` runs the same build command and uploads to branch `pr-<number>` in
-`thinkrail-website`. The deterministic alias `https://pr-<number>.thinkrail-website.pages.dev` is
-surfaced as one sticky PR comment and one `Website preview` commit status covering `/`, `/blog/`,
-`/vibecoding/`, and `/agentic-development/`. It waits for all of those routes to serve before
-publishing the URL.
+`thinkrail-website`. The Wrangler `env.preview` override gives preview deployments no D1 binding;
+the production-origin guard independently continues to return not-found for preview attribution
+requests before D1 access. The deterministic alias
+`https://pr-<number>.thinkrail-website.pages.dev` is surfaced as one sticky PR comment and one
+`Website preview` commit status covering `/`, `/blog/`, `/vibecoding/`, and `/agentic-development/`.
+It waits for all of those routes to serve before publishing the URL.
 
 Same-repository PRs only receive previews; fork PRs skip because Cloudflare credentials never cross the
 repository boundary. Preview URLs are public and analytics-silent while their PR is open. A separate
@@ -200,9 +247,11 @@ marks its preview metadata retired; PRs without that marker are no-ops. The shar
 prevents cleanup racing an in-flight publish. A newer push cancels only the superseded preview for that
 PR.
 
-One-time setup creates `thinkrail-website` with production branch `main`, using the existing
-`CLOUDFLARE_API_TOKEN` (Pages:Edit) and `CLOUDFLARE_ACCOUNT_ID` repository secrets, then attaches the
-`thinkrail.ai` custom domain after the provider-hosted main deployment is verified.
+One-time setup creates `thinkrail-website` with production branch `main`, using
+`CLOUDFLARE_API_TOKEN` (Pages:Edit plus D1:Edit for committed attribution migrations) and
+`CLOUDFLARE_ACCOUNT_ID` repository secrets, then attaches the `thinkrail.ai` custom domain after the
+provider-hosted main deployment is verified. The token permission update must land before the first
+claim-enabled production deployment.
 
 ### Hosting and retired hostname
 

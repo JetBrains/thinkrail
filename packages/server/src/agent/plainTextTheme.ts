@@ -75,6 +75,10 @@ class PlainTextTheme extends Theme {
 		return text;
 	}
 
+	override style(text: string): string {
+		return text;
+	}
+
 	override bold(text: string): string {
 		return text;
 	}

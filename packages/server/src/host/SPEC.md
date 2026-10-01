@@ -81,9 +81,18 @@ channel fan-out, and the process-boot wrapper both launchers share.
   socket close,
   an optional boot-time `openProject(projectPath)` (best-effort — a launcher convenience), the
   **analytics wiring** (`initializeAnalytics` at boot from launcher provenance, destination, and per-run
-  additional-data suppression; `analyticsEnabled` plus `analyticsConsentConfirmed` control only the
-  additional tier, synced from the settings publisher. Basic events remain on in human runs. Consent
-  changes clear additional-event correlation so re-enabling cannot reconstruct pre-consent work.
+  additional-data suppression; startup grants the additional tier only when `analyticsEnabled &&
+  analyticsConsentConfirmed`. After boot, the settings publisher still broadcasts every merged config but
+  changes the analytics grant only when its successful applied update explicitly carries `analyticsEnabled`,
+  so unrelated writes preserve the current grant and the dialog's preference prime can enable it.
+  `analyticsConsentConfirmed` controls the web prompt lifecycle. Its unconfirmed on-prime may enable ordinary
+  additional capture, but browser attribution starts only from confirmed-on state: directly after the final
+  applied dialog update (the UI is ready), or for a saved choice only through the launcher's explicit
+  `RunningServer.startAttributionClaim()` readiness signal after normal UI readiness. Revocation cancels the
+  claim generation. Basic
+  events remain on in human runs. Consent changes clear additional-event correlation so re-enabling cannot
+  reconstruct pre-consent work; campaign-only enrichment is inactive while off and restored from its strict
+  server record when on without retrying a consumed claim.
   `shutdownAnalytics()` remains a best-effort drain in `stop()` and awaited by graceful shutdown;
   every capture site lives here, including the existing basic events: `chat_started` in `session.create`, `message_sent` (via the
   local `trackSend(mode, text)`) after an **accepted** `session.prompt`/`session.steer`/`session.followUp`
@@ -101,7 +110,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   Opaque-loader provider membership identifies Central without opening its auth/configuration surface.
   Additional setup/run/task/review/PR observations use the closed triggers in
   [[submodule-server-analytics]], with transient consent-scoped correlation and task-artifact reconciliation.
-  Host alone mediates these events; no install-announcement or provider-change capture exists.
+  Host alone mediates these events; analytics initialization emits the packaged-install lifecycle event,
+  while no provider-change capture exists.
   Setup observes existing read results, never triggers provider work; only explicit setup mutations count.
   Run timing starts at canonical `agent_start`, with local send intent recorded before calling pi (not
   after `ackSend`); unproven provenance stays unknown and retries remain one cycle until `agent_settled`.
@@ -391,6 +401,14 @@ channel fan-out, and the process-boot wrapper both launchers share.
   subscribes every client so permanent domain deletion converges beyond the initiating page. It remains a
   low-latency event, not a durable queue: a reconnecting client's active-workspace `session.list` is the
   authoritative read-side repair for an event missed while its socket was down.
+- **Chat Resources:** the scoped resource read, command output/stop and direct-child stop/stop-all
+  handlers enforce each request's exact key set before resolving workspace membership and passing ids plus
+  the registry-owned cwd to the agent barrel. Parent/child ids follow Pi's canonical session grammar
+  (including internal dots); workspace and command ids retain their owner-specific grammar and authority.
+  Missing parents/resources use `RESOURCE_UNAVAILABLE`; output's missing-command result is
+  `available:false` only after validating its parent. No client path/PID field is accepted.
+  The agent's resource publisher maps to `session.resourcesChanged`, subscribed in the WS open handler;
+  this is a catalog invalidation, never an output broadcast. Resource ownership and teardown stay in agent.
 - **Activity fan-out:** `createServer` installs the agent module's activity publisher and broadcasts each
   `SessionActivityPayload` on `session.activity`, which the WS `open` handler subscribes for every client
   alongside the other session channels; `session.activityList` serves the cross-workspace snapshot, since
@@ -432,6 +450,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   may. Concurrent first sends remain per-session single-flighted. There is no settled-turn or per-turn retitle
   hook. Both manual and automatic writes converge every client through the existing
   `pi.event`/`session_info_changed` channel and `session.list` repair; no new push channel exists.
+
+`RunningServer.startAttributionClaim()` is the explicit launcher-readiness signal and rechecks the saved
+enabled/confirmed choice before entering analytics attribution.
+
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for

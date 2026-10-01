@@ -24,6 +24,7 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import { isControlMessage } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	abortSession,
 	answerQuestion,
@@ -39,10 +40,12 @@ import {
 	getSessionMessages,
 	getSessionMessagesSnapshot,
 	getSessionName,
+	getSessionResources,
 	getSessionStats,
 	getSessionWorkspaceId,
 	hasSession,
-	isSessionStreaming,
+	isHostResourceId,
+	isPiSessionId,
 	listAvailableModels,
 	listProjectAliasSkillNames,
 	listSessionActivity,
@@ -51,6 +54,7 @@ import {
 	listSkillCommands,
 	notifyExtUi,
 	promptSession,
+	readBackgroundCommandOutput,
 	readChildTranscript,
 	refreshAvailableModels,
 	refreshSubagentTools,
@@ -64,6 +68,9 @@ import {
 	setSessionModel,
 	setSessionThinkingLevel,
 	steerSession,
+	stopAllSubagents,
+	stopBackgroundCommand,
+	stopSubagent,
 } from "../agent";
 import { type AdditionalAnalyticsCapture, type SendMode, track } from "../analytics";
 import {
@@ -366,6 +373,30 @@ async function sendToFileChat(
 	await markCommentsSent(workspaceId, ids, created.sessionId);
 	fireReviewPrompt(workspaceId, ids, created.sessionId, pkg);
 	return { ...created, reused: false };
+}
+
+function resourceCwd(workspaceId: string): string {
+	try {
+		return getWorkspace(workspaceId).worktreePath;
+	} catch {
+		throw new CodedError("RESOURCE_UNAVAILABLE", "Session resources unavailable");
+	}
+}
+
+function resourceParams<K extends string>(params: unknown, keys: K[]): Record<K, string> {
+	if (!params || typeof params !== "object" || Array.isArray(params))
+		throw new Error("Invalid resource ids");
+	if (Object.keys(params).some((key) => !keys.some((allowed) => allowed === key)))
+		throw new Error("Invalid resource ids");
+	const result = {} as Record<K, string>;
+	for (const key of keys) {
+		const value: unknown = Reflect.get(params, key);
+		const sessionId = key === "sessionId" || key === "parentSessionId" || key === "childSessionId";
+		if (typeof value !== "string" || !(sessionId ? isPiSessionId(value) : isHostResourceId(value)))
+			throw new Error("Invalid resource ids");
+		result[key] = value;
+	}
+	return result;
 }
 
 const handlers: Record<string, Handler> = {
@@ -802,7 +833,6 @@ const handlers: Record<string, Handler> = {
 	},
 	"session.dispose": async (params) => {
 		const { sessionId } = params as { sessionId: string };
-		if (isSessionStreaming(sessionId)) await abortSession(sessionId).catch(() => {});
 		await removeSession(sessionId);
 		runObservation.forget(sessionId);
 		taskObservation.forget(sessionId);
@@ -866,6 +896,48 @@ const handlers: Record<string, Handler> = {
 	"session.getMessages": (params) => {
 		const p = params as { sessionId: string; workspaceId: string };
 		return getSessionMessages(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
+	},
+	"session.resources": (params) => {
+		const p = resourceParams(params, ["workspaceId", "sessionId"]);
+		return getSessionResources(p.workspaceId, p.sessionId, resourceCwd(p.workspaceId));
+	},
+	"backgroundCommand.output": (params) => {
+		const p = resourceParams(params, ["workspaceId", "sessionId", "commandId"]);
+		return readBackgroundCommandOutput(
+			p.workspaceId,
+			p.sessionId,
+			p.commandId,
+			resourceCwd(p.workspaceId),
+		);
+	},
+	"backgroundCommand.stop": async (params) => {
+		const p = resourceParams(params, ["workspaceId", "sessionId", "commandId"]);
+		await stopBackgroundCommand(
+			p.workspaceId,
+			p.sessionId,
+			p.commandId,
+			resourceCwd(p.workspaceId),
+		);
+		return { ok: true } as const;
+	},
+	"subagent.stop": async (params) => {
+		const p = resourceParams(params, ["workspaceId", "parentSessionId", "childSessionId"]);
+		await stopSubagent(
+			p.workspaceId,
+			p.parentSessionId,
+			p.childSessionId,
+			resourceCwd(p.workspaceId),
+		);
+		return { ok: true } as const;
+	},
+	"subagent.stopAll": async (params) => {
+		const p = resourceParams(params, ["workspaceId", "parentSessionId"]);
+		const targeted = await stopAllSubagents(
+			p.workspaceId,
+			p.parentSessionId,
+			resourceCwd(p.workspaceId),
+		);
+		return { ok: true, targeted } as const;
 	},
 	"subagent.getTranscript": (params) => {
 		const p = params as { workspaceId: string; parentSessionId: string; childSessionId: string };
