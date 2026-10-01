@@ -33,32 +33,43 @@ function runNativeWindowControlsRequest(action: string, operation: () => Promise
 	}
 }
 
+export function subscribeToNativeWindowState(
+	bridge: Pick<NativeWindowControlsBridge, "getState" | "subscribe">,
+	onState: (state: NativeWindowState) => void,
+): () => void {
+	let active = true;
+	let pushed = false;
+	const unsubscribe = bridge.subscribe((next) => {
+		if (!active) return;
+		pushed = true;
+		onState(next);
+	});
+	bridge.getState().then(
+		(next) => {
+			if (active && !pushed) onState(next);
+		},
+		(error) => reportNativeWindowControlsFailure("read", error),
+	);
+	return () => {
+		active = false;
+		unsubscribe();
+	};
+}
+
 export function useNativeWindowControls(): NativeWindowControlsController | null {
 	const [bridge] = useState(() =>
 		getNativeWindowControlsBridge(Reflect.get(globalThis, NATIVE_WINDOW_CONTROLS_GLOBAL)),
 	);
 	const [state, setState] = useState<NativeWindowState | null>(null);
 
-	useEffect(() => {
-		if (!bridge) return;
-		let active = true;
-		const unsubscribe = bridge.subscribe((next) => {
-			if (active) setState(next);
-		});
-		void bridge.getState().then((next) => {
-			if (active) setState(next);
-		});
-		return () => {
-			active = false;
-			unsubscribe();
-		};
-	}, [bridge]);
+	useEffect(() => (bridge ? subscribeToNativeWindowState(bridge, setState) : undefined), [bridge]);
 
 	if (!bridge || !state) return null;
 	return {
 		state,
 		minimize: () => runNativeWindowControlsRequest("minimize", () => bridge.minimize()),
-		toggleMaximize: () => runNativeWindowControlsRequest("resize", () => bridge.toggleMaximize()),
+		toggleMaximize: () =>
+			runNativeWindowControlsRequest("maximize or restore", () => bridge.toggleMaximize()),
 		close: () => runNativeWindowControlsRequest("close", () => bridge.close()),
 	};
 }

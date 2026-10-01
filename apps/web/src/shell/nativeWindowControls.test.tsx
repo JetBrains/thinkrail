@@ -1,8 +1,11 @@
 import { expect, test } from "bun:test";
-import type { NativeWindowControlsBridge } from "@thinkrail/contracts";
+import type { NativeWindowControlsBridge, NativeWindowState } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { NativeWindowControls } from "./NativeWindowControls";
-import { getNativeWindowControlsBridge } from "./useNativeWindowControls";
+import {
+	getNativeWindowControlsBridge,
+	subscribeToNativeWindowState,
+} from "./useNativeWindowControls";
 
 const FAKE_BRIDGE: NativeWindowControlsBridge = {
 	getState: () => Promise.resolve({ maximized: false, fullScreen: false }),
@@ -64,4 +67,54 @@ test("fullScreen state renders nothing", () => {
 		/>,
 	);
 	expect(markup).toBe("");
+});
+
+function deferredBridge() {
+	let resolveState: (state: NativeWindowState) => void = () => {};
+	let push: (state: NativeWindowState) => void = () => {};
+	const bridge = {
+		getState: () =>
+			new Promise<NativeWindowState>((resolve) => {
+				resolveState = resolve;
+			}),
+		subscribe: (listener: (state: NativeWindowState) => void) => {
+			push = listener;
+			return () => {
+				push = () => {};
+			};
+		},
+	};
+	return {
+		bridge,
+		resolveState: (state: NativeWindowState) => resolveState(state),
+		push: (state: NativeWindowState) => push(state),
+	};
+}
+
+test("the initial snapshot applies when no push has arrived", async () => {
+	const { bridge, resolveState } = deferredBridge();
+	const seen: NativeWindowState[] = [];
+	subscribeToNativeWindowState(bridge, (state) => seen.push(state));
+	resolveState({ maximized: true, fullScreen: false });
+	await Promise.resolve();
+	expect(seen).toEqual([{ maximized: true, fullScreen: false }]);
+});
+
+test("a stale initial snapshot never overwrites a fresher push", async () => {
+	const { bridge, resolveState, push } = deferredBridge();
+	const seen: NativeWindowState[] = [];
+	subscribeToNativeWindowState(bridge, (state) => seen.push(state));
+	push({ maximized: true, fullScreen: false });
+	resolveState({ maximized: false, fullScreen: false });
+	await Promise.resolve();
+	expect(seen).toEqual([{ maximized: true, fullScreen: false }]);
+});
+
+test("nothing applies after unsubscribing", async () => {
+	const { bridge, resolveState } = deferredBridge();
+	const seen: NativeWindowState[] = [];
+	subscribeToNativeWindowState(bridge, (state) => seen.push(state))();
+	resolveState({ maximized: true, fullScreen: false });
+	await Promise.resolve();
+	expect(seen).toEqual([]);
 });
