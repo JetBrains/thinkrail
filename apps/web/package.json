@@ -43,6 +43,7 @@
 		"clsx": "2.1.1",
 		"cmdk": "1.1.1",
 		"diff": "8.0.4",
+		"jsondiffpatch": "0.7.3",
 		"mermaid": "catalog:",
 		"monaco-editor": "0.55.1",
 		"node-htmldiff": "0.9.4",
