@@ -46,7 +46,11 @@ export function seedFixtureRepo(): void {
 						cell_type: "markdown",
 						id: "intro",
 						metadata: {},
-						source: ["# Notebook fixture\n", "Rendered markdown cell"],
+						source: [
+							"# Notebook fixture\n",
+							"Rendered markdown cell\n",
+							"![fixture-logo](logo.png)",
+						],
 					},
 					{
 						cell_type: "code",

@@ -1374,9 +1374,13 @@ own section. The kebab menu (`plan-menu`, a
   `thinkrail/notebook` accepts nbformat-4 JSON and reuses the tolerant positional JSON scanner to bind every
   rendered cell to its raw cell-object line range. Nbformat 4.5 ids are the `ipynb-cell` structural ref;
   older notebooks use `index:<zero-based>`. Markdown cells use the shared Markdown parser without raw HTML.
-  Its notebook component map permits only base64 PNG/JPEG/GIF/WebP/AVIF images in the app document,
-  routes SVG data images through the empty-sandbox `NotebookFrame`, and renders links plus every other image
-  URL as inert text. Notebook language metadata must resolve through the shared Shiki catalog; missing
+  Its notebook component map (`notebookMarkdownComponents(resource)`, built per notebook because image
+  resolution is relative to the notebook's own path, as in Jupyter) permits base64 PNG/JPEG/GIF/WebP/AVIF
+  images in the app document, routes SVG data images through the empty-sandbox `NotebookFrame`, loads
+  **relative** images from the host `/files` route through the same injected byte-URL composer the
+  markdown preview uses (a traversal above the worktree is inert text, never a request), and renders
+  links plus every remote image URL as inert text — a notebook's `![plot](figures/x.png)` is repository
+  content, a third-party URL is not. Notebook language metadata must resolve through the shared Shiki catalog; missing
   metadata defaults to Python and unknown values render as plain text. ANSI is removed from stream and error
   output. MIME bundles choose image (PNG, JPEG, GIF, SVG), HTML, JSON, then plain text. SVG output stays a
   data image inside the inert frame document.

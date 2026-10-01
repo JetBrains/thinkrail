@@ -119,6 +119,11 @@ test("opens a notebook with Notebook and Source candidates", async ({ page }) =>
 	await expect(page.getByTestId("view-toggle-code")).toBeVisible();
 	await expect(page.getByTestId("notebook-view")).toContainText("Notebook fixture");
 	await expect(page.getByTestId("notebook-view")).toContainText("notebook-output");
+	const cellImage = page.getByTestId("notebook-view").locator('img[alt="fixture-logo"]');
+	await expect(cellImage).toHaveAttribute("src", /\/files\/[^/]+\/logo\.png$/);
+	await expect
+		.poll(() => cellImage.evaluate((el: HTMLImageElement) => el.naturalWidth))
+		.toBeGreaterThan(0);
 });
 
 test("opens an HTML preview with active content disabled", async ({ page }) => {

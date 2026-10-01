@@ -87,6 +87,7 @@ function CellCommentButton({
 }
 
 function NotebookDiffSurface({
+	resource,
 	original,
 	modified,
 	ignoreWhitespace,
@@ -266,7 +267,7 @@ function NotebookDiffSurface({
 									/>
 								</>
 							) : entry.state === "unchanged" || entry.state === "added" ? (
-								<NotebookCellBody cell={current} language={language} />
+								<NotebookCellBody cell={current} language={language} resource={resource} />
 							) : (
 								<div className="min-w-0 flex-1">
 									<pre className="overflow-auto whitespace-pre-wrap p-12 tr-code-text text-text-default">

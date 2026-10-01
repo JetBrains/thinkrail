@@ -19,6 +19,7 @@ import {
 const NO_THREADS: ReadonlySet<string> = new Set();
 
 export default function NotebookView({
+	resource,
 	content,
 	review,
 	onPlacedThreadIds,
@@ -123,7 +124,7 @@ export default function NotebookView({
 										</span>
 									) : null}
 								</div>
-								<NotebookCellBody cell={cell} language={document.language} />
+								<NotebookCellBody cell={cell} language={document.language} resource={resource} />
 							</div>
 							{composing && review ? (
 								<div className="border-border-muted border-t p-8">

@@ -4,15 +4,29 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Markdown } from "@/chat/Markdown";
 import { notebookMarkdownComponents, notebookMarkdownUrlTransform } from "./NotebookOutputView";
 
+const components = notebookMarkdownComponents(
+	{ workspaceId: "ws", path: "nb/demo.ipynb" },
+	(workspaceId, path) => `http://host.test/files/${workspaceId}/${path}`,
+);
+
 function renderNotebookMarkdown(text: string): string {
 	return renderToStaticMarkup(
 		createElement(Markdown, {
 			text,
-			components: notebookMarkdownComponents,
+			components,
 			urlTransform: notebookMarkdownUrlTransform,
 		}),
 	);
 }
+
+test("notebook markdown loads relative images from the host byte route, resolved against the notebook", () => {
+	const markup = renderNotebookMarkdown("![plot](../img/plot.png?v=2)");
+	expect(markup).toContain('src="http://host.test/files/ws/img/plot.png"');
+	expect(markup).not.toContain("notebook-disabled-image");
+	const escaped = renderNotebookMarkdown("![plot](../../../etc/passwd)");
+	expect(escaped).toContain('data-testid="notebook-disabled-image"');
+	expect(escaped).not.toContain("<img");
+});
 
 test("notebook markdown replaces remote images with a URL-labelled placeholder", () => {
 	const markup = renderNotebookMarkdown("![plot](https://attacker.invalid/pixel.png)");

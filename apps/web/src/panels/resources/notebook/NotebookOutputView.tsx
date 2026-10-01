@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 import type { Components } from "react-markdown";
 import { Markdown } from "@/chat/Markdown";
+import { classifyHref, resolveRelativePath } from "../../markdownLinks";
+import { resourceBytesUrl } from "../../resourcePane";
 import type { NotebookCell, NotebookOutput } from "./notebookModel";
 import {
 	buildNotebookHtmlDocument,
@@ -28,35 +30,58 @@ function svgDataImageSource(src: string): string | null {
 	}
 }
 
-function NotebookMarkdownImage({
-	src,
-	alt,
-	title,
-}: {
-	src?: string | undefined;
-	alt?: string | undefined;
-	title?: string | undefined;
-}) {
-	if (src && RASTER_DATA_IMAGE.test(src)) {
-		return <img src={src} alt={alt ?? ""} title={title} />;
+export interface NotebookResourceContext {
+	workspaceId: string;
+	path: string;
+}
+
+function notebookImageSource(
+	src: string | undefined,
+	ctx: NotebookResourceContext,
+	bytesUrl: (workspaceId: string, path: string) => string,
+): { kind: "image"; src: string } | { kind: "svg"; svg: string } | { kind: "disabled" } {
+	if (!src) return { kind: "disabled" };
+	if (RASTER_DATA_IMAGE.test(src)) return { kind: "image", src };
+	const svg = svgDataImageSource(src);
+	if (svg !== null) return { kind: "svg", svg };
+	if (classifyHref(src) === "relative") {
+		const target = resolveRelativePath(ctx.path, src.split(/[?#]/, 1)[0] ?? src);
+		if (target) return { kind: "image", src: bytesUrl(ctx.workspaceId, target) };
 	}
-	if (src) {
-		const svg = svgDataImageSource(src);
-		if (svg !== null) {
+	return { kind: "disabled" };
+}
+
+export function notebookMarkdownComponents(
+	ctx: NotebookResourceContext,
+	bytesUrl: (workspaceId: string, path: string) => string = resourceBytesUrl,
+): Components {
+	function NotebookMarkdownImage({
+		src,
+		alt,
+		title,
+	}: {
+		src?: string | undefined;
+		alt?: string | undefined;
+		title?: string | undefined;
+	}) {
+		const source = notebookImageSource(src, ctx, bytesUrl);
+		if (source.kind === "image") return <img src={source.src} alt={alt ?? ""} title={title} />;
+		if (source.kind === "svg") {
 			return (
 				<NotebookFrame
 					title={title ?? alt ?? "Notebook SVG image"}
-					document={buildNotebookSvgDocument(svg)}
+					document={buildNotebookSvgDocument(source.svg)}
 				/>
 			);
 		}
+		return (
+			<span data-testid="notebook-disabled-image" className="text-text-muted">
+				{alt ? `${alt}: ` : "Image disabled: "}
+				{src ?? "missing URL"}
+			</span>
+		);
 	}
-	return (
-		<span data-testid="notebook-disabled-image" className="text-text-muted">
-			{alt ? `${alt}: ` : "Image disabled: "}
-			{src ?? "missing URL"}
-		</span>
-	);
+	return { img: NotebookMarkdownImage, a: NotebookMarkdownLink } as Components;
 }
 
 function NotebookMarkdownLink({
@@ -73,11 +98,6 @@ function NotebookMarkdownLink({
 		</span>
 	);
 }
-
-export const notebookMarkdownComponents = {
-	img: NotebookMarkdownImage,
-	a: NotebookMarkdownLink,
-} as Components;
 
 export function notebookMarkdownUrlTransform(url: string): string {
 	return url;
@@ -205,14 +225,26 @@ export function NotebookOutputs({ cell }: { cell: NotebookCell }) {
 	) : null;
 }
 
-export function NotebookCellBody({ cell, language }: { cell: NotebookCell; language: string }) {
+export function NotebookCellBody({
+	cell,
+	language,
+	resource,
+}: {
+	cell: NotebookCell;
+	language: string;
+	resource: NotebookResourceContext;
+}) {
+	const components = useMemo(
+		() => notebookMarkdownComponents({ workspaceId: resource.workspaceId, path: resource.path }),
+		[resource.path, resource.workspaceId],
+	);
 	let source: ReactNode;
 	if (cell.type === "markdown") {
 		source = (
 			<Markdown
 				text={cell.source}
 				className="tr-prose-doc max-w-none break-words text-text-default [&_pre]:my-8"
-				components={notebookMarkdownComponents}
+				components={components}
 				urlTransform={notebookMarkdownUrlTransform}
 			/>
 		);
@@ -222,7 +254,7 @@ export function NotebookCellBody({ cell, language }: { cell: NotebookCell; langu
 			<Markdown
 				text={`${fence}${language}\n${cell.source}\n${fence}`}
 				className="[&_pre]:!m-0 [&_pre]:rounded-none"
-				components={notebookMarkdownComponents}
+				components={components}
 				urlTransform={notebookMarkdownUrlTransform}
 			/>
 		);
