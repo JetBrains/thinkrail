@@ -32,8 +32,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   accepted blob is **streamed**: only its 8 KiB sniff head is awaited for the headers and the rest relays
   `git cat-file`'s stdout chunk by chunk, so concurrent image or PDF diffs cost pipe buffers, not blobs,
   of host memory; the body goes out chunked (a streamed body carries no `Content-Length`), a consumer
-  that disconnects kills its `git`, and the relay's own deadline is five minutes — a slow reader
-  stalls `git` on the pipe rather than racing the 55 s network budget. Both routes exist
+  that disconnects kills its `git` — through the body's cancel once it streams, and through the
+  request's `signal` while the sniff head is still awaited — and the relay's own deadline is five
+  minutes, so a slow reader stalls `git` on the pipe rather than racing the 55 s network budget. Both routes exist
   because `fs.readFile` and `git.diffFile` answer `""` for bytes they must not decode, so a byte-only
   resource is fetched over HTTP instead. Both derive `Content-Type` through the shared byte classifier plus
   filename fallback (falling back to `application/octet-stream`) and

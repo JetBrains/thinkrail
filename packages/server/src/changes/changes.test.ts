@@ -881,3 +881,37 @@ test("forgetting a workspace drops its receipts so an undo is RECEIPT_UNKNOWN", 
 	).rejects.toMatchObject({ code: "RECEIPT_UNKNOWN" });
 	expect(text("a.ts")).toBe("one\ntwo\nthree\n");
 });
+
+test("a workspace removed while a revert awaits the trash never regains a receipt ring", async () => {
+	write("late.txt", "to be trashed\n");
+	let enteredTrash!: () => void;
+	let releaseTrash!: () => void;
+	const entered = new Promise<void>((resolve) => {
+		enteredTrash = resolve;
+	});
+	const released = new Promise<void>((resolve) => {
+		releaseTrash = resolve;
+	});
+	setTrashImplementationForTests(async (input) => {
+		const path = typeof input === "string" ? input : (input[0] ?? "");
+		enteredTrash();
+		await released;
+		rmSync(path, { force: true });
+	});
+
+	const pending = revert(
+		"late.txt",
+		{ kind: "file" },
+		{ originalHash: null, modifiedHash: hash("to be trashed\n") },
+	);
+	await entered;
+	writeFileSync(join(dataDir, "workspaces.json"), "[]");
+	forgetWorkspaceChanges(workspaceId);
+	releaseTrash();
+	const receipt = await pending;
+	expect(receipt.after).toEqual({ hash: null, byteLength: null, mode: null });
+
+	await expect(
+		undoChange({ workspaceId, receiptId: receipt.id, expect: { modifiedHash: null } }),
+	).rejects.toMatchObject({ code: "RECEIPT_UNKNOWN" });
+});

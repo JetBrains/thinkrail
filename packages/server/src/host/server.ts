@@ -246,7 +246,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				return serveWorktreeFile(url.pathname);
 			}
 			if (url.pathname.startsWith(BLOB_PREFIX)) {
-				return serveBlob(url.pathname);
+				return serveBlob(url.pathname, req.signal);
 			}
 			if (staticDir) {
 				return serveStatic(url.pathname, staticDir);

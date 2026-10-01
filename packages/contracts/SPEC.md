@@ -514,8 +514,9 @@ of the host.
   compare-and-swap is the whole protection; symlink and mode-only inputs are `UNSUPPORTED_CHANGE`) and **`change.undo`** (`{ workspaceId, receiptId, expect:
   { modifiedHash } }` → `{ receipt }`: receipts are the inverse, which is why the UI offers *Undo*
   instead of a confirmation on every hunk; the `undo` receipt it answers with is itself undoable once, so
-  redo needs no third method). Receipts live in host memory only (newest 20 per workspace): git and the
-  OS trash already back recovery, so a data-dir format would buy nothing — hence
+  redo needs no third method). Receipts live in host memory only (per workspace: at most 20, at most
+  64 MiB of held bytes, oldest evicted first, the newest always kept; dropped with the workspace): git
+  and the OS trash already back recovery, so a data-dir format would buy nothing — hence
   `RECEIPT_UNKNOWN` rather than a wire promise of durability / **`git.prefetch`** (best-effort background fetch of a
   remote base — the New-Workspace dialog's freshness warm-up; always acks `{ ok }`, and when the fetch
   actually moved the local remote-tracking ref the host follows up with pathless `workspace.fsChanged`

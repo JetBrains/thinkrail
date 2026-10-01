@@ -154,6 +154,10 @@ export function streamBounded(argv: string[], opts: BoundedStreamOptions): Bound
 
 	const err = textSink(proc.stderr);
 	const deadline = delay(boundedTimeout(opts.timeoutMs));
+	const state: { exit: BoundedRunBase | null; wake: (() => void) | null } = {
+		exit: null,
+		wake: null,
+	};
 	const exited = (async (): Promise<BoundedRunBase> => {
 		const outcome = await Promise.race([
 			proc.exited.then(() => "exited" as const),
@@ -165,19 +169,42 @@ export function streamBounded(argv: string[], opts: BoundedStreamOptions): Bound
 		await Promise.race([err.done, grace.promise]);
 		grace.cancel();
 		err.cancel();
-		return {
+		state.exit = {
 			ok: outcome === "exited" && proc.exitCode === 0,
 			err: err.value(),
 			timedOut: outcome === "timed-out",
 			launchFailed: false,
 			waitedMs: waitedMs(),
 		};
+		state.wake?.();
+		return state.exit;
 	})();
 
 	const reader = proc.stdout.getReader();
+	const nextChunk = async () => {
+		const read = reader.read();
+		const outcome = await Promise.race([
+			read.then(() => "read" as const),
+			new Promise<"exited">((resolve) => {
+				if (state.exit) resolve("exited");
+				else state.wake = () => resolve("exited");
+			}),
+		]);
+		state.wake = null;
+		if (outcome === "exited") {
+			const grace = delay(DRAIN_GRACE_MS);
+			const late = await Promise.race([
+				read.then(() => "read" as const),
+				grace.promise.then(() => "grace" as const),
+			]);
+			grace.cancel();
+			if (late === "grace") void reader.cancel().catch(() => {});
+		}
+		return read;
+	};
 	const stdout = new ReadableStream<Uint8Array>({
 		async pull(controller) {
-			const next = await reader.read();
+			const next = await nextChunk();
 			if (!next.done) {
 				controller.enqueue(next.value);
 				return;

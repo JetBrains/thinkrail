@@ -68,7 +68,7 @@ export async function serveWorktreeFile(pathname: string): Promise<Response> {
 	}
 }
 
-export async function serveBlob(pathname: string): Promise<Response> {
+export async function serveBlob(pathname: string, signal?: AbortSignal): Promise<Response> {
 	const workspace = head(pathname.slice(BLOB_PREFIX.length));
 	const blob = workspace === null ? null : head(workspace.remainder);
 	const relPath = blob === null ? null : decoded(blob.remainder);
@@ -85,6 +85,7 @@ export async function serveBlob(pathname: string): Promise<Response> {
 		if (size > BLOB_SIZE_LIMIT) return new Response("blob too large", { status: 413 });
 		const stream = await readBlobStreamAtAsync(worktreePath, blob.segment, relPath, {
 			timeoutMs: BLOB_STREAM_TIMEOUT_MS,
+			...(signal ? { signal } : {}),
 		});
 		if (stream === null) return notFound();
 		return new Response(stream.body, {

@@ -228,9 +228,9 @@ test("an outdated anchor explains itself by what it could have re-found", () => 
 				{ kind: "lineRange", startLine: 1, endLine: 1 },
 			]),
 		),
-	).toMatch(/text was not found again/);
+	).toMatch(/changed or is gone.*text was not found again/);
 	expect(outdatedReason(anchor([{ kind: "region", x: 0, y: 0, width: 1, height: 1 }]))).toMatch(
-		/bytes changed .* cannot be re-verified/,
+		/bytes changed or it is gone.*cannot be re-verified/,
 	);
 	expect(outdatedReason(anchor([]))).toMatch(/is gone/);
 	expect(outdatedReason(null)).toMatch(/is gone/);

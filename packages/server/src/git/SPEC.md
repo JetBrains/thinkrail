@@ -225,7 +225,10 @@ ref off the workspace-create critical path.
   that re-emits the head and then relays `git cat-file`'s stdout as it arrives — absence and failure are
   decided from the exit the first read observes, with the same `null`/throw contract, while a failure
   *after* the head has been handed over errors the stream rather than closing it, so a consumer sees an
-  aborted transfer, never a silently truncated blob. **`readBlobSizeAtAsync`** performs the same
+  aborted transfer, never a silently truncated blob. An optional `signal` (the HTTP request's) cancels
+  the read at any point — including while the head is still awaited, before any response body exists
+  to cancel — and the cancellation kills the `git` child instead of letting it wait out the relay
+  deadline. **`readBlobSizeAtAsync`** performs the same
   bounded, strict-miss read through `git cat-file -s` before the host admits an immutable blob response;
   **`readPathModeAtAsync`** reads one path's tree mode with bounded `git ls-tree` so `changes` can reject
   symlinks and restore Git's executable bit without deriving tree metadata itself;

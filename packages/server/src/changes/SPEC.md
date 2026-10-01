@@ -90,8 +90,10 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
   alone exceeds the byte budget — the Undo toast just shown must work. Twenty is more than a toast's
   8-second life can stack; 64 MiB caps what one workspace can pin in host memory at the size of the
   largest blob `/blob` will serve. `workspace.remove` calls `forgetWorkspaceChanges`, so a removed
-  workspace pins nothing. `retainReceipts` is exported as the pure policy so its bounds are tested
-  without a 64 MiB fixture.
+  workspace pins nothing — and because removal is not serialized behind the change lock, `record`
+  itself refuses to hold a receipt for a workspace the host no longer lists, so a revert that was
+  awaiting the trash helper when its workspace disappeared cannot resurrect the ring. `retainReceipts`
+  is exported as the pure policy so its bounds are tested without a 64 MiB fixture.
 - `undoChange` CAS-checks `expect.modifiedHash` against the current worktree file, applies the inverse,
   then **consumes** the receipt and emits an `undo` receipt that is itself undoable once — so redo is the
   same operation, not a second mechanism. A refused undo (`STALE_VIEW`) or failed inverse leaves the

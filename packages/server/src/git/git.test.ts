@@ -875,6 +875,25 @@ test("a streamed blob read yields its sniff head and full body, null when absent
 	);
 });
 
+posix(
+	"a client abort before the first blob byte stops the streamed read instead of waiting out its deadline",
+	async () => {
+		seedWorkspace();
+		const head = gitHeadSha("w1");
+		if (!head) throw new Error("no head");
+		stallGitSubcommand("cat-file");
+		const controller = new AbortController();
+		const startedAt = performance.now();
+		const pending = readBlobStreamAtAsync(repo, head, "README.md", {
+			timeoutMs: 60_000,
+			signal: controller.signal,
+		});
+		setTimeout(() => controller.abort(), 150);
+		await expect(pending).rejects.toThrow(/aborted/);
+		expect(performance.now() - startedAt).toBeLessThan(5_000);
+	},
+);
+
 test("a failed worktree read is never reported as an absent side", async () => {
 	seedWorkspace();
 	rmSync(join(repo, "README.md"));

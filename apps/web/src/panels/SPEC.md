@@ -982,9 +982,11 @@ own section. The kebab menu (`plan-menu`, a
   as waiting) → **Resolved** (muted Done styling: primary check + struck hint text;
   the chat action reveals on hover — resolved is final, no reopen). No per-row status words — the section names the status; rows carry
   only the glyph, the clamped text, and the `L3` ref (+ an `outdated` eyebrow when the anchor died,
-  whose native tooltip — `reviewModel.outdatedReason`, shared with the thread card's label — says why:
-  the text was not found again, the bytes changed under a region/cell/line that has no text to search,
-  or the file is gone; the rule itself is [[submodule-server-reviews]] re-anchoring step 4).
+  whose native tooltip — `reviewModel.outdatedReason`, shared with the thread card's label — says what
+  could not be re-found, by the anchor's own selectors: text that was not matched again, a position in
+  bytes that changed, or a whole file that is gone. The wire carries no cause, only the state, so the
+  text and byte wordings both admit "or the file is gone" rather than claim a precision the client does
+  not have; the rule itself is [[submodule-server-reviews]] re-anchoring step 4).
   The locally selected center resource's section **auto-unfolds** when it is a reviewed file, and an
   expansion never auto-collapses (folding is the user's gesture alone — a send opening its chat tab must not
   fold the section the user was reading); **Drafts rows are numbered** (1., 2., …) instead of wearing

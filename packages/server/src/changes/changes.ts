@@ -191,6 +191,7 @@ function record(change: {
 		after: identity(change.after),
 		...(change.trashed === undefined ? {} : { trashed: change.trashed }),
 	};
+	if (!loadWorkspaces().some((candidate) => candidate.id === change.workspaceId)) return receipt;
 	const ring = rings.get(change.workspaceId) ?? [];
 	rings.set(change.workspaceId, retainReceipts([...ring, { receipt, before: change.before }]));
 	return receipt;

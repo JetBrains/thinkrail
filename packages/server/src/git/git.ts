@@ -414,13 +414,18 @@ export async function readBlobStreamAtAsync(
 	worktreePath: string,
 	ref: string,
 	path: string,
-	opts: { timeoutMs?: number } = {},
+	opts: { timeoutMs?: number; signal?: AbortSignal } = {},
 ): Promise<BlobStream | null> {
+	if (opts.signal?.aborted) throw new Error("Blob read aborted before it started");
 	const run = gitAsyncStream(worktreePath, blobArgs(ref, path), {
 		env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
 		...(opts.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
 	});
 	const reader = run.stdout.getReader();
+	const abort = () => {
+		void reader.cancel(new Error("Blob read aborted by the client")).catch(() => {});
+	};
+	opts.signal?.addEventListener("abort", abort, { once: true });
 	const chunks: Uint8Array[] = [];
 	let length = 0;
 	while (length < CONTENT_SNIFF_BYTES) {
@@ -428,6 +433,7 @@ export async function readBlobStreamAtAsync(
 		try {
 			next = await reader.read();
 		} catch {
+			opts.signal?.removeEventListener("abort", abort);
 			const exit = await run.exited;
 			return strictBlobFrom({
 				ok: false,
@@ -435,6 +441,11 @@ export async function readBlobStreamAtAsync(
 				err: exit.err,
 				...(exit.timedOut ? { failure: "timeout" as const } : {}),
 			});
+		}
+		if (opts.signal?.aborted) {
+			opts.signal.removeEventListener("abort", abort);
+			await run.exited;
+			throw new Error("Blob read aborted by the client");
 		}
 		if (next.done || next.value === undefined) break;
 		chunks.push(next.value);
@@ -454,10 +465,13 @@ export async function readBlobStreamAtAsync(
 		},
 		async pull(controller) {
 			const next = await reader.read();
-			if (next.done) controller.close();
-			else controller.enqueue(next.value);
+			if (next.done) {
+				opts.signal?.removeEventListener("abort", abort);
+				controller.close();
+			} else controller.enqueue(next.value);
 		},
 		cancel(reason) {
+			opts.signal?.removeEventListener("abort", abort);
 			void reader.cancel(reason).catch(() => {});
 		},
 	});

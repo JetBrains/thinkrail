@@ -69,10 +69,10 @@ export function threadLabel(t: Pick<ReviewThread, "status" | "anchorState" | "st
 export function outdatedReason(anchor: ReviewAnchor | null | undefined): string {
 	const kinds = new Set((anchor?.selectors ?? []).map((selector) => selector.kind));
 	if (kinds.has("textQuote")) {
-		return "The file changed and this comment's text was not found again; it keeps its original snapshot.";
+		return "The file changed or is gone, and this comment's text was not found again; it keeps its original snapshot.";
 	}
 	if (kinds.has("region") || kinds.has("structural") || kinds.has("lineRange")) {
-		return "The file's bytes changed since this comment; a position in an image, PDF or notebook cannot be re-verified, so it keeps its original snapshot.";
+		return "The file's bytes changed or it is gone; a position in an image, PDF or notebook cannot be re-verified, so the comment keeps its original snapshot.";
 	}
 	return "The file this comment was about is gone.";
 }

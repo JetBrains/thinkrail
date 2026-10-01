@@ -26,10 +26,15 @@ never what a particular child's output means.
   and exited nonzero.
 - **Also owns:** `streamBounded(argv, { timeoutMs, cwd?, env? })` → `{ stdout, exited }` — the same
   spawn, deadline, group kill and stderr capture, for the one caller that must relay a child's stdout
-  while it is still being produced (the host's `/blob` route). Completion is still the child's exit:
-  the `stdout` stream **closes** only after a zero exit and **errors** after a nonzero exit, an expiry or
-  a failed launch, so a consumer can never mistake a truncated relay for a complete one; cancelling the
-  stream kills the child. `exited` resolves to the same shape `runBounded` returns, minus `out`.
+  while it is still being produced (the host's `/blob` route). Completion is still the child's exit,
+  with the same pipe-holding-grandchild rule as `runBounded`: a read that is still pending
+  `DRAIN_GRACE_MS` after the child exited is cancelled, because what has not arrived by then is not
+  our child's output; a read issued *after* the exit gets the same grace from the moment it is issued,
+  so a slow consumer draining the pipe's remainder is never cut short — back-pressure is preserved up
+  to the exit, and only the hang is bounded. The `stdout` stream **closes** only after a zero exit and
+  **errors** after a nonzero exit, an expiry or a failed launch, so a consumer can never mistake a
+  truncated relay for a complete one; cancelling the stream kills the child. `exited` resolves to the
+  same shape `runBounded` returns, minus `out`.
 - **Public surface:** `runBounded`, `streamBounded`, `BoundedRun`, `BoundedBytesRun`, `BoundedRunOptions`,
   `BoundedBytesRunOptions`, `BoundedStream`, `BoundedStreamOptions`.
 - **Allowed deps:** Bun/Node process APIs. Nothing else — it knows no feature, no wire type, no

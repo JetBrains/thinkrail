@@ -235,6 +235,20 @@ posix("streamBounded kills the child when the consumer cancels, and on expiry", 
 	expect((await expired.exited).timedOut).toBe(true);
 });
 
+posix(
+	"streamBounded completes when the child exits, even while a grandchild still holds stdout",
+	async () => {
+		const startedAt = performance.now();
+		const run = streamBounded(pipeHoldingChild('process.stdout.write("held-open");'), {
+			timeoutMs: 10_000,
+		});
+		const bytes = await collect(run.stdout);
+		expect(new TextDecoder().decode(bytes)).toBe("held-open");
+		expect(await run.exited).toMatchObject({ ok: true, timedOut: false });
+		expect(performance.now() - startedAt).toBeLessThan(4_000);
+	},
+);
+
 test("streamBounded reports a failed launch through both the stream and the exit", async () => {
 	const run = streamBounded(["/definitely/not/a/binary"], { timeoutMs: 1000 });
 	await expect(collect(run.stdout)).rejects.toThrow();
