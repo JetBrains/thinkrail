@@ -74,6 +74,22 @@ function titleBarProbeScript(testIds: string[]): string {
 	poll();
 })();`;
 }
+const WINDOW_CONTROLS_PROBE_TARGETS: Record<string, { testId: string; label: string }> = {
+	"window-controls-maximize": { testId: "window-maximize", label: "Maximize" },
+	"window-controls-restore": { testId: "window-maximize", label: "Restore" },
+};
+function windowControlsProbeScript(target: { testId: string; label: string }): string {
+	return `(() => {
+	const selector = ${JSON.stringify(`[data-testid="${target.testId}"][aria-label="${target.label}"]`)};
+	const deadline = Date.now() + 15000;
+	const poll = () => {
+		const element = document.querySelector(selector);
+		if (element) element.click();
+		else if (Date.now() < deadline) setTimeout(poll, 50);
+	};
+	poll();
+})();`;
+}
 let startupQuitCoordinator: ReturnType<typeof createElectrobunQuitCoordinator> | undefined;
 
 function writeReady(path: string, payload: unknown): void {
@@ -120,6 +136,19 @@ async function start(): Promise<void> {
 		handled: number;
 		result: TitleBarDoubleClickResult | null;
 	} = { received: 0, handled: 0, result: null };
+	const windowControlsProbePath = neutral
+		? undefined
+		: process.env.THINKRAIL_DESKTOP_WINDOW_CONTROLS_PROBE_FILE;
+	const windowControlsProbe: { requests: string[]; state: NativeWindowState | null } = {
+		requests: [],
+		state: null,
+	};
+	const recordWindowControlsProbe = (update: { request?: string; state?: NativeWindowState }) => {
+		if (!windowControlsProbePath) return;
+		if (update.request) windowControlsProbe.requests.push(update.request);
+		if (update.state) windowControlsProbe.state = update.state;
+		writeReady(windowControlsProbePath, windowControlsProbe);
+	};
 	let mainWindow: BrowserWindow;
 	const updateController = await createElectrobunUpdateController({
 		isPackaged: Electrobun.app.isPackaged,
@@ -137,13 +166,16 @@ async function start(): Promise<void> {
 				getUpdateState: () => updateController.getState(),
 				getWindowState: (): NativeWindowState => readNativeWindowState(mainWindow),
 				minimizeWindow: (): undefined => {
+					recordWindowControlsProbe({ request: "minimize" });
 					mainWindow.minimize();
 				},
 				toggleMaximizeWindow: (): undefined => {
+					recordWindowControlsProbe({ request: "toggleMaximize" });
 					if (mainWindow.isMaximized()) mainWindow.unmaximize();
 					else mainWindow.maximize();
 				},
 				closeWindow: (): undefined => {
+					recordWindowControlsProbe({ request: "close" });
 					mainWindow.requestClose();
 				},
 				checkForUpdates: async () => {
@@ -261,7 +293,10 @@ async function start(): Promise<void> {
 			installWindowChromePublisher(
 				mainWindow,
 				() => readNativeWindowState(mainWindow),
-				(state) => rpc.send.windowStateChanged(state),
+				(state) => {
+					recordWindowControlsProbe({ state });
+					rpc.send.windowStateChanged(state);
+				},
 				sameNativeWindowState,
 			);
 		}
@@ -308,9 +343,10 @@ async function start(): Promise<void> {
 	if (controlPath) {
 		let navigationProbeStarted = false;
 		const titleBarProbeCommands = new Set<string>();
+		const windowControlsProbeCommands = new Set<string>();
 		const poll = setInterval(() => {
 			if (!existsSync(controlPath)) return;
-			if (navigationProbePath || titleBarProbePath) {
+			if (navigationProbePath || titleBarProbePath || windowControlsProbePath) {
 				const command = readFileSync(controlPath, "utf8");
 				if (command === "navigate" && navigationProbePath && !navigationProbeStarted) {
 					navigationProbeStarted = true;
@@ -325,6 +361,14 @@ async function start(): Promise<void> {
 				if (titleBarTargets && !titleBarProbeCommands.has(command)) {
 					titleBarProbeCommands.add(command);
 					mainWindow.webview.executeJavascript(titleBarProbeScript(titleBarTargets));
+				}
+				const windowControlsTarget =
+					windowControlsProbePath && Object.hasOwn(WINDOW_CONTROLS_PROBE_TARGETS, command)
+						? WINDOW_CONTROLS_PROBE_TARGETS[command]
+						: undefined;
+				if (windowControlsTarget && !windowControlsProbeCommands.has(command)) {
+					windowControlsProbeCommands.add(command);
+					mainWindow.webview.executeJavascript(windowControlsProbeScript(windowControlsTarget));
 				}
 				if (command !== "stop") return;
 			}

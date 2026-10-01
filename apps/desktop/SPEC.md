@@ -249,7 +249,10 @@ synthetic `dblclick`s in the live webview: `title-bar-double-click` on the heade
 launcher records how many double-click messages it received and handled, plus the last handled
 preference, action, and before/after window state. The header-only phase proves the header is
 forwarded; counting receipt as well as handling lets the second phase detect a forwarded no-drag
-click that the single-flight handler would drop. These hooks need the live window; their standalone
+click that the single-flight handler would drop. With a window-controls probe file,
+`window-controls-maximize` / `window-controls-restore` click the HTML caption button once it carries the
+expected label, and the launcher records every window-control request it handles plus the last published
+`NativeWindowState`. These hooks need the live window; their standalone
 drivers and assertions live in the test package, which product code never imports.
 
 ## Build and release

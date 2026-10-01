@@ -106,6 +106,47 @@ async function verifyTitleBarDoubleClick(
 	}
 }
 
+type WindowControlsProbe = {
+	requests?: string[];
+	state?: { maximized?: boolean; fullScreen?: boolean } | null;
+};
+
+async function verifyWindowControls(
+	controlPath: string,
+	probePath: string,
+	exited: Promise<number>,
+	exitError: (code: number) => Error,
+): Promise<void> {
+	const probe = () => readSettledJson(probePath) as WindowControlsProbe | undefined;
+	const fail = (reason: string) =>
+		new Error(`native window controls ${reason}: ${JSON.stringify(probe())}`);
+	await pollUntil(() => typeof probe()?.state?.maximized === "boolean", {
+		timeoutMs: 20_000,
+		what: "native window-state publication",
+		exited,
+		exitError,
+	});
+	if (probe()?.state?.maximized !== false) throw fail("did not start restored");
+	const runPhase = async (command: string, requests: string[], maximized: boolean) => {
+		writeFileSync(controlPath, command);
+		await pollUntil(
+			() => {
+				const document = probe();
+				return (
+					(document?.requests?.length ?? 0) >= requests.length &&
+					document?.state?.maximized === maximized
+				);
+			},
+			{ timeoutMs: 20_000, what: `native window controls (${command})`, exited, exitError },
+		);
+		if (JSON.stringify(probe()?.requests) !== JSON.stringify(requests)) {
+			throw fail(`expected requests ${JSON.stringify(requests)} after ${command}`);
+		}
+	};
+	await runPhase("window-controls-maximize", ["toggleMaximize"], true);
+	await runPhase("window-controls-restore", ["toggleMaximize", "toggleMaximize"], false);
+}
+
 function copyApplication(launcher: string): string {
 	const bundleRoot =
 		process.platform === "darwin"
@@ -144,6 +185,7 @@ async function launchDesktop(
 	const controlPath = join(root, `${id}-${label}.control`);
 	const navigationProbePath = join(root, `${id}-${label}.navigation.json`);
 	const titleBarProbePath = join(root, `${id}-${label}.title-bar.json`);
+	const windowControlsProbePath = join(root, `${id}-${label}.window-controls.json`);
 	const userDataPath = join(root, `${id}-${label}-user-data`);
 	const restoredRoute = mode === "ui" ? "#/v1/projects/desktop-smoke" : undefined;
 	if (restoredRoute) {
@@ -166,12 +208,16 @@ async function launchDesktop(
 						...(process.platform === "darwin"
 							? { THINKRAIL_DESKTOP_TITLE_BAR_PROBE_FILE: titleBarProbePath }
 							: {}),
+						...(process.platform === "win32"
+							? { THINKRAIL_DESKTOP_WINDOW_CONTROLS_PROBE_FILE: windowControlsProbePath }
+							: {}),
 					}),
 		},
 		[
 			"THINKRAIL_DESKTOP_E2E_HOST",
 			"THINKRAIL_DESKTOP_NAVIGATION_PROBE_FILE",
 			"THINKRAIL_DESKTOP_TITLE_BAR_PROBE_FILE",
+			"THINKRAIL_DESKTOP_WINDOW_CONTROLS_PROBE_FILE",
 		],
 		env,
 	);
@@ -230,6 +276,9 @@ async function launchDesktop(
 			);
 			if (process.platform === "darwin") {
 				await verifyTitleBarDoubleClick(controlPath, titleBarProbePath, proc.exited, exitedEarly);
+			}
+			if (process.platform === "win32") {
+				await verifyWindowControls(controlPath, windowControlsProbePath, proc.exited, exitedEarly);
 			}
 			writeFileSync(controlPath, "navigate");
 			let navigation: { url?: string } | undefined;
