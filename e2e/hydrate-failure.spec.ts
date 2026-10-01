@@ -104,6 +104,7 @@ test("a failed never-empty fallback keeps its chat reachable too", async ({ page
 	).toBeVisible();
 
 	await page.getByTestId("start-chat").first().click();
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await page.getByTestId("chat-history").first().click();
 	await expect(
 		page.getByTestId("closed-chat-item").filter({ hasText: "the only chat" }),
