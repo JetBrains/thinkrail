@@ -70,6 +70,7 @@
         "@radix-ui/react-tooltip": "1.2.10",
         "@remixicon/react": "4.9.0",
         "@shikijs/langs": "4.2.0",
+        "@shikijs/monaco": "4.2.0",
         "@thinkrail/contracts": "workspace:*",
         "@xterm/addon-clipboard": "0.2.0",
         "@xterm/addon-fit": "0.11.0",
@@ -918,6 +919,8 @@
     "@shikijs/engine-oniguruma": ["@shikijs/engine-oniguruma@4.2.0", "", { "dependencies": { "@shikijs/types": "4.2.0", "@shikijs/vscode-textmate": "^10.0.2" } }, "sha512-hTorK1dffPkpbMUk6Z+828PgRo7d07HbnizoP0hNPFjhxMHctj0Px/qoHeGMYafc6ju+u9iMldN4JbVzNQM++g=="],
 
     "@shikijs/langs": ["@shikijs/langs@4.2.0", "", { "dependencies": { "@shikijs/types": "4.2.0" } }, "sha512-bwrVRlJ0wUhZxAbVdvBbv2TTC9yLsh4C/IO5Ofz0T8MQntgDvyVnkbjw9vi50r1kx7RCIJdnJnjZAwmAsXFLZQ=="],
+
+    "@shikijs/monaco": ["@shikijs/monaco@4.2.0", "", { "dependencies": { "@shikijs/core": "4.2.0", "@shikijs/types": "4.2.0", "@shikijs/vscode-textmate": "^10.0.2" } }, "sha512-NBAY81HWX6wNYsbedqzkg3c75/XiwncUthARZNMp2Ac3656HjCfyfAdiRujdxq93LFTZJ5545yIyBz8hKMKZpw=="],
 
     "@shikijs/primitive": ["@shikijs/primitive@4.2.0", "", { "dependencies": { "@shikijs/types": "4.2.0", "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.4" } }, "sha512-NOq+DtUkVBJtZMVXL5A0vI0Xk8nvDYaXetFHSJFlOqjDZIVhIPRYFdGkSoElDqNuegikcc3A76SNUa8dTqtAYA=="],
 
