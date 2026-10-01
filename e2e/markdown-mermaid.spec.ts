@@ -24,6 +24,20 @@ test("renders mermaid fences as diagrams in the rendered markdown view", async (
 	await preview.getByTestId("mermaid-fullscreen").click();
 	const dialog = page.getByTestId("mermaid-fullscreen-dialog");
 	await expect(dialog).toBeVisible();
+	const gestureClaimed = await dialog.getByTestId("mermaid-fullscreen-svg").evaluate((element) => {
+		const dispatch = (type: string, scale: number) => {
+			const event = new Event(type, { bubbles: true, cancelable: true });
+			Object.defineProperty(event, "scale", { value: scale });
+			return element.dispatchEvent(event);
+		};
+		return [
+			dispatch("gesturestart", 1),
+			dispatch("gesturechange", 1.5),
+			dispatch("gestureend", 1.5),
+		];
+	});
+	await expect(dialog.getByTestId("mermaid-zoom-level")).toHaveText("150%");
+	expect(gestureClaimed).toEqual([false, false, false]);
 	await page.keyboard.press("Escape");
 	await expect(dialog).toHaveCount(0);
 
