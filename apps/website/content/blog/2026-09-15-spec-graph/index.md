@@ -8,7 +8,6 @@ tags:
   - thinkrail
   - spec-driven development
 ---
-# Spec-Driven Development
 
 ## A lesson in history
 
