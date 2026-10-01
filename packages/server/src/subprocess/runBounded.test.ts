@@ -68,6 +68,17 @@ test("captures output larger than a pipe buffer", async () => {
 	expect(result.out.length).toBe(300_000);
 });
 
+test("the bytes mode preserves stdout that is not valid UTF-8", async () => {
+	const result = await runBounded(
+		bun("process.stdout.write(Uint8Array.from([0, 255, 128, 65])); process.stderr.write('err');"),
+		{ timeoutMs: 10_000, stdout: "bytes" },
+	);
+
+	expect(result.ok).toBe(true);
+	expect(result.out).toEqual(new Uint8Array([0, 255, 128, 65]));
+	expect(result.err).toBe("err");
+});
+
 test("a failed launch is a result, not a throw", async () => {
 	const result = await runBounded(["thinkrail-no-such-binary"], { timeoutMs: 10_000 });
 

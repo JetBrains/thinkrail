@@ -16,13 +16,15 @@ never what a particular child's output means.
 
 ## Boundary
 
-- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env? })` →
+- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env?, stdout? })` →
   `{ ok, out, err, timedOut, launchFailed, waitedMs }`: capture both streams and complete on the child's
-  **exit**; POSIX children are detached process-group leaders, while Windows children retain a nonvisual
-  console. Expiry kills the POSIX group or the direct Windows child. A failed launch is a result
-  (`ok: false`, `launchFailed: true`, the launch error as `err`), never a throw; callers can distinguish
-  infrastructure failure from a child that ran and exited nonzero.
-- **Public surface:** `runBounded`, `BoundedRun`, `BoundedRunOptions`.
+  **exit**; stdout defaults to decoded text, while `stdout: "bytes"` preserves it as `Uint8Array` for
+  callers reading opaque content (stderr remains text diagnostics). POSIX children are detached
+  process-group leaders, while Windows children retain a nonvisual console. Expiry kills the POSIX group
+  or the direct Windows child. A failed launch is a result (`ok: false`, `launchFailed: true`, the launch
+  error as `err`), never a throw; callers can distinguish infrastructure failure from a child that ran
+  and exited nonzero.
+- **Public surface:** `runBounded`, `BoundedRun`, `BoundedBytesRun`, `BoundedRunOptions`, `BoundedBytesRunOptions`.
 - **Allowed deps:** Bun/Node process APIs. Nothing else — it knows no feature, no wire type, no
   persistence.
 - **Forbidden:** message wording, retry, truncation, or any policy about a specific program. `git`'s
@@ -45,7 +47,7 @@ never what a particular child's output means.
   bounded or cannot wait on anything: `git`'s sync `git()` and `terminal/shellBusy` go through
   `@thinkrail/shared/spawn`'s `spawnSyncCaptured` (`shared/shellEnv` keeps its own `Bun.spawnSync` — a
   win32 no-op), and `editors`, `cli/bootstrap` and `cli/powershell` are fire-and-forget
-  `@thinkrail/shared/spawn` `spawnDetached`s whose output nobody reads. `agent/trash`'s `execFile` is the
+  `@thinkrail/shared/spawn` `spawnDetached`s whose output nobody reads. `trash`'s helper `execFile` is the
   one true straggler: unbounded, but a local trash helper with no network and no prompt, so it fails the
   letter of this module and not its purpose.
 
@@ -122,7 +124,8 @@ never what a particular child's output means.
   arriving at the child, and a post-startup mutation being visible to one spawned without `env` — because a
   test that only asserts the defaults cannot tell the two apart.
 - `stdin` is always `ignore`, and both output streams are always piped and **read from the moment of
-  spawn**, decoded incrementally — an undrained pipe is how a chatty child deadlocks. The readers are
+  spawn**; text is decoded incrementally and byte stdout is accumulated without decoding — an undrained
+  pipe is how a chatty child deadlocks. The readers are
   cancelled once the outcome is decided *and* the grace above has run, never before it. Every
   timer is `unref`'d, so a bounded wait never holds shutdown open, and `waitedMs` comes from
   `performance.now()`, so a clock adjustment cannot render a negative wait.

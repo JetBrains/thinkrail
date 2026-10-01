@@ -21,11 +21,12 @@ export {
 	prefetchBranch,
 	readBlobAt,
 	readBlobBytesAt,
+	readBlobBytesAtAsync,
 	readCommitSubject,
 	remoteRefOid,
 	resolveDefaultBranch,
 	resolveListedCommit,
 	tryCurrentBranch,
 } from "./git";
-export { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";
+export { git, gitAsync, gitAsyncBytes, nonInteractiveGitEnv } from "./gitExec";
 export { assertSafeRef, isSafeRef, remoteNameOf, remoteTrackingRef } from "./refs";

@@ -1,16 +1,49 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
-import type { FileNode } from "@thinkrail/contracts";
+import { readdirSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import type { FileNode, ResourceMeta } from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
+import { decodeText, resourceMeta } from "./content";
+
+function isContained(root: string, candidate: string): boolean {
+	const rel = relative(root, candidate);
+	return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
+
+function isGitMetadataPath(root: string, candidate: string): boolean {
+	return relative(root, candidate).split(sep).includes(".git");
+}
+
+function assertExistingAncestorContained(root: string, abs: string): void {
+	const realRoot = realpathSync(root);
+	let cursor = abs;
+	while (true) {
+		let real: string;
+		try {
+			real = realpathSync(cursor);
+		} catch (error) {
+			const code =
+				typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+			if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
+			const parent = dirname(cursor);
+			if (parent === cursor) throw error;
+			cursor = parent;
+			continue;
+		}
+		if (!isContained(realRoot, real)) throw new Error("Path escapes the worktree");
+		if (isGitMetadataPath(realRoot, real)) throw new Error("The .git directory is not readable");
+		return;
+	}
+}
 
 function resolveInWorktree(workspaceId: string, path: string): { root: string; abs: string } {
-	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
+	const ws = loadWorkspaces().find((workspace) => workspace.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
 
 	const root = ws.worktreePath;
 	const abs = resolve(root, path);
-	const rel = relative(root, abs);
-	if (rel.startsWith("..") || isAbsolute(rel)) throw new Error("Path escapes the worktree");
+	if (!isContained(resolve(root), abs)) throw new Error("Path escapes the worktree");
+	if (isGitMetadataPath(resolve(root), abs)) throw new Error("The .git directory is not readable");
+	assertExistingAncestorContained(root, abs);
 	return { root, abs };
 }
 
@@ -29,9 +62,14 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 		.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "dir" ? -1 : 1));
 }
 
-export function readFile(workspaceId: string, path: string): { content: string } {
+export function readFile(
+	workspaceId: string,
+	path: string,
+): { content: string; meta: ResourceMeta } {
 	const { abs } = resolveInWorktree(workspaceId, path);
-	return { content: readFileSync(abs, "utf8") };
+	const bytes = readFileSync(abs);
+	const meta = resourceMeta(bytes, path);
+	return { content: meta.text ? decodeText(bytes) : "", meta };
 }
 
 export function resolveWorktreeFile(workspaceId: string, path: string): string {

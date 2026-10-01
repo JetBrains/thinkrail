@@ -12,6 +12,7 @@ export interface DiffRange {
 	untracked: boolean;
 	originalRef: string | null;
 	modifiedRef: string | null;
+	resolvedOriginalOid: string | null;
 }
 
 const OID = /^[0-9a-f]{4,64}$/;
@@ -43,6 +44,7 @@ export async function resolveDiffRange(
 			untracked: true,
 			originalRef: "HEAD",
 			modifiedRef: null,
+			resolvedOriginalOid: resolveCommitOid(ws.worktreePath, "HEAD"),
 		};
 	}
 	if (scope.kind === "pinned") {
@@ -62,6 +64,7 @@ export async function resolveDiffRange(
 			untracked: true,
 			originalRef: resolved.out,
 			modifiedRef: null,
+			resolvedOriginalOid: resolved.out,
 		};
 	}
 	if (scope.kind === "commit") {
@@ -90,6 +93,7 @@ export async function resolveDiffRange(
 				untracked: false,
 				originalRef: null,
 				modifiedRef: sha,
+				resolvedOriginalOid: null,
 			};
 		}
 		return {
@@ -98,6 +102,7 @@ export async function resolveDiffRange(
 			untracked: false,
 			originalRef: parent.out,
 			modifiedRef: sha,
+			resolvedOriginalOid: parent.out,
 		};
 	}
 	const base = diffBaseRef(ws);
@@ -108,13 +113,15 @@ export async function resolveDiffRange(
 		"HEAD",
 	]);
 	throwExecutionFailure(mergeBase);
-	const forkPoint = mergeBase.ok && mergeBase.out ? mergeBase.out : base;
+	const resolvedForkPoint = mergeBase.ok && mergeBase.out ? mergeBase.out : null;
+	const forkPoint = resolvedForkPoint ?? base;
 	return {
 		listPrefix: ["diff"],
 		listRevs: [forkPoint],
 		untracked: true,
 		originalRef: forkPoint,
 		modifiedRef: null,
+		resolvedOriginalOid: resolvedForkPoint ?? resolveCommitOid(ws.worktreePath, base),
 	};
 }
 

@@ -632,13 +632,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       modules or the AWS SDK. Registration
       lands in the same `pi-ai` instance pi consults at login time because the catalog pins one exact
       `pi-ai` version repo-wide (one store entry → one bundled module instance). Chat trash has two
-      artifact seams behind the same registration: the wrapper statically installs `@stroncium/procfs`'s
-      `processMountinfo` parser because `trash`'s Linux path reaches it through a binary-opaque
-      template-literal CommonJS `require`; and the launcher stages `trash`'s `macos-trash` /
-      `windows-trash.exe` helpers to real executable paths and injects them as `trashHelpers`, because the
-      package's internal `new URL(…, import.meta.url)` points inside `/$bunfs/` after compilation. The
-      wrapper executes an injected helper on macOS/Windows and otherwise delegates to `trash`; source mode stays on
-      `trash` entirely. No platform degrades to permanent unlink.
+      artifact seams behind the same registration, both owned by the `trash` module: the procfs parser it
+      statically installs, and the `trashHelpers` the launcher stages and `registerBundledRuntime` injects
+      through `setBundledTrashHelpers` (rationale: [[submodule-server-trash]]). No platform degrades to
+      permanent unlink.
     The desktop server/factory bundle is built with pi's `PI_BUNDLED_NODE=true` compile-time define. That
     is pi's own switch for bundled-but-not-compiled distributions: it selects the embedded-modules extension
     loader (jiti's static entry with Babel bundled in, plus pi's virtual modules). Without it pi treats the
@@ -698,14 +695,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `pi-thinkrail-workflow` + `pi-todos` (the bundled extension set — parent sessions load the set through
   resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph` and receive
   the named `pi-web-access` factory through the bundled runtime seam, with source-mode Bun `require` as the
-  dev equivalent); `typebox` (the `ask_user_question` parameter schema); `trash` (the cross-platform OS
-  recycle-bin implementation; called with globbing disabled and allowed to throw — never degraded to
-  `unlink`); `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);
+  dev equivalent); `typebox` (the `ask_user_question` parameter schema); `trash` (reached only through the
+  sibling **`trash` module** — see [[submodule-server-trash]]: one path, globbing disabled, allowed to
+  throw, never degraded to `unlink`; the launcher's staged-helper and procfs-parser seams live there too,
+  because `changes`' whole-file revert needs the same primitive);
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SessionSummary`/
   `Session*Payload`/`SlashCommandInfo`/`ExtUi*`/`AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics +
   session-lifecycle debug traces); `persistence` (`dataDir` for delegation plus the narrow session
-  receipt stores); Node.
-- **Forbidden:** `host`; sibling features other than `log` and those narrow persistence surfaces (session
+  receipt stores); `trash` (the recoverable-delete primitive); Node.
+- **Forbidden:** `host`; sibling features other than `log`, `trash` and those narrow persistence surfaces (session
   worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
 

@@ -83,8 +83,9 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
   `textQuote` carries re-anchoring). The
   `anchorState` axis (`anchored`/`moved`/`outdated`) is **orthogonal to `status`**: "was it discussed"
   and "is the anchor alive" never overwrite each other.
-  **`contentHash` is sha-256 over the resource's bytes** and capture follows the resource, not the
-  comment: a **text** side (no NUL byte in the first 8 KiB and a strict UTF-8 decode — a BOM is text)
+  **`contentHash` is sha-256 over the resource's bytes** (`fs.hashBytes`) and capture follows the
+  resource, not the comment: a **text** side (`fs.classifyBytes` — no NUL byte in the first 8 KiB and a
+  strict UTF-8 decode, a BOM is text)
   derives `textQuote` from `lineRange` as before, while a **byte-only** side hashes the bytes and keeps
   the renderer's selectors **as given**, never a derived quote — there is no text to quote. `addComment`
   **narrows the wire's selectors** before either capture — every element an object of a known `kind`
@@ -199,7 +200,9 @@ lands can still finish its record; archived updates persist without publishing a
   `renderPackage`).
 - **Allowed deps:** `contracts` (types), `persistence` (data dir), `log`, `workspaces` (worktree path lookup),
   `git` (the review's `baseSha` resolve, the diff range behind a base anchor's `baseRef`, and blob
-  reads for the base side), Node `fs`/`crypto`.
+  reads for the base side), `fs` (`classifyBytes`/`decodeText`/`hashBytes` — textness and the sha-256
+  an anchor's `contentHash` *is* are decided once, there, so a comment's hash and a revert's expectation
+  can never disagree about the same bytes), Node `fs`.
 - **Forbidden:** importing `host`/`agent` or any pi package; publishing except through the seam.
 
 ## Get right

@@ -25,6 +25,7 @@ import type {
 } from "@thinkrail/contracts";
 import { isAskUserAnswersMessage } from "@thinkrail/contracts";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
+import { setTrashImplementationForTests } from "../trash";
 import {
 	abortSession,
 	acknowledgeCompletion,
@@ -70,7 +71,6 @@ import {
 } from "./agentSessionManager";
 import { ASK_STOPPED_ERROR, assessAnswerability } from "./askUserQuestion";
 import { configurePiRuntime } from "./piRuntime";
-import { setTrashImplementationForTests } from "./trash";
 import { setExtUiPublisher } from "./webUiContext";
 
 function modelDef(id: string) {

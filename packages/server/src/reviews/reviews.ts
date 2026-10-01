@@ -18,6 +18,7 @@ import type {
 	ReviewCommentStatus,
 	ReviewSnapshot,
 } from "@thinkrail/contracts";
+import { classifyBytes, decodeText } from "../fs";
 import {
 	diffBaseRef,
 	readBlobAt,
@@ -186,22 +187,8 @@ function readWorktreeBytes(worktreePath: string, path: string): Uint8Array | nul
 	}
 }
 
-const TEXT_PROBE_BYTES = 8 * 1024;
-const STRICT_UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
-const UTF8 = new TextDecoder("utf-8", { ignoreBOM: true });
-
-export function isTextBytes(bytes: Uint8Array): boolean {
-	if (bytes.subarray(0, TEXT_PROBE_BYTES).includes(0)) return false;
-	try {
-		STRICT_UTF8.decode(bytes);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
 function capturableContent(bytes: Uint8Array): string | Uint8Array {
-	return isTextBytes(bytes) ? UTF8.decode(bytes) : bytes;
+	return classifyBytes(bytes).text ? decodeText(bytes) : bytes;
 }
 
 function readWorktreeContent(worktreePath: string, path: string): string | Uint8Array | null {

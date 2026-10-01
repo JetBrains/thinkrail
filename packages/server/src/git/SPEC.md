@@ -18,18 +18,19 @@ ref off the workspace-create critical path.
 ## Boundary
 
 - **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
-  stdout byte-exact for file-content reads; its module-internal `gitBytes(cwd, args)` twin keeps stdout
-  as *bytes*, for content no decode may touch) and `gitAsync(cwd,
-  args, opts?)` (its async twin — off the event loop through `subprocess`' `runBounded`, same `raw` option,
-  for network-bound ops like `fetch` **and** the request-path reads below, neither of which may block the
-  host: it owns only the git-shaped part, the 55s budget and the stalled/stderr wording, never the
-  child-lifetime mechanics; `opts.env` lets a caller run prompt-free with its own environment, e.g. `pr`'s
-  non-interactive push, and `opts.network` marks fetch/push solely so a no-output timeout can name the
-  remote). **A timeout keeps whatever git wrote before the kill**: the runner drains continuously, so on
+  decoded stdout untrimmed) and its module-internal `gitBytes(cwd, args, opts?)` twin (sync,
+  byte-preserving, retained for `reviews`' synchronous snapshot pass). `gitAsync(cwd, args, opts?)` and
+  **`gitAsyncBytes(cwd, args, opts?)`** are the bounded async twins over `subprocess.runBounded`; the latter
+  preserves stdout as `Uint8Array`, while stderr remains decoded diagnostics. They keep network-bound ops
+  like `fetch` **and request-path historical reads** off the event loop: this module owns only the
+  git-shaped 55s budget and stalled/stderr wording, never child-lifetime mechanics. `opts.env` lets a
+  caller run prompt-free with its own environment and pins blob diagnostics to English; `opts.network`
+  marks fetch/push solely so a no-output timeout can name the remote. **A timeout keeps whatever git wrote
+  before the kill**: the runner drains continuously, so on
   expiry its `err` already holds the real diagnosis — a publickey rejection, a proxy's refusal, `remote:`
   progress proving a large transfer was simply still running. When git wrote *nothing*, an explicitly
   networked operation gets the conditional ssh-key hint; a local `diff`/`log`/ref read gets only the
-  observed fact that git did not exit — never a fabricated remote cause. `gitAsync` carries
+  observed fact that git did not exit — never a fabricated remote cause. Both async runners carry
   `failure: "timeout" | "launch"` for those execution failures; a normal nonzero Git exit carries no
   execution failure, so semantic probes can distinguish "ref absent" from "Git never answered". The
   reads take that same 55s default (`opts.timeoutMs` overrides it): a local read that has to be *bounded*
@@ -127,18 +128,29 @@ ref off the workspace-create critical path.
   it: the review's `baseSha`, a base-side comment's `baseRef`. A scope's
   `originalRef` is not already immutable (`uncommitted` is the literal `HEAD`; a `branch` scope degrades to
   the raw base ref when `merge-base` fails), so storing one verbatim lets the content move under whoever
-  stored it;
+  stored it. A `DiffRange` carries that frozen form as **`resolvedOriginalOid`** (frozen through
+  `resolveCommitOid`, `null` when the original side has no commit — a root commit, an unborn `HEAD`, a base ref that
+  no longer resolves): a caller that must read the *same* original side twice — the `changes` module's
+  load→verify→write pass, the host's immutable `/blob` URL — addresses it by oid rather than by a ref
+  whose meaning a commit can change mid-request;
   `gitStatus(workspaceId, scope?)` — changed files over the range plus untracked (only when the range ends at
   the worktree), each carrying per-file `added`/`removed` line counts (`git diff --numstat`, its rename-mangled paths resolved
   via `numstatPath` to match `--name-status`; binary rows dropped; untracked files count their whole
   content as added) for the Changes tree's `+/−` badges;
-  `gitDiffFile(workspaceId, path, scope?)` → `{ original, modified }` — both sides of one file's change for
-  the center Monaco diff tab (`original` = the file at the range's start ref, raw, empty when absent there —
+  `gitDiffFile(workspaceId, path, scope?)` → `{ original, modified, meta: { original, modified } }` — both
+  sides of one file's change for the center diff tab (`original` = the file at the range's start ref, raw,
+  empty when absent there —
   untracked/added, a renamed file's new path, or a root commit — degrading to an add-style diff; `modified` =
   the worktree file (empty when deleted) for a range ending there, else the commit's own tree; the path is
-  escape-checked against the worktree root; historical `show` runs with deterministic English diagnostics
-  so only Git's completed path-absent result becomes an empty side, while a timeout/launch failure always
-  throws even if it captured similar text); **`gitUncommittedPaths(workspaceId)`** → the synchronous
+  checked through `fs.resolveWorktreeFile` against lexical escapes, `.git`, and escaping symlinks;
+  historical sides use bounded async `git cat-file blob` with deterministic English diagnostics, so only
+  Git's explicit path-absent result becomes an empty side; trees, commits, gitlinks, ordinary nonzero
+  failures, timeouts and launch failures all throw). **Both sides are read as BYTES and carry a
+  `ResourceMeta`** (`fs.resourceMeta` — sha-256, byte length, textness, sniffed mime): a side is decoded
+  only when it is text, so a byte-only side travels as `""` plus its metadata and the client fetches the
+  bytes over the host's `/files`/`/blob` routes instead of rendering replacement characters. Commit-scope
+  sides are read concurrently through `gitAsyncBytes`, retaining byte identity without blocking the event
+  loop or spawning a second decoded read; **`gitUncommittedPaths(workspaceId)`** → the synchronous
   tracked + untracked path set reserved for the TODO baseline boundary above, read with NUL delimiters and
   raw output so legal leading/trailing whitespace (or newlines) in a filename is identity, never trim;
   `gitStatus` uses the same NUL-safe path treatment for its tracked/untracked rows; **`listCommits(workspaceId)`** → `{ commits: GitCommit[] }` —
@@ -202,9 +214,11 @@ ref off the workspace-create critical path.
   **`readBlobAt(worktreePath, ref, path)`** → the file's UTF-8-**decoded** content at a ref, or `null`
   when the read produced none (the diff sides degrade that to `""`; the `reviews` module renders a
   base-side anchor's text fragment through it);
-  **`readBlobBytesAt(worktreePath, ref, path)`** → the same read kept **byte-exact** (`Uint8Array`), for a
-  caller that must hash or classify a blob the decoder would corrupt — a `reviews` base-side anchor on an
-  image, or a BOM whose bytes are part of the hash;
+  **`readBlobBytesAt(worktreePath, ref, path)`** → the same read kept **byte-exact** (`Uint8Array`) and
+  synchronous solely for `reviews`' snapshot pass; **`readBlobBytesAtAsync`** is the bounded request-path
+  primitive used by `changes` and the host's `/blob` route. Both run `git cat-file blob`, return `null`
+  only for Git's explicit path-absent diagnostic, and throw for a non-blob object or every other failure;
+  timeout/launch can therefore never masquerade as absence;
   **`gitCommitPaths(workspaceId, message, paths)`** → `{ sha } | null` — commit **exactly `paths`** as one
   commit for the TODO change-set feature (see [[submodule-server-todos]]): stage them (`git add -A --
   <paths>`, so a deletion stages as one), then `git commit --no-verify -- <paths>` (the host's commit must
@@ -244,15 +258,17 @@ ref off the workspace-create critical path.
   `null`. Returning the canonical sha lets the adopted-commit review resolver reject an abbreviated /
   non-canonical id, and the shared cap guarantees it never accepts a commit past the newest
   `COMMIT_LIST_MAX` — for which no adopted item is ever emitted. Kept in lock-step with `listCommits`.
-- **Public surface (barrel):** `git`, `gitAsync`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
+- **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,
-  `readBlobAt`, `readBlobBytesAt`, `readCommitSubject`,
+  `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readCommitSubject`,
   `gitCommitPaths`, `gitHeadSha`, `listCommits`, `listCommitsSince`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `resolveListedCommit`, `prefetchBranch`, `countPushDivergence`, `listRemotes`, `remoteNameOf`.
-- **Allowed deps:** `persistence` (workspace + project lookup), `log`; `contracts` (`Git*`/`BranchList` types);
-  `subprocess` (`runBounded`, the bounded child behind `gitAsync`);
+- **Allowed deps:** `persistence` (workspace + project lookup), `log`; `fs` (`resourceMeta`/`decodeText` —
+  the one content classification, so a diff side's metadata cannot disagree with `fs.readFile`'s);
+  `contracts` (`Git*`/`BranchList`/`ResourceMeta` types);
+  `subprocess` (`runBounded`, the bounded child behind both async runners);
   `@thinkrail/shared/codedError` (naming a failure for the wire); `@thinkrail/shared/spawn`
   (`spawnSyncCaptured` / `spawnSyncCapturedBytes`, the sync runners with `windowsHide`).
 - **Forbidden:** `host`; sibling features.

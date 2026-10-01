@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";
+import { delimiter, join } from "node:path";
+import { git, gitAsync, gitAsyncBytes, nonInteractiveGitEnv } from "./gitExec";
 
 const posix = test.skipIf(process.platform === "win32");
 
@@ -137,16 +137,49 @@ posix("an oversized stderr is truncated before it can reach a client", async () 
 	expect(result.err).toContain("Could not read from remote repository");
 });
 
-test("gitAsync distinguishes a launch failure from git's own nonzero exit", async () => {
+posix("gitAsyncBytes bounds a stalled git wrapper and classifies the timeout", async () => {
+	const executable = Bun.which("git");
+	if (!executable) throw new Error("git not found");
+	const bin = join(dir, "bin");
+	mkdirSync(bin);
+	const wrapper = join(bin, "git");
+	writeFileSync(wrapper, `#!/bin/sh\nsleep 30\nexec ${JSON.stringify(executable)} "$@"\n`);
+	chmodSync(wrapper, 0o755);
 	const path = process.env.PATH;
-	process.env.PATH = join(repo, "missing-bin");
-	const result = await gitAsync(repo, ["status"]);
-	if (path === undefined) delete process.env.PATH;
-	else process.env.PATH = path;
+	process.env.PATH = `${bin}${delimiter}${path ?? ""}`;
+	const result = await (async () => {
+		try {
+			return await gitAsyncBytes(repo, ["status"], { timeoutMs: 200 });
+		} finally {
+			if (path === undefined) delete process.env.PATH;
+			else process.env.PATH = path;
+		}
+	})();
 
 	expect(result.ok).toBe(false);
-	expect(result.failure).toBe("launch");
-	expect(result.err).not.toBe("");
+	expect(result.failure).toBe("timeout");
+	expect(result.err).toContain("timed out after");
+	expect(result.err).toContain("git did not exit");
+	expect(result.out).toEqual(new Uint8Array());
+});
+
+test("the async git runners distinguish a launch failure from git's own nonzero exit", async () => {
+	const path = process.env.PATH;
+	process.env.PATH = join(repo, "missing-bin");
+	const [text, bytes] = await (async () => {
+		try {
+			return await Promise.all([gitAsync(repo, ["status"]), gitAsyncBytes(repo, ["status"])]);
+		} finally {
+			if (path === undefined) delete process.env.PATH;
+			else process.env.PATH = path;
+		}
+	})();
+
+	for (const result of [text, bytes]) {
+		expect(result.ok).toBe(false);
+		expect(result.failure).toBe("launch");
+		expect(result.err).not.toBe("");
+	}
 });
 
 test("git reports git's own stderr, trimmed", () => {

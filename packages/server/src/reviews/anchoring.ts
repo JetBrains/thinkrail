@@ -1,8 +1,10 @@
-import { createHash } from "node:crypto";
 import type { ReviewAnchor, ReviewAnchorState, ReviewSelector } from "@thinkrail/contracts";
+import { hashBytes } from "../fs";
+
+const UTF8_BYTES = new TextEncoder();
 
 export function hashContent(content: string | Uint8Array): string {
-	return createHash("sha256").update(content).digest("hex");
+	return hashBytes(typeof content === "string" ? UTF8_BYTES.encode(content) : content);
 }
 
 export const TEXT_QUOTE_CONTEXT_CHARS = 32;

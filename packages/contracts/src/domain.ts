@@ -108,6 +108,13 @@ export interface FileNode {
 	children?: FileNode[];
 }
 
+export interface ResourceMeta {
+	hash: string | null;
+	byteLength: number | null;
+	text: boolean;
+	mime?: string;
+}
+
 export interface SpecGraphNode {
 	id: string;
 	type: string;
@@ -327,6 +334,26 @@ export interface GitCommit {
 	subject: string;
 	author: string;
 	committedAt: string;
+}
+
+export interface LineSpan {
+	start: number;
+	count: number;
+}
+
+export type RevertTarget =
+	| { kind: "file" }
+	| { kind: "range"; original: LineSpan; modified: LineSpan };
+
+export interface ChangeReceipt {
+	id: string;
+	workspaceId: string;
+	path: string;
+	kind: "revert" | "undo";
+	at: number;
+	before: { hash: string | null; byteLength: number | null };
+	after: { hash: string | null; byteLength: number | null };
+	trashed?: string;
 }
 
 export interface RemoteBranchGroup {

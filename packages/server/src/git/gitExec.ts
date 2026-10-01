@@ -26,6 +26,16 @@ export type GitBytesResult = {
 	err: string;
 };
 
+export type GitAsyncBytesResult = GitBytesResult & {
+	failure?: "timeout" | "launch";
+};
+
+type GitAsyncOptions = {
+	timeoutMs?: number;
+	env?: Record<string, string | undefined>;
+	network?: boolean;
+};
+
 export function nonInteractiveGitEnv(): Record<string, string | undefined> {
 	return { ...process.env, GIT_TERMINAL_PROMPT: "0" };
 }
@@ -50,9 +60,13 @@ export function git(cwd: string, args: string[], opts: { raw?: boolean } = {}): 
 	};
 }
 
-export function gitBytes(cwd: string, args: string[]): GitBytesResult {
+export function gitBytes(
+	cwd: string,
+	args: string[],
+	opts: { env?: Record<string, string | undefined> } = {},
+): GitBytesResult {
 	const result = spawnSyncCapturedBytes(["git", "-C", cwd, ...args], {
-		env: nonInteractiveGitEnv(),
+		env: opts.env ?? nonInteractiveGitEnv(),
 		maxBuffer: Number.POSITIVE_INFINITY,
 	});
 	return {
@@ -62,33 +76,54 @@ export function gitBytes(cwd: string, args: string[]): GitBytesResult {
 	};
 }
 
+function timeoutFailure(
+	run: { err: string; waitedMs: number },
+	network: boolean | undefined,
+): { err: string; failure: "timeout" } {
+	const captured = boundedStderr(run.err);
+	const noAnswer = network ? NETWORK_NO_ANSWER : LOCAL_NO_ANSWER;
+	return {
+		err: `${STALLED(run.waitedMs)} — ${captured || noAnswer}`,
+		failure: "timeout",
+	};
+}
+
 export async function gitAsync(
 	cwd: string,
 	args: string[],
-	opts: {
-		raw?: boolean;
-		timeoutMs?: number;
-		env?: Record<string, string | undefined>;
-		network?: boolean;
-	} = {},
+	opts: GitAsyncOptions & { raw?: boolean } = {},
 ): Promise<GitResult> {
 	const run = await runBounded(["git", "-C", cwd, ...args], {
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
 		env: opts.env ?? nonInteractiveGitEnv(),
 	});
 	if (run.timedOut) {
-		const captured = boundedStderr(run.err);
-		const noAnswer = opts.network ? NETWORK_NO_ANSWER : LOCAL_NO_ANSWER;
-		return {
-			ok: false,
-			out: "",
-			err: `${STALLED(run.waitedMs)} — ${captured || noAnswer}`,
-			failure: "timeout",
-		};
+		return { ok: false, out: "", ...timeoutFailure(run, opts.network) };
 	}
 	return {
 		ok: run.ok,
 		out: opts.raw ? run.out : run.out.trim(),
+		err: boundedStderr(run.err),
+		...(run.launchFailed && { failure: "launch" as const }),
+	};
+}
+
+export async function gitAsyncBytes(
+	cwd: string,
+	args: string[],
+	opts: GitAsyncOptions = {},
+): Promise<GitAsyncBytesResult> {
+	const run = await runBounded(["git", "-C", cwd, ...args], {
+		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
+		env: opts.env ?? nonInteractiveGitEnv(),
+		stdout: "bytes",
+	});
+	if (run.timedOut) {
+		return { ok: false, out: new Uint8Array(), ...timeoutFailure(run, opts.network) };
+	}
+	return {
+		ok: run.ok,
+		out: run.out,
 		err: boundedStderr(run.err),
 		...(run.launchFailed && { failure: "launch" as const }),
 	};

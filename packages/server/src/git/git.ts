@@ -1,5 +1,5 @@
 import { readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import type {
 	BranchList,
 	GitCommit,
@@ -8,8 +8,10 @@ import type {
 	GitFileStatus,
 	GitStatus,
 	RemoteBranchGroup,
+	ResourceMeta,
 	Workspace,
 } from "@thinkrail/contracts";
+import { decodeText, resolveWorktreeFile, resourceMeta } from "../fs";
 import { logger } from "../log";
 import { loadProjects, loadWorkspaces } from "../persistence";
 import {
@@ -19,7 +21,7 @@ import {
 	resolveCommitOid,
 	resolveDiffRange,
 } from "./diffScope";
-import { git, gitAsync, gitBytes, nonInteractiveGitEnv } from "./gitExec";
+import { git, gitAsync, gitAsyncBytes, gitBytes, nonInteractiveGitEnv } from "./gitExec";
 import { isSafeRef, remoteNameOf } from "./refs";
 
 const log = logger("git");
@@ -357,8 +359,12 @@ export async function gitStatus(workspaceId: string, scope?: GitDiffScope): Prom
 	return { branch, changes };
 }
 
+function blobArgs(ref: string, path: string): string[] {
+	return ["cat-file", "blob", "--", `${ref}:${path}`];
+}
+
 export function readBlobAt(worktreePath: string, ref: string, path: string): string | null {
-	return blobFrom(git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true }));
+	return blobFrom(git(worktreePath, blobArgs(ref, path), { raw: true }));
 }
 
 export function readBlobBytesAt(
@@ -366,11 +372,29 @@ export function readBlobBytesAt(
 	ref: string,
 	path: string,
 ): Uint8Array | null {
-	return blobFrom(gitBytes(worktreePath, ["show", "--end-of-options", `${ref}:${path}`]));
+	return strictBlobFrom(
+		gitBytes(worktreePath, blobArgs(ref, path), {
+			env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+		}),
+	);
+}
+
+export async function readBlobBytesAtAsync(
+	worktreePath: string,
+	ref: string,
+	path: string,
+	opts: { timeoutMs?: number } = {},
+): Promise<Uint8Array | null> {
+	return strictBlobFrom(
+		await gitAsyncBytes(worktreePath, blobArgs(ref, path), {
+			env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+			...(opts.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
+		}),
+	);
 }
 
 function blobIsMissing(stderr: string): boolean {
-	return /does not exist in|exists on disk, but not in/.test(stderr);
+	return /^fatal: path .+ (?:does not exist in|exists on disk, but not in) .+$/s.test(stderr);
 }
 
 function blobFrom<T>(shown: { ok: boolean; out: T; err: string }): T | null {
@@ -379,40 +403,61 @@ function blobFrom<T>(shown: { ok: boolean; out: T; err: string }): T | null {
 	return null;
 }
 
-async function showBlob(worktreePath: string, ref: string, path: string): Promise<string> {
-	const shown = await gitAsync(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], {
-		raw: true,
-		env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
-	});
+function strictBlobFrom<T>(shown: {
+	ok: boolean;
+	out: T;
+	err: string;
+	failure?: "timeout" | "launch";
+}): T | null {
 	if (shown.ok) return shown.out;
-	if (shown.failure) throw new Error(`Could not read the file diff: ${shown.err || "git failed"}`);
-	if (blobIsMissing(shown.err)) return "";
+	if (!shown.failure && blobIsMissing(shown.err)) return null;
 	throw new Error(`Could not read the file diff: ${shown.err || "git failed"}`);
+}
+
+function worktreeBytes(abs: string): Uint8Array | null {
+	try {
+		return readFileSync(abs);
+	} catch (error) {
+		const code =
+			typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+		if (code === "ENOENT") return null;
+		throw error;
+	}
+}
+
+function diffSide(bytes: Uint8Array | null, path: string): { text: string; meta: ResourceMeta } {
+	const meta = resourceMeta(bytes, path);
+	return { text: bytes !== null && meta.text ? decodeText(bytes) : "", meta };
 }
 
 export async function gitDiffFile(
 	workspaceId: string,
 	path: string,
 	scope?: GitDiffScope,
-): Promise<{ original: string; modified: string }> {
+): Promise<{
+	original: string;
+	modified: string;
+	meta: { original: ResourceMeta; modified: ResourceMeta };
+}> {
 	const ws = workspace(workspaceId);
 	const range = await resolveDiffRange(ws, scope);
 
-	const abs = resolve(ws.worktreePath, path);
-	const rel = relative(ws.worktreePath, abs);
-	if (rel.startsWith("..") || isAbsolute(rel)) throw new Error("Path escapes the worktree");
-
-	const original = range.originalRef
-		? await showBlob(ws.worktreePath, range.originalRef, path)
-		: "";
-
-	if (range.modifiedRef)
-		return { original, modified: await showBlob(ws.worktreePath, range.modifiedRef, path) };
-	let modified = "";
-	try {
-		modified = readFileSync(abs, "utf8");
-	} catch {}
-	return { original, modified };
+	const abs = resolveWorktreeFile(workspaceId, path);
+	const worktreeModified = range.modifiedRef === null ? worktreeBytes(abs) : null;
+	const originalRef = range.resolvedOriginalOid ?? range.originalRef;
+	const [originalBytes, modifiedBytes] = await Promise.all([
+		originalRef ? readBlobBytesAtAsync(ws.worktreePath, originalRef, path) : null,
+		range.modifiedRef
+			? readBlobBytesAtAsync(ws.worktreePath, range.modifiedRef, path)
+			: worktreeModified,
+	]);
+	const original = diffSide(originalBytes, path);
+	const modified = diffSide(modifiedBytes, path);
+	return {
+		original: original.text,
+		modified: modified.text,
+		meta: { original: original.meta, modified: modified.meta },
+	};
 }
 
 const COMMIT_LIST_MAX = 200;

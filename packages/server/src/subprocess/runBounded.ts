@@ -1,16 +1,23 @@
-export type BoundedRun = {
+type BoundedRunBase = {
 	ok: boolean;
-	out: string;
 	err: string;
 	timedOut: boolean;
 	launchFailed: boolean;
 	waitedMs: number;
 };
 
+export type BoundedRun = BoundedRunBase & { out: string };
+export type BoundedBytesRun = BoundedRunBase & { out: Uint8Array };
+
 export type BoundedRunOptions = {
 	timeoutMs: number;
 	cwd?: string;
 	env?: Record<string, string | undefined>;
+	stdout?: "text";
+};
+
+export type BoundedBytesRunOptions = Omit<BoundedRunOptions, "stdout"> & {
+	stdout: "bytes";
 };
 
 export const DRAIN_GRACE_MS = 250;
@@ -22,25 +29,57 @@ function boundedTimeout(ms: number): number {
 	return Math.min(Math.max(Math.trunc(ms), 0), MAX_TIMEOUT_MS);
 }
 
-type Sink = { text: () => string; done: Promise<void>; cancel: () => void };
+type Drain = { done: Promise<void>; cancel: () => void };
+type TextSink = Drain & { kind: "text"; value: () => string };
+type BytesSink = Drain & { kind: "bytes"; value: () => Uint8Array };
 
-function sink(stream: ReadableStream<Uint8Array>): Sink {
+function drain(stream: ReadableStream<Uint8Array>, chunk: (value: Uint8Array) => void): Drain {
 	const reader = stream.getReader();
-	const decoder = new TextDecoder();
-	let text = "";
 	const done = (async () => {
 		while (true) {
 			const { done: finished, value } = await reader.read();
 			if (finished) return;
-			if (value) text += decoder.decode(value, { stream: true });
+			if (value) chunk(value);
 		}
 	})().catch(() => {});
 	return {
-		text: () => text,
 		done,
 		cancel: () => {
 			void reader.cancel().catch(() => {});
 		},
+	};
+}
+
+function textSink(stream: ReadableStream<Uint8Array>): TextSink {
+	const decoder = new TextDecoder();
+	let text = "";
+	return {
+		kind: "text",
+		value: () => text,
+		...drain(stream, (chunk) => {
+			text += decoder.decode(chunk, { stream: true });
+		}),
+	};
+}
+
+function bytesSink(stream: ReadableStream<Uint8Array>): BytesSink {
+	const chunks: Uint8Array[] = [];
+	let length = 0;
+	return {
+		kind: "bytes",
+		value: () => {
+			const bytes = new Uint8Array(length);
+			let offset = 0;
+			for (const chunk of chunks) {
+				bytes.set(chunk, offset);
+				offset += chunk.byteLength;
+			}
+			return bytes;
+		},
+		...drain(stream, (chunk) => {
+			chunks.push(chunk.slice());
+			length += chunk.byteLength;
+		}),
 	};
 }
 
@@ -66,7 +105,12 @@ function killTree(proc: Bun.Subprocess): void {
 	proc.kill("SIGKILL");
 }
 
-export async function runBounded(argv: string[], opts: BoundedRunOptions): Promise<BoundedRun> {
+export function runBounded(argv: string[], opts: BoundedBytesRunOptions): Promise<BoundedBytesRun>;
+export function runBounded(argv: string[], opts: BoundedRunOptions): Promise<BoundedRun>;
+export async function runBounded(
+	argv: string[],
+	opts: BoundedRunOptions | BoundedBytesRunOptions,
+): Promise<BoundedRun | BoundedBytesRun> {
 	const startedAt = performance.now();
 	const waitedMs = () => performance.now() - startedAt;
 
@@ -83,11 +127,18 @@ export async function runBounded(argv: string[], opts: BoundedRunOptions): Promi
 		});
 	} catch (cause) {
 		const err = cause instanceof Error ? cause.message : String(cause);
-		return { ok: false, out: "", err, timedOut: false, launchFailed: true, waitedMs: waitedMs() };
+		const failed = {
+			ok: false,
+			err,
+			timedOut: false,
+			launchFailed: true,
+			waitedMs: waitedMs(),
+		};
+		return opts.stdout === "bytes" ? { ...failed, out: new Uint8Array() } : { ...failed, out: "" };
 	}
 
-	const out = sink(proc.stdout);
-	const err = sink(proc.stderr);
+	const out = opts.stdout === "bytes" ? bytesSink(proc.stdout) : textSink(proc.stdout);
+	const err = textSink(proc.stderr);
 	const drained = Promise.all([out.done, err.done]);
 	const deadline = delay(boundedTimeout(opts.timeoutMs));
 
@@ -103,12 +154,12 @@ export async function runBounded(argv: string[], opts: BoundedRunOptions): Promi
 	out.cancel();
 	err.cancel();
 
-	return {
+	const result = {
 		ok: outcome === "exited" && proc.exitCode === 0,
-		out: out.text(),
-		err: err.text(),
+		err: err.value(),
 		timedOut: outcome === "timed-out",
 		launchFailed: false,
 		waitedMs: waitedMs(),
 	};
+	return out.kind === "bytes" ? { ...result, out: out.value() } : { ...result, out: out.value() };
 }

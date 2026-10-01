@@ -53,7 +53,6 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
-import { resolveWorktreeFile } from "../fs";
 import { logger } from "../log";
 import { loadWorkspaces } from "../persistence";
 import {
@@ -81,6 +80,7 @@ import {
 	stopAllWatches,
 } from "../watch";
 import { getWorkspace, refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
+import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -242,8 +242,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			if (url.pathname === "/health") {
 				return new Response("ok");
 			}
-			if (url.pathname.startsWith("/files/")) {
+			if (url.pathname.startsWith(FILES_PREFIX)) {
 				return serveWorktreeFile(url.pathname);
+			}
+			if (url.pathname.startsWith(BLOB_PREFIX)) {
+				return serveBlob(url.pathname);
 			}
 			if (staticDir) {
 				return serveStatic(url.pathname, staticDir);
@@ -754,21 +757,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stop,
 		shutdown,
 	};
-}
-
-async function serveWorktreeFile(pathname: string): Promise<Response> {
-	const rest = pathname.slice("/files/".length);
-	const slash = rest.indexOf("/");
-	if (slash <= 0) return new Response("not found", { status: 404 });
-	const workspaceId = decodeURIComponent(rest.slice(0, slash));
-	const relPath = decodeURIComponent(rest.slice(slash + 1));
-	try {
-		const file = Bun.file(resolveWorktreeFile(workspaceId, relPath));
-		if (!(await file.exists())) return new Response("not found", { status: 404 });
-		return new Response(file);
-	} catch {
-		return new Response("not found", { status: 404 });
-	}
 }
 
 async function serveStatic(pathname: string, staticDir: string): Promise<Response> {

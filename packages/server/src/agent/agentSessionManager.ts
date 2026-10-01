@@ -62,6 +62,7 @@ import {
 	saveSessionLifecycle,
 	saveSessionReceipts,
 } from "../persistence";
+import { trashFile } from "../trash";
 import {
 	ANSWERABILITY_ERRORS,
 	ASK_USER_QUESTION_TOOL_NAME,
@@ -86,7 +87,6 @@ import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import { deriveSessionState } from "./sessionState";
 import type { SkillAdmissionContext } from "./skillAdmission";
-import { trashFile } from "./trash";
 import {
 	cancelExtUiForSession,
 	createWebUiContext,

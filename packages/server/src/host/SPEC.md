@@ -19,8 +19,19 @@ channel fan-out, and the process-boot wrapper both launchers share.
   the initial current PI runtime, falling back to plain PI with closed `load-failed` state when needed, then creates
   `Bun.serve` with `/health`, `/ws` upgrade, a
   **`GET /files/<workspaceId>/<relpath>`** route streaming a worktree file's raw bytes (via `fs`'s
-  `resolveWorktreeFile` — path-contained; bad id/escape/miss → 404; Bun infers the content-type) so the
-  markdown viewer's relative `<img>`s resolve, static serving with
+  `resolveWorktreeFile` — path-contained; bad id/escape/miss → 404; `Cache-Control: no-store`, because
+  the worktree moves under the URL) so the markdown viewer's relative `<img>`s resolve, the sibling
+  **`GET /blob/<workspaceId>/<oid>/<relpath>`** route serving that path's bytes **at one commit**
+  (`git.readBlobBytesAtAsync` behind a 40/64-hex `oid` — a diff range's `resolvedOriginalOid`, so the URL
+  names immutable content and answers `Cache-Control: public, max-age=31536000, immutable`; the Git
+  primitive requires a blob, so trees/commits/gitlinks are 404 alongside a bad id/oid/escape/absent
+  path). Both routes exist because `fs.readFile` and `git.diffFile` answer `""` for bytes they must not
+  decode, so a byte-only resource is fetched over HTTP instead. Both derive `Content-Type` from the same
+  `fs.resourceMeta(bytes, path).mime` the wire reports (falling back to `application/octet-stream`) and
+  send `X-Content-Type-Options: nosniff`; active same-origin types (`text/html`,
+  `application/xhtml+xml`, `image/svg+xml`) additionally receive
+  `Content-Security-Policy: sandbox; default-src 'none'`, so direct navigation cannot execute repository
+  script, static serving with
   `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
   PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace
@@ -337,6 +348,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
     plan/baseline writes land before the reclaim that sweeps them, never after it into a resurrected dir. Best-effort by contract —
     a failed background teardown is warn-logged, never thrown into the void (nothing awaits it). **Archive keeps the branch but not the chat:** the git branch stays (code is
     recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
+- **Change mutations are serialized per workspace, on their own chain** (`reviewLock.ts`'s
+  `createKeyedLock` mints both): `change.revert`/`change.undo` run under **`withChangeLock(workspaceId)`**
+  so two reverts cannot interleave their load→verify→write passes, while reviews and changes —
+  independent resources — never queue behind each other. The agent is deliberately **not** paused: the
+  `changes` module's compare-and-swap makes the race safe, and the fs watcher's `fsChanged` tick re-reads
+  the open tabs after a write exactly as it does after an agent edit (so both handlers `ensureWatch`
+  first). The named failures travel as `WsResponse.errorCode`
+  (`STALE_VIEW`/`SCOPE_IMMUTABLE`/`RANGE_INVALID`/`RECEIPT_UNKNOWN`) through the same `CodedError`
+  mapping `UNKNOWN_COMMIT` uses — the dispatch names no codes of its own, so a code added in `contracts`
+  and thrown by a feature reaches the client with no host-side allowlist to update.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
   `reviews` (drafts + package) plus `agent` (session) plus `reviews` again (mark sent + link) — a
   check-then-mark straddling an `await createSession(…)`, the review layer's only non-atomic gap.
@@ -437,7 +458,8 @@ enabled/confirmed choice before entering analytics attribution.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
   `boot.ts`); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
-  `resolveWorktreeFile` for the `/files` route); Bun/Node.
+  `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobBytesAtAsync` for the `/files` + `/blob`
+  routes); Bun/Node.
 - **Forbidden:** being imported by any feature module; importing `web`/`cli`/`desktop`.
 
 ## Get right

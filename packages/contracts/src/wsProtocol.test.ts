@@ -3,6 +3,7 @@ import type { ReviewFixDetails } from "./domain";
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
@@ -15,6 +16,7 @@ import {
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
@@ -123,8 +125,23 @@ test("host-owned new-chat defaults are pinned to v72", () => {
 
 test("rich review anchors advance the additive selector union to v74", () => {
 	expect(REVIEW_RICH_ANCHORS_PROTOCOL_VERSION).toBe(74);
-	expect(PROTOCOL_VERSION).toBe(74);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(REVIEW_RICH_ANCHORS_PROTOCOL_VERSION);
 	expect(WS_METHODS.reviewCommentAdd).toBe("review.commentAdd");
+});
+
+test("change mutations name their two methods at v75", () => {
+	expect(PROTOCOL_VERSION).toBe(75);
+	expect(CHANGE_MUTATIONS_PROTOCOL_VERSION).toBe(75);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CHANGE_MUTATIONS_PROTOCOL_VERSION);
+	expect(WS_METHODS.changeRevert).toBe("change.revert");
+	expect(WS_METHODS.changeUndo).toBe("change.undo");
+});
+
+test("resource metadata rides the two content reads from v75", () => {
+	expect(RESOURCE_META_PROTOCOL_VERSION).toBe(75);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(RESOURCE_META_PROTOCOL_VERSION);
+	expect(WS_METHODS.fsReadFile).toBe("fs.readFile");
+	expect(WS_METHODS.gitDiffFile).toBe("git.diffFile");
 });
 
 describe("isTodoReviewFixMessage", () => {

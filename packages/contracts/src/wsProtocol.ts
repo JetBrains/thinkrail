@@ -4,6 +4,7 @@ import type {
 	BackgroundCommandCompletionDetails,
 	BackgroundCommandOutputResult,
 	BranchList,
+	ChangeReceipt,
 	DelegationRunDetails,
 	DelegationRunStatus,
 	DiffStats,
@@ -28,6 +29,8 @@ import type {
 	Project,
 	ProjectPathStatus,
 	ProviderStatusReport,
+	ResourceMeta,
+	RevertTarget,
 	ReviewAnchor,
 	ReviewComment,
 	ReviewCommentKind,
@@ -99,7 +102,9 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 74;
+export const PROTOCOL_VERSION = 75;
+export const CHANGE_MUTATIONS_PROTOCOL_VERSION = 75;
+export const RESOURCE_META_PROTOCOL_VERSION = 75;
 export const REVIEW_RICH_ANCHORS_PROTOCOL_VERSION = 74;
 export const DEFAULT_MODEL_PROTOCOL_VERSION = 72;
 export const CHAT_RESOURCES_PROTOCOL_VERSION = 71;
@@ -208,6 +213,8 @@ export const WS_METHODS = {
 	gitStatus: "git.status",
 	gitDiffFile: "git.diffFile",
 	gitListCommits: "git.listCommits",
+	changeRevert: "change.revert",
+	changeUndo: "change.undo",
 	terminalReserve: "terminal.reserve",
 	terminalAttach: "terminal.attach",
 	terminalList: "terminal.list",
@@ -516,7 +523,10 @@ export interface WsMethodMap {
 		result: OpenPrResult;
 	};
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
-	"fs.readFile": { params: { workspaceId: string; path: string }; result: { content: string } };
+	"fs.readFile": {
+		params: { workspaceId: string; path: string };
+		result: { content: string; meta: ResourceMeta };
+	};
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
 	"todo.list": {
 		params: { workspaceId: string; sessionId: string };
@@ -558,9 +568,27 @@ export interface WsMethodMap {
 	"git.status": { params: { workspaceId: string; scope?: GitDiffScope }; result: GitStatus };
 	"git.diffFile": {
 		params: { workspaceId: string; path: string; scope?: GitDiffScope };
-		result: { original: string; modified: string };
+		result: {
+			original: string;
+			modified: string;
+			meta: { original: ResourceMeta; modified: ResourceMeta };
+		};
 	};
 	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };
+	"change.revert": {
+		params: {
+			workspaceId: string;
+			path: string;
+			scope: GitDiffScope;
+			target: RevertTarget;
+			expect: { originalHash: string | null; modifiedHash: string | null };
+		};
+		result: { receipt: ChangeReceipt };
+	};
+	"change.undo": {
+		params: { workspaceId: string; receiptId: string; expect: { modifiedHash: string | null } };
+		result: { receipt: ChangeReceipt };
+	};
 	"terminal.reserve": {
 		params: { workspaceId: string; tabKey: string; title: string };
 		result: { tab: TerminalTabInfo };
@@ -780,7 +808,11 @@ export type WsErrorCode =
 	| "UNKNOWN_COMMIT"
 	| "PUSH_AUTH_FAILED"
 	| "SUBAGENT_TRANSCRIPT_NOT_FOUND"
-	| "RESOURCE_UNAVAILABLE";
+	| "RESOURCE_UNAVAILABLE"
+	| "STALE_VIEW"
+	| "SCOPE_IMMUTABLE"
+	| "RANGE_INVALID"
+	| "RECEIPT_UNKNOWN";
 
 export interface WsResponse {
 	id: string;

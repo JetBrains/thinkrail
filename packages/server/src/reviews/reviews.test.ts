@@ -23,7 +23,6 @@ import {
 	deleteComment,
 	fileReviewSession,
 	getReviewSnapshot,
-	isTextBytes,
 	markCommentsSent,
 	markFileDone,
 	REVIEW_LEVEL_KEY,
@@ -566,14 +565,6 @@ test("the review pins its base to a full oid at creation (what Reject reverts to
 		encoding: "utf8",
 	}).trim();
 	expect((await getReviewSnapshot(WS_ID)).review.baseSha).toBe(head);
-});
-
-test("isTextBytes: UTF-8 (BOM allowed) is text; a NUL byte or invalid UTF-8 is not", () => {
-	expect(isTextBytes(new TextEncoder().encode("const a = 1;\n"))).toBe(true);
-	expect(isTextBytes(new TextEncoder().encode("\ufeffconst a = 1;\n"))).toBe(true);
-	expect(isTextBytes(new Uint8Array([]))).toBe(true);
-	expect(isTextBytes(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0d]))).toBe(false);
-	expect(isTextBytes(new Uint8Array([0xff, 0xfe, 0x41]))).toBe(false);
 });
 
 test("a byte-only worktree file hashes its BYTES, keeps the selectors verbatim, and goes outdated when they change", async () => {
