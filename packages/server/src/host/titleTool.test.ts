@@ -138,6 +138,31 @@ test("long names clamp at a word boundary; a missing slug keeps the branch", asy
 	expect(named.branch).toBe(ws.branch);
 });
 
+test("a branch without workspace_name is rejected before anything is written", async () => {
+	const ws = await createWorkspace("p1");
+	const chat = fakeChat(ws.id);
+
+	await expect(
+		applyAgentTitle("s1", { chat_title: "Fix login", branch: "fix-login" }, chat.deps),
+	).rejects.toThrow("pass it together with workspace_name");
+
+	expect(chat.writes).toEqual([]);
+	expect(getWorkspace(ws.id)).toMatchObject({ name: ws.name, branch: ws.branch });
+	expect(getWorkspace(ws.id).renamed).toBeUndefined();
+});
+
+test("a chat-only call on an unnamed workspace says the workspace still needs a name", async () => {
+	const ws = await createWorkspace("p1");
+	const text = await applyAgentTitle("s1", { chat_title: "Fix login" }, fakeChat(ws.id).deps);
+	expect(text).toBe(
+		'Chat title set to "Fix login".\nWorkspace is still unnamed: call set_title again with workspace_name and branch.',
+	);
+
+	renameWorkspace(ws.id, "Mine");
+	const named = await applyAgentTitle("s2", { chat_title: "Other" }, fakeChat(ws.id).deps);
+	expect(named).toBe('Chat title set to "Other".');
+});
+
 test("rejects calls from sessions the host does not manage, and empty names", async () => {
 	await expect(
 		applyAgentTitle("child", { chat_title: "x" }, fakeChat(undefined).deps),

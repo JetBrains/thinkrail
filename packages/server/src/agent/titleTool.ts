@@ -13,7 +13,7 @@ export const SetTitleSchema = Type.Object({
 	branch: Type.Optional(
 		Type.String({
 			description:
-				'Short English kebab-case slug for the workspace branch, e.g. "fix-auth-redirect".',
+				'Short English kebab-case slug for the workspace branch, e.g. "fix-auth-redirect". Only together with workspace_name.',
 		}),
 	),
 });

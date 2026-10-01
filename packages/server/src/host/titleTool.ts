@@ -30,12 +30,7 @@ export const titleToolHost: TitleToolHost = {
 
 export function workspaceNeedsName(sessionId: string): boolean {
 	const workspaceId = getSessionWorkspaceId(sessionId);
-	if (!workspaceId) return false;
-	try {
-		return isNameable(getWorkspace(workspaceId));
-	} catch {
-		return false;
-	}
+	return workspaceId !== undefined && workspaceStillNameable(workspaceId);
 }
 
 function isNameable(workspace: Workspace): boolean {
@@ -52,11 +47,25 @@ export async function applyAgentTitle(
 	const chatTitle = clampWords(params.chat_title, SESSION_TITLE_MAX_LENGTH);
 	const workspaceName = clampWords(params.workspace_name, MAX_WORKSPACE_NAME);
 	if (!chatTitle && !workspaceName) throw new Error("Pass chat_title and/or workspace_name.");
+	if (params.branch?.trim() && !workspaceName) {
+		throw new Error("branch names the workspace branch: pass it together with workspace_name.");
+	}
 
 	const lines: string[] = [];
 	if (chatTitle) lines.push(await applyChatTitle(deps, sessionId, workspaceId, chatTitle));
 	if (workspaceName) lines.push(applyWorkspaceName(workspaceId, workspaceName, params.branch));
+	else if (workspaceStillNameable(workspaceId)) {
+		lines.push("Workspace is still unnamed: call set_title again with workspace_name and branch.");
+	}
 	return lines.join("\n");
+}
+
+function workspaceStillNameable(workspaceId: string): boolean {
+	try {
+		return isNameable(getWorkspace(workspaceId));
+	} catch {
+		return false;
+	}
 }
 
 async function applyChatTitle(
