@@ -570,9 +570,13 @@ export interface AppConfig extends ThemePreference {
 	chatLineWidthBounded: boolean;
 	fileLineWidthBounded: boolean;
 	customLayoutPresets: LayoutPreset[];
-	/** The model the plan reviewer runs on; unset ⇒ the pi default. */
+	/** The model new chats start with; unset uses the first available model. */
+	defaultModel?: WireModel;
+	/** New-chat effort; unset defaults to medium. */
+	defaultEffort?: ThinkingLevel;
+	/** The model the plan reviewer runs on; unset uses the host's new-chat model default. */
 	reviewModel?: WireModel;
-	/** Reviewer thinking level; unset ⇒ the user's default thinking level, never the worker's inherited effort. */
+	/** Reviewer thinking level; unset uses the host's new-chat effort default, never the worker's inherited effort. */
 	reviewEffort?: ThinkingLevel;
 	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
 	reviewAutoFix: boolean;
@@ -586,7 +590,11 @@ export interface AppConfig extends ThemePreference {
 }
 
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
-export type AppConfigUpdate = Partial<Omit<AppConfig, "reviewModel" | "reviewEffort">> & {
+export type AppConfigUpdate = Partial<
+	Omit<AppConfig, "defaultModel" | "defaultEffort" | "reviewModel" | "reviewEffort">
+> & {
+	defaultModel?: WireModel | null;
+	defaultEffort?: ThinkingLevel | null;
 	reviewModel?: WireModel | null;
 	reviewEffort?: ThinkingLevel | null;
 };

@@ -1,4 +1,5 @@
 import {
+	RiBrainLine as Brain,
 	RiDownloadCloud2Line as DownloadCloud,
 	RiFeedbackLine as Feedback,
 	RiGitBranchLine as GitBranch,
@@ -14,6 +15,7 @@ import {
 	RiTerminalBoxLine as SquareTerminal,
 	RiTextWrap as TextWrap,
 } from "@remixicon/react";
+import { DEFAULT_MODEL_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib";
@@ -23,6 +25,7 @@ import { ChatSettings } from "./ChatSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
 import { LineWidthSettings } from "./LineWidthSettings";
+import { ModelsSettings } from "./ModelsSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
 import { ReviewSettings } from "./ReviewSettings";
@@ -34,8 +37,15 @@ const SECTIONS: {
 	label: string;
 	icon: LucideIcon;
 	requiresInjectedContent?: true;
+	requiresProtocolVersion?: number;
 }[] = [
 	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
+	{
+		id: SettingsSection.Models,
+		label: "Models",
+		icon: Brain,
+		requiresProtocolVersion: DEFAULT_MODEL_PROTOCOL_VERSION,
+	},
 	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
 	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
 	{ id: SettingsSection.LineWidth, label: "Line width", icon: TextWrap },
@@ -64,8 +74,12 @@ export function SettingsDialog({
 }) {
 	const open = useAppStore((s) => s.settingsOpen);
 	const section = useAppStore((s) => s.settingsSection);
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const sections = SECTIONS.filter(
-		(candidate) => !candidate.requiresInjectedContent || updateSettings !== undefined,
+		(candidate) =>
+			(!candidate.requiresInjectedContent || updateSettings !== undefined) &&
+			(candidate.requiresProtocolVersion === undefined ||
+				(protocolVersion !== null && protocolVersion >= candidate.requiresProtocolVersion)),
 	);
 	const selectedSection = sections.some((candidate) => candidate.id === section)
 		? section
@@ -137,6 +151,8 @@ export function SettingsDialog({
 					<div className="min-h-0 flex-1 overflow-y-auto p-16">
 						{selectedSection === SettingsSection.Providers ? (
 							<ProvidersSettings />
+						) : selectedSection === SettingsSection.Models ? (
+							<ModelsSettings />
 						) : selectedSection === SettingsSection.Github ? (
 							<GithubSettings />
 						) : selectedSection === SettingsSection.LineWidth ? (

@@ -10,6 +10,7 @@ import {
 	findGlobalCentralArtifact,
 	isRealCentralE2e,
 	removeCentralModeLocalSeeds,
+	seedE2eDefaultModel,
 	stageGlobalCentralArtifact,
 	waitForCentralTarget,
 	writeE2eAgentSettings,
@@ -107,7 +108,17 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 
 	const baseURL = config?.projects[0]?.use.baseURL;
 	if (!centralMode) {
-		return baseURL ? seedAnalyticsConsent(baseURL, false, true).then(() => undefined) : undefined;
+		if (!baseURL) return undefined;
+		return E2eWire.connect(Number(new URL(baseURL).port))
+			.then(async (wire) => {
+				try {
+					await seedE2eDefaultModel(wire);
+				} finally {
+					wire.close();
+				}
+			})
+			.then(() => seedAnalyticsConsent(baseURL, false, true))
+			.then(() => undefined);
 	}
 	return E2eWire.connect()
 		.then(async (wire) => {

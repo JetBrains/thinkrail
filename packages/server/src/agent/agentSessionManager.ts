@@ -1699,6 +1699,10 @@ export async function listAvailableModels(): Promise<WireModel[]> {
 	return readAvailableWireModels(runtime);
 }
 
+export async function listSettledModels(): Promise<WireModel[]> {
+	return readAvailableWireModels(await getPiRuntime());
+}
+
 export async function refreshAvailableModels(force = false): Promise<RefreshedModels> {
 	const runtime = await getPiRuntime();
 	const { completed } = await refreshCatalogs(runtime, { force });
@@ -1709,32 +1713,12 @@ function readAvailableWireModels(runtime: Awaited<ReturnType<typeof getPiRuntime
 	return settledAvailableModels(runtime).map((m) => toWireModel(m as unknown as Model<string>));
 }
 
-export interface DefaultModelResult {
-	model: WireModel | null;
-	thinkingLevel: ThinkingLevel;
-}
-
 export async function clampThinkingForModel(
 	ref: Pick<WireModel, "provider" | "id">,
 	level: ThinkingLevel,
 ): Promise<ThinkingLevel> {
 	const generation = await getPiRuntimeGeneration();
 	return clampThinkingLevel(resolveWireModel(generation.runtime, ref), level);
-}
-
-export async function getDefaultModel(): Promise<DefaultModelResult> {
-	const available = settledAvailableModels(await getPiRuntime());
-	const settings = SettingsManager.create(process.cwd());
-	const provider = settings.getDefaultProvider();
-	const modelId = settings.getDefaultModel();
-	const pinned =
-		provider && modelId
-			? available.find((model) => model.provider === provider && model.id === modelId)
-			: undefined;
-	const resolved = (pinned ?? null) as Model<string> | null;
-	const saved = settings.getDefaultThinkingLevel() ?? "medium";
-	const thinkingLevel = resolved ? clampThinkingLevel(resolved, saved) : saved;
-	return { model: resolved ? toWireModel(resolved) : null, thinkingLevel };
 }
 
 export function isSessionStreaming(sessionId: string): boolean {

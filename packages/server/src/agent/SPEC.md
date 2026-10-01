@@ -38,7 +38,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     live catalogs is the single-flighted **`refreshCatalogs(runtime)`** (issue #98, mirroring pi's own
     `/model`) behind two triggers: a detached task from `model.list` only
     (`listAvailableModels` fires it, then serves the current snapshot — the picker read never awaits the
-    network; broader triggers — `model.default`, host boot — were considered and declined) and
+    network; broader triggers — `model.default`, new-chat default resolution, host boot — were considered
+    and declined, so those read the snapshot through `listSettledModels`) and
     **awaited** via `model.refresh` (`refreshAvailableModels`, the picker's freshness affordance: await
     the refresh, then serve the post-refresh snapshot **with `complete`** — `refreshCatalogs` resolves a
     `CatalogRefreshOutcome` saying whether the pass it waited on settled, and that verdict travels to the
@@ -296,20 +297,16 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `setModel` / `setThinkingLevel` / **manual `compact` guarded per session** (a second overlapping request
     is rejected before Pi can overwrite its one compaction controller; an active Pi compaction also blocks
     entry) / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
-    `listAvailableModels` / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
-    pair — `model.clampThinking`; the host owns it so the pre-session picker, `getDefaultModel`, and a live
-    session all adjust effort identically) / `getDefaultModel` (the **pinned** default only — pi's settings
-    `defaultProvider`/`defaultModel` when that model is available, else `model: null` — plus the effort that
-    pairs with it). **The host never guesses a pre-session model:** pi's own resolver (settings pin →
-    provider default → first available) runs inside `createAgentSession`, so a caller without a pinned
-    default omits `model` and lets pi choose, and every creation path agrees by construction. The earlier
-    `pinned ?? available[0]` was a *second* resolver: with nothing pinned it answered `available[0]` while a
-    fresh session got pi's provider default, so the New-Workspace dialog pre-pinned a model no other path
-    would have picked — landing on `anthropic/claude-fable-5`, whose `compat.allowedFallbackModels` makes pi
-    send a `fallbacks` field, a 400 on an Anthropic proxy without the server-side-fallback beta, while a new
-    chat in the same worktree worked. Pi publishes no pre-session resolver (`findInitialModel` and
-    `defaultModelPerProvider` are not re-exported from the package root and its `exports` map blocks the deep
-    import), and copying its provider-default table here would recompute what `pi` owns. **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
+    `listAvailableModels` / `listSettledModels` (the same snapshot without starting a refresh) / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
+    pair — `model.clampThinking`; the host uses it so defaults and live-session effort changes follow Pi).
+    Earlier, #394 showed ThinkRail's `available[0]` differed from Pi's pick and hit a proxy 400. ThinkRail
+    now resolves defaults host-side from `AppConfig`, falling back to the first available model; it always
+    passes the chosen model explicitly so the UI and session agree. Accepted risk: the first available model
+    may not be the provider default; users can set one in Settings → Models. Plan review uses this same
+    `resolveNewChatModel({})` for unset reviewer overrides: AppConfig `defaultModel`/`defaultEffort`, with
+    the first available model and `medium` effort as fallbacks.
+
+    **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
     `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl`, `headers`, extension/provider
     routing data, and any other field are excluded by
     default — and the inbound side re-resolves the ref by `{provider,id}` via `resolveWireModel` against

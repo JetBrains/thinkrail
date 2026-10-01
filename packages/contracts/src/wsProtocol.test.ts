@@ -6,6 +6,7 @@ import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	customMessageText,
+	DEFAULT_MODEL_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
@@ -103,6 +104,13 @@ test("auto plan-summary generation advances the protocol to v69", () => {
 	expect(PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION).toBe(69);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION);
 	expect(WS_METHODS.todoGenerateSummary).toBe("todo.generateSummary");
+});
+
+test("host-owned new-chat defaults are pinned to v72", () => {
+	expect(PROTOCOL_VERSION).toBe(72);
+	expect(DEFAULT_MODEL_PROTOCOL_VERSION).toBe(72);
+	expect(WS_METHODS.modelDefault).toBe("model.default");
+	expect(WS_METHODS).not.toHaveProperty("modelSetDefault");
 });
 
 describe("isTodoReviewFixMessage", () => {

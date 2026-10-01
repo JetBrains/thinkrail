@@ -473,6 +473,42 @@ test("a failed config write leaves the live cache and publisher unchanged", () =
 	expect(published).toEqual([]);
 });
 
+test("defaultModel/defaultEffort persist through the top-level partial merge", () => {
+	const model = {
+		id: "m",
+		name: "M",
+		provider: "p",
+		contextWindow: 1,
+		reasoning: false,
+		thinkingLevels: [],
+	};
+	updateConfig({ defaultModel: model, defaultEffort: "high" });
+	resetConfigCache();
+	expect(getConfig().defaultModel).toEqual(model);
+	expect(getConfig().defaultEffort).toBe("high");
+});
+
+test("null defaultModel/defaultEffort clear the overrides and persist them as unset", () => {
+	const model = {
+		id: "m",
+		name: "M",
+		provider: "p",
+		contextWindow: 1,
+		reasoning: false,
+		thinkingLevels: [],
+	};
+	updateConfig({ defaultModel: model, defaultEffort: "high" });
+	const next = updateConfig({ defaultModel: null, defaultEffort: null });
+	expect(next.defaultModel).toBeUndefined();
+	expect(next.defaultEffort).toBeUndefined();
+	resetConfigCache();
+	expect(getConfig().defaultModel).toBeUndefined();
+	expect(getConfig().defaultEffort).toBeUndefined();
+	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+	expect(onDisk).not.toHaveProperty("defaultModel");
+	expect(onDisk).not.toHaveProperty("defaultEffort");
+});
+
 test("reviewModel/reviewEffort persist through the top-level partial merge", () => {
 	const model = {
 		id: "m",

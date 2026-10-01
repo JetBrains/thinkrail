@@ -39,6 +39,7 @@ export function ModelSelector({
 	placeholder,
 	defaultOption,
 	onSelectDefault,
+	disabled = false,
 }: {
 	models: WireModel[];
 	current: WireModel | null;
@@ -50,6 +51,7 @@ export function ModelSelector({
 	placeholder?: string;
 	defaultOption?: string;
 	onSelectDefault?: () => void;
+	disabled?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
 	const providers = [...new Set(models.map((m) => m.provider))];
@@ -70,6 +72,7 @@ export function ModelSelector({
 			<PopoverTrigger
 				data-testid="model-selector"
 				data-open={open}
+				disabled={disabled}
 				className={cn(
 					"flex h-32 max-w-[220px] items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected",
 					className,

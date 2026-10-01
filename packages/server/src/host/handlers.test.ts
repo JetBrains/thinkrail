@@ -3,10 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
 	Template,
 	TemplateInfo,
+	WireModel,
 	Workspace,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
@@ -30,6 +32,42 @@ const CTX = { clientKey: "test-client" };
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+
+async function setupDefaultModelRuntime(): Promise<() => void> {
+	const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
+	const agentDir = join(dataDir, "agent");
+	mkdirSync(agentDir);
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	const runtime = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	const model = {
+		id: "handler-model",
+		name: "Handler model",
+		api: "faux",
+		reasoning: false,
+		input: ["text"] as ("text" | "image")[],
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		contextWindow: 100_000,
+		maxTokens: 4_096,
+	};
+	const faux = createFauxCore({ provider: "handler", api: "faux", models: [model] });
+	runtime.registerProvider("handler", {
+		api: "faux",
+		baseUrl: "http://faux.local",
+		apiKey: "faux",
+		streamSimple: faux.streamSimple,
+		models: [model],
+	});
+	configurePiRuntime(runtime);
+	return () => {
+		configurePiRuntime(null);
+		if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+	};
+}
 
 function git(cwd: string, ...args: string[]): void {
 	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
@@ -132,6 +170,43 @@ test("template reads resolve a project's current checkout and reject ambiguous l
 	} finally {
 		if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 		else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+	}
+});
+
+test("model.default and new session creation share the AppConfig default resolution", async () => {
+	const cleanup = await setupDefaultModelRuntime();
+	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd, { id: "default-resolution" }));
+	try {
+		const models = (await handleRequest("model.list", {}, CTX)) as WireModel[];
+		const selected = models.find((model) => model.provider === "handler");
+		if (!selected) throw new Error("handler test model was not available");
+		await handleRequest(
+			"settings.update",
+			{ config: { defaultModel: selected, defaultEffort: "high" } },
+			CTX,
+		);
+		const resolved = (await handleRequest("model.default", {}, CTX)) as {
+			model: WireModel | null;
+			thinkingLevel: string;
+		};
+		expect(resolved).toEqual({ model: selected, thinkingLevel: "off" });
+
+		const workspace = (await handleRequest(
+			"workspace.create",
+			{ projectId: "p1" },
+			CTX,
+		)) as Workspace;
+		const created = (await handleRequest(
+			"session.create",
+			{ workspaceId: workspace.id },
+			CTX,
+		)) as CreateSessionResult;
+		expect(created).toMatchObject({ model: selected, thinkingLevel: "off" });
+	} finally {
+		disposeAllSessions();
+		configurePiRuntime(null);
+		setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+		cleanup();
 	}
 });
 

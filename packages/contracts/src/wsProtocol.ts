@@ -100,7 +100,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 71;
+export const PROTOCOL_VERSION = 72;
+export const DEFAULT_MODEL_PROTOCOL_VERSION = 72;
 export const CHAT_RESOURCES_PROTOCOL_VERSION = 71;
 export const HOST_UPDATE_RUN_PROTOCOL_VERSION = 70;
 export const PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION = 67;
@@ -436,6 +437,11 @@ export interface WorkspaceWatchReadyResult {
 	startupNudge: boolean;
 }
 
+export interface ModelDefault {
+	model: WireModel | null;
+	thinkingLevel: ThinkingLevel;
+}
+
 export interface WsMethodMap {
 	"project.open": { params: { path: string }; result: Project };
 	"project.list": { params: Record<string, never>; result: Project[] };
@@ -661,10 +667,7 @@ export interface WsMethodMap {
 		result: { level: ThinkingLevel };
 	};
 	"model.refresh": { params: { force?: boolean }; result: RefreshedModels };
-	"model.default": {
-		params: Record<string, never>;
-		result: { model: WireModel | null; thinkingLevel: ThinkingLevel };
-	};
+	"model.default": { params: Record<string, never>; result: ModelDefault };
 	"provider.status": { params: Record<string, never>; result: ProviderStatusReport };
 	"provider.loginStart": {
 		params: { providerId: string; type?: "oauth" | "api_key" };
