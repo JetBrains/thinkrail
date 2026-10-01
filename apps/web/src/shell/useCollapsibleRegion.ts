@@ -80,8 +80,9 @@ export function useCollapsibleRegion<T extends HTMLElement = HTMLElement>(
 	const draggingRef = useRef(false);
 	const dragStartSizeRef = useRef<number | null>(null);
 	const requestedCollapseRef = useRef(false);
-	const storageKeyRef = useRef(expandSizeStorageKey(storageId));
-	const expandSizeRef = useRef<number | null>(readExpandSize(storageKeyRef.current));
+	const storageKey = expandSizeStorageKey(storageId);
+	const [initialExpandSize] = useState(() => readExpandSize(storageKey));
+	const expandSizeRef = useRef<number | null>(initialExpandSize);
 	const [collapsed, setCollapsed] = useState(false);
 
 	useEffect(() => {
@@ -136,10 +137,10 @@ export function useCollapsibleRegion<T extends HTMLElement = HTMLElement>(
 	const onCollapse = useCallback(() => {
 		if (dragStartSizeRef.current !== null) {
 			expandSizeRef.current = dragStartSizeRef.current;
-			writeExpandSize(storageKeyRef.current, expandSizeRef.current);
+			writeExpandSize(storageKey, expandSizeRef.current);
 		} else if (requestedCollapseRef.current) {
 			expandSizeRef.current = null;
-			writeExpandSize(storageKeyRef.current, null);
+			writeExpandSize(storageKey, null);
 		}
 		if (!draggingRef.current) dragStartSizeRef.current = null;
 		requestedCollapseRef.current = false;
@@ -153,7 +154,7 @@ export function useCollapsibleRegion<T extends HTMLElement = HTMLElement>(
 			}
 		}
 		setCollapsed(true);
-	}, []);
+	}, [storageKey]);
 
 	const onExpand = useCallback(() => {
 		if (!draggingRef.current) dragStartSizeRef.current = null;

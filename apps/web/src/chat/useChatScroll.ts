@@ -165,6 +165,13 @@ function rowAlignmentTarget(
 	return scroller.scrollTop + (target.top + target.bottom - viewport.top - viewport.bottom) / 2;
 }
 
+function useReadingBandController(
+	...args: Parameters<typeof createReadingBandController>
+): ReadingBandController {
+	const [controller] = useState(() => createReadingBandController(...args));
+	return controller;
+}
+
 export function useChatScroll(
 	virtuosoRef: RefObject<VirtuosoHandle | null>,
 	isStreaming: boolean,
@@ -178,9 +185,7 @@ export function useChatScroll(
 ): ChatScroll {
 	const edge = latestEdge(messageOrder);
 	const firstItemIndexRef = useRef(firstItemIndex);
-	firstItemIndexRef.current = firstItemIndex;
 	const rowHeightEstimatesRef = useRef(rowHeightEstimates);
-	rowHeightEstimatesRef.current = rowHeightEstimates;
 	const scrollerRef = useRef<HTMLElement | null>(null);
 	const headerElementRef = useRef<HTMLDivElement | null>(null);
 	const edgeRef = useRef<HTMLDivElement | null>(null);
@@ -190,7 +195,11 @@ export function useChatScroll(
 	const measuredHeaderHeight = useRef(0);
 	const headerAnchorScrollTop = useRef(0);
 	const latestEdgeRef = useRef(edge);
-	latestEdgeRef.current = edge;
+	useLayoutEffect(() => {
+		firstItemIndexRef.current = firstItemIndex;
+		rowHeightEstimatesRef.current = rowHeightEstimates;
+		latestEdgeRef.current = edge;
+	});
 	const interactionStartScrollTop = useRef(0);
 	const returnIntentUntil = useRef(0);
 	const pointerIntentUntil = useRef(0);
@@ -231,79 +240,73 @@ export function useChatScroll(
 	const [snapshot, setSnapshot] = useState<ReadingBandSnapshot>(() =>
 		initialReadingBandSnapshot(isStreaming),
 	);
-	const [controller] = useState<ReadingBandController>(() =>
-		createReadingBandController(
-			{
-				readGeometry: () => {
-					const scroller = scrollerRef.current;
-					if (!scroller) return null;
-					const currentEdge = latestEdgeRef.current;
-					const edgeElement = edgeRef.current;
-					const runwayEdgeElement =
-						currentEdge === "top" ? runwayEdgeElementRef.current : edgeElement;
-					const viewportTop = scroller.getBoundingClientRect().top;
-					const headerHeight =
-						currentEdge === "top"
-							? (headerElementRef.current?.getBoundingClientRect().height ?? 0)
-							: 0;
-					return {
-						...scrollBounds(scroller),
-						viewportHeight: scroller.clientHeight,
-						edgeBottom: edgeElement
-							? markerBottomWithoutHeader(
-									edgeElement.getBoundingClientRect().bottom,
-									viewportTop,
-									0,
-								)
-							: null,
-						runwayBottom: runwayEdgeElement
-							? markerBottomWithoutHeader(
-									runwayEdgeElement.getBoundingClientRect().bottom,
-									viewportTop,
-									headerHeight,
-								)
-							: null,
-					};
-				},
-				readScrollBounds: () => {
-					const scroller = scrollerRef.current;
-					return scroller ? scrollBounds(scroller) : null;
-				},
-				readViewportHeight: () => scrollerRef.current?.clientHeight ?? 0,
-				writeScrollTop: (top) => {
-					const scroller = scrollerRef.current;
-					if (!scroller) return;
-					scroller.scrollTop = top;
-					recordProgrammaticScrollPosition();
-					const headerHeight = headerElementRef.current?.getBoundingClientRect().height ?? 0;
-					if (Math.abs(headerHeight - measuredHeaderHeight.current) <= 0.5) {
-						headerAnchorScrollTop.current = boundedScrollTop(scroller);
-					}
-				},
-				writeRunwayHeight: (height) => {
-					runwayHeightRef.current = height;
-					const runway = runwayElementRef.current;
-					if (runway) {
-						runway.style.height = `${height}px`;
-						recordProgrammaticScrollPosition();
-					}
-				},
-				anchorTurn: (index, inset) => {
-					virtuosoRef.current?.scrollToIndex({
-						index,
-						align: "start",
-						offset: -inset,
-						behavior: "auto",
-					});
-				},
-				prefersReducedMotion: () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-				now: () => performance.now(),
-				requestFrame: (callback) => requestAnimationFrame(callback),
-				cancelFrame: (id) => cancelAnimationFrame(id),
-				onStateChange: setSnapshot,
+	const controller = useReadingBandController(
+		{
+			readGeometry: () => {
+				const scroller = scrollerRef.current;
+				if (!scroller) return null;
+				const currentEdge = latestEdgeRef.current;
+				const edgeElement = edgeRef.current;
+				const runwayEdgeElement =
+					currentEdge === "top" ? runwayEdgeElementRef.current : edgeElement;
+				const viewportTop = scroller.getBoundingClientRect().top;
+				const headerHeight =
+					currentEdge === "top"
+						? (headerElementRef.current?.getBoundingClientRect().height ?? 0)
+						: 0;
+				return {
+					...scrollBounds(scroller),
+					viewportHeight: scroller.clientHeight,
+					edgeBottom: edgeElement
+						? markerBottomWithoutHeader(edgeElement.getBoundingClientRect().bottom, viewportTop, 0)
+						: null,
+					runwayBottom: runwayEdgeElement
+						? markerBottomWithoutHeader(
+								runwayEdgeElement.getBoundingClientRect().bottom,
+								viewportTop,
+								headerHeight,
+							)
+						: null,
+				};
 			},
-			{ streaming: isStreaming, latestEdge: edge, movement },
-		),
+			readScrollBounds: () => {
+				const scroller = scrollerRef.current;
+				return scroller ? scrollBounds(scroller) : null;
+			},
+			readViewportHeight: () => scrollerRef.current?.clientHeight ?? 0,
+			writeScrollTop: (top) => {
+				const scroller = scrollerRef.current;
+				if (!scroller) return;
+				scroller.scrollTop = top;
+				recordProgrammaticScrollPosition();
+				const headerHeight = headerElementRef.current?.getBoundingClientRect().height ?? 0;
+				if (Math.abs(headerHeight - measuredHeaderHeight.current) <= 0.5) {
+					headerAnchorScrollTop.current = boundedScrollTop(scroller);
+				}
+			},
+			writeRunwayHeight: (height) => {
+				runwayHeightRef.current = height;
+				const runway = runwayElementRef.current;
+				if (runway) {
+					runway.style.height = `${height}px`;
+					recordProgrammaticScrollPosition();
+				}
+			},
+			anchorTurn: (index, inset) => {
+				virtuosoRef.current?.scrollToIndex({
+					index,
+					align: "start",
+					offset: -inset,
+					behavior: "auto",
+				});
+			},
+			prefersReducedMotion: () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+			now: () => performance.now(),
+			requestFrame: (callback) => requestAnimationFrame(callback),
+			cancelFrame: (id) => cancelAnimationFrame(id),
+			onStateChange: setSnapshot,
+		},
+		{ streaming: isStreaming, latestEdge: edge, movement },
 	);
 
 	const resumeNativeMotion = useCallback(() => {

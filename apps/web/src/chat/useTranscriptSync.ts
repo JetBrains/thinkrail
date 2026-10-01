@@ -102,11 +102,11 @@ export function useTranscriptSync({
 	const failure = useRef<{ key: string; count: number } | null>(null);
 	const need = transcriptSyncNeed(runtime, connectionGeneration);
 	const needKey = need ? `${connectionGeneration}:${need.compactionTurnId ?? "generation"}` : null;
-	const failureCount = failure.current?.key === needKey ? failure.current.count : 0;
-	const exhausted = failureCount > 0 && transcriptSyncRetryDelay(failureCount) === null;
 
 	useEffect(() => {
-		if (!enabled || !needKey || status !== "connected" || exhausted) return;
+		if (!enabled || !needKey || status !== "connected") return;
+		const failureCount = failure.current?.key === needKey ? failure.current.count : 0;
+		if (failureCount > 0 && transcriptSyncRetryDelay(failureCount) === null) return;
 		const waiting = waitingForIdle.current;
 		if (waiting?.key === needKey) {
 			if (waiting.eventRevision === runtime.eventRevision || runtime.isStreaming) return;
@@ -165,7 +165,6 @@ export function useTranscriptSync({
 		connectionGeneration,
 		enabled,
 		needKey,
-		exhausted,
 		retry,
 		runtime.eventRevision,
 		runtime.isStreaming,
