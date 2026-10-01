@@ -289,7 +289,7 @@ export default function ChatView({
 		let delay = 250;
 		let attempts = 0;
 		const acknowledge = (): void => {
-			attempts++;
+			attempts += 1;
 			void getTransport()
 				.request("session.acknowledgeCompletion", {
 					sessionId,

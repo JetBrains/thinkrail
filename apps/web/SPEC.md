@@ -97,6 +97,7 @@ these conventions:
   (`useReadingBandController`), and a ref is never handed to a plain helper; the helper becomes a hook that
   owns it (`useSideResizeBinder`).
 - A default parameter never reads a member expression (`caret = text.length`); resolve it in the body.
+- A closure never applies `++`/`--` to a variable it captures; write `attempts += 1`.
 - A `useMemo`/`useCallback` lists every dependency it reads, or the compiler cannot preserve it.
 - Render never reads a value the compiler cannot see change — `matchMedia`, storage, `Date.now`, a module
   singleton. It arrives through `useSyncExternalStore` or state: `AppearanceSettings` subscribes with
