@@ -140,7 +140,7 @@ export interface ResourceMeta {
   mime?: string;              // sniffed by magic bytes first, extension second
 }
 "fs.readFile":  { result: { content: string; meta: ResourceMeta } }                    // `content` is "" for byte-only
-"git.diffFile": { result: { original: string; modified: string; meta: { original: ResourceMeta; modified: ResourceMeta } } }
+"git.diffFile": { result: { original: string; modified: string; originalOid: string | null; meta: { original: ResourceMeta; modified: ResourceMeta } } }
 ```
 
 Byte-only sides are fetched by the client over HTTP: the existing **`/files/<workspaceId>/<path>`**

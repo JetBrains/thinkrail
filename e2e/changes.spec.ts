@@ -24,15 +24,14 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 	await expect(diffTab).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("diff-pane")).toContainText("edited by e2e");
 
-	// Markdown diffs open in the Rendered view by default (no Split|Inline segment).
-	await expect(page.getByTestId("diff-toggle-rendered")).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("diff-toggle-split")).toHaveCount(0);
+	await expect(page.getByTestId("view-toggle-markdown")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
 	const renderedDiff = page.getByTestId("rendered-diff");
 	await expect(renderedDiff.locator("h1")).toHaveText("sample-project");
 	await expect(renderedDiff.locator("ins")).toContainText("edited by e2e");
 
-	await page.getByTestId("diff-toggle-source").click();
-	await expect(page.getByTestId("diff-toggle-source")).toHaveAttribute("data-active", "true");
+	await page.getByTestId("view-toggle-code").click();
+	await expect(page.getByTestId("view-toggle-code")).toHaveAttribute("data-active", "true");
 	await expect(renderedDiff).toHaveCount(0);
 
 	await changed.click();
@@ -42,7 +41,7 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
 	await expect(page.getByTestId("diff-pane")).toContainText("edited = true");
 	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("diff-toggle-rendered")).toHaveCount(0);
+	await expect(page.getByTestId("view-toggle-markdown")).toHaveCount(0);
 	await page.getByTestId("diff-toggle-inline").click();
 	await expect(page.getByTestId("diff-toggle-inline")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("diff-pane")).toContainText("edited = true");
@@ -107,7 +106,7 @@ test("Rendered markdown diff shows an error placeholder when the merge worker fa
 	await expect(page.getByTestId("rendered-diff-error")).toBeVisible();
 	await expect(page.getByTestId("rendered-diff-error")).toContainText("Source");
 
-	await page.getByTestId("diff-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await expect(page.getByTestId("diff-pane")).toContainText("edited by e2e");
 });
 

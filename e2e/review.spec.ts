@@ -455,13 +455,13 @@ test("cards drawn in the preview reserve their height in the source view — and
 	}
 	await expect(preview.getByTestId("review-thread")).toHaveCount(2);
 
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await scrollCardsIntoView(page);
 	await expect.poll(() => zonesReserveCards(page), { timeout: 5000 }).toBe(true);
 
-	await page.getByTestId("md-toggle-preview").click();
+	await page.getByTestId("view-toggle-markdown").click();
 	await expect(page.getByTestId("markdown-preview").getByTestId("review-thread")).toHaveCount(2);
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await scrollCardsIntoView(page);
 	await expect.poll(() => zonesReserveCards(page), { timeout: 5000 }).toBe(true);
 });
@@ -557,7 +557,7 @@ test("an in-flow card never halves a code fence — the rest of the document sta
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "FENCE.md" }).click();
 
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await page.getByTestId("editor-pane").getByText("const two = 2;").last().click();
 	await page.keyboard.press("Home");
 	await page.keyboard.press("Shift+End");
@@ -566,7 +566,7 @@ test("an in-flow card never halves a code fence — the rest of the document sta
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
 
-	await page.getByTestId("md-toggle-preview").click();
+	await page.getByTestId("view-toggle-markdown").click();
 	const preview = page.getByTestId("markdown-preview");
 	await expect(preview.getByTestId("review-thread")).toHaveCount(1);
 	const code = preview.locator("pre[data-md-line-start]");
@@ -608,9 +608,8 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
 	await expect(page.getByTestId("diff-pane")).toContainText("renamed");
-	// Markdown diffs render by default; this test anchors on the Monaco source split.
-	await page.getByTestId("diff-toggle-source").click();
-	await expect(page.getByTestId("diff-toggle-source")).toHaveAttribute("data-active", "true");
+	await page.getByTestId("view-toggle-code").click();
+	await expect(page.getByTestId("view-toggle-code")).toHaveAttribute("data-active", "true");
 
 	const original = page.locator(".editor.original");
 	await original.getByText("sample-project").first().click();
@@ -665,7 +664,7 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-active="true"][data-kind="diff"]'),
 	).toContainText("README.md");
-	await page.getByTestId("diff-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await expect(page.locator(".editor.original").getByTestId("review-thread")).toHaveCount(1);
 
 	execSync(`git -C "${worktree()}" commit -am "land the rename"`, { stdio: "ignore" });
@@ -680,7 +679,7 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-active="true"][data-kind="diff"]'),
 	).toContainText("README.md");
-	await page.getByTestId("diff-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await expect(page.locator(".editor.original")).toContainText("# sample-project");
 	await expect(page.locator(".editor.original")).not.toContainText("renamed");
 	await expect(page.locator(".editor.original").getByTestId("review-thread")).toHaveCount(1);

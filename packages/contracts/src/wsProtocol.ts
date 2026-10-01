@@ -571,6 +571,7 @@ export interface WsMethodMap {
 		result: {
 			original: string;
 			modified: string;
+			originalOid: string | null;
 			meta: { original: ResourceMeta; modified: ResourceMeta };
 		};
 	};

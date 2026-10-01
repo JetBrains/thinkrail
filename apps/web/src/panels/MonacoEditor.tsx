@@ -1,6 +1,7 @@
 import MonacoReact, { type BeforeMount, type OnMount } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { useCallback, useEffect, useRef } from "react";
+import type { ResourceViewProps, SurfaceReview } from "@/resources";
 import { LoadingRegion } from "../components/Skeleton";
 import { useAppStore } from "../store";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
@@ -10,21 +11,31 @@ import {
 	sharedEditorOptions,
 	watchThemeSwap,
 } from "./monacoSetup";
-import { applyReviewDecorations } from "./reviewGutter";
-import { attachReviewCommenting, attachReviewThreads } from "./reviewWidgets";
-import type { EditorReview } from "./useReviewCommenting";
+import {
+	applyReviewDecorations,
+	attachReviewCommenting,
+	attachReviewThreads,
+} from "./reviewWidgets";
 
-const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
+const beforeMount: BeforeMount = (monaco) => defineThinkrailTheme(monaco);
+
+function focusLine(review: SurfaceReview): number | null {
+	const range = review.focus?.anchor.selectors.find((selector) => selector.kind === "lineRange");
+	return range?.kind === "lineRange" ? range.startLine : null;
+}
+
+function isEditorViewState(value: unknown): value is editor.ICodeEditorViewState {
+	if (typeof value !== "object" || value === null) return false;
+	return Array.isArray(Reflect.get(value, "cursorState")) && Reflect.has(value, "viewState");
+}
 
 export default function MonacoEditor({
-	path,
+	resource,
 	content,
 	review,
-}: {
-	path: string;
-	content: string;
-	review?: EditorReview;
-}) {
+	viewState,
+	onViewState,
+}: ResourceViewProps) {
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
@@ -34,26 +45,32 @@ export default function MonacoEditor({
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 	const decorationsRef = useRef<string[]>([]);
 	const reviewRef = useRef(review);
+	const onViewStateRef = useRef(onViewState);
 	reviewRef.current = review;
+	onViewStateRef.current = onViewState;
 
-	const syncThreads = useCallback((target: EditorReview) => {
+	const syncThreads = useCallback((target: SurfaceReview) => {
 		if (!editorRef.current) return;
 		threadsRef.current?.setThreads(target.threads);
-		decorationsRef.current = applyReviewDecorations(
+		const applied = applyReviewDecorations(
 			editorRef.current,
 			decorationsRef.current,
 			target.threads,
 		);
+		decorationsRef.current = applied.decorations;
 	}, []);
 
-	const onMount: OnMount = (codeEditor, m) => {
-		stopThemeWatchRef.current = watchThemeSwap(m, EDITOR_THEME);
+	const onMount: OnMount = (codeEditor, monaco) => {
+		stopThemeWatchRef.current = watchThemeSwap(monaco, EDITOR_THEME);
 		editorRef.current = codeEditor;
 		menuIconsRef.current = decorateEditorContextMenus(codeEditor);
+		if (isEditorViewState(viewState)) codeEditor.restoreViewState(viewState);
 		if (review) {
 			detachRef.current = attachReviewCommenting(codeEditor, {
-				onSave: (s, t) => reviewRef.current?.commenting.onSave(s, t) ?? Promise.resolve(),
-				onSend: (s, t) => reviewRef.current?.commenting.onSend(s, t) ?? Promise.resolve(),
+				onSave: (draft, text) =>
+					reviewRef.current?.commenting.onSave(draft, text) ?? Promise.resolve(),
+				onSend: (draft, text) =>
+					reviewRef.current?.commenting.onSend(draft, text) ?? Promise.resolve(),
 			});
 			threadsRef.current = attachReviewThreads(codeEditor, {
 				onSendComment: (id) => reviewRef.current?.actions.onSendComment(id) ?? Promise.resolve(),
@@ -63,10 +80,10 @@ export default function MonacoEditor({
 					reviewRef.current?.actions.onUpdateComment(id, body) ?? Promise.resolve(),
 			});
 			syncThreads(review);
-			const focus = reviewRef.current?.focus;
-			if (focus) {
-				codeEditor.revealLineInCenter(focus.line);
-				reviewRef.current?.onFocusHandled();
+			const line = focusLine(review);
+			if (line !== null) {
+				codeEditor.revealLineInCenter(line);
+				review.onFocusHandled();
 			}
 		}
 	};
@@ -76,13 +93,17 @@ export default function MonacoEditor({
 	}, [review, syncThreads]);
 
 	useEffect(() => {
-		if (!review?.focus || !editorRef.current) return;
-		editorRef.current.revealLineInCenter(review.focus.line);
+		if (!review || !editorRef.current) return;
+		const line = focusLine(review);
+		if (line === null) return;
+		editorRef.current.revealLineInCenter(line);
 		review.onFocusHandled();
 	}, [review]);
 
 	useEffect(
 		() => () => {
+			const saved = editorRef.current?.saveViewState();
+			if (saved) onViewStateRef.current?.(saved);
 			stopThemeWatchRef.current?.();
 			menuIconsRef.current?.dispose();
 			detachRef.current?.();
@@ -91,11 +112,12 @@ export default function MonacoEditor({
 		[],
 	);
 
+	const text = content.kind === "text" ? content.text : "";
 	return (
 		<MonacoReact
 			height="100%"
-			path={path}
-			value={content}
+			path={resource.path}
+			value={text}
 			theme={EDITOR_THEME}
 			beforeMount={beforeMount}
 			onMount={onMount}

@@ -204,9 +204,9 @@ of the host.
   `RESOURCE_META_PROTOCOL_VERSION` = v75: sha-256 `hash` + `byteLength`, both `null` when the resource is
   absent; `text` = valid UTF-8, BOM-aware; optional `mime`, sniffed from magic bytes first and the
   filename second. It rides `fs.readFile` and both sides of `git.diffFile`, whose `content` is `""`
-  whenever `text` is false — the host refuses to send a decoded binary, so a client renders byte-only
-  resources from the `/files` + `/blob` HTTP routes and uses `hash` as the identity a comment anchor or a
-  revert expectation names),
+  whenever `text` is false and whose `originalOid` is the resolved range start used to address the immutable
+  `/blob` side — the host refuses to send a decoded binary, so a client renders byte-only resources from the
+  `/files` + `/blob` HTTP routes and uses `hash` as the identity a comment anchor or a revert expectation names),
   the **change-mutation types** — **`LineSpan`** (1-based inclusive; `count: 0` names an insertion point
   *before* `start`), **`RevertTarget`** (`file` = the path's whole change in the scope, or `range` = one
   hunk as **line spans on both sides**, never a patch or a `@@` header: two client diff engines split
@@ -499,8 +499,8 @@ of the host.
   the client's conservative fallback when the event push was lost or startup failed; an optional
   `prewarm: true` marks the started watcher as prewarm-only — the host keeps those in a globally bounded,
   evictable pool and any real preflight/read promotes them out of it, see the server `watch` SPEC) / **`git.status`** +
-  **`git.diffFile`** (whose two sides now ride with a `meta: { original, modified }` pair of
-  `ResourceMeta`), both
+  **`git.diffFile`** (whose two sides ride with `ResourceMeta` and whose `originalOid` freezes the range's
+  original side for `/blob`), both
   taking an optional **`scope: GitDiffScope`** (an unresolvable scope — a commit a rebase removed — is
   *rejected*, which the panel reads as "reset the scope" instead of staying wedged on a dead sha) /
   **`git.listCommits`** (the workspace branch's own commits, `<diff base>..HEAD`, newest first, capped

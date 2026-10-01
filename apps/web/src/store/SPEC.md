@@ -126,8 +126,8 @@ selected-log state belong to chat integration, not domain persistence. See
   cannot recreate it.
 
   **Browser-local resource render state** is keyed by workspace + canonical resource id, never embedded in
-  the frame. Loaded file/diff content and ticks, editor modes, live chat runtimes, and resolved document
-  markdown remain caches over their domain sources. Placement ids are stable within a workspace view; an id
+  the frame. Loaded file/diff content and metadata, renderer choice, opaque renderer view state, diff layout,
+  live chat runtimes, and resolved document markdown remain caches over their domain sources. Placement ids are stable within a workspace view; an id
   already owned by another semantic cache gets a collision-safe cache id. A virtual document is legal only
   when its local resource reference names a registered resolver plus durable source identity; `todo-plan`
   resolves by session to the live `PlanPane`. Arbitrary inline markdown cannot enter persisted layout state.
@@ -482,12 +482,10 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   The selector
   **`selectSkillsStale(state, workspaceId, sessionId)`** = `skillChangeTick > syncedTick` — store-derived
   (survives `ChatView`'s tab-switch remount) and per-session (a sibling/newer chat that loaded the current
-  skills is not flagged; a reload clears only its own). Also **`updateFileTabContent(workspaceId, id, content,
-  tick)`** — a `FileTab` carries the `tick` its content was loaded at, so `FilePane` detects staleness
-  (`workspaceTick > tab.loadedTick`) across tab switches, and its diff twin
-  **`updateDiffTabContent(workspaceId, id, original, modified, tick, loadedTarget)`** — a `DiffTab` follows the same
-  staleness contract in `DiffPane`, in **two** dimensions: the fs tick and the review target the two sides were
-  read against, written together so neither can outlive the content it describes. The transient
+  skills is not flagged; a reload clears only its own). `updateFileTabContent` writes content, `ResourceMeta`,
+  and the captured fs tick together. Its diff twin, `updateDiffTabContent`, additionally writes both sides'
+  metadata, the resolved original oid, and `loadedTarget`; a `DiffTab` is stale in either the fs-tick or review-target
+  dimension, and neither identity may outlive the content it describes. The transient
   A **`reveal-tool` `LayoutIntent`** is the arrangement-agnostic request to reveal/focus a singleton
   side tool; the shell layout integration consumes it and resolves the tool's current saved location.
   **`changesRequest`** and **`specRequest`** add an optional path/item target to that reveal and carry a
@@ -508,8 +506,7 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   **`openDoc(tab)`** caches and places either a resolved **`DocTab`** or a **`PlanTab`** (`kind: "plan"`,
   id `${workspaceId}:plan:${sessionId}` — one page per chat, re-open focuses). Local placement persistence
   keeps only resolver kind + durable session identity, never cached content. `PlanPane` reads the host-owned
-  plan live, so the page has no snapshot to go stale. **`DiffTab`** is a read-only Monaco diff of one
-changed file over **one diff scope** (id `${workspaceId}:diff:${scopeKey}:${path}` — one tab per *(file,
+  plan live, so the page has no snapshot to go stale. **`DiffTab`** is one renderer-dispatched changed file over **one diff scope** (id `${workspaceId}:diff:${scopeKey}:${path}` — one tab per *(file,
 scope)*: **the scope is part of a tab's identity**, because a tab's content must never change meaning
 because the Changes tool's scope flipped underneath it; the tab carries its own `scope`, which is also what
 `DiffPane` re-reads with, never the panel's current one).
@@ -523,13 +520,15 @@ second live dimension (see `panels/SPEC.md`'s live-refresh contract) — and tha
 its content was actually read against** (`DiffTab.loadedTarget`, required, written by every content write).
 Panes mount only while their resource is locally selected, so without that record a diff whose target moved
 while it sat in the background would mount with the new target already in hand, conclude nothing changed, and show the *old*
-target's diff under the new target's label; the cached value is what the mount compares against. Its
-per-resource view state: `view` split|inline via
-**`setDiffTabView`**, split the default; a markdown diff's `rendered` flag via **`setDiffTabRendered`**
-(swaps raw lines for compiled documents — `DiffPane` offers it for markdown paths only); and
-`ignoreWhitespace` via **`setDiffTabIgnoreWhitespace`** (Monaco's `ignoreTrimWhitespace`). All three go
-through one internal `patchDiffRenderState(state, workspaceId, id, patch)` helper — locate-the-resource-cache
-and merge lives once, so a new per-diff toggle is a one-liner, not another copy. Opened by `ChangesPanel`.
+target's diff under the new target's label; the cached value is what the mount compares against. `FileTab`
+and `DiffTab` share `rendererId` plus opaque `viewState`, written by workspace-explicit `setTabRenderer`
+and `setTabViewState` so an unmount callback settling after a workspace switch still updates its owning tab.
+The registry owns view-state interpretation; changing renderer or phone/desktop implementation drops the
+prior opaque state, and each implementation rejects state it cannot interpret. Diff-only presentation keeps
+`view` split|inline via
+`setDiffTabView` (split by default) and `ignoreWhitespace` via `setDiffTabIgnoreWhitespace`. Legacy persisted
+`view` on file documents and `rendered` on diff documents are outside the accepted cache shape and are
+ignored on read; no migration state exists. Opened by `ChangesPanel`.
 **`diffScopeByWorkspace`** + **`setDiffScope(workspaceId, scope)`** hold *what* each workspace's Changes
 panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
 `BRANCH_SCOPE`); keyed **per workspace**, not app-wide like `changesView`, because a scope belongs to that

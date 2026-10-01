@@ -72,8 +72,19 @@ test("groupComments: review-level first, then files alphabetically, creation ord
 	expect(groups[2]?.comments.map((c) => c.id)).toEqual(["c1", "c4"]);
 });
 
-test("lineRef: the compact line reference; empty for review-level", () => {
+test("lineRef uses the shared anchor labels and stays empty for review-level comments", () => {
 	expect(lineRef(comment({}))).toBe("L3–5");
+	expect(
+		lineRef(
+			comment({
+				anchor: {
+					path: "data.json",
+					side: "worktree",
+					selectors: [{ kind: "structural", scheme: "json-pointer", ref: "/name" }],
+				},
+			}),
+		),
+	).toBe("json-pointer /name");
 	expect(lineRef(comment({ kind: "review", anchor: null }))).toBe("");
 });
 
@@ -112,9 +123,26 @@ test("fileThreads keeps the two diff sides apart — each editor renders only it
 			},
 		}),
 	];
-	expect(fileThreads(comments, "src/a.ts", "worktree").map((t) => t.id)).toEqual(["w1"]);
-	expect(fileThreads(comments, "src/a.ts", "base").map((t) => [t.id, t.startLine])).toEqual([
-		["b1", 9],
+	expect(fileThreads(comments, "src/a.ts", "worktree").map((thread) => thread.id)).toEqual(["w1"]);
+	expect(
+		fileThreads(comments, "src/a.ts", "base").map((thread) => [
+			thread.id,
+			thread.anchor.selectors[0],
+		]),
+	).toEqual([["b1", { kind: "lineRange", startLine: 9, endLine: 9 }]]);
+});
+
+test("fileThreads retains positioned selectors a Monaco renderer cannot place", () => {
+	const structural = comment({
+		id: "structural",
+		anchor: {
+			path: "src/a.ts",
+			side: "worktree",
+			selectors: [{ kind: "structural", scheme: "json-pointer", ref: "/name" }],
+		},
+	});
+	expect(fileThreads([structural], "src/a.ts", "worktree")).toEqual([
+		expect.objectContaining({ id: "structural", anchor: structural.anchor }),
 	]);
 });
 

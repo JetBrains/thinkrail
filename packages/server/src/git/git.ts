@@ -437,6 +437,7 @@ export async function gitDiffFile(
 ): Promise<{
 	original: string;
 	modified: string;
+	originalOid: string | null;
 	meta: { original: ResourceMeta; modified: ResourceMeta };
 }> {
 	const ws = workspace(workspaceId);
@@ -456,6 +457,7 @@ export async function gitDiffFile(
 	return {
 		original: original.text,
 		modified: modified.text,
+		originalOid: range.resolvedOriginalOid,
 		meta: { original: original.meta, modified: modified.meta },
 	};
 }

@@ -184,11 +184,11 @@ treatment.
   row carries the shared **`ChangeRowActions`** menu. The row wrapper paints the complete hover/selected
   band, including the trailing menu slot; its inner open-file button remains transparent so that band
   cannot look clipped before the menu),
-  `FilePane` (+ its lazy `MonacoEditor` / `MarkdownPreview`) + `DiffPane` (+ its lazy
-  `MonacoDiff`), plus lazy `TerminalInstance`. The Monaco plumbing both editors share —
+  `FilePane` and `DiffPane` as resource-registry dispatchers, the bundled lazy renderers under
+  `panels/resources`, plus lazy `TerminalInstance`. The Monaco plumbing the code renderer's editors share —
   worker wiring, the local loader, the token-driven `thinkrail` theme + the `[data-theme]` re-theme
-  observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (`Preview|Source`,
-  `Split|Inline`, `List|Tree`) is the shared `ToggleSegment` — whose active segment reuses the tab
+  observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (the ordered resource
+  candidates, `Split|Inline`, `List|Tree`) is the shared `ToggleSegment` — whose active segment reuses the tab
   grammar's `control-bg-selected` (below), never a container surface, so the selected fill survives the
   high-contrast themes where `container-elevated-bg` collapses onto the toolbar surface.
   The `ChangesPanel` secondary toolbar paints **no surface of its own**: like the right-panel tab strip
@@ -585,7 +585,7 @@ a project picker, the prompt hero, and the reused
   (`auth` module).
 
   Panels compose their own sub-panels
-  (e.g. side tools → `FileTree`/`ChangesPanel`, workbench resource renderers → `FilePane`→`MonacoEditor`) — an internal hierarchy.
+  (e.g. side tools → `FileTree`/`ChangesPanel`, resource panes → registered bundled renderers) — an internal hierarchy.
   When a center group has no resource tab, the workbench asks panels for the empty surface as a persistent
   creation/orientation receipt rather than a generic placeholder: **“Workspace ready”**, the display name,
   `branch · from baseBranch`, and **“Files, chats, changes, and terminals are scoped to this workspace,”**
@@ -927,7 +927,7 @@ own section. The kebab menu (`plan-menu`, a
   state renders content-shaped skeleton rows, never a bare "Loading…" line), `components/ui` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook that feeds them,
   reused by `NewWorkspaceDialog`; `Markdown`,
-  reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `lib`, `themes` (catalog + generic application contract),
+  reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `resources`, `lib`, `themes` (catalog + generic application contract),
   `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
@@ -943,9 +943,17 @@ own section. The kebab menu (`plan-menu`, a
   surfaces equal. The grammar also supplies bounded one-row overflow and the complete WAI-ARIA tabs
   pattern with roving focus and labelled tabpanels. Panel renderers provide title/icon/status/close
   metadata and fill the selected tabpanel; they never read group order or draw their own docking strip.
-  The shared `ToggleSegment` (List|Tree, Split|Inline, Preview|Source) borrows the same
+  The shared `ToggleSegment` (List|Tree, Split|Inline, and the resolved resource candidates) borrows the same
   `control-bg-selected` fill + `text-default` for its active segment (no bottom marker — a slim toggle,
   not a tab), so "selected" reads the same everywhere and never derives a parallel surface token.
+- **File and diff panes dispatch; they do not classify formats.** Each describes the host metadata,
+  resolves the registry for its intent and phone class, lazily mounts the selected candidate, and keeps
+  `rendererId` plus opaque view state on the tab. The lazy implementation identity includes renderer id and
+  phone class, so crossing the breakpoint swaps the code implementation and discards incompatible state.
+  Two or more candidates become one ordered toggle whose ids are the test hooks. Threads whose selectors
+  the selected renderer cannot place for the pane's view or diff intent remain visible in an unplaced
+  strip; its action switches to the first candidate that advertises matching anchor geometry for that intent.
+  Bundled registration is a workbench-mount side effect, while renderer implementation imports stay lazy.
 - The singleton side-tool renderers are **Projects | Specs | Files | Changes | Review**. Their current
   location and local selection are supplied by the shell; Review exposes its store-derived pending-draft
   count as tab metadata. A renderer remains the same when its singleton moves to the opposite side.
@@ -1014,8 +1022,8 @@ own section. The kebab menu (`plan-menu`, a
   `useWorkspaceSpecs` pattern — the read also re-anchors server-side): tab flags and the Review badge need
   the snapshot even while the panel body is unmounted.
   Every client converges on `review.changed` pushes folded into the store; nothing here
-  mutates optimistically. Comment *authoring* is **selection-triggered, no mode toggle** (`reviewWidgets.ts`,
-  shared by `FilePane`/`DiffPane` through the Monaco components): selecting text shows a floating
+  mutates optimistically. Comment *authoring* is **selection-triggered, no mode toggle**. Renderer
+  implementations project `SurfaceReview` anchors; Monaco's projection lives in `reviewWidgets.ts`, where selecting text shows a floating
   **comment icon right of the selection** (a Monaco content widget; the rendered preview's icon
   follows the selection live but stays mouse-transparent until the drag ends — a clickable node under
   the moving cursor is one the native selection extends into, repainting the document tail). The
@@ -1035,21 +1043,22 @@ own section. The kebab menu (`plan-menu`, a
   the open menu's DOM: each row gets a fixed-width `.editor-menu-icon` slot (labels stay aligned), known
   English labels get their glyph, unknown/restructured rows stay label-only (a Monaco bump can only
   lose icons, never break the menu); submenu popups (Peek ▸) stay undecorated. The rendered preview's
-  context menu is the browser's own and stays unextended. Save →
-  `review.commentAdd` with only the `lineRange` + the anchor's **side** (the host reads that side's own
-  content to fill `contentHash` + the drift-tolerant `textQuote`); Send now additionally fires
+  context menu is the browser's own and stays unextended. Save sends an `AnchorDraft`; Monaco and the
+  markdown preview produce a raw-file `lineRange`, while an unlocatable preview selection produces an empty
+  selector set and therefore a whole-file comment. `useFileReview` combines that draft with path and the
+  surface's **side** (the host fills `contentHash` + the drift-tolerant `textQuote`); Send now additionally fires
   `review.sendComment` and opens the created chat. Commented
   lines render as decorations (`review-comment-line`). Review attaches only for scopes whose modified
   side IS the worktree (branch / uncommitted — never a `commit` scope, whose content is historical).
   **A diff's two editors are two anchor spaces, each carrying the full surface** (decorations,
   in-flow cards, composer): the modified editor holds `side: "worktree"` comments, the original editor
-  holds `side: "base"` ones (`useFileReview`'s `base` slice; `MonacoDiff` wires both through one
-  `wireSide`, and the tab's `scope` rides along so the host resolves the very blob the original editor
-  shows). An original-side selection is **never remapped onto modified line numbers** — the two sides
+  holds `side: "base"` ones (`useFileReview` returns independent `worktree` and `base` surfaces;
+  `MonacoDiff` wires both through one `wireSide`, and the tab's `scope` rides along so the host resolves the
+  very blob the original editor shows). An original-side selection is **never remapped onto modified line numbers** — the two sides
   say different things at the same numbers, so a remark on a deleted or rewritten line would silently
   re-point at whatever now sits there, and that is what the send package would hand the agent. A focus
-  deep link likewise resolves **per side** (`SideReview.focus`), so a surface only ever reveals a line
-  it actually renders. The **rendered markdown view comments too**
+  deep link likewise resolves **per side** (`SurfaceReview.focus` carries the full anchor), so a surface
+  only ever reveals geometry it actually renders. The **rendered markdown file view comments too**
   (`PreviewCommenting` — the React sibling of `reviewWidgets`, same icon/composer skin, overlays
   positioned in the scroller's content coordinates so they travel with the document): the rendered
   selection is mapped back to SOURCE lines by the pure `previewAnchor` (head/tail phrase search over
@@ -1075,7 +1084,9 @@ own section. The kebab menu (`plan-menu`, a
   (a `status`/`anchorState`/line-range/`body` signature) keeps its exact DOM, so a draft the user is
   mid-edit survives an unrelated push (another client's comment, a re-anchor/resolve elsewhere) with
   its textarea value, focus and selection intact — only changed cards rebuild, gone ones drop, new ones
-  add. **Rendered preview**: `MarkdownPreview` splits the stripped document at each insert's
+  add. Threads without a `lineRange` never enter Monaco zones or decorations: the widget returns them as
+  unplaced and the pane-level strip keeps them visible without changing `anchorState`. **Rendered preview**:
+  `MarkdownPreview` splits the stripped document at each insert's
   anchor and splices it between the markdown segments (`splicedSegments` — the inline-edit split
   pattern; a cut **never divides a multi-line construct**: an anchor inside a fenced code block or a
   GFM table snaps to that construct's last line (`sourceLines`' `indivisibleSpans` + `snapSplitLine`),
@@ -1104,10 +1115,8 @@ own section. The kebab menu (`plan-menu`, a
   the rest of the review vocabulary already counts draft-**or**-sent as in review (`fileSummaries`,
   `selectActiveReviewedPath`, `fileThreads`) — a drafts-only flag made a file the chat was actively
   working through look identical in the tab strip to one never reviewed, while the rail insisted it
-  was in review. **`Send review (N)` stays strictly drafts-only and PER-FILE** — that file's PANE
-  TOOLBAR (DiffPane's header,
-  FilePane's markdown header — a non-markdown file grows a slim header just for it) carries the text
-  button (`SendReviewButton`, over the one `fileDraftIds` derivation): the count and the send are
+  was in review. **`Send review (N)` stays strictly drafts-only and PER-FILE** — the file or diff pane's
+  resource toolbar carries the text button (`SendReviewButton`, over the one `fileDraftIds` derivation): the count and the send are
   exactly THIS file's drafts, batched into the file's own review chat (one chat per file — the host
   pins it in `Review.fileSessions` and later sends `followUp` there), which **opens immediately** (the
   host fires the package into the session detached — see the reviews SPEC's send-latency note). Other
@@ -1117,9 +1126,8 @@ own section. The kebab menu (`plan-menu`, a
   would be a lie, so an in-progress file keeps its muted flag and grows no toolbar. A pane over an
   uncommented file shows neither. There is no manual review mode to enter. Every send affordance (composer Send now, thread cards, sidebar rows/footer, tab
   Send all) goes through the one `reviewSend.ts` pair (`sendReviewComment`/`sendReviewBatch`: request
-  → show the chat tab → toast on failure), and the panes integrate via the one **`useFileReview`**
-  hook (threads + composer callbacks + card actions in a single `review` prop on
-  `MonacoEditor`/`MonacoDiff`).
+  → show the chat tab → toast on failure), and the panes integrate via the one **`useFileReview`** hook,
+  passing its anchor-keyed `worktree`/`base` surfaces through the registry props.
   A batch answers with EVERY session it touched (one per group), so a multi-file batch opens every chat
   it started and focuses the first — a chat the user never saw would still be an agent working on their
   comments. **Showing each chat forks on the result's `reused` flag:** a chat this send CREATED opens straight
@@ -1304,54 +1312,24 @@ own section. The kebab menu (`plan-menu`, a
   `server/src/git/SPEC.md`). The **target branch lives beside the scope menu, not inside it**
   (as first designed): a searchable list belongs in a combobox, and a nested Radix submenu closes itself when
   the menu re-renders as those lazy reads land.
-- **The diff is a center resource tab, not an inset inside the Changes tool.** Clicking a Changes row fetches `git.diffFile` (both sides of
-  the row's scope) and opens a **`DiffTab`** (`${workspaceId}:diff:${scopeKey}:${path}` — one tab per *file and
-  scope*, carrying its own `scope`: a re-click in the same scope focuses the existing tab, while the same file
-  in another scope is a second tab, because a tab's content must never change meaning because the Changes scope
-  flipped underneath it; non-default scopes tag the tab label via `diffTabName`) through `openTabs.ts`'s
-  **`openDiffInTab`**, the diff twin of `openFileInTab`: a single click **previews**, a double click **keeps**,
-  so scanning a change set reuses one tab. `DiffPane` renders a slim
-  header — the **path chip** (muted directory prefix + bright basename, matching the flat list's rows), a
-  **¶ hide-whitespace** toggle (Monaco's `ignoreTrimWhitespace`, per tab via
-  `store.setDiffTabIgnoreWhitespace`), a **copy-contents** button (the modified side; no clipboard → no-op,
-  the text stays selectable), and the per-tab
-  **Split | Inline** toggle via `store.setDiffTabView`; split is the default — over the read-only lazy
-  `MonacoDiff` (`@monaco-editor/react` `DiffEditor`, model paths derived from the file's path so both
-  sides highlight alike; `useInlineViewWhenSpaceIsLimited: false` — the toggle must do what it says, so
-  Split never silently renders as inline on a narrow pane; **`hideUnchangedRegions: { enabled: true }`** —
-  Monaco's own collapsed context (“N hidden lines” with an expand control, in both layouts), never a
-  hand-rolled folding of our own; the inline view's dual line-number gutter
-  — base-branch no. left, worktree no. right — is Monaco's standard and stays; on unmount it sets
-  **`keepCurrentOriginalModel`/`keepCurrentModifiedModel`** so `@monaco-editor/react` won't dispose the
-  models early, and then disposes the **widget before its two models itself** — the only order that dodges
-  Monaco 0.52+'s "TextModel got disposed before DiffEditorWidget model got reset" assertion (disposing a
-  model while a live widget still references it), which the library otherwise trips by disposing models
-  first; keeping them also avoids leaking a model pair per closed diff tab (regression-pinned in
-  `e2e/changes.spec.ts`)). **A markdown diff has exactly two
-  views** instead, via a **Source | Rendered** toggle (`diff-toggle-source`/`diff-toggle-rendered`,
-  per-tab `DiffTab.rendered` via `store.setDiffTabRendered`, gated on `lib.isMarkdownPath`; **Rendered is
-  the default** (`tab.rendered ?? true`), matching rendered-by-default markdown file tabs — no
-  Split|Inline segment for markdown). **Source** = the basic Monaco split diff.
-  **Rendered** is a **real rich diff**, not plain previews (see [[task-rendered-markdown-diff]]): the
-  lazy `RenderedDiff` renders **both sides** through the same document pipeline as `MarkdownPreview`
-  (the shared `MarkdownDocument` — prose skin, alerts, heading ids, frontmatter stripped) to static
-  HTML (`renderToStaticMarkup`; effects don't run, so code blocks show the plain fallback and link
-  handlers are inert — accepted for a diff view), then merges them with **`node-htmldiff`** into ONE
-  document carrying `<ins>`/`<del>` markers (`del` red + strikethrough, `ins` green — token colors),
-  injected via `dangerouslySetInnerHTML` (same accepted risk class as the shiki path in
-  `chat/Markdown`). **The htmldiff merge runs in a Web Worker** (`htmldiff.worker.ts`, one worker per
-  pending request — terminate = cancel): htmldiff's matcher is super-linear on repetitive content
-  (seconds of synchronous blocking for a few hundred near-identical rows), so it must never run on the
-  main thread; while it computes, `RenderedDiff` shows a `rendered-diff-loading` placeholder, and a
-  worker failure (script asset failing to load, htmldiff throwing) shows a `rendered-diff-error`
-  placeholder pointing at the Source view — never an eternal spinner. The
-  static-markup render of both sides is linear and stays on the main thread. Pinned by e2e in
-  `e2e/changes.spec.ts`: the long-task test (seeded `LARGE.md`, 800 identical rows), the
-  worker-failure test (worker asset blocked → `rendered-diff-error`), and the live-edit test (fs
-  tick re-reads both sides → stale merge cancelled, fresh one lands). This mirrors VS Code's opt-in "markdown preview in the diff view" — a feature of
-  VS Code's webview layer, absent from standalone Monaco, hence built here. A row is shown selected when its
-  diff resource is locally selected in a center group (or it is the deep-link highlight). A failed
-  `git.diffFile` leaves placement unchanged (the row stays for a retry).
+- **The diff is a center resource tab, not an inset inside the Changes tool.** Clicking a Changes row
+  reads `git.diffFile` and opens one `DiffTab` per *(path, scope)* through `openDiffInTab`; preview/keep,
+  navigation-stamp, target-ref, and live-refresh semantics are unchanged. `DiffPane` describes the returned
+  `ResourceMeta`, resolves the registry for `diff`, and lazily mounts the selected renderer. Byte-only
+  original sides use the response's resolved original oid with `/blob`; an absent side is explicit, never a
+  bytes value with a fabricated URL. The fixed toolbar keeps path, per-file review send, ¶ whitespace, copy,
+  and **Split | Inline**, then renders one `view-toggle-<renderer suffix>` segment per candidate when the
+  registry returns more than one. Renderer choice replaces the old markdown-only `rendered` state; layout
+  and whitespace remain independent diff state.
+
+  Bundled candidates are registered once from `panels/resources/register.ts`: `thinkrail/code` is the text
+  fallback (Monaco diff in this step), `thinkrail/markdown` supplies `RenderedDiff`, and
+  `thinkrail/binary` reports both sides' byte sizes. `RenderedDiff` keeps its worker-isolated htmldiff merge,
+  loading/error states, and token styling, but advertises no diff anchors: both sides' threads stay in the
+  pane's unplaced strip, **Show in Source** selects the code renderer, and diff authoring is available only
+  in Source. It is selected by registry match rather than a path branch in the pane. Scopes whose modified
+  side is historical receive no review surface; `hunkActions` remains absent
+  for every scope until the mutation step wires it.
 - **Changes: List | Tree.** A header toggle (`store.changesView`, app-wide — persisted in the store, not
   per workspace, so it survives workspace switches) switches the flat **List** and a folder **Tree**
   (`ChangesTree`), both built from the same `git.status` list. The Tree is styled exactly like the
@@ -1418,23 +1396,17 @@ own section. The kebab menu (`plan-menu`, a
   would overflow the chip **invisibly to the layout** while spilling over the buttons on screen, so the
   basename pairs it with `max-w-full`: flex never steals the name's width, but max-width still clamps it to
   the row, which is also why the e2e pin measures the *chip's* `scrollWidth`, not the header's.
-- **Markdown file tabs render, don't read.** A `.md`/`.markdown` `FileTab` (from the file tree **or** the
-  Specs panel — same `openTab` path) opens **rendered by default**: `FilePane` gates on `lib.isMarkdownPath`
-  and shows a slim `Preview | Source` header (`markdown-view-toggle`), the rendered view being lazy
-  `MarkdownPreview` (reuses `chat/Markdown` for GFM+shiki but owns the **document skin** — `tr-prose-doc`
-  supplies every typography value (`typography.json` → `proseSystems.doc`: h1–h4 at 24/20/18/16 against
-  14px body copy, so a rendered file reads as a document rather than a chat bubble), and the skin adds
-  only what is *not* typography: h1/h2 section rules, a capped reading measure (~78ch) with wide
-  tables/code scrolling inside it, zebra-striped bordered tables, muted accent blockquotes, crisp
-  rules, and **GitHub-style alert callouts** (`> [!NOTE]`…`[!CAUTION]`, via the in-repo
-  `markdownAlerts` remark transform + a Remix Icon/token `AlertCallout`, wired in only here — not chat), and
-  **```mermaid fences render as themed diagrams** (the shared `Markdown` primitive's mermaid path —
-  `chat/SPEC.md`; the rendered *diff* keeps the source-code degradation, like shiki) — in
-  a centered reading column; strips a leading YAML frontmatter block via
-  `lib.stripFrontmatter` so a spec's metadata doesn't render as a stray heading — source view still shows
-  it) and source being the lazy read-only `MonacoEditor`. The choice
-  is a per-tab `store.setFileTabView` (survives tab switches; not persisted across reload). Non-markdown
-  files render Monaco directly with no header, exactly as before.
+- **File tabs use the same renderer dispatch as diffs.** `FilePane` describes the first `fs.readFile`
+  metadata (provisionally text before it lands), resolves `view`, and mounts the selected lazy candidate.
+  `thinkrail/markdown` remains the higher-ranked match for `.md`/`.mdx`, so documents open in
+  `MarkdownPreview`; `thinkrail/code` is the text fallback and uses Monaco on desktop plus a temporary
+  read-only Shiki surface on phone-class viewports; `thinkrail/binary` shows identity and a host-backed
+  download. The candidate list alone determines whether the resource toggle exists. No format predicate or
+  preview/source field remains in the pane or tab.
+
+  `MarkdownPreview` retains the document typography, frontmatter stripping, alerts, Mermaid rendering,
+  source-line stamps, review commenting, and bounded reading measure described above. These are renderer
+  behavior, not dispatch policy.
 - **Rendered markdown navigates.** In the preview, links + images resolve against the file's own path
   (via `markdownLinks`, passed as the `a`/`img` renderers): a **relative link** opens the target file in
   the **preview** tab through the shared **`openFileInTab`** (the same flow `FileTree` uses) — following a

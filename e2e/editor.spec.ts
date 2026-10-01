@@ -16,12 +16,12 @@ test("opens a file in a center Monaco tab, focuses on re-open, and closes", asyn
 	await readme.dblclick();
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toBeVisible();
 	await expect(page.getByTestId("markdown-preview")).toContainText("sample-project");
-	await expect(page.getByTestId("md-toggle-preview")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("view-toggle-markdown")).toHaveAttribute("data-active", "true");
 
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await expect(page.getByTestId("markdown-preview")).toHaveCount(0);
 	await expect(page.getByTestId("editor-pane")).toContainText("# sample-project");
-	await page.getByTestId("md-toggle-preview").click();
+	await page.getByTestId("view-toggle-markdown").click();
 	await expect(page.getByTestId("markdown-preview")).toContainText("sample-project");
 
 	await readme.dblclick();
@@ -51,7 +51,7 @@ test("hides YAML frontmatter in the rendered view but shows it in source", async
 	await expect(preview).not.toContainText("goal-and-requirements");
 	await expect(preview).not.toContainText("id: sample-root");
 
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await expect(page.getByTestId("markdown-preview")).toHaveCount(0);
 	await expect(page.getByTestId("editor-pane")).toContainText("id: sample-root");
 });
@@ -69,6 +69,6 @@ test("opens a non-markdown file straight to Monaco with no rendered-view toggle"
 
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "notes.txt" })).toBeVisible();
 	await expect(page.getByTestId("editor-pane")).toContainText("plain-text-fixture");
-	await expect(page.getByTestId("markdown-view-toggle")).toHaveCount(0);
+	await expect(page.getByTestId("resource-view-toggle")).toHaveCount(0);
 	await expect(page.getByTestId("markdown-preview")).toHaveCount(0);
 });

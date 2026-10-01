@@ -27,6 +27,7 @@ import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
 import { openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
+import "../panels/resources/register";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlags } from "../panels/reviewModel";
 import { SpecsPanel } from "../panels/SpecsPanel";
@@ -357,7 +358,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			if (tab.kind === "file") {
 				void getTransport()
 					.request("fs.readFile", { workspaceId, path: tab.path })
-					.then(({ content }) => {
+					.then(({ content, meta }) => {
 						const latest = useAppStore.getState();
 						if (!current || !isConnectedGeneration(latest, connectionGeneration)) return;
 						const placed = currentPlacement();
@@ -370,6 +371,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								path: placed.path,
 								name: placed.name,
 								content,
+								meta,
 								loadedTick,
 							},
 							"keep",
@@ -385,7 +387,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				});
 				void getTransport()
 					.request("git.diffFile", { workspaceId, path: tab.path, scope: tab.scope })
-					.then(({ original, modified }) => {
+					.then(({ original, modified, meta, originalOid }) => {
 						const latest = useAppStore.getState();
 						if (!current || !isConnectedGeneration(latest, connectionGeneration)) return;
 						const placed = currentPlacement();
@@ -400,6 +402,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								name: placed.name,
 								original,
 								modified,
+								meta,
+								originalOid,
 								loadedTick,
 								loadedTarget,
 							},

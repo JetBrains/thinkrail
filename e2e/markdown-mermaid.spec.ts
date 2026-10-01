@@ -27,6 +27,6 @@ test("renders mermaid fences as diagrams in the rendered markdown view", async (
 	await page.keyboard.press("Escape");
 	await expect(dialog).toHaveCount(0);
 
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await expect(page.getByTestId("editor-pane")).toContainText("flowchart TD; Start --> Finish");
 });

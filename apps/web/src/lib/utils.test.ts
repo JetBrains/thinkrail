@@ -3,7 +3,6 @@ import {
 	cssColorToHex,
 	hasPlatformModifier,
 	isAbsolutePath,
-	isMarkdownPath,
 	isShellInert,
 	layoutResourceIdentity,
 	normalizePath,
@@ -49,16 +48,6 @@ test("isShellInert accepts only names that stay literal in POSIX, PowerShell, an
 	]) {
 		expect(isShellInert(hostile)).toBe(false);
 	}
-});
-
-test("isMarkdownPath matches .md/.markdown case-insensitively, nothing else", () => {
-	expect(isMarkdownPath("README.md")).toBe(true);
-	expect(isMarkdownPath("docs/GUIDE.MARKDOWN")).toBe(true);
-	expect(isMarkdownPath("a/b/notes.Md")).toBe(true);
-	expect(isMarkdownPath("index.ts")).toBe(false);
-	expect(isMarkdownPath("notes.txt")).toBe(false);
-	expect(isMarkdownPath("mdfile")).toBe(false);
-	expect(isMarkdownPath("weird.md.ts")).toBe(false);
 });
 
 test("stripFrontmatter drops a leading YAML block, keeping the body", () => {

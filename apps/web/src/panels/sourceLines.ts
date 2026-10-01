@@ -1,4 +1,7 @@
-import type { LineSelection } from "./reviewGutter";
+export interface SourceLineRange {
+	startLine: number;
+	endLine: number;
+}
 
 interface HastNode {
 	type: string;
@@ -75,7 +78,7 @@ function stampedAncestor(node: Node | null, root: HTMLElement): HTMLElement | nu
 	return null;
 }
 
-export function stampedSelectionLines(container: HTMLElement): LineSelection | null {
+export function stampedSelectionLines(container: HTMLElement): SourceLineRange | null {
 	const sel = window.getSelection();
 	if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
 	const range = sel.getRangeAt(0);
@@ -99,7 +102,7 @@ export function stampedSelectionLines(container: HTMLElement): LineSelection | n
 
 const REGION_BLOCKS = "p, li, h1, h2, h3, h4, h5, h6, pre, blockquote, td, th";
 
-export function markReviewRegions(container: HTMLElement, ranges: LineSelection[]): void {
+export function markReviewRegions(container: HTMLElement, ranges: SourceLineRange[]): void {
 	for (const el of container.querySelectorAll(".review-region"))
 		el.classList.remove("review-region");
 	if (ranges.length === 0) return;

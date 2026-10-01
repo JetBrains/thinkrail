@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { DiffTab } from "../store";
+import type { ResourceDiffProps } from "@/resources";
 import { MarkdownDocument } from "./MarkdownPreview";
+import { useScrollViewState } from "./useScrollViewState";
 
 const DIFF_MARKS = [
 	"[&_ins]:rounded-[var(--radius-sm)] [&_ins]:bg-feedback-success-subtle [&_ins]:text-feedback-success [&_ins]:no-underline",
@@ -42,19 +43,36 @@ function Placeholder({ testid, children }: { testid: string; children: string })
 	);
 }
 
-export default function RenderedDiff({ tab }: { tab: DiffTab }) {
+export default function RenderedDiff({
+	resource,
+	original,
+	modified,
+	viewState,
+	onViewState,
+}: ResourceDiffProps) {
+	const originalText = original.kind === "text" ? original.text : "";
+	const modifiedText = modified.kind === "text" ? modified.text : "";
 	const [before, after] = useMemo(
 		() => [
 			renderToStaticMarkup(
-				<MarkdownDocument content={tab.original} workspaceId={tab.workspaceId} path={tab.path} />,
+				<MarkdownDocument
+					content={originalText}
+					workspaceId={resource.workspaceId}
+					path={resource.path}
+				/>,
 			),
 			renderToStaticMarkup(
-				<MarkdownDocument content={tab.modified} workspaceId={tab.workspaceId} path={tab.path} />,
+				<MarkdownDocument
+					content={modifiedText}
+					workspaceId={resource.workspaceId}
+					path={resource.path}
+				/>,
 			),
 		],
-		[tab.original, tab.modified, tab.workspaceId, tab.path],
+		[originalText, modifiedText, resource.workspaceId, resource.path],
 	);
 	const merge = useHtmldiffMerge(before, after);
+	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);
 
 	if (merge.state === "pending") {
 		return <Placeholder testid="rendered-diff-loading">Rendering diff…</Placeholder>;
@@ -68,10 +86,13 @@ export default function RenderedDiff({ tab }: { tab: DiffTab }) {
 	}
 
 	return (
-		<div data-testid="rendered-diff" className="h-full overflow-auto bg-container-content-bg">
+		<div
+			ref={attachScroller}
+			data-testid="rendered-diff"
+			className="h-full overflow-auto bg-container-content-bg motion-safe:animate-reveal"
+		>
 			<article
 				className={`mx-auto max-w-[78ch] px-24 py-16 ${DIFF_MARKS}`}
-				// biome-ignore lint/security/noDangerouslySetInnerHtml: htmldiff meshing of our own escaped react-markdown output (user-approved; same risk class as the shiki path in chat/Markdown)
 				dangerouslySetInnerHTML={{ __html: merge.html }}
 			/>
 		</div>

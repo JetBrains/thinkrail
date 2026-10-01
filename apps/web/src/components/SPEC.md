@@ -131,9 +131,8 @@ Beyond picking the right tier:
   plays once on that element's mount, and a shared wrapper around both branches would fire on first paint,
   before the data (or the resolved content itself) exists to fade in. It never re-fires on ordinary
   re-renders (a longer todo list, a new chat message) because React reconciles the same persistent DOM node
-  across those — only the branch switch is a real mount. `panels/DiffPane.tsx`/`panels/FilePane.tsx` wrap
-  `RenderedDiff`/`MarkdownPreview`'s lazy `Suspense` children in it — but pointedly **not** `MonacoDiff`/
-  `MonacoEditor`'s: `@monaco-editor/react` shows its own second `loading={<SkeletonRows/>}` internally while
+  across those — only the branch switch is a real mount. The registered `RenderedDiff`/`MarkdownPreview`
+  roots carry it — but pointedly **not** `MonacoDiff`/`MonacoEditor`'s: `@monaco-editor/react` shows its own second `loading={<SkeletonRows/>}` internally while
   Monaco's own runtime boots, *after* our `Suspense` chunk has already resolved, so wrapping our `Suspense`
   boundary there fades in — a still-loading skeleton, not the real editor, an animated flash into a second,
   unanimated skeleton swap that reads as two different loading indicators blinking rather than one. The

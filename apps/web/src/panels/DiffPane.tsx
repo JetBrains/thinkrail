@@ -3,33 +3,101 @@ import {
 	RiFileCopyLine as Copy,
 	RiParagraph as Pilcrow,
 } from "@remixicon/react";
-import { lazy, Suspense, useState } from "react";
+import type { ResourceMeta } from "@thinkrail/contracts";
+import {
+	type ComponentType,
+	type LazyExoticComponent,
+	lazy,
+	Suspense,
+	useMemo,
+	useState,
+} from "react";
 import { IconTooltip } from "@/components/ui/tooltip";
-import { copyText, isMarkdownPath } from "@/lib/utils";
+import { copyText, isPhoneViewport, usePhoneViewport } from "@/lib";
+import {
+	describeResource,
+	type ResourceContent,
+	type ResourceDiffProps,
+	type ResourceRenderer,
+	resolveRenderers,
+} from "@/resources";
 import { LoadingRegion } from "../components/Skeleton";
 import type { DiffTab } from "../store";
 import { selectDiffTabTargetRef, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { splitPath } from "./changesModel";
+import {
+	encodeResourcePath,
+	PENDING_TEXT_META,
+	rendererImplementationKey,
+	rendererTestId,
+	selectResourceRenderer,
+	useResetViewStateOnImplementationChange,
+} from "./resourcePane";
 import { SendReviewButton } from "./SendReviewButton";
 import { ToggleSegment } from "./ToggleSegment";
+import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
 
-const MonacoDiff = lazy(() => import("./MonacoDiff"));
-const RenderedDiff = lazy(() => import("./RenderedDiff"));
-
 const loading = <LoadingRegion rows={12} className="h-full p-12" />;
 
+function bytesUrl(workspaceId: string, path: string, oid?: string | null): string {
+	const base = getTransport().httpBase();
+	const encoded = `${encodeURIComponent(workspaceId)}/${encodeResourcePath(path)}`;
+	return oid
+		? `${base}/blob/${encodeURIComponent(workspaceId)}/${encodeURIComponent(oid)}/${encodeResourcePath(path)}`
+		: `${base}/files/${encoded}`;
+}
+
+function descriptorMetaFor(meta: DiffTab["meta"]): ResourceMeta {
+	if (!meta) return PENDING_TEXT_META;
+	const present = [meta.original, meta.modified].filter((side) => side.hash !== null);
+	const representative =
+		meta.modified.hash !== null ? meta.modified : (present[0] ?? PENDING_TEXT_META);
+	return { ...representative, text: present.every((side) => side.text) };
+}
+
+function sideContent(
+	text: string,
+	meta: ResourceMeta | undefined,
+	url: string | null,
+): ResourceContent {
+	if (!meta) return { kind: "text", text, hash: "" };
+	if (meta.hash === null || meta.byteLength === null) return { kind: "absent" };
+	if (meta.text) return { kind: "text", text, hash: meta.hash };
+	if (!url) return { kind: "absent" };
+	return { kind: "bytes", url, hash: meta.hash, byteLength: meta.byteLength };
+}
+
+const diffComponents = new Map<string, LazyExoticComponent<ComponentType<ResourceDiffProps>>>();
+
+function RendererDiff({
+	renderer,
+	implementationKey,
+	...props
+}: ResourceDiffProps & { renderer: ResourceRenderer; implementationKey: string }) {
+	let Component = diffComponents.get(implementationKey);
+	if (!Component) {
+		if (!renderer.loadDiff) {
+			throw new Error(`Resource renderer has no diff loader: ${renderer.id}`);
+		}
+		Component = lazy(renderer.loadDiff);
+		diffComponents.set(implementationKey, Component);
+	}
+	return <Component {...props} />;
+}
+
 export function DiffPane({ tab }: { tab: DiffTab }) {
-	const setDiffTabView = useAppStore((s) => s.setDiffTabView);
-	const setDiffTabRendered = useAppStore((s) => s.setDiffTabRendered);
-	const setDiffTabIgnoreWhitespace = useAppStore((s) => s.setDiffTabIgnoreWhitespace);
+	const mobile = usePhoneViewport();
+	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
+	const setDiffTabView = useAppStore((state) => state.setDiffTabView);
+	const setDiffTabIgnoreWhitespace = useAppStore((state) => state.setDiffTabIgnoreWhitespace);
 	const [copied, setCopied] = useState(false);
 	const reviewable = tab.scope.kind !== "commit";
 	const review = useFileReview(tab.workspaceId, tab.path, "diff", tab.scope);
+	const targetRef = useAppStore((state) => selectDiffTabTargetRef(state, tab));
 
-	const targetRef = useAppStore((s) => selectDiffTabTargetRef(s, tab));
 	useLiveTabContent(
 		tab,
 		{
@@ -39,10 +107,19 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 					path: tab.path,
 					scope: tab.scope,
 				}),
-			applyFresh: ({ original, modified }, tick) =>
+			applyFresh: ({ original, modified, meta, originalOid }, tick) =>
 				useAppStore
 					.getState()
-					.updateDiffTabContent(tab.workspaceId, tab.id, original, modified, tick, targetRef),
+					.updateDiffTabContent(
+						tab.workspaceId,
+						tab.id,
+						original,
+						modified,
+						meta,
+						originalOid,
+						tick,
+						targetRef,
+					),
 			keepCurrent: (tick) =>
 				useAppStore
 					.getState()
@@ -51,6 +128,8 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 						tab.id,
 						tab.original,
 						tab.modified,
+						tab.meta,
+						tab.originalOid,
 						tick,
 						tab.loadedTarget,
 					),
@@ -59,47 +138,52 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 		tab.loadedTarget,
 	);
 
-	const markdown = isMarkdownPath(tab.path);
-	const view = tab.view ?? "split";
-	const rendered = markdown && (tab.rendered ?? true);
+	const descriptorMeta = useMemo(() => descriptorMetaFor(tab.meta), [tab.meta]);
+	const resource = useMemo(
+		() => describeResource(tab.workspaceId, tab.path, descriptorMeta, tab.scope),
+		[tab.workspaceId, tab.path, descriptorMeta, tab.scope],
+	);
+	const candidates = useMemo(
+		() => resolveRenderers(resource, "diff", { mobile }),
+		[resource, mobile],
+	);
+	const renderer = selectResourceRenderer(candidates, tab.rendererId, tab.path);
+	const implementationKey = rendererImplementationKey(renderer.id, mobile);
+	useResetViewStateOnImplementationChange(tab.workspaceId, tab.id, implementationKey);
+
+	const view = mobile ? "inline" : (tab.view ?? "split");
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
+	const original = sideContent(
+		tab.original,
+		tab.meta?.original,
+		tab.originalOid ? bytesUrl(tab.workspaceId, tab.path, tab.originalOid) : null,
+	);
+	const modifiedOid = tab.scope.kind === "commit" ? tab.scope.sha : null;
+	const modified = sideContent(
+		tab.modified,
+		tab.meta?.modified,
+		bytesUrl(tab.workspaceId, tab.path, modifiedOid),
+	);
 	const { dir, base } = splitPath(tab.path);
 	const copy = async () => {
 		if (!(await copyText(tab.modified))) return;
 		setCopied(true);
 		setTimeout(() => setCopied(false), 1500);
 	};
-	const toggles = markdown ? (
-		<>
-			<ToggleSegment
-				testid="diff-toggle-source"
-				label="Source"
-				active={!rendered}
-				onClick={() => setDiffTabRendered(tab.id, false)}
-			/>
-			<ToggleSegment
-				testid="diff-toggle-rendered"
-				label="Rendered"
-				active={rendered}
-				onClick={() => setDiffTabRendered(tab.id, true)}
-			/>
-		</>
-	) : (
-		<>
-			<ToggleSegment
-				testid="diff-toggle-split"
-				label="Split"
-				active={view === "split"}
-				onClick={() => setDiffTabView(tab.id, "split")}
-			/>
-			<ToggleSegment
-				testid="diff-toggle-inline"
-				label="Inline"
-				active={view === "inline"}
-				onClick={() => setDiffTabView(tab.id, "inline")}
-			/>
-		</>
-	);
+	const reviews = reviewable ? [review.worktree, review.base] : [];
+	const saveViewState = (state: unknown) => {
+		const current = useAppStore
+			.getState()
+			.tabsByWorkspace[tab.workspaceId]?.find((candidate) => candidate.id === tab.id);
+		if (
+			current?.kind === "diff" &&
+			(current.rendererId === undefined || current.rendererId === renderer.id) &&
+			rendererImplementationKey(renderer.id, isPhoneViewport()) === implementationKey
+		) {
+			useAppStore.getState().setTabViewState(tab.workspaceId, tab.id, state);
+		}
+	};
+
 	return (
 		<div data-testid="diff-pane" className="flex h-full min-h-0 flex-col">
 			<div
@@ -126,16 +210,14 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 					</span>
 				</span>
 				<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
-				{rendered ? null : (
-					<HeaderIconButton
-						testid="diff-toggle-whitespace"
-						label="Hide whitespace changes"
-						active={ignoreWhitespace}
-						onClick={() => setDiffTabIgnoreWhitespace(tab.id, !ignoreWhitespace)}
-					>
-						<Pilcrow className="size-14" />
-					</HeaderIconButton>
-				)}
+				<HeaderIconButton
+					testid="diff-toggle-whitespace"
+					label="Hide whitespace changes"
+					active={ignoreWhitespace}
+					onClick={() => setDiffTabIgnoreWhitespace(tab.id, !ignoreWhitespace)}
+				>
+					<Pilcrow className="size-14" />
+				</HeaderIconButton>
 				<HeaderIconButton testid="diff-copy" label="Copy file contents" onClick={() => void copy()}>
 					{copied ? (
 						<Check className="size-14 text-feedback-success" />
@@ -143,24 +225,52 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 						<Copy className="size-14" />
 					)}
 				</HeaderIconButton>
-				{toggles}
+				{candidates.length >= 2
+					? candidates.map((candidate) => (
+							<ToggleSegment
+								key={candidate.id}
+								testid={rendererTestId(candidate.id)}
+								label={candidate.label}
+								active={candidate.id === renderer.id}
+								onClick={() => setTabRenderer(tab.workspaceId, tab.id, candidate.id)}
+							/>
+						))
+					: null}
+				<ToggleSegment
+					testid="diff-toggle-split"
+					label="Split"
+					active={view === "split"}
+					onClick={() => setDiffTabView(tab.id, "split")}
+				/>
+				<ToggleSegment
+					testid="diff-toggle-inline"
+					label="Inline"
+					active={view === "inline"}
+					onClick={() => setDiffTabView(tab.id, "inline")}
+				/>
 			</div>
+			<UnplacedReviewStrip
+				reviews={reviews}
+				renderer={renderer}
+				intent="diff"
+				candidates={candidates}
+				onSelectRenderer={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
+			/>
 			<div className="min-h-0 flex-1">
 				<Suspense fallback={loading}>
-					{rendered ? (
-						<div className="h-full motion-safe:animate-reveal">
-							<RenderedDiff tab={tab} />
-						</div>
-					) : (
-						<MonacoDiff
-							path={tab.path}
-							original={tab.original}
-							modified={tab.modified}
-							view={markdown ? "split" : view}
-							ignoreWhitespace={ignoreWhitespace}
-							{...(reviewable ? { review } : {})}
-						/>
-					)}
+					<RendererDiff
+						key={implementationKey}
+						renderer={renderer}
+						implementationKey={implementationKey}
+						resource={resource}
+						original={original}
+						modified={modified}
+						layout={view === "split" ? "split" : "unified"}
+						ignoreWhitespace={ignoreWhitespace}
+						{...(reviewable ? { review } : {})}
+						viewState={tab.viewState}
+						onViewState={saveViewState}
+					/>
 				</Suspense>
 			</div>
 		</div>

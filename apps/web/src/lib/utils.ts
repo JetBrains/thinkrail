@@ -86,10 +86,6 @@ export function userText(content: UserMessage["content"]): string {
 		.join("");
 }
 
-export function isMarkdownPath(path: string): boolean {
-	return /\.(md|markdown)$/i.test(path);
-}
-
 export function normalizePath(path: string): string {
 	return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
 }

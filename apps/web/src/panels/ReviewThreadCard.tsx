@@ -1,8 +1,8 @@
 import { RiSendPlaneLine as Send, RiDeleteBin6Line as Trash2 } from "@remixicon/react";
 import { useEffect, useRef, useState } from "react";
 import { IconTooltip } from "../components/ui/tooltip";
+import type { ReviewThread, ReviewThreadActions } from "../resources";
 import { threadLabel } from "./reviewModel";
-import type { ReviewThreadActions, ReviewThreadData } from "./reviewWidgets";
 
 function grow(el: HTMLTextAreaElement): void {
 	el.style.height = "auto";
@@ -13,7 +13,7 @@ export function ReviewThreadCard({
 	thread,
 	actions,
 }: {
-	thread: ReviewThreadData;
+	thread: ReviewThread;
 	actions: ReviewThreadActions;
 }) {
 	const [busy, setBusy] = useState(false);

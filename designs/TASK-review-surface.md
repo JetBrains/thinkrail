@@ -94,7 +94,8 @@ export interface ResourceDescriptor {
 
 export type ResourceContent =
   | { kind: "text"; text: string; hash: string }
-  | { kind: "bytes"; url: string; hash: string; byteLength: number };  // /files or /blob URL (task-change-mutations §D)
+  | { kind: "bytes"; url: string; hash: string; byteLength: number }   // /files or /blob URL (task-change-mutations §D)
+  | { kind: "absent" };                                               // an absent diff side has no fetchable URL
 
 export interface AnchorDraft { selectors: ReviewSelector[]; label: string }  // label = sidebar ref: "L3", "cell 7", "region"
 
@@ -122,13 +123,19 @@ export interface ResourceDiffProps {
   viewState?: unknown; onViewState?(state: unknown): void;
 }
 
+export type ResourceAnchorCapability = "line" | `structural:${string}` | "region";
+
 export interface ResourceRenderer {
   id: string;                                    // "thinkrail/code", "thinkrail/markdown", …
+  label: string;                                 // view-toggle caption
   match: { glob?: string[]; mime?: string[]; language?: string[]; text?: boolean };
   rank: number;                                  // highest wins; bundled 100, project-trusted 200, user 300
   capabilities: {
     view: boolean; diff: boolean;
-    anchors: ReadonlyArray<"line" | `structural:${string}` | "region">;
+    anchors: {
+      view: ReadonlyArray<ResourceAnchorCapability>;
+      diff: ReadonlyArray<ResourceAnchorCapability>;
+    };
     mobile: boolean;                             // false → never resolved on a phone-class viewport
     active: boolean;                             // renders active content → sandboxed iframe
   };
@@ -152,8 +159,9 @@ export function resolveRenderers(d: ResourceDescriptor, intent: "view" | "diff",
   the line-keyed `ReviewThreadData` are deleted. A renderer owns the mapping anchor ↔ geometry: Monaco
   maps `lineRange` to view zones; Pierre maps `lineRange` to annotations and line selection; the markdown
   preview maps source stamps to blocks; the image renderer maps `region` to an overlay; the notebook
-  renderer maps `structural:ipynb-cell` to a cell card. A thread the current renderer cannot place
-  renders in the pane's **unplaced strip** above the content with a "show in <renderer>" action — never
+  renderer maps `structural:ipynb-cell` to a cell card. Anchor capabilities are declared separately for
+  view and diff intent. A thread the current renderer cannot place in that intent renders in the pane's
+  **unplaced strip** above the content with a "show in <renderer>" action — never
   dropped, never guessed.
 - **Active content is a security boundary.** `capabilities.active` renderers mount in a sandboxed iframe
   (`sandbox="allow-scripts"` at most, no `allow-same-origin`, a CSP without network), receive the design
@@ -166,18 +174,18 @@ export function resolveRenderers(d: ResourceDescriptor, intent: "view" | "diff",
 
 ### D. Renderers
 
-| id | match | view | diff | anchors | mobile |
+| id | match | view | diff | anchors (view / diff) | mobile |
 | --- | --- | --- | --- | --- | --- |
-| `thinkrail/code` | `text: true` | **Monaco** (desktop) · **Pierre `File`** (mobile), read-only | **Pierre `FileDiff`** — split/unified, word-level, collapsed unchanged, hunk toolbar | `line` | Monaco no · Pierre yes |
-| `thinkrail/markdown` | `*.md`, `*.mdx` | `MarkdownPreview` | `RenderedDiff` (htmldiff) | `line` (source stamps) | yes |
-| `thinkrail/image` | `image/*` | fit / zoom / 1:1 | 2-up · swipe · onion skin · difference | `region` | yes |
-| `thinkrail/svg` | `image/svg+xml` | sandboxed render | render both + source diff via `code` | `region`, `line` | yes |
-| `thinkrail/csv` | `*.csv`, `*.tsv` | table | row/cell diff (daff-style alignment) | `line`, `structural:table-cell` | yes |
-| `thinkrail/json` | `*.json`, `*.yaml`, `*.yml`, `*.toml` | collapsible tree | structural diff (`jsondiffpatch`, move detection) | `line`, `structural:json-pointer` | yes |
-| `thinkrail/notebook` | `*.ipynb` | cells: markdown + Shiki code + outputs (outputs sandboxed) | cell-aligned diff (ids, then source similarity); per-cell `code` diff; image-output diff | `line`, `structural:ipynb-cell` | yes |
-| `thinkrail/pdf` | `application/pdf` | pdf.js pages | side-by-side pages | `region` (+ `page`) | yes |
-| `thinkrail/html` | `*.html` | sandboxed preview | sandboxed both sides | `line` (via `code`) | yes |
-| `thinkrail/binary` | fallback | size, hash, open externally | "binary files differ" + sizes | — | yes |
+| `thinkrail/code` | `text: true` | **Monaco** (desktop) · **Pierre `File`** (mobile), read-only | **Pierre `FileDiff`** — split/unified, word-level, collapsed unchanged, hunk toolbar | `line` / `line` | Monaco no · Pierre yes |
+| `thinkrail/markdown` | `*.md`, `*.mdx`, `text: true` | `MarkdownPreview` | `RenderedDiff` (htmldiff) | `line` / — | yes |
+| `thinkrail/image` | `image/*` | fit / zoom / 1:1 | 2-up · swipe · onion skin · difference | `region` / `region` | yes |
+| `thinkrail/svg` | `image/svg+xml` | sandboxed render | render both + source diff via `code` | `region` / `line` | yes |
+| `thinkrail/csv` | `*.csv`, `*.tsv` | table | row/cell diff (daff-style alignment) | `line`, `structural:table-cell` / same | yes |
+| `thinkrail/json` | `*.json`, `*.yaml`, `*.yml`, `*.toml` | collapsible tree | structural diff (`jsondiffpatch`, move detection) | `line`, `structural:json-pointer` / same | yes |
+| `thinkrail/notebook` | `*.ipynb` | cells: markdown + Shiki code + outputs (outputs sandboxed) | cell-aligned diff (ids, then source similarity); per-cell `code` diff; image-output diff | `line`, `structural:ipynb-cell` / same | yes |
+| `thinkrail/pdf` | `application/pdf` | pdf.js pages | side-by-side pages | `region` (+ `page`) / same | yes |
+| `thinkrail/html` | `*.html` | sandboxed preview | sandboxed both sides | `line` / `line` (via `code`) | yes |
+| `thinkrail/binary` | fallback | size, hash, open externally | "binary files differ" + sizes | — / — | yes |
 
 `thinkrail/code` is one registration with a viewport-dependent `loadView` (Monaco or Pierre `File`);
 `capabilities.mobile` is evaluated per implementation. `svg`, `html` and notebook outputs are `active`.

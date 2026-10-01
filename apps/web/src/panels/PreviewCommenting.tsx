@@ -1,30 +1,49 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import type { AnchorDraft, ReviewThread, SurfaceReview } from "@/resources";
 import { mapPreviewSelection } from "./previewAnchor";
-import type { LineSelection } from "./reviewGutter";
-import type { ReviewCommentingCallbacks } from "./reviewWidgets";
-import { markReviewRegions, stampedSelectionLines } from "./sourceLines";
-import type { EditorReview } from "./useReviewCommenting";
+import { markReviewRegions, type SourceLineRange, stampedSelectionLines } from "./sourceLines";
+import { useScrollViewState } from "./useScrollViewState";
 
 export interface ComposerInsert {
 	line: number;
 	node: ReactNode;
 }
 
+function threadLineRange(thread: ReviewThread): SourceLineRange | null {
+	const range = thread.anchor.selectors.find((selector) => selector.kind === "lineRange");
+	return range?.kind === "lineRange"
+		? { startLine: range.startLine, endLine: range.endLine }
+		: null;
+}
+
 export function PreviewCommenting({
 	source,
 	review,
+	testid = "markdown-preview",
+	surfaceClassName = "relative h-full overflow-auto bg-container-workspace-bg motion-safe:animate-reveal",
+	canCommentSelection,
+	viewState,
+	onViewState,
 	children,
 }: {
 	source: string;
-	review: EditorReview;
+	review: SurfaceReview;
+	testid?: string;
+	surfaceClassName?: string;
+	canCommentSelection?: (selection: Selection, scroller: HTMLElement) => boolean;
+	viewState?: unknown;
+	onViewState?: (state: unknown) => void;
 	children: (composer: ComposerInsert | null) => ReactNode;
 }) {
-	const scrollerRef = useRef<HTMLDivElement>(null);
+	const { elementRef: scrollerRef, attach: attachScroller } = useScrollViewState<HTMLDivElement>(
+		viewState,
+		onViewState,
+	);
 	const iconRef = useRef<HTMLButtonElement>(null);
 	const draggingRef = useRef(false);
-	const [selection, setSelection] = useState<LineSelection | null>(null);
+	const [selection, setSelection] = useState<SourceLineRange | null>(null);
 	const [composing, setComposing] = useState(false);
 	const [text, setText] = useState("");
 	const [busy, setBusy] = useState(false);
@@ -40,17 +59,20 @@ export function PreviewCommenting({
 	useEffect(() => {
 		const scroller = scrollerRef.current;
 		if (!focusId || !scroller) return;
-		scroller.querySelector(`[data-comment-id="${focusId}"]`)?.scrollIntoView({ block: "center" });
-		review.onFocusHandled();
+		const card = scroller.querySelector(`[data-comment-id="${focusId}"]`);
+		if (card) {
+			card.scrollIntoView({ block: "center" });
+			review.onFocusHandled();
+		}
 	}, [focusId, review]);
 
 	useEffect(() => {
 		const scroller = scrollerRef.current;
 		if (!scroller) return;
-		const ranges: LineSelection[] = threads.map((t) => ({
-			startLine: t.startLine,
-			endLine: t.endLine,
-		}));
+		const ranges = threads.flatMap((thread) => {
+			const range = threadLineRange(thread);
+			return range ? [range] : [];
+		});
 		if (composing && selection) ranges.push(selection);
 		markReviewRegions(scroller, ranges);
 	}, [threads, composing, selection]);
@@ -70,7 +92,10 @@ export function PreviewCommenting({
 				return;
 			}
 			const range = sel.getRangeAt(0);
-			if (!scroller.contains(range.commonAncestorContainer)) {
+			if (
+				!scroller.contains(range.commonAncestorContainer) ||
+				(canCommentSelection && !canCommentSelection(sel, scroller))
+			) {
 				hideIcon();
 				return;
 			}
@@ -115,11 +140,19 @@ export function PreviewCommenting({
 			document.removeEventListener("pointerup", onPointerUp);
 			scroller?.removeEventListener("scroll", evaluate);
 		};
-	}, [composing]);
+	}, [composing, canCommentSelection]);
 
 	const openComposer = () => {
 		const scroller = scrollerRef.current;
-		if (!iconRef.current?.hasAttribute("data-visible") || !scroller) return;
+		const selected = document.getSelection();
+		if (
+			!iconRef.current?.hasAttribute("data-visible") ||
+			!scroller ||
+			!selected ||
+			(canCommentSelection && !canCommentSelection(selected, scroller))
+		) {
+			return;
+		}
 		const resolved =
 			stampedSelectionLines(scroller) ?? mapPreviewSelection(source, selectedTextRef.current);
 		setSelection(resolved);
@@ -134,10 +167,19 @@ export function PreviewCommenting({
 		setBusy(false);
 	};
 
-	const submit = (action: ReviewCommentingCallbacks["onSave"]) => {
+	const submit = (action: SurfaceReview["commenting"]["onSave"]) => {
 		if (!composing || !text.trim()) return;
+		const draft: AnchorDraft = selection
+			? {
+					selectors: [{ kind: "lineRange", ...selection }],
+					label:
+						selection.startLine === selection.endLine
+							? `L${selection.startLine}`
+							: `L${selection.startLine}–${selection.endLine}`,
+				}
+			: { selectors: [], label: "file" };
 		setBusy(true);
-		action(selection, text.trim()).then(close, () => setBusy(false));
+		action(draft, text.trim()).then(close, () => setBusy(false));
 	};
 
 	const label = selection
@@ -203,11 +245,7 @@ export function PreviewCommenting({
 		: null;
 
 	return (
-		<div
-			ref={scrollerRef}
-			data-testid="markdown-preview"
-			className="relative h-full overflow-auto bg-container-workspace-bg"
-		>
+		<div ref={attachScroller} data-testid={testid} className={surfaceClassName}>
 			{children(composerInsert)}
 			{createPortal(
 				<button

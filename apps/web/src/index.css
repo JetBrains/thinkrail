@@ -102,7 +102,7 @@
 	app-region: no-drag;
 }
 
-/* Review Monaco surfaces (panels/reviewGutter.ts + reviewWidgets.ts): commented-line decorations, the
+/* Review Monaco surfaces (panels/reviewWidgets.ts): commented-line decorations, the
    floating comment icon, and the inline composer. Plain-DOM widgets inside Monaco's layers — styled
    here from the live theme tokens, so every theme wears them. */
 /* Commented lines: just a lighter wash of the editor's own background (the app's hover shade) — no

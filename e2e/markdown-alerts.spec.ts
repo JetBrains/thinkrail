@@ -24,6 +24,6 @@ test("renders GitHub-style alert callouts in the rendered markdown view", async 
 	await expect(preview.locator('[data-variant="note"]')).toContainText("Useful information");
 	await expect(preview).not.toContainText("[!NOTE]");
 
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await expect(page.getByTestId("editor-pane")).toContainText("[!NOTE]");
 });

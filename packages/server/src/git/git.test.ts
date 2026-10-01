@@ -122,9 +122,10 @@ function commitOnFeature(file: string, content: string, message: string): string
 test("gitDiffFile returns both sides: base content vs worktree content (trailing newline intact)", async () => {
 	seedWorkspace();
 	writeFileSync(join(repo, "README.md"), "# repo\n\nedited\n");
-	const { original, modified } = await gitDiffFile("w1", "README.md");
+	const { original, modified, originalOid } = await gitDiffFile("w1", "README.md");
 	expect(original).toBe("# repo\n");
 	expect(modified).toBe("# repo\n\nedited\n");
+	expect(originalOid).toBe(gitHeadSha("w1"));
 });
 
 test("gitDiffFile: untracked → empty original; deleted → empty modified", async () => {
@@ -573,6 +574,10 @@ test("resolveDiffRange degrades a root commit to an add-style diff (no parent to
 		stdout: "pipe",
 	});
 	expect(new TextDecoder().decode(listed.stdout)).toContain("README.md");
+	seedWorkspace();
+	expect((await gitDiffFile("w1", "README.md", { kind: "commit", sha: root })).originalOid).toBe(
+		null,
+	);
 });
 
 test("resolveDiffRange rejects a non-oid sha before it reaches git, and an unknown commit", async () => {
@@ -632,10 +637,16 @@ test("gitStatus/gitDiffFile for a commit scope read only that commit, from histo
 	expect(changes.map((c) => c.path)).toEqual(["script.ts"]);
 	expect(changes[0]).toMatchObject({ status: "modified", added: 1, removed: 1 });
 
-	expect(await gitDiffFile("w1", "script.ts", scope)).toMatchObject({
+	const diff = await gitDiffFile("w1", "script.ts", scope);
+	expect(diff).toMatchObject({
 		original: "export const one = 1;\n",
 		modified: "export const two = 2;\n",
 	});
+	expect(diff.originalOid).toBe(
+		new TextDecoder()
+			.decode(Bun.spawnSync(["git", "-C", repo, "rev-parse", `${sha}^`], { stdout: "pipe" }).stdout)
+			.trim(),
+	);
 });
 
 test("gitStatus/listCommits measure against the re-pointed diffBase, not the creation base", async () => {

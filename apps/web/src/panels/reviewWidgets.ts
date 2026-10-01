@@ -6,12 +6,12 @@ import {
 import * as monaco from "monaco-editor";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { LineSelection } from "./reviewGutter";
+import type { AnchorDraft, ReviewThread, ReviewThreadActions } from "@/resources";
 import { threadLabel } from "./reviewModel";
 
 export interface ReviewCommentingCallbacks {
-	onSave: (selection: LineSelection | null, text: string) => Promise<void>;
-	onSend: (selection: LineSelection | null, text: string) => Promise<void>;
+	onSave: (draft: AnchorDraft, text: string) => Promise<void>;
+	onSend: (draft: AnchorDraft, text: string) => Promise<void>;
 }
 
 const ICON_WIDGET_ID = "thinkrail.review.addIcon";
@@ -21,22 +21,6 @@ const CARD_MAX_WIDTH = 832;
 
 function cardMaxWidth(codeEditor: monaco.editor.ICodeEditor): number {
 	return Math.max(280, Math.min(CARD_MAX_WIDTH, codeEditor.getLayoutInfo().contentWidth - 24));
-}
-
-export interface ReviewThreadData {
-	id: string;
-	startLine: number;
-	endLine: number;
-	body: string;
-	status: string;
-	anchorState: string;
-	stale?: boolean;
-}
-
-export interface ReviewThreadActions {
-	onSendComment: (id: string) => Promise<void>;
-	onDeleteComment: (id: string) => Promise<void>;
-	onUpdateComment: (id: string, body: string) => Promise<void>;
 }
 
 const ICON_SVG = renderToStaticMarkup(createElement(MessageSquarePlus, { size: 14 }));
@@ -50,6 +34,43 @@ function button(testid: string, className: string, label: string): HTMLButtonEle
 	el.className = className;
 	el.textContent = label;
 	return el;
+}
+
+function threadLineRange(thread: ReviewThread): { startLine: number; endLine: number } | null {
+	const range = thread.anchor.selectors.find((selector) => selector.kind === "lineRange");
+	return range?.kind === "lineRange"
+		? { startLine: range.startLine, endLine: range.endLine }
+		: null;
+}
+
+export function applyReviewDecorations(
+	codeEditor: monaco.editor.ICodeEditor,
+	previous: string[],
+	threads: ReviewThread[],
+): { decorations: string[]; unplaced: ReviewThread[] } {
+	const ranges = threads.flatMap((thread) => {
+		const range = threadLineRange(thread);
+		return range ? [range] : [];
+	});
+	return {
+		decorations: codeEditor.deltaDecorations(
+			previous,
+			ranges.map((range) => ({
+				range: {
+					startLineNumber: range.startLine,
+					startColumn: 1,
+					endLineNumber: range.endLine,
+					endColumn: 1,
+				},
+				options: {
+					isWholeLine: true,
+					className: "review-comment-line",
+					linesDecorationsClassName: "review-comment-rail",
+				},
+			})),
+		),
+		unplaced: threads.filter((thread) => threadLineRange(thread) === null),
+	};
 }
 
 export function attachReviewCommenting(
@@ -104,7 +125,7 @@ export function attachReviewCommenting(
 		codeEditor.changeViewZones((accessor) => accessor.removeZone(id));
 	};
 
-	const openComposer = (selection: LineSelection) => {
+	const openComposer = (selection: { startLine: number; endLine: number }) => {
 		closeComposer();
 		hideIcon();
 
@@ -151,8 +172,15 @@ export function attachReviewCommenting(
 		const submit = (action: ReviewCommentingCallbacks["onSave"]) => {
 			const text = textarea.value.trim();
 			if (!text) return;
+			const draft: AnchorDraft = {
+				selectors: [{ kind: "lineRange", ...selection }],
+				label:
+					selection.startLine === selection.endLine
+						? `L${selection.startLine}`
+						: `L${selection.startLine}–${selection.endLine}`,
+			};
 			setBusy(true);
-			action(selection, text).then(closeComposer, () => setBusy(false));
+			action(draft, text).then(closeComposer, () => setBusy(false));
 		};
 		save.addEventListener("click", () => submit(callbacks.onSave));
 		send.addEventListener("click", () => submit(callbacks.onSend));
@@ -239,7 +267,7 @@ export function attachReviewCommenting(
 export function attachReviewThreads(
 	codeEditor: monaco.editor.ICodeEditor,
 	actions: ReviewThreadActions,
-): { setThreads: (threads: ReviewThreadData[]) => void; dispose: () => void } {
+): { setThreads: (threads: ReviewThread[]) => ReviewThread[]; dispose: () => void } {
 	let zones: {
 		id: string;
 		zone: monaco.editor.IViewZone;
@@ -259,7 +287,7 @@ export function attachReviewThreads(
 		return el;
 	};
 
-	const cardFor = (thread: ReviewThreadData): HTMLElement => {
+	const cardFor = (thread: ReviewThread): HTMLElement => {
 		const card = document.createElement("div");
 		card.className = "review-thread";
 		card.dataset.testid = "review-thread";
@@ -367,17 +395,30 @@ export function attachReviewThreads(
 
 	const cardSizeObserver = new ResizeObserver(() => relayoutCards());
 
-	const signature = (t: ReviewThreadData): string =>
-		[t.status, t.anchorState, t.stale ?? false, t.startLine, t.endLine, t.body].join("\u0000");
+	const signature = (thread: ReviewThread): string => {
+		const range = threadLineRange(thread);
+		return [
+			thread.status,
+			thread.anchorState,
+			thread.stale ?? false,
+			range?.startLine ?? "",
+			range?.endLine ?? "",
+			thread.body,
+		].join("\u0000");
+	};
 
-	const buildZone = (accessor: monaco.editor.IViewZoneChangeAccessor, thread: ReviewThreadData) => {
+	const buildZone = (
+		accessor: monaco.editor.IViewZoneChangeAccessor,
+		thread: ReviewThread,
+		range: { startLine: number; endLine: number },
+	) => {
 		const domNode = document.createElement("div");
 		domNode.className = "review-composer-zone";
 		const card = cardFor(thread);
 		card.style.maxWidth = `${cardMaxWidth(codeEditor)}px`;
 		domNode.appendChild(card);
 		const zone: monaco.editor.IViewZone = {
-			afterLineNumber: thread.endLine,
+			afterLineNumber: range.endLine,
 			heightInPx: 48,
 			domNode,
 		};
@@ -390,19 +431,26 @@ export function attachReviewThreads(
 		};
 	};
 
-	const setThreads = (threads: ReviewThreadData[]) => {
+	const setThreads = (threads: ReviewThread[]): ReviewThread[] => {
+		const placed = threads.flatMap((thread) => {
+			const range = threadLineRange(thread);
+			return range ? [{ thread, range }] : [];
+		});
 		codeEditor.changeViewZones((accessor) => {
 			const kept = new Map<string, (typeof zones)[number]>();
 			for (const entry of zones) {
-				const next = threads.find((t) => t.id === entry.commentId);
+				const next = placed.find(({ thread }) => thread.id === entry.commentId)?.thread;
 				if (next && signature(next) === entry.signature) kept.set(entry.commentId, entry);
 				else accessor.removeZone(entry.id);
 			}
-			zones = threads.map((thread) => kept.get(thread.id) ?? buildZone(accessor, thread));
+			zones = placed.map(
+				({ thread, range }) => kept.get(thread.id) ?? buildZone(accessor, thread, range),
+			);
 		});
 		cardSizeObserver.disconnect();
 		for (const { card } of zones) cardSizeObserver.observe(card);
 		relayoutCards();
+		return threads.filter((thread) => threadLineRange(thread) === null);
 	};
 
 	return {

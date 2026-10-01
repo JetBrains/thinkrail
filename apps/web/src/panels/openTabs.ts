@@ -160,13 +160,14 @@ export function openFileInTab(
 		layoutResourceIdentity({ kind: "file", id, name: baseName(path), path }),
 		intent,
 		() => getTransport().request("fs.readFile", { workspaceId, path }),
-		({ content }, loadedTick) => ({
+		({ content, meta }, loadedTick) => ({
 			kind: "file",
 			id,
 			workspaceId,
 			path,
 			name: baseName(path),
 			content,
+			meta,
 			loadedTick,
 		}),
 		requestedNavigation,
@@ -198,7 +199,7 @@ export function openDiffInTab(
 		}),
 		intent,
 		() => getTransport().request("git.diffFile", { workspaceId, path: canonicalPath, scope }),
-		({ original, modified }, loadedTick) => ({
+		({ original, modified, meta, originalOid }, loadedTick) => ({
 			kind: "diff",
 			id,
 			workspaceId,
@@ -207,6 +208,8 @@ export function openDiffInTab(
 			name: diffTabName(scope, canonicalPath),
 			original,
 			modified,
+			meta,
+			originalOid,
 			loadedTick,
 			loadedTarget: target,
 		}),

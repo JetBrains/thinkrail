@@ -12,6 +12,7 @@ import type {
 	PiEvent,
 	Project,
 	RefreshedModels,
+	ResourceMeta,
 	ReviewChangedPayload,
 	ReviewSnapshot,
 	SessionEventPayload,
@@ -114,7 +115,9 @@ export interface FileTab {
 	name: string;
 	path: string;
 	content: string;
-	view?: "rendered" | "source";
+	meta?: ResourceMeta;
+	rendererId?: string;
+	viewState?: unknown;
 	loadedTick?: number;
 }
 export interface ChatTab {
@@ -144,8 +147,11 @@ export interface DiffTab {
 	loadedTarget: string;
 	original: string;
 	modified: string;
+	meta?: { original: ResourceMeta; modified: ResourceMeta };
+	originalOid?: string | null;
+	rendererId?: string;
+	viewState?: unknown;
 	view?: DiffTabView;
-	rendered?: boolean;
 	ignoreWhitespace?: boolean;
 	loadedTick?: number;
 }
@@ -962,9 +968,9 @@ interface AppState {
 		preferredGroupId?: string,
 	) => CenterNavigationStamp | null;
 	noteNavigation: (workspaceId: string) => void;
-	setFileTabView: (id: string, view: "rendered" | "source") => void;
+	setTabRenderer: (workspaceId: string, id: string, rendererId: string) => void;
+	setTabViewState: (workspaceId: string, id: string, viewState: unknown) => void;
 	setDiffTabView: (id: string, view: DiffTabView) => void;
-	setDiffTabRendered: (id: string, rendered: boolean) => void;
 	setDiffTabIgnoreWhitespace: (id: string, ignoreWhitespace: boolean) => void;
 	changesView: "list" | "tree";
 	setChangesView: (view: "list" | "tree") => void;
@@ -972,12 +978,20 @@ interface AppState {
 	setDiffScope: (workspaceId: string, scope: GitDiffScope) => void;
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
 	markSkillsSynced: (sessionId: string, syncedTick: number) => void;
-	updateFileTabContent: (workspaceId: string, id: string, content: string, tick: number) => void;
+	updateFileTabContent: (
+		workspaceId: string,
+		id: string,
+		content: string,
+		meta: ResourceMeta | undefined,
+		tick: number,
+	) => void;
 	updateDiffTabContent: (
 		workspaceId: string,
 		id: string,
 		original: string,
 		modified: string,
+		meta: { original: ResourceMeta; modified: ResourceMeta } | undefined,
+		originalOid: string | null | undefined,
 		tick: number,
 		loadedTarget: string,
 	) => void;
@@ -1259,6 +1273,26 @@ function isSessionDeleted(
 	sessionId: string,
 ): boolean {
 	return state.deletedSessionsByWorkspace[workspaceId]?.[sessionId] === true;
+}
+
+function patchResourceTab(
+	state: Pick<AppState, "tabsByWorkspace">,
+	workspaceId: string,
+	id: string,
+	patch: (tab: FileTab | DiffTab) => FileTab | DiffTab,
+): Partial<AppState> {
+	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
+	if (!tabs.some((tab) => tab.id === id && (tab.kind === "file" || tab.kind === "diff"))) {
+		return {};
+	}
+	return {
+		tabsByWorkspace: {
+			...state.tabsByWorkspace,
+			[workspaceId]: tabs.map((tab) =>
+				tab.id === id && (tab.kind === "file" || tab.kind === "diff") ? patch(tab) : tab,
+			),
+		},
+	};
 }
 
 function patchDiffTab(
@@ -2492,21 +2526,23 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) =>
 			s.removedWorkspaceIds[workspaceId] ? {} : { navTickByWorkspace: bumpNav(s, workspaceId) },
 		),
-	setFileTabView: (id, view) =>
-		set((s) => {
-			const wsId = s.activeWorkspaceId;
-			if (!wsId) return {};
-			const tabs = s.tabsByWorkspace[wsId] ?? [];
-			if (!tabs.some((t) => t.id === id && t.kind === "file")) return {};
-			return {
-				tabsByWorkspace: {
-					...s.tabsByWorkspace,
-					[wsId]: tabs.map((t) => (t.id === id && t.kind === "file" ? { ...t, view } : t)),
-				},
-			};
-		}),
+	setTabRenderer: (workspaceId, id, rendererId) =>
+		set((s) =>
+			patchResourceTab(s, workspaceId, id, (tab) => {
+				const next = { ...tab, rendererId };
+				delete next.viewState;
+				return next;
+			}),
+		),
+	setTabViewState: (workspaceId, id, viewState) =>
+		set((s) =>
+			patchResourceTab(s, workspaceId, id, (tab) => {
+				const next = { ...tab, viewState };
+				if (viewState === undefined) delete next.viewState;
+				return next;
+			}),
+		),
 	setDiffTabView: (id, view) => set((s) => patchDiffTab(s, id, { view })),
-	setDiffTabRendered: (id, rendered) => set((s) => patchDiffTab(s, id, { rendered })),
 	setDiffTabIgnoreWhitespace: (id, ignoreWhitespace) =>
 		set((s) => patchDiffTab(s, id, { ignoreWhitespace })),
 	setChangesView: (view) => set({ changesView: view }),
@@ -2545,7 +2581,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				skillsSyncedTickBySession: { ...s.skillsSyncedTickBySession, [sessionId]: synced },
 			};
 		}),
-	updateFileTabContent: (workspaceId, id, content, tick) =>
+	updateFileTabContent: (workspaceId, id, content, meta, tick) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
@@ -2554,12 +2590,28 @@ export const useAppStore = create<AppState>((set, get) => ({
 				tabsByWorkspace: {
 					...s.tabsByWorkspace,
 					[workspaceId]: tabs.map((tab) =>
-						tab.id === id && tab.kind === "file" ? { ...tab, content, loadedTick: tick } : tab,
+						tab.id === id && tab.kind === "file"
+							? {
+									...tab,
+									content,
+									...(meta === undefined ? {} : { meta }),
+									loadedTick: tick,
+								}
+							: tab,
 					),
 				},
 			};
 		}),
-	updateDiffTabContent: (workspaceId, id, original, modified, tick, loadedTarget) =>
+	updateDiffTabContent: (
+		workspaceId,
+		id,
+		original,
+		modified,
+		meta,
+		originalOid,
+		tick,
+		loadedTarget,
+	) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
@@ -2569,7 +2621,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...s.tabsByWorkspace,
 					[workspaceId]: tabs.map((tab) =>
 						tab.id === id && tab.kind === "diff"
-							? { ...tab, original, modified, loadedTick: tick, loadedTarget }
+							? {
+									...tab,
+									original,
+									modified,
+									...(meta === undefined ? {} : { meta }),
+									...(originalOid === undefined ? {} : { originalOid }),
+									loadedTick: tick,
+									loadedTarget,
+								}
 							: tab,
 					),
 				},

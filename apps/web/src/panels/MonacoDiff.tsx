@@ -6,6 +6,7 @@ import {
 } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { useCallback, useEffect, useRef } from "react";
+import type { ResourceDiffProps, SurfaceReview } from "@/resources";
 import { LoadingRegion } from "../components/Skeleton";
 import { useAppStore } from "../store";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
@@ -16,35 +17,49 @@ import {
 	THEME,
 	watchThemeSwap,
 } from "./monacoSetup";
-import { applyReviewDecorations } from "./reviewGutter";
-import { attachReviewCommenting, attachReviewThreads } from "./reviewWidgets";
-import type { EditorReview, SideReview } from "./useReviewCommenting";
+import {
+	applyReviewDecorations,
+	attachReviewCommenting,
+	attachReviewThreads,
+} from "./reviewWidgets";
 
-const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
+const beforeMount: BeforeMount = (monaco) => defineThinkrailTheme(monaco);
+
+type DiffReview = NonNullable<ResourceDiffProps["review"]>;
 
 interface SideWiring {
 	codeEditor: editor.ICodeEditor;
 	threads: ReturnType<typeof attachReviewThreads>;
-	read: (review: EditorReview) => SideReview;
+	read: (review: DiffReview) => SurfaceReview;
 	decorations: string[];
 	detach: () => void;
 }
 
+function focusLine(review: SurfaceReview): number | null {
+	const range = review.focus?.anchor.selectors.find((selector) => selector.kind === "lineRange");
+	return range?.kind === "lineRange" ? range.startLine : null;
+}
+
+function isDiffViewState(value: unknown): value is editor.IDiffEditorViewState {
+	if (typeof value !== "object" || value === null) return false;
+	const original = Reflect.get(value, "original");
+	const modified = Reflect.get(value, "modified");
+	return (
+		(original === null || typeof original === "object") &&
+		(modified === null || typeof modified === "object")
+	);
+}
+
 export default function MonacoDiff({
-	path,
+	resource,
 	original,
 	modified,
-	view,
+	layout,
 	ignoreWhitespace,
 	review,
-}: {
-	path: string;
-	original: string;
-	modified: string;
-	view: "split" | "inline";
-	ignoreWhitespace: boolean;
-	review?: EditorReview;
-}) {
+	viewState,
+	onViewState,
+}: ResourceDiffProps) {
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
@@ -53,48 +68,49 @@ export default function MonacoDiff({
 	const modelsRef = useRef<{ dispose(): void }[]>([]);
 	const sidesRef = useRef<SideWiring[]>([]);
 	const reviewRef = useRef(review);
+	const onViewStateRef = useRef(onViewState);
 	reviewRef.current = review;
+	onViewStateRef.current = onViewState;
 
-	const syncThreads = useCallback((target: EditorReview) => {
+	const syncThreads = useCallback((target: DiffReview) => {
 		for (const side of sidesRef.current) {
-			const slice = side.read(target);
-			side.threads.setThreads(slice.threads);
-			side.decorations = applyReviewDecorations(side.codeEditor, side.decorations, slice.threads);
+			const surface = side.read(target);
+			side.threads.setThreads(surface.threads);
+			const applied = applyReviewDecorations(side.codeEditor, side.decorations, surface.threads);
+			side.decorations = applied.decorations;
 		}
 	}, []);
 
-	const consumeFocus = useCallback((target: EditorReview) => {
-		let handled = false;
+	const consumeFocus = useCallback((target: DiffReview) => {
 		for (const side of sidesRef.current) {
-			const focus = side.read(target).focus;
-			if (!focus) continue;
-			side.codeEditor.revealLineInCenter(focus.line);
-			handled = true;
+			const surface = side.read(target);
+			const line = focusLine(surface);
+			if (line === null) continue;
+			side.codeEditor.revealLineInCenter(line);
+			surface.onFocusHandled();
 		}
-		if (handled) target.onFocusHandled();
 	}, []);
 
 	const wireSide = useCallback(
 		(codeEditor: editor.IStandaloneCodeEditor, read: SideWiring["read"]): SideWiring => {
-			const slice = () => (reviewRef.current ? read(reviewRef.current) : undefined);
+			const surface = () => (reviewRef.current ? read(reviewRef.current) : undefined);
 			const detach = attachReviewCommenting(codeEditor, {
-				onSave: (s, t) => slice()?.commenting.onSave(s, t) ?? Promise.resolve(),
-				onSend: (s, t) => slice()?.commenting.onSend(s, t) ?? Promise.resolve(),
+				onSave: (draft, text) => surface()?.commenting.onSave(draft, text) ?? Promise.resolve(),
+				onSend: (draft, text) => surface()?.commenting.onSend(draft, text) ?? Promise.resolve(),
 			});
 			const threads = attachReviewThreads(codeEditor, {
-				onSendComment: (id) => reviewRef.current?.actions.onSendComment(id) ?? Promise.resolve(),
-				onDeleteComment: (id) =>
-					reviewRef.current?.actions.onDeleteComment(id) ?? Promise.resolve(),
+				onSendComment: (id) => surface()?.actions.onSendComment(id) ?? Promise.resolve(),
+				onDeleteComment: (id) => surface()?.actions.onDeleteComment(id) ?? Promise.resolve(),
 				onUpdateComment: (id, body) =>
-					reviewRef.current?.actions.onUpdateComment(id, body) ?? Promise.resolve(),
+					surface()?.actions.onUpdateComment(id, body) ?? Promise.resolve(),
 			});
 			return { codeEditor, threads, read, decorations: [], detach };
 		},
 		[],
 	);
 
-	const onMount: DiffOnMount = (diffEditor, m) => {
-		stopThemeWatchRef.current = watchThemeSwap(m, THEME);
+	const onMount: DiffOnMount = (diffEditor, monaco) => {
+		stopThemeWatchRef.current = watchThemeSwap(monaco, THEME);
 		editorRef.current = diffEditor;
 		menuIconsRef.current = [
 			decorateEditorContextMenus(diffEditor.getModifiedEditor()),
@@ -102,13 +118,14 @@ export default function MonacoDiff({
 		];
 		const model = diffEditor.getModel();
 		modelsRef.current = model ? [model.original, model.modified] : [];
+		if (isDiffViewState(viewState)) diffEditor.restoreViewState(viewState);
 		if (!review) return;
 		sidesRef.current = [
-			wireSide(diffEditor.getModifiedEditor(), (r) => r),
-			wireSide(diffEditor.getOriginalEditor(), (r) => r.base),
+			wireSide(diffEditor.getModifiedEditor(), (target) => target.worktree),
+			wireSide(diffEditor.getOriginalEditor(), (target) => target.base),
 		];
 		syncThreads(review);
-		if (reviewRef.current) consumeFocus(reviewRef.current);
+		consumeFocus(review);
 	};
 
 	useEffect(() => {
@@ -121,15 +138,16 @@ export default function MonacoDiff({
 
 	useEffect(
 		() => () => {
+			const saved = editorRef.current?.saveViewState();
+			if (saved) onViewStateRef.current?.(saved);
 			stopThemeWatchRef.current?.();
-			for (const d of menuIconsRef.current) d.dispose();
+			for (const disposable of menuIconsRef.current) disposable.dispose();
 			menuIconsRef.current = [];
 			for (const side of sidesRef.current) {
 				side.detach();
 				side.threads.dispose();
 			}
 			sidesRef.current = [];
-			// Widget before models — the only order that dodges Monaco 0.52+'s dispose assertion (monaco-editor#4779, see panels/SPEC.md).
 			editorRef.current?.dispose();
 			editorRef.current = null;
 			for (const model of modelsRef.current) model.dispose();
@@ -141,11 +159,11 @@ export default function MonacoDiff({
 	return (
 		<DiffEditor
 			height="100%"
-			original={original}
-			modified={modified}
-			language={languageForPath(path)}
-			originalModelPath={`diff-original://${path}`}
-			modifiedModelPath={`diff-modified://${path}`}
+			original={original.kind === "text" ? original.text : ""}
+			modified={modified.kind === "text" ? modified.text : ""}
+			language={resource.language ?? languageForPath(resource.path)}
+			originalModelPath={`diff-original://${resource.path}`}
+			modifiedModelPath={`diff-modified://${resource.path}`}
 			theme={THEME}
 			keepCurrentOriginalModel
 			keepCurrentModifiedModel
@@ -154,7 +172,7 @@ export default function MonacoDiff({
 			loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
 			options={{
 				...sharedEditorOptions(fileLineWidth, fileLineWidthBounded),
-				renderSideBySide: view === "split",
+				renderSideBySide: layout === "split",
 				useInlineViewWhenSpaceIsLimited: false,
 				hideUnchangedRegions: { enabled: true },
 				ignoreTrimWhitespace: ignoreWhitespace,
