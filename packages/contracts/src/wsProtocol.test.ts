@@ -78,7 +78,7 @@ test("session rename is versioned and bounded", () => {
 });
 
 test("normalized session state advances the protocol and names one snapshot/push channel", () => {
-	expect(SESSION_STATE_PROTOCOL_VERSION).toBe(69);
+	expect(SESSION_STATE_PROTOCOL_VERSION).toBe(73);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SESSION_STATE_PROTOCOL_VERSION);
 	expect(WS_METHODS.sessionStateList).toBe("session.stateList");
 	expect(WS_METHODS.sessionAcknowledgeCompletion).toBe("session.acknowledgeCompletion");
@@ -114,8 +114,8 @@ test("auto plan-summary generation advances the protocol to v69", () => {
 });
 
 test("host-owned new-chat defaults are pinned to v72", () => {
-	expect(PROTOCOL_VERSION).toBe(72);
 	expect(DEFAULT_MODEL_PROTOCOL_VERSION).toBe(72);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(DEFAULT_MODEL_PROTOCOL_VERSION);
 	expect(WS_METHODS.modelDefault).toBe("model.default");
 	expect(WS_METHODS).not.toHaveProperty("modelSetDefault");
 });
