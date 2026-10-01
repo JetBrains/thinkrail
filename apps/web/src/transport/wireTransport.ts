@@ -20,6 +20,7 @@ import {
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	SERVER_FALLBACK_OPT_OUT_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { isConnectedGeneration, useAppStore } from "../store";
@@ -51,6 +52,10 @@ export function supportsPlanReview(protocolVersion: number | null): boolean {
  * such method, so the client must not issue the request. See [[submodule-web-transport]]. */
 export function supportsPlanSummaryGeneration(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION;
+}
+
+export function supportsServerFallbackOptOut(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= SERVER_FALLBACK_OPT_OUT_PROTOCOL_VERSION;
 }
 
 const activityHydration = createActivityHydration({

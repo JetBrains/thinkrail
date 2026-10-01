@@ -49,7 +49,7 @@ import {
 } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
-import { assistantFailureText } from "../chat/assistantFailure";
+import { assistantFailureRecovery, assistantFailureText } from "../chat/assistantFailure";
 import type { ChatMessageOrder } from "../chat/chatPreferences";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type {
@@ -679,7 +679,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						kind: "error",
 						id: crypto.randomUUID(),
 						text: failure,
-						recovery: "try-again",
+						recovery: assistantFailureRecovery(event.terminal),
 					}
 				: { kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() };
 			return {

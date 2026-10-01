@@ -15,7 +15,8 @@ Everything about **model-provider credentials**: the read side the Welcome strip
 (`provider.status`) and the write side that configures them from inside the app — OAuth sign-in,
 interactive API-key entry (both over the **same login channel**, issue #97), and logout. All of it goes
 through the shared `ModelRuntime` (pi's model/auth facade); we never parse `auth.json` / `models.json`
-ourselves and never surface a credential value over the wire.
+ourselves and never surface a credential value over the wire. (The one host write to `models.json`, the
+user-initiated server-side-fallback opt-out, is a runtime concern and lives in `agent` — see its SPEC.)
 
 ## Boundary
 

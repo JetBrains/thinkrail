@@ -43,6 +43,7 @@ import {
 	compactSession,
 	createSession,
 	deleteSession,
+	disableServerFallback,
 	disposeAllSessions,
 	ensureSessionAttached,
 	followUpSession,
@@ -311,6 +312,28 @@ test("session creation publishes a domain summary for other frontends", async ()
 	} finally {
 		setSessionCreatedPublisher(() => {});
 	}
+});
+
+test("disableServerFallback writes the provider opt-out to the agent dir and keeps the session runnable", async () => {
+	const created = await createSession({
+		cwd: tmpCwd("trpi-server-fallback-"),
+		workspaceId: "ws-server-fallback",
+		model: toWireModel(fauxA.getModel()),
+	});
+	try {
+		await disableServerFallback(created.sessionId);
+
+		const modelsJson = join(process.env.PI_CODING_AGENT_DIR ?? "", "models.json");
+		expect(JSON.parse(readFileSync(modelsJson, "utf8")).providers.fauxa).toEqual({
+			compat: { allowedFallbackModels: [] },
+		});
+		fauxA.setResponses([fauxAssistantMessage("AFTER_OPT_OUT")]);
+		await promptSession(created.sessionId, "again");
+		expect(JSON.stringify(events.get(created.sessionId))).toContain("AFTER_OPT_OUT");
+	} finally {
+		removeSession(created.sessionId);
+	}
+	await expect(disableServerFallback("no-such-session")).rejects.toThrow("Unknown session");
 });
 
 test("two sessions in two worktrees stream independently; disposing one leaves the other working", async () => {

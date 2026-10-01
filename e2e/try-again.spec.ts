@@ -25,7 +25,11 @@ async function interceptTryAgain(page: Page, prompts: ClientFrame[]): Promise<vo
 				server.send(message);
 				return;
 			}
-			if (frame.id && frame.method === "session.prompt" && frame.params?.text === "Try again.") {
+			if (
+				frame.id &&
+				(frame.method === "session.disableServerFallback" ||
+					(frame.method === "session.prompt" && frame.params?.text === "Try again."))
+			) {
 				prompts.push(frame);
 				ws.send(JSON.stringify({ id: frame.id, ok: true, result: { ok: true } }));
 				return;
@@ -77,4 +81,45 @@ test("a final agent failure offers Try again as an ordinary visible prompt", asy
 		.poll(() => prompts.at(-1)?.params)
 		.toEqual({ sessionId: chat.id, text: "Try again." });
 	expect(prompts).toHaveLength(1);
+});
+
+test("a proxy rejecting the fallbacks field offers to turn server-side fallback off, then retries", async ({
+	page,
+}) => {
+	const frames: ClientFrame[] = [];
+	await interceptTryAgain(page, frames);
+	await openFixtureProject(page);
+
+	const chat = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "fallback rejected chat",
+		messages: [
+			{ role: "user", text: "finish the task", timestamp: BASE_TS },
+			{
+				role: "assistant",
+				text: "",
+				timestamp: BASE_TS + 1_000,
+				stopReason: "error",
+				errorMessage: "400 Anthropic proxy does not support fallback field",
+			},
+		],
+	});
+
+	await enterDefaultWorkspace(page);
+	const failure = page
+		.locator('[data-testid="chat-message"][data-role="error"]')
+		.filter({ hasText: "does not support fallback field" });
+	await expect(failure).toBeVisible();
+	await expect(failure.getByTestId("agent-try-again")).toBeVisible();
+	const disable = failure.getByTestId("agent-disable-server-fallback");
+	await expect(disable).toHaveText("Disable fallback & retry");
+
+	await disable.click();
+
+	await expect
+		.poll(() => frames.map((frame) => [frame.method, frame.params]))
+		.toEqual([
+			["session.disableServerFallback", { sessionId: chat.id }],
+			["session.prompt", { sessionId: chat.id, text: "Try again." }],
+		]);
+	await expect(page.getByTestId("agent-disable-server-fallback")).toHaveCount(0);
 });

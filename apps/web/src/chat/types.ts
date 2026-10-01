@@ -18,7 +18,7 @@ export type ExtUiDialogRequest = Extract<
 	{ kind: "select" | "confirm" | "input" | "editor" }
 >;
 
-export type FailureRecovery = "try-again";
+export type FailureRecovery = "try-again" | "disable-server-fallback";
 
 export type ChatTurn =
 	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }

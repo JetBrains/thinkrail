@@ -276,7 +276,10 @@ of the host.
   reviewAutoFix, agentReviewEnabled, subagentsEnabled, jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
   the wire at protocol v61 and `terminalWindowsShell` at v62. **`DEFAULT_MODEL_PROTOCOL_VERSION`** pins
   v72's AppConfig `defaultModel`/`defaultEffort` and host-side default resolution; the Settings controls are
-  hidden against older hosts. `defaultModel` is a full allowlisted `WireModel`, `defaultEffort` is an optional
+  hidden against older hosts. **`SERVER_FALLBACK_OPT_OUT_PROTOCOL_VERSION`** (73) gates
+  `session.disableServerFallback({ sessionId }) → Ack`, the chat's user-initiated recovery for a provider
+  endpoint that rejects pi's server-side `fallbacks` field (host side: the `agent` SPEC); older hosts never
+  receive it. `defaultModel` is a full allowlisted `WireModel`, `defaultEffort` is an optional
   `ThinkingLevel`, and `settings.update` accepts `null` to clear either optional value. `terminalWindowsShell`
   (`"auto" | "pwsh" | "powershell" | "cmd"`, default `"auto"`) is read only by `server/terminal` on
   Windows and ignored elsewhere — see

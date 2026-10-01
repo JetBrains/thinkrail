@@ -14,4 +14,5 @@ export {
 	supportsHostUpdateRun,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
+	supportsServerFallbackOptOut,
 } from "./wireTransport";

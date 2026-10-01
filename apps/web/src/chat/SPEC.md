@@ -68,7 +68,12 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   (provider/model error, an unrecovered `length` truncation, or a rejected send) — **never folded**, so
   a failed turn can't look like nothing happened. Only the current settlement-derived failure carries the
   web-local `try-again` recovery action; its **Try again** button sends one visible ordinary `Try again.` user
-  message through `ChatView`'s existing immediate-send path. Rejected sends, extension notifications, and
+  message through `ChatView`'s existing immediate-send path. A settlement failure whose text says the endpoint
+  does not support pi's server-side `fallbacks` field (`assistantFailureRecovery` → `disable-server-fallback`,
+  a case-insensitive match on `does not support fallback`) also offers **Disable fallback & retry** (next to Try again, which still works with another model) on
+  hosts at `SERVER_FALLBACK_OPT_OUT_PROTOCOL_VERSION` (older hosts keep plain Try again): it awaits
+  `session.disableServerFallback` and only then sends the same `Try again.`; a rejection toasts and leaves
+  the notice actionable. Rejected sends, extension notifications, and
   generic app errors stay non-actionable because the missing prompt or repair may not be in Pi's context.
   The optimistic user append consumes the action immediately, and any later `agent_start` consumes it for
   other-client/custom-message starts, so a historical error never regains the affordance. Live settlement

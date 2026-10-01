@@ -85,6 +85,7 @@ import {
 	settledAvailableModels,
 } from "./piRuntime";
 import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
+import { writeServerFallbackOptOut } from "./serverFallback";
 import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
@@ -1649,6 +1650,18 @@ async function abortEntry(
 
 export async function setSessionModel(sessionId: string, model: WireModel): Promise<void> {
 	const entry = mustGetEntry(sessionId);
+	await entry.session.setModel(resolveWireModel(entry.generation.runtime, model));
+}
+
+export async function disableServerFallback(sessionId: string): Promise<void> {
+	const entry = mustGetEntry(sessionId);
+	const model = entry.session.model;
+	if (!model) throw new Error("This chat has no model to update.");
+	await writeServerFallbackOptOut(join(getAgentDir(), "models.json"), model.provider);
+	await entry.generation.runtime.refresh({
+		providers: [model.provider],
+		signal: AbortSignal.timeout(15_000),
+	});
 	await entry.session.setModel(resolveWireModel(entry.generation.runtime, model));
 }
 

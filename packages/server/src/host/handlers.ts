@@ -33,6 +33,7 @@ import {
 	compactSession,
 	createSession,
 	deleteSession,
+	disableServerFallback,
 	ensureSessionAttached,
 	followUpSession,
 	getSessionCommands,
@@ -859,6 +860,10 @@ const handlers: Record<string, Handler> = {
 	"session.setModel": async (params) => {
 		const p = params as { sessionId: string; model: WireModel };
 		await setSessionModel(p.sessionId, p.model);
+		return { ok: true } as const;
+	},
+	"session.disableServerFallback": async (params) => {
+		await disableServerFallback((params as { sessionId: string }).sessionId);
 		return { ok: true } as const;
 	},
 	"session.setThinkingLevel": (params) => {

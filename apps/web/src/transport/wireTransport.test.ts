@@ -4,11 +4,13 @@ import {
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	SERVER_FALLBACK_OPT_OUT_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import {
 	supportsHostUpdateRun,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
+	supportsServerFallbackOptOut,
 	supportsSessionActivity,
 } from "./wireTransport";
 
@@ -42,4 +44,10 @@ test("auto plan-summary is requested only from a host at or beyond the v69 capab
 	// A pre-v69 host serves no todo.generateSummary, so a new client must not issue the request.
 	expect(supportsPlanSummaryGeneration(PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION - 1)).toBe(false);
 	expect(supportsPlanSummaryGeneration(null)).toBe(false);
+});
+
+test("the server-side-fallback opt-out is offered only by a host at or beyond v73", () => {
+	expect(supportsServerFallbackOptOut(SERVER_FALLBACK_OPT_OUT_PROTOCOL_VERSION)).toBe(true);
+	expect(supportsServerFallbackOptOut(SERVER_FALLBACK_OPT_OUT_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsServerFallbackOptOut(null)).toBe(false);
 });

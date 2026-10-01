@@ -100,7 +100,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 72;
+export const PROTOCOL_VERSION = 73;
+export const SERVER_FALLBACK_OPT_OUT_PROTOCOL_VERSION = 73;
 export const DEFAULT_MODEL_PROTOCOL_VERSION = 72;
 export const CHAT_RESOURCES_PROTOCOL_VERSION = 71;
 export const HOST_UPDATE_RUN_PROTOCOL_VERSION = 70;
@@ -235,6 +236,7 @@ export const WS_METHODS = {
 	sessionDelete: "session.delete",
 	sessionRename: "session.rename",
 	sessionSetModel: "session.setModel",
+	sessionDisableServerFallback: "session.disableServerFallback",
 	sessionSetThinkingLevel: "session.setThinkingLevel",
 	sessionCompact: "session.compact",
 	sessionGetStats: "session.getStats",
@@ -621,6 +623,7 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"session.setModel": { params: { sessionId: string; model: WireModel }; result: Ack };
+	"session.disableServerFallback": { params: { sessionId: string }; result: Ack };
 	"session.setThinkingLevel": { params: { sessionId: string; level: ThinkingLevel }; result: Ack };
 	"session.compact": { params: { sessionId: string; instructions?: string }; result: Ack };
 	"session.getStats": { params: { sessionId: string }; result: SessionStats };

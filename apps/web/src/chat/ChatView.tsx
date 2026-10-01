@@ -33,7 +33,7 @@ import {
 	toast,
 	useAppStore,
 } from "@/store";
-import { errorText, getTransport } from "@/transport";
+import { errorText, getTransport, supportsServerFallbackOptOut } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
@@ -621,6 +621,19 @@ export default function ChatView({
 			});
 	};
 
+	const canDisableServerFallback = useAppStore((s) =>
+		supportsServerFallbackOptOut(s.protocolVersion),
+	);
+	const disableServerFallbackAndRetry = async () => {
+		try {
+			await getTransport().request("session.disableServerFallback", { sessionId });
+		} catch (err) {
+			toast.error(errorText(err), "Couldn't turn off server-side fallback");
+			return;
+		}
+		performSend(TRY_AGAIN_PROMPT, [], "send");
+	};
+
 	const onSubmit = (
 		text: string,
 		attachments: ChatAttachment[],
@@ -1039,6 +1052,9 @@ export default function ChatView({
 												onOpenChange={onOpenChange}
 												onReveal={onReveal}
 												onTryAgain={() => performSend(TRY_AGAIN_PROMPT, [], "send")}
+												onDisableServerFallback={
+													canDisableServerFallback ? disableServerFallbackAndRetry : undefined
+												}
 											/>
 										</FoldGeometryProvider>
 										{chatMessageOrder === "newest-first" &&

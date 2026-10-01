@@ -16,6 +16,7 @@ import {
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	SERVER_FALLBACK_OPT_OUT_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
@@ -107,7 +108,7 @@ test("auto plan-summary generation advances the protocol to v69", () => {
 });
 
 test("host-owned new-chat defaults are pinned to v72", () => {
-	expect(PROTOCOL_VERSION).toBe(72);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(DEFAULT_MODEL_PROTOCOL_VERSION);
 	expect(DEFAULT_MODEL_PROTOCOL_VERSION).toBe(72);
 	expect(WS_METHODS.modelDefault).toBe("model.default");
 	expect(WS_METHODS).not.toHaveProperty("modelSetDefault");
@@ -219,4 +220,10 @@ test("chat resources introduce scoped reads and cancellation, never browser comm
 	expect(WS_METHODS.subagentStop).toBe("subagent.stop");
 	expect(WS_METHODS.subagentStopAll).toBe("subagent.stopAll");
 	expect(Object.values(WS_METHODS)).not.toContain("backgroundCommand.start");
+});
+
+test("the server-side-fallback opt-out is pinned to v73", () => {
+	expect(PROTOCOL_VERSION).toBe(73);
+	expect(SERVER_FALLBACK_OPT_OUT_PROTOCOL_VERSION).toBe(73);
+	expect(WS_METHODS.sessionDisableServerFallback).toBe("session.disableServerFallback");
 });

@@ -49,6 +49,7 @@ export function ChatTurnView({
 	onOpenChange,
 	onReveal,
 	onTryAgain,
+	onDisableServerFallback,
 }: {
 	row: ChatRow;
 	workspaceRoot?: string | undefined;
@@ -59,6 +60,7 @@ export function ChatTurnView({
 	onOpenChange?: ((path: string) => void) | undefined;
 	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
 	onTryAgain?: (() => void) | undefined;
+	onDisableServerFallback?: (() => Promise<void>) | undefined;
 }) {
 	switch (row.kind) {
 		case "user":
@@ -76,7 +78,10 @@ export function ChatTurnView({
 			return (
 				<ErrorTurn
 					text={row.text}
-					onTryAgain={row.recovery === "try-again" ? onTryAgain : undefined}
+					onTryAgain={row.recovery ? onTryAgain : undefined}
+					onDisableServerFallback={
+						row.recovery === "disable-server-fallback" ? onDisableServerFallback : undefined
+					}
 				/>
 			);
 		case "compaction":
@@ -545,7 +550,16 @@ function CompactionTurn({
 	);
 }
 
-function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => void) | undefined }) {
+function ErrorTurn({
+	text,
+	onTryAgain,
+	onDisableServerFallback,
+}: {
+	text: string;
+	onTryAgain?: (() => void) | undefined;
+	onDisableServerFallback?: (() => Promise<void>) | undefined;
+}) {
+	const [disabling, setDisabling] = useState(false);
 	return (
 		<div
 			data-testid="chat-message"
@@ -554,6 +568,23 @@ function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => voi
 		>
 			<TriangleAlert className="mt-2 size-12 shrink-0" />
 			<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</span>
+			{onDisableServerFallback ? (
+				<Button
+					variant="outline"
+					size="sm"
+					data-testid="agent-disable-server-fallback"
+					className="shrink-0"
+					disabled={disabling}
+					title="Turn off server-side model fallback for this provider in pi's models.json, then try again"
+					onClick={() => {
+						setDisabling(true);
+						void onDisableServerFallback().finally(() => setDisabling(false));
+					}}
+				>
+					<RotateCw className="size-12" />
+					Disable fallback & retry
+				</Button>
+			) : null}
 			{onTryAgain ? (
 				<Button
 					variant="outline"

@@ -306,6 +306,19 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `resolveNewChatModel({})` for unset reviewer overrides: AppConfig `defaultModel`/`defaultEffort`, with
     the first available model and `medium` effort as fallbacks.
 
+    **The one host write to `models.json` — `disableServerFallback(sessionId)`.** pi owns `models.json`;
+    the host writes it only here, and only on the user's explicit chat recovery action. A model whose
+    `compat.allowedFallbackModels` is non-empty (e.g. `anthropic/claude-fable-5`) makes pi send the
+    server-side-fallback beta and a `fallbacks` field, which an Anthropic-compatible proxy without that beta
+    rejects with a 400. The operation merges `compat.allowedFallbackModels: []` into
+    `providers[<the session model's provider>]` of `<agentDir>/models.json` — pi merges provider `compat` into
+    every model of that provider, so the empty list replaces each model's built-in fallbacks — creating the
+    file or provider entry when absent and preserving every other field and the file's mode (it can hold
+    credentials), via tmp + rename. An unparsable or non-object file is refused, never overwritten. It then
+    runs `refresh({ providers: [id] })` on the session's runtime generation (pi re-reads `models.json`) and
+    re-sets the session's model, so the live session drops the field. The opt-out is global to that pi agent
+    dir (other worktrees and the pi CLI see it) and is idempotent.
+
     **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
     `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl`, `headers`, extension/provider
     routing data, and any other field are excluded by
