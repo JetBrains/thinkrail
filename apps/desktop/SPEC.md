@@ -216,6 +216,15 @@ are ignored; a filesystem refusal is logged without changing the in-memory docum
 client. The web feature still owns each value's validation and default. The web router remains the route
 grammar validator, and the preload exposes no host/domain capability.
 
+On Windows, webview-to-main RPC (requests and one-way messages) rides Electrobun's native host bridge,
+not its loopback WebSocket. Electrobun 2.0.1's core binds its fixed default socket port `50000` with
+address reuse on Windows, so a second running Electrobun app (another ThinkRail channel included) shares
+the port and receives this webview's socket traffic; every request then times out and every message is
+lost. The launcher therefore prepends a removal of the two injected socket-port globals to the Windows
+preload, which selects Electroview's documented no-socket path (`__electrobunHostBridge`, the same per-webview
+WebView2 channel used as its fallback). Main-to-webview delivery is unaffected. Re-check on an Electrobun
+upgrade: once the core picks a private port on Windows, drop `hostTransport.ts`.
+
 The host reads the staged preload bundle and passes its JavaScript **source text** to
 `BrowserWindow.preload`. A `views://` preload URL is forbidden: Electrobun 1.18.1 resolves it on macOS but
 injects the literal URL as code on Linux.

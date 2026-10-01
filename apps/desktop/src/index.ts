@@ -13,6 +13,7 @@ import Electrobun, {
 import { installDesktopApplicationMenu } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { installExternalNavigation } from "./externalNavigation";
+import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
 import { nextPageZoom } from "./pageZoom";
 import {
 	injectInitialDesktopPreferences,
@@ -193,15 +194,21 @@ async function start(): Promise<void> {
 		},
 	});
 	const windowChrome = desktopWindowChrome(process.platform);
-	const preload = neutral
+	const preloadSource = neutral
 		? null
-		: injectInitialWindowChrome(
-				injectInitialDesktopPreferences(
-					await Bun.file(join(PATHS.VIEWS_FOLDER, "preload", "index.js")).text(),
-					initialPreferences,
-				),
-				windowChromePreloadSeed(windowChrome),
-			);
+		: await Bun.file(join(PATHS.VIEWS_FOLDER, "preload", "index.js")).text();
+	const preload =
+		preloadSource === null
+			? null
+			: injectInitialWindowChrome(
+					injectInitialDesktopPreferences(
+						usesNativeHostBridge(process.platform)
+							? preferNativeHostBridge(preloadSource)
+							: preloadSource,
+						initialPreferences,
+					),
+					windowChromePreloadSeed(windowChrome),
+				);
 	mainWindow = new BrowserWindow({
 		title: "ThinkRail",
 		url: neutral ? "about:blank" : `${origin}/${initialRoute}`,
