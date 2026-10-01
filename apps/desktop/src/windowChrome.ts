@@ -11,6 +11,7 @@ export type WindowChromePolicy = Readonly<{
 	trafficLightOffset: { x: number; y: number } | null;
 	geometry: WindowChromeGeometry;
 	dragRegion: boolean;
+	titleBarDoubleClick: boolean;
 	windowControls: boolean;
 	restoreFrameControls: boolean;
 }>;
@@ -38,6 +39,7 @@ export function desktopWindowChrome(platform: NodeJS.Platform): WindowChromePoli
 			trafficLightOffset: { x: 0, y: 4 },
 			geometry: { insetLeft: 64, insetRight: 0 },
 			dragRegion: true,
+			titleBarDoubleClick: true,
 			windowControls: false,
 			restoreFrameControls: false,
 		};
@@ -48,6 +50,7 @@ export function desktopWindowChrome(platform: NodeJS.Platform): WindowChromePoli
 			trafficLightOffset: null,
 			geometry: { insetLeft: 0, insetRight: 138 },
 			dragRegion: true,
+			titleBarDoubleClick: false,
 			windowControls: true,
 			restoreFrameControls: true,
 		};
@@ -57,6 +60,7 @@ export function desktopWindowChrome(platform: NodeJS.Platform): WindowChromePoli
 		trafficLightOffset: null,
 		geometry: NO_INSETS,
 		dragRegion: false,
+		titleBarDoubleClick: false,
 		windowControls: false,
 		restoreFrameControls: false,
 	};

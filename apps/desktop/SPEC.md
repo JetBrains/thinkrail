@@ -165,7 +165,7 @@ nothing.
 **Dragging.** The desktop's only contribution is the `drag` flag: the web header's `window-drag` utility
 resolves to `-webkit-app-region: drag` only when `--window-chrome-drag-region` says so, and Electrobun's
 own injected preload rewrites app-region declarations from same-origin stylesheets into a mirrored custom
-property it hit-tests against on `mousedown`. A decorated window (Windows, Linux, the neutral window)
+property it hit-tests against on `mousedown`. A decorated window (Linux, the neutral window)
 publishes `no-drag` and so never acquires a second, partial drag strip.
 
 **Title-bar double-click.** The webview covers the native strip, so `NSWindow` never sees a header
@@ -175,7 +175,9 @@ event monitors, so the page still receives `dblclick`. The desktop preload liste
 when the target is a drag region by Electrobun's own hit-test input: the computed, inherited
 `--electrobun-app-region` property its stylesheet rewrite produces. Exactly the area that drags the window
 therefore also zooms it; the `window-no-drag` action cluster does neither, and the web client still has no
-desktop branch. The main process acts only under the macOS drag policy and outside native fullscreen. It
+desktop branch. The main process acts only when the macOS policy's `titleBarDoubleClick` flag is set and outside native
+fullscreen; Windows leaves it off because its `HTCAPTION` drag region already maximizes natively, and handling
+it too would toggle twice. It
 reads `AppleActionOnDoubleClick` on every double-click (asynchronous `defaults read -g`, so a changed
 setting applies without restart) and maps it as Chromium does for custom draggable areas: unset, `Maximize`
 (Zoom) or `Fill` toggles zoom through `maximize()`/`unmaximize()` (`[NSWindow zoom:]`); `Minimize`

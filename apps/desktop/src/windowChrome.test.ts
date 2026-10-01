@@ -20,6 +20,7 @@ test("macOS hides the native strip, reserves its zone, and opts into dragging", 
 		trafficLightOffset: { x: 0, y: 4 },
 		geometry: { insetLeft: 64, insetRight: 0 },
 		dragRegion: true,
+		titleBarDoubleClick: true,
 		windowControls: false,
 		restoreFrameControls: false,
 	});
@@ -31,6 +32,7 @@ test("Windows uses frameless web controls and restores the frame style", () => {
 		trafficLightOffset: null,
 		geometry: { insetLeft: 0, insetRight: 138 },
 		dragRegion: true,
+		titleBarDoubleClick: false,
 		windowControls: true,
 		restoreFrameControls: true,
 	});
@@ -43,6 +45,7 @@ test("other platforms keep the default native chrome and do not drag", () => {
 			trafficLightOffset: null,
 			geometry: { insetLeft: 0, insetRight: 0 },
 			dragRegion: false,
+			titleBarDoubleClick: false,
 			windowControls: false,
 			restoreFrameControls: false,
 		});

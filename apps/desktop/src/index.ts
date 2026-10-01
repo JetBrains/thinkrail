@@ -223,7 +223,7 @@ async function start(): Promise<void> {
 	});
 	if (!neutral) {
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
-			enabled: windowChrome.dragRegion,
+			enabled: windowChrome.titleBarDoubleClick,
 			window: mainWindow,
 			...(titleBarProbePath
 				? {
