@@ -116,17 +116,36 @@ controls survive without a native strip. Electrobun 2.0.1 exposes no caption-col
 removing the native strip and letting the web header occupy it. The policy is platform-pure
 (`windowChrome.ts`, pinned by unit tests) and spread into the main `BrowserWindow`:
 
-| platform | `titleBarStyle` | traffic lights | published left inset |
-|---|---|---|---|
-| macOS | `hiddenInset` — transparent strip, hidden title, full-size content view; native traffic lights stay | `trafficLightOffset { x: 0, y: 4 }` centres the 12px buttons in the 40px topbar (measured on a packaged build: the default position centres them at 16px, so +4 lands on 20) | `64px` — the traffic-light zone (7 + 3×12 + 2×8 = 59px on the spacing grid) |
-| Windows, Linux | `default` | — | `0px` |
+| platform | `titleBarStyle` | native controls | published insets | header drag |
+|---|---|---|---|---|
+| macOS | `hiddenInset` — transparent strip, hidden title, full-size content view | AppKit traffic lights stay; `trafficLightOffset { x: 0, y: 4 }` centres the 12px buttons in the 40px topbar (measured on a packaged build: the default position centres them at 16px, so +4 lands on 20) | left `64px` — the traffic-light zone (7 + 3×12 + 2×8 = 59px on the spacing grid) | yes |
+| Windows | `hiddenInset` — Electrobun creates `WS_CAPTION \| WS_THICKFRAME` and strips the caption in `WM_NCCALCSIZE`: resize borders and the DWM shadow survive, no native caption buttons | none native; the web renders minimize / maximize-or-restore / close ([[submodule-web-shell]]) and drives the window over RPC | right `138px` — three 46px caption buttons | yes |
+| Linux | `default` | GTK/WM decorations | none | no |
 
-Windows is deferred because `hiddenInset` there strips the caption *including* minimize/maximize/close,
-which would have to be HTML controls over RPC (and Electrobun has no `HTMAXBUTTON` hit-test, so Win11
-snap layouts would not appear). Linux is not planned: `hiddenInset` is a no-op under GTK and `hidden`
-removes decorations together with WM-provided resize handles. Fully custom macOS chrome
-(`titleBarStyle: "hidden"` with drawn traffic lights) was rejected because the platform provides real
-ones.
+**Windows.** Electrobun 2.0.1 already enables WebView2's non-client-region support, so the header's
+`app-region: drag` is a real `HTCAPTION` hit: Aero Snap, drag-from-maximized, double-click-to-maximize and
+Alt+Space come from the OS, not from Electrobun's raw-input mover. What Electrobun omits from its
+`hiddenInset` style is `WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX` (upstream blackboardsh/electrobun#558):
+without them maximize covers the taskbar and the double-click / system-menu behaviours are inert. Until
+that lands upstream, `windowsFrame.ts` ORs the three bits onto the HWND once after window creation through
+a `dlopen`ed `user32.dll` (`GetWindowLongPtrW` → `SetWindowLongPtrW` → `SetWindowPos(SWP_FRAMECHANGED)`) —
+pure style arithmetic behind an injectable API, no C source, no runtime compilation; a failure is logged,
+never fatal. Success is judged by reading the style back, not by `SetWindowLongPtrW`'s return: a 0 previous
+style is ambiguous, and its `SetLastError`/`GetLastError` disambiguation would span separate FFI calls the
+runtime may clobber. The HTML controls call `minimizeWindow` / `toggleMaximizeWindow` / `closeWindow` requests;
+close goes through `requestClose()`, the same path as the native X, so the quit coordinator still owns
+shutdown. The main process publishes `windowStateChanged { maximized, fullScreen }` on every `dom-ready` and
+on `resize` when it changed, and the preload exposes the `NativeWindowControlsBridge`
+(`__THINKRAIL_NATIVE_WINDOW_CONTROLS__`, [[module-contracts]]) only when the injected seed says
+`windowControls`. Known gaps, accepted rather than patched with a window subclass: the top edge is not a
+resize hit (Electrobun folds it into the client area, also #558) and Windows 11 Snap Layouts do not appear on
+hover over the HTML maximize button (that needs `HTMAXBUTTON`, which nothing short of WebView2's prerelease
+window-controls overlay provides). PR #469 explored keeping DWM's own buttons through a runtime-compiled HWND
+subclass and WebView2 region masking; it was set aside as too heavy to verify.
+
+Linux is not planned: `hiddenInset` is a no-op under GTK and `hidden` removes decorations together with
+WM-provided resize handles. Fully custom macOS chrome (`titleBarStyle: "hidden"` with drawn traffic lights)
+was rejected because the platform provides real ones.
 
 **Geometry contract.** The desktop publishes three CSS custom properties on `<html>`: the two inset
 properties plus `--window-chrome-drag-region` (`drag` | `no-drag`), which tells the page whether its
@@ -135,11 +154,12 @@ geometry updates arrive as `windowChromeChanged { insetLeft, insetRight }`. The 
 with `0px` fallbacks, so a browser-hosted client and the neutral E2E-host window (`about:blank`, no
 preload) are unaffected and the *web client still has no desktop branch*. The preload validates geometry,
 keeps only the latest value while the document root is absent, and flushes it at `DOMContentLoaded`, so a
-pending startup write cannot overwrite a newer native state. The right inset is always `0px` today and
-exists so the Windows follow-up changes a value, not the contract.
+pending startup write cannot overwrite a newer native state. The right inset is `138px` on Windows and `0px` elsewhere; the seed additionally carries the
+per-policy `windowControls` flag, which the preload turns into the optional controls bridge.
 
-**Fullscreen.** macOS native fullscreen auto-hides the traffic lights with the menu bar, so fullscreen
-zeroes both insets. The main process publishes geometry on every webview `dom-ready` (a reload during
+**Fullscreen.** macOS native fullscreen auto-hides the traffic lights with the menu bar, and a Windows
+fullscreen window is a bare `WS_POPUP`, so fullscreen zeroes both insets and the web hides its controls when
+`windowStateChanged` reports `fullScreen`. The main process publishes geometry on every webview `dom-ready` (a reload during
 fullscreen must not inherit the windowed insets) and on `resize` only when the geometry changed. The
 neutral E2E-host window (`THINKRAIL_DESKTOP_E2E_HOST=1`) keeps the default native chrome and publishes
 nothing.
@@ -147,7 +167,7 @@ nothing.
 **Dragging.** The desktop's only contribution is the `drag` flag: the web header's `window-drag` utility
 resolves to `-webkit-app-region: drag` only when `--window-chrome-drag-region` says so, and Electrobun's
 own injected preload rewrites app-region declarations from same-origin stylesheets into a mirrored custom
-property it hit-tests against on `mousedown`. A decorated window (Windows, Linux, the neutral window)
+property it hit-tests against on `mousedown`. A decorated window (Linux, the neutral window)
 publishes `no-drag` and so never acquires a second, partial drag strip.
 
 **Title-bar double-click.** The webview covers the native strip, so `NSWindow` never sees a header
@@ -157,7 +177,9 @@ event monitors, so the page still receives `dblclick`. The desktop preload liste
 when the target is a drag region by Electrobun's own hit-test input: the computed, inherited
 `--electrobun-app-region` property its stylesheet rewrite produces. Exactly the area that drags the window
 therefore also zooms it; the `window-no-drag` action cluster does neither, and the web client still has no
-desktop branch. The main process acts only under the macOS drag policy and outside native fullscreen. It
+desktop branch. The main process acts only when the macOS policy's `titleBarDoubleClick` flag is set and outside native
+fullscreen; Windows leaves it off because its `HTCAPTION` drag region already maximizes natively, and handling
+it too would toggle twice. It
 reads `AppleActionOnDoubleClick` on every double-click (asynchronous `defaults read -g`, so a changed
 setting applies without restart) and maps it as Chromium does for custom draggable areas: unset, `Maximize`
 (Zoom) or `Fill` toggles zoom through `maximize()`/`unmaximize()` (`[NSWindow zoom:]`); `Minimize`
@@ -194,6 +216,15 @@ are ignored; a filesystem refusal is logged without changing the in-memory docum
 client. The web feature still owns each value's validation and default. The web router remains the route
 grammar validator, and the preload exposes no host/domain capability.
 
+On Windows, webview-to-main RPC (requests and one-way messages) rides Electrobun's native host bridge,
+not its loopback WebSocket. Electrobun 2.0.1's core binds its fixed default socket port `50000` with
+address reuse on Windows, so a second running Electrobun app (another ThinkRail channel included) shares
+the port and receives this webview's socket traffic; every request then times out and every message is
+lost. The launcher therefore prepends a removal of the two injected socket-port globals to the Windows
+preload, which selects Electroview's documented no-socket path (`__electrobunHostBridge`, the same per-webview
+WebView2 channel used as its fallback). Main-to-webview delivery is unaffected. Re-check on an Electrobun
+upgrade: once the core picks a private port on Windows, drop `hostTransport.ts`.
+
 The host reads the staged preload bundle and passes its JavaScript **source text** to
 `BrowserWindow.preload`. A `views://` preload URL is forbidden: Electrobun 1.18.1 resolves it on macOS but
 injects the literal URL as code on Linux.
@@ -218,7 +249,10 @@ synthetic `dblclick`s in the live webview: `title-bar-double-click` on the heade
 launcher records how many double-click messages it received and handled, plus the last handled
 preference, action, and before/after window state. The header-only phase proves the header is
 forwarded; counting receipt as well as handling lets the second phase detect a forwarded no-drag
-click that the single-flight handler would drop. These hooks need the live window; their standalone
+click that the single-flight handler would drop. With a window-controls probe file,
+`window-controls-maximize` / `window-controls-restore` click the HTML caption button once it carries the
+expected label, and the launcher records every window-control request it handles plus the last published
+`NativeWindowState`. These hooks need the live window; their standalone
 drivers and assertions live in the test package, which product code never imports.
 
 ## Build and release
@@ -345,6 +379,6 @@ release checks described in [[module-ci-release]].
 
 ## Deferred
 
-Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, and the Windows
-frameless title bar (HTML minimize/maximize/close over RPC behind a window-controls capability the geometry
-contract does not yet carry). The update feed publication described above remains release-owned.
+Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, and removing the
+`user32` style-bit shim once blackboardsh/electrobun#558 ships. The update feed publication described above
+remains release-owned.

@@ -47,8 +47,12 @@ Native desktop smoke loads the real UI and verifies route/preload messaging plus
 navigation handler. On macOS it also drives the title-bar double-click path end to end: a no-drag
 double-click must not act, and the header double-click's recorded action and resulting window state must
 match the machine's `AppleActionOnDoubleClick` setting mapped as [[module-desktop]] documents (unset,
-`Maximize` and `Fill` zoom). Other platforms skip it because their decorated
-windows have no web drag region. Desktop-backed Playwright uses the launcher's opt-in neutral-window seam so it is the
+`Maximize` and `Fill` zoom). Linux skips it because its decorated window has no web drag region;
+Windows skips it because its native caption hit already maximizes on double-click. On Windows it instead clicks the HTML maximize button and then its
+Restore successor in the live webview; the launcher must record exactly one `toggleMaximize` request per
+click and publish the matching `maximized` state, proving the real bridge request leg and native state
+push rather than a fake bridge. Close is not probed: it shares the native-X `requestClose()` path, and the
+subsequent external-navigation probe needs the window. Desktop-backed Playwright uses the launcher's opt-in neutral-window seam so it is the
 only hydrated client. The live-window ready/control seam remains in the launcher, never a runtime import
 of this package.
 

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import type { NativeWindowState } from "@thinkrail/contracts";
 import { channel, version } from "@thinkrail/shared/version";
 import Electrobun, {
 	ApplicationMenu,
@@ -12,6 +13,7 @@ import Electrobun, {
 import { installDesktopApplicationMenu } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { installExternalNavigation } from "./externalNavigation";
+import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
 import { nextPageZoom } from "./pageZoom";
 import {
 	injectInitialDesktopPreferences,
@@ -32,8 +34,13 @@ import {
 	desktopWindowChrome,
 	injectInitialWindowChrome,
 	installWindowChromeGeometry,
+	installWindowChromePublisher,
+	readNativeWindowState,
+	sameNativeWindowState,
 	windowChromeGeometry,
+	windowChromePreloadSeed,
 } from "./windowChrome";
+import { loadWindowsFrameApi, restoreWindowsFrameControls } from "./windowsFrame";
 
 type BeforeQuitEvent = ReturnType<typeof Electrobun.events.events.app.beforeQuit>;
 
@@ -63,6 +70,22 @@ function titleBarProbeScript(testIds: string[]): string {
 		} else if (Date.now() < deadline) {
 			setTimeout(poll, 50);
 		}
+	};
+	poll();
+})();`;
+}
+const WINDOW_CONTROLS_PROBE_TARGETS: Record<string, { testId: string; label: string }> = {
+	"window-controls-maximize": { testId: "window-maximize", label: "Maximize" },
+	"window-controls-restore": { testId: "window-maximize", label: "Restore" },
+};
+function windowControlsProbeScript(target: { testId: string; label: string }): string {
+	return `(() => {
+	const selector = ${JSON.stringify(`[data-testid="${target.testId}"][aria-label="${target.label}"]`)};
+	const deadline = Date.now() + 15000;
+	const poll = () => {
+		const element = document.querySelector(selector);
+		if (element) element.click();
+		else if (Date.now() < deadline) setTimeout(poll, 50);
 	};
 	poll();
 })();`;
@@ -113,6 +136,19 @@ async function start(): Promise<void> {
 		handled: number;
 		result: TitleBarDoubleClickResult | null;
 	} = { received: 0, handled: 0, result: null };
+	const windowControlsProbePath = neutral
+		? undefined
+		: process.env.THINKRAIL_DESKTOP_WINDOW_CONTROLS_PROBE_FILE;
+	const windowControlsProbe: { requests: string[]; state: NativeWindowState | null } = {
+		requests: [],
+		state: null,
+	};
+	const recordWindowControlsProbe = (update: { request?: string; state?: NativeWindowState }) => {
+		if (!windowControlsProbePath) return;
+		if (update.request) windowControlsProbe.requests.push(update.request);
+		if (update.state) windowControlsProbe.state = update.state;
+		writeReady(windowControlsProbePath, windowControlsProbe);
+	};
 	let mainWindow: BrowserWindow;
 	const updateController = await createElectrobunUpdateController({
 		isPackaged: Electrobun.app.isPackaged,
@@ -128,6 +164,20 @@ async function start(): Promise<void> {
 		handlers: {
 			requests: {
 				getUpdateState: () => updateController.getState(),
+				getWindowState: (): NativeWindowState => readNativeWindowState(mainWindow),
+				minimizeWindow: (): undefined => {
+					recordWindowControlsProbe({ request: "minimize" });
+					mainWindow.minimize();
+				},
+				toggleMaximizeWindow: (): undefined => {
+					recordWindowControlsProbe({ request: "toggleMaximize" });
+					if (mainWindow.isMaximized()) mainWindow.unmaximize();
+					else mainWindow.maximize();
+				},
+				closeWindow: (): undefined => {
+					recordWindowControlsProbe({ request: "close" });
+					mainWindow.requestClose();
+				},
 				checkForUpdates: async () => {
 					await updateController.checkForUpdates();
 					return undefined;
@@ -176,16 +226,21 @@ async function start(): Promise<void> {
 		},
 	});
 	const windowChrome = desktopWindowChrome(process.platform);
-	const preload = neutral
+	const preloadSource = neutral
 		? null
-		: injectInitialWindowChrome(
-				injectInitialDesktopPreferences(
-					await Bun.file(join(PATHS.VIEWS_FOLDER, "preload", "index.js")).text(),
-					initialPreferences,
-				),
-				windowChrome.geometry,
-				windowChrome.dragRegion,
-			);
+		: await Bun.file(join(PATHS.VIEWS_FOLDER, "preload", "index.js")).text();
+	const preload =
+		preloadSource === null
+			? null
+			: injectInitialWindowChrome(
+					injectInitialDesktopPreferences(
+						usesNativeHostBridge(process.platform)
+							? preferNativeHostBridge(preloadSource)
+							: preloadSource,
+						initialPreferences,
+					),
+					windowChromePreloadSeed(windowChrome),
+				);
 	mainWindow = new BrowserWindow({
 		title: "ThinkRail",
 		url: neutral ? "about:blank" : `${origin}/${initialRoute}`,
@@ -207,7 +262,7 @@ async function start(): Promise<void> {
 	});
 	if (!neutral) {
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
-			enabled: windowChrome.dragRegion,
+			enabled: windowChrome.titleBarDoubleClick,
 			window: mainWindow,
 			...(titleBarProbePath
 				? {
@@ -219,11 +274,32 @@ async function start(): Promise<void> {
 					}
 				: {}),
 		});
+		if (windowChrome.restoreFrameControls) {
+			const handle = mainWindow.ptr;
+			if (handle) {
+				try {
+					restoreWindowsFrameControls(handle, loadWindowsFrameApi());
+				} catch (error) {
+					console.error("[desktop] could not restore the Windows frame controls", error);
+				}
+			}
+		}
 		installWindowChromeGeometry(
 			mainWindow,
 			() => windowChromeGeometry(windowChrome, mainWindow.isFullScreen()),
 			(geometry) => rpc.send.windowChromeChanged(geometry),
 		);
+		if (windowChrome.windowControls) {
+			installWindowChromePublisher(
+				mainWindow,
+				() => readNativeWindowState(mainWindow),
+				(state) => {
+					recordWindowControlsProbe({ state });
+					rpc.send.windowStateChanged(state);
+				},
+				sameNativeWindowState,
+			);
+		}
 	}
 	const navigationProbePath = neutral
 		? undefined
@@ -267,9 +343,10 @@ async function start(): Promise<void> {
 	if (controlPath) {
 		let navigationProbeStarted = false;
 		const titleBarProbeCommands = new Set<string>();
+		const windowControlsProbeCommands = new Set<string>();
 		const poll = setInterval(() => {
 			if (!existsSync(controlPath)) return;
-			if (navigationProbePath || titleBarProbePath) {
+			if (navigationProbePath || titleBarProbePath || windowControlsProbePath) {
 				const command = readFileSync(controlPath, "utf8");
 				if (command === "navigate" && navigationProbePath && !navigationProbeStarted) {
 					navigationProbeStarted = true;
@@ -284,6 +361,14 @@ async function start(): Promise<void> {
 				if (titleBarTargets && !titleBarProbeCommands.has(command)) {
 					titleBarProbeCommands.add(command);
 					mainWindow.webview.executeJavascript(titleBarProbeScript(titleBarTargets));
+				}
+				const windowControlsTarget =
+					windowControlsProbePath && Object.hasOwn(WINDOW_CONTROLS_PROBE_TARGETS, command)
+						? WINDOW_CONTROLS_PROBE_TARGETS[command]
+						: undefined;
+				if (windowControlsTarget && !windowControlsProbeCommands.has(command)) {
+					windowControlsProbeCommands.add(command);
+					mainWindow.webview.executeJavascript(windowControlsProbeScript(windowControlsTarget));
 				}
 				if (command !== "stop") return;
 			}
