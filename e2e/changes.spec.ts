@@ -294,7 +294,8 @@ test("Uncommitted scope converges when HEAD moves out-of-band (a commit in a ter
 
 	await expect(page.getByTestId("change-item")).toHaveCount(0, { timeout: 10_000 });
 	await expect(page.getByTestId("changes-empty")).toBeVisible();
-	await expect.poll(dirtyLineCount, { timeout: 10_000 }).toBe(2);
+	await expect(page.getByTestId("diff-empty")).toBeVisible({ timeout: 10_000 });
+	await expect.poll(dirtyLineCount).toBe(0);
 });
 
 test("The scope menu's target-branch picker re-points what the changes are measured against", async ({

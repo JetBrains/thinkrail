@@ -388,6 +388,11 @@ function PierreDiffSurface({
 			data-testid="diff-view"
 			className="h-full overflow-auto bg-container-content-bg pierre-code-surface pierre-diff-surface"
 		>
+			{fileDiff.hunks.length === 0 ? (
+				<p data-testid="diff-empty" className="px-12 py-8 tr-text-ui text-text-muted">
+					No differences between the two sides.
+				</p>
+			) : null}
 			<FileDiff<DiffAnnotationMetadata>
 				fileDiff={fileDiff}
 				options={options}
