@@ -41,9 +41,12 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   level, because a send is ONE MESSAGE PER FILE (`review.sendBatch` groups by file and fires each
   group as its own message), so a file row would always hold exactly one entry the summary already
   names. Each row is one comment (`▸ L2 · the remark…`, one line), unfolding to its full text plus
-  the quoted `<fragment>` verbatim (monospace, height-capped). Everything is parsed from the MESSAGE
-  itself — never the review snapshot, which the next review replaces — so any transcript answers
-  "what was sent" forever, on any client; the comment-row folds ride the shared fold cache (keyed
+  the quoted `<fragment>` verbatim — or the comment's `<locator>` line(s) when the position has no
+  source text — in monospace, height-capped. Attribute and locator values are read back through the
+  renderer's own escaping, so a path or node ref carrying `" < > &` or a newline round-trips exactly.
+  Everything is parsed from the MESSAGE itself — never the review snapshot, which the next review
+  replaces — so any transcript answers "what was sent" forever, on any client; the comment-row folds
+  ride the shared fold cache (keyed
   `rowId:<content-key>`), surviving virtualization. A **plain** user bubble (not a skill/review card)
   whose text exceeds **500 characters** collapses to a `line-clamp` preview + a `Show more`/`Show less`
   toggle **inside the card** (within its padding, directly below the message body, so line-clamp truncates

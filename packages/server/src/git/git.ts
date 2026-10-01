@@ -19,7 +19,7 @@ import {
 	resolveCommitOid,
 	resolveDiffRange,
 } from "./diffScope";
-import { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";
+import { git, gitAsync, gitBytes, nonInteractiveGitEnv } from "./gitExec";
 import { isSafeRef, remoteNameOf } from "./refs";
 
 const log = logger("git");
@@ -361,11 +361,19 @@ export function readBlobAt(worktreePath: string, ref: string, path: string): str
 	return blobFrom(git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true }));
 }
 
+export function readBlobBytesAt(
+	worktreePath: string,
+	ref: string,
+	path: string,
+): Uint8Array | null {
+	return blobFrom(gitBytes(worktreePath, ["show", "--end-of-options", `${ref}:${path}`]));
+}
+
 function blobIsMissing(stderr: string): boolean {
 	return /does not exist in|exists on disk, but not in/.test(stderr);
 }
 
-function blobFrom(shown: { ok: boolean; out: string; err: string }): string | null {
+function blobFrom<T>(shown: { ok: boolean; out: T; err: string }): T | null {
 	if (shown.ok) return shown.out;
 	if (!blobIsMissing(shown.err)) log.warn("git blob read failed");
 	return null;

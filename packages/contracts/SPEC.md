@@ -372,8 +372,16 @@ of the host.
   inline/diff/file/review; `status` draft/sent/resolved/
   dismissed — orthogonal to **`anchorState`** anchored/moved/outdated; per-comment `sessionId` — the
   chat it was sent into), **`ReviewAnchor`** (`path` + `side` + `contentHash` + an ordered **`ReviewSelector`**
-  fallback chain: `lineRange` / `textQuote` / `diffHunk` / `structural` — the last two are reserved
-  slots no author populates; a `side: "base"` anchor additionally carries **`baseRef`**, the ref
+  fallback chain: `lineRange` / `textQuote` / `diffHunk` / `structural` / `region` — `structural` is the
+  typed-by-scheme slot for document models with stable identities (`json-pointer`, `ipynb-cell`,
+  `table-cell`, `md-heading`, plus whatever scheme a renderer mints: unknown schemes cross the wire
+  verbatim, only the shape is checked) and `region` is normalized `0..1` geometry with an optional
+  1-based `page` for paged media, so a comment can name an image region or a notebook cell instead of a
+  line; `diffHunk` remains a reserved slot no author populates, and `contentHash` is sha-256 over the
+  resource's BYTES (byte-identical to the former text hash for valid UTF-8).
+  **`REVIEW_RICH_ANCHORS_PROTOCOL_VERSION`** pins the additive `region` member and the now-populated
+  `structural` slot to v74, so a renderer-rich client tells a host that preserves them from one that
+  predates them instead of having a region anchor silently dropped; a `side: "base"` anchor additionally carries **`baseRef`**, the ref
   its lines and fragment were captured against, since the two diff sides are two line spaces, plus the
   **`scope`** it was captured in — the diff identity that reopens the one surface rendering that blob),
   **`ReviewSnapshot`** (`{ review, comments }` — the `review.get`

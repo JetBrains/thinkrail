@@ -78,10 +78,21 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
   rollback of worktree changes (the old `git.revertFile` Reject is gone); the way
   to push back on a change is to say so in the comment.
 - **`ReviewAnchor` = `path` + `side` + `contentHash` + an ordered `selectors` fallback chain**
-  (`lineRange`, `textQuote` with exact/prefix/suffix, `structural` as a reserved slot; the `diffHunk` member
-  exists in the union but no author populates it — `textQuote` carries re-anchoring). The
+  (`lineRange`, `textQuote` with exact/prefix/suffix, `structural` scheme+ref for a document node, `region`
+  for normalized `0..1` geometry; the `diffHunk` member exists in the union but no author populates it —
+  `textQuote` carries re-anchoring). The
   `anchorState` axis (`anchored`/`moved`/`outdated`) is **orthogonal to `status`**: "was it discussed"
   and "is the anchor alive" never overwrite each other.
+  **`contentHash` is sha-256 over the resource's bytes** and capture follows the resource, not the
+  comment: a **text** side (no NUL byte in the first 8 KiB and a strict UTF-8 decode — a BOM is text)
+  derives `textQuote` from `lineRange` as before, while a **byte-only** side hashes the bytes and keeps
+  the renderer's selectors **as given**, never a derived quote — there is no text to quote. `addComment`
+  **narrows the wire's selectors** before either capture — every element an object of a known `kind`
+  with every declared field type-checked (`region` components finite and in `[0, 1]`, `page` a positive
+  integer; `structural.ref` a non-empty string and `scheme` matching `/^[a-z][a-z0-9-]*$/`; `lineRange`
+  integral, 1-based, non-inverted) — and stores *that* narrowed value, so an undeclared field cannot ride
+  the wire into the store. It checks nothing beyond shape: an unknown structural scheme belongs to a
+  renderer this host has never heard of and is preserved, not refused.
 - **The two diff sides are two anchor spaces.** A `side: "worktree"` anchor is captured from the
   worktree file; a `side: "base"` anchor is captured from the blob the diff's ORIGINAL editor is
   showing — the host resolves it from the tab's `scope` (`resolveDiffRange(...).originalRef`), **pins that ref to a
@@ -91,6 +102,9 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
   base ref when `merge-base` fails, so storing it verbatim means the user's next commit re-points it and
   the package reads today's content at yesterday's line numbers. A ref that names no commit is refused
   outright rather than anchored to something that moves.
+  Both sides are read as **bytes** at capture (`git.readBlobBytesAt` for the base, as the worktree side
+  already does), since a decoded read would hash replacement characters for an image and drop a BOM the
+  worktree side keeps.
   A base selection is **never translated into worktree line numbers**: the two sides say different
   things at the same numbers, so a remark on a deleted or rewritten line would end up attached to
   whatever now occupies that spot — and *that* is what the send package would show the agent. A base
@@ -99,13 +113,18 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
 ## Re-anchoring (the file changed under a comment)
 
 Recomputed on every snapshot read and before any send (`reanchorWorkspace`), against the worktree:
-1. `contentHash` (sha-256 of the file) unchanged → `anchored`.
+1. `contentHash` (sha-256 of the file's bytes) unchanged → `anchored`.
 2. Else search `textQuote.exact` (disambiguated by prefix/suffix) → exactly one match → update
    `lineRange`, state `moved` (silent re-pin). **`moved` is sticky**: the re-pin refreshes the
    anchor's `contentHash`, so the very next pass would otherwise see a hash match and silently
    downgrade it to `anchored` — losing the "drifted since creation" fact the state records.
 3. No/ambiguous match or file gone → `outdated`; the comment keeps its creation-time snapshot
    (`textQuote.exact`) so it stays meaningful and sendable (the package marks it outdated).
+4. **No `textQuote` to search at all** (a byte-only resource, or a renderer that anchored without text):
+   a **positioned** anchor — any `lineRange`/`structural`/`region` selector — is `outdated`, because a
+   re-pin needs evidence and a changed image or notebook offers none; a **whole-file** anchor (no
+   selectors, the `file` comment kind) stays `moved` with a refreshed hash, because the remark is about
+   the file and not a position in it.
 `side: "base"` anchors are never re-anchored: `baseRef` is a commit oid, so the blob it names is
 immutable and there is nothing to drift — and re-anchoring them against the *worktree* would be the very re-pointing the
 per-side capture exists to prevent.
@@ -114,7 +133,14 @@ per-side capture exists to prevent.
 
 `review.sendComment` / `review.sendBatch` are **composed in `host`'s handlers** (this module never
 imports `agent`): reanchor → render the package (one structured user message with stable comment ids,
-fragment + surrounding context per comment — never the full diff; the agent reads the worktree with its
+fragment + surrounding context per comment — or, for a position with no source text, a `<locator>` line
+naming the region geometry or the `<scheme> <ref>` node, since there is nothing to quote; every comment
+carries `anchor-kind` (`region`/`structural`/`line`/`file`) so the agent reads geometry as geometry —
+never the full diff. **Every dynamic attribute and locator value is entity-escaped** (`& < > "`, CR/LF
+as numeric references), because a repo path or a renderer's node ref is untrusted text that could
+otherwise close a tag and forge a comment the user never wrote; fragments, context and body stay
+verbatim, since they are the content the agent is meant to read as-is — and the web card parses the
+same escaping back (see `apps/web/src/chat/SPEC.md`). The agent reads the worktree with its
 own tools; **each side reads its own content** — the worktree for worktree anchors, the anchor's
 `baseRef` blob for base ones, since base line numbers index the pre-change file) →
 `agent.createSession` (or `followUp` into the client's **last open chat** when the send names one —

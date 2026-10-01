@@ -1,4 +1,4 @@
-import { spawnSyncCaptured } from "@thinkrail/shared/spawn";
+import { spawnSyncCaptured, spawnSyncCapturedBytes } from "@thinkrail/shared/spawn";
 import { runBounded } from "../subprocess";
 
 const NETWORK_TIMEOUT_MS = 55_000;
@@ -18,6 +18,12 @@ export type GitResult = {
 	out: string;
 	err: string;
 	failure?: "timeout" | "launch";
+};
+
+export type GitBytesResult = {
+	ok: boolean;
+	out: Uint8Array;
+	err: string;
 };
 
 export function nonInteractiveGitEnv(): Record<string, string | undefined> {
@@ -40,6 +46,18 @@ export function git(cwd: string, args: string[], opts: { raw?: boolean } = {}): 
 	return {
 		ok: result.launched && result.exitCode === 0,
 		out: opts.raw ? result.stdout : result.stdout.trim(),
+		err: boundedStderr(result.stderr),
+	};
+}
+
+export function gitBytes(cwd: string, args: string[]): GitBytesResult {
+	const result = spawnSyncCapturedBytes(["git", "-C", cwd, ...args], {
+		env: nonInteractiveGitEnv(),
+		maxBuffer: Number.POSITIVE_INFINITY,
+	});
+	return {
+		ok: result.launched && result.exitCode === 0,
+		out: result.stdout,
 		err: boundedStderr(result.stderr),
 	};
 }

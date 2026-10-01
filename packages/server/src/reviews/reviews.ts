@@ -18,11 +18,24 @@ import type {
 	ReviewCommentStatus,
 	ReviewSnapshot,
 } from "@thinkrail/contracts";
-import { diffBaseRef, readBlobAt, resolveCommitOid, resolveDiffRange } from "../git";
+import {
+	diffBaseRef,
+	readBlobAt,
+	readBlobBytesAt,
+	resolveCommitOid,
+	resolveDiffRange,
+} from "../git";
 import { logger } from "../log";
 import { dataDir } from "../persistence";
 import { getWorkspace, workspaceDiffKey } from "../workspaces";
-import { buildTextQuote, hashContent, lineRangeOf, reanchor, textQuoteOf } from "./anchoring";
+import {
+	buildTextQuote,
+	hashContent,
+	lineRangeOf,
+	reanchor,
+	textQuoteOf,
+	validateSelectors,
+} from "./anchoring";
 import { renderPackage } from "./packageRender";
 
 const log = logger("reviews");
@@ -148,15 +161,52 @@ function persistAndPublish(workspaceId: string, snapshot: ReviewSnapshot): void 
 	publish({ workspaceId, ...snapshot });
 }
 
-function readWorktreeFile(worktreePath: string, path: string): string | null {
+function worktreeFilePath(worktreePath: string, path: string): string {
 	const abs = resolve(worktreePath, path);
 	const rel = relative(worktreePath, abs);
 	if (rel.startsWith("..") || isAbsolute(rel)) throw new Error("Path escapes the worktree");
+	return abs;
+}
+
+function readWorktreeFile(worktreePath: string, path: string): string | null {
+	const abs = worktreeFilePath(worktreePath, path);
 	try {
 		return readFileSync(abs, "utf8");
 	} catch {
 		return null;
 	}
+}
+
+function readWorktreeBytes(worktreePath: string, path: string): Uint8Array | null {
+	const abs = worktreeFilePath(worktreePath, path);
+	try {
+		return readFileSync(abs);
+	} catch {
+		return null;
+	}
+}
+
+const TEXT_PROBE_BYTES = 8 * 1024;
+const STRICT_UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+const UTF8 = new TextDecoder("utf-8", { ignoreBOM: true });
+
+export function isTextBytes(bytes: Uint8Array): boolean {
+	if (bytes.subarray(0, TEXT_PROBE_BYTES).includes(0)) return false;
+	try {
+		STRICT_UTF8.decode(bytes);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function capturableContent(bytes: Uint8Array): string | Uint8Array {
+	return isTextBytes(bytes) ? UTF8.decode(bytes) : bytes;
+}
+
+function readWorktreeContent(worktreePath: string, path: string): string | Uint8Array | null {
+	const bytes = readWorktreeBytes(worktreePath, path);
+	return bytes === null ? null : capturableContent(bytes);
 }
 
 async function freshSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
@@ -231,7 +281,7 @@ function reanchorSnapshot(workspaceId: string, snapshot: ReviewSnapshot): boolea
 	snapshot.comments = snapshot.comments.map((comment) => {
 		const anchor = comment.anchor;
 		if (!anchor || anchor.side === "base") return comment;
-		const content = readWorktreeFile(ws.worktreePath, anchor.path);
+		const content = readWorktreeContent(ws.worktreePath, anchor.path);
 		const result = reanchor(anchor, content);
 		const state =
 			result.state === "anchored" && comment.anchorState === "moved" ? "moved" : result.state;
@@ -278,13 +328,15 @@ export interface AddCommentInput {
 	origin?: { todoId: string; reviewedSha: string; sessionId: string };
 }
 
-function captureAnchor(anchor: ReviewAnchor, content: string): ReviewAnchor {
+function captureAnchor(anchor: ReviewAnchor, content: string | Uint8Array): ReviewAnchor {
+	const contentHash = hashContent(content);
+	if (typeof content !== "string") return { ...anchor, contentHash };
 	const range = lineRangeOf(anchor);
 	const selectors =
 		range && !textQuoteOf(anchor)
 			? [...anchor.selectors, buildTextQuote(content, range.startLine, range.endLine)]
 			: anchor.selectors;
-	return { ...anchor, contentHash: hashContent(content), selectors };
+	return { ...anchor, contentHash, selectors };
 }
 
 export async function addComment(input: AddCommentInput): Promise<ReviewComment> {
@@ -294,7 +346,9 @@ export async function addComment(input: AddCommentInput): Promise<ReviewComment>
 		throw new Error(`A ${input.kind} comment requires an anchor path.`);
 	if (input.kind === "review" && input.anchor)
 		throw new Error("A review-level comment carries no anchor.");
-	let anchor = input.anchor;
+	let anchor = input.anchor
+		? { ...input.anchor, selectors: validateSelectors(input.anchor.selectors) }
+		: null;
 	if (anchor?.side === "base") {
 		const ws = getWorkspace(input.workspaceId);
 		const originalRef = (await resolveDiffRange(ws, input.scope)).originalRef;
@@ -303,19 +357,19 @@ export async function addComment(input: AddCommentInput): Promise<ReviewComment>
 		const baseRef = resolveCommitOid(ws.worktreePath, originalRef);
 		if (!baseRef)
 			throw new Error(`Can't pin the base side of this diff: ${originalRef} names no commit.`);
-		const content = readBlobAt(ws.worktreePath, baseRef, anchor.path);
-		if (content === null)
+		const bytes = readBlobBytesAt(ws.worktreePath, baseRef, anchor.path);
+		if (bytes === null)
 			throw new Error(`The base (${baseRef}) has no ${anchor.path} to comment on.`);
 		anchor = captureAnchor(
 			{ ...anchor, baseRef, ...(input.scope ? { scope: input.scope } : {}) },
-			content,
+			capturableContent(bytes),
 		);
 	}
 	return mutateSnapshot(input.workspaceId, (snapshot) => {
 		let captured = anchor;
 		if (captured?.side === "worktree") {
 			const ws = getWorkspace(input.workspaceId);
-			const content = readWorktreeFile(ws.worktreePath, captured.path);
+			const content = readWorktreeContent(ws.worktreePath, captured.path);
 			if (content !== null) captured = captureAnchor(captured, content);
 		}
 		const comment: ReviewComment = {

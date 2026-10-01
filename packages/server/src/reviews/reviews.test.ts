@@ -14,6 +14,7 @@ import { join } from "node:path";
 import type { ReviewChangedPayload, ReviewSnapshot, Workspace } from "@thinkrail/contracts";
 import { saveWorkspaces } from "../persistence";
 import { setWorkspaceDiffBase } from "../workspaces";
+import { hashContent } from "./anchoring";
 import {
 	addComment,
 	anchorProblem,
@@ -22,6 +23,7 @@ import {
 	deleteComment,
 	fileReviewSession,
 	getReviewSnapshot,
+	isTextBytes,
 	markCommentsSent,
 	markFileDone,
 	REVIEW_LEVEL_KEY,
@@ -564,6 +566,96 @@ test("the review pins its base to a full oid at creation (what Reject reverts to
 		encoding: "utf8",
 	}).trim();
 	expect((await getReviewSnapshot(WS_ID)).review.baseSha).toBe(head);
+});
+
+test("isTextBytes: UTF-8 (BOM allowed) is text; a NUL byte or invalid UTF-8 is not", () => {
+	expect(isTextBytes(new TextEncoder().encode("const a = 1;\n"))).toBe(true);
+	expect(isTextBytes(new TextEncoder().encode("\ufeffconst a = 1;\n"))).toBe(true);
+	expect(isTextBytes(new Uint8Array([]))).toBe(true);
+	expect(isTextBytes(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0d]))).toBe(false);
+	expect(isTextBytes(new Uint8Array([0xff, 0xfe, 0x41]))).toBe(false);
+});
+
+test("a byte-only worktree file hashes its BYTES, keeps the selectors verbatim, and goes outdated when they change", async () => {
+	const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01, 0x02]);
+	writeFileSync(join(worktree, "shot.png"), png);
+	const comment = await addComment({
+		workspaceId: WS_ID,
+		kind: "inline",
+		anchor: {
+			path: "shot.png",
+			side: "worktree",
+			selectors: [{ kind: "region", x: 0.12, y: 0.4, width: 0.3, height: 0.1 }],
+		},
+		body: "This arrow points the wrong way.",
+	});
+	expect(comment.anchor?.contentHash).toBe(hashContent(png));
+	expect(comment.anchor?.selectors).toEqual([
+		{ kind: "region", x: 0.12, y: 0.4, width: 0.3, height: 0.1 },
+	]);
+
+	expect((await getReviewSnapshot(WS_ID)).comments[0]?.anchorState).toBe("anchored");
+	writeFileSync(join(worktree, "shot.png"), new Uint8Array([...png, 0x03]));
+	const reanchored = (await getReviewSnapshot(WS_ID)).comments[0];
+	expect(reanchored?.anchorState).toBe("outdated");
+	expect(reanchored?.anchor?.contentHash).toBe(hashContent(png));
+});
+
+test("a base-side blob is captured as BYTES: invalid UTF-8 hashes raw, a BOM stays in hash + fragment", async () => {
+	const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0xff, 0xfe, 0x01]);
+	const bom = new TextEncoder().encode("\ufeffconst one = 1;\nconst two = 2;\n");
+	writeFileSync(join(worktree, "shot.png"), png);
+	writeFileSync(join(worktree, "bom.ts"), bom);
+	gitIn(worktree, ["add", "shot.png", "bom.ts"]);
+	gitIn(worktree, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "add blobs"]);
+	writeFileSync(join(worktree, "shot.png"), new Uint8Array([0x89, 0x50]));
+	writeFileSync(join(worktree, "bom.ts"), "const one = 1;\n");
+
+	const region = { kind: "region" as const, x: 0.1, y: 0.2, width: 0.3, height: 0.4 };
+	const image = await addComment({
+		workspaceId: WS_ID,
+		kind: "diff",
+		anchor: { path: "shot.png", side: "base", selectors: [region] },
+		body: "this arrow pointed the wrong way",
+		scope: { kind: "uncommitted" },
+	});
+	expect(image.anchor?.contentHash).toBe(hashContent(png));
+	expect(image.anchor?.contentHash).not.toBe(hashContent(new TextDecoder().decode(png)));
+	expect(image.anchor?.selectors).toEqual([region]);
+
+	const text = await addBase("bom.ts", 1, "why the BOM?");
+	expect(text.anchor?.contentHash).toBe(hashContent(bom));
+	expect(text.anchor?.contentHash).not.toBe(hashContent(new TextDecoder().decode(bom)));
+	const quote = text.anchor?.selectors.find((s) => s.kind === "textQuote");
+	expect(quote && "exact" in quote ? quote.exact : "").toBe("\ufeffconst one = 1;");
+});
+
+test("addComment validates the incoming selectors before capturing anything", async () => {
+	await expect(
+		addComment({
+			workspaceId: WS_ID,
+			kind: "inline",
+			anchor: {
+				path: "a.ts",
+				side: "worktree",
+				selectors: [{ kind: "region", x: 1.4, y: 0, width: 0.1, height: 0.1 }],
+			},
+			body: "out of frame",
+		}),
+	).rejects.toThrow(/fraction in \[0, 1\]/);
+	await expect(
+		addComment({
+			workspaceId: WS_ID,
+			kind: "diff",
+			anchor: {
+				path: "a.ts",
+				side: "base",
+				selectors: [{ kind: "structural", scheme: "Table Cell", ref: "1:2" }],
+			},
+			body: "bad scheme",
+		}),
+	).rejects.toThrow(/scheme must match/);
+	expect((await getReviewSnapshot(WS_ID)).comments).toEqual([]);
 });
 
 test("review-level comments carry no anchor; validation rejects bad shapes", async () => {

@@ -16,6 +16,7 @@ function keyPackageItems(items: ReviewPackageItem[]): { key: string; item: Revie
 
 function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPackageItem }) {
 	const [expanded, toggle, toggleRef] = useFold(foldId);
+	const detail = item.fragment ?? item.locator;
 	return (
 		<li data-testid="review-package-item" data-chat-fold-root data-expanded={expanded}>
 			<button
@@ -44,9 +45,9 @@ function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPacka
 					{item.body}
 				</span>
 			</button>
-			{expanded && item.fragment && (
+			{expanded && detail && (
 				<pre className="mb-4 ml-16 max-h-128 overflow-auto whitespace-pre-wrap rounded-[var(--radius-sm)] border border-border-muted bg-sunken px-8 py-4 tr-code-text text-text-muted">
-					{item.fragment}
+					{detail}
 				</pre>
 			)}
 		</li>

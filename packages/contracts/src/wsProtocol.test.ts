@@ -15,6 +15,7 @@ import {
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
@@ -118,6 +119,12 @@ test("host-owned new-chat defaults are pinned to v72", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(DEFAULT_MODEL_PROTOCOL_VERSION);
 	expect(WS_METHODS.modelDefault).toBe("model.default");
 	expect(WS_METHODS).not.toHaveProperty("modelSetDefault");
+});
+
+test("rich review anchors advance the additive selector union to v74", () => {
+	expect(REVIEW_RICH_ANCHORS_PROTOCOL_VERSION).toBe(74);
+	expect(PROTOCOL_VERSION).toBe(74);
+	expect(WS_METHODS.reviewCommentAdd).toBe("review.commentAdd");
 });
 
 describe("isTodoReviewFixMessage", () => {

@@ -1,8 +1,10 @@
 import type {
 	Review,
+	ReviewAnchor,
 	ReviewComment,
 	ReviewFixComment,
 	ReviewFixDetails,
+	ReviewSelector,
 } from "@thinkrail/contracts";
 import { lineRangeOf, textQuoteOf } from "./anchoring";
 
@@ -49,6 +51,7 @@ const INSTRUCTIONS = `Address each review comment above.
 - After you have addressed a comment (by an edit, or by an answer when no change is needed), call resolve_comment with its id and a one-line note of what you did.
 - If a comment is unclear or you disagree, reply in the conversation instead of editing, and do NOT resolve it.
 - A comment marked outdated includes the fragment as it was when the comment was written — verify against the current file first.
+- A comment with a locator instead of a fragment names a position that has no source text (an image region in normalized 0..1 coordinates of the rendered size, or a document node such as a notebook cell): open the file with your own tools to see it.
 - A comment with side="base" points at the PRE-change version of the file: its lines and fragment index base-ref, not the worktree. It is a remark about what the change removed or replaced — find the corresponding place in the current file before editing.`;
 
 function contextBlock(content: string, startLine: number, endLine: number): string {
@@ -58,18 +61,64 @@ function contextBlock(content: string, startLine: number, endLine: number): stri
 	return lines.slice(from - 1, to).join("\n");
 }
 
+function escapeValue(value: string): string {
+	return value
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/\r/g, "&#13;")
+		.replace(/\n/g, "&#10;");
+}
+
+function attr(name: string, value: string | number): string {
+	return `${name}="${escapeValue(String(value))}"`;
+}
+
+function anchorKind(anchor: ReviewAnchor | null): "region" | "structural" | "line" | "file" {
+	if (anchor?.selectors.some((s) => s.kind === "region")) return "region";
+	if (anchor?.selectors.some((s) => s.kind === "structural")) return "structural";
+	if (anchor && lineRangeOf(anchor)) return "line";
+	return "file";
+}
+
+function fraction(value: number): string {
+	return String(Math.round(value * 1000) / 1000);
+}
+
+function locatorOf(selector: ReviewSelector, anchor: ReviewAnchor): string | null {
+	const path = escapeValue(anchor.path);
+	if (selector.kind === "region") {
+		const page = selector.page === undefined ? "" : ` page=${selector.page}`;
+		const hash = escapeValue(anchor.contentHash ?? "unknown");
+		return `image region x=${fraction(selector.x)} y=${fraction(selector.y)} w=${fraction(selector.width)} h=${fraction(selector.height)}${page} of ${path} (sha256 ${hash})`;
+	}
+	if (selector.kind === "structural")
+		return `${escapeValue(selector.scheme)} ${escapeValue(selector.ref)} of ${path}`;
+	return null;
+}
+
+function locatorLines(anchor: ReviewAnchor): string[] {
+	return anchor.selectors.flatMap((selector) => {
+		const locator = locatorOf(selector, anchor);
+		return locator === null ? [] : [`<locator>${locator}</locator>`];
+	});
+}
+
 function renderComment(comment: ReviewComment, input: PackageInput): string {
 	const anchor = comment.anchor;
 	const range = anchor ? lineRangeOf(anchor) : undefined;
 	const attrs = [
-		`id="${comment.id}"`,
-		`kind="${comment.kind}"`,
-		...(anchor ? [`path="${anchor.path}"`, `side="${anchor.side}"`] : []),
-		...(anchor?.baseRef ? [`base-ref="${anchor.baseRef}"`] : []),
-		...(range ? [`lines="${range.startLine}-${range.endLine}"`] : []),
-		`anchor="${comment.anchorState}"`,
+		attr("id", comment.id),
+		attr("kind", comment.kind),
+		...(anchor ? [attr("path", anchor.path), attr("side", anchor.side)] : []),
+		...(anchor?.baseRef ? [attr("base-ref", anchor.baseRef)] : []),
+		...(range ? [attr("lines", `${range.startLine}-${range.endLine}`)] : []),
+		attr("anchor", comment.anchorState),
+		attr("anchor-kind", anchorKind(anchor)),
 	];
 	const parts = [`<comment ${attrs.join(" ")}>`];
+	if (anchor) parts.push(...locatorLines(anchor));
 	const quote = anchor ? textQuoteOf(anchor) : undefined;
 	if (quote?.exact) parts.push(`<fragment>\n${quote.exact}\n</fragment>`);
 	if (anchor && range && comment.anchorState !== "outdated") {
@@ -81,9 +130,10 @@ function renderComment(comment: ReviewComment, input: PackageInput): string {
 				: input.readFile(anchor.path);
 		if (content !== null) {
 			const from = Math.max(1, range.startLine - CONTEXT_LINES);
+			const to = Math.min(content.split("\n").length, range.endLine + CONTEXT_LINES);
 			const scope = anchor.side === "base" ? ` side="base"` : "";
 			parts.push(
-				`<context lines="${from}-${Math.min(content.split("\n").length, range.endLine + CONTEXT_LINES)}"${scope}>\n${contextBlock(content, range.startLine, range.endLine)}\n</context>`,
+				`<context ${attr("lines", `${from}-${to}`)}${scope}>\n${contextBlock(content, range.startLine, range.endLine)}\n</context>`,
 			);
 		}
 	}
@@ -93,7 +143,7 @@ function renderComment(comment: ReviewComment, input: PackageInput): string {
 
 export function renderPackage(input: PackageInput): string {
 	const { review, comments } = input;
-	const header = `<review id="${review.id}" branch="${input.branch}" base="${input.baseBranch}@${review.baseSha}" comments="${comments.length}">`;
+	const header = `<review ${attr("id", review.id)} ${attr("branch", input.branch)} ${attr("base", `${input.baseBranch}@${review.baseSha}`)} ${attr("comments", comments.length)}>`;
 	const intro =
 		comments.length === 1
 			? "The user left the following review comment. It is a structured review item anchored to the workspace's files."

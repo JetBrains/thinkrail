@@ -18,7 +18,8 @@ ref off the workspace-create critical path.
 ## Boundary
 
 - **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
-  stdout byte-exact for file-content reads) and `gitAsync(cwd,
+  stdout byte-exact for file-content reads; its module-internal `gitBytes(cwd, args)` twin keeps stdout
+  as *bytes*, for content no decode may touch) and `gitAsync(cwd,
   args, opts?)` (its async twin — off the event loop through `subprocess`' `runBounded`, same `raw` option,
   for network-bound ops like `fetch` **and** the request-path reads below, neither of which may block the
   host: it owns only the git-shaped part, the 55s budget and the stalled/stderr wording, never the
@@ -198,9 +199,12 @@ ref off the workspace-create critical path.
   `git.prefetch` handler uses `moved` to fan out the host's pathless `fsChanged` nudge (`host`'s fsNudge
   seam; an unaffected re-read is an idempotent no-op). `moved` is host-internal; the wire response stays
   `{ ok }`;
-  **`readBlobAt(worktreePath, ref, path)`** → the file's byte-exact content at a ref, or `null` when the
-  read produced none (the diff sides degrade that to `""`; the `reviews` module uses it to capture and
-  render a base-side anchor's own content);
+  **`readBlobAt(worktreePath, ref, path)`** → the file's UTF-8-**decoded** content at a ref, or `null`
+  when the read produced none (the diff sides degrade that to `""`; the `reviews` module renders a
+  base-side anchor's text fragment through it);
+  **`readBlobBytesAt(worktreePath, ref, path)`** → the same read kept **byte-exact** (`Uint8Array`), for a
+  caller that must hash or classify a blob the decoder would corrupt — a `reviews` base-side anchor on an
+  image, or a BOM whose bytes are part of the hash;
   **`gitCommitPaths(workspaceId, message, paths)`** → `{ sha } | null` — commit **exactly `paths`** as one
   commit for the TODO change-set feature (see [[submodule-server-todos]]): stage them (`git add -A --
   <paths>`, so a deletion stages as one), then `git commit --no-verify -- <paths>` (the host's commit must
@@ -242,7 +246,7 @@ ref off the workspace-create critical path.
   `COMMIT_LIST_MAX` — for which no adopted item is ever emitted. Kept in lock-step with `listCommits`.
 - **Public surface (barrel):** `git`, `gitAsync`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,
-  `readBlobAt`, `readCommitSubject`,
+  `readBlobAt`, `readBlobBytesAt`, `readCommitSubject`,
   `gitCommitPaths`, `gitHeadSha`, `listCommits`, `listCommitsSince`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
@@ -250,7 +254,7 @@ ref off the workspace-create critical path.
 - **Allowed deps:** `persistence` (workspace + project lookup), `log`; `contracts` (`Git*`/`BranchList` types);
   `subprocess` (`runBounded`, the bounded child behind `gitAsync`);
   `@thinkrail/shared/codedError` (naming a failure for the wire); `@thinkrail/shared/spawn`
-  (`spawnSyncCaptured`, the sync runner with `windowsHide`).
+  (`spawnSyncCaptured` / `spawnSyncCapturedBytes`, the sync runners with `windowsHide`).
 - **Forbidden:** `host`; sibling features.
 
 ## Get right

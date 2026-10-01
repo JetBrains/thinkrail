@@ -29,13 +29,16 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
   `@thinkrail/shared/removeTree` → `removeTree()`, the retrying recursive remove every teardown of a tree
   a child process ran from goes through;
-  `@thinkrail/shared/spawn` → `spawnSyncCaptured()` + `spawnDetached()`, the hidden-child-process seam every
-  console child the host or CLI launches goes through;
+  `@thinkrail/shared/spawn` → `spawnSyncCaptured()` + `spawnSyncCapturedBytes()` + `spawnDetached()`, the
+  hidden-child-process seam every console child the host or CLI launches goes through;
   `@thinkrail/shared/jbcentral` → the native Central CLI adapter: absolute executable/version/status
   probing; the minimum supported version and the global opaque PI-extension path; a one-directional auth
   verdict; an artifact-location watcher; `add pi` / `remove pi` / `login` / `update --install` actions; and
   the per-OS official install plan. It never edits PI model or credential configuration.
-- **/spawn** — `spawnSyncCaptured()` (sync capture → `{ launched, exitCode, stdout, stderr }`) and
+- **/spawn** — `spawnSyncCaptured()` (sync capture → `{ launched, exitCode, stdout, stderr }`),
+  `spawnSyncCapturedBytes()` (the same launch and exit semantics with **`stdout` left as bytes**, for a
+  caller reading binary child output the UTF-8 decoder would replace — stderr stays decoded text, since a
+  diagnostic is only ever read as text) and
   `spawnDetached()` (fire-and-forget `unref`) over `Bun.spawnSync` / `Bun.spawn`, always
   `windowsHide: true`. Bun 1.4.0 maps that option to libuv `UV_PROCESS_WINDOWS_HIDE`; the seam prevents
   background console spawns from omitting it. The two bespoke bounded runners (`server/subprocess`

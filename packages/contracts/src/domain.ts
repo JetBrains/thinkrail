@@ -749,7 +749,8 @@ export type ReviewSelector =
 	| { kind: "lineRange"; startLine: number; endLine: number }
 	| { kind: "textQuote"; exact: string; prefix: string; suffix: string }
 	| { kind: "diffHunk"; hunkHeader: string }
-	| { kind: "structural"; scheme: string; ref: string };
+	| { kind: "structural"; scheme: string; ref: string }
+	| { kind: "region"; x: number; y: number; width: number; height: number; page?: number };
 
 export interface ReviewAnchor {
 	path: string;
