@@ -411,7 +411,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 							/>
 						))
 					: null}
-				{renderer.capabilities.layout ? (
+				{renderer.capabilities.layout && !mobile ? (
 					<>
 						<ToggleSegment
 							testid="diff-toggle-split"

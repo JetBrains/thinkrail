@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
+import { selectPierreLine } from "./fixtures/pierre";
 
 const worktree = () => join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 
@@ -27,13 +28,7 @@ test("a review send reads back from the chat: summary → file → comment + fra
 		if (await staleNotification.isVisible()) await staleNotification.click();
 		await changeItem.click({ timeout: 2_000 });
 	}).toPass({ timeout: 30_000 });
-	const diff = page.getByTestId("diff-view");
-	const lineNumber = await diff
-		.getByText("two = 2")
-		.last()
-		.evaluate((node) => node.closest("[data-line]")?.getAttribute("data-line"));
-	if (!lineNumber) throw new Error("No Pierre line for the review comment");
-	await diff.locator(`[data-column-number="${lineNumber}"]`).last().click();
+	await selectPierreLine(page.getByTestId("diff-view"), "two = 2");
 	await page.getByTestId("review-composer-input").fill("Please rename `two` to `pair`.");
 	await page.getByTestId("review-composer-send").click();
 

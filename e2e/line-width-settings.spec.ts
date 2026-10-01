@@ -9,6 +9,7 @@ import {
 	PHONE_VIEWPORT,
 } from "./fixtures/app";
 import { installChannelHold } from "./fixtures/channelHold";
+import { pierreDeletionsSide } from "./fixtures/pierre";
 import { LONG_LINE } from "./fixtures/repo";
 
 function widthControls(page: Page) {
@@ -152,7 +153,7 @@ test("Pierre renders both sides of a long-line diff", async ({ page }) => {
 	await page.getByTestId("change-item").filter({ hasText: "LONG_LINE.txt" }).click();
 	const diff = page.getByTestId("diff-view");
 	await expect(
-		diff.locator("[data-deletions]").getByText(LONG_LINE.trim(), { exact: false }).last(),
+		pierreDeletionsSide(diff).getByText(LONG_LINE.trim(), { exact: false }).last(),
 	).toBeVisible();
 	await expect(
 		diff

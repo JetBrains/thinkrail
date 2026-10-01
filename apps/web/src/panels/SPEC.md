@@ -1390,7 +1390,8 @@ own section. The kebab menu (`plan-menu`, a
 
   Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,
   uses the `thinkrail` CSS-variable Shiki theme, word-level inline changes, collapsed unchanged regions with
-  line-info hunk separators, and split/unified layout; phone-class viewports force unified. A diff whose
+  line-info hunk separators, and split/unified layout; phone-class viewports force unified and hide the
+  Split/Inline segments, so no control promises a layout the viewport refuses. A diff whose
   two sides are identical (a file that left the change set after an out-of-band commit) shows an explicit
   `diff-empty` notice above Pierre's surface instead of a blank pane. The lazy Pierre
   file/diff modules mount `WorkerPoolContextProvider` only when their surface renders; Pierre's internal

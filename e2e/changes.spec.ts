@@ -4,6 +4,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 import { gitQuiet } from "./fixtures/git";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
+import { pierreCollapsedContext, pierreLines } from "./fixtures/pierre";
 import { largeRepetitiveMarkdownEdited } from "./fixtures/repo";
 
 const diffText = (page: Page, text: string) =>
@@ -275,7 +276,7 @@ test("Uncommitted scope converges when HEAD moves out-of-band (a commit in a ter
 
 	await dirtyRow.dblclick();
 	const dirtyLineCount = () =>
-		page.getByTestId("diff-view").locator("[data-line]", { hasText: "dirty line by e2e" }).count();
+		pierreLines(page.getByTestId("diff-view"), "dirty line by e2e").count();
 	await expect.poll(dirtyLineCount, { timeout: 15_000 }).toBe(1);
 
 	await new Promise((r) => setTimeout(r, 1500));
@@ -426,7 +427,7 @@ test("The diff viewer collapses unchanged context and has a per-tab hide-whitesp
 	await page.getByTestId("change-item").filter({ hasText: "long.ts" }).click();
 	await expect(page.getByTestId("diff-path")).toHaveText("long.ts");
 	const diff = page.getByTestId("diff-view");
-	await expect(diff.locator("[data-unmodified-lines]").first()).toHaveText(/\d+ unmodified lines/);
+	await expect(pierreCollapsedContext(diff).first()).toHaveText(/\d+ unmodified lines/);
 	await expect(diff.getByText("6000", { exact: false }).last()).toBeVisible();
 
 	const whitespace = page.getByTestId("diff-toggle-whitespace");
@@ -592,10 +593,10 @@ test("The diff header keeps its controls on a narrow pane, however long the file
 	await expect(page.getByTestId("diff-view")).toBeVisible();
 
 	await page.setViewportSize({ width: 620, height: 800 });
-	await expect(page.getByTestId("diff-toggle-inline")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("diff-toggle-split")).toHaveCount(0);
+	await expect(page.getByTestId("diff-toggle-inline")).toHaveCount(0);
 	await expect(page.getByTestId("diff-toggle-whitespace")).toBeVisible();
 	await expect(page.getByTestId("diff-copy")).toBeVisible();
-	await expect(page.getByTestId("diff-toggle-split")).toBeVisible();
 	const chipOverflow = await page
 		.getByTestId("diff-path")
 		.evaluate((n) => n.scrollWidth - n.clientWidth);

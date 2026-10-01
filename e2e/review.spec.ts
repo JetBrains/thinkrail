@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { type Browser, expect, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
+import { pierreDeletionsSide, selectPierreLine } from "./fixtures/pierre";
 
 const worktree = () => join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 
@@ -35,13 +36,7 @@ async function openReviewClient(browser: Browser): Promise<Page> {
 }
 
 async function selectLine(page: Page, text: string): Promise<void> {
-	const diff = page.getByTestId("diff-view");
-	const lineNumber = await diff
-		.getByText(text)
-		.last()
-		.evaluate((node) => node.closest("[data-line]")?.getAttribute("data-line"));
-	if (!lineNumber) throw new Error(`No Pierre line for ${text}`);
-	await diff.locator(`[data-column-number="${lineNumber}"]`).last().click();
+	await selectPierreLine(page.getByTestId("diff-view"), text);
 }
 
 async function composeComment(page: Page, line: string, body: string): Promise<void> {
@@ -602,13 +597,7 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 
 	const diff = page.getByTestId("diff-view");
 	await expect(diff.getByText("renamed", { exact: false }).last()).toBeVisible();
-	const original = diff.locator("[data-deletions]");
-	const originalLine = await original
-		.getByText("sample-project")
-		.first()
-		.evaluate((node) => node.closest("[data-line]")?.getAttribute("data-line"));
-	if (!originalLine) throw new Error("No Pierre deletion-side line");
-	await original.locator(`[data-column-number="${originalLine}"]`).first().click();
+	await selectPierreLine(pierreDeletionsSide(diff), "sample-project", "first");
 	await expect(page.getByTestId("review-composer")).toBeVisible();
 	await page.getByTestId("review-composer-input").fill("Left-side remark.");
 	await page.getByTestId("review-composer-save").click();
@@ -684,11 +673,11 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await page.getByTestId("view-toggle-code").click();
 	const pinnedDiff = page.getByTestId("diff-view");
 	await expect(
-		pinnedDiff.locator("[data-deletions]").getByText("# sample-project", { exact: false }).last(),
+		pierreDeletionsSide(pinnedDiff).getByText("# sample-project", { exact: false }).last(),
 	).toBeVisible();
-	await expect(
-		pinnedDiff.locator("[data-deletions]").getByText("renamed", { exact: false }),
-	).toHaveCount(0);
+	await expect(pierreDeletionsSide(pinnedDiff).getByText("renamed", { exact: false })).toHaveCount(
+		0,
+	);
 	await expect(
 		pinnedDiff.locator('[slot^="annotation-deletions-"]').getByTestId("review-thread-card"),
 	).toHaveCount(1);
