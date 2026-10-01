@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
+import { DOCUMENT_ID_PREFIX } from "./markdownHtml";
 import { openFileInTab } from "./openTabs";
 import { resourceBytesUrl } from "./resourcePane";
 
@@ -78,9 +79,43 @@ function walk(node: MdNode, visit: (n: MdNode) => void): void {
 }
 
 function scrollToAnchor(id: string): void {
-	document
-		.getElementById(decodeURIComponent(id))
-		?.scrollIntoView({ behavior: "smooth", block: "start" });
+	const slug = decodeURIComponent(id);
+	(
+		document.getElementById(`${DOCUMENT_ID_PREFIX}${slug}`) ?? document.getElementById(slug)
+	)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+const WEB_URL = /^(?:https?:)?\/\//i;
+
+export function srcsetCandidates(srcSet: string): { url: string; descriptor: string }[] {
+	const candidates: { url: string; descriptor: string }[] = [];
+	let index = 0;
+	while (index < srcSet.length) {
+		while (index < srcSet.length && /[\s,]/.test(srcSet[index] ?? "")) index += 1;
+		if (index >= srcSet.length) break;
+		let end = index;
+		while (end < srcSet.length && !/\s/.test(srcSet[end] ?? "")) end += 1;
+		let url = srcSet.slice(index, end);
+		index = end;
+		let descriptor = "";
+		if (url.endsWith(",")) {
+			url = url.replace(/,+$/, "");
+		} else {
+			let depth = 0;
+			let stop = index;
+			while (stop < srcSet.length) {
+				const char = srcSet[stop] ?? "";
+				if (char === "(") depth += 1;
+				else if (char === ")") depth = Math.max(0, depth - 1);
+				else if (char === "," && depth === 0) break;
+				stop += 1;
+			}
+			descriptor = srcSet.slice(index, stop).trim();
+			index = stop + 1;
+		}
+		if (url) candidates.push({ url, descriptor });
+	}
+	return candidates;
 }
 
 export function documentComponents(
@@ -127,18 +162,19 @@ export function documentComponents(
 	}
 
 	const resolveSource = (src: string | undefined): string | undefined => {
-		if (classifyHref(src) !== "relative" || src === undefined) return src;
+		if (src === undefined) return undefined;
+		if (classifyHref(src) !== "relative") return WEB_URL.test(src) ? src : undefined;
 		const target = resolveRelativePath(ctx.path, relativePathname(src));
 		return target ? bytesUrl(ctx.workspaceId, target) : undefined;
 	};
-	const resolveSourceSet = (srcSet: string | undefined): string | undefined =>
-		srcSet
-			?.split(/,\s+/)
-			.map((candidate) => {
-				const [url, ...descriptor] = candidate.trim().split(/\s+/);
-				return [resolveSource(url) ?? "", ...descriptor].join(" ").trim();
-			})
-			.join(", ");
+	const resolveSourceSet = (srcSet: string | undefined): string | undefined => {
+		if (srcSet === undefined) return undefined;
+		const resolved = srcsetCandidates(srcSet).flatMap(({ url, descriptor }) => {
+			const source = resolveSource(url);
+			return source ? [descriptor ? `${source} ${descriptor}` : source] : [];
+		});
+		return resolved.length > 0 ? resolved.join(", ") : undefined;
+	};
 
 	function DocumentImage({
 		src,

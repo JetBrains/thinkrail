@@ -101,4 +101,8 @@ test("the delimiter is sniffed from the first header line: comma by default, sem
 	expect(sniffDelimiter("a.tsv", "id;name\n")).toBe("\t");
 	expect(sniffDelimiter("a.csv", "", "id;name\n")).toBe(";");
 	expect(sniffDelimiter("a.csv", "")).toBe(",");
+	expect(sniffDelimiter("a.csv", "\n\nid;name;score\n")).toBe(";");
+	expect(sniffDelimiter("a.csv", "\uFEFFid;name\r\n1;Ann\r\n")).toBe(";");
+	expect(sniffDelimiter("a.csv", "a;b|c\n")).toBe(",");
+	expect(sniffDelimiter("a.csv", "single column\n")).toBe(",");
 });

@@ -17,7 +17,8 @@ export function LfsCard({
 			{label ? <span className="tr-text-metadata text-text-muted">{label}</span> : null}
 			<h2 className="tr-title-entity text-text-default">Stored in Git LFS</h2>
 			<p className="mt-4 tr-text-metadata text-text-muted">
-				This checkout holds the pointer, not the content. Run <code>git lfs pull</code> to fetch it.
+				This checkout holds the pointer, not the content. Run{" "}
+				<code className="tr-code-text">git lfs pull</code> to fetch it.
 			</p>
 			<dl className="mt-12 grid grid-cols-[auto_1fr] gap-x-12 gap-y-4 tr-text-metadata text-text-muted">
 				<dt>Size</dt>

@@ -70,10 +70,22 @@ test("active content and handlers never survive: script, iframe, style, event at
 	expect(html).toContain("styled");
 });
 
-test("sanitizing keeps the document plugins' own output: alert callouts and unprefixed heading ids", () => {
+test("srcset candidates are parsed like a browser does and only web or worktree URLs survive", () => {
+	const html = render(
+		'<picture><source srcset="../img/a.png 1x,../img/b.png 2x, javascript:alert(1) 3x, data:image/png;base64,AAAA 4x, https://cdn.example/c.png 5x"><img src="javascript:alert(1)"></picture>',
+	);
+	expect(html).toContain(
+		'srcSet="http://host.test/files/ws/img/a.png 1x, http://host.test/files/ws/img/b.png 2x, https://cdn.example/c.png 5x"',
+	);
+	expect(html).not.toContain("javascript:");
+	expect(html).not.toContain("data:image");
+	expect(html).toContain("<img");
+	expect(html).not.toContain('src="javascript');
+});
+
+test("sanitizing keeps the document plugins' own output: alert callouts and clobber-safe heading ids", () => {
 	const html = render("## Getting Started\n\n> [!NOTE]\n> Mind the gap.");
-	expect(html).toContain('id="getting-started"');
-	expect(html).not.toContain("user-content-");
+	expect(html).toContain('id="user-content-getting-started"');
 	expect(html).toContain("Mind the gap.");
 	expect(html).toMatch(/data-testid="markdown-alert"|data-variant="note"|alert/i);
 });

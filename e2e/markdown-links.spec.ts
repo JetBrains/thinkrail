@@ -44,7 +44,7 @@ test("relative links, images, and heading anchors work in the rendered markdown 
 	const preview = page.getByTestId("markdown-preview");
 	await expect(preview).toBeVisible();
 
-	await expect(preview.locator("#section-two")).toHaveCount(1);
+	await expect(preview.locator("#user-content-section-two")).toHaveCount(1);
 
 	const img = preview.locator("img").first();
 	await expect(img).toHaveAttribute("src", /\/files\/[^/]+\/logo\.png$/);

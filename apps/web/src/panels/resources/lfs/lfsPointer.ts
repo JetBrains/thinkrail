@@ -3,18 +3,12 @@ export interface LfsPointer {
 	size: number;
 }
 
+const POINTER =
+	/^version https:\/\/git-lfs\.github\.com\/spec\/v1\noid sha256:([0-9a-f]{64})\nsize (\d{1,15})\n$/;
+
 export function parseLfsPointer(text: string): LfsPointer | null {
-	const lines = text.split("\n");
-	if (lines[0] !== "version https://git-lfs.github.com/spec/v1") return null;
-	let oid: string | undefined;
-	let size: number | undefined;
-	for (const line of lines.slice(1)) {
-		const match = /^oid sha256:([0-9a-f]{64})$/.exec(line);
-		if (match?.[1]) oid = match[1];
-		const sized = /^size (\d+)$/.exec(line);
-		if (sized?.[1]) size = Number(sized[1]);
-	}
-	return oid !== undefined && size !== undefined ? { oid, size } : null;
+	const match = POINTER.exec(text);
+	return match?.[1] && match[2] ? { oid: match[1], size: Number(match[2]) } : null;
 }
 
 export function formatLfsSize(bytes: number): string {

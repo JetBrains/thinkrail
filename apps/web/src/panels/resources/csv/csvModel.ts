@@ -50,20 +50,24 @@ function unquotedCount(line: string, delimiter: CsvDelimiter): number {
 	return count;
 }
 
+function firstNonEmptyLine(text: string): string | undefined {
+	return text
+		.replace(/^\uFEFF/, "")
+		.split(/\r?\n/)
+		.find((line) => line.trim() !== "");
+}
+
 export function sniffDelimiter(path: string, ...texts: readonly string[]): CsvDelimiter {
 	if (path.toLowerCase().endsWith(".tsv")) return "\t";
-	const header = texts.map((text) => text.split(/\r?\n/, 1)[0] ?? "").find((line) => line !== "");
+	const header = texts.map(firstNonEmptyLine).find((line) => line !== undefined);
 	if (header === undefined) return ",";
-	let best: CsvDelimiter = ",";
-	let bestCount = unquotedCount(header, ",");
-	for (const candidate of SNIFFED_DELIMITERS) {
-		const count = unquotedCount(header, candidate);
-		if (count > bestCount) {
-			best = candidate;
-			bestCount = count;
-		}
-	}
-	return best;
+	const counts = SNIFFED_DELIMITERS.map((delimiter) => ({
+		delimiter,
+		count: unquotedCount(header, delimiter),
+	}));
+	const top = Math.max(...counts.map(({ count }) => count));
+	const leaders = counts.filter(({ count }) => count === top);
+	return top > 0 && leaders.length === 1 ? (leaders[0]?.delimiter ?? ",") : ",";
 }
 
 export function parseCsv(text: string, delimiter: CsvDelimiter = ","): CsvTable {

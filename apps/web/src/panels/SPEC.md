@@ -1347,8 +1347,9 @@ own section. The kebab menu (`plan-menu`, a
 
   `thinkrail/csv` parses CSV/TSV locally with an RFC-4180 state machine, including escaped quotes, CRLF, and
   quoted fields spanning source lines. The delimiter is **sniffed from the first non-empty header line**
-  (`sniffDelimiter`: the most frequent of `,` `;` `\t` `|` outside quotes, comma on a tie or an empty
-  file; `.tsv` is always tab), because spreadsheet exports in locales with a decimal comma write `;`
+  (`sniffDelimiter`: the unique most frequent of `,` `;` `\t` `|` outside quotes on the first
+  non-empty line, BOM ignored; comma on a tie, a single-column header, or an empty file; `.tsv` is
+  always tab), because spreadsheet exports in locales with a decimal comma write `;`
   and a one-column table of `id;name;score` is a misrender, not a table. A diff sniffs the modified
   side first and falls back to the original, so both sides parse with one delimiter. The view keeps the header fixed and virtualizes data rows with
   `react-virtuoso`. A selected cell or shift-extended rectangle emits the selected rows' raw-file
@@ -1554,12 +1555,18 @@ own section. The kebab menu (`plan-menu`, a
   sections in `<details>`, and ship theme-aware logos as `<picture><source media srcset>`; shown as
   literal tags, those documents lose exactly their most visible content. `markdownHtml.documentRehypePlugins`
   runs `rehype-raw` and then `rehype-sanitize` on GitHub's `defaultSchema` with three deltas: the alert
-  element the in-repo remark transform emits (`mdalert` + `variant`) is allowed, `<source>` keeps
-  `srcset`/`media`/`type`/`sizes`, and ids keep their slugs (`clobberPrefix: ""`) so `#` navigation and
-  `remarkHeadingIds` still agree. Everything active or stylistic — `script`, `iframe`, `style`, event
-  handlers, inline `style`, `javascript:` URLs — is dropped, and `data:` images with it (the schema's
-  `src` protocols are http/https/relative). Raw `<img>`/`<source>` go through the same relative-URL
-  rewrite as markdown images, so a README logo loads from the worktree; `width`/`height` survive, and
+  element the in-repo remark transform emits (`mdalert` + `variant`) is allowed and `<source>` keeps
+  `srcset`/`media`/`type`/`sizes`. GitHub's **`user-content-` clobber prefix stays on** every `id`/`name`
+  (a document must not be able to mint `window.MonacoEnvironment` or shadow a global by naming an
+  element after it), so in-document `#slug` links resolve through `scrollToAnchor`, which tries the
+  prefixed id first and the bare slug second. Everything active or stylistic — `script`, `iframe`,
+  `style`, event handlers, inline `style`, `javascript:` URLs — is dropped, and `data:` images with it
+  (the schema's `src` protocols are http/https/relative). Raw `<img>`/`<source>` go through the same
+  relative-URL rewrite as markdown images, so a README logo loads from the worktree; `srcset` is parsed
+  with the HTML candidate grammar (`srcsetCandidates`: commas inside URLs, descriptor parentheses) and,
+  because neither the sanitizer nor react-markdown protocol-checks `srcset`, every candidate is
+  re-admitted only as a worktree URL or an `http(s)`/protocol-relative one — `javascript:`/`data:`
+  candidates are dropped, as is a bare `src` of those kinds; `width`/`height` survive, and
   `align="left|right"` maps to a float utility rather than a presentational attribute. The source-line
   stamps for commenting are added **after** sanitizing, so the sanitizer can never strip them. The chat
   `Markdown` primitive is untouched: model output is not a document the user authored.

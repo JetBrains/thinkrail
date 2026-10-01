@@ -11,6 +11,7 @@ test("an LFS pointer parses to its object id and size, and nothing else does", (
 		size: 12345,
 	});
 	expect(parseLfsPointer("version https://git-lfs.github.com/spec/v1\nsize 1\n")).toBeNull();
+	expect(parseLfsPointer(`${POINTER}comment extra\n`)).toBeNull();
 	expect(parseLfsPointer("not a pointer")).toBeNull();
 });
 
