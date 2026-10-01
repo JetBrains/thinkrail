@@ -6,6 +6,7 @@ import {
 	changedCellIndices,
 	csvSelectionDraft,
 	parseCsv,
+	sniffDelimiter,
 	tableCellOfAnchor,
 } from "./csvModel";
 
@@ -90,4 +91,14 @@ test("CSV renderer registration declares table-cell and line anchors", () => {
 			mobile: true,
 		},
 	});
+});
+
+test("the delimiter is sniffed from the first header line: comma by default, semicolon, pipe, tab by extension", () => {
+	expect(sniffDelimiter("a.csv", "id,name\n1,Ann\n")).toBe(",");
+	expect(sniffDelimiter("a.csv", "id;name;score\n1;Ann;9,5\n")).toBe(";");
+	expect(sniffDelimiter("a.csv", "id|name\n1|Ann\n")).toBe("|");
+	expect(sniffDelimiter("a.csv", '"last, first";score\n"Doe, Jane";8\n')).toBe(";");
+	expect(sniffDelimiter("a.tsv", "id;name\n")).toBe("\t");
+	expect(sniffDelimiter("a.csv", "", "id;name\n")).toBe(";");
+	expect(sniffDelimiter("a.csv", "")).toBe(",");
 });

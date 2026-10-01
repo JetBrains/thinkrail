@@ -59,6 +59,7 @@
 	--editor-selection-highlight-bg: color-mix(in srgb, var(--editor-selection) 20%, transparent); /* Monaco's secondary matches of the active selection */
 	--editor-find-match-bg: color-mix(in srgb, var(--warning) 40%, transparent); /* Monaco's active find match */
 	--widget-shadow: color-mix(in srgb, var(--text) 20%, transparent); /* Monaco widget, sticky-scroll, and scrollbar shadows */
+	--media-checker-tile: color-mix(in srgb, var(--text) 20%, transparent); /* the transparency checkerboard tile behind images and vector previews: the text colour at the soft (20%) step — the contrast of the conventional #ccc-on-white checkerboard — over the content canvas, so a dark logo on a transparent PNG stays visible on a dark theme and a light one on a light theme; index.css's `.media-backdrop` is the only consumer */
 }
 
 /* Appearance-level effects. The theme engine stamps `data-theme-appearance` before React mounts, so

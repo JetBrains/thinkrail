@@ -34,6 +34,15 @@ test("magic bytes name the media type before any filename is consulted", () => {
 		mime: "image/webp",
 	});
 	expect(
+		classifyBytes(BYTES.encode("\u0000\u0000\u0000\u001cftypavif\u0000\u0000\u0000\u0000")),
+	).toEqual({
+		text: false,
+		mime: "image/avif",
+	});
+	expect(classifyBytes(BYTES.encode("\u0000\u0000\u0000\u001cftypisom\u0000"))).toEqual({
+		text: false,
+	});
+	expect(
 		classifyBytes(BYTES.encode("NOPE\u0000\u0000\u0000\u0000WEBP\u0000")).mime,
 	).toBeUndefined();
 	expect(classifyBytes(new Uint8Array([0x1f, 0x8b, 0x08, 0x00])).mime).toBe("application/gzip");

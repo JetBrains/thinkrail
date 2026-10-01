@@ -66,6 +66,7 @@ equals `border-default` is not a second weight, it is a second name).
 | Chat bubble | `bubble-user-bg` · `bubble-user-border` | tinted from the manifest's own `bubbleAccent`, which every bundled theme currently ships **equal to its `accent`** — the user bubble wears the brand colour. The separate key is the knob (per `themes/SPEC.md`): a theme that wants the bubble to read as "you" rather than "the product" re-points it without touching a component |
 | Effects | `overlay` · `sunken` | written per light/dark by the theme engine |
 | Strict-consumer editor roles | `editor-selection-bg` · `editor-selection-text` · `editor-selection-highlight-bg` · `editor-find-match-bg` · `widget-shadow` | `publish: false`; Monaco/xterm read them directly and no Tailwind utility is emitted |
+| Media | `media-checker-tile` | `publish: false`; the transparency checkerboard tile that `index.css`'s `.media-backdrop` paints behind every image and vector preview, derived from `text` at the `soft` (20%) step so it is light-on-dark in a dark theme and the conventional `#ccc`-on-white in a light one — a dark logo on a transparent PNG must never read as "no image" |
 
 There is no `text-strong` and no `text-link` utility: they duplicate other tokens, and `--text-link`
 exists as a variable for `global.css`'s bare-anchor fallback alone. That fallback lives in the CSS base
@@ -101,8 +102,8 @@ chat keeps its live CSS-variable form, while Monaco resolves the same variables 
 API. All consumers therefore name the same semantic tokens everything else does, with one name per value.
 The roles these consumers *share* with components (`--container-*-bg`, `--text-muted`) stay published and
 mapped in `@theme inline`; the ones **only** they read (`--editor-selection-*`,
-`--editor-find-match-bg`, and `--widget-shadow`) are `publish: false` and unmapped — a utility nothing can
-use is dead weight. Values that strict JS consumers
+`--editor-find-match-bg`, `--widget-shadow`, and the stylesheet-only `--media-checker-tile`) are
+`publish: false` and unmapped — a utility nothing can use is dead weight. Values that strict JS consumers
 need reach them canonicalised to hex via `cssColorToHex` (`lib/utils.ts`), because the built CSS is minified
 and Monaco/xterm accept hex only.
 

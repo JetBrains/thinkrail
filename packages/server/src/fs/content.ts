@@ -44,12 +44,21 @@ function startsWith(bytes: Uint8Array, magic: readonly number[], offset = 0): bo
 	return magic.every((byte, index) => bytes[offset + index] === byte);
 }
 
+const FTYP = [0x66, 0x74, 0x79, 0x70];
+const AVIF_BRANDS = [
+	[0x61, 0x76, 0x69, 0x66],
+	[0x61, 0x76, 0x69, 0x73],
+];
+
 function sniffMagic(bytes: Uint8Array): string | undefined {
 	if (
 		startsWith(bytes, [0x52, 0x49, 0x46, 0x46]) &&
 		startsWith(bytes, [0x57, 0x45, 0x42, 0x50], 8)
 	) {
 		return "image/webp";
+	}
+	if (startsWith(bytes, FTYP, 4) && AVIF_BRANDS.some((brand) => startsWith(bytes, brand, 8))) {
+		return "image/avif";
 	}
 	return MAGIC.find(({ bytes: magic }) => startsWith(bytes, magic))?.mime;
 }

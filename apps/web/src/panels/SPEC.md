@@ -1314,7 +1314,10 @@ own section. The kebab menu (`plan-menu`, a
   side is historical receive no review surface or mutation actions.
 
   `thinkrail/image` renders host-backed byte URLs with fit, natural-size, button/wheel zoom, intrinsic
-  dimensions, and byte size. A drag over the rendered intrinsic box produces one normalized `region`
+  dimensions, and byte size, always on the `.media-backdrop` transparency checkerboard (the view's image
+  and both diff frames; the difference blend keeps a flat canvas so the checker cannot leak into the
+  subtraction), because on a solid dark canvas a dark logo on a transparent PNG is indistinguishable from
+  an image that failed to load. A drag over the rendered intrinsic box produces one normalized `region`
   selector; placed threads project that selector back to outlined rectangles and numbered markers, with
   cards below the image. Its diff defaults to 2-up and also offers swipe, onion-skin, and difference-blend
   modes. Two-up anchors directly to the side drawn on; overlaid modes expose the active old/new anchor space
@@ -1338,7 +1341,11 @@ own section. The kebab menu (`plan-menu`, a
   swipe/divider/opacity overlay geometry use inline values.
 
   `thinkrail/csv` parses CSV/TSV locally with an RFC-4180 state machine, including escaped quotes, CRLF, and
-  quoted fields spanning source lines. The view keeps the header fixed and virtualizes data rows with
+  quoted fields spanning source lines. The delimiter is **sniffed from the first non-empty header line**
+  (`sniffDelimiter`: the most frequent of `,` `;` `\t` `|` outside quotes, comma on a tie or an empty
+  file; `.tsv` is always tab), because spreadsheet exports in locales with a decimal comma write `;`
+  and a one-column table of `id;name;score` is a misrender, not a table. A diff sniffs the modified
+  side first and falls back to the original, so both sides parse with one delimiter. The view keeps the header fixed and virtualizes data rows with
   `react-virtuoso`. A selected cell or shift-extended rectangle emits the selected rows' raw-file
   `lineRange` plus `structural { scheme: "table-cell", ref: "<row>:<column>" }`, with header row zero; a
   missing cell, or a coordinate whose row no longer intersects the host-reanchored line range, is omitted

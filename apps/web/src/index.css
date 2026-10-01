@@ -227,6 +227,12 @@
 }
 /* The composer wears the CHAT INPUT's skin (see chat/Composer.tsx's textarea): same input surface,
    border, radius and focus treatment — only the buttons differ. No accent chrome of its own. */
+.media-backdrop {
+	background-color: var(--container-content-bg);
+	background-image: repeating-conic-gradient(var(--media-checker-tile) 0% 25%, transparent 0% 50%);
+	background-size: var(--space-16) var(--space-16);
+}
+
 .review-composer {
 	pointer-events: auto;
 	max-width: var(--review-card-max-width, 832px);

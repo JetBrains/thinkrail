@@ -137,8 +137,8 @@ export default function ImageView({
 							data-testid="image-resource"
 							className={
 								mode === "fit"
-									? "block max-h-[70vh] max-w-full object-contain"
-									: "block h-full w-full max-w-none"
+									? "media-backdrop block max-h-[70vh] max-w-full object-contain"
+									: "media-backdrop block h-full w-full max-w-none"
 							}
 							draggable={false}
 							onLoad={(event) => {

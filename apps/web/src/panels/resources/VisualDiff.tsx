@@ -29,10 +29,10 @@ function aspectOf(size: Size | null): number | null {
 	return size && size.width > 0 && size.height > 0 ? size.width / size.height : null;
 }
 
-function frameClass(size: Size | null, maximumHeight: 58 | 68): string {
+function frameClass(size: Size | null, maximumHeight: 58 | 68, backdrop = true): string {
 	const fallback =
 		maximumHeight === 58 ? "h-[min(58vh,640px)] w-full" : "h-[min(68vh,720px)] w-full";
-	return `${aspectOf(size) ? "mx-auto w-full" : fallback} min-h-40 border border-border-muted bg-container-content-bg`;
+	return `${aspectOf(size) ? "mx-auto w-full" : fallback} min-h-40 border border-border-muted ${backdrop ? "media-backdrop" : "bg-container-content-bg"}`;
 }
 
 function frameStyle(size: Size | null, maximumHeight: 58 | 68): React.CSSProperties | undefined {
@@ -227,7 +227,7 @@ export function VisualDiff({
 										],
 									}
 								: {})}
-							className={frameClass(active.intrinsicSize, 68)}
+							className={frameClass(active.intrinsicSize, 68, mode !== "difference")}
 							{...(style ? { style } : {})}
 							label={regionLabel}
 							{...(active.draftForRegion ? { draftForRegion: active.draftForRegion } : {})}

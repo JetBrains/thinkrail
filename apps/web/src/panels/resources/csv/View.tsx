@@ -10,9 +10,9 @@ import {
 	type CsvRow,
 	type CsvSelection,
 	csvSelectionDraft,
-	delimiterForPath,
 	parseCsv,
 	placedTableThreadIds,
+	sniffDelimiter,
 	tableCellOfAnchor,
 } from "./csvModel";
 
@@ -35,7 +35,7 @@ export default function CsvView({
 }: ResourceViewProps) {
 	const text = content.kind === "text" ? content.text : "";
 	const table = useMemo(
-		() => parseCsv(text, delimiterForPath(resource.path)),
+		() => parseCsv(text, sniffDelimiter(resource.path, text)),
 		[text, resource.path],
 	);
 	const composer = useStampedComposer<CsvSelection>(contentStamp(content));

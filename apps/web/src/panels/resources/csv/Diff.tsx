@@ -11,9 +11,9 @@ import {
 	type CsvRow,
 	type CsvSelection,
 	csvSelectionDraft,
-	delimiterForPath,
 	parseCsv,
 	placedTableThreadIds,
+	sniffDelimiter,
 	tableCellOfAnchor,
 } from "./csvModel";
 
@@ -59,7 +59,11 @@ export default function CsvDiff({
 	review,
 	onPlacedThreadIds,
 }: ResourceDiffProps) {
-	const delimiter = delimiterForPath(resource.path);
+	const delimiter = sniffDelimiter(
+		resource.path,
+		modified.kind === "text" ? modified.text : "",
+		original.kind === "text" ? original.text : "",
+	);
 	const originalTable = useMemo(
 		() => parseCsv(original.kind === "text" ? original.text : "", delimiter),
 		[delimiter, original],

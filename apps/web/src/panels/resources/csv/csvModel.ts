@@ -10,8 +10,10 @@ export interface CsvRow {
 	raw: string;
 }
 
+export type CsvDelimiter = "," | "\t" | ";" | "|";
+
 export interface CsvTable {
-	delimiter: "," | "\t";
+	delimiter: CsvDelimiter;
 	rows: CsvRow[];
 }
 
@@ -36,11 +38,35 @@ export type AlignedCsvRow =
 			changedCells: readonly number[];
 	  };
 
-export function delimiterForPath(path: string): "," | "\t" {
-	return path.toLowerCase().endsWith(".tsv") ? "\t" : ",";
+const SNIFFED_DELIMITERS: readonly CsvDelimiter[] = [",", ";", "\t", "|"];
+
+function unquotedCount(line: string, delimiter: CsvDelimiter): number {
+	let count = 0;
+	let inQuotes = false;
+	for (const char of line) {
+		if (char === '"') inQuotes = !inQuotes;
+		else if (char === delimiter && !inQuotes) count += 1;
+	}
+	return count;
 }
 
-export function parseCsv(text: string, delimiter: "," | "\t" = ","): CsvTable {
+export function sniffDelimiter(path: string, ...texts: readonly string[]): CsvDelimiter {
+	if (path.toLowerCase().endsWith(".tsv")) return "\t";
+	const header = texts.map((text) => text.split(/\r?\n/, 1)[0] ?? "").find((line) => line !== "");
+	if (header === undefined) return ",";
+	let best: CsvDelimiter = ",";
+	let bestCount = unquotedCount(header, ",");
+	for (const candidate of SNIFFED_DELIMITERS) {
+		const count = unquotedCount(header, candidate);
+		if (count > bestCount) {
+			best = candidate;
+			bestCount = count;
+		}
+	}
+	return best;
+}
+
+export function parseCsv(text: string, delimiter: CsvDelimiter = ","): CsvTable {
 	if (text.length === 0) return { delimiter, rows: [] };
 	const rows: CsvRow[] = [];
 	let cells: string[] = [];

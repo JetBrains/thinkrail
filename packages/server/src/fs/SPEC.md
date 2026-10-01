@@ -31,7 +31,7 @@ bytes are** — the one byte-level classification every content read in the host
   safety; its callers own the streaming and the writing.
   **Content classification** (`content.ts`, pure, no dependency): `CONTENT_SNIFF_BYTES` names the shared
   8 KiB bounded-head size; `classifyBytes(bytes)` → `{ text, mime? }` — **mime** is what the *bytes*
-  prove (magic numbers for png/jpeg/gif/webp/bmp/ico/pdf/zip/gzip/woff/woff2, plus `image/svg+xml` for
+  prove (magic numbers for png/jpeg/gif/webp/avif/bmp/ico/pdf/zip/gzip/woff/woff2, plus `image/svg+xml` for
   text whose root element is `<svg>`, directly or behind an XML prolog — a prolog alone is not an
   image); **text** is "no recognized binary magic number, no NUL byte in the first 8 KiB, and a strict
   UTF-8 decode" (a BOM is text; an SVG is text because `image/svg+xml` is inferred from text, never
