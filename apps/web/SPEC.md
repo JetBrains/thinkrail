@@ -73,6 +73,15 @@ reads `bun.lock` and rejects any second `react` or `react-dom` version. Every Re
 packages together and repeats the mounted-chat memory stress probe before this temporary canary pin can
 return to stable.
 
+**The React Compiler is on for every `apps/web` bundle** (`vite.config.ts`: `@rolldown/plugin-babel` running
+`@vitejs/plugin-react`'s `reactCompilerPreset()` over dev and build). Three devDependencies live in this
+manifest only, and the `@babel/core` 7.x pin is load-bearing: `babel-plugin-react-compiler` 1.0.0 mis-lowers
+destructuring defaults under Babel 8 and silently drops those functions from compilation. Bailouts never
+fail the build — a component that writes `ref.current` during render, or returns refs mixed with state, is
+skipped whole, not miscompiled — so keep the compilable set from shrinking by checking it ran: a production
+build's `dist/assets/*.js` carries `react.memo_cache_sentinel` in the hundreds (React's own runtime accounts
+for three). `bun test` transpiles without Vite, so only the browser E2E suite exercises compiled output.
+
 ### Dependency graph
 
 - `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration

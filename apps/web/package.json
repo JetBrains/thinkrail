@@ -54,11 +54,14 @@
 		"zustand": "5.0.14"
 	},
 	"devDependencies": {
+		"@babel/core": "7.29.7",
+		"@rolldown/plugin-babel": "0.2.4",
 		"@tailwindcss/vite": "catalog:",
 		"@types/bun": "catalog:",
 		"@types/react": "catalog:",
 		"@types/react-dom": "catalog:",
 		"@vitejs/plugin-react": "6.0.2",
+		"babel-plugin-react-compiler": "1.0.0",
 		"tailwindcss": "catalog:",
 		"typescript": "catalog:",
 		"vite": "8.0.16"
