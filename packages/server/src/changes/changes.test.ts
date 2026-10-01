@@ -16,7 +16,7 @@ import { basename, dirname, join } from "node:path";
 import type { ChangeReceipt, GitDiffScope, LineSpan, RevertTarget } from "@thinkrail/contracts";
 import { hashBytes } from "../fs";
 import { setTrashImplementationForTests } from "../trash";
-import { revertChange, undoChange } from "./changes";
+import { forgetWorkspaceChanges, retainReceipts, revertChange, undoChange } from "./changes";
 import { splitLines } from "./textSplice";
 
 const BYTES = new TextEncoder();
@@ -840,4 +840,44 @@ test("the original side is read at the range's resolved oid, not the moving ref"
 		modifiedHash: hash("one\nTWO\nTHREE\n"),
 	});
 	expect(text("a.ts")).toBe("one\nTWO\nTHREE\n");
+});
+
+test("the receipt ring is bounded by count and by held bytes, always keeping the newest receipt", () => {
+	const held = (id: string, size: number) => ({
+		receipt: { id },
+		before: { bytes: size === 0 ? null : new Uint8Array(size) },
+	});
+	const ids = (ring: readonly { receipt: { id: string } }[]) =>
+		ring.map((entry) => entry.receipt.id);
+
+	const byCount = Array.from({ length: 25 }, (_value, index) => held(`r${index}`, 1));
+	expect(ids(retainReceipts(byCount, { count: 20, bytes: 1000 }))).toEqual(ids(byCount.slice(5)));
+
+	const byBytes = [held("old", 60), held("mid", 30), held("new", 20)];
+	expect(ids(retainReceipts(byBytes, { count: 20, bytes: 49 }))).toEqual(["new"]);
+	expect(ids(retainReceipts(byBytes, { count: 20, bytes: 50 }))).toEqual(["mid", "new"]);
+
+	const oversized = [held("small", 1), held("huge", 500)];
+	expect(ids(retainReceipts(oversized, { count: 20, bytes: 100 }))).toEqual(["huge"]);
+
+	const absent = [held("gone", 0), held("gone-too", 0)];
+	expect(ids(retainReceipts(absent, { count: 1, bytes: 0 }))).toEqual(["gone-too"]);
+});
+
+test("forgetting a workspace drops its receipts so an undo is RECEIPT_UNKNOWN", async () => {
+	write("a.ts", "one\ntwo\nchanged\n");
+	const receipt = await revert(
+		"a.ts",
+		{ kind: "file" },
+		{ originalHash: hash("one\ntwo\nthree\n"), modifiedHash: hash("one\ntwo\nchanged\n") },
+	);
+	forgetWorkspaceChanges(workspaceId);
+	await expect(
+		undoChange({
+			workspaceId,
+			receiptId: receipt.id,
+			expect: { modifiedHash: hash("one\ntwo\nthree\n") },
+		}),
+	).rejects.toMatchObject({ code: "RECEIPT_UNKNOWN" });
+	expect(text("a.ts")).toBe("one\ntwo\nthree\n");
 });

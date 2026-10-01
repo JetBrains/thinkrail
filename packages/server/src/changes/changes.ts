@@ -44,6 +44,7 @@ interface FileState {
 }
 
 const RECEIPT_RING = 20;
+const RECEIPT_RING_BYTES = 64 * 1024 * 1024;
 const BYTES = new TextEncoder();
 const ULID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const GIT_MODE_TYPE = 0o170000;
@@ -71,6 +72,28 @@ interface ReceiptRecord {
 }
 
 const rings = new Map<string, ReceiptRecord[]>();
+
+export function retainReceipts<T extends { before: { bytes: Uint8Array | null } }>(
+	ring: readonly T[],
+	limits: { count: number; bytes: number } = { count: RECEIPT_RING, bytes: RECEIPT_RING_BYTES },
+): T[] {
+	const retained: T[] = [];
+	let bytes = 0;
+	for (let index = ring.length - 1; index >= 0; index--) {
+		const held = ring[index];
+		if (held === undefined) continue;
+		const size = held.before.bytes?.byteLength ?? 0;
+		if (retained.length > 0 && (retained.length >= limits.count || bytes + size > limits.bytes))
+			break;
+		retained.unshift(held);
+		bytes += size;
+	}
+	return retained;
+}
+
+export function forgetWorkspaceChanges(workspaceId: string): void {
+	rings.delete(workspaceId);
+}
 
 function workspace(workspaceId: string): Workspace {
 	const ws = loadWorkspaces().find((candidate) => candidate.id === workspaceId);
@@ -169,9 +192,7 @@ function record(change: {
 		...(change.trashed === undefined ? {} : { trashed: change.trashed }),
 	};
 	const ring = rings.get(change.workspaceId) ?? [];
-	ring.push({ receipt, before: change.before });
-	while (ring.length > RECEIPT_RING) ring.shift();
-	rings.set(change.workspaceId, ring);
+	rings.set(change.workspaceId, retainReceipts([...ring, { receipt, before: change.before }]));
 	return receipt;
 }
 

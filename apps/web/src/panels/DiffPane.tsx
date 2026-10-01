@@ -213,9 +213,15 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 	const { dir, base } = splitPath(tab.path);
 	const handleMutationError = useCallback(
 		(error: unknown, title: string) => {
-			if (wsErrorCode(error) === "STALE_VIEW") {
+			const code = wsErrorCode(error);
+			if (code === "STALE_VIEW") {
 				reload();
 				toast.info("This file changed since you opened it — review the new diff");
+				return;
+			}
+			if (code === "RECEIPT_UNKNOWN") {
+				reload();
+				toast.info("This change can no longer be undone — the host no longer holds it");
 				return;
 			}
 			toast.error(errorText(error), title);

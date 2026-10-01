@@ -1415,8 +1415,10 @@ own section. The kebab menu (`plan-menu`, a
   `DiffPane` sends both rendered hashes with every range/file revert. Success raises an eight-second toast
   whose **Undo** action sends `change.undo` with the receipt id and `receipt.after.hash`; a trashed whole file
   says it moved to the trash. `STALE_VIEW` immediately uses `useLiveTabContent.reload()` and says “This file
-  changed since you opened it — review the new diff”; every other named or unnamed failure uses
-  `errorText`. Commit scopes never receive `hunkActions`, so neither the toolbar nor Revert file can render.
+  changed since you opened it — review the new diff”; `RECEIPT_UNKNOWN` (the receipt was evicted, its
+  workspace forgotten, or the host restarted behind a toast that is still on screen) reloads the same way
+  and says “This change can no longer be undone — the host no longer holds it” as information, not an
+  error; every other named or unnamed failure uses `errorText`. Commit scopes never receive `hunkActions`, so neither the toolbar nor Revert file can render.
 - **Changes: List | Tree.** A header toggle (`store.changesView`, app-wide — persisted in the store, not
   per workspace, so it survives workspace switches) switches the flat **List** and a folder **Tree**
   (`ChangesTree`), both built from the same `git.status` list. The Tree is styled exactly like the

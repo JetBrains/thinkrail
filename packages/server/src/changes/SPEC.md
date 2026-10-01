@@ -21,7 +21,8 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
   bounded historical-byte read) followed by a **synchronous verify→write/claim pass**, like the
   `reviews` module's snapshot passes; the per-workspace **receipt ring**; the whole-file semantics table
   below.
-- **Public surface (barrel):** `revertChange`, `undoChange`, `RevertChangeParams`, `UndoChangeParams`.
+- **Public surface (barrel):** `revertChange`, `undoChange`, `RevertChangeParams`, `UndoChangeParams`,
+  `forgetWorkspaceChanges`, `retainReceipts`.
 - **Allowed deps:** `contracts` (`ChangeReceipt`/`RevertTarget`/`LineSpan`/`GitDiffScope`), `git`
   (`resolveDiffRange`, bounded `readBlobBytesAtAsync` + `readPathModeAtAsync`), `fs` (`resolveWorktreeFile` for containment, `classifyBytes`/
   `hashBytes`/`decodeText` for identity and textness), `persistence` (workspace lookup), `trash`,
@@ -79,11 +80,18 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
 
 ## Receipts
 
-- Every mutation answers with a **`ChangeReceipt`** whose id is also the undo token. The host keeps the
-  newest **20 per workspace** in memory, each holding the path's **`before` bytes and mode** — restoring
+- Every mutation answers with a **`ChangeReceipt`** whose id is also the undo token. The host keeps a
+  per-workspace ring in memory, each entry holding the path's **`before` bytes and mode** — restoring
   what the path held *is* the inverse of every operation here, so there is no separate inverse payload to keep in
   step. A trashed file is therefore undone by **writing its bytes back**, not by reaching into the
   trash, which no OS offers portably.
+- **The ring is bounded twice** (`retainReceipts`): at most **20 receipts** and at most **64 MiB of held
+  bytes** per workspace, evicting oldest-first, and the **newest receipt is always kept** even when it
+  alone exceeds the byte budget — the Undo toast just shown must work. Twenty is more than a toast's
+  8-second life can stack; 64 MiB caps what one workspace can pin in host memory at the size of the
+  largest blob `/blob` will serve. `workspace.remove` calls `forgetWorkspaceChanges`, so a removed
+  workspace pins nothing. `retainReceipts` is exported as the pure policy so its bounds are tested
+  without a 64 MiB fixture.
 - `undoChange` CAS-checks `expect.modifiedHash` against the current worktree file, applies the inverse,
   then **consumes** the receipt and emits an `undo` receipt that is itself undoable once — so redo is the
   same operation, not a second mechanism. A refused undo (`STALE_VIEW`) or failed inverse leaves the
@@ -91,7 +99,9 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
   cannot redirect the inverse outside the worktree.
 - **Receipts are host memory only**, lost on restart: the worktree is git-tracked and a trashed file is
   recoverable from the OS trash, so persisting them would add a data-dir format for a convenience those
-  two already back. An id the host no longer holds is `RECEIPT_UNKNOWN`, never a silent no-op.
+  two already back. An id the host no longer holds — evicted, forgotten with its workspace, or lost to a
+  restart behind a still-visible toast — is `RECEIPT_UNKNOWN`, never a silent no-op; the client treats
+  it as information (reload, "can no longer be undone"), not as a failure.
 - Receipt ids are ULIDs generated from Node crypto; ring order remains insertion order rather than being
   re-derived from the token.
 

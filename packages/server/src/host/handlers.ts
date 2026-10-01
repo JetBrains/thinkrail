@@ -86,6 +86,7 @@ import {
 } from "../auth";
 import { findOpenBranchReview } from "../branch-review";
 import {
+	forgetWorkspaceChanges,
 	type RevertChangeParams,
 	revertChange,
 	type UndoChangeParams,
@@ -462,6 +463,7 @@ const handlers: Record<string, Handler> = {
 		if (ws) {
 			evictSpecIndex(ws.id);
 			removeWorkspaceReviews(ws.id);
+			forgetWorkspaceChanges(ws.id);
 			stopWatch(ws.id);
 			closeWorkspaceTerminals(ws.id);
 			void archiveTeardown(ws);
