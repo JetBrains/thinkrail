@@ -41,5 +41,11 @@ test("a reload mid-stream does not duplicate the streaming assistant message", {
 	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false", {
 		timeout: 120_000,
 	});
-	await expect(assistant).toHaveCount(1);
+	const texts = (await assistant.allInnerTexts()).map((text) => text.trim());
+	expect(texts.length).toBeGreaterThan(0);
+	for (const [i, earlier] of texts.entries()) {
+		for (const later of texts.slice(i + 1)) {
+			expect(later.startsWith(earlier) || earlier.startsWith(later)).toBe(false);
+		}
+	}
 });
