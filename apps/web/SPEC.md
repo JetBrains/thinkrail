@@ -106,13 +106,21 @@ these conventions:
   singleton. It arrives through `useSyncExternalStore` or state: `AppearanceSettings` subscribes with
   `onSystemAppearanceChange`, and relative-time labels take `now` from `components/useNow`.
 
-Known bailouts, all off the per-keystroke and per-delta paths: `useVirtualRows` reads the visible-anchor ref
-while adjusting state during render (state would cost a render per scroll); hooks and hosts that still write
-`ref.current` in render (`useWorkspaceRead`, `useChatTodos`, `useOpenBranchReview`, `useBranchList`,
-`useTemplateCommandPicker`, `usePendingSelection`, `MonacoEditor`, `MonacoDiff`, `AskUserQuestionCard`);
-`useLiveTabContent` (`??=`); `usePromptImages` (try without catch); `useAnalyticsConsent` (a callback that
-calls itself); `HistoryOverlay`'s `Highlight` (mutates a closure counter); `TemplateRow` and the try/finally
-dialogs and settings panes. A new bailout is a regression unless it joins this list.
+Known bailouts. Two sit on hot paths: `useVirtualRows` runs on every `ChatView` render (each streamed delta)
+and `PlanComposer` on every plan-pane keystroke. The rest are off the per-keystroke and per-delta paths.
+
+- Ref read in render: `useVirtualRows` (reads the visible-anchor ref while adjusting state during render;
+  state would cost a render per scroll), `useWorkspaceRead`, `useChatTodos`, `useOpenBranchReview`,
+  `useBranchList`, `useTemplateCommandPicker`, `usePendingSelection`, `MonacoEditor`, `MonacoDiff`,
+  `AskUserQuestionCard`.
+- try/finally: `PlanPane` (also a throw inside try), `PlanComposer`, `ReviewPanel`, `SendButtonBase`,
+  `NewWorkspaceDialog`, `SkillsDialog`, `TemplateEditorDialog`, `JetBrainsAiCard`, `ProvidersSettings`,
+  `ModelsSettings`, `GithubSettings`, `LayoutSettings`, `ProjectSkillsNotice`, `StarterTemplatesOffer`.
+- try without catch: `usePromptImages`, `LineWidthControl`.
+- Other: `useLiveTabContent` (`??=`), `useAnalyticsConsent` (a callback that calls itself), `TemplateRow`
+  (a conditional inside try/catch), `HistoryOverlay`'s `Highlight` (mutates a closure counter).
+
+A new bailout is a regression unless it joins this list.
 
 ### Dependency graph
 
