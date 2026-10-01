@@ -9,11 +9,18 @@ import {
 	isSpec,
 	parseFile,
 	resolveSpecPath,
+	SECTIONED_TYPES,
 	SPEC_STATUSES,
 	SPEC_TYPES,
 	serializeFrontmatter,
 } from "../core/index.ts";
-import { errorResult, getIndex, scaffoldBody, textResult } from "./shared.ts";
+import {
+	errorResult,
+	getIndex,
+	MODULE_SCAFFOLD_GUIDE,
+	scaffoldBody,
+	textResult,
+} from "./shared.ts";
 
 const parameters = Type.Object({
 	path: Type.String({
@@ -44,7 +51,7 @@ export function registerSpecCreate(pi: ExtensionAPI): void {
 		name: "spec_create",
 		label: "Spec Create",
 		description:
-			"Create a new spec file with scaffolded frontmatter (id, type, title, an optional status, and any links) and a heading-only body stub chosen by type. Fails if the file already exists, the id is already in use, or the path is not an indexable root-relative .md path. Edit prose afterward with the write/edit tools.",
+			"Create a new spec file with scaffolded frontmatter (id, type, title, an optional status, and any links) and a heading-only body stub chosen by type: module and submodule specs get the six-section skeleton (Responsibility, Boundary, Behavior, Invariants, Decisions, History). Fails if the file already exists, the id is already in use, or the path is not an indexable root-relative .md path. Edit prose afterward with the write/edit tools and delete sections left empty.",
 		promptSnippet:
 			"spec_create — create a new spec file with scaffolded frontmatter (id/type/title/links) and heading stubs.",
 		parameters,
@@ -81,7 +88,13 @@ export function registerSpecCreate(pi: ExtensionAPI): void {
 			} catch (err) {
 				return errorResult(`Failed to write ${rel}: ${(err as Error).message}`);
 			}
-			return textResult(`Created ${rel} (id: ${params.id}).`, { path: rel, id: params.id });
+			const guide = (SECTIONED_TYPES as readonly string[]).includes(params.type)
+				? `\n\n${MODULE_SCAFFOLD_GUIDE}`
+				: "";
+			return textResult(`Created ${rel} (id: ${params.id}).${guide}`, {
+				path: rel,
+				id: params.id,
+			});
 		},
 	});
 }

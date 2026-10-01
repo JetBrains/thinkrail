@@ -42,6 +42,18 @@ description: "Use when locating, reading, creating, updating, or validating proj
 - **Prefer prose to exhaustive tables**, and cut anything that only paraphrases code, filenames, or a
   sibling spec.
 
+### Shape
+
+- A `module-design` / `submodule-design` spec has six `##` sections, in order: **Responsibility**,
+  **Boundary**, **Behavior**, **Invariants**, **Decisions**, **History**. The first two are mandatory;
+  the rest exist only when they have content. `spec_create` scaffolds all six — delete what stays empty.
+- Rules go in `Invariants` as numbered one-liners; the reason behind a choice goes in `Decisions`; a
+  bug's story goes in `History` as one line pointing at the invariant it produced. `Behavior` describes
+  what a caller or user observes, one `###` per topic.
+- Budgets, measured by `spec_validate`: 400 lines, 4,000 words, a heading at least every 60 lines, no
+  list item over 8 lines, no table cell over 200 characters, file under 50 KB. Over budget means split
+  into a child spec beside the sub-directory that owns the topic, not compress.
+
 ## The graph
 
 - `parent` links form a hierarchy that mirrors the code structure: a `SPEC.md` sits beside the module it
@@ -74,10 +86,12 @@ Read:
 - `spec_graph` — a bounded slice of the graph: a subtree, ancestors, or a node's neighbors, to a depth.
 
 Manage:
-- `spec_create` — a new spec with scaffolded frontmatter and headings.
+- `spec_create` — a new spec with scaffolded frontmatter and headings (the six-section skeleton for
+  module and submodule specs).
 - `spec_update` — a spec's frontmatter (fields and links). It does not touch the body.
 - `spec_delete` — remove a spec.
-- `spec_validate` — report dangling links, duplicate ids, and parent cycles.
+- `spec_validate` — report dangling links, duplicate ids, and parent cycles (errors), plus per-spec
+  structure warnings against the shape budgets; pass `id` to see one spec's warnings after editing it.
 
 Prose is written and edited with the normal `write`/`edit` tools; the spec tools own frontmatter and
 structure.
@@ -86,9 +100,13 @@ structure.
 
 1. **Orient when specs govern the work.** From a known root or the module you are touching, use
    `spec_graph` for the neighborhood, `spec_get` for a node's metadata, and `read` for its body. Use
-   `spec_grep` to find specs by content.
+   `spec_grep` to find specs by content, then `read` the section it lands in (`offset`/`limit`) rather
+   than a whole large spec.
 2. **Align.** Reconcile the change with the decisions and contracts the specs record; surface
    contradictions before diverging.
 3. **Update.** When the change alters a boundary, contract, or decision, update the spec — frontmatter
    (including `status`) with `spec_update`, prose with `edit` — and add `spec_create` for a new module.
-4. **Check.** Run `spec_validate` after structural changes.
+   Put each addition in the section that owns its kind (rule, behavior, decision, history) and remove
+   the prose it supersedes.
+4. **Check.** Run `spec_validate` after structural changes; after editing one spec, run it with that
+   spec's `id` and clear any new structure warnings.

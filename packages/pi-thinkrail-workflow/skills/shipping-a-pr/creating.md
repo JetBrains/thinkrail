@@ -23,7 +23,10 @@ selects wait mode. Control continues with the selected mode at `screenshots.md` 
    verified by hand and reported as exactly that, never silently treated as verified.
 5. **Self-review.** Re-read the full diff (`git diff <base>...HEAD` plus working tree) as a
    reviewer, holding the project's handoff-hygiene bar: no silent lint/type suppressions, no comment
-   creep, no half-migrated patterns, no leftovers. Fix what you find; don't annotate it.
+   creep, no half-migrated patterns, no leftovers. Spec edits meet the **writing-specs** bar: each
+   addition sits in the section that owns its kind and removed what it superseded; a spec-lint
+   baseline that went *up* is a decision to justify in the body, not a side effect. Fix what you
+   find; don't annotate it.
 
 Red flags — stop, a gate is being rationalized away:
 

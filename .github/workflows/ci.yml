@@ -35,6 +35,7 @@ jobs:
       # dynamic import that registerBundledRuntime doesn't statically register (see the script header).
       - run: bun run check:seams
       - run: bun run check:spec-surface
+      - run: bun run check:spec-lint
       - run: bun run lint
       - run: bun run typecheck
 

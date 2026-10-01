@@ -61,9 +61,20 @@ Read — `spec_grep` (content search, narrowable by metadata), `spec_get` (a nod
 links, and path — no body), `spec_graph` (a bounded subtree/ancestors/neighbors slice). Manage —
 `spec_create` (which refuses any path the index could never see — see `resolveSpecPath` in
 `submodule-spec-graph-core` — and any parameters that would write a file born a non-spec),
-`spec_update` (frontmatter only), `spec_delete`, `spec_validate`. Per-tool
-usage lives in the skill and in each tool's `description`; **none edit prose** — prose is written/edited
-with pi's normal `read`/`write`/`edit`.
+`spec_update` (frontmatter only), `spec_delete`, `spec_validate` (link errors plus per-spec structure
+warnings, scoped by `id` on request). Per-tool usage lives in the skill and in each tool's `description`;
+**none edit prose** — prose is written/edited with pi's normal `read`/`write`/`edit`.
+
+### Spec shape
+
+The package carries the **shape** a module spec is expected to have, so a project that installs it gets
+the same skeleton and budgets its tools measure: `core`'s `MODULE_SECTIONS` (Responsibility, Boundary,
+Behavior, Invariants, Decisions, History), `DEFAULT_SPEC_BUDGETS`, and the nine `LINT_RULES`. `spec_create`
+is the write half (it scaffolds the six headings), `spec_validate` the read half (it reports what is
+missing, off-skeleton, empty, or over budget) — advisory in the tool, so a project can choose to gate on
+the same numbers (thinkrail does, in `scripts/check-spec-lint.ts`). The skill states the skeleton and
+budgets a tool user needs; the *quality bar* built on top of them belongs to the installing project
+(thinkrail's `writing-specs`), which is why the skill does not restate style rules.
 
 ## Knowledge delivery
 
@@ -101,6 +112,9 @@ revalidate-on-read `SpecIndex` the agent tools use.
   state — `pi` owns state — and never serves a stale graph.
 - Tools never edit prose; `spec_update` is frontmatter-only, lossless (preserves comments / nested
   fields), and never un-specs a file.
+- Structure lint never changes what is a spec or whether the graph is valid; it only reports. The
+  skeleton vocabulary and budgets live once, in `core`, and every consumer (scaffold, validate, the
+  skill, a host's gate) quotes them from there.
 
 ## Non-goals
 

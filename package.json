@@ -69,6 +69,7 @@
 		"check:boundaries": "bun test scripts/checkModuleBoundaries.test.ts && bun scripts/check-module-boundaries.ts",
 		"check:seams": "bun scripts/check-binary-seams.ts",
 		"check:spec-surface": "bun scripts/check-spec-surface.ts",
+		"check:spec-lint": "bun test scripts/specLint.test.ts && bun scripts/check-spec-lint.ts",
 		"typography:generate": "bun --filter @thinkrail/web typography:generate",
 		"typography:validate": "bun --filter @thinkrail/web typography:validate",
 		"typography:check": "bun --filter @thinkrail/web typography:check",

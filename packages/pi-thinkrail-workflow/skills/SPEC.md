@@ -196,7 +196,7 @@ flowchart LR
 | `starting-a-new-project` | worker — inception interview (empty repo → goal-and-requirements) | `setting-up-a-project` + narrow self-trigger | active; route-in observed by the routing suite; the interview itself and its living-doc template (2026-09) unverified by use (rule 14 suspended — a slice-3 candidate via the user simulator) |
 | `importing-a-codebase` | worker — existing codebase → first spec graph (derive + adopt existing docs + minimal interview) | `setting-up-a-project` + narrow self-trigger | active; covered by a tagged `@agent` e2e; route-in also observed by the routing suite; the doc-adoption offer observed green by the harness's importing suite (2026-07: adoption + no-candidates regression scenarios; the pre-change skill run red against the same scenario as the before/after control) |
 | `asking-user-questions` | concept — `ask_user_question` rounds, options, inference confirmation, degradation | — (reached by name, rule 4) | active; observed by use (2026-07 manual: loaded through brainstorming's reference, a round composed + resolved) |
-| `writing-specs` | concept — the spec quality bar (short / honest / on-rails) for every spec-producing flow | — (reached by name, rule 4) | active; observed by use (2026-07 manual: self-triggered for a spec revision and applied) |
+| `writing-specs` | concept — the spec quality bar (short / honest / on-rails / shaped) for every spec-producing flow | — (reached by name, rule 4) | active; observed by use (2026-07 manual: self-triggered for a spec revision and applied) |
 | `choosing-a-workflow` | router (root) — classification + routing for workflow-eligible work | — (conditional pointer from the always-on rule, rule 4) | active; revised narrow-entry behavior unverified by use; previous onboarding, PR/change, and direct-work classifications were observed |
 | `writing-workflow-skills` | worker — authoring checklist for adding workflows | — (self-trigger only, rule 4) | active |
 | `shipping-a-pr` | worker — PR lifecycle (create with gates / body or screenshot maintenance / up-to-date sync / checks / review comments — phases as sibling docs) | `choosing-a-workflow` (root) + narrow self-trigger | active; snapshot-by-default completion and verification reuse unverified by use (rule 14 suspended) |
@@ -316,10 +316,14 @@ follows is only the rationale the skill bodies don't state:
   each phase doc instantiates it at its own action points (pre-push re-assertions after
   tree-mutating steps, title/body re-fetched and the requested mutation reapplied to the fresh value,
   `UNKNOWN` merge state polled, throwaway cleanup owned by the phase that made the throwaway).
-- **`writing-specs`** carries the family's spec quality bar once — short / honest / on-rails — and is
-  the accruing home for the family's rules about specs and the spec graph as they grow. Graph
+- **`writing-specs`** carries the family's spec quality bar once — short / honest / on-rails / shaped —
+  and is the accruing home for the family's rules about specs and the spec graph as they grow. Graph
   *mechanics* (frontmatter, link kinds, the `spec_*` tools) stay with the spec-graph skill
   ([[module-spec-graph]]); this concept is the bar the workflows hold on top of them. Extracted per
   rules 3/7 when the setup trio carried three drifting copies of the bar (and the dispatcher — a
   router — carried norms it shouldn't, per rule 2). The goal-doc shape (a living product record with no
   versions or roadmap) lives here, not in either setup worker, because both draft the graph root.
+- **"Shaped"** (2026-09) is the six-section module skeleton, the numeric budgets, and the
+  subtract-when-you-add rule. The numbers are quoted from `pi-spec-graph/core`'s `DEFAULT_SPEC_BUDGETS`;
+  the spec-graph skill repeats only the skeleton and budgets a tool user needs, so the two skills cannot
+  drift on the bar itself.

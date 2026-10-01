@@ -8,6 +8,20 @@ export {
 	type SpecNode,
 } from "./graph.ts";
 export {
+	DEFAULT_SPEC_BUDGETS,
+	formatLintFinding,
+	LINT_RULES,
+	type LintFinding,
+	type LintReport,
+	type LintRule,
+	lintSpec,
+	lintSpecs,
+	MODULE_SECTIONS,
+	REQUIRED_MODULE_SECTIONS,
+	SECTIONED_TYPES,
+	type SpecBudgets,
+} from "./lint.ts";
+export {
 	FIELD_ORDER,
 	FIELDS,
 	type Frontmatter,

@@ -68,8 +68,12 @@ default renderer.
 ## Specs and comments
 
 Specs are the durable home for intent, decisions, invariants, trade-offs, and post-mortems. Keep them
-concise and avoid restating code or another spec. Comments are near-zero: lint/type directives and a
-rare one-line hazard note are acceptable; rationale and narrative belong in the owning spec.
+concise and avoid restating code or another spec. A module spec has six sections in a fixed order
+(Responsibility, Boundary, Behavior, Invariants, Decisions, History); each addition goes into the
+section that owns its kind and replaces the prose it supersedes. A post-mortem is one `Invariants`
+line plus one `History` line, never narrative in `Behavior`. The `writing-specs` skill carries the
+full bar and budgets. Comments are near-zero: lint/type directives and a rare one-line hazard note are
+acceptable; rationale and narrative belong in the owning spec.
 
 ## Verification
 
@@ -84,7 +88,8 @@ caused by the requested change, and rerun them without asking for approval at ea
   affect the shipped runtime.
 - Fast gates: `bun run check:deps`, `bun run check:boundaries`, `bun run check:seams`, `bun run lint`,
   and `bun run typecheck`. Unit tests are `bun run test`; `bun run check:spec-surface` validates enrolled
-  spec/barrel public surfaces.
+  spec/barrel public surfaces; `bun run check:spec-lint` ratchets spec structure against
+  `scripts/spec-lint-baseline.json` (a spec may only get closer to the shape budgets, never further).
 - `bun run test:workflows` is on-demand: it uses real provider tokens and is not a commit/CI gate.
 - Binary and desktop artifact modes have separate gates; use them when changing those artifacts.
 
@@ -100,6 +105,8 @@ Green gates are necessary but not sufficient:
 - For nontrivial implementation, do a subtraction pass: remove avoidable abstractions, state owners,
   dependencies, compatibility layers, and fallbacks. Report material removals and justify layers that
   remain; do not add ceremony for a localized edit.
+- Do the same pass on spec edits: an insert-only spec diff is a smell. `check:spec-lint` must hold;
+  a baseline entry that went up is a decision to state, not a side effect.
 - Never add `biome-ignore`, `@ts-expect-error`, `@ts-ignore`, `eslint-disable`, or `as any` merely to make
   a gate pass. Treat the error as a design signal. If a suppression is genuinely required, get explicit
   user approval first.

@@ -735,10 +735,10 @@ test("spec_delete errors on an unknown id and leaves a dangling link behind", as
 
 test("spec_validate: clean graph, then dangling links across every kind", async () => {
 	await withRoot(async (root) => {
-		await run(
-			"spec_create",
-			{ path: "a/SPEC.md", id: "a", type: "module-design", title: "A" },
-			root,
+		mkdirSync(join(root, "a"));
+		writeFileSync(
+			join(root, "a/SPEC.md"),
+			"---\nid: a\ntype: module-design\ntitle: A\n---\n## Responsibility\n\nx\n\n## Boundary\n\ny\n",
 		);
 		expect(text(await run("spec_validate", {}, root))).toContain("valid: no issues");
 
@@ -764,6 +764,72 @@ test("spec_validate: clean graph, then dangling links across every kind", async 
 			"parent:ghost-parent",
 			"references:ghost-ref",
 		]);
+	});
+});
+
+test("spec_create scaffolds the six-section skeleton for module specs and says what goes where", async () => {
+	await withRoot(async (root) => {
+		const created = await run(
+			"spec_create",
+			{ path: "m/SPEC.md", id: "m", type: "submodule-design", title: "M" },
+			root,
+		);
+		const body = readFileSync(join(root, "m/SPEC.md"), "utf8").split("---\n")[2];
+		expect(body).toBe(
+			"\n## Responsibility\n\n## Boundary\n\n## Behavior\n\n## Invariants\n\n## Decisions\n\n## History\n",
+		);
+		expect(text(created)).toContain("Delete any section you leave empty");
+
+		const arch = await run(
+			"spec_create",
+			{ path: "arch.md", id: "arch", type: "architecture-design", title: "Arch" },
+			root,
+		);
+		expect(text(arch)).not.toContain("Delete any section");
+		expect(readFileSync(join(root, "arch.md"), "utf8")).toContain("## Drivers");
+	});
+});
+
+test("spec_validate reports structure warnings, scopes them by id, and caps the listing", async () => {
+	await withRoot(async (root) => {
+		await run(
+			"spec_create",
+			{ path: "m/SPEC.md", id: "m", type: "module-design", title: "M" },
+			root,
+		);
+		const fresh = await run("spec_validate", {}, root);
+		expect(text(fresh)).toContain("Spec-graph links are valid.");
+		expect(text(fresh)).toContain("Structure warnings (6 in 1 spec; empty-section 6)");
+		expect(text(fresh)).toContain('m/SPEC.md:7 [empty-section] "## Responsibility" has no content');
+		const details = fresh.details as { lint: { checked: number; findings: unknown[] } };
+		expect(details.lint.checked).toBe(1);
+		expect(details.lint.findings).toHaveLength(6);
+
+		const rows = Array.from({ length: 50 }, (_, i) => `- item ${i}\n${"  more\n".repeat(8)}`).join(
+			"",
+		);
+		mkdirSync(join(root, "n"));
+		writeFileSync(
+			join(root, "n/SPEC.md"),
+			`---\nid: n\ntype: submodule-design\ntitle: N\n---\n## Responsibility\n\nx\n\n## Boundary\n\n${rows}`,
+		);
+		const all = text(await run("spec_validate", {}, root));
+		expect(all).toContain("in 2 specs");
+		expect(all).toContain("… ");
+		expect(all).toContain("more (pass id to scope to one spec)");
+
+		const scoped = await run("spec_validate", { id: "m" }, root);
+		expect(text(scoped)).toContain("Structure warnings (6 in 1 spec; empty-section 6)");
+		expect(text(scoped)).not.toContain("n/SPEC.md");
+		expect(isError(await run("spec_validate", { id: "nope" }, root))).toBe(true);
+
+		writeFileSync(
+			join(root, "m/SPEC.md"),
+			"---\nid: m\ntype: module-design\ntitle: M\n---\n## Responsibility\n\nx\n\n## Boundary\n\ny\n",
+		);
+		expect(text(await run("spec_validate", { id: "m" }, root))).toContain(
+			"valid: no issues found. Structure: no warnings for this spec.",
+		);
 	});
 });
 

@@ -17,8 +17,8 @@ None edit prose.
 
 ## Boundary
 
-- **Owns:** tool registration, param schemas, and result formatting; the per-root `SpecIndex` cache and the
-  `spec_create` scaffold headings (`shared.ts`).
+- **Owns:** tool registration, param schemas, and result formatting; the per-root `SpecIndex` cache, the
+  `spec_create` scaffold headings, and the module-scaffold guide text (`shared.ts`).
 - **Public surface:** the `index.ts` **barrel** exporting `registerSpecTools(pi)`; the extension entry
   (`../index.ts`) is the only caller.
 - **Allowed deps:** `core/` (via its barrel), `@earendil-works/pi-coding-agent` (types + `registerTool`),
@@ -51,6 +51,15 @@ file; the other four are read-only.
   tool reports, so its `Created <path>` never disagrees with what `spec_get` will say), the assembled
   bytes must parse back as a spec before anything is written, and the write itself is exclusive
   (`flag: "wx"`) so the existence check cannot be raced or satisfied by a link.
+- `spec_create` scaffolds module and submodule specs with `core`'s `MODULE_SECTIONS` — all six headings,
+  heading-only, never a placeholder sentence — and its result text tells the author what each section
+  holds and to delete any left empty. The scaffold is the write half of a loop `spec_validate` closes: a
+  fresh, unfilled scaffold reports six `empty-section` warnings until it is filled or trimmed.
+- `spec_validate` separates **errors** (dangling links, duplicate ids, parent cycles — the graph is
+  invalid) from **structure warnings** (`core`'s `lintSpecs` over every spec, or over one when `id` is
+  passed). Warnings never make the graph invalid; the text lists at most 40 findings with a per-rule
+  summary and a count of the rest, so a large repo's report stays readable in a tool result. `details`
+  carries the full `ValidationReport` plus `lint`.
 - The spec root is `ctx.cwd`; one `SpecIndex` is reused per root (freshness handled in `core/` — see
   `module-spec-graph`). `spec_update` reads via `recordForId` to reuse the scan's cached read; write tools
   just write, and the next read picks the change up.

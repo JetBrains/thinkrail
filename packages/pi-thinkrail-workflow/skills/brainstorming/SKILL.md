@@ -34,9 +34,11 @@ description: "Use before implementation when a request requires choosing product
 7. **Review once.** Present one cohesive design scaled to the decision. Ask for one approval only when
    the user has not already approved the same design through their request or acceptance criteria.
    Revise the task-spec if they adjust it.
-8. **Promote.** Read the **writing-specs** concept skill, then move any settled boundary, contract, or
-   decision into the relevant durable `SPEC.md`; use `spec_create` for a new module, `spec_update` for
-   frontmatter, and `edit` for prose. Run `spec_validate` after structural changes.
+8. **Promote and prune.** Read the **writing-specs** concept skill, then move any settled boundary,
+   contract, or decision into the relevant durable `SPEC.md`, into the section that owns its kind,
+   replacing the prose it supersedes rather than adding beside it; use `spec_create` for a new module,
+   `spec_update` for frontmatter, and `edit` for prose. Run `spec_validate` with the spec's `id` and
+   clear new structure warnings.
 9. **Build.** Implement directly against the accepted design. Before handoff, self-review the task
    diff: no silent lint/type suppressions, duplicated nontrivial derivations, rationale left as code
    comments, or remnants of a replaced pattern. Keep durable specs honest and retire the task-spec

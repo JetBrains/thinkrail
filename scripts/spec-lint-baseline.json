@@ -1,0 +1,326 @@
+{
+	".github/SPEC.md": {
+		"unknown-section": 6
+	},
+	"apps/cli/SPEC.md": {
+		"bullet-length": 5,
+		"heading-gap": 1,
+		"unknown-section": 10
+	},
+	"apps/desktop/SPEC.md": {
+		"bullet-length": 1,
+		"heading-gap": 1,
+		"unknown-section": 11
+	},
+	"apps/web/SPEC.md": {
+		"bullet-length": 9,
+		"heading-gap": 1,
+		"unknown-section": 4
+	},
+	"apps/web/scripts/SPEC.md": {
+		"missing-section": 1,
+		"table-cell": 1,
+		"unknown-section": 1
+	},
+	"apps/web/src/auth/SPEC.md": {
+		"unknown-section": 2
+	},
+	"apps/web/src/chat/SPEC.md": {
+		"bullet-length": 3,
+		"bytes": 1,
+		"heading-gap": 1,
+		"lines": 1,
+		"missing-section": 1,
+		"unknown-section": 1,
+		"words": 1
+	},
+	"apps/web/src/chat/tools/SPEC.md": {
+		"bullet-length": 3,
+		"heading-gap": 1,
+		"unknown-section": 2
+	},
+	"apps/web/src/chat/tools/subagent/SPEC.md": {
+		"unknown-section": 2
+	},
+	"apps/web/src/chat/tools/web/SPEC.md": {
+		"unknown-section": 1
+	},
+	"apps/web/src/components/SPEC.md": {
+		"bullet-length": 5,
+		"heading-gap": 1,
+		"unknown-section": 2
+	},
+	"apps/web/src/components/ui/SPEC.md": {
+		"bullet-length": 1,
+		"unknown-section": 1
+	},
+	"apps/web/src/lib/SPEC.md": {
+		"bullet-length": 2
+	},
+	"apps/web/src/navigation/SPEC.md": {
+		"unknown-section": 4
+	},
+	"apps/web/src/panels/SPEC.md": {
+		"bullet-length": 21,
+		"bytes": 1,
+		"heading-gap": 2,
+		"lines": 1,
+		"unknown-section": 1,
+		"words": 1
+	},
+	"apps/web/src/shell/SPEC.md": {
+		"unknown-section": 8
+	},
+	"apps/web/src/shell/layout/SPEC.md": {
+		"bullet-length": 1,
+		"unknown-section": 4
+	},
+	"apps/web/src/store/SPEC.md": {
+		"bullet-length": 4,
+		"bytes": 1,
+		"heading-gap": 1,
+		"lines": 1,
+		"words": 1
+	},
+	"apps/web/src/styles/COLOR.md": {
+		"missing-section": 2,
+		"table-cell": 4,
+		"unknown-section": 7
+	},
+	"apps/web/src/styles/SPACING.md": {
+		"missing-section": 2,
+		"unknown-section": 4
+	},
+	"apps/web/src/styles/TYPOGRAPHY.md": {
+		"missing-section": 2,
+		"table-cell": 1,
+		"unknown-section": 9
+	},
+	"apps/web/src/themes/SPEC.md": {
+		"heading-gap": 1,
+		"unknown-section": 3
+	},
+	"apps/web/src/transport/SPEC.md": {
+		"bullet-length": 3,
+		"heading-gap": 1,
+		"unknown-section": 1
+	},
+	"apps/website/SPEC.md": {
+		"bullet-length": 4,
+		"heading-gap": 1,
+		"unknown-section": 4
+	},
+	"apps/website/src/attribution/SPEC.md": {
+		"missing-section": 2,
+		"unknown-section": 3
+	},
+	"architecture.md": {
+		"bullet-length": 11,
+		"heading-gap": 1
+	},
+	"central-integration.md": {
+		"bullet-length": 1
+	},
+	"e2e/SPEC.md": {
+		"heading-gap": 2,
+		"unknown-section": 4
+	},
+	"e2e/workflows/SPEC.md": {
+		"bullet-length": 2,
+		"unknown-section": 2
+	},
+	"packages/artifact-tests/SPEC.md": {
+		"unknown-section": 1
+	},
+	"packages/contracts/SPEC.md": {
+		"bullet-length": 9,
+		"bytes": 1,
+		"heading-gap": 1,
+		"lines": 1,
+		"unknown-section": 4,
+		"words": 1
+	},
+	"packages/pi-dag/SPEC.md": {
+		"unknown-section": 6
+	},
+	"packages/pi-dag/extension/SPEC.md": {
+		"missing-section": 1,
+		"unknown-section": 3
+	},
+	"packages/pi-dag/persistence/SPEC.md": {
+		"unknown-section": 5
+	},
+	"packages/pi-dag/runtime/SPEC.md": {
+		"missing-section": 1,
+		"unknown-section": 4
+	},
+	"packages/pi-delegation/SPEC.md": {
+		"bullet-length": 3,
+		"heading-gap": 1,
+		"lines": 1,
+		"table-cell": 7,
+		"unknown-section": 9,
+		"words": 1
+	},
+	"packages/pi-subagents/SPEC.md": {
+		"bullet-length": 1,
+		"table-cell": 2,
+		"unknown-section": 6
+	},
+	"packages/pi-thinkrail-workflow/SPEC.md": {
+		"unknown-section": 4
+	},
+	"packages/pi-thinkrail-workflow/skills/SPEC.md": {
+		"bullet-length": 6,
+		"heading-gap": 2,
+		"missing-section": 1,
+		"table-cell": 1,
+		"unknown-section": 6
+	},
+	"packages/pi-todos/SPEC.md": {
+		"bullet-length": 1,
+		"table-cell": 1,
+		"unknown-section": 6
+	},
+	"packages/pi-todos/core/SPEC.md": {
+		"heading-gap": 1,
+		"unknown-section": 1
+	},
+	"packages/pi-todos/tools/SPEC.md": {
+		"bullet-length": 1,
+		"unknown-section": 1
+	},
+	"packages/pi-visualize/SPEC.md": {
+		"missing-section": 1,
+		"unknown-section": 6
+	},
+	"packages/server/SPEC.md": {
+		"bullet-length": 1,
+		"heading-gap": 1,
+		"unknown-section": 4
+	},
+	"packages/server/src/agent/SPEC.md": {
+		"bullet-length": 11,
+		"bytes": 1,
+		"heading-gap": 1,
+		"lines": 1,
+		"unknown-section": 2,
+		"words": 1
+	},
+	"packages/server/src/analytics/SPEC.md": {
+		"missing-section": 2,
+		"unknown-section": 4
+	},
+	"packages/server/src/assist/SPEC.md": {
+		"bullet-length": 1,
+		"unknown-section": 1
+	},
+	"packages/server/src/auth/SPEC.md": {
+		"bullet-length": 3,
+		"heading-gap": 1,
+		"unknown-section": 2
+	},
+	"packages/server/src/dialog/SPEC.md": {
+		"bullet-length": 2
+	},
+	"packages/server/src/editors/SPEC.md": {
+		"bullet-length": 2
+	},
+	"packages/server/src/feedback/SPEC.md": {
+		"unknown-section": 1
+	},
+	"packages/server/src/git/SPEC.md": {
+		"bullet-length": 3,
+		"heading-gap": 2,
+		"unknown-section": 1,
+		"words": 1
+	},
+	"packages/server/src/github/SPEC.md": {
+		"bullet-length": 1
+	},
+	"packages/server/src/history/SPEC.md": {
+		"bullet-length": 2,
+		"unknown-section": 3
+	},
+	"packages/server/src/host/SPEC.md": {
+		"bullet-length": 9,
+		"heading-gap": 1,
+		"lines": 1,
+		"unknown-section": 1,
+		"words": 1
+	},
+	"packages/server/src/host/planReview.SPEC.md": {
+		"bullet-length": 4,
+		"heading-gap": 1,
+		"unknown-section": 1
+	},
+	"packages/server/src/log/SPEC.md": {
+		"unknown-section": 4
+	},
+	"packages/server/src/pr/SPEC.md": {
+		"bullet-length": 3,
+		"heading-gap": 1
+	},
+	"packages/server/src/projects/SPEC.md": {
+		"bullet-length": 1
+	},
+	"packages/server/src/reviews/SPEC.md": {
+		"bullet-length": 3,
+		"heading-gap": 1,
+		"unknown-section": 4
+	},
+	"packages/server/src/settings/SPEC.md": {
+		"unknown-section": 1
+	},
+	"packages/server/src/spec/SPEC.md": {
+		"bullet-length": 1
+	},
+	"packages/server/src/subprocess/SPEC.md": {
+		"bullet-length": 3,
+		"heading-gap": 1,
+		"unknown-section": 1
+	},
+	"packages/server/src/templates/SPEC.md": {
+		"bullet-length": 7,
+		"heading-gap": 2,
+		"unknown-section": 3
+	},
+	"packages/server/src/terminal/SPEC.md": {
+		"bullet-length": 4,
+		"heading-gap": 1,
+		"unknown-section": 2
+	},
+	"packages/server/src/todos/SPEC.md": {
+		"bullet-length": 5,
+		"heading-gap": 1,
+		"words": 1
+	},
+	"packages/server/src/watch/SPEC.md": {
+		"bullet-length": 2,
+		"heading-gap": 1
+	},
+	"packages/server/src/workspaces/SPEC.md": {
+		"bullet-length": 3,
+		"heading-gap": 1
+	},
+	"packages/shared/SPEC.md": {
+		"bullet-length": 7,
+		"heading-gap": 1,
+		"unknown-section": 4
+	},
+	"packages/spec-graph/SPEC.md": {
+		"unknown-section": 6
+	},
+	"packages/spec-graph/core/SPEC.md": {
+		"bullet-length": 4,
+		"heading-gap": 1,
+		"table-cell": 1,
+		"unknown-section": 1
+	},
+	"packages/spec-graph/tools/SPEC.md": {
+		"unknown-section": 1
+	},
+	"packages/website-analytics/SPEC.md": {
+		"unknown-section": 2
+	}
+}

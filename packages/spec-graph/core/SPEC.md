@@ -12,8 +12,8 @@ tags: [spec-graph, pi-extension]
 The pi-free spec model: the is-a-spec rule, frontmatter parse/serialize and in-place edit (via the
 `yaml` library, with link/metadata lists inline), the derived graph (parent tree +
 `depends-on`/`references`/`implements` DAG + reverse edges), the on-demand in-memory read index, content
-grep with metadata filters, bounded graph slices, and structural validation. Imports **no
-`@earendil-works/*`**, so it is unit-testable on its own (`core/core.test.ts`).
+grep with metadata filters, bounded graph slices, link validation, and per-spec structural lint. Imports
+**no `@earendil-works/*`**, so it is unit-testable on its own (`core/core.test.ts`, `core/lint.test.ts`).
 
 ## Boundary
 
@@ -30,8 +30,9 @@ grep with metadata filters, bounded graph slices, and structural validation. Imp
 
 ## Leaves & the dependency graph
 
-Acyclic and one-way: `parse` is the root, `graph` builds on it, and `query`/`validate`/`store` build on
-`graph`. The barrel re-exports the leaves and adds no logic.
+Acyclic and one-way: `parse` is the root, `graph` builds on it, `query`/`validate`/`store` build on
+`graph`, and `lint` reads a file's content through `parse` alone. The barrel re-exports the leaves and
+adds no logic.
 
 | leaf | owns | depends on |
 | --- | --- | --- |
@@ -39,6 +40,7 @@ Acyclic and one-way: `parse` is the root, `graph` builds on it, and `query`/`val
 | `graph.ts` | files → nodes + edges (parent tree, DAG + reverse); duplicate-id tracking | `parse` |
 | `query.ts` | content grep with metadata filters; bounded graph slices | `parse`, `graph` |
 | `validate.ts` | dangling links, duplicate ids, parent cycles | `parse`, `graph` |
+| `lint.ts` | per-spec structural findings against `SpecBudgets`; the module skeleton vocabulary (`MODULE_SECTIONS`, `REQUIRED_MODULE_SECTIONS`, `SECTIONED_TYPES`) | `parse`, `query` (the `SpecContentEntry` shape) |
 | `store.ts` | `SpecIndex`: the on-demand fs glob + per-file parse cache + memoized graph (the `core/index` module); the indexable-path rule (`resolveSpecPath`) | `parse`, `graph`, `query` |
 
 ## Invariants
@@ -108,6 +110,19 @@ Acyclic and one-way: `parse` is the root, `graph` builds on it, and `query`/`val
   `node_modules` is lowercase on disk and the exact check already skips it — and it cost the `Build/`
   case, so the glob stays exact. What the fold does not reach at all: a spec written into `NODE_MODULES/`
   by pi's own `write` never passes through `resolveSpecPath`.
+- Lint findings are **advisory and content-only**: `lintSpec` never affects `isSpec`, the graph, or
+  `validateGraph`. `LINT_RULES` is a stable vocabulary, so a consumer may baseline counts per rule.
+  Line numbers are file-absolute. `DEFAULT_SPEC_BUDGETS` is the one source for the numbers the writing
+  rules quote.
+- `bytes` measures the **whole file**, frontmatter included, because it guards what a reader loads in one
+  call; `lines` and `words` measure the body. The section rules (`missing-section`, `unknown-section`,
+  `empty-section`) apply only to `SECTIONED_TYPES`; the size and shape rules apply to every spec.
+- Lint reads Markdown the CommonMark way. A fence at any indentation closes only on a same-character
+  marker at least as long as its opener and hides its content from every structure rule. A heading may
+  carry up to three leading spaces. A table is a block whose second line is a delimiter row (leading
+  pipes optional); an escaped `\|` (odd backslash run) is cell content.
+- A list item ends at a blank line, a heading, another marker, or a fence opened at or outside its own
+  indentation. A `###` heading is not content for `empty-section`, so an unfilled scaffold cannot pass.
 - `SpecNode.type` stays `string`: the read model indexes whatever is on disk, so it tolerates any `type`;
   the `SPEC_TYPES` vocabulary constrains only the `spec_create` authoring surface, never the graph.
 - Finite vocabularies (`SPEC_TYPES`, `SPEC_STATUSES`, `SLICE_DIRECTIONS`, `LINK_KINDS`, `IDENTITY_FIELDS`)

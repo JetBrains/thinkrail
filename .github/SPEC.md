@@ -31,7 +31,7 @@ pipeline.
 Workflow Bun setup reads the root `package.json` `packageManager` pin through `bun-version-file`.
 Desktop's packaged runtime remains Electrobun-owned (see [[module-desktop]]).
 
-PR and merge-queue gates cover dependency/boundary/seam/spec-surface conformance, lint/typecheck, unit
+PR and merge-queue gates cover dependency/boundary/seam/spec-surface/spec-lint conformance, lint/typecheck, unit
 and no-agent browser tests. Linux and Windows run native CLI artifact smoke; Linux also runs browser tests
 against the compiled binary. Desktop PR coverage builds the Linux target, runs native-window and shared
 artifact probes under Xvfb with test-only software-rendering flags, and runs desktop-backed browser tests.

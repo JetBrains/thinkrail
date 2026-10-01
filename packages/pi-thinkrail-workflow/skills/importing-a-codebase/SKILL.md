@@ -79,7 +79,9 @@ Save with the spec tools as you go (`spec_create` per node, `edit` for prose). O
    invariants the code enforces.
 3. **One short `SPEC.md` per genuine module** (`type: module-design`, or `submodule-design` for a
    directory-level module inside a package; `parent:` its enclosing module or `architecture`). Each states
-   its **responsibility** and its **boundary** (allowed deps / forbidden reaches).
+   its **responsibility** and its **boundary** (allowed deps / forbidden reaches) in the six-section
+   shape `writing-specs` sets; the invariants the code enforces go under `Invariants`, the non-obvious
+   choices under `Decisions`, and any section with nothing settled is deleted, not left empty.
 
 **Adopted docs become nodes in place.** First, for each accepted candidate: read it carefully, then
 add spec frontmatter where the file lies (`id`, `type`, `title`, `status: draft`, `parent`;
