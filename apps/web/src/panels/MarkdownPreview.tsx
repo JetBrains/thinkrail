@@ -1,17 +1,13 @@
 import { useMemo } from "react";
 import { stripFrontmatter } from "@/lib/utils";
 import type { ResourceViewProps } from "@/resources";
-import { Markdown, type MarkdownRehypePlugins } from "../chat/Markdown";
+import { Markdown } from "../chat/Markdown";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
+import { documentRehypePlugins } from "./markdownHtml";
 import { documentComponents, remarkHeadingIds } from "./markdownLinks";
 import { type ComposerInsert, PreviewCommenting } from "./PreviewCommenting";
 import { ReviewThreadCard } from "./ReviewThreadCard";
-import {
-	frontmatterOffset,
-	indivisibleSpans,
-	snapSplitLine,
-	sourceLineRehype,
-} from "./sourceLines";
+import { frontmatterOffset, indivisibleSpans, snapSplitLine } from "./sourceLines";
 import { useScrollViewState } from "./useScrollViewState";
 
 const DOCUMENT_PROSE = [
@@ -53,6 +49,7 @@ export function MarkdownDocument({
 			text={stripFrontmatter(content)}
 			className={DOCUMENT_PROSE}
 			remarkPlugins={[remarkGithubAlerts, remarkHeadingIds]}
+			rehypePlugins={documentRehypePlugins()}
 			components={{ ...alertComponents, ...components }}
 		/>
 	);
@@ -136,7 +133,7 @@ export default function MarkdownPreview({
 	const mdProps = (stampOffset: number) => ({
 		className: DOCUMENT_PROSE,
 		remarkPlugins: [remarkGithubAlerts, remarkHeadingIds],
-		rehypePlugins: [[sourceLineRehype, { offset: stampOffset }]] as MarkdownRehypePlugins,
+		rehypePlugins: documentRehypePlugins(stampOffset),
 		components: { ...alertComponents, ...components },
 	});
 	const threadInserts: FlowInsert[] = review.threads.flatMap((thread) => {

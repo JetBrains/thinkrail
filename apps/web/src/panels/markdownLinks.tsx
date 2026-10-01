@@ -83,7 +83,10 @@ function scrollToAnchor(id: string): void {
 		?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-export function documentComponents(ctx: { workspaceId: string; path: string }): Components {
+export function documentComponents(
+	ctx: { workspaceId: string; path: string },
+	bytesUrl: (workspaceId: string, path: string) => string = resourceBytesUrl,
+): Components {
 	function DocumentLink({ href, children }: { href?: string; children?: ReactNode }) {
 		const kind = classifyHref(href);
 		if (kind === "anchor" && href) {
@@ -123,16 +126,62 @@ export function documentComponents(ctx: { workspaceId: string; path: string }): 
 		);
 	}
 
-	function DocumentImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
-		const isRelative = classifyHref(src) === "relative" && src !== undefined;
-		const target = isRelative ? resolveRelativePath(ctx.path, relativePathname(src)) : null;
-		const resolved = isRelative
-			? target
-				? resourceBytesUrl(ctx.workspaceId, target)
-				: undefined
-			: src;
-		return <img src={resolved} alt={alt ?? ""} title={title} />;
+	const resolveSource = (src: string | undefined): string | undefined => {
+		if (classifyHref(src) !== "relative" || src === undefined) return src;
+		const target = resolveRelativePath(ctx.path, relativePathname(src));
+		return target ? bytesUrl(ctx.workspaceId, target) : undefined;
+	};
+	const resolveSourceSet = (srcSet: string | undefined): string | undefined =>
+		srcSet
+			?.split(/,\s+/)
+			.map((candidate) => {
+				const [url, ...descriptor] = candidate.trim().split(/\s+/);
+				return [resolveSource(url) ?? "", ...descriptor].join(" ").trim();
+			})
+			.join(", ");
+
+	function DocumentImage({
+		src,
+		alt,
+		title,
+		width,
+		height,
+		align,
+	}: {
+		src?: string;
+		alt?: string;
+		title?: string;
+		width?: string | number;
+		height?: string | number;
+		align?: string;
+	}) {
+		const floated =
+			align === "right" ? "float-right ml-8" : align === "left" ? "float-left mr-8" : undefined;
+		return (
+			<img
+				src={resolveSource(src)}
+				alt={alt ?? ""}
+				title={title}
+				width={width}
+				height={height}
+				className={floated}
+			/>
+		);
 	}
 
-	return { a: DocumentLink, img: DocumentImage } as Components;
+	function DocumentSource({
+		srcSet,
+		media,
+		type,
+		sizes,
+	}: {
+		srcSet?: string;
+		media?: string;
+		type?: string;
+		sizes?: string;
+	}) {
+		return <source srcSet={resolveSourceSet(srcSet)} media={media} type={type} sizes={sizes} />;
+	}
+
+	return { a: DocumentLink, img: DocumentImage, source: DocumentSource } as Components;
 }

@@ -1537,8 +1537,23 @@ own section. The kebab menu (`plan-menu`, a
   the open came from — an **in-doc `#` link**
   scrolls the preview (headings carry slug ids from the in-repo `remarkHeadingIds` transform), an
   **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
-  (built from `transport.httpBase()`). A cross-file link's `#fragment` is not yet followed (opens the
+  (through `resourcePane.resourceBytesUrl`, injected into `documentComponents` so the markdown layer never
+  reaches for the transport itself). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
+- **Document markdown renders sanitized raw HTML; chat markdown does not.** READMEs place logos and
+  banners with `<p align="center"><img src width>`, float images with `<img align="right">`, fold
+  sections in `<details>`, and ship theme-aware logos as `<picture><source media srcset>`; shown as
+  literal tags, those documents lose exactly their most visible content. `markdownHtml.documentRehypePlugins`
+  runs `rehype-raw` and then `rehype-sanitize` on GitHub's `defaultSchema` with three deltas: the alert
+  element the in-repo remark transform emits (`mdalert` + `variant`) is allowed, `<source>` keeps
+  `srcset`/`media`/`type`/`sizes`, and ids keep their slugs (`clobberPrefix: ""`) so `#` navigation and
+  `remarkHeadingIds` still agree. Everything active or stylistic — `script`, `iframe`, `style`, event
+  handlers, inline `style`, `javascript:` URLs — is dropped, and `data:` images with it (the schema's
+  `src` protocols are http/https/relative). Raw `<img>`/`<source>` go through the same relative-URL
+  rewrite as markdown images, so a README logo loads from the worktree; `width`/`height` survive, and
+  `align="left|right"` maps to a float utility rather than a presentational attribute. The source-line
+  stamps for commenting are added **after** sanitizing, so the sanitizer can never strip them. The chat
+  `Markdown` primitive is untouched: model output is not a document the user authored.
 - **Desktop file source wraps at the synchronized file column.** `MonacoEditor` uses `fileLineWidth` as
   `wordWrapColumn` (40–240, default 120). The independent `fileLineWidthBounded` default maps to Monaco
   `wordWrap: "bounded"`, wrapping sooner at the mounted file pane; off maps to `"wordWrapColumn"`, preserving
