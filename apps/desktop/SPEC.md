@@ -130,7 +130,9 @@ without them maximize covers the taskbar and the double-click / system-menu beha
 that lands upstream, `windowsFrame.ts` ORs the three bits onto the HWND once after window creation through
 a `dlopen`ed `user32.dll` (`GetWindowLongPtrW` → `SetWindowLongPtrW` → `SetWindowPos(SWP_FRAMECHANGED)`) —
 pure style arithmetic behind an injectable API, no C source, no runtime compilation; a failure is logged,
-never fatal. The HTML controls call `minimizeWindow` / `toggleMaximizeWindow` / `closeWindow` requests;
+never fatal. Success is judged by reading the style back, not by `SetWindowLongPtrW`'s return: a 0 previous
+style is ambiguous, and its `SetLastError`/`GetLastError` disambiguation would span separate FFI calls the
+runtime may clobber. The HTML controls call `minimizeWindow` / `toggleMaximizeWindow` / `closeWindow` requests;
 close goes through `requestClose()`, the same path as the native X, so the quit coordinator still owns
 shutdown. The main process publishes `windowStateChanged { maximized, fullScreen }` on every `dom-ready` and
 on `resize` when it changed, and the preload exposes the `NativeWindowControlsBridge`

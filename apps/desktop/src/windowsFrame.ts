@@ -18,7 +18,7 @@ export function windowsFrameControlsStyle(style: bigint): bigint {
 
 export interface WindowsFrameApi {
 	getStyle(window: Pointer): bigint;
-	setStyle(window: Pointer, style: bigint): bigint;
+	setStyle(window: Pointer, style: bigint): void;
 	refreshFrame(window: Pointer): boolean;
 }
 
@@ -26,7 +26,9 @@ export function restoreWindowsFrameControls(window: Pointer, api: WindowsFrameAp
 	const style = api.getStyle(window);
 	const nextStyle = windowsFrameControlsStyle(style);
 	if (nextStyle === style) return false;
-	if (api.setStyle(window, nextStyle) === 0n) {
+	api.setStyle(window, nextStyle);
+	const appliedStyle = api.getStyle(window);
+	if (windowsFrameControlsStyle(appliedStyle) !== appliedStyle) {
 		throw new Error("Could not update the Windows window style");
 	}
 	if (!api.refreshFrame(window)) {
@@ -63,8 +65,9 @@ export function loadWindowsFrameApi(): WindowsFrameApi {
 	});
 	cachedWindowsFrameApi = {
 		getStyle: (window) => BigInt(library.symbols.GetWindowLongPtrW(window, GWL_STYLE)),
-		setStyle: (window, style) =>
-			BigInt(library.symbols.SetWindowLongPtrW(window, GWL_STYLE, style)),
+		setStyle: (window, style) => {
+			library.symbols.SetWindowLongPtrW(window, GWL_STYLE, style);
+		},
 		refreshFrame: (window) =>
 			library.symbols.SetWindowPos(window, null, 0, 0, 0, 0, SWP_FRAME_REFRESH),
 	};

@@ -19,57 +19,56 @@ test("adds all Windows frame control style bits", () => {
 	expect(windowsFrameControlsStyle(0x8000000000000000n)).toBe(0x80000000000b0000n);
 });
 
-test("does not refresh an already complete frame style", () => {
-	const calls: string[] = [];
-	const api = {
-		getStyle: () => frameControlBits,
-		setStyle: () => {
-			calls.push("set");
-			return 1n;
-		},
-		refreshFrame: () => {
-			calls.push("refresh");
-			return true;
+function fakeFrameApi(
+	initialStyle: bigint,
+	options: { applies?: boolean; refreshes?: boolean } = {},
+) {
+	let style = initialStyle;
+	const calls: Array<string | bigint> = [];
+	return {
+		calls,
+		api: {
+			getStyle: () => style,
+			setStyle: (_window: Pointer, next: bigint) => {
+				calls.push(next);
+				if (options.applies ?? true) style = next;
+			},
+			refreshFrame: () => {
+				calls.push("refresh");
+				return options.refreshes ?? true;
+			},
 		},
 	};
+}
+
+test("does not refresh an already complete frame style", () => {
+	const { api, calls } = fakeFrameApi(frameControlBits);
 	expect(restoreWindowsFrameControls(windowHandle, api)).toBe(false);
 	expect(calls).toEqual([]);
 });
 
 test("updates and refreshes an incomplete frame style", () => {
-	const calls: Array<string | bigint> = [];
-	const api = {
-		getStyle: () => 0x16c40000n,
-		setStyle: (_window: Pointer, style: bigint) => {
-			calls.push(style);
-			return 1n;
-		},
-		refreshFrame: () => {
-			calls.push("refresh");
-			return true;
-		},
-	};
+	const { api, calls } = fakeFrameApi(0x16c40000n);
 	expect(restoreWindowsFrameControls(windowHandle, api)).toBe(true);
 	expect(calls).toEqual([0x16cf0000n, "refresh"]);
 });
 
-test("throws when updating the frame style fails", () => {
-	const api = {
-		getStyle: () => 0n,
-		setStyle: () => 0n,
-		refreshFrame: () => true,
-	};
+test("treats a zero previous style as success when the bits land", () => {
+	const { api, calls } = fakeFrameApi(0n);
+	expect(restoreWindowsFrameControls(windowHandle, api)).toBe(true);
+	expect(calls).toEqual([frameControlBits, "refresh"]);
+});
+
+test("throws when the frame style bits do not land", () => {
+	const { api, calls } = fakeFrameApi(0x16c40000n, { applies: false });
 	expect(() => restoreWindowsFrameControls(windowHandle, api)).toThrow(
 		"Could not update the Windows window style",
 	);
+	expect(calls).toEqual([0x16cf0000n]);
 });
 
 test("throws when refreshing the frame fails", () => {
-	const api = {
-		getStyle: () => 0n,
-		setStyle: () => 1n,
-		refreshFrame: () => false,
-	};
+	const { api } = fakeFrameApi(0n, { refreshes: false });
 	expect(() => restoreWindowsFrameControls(windowHandle, api)).toThrow(
 		"Could not refresh the Windows window frame",
 	);
@@ -79,6 +78,6 @@ test.skipIf(process.platform !== "win32")("binds the user32 symbols behind the f
 	const api = loadWindowsFrameApi();
 	expect(loadWindowsFrameApi()).toBe(api);
 	expect(api.getStyle(0 as unknown as Pointer)).toBe(0n);
-	expect(api.setStyle(0 as unknown as Pointer, 0n)).toBe(0n);
+	api.setStyle(0 as unknown as Pointer, 0n);
 	expect(api.refreshFrame(0 as unknown as Pointer)).toBe(false);
 });
