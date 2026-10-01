@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib";
 import type { AnchorDraft, SurfaceReview } from "@/resources";
 
+function grow(el: HTMLTextAreaElement): void {
+	el.style.height = "auto";
+	el.style.height = `${Math.min(160, Math.max(56, el.scrollHeight + 2))}px`;
+}
+
 export function ReviewComposer({
 	draft,
 	label,
@@ -28,6 +33,7 @@ export function ReviewComposer({
 		if (!input) return;
 		input.focus();
 		input.setSelectionRange(input.value.length, input.value.length);
+		grow(input);
 	}, []);
 
 	const submit = (action: SurfaceReview["commenting"]["onSave"]) => {
@@ -48,8 +54,12 @@ export function ReviewComposer({
 				placeholder="Leave a review comment…"
 				value={text}
 				disabled={busy}
-				onChange={(event) => setText(event.target.value)}
+				onChange={(event) => {
+					setText(event.target.value);
+					grow(event.target);
+				}}
 				onKeyDown={(event) => {
+					event.stopPropagation();
 					if (event.key === "Escape") onClose();
 					if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
 						submit(commenting.onSave);

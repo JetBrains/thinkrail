@@ -23,7 +23,7 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
   below.
 - **Public surface (barrel):** `revertChange`, `undoChange`, `RevertChangeParams`, `UndoChangeParams`.
 - **Allowed deps:** `contracts` (`ChangeReceipt`/`RevertTarget`/`LineSpan`/`GitDiffScope`), `git`
-  (`resolveDiffRange`, bounded `readBlobBytesAtAsync`), `fs` (`resolveWorktreeFile` for containment, `classifyBytes`/
+  (`resolveDiffRange`, bounded `readBlobBytesAtAsync` + `readPathModeAtAsync`), `fs` (`resolveWorktreeFile` for containment, `classifyBytes`/
   `hashBytes`/`decodeText` for identity and textness), `persistence` (workspace lookup), `trash`,
   `@thinkrail/shared/codedError`, Node `fs`/`crypto`/`path`.
 - **Forbidden:** `host`, `agent`, `reviews`; any write outside `fs`'s contained path; `unlink`.
@@ -48,6 +48,9 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
   (`RANGE_INVALID`), never trusted.
 - **Range reverts are text-only and never change a file's existence.** A byte-only side, or a worktree
   file that is absent, is `RANGE_INVALID` — the whole-file revert is the operation for those.
+- **The line model is jsdiff's:** only `\n` terminates a line, a preceding `\r` remains part of that
+  terminated segment, and a lone `\r` is ordinary content. This is the model that produced the client's
+  `structuredPatch` spans, so the same span cannot address a different server line.
 - **Line endings and the final newline follow the side the lines come from.** Restored original lines
   carry their own EOLs (a CRLF base stays CRLF); a line that stopped being the file's last line is
   re-terminated with the file's dominant ending, so an unterminated base tail spliced into the middle
@@ -60,19 +63,25 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
   claim, then move that claim to the OS trash; **absent in the worktree** (deleted) → restore the original
   bytes, creating missing parent directories. Undo uses the same claim before an inverse removes a file.
   The rename occurs in the synchronous verify pass, so a later agent write recreates the real path and
-  cannot become the object an awaited trash helper removes; a trash failure renames the claim back.
+  cannot become the object an awaited trash helper removes. If trash fails, the claim is restored only
+  while the destination is absent; a concurrent recreation wins, and the original claim is preserved as
+  `.thinkrail-recovery-<ulid>` beside it with that absolute recovery path in the thrown error.
   `receipt.trashed` is the helper's absolute input path, so the file appears in the OS trash under its
   `.thinkrail-revert-<ulid>` temporary name. Absent on both sides is not a change and is refused. A
   *renamed* file reverts as its two halves — the new path trashes, the old path restores — because that
   is what the two sides of each path actually say.
-- **Writes are atomic**: a temp file in the same directory, the existing file's mode re-applied, then
-  `rename`. A crash mid-write leaves either the old file or the new one, never a truncated one.
+- **Symlinks and mode-only changes are refused as `UNSUPPORTED_CHANGE`.** Worktree identity is read with
+  `lstat`, and the original tree mode comes from `git ls-tree`; a symlink on either side is never followed.
+  Equal bytes with a different mode are not a content revert and are refused. A whole-file restore
+  applies the original Git mode (`100755` maps to executable permissions); a range keeps the worktree mode.
+- **Writes are atomic**: a temp file in the same directory, the selected mode applied, then `rename`.
+  A crash mid-write leaves either the old file or the new one, never a truncated one.
 
 ## Receipts
 
 - Every mutation answers with a **`ChangeReceipt`** whose id is also the undo token. The host keeps the
-  newest **20 per workspace** in memory, each holding the path's **`before` bytes** — restoring what the
-  path held *is* the inverse of every operation here, so there is no separate inverse payload to keep in
+  newest **20 per workspace** in memory, each holding the path's **`before` bytes and mode** — restoring
+  what the path held *is* the inverse of every operation here, so there is no separate inverse payload to keep in
   step. A trashed file is therefore undone by **writing its bytes back**, not by reaching into the
   trash, which no OS offers portably.
 - `undoChange` CAS-checks `expect.modifiedHash` against the current worktree file, applies the inverse,

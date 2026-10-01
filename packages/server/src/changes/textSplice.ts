@@ -4,17 +4,9 @@ export function splitLines(text: string): string[] {
 	const segments: string[] = [];
 	let start = 0;
 	for (let index = 0; index < text.length; index++) {
-		const char = text[index];
-		if (char === "\n") {
-			segments.push(text.slice(start, index + 1));
-			start = index + 1;
-			continue;
-		}
-		if (char !== "\r") continue;
-		const end = text[index + 1] === "\n" ? index + 2 : index + 1;
-		segments.push(text.slice(start, end));
-		index = end - 1;
-		start = end;
+		if (text[index] !== "\n") continue;
+		segments.push(text.slice(start, index + 1));
+		start = index + 1;
 	}
 	if (start < text.length) segments.push(text.slice(start));
 	return segments;
@@ -29,7 +21,6 @@ export function spanFits(span: LineSpan, lines: number): boolean {
 function ending(segment: string | undefined): string | null {
 	if (segment?.endsWith("\r\n")) return "\r\n";
 	if (segment?.endsWith("\n")) return "\n";
-	if (segment?.endsWith("\r")) return "\r";
 	return null;
 }
 
@@ -44,15 +35,12 @@ function endsAtTail(span: LineSpan, lines: number): boolean {
 function dominantEol(segments: readonly string[]): string | null {
 	let crlf = 0;
 	let lf = 0;
-	let cr = 0;
 	for (const segment of segments) {
 		if (segment.endsWith("\r\n")) crlf++;
 		else if (segment.endsWith("\n")) lf++;
-		else if (segment.endsWith("\r")) cr++;
 	}
-	if (crlf === 0 && lf === 0 && cr === 0) return null;
-	if (crlf >= lf && crlf >= cr) return "\r\n";
-	return lf >= cr ? "\n" : "\r";
+	if (crlf === 0 && lf === 0) return null;
+	return crlf >= lf ? "\r\n" : "\n";
 }
 
 export function revertedText(
@@ -83,7 +71,7 @@ export function revertedText(
 	if (tail !== undefined) {
 		if (finalEnding !== null && !terminated(tail)) segments[last] = tail + finalEnding;
 		if (finalEnding === null && terminated(tail)) {
-			segments[last] = tail.replace(/\r\n$|[\n\r]$/, "");
+			segments[last] = tail.replace(/\r?\n$/, "");
 		}
 	}
 	return segments.join("");

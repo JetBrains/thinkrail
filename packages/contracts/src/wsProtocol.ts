@@ -813,7 +813,8 @@ export type WsErrorCode =
 	| "STALE_VIEW"
 	| "SCOPE_IMMUTABLE"
 	| "RANGE_INVALID"
-	| "RECEIPT_UNKNOWN";
+	| "RECEIPT_UNKNOWN"
+	| "UNSUPPORTED_CHANGE";
 
 export interface WsResponse {
 	id: string;

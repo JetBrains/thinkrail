@@ -118,8 +118,11 @@ themselves.
   use utilities for colour, spacing, borders and layout (`bg-container-header-bg`, `text-primary`,
   `border-border-default`,
   `px-12`) and a **generated semantic typography class** for type (`tr-text-ui`, `tr-title-dialog`,
-  `tr-code-text`, …) — **never inline `style` objects, never raw hex.** Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come
-  from Tailwind (inline styles can't express them, and the responsive shell needs them).
+  `tr-code-text`, …) — **never inline `style` objects except renderer-measured geometry, and never raw
+  hex.** The bounded geometry exception covers values such as intrinsic media bounds, normalized overlays,
+  zoom, swipe position, and portal placement; colour, spacing, and control skin remain token utilities.
+  Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come from Tailwind (inline styles can't
+  express them, and the responsive shell needs them).
 - **Chrome geometry lives in `index.css`, host geometry arrives as CSS custom properties.** Beside the
   generated colour/spacing layers, `index.css` maps the shell's structural rows (`--spacing-panel-header-row`,
   `--spacing-topbar-row` from `tokens.css`) and the two host-published window-chrome insets

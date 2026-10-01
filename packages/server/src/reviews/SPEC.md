@@ -5,7 +5,6 @@ status: active
 title: reviews — draft comments on files/diffs + review sessions
 parent: module-server
 depends-on: [module-contracts]
-references: [task-review-comments]
 tags: [review]
 ---
 
@@ -14,7 +13,7 @@ tags: [review]
 The review layer: GitHub-style **draft comments** anchored to a workspace's files and diffs, collected
 without starting the agent, then sent — grouped **per file**, each file's comments into that file's one
 review chat — as a **structured context package**. Owns the per-workspace review store, anchor
-re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-review-comments]].
+re-anchoring, and package rendering.
 
 ## Model (mirrors the wire DTOs in `contracts`)
 
@@ -79,8 +78,8 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
   to push back on a change is to say so in the comment.
 - **`ReviewAnchor` = `path` + `side` + `contentHash` + an ordered `selectors` fallback chain**
   (`lineRange`, `textQuote` with exact/prefix/suffix, `structural` scheme+ref for a document node, `region`
-  for normalized `0..1` geometry; the `diffHunk` member exists in the union but no author populates it —
-  `textQuote` carries re-anchoring). The
+  for normalized `0..1` geometry; Ask-agent populates `diffHunk` with the exact displayed hunk header,
+  while `textQuote` carries re-anchoring). The
   `anchorState` axis (`anchored`/`moved`/`outdated`) is **orthogonal to `status`**: "was it discussed"
   and "is the anchor alive" never overwrite each other.
   **`contentHash` is sha-256 over the resource's bytes** (`fs.hashBytes`) and capture follows the

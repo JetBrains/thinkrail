@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { serveBlob, serveWorktreeFile } from "./fileRoutes";
+import { BLOB_SIZE_LIMIT, serveBlob, serveWorktreeFile } from "./fileRoutes";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x7f]);
 
@@ -107,12 +107,13 @@ test("/blob 404s on malformed locations, absent blobs, and tree paths", async ()
 	expect((await serveBlob("/blob/w1/")).status).toBe(404);
 });
 
-test("/files serves the worktree's current bytes and never caches them", async () => {
+test("/files streams the worktree's current bytes with sniffed headers and never caches them", async () => {
 	writeFileSync(join(repo, "notes.md"), "# edited\n");
 	const response = await serveWorktreeFile("/files/w1/notes.md");
 	expect(response.status).toBe(200);
 	expect(response.headers.get("Cache-Control")).toBe("no-store");
 	expect(response.headers.get("Content-Type")).toBe("text/markdown");
+	expect(response.headers.get("Content-Length")).toBe("9");
 	expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
 	expect(await response.text()).toBe("# edited\n");
 
@@ -122,6 +123,19 @@ test("/files serves the worktree's current bytes and never caches them", async (
 	expect((await serveWorktreeFile("/files/w1/..%2Fescaped.txt")).status).toBe(404);
 	expect((await serveWorktreeFile("/files/w1/docs")).status).toBe(404);
 	expect((await serveWorktreeFile("/files/w1")).status).toBe(404);
+});
+
+test("/blob refuses objects above the response cap before reading their content", async () => {
+	const large = join(repo, "large.bin");
+	writeFileSync(large, "");
+	truncateSync(large, BLOB_SIZE_LIMIT + 1);
+	git("add", "large.bin");
+	git("commit", "-m", "large blob");
+	const oid = git("rev-parse", "HEAD");
+
+	const response = await serveBlob(`/blob/w1/${oid}/large.bin`);
+	expect(response.status).toBe(413);
+	expect(await response.text()).toBe("blob too large");
 });
 
 test("file routes refuse .git and symlinks escaping the worktree", async () => {

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { extname } from "node:path";
 import type { ResourceMeta } from "@thinkrail/contracts";
 
-const TEXT_PROBE_BYTES = 8 * 1024;
+export const CONTENT_SNIFF_BYTES = 8 * 1024;
 const STRICT_UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const UTF8 = new TextDecoder("utf-8", { ignoreBOM: true });
 
@@ -55,7 +55,7 @@ function sniffMagic(bytes: Uint8Array): string | undefined {
 }
 
 function isTextBytes(bytes: Uint8Array): boolean {
-	if (bytes.subarray(0, TEXT_PROBE_BYTES).includes(0)) return false;
+	if (bytes.subarray(0, CONTENT_SNIFF_BYTES).includes(0)) return false;
 	try {
 		STRICT_UTF8.decode(bytes);
 		return true;
@@ -65,7 +65,7 @@ function isTextBytes(bytes: Uint8Array): boolean {
 }
 
 function isSvg(bytes: Uint8Array): boolean {
-	const head = UTF8.decode(bytes.subarray(0, TEXT_PROBE_BYTES));
+	const head = UTF8.decode(bytes.subarray(0, CONTENT_SNIFF_BYTES));
 	if (SVG_ROOT.test(head)) return true;
 	if (!XML_PROLOG.test(head)) return false;
 	const prologEnd = head.indexOf("?>");
@@ -86,10 +86,14 @@ export function decodeText(bytes: Uint8Array): string {
 	return UTF8.decode(bytes);
 }
 
+export function mimeFromPath(path: string): string | undefined {
+	return EXTENSION_MIME[extname(path).toLowerCase()];
+}
+
 export function resourceMeta(bytes: Uint8Array | null, path: string): ResourceMeta {
 	if (bytes === null) return { hash: null, byteLength: null, text: true };
 	const { text, mime } = classifyBytes(bytes);
-	const resolved = mime ?? EXTENSION_MIME[extname(path).toLowerCase()];
+	const resolved = mime ?? mimeFromPath(path);
 	return {
 		hash: hashBytes(bytes),
 		byteLength: bytes.byteLength,

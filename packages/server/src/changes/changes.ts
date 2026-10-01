@@ -1,11 +1,12 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import {
 	chmodSync,
+	linkSync,
+	lstatSync,
 	mkdirSync,
 	readFileSync,
 	renameSync,
 	rmSync,
-	statSync,
 	writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
@@ -18,7 +19,7 @@ import type {
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { classifyBytes, decodeText, hashBytes, resolveWorktreeFile } from "../fs";
-import { readBlobBytesAtAsync, resolveDiffRange } from "../git";
+import { readBlobBytesAtAsync, readPathModeAtAsync, resolveDiffRange } from "../git";
 import { loadWorkspaces } from "../persistence";
 import { trashFile } from "../trash";
 import { revertedText, spanFits, splitLines } from "./textSplice";
@@ -37,9 +38,17 @@ export interface UndoChangeParams {
 	expect: { modifiedHash: string | null };
 }
 
+interface FileState {
+	bytes: Uint8Array | null;
+	mode: number | null;
+}
+
 const RECEIPT_RING = 20;
 const BYTES = new TextEncoder();
 const ULID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const GIT_MODE_TYPE = 0o170000;
+const GIT_MODE_FILE = 0o100000;
+const GIT_MODE_SYMLINK = 0o120000;
 
 function base32(value: bigint, length: number): string {
 	let encoded = "";
@@ -58,7 +67,7 @@ function receiptId(): string {
 
 interface ReceiptRecord {
 	receipt: ChangeReceipt;
-	before: Uint8Array | null;
+	before: FileState;
 }
 
 const rings = new Map<string, ReceiptRecord[]>();
@@ -69,38 +78,44 @@ function workspace(workspaceId: string): Workspace {
 	return ws;
 }
 
-function worktreeBytes(abs: string): Uint8Array | null {
+function unsupported(path: string, reason: string): never {
+	throw new CodedError("UNSUPPORTED_CHANGE", `${path} ${reason}`);
+}
+
+function worktreeState(abs: string, path: string): FileState {
+	let stat: ReturnType<typeof lstatSync>;
 	try {
-		return readFileSync(abs);
+		stat = lstatSync(abs);
 	} catch (error) {
 		const code =
 			typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
-		if (code === "ENOENT") return null;
+		if (code === "ENOENT") return { bytes: null, mode: null };
 		throw error;
 	}
+	if (stat.isSymbolicLink())
+		unsupported(path, "is a symbolic link, which change mutations do not support.");
+	return { bytes: readFileSync(abs), mode: stat.mode & 0o777 };
 }
 
-function hashOf(bytes: Uint8Array | null): string | null {
-	return bytes === null ? null : hashBytes(bytes);
+function hashOf(state: FileState): string | null {
+	return state.bytes === null ? null : hashBytes(state.bytes);
 }
 
-function identity(bytes: Uint8Array | null): { hash: string | null; byteLength: number | null } {
-	return bytes === null
-		? { hash: null, byteLength: null }
-		: { hash: hashBytes(bytes), byteLength: bytes.byteLength };
+function identity(state: FileState): ChangeReceipt["before"] {
+	return state.bytes === null
+		? { hash: null, byteLength: null, mode: null }
+		: { hash: hashBytes(state.bytes), byteLength: state.bytes.byteLength, mode: state.mode };
 }
 
-function writeAtomic(abs: string, bytes: Uint8Array): void {
+function writeAtomic(abs: string, state: FileState): void {
+	if (state.bytes === null || state.mode === null)
+		throw new Error("Cannot write an absent file state");
 	const dir = dirname(abs);
 	mkdirSync(dir, { recursive: true });
-	let mode: number | undefined;
-	try {
-		mode = statSync(abs).mode;
-	} catch {}
 	const tmp = join(dir, `.thinkrail-revert-${process.pid}-${randomUUID().slice(0, 8)}.tmp`);
 	try {
-		writeFileSync(tmp, bytes);
-		if (mode !== undefined) chmodSync(tmp, mode);
+		writeFileSync(tmp, state.bytes);
+		chmodSync(tmp, state.mode);
 		renameSync(tmp, abs);
 	} catch (error) {
 		rmSync(tmp, { force: true });
@@ -114,11 +129,23 @@ function claimForTrash(abs: string): string {
 	return claimed;
 }
 
+function recoveryError(error: unknown, recovery: string): Error {
+	const message = error instanceof Error ? error.message : String(error);
+	return new Error(`${message} The claimed file was preserved at ${recovery}.`, { cause: error });
+}
+
 async function trashClaim(claimed: string, abs: string): Promise<void> {
 	try {
 		await trashFile(claimed);
 	} catch (error) {
-		renameSync(claimed, abs);
+		try {
+			linkSync(claimed, abs);
+		} catch {
+			const recovery = join(dirname(abs), `.thinkrail-recovery-${receiptId()}`);
+			renameSync(claimed, recovery);
+			throw recoveryError(error, recovery);
+		}
+		rmSync(claimed, { force: true });
 		throw error;
 	}
 }
@@ -127,8 +154,8 @@ function record(change: {
 	kind: ChangeReceipt["kind"];
 	workspaceId: string;
 	path: string;
-	before: Uint8Array | null;
-	after: Uint8Array | null;
+	before: FileState;
+	after: FileState;
 	trashed?: string;
 }): ChangeReceipt {
 	const receipt: ChangeReceipt = {
@@ -148,7 +175,18 @@ function record(change: {
 	return receipt;
 }
 
-async function originalSide(params: RevertChangeParams): Promise<Uint8Array | null> {
+function permissionsForGitMode(path: string, mode: number | null): number | null {
+	if (mode === null) return null;
+	if ((mode & GIT_MODE_TYPE) === GIT_MODE_SYMLINK) {
+		unsupported(path, "is a symbolic link in Git, which change mutations do not support.");
+	}
+	if ((mode & GIT_MODE_TYPE) !== GIT_MODE_FILE) {
+		unsupported(path, "is not a regular Git file, which change mutations do not support.");
+	}
+	return mode & 0o111 ? 0o755 : 0o644;
+}
+
+async function originalSide(params: RevertChangeParams): Promise<FileState> {
 	const ws = workspace(params.workspaceId);
 	const range = await resolveDiffRange(ws, params.scope);
 	if (range.modifiedRef !== null) {
@@ -163,15 +201,21 @@ async function originalSide(params: RevertChangeParams): Promise<Uint8Array | nu
 			"The original side of this diff no longer resolves — re-read it before reverting.",
 		);
 	}
-	return range.resolvedOriginalOid
-		? await readBlobBytesAtAsync(ws.worktreePath, range.resolvedOriginalOid, params.path)
-		: null;
+	if (!range.resolvedOriginalOid) return { bytes: null, mode: null };
+	const [bytes, gitMode] = await Promise.all([
+		readBlobBytesAtAsync(ws.worktreePath, range.resolvedOriginalOid, params.path),
+		readPathModeAtAsync(ws.worktreePath, range.resolvedOriginalOid, params.path),
+	]);
+	if ((bytes === null) !== (gitMode === null)) {
+		throw new Error(`Could not read a consistent original side for ${params.path}`);
+	}
+	return { bytes, mode: permissionsForGitMode(params.path, gitMode) };
 }
 
 function assertSameView(
 	params: RevertChangeParams,
-	original: Uint8Array | null,
-	modified: Uint8Array | null,
+	original: FileState,
+	modified: FileState,
 ): void {
 	const stale =
 		hashOf(original) !== params.expect.originalHash
@@ -184,6 +228,17 @@ function assertSameView(
 			"STALE_VIEW",
 			`The ${stale} side of ${params.path} changed since this diff was rendered — re-read it before reverting.`,
 		);
+	}
+}
+
+function assertNotModeOnly(path: string, original: FileState, modified: FileState): void {
+	if (
+		original.bytes !== null &&
+		modified.bytes !== null &&
+		hashOf(original) === hashOf(modified) &&
+		original.mode !== modified.mode
+	) {
+		unsupported(path, "has only a mode change, which change mutations do not support.");
 	}
 }
 
@@ -224,9 +279,10 @@ function revertedRange(
 
 export async function revertChange(params: RevertChangeParams): Promise<ChangeReceipt> {
 	const original = await originalSide(params);
-	const abs = resolveWorktreeFile(params.workspaceId, params.path);
-	const modified = worktreeBytes(abs);
+	const abs = resolveWorktreeFile(params.workspaceId, params.path, { followLeaf: false });
+	const modified = worktreeState(abs, params.path);
 	assertSameView(params, original, modified);
+	assertNotModeOnly(params.path, original, modified);
 	const change = {
 		kind: "revert" as const,
 		workspaceId: params.workspaceId,
@@ -234,15 +290,16 @@ export async function revertChange(params: RevertChangeParams): Promise<ChangeRe
 	};
 
 	if (params.target.kind === "range") {
-		const next = revertedRange(params.path, original, modified, params.target);
+		const bytes = revertedRange(params.path, original.bytes, modified.bytes, params.target);
+		const next = { bytes, mode: modified.mode };
 		writeAtomic(abs, next);
 		return record({ ...change, before: modified, after: next });
 	}
 	if (params.target.kind !== "file") {
 		throw new CodedError("RANGE_INVALID", `Unknown revert target for ${params.path}.`);
 	}
-	if (original === null) {
-		if (modified === null) {
+	if (original.bytes === null) {
+		if (modified.bytes === null) {
 			throw new CodedError(
 				"RANGE_INVALID",
 				`There is no change to revert for ${params.path} in this scope.`,
@@ -250,7 +307,12 @@ export async function revertChange(params: RevertChangeParams): Promise<ChangeRe
 		}
 		const claimed = claimForTrash(abs);
 		await trashClaim(claimed, abs);
-		return record({ ...change, before: modified, after: null, trashed: claimed });
+		return record({
+			...change,
+			before: modified,
+			after: { bytes: null, mode: null },
+			trashed: claimed,
+		});
 	}
 	writeAtomic(abs, original);
 	return record({ ...change, before: modified, after: original });
@@ -266,8 +328,8 @@ export async function undoChange(params: UndoChangeParams): Promise<ChangeReceip
 			`This change can no longer be undone (receipt ${params.receiptId} is not held by the host).`,
 		);
 	}
-	const abs = resolveWorktreeFile(params.workspaceId, held.receipt.path);
-	const current = worktreeBytes(abs);
+	const abs = resolveWorktreeFile(params.workspaceId, held.receipt.path, { followLeaf: false });
+	const current = worktreeState(abs, held.receipt.path);
 	if (hashOf(current) !== params.expect.modifiedHash) {
 		throw new CodedError(
 			"STALE_VIEW",
@@ -275,8 +337,8 @@ export async function undoChange(params: UndoChangeParams): Promise<ChangeReceip
 		);
 	}
 	let trashed: string | undefined;
-	if (held.before === null) {
-		if (current !== null) {
+	if (held.before.bytes === null) {
+		if (current.bytes !== null) {
 			const claimed = claimForTrash(abs);
 			await trashClaim(claimed, abs);
 			trashed = claimed;

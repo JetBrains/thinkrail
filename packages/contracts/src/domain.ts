@@ -351,8 +351,8 @@ export interface ChangeReceipt {
 	path: string;
 	kind: "revert" | "undo";
 	at: number;
-	before: { hash: string | null; byteLength: number | null };
-	after: { hash: string | null; byteLength: number | null };
+	before: { hash: string | null; byteLength: number | null; mode: number | null };
+	after: { hash: string | null; byteLength: number | null; mode: number | null };
 	trashed?: string;
 }
 

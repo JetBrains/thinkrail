@@ -46,9 +46,10 @@ const renderer: ResourceRenderer = {
 		diff: true,
 		anchors: { view: ["line"], diff: ["line"] },
 		mobile: true,
-		active: false,
+		copy: false,
+		layout: false,
+		whitespace: false,
 	},
-	trust: "bundled",
 };
 
 function collapsedDiff() {

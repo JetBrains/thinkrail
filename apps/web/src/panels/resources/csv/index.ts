@@ -13,9 +13,10 @@ export const csvRenderer: ResourceRenderer = {
 			diff: ["line", "structural:table-cell"],
 		},
 		mobile: true,
-		active: false,
+		copy: true,
+		layout: false,
+		whitespace: false,
 	},
-	trust: "bundled",
 	loadView: () => import("./View"),
 	loadDiff: () => import("./Diff"),
 };

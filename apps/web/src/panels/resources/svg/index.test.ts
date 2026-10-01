@@ -15,7 +15,7 @@ import {
 	svgIntrinsicSize,
 } from "./svgDocument";
 
-test("SVG renderer registration outranks raster images and stays sandboxed-active", () => {
+test("SVG renderer registration outranks raster images and stays sandboxed", () => {
 	expect(svgRenderer).toMatchObject({
 		id: "thinkrail/svg",
 		label: "Vector",
@@ -24,7 +24,9 @@ test("SVG renderer registration outranks raster images and stays sandboxed-activ
 		capabilities: {
 			anchors: { view: ["region"], diff: ["region"] },
 			mobile: true,
-			active: true,
+			copy: false,
+			layout: false,
+			whitespace: false,
 		},
 	});
 });

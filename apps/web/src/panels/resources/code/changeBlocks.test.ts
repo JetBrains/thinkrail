@@ -19,6 +19,12 @@ describe("computeChangeBlocks", () => {
 		]);
 	});
 
+	test("treats a CR-only file as one line", () => {
+		expect(computeChangeBlocks("one\rtwo", "one\rTWO", false)).toEqual([
+			{ original: { start: 1, count: 1 }, modified: { start: 1, count: 1 } },
+		]);
+	});
+
 	test("uses the rendered diff's whitespace policy", () => {
 		expect(computeChangeBlocks("const value = 1;\n", "  const value = 1;\n", false)).toHaveLength(
 			1,

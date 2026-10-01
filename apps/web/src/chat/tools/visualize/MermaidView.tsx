@@ -60,7 +60,6 @@ export function MermaidView({
 			<div
 				data-testid="mermaid-svg"
 				className="overflow-auto [&_svg]:h-auto [&_svg]:max-w-full"
-				// biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid renders agent-provided source with securityLevel "strict"
 				dangerouslySetInnerHTML={{ __html: svg }}
 			/>
 			<button

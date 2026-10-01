@@ -959,8 +959,7 @@ own section. The kebab menu (`plan-menu`, a
 - The singleton side-tool renderers are **Projects | Specs | Files | Changes | Review**. Their current
   location and local selection are supplied by the shell; Review exposes its store-derived pending-draft
   count as tab metadata. A renderer remains the same when its singleton moves to the opposite side.
-- **`ReviewPanel`** is the review sidebar (see [[submodule-server-reviews]] +
-  [[task-review-comments]] for the model) — **ONE screen, a per-file ACCORDION**: each row a path +
+- **`ReviewPanel`** is the review sidebar (see [[submodule-server-reviews]] for the model) — **ONE screen, a per-file ACCORDION**: each row a path +
   draft/sent/resolved counts with a fold chevron; **clicking a row unfolds its comments in place AND
   opens the file's tab** (folding is a second click and navigates nowhere — the row is the only
   toggle; the one other row action is below). A file whose comments are ALL resolved **stays listed**
@@ -1052,9 +1051,11 @@ own section. The kebab menu (`plan-menu`, a
   remapped to the other side's line numbers.
 
   **Monaco renders desktop files only.** `reviewWidgets.ts` keeps its content-widget selection affordance,
-  context-menu action, decorations, and comment-card view zones for that one surface. Zone heights follow
-  card geometry through `ResizeObserver`, and `setThreads` reconciles by comment id so an unrelated push
-  cannot replace a draft textarea being edited. Threads without a `lineRange` stay in the same unplaced
+  context-menu action, decorations, and view-zone reconciliation for that one surface. It exposes stable
+  zone nodes keyed by comment id; `MonacoReviewZones` portals the shared React `ReviewThreadCard` and
+  `ReviewComposer` into them, while `ResizeObserver` feeds their measured heights back to Monaco. An
+  unrelated push therefore keeps the same keyed draft textarea, including the shared card's Escape-cancel
+  and shortcut-save behavior. Threads without a `lineRange` stay in the same unplaced
   strip. `monacoMenuIcons.ts` decorates Monaco's standalone file-editor menu; no diff editor or diff-side
   branch remains. **Rendered preview**:
   `MarkdownPreview` splits the stripped document at each insert's
@@ -1288,14 +1289,17 @@ own section. The kebab menu (`plan-menu`, a
   navigation-stamp, target-ref, and live-refresh semantics are unchanged. `DiffPane` describes the returned
   `ResourceMeta`, resolves the registry for `diff`, and lazily mounts the selected renderer. Byte-only
   original sides use the response's resolved original oid with `/blob`; an absent side is explicit, never a
-  bytes value with a fabricated URL. The fixed toolbar keeps path, per-file review send, ¶ whitespace, copy,
-  and **Split | Inline**, then renders one `view-toggle-<renderer suffix>` segment per candidate when the
+  bytes value with a fabricated URL. The fixed toolbar keeps path and per-file review send, then exposes ¶
+  whitespace, modified-side copy, and **Split | Inline** only when the selected renderer advertises the
+  corresponding capability. It renders one `view-toggle-<renderer suffix>` segment per candidate when the
   registry returns more than one. Renderer choice replaces the old markdown-only `rendered` state; layout
   and whitespace remain independent diff state.
 
   Bundled candidates are registered once from `panels/resources/register.ts`: `thinkrail/code` renders
-  every source diff with Pierre `FileDiff`, `thinkrail/markdown` supplies `RenderedDiff`, and
-  `thinkrail/binary` reports both sides' byte sizes. `RenderedDiff` keeps its worker-isolated htmldiff merge,
+  every source diff with Pierre `FileDiff` and supports copy, layout, and whitespace controls;
+  `thinkrail/markdown` supplies `RenderedDiff`, and `thinkrail/binary` reports both sides' byte sizes. Rich
+  renderers omit those controls, except CSV, JSON, and notebook diffs support modified-source copy.
+  `RenderedDiff` keeps its worker-isolated htmldiff merge,
   loading/error states, and token styling, but advertises no diff anchors: both sides' threads stay in the
   pane's unplaced strip, **Show in Source** selects the code renderer, and diff authoring is available only
   in Source. It is selected by registry match rather than a path branch in the pane. Scopes whose modified
@@ -1349,10 +1353,12 @@ own section. The kebab menu (`plan-menu`, a
   `thinkrail/notebook` accepts nbformat-4 JSON and reuses the tolerant positional JSON scanner to bind every
   rendered cell to its raw cell-object line range. Nbformat 4.5 ids are the `ipynb-cell` structural ref;
   older notebooks use `index:<zero-based>`. Markdown cells use the shared Markdown parser without raw HTML.
-  Its notebook component map permits only `data:` images and renders links plus blocked image URLs as inert
-  text. Notebook language metadata must resolve through the shared Shiki catalog; missing metadata defaults
-  to Python and unknown values render as plain text. ANSI is removed from stream and error output. MIME
-  bundles choose image (PNG, JPEG, GIF, SVG), HTML, JSON, then plain text. SVG output stays a data image.
+  Its notebook component map permits only base64 PNG/JPEG/GIF/WebP/AVIF images in the app document,
+  routes SVG data images through the empty-sandbox `NotebookFrame`, and renders links plus every other image
+  URL as inert text. Notebook language metadata must resolve through the shared Shiki catalog; missing
+  metadata defaults to Python and unknown values render as plain text. ANSI is removed from stream and error
+  output. MIME bundles choose image (PNG, JPEG, GIF, SVG), HTML, JSON, then plain text. SVG output stays a
+  data image inside the inert frame document.
   HTML output uses the same sanitized empty-capability document as the HTML renderer. Cell review emits both
   the raw line range and structural ref, keeps cards below the resolved cell, reports only actual placements,
   and hash-stamps an open composer. Diffs align ids first and exact normalized source second. Remaining runs
@@ -1478,8 +1484,8 @@ own section. The kebab menu (`plan-menu`, a
 - **File tabs use the same renderer dispatch as diffs.** `FilePane` describes the first `fs.readFile`
   metadata (provisionally text before it lands), resolves `view`, and mounts the selected lazy candidate.
   `thinkrail/markdown` remains the higher-ranked match for `.md`/`.mdx`, so documents open in
-  `MarkdownPreview`; `thinkrail/code` is the text fallback and uses Monaco on desktop plus a temporary
-  read-only Shiki surface on phone-class viewports; `thinkrail/binary` shows identity and a host-backed
+  `MarkdownPreview`; `thinkrail/code` is the text fallback and uses Monaco on desktop plus Pierre `File`
+  on phone-class viewports; `thinkrail/binary` shows identity and a host-backed
   download. The candidate list alone determines whether the resource toggle exists. No format predicate or
   preview/source field remains in the pane or tab.
 

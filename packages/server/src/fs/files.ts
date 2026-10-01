@@ -35,7 +35,11 @@ function assertExistingAncestorContained(root: string, abs: string): void {
 	}
 }
 
-function resolveInWorktree(workspaceId: string, path: string): { root: string; abs: string } {
+function resolveInWorktree(
+	workspaceId: string,
+	path: string,
+	followLeaf: boolean,
+): { root: string; abs: string } {
 	const ws = loadWorkspaces().find((workspace) => workspace.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
 
@@ -43,12 +47,12 @@ function resolveInWorktree(workspaceId: string, path: string): { root: string; a
 	const abs = resolve(root, path);
 	if (!isContained(resolve(root), abs)) throw new Error("Path escapes the worktree");
 	if (isGitMetadataPath(resolve(root), abs)) throw new Error("The .git directory is not readable");
-	assertExistingAncestorContained(root, abs);
+	assertExistingAncestorContained(root, followLeaf ? abs : dirname(abs));
 	return { root, abs };
 }
 
 export function readDir(workspaceId: string, path: string): FileNode[] {
-	const { root, abs } = resolveInWorktree(workspaceId, path);
+	const { root, abs } = resolveInWorktree(workspaceId, path, true);
 
 	return readdirSync(abs, { withFileTypes: true })
 		.filter((entry) => entry.name !== ".git")
@@ -66,12 +70,16 @@ export function readFile(
 	workspaceId: string,
 	path: string,
 ): { content: string; meta: ResourceMeta } {
-	const { abs } = resolveInWorktree(workspaceId, path);
+	const { abs } = resolveInWorktree(workspaceId, path, true);
 	const bytes = readFileSync(abs);
 	const meta = resourceMeta(bytes, path);
 	return { content: meta.text ? decodeText(bytes) : "", meta };
 }
 
-export function resolveWorktreeFile(workspaceId: string, path: string): string {
-	return resolveInWorktree(workspaceId, path).abs;
+export function resolveWorktreeFile(
+	workspaceId: string,
+	path: string,
+	options: { followLeaf?: boolean } = {},
+): string {
+	return resolveInWorktree(workspaceId, path, options.followLeaf !== false).abs;
 }

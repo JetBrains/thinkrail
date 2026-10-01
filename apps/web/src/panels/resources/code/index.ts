@@ -11,9 +11,10 @@ export const codeRenderer: ResourceRenderer = {
 		diff: true,
 		anchors: { view: ["line"], diff: ["line"] },
 		mobile: true,
-		active: false,
+		copy: true,
+		layout: true,
+		whitespace: true,
 	},
-	trust: "bundled",
 	loadView: () => (isPhoneViewport() ? import("./PierreFile") : import("../../MonacoEditor")),
 	loadDiff: () => import("./PierreDiff"),
 };

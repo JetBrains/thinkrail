@@ -10,9 +10,10 @@ export const imageRenderer: ResourceRenderer = {
 		diff: true,
 		anchors: { view: ["region"], diff: ["region"] },
 		mobile: true,
-		active: false,
+		copy: false,
+		layout: false,
+		whitespace: false,
 	},
-	trust: "bundled",
 	loadView: () => import("./View"),
 	loadDiff: () => import("./Diff"),
 };

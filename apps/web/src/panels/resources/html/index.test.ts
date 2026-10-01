@@ -131,7 +131,7 @@ function hostileDocument(): FakeDocument {
 	return new FakeDocument(head, body);
 }
 
-test("HTML renderer registration has no review geometry and is sandboxed-active", () => {
+test("HTML renderer registration has no review geometry and stays sandboxed", () => {
 	expect(htmlRenderer).toMatchObject({
 		id: "thinkrail/html",
 		label: "Preview",
@@ -140,7 +140,9 @@ test("HTML renderer registration has no review geometry and is sandboxed-active"
 		capabilities: {
 			anchors: { view: [], diff: [] },
 			mobile: true,
-			active: true,
+			copy: false,
+			layout: false,
+			whitespace: false,
 		},
 	});
 });

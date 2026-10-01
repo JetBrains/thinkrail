@@ -299,7 +299,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
     through `contracts`' `ReviewSelector` set (`lineRange`/`textQuote` for text, `structural` schemes
     such as `json-pointer`/`table-cell`/`ipynb-cell`, `region` geometry), which every renderer maps onto
     its own geometry and reports back as placed or unplaced — the host's anchors are the only authority.
-    `@pierre/diffs` renders every diff and every phone-class code surface; Monaco renders files on
+    `@pierre/diffs` renders every source diff and every phone-class code surface; rich formats render
+    through their own renderers' diffs. Monaco renders files on
     desktop and never loads on a phone. Write-paths are host-derived and compare-and-swap guarded
     (`change.revert`/`change.undo`, [[submodule-server-changes]]); the client never sends bytes to
     write. ThinkRail hosts no VS Code extensions: language intelligence (TextMate grammars, Shiki) is

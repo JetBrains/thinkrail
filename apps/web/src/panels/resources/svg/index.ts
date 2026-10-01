@@ -10,9 +10,10 @@ export const svgRenderer: ResourceRenderer = {
 		diff: true,
 		anchors: { view: ["region"], diff: ["region"] },
 		mobile: true,
-		active: true,
+		copy: false,
+		layout: false,
+		whitespace: false,
 	},
-	trust: "bundled",
 	loadView: () => import("./View"),
 	loadDiff: () => import("./Diff"),
 };

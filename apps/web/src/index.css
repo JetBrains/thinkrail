@@ -229,6 +229,7 @@
    border, radius and focus treatment — only the buttons differ. No accent chrome of its own. */
 .review-composer {
 	pointer-events: auto;
+	max-width: var(--review-card-max-width, 832px);
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
@@ -314,7 +315,7 @@
 	gap: var(--space-8);
 	margin: var(--space-4) 0 var(--space-4) var(--space-12);
 	/* Keep in sync with reviewWidgets.ts' CARD_MAX_WIDTH (the Monaco view-zone clamp). */
-	max-width: 832px;
+	max-width: var(--review-card-max-width, 832px);
 	padding: var(--space-8);
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-md);

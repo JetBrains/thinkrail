@@ -13,9 +13,10 @@ export const jsonRenderer: ResourceRenderer = {
 			diff: ["line", "structural:json-pointer"],
 		},
 		mobile: true,
-		active: false,
+		copy: true,
+		layout: false,
+		whitespace: false,
 	},
-	trust: "bundled",
 	loadView: () => import("./View"),
 	loadDiff: () => import("./Diff"),
 };

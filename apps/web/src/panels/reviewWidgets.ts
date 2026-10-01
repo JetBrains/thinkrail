@@ -1,39 +1,30 @@
-import {
-	RiChatNewLine as MessageSquarePlus,
-	RiSendPlaneLine as Send,
-	RiDeleteBin6Line as Trash2,
-} from "@remixicon/react";
+import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { AnchorDraft, ReviewThread, ReviewThreadActions } from "@/resources";
-import { threadLabel } from "./reviewModel";
-
-export interface ReviewCommentingCallbacks {
-	onSave: (draft: AnchorDraft, text: string) => Promise<void>;
-	onSend: (draft: AnchorDraft, text: string) => Promise<void>;
-}
+import type { ReviewThread } from "@/resources";
 
 const ICON_WIDGET_ID = "thinkrail.review.addIcon";
-
-// Keep in sync with the CSS caps in index.css (.review-thread / .review-composer-flow).
 const CARD_MAX_WIDTH = 832;
+const ICON_SVG = renderToStaticMarkup(createElement(MessageSquarePlus, { className: "size-14" }));
+
+export interface MonacoThreadZone {
+	commentId: string;
+	node: HTMLElement;
+}
+
+export interface MonacoComposerZone {
+	node: HTMLElement;
+	selection: { startLine: number; endLine: number };
+}
+
+export interface MonacoReviewZoneState {
+	threads: MonacoThreadZone[];
+	composer: MonacoComposerZone | null;
+}
 
 function cardMaxWidth(codeEditor: monaco.editor.ICodeEditor): number {
 	return Math.max(280, Math.min(CARD_MAX_WIDTH, codeEditor.getLayoutInfo().contentWidth - 24));
-}
-
-const ICON_SVG = renderToStaticMarkup(createElement(MessageSquarePlus, { size: 14 }));
-const SEND_SVG = renderToStaticMarkup(createElement(Send, { size: 12 }));
-const TRASH_SVG = renderToStaticMarkup(createElement(Trash2, { size: 12 }));
-
-function button(testid: string, className: string, label: string): HTMLButtonElement {
-	const el = document.createElement("button");
-	el.type = "button";
-	el.dataset.testid = testid;
-	el.className = className;
-	el.textContent = label;
-	return el;
 }
 
 function threadLineRange(thread: ReviewThread): { startLine: number; endLine: number } | null {
@@ -47,39 +38,39 @@ export function applyReviewDecorations(
 	codeEditor: monaco.editor.ICodeEditor,
 	previous: string[],
 	threads: ReviewThread[],
-): { decorations: string[]; unplaced: ReviewThread[] } {
+): string[] {
 	const ranges = threads.flatMap((thread) => {
 		const range = threadLineRange(thread);
 		return range ? [range] : [];
 	});
-	return {
-		decorations: codeEditor.deltaDecorations(
-			previous,
-			ranges.map((range) => ({
-				range: {
-					startLineNumber: range.startLine,
-					startColumn: 1,
-					endLineNumber: range.endLine,
-					endColumn: 1,
-				},
-				options: {
-					isWholeLine: true,
-					className: "review-comment-line",
-					linesDecorationsClassName: "review-comment-rail",
-				},
-			})),
-		),
-		unplaced: threads.filter((thread) => threadLineRange(thread) === null),
-	};
+	return codeEditor.deltaDecorations(
+		previous,
+		ranges.map((range) => ({
+			range: {
+				startLineNumber: range.startLine,
+				startColumn: 1,
+				endLineNumber: range.endLine,
+				endColumn: 1,
+			},
+			options: {
+				isWholeLine: true,
+				className: "review-comment-line",
+				linesDecorationsClassName: "review-comment-rail",
+			},
+		})),
+	);
+}
+
+interface ReviewZoneController {
+	openComposer(selection: { startLine: number; endLine: number }): void;
+	isComposerOpen(): boolean;
 }
 
 export function attachReviewCommenting(
 	codeEditor: monaco.editor.IStandaloneCodeEditor,
-	callbacks: ReviewCommentingCallbacks,
+	zones: ReviewZoneController,
 ): () => void {
 	let iconPosition: monaco.IPosition | null = null;
-	let composerZoneId: string | null = null;
-
 	const iconNode = document.createElement("div");
 	iconNode.className = "review-add-icon-holder";
 	iconNode.style.display = "none";
@@ -117,122 +108,15 @@ export function attachReviewCommenting(
 		iconNode.style.display = "none";
 		codeEditor.layoutContentWidget(iconWidget);
 	};
-
-	const closeComposer = () => {
-		if (composerZoneId === null) return;
-		const id = composerZoneId;
-		composerZoneId = null;
-		codeEditor.changeViewZones((accessor) => accessor.removeZone(id));
-	};
-
-	const openComposer = (selection: { startLine: number; endLine: number }) => {
-		closeComposer();
-		hideIcon();
-
-		const domNode = document.createElement("div");
-		domNode.className = "review-composer-zone";
-		const card = document.createElement("div");
-		card.className = "review-composer";
-		card.dataset.testid = "review-composer";
-		card.style.maxWidth = `${cardMaxWidth(codeEditor)}px`;
-		domNode.appendChild(card);
-
-		const label = document.createElement("span");
-		label.className = "review-composer-label tr-code-text";
-		label.textContent =
-			selection.startLine === selection.endLine
-				? `Line ${selection.startLine}`
-				: `Lines ${selection.startLine}–${selection.endLine}`;
-
-		const textarea = document.createElement("textarea");
-		textarea.dataset.testid = "review-composer-input";
-		textarea.placeholder = "Leave a review comment…";
-		textarea.className = "review-composer-input tr-text-ui";
-		textarea.wrap = "soft";
-
-		const save = button("review-composer-save", "review-composer-btn tr-text-action", "Save draft");
-		const send = button(
-			"review-composer-send",
-			"review-composer-btn review-composer-btn-primary tr-text-action",
-			"Send now",
-		);
-		const cancel = button(
-			"review-composer-cancel",
-			"review-composer-btn review-composer-btn-quiet tr-text-action",
-			"Cancel",
-		);
-
-		const setBusy = (busy: boolean) => {
-			textarea.disabled = busy;
-			save.disabled = busy || !textarea.value.trim();
-			send.disabled = busy || !textarea.value.trim();
-		};
-		setBusy(false);
-
-		const submit = (action: ReviewCommentingCallbacks["onSave"]) => {
-			const text = textarea.value.trim();
-			if (!text) return;
-			const draft: AnchorDraft = {
-				selectors: [{ kind: "lineRange", ...selection }],
-				label:
-					selection.startLine === selection.endLine
-						? `L${selection.startLine}`
-						: `L${selection.startLine}–${selection.endLine}`,
-			};
-			setBusy(true);
-			action(draft, text).then(closeComposer, () => setBusy(false));
-		};
-		save.addEventListener("click", () => submit(callbacks.onSave));
-		send.addEventListener("click", () => submit(callbacks.onSend));
-		cancel.addEventListener("click", closeComposer);
-		textarea.addEventListener("keydown", (e) => {
-			if (e.key === "Escape") closeComposer();
-			if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(callbacks.onSave);
-			e.stopPropagation();
-		});
-
-		const row = document.createElement("div");
-		row.className = "review-composer-row";
-		row.append(save, send, cancel);
-		card.append(label, textarea, row);
-
-		const zone: monaco.editor.IViewZone = {
-			afterLineNumber: selection.endLine,
-			heightInPx: 120,
-			domNode,
-		};
-		const relayout = () => {
-			textarea.style.height = "auto";
-			textarea.style.height = `${Math.min(160, Math.max(56, textarea.scrollHeight + 2))}px`;
-			const height = card.offsetHeight + 12;
-			if (zone.heightInPx !== height && composerZoneId !== null) {
-				zone.heightInPx = height;
-				const id = composerZoneId;
-				codeEditor.changeViewZones((accessor) => accessor.layoutZone(id));
-			}
-		};
-		textarea.addEventListener("input", () => {
-			setBusy(false);
-			relayout();
-		});
-
-		codeEditor.changeViewZones((accessor) => {
-			composerZoneId = accessor.addZone(zone);
-		});
-		requestAnimationFrame(() => {
-			textarea.focus();
-			relayout();
-		});
-	};
-
 	const commentOnSelection = () => {
-		const s = codeEditor.getSelection();
-		if (!s || s.isEmpty()) return;
+		const selection = codeEditor.getSelection();
+		if (!selection || selection.isEmpty()) return;
 		const endLine =
-			s.positionColumn === 1 && s.endLineNumber > s.startLineNumber
-				? s.endLineNumber - 1
-				: s.endLineNumber;
-		openComposer({ startLine: s.startLineNumber, endLine });
+			selection.positionColumn === 1 && selection.endLineNumber > selection.startLineNumber
+				? selection.endLineNumber - 1
+				: selection.endLineNumber;
+		hideIcon();
+		zones.openComposer({ startLine: selection.startLineNumber, endLine });
 	};
 	iconButton.addEventListener("click", commentOnSelection);
 
@@ -245,145 +129,75 @@ export function attachReviewCommenting(
 		keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyM],
 		run: commentOnSelection,
 	});
-
-	const selectionListener = codeEditor.onDidChangeCursorSelection((e) => {
-		if (composerZoneId !== null) return;
-		const s = e.selection;
-		if (s.isEmpty()) {
+	const selectionListener = codeEditor.onDidChangeCursorSelection((event) => {
+		if (zones.isComposerOpen()) return;
+		const selection = event.selection;
+		if (selection.isEmpty()) {
 			hideIcon();
 			return;
 		}
-		showIcon({ lineNumber: s.positionLineNumber, column: s.positionColumn });
+		showIcon({
+			lineNumber: selection.positionLineNumber,
+			column: selection.positionColumn,
+		});
 	});
 
 	return () => {
 		selectionListener.dispose();
 		menuAction.dispose();
-		closeComposer();
 		codeEditor.removeContentWidget(iconWidget);
 	};
 }
 
+interface InternalThreadZone extends MonacoThreadZone {
+	id: string;
+	zone: monaco.editor.IViewZone;
+	endLine: number;
+}
+
+interface InternalComposerZone extends MonacoComposerZone {
+	id: string;
+	zone: monaco.editor.IViewZone;
+}
+
 export function attachReviewThreads(
 	codeEditor: monaco.editor.ICodeEditor,
-	actions: ReviewThreadActions,
-): { setThreads: (threads: ReviewThread[]) => ReviewThread[]; dispose: () => void } {
-	let zones: {
-		id: string;
-		zone: monaco.editor.IViewZone;
-		card: HTMLElement;
-		commentId: string;
-		signature: string;
-	}[] = [];
+	onZones: (zones: MonacoReviewZoneState) => void,
+): {
+	setThreads(threads: ReviewThread[]): void;
+	openComposer(selection: { startLine: number; endLine: number }): void;
+	closeComposer(): void;
+	isComposerOpen(): boolean;
+	layout(): void;
+	dispose(): void;
+} {
+	let threads: InternalThreadZone[] = [];
+	let composer: InternalComposerZone | null = null;
+	let layoutFrame: number | null = null;
+	let disposed = false;
 
-	const iconButton = (testid: string, title: string, svg: string): HTMLButtonElement => {
-		const el = document.createElement("button");
-		el.type = "button";
-		el.dataset.testid = testid;
-		el.title = title;
-		el.ariaLabel = title;
-		el.className = "review-thread-action";
-		el.innerHTML = svg;
-		return el;
+	const emit = () => {
+		onZones({
+			threads: threads.map(({ commentId, node }) => ({ commentId, node })),
+			composer: composer ? { node: composer.node, selection: composer.selection } : null,
+		});
 	};
-
-	const cardFor = (thread: ReviewThread): HTMLElement => {
-		const card = document.createElement("div");
-		card.className = "review-thread";
-		card.dataset.testid = "review-thread-card";
-		card.dataset.commentId = thread.id;
-		card.dataset.status = thread.status;
-
-		const head = document.createElement("div");
-		head.className = "review-thread-head";
-		const dot = document.createElement("span");
-		dot.className = `review-thread-dot rounded-full review-thread-dot-${thread.status === "sent" ? "sent" : "draft"}`;
-		const label = document.createElement("span");
-		const labelTone = thread.stale ? " text-feedback-warning" : "";
-		label.className = `review-thread-label tr-text-eyebrow${labelTone}`;
-		label.textContent = threadLabel(thread);
-		head.append(dot, label);
-
-		if (thread.status === "draft") {
-			const actionsWrap = document.createElement("span");
-			actionsWrap.className = "review-thread-actions";
-			const send = iconButton(
-				"review-thread-send",
-				"Send this comment to the file's review chat",
-				SEND_SVG,
-			);
-			const del = iconButton("review-thread-delete", "Delete draft", TRASH_SVG);
-			const busy = (b: boolean) => {
-				send.disabled = b;
-				del.disabled = b;
-			};
-			send.addEventListener("click", () => {
-				busy(true);
-				actions.onSendComment(thread.id).catch(() => busy(false));
-			});
-			del.addEventListener("click", () => {
-				busy(true);
-				actions.onDeleteComment(thread.id).catch(() => busy(false));
-			});
-			actionsWrap.append(send, del);
-			head.append(actionsWrap);
-		}
-
-		if (thread.status === "draft") {
-			const edit = document.createElement("textarea");
-			edit.className = "review-thread-edit review-thread-body tr-text-ui";
-			edit.dataset.testid = "review-thread-edit";
-			edit.value = thread.body;
-			edit.rows = 1;
-			edit.wrap = "soft";
-			const grow = () => {
-				edit.style.height = "auto";
-				edit.style.height = `${edit.scrollHeight}px`;
-				relayoutCards();
-			};
-			edit.addEventListener("input", grow);
-			edit.addEventListener("keydown", (e) => {
-				e.stopPropagation();
-				if (e.key === "Escape") {
-					edit.value = thread.body;
-					edit.blur();
-				}
-				if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) edit.blur();
-			});
-			edit.addEventListener("blur", () => {
-				const next = edit.value.trim();
-				if (!next || next === thread.body) {
-					edit.value = thread.body;
-					grow();
-					return;
-				}
-				actions.onUpdateComment(thread.id, next).catch(() => {
-					edit.value = thread.body;
-					grow();
-				});
-			});
-			card.append(head, edit);
-			requestAnimationFrame(grow);
-			return card;
-		}
-
-		const body = document.createElement("p");
-		body.className = "review-thread-body tr-text-ui";
-		body.textContent = thread.body;
-		card.append(head, body);
-		return card;
+	const allZones = () => (composer ? [...threads, composer] : threads);
+	const setWidth = (node: HTMLElement) => {
+		node.style.setProperty("--review-card-max-width", `${cardMaxWidth(codeEditor)}px`);
 	};
-
-	const relayoutCards = () => {
-		requestAnimationFrame(() => {
+	const relayout = () => {
+		if (layoutFrame !== null || disposed) return;
+		layoutFrame = requestAnimationFrame(() => {
+			layoutFrame = null;
+			if (disposed) return;
+			observeZones();
 			codeEditor.changeViewZones((accessor) => {
-				for (const entry of zones) {
-					const edit = entry.card.querySelector<HTMLTextAreaElement>(".review-thread-edit");
-					if (edit) {
-						edit.style.height = "auto";
-						edit.style.height = `${edit.scrollHeight}px`;
-					}
-					const height = entry.card.offsetHeight + 12;
+				for (const entry of allZones()) {
+					setWidth(entry.node);
+					const card = entry.node.firstElementChild;
+					if (!(card instanceof HTMLElement)) continue;
+					const height = card.offsetHeight + 12;
 					if (height > 12 && entry.zone.heightInPx !== height) {
 						entry.zone.heightInPx = height;
 						accessor.layoutZone(entry.id);
@@ -392,75 +206,102 @@ export function attachReviewThreads(
 			});
 		});
 	};
-
-	const cardSizeObserver = new ResizeObserver(() => relayoutCards());
-
-	const signature = (thread: ReviewThread): string => {
-		const range = threadLineRange(thread);
-		return [
-			thread.status,
-			thread.anchorState,
-			thread.stale ?? false,
-			range?.startLine ?? "",
-			range?.endLine ?? "",
-			thread.body,
-		].join("\u0000");
+	const sizeObserver = new ResizeObserver(relayout);
+	let observed = new Set<Element>();
+	const observeZones = () => {
+		const targets = new Set(
+			allZones().map((entry) =>
+				entry.node.firstElementChild instanceof HTMLElement
+					? entry.node.firstElementChild
+					: entry.node,
+			),
+		);
+		if (targets.size === observed.size && [...targets].every((target) => observed.has(target))) {
+			return;
+		}
+		sizeObserver.disconnect();
+		observed = targets;
+		for (const target of targets) sizeObserver.observe(target);
 	};
-
-	const buildZone = (
+	const buildThreadZone = (
 		accessor: monaco.editor.IViewZoneChangeAccessor,
 		thread: ReviewThread,
-		range: { startLine: number; endLine: number },
-	) => {
-		const domNode = document.createElement("div");
-		domNode.className = "review-composer-zone";
-		const card = cardFor(thread);
-		card.style.maxWidth = `${cardMaxWidth(codeEditor)}px`;
-		domNode.appendChild(card);
+		endLine: number,
+	): InternalThreadZone => {
+		const node = document.createElement("div");
+		node.className = "review-composer-zone";
+		setWidth(node);
 		const zone: monaco.editor.IViewZone = {
-			afterLineNumber: range.endLine,
+			afterLineNumber: endLine,
 			heightInPx: 48,
-			domNode,
+			domNode: node,
 		};
-		return {
-			id: accessor.addZone(zone),
-			zone,
-			card,
-			commentId: thread.id,
-			signature: signature(thread),
-		};
+		return { id: accessor.addZone(zone), zone, node, commentId: thread.id, endLine };
 	};
-
-	const setThreads = (threads: ReviewThread[]): ReviewThread[] => {
-		const placed = threads.flatMap((thread) => {
-			const range = threadLineRange(thread);
-			return range ? [{ thread, range }] : [];
-		});
-		codeEditor.changeViewZones((accessor) => {
-			const kept = new Map<string, (typeof zones)[number]>();
-			for (const entry of zones) {
-				const next = placed.find(({ thread }) => thread.id === entry.commentId)?.thread;
-				if (next && signature(next) === entry.signature) kept.set(entry.commentId, entry);
-				else accessor.removeZone(entry.id);
-			}
-			zones = placed.map(
-				({ thread, range }) => kept.get(thread.id) ?? buildZone(accessor, thread, range),
-			);
-		});
-		cardSizeObserver.disconnect();
-		for (const { card } of zones) cardSizeObserver.observe(card);
-		relayoutCards();
-		return threads.filter((thread) => threadLineRange(thread) === null);
+	const closeComposer = () => {
+		if (!composer) return;
+		const current = composer;
+		composer = null;
+		codeEditor.changeViewZones((accessor) => accessor.removeZone(current.id));
+		observeZones();
+		emit();
 	};
 
 	return {
-		setThreads,
-		dispose: () => {
-			cardSizeObserver.disconnect();
-			codeEditor.changeViewZones((accessor) => {
-				for (const { id } of zones) accessor.removeZone(id);
+		setThreads(nextThreads) {
+			const placed = nextThreads.flatMap((thread) => {
+				const range = threadLineRange(thread);
+				return range ? [{ thread, endLine: range.endLine }] : [];
 			});
-			zones = [];
+			codeEditor.changeViewZones((accessor) => {
+				const nextById = new Map(placed.map((entry) => [entry.thread.id, entry]));
+				const kept = new Map<string, InternalThreadZone>();
+				for (const entry of threads) {
+					const next = nextById.get(entry.commentId);
+					if (next?.endLine === entry.endLine) kept.set(entry.commentId, entry);
+					else accessor.removeZone(entry.id);
+				}
+				threads = placed.map(
+					({ thread, endLine }) =>
+						kept.get(thread.id) ?? buildThreadZone(accessor, thread, endLine),
+				);
+			});
+			observeZones();
+			emit();
+			relayout();
+		},
+		openComposer(selection) {
+			closeComposer();
+			const node = document.createElement("div");
+			node.className = "review-composer-zone";
+			setWidth(node);
+			const zone: monaco.editor.IViewZone = {
+				afterLineNumber: selection.endLine,
+				heightInPx: 120,
+				domNode: node,
+			};
+			codeEditor.changeViewZones((accessor) => {
+				composer = { id: accessor.addZone(zone), zone, node, selection };
+			});
+			observeZones();
+			emit();
+			relayout();
+		},
+		closeComposer,
+		isComposerOpen: () => composer !== null,
+		layout() {
+			observeZones();
+			relayout();
+		},
+		dispose() {
+			disposed = true;
+			if (layoutFrame !== null) cancelAnimationFrame(layoutFrame);
+			sizeObserver.disconnect();
+			codeEditor.changeViewZones((accessor) => {
+				for (const entry of allZones()) accessor.removeZone(entry.id);
+			});
+			threads = [];
+			composer = null;
 		},
 	};
 }

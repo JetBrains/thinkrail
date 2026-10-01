@@ -29,7 +29,7 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 	await expect(renderedDiff).toContainText("edited by e2e");
 
 	await expect(page.getByTestId("view-toggle-markdown")).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("diff-toggle-split")).toHaveCount(0);
 	await expect(renderedDiff.locator("h1")).toHaveText("sample-project");
 	await expect(renderedDiff.locator("ins")).toContainText("edited by e2e");
 

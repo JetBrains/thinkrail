@@ -34,7 +34,9 @@ test("PDF renderer registration declares MIME matching and paged region anchors"
 		capabilities: {
 			anchors: { view: ["region"], diff: ["region"] },
 			mobile: true,
-			active: false,
+			copy: false,
+			layout: false,
+			whitespace: false,
 		},
 	});
 });
@@ -50,9 +52,10 @@ test("a .pdf extension resolves through inferred MIME metadata", () => {
 			diff: true,
 			anchors: { view: [], diff: [] },
 			mobile: true,
-			active: false,
+			copy: false,
+			layout: false,
+			whitespace: false,
 		},
-		trust: "bundled",
 	};
 	const disposers = [binary, pdfRenderer].map(registerResourceRenderer);
 	try {

@@ -21,7 +21,9 @@ test("image renderer registration declares image matching and region anchors", (
 		capabilities: {
 			anchors: { view: ["region"], diff: ["region"] },
 			mobile: true,
-			active: false,
+			copy: false,
+			layout: false,
+			whitespace: false,
 		},
 	});
 });
@@ -37,9 +39,10 @@ test("image extensions match when MIME metadata is absent", () => {
 			diff: true,
 			anchors: { view: [], diff: [] },
 			mobile: true,
-			active: false,
+			copy: false,
+			layout: false,
+			whitespace: false,
 		},
-		trust: "bundled",
 	};
 	const disposers = [fallback, imageRenderer].map(registerResourceRenderer);
 	try {

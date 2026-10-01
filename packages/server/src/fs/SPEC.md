@@ -26,20 +26,24 @@ bytes are** — the one byte-level classification every content read in the host
   serving relative images in the markdown viewer, the `/blob` route's containment check) and for the
   `changes` module's atomic writes. Lexical escapes, `.git`, and an existing symlink chain whose resolved
   target leaves the worktree are refused; missing leaf paths are allowed so a deleted file can be
-  restored. This module owns the path safety; its callers own the streaming and the writing.
-  **Content classification** (`content.ts`, pure, no dependency): `classifyBytes(bytes)` →
-  `{ text, mime? }` — **text** is "no NUL byte in the first 8 KiB and a strict UTF-8 decode" (a BOM is
+  restored. `changes` passes `{ followLeaf: false }` so containment validates through the parent and its
+  own `lstat` can reject even an escaping leaf symlink without following it. This module owns the path
+  safety; its callers own the streaming and the writing.
+  **Content classification** (`content.ts`, pure, no dependency): `CONTENT_SNIFF_BYTES` names the shared
+  8 KiB bounded-head size; `classifyBytes(bytes)` → `{ text, mime? }` — **text** is "no NUL byte in the
+  first 8 KiB and a strict UTF-8 decode" (a BOM is
   text), **mime** is what the *bytes* prove (magic numbers for png/jpeg/gif/webp/bmp/ico/pdf/zip/gzip/
   woff/woff2, plus `image/svg+xml` for text whose root element is `<svg>`, directly or behind an XML
   prolog — a prolog alone is not an image); `hashBytes(bytes)` → the sha-256 hex that **is** a
   resource's identity on the wire (`ResourceMeta.hash`, `ReviewAnchor.contentHash`, the `change.*`
   compare-and-swap); `decodeText(bytes)` → the one UTF-8 decode (BOM retained, because the BOM is part
-  of the bytes the hash covers); `resourceMeta(bytes, path)` → the wire's **`ResourceMeta`**, adding the
-  *filename* fallback no byte inspection can give (markdown/json/csv/yaml/html/xhtml/plain) and treating
+  of the bytes the hash covers); `mimeFromPath(path)` owns the filename fallback no byte inspection can
+  give (markdown/json/csv/yaml/html/xhtml/plain); `resourceMeta(bytes, path)` → the wire's **`ResourceMeta`**, adding that
+  fallback and treating
   `null` bytes as absence (`hash`/`byteLength` null, `text: true` — nothing to decode, and the empty
   string it pairs with is valid text).
 - **Public surface (barrel):** `readDir`, `readFile`, `resolveWorktreeFile`, `classifyBytes`,
-  `hashBytes`, `decodeText`, `resourceMeta`.
+  `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`); Node
   `fs`/`path`/`crypto`.
 - **Forbidden:** `host`; sibling features.

@@ -10,9 +10,10 @@ export const binaryRenderer: ResourceRenderer = {
 		diff: true,
 		anchors: { view: [], diff: [] },
 		mobile: true,
-		active: false,
+		copy: false,
+		layout: false,
+		whitespace: false,
 	},
-	trust: "bundled",
 	loadView: () => import("./BinaryView"),
 	loadDiff: () => import("./BinaryDiff"),
 };

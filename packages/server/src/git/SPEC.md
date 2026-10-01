@@ -136,7 +136,8 @@ ref off the workspace-create critical path.
   `gitStatus(workspaceId, scope?)` — changed files over the range plus untracked (only when the range ends at
   the worktree), each carrying per-file `added`/`removed` line counts (`git diff --numstat`, its rename-mangled paths resolved
   via `numstatPath` to match `--name-status`; binary rows dropped; untracked files count their whole
-  content as added) for the Changes tree's `+/−` badges;
+  content as added only when `fs.classifyBytes` agrees it is text, so invalid UTF-8 and NUL-bearing
+  untracked files omit counts exactly as their `ResourceMeta` does) for the Changes tree's `+/−` badges;
   `gitDiffFile(workspaceId, path, scope?)` → `{ original, modified, originalOid, meta: { original, modified } }` — `originalOid` is the range's resolved immutable start (or `null`) and both
   sides of one file's change for the center diff tab (`original` = the file at the range's start ref, raw,
   empty when absent there —
@@ -218,7 +219,10 @@ ref off the workspace-create critical path.
   synchronous solely for `reviews`' snapshot pass; **`readBlobBytesAtAsync`** is the bounded request-path
   primitive used by `changes` and the host's `/blob` route. Both run `git cat-file blob`, return `null`
   only for Git's explicit path-absent diagnostic, and throw for a non-blob object or every other failure;
-  timeout/launch can therefore never masquerade as absence;
+  timeout/launch can therefore never masquerade as absence. **`readBlobSizeAtAsync`** performs the same
+  bounded, strict-miss read through `git cat-file -s` before the host admits an immutable blob response;
+  **`readPathModeAtAsync`** reads one path's tree mode with bounded `git ls-tree` so `changes` can reject
+  symlinks and restore Git's executable bit without deriving tree metadata itself;
   **`gitCommitPaths(workspaceId, message, paths)`** → `{ sha } | null` — commit **exactly `paths`** as one
   commit for the TODO change-set feature (see [[submodule-server-todos]]): stage them (`git add -A --
   <paths>`, so a deletion stages as one), then `git commit --no-verify -- <paths>` (the host's commit must
@@ -260,7 +264,8 @@ ref off the workspace-create critical path.
   `COMMIT_LIST_MAX` — for which no adopted item is ever emitted. Kept in lock-step with `listCommits`.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,
-  `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readCommitSubject`,
+  `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readBlobSizeAtAsync`,
+  `readPathModeAtAsync`, `readCommitSubject`,
   `gitCommitPaths`, `gitHeadSha`, `listCommits`, `listCommitsSince`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,

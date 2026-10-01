@@ -11,7 +11,7 @@ import type {
 	ResourceMeta,
 	Workspace,
 } from "@thinkrail/contracts";
-import { decodeText, resolveWorktreeFile, resourceMeta } from "../fs";
+import { classifyBytes, decodeText, resolveWorktreeFile, resourceMeta } from "../fs";
 import { logger } from "../log";
 import { loadProjects, loadWorkspaces } from "../persistence";
 import {
@@ -271,15 +271,14 @@ function lineCount(content: string): number {
 }
 
 const UNTRACKED_COUNT_MAX_BYTES = 2 * 1024 * 1024;
-const BINARY_SNIFF_BYTES = 8192;
 
 function untrackedAdded(worktreePath: string, path: string): number | undefined {
 	try {
 		const abs = resolve(worktreePath, path);
 		if (statSync(abs).size > UNTRACKED_COUNT_MAX_BYTES) return undefined;
-		const buf = readFileSync(abs);
-		if (buf.subarray(0, BINARY_SNIFF_BYTES).includes(0)) return undefined;
-		return lineCount(buf.toString("utf8"));
+		const bytes = readFileSync(abs);
+		if (!classifyBytes(bytes).text) return undefined;
+		return lineCount(decodeText(bytes));
 	} catch {
 		return undefined;
 	}
@@ -391,6 +390,40 @@ export async function readBlobBytesAtAsync(
 			...(opts.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
 		}),
 	);
+}
+
+export async function readBlobSizeAtAsync(
+	worktreePath: string,
+	ref: string,
+	path: string,
+): Promise<number | null> {
+	const output = strictBlobFrom(
+		await gitAsync(worktreePath, ["cat-file", "-s", "--", `${ref}:${path}`], {
+			env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+		}),
+	);
+	if (output === null) return null;
+	if (!/^\d+$/.test(output)) throw new Error("Could not read the file size: invalid git output");
+	const size = Number(output);
+	if (!Number.isSafeInteger(size))
+		throw new Error("Could not read the file size: invalid git output");
+	return size;
+}
+
+export async function readPathModeAtAsync(
+	worktreePath: string,
+	ref: string,
+	path: string,
+): Promise<number | null> {
+	const shown = await gitAsync(worktreePath, ["ls-tree", "-z", ref, "--", path], {
+		raw: true,
+		env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+	});
+	if (!shown.ok) throw new Error(`Could not read the file mode: ${shown.err || "git failed"}`);
+	if (shown.out === "") return null;
+	const match = /^([0-7]{6}) /.exec(shown.out);
+	if (!match?.[1]) throw new Error("Could not read the file mode: invalid git output");
+	return Number.parseInt(match[1], 8);
 }
 
 function blobIsMissing(stderr: string): boolean {

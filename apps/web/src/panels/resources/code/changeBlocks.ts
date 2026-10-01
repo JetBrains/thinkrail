@@ -77,6 +77,5 @@ export function createAskAgentRequest(block: ChangeBlock, modifiedText: string):
 
 function textLineCount(text: string): number {
 	if (text.length === 0) return 0;
-	const endings = text.match(/\r\n|[\n\r]/g)?.length ?? 0;
-	return endings + (/\r\n$|[\n\r]$/.test(text) ? 0 : 1);
+	return text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
 }

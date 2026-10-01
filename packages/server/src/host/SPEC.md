@@ -18,16 +18,19 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - **Owns:** `server.ts` (async `createServer` first asks auth to start Central artifact watching and publish
   the initial current PI runtime, falling back to plain PI with closed `load-failed` state when needed, then creates
   `Bun.serve` with `/health`, `/ws` upgrade, a
-  **`GET /files/<workspaceId>/<relpath>`** route streaming a worktree file's raw bytes (via `fs`'s
-  `resolveWorktreeFile` — path-contained; bad id/escape/miss → 404; `Cache-Control: no-store`, because
-  the worktree moves under the URL) so the markdown viewer's relative `<img>`s resolve, the sibling
+  **`GET /files/<workspaceId>/<relpath>`** route streaming a worktree file's raw bytes from `Bun.file`
+  after classifying only its bounded 8 KiB head (via `fs`'s `resolveWorktreeFile` — path-contained; bad
+  id/escape/miss → 404; `Cache-Control: no-store`, because the worktree moves under the URL) so the
+  markdown viewer's relative `<img>`s resolve, the sibling
   **`GET /blob/<workspaceId>/<oid>/<relpath>`** route serving that path's bytes **at one commit**
   (`git.readBlobBytesAtAsync` behind a 40/64-hex `oid` — a diff range's `resolvedOriginalOid`, so the URL
   names immutable content and answers `Cache-Control: public, max-age=31536000, immutable`; the Git
   primitive requires a blob, so trees/commits/gitlinks are 404 alongside a bad id/oid/escape/absent
-  path). Both routes exist because `fs.readFile` and `git.diffFile` answer `""` for bytes they must not
-  decode, so a byte-only resource is fetched over HTTP instead. Both derive `Content-Type` from the same
-  `fs.resourceMeta(bytes, path).mime` the wire reports (falling back to `application/octet-stream`) and
+  path). Before reading a blob body, the route performs a bounded `git cat-file -s`; objects above 64 MiB
+  are refused with 413, while accepted immutable blobs are read as one bounded response. Both routes exist
+  because `fs.readFile` and `git.diffFile` answer `""` for bytes they must not decode, so a byte-only
+  resource is fetched over HTTP instead. Both derive `Content-Type` through the shared byte classifier plus
+  filename fallback (falling back to `application/octet-stream`) and
   send `X-Content-Type-Options: nosniff`; active same-origin types (`text/html`,
   `application/xhtml+xml`, `image/svg+xml`) additionally receive
   `Content-Security-Policy: sandbox; default-src 'none'`, so direct navigation cannot execute repository
@@ -355,7 +358,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `changes` module's compare-and-swap makes the race safe, and the fs watcher's `fsChanged` tick re-reads
   the open tabs after a write exactly as it does after an agent edit (so both handlers `ensureWatch`
   first). The named failures travel as `WsResponse.errorCode`
-  (`STALE_VIEW`/`SCOPE_IMMUTABLE`/`RANGE_INVALID`/`RECEIPT_UNKNOWN`) through the same `CodedError`
+  (`STALE_VIEW`/`SCOPE_IMMUTABLE`/`RANGE_INVALID`/`RECEIPT_UNKNOWN`/`UNSUPPORTED_CHANGE`) through the same `CodedError`
   mapping `UNKNOWN_COMMIT` uses — the dispatch names no codes of its own, so a code added in `contracts`
   and thrown by a feature reaches the client with no host-side allowlist to update.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is

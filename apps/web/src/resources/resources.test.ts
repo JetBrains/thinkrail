@@ -27,9 +27,10 @@ function renderer(id: string, overrides: Partial<ResourceRenderer> = {}): Resour
 			diff: true,
 			anchors: { view: [], diff: [] },
 			mobile: true,
-			active: false,
+			copy: false,
+			layout: false,
+			whitespace: false,
 		},
-		trust: "bundled",
 		...overrides,
 	};
 }
@@ -49,7 +50,9 @@ function registerFallbacks(): void {
 				diff: true,
 				anchors: { view: ["line"], diff: ["line"] },
 				mobile: true,
-				active: false,
+				copy: true,
+				layout: true,
+				whitespace: true,
 			},
 		}),
 	);
@@ -94,7 +97,9 @@ test("resolution filters view and diff capabilities independently", () => {
 				diff: false,
 				anchors: { view: ["line"], diff: [] },
 				mobile: true,
-				active: false,
+				copy: false,
+				layout: false,
+				whitespace: false,
 			},
 		}),
 	);
@@ -107,7 +112,9 @@ test("resolution filters view and diff capabilities independently", () => {
 				diff: true,
 				anchors: { view: [], diff: ["line"] },
 				mobile: true,
-				active: false,
+				copy: false,
+				layout: false,
+				whitespace: false,
 			},
 		}),
 	);
@@ -133,7 +140,9 @@ test("mobile resolution is a hard capability filter", () => {
 				diff: true,
 				anchors: { view: ["line"], diff: ["line"] },
 				mobile: false,
-				active: false,
+				copy: false,
+				layout: false,
+				whitespace: false,
 			},
 		}),
 	);
@@ -236,7 +245,9 @@ test("placement uses anchor capabilities for the requested intent", () => {
 			diff: true,
 			anchors: { view: ["line"], diff: ["structural:json-pointer"] },
 			mobile: true,
-			active: false,
+			copy: false,
+			layout: false,
+			whitespace: false,
 		},
 	});
 	const line: ReviewAnchor = {

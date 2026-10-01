@@ -30,8 +30,9 @@ of the host.
   **`STALE_VIEW`** (an `expect` hash no longer matches what the host reads → re-read the diff and
   re-offer), **`SCOPE_IMMUTABLE`** (the scope's modified side is a commit, so nothing in the worktree is
   being described), **`RANGE_INVALID`** (a span lies outside the side it names, or a range revert was
-  asked of a byte-only resource) and **`RECEIPT_UNKNOWN`** (an undo of a receipt the host no longer
-  holds — the ring is 20 deep and dies with the process)), so a client can react to one specific failure
+  asked of a byte-only resource), **`RECEIPT_UNKNOWN`** (an undo of a receipt the host no longer
+  holds — the ring is 20 deep and dies with the process), and **`UNSUPPORTED_CHANGE`** (the selected
+  change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses)), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
@@ -211,7 +212,7 @@ of the host.
   *before* `start`), **`RevertTarget`** (`file` = the path's whole change in the scope, or `range` = one
   hunk as **line spans on both sides**, never a patch or a `@@` header: two client diff engines split
   hunks differently, and the client must never dictate bytes) and **`ChangeReceipt`** (the answer to a
-  `change.*` call *and* its undo token: `kind` revert/undo, the `before`/`after` hash+length pair with
+  `change.*` call *and* its undo token: `kind` revert/undo, the `before`/`after` hash+length+mode identity with
   `null` meaning absent, and optional `trashed` — the absolute same-directory temporary claim path the
   trash helper received for a whole-file removal; the file consequently has that temporary name in the
   OS trash),
@@ -399,7 +400,7 @@ of the host.
   `table-cell`, `md-heading`, plus whatever scheme a renderer mints: unknown schemes cross the wire
   verbatim, only the shape is checked) and `region` is normalized `0..1` geometry with an optional
   1-based `page` for paged media, so a comment can name an image region or a notebook cell instead of a
-  line; `diffHunk` remains a reserved slot no author populates, and `contentHash` is sha-256 over the
+  line; Ask-agent hunk comments populate `diffHunk` with the exact displayed hunk header, and `contentHash` is sha-256 over the
   resource's BYTES (byte-identical to the former text hash for valid UTF-8).
   **`REVIEW_RICH_ANCHORS_PROTOCOL_VERSION`** pins the additive `region` member and the now-populated
   `structural` slot to v74, so a renderer-rich client tells a host that preserves them from one that
@@ -509,7 +510,7 @@ of the host.
   target, expect: { originalHash, modifiedHash } }` → `{ receipt }`: the client names *what it saw*, the
   host re-derives the change from its own reads under a per-workspace lock, and either side's hash
   mismatching is `STALE_VIEW` with nothing written — the agent keeps working during review, so
-  compare-and-swap is the whole protection) and **`change.undo`** (`{ workspaceId, receiptId, expect:
+  compare-and-swap is the whole protection; symlink and mode-only inputs are `UNSUPPORTED_CHANGE`) and **`change.undo`** (`{ workspaceId, receiptId, expect:
   { modifiedHash } }` → `{ receipt }`: receipts are the inverse, which is why the UI offers *Undo*
   instead of a confirmation on every hunk; the `undo` receipt it answers with is itself undoable once, so
   redo needs no third method). Receipts live in host memory only (newest 20 per workspace): git and the

@@ -107,9 +107,10 @@ export interface ResourceRenderer {
 			diff: ReadonlyArray<ResourceAnchorCapability>;
 		};
 		mobile: boolean;
-		active: boolean;
+		copy: boolean;
+		layout: boolean;
+		whitespace: boolean;
 	};
-	trust: "bundled" | "project" | "user";
 	loadView?(): Promise<{ default: ComponentType<ResourceViewProps> }>;
 	loadDiff?(): Promise<{ default: ComponentType<ResourceDiffProps> }>;
 }

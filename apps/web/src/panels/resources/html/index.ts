@@ -10,9 +10,10 @@ export const htmlRenderer: ResourceRenderer = {
 		diff: true,
 		anchors: { view: [], diff: [] },
 		mobile: true,
-		active: true,
+		copy: false,
+		layout: false,
+		whitespace: false,
 	},
-	trust: "bundled",
 	loadView: () => import("./View"),
 	loadDiff: () => import("./Diff"),
 };

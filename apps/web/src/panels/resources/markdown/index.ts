@@ -10,9 +10,10 @@ export const markdownRenderer: ResourceRenderer = {
 		diff: true,
 		anchors: { view: ["line"], diff: [] },
 		mobile: true,
-		active: false,
+		copy: false,
+		layout: false,
+		whitespace: false,
 	},
-	trust: "bundled",
 	loadView: () => import("../../MarkdownPreview"),
 	loadDiff: () => import("../../RenderedDiff"),
 };

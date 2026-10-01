@@ -1,7 +1,7 @@
 ---
 id: submodule-web-resources
 type: submodule-design
-status: draft
+status: active
 title: resources — renderer registry and review surface contracts
 parent: module-web
 depends-on: [module-contracts]
@@ -13,7 +13,9 @@ Own the engine-neutral resource description, renderer registry, and review-surfa
 and diff panes. Selection is metadata-driven: matching renderers are filtered by intent and phone support,
 ranked, and followed by the required text or byte fallback. MIME matching uses the same extension-derived
 fallback as resource description when host MIME metadata is absent. The resulting ordered list is both
-dispatch policy and the pane's view-toggle grammar.
+dispatch policy and the pane's view-toggle grammar. Renderer capabilities also state whether the selected
+surface supports copying its modified source, split/unified layout, and ignore-whitespace recomputation; the
+pane exposes only those applicable controls.
 
 `ResourceContent` keeps text, retrievable bytes, and an absent diff side distinct. In particular, absence
 is never represented by a byte payload without a URL. `SurfaceReview` carries authoritative anchors; a
@@ -51,6 +53,6 @@ and opaque per-tab view state. `anchorLabel` prefers a structural locator over i
 `table-cell` is `R<row>C<column>`, `json-pointer` is the pointer itself, and unknown schemes retain
 `<scheme> <ref>`; `ipynb-cell` is `cell <n>` for legacy `index:<zero-based>` refs and `cell <id>` for
 stable ids, with an optional renderer-supplied id-to-ordinal map producing the local `cell <ordinal>` label.
-Paged regions are `p<page> region`; unpaged regions, lines, and files keep their existing forms. Active
-renderers remain a sandbox boundary; registration metadata may name that capability but this module never
-mounts one.
+Paged regions are `p<page> region`; unpaged regions, lines, and files keep their existing forms. Registration
+carries only dispatch, geometry, viewport, and concrete diff-control capabilities; it has no unenforced
+provenance or execution-policy metadata. Sandboxing belongs to each renderer implementation.

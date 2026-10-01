@@ -4,6 +4,7 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	rmSync,
 	statSync,
@@ -16,6 +17,7 @@ import type { ChangeReceipt, GitDiffScope, LineSpan, RevertTarget } from "@think
 import { hashBytes } from "../fs";
 import { setTrashImplementationForTests } from "../trash";
 import { revertChange, undoChange } from "./changes";
+import { splitLines } from "./textSplice";
 
 const BYTES = new TextEncoder();
 const UNCOMMITTED: GitDiffScope = { kind: "uncommitted" };
@@ -69,6 +71,12 @@ function expectTrashClaim(path: string | undefined): string {
 	expect(dirname(path)).toBe(repo);
 	expect(basename(path)).toMatch(/^\.thinkrail-revert-[0-7][0-9A-HJKMNP-TV-Z]{25}$/);
 	return path;
+}
+
+function recoveryFiles(): string[] {
+	return readdirSync(repo)
+		.filter((name) => /^\.thinkrail-recovery-[0-7][0-9A-HJKMNP-TV-Z]{25}$/.test(name))
+		.map((name) => join(repo, name));
 }
 
 function revert(
@@ -142,7 +150,11 @@ test("a range revert restores the original lines and leaves the rest of the work
 	expect(receipt.kind).toBe("revert");
 	expect(receipt.path).toBe("a.ts");
 	expect(receipt.before.hash).toBe(hash("one\nTWO\nthree\nfour\n"));
-	expect(receipt.after).toEqual({ hash: hash("one\ntwo\nthree\nfour\n"), byteLength: 19 });
+	expect(receipt.after).toEqual({
+		hash: hash("one\ntwo\nthree\nfour\n"),
+		byteLength: 19,
+		mode: 0o644,
+	});
 	expect(receipt.trashed).toBeUndefined();
 });
 
@@ -268,10 +280,33 @@ test("CRLF survives a revert, and a restored CRLF line keeps its own ending", as
 	expect(text("crlf.txt")).toBe("one\r\ntwo\r\nthree\r\n");
 });
 
+test("line splitting matches jsdiff for CR-only and mixed CRLF/LF content", async () => {
+	expect(splitLines("one\rtwo\rthree")).toEqual(["one\rtwo\rthree"]);
+	expect(splitLines("one\r\ntwo\nthree\r\n")).toEqual(["one\r\n", "two\n", "three\r\n"]);
+
+	write("cr-only.txt", "one\rtwo\rthree");
+	write("mixed.txt", "one\r\ntwo\nthree\r\n");
+	commitAll("mixed line endings");
+	write("cr-only.txt", "one\rTWO\rthree");
+	write("mixed.txt", "one\r\nTWO\nthree\r\n");
+
+	await revert("cr-only.txt", range({ start: 1, count: 1 }, { start: 1, count: 1 }), {
+		originalHash: hash("one\rtwo\rthree"),
+		modifiedHash: hash("one\rTWO\rthree"),
+	});
+	await revert("mixed.txt", range({ start: 2, count: 1 }, { start: 2, count: 1 }), {
+		originalHash: hash("one\r\ntwo\nthree\r\n"),
+		modifiedHash: hash("one\r\nTWO\nthree\r\n"),
+	});
+
+	expect(text("cr-only.txt")).toBe("one\rtwo\rthree");
+	expect(text("mixed.txt")).toBe("one\r\ntwo\nthree\r\n");
+});
+
 test("a whole-file revert rewrites a modified file and restores a deleted one", async () => {
 	write("a.ts", "rewritten\n");
 	chmodSync(join(repo, "a.ts"), 0o755);
-	await revert(
+	const modified = await revert(
 		"a.ts",
 		{ kind: "file" },
 		{
@@ -280,6 +315,15 @@ test("a whole-file revert rewrites a modified file and restores a deleted one", 
 		},
 	);
 	expect(text("a.ts")).toBe("one\ntwo\nthree\n");
+	expect(statSync(join(repo, "a.ts")).mode & 0o777).toBe(0o644);
+	expect(modified.before.mode).toBe(0o755);
+	expect(modified.after.mode).toBe(0o644);
+	await undoChange({
+		workspaceId,
+		receiptId: modified.id,
+		expect: { modifiedHash: hash("one\ntwo\nthree\n") },
+	});
+	expect(text("a.ts")).toBe("rewritten\n");
 	expect(statSync(join(repo, "a.ts")).mode & 0o777).toBe(0o755);
 
 	rmSync(join(repo, "a.ts"));
@@ -292,7 +336,59 @@ test("a whole-file revert rewrites a modified file and restores a deleted one", 
 		},
 	);
 	expect(text("a.ts")).toBe("one\ntwo\nthree\n");
-	expect(restored.before).toEqual({ hash: null, byteLength: null });
+	expect(restored.before).toEqual({ hash: null, byteLength: null, mode: null });
+});
+
+test("a mode-only change is unsupported", async () => {
+	chmodSync(join(repo, "a.ts"), 0o755);
+	await expect(
+		revert(
+			"a.ts",
+			{ kind: "file" },
+			{
+				originalHash: hash("one\ntwo\nthree\n"),
+				modifiedHash: hash("one\ntwo\nthree\n"),
+			},
+		),
+	).rejects.toMatchObject({ code: "UNSUPPORTED_CHANGE" });
+	expect(statSync(join(repo, "a.ts")).mode & 0o777).toBe(0o755);
+});
+
+test("a deleted executable is restored with its Git mode", async () => {
+	write("run.sh", "#!/bin/sh\necho ready\n");
+	chmodSync(join(repo, "run.sh"), 0o755);
+	commitAll("add executable");
+	rmSync(join(repo, "run.sh"));
+
+	const receipt = await revert(
+		"run.sh",
+		{ kind: "file" },
+		{ originalHash: hash("#!/bin/sh\necho ready\n"), modifiedHash: null },
+	);
+	expect(statSync(join(repo, "run.sh")).mode & 0o777).toBe(0o755);
+	expect(receipt.after.mode).toBe(0o755);
+});
+
+test("symbolic links on either side are unsupported", async () => {
+	write("target.txt", "target\n");
+	symlinkSync("target.txt", join(repo, "link.txt"));
+	commitAll("add symlink");
+	await expect(
+		revert("link.txt", { kind: "file" }, { originalHash: hash("target.txt"), modifiedHash: null }),
+	).rejects.toMatchObject({ code: "UNSUPPORTED_CHANGE" });
+
+	rmSync(join(repo, "link.txt"));
+	write("regular.txt", "regular\n");
+	commitAll("replace symlink with regular file");
+	rmSync(join(repo, "regular.txt"));
+	symlinkSync("target.txt", join(repo, "regular.txt"));
+	await expect(
+		revert(
+			"regular.txt",
+			{ kind: "file" },
+			{ originalHash: hash("regular\n"), modifiedHash: hash("target\n") },
+		),
+	).rejects.toMatchObject({ code: "UNSUPPORTED_CHANGE" });
 });
 
 test("a whole-file revert of an added or untracked file moves it to the trash", async () => {
@@ -307,7 +403,7 @@ test("a whole-file revert of an added or untracked file moves it to the trash", 
 	);
 	expect(existsSync(join(repo, "untracked.txt"))).toBe(false);
 	const untrackedClaim = expectTrashClaim(untracked.trashed);
-	expect(untracked.after).toEqual({ hash: null, byteLength: null });
+	expect(untracked.after).toEqual({ hash: null, byteLength: null, mode: null });
 
 	write("added.txt", "staged\n");
 	git("add", "added.txt");
@@ -363,6 +459,85 @@ test("a write landing while revert trashes its claim survives and the receipt re
 		expect: { modifiedHash: hash("agent write\n") },
 	});
 	expect(text("raced.txt")).toBe("before revert\n");
+});
+
+test("a failed revert trash preserves its claim without overwriting a concurrent recreation", async () => {
+	write("failed-race.txt", "claimed bytes\n");
+	let enteredTrash!: () => void;
+	let releaseTrash!: () => void;
+	const entered = new Promise<void>((resolve) => {
+		enteredTrash = resolve;
+	});
+	const released = new Promise<void>((resolve) => {
+		releaseTrash = resolve;
+	});
+	setTrashImplementationForTests(async () => {
+		enteredTrash();
+		await released;
+		throw new Error("trash unavailable");
+	});
+
+	const pending = revert(
+		"failed-race.txt",
+		{ kind: "file" },
+		{ originalHash: null, modifiedHash: hash("claimed bytes\n") },
+	);
+	await entered;
+	write("failed-race.txt", "agent recreation\n");
+	releaseTrash();
+	const failure = await pending.then(
+		() => null,
+		(error: unknown) => error,
+	);
+	const [recovery] = recoveryFiles();
+	if (!recovery) throw new Error("missing recovery file");
+
+	expect(text("failed-race.txt")).toBe("agent recreation\n");
+	expect(readFileSync(recovery, "utf8")).toBe("claimed bytes\n");
+	expect(failure).toBeInstanceOf(Error);
+	expect((failure as Error).message).toContain(recovery);
+});
+
+test("a failed undo trash preserves its claim without overwriting a concurrent recreation", async () => {
+	rmSync(join(repo, "a.ts"));
+	const restored = await revert(
+		"a.ts",
+		{ kind: "file" },
+		{ originalHash: hash("one\ntwo\nthree\n"), modifiedHash: null },
+	);
+	let enteredTrash!: () => void;
+	let releaseTrash!: () => void;
+	const entered = new Promise<void>((resolve) => {
+		enteredTrash = resolve;
+	});
+	const released = new Promise<void>((resolve) => {
+		releaseTrash = resolve;
+	});
+	setTrashImplementationForTests(async () => {
+		enteredTrash();
+		await released;
+		throw new Error("trash unavailable");
+	});
+
+	const pending = undoChange({
+		workspaceId,
+		receiptId: restored.id,
+		expect: { modifiedHash: hash("one\ntwo\nthree\n") },
+	});
+	await entered;
+	write("a.ts", "agent recreation\n");
+	releaseTrash();
+	const failure = await pending.then(
+		() => null,
+		(error: unknown) => error,
+	);
+	const [recovery] = recoveryFiles();
+	if (!recovery) throw new Error("missing recovery file");
+
+	expect(text("a.ts")).toBe("agent recreation\n");
+	expect(readFileSync(recovery, "utf8")).toBe("one\ntwo\nthree\n");
+	expect(failure).toBeInstanceOf(Error);
+	expect((failure as Error).message).toContain(recovery);
 });
 
 test("a byte-only side refuses a range revert and keeps the file untouched", async () => {
@@ -587,7 +762,7 @@ test("change paths cannot traverse .git or a symlink escaping the worktree", asy
 
 	await expect(
 		revert("linked.txt", { kind: "file" }, { originalHash: null, modifiedHash: null }),
-	).rejects.toThrow("Path escapes the worktree");
+	).rejects.toMatchObject({ code: "UNSUPPORTED_CHANGE" });
 	await expect(
 		revert(".git/config", { kind: "file" }, { originalHash: null, modifiedHash: null }),
 	).rejects.toThrow(".git");

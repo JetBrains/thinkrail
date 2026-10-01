@@ -118,6 +118,7 @@ export function ReviewThreadCard({
 					}}
 					onBlur={saveEdit}
 					onKeyDown={(e) => {
+						e.stopPropagation();
 						if (e.key === "Escape") {
 							cancelledRef.current = true;
 							setDraftText(thread.body);

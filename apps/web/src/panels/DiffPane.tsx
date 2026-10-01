@@ -371,21 +371,29 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 						<Revert className="size-14" />
 					</HeaderIconButton>
 				) : null}
-				<HeaderIconButton
-					testid="diff-toggle-whitespace"
-					label="Hide whitespace changes"
-					active={ignoreWhitespace}
-					onClick={() => setDiffTabIgnoreWhitespace(tab.id, !ignoreWhitespace)}
-				>
-					<Pilcrow className="size-14" />
-				</HeaderIconButton>
-				<HeaderIconButton testid="diff-copy" label="Copy file contents" onClick={() => void copy()}>
-					{copied ? (
-						<Check className="size-14 text-feedback-success" />
-					) : (
-						<Copy className="size-14" />
-					)}
-				</HeaderIconButton>
+				{renderer.capabilities.whitespace ? (
+					<HeaderIconButton
+						testid="diff-toggle-whitespace"
+						label="Hide whitespace changes"
+						active={ignoreWhitespace}
+						onClick={() => setDiffTabIgnoreWhitespace(tab.id, !ignoreWhitespace)}
+					>
+						<Pilcrow className="size-14" />
+					</HeaderIconButton>
+				) : null}
+				{renderer.capabilities.copy ? (
+					<HeaderIconButton
+						testid="diff-copy"
+						label="Copy file contents"
+						onClick={() => void copy()}
+					>
+						{copied ? (
+							<Check className="size-14 text-feedback-success" />
+						) : (
+							<Copy className="size-14" />
+						)}
+					</HeaderIconButton>
+				) : null}
 				{candidates.length >= 2
 					? candidates.map((candidate) => (
 							<ToggleSegment
@@ -397,18 +405,22 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 							/>
 						))
 					: null}
-				<ToggleSegment
-					testid="diff-toggle-split"
-					label="Split"
-					active={view === "split"}
-					onClick={() => setDiffTabView(tab.id, "split")}
-				/>
-				<ToggleSegment
-					testid="diff-toggle-inline"
-					label="Inline"
-					active={view === "inline"}
-					onClick={() => setDiffTabView(tab.id, "inline")}
-				/>
+				{renderer.capabilities.layout ? (
+					<>
+						<ToggleSegment
+							testid="diff-toggle-split"
+							label="Split"
+							active={view === "split"}
+							onClick={() => setDiffTabView(tab.id, "split")}
+						/>
+						<ToggleSegment
+							testid="diff-toggle-inline"
+							label="Inline"
+							active={view === "inline"}
+							onClick={() => setDiffTabView(tab.id, "inline")}
+						/>
+					</>
+				) : null}
 			</div>
 			<UnplacedReviewStrip
 				reviews={reviews}

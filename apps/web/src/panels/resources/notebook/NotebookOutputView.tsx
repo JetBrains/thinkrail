@@ -8,6 +8,26 @@ import {
 	notebookImageDataUrl,
 } from "./outputDocument";
 
+const RASTER_DATA_IMAGE = /^data:image\/(?:png|jpeg|gif|webp|avif);base64,/i;
+const SVG_DATA_IMAGE = /^data:image\/svg\+xml((?:;[^,]*)?),(.*)$/is;
+
+function svgDataImageSource(src: string): string | null {
+	const match = SVG_DATA_IMAGE.exec(src);
+	if (!match) return null;
+	try {
+		const parameters = (match[1] ?? "")
+			.split(";")
+			.filter(Boolean)
+			.map((value) => value.toLowerCase());
+		const payload = match[2] ?? "";
+		if (!parameters.includes("base64")) return decodeURIComponent(payload);
+		const binary = atob(payload.replaceAll(/\s/g, ""));
+		return new TextDecoder().decode(Uint8Array.from(binary, (value) => value.charCodeAt(0)));
+	} catch {
+		return null;
+	}
+}
+
 function NotebookMarkdownImage({
 	src,
 	alt,
@@ -17,7 +37,20 @@ function NotebookMarkdownImage({
 	alt?: string | undefined;
 	title?: string | undefined;
 }) {
-	if (src && /^data:/i.test(src)) return <img src={src} alt={alt ?? ""} title={title} />;
+	if (src && RASTER_DATA_IMAGE.test(src)) {
+		return <img src={src} alt={alt ?? ""} title={title} />;
+	}
+	if (src) {
+		const svg = svgDataImageSource(src);
+		if (svg !== null) {
+			return (
+				<NotebookFrame
+					title={title ?? alt ?? "Notebook SVG image"}
+					document={buildNotebookSvgDocument(svg)}
+				/>
+			);
+		}
+	}
 	return (
 		<span data-testid="notebook-disabled-image" className="text-text-muted">
 			{alt ? `${alt}: ` : "Image disabled: "}

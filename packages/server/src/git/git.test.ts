@@ -181,9 +181,10 @@ test("gitStatus attaches per-file +/- counts, incl. untracked line counts", asyn
 	expect(untracked).toMatchObject({ status: "untracked", added: 2, removed: 0 });
 });
 
-test("gitStatus omits counts for untracked binary or oversized files (matches tracked binaries)", async () => {
+test("gitStatus uses ResourceMeta text classification for untracked counts", async () => {
 	seedWorkspace();
 	writeFileSync(join(repo, "blob.bin"), Buffer.from([0x00, 0x01, 0x02, 0x0a, 0x0a]));
+	writeFileSync(join(repo, "invalid.txt"), Buffer.from([0x66, 0x80, 0x0a]));
 	writeFileSync(join(repo, "big.txt"), `${"x".repeat(2 * 1024 * 1024 + 1)}\n`);
 	writeFileSync(join(repo, "small.txt"), "one\ntwo\n");
 
@@ -191,8 +192,13 @@ test("gitStatus omits counts for untracked binary or oversized files (matches tr
 	const bin = changes.find((c) => c.path === "blob.bin");
 	expect(bin).toMatchObject({ status: "untracked" });
 	expect(bin?.added).toBeUndefined();
+	expect(changes.find((c) => c.path === "invalid.txt")?.added).toBeUndefined();
 	expect(changes.find((c) => c.path === "big.txt")?.added).toBeUndefined();
 	expect(changes.find((c) => c.path === "small.txt")).toMatchObject({ added: 2 });
+
+	const invalid = await gitDiffFile("w1", "invalid.txt", { kind: "uncommitted" });
+	expect(invalid.meta.modified.text).toBe(false);
+	expect(invalid.modified).toBe("");
 });
 
 test("gitDiffFile stamps both sides with their byte identity and never decodes a binary side", async () => {

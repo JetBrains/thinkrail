@@ -10,7 +10,7 @@ import {
 	notebookImageDataUrl,
 } from "./outputDocument";
 
-test("notebook renderer registration declares cell anchors and active output content", () => {
+test("notebook renderer registration declares cell anchors and copy support", () => {
 	expect(notebookRenderer).toMatchObject({
 		id: "thinkrail/notebook",
 		label: "Notebook",
@@ -22,7 +22,9 @@ test("notebook renderer registration declares cell anchors and active output con
 				diff: ["line", "structural:ipynb-cell"],
 			},
 			mobile: true,
-			active: true,
+			copy: true,
+			layout: false,
+			whitespace: false,
 		},
 	});
 });

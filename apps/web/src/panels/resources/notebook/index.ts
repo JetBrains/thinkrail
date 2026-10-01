@@ -13,9 +13,10 @@ export const notebookRenderer: ResourceRenderer = {
 			diff: ["line", "structural:ipynb-cell"],
 		},
 		mobile: true,
-		active: true,
+		copy: true,
+		layout: false,
+		whitespace: false,
 	},
-	trust: "bundled",
 	loadView: () => import("./View"),
 	loadDiff: () => import("./Diff"),
 };
