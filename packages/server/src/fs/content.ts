@@ -38,6 +38,9 @@ const EXTENSION_MIME: Readonly<Record<string, string>> = {
 
 const SVG_ROOT = /^\s*<svg[\s>]/;
 const XML_PROLOG = /^\s*<\?xml(?:\s|\?>)/;
+const LFS_POINTER_LIMIT = 1024;
+const LFS_POINTER =
+	/^version https:\/\/git-lfs\.github\.com\/spec\/v1\n(?:[a-z0-9.-]+ [^\n]*\n)*?oid sha256:[0-9a-f]{64}\n(?:[a-z0-9.-]+ [^\n]*\n)*?size \d+\n(?:[a-z0-9.-]+ [^\n]*\n)*$/;
 
 function startsWith(bytes: Uint8Array, magic: readonly number[], offset = 0): boolean {
 	if (bytes.length < offset + magic.length) return false;
@@ -81,11 +84,18 @@ function isSvg(bytes: Uint8Array): boolean {
 	return prologEnd !== -1 && /<svg[\s>]/.test(head.slice(prologEnd + 2));
 }
 
+function isLfsPointer(bytes: Uint8Array): boolean {
+	return bytes.byteLength <= LFS_POINTER_LIMIT && LFS_POINTER.test(UTF8.decode(bytes));
+}
+
 export function classifyBytes(bytes: Uint8Array): { text: boolean; mime?: string } {
 	const magic = sniffMagic(bytes);
 	if (magic !== undefined) return { text: false, mime: magic };
 	const text = isTextBytes(bytes);
-	return text && isSvg(bytes) ? { text, mime: "image/svg+xml" } : { text };
+	if (!text) return { text };
+	if (isSvg(bytes)) return { text, mime: "image/svg+xml" };
+	if (isLfsPointer(bytes)) return { text, mime: "application/vnd.git-lfs" };
+	return { text };
 }
 
 export function hashBytes(bytes: Uint8Array): string {

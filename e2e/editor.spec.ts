@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
-import { asciiPdf } from "./fixtures/repo";
+import { asciiPdf, lfsPointer } from "./fixtures/repo";
 
 test("opens a file in a center Monaco tab, focuses on re-open, and closes", async ({ page }) => {
 	await openFixtureProject(page);
@@ -173,6 +173,28 @@ test("opens an uncompressed PDF in the PDF renderer and its change in the PDF di
 	await page.getByTestId("change-item").filter({ hasText: "RENDERERS.pdf" }).click();
 	await expect(page.getByTestId("pdf-diff")).toBeVisible();
 	await expect(page.getByTestId("pdf-diff-page")).toHaveCount(1);
+});
+
+test("a Git LFS pointer shows as a card in the view and per side in the diff, with Source one toggle away", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+
+	await page.getByTestId("file-node").filter({ hasText: "LFS-ASSET.png" }).dblclick();
+	await expect(page.getByTestId("view-toggle-lfs")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("lfs-pointer")).toContainText("Stored in Git LFS");
+	await expect(page.getByTestId("lfs-pointer-size")).toHaveText("12 KB");
+	await page.getByTestId("view-toggle-code").click();
+	await expect(page.getByTestId("editor-pane")).toContainText("oid sha256:4d7a");
+
+	writeFileSync(join(workspace.worktreePath, "LFS-ASSET.png"), lfsPointer("beef", 4_000_000));
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("change-item").filter({ hasText: "LFS-ASSET.png" }).click();
+	await expect(page.getByTestId("lfs-diff")).toBeVisible();
+	await expect(page.getByTestId("lfs-pointer-original-size")).toHaveText("12 KB");
+	await expect(page.getByTestId("lfs-pointer-modified-size")).toHaveText("3.8 MB");
 });
 
 test("renders a PNG and opens its changed version in the 2-up image diff", async ({ page }) => {

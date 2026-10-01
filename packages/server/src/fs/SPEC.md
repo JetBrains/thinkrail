@@ -33,7 +33,9 @@ bytes are** — the one byte-level classification every content read in the host
   8 KiB bounded-head size; `classifyBytes(bytes)` → `{ text, mime? }` — **mime** is what the *bytes*
   prove (magic numbers for png/jpeg/gif/webp/avif/bmp/ico/pdf/zip/gzip/woff/woff2, plus `image/svg+xml` for
   text whose root element is `<svg>`, directly or behind an XML prolog — a prolog alone is not an
-  image); **text** is "no recognized binary magic number, no NUL byte in the first 8 KiB, and a strict
+  image, and `application/vnd.git-lfs` for a text file of at most 1 KiB that is exactly a Git LFS pointer —
+  `version`, `oid sha256:`, `size`, nothing else — so a `.png` whose content is a pointer is reported as
+  the pointer it is, not as an image that failed to decode); **text** is "no recognized binary magic number, no NUL byte in the first 8 KiB, and a strict
   UTF-8 decode" (a BOM is text; an SVG is text because `image/svg+xml` is inferred from text, never
   from a magic number). A magic number wins over decodability: an uncompressed PDF is valid ASCII, yet
   it is a document the PDF renderer owns, not source the code renderer may claim; `hashBytes(bytes)` → the sha-256 hex that **is** a

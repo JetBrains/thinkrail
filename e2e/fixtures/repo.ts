@@ -163,6 +163,7 @@ export function seedFixtureRepo(): void {
 		),
 	);
 	writeFileSync(join(E2E_FIXTURE_REPO, "RENDERERS.pdf"), asciiPdf("RENDERERS PDF FIXTURE"));
+	writeFileSync(join(E2E_FIXTURE_REPO, "LFS-ASSET.png"), lfsPointer("4d7a", 12345));
 	writeFileSync(
 		join(E2E_FIXTURE_REPO, "SPEC.md"),
 		"---\nid: sample-root\ntype: goal-and-requirements\ntitle: Sample Project\n---\n\n## Goal\n\nA throwaway fixture project for the thinkrail e2e suite. It carries the token SPECGRAPHPROBE so spec_grep has a deterministic match to find.\n",
@@ -211,4 +212,9 @@ export function asciiPdf(text: string): string {
 	const xref = body.length;
 	const entries = offsets.map((offset) => `${String(offset).padStart(10, "0")} 00000 n `);
 	return `${body}xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${entries.join("\n")}\ntrailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+}
+
+export function lfsPointer(oidPrefix: string, size: number): string {
+	const oid = `${oidPrefix}${"0".repeat(64 - oidPrefix.length)}`;
+	return `version https://git-lfs.github.com/spec/v1\noid sha256:${oid}\nsize ${size}\n`;
 }

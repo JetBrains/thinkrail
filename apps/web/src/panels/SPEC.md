@@ -1307,6 +1307,11 @@ own section. The kebab menu (`plan-menu`, a
   every source diff with Pierre `FileDiff` and supports copy, layout, and whitespace controls;
   `thinkrail/markdown` supplies `RenderedDiff`, and `thinkrail/binary` reports both sides' byte sizes. Rich
   renderers omit those controls, except CSV, JSON, and notebook diffs support modified-source copy.
+  `thinkrail/lfs` claims the host's `application/vnd.git-lfs` text (a file that *is* a Git LFS pointer,
+  whatever its extension) above the code renderer and shows a card — "Stored in Git LFS", size, object id,
+  `git lfs pull` hint — in the view and one card per side in the diff, because three lines of pointer
+  protocol in a Monaco editor explain nothing about why a `.png` has no image; Source stays one toggle
+  away, and the renderer places no anchors, so a pointer's threads live in the unplaced strip.
   `RenderedDiff` keeps its worker-isolated htmldiff merge,
   loading/error states, and token styling, but advertises no diff anchors: both sides' threads stay in the
   pane's unplaced strip, **Show in Source** selects the code renderer, and diff authoring is available only

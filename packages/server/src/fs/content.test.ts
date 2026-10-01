@@ -91,3 +91,21 @@ test("resource metadata carries byte identity, and absence carries none", () => 
 	);
 	expect(resourceMeta(null, "gone.png")).toEqual({ hash: null, byteLength: null, text: true });
 });
+
+test("a Git LFS pointer is text with its own media type, whatever the file is named", () => {
+	const pointer =
+		"version https://git-lfs.github.com/spec/v1\noid sha256:4d7a214614ab2935c943f9e0ff69d22eadbb8f32b1258daaa5e2ca24d17e2393\nsize 12345\n";
+	expect(classifyBytes(BYTES.encode(pointer))).toEqual({
+		text: true,
+		mime: "application/vnd.git-lfs",
+	});
+	expect(resourceMeta(BYTES.encode(pointer), "assets/photo.png").mime).toBe(
+		"application/vnd.git-lfs",
+	);
+	expect(classifyBytes(BYTES.encode(`${pointer}\nA paragraph of prose, not a key.\n`))).toEqual({
+		text: true,
+	});
+	expect(classifyBytes(BYTES.encode("version https://git-lfs.github.com/spec/v1\n"))).toEqual({
+		text: true,
+	});
+});
