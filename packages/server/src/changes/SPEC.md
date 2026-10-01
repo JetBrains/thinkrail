@@ -5,7 +5,6 @@ status: active
 title: changes — host-owned revert of a hunk or file, with undo receipts
 parent: module-server
 depends-on: [module-contracts, submodule-server-git, submodule-server-fs]
-references: [task-change-mutations]
 tags: [review, git, public-surface-checked]
 ---
 
@@ -14,7 +13,7 @@ tags: [review, git, public-surface-checked]
 The review surface's write path: **revert one hunk or one file's whole change in the worktree**, and undo
 that revert. Git and the worktree are the authority — a mutation names *what the user saw* (the scope, a
 line span per side, a sha-256 per side) and this module re-derives the change from its own reads.
-Design + user-confirmed decisions: [[task-change-mutations]].
+The platform decision behind it is [[architecture]] decision #19; the rules below are this module's own.
 
 ## Boundary
 
