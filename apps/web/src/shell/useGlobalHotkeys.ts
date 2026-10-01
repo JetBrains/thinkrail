@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useInsertionEffect, useRef } from "react";
 import { hasPlatformModifier } from "../lib";
 import { selectHistoryTarget, useAppStore } from "../store";
 
@@ -53,7 +53,7 @@ function isInTerminal(target: EventTarget | null): boolean {
 
 export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 	const actionsRef = useRef(actions);
-	useLayoutEffect(() => {
+	useInsertionEffect(() => {
 		actionsRef.current = actions;
 	});
 

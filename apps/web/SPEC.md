@@ -85,10 +85,10 @@ compiled output.
 The shell, the workbench group views, `ChatView`, `Composer` and `useChatScroll` compile because they keep
 these conventions:
 
-- A latest-value ref (`xRef.current = value`) is written in a `useLayoutEffect`, never in render, and render
-  never reads `ref.current`. This is sound only while every reader is an event handler, a timer or an effect.
-  The one reader outside that set is `useChatScroll`'s `readGeometry`, reached from Virtuoso's own layout
-  effect, which can see the previous edge for one commit; the runway effect re-runs `contentChanged` after.
+- A latest-value ref (`xRef.current = value`) is written in a `useInsertionEffect`, never in render, and
+  render never reads `ref.current`. Insertion effects run for the whole tree before any layout effect, so a
+  child's layout effect that calls back into the parent (`react-resizable-panels`' `onLayout`, Virtuoso's
+  geometry reads in `useChatScroll`) sees the current value. The effect only assigns refs: no state, no DOM.
 - A hook hands refs back beside render values as a tuple (`useElementSize`), or the caller destructures them
   (`useCollapsibleRegion`, dnd-kit results): reading a render value off an object that carries a ref counts
   as a ref read.

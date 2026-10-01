@@ -12,7 +12,7 @@ import {
 	type RefCallback,
 	useCallback,
 	useEffect,
-	useLayoutEffect,
+	useInsertionEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -505,7 +505,7 @@ export default function ChatView({
 	const locationRowsRef = useRef(rows);
 	const locationTurnsRef = useRef(turns);
 	const locationTurnMapRef = useRef(runtime.turnIdByMessageIndex);
-	useLayoutEffect(() => {
+	useInsertionEffect(() => {
 		locationRowsRef.current = rows;
 		locationTurnsRef.current = turns;
 		locationTurnMapRef.current = runtime.turnIdByMessageIndex;

@@ -4,6 +4,7 @@ import {
 	type RefObject,
 	useCallback,
 	useEffect,
+	useInsertionEffect,
 	useLayoutEffect,
 	useRef,
 	useState,
@@ -195,7 +196,7 @@ export function useChatScroll(
 	const measuredHeaderHeight = useRef(0);
 	const headerAnchorScrollTop = useRef(0);
 	const latestEdgeRef = useRef(edge);
-	useLayoutEffect(() => {
+	useInsertionEffect(() => {
 		firstItemIndexRef.current = firstItemIndex;
 		rowHeightEstimatesRef.current = rowHeightEstimates;
 		latestEdgeRef.current = edge;

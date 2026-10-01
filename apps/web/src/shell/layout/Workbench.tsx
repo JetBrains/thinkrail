@@ -47,7 +47,7 @@ import {
 	type ReactNode,
 	useCallback,
 	useEffect,
-	useLayoutEffect,
+	useInsertionEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -240,7 +240,7 @@ function useCommittedSizes(
 	const epoch = useRef(projectionEpoch);
 	const currentRef = useRef(current);
 	const commitRef = useRef(commit);
-	useLayoutEffect(() => {
+	useInsertionEffect(() => {
 		epoch.current = projectionEpoch;
 		currentRef.current = current;
 		commitRef.current = commit;
@@ -904,7 +904,7 @@ function WorkbenchTab({
 		listeners: dragListeners,
 	} = useDraggable({ id: tupleKey("dnd-tab", tab.id), data: { tab } satisfies DragData });
 	const attentionRef = useRef(attention);
-	useLayoutEffect(() => {
+	useInsertionEffect(() => {
 		attentionRef.current = attention;
 	});
 	const pendingPreviewKeep = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2583,7 +2583,7 @@ export function Workbench({
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 	const [draggingTab, setDraggingTab] = useState<LayoutTab | null>(null);
 	const tabSelectionEpoch = useRef(0);
-	useLayoutEffect(() => {
+	useInsertionEffect(() => {
 		tabSelectionEpoch.current += 1;
 	}, [projectionEpoch]);
 	const [workbenchRef, { width: workbenchWidth, height: workbenchHeight }] = useElementSize();
@@ -2593,7 +2593,7 @@ export function Workbench({
 	} | null>(null);
 	const documentRef = useRef(document);
 	const attentionRef = useRef(attention);
-	useLayoutEffect(() => {
+	useInsertionEffect(() => {
 		documentRef.current = document;
 		attentionRef.current = attention;
 	});
