@@ -15,6 +15,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useNow } from "@/components/useNow";
 import { relativeTime } from "@/lib";
 import { getTransport } from "../transport";
 import { scopeLabel, scopeTitle } from "./changesModel";
@@ -28,6 +29,7 @@ export function ChangesScopeMenu({
 	scope: GitDiffScope;
 	onSelectScope: (scope: GitDiffScope) => void;
 }) {
+	const now = useNow();
 	const [open, setOpen] = useState(false);
 	const [commits, setCommits] = useState<GitCommit[] | null>(null);
 	const [hasUncommitted, setHasUncommitted] = useState<boolean | null>(null);
@@ -117,7 +119,9 @@ export function ChangesScopeMenu({
 									<span className="truncate">{commit.subject || commit.shortSha}</span>
 									<span className="truncate tr-text-metadata text-text-muted">
 										{commit.shortSha} · {commit.author}
-										{commit.committedAt ? ` · ${relativeTime(Date.parse(commit.committedAt))}` : ""}
+										{commit.committedAt
+											? ` · ${relativeTime(Date.parse(commit.committedAt), now)}`
+											: ""}
 									</span>
 								</span>
 							</DropdownMenuItem>

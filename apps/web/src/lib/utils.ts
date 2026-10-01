@@ -219,8 +219,8 @@ export function platformShortcutLabel(
 	return alt ? `Ctrl+Alt+${key}` : `Ctrl+${key}`;
 }
 
-export function relativeTime(ms: number): string {
-	const s = Math.floor((Date.now() - ms) / 1000);
+export function relativeTime(ms: number, now: number): string {
+	const s = Math.floor((now - ms) / 1000);
 	if (s < 60) return "just now";
 	const m = Math.floor(s / 60);
 	if (m < 60) return `${m}m ago`;

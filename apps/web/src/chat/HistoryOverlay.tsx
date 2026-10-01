@@ -13,6 +13,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { IconTooltip } from "@/components/ui/tooltip";
+import { useNow } from "@/components/useNow";
 import { platformShortcutLabel, relativeTime } from "@/lib";
 import {
 	type ChatLocationRequest,
@@ -123,6 +124,7 @@ function PromptRow({
 	onOpenMessage: (target: ChatLocationRequest) => void;
 	onDeleteChat: (workspaceId: string, sessionId: string) => void;
 }) {
+	const now = useNow();
 	const firstLine = hit.text.split("\n")[0] ?? hit.text;
 	const showChip = (scope.kind === "project" || scope.kind === "all") && !!hit.workspaceId;
 	const target = jumpTarget(hit);
@@ -151,7 +153,7 @@ function PromptRow({
 					</span>
 				) : null}
 				<span className="shrink-0 text-text-muted tr-text-metadata">
-					{relativeTime(hit.timestamp)}
+					{relativeTime(hit.timestamp, now)}
 				</span>
 			</button>
 			{isSelected ? (
@@ -229,6 +231,7 @@ function MessageRow({
 	onPick: () => void;
 	onDeleteChat: (workspaceId: string, sessionId: string) => void;
 }) {
+	const now = useNow();
 	const unmapped = !hit.workspaceId;
 	return (
 		<div
@@ -254,7 +257,7 @@ function MessageRow({
 					<span>·</span>
 					<span>{hit.role}</span>
 					<span>·</span>
-					<span>{relativeTime(hit.timestamp)}</span>
+					<span>{relativeTime(hit.timestamp, now)}</span>
 					{unmapped ? <span>· not a ThinkRail workspace</span> : null}
 				</span>
 				<span className="overflow-hidden whitespace-nowrap text-ellipsis">
@@ -278,10 +281,11 @@ function PromptPreviewFooter({
 	hit: PromptHit;
 	workspaceName: string | undefined;
 }) {
+	const now = useNow();
 	const parts = [
 		hit.sessionTitle,
 		hit.workspaceId ? (workspaceName ?? "workspace") : undefined,
-		relativeTime(hit.timestamp),
+		relativeTime(hit.timestamp, now),
 	].filter((part): part is string => !!part);
 	return <>{parts.join(" · ")}</>;
 }
@@ -297,6 +301,7 @@ function HistoryPreview({
 	workspaceName: string | undefined;
 	className: string;
 }) {
+	const now = useNow();
 	return (
 		<div data-testid="history-preview" className={`flex flex-col overflow-hidden ${className}`}>
 			{item ? (
@@ -308,7 +313,7 @@ function HistoryPreview({
 						{item.kind === "prompt" ? (
 							<PromptPreviewFooter hit={item.hit} workspaceName={workspaceName} />
 						) : (
-							messageCrumb(item.hit)
+							messageCrumb(item.hit, now)
 						)}
 					</div>
 				</>
@@ -317,8 +322,8 @@ function HistoryPreview({
 	);
 }
 
-function messageCrumb(hit: MessageHit): string {
-	return `${hit.sessionTitle || hit.cwd.split("/").pop() || "session"} · ${hit.role} · ${relativeTime(hit.timestamp)}`;
+function messageCrumb(hit: MessageHit, now: number): string {
+	return `${hit.sessionTitle || hit.cwd.split("/").pop() || "session"} · ${hit.role} · ${relativeTime(hit.timestamp, now)}`;
 }
 
 export interface HistoryOverlayProps {

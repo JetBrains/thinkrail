@@ -11,6 +11,7 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useNow } from "@/components/useNow";
 import { relativeTime } from "@/lib";
 import { getTransport } from "../transport";
 
@@ -23,6 +24,7 @@ export function PlanCommitsMenu({
 	reloadSignal: number;
 	onOpenCommit: (sha: string) => void;
 }) {
+	const now = useNow();
 	const [open, setOpen] = useState(false);
 	const [commits, setCommits] = useState<GitCommit[] | null>(null);
 	const generation = useRef(0);
@@ -71,7 +73,9 @@ export function PlanCommitsMenu({
 							<span className="truncate">{commit.subject || commit.shortSha}</span>
 							<span className="truncate tr-text-metadata text-text-muted">
 								{commit.shortSha} · {commit.author}
-								{commit.committedAt ? ` · ${relativeTime(Date.parse(commit.committedAt))}` : ""}
+								{commit.committedAt
+									? ` · ${relativeTime(Date.parse(commit.committedAt), now)}`
+									: ""}
 							</span>
 						</span>
 					</DropdownMenuItem>

@@ -28,9 +28,10 @@ Tiny UI helpers shared across components.
   anchored browser-side mirror of Pi's canonical expanded `<skill>` user-message grammar, shared by
   `chat`'s compact renderer and `store`'s optimistic-echo reconciliation; malformed/quoted blocks fail
   closed),
-  **`relativeTime()`** (`just now` / `5m ago` / `2d ago` — shared by chat history, the tab strip's closed
-  chats, and the Changes scope menu's commit rows; it lives here because `chat/` may not import from
-  `panels/`, which is what let three private twins of it accumulate), **`platformShortcutLabel()`** +
+  **`relativeTime(ms, now)`** (`just now` / `5m ago` / `2d ago` against an explicit `now`, never `Date.now`
+  — shared by chat history, the tab strip's closed chats, and the Changes scope menu's commit rows; it lives
+  here because `chat/` may not import from `panels/`, which is what let three private twins of it
+  accumulate), **`platformShortcutLabel()`** +
   **`hasPlatformModifier()`** (one Apple-vs-other definition for shortcut chrome and global handlers; both
   default to the browser-reported platform but accept an explicit platform string so non-browser callers and
   tests never inherit a host runtime's synthetic `navigator` accidentally; the label optionally renders the
