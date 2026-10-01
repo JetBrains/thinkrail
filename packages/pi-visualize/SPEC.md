@@ -16,6 +16,11 @@ and is joined to this package only by the tool **name**.
 
 This package has **no dependency on ThinkRail** and is installable into any bare `pi`.
 
+**Succession.** This package is superseded by the published `@thinkrail/pi-visualize` under
+`pi-extensions/visualize` ([[module-pi-extensions]]); it stays untouched and loaded by the host until the
+wiring PR of the extensions pilot composes the successor through [[module-thinkrail-extensions]] and
+deletes this directory. Until then the two coexist on purpose.
+
 ## What it owns
 
 - The `visualize` tool definition: name, description, TypeBox schema, per-type shape validation,
