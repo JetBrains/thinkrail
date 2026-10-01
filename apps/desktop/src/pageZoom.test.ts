@@ -1,5 +1,19 @@
 import { expect, test } from "bun:test";
-import { handlePageZoomShortcut, nextPageZoom, type PageZoomAction } from "./pageZoom";
+import {
+	createPageZoomGestureHandler,
+	handlePageZoomShortcut,
+	installPageZoomGestures,
+	nextPageZoom,
+	type PageZoomAction,
+	type PageZoomGesture,
+	pageZoomForGesture,
+} from "./pageZoom";
+
+function gestureEvent(type: string, scale?: number): Event {
+	const event = new Event(type, { cancelable: true });
+	if (scale !== undefined) Object.defineProperty(event, "scale", { value: scale });
+	return event;
+}
 
 function shortcut(
 	platform: string,
@@ -60,6 +74,112 @@ test("yields zoom chords a page handler already claimed", () => {
 		actions: [],
 		calls: [],
 	});
+});
+
+test("turns a WebKit pinch lifecycle into page zoom requests", () => {
+	const target = new EventTarget();
+	const gestures: PageZoomGesture[] = [];
+	installPageZoomGestures(target, "MacIntel", (gesture) => gestures.push(gesture));
+	const start = gestureEvent("gesturestart");
+	const change = gestureEvent("gesturechange", 1.4);
+	const end = gestureEvent("gestureend");
+
+	target.dispatchEvent(start);
+	target.dispatchEvent(change);
+	target.dispatchEvent(end);
+
+	expect(gestures).toEqual([{ phase: "start" }, { phase: "change", scale: 1.4 }, { phase: "end" }]);
+	expect([start.defaultPrevented, change.defaultPrevented, end.defaultPrevented]).toEqual([
+		true,
+		true,
+		true,
+	]);
+});
+
+test("drops malformed scale updates from an active pinch", () => {
+	const target = new EventTarget();
+	const gestures: PageZoomGesture[] = [];
+	installPageZoomGestures(target, "MacIntel", (gesture) => gestures.push(gesture));
+	target.dispatchEvent(gestureEvent("gesturestart"));
+
+	for (const scale of [Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
+		target.dispatchEvent(gestureEvent("gesturechange", scale));
+	}
+
+	expect(gestures).toEqual([{ phase: "start" }]);
+});
+
+test("yields a pinch gesture that a page handler already claimed", () => {
+	const target = new EventTarget();
+	const gestures: PageZoomGesture[] = [];
+	installPageZoomGestures(target, "MacIntel", (gesture) => gestures.push(gesture));
+	const start = gestureEvent("gesturestart");
+	const change = gestureEvent("gesturechange", 1.2);
+	const end = gestureEvent("gestureend");
+	start.preventDefault();
+	target.dispatchEvent(start);
+	target.dispatchEvent(change);
+	target.dispatchEvent(end);
+
+	expect(gestures).toEqual([]);
+	expect([change.defaultPrevented, end.defaultPrevented]).toEqual([false, false]);
+});
+
+test("yields scale updates that a page handler already claimed", () => {
+	const target = new EventTarget();
+	const gestures: PageZoomGesture[] = [];
+	installPageZoomGestures(target, "MacIntel", (gesture) => gestures.push(gesture));
+	target.dispatchEvent(gestureEvent("gesturestart"));
+	const change = gestureEvent("gesturechange", 1.2);
+	change.preventDefault();
+	target.dispatchEvent(change);
+	target.dispatchEvent(gestureEvent("gestureend"));
+
+	expect(gestures).toEqual([{ phase: "start" }, { phase: "end" }]);
+});
+
+test("leaves pinch gestures to the renderer outside Apple platforms", () => {
+	const target = new EventTarget();
+	const gestures: PageZoomGesture[] = [];
+	installPageZoomGestures(target, "Win32", (gesture) => gestures.push(gesture));
+	const start = gestureEvent("gesturestart");
+	target.dispatchEvent(start);
+
+	expect(gestures).toEqual([]);
+	expect(start.defaultPrevented).toBe(false);
+});
+
+test("keeps every gesture scale relative to the native zoom at pinch start", () => {
+	const writes: number[] = [];
+	const handle = createPageZoomGestureHandler({
+		getPageZoom: () => 1.25,
+		setPageZoom: (zoom) => writes.push(zoom),
+	});
+
+	handle({ phase: "change", scale: 2 });
+	handle({ phase: "start" });
+	handle({ phase: "change", scale: 1.2 });
+	handle({ phase: "change", scale: 0.8 });
+	handle({ phase: "end" });
+	handle({ phase: "change", scale: 2 });
+
+	expect(writes).toEqual([1.5, 1]);
+});
+
+test("scales continuously from the zoom at gesture start", () => {
+	expect(pageZoomForGesture(1.25, 1.2)).toBe(1.5);
+	expect(pageZoomForGesture(1.25, 0.8)).toBe(1);
+});
+
+test("clamps gesture zoom to the browser-style range", () => {
+	expect(pageZoomForGesture(1, 0.25)).toBe(0.5);
+	expect(pageZoomForGesture(1, 3)).toBe(2);
+});
+
+test("ignores malformed gesture scales", () => {
+	for (const scale of [Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
+		expect(pageZoomForGesture(1.25, scale)).toBe(1.25);
+	}
 });
 
 test("steps from the webview's current zoom to the adjacent browser factor", () => {
