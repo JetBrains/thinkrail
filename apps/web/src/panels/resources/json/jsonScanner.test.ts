@@ -32,6 +32,15 @@ test("JSONC comments and trailing commas parse without changing source positions
 	expect(document?.nodes.get("/b/0")).toMatchObject({ startLine: 4, endLine: 4 });
 });
 
+test("the scanner names the dialect it needed: strict JSON stays json, comments or trailing commas are jsonc", () => {
+	expect(scanJson('{"a": [1, 2]}')?.dialect).toBe("json");
+	expect(scanJson('{"a": 1 // note\n}')?.dialect).toBe("jsonc");
+	expect(scanJson("/* c */ [1]")?.dialect).toBe("jsonc");
+	expect(scanJson('{"a": 1,}')?.dialect).toBe("jsonc");
+	expect(scanJson("[1, 2,]")?.dialect).toBe("jsonc");
+	expect(scanJson("{broken")).toBeNull();
+});
+
 test("duplicate keys resolve to the last source node", () => {
 	const document = scanJson('{\n  "same": 1,\n  "same": { "value": 2 }\n}');
 	expect(document?.root.children).toHaveLength(1);

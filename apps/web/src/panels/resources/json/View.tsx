@@ -6,6 +6,7 @@ import { contentStamp, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
 import { JsonTree, type JsonTreeThread } from "./JsonTree";
 import {
+	type JsonDialect,
 	type JsonNode,
 	jsonNodeDraft,
 	jsonNodeOfAnchor,
@@ -15,7 +16,19 @@ import {
 
 const NO_THREADS: ReadonlySet<string> = new Set();
 
-export default function JsonView({ content, review, onPlacedThreadIds }: ResourceViewProps) {
+function dialectNotice(path: string, dialect: JsonDialect): string | null {
+	if (dialect !== "jsonc") return null;
+	return path.toLowerCase().endsWith(".jsonc")
+		? null
+		: "Parsed as JSONC: this file uses comments or trailing commas, which strict JSON parsers reject.";
+}
+
+export default function JsonView({
+	resource,
+	content,
+	review,
+	onPlacedThreadIds,
+}: ResourceViewProps) {
 	const text = content.kind === "text" ? content.text : "";
 	const document = useMemo(() => scanJson(text), [text]);
 	const composer = useStampedComposer<JsonNode>(contentStamp(content));
@@ -62,7 +75,17 @@ export default function JsonView({ content, review, onPlacedThreadIds }: Resourc
 		review?.onFocusHandled();
 	}, [focusId, placed, review]);
 
-	if (!document) return null;
+	if (!document) {
+		return (
+			<div
+				data-testid="json-invalid"
+				className="h-full overflow-auto bg-container-workspace-bg p-12 tr-text-ui text-text-muted"
+			>
+				Not valid JSON or JSONC — switch to Source to inspect the file.
+			</div>
+		);
+	}
+	const notice = dialectNotice(resource.path, document.dialect);
 	const scrollToCard = (id: string) =>
 		cardRefs.current.get(id)?.scrollIntoView({ block: "center" });
 	const scrollToNode = (thread: ReviewThread) => {
@@ -80,6 +103,11 @@ export default function JsonView({ content, review, onPlacedThreadIds }: Resourc
 			data-testid="json-view"
 			className="h-full overflow-auto bg-container-workspace-bg p-12"
 		>
+			{notice ? (
+				<div data-testid="json-dialect" className="pb-8 tr-text-metadata text-text-muted">
+					{notice}
+				</div>
+			) : null}
 			<JsonTree
 				node={document.root}
 				threadsFor={(node) => threadsByPointer.get(node.pointer) ?? []}

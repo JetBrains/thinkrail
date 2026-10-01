@@ -13,10 +13,13 @@ export interface JsonNode {
 	children: JsonNode[];
 }
 
+export type JsonDialect = "json" | "jsonc";
+
 export interface JsonDocument {
 	value: unknown;
 	root: JsonNode;
 	nodes: ReadonlyMap<string, JsonNode>;
+	dialect: JsonDialect;
 }
 
 interface ParsedValue {
@@ -32,6 +35,7 @@ function escapePointerSegment(segment: string): string {
 
 class JsonScanner {
 	private index = 0;
+	private dialect: JsonDialect = "json";
 	private readonly nodes = new Map<string, JsonNode>();
 	private readonly lineStarts = [0];
 
@@ -46,7 +50,7 @@ class JsonScanner {
 		const root = this.parseNode("");
 		this.skipTrivia();
 		if (this.index !== this.text.length) throw new Error("Unexpected content after JSON value");
-		return { value: root.value, root, nodes: this.nodes };
+		return { value: root.value, root, nodes: this.nodes, dialect: this.dialect };
 	}
 
 	private lineAt(offset: number): number {
@@ -64,11 +68,13 @@ class JsonScanner {
 		for (;;) {
 			while (/\s/.test(this.text[this.index] ?? "")) this.index += 1;
 			if (this.text.startsWith("//", this.index)) {
+				this.dialect = "jsonc";
 				this.index += 2;
 				while (this.index < this.text.length && this.text[this.index] !== "\n") this.index += 1;
 				continue;
 			}
 			if (this.text.startsWith("/*", this.index)) {
+				this.dialect = "jsonc";
 				const end = this.text.indexOf("*/", this.index + 2);
 				if (end < 0) throw new Error("Unterminated JSON comment");
 				this.index = end + 2;
@@ -191,6 +197,7 @@ class JsonScanner {
 			this.index += 1;
 			this.skipTrivia();
 			if (this.text[this.index] === "}") {
+				this.dialect = "jsonc";
 				this.index += 1;
 				return { type: "object", value, children, end: this.index };
 			}
@@ -221,6 +228,7 @@ class JsonScanner {
 			this.index += 1;
 			this.skipTrivia();
 			if (this.text[this.index] === "]") {
+				this.dialect = "jsonc";
 				this.index += 1;
 				return { type: "array", value, children, end: this.index };
 			}

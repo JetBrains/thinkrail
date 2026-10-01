@@ -123,7 +123,14 @@ export default function JsonDiff({
 		(originalText !== null && !originalDocument) ||
 		(modifiedText !== null && !modifiedDocument)
 	) {
-		return null;
+		return (
+			<div
+				data-testid="json-invalid"
+				className="h-full overflow-auto bg-container-workspace-bg p-12 tr-text-ui text-text-muted"
+			>
+				One side is not valid JSON or JSONC — switch to Source to compare the text.
+			</div>
+		);
 	}
 	const surfaceFor = (side: Side): SurfaceReview | undefined =>
 		side === "base" ? review?.base : review?.worktree;

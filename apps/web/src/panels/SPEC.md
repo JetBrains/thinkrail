@@ -1345,9 +1345,15 @@ own section. The kebab menu (`plan-menu`, a
   unmatched rows use success/error subtle surfaces. Diff selections use modified source lines except removed
   rows, which remain in the base anchor space.
 
-  `thinkrail/json` currently matches JSON and JSONC only. Its tolerant scanner accepts comments and trailing
-  commas while building the parsed value and an RFC-6901 pointer-to-source-line index in one pass; duplicate
-  object keys resolve to the last occurrence, matching JSON value semantics. Selecting a non-root node emits
+  `thinkrail/json` matches `*.json` and `*.jsonc` only. Its scanner is **JSONC-tolerant by design** —
+  `tsconfig.json`, `.vscode/*.json` and most editor settings files carry comments and trailing commas,
+  and a tree that refused them would send exactly those files to Source — but it is honest about it:
+  the document records the `dialect` it needed, and a `.json` file that only parsed as JSONC shows a
+  `json-dialect` notice above the tree (a `.jsonc` file does not, because there it is the point); a
+  file that is not even JSONC renders an explicit `json-invalid` notice pointing to Source instead of a
+  blank pane, in both the view and the diff. The scanner builds the parsed value and an RFC-6901
+  pointer-to-source-line index in one pass; duplicate object keys resolve to the last occurrence,
+  matching JSON value semantics. Selecting a non-root node emits
   its mandatory `lineRange` plus `structural { scheme: "json-pointer", ref }`; a pointer absent after an edit,
   or one now naming a node outside the host-reanchored line range, is reported unplaced. The collapsible
   unified diff comes from a `jsondiffpatch` instance with move detection

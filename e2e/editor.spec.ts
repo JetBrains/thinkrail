@@ -78,13 +78,24 @@ test("opens a non-markdown file straight to Monaco with no rendered-view toggle"
 
 test("opens JSON with Tree and Source candidates, defaulting to Tree", async ({ page }) => {
 	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
+	const workspace = await createWorkspaceViaDialog(page);
 	await page.getByTestId("tab-files").click();
 
 	await page.getByTestId("file-node").filter({ hasText: "sample.json" }).dblclick();
 	await expect(page.getByTestId("view-toggle-json")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("view-toggle-code")).toBeVisible();
 	await expect(page.getByTestId("json-view")).toContainText("sample-project");
+	await expect(page.getByTestId("json-dialect")).toHaveCount(0);
+
+	const jsonPath = join(workspace.worktreePath, "sample.json");
+	writeFileSync(jsonPath, '{\n  // a note\n  "project": "sample-project",\n}\n');
+	await expect(page.getByTestId("json-dialect")).toContainText("Parsed as JSONC");
+	await expect(page.getByTestId("json-view")).toContainText("sample-project");
+
+	writeFileSync(jsonPath, "{ not json");
+	await expect(page.getByTestId("json-invalid")).toContainText("Not valid JSON");
+	await page.getByTestId("view-toggle-code").click();
+	await expect(page.locator(".monaco-editor").first()).toBeVisible();
 });
 
 test("opens CSV with Table and Source candidates, defaulting to Table", async ({ page }) => {
