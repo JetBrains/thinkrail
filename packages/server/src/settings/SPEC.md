@@ -16,7 +16,7 @@ visual line widths plus independent pane bounds, bounded custom layout-preset ca
 display/cadence, the host-wide subagent default, and plan-review policy. `defaultModel` / `defaultEffort`
 select the defaults every new chat receives (unset model means first available; unset effort means medium);
 `reviewModel` / `reviewEffort`
-select the reviewer runtime (unset means the pi default); `reviewAutoFix: false` records a `request_changes`
+select the reviewer runtime (unset means that same new-chat default); `reviewAutoFix: false` records a `request_changes`
 verdict and waits instead of auto-sending a fix.
 The module reads, normalizes, persists, caches, and broadcasts values that intentionally follow the owner
 across frontends.

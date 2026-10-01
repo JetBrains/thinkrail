@@ -580,7 +580,7 @@ a project picker, the prompt hero, and the reused
   `useModelCatalog`, written as `settings.update { reviewModel | reviewEffort }`; unset ⇒ default). The
   selector carries an **explicit default-model row** (`model-option-default`, labelled with the host's
   `model.default` result) that writes `{ reviewModel: null, reviewEffort: null }` — the null-clears wire
-  form, see `submodule-server-settings` — so a chosen reviewer model can be restored to the pi default
+  form, see `submodule-server-settings` — so a chosen reviewer model can be restored to the host's new-chat default
   without hand-editing host state; while unset, the effort control runs on the default model's supported
   levels (fetched once from `model.default`) instead of an empty list. And an
   **auto-fix toggle** (`review-autofix-toggle`, a switch over `store.reviewAutoFix` →
