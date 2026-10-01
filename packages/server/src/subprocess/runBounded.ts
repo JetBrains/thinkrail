@@ -20,6 +20,12 @@ export type BoundedBytesRunOptions = Omit<BoundedRunOptions, "stdout"> & {
 	stdout: "bytes";
 };
 
+export type BoundedStreamOptions = Omit<BoundedRunOptions, "stdout">;
+export type BoundedStream = {
+	stdout: ReadableStream<Uint8Array>;
+	exited: Promise<BoundedRunBase>;
+};
+
 export const DRAIN_GRACE_MS = 250;
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
@@ -105,6 +111,96 @@ function killTree(proc: Bun.Subprocess): void {
 	proc.kill("SIGKILL");
 }
 
+function spawnOptions(opts: { cwd?: string; env?: Record<string, string | undefined> }) {
+	return {
+		cwd: opts.cwd ?? process.cwd(),
+		env: opts.env ?? process.env,
+		stdin: "ignore",
+		stdout: "pipe",
+		stderr: "pipe",
+		detached: process.platform !== "win32",
+		windowsHide: process.platform === "win32",
+	} as const;
+}
+
+function launchFailure(cause: unknown, waitedMs: number): BoundedRunBase {
+	return {
+		ok: false,
+		err: cause instanceof Error ? cause.message : String(cause),
+		timedOut: false,
+		launchFailed: true,
+		waitedMs,
+	};
+}
+
+export function streamBounded(argv: string[], opts: BoundedStreamOptions): BoundedStream {
+	const startedAt = performance.now();
+	const waitedMs = () => performance.now() - startedAt;
+
+	let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
+	try {
+		proc = Bun.spawn(argv, spawnOptions(opts));
+	} catch (cause) {
+		const failed = launchFailure(cause, waitedMs());
+		return {
+			stdout: new ReadableStream<Uint8Array>({
+				start(controller) {
+					controller.error(new Error(failed.err));
+				},
+			}),
+			exited: Promise.resolve(failed),
+		};
+	}
+
+	const err = textSink(proc.stderr);
+	const deadline = delay(boundedTimeout(opts.timeoutMs));
+	const exited = (async (): Promise<BoundedRunBase> => {
+		const outcome = await Promise.race([
+			proc.exited.then(() => "exited" as const),
+			deadline.promise.then(() => "timed-out" as const),
+		]);
+		deadline.cancel();
+		if (outcome === "timed-out") killTree(proc);
+		const grace = delay(DRAIN_GRACE_MS);
+		await Promise.race([err.done, grace.promise]);
+		grace.cancel();
+		err.cancel();
+		return {
+			ok: outcome === "exited" && proc.exitCode === 0,
+			err: err.value(),
+			timedOut: outcome === "timed-out",
+			launchFailed: false,
+			waitedMs: waitedMs(),
+		};
+	})();
+
+	const reader = proc.stdout.getReader();
+	const stdout = new ReadableStream<Uint8Array>({
+		async pull(controller) {
+			const next = await reader.read();
+			if (!next.done) {
+				controller.enqueue(next.value);
+				return;
+			}
+			const result = await exited;
+			if (result.ok) controller.close();
+			else
+				controller.error(
+					new Error(
+						result.timedOut
+							? `timed out after ${Math.round(result.waitedMs)}ms`
+							: result.err || `exited with status ${proc.exitCode}`,
+					),
+				);
+		},
+		cancel() {
+			void reader.cancel().catch(() => {});
+			killTree(proc);
+		},
+	});
+	return { stdout, exited };
+}
+
 export function runBounded(argv: string[], opts: BoundedBytesRunOptions): Promise<BoundedBytesRun>;
 export function runBounded(argv: string[], opts: BoundedRunOptions): Promise<BoundedRun>;
 export async function runBounded(
@@ -116,24 +212,9 @@ export async function runBounded(
 
 	let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
 	try {
-		proc = Bun.spawn(argv, {
-			cwd: opts.cwd ?? process.cwd(),
-			env: opts.env ?? process.env,
-			stdin: "ignore",
-			stdout: "pipe",
-			stderr: "pipe",
-			detached: process.platform !== "win32",
-			windowsHide: process.platform === "win32",
-		});
+		proc = Bun.spawn(argv, spawnOptions(opts));
 	} catch (cause) {
-		const err = cause instanceof Error ? cause.message : String(cause);
-		const failed = {
-			ok: false,
-			err,
-			timedOut: false,
-			launchFailed: true,
-			waitedMs: waitedMs(),
-		};
+		const failed = launchFailure(cause, waitedMs());
 		return opts.stdout === "bytes" ? { ...failed, out: new Uint8Array() } : { ...failed, out: "" };
 	}
 

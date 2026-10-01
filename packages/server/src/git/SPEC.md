@@ -217,9 +217,15 @@ ref off the workspace-create critical path.
   base-side anchor's text fragment through it);
   **`readBlobBytesAt(worktreePath, ref, path)`** → the same read kept **byte-exact** (`Uint8Array`) and
   synchronous solely for `reviews`' snapshot pass; **`readBlobBytesAtAsync`** is the bounded request-path
-  primitive used by `changes` and the host's `/blob` route. Both run `git cat-file blob`, return `null`
+  primitive used by `changes`, whose reads must be whole to be hashed. Both run `git cat-file blob`, return `null`
   only for Git's explicit path-absent diagnostic, and throw for a non-blob object or every other failure;
-  timeout/launch can therefore never masquerade as absence. **`readBlobSizeAtAsync`** performs the same
+  timeout/launch can therefore never masquerade as absence. **`readBlobStreamAtAsync`** is the same read
+  for the host's `/blob` route, which must not hold a blob in memory: it awaits only the first
+  `CONTENT_SNIFF_BYTES` (the `head` the route classifies) and hands the rest over as a `body` stream
+  that re-emits the head and then relays `git cat-file`'s stdout as it arrives — absence and failure are
+  decided from the exit the first read observes, with the same `null`/throw contract, while a failure
+  *after* the head has been handed over errors the stream rather than closing it, so a consumer sees an
+  aborted transfer, never a silently truncated blob. **`readBlobSizeAtAsync`** performs the same
   bounded, strict-miss read through `git cat-file -s` before the host admits an immutable blob response;
   **`readPathModeAtAsync`** reads one path's tree mode with bounded `git ls-tree` so `changes` can reject
   symlinks and restore Git's executable bit without deriving tree metadata itself;
@@ -262,9 +268,9 @@ ref off the workspace-create critical path.
   `null`. Returning the canonical sha lets the adopted-commit review resolver reject an abbreviated /
   non-canonical id, and the shared cap guarantees it never accepts a commit past the newest
   `COMMIT_LIST_MAX` — for which no adopted item is ever emitted. Kept in lock-step with `listCommits`.
-- **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
+- **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,
-  `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readBlobSizeAtAsync`,
+  `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readBlobStreamAtAsync`, `readBlobSizeAtAsync`,
   `readPathModeAtAsync`, `readCommitSubject`,
   `gitCommitPaths`, `gitHeadSha`, `listCommits`, `listCommitsSince`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,

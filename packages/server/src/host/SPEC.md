@@ -23,11 +23,17 @@ channel fan-out, and the process-boot wrapper both launchers share.
   id/escape/miss → 404; `Cache-Control: no-store`, because the worktree moves under the URL) so the
   markdown viewer's relative `<img>`s resolve, the sibling
   **`GET /blob/<workspaceId>/<oid>/<relpath>`** route serving that path's bytes **at one commit**
-  (`git.readBlobBytesAtAsync` behind a 40/64-hex `oid` — a diff range's `resolvedOriginalOid`, so the URL
+  (`git.readBlobStreamAtAsync` behind a 40/64-hex `oid` — a diff range's `resolvedOriginalOid`, so the URL
   names immutable content and answers `Cache-Control: public, max-age=31536000, immutable`; the Git
   primitive requires a blob, so trees/commits/gitlinks are 404 alongside a bad id/oid/escape/absent
-  path). Before reading a blob body, the route performs a bounded `git cat-file -s`; objects above 64 MiB
-  are refused with 413, while accepted immutable blobs are read as one bounded response. Both routes exist
+  path). Before opening a blob body, the route performs a bounded `git cat-file -s`; objects above
+  `BLOB_SIZE_LIMIT` (64 MiB — the size of the largest image, PDF or notebook a review surface renders
+  in one piece, and the bound on what one `change.revert` receipt may pin) are refused with 413. An
+  accepted blob is **streamed**: only its 8 KiB sniff head is awaited for the headers and the rest relays
+  `git cat-file`'s stdout chunk by chunk, so concurrent image or PDF diffs cost pipe buffers, not blobs,
+  of host memory; the body goes out chunked (a streamed body carries no `Content-Length`), a consumer
+  that disconnects kills its `git`, and the relay's own deadline is five minutes — a slow reader
+  stalls `git` on the pipe rather than racing the 55 s network budget. Both routes exist
   because `fs.readFile` and `git.diffFile` answer `""` for bytes they must not decode, so a byte-only
   resource is fetched over HTTP instead. Both derive `Content-Type` through the shared byte classifier plus
   filename fallback (falling back to `application/octet-stream`) and
@@ -461,7 +467,7 @@ enabled/confirmed choice before entering analytics attribution.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
   `boot.ts`); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
-  `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobBytesAtAsync` for the `/files` + `/blob`
+  `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobStreamAtAsync` for the `/files` + `/blob`
   routes); Bun/Node.
 - **Forbidden:** being imported by any feature module; importing `web`/`cli`/`desktop`.
 

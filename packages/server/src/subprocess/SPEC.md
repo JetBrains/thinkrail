@@ -24,7 +24,14 @@ never what a particular child's output means.
   or the direct Windows child. A failed launch is a result (`ok: false`, `launchFailed: true`, the launch
   error as `err`), never a throw; callers can distinguish infrastructure failure from a child that ran
   and exited nonzero.
-- **Public surface:** `runBounded`, `BoundedRun`, `BoundedBytesRun`, `BoundedRunOptions`, `BoundedBytesRunOptions`.
+- **Also owns:** `streamBounded(argv, { timeoutMs, cwd?, env? })` → `{ stdout, exited }` — the same
+  spawn, deadline, group kill and stderr capture, for the one caller that must relay a child's stdout
+  while it is still being produced (the host's `/blob` route). Completion is still the child's exit:
+  the `stdout` stream **closes** only after a zero exit and **errors** after a nonzero exit, an expiry or
+  a failed launch, so a consumer can never mistake a truncated relay for a complete one; cancelling the
+  stream kills the child. `exited` resolves to the same shape `runBounded` returns, minus `out`.
+- **Public surface:** `runBounded`, `streamBounded`, `BoundedRun`, `BoundedBytesRun`, `BoundedRunOptions`,
+  `BoundedBytesRunOptions`, `BoundedStream`, `BoundedStreamOptions`.
 - **Allowed deps:** Bun/Node process APIs. Nothing else — it knows no feature, no wire type, no
   persistence.
 - **Forbidden:** message wording, retry, truncation, or any policy about a specific program. `git`'s

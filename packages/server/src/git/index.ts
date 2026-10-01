@@ -23,6 +23,7 @@ export {
 	readBlobBytesAt,
 	readBlobBytesAtAsync,
 	readBlobSizeAtAsync,
+	readBlobStreamAtAsync,
 	readCommitSubject,
 	readPathModeAtAsync,
 	remoteRefOid,
@@ -30,5 +31,5 @@ export {
 	resolveListedCommit,
 	tryCurrentBranch,
 } from "./git";
-export { git, gitAsync, gitAsyncBytes, nonInteractiveGitEnv } from "./gitExec";
+export { git, gitAsync, gitAsyncBytes, gitAsyncStream, nonInteractiveGitEnv } from "./gitExec";
 export { assertSafeRef, isSafeRef, remoteNameOf, remoteTrackingRef } from "./refs";

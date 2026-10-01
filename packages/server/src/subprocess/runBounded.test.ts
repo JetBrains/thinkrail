@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DRAIN_GRACE_MS, runBounded } from "./runBounded";
+import { DRAIN_GRACE_MS, runBounded, streamBounded } from "./runBounded";
 
 const posix = test.skipIf(process.platform === "win32");
 
@@ -185,4 +185,58 @@ posix("the timeout path drains after the kill, bounded by the grace", async () =
 	expect(result.err).toBe("REMOTE-SAID-THIS");
 	expect(result.waitedMs).toBeGreaterThanOrEqual(budget + DRAIN_GRACE_MS);
 	expect(result.waitedMs).toBeLessThan(budget + DRAIN_GRACE_MS * 8);
+});
+
+async function collect(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+	return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+test("streamBounded hands stdout over as it arrives and closes on a clean exit", async () => {
+	const run = streamBounded(
+		bun(
+			"const chunk = Buffer.alloc(1 << 20, 7); for (let i = 0; i < 4; i++) process.stdout.write(chunk);",
+		),
+		{ timeoutMs: 10_000 },
+	);
+	const reader = run.stdout.getReader();
+	const first = await reader.read();
+	expect(first.done).toBe(false);
+	let total = first.value?.byteLength ?? 0;
+	while (true) {
+		const next = await reader.read();
+		if (next.done) break;
+		total += next.value.byteLength;
+	}
+	expect(total).toBe(4 << 20);
+	expect(await run.exited).toMatchObject({ ok: true, timedOut: false, launchFailed: false });
+});
+
+test("streamBounded errors the stream instead of closing it when the child exits nonzero", async () => {
+	const run = streamBounded(
+		bun('process.stdout.write("partial"); console.error("boom"); process.exit(3);'),
+		{ timeoutMs: 10_000 },
+	);
+	await expect(collect(run.stdout)).rejects.toThrow("boom");
+	expect(await run.exited).toMatchObject({ ok: false, err: "boom\n", timedOut: false });
+});
+
+posix("streamBounded kills the child when the consumer cancels, and on expiry", async () => {
+	const cancelled = streamBounded(
+		bun('process.stdout.write("x"); setInterval(() => process.stdout.write("x"), 10);'),
+		{ timeoutMs: 10_000 },
+	);
+	const reader = cancelled.stdout.getReader();
+	expect((await reader.read()).done).toBe(false);
+	await reader.cancel();
+	expect(await cancelled.exited).toMatchObject({ ok: false, timedOut: false });
+
+	const expired = streamBounded(bun("setInterval(() => {}, 1000);"), { timeoutMs: 100 });
+	await expect(collect(expired.stdout)).rejects.toThrow("timed out");
+	expect((await expired.exited).timedOut).toBe(true);
+});
+
+test("streamBounded reports a failed launch through both the stream and the exit", async () => {
+	const run = streamBounded(["/definitely/not/a/binary"], { timeoutMs: 1000 });
+	await expect(collect(run.stdout)).rejects.toThrow();
+	expect(await run.exited).toMatchObject({ ok: false, launchFailed: true });
 });

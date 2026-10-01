@@ -1,11 +1,12 @@
 import { statSync } from "node:fs";
 import { CONTENT_SNIFF_BYTES, classifyBytes, mimeFromPath, resolveWorktreeFile } from "../fs";
-import { readBlobBytesAtAsync, readBlobSizeAtAsync } from "../git";
+import { readBlobSizeAtAsync, readBlobStreamAtAsync } from "../git";
 import { loadWorkspaces } from "../persistence";
 
 export const FILES_PREFIX = "/files/";
 export const BLOB_PREFIX = "/blob/";
 export const BLOB_SIZE_LIMIT = 64 * 1024 * 1024;
+const BLOB_STREAM_TIMEOUT_MS = 5 * 60_000;
 
 const OID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -16,13 +17,13 @@ function contentHeaders(
 	head: Uint8Array,
 	path: string,
 	cacheControl: string,
-	byteLength: number,
+	byteLength: number | null,
 ): Record<string, string> {
 	const mime = classifyBytes(head).mime ?? mimeFromPath(path) ?? "application/octet-stream";
 	return {
 		"Content-Type": mime,
 		"Cache-Control": cacheControl,
-		"Content-Length": String(byteLength),
+		...(byteLength === null ? {} : { "Content-Length": String(byteLength) }),
 		"X-Content-Type-Options": "nosniff",
 		...(ACTIVE_TYPES.has(mime) ? { "Content-Security-Policy": "sandbox; default-src 'none'" } : {}),
 	};
@@ -82,10 +83,12 @@ export async function serveBlob(pathname: string): Promise<Response> {
 		const size = await readBlobSizeAtAsync(worktreePath, blob.segment, relPath);
 		if (size === null) return notFound();
 		if (size > BLOB_SIZE_LIMIT) return new Response("blob too large", { status: 413 });
-		const bytes = await readBlobBytesAtAsync(worktreePath, blob.segment, relPath);
-		if (bytes === null) return notFound();
-		return new Response(new Uint8Array(bytes), {
-			headers: contentHeaders(bytes.subarray(0, CONTENT_SNIFF_BYTES), relPath, IMMUTABLE, size),
+		const stream = await readBlobStreamAtAsync(worktreePath, blob.segment, relPath, {
+			timeoutMs: BLOB_STREAM_TIMEOUT_MS,
+		});
+		if (stream === null) return notFound();
+		return new Response(stream.body, {
+			headers: contentHeaders(stream.head, relPath, IMMUTABLE, null),
 		});
 	} catch {
 		return notFound();

@@ -11,7 +11,13 @@ import type {
 	ResourceMeta,
 	Workspace,
 } from "@thinkrail/contracts";
-import { classifyBytes, decodeText, resolveWorktreeFile, resourceMeta } from "../fs";
+import {
+	CONTENT_SNIFF_BYTES,
+	classifyBytes,
+	decodeText,
+	resolveWorktreeFile,
+	resourceMeta,
+} from "../fs";
 import { logger } from "../log";
 import { loadProjects, loadWorkspaces } from "../persistence";
 import {
@@ -21,7 +27,14 @@ import {
 	resolveCommitOid,
 	resolveDiffRange,
 } from "./diffScope";
-import { git, gitAsync, gitAsyncBytes, gitBytes, nonInteractiveGitEnv } from "./gitExec";
+import {
+	git,
+	gitAsync,
+	gitAsyncBytes,
+	gitAsyncStream,
+	gitBytes,
+	nonInteractiveGitEnv,
+} from "./gitExec";
 import { isSafeRef, remoteNameOf } from "./refs";
 
 const log = logger("git");
@@ -390,6 +403,65 @@ export async function readBlobBytesAtAsync(
 			...(opts.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
 		}),
 	);
+}
+
+export interface BlobStream {
+	head: Uint8Array;
+	body: ReadableStream<Uint8Array>;
+}
+
+export async function readBlobStreamAtAsync(
+	worktreePath: string,
+	ref: string,
+	path: string,
+	opts: { timeoutMs?: number } = {},
+): Promise<BlobStream | null> {
+	const run = gitAsyncStream(worktreePath, blobArgs(ref, path), {
+		env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+		...(opts.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
+	});
+	const reader = run.stdout.getReader();
+	const chunks: Uint8Array[] = [];
+	let length = 0;
+	while (length < CONTENT_SNIFF_BYTES) {
+		let next: Awaited<ReturnType<typeof reader.read>>;
+		try {
+			next = await reader.read();
+		} catch {
+			const exit = await run.exited;
+			return strictBlobFrom({
+				ok: false,
+				out: null,
+				err: exit.err,
+				...(exit.timedOut ? { failure: "timeout" as const } : {}),
+			});
+		}
+		if (next.done || next.value === undefined) break;
+		chunks.push(next.value);
+		length += next.value.byteLength;
+	}
+	const head = new Uint8Array(Math.min(length, CONTENT_SNIFF_BYTES));
+	let offset = 0;
+	for (const chunk of chunks) {
+		const part = chunk.subarray(0, head.byteLength - offset);
+		head.set(part, offset);
+		offset += part.byteLength;
+		if (offset >= head.byteLength) break;
+	}
+	const body = new ReadableStream<Uint8Array>({
+		start(controller) {
+			for (const chunk of chunks) controller.enqueue(chunk);
+		},
+		async pull(controller) {
+			const next = await reader.read();
+			if (next.done) controller.close();
+			else controller.enqueue(next.value);
+		},
+		cancel(reason) {
+			void reader.cancel(reason).catch(() => {});
+		},
+	});
+	return { head, body };
 }
 
 export async function readBlobSizeAtAsync(

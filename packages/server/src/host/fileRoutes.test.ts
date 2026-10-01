@@ -147,3 +147,27 @@ test("file routes refuse .git and symlinks escaping the worktree", async () => {
 	expect((await serveWorktreeFile("/files/w1/outside%2Fworkspaces.json")).status).toBe(404);
 	expect((await serveBlob(`/blob/w1/${head}/.git%2Fconfig`)).status).toBe(404);
 });
+
+test("/blob streams a multi-megabyte blob through a live server", async () => {
+	const big = new Uint8Array(3 * 1024 * 1024);
+	for (let index = 0; index < big.byteLength; index++) big[index] = (index * 31 + 7) & 0xff;
+	writeFileSync(join(repo, "docs", "big.bin"), big);
+	git("add", "-A");
+	git("commit", "-m", "big");
+	const commit = git("rev-parse", "HEAD");
+	const server = Bun.serve({
+		port: 0,
+		fetch: (request) => serveBlob(new URL(request.url).pathname),
+	});
+	try {
+		const response = await fetch(
+			`http://127.0.0.1:${server.port}/blob/w1/${commit}/docs%2Fbig.bin`,
+		);
+		expect(response.status).toBe(200);
+		expect(response.headers.get("Content-Type")).toBe("application/octet-stream");
+		expect(response.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
+		expect(new Uint8Array(await response.arrayBuffer())).toEqual(big);
+	} finally {
+		server.stop(true);
+	}
+});

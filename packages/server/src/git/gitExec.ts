@@ -1,5 +1,5 @@
 import { spawnSyncCaptured, spawnSyncCapturedBytes } from "@thinkrail/shared/spawn";
-import { runBounded } from "../subprocess";
+import { type BoundedStream, runBounded, streamBounded } from "../subprocess";
 
 const NETWORK_TIMEOUT_MS = 55_000;
 const MAX_STDERR_CHARS = 2_000;
@@ -106,6 +106,17 @@ export async function gitAsync(
 		err: boundedStderr(run.err),
 		...(run.launchFailed && { failure: "launch" as const }),
 	};
+}
+
+export function gitAsyncStream(
+	cwd: string,
+	args: string[],
+	opts: GitAsyncOptions = {},
+): BoundedStream {
+	return streamBounded(["git", "-C", cwd, ...args], {
+		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
+		env: opts.env ?? nonInteractiveGitEnv(),
+	});
 }
 
 export async function gitAsyncBytes(

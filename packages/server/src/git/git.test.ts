@@ -16,6 +16,7 @@ import {
 	listCommitsSince,
 	prefetchBranch,
 	readBlobBytesAtAsync,
+	readBlobStreamAtAsync,
 	tryCurrentBranch,
 } from "./git";
 import { isSafeRef } from "./refs";
@@ -844,6 +845,33 @@ posix("a bounded blob-read timeout throws instead of becoming an absent side", a
 
 	await expect(readBlobBytesAtAsync(repo, head, "README.md", { timeoutMs: 200 })).rejects.toThrow(
 		/timed out after.*git did not exit/,
+	);
+});
+
+test("a streamed blob read yields its sniff head and full body, null when absent, and throws on failure", async () => {
+	seedWorkspace();
+	const head = gitHeadSha("w1");
+	if (!head) throw new Error("no head");
+	const big = new Uint8Array(200 * 1024);
+	for (let index = 0; index < big.byteLength; index++) big[index] = index & 0xff;
+	writeFileSync(join(repo, "big.bin"), big);
+	git(repo, "add", "big.bin");
+	git(repo, "commit", "-m", "big");
+	const commit = gitHeadSha("w1");
+	if (!commit) throw new Error("no commit");
+
+	const streamed = await readBlobStreamAtAsync(repo, commit, "big.bin");
+	if (!streamed) throw new Error("expected a blob");
+	expect(streamed.head.byteLength).toBe(8 * 1024);
+	expect(streamed.head).toEqual(big.subarray(0, 8 * 1024));
+	expect(new Uint8Array(await new Response(streamed.body).arrayBuffer())).toEqual(big);
+
+	expect(await readBlobStreamAtAsync(repo, head, "big.bin")).toBeNull();
+	expect(await readBlobStreamAtAsync(repo, head, "missing.txt")).toBeNull();
+
+	failGitSubcommand("cat-file");
+	await expect(readBlobStreamAtAsync(repo, head, "README.md")).rejects.toThrow(
+		/forced cat-file failure/,
 	);
 });
 
