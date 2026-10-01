@@ -20,10 +20,10 @@ import type { FileTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import {
-	encodeResourcePath,
 	PENDING_TEXT_META,
 	rendererImplementationKey,
 	rendererTestId,
+	resourceBytesUrl,
 	selectResourceRenderer,
 	useResetViewStateOnImplementationChange,
 } from "./resourcePane";
@@ -43,7 +43,7 @@ function contentFor(tab: FileTab): ResourceContent {
 	if (meta.text) return { kind: "text", text: tab.content, hash: meta.hash };
 	return {
 		kind: "bytes",
-		url: `${getTransport().httpBase()}/files/${encodeURIComponent(tab.workspaceId)}/${encodeResourcePath(tab.path)}`,
+		url: resourceBytesUrl(tab.workspaceId, tab.path),
 		hash: meta.hash,
 		byteLength: meta.byteLength,
 	};

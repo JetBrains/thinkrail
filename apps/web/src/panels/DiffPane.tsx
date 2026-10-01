@@ -31,10 +31,10 @@ import { errorText, getTransport, wsErrorCode } from "../transport";
 import { canOfferChangeMutations, scopeHasMutableModifiedSide } from "./changeMutationAvailability";
 import { splitPath } from "./changesModel";
 import {
-	encodeResourcePath,
 	PENDING_TEXT_META,
 	rendererImplementationKey,
 	rendererTestId,
+	resourceBytesUrl,
 	selectResourceRenderer,
 	useResetViewStateOnImplementationChange,
 } from "./resourcePane";
@@ -46,14 +46,6 @@ import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
 
 const loading = <LoadingRegion rows={12} className="h-full p-12" />;
-
-function bytesUrl(workspaceId: string, path: string, oid?: string | null): string {
-	const base = getTransport().httpBase();
-	const encoded = `${encodeURIComponent(workspaceId)}/${encodeResourcePath(path)}`;
-	return oid
-		? `${base}/blob/${encodeURIComponent(workspaceId)}/${encodeURIComponent(oid)}/${encodeResourcePath(path)}`
-		: `${base}/files/${encoded}`;
-}
 
 function descriptorMetaFor(meta: DiffTab["meta"]): ResourceMeta {
 	if (!meta) return PENDING_TEXT_META;
@@ -201,13 +193,13 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 	const original = sideContent(
 		tab.original,
 		tab.meta?.original,
-		tab.originalOid ? bytesUrl(tab.workspaceId, tab.path, tab.originalOid) : null,
+		tab.originalOid ? resourceBytesUrl(tab.workspaceId, tab.path, tab.originalOid) : null,
 	);
 	const modifiedOid = tab.scope.kind === "commit" ? tab.scope.sha : null;
 	const modified = sideContent(
 		tab.modified,
 		tab.meta?.modified,
-		bytesUrl(tab.workspaceId, tab.path, modifiedOid),
+		resourceBytesUrl(tab.workspaceId, tab.path, modifiedOid),
 	);
 	const modifiedText = modified.kind === "text" ? modified.text : "";
 	const { dir, base } = splitPath(tab.path);

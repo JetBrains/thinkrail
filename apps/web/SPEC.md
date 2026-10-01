@@ -269,6 +269,13 @@ themselves.
 - Streaming invariant: `text_delta` / `thinking_delta` **APPEND**; `tool_execution_update.partialResult`
   **REPLACE**. Attempt-level `agent_end` never means idle; automatic work ends only at `agent_settled`.
 - Panels stay arrangement-agnostic so the mobile shell is an additive layer, not a rewrite.
+- **Every host HTTP route the app composes is proxied by the Vite dev server.** The app reaches the host
+  over `/ws` and over the two byte routes `/files` and `/blob` (images, PDFs, notebooks, markdown-relative
+  images), always composed through one function (`panels/resourcePane.resourceBytesUrl`) on the
+  transport's HTTP origin. Under `bun run dev` that origin is Vite, and a route Vite does not proxy
+  answers the SPA `index.html` with status 200 — an `<img>` shows nothing and a PDF fetch "succeeds" with
+  HTML, while the host-served build and the e2e suite stay green. `vite.config.ts` therefore proxies
+  `/files` and `/blob` beside `/ws`, and `devProxy.test.ts` pins the list to the composer's constants.
 
 ## Later
 

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
-import { getTransport } from "../transport";
 import { openFileInTab } from "./openTabs";
+import { resourceBytesUrl } from "./resourcePane";
 
 export type HrefKind = "empty" | "anchor" | "external" | "relative";
 
@@ -43,10 +43,6 @@ export function slugify(text: string): string {
 function relativePathname(href: string): string {
 	const i = href.search(/[?#]/);
 	return i < 0 ? href : href.slice(0, i);
-}
-
-function encodePath(path: string): string {
-	return path.split("/").map(encodeURIComponent).join("/");
 }
 
 interface MdNode {
@@ -132,7 +128,7 @@ export function documentComponents(ctx: { workspaceId: string; path: string }): 
 		const target = isRelative ? resolveRelativePath(ctx.path, relativePathname(src)) : null;
 		const resolved = isRelative
 			? target
-				? `${getTransport().httpBase()}/files/${encodeURIComponent(ctx.workspaceId)}/${encodePath(target)}`
+				? resourceBytesUrl(ctx.workspaceId, target)
 				: undefined
 			: src;
 		return <img src={resolved} alt={alt ?? ""} title={title} />;
