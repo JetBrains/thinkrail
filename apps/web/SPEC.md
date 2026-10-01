@@ -89,7 +89,11 @@ dnd-kit results), because reading a render value off an object that also carries
 read; a ref that travels as a prop is named `*Ref` (`selectionEpochRef`) so the compiler lets handlers
 mutate it; and a closure that reads refs reaches a `useState` initialiser only through a hook
 (`useReadingBandController`, `useSideResizeBinder`), since the compiler rejects it as a direct hook or
-plain-function argument. Intentional bailouts: `useVirtualRows` reads the visible-anchor ref while
+plain-function argument. A fifth convention follows from memoisation itself: render never reads a
+value the compiler cannot see change — `matchMedia`, storage, `Date.now`, a module singleton — so a
+browser signal a component displays arrives through `useSyncExternalStore` or state (`AppearanceSettings`
+reads the system appearance through `onSystemAppearanceChange`, not by calling `readSystemAppearance` in
+render). Intentional bailouts: `useVirtualRows` reads the visible-anchor ref while
 adjusting state during render (state would cost a render per scroll), and the try/finally dialogs and
 settings panes are cold.
 
