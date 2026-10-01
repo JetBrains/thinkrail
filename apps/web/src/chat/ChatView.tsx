@@ -139,24 +139,29 @@ function StreamHeader({ context }: { context: ChatListContext }) {
 
 function StreamFooter({ context }: { context: ChatListContext }) {
 	if (context.messageOrder === "newest-first") {
-		return context.runwayActive ? (
-			<div ref={context.runwayRef} data-testid="chat-stream-runway" className="h-0" aria-hidden />
-		) : null;
+		return (
+			<div
+				ref={context.runwayRef}
+				data-testid="chat-stream-runway"
+				data-active={context.runwayActive}
+				className="h-0"
+				aria-hidden
+			/>
+		);
 	}
 	return (
 		<>
 			<StreamStatusSlot status={context.status} measureClassName={context.measureClassName} />
 			{context.runwayActive ? (
-				<>
-					<div ref={context.streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
-					<div
-						ref={context.runwayRef}
-						data-testid="chat-stream-runway"
-						className="h-0"
-						aria-hidden
-					/>
-				</>
+				<div ref={context.streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
 			) : null}
+			<div
+				ref={context.runwayRef}
+				data-testid="chat-stream-runway"
+				data-active={context.runwayActive}
+				className="h-0"
+				aria-hidden
+			/>
 		</>
 	);
 }

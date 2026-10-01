@@ -453,20 +453,71 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **Follow response** and an exact-edge return resume holding at Settle immediately. Reader takeover never
   moves the reader: room shrinks only as far as the reader's current position allows (the document may end
   exactly at their viewport bottom), and later growth or upward reading consumes the rest. A reveal that
-  releases room (tool attention, jump-to-message, breadcrumb) also suspends holding for the rest of that
-  response, because it is about to place the viewport itself. A settlement that lands while native input is
-  still pending defers its return until that input resolves, and drops the return if the input detached.
-- **Settlement never moves a reader who took over** — every `agent_settled`, never `agent_end`, ends
-  response movement and removes remaining synthetic room. A following reader makes one smooth move to the
-  order's physical latest edge; a detached reader's visible content stays exactly where it is and only the
-  affordance changes from **Follow response** to **Latest**. Returning detached readers at settlement was
-  the largest measured yank (tens of thousands of px) and contradicted reader-wins. The store exposes a
-  monotonic per-session settlement tick alongside `isStreaming`, so a start and settlement coalesced into one
-  React render cannot strand an
-  optimistic turn inset or runway. Delayed virtual measurements retarget that same bounded return rather
-  than creating a hard-pin loop. If reader input intersects settlement, either idle reattach path carries
-  the partial room-to-zero leg forward instead of leaking hidden runway. A rejected immediate prompt likewise
-  cancels its locally armed turn state.
+  releases room (tool attention, jump-to-message, breadcrumb) suspends holding while its target is still the
+  newest row, because it is about to place the viewport itself; the first new latest row after it (for
+  example the answer that follows a resolved question) ends the suspension and restarts the fill phase.
+  Suspending for the rest of the response froze following after every question card and then flew 2–2.6k px
+  at settlement. A settlement that lands while native input is still pending defers its return until that
+  input resolves, and drops the return if the input detached.
+- **A tall arrival shows its start** — in oldest-first the controller remembers the last response edge the
+  reader actually had on screen. When the follow destination would carry that edge above the turn inset —
+  content taller than the reading space (the Settle line minus the turn inset) arrived below it, typically a
+  diagram or card that renders at once, possibly in several quick layout steps — the destination is capped so
+  that point lands at the turn inset, the same place an own prompt lands. Growth within 300 ms of the cap
+  engaging belongs to the arrival; each later growth releases the cap by twice its own height until Settle is
+  held again, so the block slides past at reading pace instead of flying by (one mermaid card measured a 1.5k
+  px glide in under a second, and judging each layout step alone missed cards that land in two steps). A second
+  tall arrival never pushes an active cap further. The cap is evaluated wherever the follow destination is, so
+  it also bounds the fill phase's first glide and a motion already in flight. Positions are kept relative to
+  the topmost visible row rather than document coordinates, and each evaluation re-expresses them relative to
+  the current one, so height changes above the viewport (Virtuoso replacing an estimate, a code block
+  highlighting) neither trigger nor misplace the cap, rows may unmount, and a block that grows above rows that
+  already follow it (WebKit renders a diagram after the next turn's row exists) still counts. Anchoring to the
+  last row instead missed exactly that case. A width reflow, a reader's own disclosure toggle, and a fresh
+  mount re-take the seen edge instead of counting as an arrival; an automatic expansion (a card opening when it
+  completes) still can. A Markdown mermaid fence replaces its own source in place, so its rendered top sits
+  above the old edge by the source height and the cap shows the diagram from that point. Newest-first prepends
+  its latest rows, so edge growth there is not appended content and the cap does not apply. **Follow
+  response**, an exact-edge return, a new turn, reader takeover, and a room-releasing reveal clear it.
+  Settlement ends the cap like any other following settlement: content still unseen below gets the one forward
+  move to the end. Detaching the reader there instead surfaced **Latest** without anyone taking over and
+  stranded plain text answers whose deltas arrived in large bursts.
+- **Following keeps what is on screen still** — while a following reader watches an oldest-first stream,
+  the topmost visible row is the view's anchor: only the controller's own writes and reader input may move
+  it. After every layout that changes the item list (before paint) and on any scroll the hook did not cause,
+  an anchor that moved is restored in the same frame, adding synthetic room when the scroll range shrank.
+  A scroll that lands exactly on the shrunken range's end is a clamp and is left to the before-paint path,
+  which runs after Virtuoso's own size compensation; restoring it from the scroll event made Virtuoso read
+  the clamp as upward reading and compensate the restore away (an 844 px jump in Chromium).
+  Two measured causes motivate this, and both also appeared without virtualization: an answered question
+  card collapsing by 400–800 px (the browser clamps the range, then Virtuoso's size compensation scrolls the
+  rest), and WebKit resetting `scrollTop` (627 → 0) when a tool row appears beside a re-rendered text row,
+  with no script write, focus, or scroll-anchoring involved. The guard is idle while the reader is detached,
+  while native input is pending, during reveal, fold-anchor, and settlement motions, and for 1.3 s after a
+  turn anchor hands placement to Virtuoso (its `scrollToIndex` retries while sizes keep changing; later
+  retries target the same turn position), so it never fights a placement someone asked for. The synthetic
+  room is always mounted (zero height when unused) so the guard can grow it synchronously; room left behind
+  is reader-preserving and later growth consumes it. Changes that announce themselves avoid the clamp
+  entirely: the fold seam (disclosures, and the question card's own submit, which swaps the card for a small
+  "Answer sent" state) reserves room for the changing row's whole height before the DOM changes while a
+  following reader watches a stream, then trims it to what the reader's position needs. That trim counts
+  content shorter than the viewport, because the true natural scroll range is then negative; clamping it at
+  zero under-reserved by the shortfall and let a short transcript slide 280 px down after an answer.
+- **Settlement never moves a reader who took over, and never moves content backward** — every
+  `agent_settled`, never `agent_end`, ends response movement. In oldest-first a following reader whose
+  content already ends inside the viewport stays exactly where it is: the remaining synthetic room becomes
+  reader-preserving room that disappears as the reader scrolls up or the next turn starts, never by sliding
+  what is on screen. Removing it at settlement slid every finished answer down by up to the `100% − Settle`
+  band (≈100 px measured) and, after an absorbed card collapse, by several hundred px. Only when unseen
+  content remains below does a following reader make one smooth forward move to the physical latest edge;
+  newest-first keeps its one smooth return to its top latest edge. A detached reader's visible content
+  stays exactly where it is and only the affordance changes from **Follow response** to **Latest**. Returning
+  detached readers at settlement was the largest measured yank (tens of thousands of px) and contradicted
+  reader-wins. The store exposes a monotonic per-session settlement tick alongside `isStreaming`, so a start
+  and settlement coalesced into one React render cannot strand an optimistic turn inset or runway. Delayed
+  virtual measurements retarget that same bounded return rather than creating a hard-pin loop. If reader input
+  intersects settlement, either idle reattach path carries the partial room-to-zero leg forward instead of
+  leaking hidden runway. A rejected immediate prompt likewise cancels its locally armed turn state.
 - **Stable work-status geometry** — one fixed-size slot always occupies the logical latest transcript edge:
   after rows in oldest-first and before rows in newest-first. While work is active it always contains one
   polite live phase — **Working…**, **Thinking…**, **Running `<tool>`…**, **Writing…**, or
