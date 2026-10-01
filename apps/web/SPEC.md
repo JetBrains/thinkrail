@@ -77,25 +77,38 @@ return to stable.
 `@vitejs/plugin-react`'s `reactCompilerPreset()` over dev and build). Three devDependencies live in this
 manifest only, and the `@babel/core` 7.x pin is load-bearing: `babel-plugin-react-compiler` 1.0.0 mis-lowers
 destructuring defaults under Babel 8 and silently drops those functions from compilation. Bailouts never
-fail the build — a component that writes `ref.current` during render, or returns refs mixed with state, is
-skipped whole, not miscompiled — so keep the compilable set from shrinking by checking it ran: a production
-build's `dist/assets/*.js` carries `react.memo_cache_sentinel` in the hundreds (React's own runtime accounts
-for three). `bun test` transpiles without Vite, so only the browser E2E suite exercises compiled output.
-The shell, the workbench group views, `ChatView` and `useChatScroll` compile because they keep four
-conventions: a latest-value ref (`xRef.current = value`) is written in a `useLayoutEffect`, never in render,
-which is sound only while every reader is an event handler, a timer or an effect; a hook hands refs back
-beside render values as a tuple (`useElementSize`) or the caller destructures them (`useCollapsibleRegion`,
-dnd-kit results), because reading a render value off an object that also carries a ref counts as a ref
-read; a ref that travels as a prop is named `*Ref` (`selectionEpochRef`) so the compiler lets handlers
-mutate it; and a closure that reads refs reaches a `useState` initialiser only through a hook
-(`useReadingBandController`, `useSideResizeBinder`), since the compiler rejects it as a direct hook or
-plain-function argument. A fifth convention follows from memoisation itself: render never reads a
-value the compiler cannot see change — `matchMedia`, storage, `Date.now`, a module singleton — so a
-browser signal a component displays arrives through `useSyncExternalStore` or state (`AppearanceSettings`
-reads the system appearance through `onSystemAppearanceChange`, not by calling `readSystemAppearance` in
-render). Intentional bailouts: `useVirtualRows` reads the visible-anchor ref while
-adjusting state during render (state would cost a render per scroll), and the try/finally dialogs and
-settings panes are cold.
+fail the build — a function the compiler cannot prove safe is skipped whole, not miscompiled — so check it
+ran: a production build's `dist/assets/*.js` carries `react.memo_cache_sentinel` in the hundreds (React's own
+runtime accounts for three). `bun test` transpiles without Vite, so only the browser E2E suite exercises
+compiled output.
+
+The shell, the workbench group views, `ChatView`, `Composer` and `useChatScroll` compile because they keep
+these conventions:
+
+- A latest-value ref (`xRef.current = value`) is written in a `useLayoutEffect`, never in render, and render
+  never reads `ref.current`. This is sound only while every reader is an event handler, a timer or an effect.
+  The one reader outside that set is `useChatScroll`'s `readGeometry`, reached from Virtuoso's own layout
+  effect, which can see the previous edge for one commit; the runway effect re-runs `contentChanged` after.
+- A hook hands refs back beside render values as a tuple (`useElementSize`), or the caller destructures them
+  (`useCollapsibleRegion`, dnd-kit results): reading a render value off an object that carries a ref counts
+  as a ref read.
+- A ref that travels as a prop is named `*Ref` (`selectionEpochRef`) so handlers may mutate it.
+- A closure that reads refs reaches a `useState` initialiser only through a hook
+  (`useReadingBandController`), and a ref is never handed to a plain helper; the helper becomes a hook that
+  owns it (`useSideResizeBinder`).
+- A default parameter never reads a member expression (`caret = text.length`); resolve it in the body.
+- A `useMemo`/`useCallback` lists every dependency it reads, or the compiler cannot preserve it.
+- Render never reads a value the compiler cannot see change — `matchMedia`, storage, `Date.now`, a module
+  singleton. It arrives through `useSyncExternalStore` or state: `AppearanceSettings` subscribes with
+  `onSystemAppearanceChange`, and relative-time labels take `now` from `components/useNow`.
+
+Known bailouts, all off the per-keystroke and per-delta paths: `useVirtualRows` reads the visible-anchor ref
+while adjusting state during render (state would cost a render per scroll); hooks and hosts that still write
+`ref.current` in render (`useWorkspaceRead`, `useChatTodos`, `useOpenBranchReview`, `useBranchList`,
+`useTemplateCommandPicker`, `usePendingSelection`, `MonacoEditor`, `MonacoDiff`, `AskUserQuestionCard`);
+`useLiveTabContent` (`??=`); `usePromptImages` (try without catch); `useAnalyticsConsent` (a callback that
+calls itself); `HistoryOverlay`'s `Highlight` (mutates a closure counter); `TemplateRow` and the try/finally
+dialogs and settings panes. A new bailout is a regression unless it joins this list.
 
 ### Dependency graph
 
