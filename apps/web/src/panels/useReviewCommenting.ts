@@ -2,7 +2,7 @@ import type { GitDiffScope, ReviewAnchor } from "@thinkrail/contracts";
 import { useMemo } from "react";
 import type { AnchorDraft, ReviewThread, ReviewThreadActions, SurfaceReview } from "@/resources";
 import { toast, useAppStore } from "../store";
-import { errorText, getTransport } from "../transport";
+import { errorText, getTransport, supportsRichAnchors } from "../transport";
 import { fileThreads } from "./reviewModel";
 import { sendReviewComment } from "./reviewSend";
 
@@ -114,6 +114,15 @@ export function commentKindForDraft(
 		: "file";
 }
 
+export const RICH_ANCHOR_HOST_TOO_OLD =
+	"This host is older than the review surface: it would not keep a region or cell comment. Update the host, or comment on the source instead.";
+
+export function draftNeedsRichAnchors(draft: AnchorDraft): boolean {
+	return draft.selectors.some(
+		(selector) => selector.kind === "region" || selector.kind === "structural",
+	);
+}
+
 function sideCommenting(
 	workspaceId: string,
 	path: string,
@@ -121,14 +130,21 @@ function sideCommenting(
 	side: ReviewAnchor["side"],
 	scope: GitDiffScope | undefined,
 ): SurfaceReview["commenting"] {
-	const add = (draft: AnchorDraft, body: string) =>
-		getTransport().request("review.commentAdd", {
+	const add = (draft: AnchorDraft, body: string) => {
+		if (
+			draftNeedsRichAnchors(draft) &&
+			!supportsRichAnchors(useAppStore.getState().protocolVersion)
+		) {
+			return Promise.reject(new Error(RICH_ANCHOR_HOST_TOO_OLD));
+		}
+		return getTransport().request("review.commentAdd", {
 			workspaceId,
 			kind: commentKindForDraft(kind, draft),
 			anchor: { path, side, selectors: draft.selectors },
 			body,
 			...(scope ? { scope } : {}),
 		});
+	};
 	return {
 		onSave: async (draft, text) => {
 			try {

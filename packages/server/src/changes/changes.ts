@@ -352,7 +352,11 @@ export async function undoChange(params: UndoChangeParams): Promise<ChangeReceip
 	}
 	const abs = resolveWorktreeFile(params.workspaceId, held.receipt.path, { followLeaf: false });
 	const current = worktreeState(abs, held.receipt.path);
-	if (hashOf(current) !== params.expect.modifiedHash) {
+	const modeMoved =
+		held.receipt.after.mode !== null &&
+		current.mode !== null &&
+		current.mode !== held.receipt.after.mode;
+	if (hashOf(current) !== params.expect.modifiedHash || modeMoved) {
 		throw new CodedError(
 			"STALE_VIEW",
 			`${held.receipt.path} changed since the change was applied — nothing was undone.`,

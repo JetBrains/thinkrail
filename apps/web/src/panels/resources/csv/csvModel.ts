@@ -50,24 +50,35 @@ function unquotedCount(line: string, delimiter: CsvDelimiter): number {
 	return count;
 }
 
-function firstNonEmptyLine(text: string): string | undefined {
+const SNIFF_RECORDS = 20;
+
+function sampleRecords(text: string): string[] {
 	return text
 		.replace(/^\uFEFF/, "")
 		.split(/\r?\n/)
-		.find((line) => line.trim() !== "");
+		.filter((line) => line.trim() !== "")
+		.slice(0, SNIFF_RECORDS);
+}
+
+function consistentFieldCount(records: readonly string[], delimiter: CsvDelimiter): number | null {
+	const counts = records.map((record) => unquotedCount(record, delimiter) + 1);
+	const first = counts[0];
+	if (first === undefined || first < 2) return null;
+	return counts.every((count) => count === first) ? first : null;
 }
 
 export function sniffDelimiter(path: string, ...texts: readonly string[]): CsvDelimiter {
 	if (path.toLowerCase().endsWith(".tsv")) return "\t";
-	const header = texts.map(firstNonEmptyLine).find((line) => line !== undefined);
-	if (header === undefined) return ",";
-	const counts = SNIFFED_DELIMITERS.map((delimiter) => ({
-		delimiter,
-		count: unquotedCount(header, delimiter),
-	}));
-	const top = Math.max(...counts.map(({ count }) => count));
-	const leaders = counts.filter(({ count }) => count === top);
-	return top > 0 && leaders.length === 1 ? (leaders[0]?.delimiter ?? ",") : ",";
+	const records = texts.map(sampleRecords).find((lines) => lines.length > 0);
+	if (records === undefined) return ",";
+	const consistent = SNIFFED_DELIMITERS.flatMap((delimiter) => {
+		const fields = consistentFieldCount(records, delimiter);
+		return fields === null ? [] : [{ delimiter, fields }];
+	});
+	if (consistent.some(({ delimiter }) => delimiter === ",")) return ",";
+	const widest = Math.max(0, ...consistent.map(({ fields }) => fields));
+	const leaders = consistent.filter(({ fields }) => fields === widest);
+	return leaders.length === 1 ? (leaders[0]?.delimiter ?? ",") : ",";
 }
 
 export function parseCsv(text: string, delimiter: CsvDelimiter = ","): CsvTable {

@@ -915,3 +915,31 @@ test("a workspace removed while a revert awaits the trash never regains a receip
 		undoChange({ workspaceId, receiptId: receipt.id, expect: { modifiedHash: null } }),
 	).rejects.toMatchObject({ code: "RECEIPT_UNKNOWN" });
 });
+
+test("an undo refuses a file whose mode moved after the revert, even with identical bytes", async () => {
+	write("a.ts", "one\ntwo\nchanged\n");
+	const receipt = await revert(
+		"a.ts",
+		{ kind: "file" },
+		{ originalHash: hash("one\ntwo\nthree\n"), modifiedHash: hash("one\ntwo\nchanged\n") },
+	);
+	expect(text("a.ts")).toBe("one\ntwo\nthree\n");
+	chmodSync(join(repo, "a.ts"), 0o755);
+	await expect(
+		undoChange({
+			workspaceId,
+			receiptId: receipt.id,
+			expect: { modifiedHash: hash("one\ntwo\nthree\n") },
+		}),
+	).rejects.toMatchObject({ code: "STALE_VIEW" });
+	expect(text("a.ts")).toBe("one\ntwo\nthree\n");
+	expect(statSync(join(repo, "a.ts")).mode & 0o777).toBe(0o755);
+
+	chmodSync(join(repo, "a.ts"), 0o644);
+	await undoChange({
+		workspaceId,
+		receiptId: receipt.id,
+		expect: { modifiedHash: hash("one\ntwo\nthree\n") },
+	});
+	expect(text("a.ts")).toBe("one\ntwo\nchanged\n");
+});

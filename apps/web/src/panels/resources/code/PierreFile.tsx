@@ -1,7 +1,7 @@
 import type { LineAnnotation, SelectedLineRange } from "@pierre/diffs";
 import { File } from "@pierre/diffs/react";
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IconTooltip } from "@/components/ui/tooltip";
 import type { AnchorDraft, ResourceViewProps } from "@/resources";
 import { ReviewComposer } from "../../ReviewComposer";
@@ -9,7 +9,15 @@ import { ReviewThreadCard } from "../../ReviewThreadCard";
 import { useScrollViewState } from "../../useScrollViewState";
 import { type AnnotationSlot, reconcileAnnotationSlots } from "./annotationSlots";
 import PierreProvider from "./PierreProvider";
-import { composerLineLabel, draftLineLabel, threadLineRange, usePierreFocus } from "./pierreReview";
+import {
+	composerLineLabel,
+	draftLineLabel,
+	filePlacedThreadIds,
+	threadLineRange,
+	usePierreFocus,
+} from "./pierreReview";
+
+const NO_PLACED_THREADS: ReadonlySet<string> = new Set();
 
 type FileAnnotationMetadata = { kind: "thread"; id: string } | { kind: "composer"; id: number };
 
@@ -27,12 +35,15 @@ function sameFileAnnotation(
 	return left.lineNumber === right.lineNumber;
 }
 
-function useThreadAnnotations(review: ResourceViewProps["review"]) {
+function useThreadAnnotations(
+	review: ResourceViewProps["review"],
+	placedThreadIds: ReadonlySet<string>,
+) {
 	const slotsRef = useRef<AnnotationSlot<LineAnnotation<FileAnnotationMetadata>>[]>([]);
 	return useMemo(() => {
 		const current = (review?.threads ?? []).flatMap((thread) => {
 			const range = threadLineRange(thread);
-			return range
+			return range && placedThreadIds.has(thread.id)
 				? [
 						{
 							id: thread.id,
@@ -47,13 +58,14 @@ function useThreadAnnotations(review: ResourceViewProps["review"]) {
 		const slots = reconcileAnnotationSlots(slotsRef.current, current, sameFileAnnotation);
 		slotsRef.current = slots;
 		return slots.map((slot) => slot.annotation);
-	}, [review?.threads]);
+	}, [placedThreadIds, review?.threads]);
 }
 
 function PierreFileSurface({
 	resource,
 	content,
 	review,
+	onPlacedThreadIds,
 	viewState,
 	onViewState,
 }: ResourceViewProps) {
@@ -68,7 +80,15 @@ function PierreFileSurface({
 		}),
 		[hash, resource.language, resource.path, text],
 	);
-	const threadAnnotations = useThreadAnnotations(review);
+	const placedThreadIds = useMemo(
+		() => filePlacedThreadIds(text, review?.threads ?? []),
+		[review?.threads, text],
+	);
+	useEffect(() => {
+		onPlacedThreadIds?.(placedThreadIds);
+		return () => onPlacedThreadIds?.(NO_PLACED_THREADS);
+	}, [onPlacedThreadIds, placedThreadIds]);
+	const threadAnnotations = useThreadAnnotations(review, placedThreadIds);
 	const [composer, setComposer] = useState<OpenComposer | null>(null);
 	const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(null);
 	const nextComposerId = useRef(0);
@@ -123,7 +143,7 @@ function PierreFileSurface({
 		viewState,
 		onViewState,
 	);
-	usePierreFocus(rootRef, [review]);
+	usePierreFocus(rootRef, [review], placedThreadIds);
 
 	return (
 		<div
@@ -161,7 +181,7 @@ function PierreFileSurface({
 					const metadata = annotation.metadata;
 					if (metadata.kind === "thread") {
 						const thread = threadById.get(metadata.id);
-						return thread && review ? (
+						return thread && review && placedThreadIds.has(metadata.id) ? (
 							<ReviewThreadCard key={thread.id} thread={thread} actions={review.actions} />
 						) : null;
 					}

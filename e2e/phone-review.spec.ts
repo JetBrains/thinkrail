@@ -94,4 +94,17 @@ test("a phone-class diff is unified only, and a tapped line authors a thread tha
 	await page.getByTestId("tab-review").click();
 	await expect(page.getByTestId("review-comment")).toHaveCount(1);
 	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");
+
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "script.ts" }).dblclick();
+	await expect(page.locator(".monaco-editor").first()).toBeVisible();
+	await goPhone(page);
+	const fileView = page.getByTestId("file-view");
+	await expect(fileView.getByTestId("review-thread-card")).toHaveCount(1);
+	await expect(page.getByTestId("review-unplaced-strip")).toHaveCount(0);
+
+	writeFileSync(join(worktree(), "script.ts"), "export const one = 1;\n");
+	await expect(pierreLines(fileView, "two = 2")).toHaveCount(0);
+	await expect(fileView.getByTestId("review-thread-card")).toHaveCount(0);
+	await expect(page.getByTestId("review-unplaced-strip")).toBeVisible();
 });

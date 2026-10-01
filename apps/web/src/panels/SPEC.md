@@ -1052,7 +1052,9 @@ own section. The kebab menu (`plan-menu`, a
   annotation into view before `onFocusHandled`; a thread without `lineRange`, or whose endpoint is hidden
   in Pierre's initially collapsed unchanged context, never enters Pierre and remains in the pane-level
   unplaced strip, which consumes any focus request for it. Pierre `File` applies the same annotation, selection, focus,
-  and unplaced rules on phones. Review attaches only where the modified side is the worktree (`branch`,
+  and unplaced rules on phones, reporting as placed exactly the threads whose end line exists in the
+  current text (`filePlacedThreadIds`) — Pierre emits annotation rows only for existing lines, so a thread
+  pointing past a shortened file would otherwise vanish from both the surface and the strip. Review attaches only where the modified side is the worktree (`branch`,
   `uncommitted`, or `pinned`); commit scopes are historical and receive neither review authoring nor hunk
   mutations. A diff's deletion and addition columns remain two authoritative anchor spaces: original-side
   selections create `side: "base"`, modified-side selections create `side: "worktree"`, and neither is
@@ -1346,12 +1348,13 @@ own section. The kebab menu (`plan-menu`, a
   swipe/divider/opacity overlay geometry use inline values.
 
   `thinkrail/csv` parses CSV/TSV locally with an RFC-4180 state machine, including escaped quotes, CRLF, and
-  quoted fields spanning source lines. The delimiter is **sniffed from the first non-empty header line**
-  (`sniffDelimiter`: the unique most frequent of `,` `;` `\t` `|` outside quotes on the first
-  non-empty line, BOM ignored; comma on a tie, a single-column header, or an empty file; `.tsv` is
-  always tab), because spreadsheet exports in locales with a decimal comma write `;`
-  and a one-column table of `id;name;score` is a misrender, not a table. A diff sniffs the modified
-  side first and falls back to the original, so both sides parse with one delimiter. The view keeps the header fixed and virtualizes data rows with
+  quoted fields spanning source lines. The delimiter is **inferred from the shape of the first twenty
+  non-empty records** (`sniffDelimiter`, BOM ignored): a candidate among `,` `;` `\t` `|` qualifies only
+  if it splits every sampled record into the same number of fields, at least two; comma wins whenever it
+  qualifies, otherwise the single widest qualifier, otherwise comma — so a header value that happens to
+  contain semicolons never reclassifies a comma file, while a locale export of `id;name;score` is a table
+  and not one column; `.tsv` is always tab. A diff samples the modified side first and falls back to the
+  original, so both sides parse with one delimiter. The view keeps the header fixed and virtualizes data rows with
   `react-virtuoso`. A selected cell or shift-extended rectangle emits the selected rows' raw-file
   `lineRange` plus `structural { scheme: "table-cell", ref: "<row>:<column>" }`, with header row zero; a
   missing cell, or a coordinate whose row no longer intersects the host-reanchored line range, is omitted
@@ -1525,7 +1528,9 @@ own section. The kebab menu (`plan-menu`, a
   basename pairs it with `max-w-full`: flex never steals the name's width, but max-width still clamps it to
   the row, which is also why the e2e pin measures the *chip's* `scrollWidth`, not the header's.
 - **File tabs use the same renderer dispatch as diffs.** `FilePane` describes the first `fs.readFile`
-  metadata (provisionally text before it lands), resolves `view`, and mounts the selected lazy candidate.
+  metadata (provisionally text before it lands — and permanently text against a host that predates
+  `RESOURCE_META_PROTOCOL_VERSION` and never sends `meta`, which is that host's own legacy surface, so no
+  protocol gate is needed for byte-only rendering), resolves `view`, and mounts the selected lazy candidate.
   `thinkrail/markdown` remains the higher-ranked match for `.md`/`.mdx`, so documents open in
   `MarkdownPreview`; `thinkrail/code` is the text fallback and uses Monaco on desktop plus Pierre `File`
   on phone-class viewports; `thinkrail/binary` shows identity and a host-backed

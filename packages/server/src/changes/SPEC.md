@@ -94,7 +94,11 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
   itself refuses to hold a receipt for a workspace the host no longer lists, so a revert that was
   awaiting the trash helper when its workspace disappeared cannot resurrect the ring. `retainReceipts`
   is exported as the pure policy so its bounds are tested without a 64 MiB fixture.
-- `undoChange` CAS-checks `expect.modifiedHash` against the current worktree file, applies the inverse,
+- `undoChange` CAS-checks the current worktree file against the client's `expect.modifiedHash` **and**,
+  when both the receipt's `after` and the current file have a mode, against the receipt's `after.mode` —
+  the inverse rewrites the mode too, and identical bytes under a newer executable bit are still a change
+  the user did not see; a file re-created after a whole-file trash has no `after.mode` to compare, so there
+  the client's hash alone decides, as before — then applies the inverse,
   then **consumes** the receipt and emits an `undo` receipt that is itself undoable once — so redo is the
   same operation, not a second mechanism. A refused undo (`STALE_VIEW`) or failed inverse leaves the
   receipt usable; every attempt re-runs `resolveWorktreeFile`, so a symlink introduced after the revert

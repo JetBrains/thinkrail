@@ -20,6 +20,7 @@ import {
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
@@ -35,6 +36,10 @@ export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
 
 export function supportsChangeMutations(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= CHANGE_MUTATIONS_PROTOCOL_VERSION;
+}
+
+export function supportsRichAnchors(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= REVIEW_RICH_ANCHORS_PROTOCOL_VERSION;
 }
 
 export function runHostUpdate(): Promise<Ack> {

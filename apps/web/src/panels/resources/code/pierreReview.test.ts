@@ -5,6 +5,7 @@ import { focusedUnplacedEntry, unplacedReviewEntries } from "../../UnplacedRevie
 import {
 	CROSS_SIDE_MESSAGE,
 	diffPlacedThreadIds,
+	filePlacedThreadIds,
 	renderedDiffLineNumbers,
 	selectionComposer,
 } from "./pierreReview";
@@ -114,4 +115,28 @@ test("a one-sided selection opens a composer on that side; a cross-side selectio
 		lineNumber: 9,
 		message: CROSS_SIDE_MESSAGE,
 	});
+});
+
+test("a file places only the threads whose end line still exists in the text", () => {
+	const thread = (id: string, endLine: number): ReviewThread => ({
+		id,
+		body: id,
+		status: "draft",
+		anchorState: "anchored",
+		anchor: {
+			path: "a.ts",
+			side: "worktree",
+			contentHash: "h",
+			selectors: [{ kind: "lineRange", startLine: endLine, endLine }],
+		},
+	});
+	const whole: ReviewThread = {
+		...thread("whole", 1),
+		anchor: { ...thread("whole", 1).anchor, selectors: [] },
+	};
+	expect([
+		...filePlacedThreadIds("one\ntwo\nthree\n", [thread("a", 3), thread("b", 4), whole]),
+	]).toEqual(["a"]);
+	expect([...filePlacedThreadIds("one\ntwo", [thread("a", 2), thread("b", 3)])]).toEqual(["a"]);
+	expect([...filePlacedThreadIds("", [thread("a", 1)])]).toEqual([]);
 });

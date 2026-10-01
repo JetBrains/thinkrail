@@ -4,6 +4,7 @@ import {
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	type SessionStateRecord,
 } from "@thinkrail/contracts";
 import {
@@ -12,6 +13,7 @@ import {
 	supportsHostUpdateRun,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
+	supportsRichAnchors,
 } from "./wireTransport";
 
 test("host update execution is offered only by a host at or beyond the v70 capability", () => {
@@ -26,6 +28,12 @@ test("change mutations are offered only by a host at or beyond their capability 
 	expect(supportsChangeMutations(CHANGE_MUTATIONS_PROTOCOL_VERSION + 1)).toBe(true);
 	expect(supportsChangeMutations(CHANGE_MUTATIONS_PROTOCOL_VERSION - 1)).toBe(false);
 	expect(supportsChangeMutations(null)).toBe(false);
+});
+
+test("rich review anchors are authored only against a host that preserves them", () => {
+	expect(supportsRichAnchors(REVIEW_RICH_ANCHORS_PROTOCOL_VERSION)).toBe(true);
+	expect(supportsRichAnchors(REVIEW_RICH_ANCHORS_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsRichAnchors(null)).toBe(false);
 });
 
 test("plan review is offered only by a host at or beyond the v67 capability", () => {

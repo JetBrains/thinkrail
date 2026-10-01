@@ -15,4 +15,5 @@ export {
 	supportsHostUpdateRun,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
+	supportsRichAnchors,
 } from "./wireTransport";

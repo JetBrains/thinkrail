@@ -92,6 +92,19 @@ export function renderedDiffLineNumbers(
 	return { additions, deletions };
 }
 
+export function filePlacedThreadIds(
+	text: string,
+	threads: readonly ReviewThread[],
+): ReadonlySet<string> {
+	const lineCount = text.length === 0 ? 0 : text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
+	const ids = new Set<string>();
+	for (const thread of threads) {
+		const range = threadLineRange(thread);
+		if (range && range.endLine >= 1 && range.endLine <= lineCount) ids.add(thread.id);
+	}
+	return ids;
+}
+
 export function diffPlacedThreadIds(
 	fileDiff: FileDiffMetadata,
 	review: ResourceDiffProps["review"],
