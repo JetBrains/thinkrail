@@ -47,6 +47,7 @@
 		"mermaid": "catalog:",
 		"monaco-editor": "0.55.1",
 		"node-htmldiff": "0.9.4",
+		"pdfjs-dist": "5.4.449",
 		"react": "catalog:",
 		"react-dom": "catalog:",
 		"react-markdown": "10.1.0",
