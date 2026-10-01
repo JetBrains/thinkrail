@@ -905,7 +905,7 @@ export default function ChatView({
 			openSubagentTranscript: setTranscriptChildId,
 			revealChatElement: revealElement,
 		}),
-		[cancelAutomaticReveal, revealElement, sessionId],
+		[cancelAutomaticReveal, revealElement, sessionId, setTranscriptChildId],
 	);
 
 	const onExtUiReply = (value: string | boolean | null) => {
@@ -1273,14 +1273,11 @@ export default function ChatView({
 							workspaceId={workspaceId}
 							parentSessionId={sessionId}
 							childSessionId={transcriptChildId}
-							{...(resourceTranscript.current
-								? {
-										onCloseAutoFocus: (event: Event) => {
-											returnToResources(event);
-											resourceTranscript.current = false;
-										},
-									}
-								: {})}
+							onCloseAutoFocus={(event) => {
+								if (!resourceTranscript.current) return;
+								returnToResources(event);
+								resourceTranscript.current = false;
+							}}
 							onOpenChange={(open) => {
 								if (!open) setTranscriptChildId(null);
 							}}

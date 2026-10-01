@@ -673,7 +673,7 @@ function PlanSessionLive({
 	showAgentMessage: boolean;
 }) {
 	const runtime = useAppStore((s) => s.sessions[sessionId]);
-	const focusScope = useRef({}).current;
+	const [focusScope] = useState<object>(() => ({}));
 	const actions = useMemo<ChatActions>(
 		() => ({
 			answerQuestion: (toolCallId, result) =>
