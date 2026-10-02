@@ -93,6 +93,13 @@ of the host.
     `queue_update` / `compaction_*` / `auto_retry_*` / `summarization_retry_*` /
     `session_info_changed` / `thinking_level_changed` members, plus `bash_execution_update` — mirrored
     for union fidelity only; the host never calls `executeBash`, so the UI never receives it).
+    Every message an event carries (`message_*`, `turn_end`, `agent_end.messages`) is typed as
+    **`WireAgentMessage`** — `TranscriptMessage` plus the `WireBranchSummary` / `WireBashExecution`
+    mirrors — never pi-agent-core's `AgentMessage`. That type is `Message` plus whatever
+    `CustomAgentMessages` augmentation the compilation happens to include: pi-coding-agent adds the
+    custom roles only in Node builds, and pi-agent-core 1.0 stopped adding them itself, so the same
+    `PiEvent` would otherwise mean two different unions on the server and in the browser (where the
+    custom-message guards narrowed to `never`).
     `agent_settled` is a host projection carrying the final attempt's reported terminal metadata
     (`stopReason` + optional `errorMessage`): `agent_end.willRetry` covers provider auto-retry only and
     is not an automatic-work terminal when compaction or a queued continuation follows.

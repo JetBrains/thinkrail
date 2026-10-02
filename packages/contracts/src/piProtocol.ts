@@ -67,9 +67,13 @@ export interface SessionState {
 	queuedCount: number;
 }
 
+type WithWireMessage<E> = E extends { message: AgentMessage }
+	? Omit<E, "message"> & { message: WireAgentMessage }
+	: E;
+
 export type PiEvent =
-	| Exclude<AgentEvent, { type: "agent_end" }>
-	| { type: "agent_end"; messages: AgentMessage[]; willRetry: boolean }
+	| WithWireMessage<Exclude<AgentEvent, { type: "agent_end" }>>
+	| { type: "agent_end"; messages: WireAgentMessage[]; willRetry: boolean }
 	| { type: "agent_settled"; terminal: AgentSettlement | null }
 	| {
 			type: "queue_update";
@@ -285,6 +289,27 @@ export interface WireCompactionSummary {
 }
 
 export type TranscriptMessage = Message | WireCustomMessage | WireCompactionSummary;
+
+export interface WireBranchSummary {
+	role: "branchSummary";
+	summary: string;
+	fromId: string | null;
+	timestamp: number;
+}
+
+export interface WireBashExecution {
+	role: "bashExecution";
+	command: string;
+	output: string;
+	exitCode: number | undefined;
+	cancelled: boolean;
+	truncated: boolean;
+	fullOutputPath?: string;
+	timestamp: number;
+	excludeFromContext?: boolean;
+}
+
+export type WireAgentMessage = TranscriptMessage | WireBranchSummary | WireBashExecution;
 
 const TRANSCRIPT_MESSAGE_ROLES: ReadonlySet<string> = new Set([
 	"user",
