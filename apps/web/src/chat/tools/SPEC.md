@@ -10,10 +10,10 @@ tags: [chat]
 
 ## Responsibility
 
-The **presentation half of every bundled tool**, joined to its server-side capability by tool name (the
-extension model lives in the parent spec). `register.ts` wires everything via `registerToolRenderer` —
-renderer + collapsed-header summary + chrome/prominence — as a side-effect import of `ChatView`, so
-registration runs once when the chat module mounts. Unregistered tools fall back to
+The **app-local presentation halves of bundled tools**, joined to server-side capabilities by tool name
+(the extension model lives in the parent spec). `register.ts` wires these renderers via
+`registerToolRenderer` — renderer + collapsed-header summary + chrome/prominence — as a side-effect
+import of `ChatView`. Extracted extension renderers are registered by the host's `extensions/registry.ts`. Unregistered tools fall back to
 `DefaultToolRenderer` and are treated as **routine** (they fold into activity groups).
 
 ## What's here
@@ -190,19 +190,8 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     color). Shown up front for every recommended option, not gated on selection: more discoverable than
     a tooltip and, being ordinary visible text, it reads on touch and for AT without a popover.
     **Active card only** — the resolved record shows selections only, no rationale.
-- **`visualize/`** — `VisualizationCard` dispatches on `args.type` to `DiagramCard` (mermaid → themed
-  SVG via the **lazy-loaded** `mermaid`, source fallback on parse error) and `ComparisonCard` (option
-  cards with pros/cons + `recommended` highlight); shared `MermaidView` re-renders on `[data-theme]`
-  change, offers a full-screen pan/zoom Dialog, and takes an optional `fallback` node shown while the
-  SVG is pending (default: a "Rendering…" line). Its full-screen canvas owns both modifier-wheel zoom
-  and WebKit's `gesture*` pinch lifecycle; the latter applies absolute scale from the local gesture-start
-  baseline and prevents the desktop shell's browser-style page zoom from claiming that same pinch. It is
-  also consumed by the **parent `Markdown`
-  primitive** for fenced ```mermaid blocks — the `mermaid` *package* import stays lazy and confined to
-  `visualize/mermaid.ts`. Registered **primary + `defaultExpanded`** — a
-  visualization is output *for the user*, not plumbing: it escapes the activity fold and renders open on
-  completion (while its args stream it stays a slim running row). Capability: the bundled
-  `pi-visualize` extension.
+- **Visualize** is owned by [[module-ext-visualize]], outside this module. Its primary/default-expanded
+  registration and named `MermaidView` reach chat through the public web entrypoint.
 - **Spec-graph tools** — one defensive `SpecToolCard` registered for all seven `spec_*` names. Each keeps
   the capability's readable text, folds long output, replaces redundant args JSON with a meaningful
   activity summary, and turns only exact standalone worktree-path tokens obtained from known successful
@@ -218,19 +207,18 @@ registration runs once when the chat module mounts. Unregistered tools fall back
 - **Shared pieces** — `CodeBlock` (shiki), `Collapsible` ("Show all N lines" fold for long output;
   callers supply a stable tool-call-derived id so state and geometry anchoring survive virtualization),
   `ToolFileLink` + exact-reference linked text backed by the parent chat module's shared
-  `workspaceFileTarget`, pure `toolHelpers` (arg readers, `resultText`, `languageFromPath`) + `lib`'s
-  `projectRelativePath`. `resultText` delegates canonical result parsing to
-  the parent chat primitive, so text extraction and the common image layer cannot disagree about what
-  constitutes a valid content block.
+  `workspaceFileTarget` + `lib`'s `projectRelativePath`. Pure `toolHelpers` (arg readers, `resultText`,
+  `languageFromPath`) and canonical `toolResultContent` parsing live in `@thinkrail/extension-api/web`,
+  so extension text extraction and chat's common image layer cannot disagree about valid content.
 
 ## Boundary
 
-- **Public surface:** the side-effect `register` import + the shared `CodeBlock`/`Collapsible`/
-  `toolHelpers` for sibling renderers + `visualize/MermaidView` for the parent `Markdown` primitive. No barrel (chat pulls shiki — per-file imports, as in the parent).
+- **Public surface:** the side-effect `register` import + shared `CodeBlock`/`Collapsible` for sibling
+  renderers. No barrel (chat pulls shiki — per-file imports, as in the parent).
 - **Allowed deps:** parent chat primitives (`toolRegistry`, `Markdown`, `ChatActions`, `askState`,
   `fileTargets`, `foldState`);
-  `contracts` (type-only + the `ASK_USER_ANSWERS_CUSTOM_TYPE` constant); `components/ui`; `lib`;
-  `@remixicon/react`; `mermaid` (**lazy, `visualize/` only**).
+  `contracts` (type-only + the `ASK_USER_ANSWERS_CUSTOM_TYPE` constant); `@thinkrail/ui/*`;
+  `@thinkrail/extension-api/web`; `lib`; `@remixicon/react`.
 - **Forbidden:** value-importing any `pi` package; `store`/`transport` (renderers stay presentational —
   extraction-ready into a future `packages/chat-ui`).
 

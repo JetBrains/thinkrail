@@ -17,7 +17,7 @@ message / content-block model**, a **tool-renderer registry** (the extension poi
 event→render *reference* we learn from but do **not** adopt (architecture + framework mismatch with our
 host-runs-pi / typed-WS / React+shadcn model). Built so others can reuse/contribute (extraction-ready as
 a future `packages/chat-ui`). Built-in tool renderers live in the child
-[tools/SPEC.md](tools/SPEC.md).
+[tools/SPEC.md](tools/SPEC.md); extracted extension renderers live in [[module-thinkrail-extensions]].
 
 ## Rendering model — rows and progressive disclosure
 
@@ -273,7 +273,13 @@ entry/exit obeys reduced motion.
 
 `toolRegistry.tsx` is **THE extension point**; a tool has two decoupled sides joined by **tool name**:
 the **capability** registers with the pi session server-side (custom tool or pi extension/skill), the
-**presentation** registers here. A registration is:
+**presentation** registers here. The registry `Map` and fallback renderer stay app-local;
+`extensions/registerWebExtensions()` feeds the ordered descriptors from `extensions/registry.ts`
+into it when `ChatView` loads. Built-in app renderers retain their local side-effect registrations.
+Render contracts (`ToolRenderProps`, `ToolStatus`, registration metadata) and pure argument/result
+helpers come from `@thinkrail/extension-api/web`, not chat internals. `Markdown` imports the named
+`MermaidView` from `@thinkrail/ext-visualize/web` for fenced mermaid; shiki and highlighted `CodeBlock`
+remain app-local. A registration is:
 
 - a **renderer** (the specialized card body; `ToolRenderProps` carries `toolCallId`/`args`/`result`/
   `status`/`workspaceRoot`/`streaming` plus an optional shell-injected `onOpenFile` callback — enough to

@@ -6,7 +6,8 @@
 		"packages": [
 			"apps/*",
 			"packages/*",
-			"pi-extensions/*"
+			"pi-extensions/*",
+			"thinkrail-extensions/*"
 		],
 		"catalog": {
 			"@astrojs/check": "0.9.10",

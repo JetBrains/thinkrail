@@ -16,8 +16,8 @@ third-party pi package — with its ThinkRail-specific halves: what the host bun
 the web client presents the capability's tools. The host composes extensions from **one registry file per
 side**; how a user would install, enable or discover an extension is deliberately not designed.
 
-Status: decided in planning; the first extension (`visualize`) arrives with PR 2 (`./web`) and PR 3
-(`./server`) of the extensions pilot. Install UX, marketplace, per-extension settings, wire methods,
+The first extension (`visualize`) supplies its `./web` half through [[module-ext-visualize]]. Server
+composition below is the decided contract for the subsequent server extraction, not a shipped registry. Install UX, marketplace, per-extension settings, wire methods,
 panels and store contributions are explicit deferrals, not gaps.
 
 ## Shape — two entrypoints, no root barrel
@@ -42,15 +42,15 @@ session manager, outside the static registry.
 
 ## Host UI SDK
 
-What a `./web` half may import, extracted from `apps/web` in PR 2:
+What a `./web` half may import:
 
-- `@thinkrail/extension-api` (`packages/extension-api`) — types and `define*` helpers only, no React
+- `@thinkrail/extension-api` ([[module-extension-api]]) — types and `define*` helpers only, no React
   components. `./web`: `ToolRenderProps`, `ToolRenderer`, `ToolRegistrationOptions`, `ToolStatus`,
   `WebExtension`, `defineWebExtension`, and the pure renderer helpers (`toolHelpers`, `toolResultContent`).
   `./server`: `ServerExtension`, `defineServerExtension`. Its own package because server pi types would
   contaminate the wire boundary in `contracts`, and the server contract in `ui` would give the host a
   presentation dependency.
-- `@thinkrail/ui` (`packages/ui`) — the owned shadcn/Radix primitives moved whole, `cn`, and the
+- `@thinkrail/ui` ([[module-ui]]) — the owned shadcn/Radix primitives moved whole, `cn`, and the
   `onThemeSwap` function only (not the theme catalog/preferences runtime). Per-file imports
   (`@thinkrail/ui/dialog`) are retained for code-splitting. Design tokens stay in `apps/web/src/styles`;
   the SDK and extension web halves use token utility classes only, and the app's CSS `@source` and
@@ -73,8 +73,8 @@ What a `./web` half may import, extracted from `apps/web` in PR 2:
   `registerBundledRuntime`'s OAuth/Bedrock/trash registration, the generated-module isolation of
   `pi-web-access`) is unchanged by this.
 - **Web:** `apps/web/src/extensions/registry.ts` exports the ordered web extensions;
-  `registerWebExtensions()` feeds their `toolRenderers` into the chat tool registry, replacing side-effect
-  `register.ts` imports.
+  `registerWebExtensions()` feeds their `toolRenderers` into the chat tool registry. App-local tool
+  registrations retain their side-effect imports; extension descriptors need none.
 
 ## Boundary rules (enforced by `scripts/check-module-boundaries.ts`, with negative tests)
 

@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Web UI client
 parent: architecture
-depends-on: [module-contracts]
+depends-on: [module-contracts, module-ui, module-extension-api, module-ext-visualize]
 tags: [ui]
 ---
 
@@ -17,7 +17,9 @@ event stream as a chat-centric, multi-session IDE shell.
 
 - **Owns:** the browser UI — client-local navigation and workbench state, transport client, store, panels, the responsive shell, branding tokens.
 - **Public surface:** the built static bundle (`dist/`) — a deployable artifact that dials a host.
-- **Allowed deps:** `@thinkrail/contracts` (types plus its small pure runtime: WS constants, versions, guards, `createQuitConfirmation`; see [[module-contracts]]) ONLY; React / Zustand / Vite / etc.
+- **Allowed deps:** `@thinkrail/contracts` (types plus its small pure runtime: WS constants, versions,
+  guards, `createQuitConfirmation`; see [[module-contracts]]), `@thinkrail/ui/*`,
+  `@thinkrail/extension-api/web`, and `@thinkrail/ext-*/web`; React / Zustand / Vite / etc.
 - **Deployment obligation:** one built client serves every launcher and future deployment. Endpoint selection
   belongs to the transport bootstrap; panels, stores, and feature flows never branch on `cli`, `desktop`, or
   a deployment name.
@@ -26,8 +28,8 @@ event stream as a chat-centric, multi-session IDE shell.
 
 ## Internal modules
 
-Each is a bounded sub-module; `navigation`/`transport`/`store`/`updates`/`prompt`/`resources`/`lib` expose an `index.ts` **barrel** (their only public
-surface). `panels`/`components/ui`/`chat` are imported **per-file by design** — barreling them would pull
+Each is a bounded sub-module; `navigation`/`transport`/`store`/`updates`/`prompt`/`resources`/`lib`/`extensions` expose an `index.ts` **barrel** (their only public
+surface). `panels`/`chat` are imported **per-file by design** — barreling them would pull
 the lazily-loaded Monaco/shiki/xterm chunks into the eager bundle and break the shadcn per-primitive
 convention; their boundary is held by convention + spec. Sibling edges live here, not in the leaves.
 
@@ -43,10 +45,10 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `auth` | in-app provider login: the presentational OAuth dialog + its client-side state reducer | yes | [auth/SPEC.md](src/auth/SPEC.md) |
 | `shell` | responsive composition + frontend-local workbench ownership (bounded `layout/` and `layoutState/` children) | no | [shell/SPEC.md](src/shell/SPEC.md) |
 | `updates` | optional native/host update shell hook and props-driven controls | yes | [updates/SPEC.md](src/updates/SPEC.md) |
-| `components` | dependency-light shared React primitives: error isolation, status icons, custom icons, quiet scroll frames (contains `ui/`) | no | [components/SPEC.md](src/components/SPEC.md) |
-| `components/ui` | shadcn primitives, themed with our tokens | no | [components/ui/SPEC.md](src/components/ui/SPEC.md) |
+| `components` | dependency-light app primitives: error isolation, status icons, custom icons, quiet scroll frames | no | [components/SPEC.md](src/components/SPEC.md) |
+| `extensions` | ordered composition of web extension descriptors into the chat registry | yes | [extensions/SPEC.md](src/extensions/SPEC.md) |
 | `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
-| `lib` | `cn()` + the shared UI/path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
+| `lib` | shared path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
 Leaf utilities without their own spec: `constants/` (branding — the product name, storage/event prefixes, and the one
 `BRAND_MARK_PATH` monogram outline that the shell logo and the components' working badge both draw), `clientPreferences.ts` (feature-neutral
@@ -140,18 +142,19 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
 ### Dependency graph
 
 - `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration
-- `shell` → children `shell/layout` + `shell/layoutState`, `updates` (one optional-capability hook + props-driven Settings content and durable status affordance), `panels`, `chat` (app-integration render/hydration only), `store`, `transport` (domain hydration + endpoint identity), `contracts` (types + the shared `createQuitConfirmation` rule), `components/ui`, `components` (`ErrorBoundary` around each mounted region + `QuietScrollArea` around shell-owned tool bodies), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of catalog/media resolution and atomic theme application, driven by the hydrated store preference or pre-hydration hint)
+- `shell` → children `shell/layout` + `shell/layoutState`, `updates` (one optional-capability hook + props-driven Settings content and durable status affordance), `panels`, `chat` (app-integration render/hydration only), `store`, `transport` (domain hydration + endpoint identity), `contracts` (types + the shared `createQuitConfirmation` rule), `ui`, `components` (`ErrorBoundary` around each mounted region + `QuietScrollArea` around shell-owned tool bodies), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of catalog/media resolution and atomic theme application, driven by the hydrated store preference or pre-hydration hint)
 - `shell/layout` → `contracts` (`LayoutPreset` + `GitDiffScope` types only), `lib` (attention/id primitives), and React / `react-resizable-panels` / `@dnd-kit/core`; `shell/layoutState` → `shell/layout`, `store`, `transport` (browser endpoint identity + error normalization), `clientPreferences` (native-stable persistence), `contracts` (`LayoutPreset` type only), `lib`, and React. The parent injects store state and feature renderers, so the pure layout child has no feature-module runtime edge
-- `updates` → `contracts` (native bridge + host notice types), `store` (host notice), `components/ui`, React, and Remix Icon; native snapshots remain shell-local
-- `panels` → `resources`, `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelEffortPicker`+`useModelCatalog`+`useModelPreferences`, `ReviewSettings`/`ModelsSettings` the older `ModelSelector`+`ThinkingSelector`, and `ProvidersSettings` the `chat/modelPicker` connection-kind vocabulary — all shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping), `@shikijs/monaco` (the desktop file renderer's TextMate adapter), `@pierre/diffs` (all source diffs + phone code files), `diff` (engine-neutral mutation blocks, CSV row alignment, and notebook cell similarity), `jsondiffpatch` (structural JSON deltas with move detection), `react-virtuoso` (CSV rows), and `pdfjs-dist` (PDF canvas rendering)
-- `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `components` (`useNow`, and the `RunningIcon` badge in the stream footer), `prompt` (shared slash/template behavior), `lib`, `clientPreferences`; `store` + `transport`
+- `updates` → `contracts` (native bridge + host notice types), `store` (host notice), `ui`, React, and Remix Icon; native snapshots remain shell-local
+- `panels` → `resources`, `store`, `transport`, `ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelEffortPicker`+`useModelCatalog`+`useModelPreferences`, `ReviewSettings`/`ModelsSettings` the older `ModelSelector`+`ThinkingSelector`, and `ProvidersSettings` the `chat/modelPicker` connection-kind vocabulary — all shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping), `@shikijs/monaco` (the desktop file renderer's TextMate adapter), `@pierre/diffs` (all source diffs + phone code files), `diff` (engine-neutral mutation blocks, CSV row alignment, and notebook cell similarity), `jsondiffpatch` (structural JSON deltas with move detection), `react-virtuoso` (CSV rows), and `pdfjs-dist` (PDF canvas rendering)
+- `chat` → `contracts` (pi message types, **type-only**), `ui`, `extension-api/web`, `ext-visualize/web`, `extensions` (registration only), `components` (`useNow`, and the `RunningIcon` badge in the stream footer), `prompt` (shared slash/template behavior), `lib`, `clientPreferences`; `store` + `transport`
   (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)
 - `prompt` → `contracts` (slash/template types only), `lib`, and React; it has no lifecycle integration dependency
-- `auth` → `components/ui` (the dialog is store/transport-free — the panel integrates it; the state types need no imports)
+- `extensions` → `ext-*/web`, `extension-api/web`, `chat/toolRegistry` (registration only; no ChatView import)
+- `auth` → `ui` (the dialog is store/transport-free — the panel integrates it; the state types need no imports)
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts` (domain + custom-preset types, never current-layout DTOs), `lib` (shared path/array primitives — a leaf, so no cycle), and `shell/layout` (**type-only** for web-local frame/view state)
 - `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so
   the runtime graph is acyclic), `lib` (plain-HTTP-safe random page identity)
-- `components` → `lib` (`ErrorBoundary`'s `shallowEqualArrays` for its reset keys) and `constants` (`RunningIcon` draws the shared brand monogram) — both leaves, so any region can still wrap in it; `components/ui` → `lib`
+- `components` → `lib` (`ErrorBoundary`'s `shallowEqualArrays` for its reset keys) and `constants` (`RunningIcon` draws the shared brand monogram) — both leaves, so any region can still wrap in it; presentational controls consume `ui`
 - `resources` → `contracts` (types only), `lib`; it owns no store, transport, shell, or renderer implementation
 - `lib` → `themes` (the lazy highlighter uses the one generic CSS-variable Shiki registration) and React (the phone-viewport hook only)
 - `themes` → `constants` (the branding storage prefix scopes the first-paint hint), `clientPreferences` (native-stable hint storage)
@@ -240,7 +243,7 @@ themselves.
   rows, menu/command items, tabs). A **two-line** row (e.g. a
   workspace whose branch differs from its name) **top-aligns** the icon to the first line (`items-start`
   + `mt-2`) so the glyph hangs on its title, while a single-line row stays vertically centred
-  (`items-center`, no nudge). Menu-item icons are centralized once in `components/ui/menu-styles.ts` (`menuItemClass`
+  (`items-center`, no nudge). Menu-item icons are centralized once in `packages/ui/menu-styles.ts` (`menuItemClass`
   `[&_svg]:size-14` + `gap-4`).
 - **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
   theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
@@ -301,7 +304,7 @@ themselves.
   (`panels/monacoSetup.ts`) reads the code family, `s11`, and the default line-height; Pierre receives the
   same primitives through the `.pierre-code-surface` custom-property bridge in `index.css`; xterm
   (`panels/TerminalInstance.tsx`) reads the code family + `s13` and owns its row height; mermaid
-  (`chat/tools/visualize/mermaid.ts`) reads the code family. These third-party integrations are the exhaustive
+  (`thinkrail-extensions/visualize/web/mermaid.ts`) reads the code family. These third-party integrations are the exhaustive
   allowlist in `styles/typographyUsage.test.ts`. Everywhere else a class is required, and
   `<pre>` / `<code>` must carry one even inside a container that has one: preflight targets those elements
   directly, and a directly-matching rule beats an inherited family. Note that the bare arbitrary value
@@ -322,14 +325,14 @@ themselves.
   code-only mono, the two prose systems, and how to add or change a style — is specced in
   [src/styles/TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md)** (`web-typography`); check changes against it. The
   generator that turns it into CSS is [scripts/SPEC.md](scripts/SPEC.md).
-- **Icons: `@remixicon/react` (Line default, Fill when active/selected). Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
-  and themed with our token utilities (`cn()` in `src/lib/utils.ts`) — never shadcn's default oklch
+- **Icons: `@remixicon/react` (Line default, Fill when active/selected). Components: shadcn/ui** (Radix primitives), owned by [[module-ui]]
+  and themed with our token utilities (`cn()` in `@thinkrail/ui/utils`) — never shadcn's default oklch
   palette. Use these for accessible menus / dialogs / tooltips; icon-only controls label themselves with
   `IconTooltip`, never native `title`.
 
 ## Get right
 
-- **`apps/web` depends on `packages/contracts` only.** Never value-import `pi`; never import `server`/`shared`.
+- **`apps/web` depends on `contracts`, `ui`, `extension-api/web`, and `thinkrail-extensions/*/web` only.** Never value-import `pi`; never import `server`/`shared`.
 - Streaming invariant: `text_delta` / `thinking_delta` **APPEND**; `tool_execution_update.partialResult`
   **REPLACE**. Attempt-level `agent_end` never means idle; automatic work ends only at `agent_settled`.
 - Panels stay arrangement-agnostic so the mobile shell is an additive layer, not a rewrite.
