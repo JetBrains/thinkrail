@@ -97,7 +97,7 @@ of the host.
     **`WireAgentMessage`** — `TranscriptMessage` plus the `WireBranchSummary` / `WireBashExecution`
     mirrors — never pi-agent-core's `AgentMessage`. That type is `Message` plus whatever
     `CustomAgentMessages` augmentation the compilation happens to include: pi-coding-agent adds the
-    custom roles only in Node builds, and pi-agent-core 1.0 stopped adding them itself, so the same
+    custom roles only in Node builds, and pi-agent-core itself no longer adds them, so the same
     `PiEvent` would otherwise mean two different unions on the server and in the browser (where the
     custom-message guards narrowed to `never`).
     `agent_settled` is a host projection carrying the final attempt's reported terminal metadata

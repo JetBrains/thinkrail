@@ -96,8 +96,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     would hand `model.list` (whose contract is to answer without touching the network), `model.default` and
     every inbound model-ref check an unbounded wait, and would escape the refresh deadline one line after
     applying it. The snapshot is what pi's last *settled* pass concluded (written at `create()`, after every
-    `refresh()`, and on login/logout), and being the one read makes the picker, default, and model resolution
-    agree within a generation.
+    `refresh()`, and on login/logout), plus a provisional entry pi writes the moment a provider with a stored
+    credential or configured key is registered — config and native (`registerNativeProvider`) registrations
+    alike, so a Central or delegation-mirrored provider is readable before its availability pass lands. Being
+    the one read makes the picker, default, and model resolution agree within a generation.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
