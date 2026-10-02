@@ -1195,9 +1195,18 @@ export interface SessionStateWorkspace {
 	cwd: string;
 }
 
+async function listBaselineSessionInfos(cwd: string): Promise<SessionInfo[]> {
+	try {
+		return await listSessionInfosStrict(cwd);
+	} catch (error) {
+		log.warn(`session baseline is skipping unreadable transcripts for ${cwd}`, error);
+		return SessionManager.list(cwd);
+	}
+}
+
 async function collectSessionStates(
 	workspaces: readonly SessionStateWorkspace[],
-	legacy: boolean,
+	baseline: boolean,
 ): Promise<SessionStateRecord[]> {
 	const records: SessionStateRecord[] = [];
 	const liveIds = new Set<string>();
@@ -1214,7 +1223,9 @@ async function collectSessionStates(
 		liveIds.add(sessionId);
 	}
 	for (const workspace of workspaces) {
-		const infos = await listSessionInfosStrict(workspace.cwd);
+		const infos = baseline
+			? await listBaselineSessionInfos(workspace.cwd)
+			: await listSessionInfosStrict(workspace.cwd);
 		for (const info of infos) {
 			if (
 				info.cwd !== workspace.cwd ||
@@ -1228,7 +1239,7 @@ async function collectSessionStates(
 				sessionId: info.id,
 				workspaceId: workspace.id,
 				projectId: workspace.projectId,
-				state: stateFromDisk(info.id, SessionManager.open(info.path), legacy),
+				state: stateFromDisk(info.id, SessionManager.open(info.path), baseline),
 			});
 		}
 	}

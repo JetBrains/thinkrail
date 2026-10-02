@@ -511,23 +511,35 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 	});
 });
 
+async function withFreshDataDir(run: (dataDir: string) => Promise<void>): Promise<void> {
+	const previousDataDir = process.env.THINKRAIL_DATA_DIR;
+	const dataDir = tmpCwd("trpi-fresh-data-");
+	process.env.THINKRAIL_DATA_DIR = dataDir;
+	try {
+		await run(dataDir);
+	} finally {
+		if (previousDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+		else process.env.THINKRAIL_DATA_DIR = previousDataDir;
+	}
+}
+
+function writeFinishedDiskSession(cwd: string): { id: string; dir: string } {
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const { id } = writeFixtureSession(dir, {
+		cwd,
+		messages: [
+			{ role: "user", text: "hi", timestamp: 1_000 },
+			{ role: "assistant", text: "done", stopReason: "stop", timestamp: 1_001 },
+		],
+	});
+	return { id, dir };
+}
+
 for (const corrupt of ["session-receipts.json", "session-lifecycle.json"]) {
-	test(`an unreadable ${corrupt} is set aside and existing history re-baselines as read`, async () => {
-		const previousDataDir = process.env.THINKRAIL_DATA_DIR;
-		const dataDir = tmpCwd("trpi-corrupt-metadata-");
-		process.env.THINKRAIL_DATA_DIR = dataDir;
-		try {
+	test(`an unreadable ${corrupt} is set aside and existing history re-baselines as read`, () =>
+		withFreshDataDir(async (dataDir) => {
 			const cwd = tmpCwd("trpi-corrupt-metadata-ws-");
-			const { id } = writeFixtureSession(
-				defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd),
-				{
-					cwd,
-					messages: [
-						{ role: "user", text: "hi", timestamp: 1_000 },
-						{ role: "assistant", text: "done", stopReason: "stop", timestamp: 1_001 },
-					],
-				},
-			);
+			const { id } = writeFinishedDiskSession(cwd);
 			writeFileSync(
 				join(dataDir, "session-lifecycle.json"),
 				JSON.stringify({ version: 1, completionBySession: {}, cancelledRunBySession: {} }),
@@ -557,12 +569,32 @@ for (const corrupt of ["session-receipts.json", "session-lifecycle.json"]) {
 			for (const file of ["session-lifecycle.json", "session-receipts.json"]) {
 				expect(() => JSON.parse(readFileSync(join(dataDir, file), "utf8"))).not.toThrow();
 			}
-		} finally {
-			if (previousDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
-			else process.env.THINKRAIL_DATA_DIR = previousDataDir;
-		}
-	});
+		}));
 }
+
+test("the startup baseline skips an unreadable transcript instead of failing", () =>
+	withFreshDataDir(async (dataDir) => {
+		const cwd = tmpCwd("trpi-baseline-broken-ws-");
+		const { id, dir } = writeFinishedDiskSession(cwd);
+		const broken = join(dir, "0_broken.jsonl");
+		writeFileSync(broken, "");
+		const workspace = { id: "ws-baseline-broken", projectId: "p-baseline-broken", cwd };
+
+		await initializeSessionStates([workspace]);
+
+		expect(JSON.parse(readFileSync(join(dataDir, "session-receipts.json"), "utf8"))).toMatchObject({
+			baselineComplete: true,
+			handledCompletionBySession: { [id]: expect.stringMatching(/^completion:/) },
+		});
+		await expect(listSessionStates([workspace])).rejects.toThrow("unreadable or malformed");
+		rmSync(broken);
+		expect(await listSessionStates([workspace])).toEqual([
+			expect.objectContaining({
+				sessionId: id,
+				state: expect.objectContaining({ completionUnread: false }),
+			}),
+		]);
+	}));
 
 test("a length-truncated questionnaire is terminal and cannot be answered", async () => {
 	let releaseContinuation = (): void => {};
